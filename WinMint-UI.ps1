@@ -26,8 +26,7 @@ param(
     [switch]$ExportHostDrivers,
     [switch]$SelfElevated,  # internal — set by Invoke-SelfElevate; do not pass manually
     [string]$ResumeProfile = '',  # internal — path to a pre-built profile JSON; skips wizard
-    [switch]$FixtureMode, # design/dev only — seeds fixture UI state without ISO verification
-    [switch]$Audit  # auto-runs scripts/ui-automation/Audit-RunCaptures.ps1 once the window is up
+    [switch]$FixtureMode # test-only — seeds fixture UI state without ISO verification
 )
 
 $ErrorActionPreference = 'Stop'
@@ -109,7 +108,6 @@ function Get-WinWSUiForwardArgs {
     if ($SelfElevated)      { $list.Add('-SelfElevated') }
     if ($ResumeProfile)     { $list.Add('-ResumeProfile'); $list.Add("`"$ResumeProfile`"") }
     if ($FixtureMode)       { $list.Add('-FixtureMode') }
-    if ($Audit)             { $list.Add('-Audit') }
     if ($VerbosePreference -eq 'Continue') { $list.Add('-Verbose') }
     return [string[]]$list
 }
@@ -144,7 +142,7 @@ _T 'Interop done'
 if (-not $FixtureMode -and -not (Test-IsAdministrator)) {
     _T 'Not elevated — relaunching via UAC'
     Stop-WinWSUiSessionTranscript
-    Invoke-SelfElevate -ScriptPath $PSCommandPath -DryRun:$DryRun -ExportHostDrivers:$ExportHostDrivers -ResumeProfile $ResumeProfile -FixtureMode:$FixtureMode -Audit:$Audit
+    Invoke-SelfElevate -ScriptPath $PSCommandPath -DryRun:$DryRun -ExportHostDrivers:$ExportHostDrivers -ResumeProfile $ResumeProfile -FixtureMode:$FixtureMode
     exit 0
 }
 
@@ -189,7 +187,6 @@ try {
         -RepositoryRoot $PSScriptRoot `
         -DryRun:$DryRun `
         -FixtureMode:$FixtureMode `
-        -Audit:$Audit `
         -ResumeProfile $ResumeProfile
 }
 catch {

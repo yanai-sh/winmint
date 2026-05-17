@@ -18,87 +18,20 @@ function Update-WinWSUiRegionalFromPrefetch {
     $script:RegionalRefreshJob = $null
 }
 
-function Start-WinWSUiAuditRunner {
-    param(
-        [Parameter(Mandatory)][System.Windows.Window]$Window,
-        [Parameter(Mandatory)][string]$RepositoryRoot
-    )
-
-    $script:WinWSAuditPwshExe = (Get-Process -Id $PID).Path
-    $script:WinWSAuditScriptPath = Join-Path $RepositoryRoot 'scripts\ui-automation\Audit-RunCaptures.ps1'
-    $script:WinWSAuditWorkingDir = $RepositoryRoot
-    $script:WinWSAuditLogDir = Join-Path $RepositoryRoot 'output\screenshots'
-    $script:WinWSAuditDonePath = Join-Path $script:WinWSAuditLogDir 'audit-done.json'
-    (Get-WinWSUiAppContext).ProcessExitCode = 0
-    $Window.Add_Loaded({
-        $script:WinWSAuditTimer = [System.Windows.Threading.DispatcherTimer]::new()
-        $script:WinWSAuditTimer.Interval = [System.TimeSpan]::FromMilliseconds(1500)
-        $script:WinWSAuditTimer.Add_Tick({
-            $script:WinWSAuditTimer.Stop()
-            try {
-                $null = New-Item -ItemType Directory -Path $script:WinWSAuditLogDir -Force
-                $stdoutLog = Join-Path $script:WinWSAuditLogDir 'audit-stdout.log'
-                $stderrLog = Join-Path $script:WinWSAuditLogDir 'audit-stderr.log'
-                Remove-Item -LiteralPath $script:WinWSAuditDonePath -Force -ErrorAction SilentlyContinue
-                Start-Process -FilePath $script:WinWSAuditPwshExe `
-                    -ArgumentList @('-NoProfile', '-File', $script:WinWSAuditScriptPath, '-DonePath', $script:WinWSAuditDonePath) `
-                    -WorkingDirectory $script:WinWSAuditWorkingDir `
-                    -RedirectStandardOutput $stdoutLog `
-                    -RedirectStandardError $stderrLog `
-                    -WindowStyle Normal | Out-Null
-                Write-WinWSUiLog "Audit run launched in a sibling shell; logs in '$script:WinWSAuditLogDir'."
-                $script:WinWSAuditDoneTimer = [System.Windows.Threading.DispatcherTimer]::new()
-                $script:WinWSAuditDoneTimer.Interval = [System.TimeSpan]::FromMilliseconds(750)
-                $script:WinWSAuditDeadline = [System.DateTime]::UtcNow.AddMinutes(3)
-                $script:WinWSAuditDoneTimer.Add_Tick({
-                    if ([System.DateTime]::UtcNow -gt $script:WinWSAuditDeadline) {
-                        $script:WinWSAuditDoneTimer.Stop()
-                        (Get-WinWSUiAppContext).ProcessExitCode = 1
-                        Write-WinWSUiLog 'Audit run timed out waiting for completion marker.'
-                        (Get-WinWSUiAppContext).Window.Close()
-                        return
-                    }
-                    if (-not (Test-Path -LiteralPath $script:WinWSAuditDonePath)) { return }
-                    $script:WinWSAuditDoneTimer.Stop()
-                    try {
-                        $done = Get-Content -LiteralPath $script:WinWSAuditDonePath -Raw | ConvertFrom-Json
-                        if ($done.status -ne 'ok') {
-                            (Get-WinWSUiAppContext).ProcessExitCode = 1
-                            Write-WinWSUiLog "Audit run failed: $($done.message)"
-                        } else {
-                            Write-WinWSUiLog 'Audit run completed; closing UI.'
-                        }
-                    } catch {
-                        (Get-WinWSUiAppContext).ProcessExitCode = 1
-                        Write-WinWSUiLog "Audit completion marker unreadable: $_"
-                    }
-                    (Get-WinWSUiAppContext).Window.Close()
-                })
-                $script:WinWSAuditDoneTimer.Start()
-            } catch {
-                (Get-WinWSUiAppContext).ProcessExitCode = 1
-                Write-WinWSUiLog "Audit launch failed: $_"
-                (Get-WinWSUiAppContext).Window.Close()
-            }
-        })
-        $script:WinWSAuditTimer.Start()
-    })
-}
-
 function Set-WinWSUiBrandImages {
     param(
         [Parameter(Mandatory)][object]$State,
         [Parameter(Mandatory)][System.Windows.Window]$Window
     )
 
-    $brandPath = Get-WinWSAssetPath -State $State -RelativePath 'assets\WinMint.svg'
+    $brandPath = Get-WinWSAssetPath -State $State -RelativePath 'assets\brand\WinMint.svg'
     if (-not (Test-Path -LiteralPath $brandPath)) { return }
 
     foreach ($name in @('TopWordmark', 'HeroWordmark')) {
         $element = $Window.FindName($name)
         if ($null -eq $element) { continue }
         if ($element -is [System.Windows.FrameworkElement]) {
-            $element.Tag = 'assets\WinMint.svg'
+            $element.Tag = 'assets\brand\WinMint.svg'
         }
     }
 }
@@ -168,7 +101,6 @@ function Start-WinWSUIApp {
         [Parameter(Mandatory)][string]$RepositoryRoot,
         [switch]$DryRun,
         [switch]$FixtureMode,
-        [switch]$Audit,
         [string]$ResumeProfile = ''
     )
 
@@ -261,13 +193,9 @@ function Start-WinWSUIApp {
         Initialize-WinWSUiShell -HostRunspace $psHostRunspace
     }
 
-    if ($Audit) {
-        Start-WinWSUiAuditRunner -Window $window -RepositoryRoot $RepositoryRoot
-    }
-
     Write-WinWSUiLog 'Showing window.'
     try {
-        if ($FixtureMode -or $Audit) {
+        if ($FixtureMode) {
             $window.WindowStartupLocation = [System.Windows.WindowStartupLocation]::Manual
             $window.Left = -10000
             $window.Top = -10000

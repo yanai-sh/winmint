@@ -28,34 +28,8 @@ pwsh -NoProfile -File WinMint-CLI.ps1 -DryRun
 # UI build
 pwsh -NoProfile -File WinMint-UI.ps1
 
-# UI build with auto-audit — wizard launches and a sibling shell drives it
-# through every page with input/*.iso + input/*.msi fixtures. Primary artifacts
-# are semantic JSON under output\ui-snapshots\ (UIA tree + probe); PNGs optional.
-pwsh -NoProfile -File WinMint-UI.ps1 -Audit
-
-# Fast UI fixture capture for design iteration. Uses -FixtureMode; writes
-# output\ui-audit\<run>\*.ui.json (+ audit.json). Optional PNG only if you pass
-# -IncludePng through Drive-Ui from a custom driver.
-pwsh -NoProfile -File scripts\ui-automation\Capture-UiFixtureStates.ps1
-
 # Release bundle (outputs to dist\)
 pwsh -NoProfile -File scripts\release\New-WinMintReleaseBundle.ps1 -Version v0.2.0
-
-# Optional PNG capture (pixel/visual review). Prefer Drive-Ui Snapshot for JSON.
-pwsh -NoProfile -File scripts\ui-automation\Capture-UiScreenshot.ps1 -Page 1
-
-# Drive the running WinWS UI programmatically (UIA). Snapshot writes semantic JSON
-# to output\ui-snapshots\; use -IncludePng for a bitmap. All control IDs are WPF
-# x:Name values. Outputs JSON; non-zero exit on error. Run from an admin shell
-# since WinWS auto-elevates.
-pwsh -NoProfile -File scripts\ui-automation\Drive-Ui.ps1 -Action Click -Name BtnNext
-pwsh -NoProfile -File scripts\ui-automation\Drive-Ui.ps1 -Action SetText -Name TxtComputerNameSplash -Value 'test-pc'
-pwsh -NoProfile -File scripts\ui-automation\Drive-Ui.ps1 -Action SetIso        # auto-finds input\*.iso
-pwsh -NoProfile -File scripts\ui-automation\Drive-Ui.ps1 -Action SetDriver     # auto-finds input\*.msi
-pwsh -NoProfile -File scripts\ui-automation\Drive-Ui.ps1 -Action GetCurrentPage
-pwsh -NoProfile -File scripts\ui-automation\Drive-Ui.ps1 -Action GoToPage -Page 3
-pwsh -NoProfile -File scripts\ui-automation\Drive-Ui.ps1 -Action Snapshot -Label page3-desktop
-pwsh -NoProfile -File scripts\ui-automation\Drive-Ui.ps1 -Action Snapshot -Label visual -IncludePng
 ```
 
 For automation tests: leave the password fields blank (passwordless local

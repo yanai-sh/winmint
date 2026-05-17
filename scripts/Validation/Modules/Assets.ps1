@@ -5,7 +5,6 @@ function Test-RequiredAssets {
         'src\WinWS.UI\Views\MainWindow.xaml',
         'config\autounattend.xml',
         'LICENSE',
-        'docs\roadmap.md',
         'winmint.ps1',
         'assets\brand\WinMint.svg',
         'assets\brand\winmint-brand-final.svg',

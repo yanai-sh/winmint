@@ -169,7 +169,6 @@ The current structure is close enough to refactor. Do not restart the repo. Move
 |   `-- fixtures/
 |-- winmint.ps1
 |-- README.md
-|-- roadmap.md
 `-- THIRD_PARTY_NOTICES.md
 ```
 

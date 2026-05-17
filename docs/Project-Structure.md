@@ -8,8 +8,7 @@ fixture.
 ## Design Rules
 
 - `src/` contains shipped runtime code only.
-- `scripts/` contains repo automation and Windows Setup payload scripts. Move it
-  gradually toward role-based subfolders without breaking documented commands.
+- `scripts/` contains repo automation and Windows Setup payload scripts.
 - `config/` contains product policy and repo manifests, not generated state.
 - `schemas/` contains public JSON contracts.
 - `assets/` contains source-controlled payloads and visual assets required by
@@ -52,7 +51,6 @@ fixture.
 |   |-- release/
 |   |-- setup/
 |   |-- test/
-|   |-- ui-automation/
 |   `-- validation/
 |-- src/
 |   |-- WinWS/
@@ -77,14 +75,13 @@ fixture.
 | `src/WinWS/` | Engine, profile contracts, ISO/WIM servicing, reporting APIs | WPF controls, live-user app installs |
 | `src/WinWS.UI/` | PowerShell WPF wizard, UI state, previews, profile creation | DISM/WIM servicing, registry hive edits |
 | `src/WinWS.Agent/` | FirstLogon user setup modules and retry state | Offline image servicing, UI wizard state |
-| `scripts/setup/` | SetupComplete, FirstLogon, DefaultUser, Specialize payloads | Repo validation and UI audit helpers |
+| `scripts/setup/` | SetupComplete, FirstLogon, DefaultUser, Specialize payloads | Repo validation helpers |
 | `scripts/audit/` | Output ISO and live-install audit tooling | Product runtime entry points |
-| `scripts/ui-automation/` | UIA drivers, fixture capture, visual snapshots | Engine build logic |
 | `scripts/test/` | Smoke tests and profile invariant tests | Shipped setup payloads |
 | `scripts/Validation/` | Static validation helpers | Product behavior decisions |
 | `scripts/release/` | Release bundle assembly and publishing helpers | Runtime source code |
 | `tests/` | Test fixture roots and future test suites | Product runtime or release payloads |
-| `tests/fixtures/iso/` | Local ISO/WIM/ESD/SWM media for tests and UI audit runs | Checked-in Microsoft payloads |
+| `tests/fixtures/iso/` | Local ISO/WIM/ESD/SWM media for tests | Checked-in Microsoft payloads |
 | `tests/fixtures/drivers/` | Local driver fixture folders, MSI bundles, and ZIPs | Shipped driver assets |
 | `tests/fixtures/uupdump/` | Local UUP Dump zips/folders/conversion outputs | Bundled Microsoft payloads |
 

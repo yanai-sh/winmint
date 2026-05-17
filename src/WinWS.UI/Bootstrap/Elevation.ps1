@@ -36,8 +36,7 @@ function Invoke-SelfElevate {
         [switch]$DryRun,
         [switch]$ExportHostDrivers,
         [string]$ResumeProfile = '',
-        [switch]$FixtureMode,
-        [switch]$Audit
+        [switch]$FixtureMode
     )
     Write-Information 'Elevating to Administrator…' -InformationAction Continue
     $pwshArgs = @('-STA', '-NoProfile', '-File', "`"$ScriptPath`"", '-SelfElevated')
@@ -45,7 +44,6 @@ function Invoke-SelfElevate {
     if ($ExportHostDrivers) { $pwshArgs += '-ExportHostDrivers' }
     if ($ResumeProfile)     { $pwshArgs += '-ResumeProfile'; $pwshArgs += "`"$ResumeProfile`"" }
     if ($FixtureMode)       { $pwshArgs += '-FixtureMode' }
-    if ($Audit)             { $pwshArgs += '-Audit' }
     if ($VerbosePreference -eq 'Continue') { $pwshArgs += '-Verbose' }
     # See comment in Invoke-ElevateForBuild — wt.exe MSIX activation drops
     # `-Verb RunAs` silently. Always use pwsh.exe so the new process is
