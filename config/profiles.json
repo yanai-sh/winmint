@@ -1,0 +1,20 @@
+{
+  "defaultProfile": "Developer",
+  "profiles": [
+    {
+      "id": "Base",
+      "description": "Base debloat and setup hygiene.",
+      "editors": []
+    },
+    {
+      "id": "Developer",
+      "description": "Dev Default: base debloat, PS7, Terminal, OpenSSH, WSL2-first Ubuntu default, winget-backed editor bootstrap.",
+      "editors": ["cursor", "vscodium", "neovim"]
+    },
+    {
+      "id": "Workstation",
+      "description": "Developer profile plus optional workstation shell modules selected in the UI; WSL2-first defaults still apply unless the user opts out.",
+      "editors": ["cursor", "vscodium", "zed", "neovim"]
+    }
+  ]
+}

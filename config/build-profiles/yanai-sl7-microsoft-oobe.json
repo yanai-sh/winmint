@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-05-16T00:00:00+03:00",
+  "profileName": "Developer",
+  "setupOption": "CopilotPlus",
+  "source": {
+    "isoPath": "",
+    "architecture": "arm64"
+  },
+  "target": {
+    "device": "DifferentPC",
+    "editionMode": "TargetLicense",
+    "edition": "",
+    "diskMode": "AutoWipeDisk0",
+    "diskLayout": {
+      "mode": "AutoWipeDisk0",
+      "preset": "",
+      "roundingGb": 64,
+      "windowsMinimumGb": 256,
+      "windowsRecommendedGb": 384,
+      "linuxMinimumGb": 128,
+      "linuxRecommendedGb": 256,
+      "efiMb": 1024,
+      "msrMb": 16,
+      "recoveryMb": 1024
+    }
+  },
+  "identity": {
+    "computerName": "SL7",
+    "accountName": "Yanai",
+    "accountMode": "MicrosoftOobe",
+    "autoLogon": false,
+    "passwordSet": false,
+    "passwordIncluded": false
+  },
+  "regional": {
+    "timeZoneId": "Israel Standard Time",
+    "uiLanguage": "en-US",
+    "systemLocale": "he-IL",
+    "uiLanguageFallback": "en-US",
+    "userLocale": "he-IL",
+    "inputLocale": "en-US;he-IL"
+  },
+  "drivers": {
+    "source": "None",
+    "path": "",
+    "exportHostDrivers": false
+  },
+  "desktop": {
+    "cursorPack": "BreezeXLight",
+    "layers": [
+      "standard"
+    ]
+  },
+  "development": {
+    "editors": [
+      "cursor"
+    ],
+    "wsl": {
+      "enabled": true,
+      "distros": [
+        "Ubuntu"
+      ]
+    }
+  },
+  "removals": {
+    "advertising": true,
+    "gaming": true,
+    "communication": true,
+    "microsoftApps": true,
+    "effectiveAppx": [
+      "AVGTechnologies",
+      "AvastSoftware",
+      "Clipchamp.Clipchamp",
+      "DolbyLaboratories",
+      "ExpressVPN",
+      "KasperskyLab",
+      "MSTeams",
+      "McAfee",
+      "Microsoft.549981C3F5F10",
+      "Microsoft.BingNews",
+      "Microsoft.BingSearch",
+      "Microsoft.GamingApp",
+      "Microsoft.GetHelp",
+      "Microsoft.Microsoft3DViewer",
+      "Microsoft.MicrosoftOfficeHub",
+      "Microsoft.MicrosoftSolitaireCollection",
+      "Microsoft.MixedReality.Portal",
+      "Microsoft.Office.OneNote",
+      "Microsoft.OutlookForWindows",
+      "Microsoft.PowerAutomateDesktop",
+      "Microsoft.RemoteDesktop",
+      "Microsoft.RemoteDesktopPreview",
+      "Microsoft.StartExperiencesApp",
+      "Microsoft.Todos",
+      "Microsoft.Whiteboard",
+      "Microsoft.Windows.DevHome",
+      "Microsoft.WindowsCalculator",
+      "Microsoft.WindowsFeedbackHub",
+      "Microsoft.WindowsMaps",
+      "Microsoft.Xbox.TCUI",
+      "Microsoft.XboxApp",
+      "Microsoft.XboxGameOverlay",
+      "Microsoft.XboxGamingOverlay",
+      "Microsoft.XboxIdentityProvider",
+      "Microsoft.XboxSpeechToTextOverlay",
+      "Microsoft.ZuneMusic",
+      "Microsoft.ZuneVideo",
+      "Microsoft.windowscommunicationsapps",
+      "MicrosoftCorporationII.MicrosoftFamily",
+      "MicrosoftCorporationII.QuickAssist",
+      "MicrosoftTeams",
+      "NortonLifeLock",
+      "NortonSecurity",
+      "Piriform.CCleaner",
+      "Surfshark",
+      "SurfsharkVPN"
+    ]
+  },
+  "privacy": {
+    "telemetry": true,
+    "advertisingId": true,
+    "location": false,
+    "timeline": true
+  },
+  "tweaks": {
+    "darkMode": true,
+    "fileExtensions": true,
+    "stickyKeys": true,
+    "hardwareBypass": false
+  }
+}

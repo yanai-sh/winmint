@@ -1,0 +1,149 @@
+{
+  "tweaks": [
+    {
+      "id": "hardware-bypass",
+      "description": "Bypass Windows 11 setup checks when explicitly selected.",
+      "scope": "offline registry",
+      "risk": "medium",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Allow Windows Setup to proceed on explicitly selected unsupported hardware.",
+      "offline": true,
+      "online": false
+    },
+    {
+      "id": "developer-qol",
+      "description": "Show file extensions and hidden files.",
+      "scope": "default user registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Make Explorer friendlier for development by exposing file extensions and hidden files.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "powershell-remotesigned",
+      "description": "Set Windows PowerShell and PowerShell 7 execution policy to RemoteSigned.",
+      "scope": "machine registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Permit locally authored scripts while keeping downloaded scripts signature-gated.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "wsl-openssh",
+      "description": "Enable WSL, Virtual Machine Platform, and OpenSSH Client when selected by the profile.",
+      "scope": "Windows features/capabilities",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Document optional feature policy that is implemented outside the registry tweak engine.",
+      "documentationOnly": true,
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "windows-update-preserved",
+      "description": "Keep Windows Update and servicing enabled.",
+      "scope": "service policy",
+      "risk": "low",
+      "reversible": true,
+      "phase": "setup",
+      "intent": "Document the platform guardrail that keeps update and servicing infrastructure enabled.",
+      "documentationOnly": true,
+      "offline": false,
+      "online": true
+    },
+    {
+      "id": "terminal-admin-context",
+      "description": "Add an elevated Windows Terminal entry to directory context menus.",
+      "scope": "offline registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Add a fast elevated terminal entry to directory context menus.",
+      "offline": true,
+      "online": false
+    },
+    {
+      "id": "uac-no-secure-desktop",
+      "description": "Show UAC consent prompts without switching to the dimmed secure desktop.",
+      "scope": "machine policy registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Keep UAC consent prompts enabled while avoiding the disruptive screen-dimming secure desktop switch.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "edge-policy-minimal",
+      "description": "Reduce Edge recommendations, shopping/rewards/wallet noise, first-run prompts, web widgets, image enhancement, sidebar, feedback, and telemetry.",
+      "scope": "machine policy registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Reduce Edge promotional, commerce, telemetry, and sidebar noise for Minimal builds.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "edge-policy-copilotplus",
+      "description": "Reduce Edge recommendations, shopping/rewards/wallet noise, first-run prompts, feedback, and telemetry while preserving Copilot/sidebar, web widgets, and image enhancement.",
+      "scope": "machine policy registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Reduce Edge promotional, commerce, and telemetry noise while preserving Copilot+ sidebar capabilities.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "dual-boot-windows-policy",
+      "description": "Dual boot: disable Fast Startup, prevent automatic BitLocker device encryption, and disable WPBT execution.",
+      "scope": "offline registry",
+      "risk": "medium",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Avoid dual-boot friction from Fast Startup, surprise device encryption, and firmware payload injection.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "onedrive-policy",
+      "description": "Remove OneDrive integration, block sync/reinstall policies, hide Explorer namespace, and force known folders back to local user-profile paths.",
+      "scope": "machine and default user registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Remove OneDrive pressure and keep known folders local for new users.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "gamebar-policy",
+      "description": "Disable Xbox Game Bar and GameDVR capture prompts.",
+      "scope": "machine and default user registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Suppress Game Bar capture prompts and GameDVR recording defaults.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "developer-mode",
+      "description": "Enable Windows Developer Mode: symlinks without UAC elevation, app sideloading.",
+      "scope": "machine registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Enable Windows Developer Mode features expected by developer workstations.",
+      "offline": true,
+      "online": true
+    }
+  ]
+}

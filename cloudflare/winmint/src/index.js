@@ -1,0 +1,56 @@
+const DEFAULT_BOOTSTRAP_URL =
+  "https://raw.githubusercontent.com/yanai-sh/winmint/main/winmint.ps1";
+
+const BOOTSTRAP_PATHS = new Set(["/", "/winmint", "/winmint.ps1"]);
+
+function textResponse(body, status = 200, extraHeaders = {}) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      ...extraHeaders,
+    },
+  });
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/winmint/") {
+      return Response.redirect(`${url.origin}/winmint`, 308);
+    }
+
+    if (!BOOTSTRAP_PATHS.has(url.pathname)) {
+      return textResponse("Not found\n", 404);
+    }
+
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return textResponse("Method not allowed\n", 405, { allow: "GET, HEAD" });
+    }
+
+    const bootstrapUrl = env.BOOTSTRAP_URL || DEFAULT_BOOTSTRAP_URL;
+    const upstream = await fetch(bootstrapUrl, {
+      headers: { "user-agent": "WinMint-Bootstrap-Worker" },
+      cf: { cacheEverything: true, cacheTtl: 300 },
+    });
+
+    if (!upstream.ok) {
+      return textResponse(`Bootstrap source returned HTTP ${upstream.status}\n`, 502);
+    }
+
+    const headers = {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "public, max-age=300",
+      "x-content-type-options": "nosniff",
+    };
+
+    if (request.method === "HEAD") {
+      return new Response(null, { status: 200, headers });
+    }
+
+    return new Response(await upstream.text(), { status: 200, headers });
+  },
+};

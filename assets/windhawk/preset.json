@@ -1,0 +1,195 @@
+{
+  "schema": "winws.windhawkPreset.v1",
+  "description": "WinWS Windhawk desktop preset. Stores settings only; official mod sources and DLLs are downloaded at install time.",
+  "created": "2026-05-01T13:36:51.1549911+03:00",
+  "mods": [
+    {
+      "id": "taskbar-auto-hide-speed",
+      "version": "1.1",
+      "disabled": false,
+      "include": [
+        "explorer.exe"
+      ],
+      "exclude": [],
+      "architecture": [
+        "x86-64"
+      ],
+      "sourceUrl": "https://mods.windhawk.net/mods/taskbar-auto-hide-speed.wh.cpp",
+      "settings": {
+        "showSpeedup": 250,
+        "hideSpeedup": 130,
+        "frameRate": 90,
+        "oldTaskbarOnWin11": 0
+      }
+    },
+    {
+      "id": "taskbar-auto-hide-when-maximized",
+      "version": "1.2.6",
+      "disabled": false,
+      "include": [
+        "explorer.exe"
+      ],
+      "exclude": [],
+      "architecture": [
+        "x86-64"
+      ],
+      "sourceUrl": "https://mods.windhawk.net/mods/taskbar-auto-hide-when-maximized.wh.cpp",
+      "settings": {
+        "mode": "intersected",
+        "foregroundWindowOnly": 0,
+        "excludedPrograms[0]": "",
+        "primaryMonitorOnly": 0,
+        "oldTaskbarOnWin11": 0
+      }
+    },
+    {
+      "id": "taskbar-button-click",
+      "version": "1.0.9",
+      "disabled": false,
+      "include": [
+        "explorer.exe"
+      ],
+      "exclude": [],
+      "architecture": [
+        "x86-64"
+      ],
+      "sourceUrl": "https://mods.windhawk.net/mods/taskbar-button-click.wh.cpp",
+      "settings": {
+        "multipleItemsBehavior": "closeForeground",
+        "keysToEndTask.Ctrl": 1,
+        "keysToEndTask.Alt": 0,
+        "oldTaskbarOnWin11": 0
+      }
+    },
+    {
+      "id": "taskbar-dock-animation",
+      "version": "1.9.2",
+      "disabled": false,
+      "include": [
+        "explorer.exe"
+      ],
+      "exclude": [],
+      "architecture": [
+        "x86-64"
+      ],
+      "sourceUrl": "https://mods.windhawk.net/mods/taskbar-dock-animation.wh.cpp",
+      "settings": {
+        "AnimationType": 0,
+        "MaxScale": 120,
+        "EffectRadius": 120,
+        "SpacingFactor": 50,
+        "BounceDelay": 500,
+        "FocusDuration": 150,
+        "MirrorForTopTaskbar": 0,
+        "DisableVerticalBounce": 0,
+        "TaskbarLabelsMode": 0,
+        "ExcludeSystemButtonsMode": 0,
+        "LerpSpeed": 50,
+        "DisableBounce": 0
+      }
+    },
+    {
+      "id": "taskbar-icon-size",
+      "version": "1.3.7",
+      "disabled": false,
+      "include": [
+        "explorer.exe"
+      ],
+      "exclude": [],
+      "architecture": [
+        "x86-64"
+      ],
+      "sourceUrl": "https://mods.windhawk.net/mods/taskbar-icon-size.wh.cpp",
+      "settings": {
+        "TaskbarHeight": 64,
+        "IconSize": 26,
+        "TaskbarButtonWidth": 48,
+        "IconSizeSmall": 16,
+        "TaskbarButtonWidthSmall": 32
+      }
+    },
+    {
+      "id": "taskbar-tray-show-on-hover",
+      "version": "1.0",
+      "disabled": false,
+      "include": [
+        "explorer.exe"
+      ],
+      "exclude": [],
+      "architecture": [
+        "x86-64"
+      ],
+      "sourceUrl": "https://mods.windhawk.net/mods/taskbar-tray-show-on-hover.wh.cpp",
+      "settings": {
+        "hiddenOpacity": 0,
+        "hideDelay": 10000,
+        "fadeDuration": 200
+      }
+    },
+    {
+      "id": "windows-11-taskbar-styler",
+      "version": "1.6.1",
+      "disabled": false,
+      "include": [
+        "explorer.exe"
+      ],
+      "exclude": [],
+      "architecture": [
+        "x86-64"
+      ],
+      "sourceUrl": "https://mods.windhawk.net/mods/windows-11-taskbar-styler.wh.cpp",
+      "settings": {
+        "theme": "",
+        "styleConstants[0]": "",
+        "controlStyles[0].target": "Taskbar.TaskbarFrame",
+        "controlStyles[0].styles[0]": "Width=Auto",
+        "controlStyles[0].styles[1]": "HorizontalAlignment=Center",
+        "controlStyles[1].target": "Taskbar.TaskbarFrame > Grid#RootGrid",
+        "controlStyles[1].styles[0]": "Visibility=Visible",
+        "controlStyles[1].styles[1]": "Margin=0,0,0,12",
+        "controlStyles[1].styles[2]": "Padding=20,0,20,0",
+        "controlStyles[2].target": "Taskbar.TaskbarBackground",
+        "controlStyles[2].styles[0]": "Background:=<SolidColorBrush Color=\"Transparent\" />",
+        "controlStyles[3].target": "Taskbar.TaskbarFrame > Grid#RootGrid > Taskbar.TaskbarBackground > Grid",
+        "controlStyles[3].styles[0]": "CornerRadius=16",
+        "controlStyles[3].styles[1]": "BorderThickness=1",
+        "controlStyles[3].styles[2]": "BorderBrush=#35FFFFFF",
+        "controlStyles[3].styles[3]": "Margin=-20,0,-20,0",
+        "controlStyles[3].styles[4]": "Padding=-1",
+        "controlStyles[4].target": "Taskbar.TaskbarFrame > Grid#RootGrid > Taskbar.TaskbarBackground > Grid > Rectangle#BackgroundStroke",
+        "controlStyles[4].styles[0]": "StrokeThickness=0",
+        "controlStyles[4].styles[1]": "Fill=Transparent",
+        "controlStyles[5].target": "Taskbar.TaskbarFrame > Grid#RootGrid > Taskbar.TaskbarBackground > Grid > Rectangle#BackgroundFill",
+        "controlStyles[5].styles[0]": "Fill:=<SolidColorBrush Color=\"#FF1A1A1A\" />",
+        "controlStyles[6].target": "Grid#SystemTrayFrameGrid",
+        "controlStyles[6].styles[0]": "Background:=<SolidColorBrush Color=\"#FF1A1A1A\" />",
+        "controlStyles[6].styles[1]": "CornerRadius=16",
+        "controlStyles[6].styles[2]": "BorderThickness=1",
+        "controlStyles[6].styles[3]": "BorderBrush=#35FFFFFF",
+        "controlStyles[6].styles[4]": "Margin=0,0,0,12",
+        "controlStyles[6].styles[5]": "Padding=12,0,12,0",
+        "controlStyles[6].styles[6]": "Visibility=Visible",
+        "controlStyles[7].target": "SystemTray.OmniButton",
+        "controlStyles[7].styles[0]": "CornerRadius=10",
+        "controlStyles[8].target": "Taskbar.TaskListButtonPanel > Border#BackgroundElement",
+        "controlStyles[8].styles[0]": "Background:=<SolidColorBrush Color=\"Transparent\" />",
+        "controlStyles[8].styles[1]": "BorderBrush:=<SolidColorBrush Color=\"Transparent\" />",
+        "controlStyles[8].styles[2]": "Opacity:=0",
+        "controlStyles[9].target": "Taskbar.TaskListLabeledButtonPanel > Border#BackgroundElement",
+        "controlStyles[9].styles[0]": "Background:=<SolidColorBrush Color=\"Transparent\" />",
+        "controlStyles[9].styles[1]": "BorderBrush:=<SolidColorBrush Color=\"Transparent\" />",
+        "controlStyles[9].styles[2]": "Opacity:=0",
+        "controlStyles[10].target": "Taskbar.TaskListButtonPanel > Border#MultiWindowElement",
+        "controlStyles[10].styles[0]": "Visibility:=Collapsed",
+        "controlStyles[10].styles[1]": "Width:=0",
+        "controlStyles[10].styles[2]": "Margin:=0",
+        "controlStyles[11].target": "Taskbar.TaskListLabeledButtonPanel > Border#MultiWindowElement",
+        "controlStyles[11].styles[0]": "Visibility:=Collapsed",
+        "controlStyles[11].styles[1]": "Width:=0",
+        "controlStyles[11].styles[2]": "Margin:=0",
+        "themeResourceVariables[0]": "",
+        "xamlDiagnosticsHandling": ""
+      }
+    }
+  ]
+}

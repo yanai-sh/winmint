@@ -1,0 +1,91 @@
+{
+  "sourcePolicy": {
+    "winget": "GUI apps, Microsoft apps, signed installers, CLI tools, and packages where the upstream installer is canonical.",
+    "github": "Specific upstream assets, stale package metadata, architecture-specific layouts.",
+    "store": "Only where Store identity is required."
+  },
+  "tools": {
+    "cursor": {
+      "displayName": "Cursor",
+      "source": "winget",
+      "id": "Anysphere.Cursor",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "vscode": {
+      "displayName": "Visual Studio Code",
+      "source": "winget",
+      "id": "Microsoft.VisualStudioCode",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "vscodium": {
+      "displayName": "VSCodium",
+      "source": "winget",
+      "id": "VSCodium.VSCodium",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "zed": {
+      "displayName": "Zed",
+      "source": "winget",
+      "id": "Zed.Zed",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "windhawk": {
+      "displayName": "Windhawk",
+      "source": "winget",
+      "id": "RamenSoftware.Windhawk",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"],
+      "wingetArchitectureByHost": {
+        "amd64": "x86",
+        "arm64": "x86"
+      }
+    },
+    "yasb": {
+      "displayName": "YASB",
+      "source": "winget",
+      "id": "AmN.yasb",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "komorebi": {
+      "displayName": "Komorebi",
+      "source": "winget",
+      "id": "LGUG2Z.komorebi",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "whkd": {
+      "displayName": "whkd",
+      "source": "winget",
+      "id": "LGUG2Z.whkd",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "neovim": {
+      "displayName": "Neovim",
+      "source": "winget",
+      "id": "Neovim.Neovim",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "flow-launcher": {
+      "displayName": "Flow Launcher",
+      "source": "winget",
+      "id": "Flow-Launcher.Flow-Launcher",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"],
+      "wingetArchitectureByHost": { "arm64": "x86" }
+    },
+    "everything": {
+      "displayName": "Everything Alpha",
+      "source": "winget",
+      "id": "voidtools.Everything.Alpha",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cmd]
+end_of_line = crlf
+
+[*.{ps1,psm1,psd1,md,json,jsonc,xml,xaml,yaml,yml,css,js,cs,svg}]
+end_of_line = lf

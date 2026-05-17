@@ -1,0 +1,28 @@
+{
+  "schema": "winws.releaseManifest.v1",
+  "include": [
+    "WinMint-CLI.ps1",
+    "WinMint-UI.ps1",
+    "LICENSE",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md",
+    "PSScriptAnalyzerSettings.psd1",
+    "winmint.ps1",
+    "assets",
+    "config",
+    "docs",
+    "schemas",
+    "scripts",
+    "src",
+    "vendor"
+  ],
+  "exclude": [
+    "cloudflare",
+    "tests",
+    "assets/drivers/**/*.msi",
+    "assets/drivers/**/_msi_extract_*",
+    "assets/cursors/*/png",
+    "**/*.iso",
+    "**/*.log"
+  ]
+}
