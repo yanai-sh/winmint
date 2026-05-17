@@ -3,8 +3,8 @@
 WinMint is distributed as a small bootstrap script plus a versioned release bundle.
 
 The bootstrap script is intentionally small. It queries the GitHub release, downloads
-the `WinWS-Slim-<version>.zip` asset, verifies the `.sha256` asset when present,
-extracts the bundle into `%LOCALAPPDATA%\WinWS\versions\<version>`, then launches
+the `WinMint-<version>.zip` asset, verifies the `.sha256` asset when present,
+extracts the bundle into `%LOCALAPPDATA%\WinMint\versions\<version>`, then launches
 `WinMint-UI.ps1` with PowerShell 7.3+.
 
 ## User Launch
@@ -36,9 +36,15 @@ Useful launcher switches:
 .\winmint.ps1 -Version v0.1.0
 .\winmint.ps1 -DryRun
 .\winmint.ps1 -ExportHostDrivers
+.\winmint.ps1 -Headless -ProfilePath C:\WinMint\profiles\surface.json -Yes
+.\winmint.ps1 -Gui
 .\winmint.ps1 -NoLaunch
 .\winmint.ps1 -Force
 ```
+
+`irm https://winmint.yanai.sh | iex` starts the current PowerShell/WPF UI. Use
+`-Headless` for the console build path. Use `-Gui` only for the WIP GPUI lab; the
+launcher fails with a clear message when a release does not package that lab yet.
 
 ## Release Build
 
@@ -56,12 +62,12 @@ ad hoc cleanup in the packaging script.
 Upload both files from `dist\` to the matching GitHub release:
 
 ```text
-WinWS-Slim-v0.1.0.zip
-WinWS-Slim-v0.1.0.zip.sha256
+WinMint-v0.1.0.zip
+WinMint-v0.1.0.zip.sha256
 ```
 
-The bootstrapper prefers an exact asset named `WinWS-Slim-<tag>.zip`, then falls
-back to the first WinWS-looking `.zip` asset.
+The bootstrapper prefers an exact asset named `WinMint-<tag>.zip`, then falls
+back to the first WinMint-looking `.zip` asset.
 
 ## Cloudflare Alias
 

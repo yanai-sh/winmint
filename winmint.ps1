@@ -4,8 +4,29 @@ param(
     [string]$Repository = 'yanai-sh/winmint',
     [string]$Version = 'latest',
     [string]$InstallRoot = '',
+    [ValidateSet('Ui','Gui','Headless')]
+    [string]$Mode = 'Ui',
+    [switch]$Gui,
+    [switch]$Headless,
+    [string]$ProfilePath = '',
+    [string]$SourceIso = '',
+    [string]$UupDumpZip = '',
+    [string]$SourceIsoOverride = '',
+    [ValidateSet('amd64','arm64','x86')]
+    [string]$Architecture = '',
     [switch]$DryRun,
     [switch]$ExportHostDrivers,
+    [switch]$Developer,
+    [switch]$Copilot,
+    [switch]$DesktopUI,
+    [switch]$Gaming,
+    [switch]$NonInteractive,
+    [switch]$ValidateOnly,
+    [switch]$Json,
+    [switch]$NoProgress,
+    [switch]$Quiet,
+    [switch]$AllowElevate,
+    [switch]$Yes,
     [switch]$NoLaunch,
     [switch]$Force
 )
@@ -49,7 +70,7 @@ function Get-WinWSRelease {
     Write-WinWSBootstrapLog "Querying GitHub release '$RequestedVersion' from $Repo."
     Invoke-RestMethod -Uri $releasePath -Headers @{
         'Accept' = 'application/vnd.github+json'
-        'User-Agent' = 'WinWS-Slim-Bootstrap'
+        'User-Agent' = 'WinMint-Bootstrap'
     } -UseBasicParsing
 }
 
@@ -69,7 +90,7 @@ function Select-WinWSAsset {
     if ($preferred) { return $preferred }
 
     $matching = $assets |
-        Where-Object { $_.name -like "*$Extension" -and $_.name -match '(?i)winws|windows' } |
+        Where-Object { $_.name -like "*$Extension" -and $_.name -match '(?i)winmint|winws|windows' } |
         Select-Object -First 1
     if ($matching) { return $matching }
 
@@ -84,7 +105,7 @@ function Save-WinWSAsset {
 
     Write-WinWSBootstrapLog "Downloading $($Asset.name)."
     Invoke-WebRequest -Uri $Asset.browser_download_url -OutFile $Destination -Headers @{
-        'User-Agent' = 'WinWS-Slim-Bootstrap'
+        'User-Agent' = 'WinMint-Bootstrap'
     } -UseBasicParsing
 }
 
@@ -145,6 +166,105 @@ function Find-WinWSUiScript {
     }
 
     return $script.FullName
+}
+
+function Find-WinWSCliScript {
+    param([string]$Root)
+
+    $script = Get-ChildItem -LiteralPath $Root -Filter 'WinMint-CLI.ps1' -Recurse -File |
+        Select-Object -First 1
+    if (-not $script) {
+        throw "WinMint-CLI.ps1 was not found under '$Root'."
+    }
+
+    return $script.FullName
+}
+
+function Find-WinWSGuiScript {
+    param([string]$Root)
+
+    foreach ($relativePath in @(
+            'WinMint-GUI.ps1',
+            'scripts\gpui\Start-GpuiLab.ps1'
+        )) {
+        $candidate = Join-Path $Root $relativePath
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+
+    throw "The WIP GUI is not packaged in this WinMint release yet. Use the default UI, or pass -Headless."
+}
+
+function Resolve-WinWSLaunchMode {
+    param(
+        [string]$RequestedMode,
+        [switch]$UseGui,
+        [switch]$UseHeadless
+    )
+
+    if ($UseGui -and $UseHeadless) {
+        throw 'Use either -Gui or -Headless, not both.'
+    }
+    if ($UseGui -and $RequestedMode -ne 'Ui') {
+        throw 'Use either -Mode or -Gui, not both.'
+    }
+    if ($UseHeadless -and $RequestedMode -ne 'Ui') {
+        throw 'Use either -Mode or -Headless, not both.'
+    }
+    if ($UseGui) { return 'Gui' }
+    if ($UseHeadless) { return 'Headless' }
+    return $RequestedMode
+}
+
+function Add-WinWSArgumentValue {
+    param(
+        [Parameter(Mandatory)][System.Collections.Generic.List[string]]$Arguments,
+        [string]$Name,
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return
+    }
+
+    $Arguments.Add("-$Name")
+    $Arguments.Add($Value)
+}
+
+function New-WinWSLaunchArguments {
+    param(
+        [string]$ScriptPath,
+        [string]$LaunchMode
+    )
+
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    foreach ($value in @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath)) {
+        $arguments.Add($value)
+    }
+
+    if ($LaunchMode -eq 'Headless') {
+        Add-WinWSArgumentValue -Arguments $arguments -Name 'ProfilePath' -Value $ProfilePath
+        Add-WinWSArgumentValue -Arguments $arguments -Name 'SourceIso' -Value $SourceIso
+        Add-WinWSArgumentValue -Arguments $arguments -Name 'UupDumpZip' -Value $UupDumpZip
+        Add-WinWSArgumentValue -Arguments $arguments -Name 'SourceIsoOverride' -Value $SourceIsoOverride
+        Add-WinWSArgumentValue -Arguments $arguments -Name 'Architecture' -Value $Architecture
+        if ($Developer) { $arguments.Add('-Developer') }
+        if ($Copilot) { $arguments.Add('-Copilot') }
+        if ($DesktopUI) { $arguments.Add('-DesktopUI') }
+        if ($Gaming) { $arguments.Add('-Gaming') }
+        if ($NonInteractive) { $arguments.Add('-NonInteractive') }
+        if ($ValidateOnly) { $arguments.Add('-ValidateOnly') }
+        if ($Json) { $arguments.Add('-Json') }
+        if ($NoProgress) { $arguments.Add('-NoProgress') }
+        if ($Quiet) { $arguments.Add('-Quiet') }
+        if ($AllowElevate) { $arguments.Add('-AllowElevate') }
+        if ($Yes) { $arguments.Add('-Yes') }
+    }
+
+    if ($DryRun) { $arguments.Add('-DryRun') }
+    if ($ExportHostDrivers -and $LaunchMode -ne 'Gui') { $arguments.Add('-ExportHostDrivers') }
+    return $arguments.ToArray()
 }
 
 function Get-WinWSObjectProperty {
@@ -263,19 +383,21 @@ if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
     throw 'LOCALAPPDATA is not set. This launcher must run on Windows.'
 }
 if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
-    $InstallRoot = Join-Path $env:LOCALAPPDATA 'WinWS'
+    $InstallRoot = Join-Path $env:LOCALAPPDATA 'WinMint'
 }
+
+$launchMode = Resolve-WinWSLaunchMode -RequestedMode $Mode -UseGui:$Gui -UseHeadless:$Headless
 
 $release = Get-WinWSRelease -Repo $Repository -RequestedVersion $Version
 $tag = [string]$release.tag_name
 $safeTag = $tag -replace '[^A-Za-z0-9._-]', '_'
 $downloadRoot = Join-Path $InstallRoot 'downloads'
 $versionRoot = Join-Path (Join-Path $InstallRoot 'versions') $safeTag
-$installMarkerPath = Join-Path $versionRoot '.winws-install-complete.json'
-$archiveName = "WinWS-Slim-$tag.zip"
+$installMarkerPath = Join-Path $versionRoot '.winmint-install-complete.json'
+$archiveName = "WinMint-$tag.zip"
 $archive = Select-WinWSAsset -Release $release -Extension '.zip' -PreferredName $archiveName
 if (-not $archive) {
-    throw "Release '$tag' does not include a WinWS zip asset."
+    throw "Release '$tag' does not include a WinMint zip asset."
 }
 
 $checksumName = "$($archive.name).sha256"
@@ -315,14 +437,17 @@ if (-not $uiScript) {
 Write-WinWSBootstrapLog "Ready: $uiScript" 'OK'
 
 if ($NoLaunch) {
-    Write-WinWSBootstrapLog 'NoLaunch requested; not starting the UI.'
+    Write-WinWSBootstrapLog 'NoLaunch requested; not starting WinMint.'
     return
 }
 
 $pwshExe = Get-WinWSPowerShell
-$arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $uiScript)
-if ($DryRun) { $arguments += '-DryRun' }
-if ($ExportHostDrivers) { $arguments += '-ExportHostDrivers' }
+$entryScript = switch ($launchMode) {
+    'Ui' { $uiScript }
+    'Headless' { Find-WinWSCliScript -Root $versionRoot }
+    'Gui' { Find-WinWSGuiScript -Root $versionRoot }
+}
+$arguments = New-WinWSLaunchArguments -ScriptPath $entryScript -LaunchMode $launchMode
 
-Write-WinWSBootstrapLog 'Starting WinMint UI.'
+Write-WinWSBootstrapLog "Starting WinMint $launchMode."
 & $pwshExe @arguments
