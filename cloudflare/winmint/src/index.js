@@ -73,16 +73,6 @@ export default {
       return textResponse("Method not allowed\n", 405, { allow: "GET, HEAD" });
     }
 
-    const bootstrapUrl = env.BOOTSTRAP_URL || DEFAULT_BOOTSTRAP_URL;
-    const upstream = await fetch(bootstrapUrl, {
-      headers: { "user-agent": "WinMint-Bootstrap-Worker" },
-      cf: { cacheEverything: true, cacheTtl: 300 },
-    });
-
-    if (!upstream.ok) {
-      return textResponse(`Bootstrap source returned HTTP ${upstream.status}\n`, 502);
-    }
-
     const headers = {
       "content-type": "text/plain; charset=utf-8",
       "cache-control": "public, max-age=300",
@@ -95,6 +85,16 @@ export default {
 
     if (CLI_PATHS.has(url.pathname)) {
       return new Response(cliWrapper(url.origin), { status: 200, headers });
+    }
+
+    const bootstrapUrl = env.BOOTSTRAP_URL || DEFAULT_BOOTSTRAP_URL;
+    const upstream = await fetch(bootstrapUrl, {
+      headers: { "user-agent": "WinMint-Bootstrap-Worker" },
+      cf: { cacheEverything: true, cacheTtl: 300 },
+    });
+
+    if (!upstream.ok) {
+      return textResponse(`Bootstrap source returned HTTP ${upstream.status}\n`, 502);
     }
 
     return new Response(await upstream.text(), { status: 200, headers });
