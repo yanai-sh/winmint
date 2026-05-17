@@ -21,6 +21,7 @@ Short path:
 
 ```powershell
 irm https://winmint.yanai.sh | iex
+irm https://winmint.yanai.sh/cli | iex
 ```
 
 Passing parameters through a pipeline is awkward. Use a scriptblock when arguments
@@ -43,8 +44,9 @@ Useful launcher switches:
 ```
 
 `irm https://winmint.yanai.sh | iex` starts the current PowerShell/WPF UI. Use
-`-Headless` for the console build path. Use `-Gui` only for the WIP GPUI lab; the
-launcher fails with a clear message when a release does not package that lab yet.
+`irm https://winmint.yanai.sh/cli | iex` for the console build path. Use `-Gui`
+only for the WIP GPUI lab; the launcher fails with a clear message when a release
+does not package that lab yet.
 
 ## Release Build
 
@@ -82,7 +84,8 @@ bunx wrangler@latest deploy --config wrangler.jsonc
 The Worker uses `winmint.yanai.sh` as a custom domain and serves the canonical
 `winmint.ps1` source as `text/plain`. The future portfolio/blog site can
 own the apex `yanai.sh` domain independently. The root path serves the
-bootstrap; `/winmint` and `/winmint.ps1` are aliases.
+bootstrap; `/winmint` and `/winmint.ps1` are aliases. `/cli` and `/cli.ps1` serve
+a small wrapper that invokes the canonical bootstrap with `-Headless`.
 
 The hostname must not be protected by a JavaScript challenge, managed challenge,
 Cloudflare Access, Bot Fight Mode, browser integrity check, or WAF rule that can
