@@ -24,6 +24,8 @@ param(
     [switch]$Copilot,
     [switch]$DesktopUI,
     [switch]$Gaming,
+    [Alias('FlowEverything')]
+    [switch]$InstallFlowEverything,
     [switch]$NonInteractive,
     [switch]$ValidateOnly,
     [switch]$Json,

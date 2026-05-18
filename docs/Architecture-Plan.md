@@ -6,7 +6,7 @@ Branch: `architecture/profile-engine`
 
 This document defines the target architecture for WinMint. The goal is not a full rewrite. The goal is to turn the current working project into a professional, modular, profile-driven Windows ISO builder without letting the repo fragment into hundreds of tiny scripts.
 
-WinWS should remain:
+WinMint should remain:
 
 - Script-first and transparent.
 - Launchable through `irm https://winmint.yanai.sh | iex`.
@@ -152,40 +152,47 @@ The current structure is close enough to refactor. Do not restart the repo. Move
 |   |-- Windows-Debloat-Strategy.md
 |   `-- ...
 |-- schemas/
-|   |-- winws.buildprofile.schema.json
-|   |-- winws.buildmanifest.schema.json
-|   `-- winws.agentstate.schema.json
-|-- scripts/
-|   |-- Validate.ps1
-|   |-- New-WinMintReleaseBundle.ps1
-|   `-- tools/
+|   |-- winmint.buildprofile.schema.json
+|   |-- winmint.buildmanifest.schema.json
+|   `-- winmint.agentstate.schema.json
+|-- apps/
+|   |-- WinMint.GPUI/
+|   `-- WinMint.LegacyWpf/
 |-- src/
-|   |-- WinWS/
-|   |-- WinWS.UI/
-|   `-- WinWS.Agent/
+|   |-- WinMint/
+|   |-- WinMint.Agent/
+|   `-- WinMint.Setup/
 |-- tests/
+|   |-- contract/
 |   |-- unit/
 |   |-- integration/
 |   `-- fixtures/
+|-- tools/
+|   |-- audit/
+|   |-- brand/
+|   |-- gpui/
+|   |-- release/
+|   |-- ui-bridge/
+|   `-- validation/
 |-- winmint.ps1
 |-- README.md
 `-- THIRD_PARTY_NOTICES.md
 ```
 
-### `src/WinWS`
+### `src/WinMint`
 
 PowerShell engine module. This is where Windows servicing lives.
 
 Target internal layout:
 
 ```text
-src/WinWS/
-|-- WinWS.ps1
+src/WinMint/
+|-- WinMint.ps1
 |-- Public/
-|   |-- New-WinWSBuildProfile.ps1
-|   |-- Test-WinWSBuildProfile.ps1
-|   |-- Start-WinWSBuild.ps1
-|   `-- New-WinWSBuildReport.ps1
+|   |-- New-WinMintBuildProfile.ps1
+|   |-- Test-WinMintBuildProfile.ps1
+|   |-- Start-WinMintBuild.ps1
+|   `-- New-WinMintBuildReport.ps1
 `-- Private/
     |-- Config/
     |-- Drivers/
@@ -205,15 +212,15 @@ Rules:
 - `Pipeline.ps1` should become a thin orchestrator, not a giant logic file.
 - Image servicing code should not know WPF exists.
 
-### `src/WinWS.UI`
+### `apps/WinMint.LegacyWpf`
 
 PowerShell-hosted WPF app. This collects choices and renders previews.
 
 Target internal layout:
 
 ```text
-src/WinWS.UI/
-|-- Start-WinWSUI.ps1
+apps/WinMint.LegacyWpf/
+|-- Start-WinMintUI.ps1
 |-- Views/
 |-- ViewModels/
 |-- Services/
@@ -229,15 +236,15 @@ Rules:
 - UI logic should not directly mutate engine settings.
 - Keep UI orchestration in `ViewModels/` + `Services/` (single cinematic stack); avoid parallel wizard implementations.
 
-### `src/WinWS.Agent`
+### `src/WinMint.Agent`
 
 FirstLogon/live-user setup agent.
 
 Target internal layout:
 
 ```text
-src/WinWS.Agent/
-|-- Start-WinWSAgent.ps1
+src/WinMint.Agent/
+|-- Start-WinMintAgent.ps1
 |-- Agent.UI/
 |-- Modules/
 |   |-- Core/
@@ -258,22 +265,23 @@ Rules:
 - A failed optional layer must not break the entire first logon.
 - Reboot-required steps must be explicit.
 
-### `scripts`
+### `tools`
 
-Only developer and setup entry scripts belong here.
+Only developer automation and authoring scripts belong here.
 
 Allowed:
 
 - Validation scripts.
 - Release bundle scripts.
-- One-off tooling under `scripts/tools/`.
-- Windows setup phase entrypoints that must live as loose scripts.
+- One-off tooling under a named tool folder.
+- UI bridge scripts used by app experiments.
 
 Not allowed:
 
 - Core engine logic.
 - UI logic.
 - Agent modules.
+- Staged setup payloads.
 - Random helper scripts that should be module functions.
 
 ## File and Module Discipline
@@ -304,6 +312,7 @@ Rules:
 ## Profile Resolution
 
 The profile layer should normalize raw UI choices into concrete build behavior.
+GUIs author intent; the shared PowerShell profile factory resolves intent; the engine consumes the resulting `BuildProfile.json`. The CLI follows the same contract and should remain a headless executor/profile authoring helper rather than a separate terminal wizard.
 
 Example:
 
@@ -325,10 +334,10 @@ The UI may preview this behavior, but profile resolution should be reusable by U
 Suggested functions:
 
 ```powershell
-New-WinWSBuildProfile
-Resolve-WinWSBuildProfile
-Test-WinWSBuildProfile
-New-WinWSBuildConfig -Profile $profile
+New-WinMintBuildProfile
+Resolve-WinMintBuildProfile
+Test-WinMintBuildProfile
+New-WinMintBuildConfig -Profile $profile
 ```
 
 ## Build Engine Phases
@@ -397,12 +406,12 @@ Use FirstLogon for:
 
 ## OOBE Policy
 
-WinWS uses official Windows OOBE where it is the right owner, and preconfigures the rest through supported setup/profile contracts.
+WinMint uses official Windows OOBE where it is the right owner, and preconfigures the rest through supported setup/profile contracts.
 
 - The network page stays visible so the user can join Wi-Fi before first-logon automation.
 - `AccountMode Local` creates the local administrator through `autounattend.xml`; the account OOBE page is not needed.
 - `AccountMode MicrosoftOobe` removes local-account and account-bypass nodes so official Windows account setup is shown.
-- Privacy is WinWS-owned, not a choice matrix. Location services are enabled by default and can be disabled with the explicit location setting; advertising, tailored experiences, feedback/activity history, and similar surfaces are disabled by baseline policy.
+- Privacy is WinMint-owned, not a choice matrix. Location services are disabled by default for predictable regional/time-zone behavior and can be enabled with the explicit location setting; advertising, tailored experiences, feedback/activity history, and similar surfaces are disabled by baseline policy.
 - Phone Link is not a profile group. Preserve/remove behavior is a feature policy decision, separate from whether Microsoft shows cloud-service prompts during official OOBE.
 
 ## Testing Strategy
@@ -463,19 +472,19 @@ Do this incrementally. Keep the app runnable after every step.
 ### Phase 6: Cleanup
 
 - Remove stale docs and obsolete scripts.
-- Move one-off tools under `scripts/tools/` or out of version control.
+- Move one-off tools under `tools/` or out of version control.
 - Enforce file-size and boundary checks in validation.
 
 ## Open Decisions
 
 | Decision | Current Lean |
 |----------|--------------|
-| Should the UI save build profiles by default? | Yes, under `%APPDATA%\WinWS\profiles`. |
+| Should the UI save build profiles by default? | Yes, under `%APPDATA%\WinMint\profiles`. |
 | Should first-logon be blocking? | Visible and compact, but not a full-screen blocker. |
 | Should the CLI be first-class? | Yes, after the profile schema is stable. |
 | Should payloads be bundled or downloaded? | Core small assets bundled; larger tools versioned and downloaded with hashes. |
 | Should OEM driver downloaders exist? | Later. Keep stable manual and This PC paths first. |
-| Should WinWS ever become a compiled app? | Only if script-first distribution becomes a real limitation. |
+| Should WinMint ever become a compiled app? | Only if script-first distribution becomes a real limitation. |
 
 ## Success Criteria
 

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - architecture/**
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate PowerShell
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate syntax and profile invariants
+        shell: pwsh
+        run: |
+          ./tests/contract/Test-ProfileInvariants.ps1
+          ./tools/validation/Validate.ps1
+
+  gpui_lab:
+    name: GPUI lab (Rust)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo cache for GPUI
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/WinMint.GPUI
+
+      - name: cargo check and test — GPUI crate
+        shell: pwsh
+        run: |
+          cargo check --manifest-path apps/WinMint.GPUI/Cargo.toml
+          cargo test --manifest-path apps/WinMint.GPUI/Cargo.toml

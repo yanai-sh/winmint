@@ -1,6 +1,6 @@
 {
-  "schema": "winws.windhawkPreset.v1",
-  "description": "WinWS Windhawk desktop preset. Stores settings only; official mod sources and DLLs are downloaded at install time.",
+  "schema": "winmint.windhawkPreset.v1",
+  "description": "WinMint Windhawk desktop preset. Stores settings only; official mod sources and DLLs are downloaded at install time.",
   "created": "2026-05-01T13:36:51.1549911+03:00",
   "mods": [
     {

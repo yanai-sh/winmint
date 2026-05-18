@@ -86,6 +86,13 @@
       "id": "voidtools.Everything.Alpha",
       "versionPolicy": "latest",
       "architectures": ["amd64", "arm64"]
+    },
+    "raycast": {
+      "displayName": "Raycast",
+      "source": "winget",
+      "id": "Raycast.Raycast",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
     }
   }
 }

@@ -1,6 +1,6 @@
 # Windhawk Preset
 
-`preset.json` is the version-controlled WinWS Windhawk desktop preset.
+`preset.json` is the version-controlled WinMint Windhawk desktop preset.
 
 The preset stores:
 
@@ -11,7 +11,7 @@ The preset stores:
 - mod settings
 
 It does not store compiled Windhawk mod DLLs or local Windhawk `ProgramData` state.
-During first logon, `scripts/setup/WindhawkBootstrap.ps1` installs Windhawk through the
+During first logon, `src/WinMint.Setup/WindhawkBootstrap.ps1` installs Windhawk through the
 agent package manifest, downloads official mod source and precompiled DLLs from
 `mods.windhawk.net`, writes the Windhawk registry configuration, and restarts
 Windhawk/Explorer.

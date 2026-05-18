@@ -1,6 +1,6 @@
 # WinMint
 
-Opinionated Windows 11 ISO builder for clean developer workstation installs. Starts from official Windows media, applies a curated set of setup automation, debloat, DMA interoperability defaults, drivers, desktop layer presets, and first-logon bootstrap, then emits a bootable ISO.
+Opinionated Windows 11 ISO builder for clean developer workstation installs. Starts from official Windows media, applies a curated set of setup automation, debloat, optional DMA interoperability, drivers, desktop layer presets, and first-logon bootstrap, then emits a bootable ISO.
 
 Works on x64 and ARM64 hardware (Surface, standard laptops, VMs). All choices are designed to not compromise system features the user might reasonably want.
 
@@ -13,10 +13,10 @@ WinMint does not replace Rufus or Ventoy. Build the ISO here; write it to USB wi
 ## Quick start
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-UI.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-GUI.ps1
 ```
 
-The wizard auto-elevates via UAC at launch. Reading the offline `install.wim` for the edition list (`Get-WindowsImage`) and every later DISM/registry/disk operation needs admin, so the whole flow runs in one elevated process.
+The primary GPUI launcher starts the packaged WinMint GUI. The legacy WPF fallback remains available as `WinMint-LegacyUI.ps1`; it auto-elevates via UAC because reading the offline `install.wim` for the edition list (`Get-WindowsImage`) and every later DISM/registry/disk operation needs admin.
 
 Select your source ISO in the wizard. Browse via the file dialog, or copy an ISO in Explorer and bring the wizard to the foreground — clipboard auto-detection picks it up. Architecture is inferred from the filename and cross-checked against the WIM metadata.
 
@@ -24,18 +24,21 @@ Local layout:
 
 ```
 winmint/
-├── WinMint-UI.ps1     # WPF wizard (recommended)
+├── WinMint-GUI.ps1    # primary GPUI launcher
+├── WinMint-LegacyUI.ps1 # legacy WPF fallback
 ├── WinMint-CLI.ps1    # headless/console builder (profile or flags; no GUI required)
 ├── winmint.ps1         # bootstrap downloader — fetches the latest release and launches the UI
+├── apps/               # UI front ends (primary GPUI + legacy WPF)
+├── src/                # engine, FirstLogon agent, and staged setup payloads
+├── tools/              # validation, release, bridge, and authoring tools
 ├── config/
 │   └── autounattend.xml      # OOBE automation template
-├── Win11_25H2_ARM64.iso      # your source Windows 11 ISO (25H2+ only)
 ├── assets/
 │   └── drivers/              # optional: custom driver payloads
 └── output/                   # generated ISO lands here (auto-created)
 ```
 
-### Remote launch (future release)
+### Remote launch
 
 ```powershell
 irm https://winmint.yanai.sh | iex
@@ -43,19 +46,39 @@ irm https://winmint.yanai.sh | iex
 
 ### Headless build
 
-Run the builder without the WPF UI by passing either a complete build profile or the required settings as flags:
+Run the builder without a GUI. The CLI is profile-first: `BuildProfile.json` is the full-fidelity contract used by the CLI, GPUI, legacy WPF UI, and automation. Use profile execution for repeatable builds, profile generation for editable templates, and shallow flags for quick automation.
+
+#### Profile builds
 
 ```powershell
 # Build from a committed/generated profile contract
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
   -ProfilePath .\BuildProfile.json
 
+# Generate an editable starter profile without building or requiring elevation
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
+  -NewProfile .\BuildProfile.json `
+  -Preset Developer
+
+# Save flag-composed intent as a profile, then edit/reuse it later
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
+  -OutProfile .\dev-desktop.json `
+  -Preset Developer `
+  -DesktopUI `
+  -Architecture amd64
+```
+
+`-ProfilePath` consumes the first-class `BuildProfile.json` contract directly and strips secrets from the public artifact written under `output\`. `-NewProfile` and `-OutProfile` write schema-valid profiles and exit without building; they are intended for editable templates and future GUI/automation handoff.
+
+#### Flag builds
+
+```powershell
 # Build from flags, with no prompts
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
   -NonInteractive `
   -SourceIso .\Win11_25H2_amd64.iso `
   -Architecture amd64 `
-  -ComputerName WinWS `
+  -ComputerName WinMint `
   -AccountName dev
 
 # Keep official account OOBE, while still preconfiguring machine/region/disk choices
@@ -64,6 +87,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
   -SourceIso .\Win11_25H2_ARM64.iso `
   -Architecture arm64 `
   -SetupOption CopilotPlus `
+  -EditionMode Fixed `
+  -Edition 'Windows 11 Pro' `
   -ComputerName SL7 `
   -AccountName Yanai `
   -AccountMode MicrosoftOobe `
@@ -76,11 +101,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
   -UserLocale he-IL `
   -InputLocale 'en-US;he-IL'
 
-# Build from a user-provided UUP Dump conversion zip. WinMint prepares the ISO
-# with updates/component cleanup using its own defaults, then runs the normal build.
+# Build from a user-provided UUP Dump source only when you want
+# WinMint to prepare the ISO. If you already converted UUP to an ISO,
+# pass that ISO through -SourceIso instead.
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
   -NonInteractive `
-  -UupDumpZip .\uup_dump\26220.8474_arm64_en-us_core_f75dadfc_convert.zip `
+  -UupDumpSource .\uup_dump\26220.8474_arm64_en-us_core_f75dadfc_convert.zip `
   -Yes `
   -Architecture arm64 `
   -TargetDevice ThisPC `
@@ -102,7 +128,58 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
   -Architecture amd64
 ```
 
-`-SourceIso` implies the no-prompt path. `-UupDumpZip` accepts a UUP Dump conversion zip and prepares a normal ISO first; `-Yes` is required before WinMint downloads/converts Windows payloads. `-TargetDevice ThisPC` captures installed drivers from the build machine for a same-device reinstall. `-TargetDevice DifferentPC` uses default Windows drivers unless `-DriverPack <msi|zip>` is supplied. With no profile group flags, WinMint uses the `Minimal` posture: remove obvious consumer bloat, Copilot/WebExperience surfaces, and Xbox gaming apps. Additive group flags are `-Developer`, `-Copilot`, `-Gaming`, and `-DesktopUI`/`--Desktop-UI`. `-Developer` enables WSL/editor/OpenSSH/developer-mode defaults, `-Copilot` keeps Microsoft Copilot and WebExperience surfaces, `-Gaming` keeps Xbox/gaming packages and policies, and `-DesktopUI` selects the WinMint shell stack. Recall is always removed when present. `-SetupOption CopilotPlus` is still accepted as a compatibility alias for the Copilot group. `-AccountMode Local` is the default unattended local-admin flow. `-AccountMode MicrosoftOobe` removes the account-bypass pieces from `autounattend.xml`, so Windows runs the official Microsoft-account/sign-in OOBE while WinMint still applies the CLI-provided machine, disk, servicing, and first-logon configuration. WinMint always uses Germany as the Windows setup region to bake Microsoft DMA interoperability, with Ireland as a defensive fallback if the setup-region culture cannot be resolved, then restores the builder's configured region after successful FirstLogon. Location services are enabled by default; pass `-NoLocationServices` to disable them. Other privacy surfaces are WinMint baseline policy, not profile choices. `-ProfilePath` consumes the first-class `BuildProfile.json` contract directly and strips secrets from the public artifact written under `output\`.
+There is intentionally no v1 terminal wizard/TUI. GUI front ends author intent, the shared PowerShell profile factory resolves it, and the engine consumes the resulting profile.
+
+#### Source ISO and UUP Dump
+
+`-SourceIso` is the preferred input when you already have a final Windows ISO, including an ISO you created yourself from UUP Dump. Passing `-SourceIso` implies the no-prompt path for CLI builds.
+
+`-UupDumpSource` accepts a UUP Dump conversion zip only when you want WinMint to prepare and validate the ISO first. UUP Dump folders are not accepted: if UUP Dump already produced an ISO, pass that ISO with `-SourceIso`. `-Yes` is required before WinMint downloads or converts Windows payloads.
+
+`-TargetDevice ThisPC` means same-machine reinstall: WinMint captures installed drivers and uses the build host timezone, locale, and keyboard layouts as target intent. `-TargetDevice DifferentPC` means the build host is only a factory: WinMint uses default Windows drivers unless `-DriverPack <msi|zip>` is supplied, and any target timezone, locale, and keyboard assumptions should be checked explicitly.
+
+#### Account, region, and edition
+
+Use `-EditionMode TargetLicense` for the best automatic OEM activation path. Use `-EditionMode Fixed -Edition '<licensed edition>'` only when you know the target edition or accept manual activation; fixed edition builds service one image and shrink the final ISO.
+
+`-AccountMode Local` is the default unattended local-admin flow. `-AccountMode MicrosoftOobe` removes the account-bypass pieces from `autounattend.xml`, so Windows runs the official Microsoft-account/sign-in OOBE while WinMint still applies the CLI-provided machine, disk, servicing, and first-logon configuration.
+
+Pass `-DmaInterop` to opt into the EEA setup-region DMA interoperability path; WinMint uses Ireland with Germany as a defensive fallback, disables automatic time-zone updates, then restores the configured region after successful FirstLogon. Location services are disabled by default; pass `-LocationServices` to keep them enabled. Other privacy surfaces are WinMint baseline policy, not profile choices.
+
+#### Optional feature groups
+
+`-Preset Minimal|Developer|CopilotPlus|Gaming|DesktopUI` seeds profile groups, and additive group flags can be combined with it. With no profile group flags, WinMint uses the `Minimal` posture: remove obvious consumer bloat, Copilot/WebExperience surfaces, and Xbox gaming apps.
+
+Additive group flags are `-Developer`, `-Copilot`, `-Gaming`, and `-DesktopUI`/`--Desktop-UI`. `-Developer` enables OpenSSH/developer-mode defaults but does not preselect editors, WSL distros, package managers, or launchers. `-Copilot` keeps Microsoft Copilot and WebExperience surfaces, `-Gaming` keeps Xbox/gaming packages and policies, and `-DesktopUI` selects the WinMint shell stack for direct flag-built builds. `-SetupOption CopilotPlus` is still accepted as a compatibility alias for the Copilot group.
+
+Launchers are not implied by any profile group; pass `-Launcher FlowEverything` for Flow Launcher plus Everything Alpha, `-Launcher Raycast` for Raycast, or omit the flag for no launcher. Phone Link first-logon policy and live install audit are disabled by default; pass `-PhoneLink` or `-LiveInstallAudit` only when you want those live-user modules. Profile templates include selected groups but leave granular editor, WSL distro, shell-layer, launcher, audit, and Phone Link choices unselected unless explicit flags are provided. Recall is always removed when present.
+
+---
+
+## Safety model
+
+- **Your ISO is the base.** WinMint does not ship or pin a hidden golden Windows image. The source ISO you choose is the version DISM services.
+- **Security foundations stay intact.** WinMint does not disable Defender, Firewall, SmartScreen, Windows Update, Store infrastructure, WebView2, WSL, IPv6, WinRE, the component store, or UAC.
+- **No recurring maintenance agent.** WinMint does not leave a scheduled maintenance task, background service, or drift-fighting script behind on the installed system.
+- **Destructive disk modes are explicit.** `Manual` leaves disk choice to Windows Setup, `AutoWipeDisk0` targets disk 0, and `DualBootReserved` creates a Windows layout using a selected preset while leaving remaining space unallocated for another OS.
+
+---
+
+## Contracts and outputs
+
+WinMint uses three JSON contracts:
+
+| Contract | Schema | Purpose |
+|----------|--------|---------|
+| `BuildProfile.json` | `schemas/winmint.buildprofile.schema.json` | User/build intent from the GUI or CLI |
+| `BuildManifest.json` | `schemas/winmint.buildmanifest.schema.json` | Machine-readable record of what the engine did |
+| `state.json` | `schemas/winmint.agentstate.schema.json` | FirstLogon agent retry/resume state on the installed system |
+
+Build outputs land under `output/`:
+
+- Bootable ISO
+- `WinMint-BuildManifest.json` — source ISO metadata, payload hashes, editions selected, drivers injected, build duration, warnings
+- `WinMint-BuildProfile.json` — secrets-free copy of the build profile, with password material stripped
 
 ---
 
@@ -145,11 +222,11 @@ The build pipeline runs in four phases:
 **2. OOBE automation (`autounattend.xml`)**
 - `-AccountMode Local`: local account creation, no Microsoft account page
 - `-AccountMode MicrosoftOobe`: official Windows account page shown
-- Timezone injected from build host
-- DMA interoperability baked by using Germany (`de-DE`, GeoID 94) as the Windows setup region
-- Builder/user region restored after successful FirstLogon; the DMA setup-region decision is intentionally left baked
+- Timezone injected from the target regional profile (`-TimeZoneId` in CLI/profile builds; the UI defaults to the builder setting but writes it as profile intent)
+- Optional DMA interoperability (`-DmaInterop`) baked by using Ireland (`en-IE`, GeoID 68) as the Windows setup region
+- Builder/user region restored after successful FirstLogon; automatic time-zone updates are disabled when DMA interoperability is selected
 - Wi-Fi page preserved (not skipped)
-- Privacy pages skipped/preconfigured (location services stay enabled unless `-NoLocationServices` is selected; other privacy surfaces are disabled by baseline policy)
+- Privacy pages skipped/preconfigured (location services are disabled unless `-LocationServices` is selected; other privacy surfaces are disabled by baseline policy)
 - Recall removal at image servicing time
 
 **3. SetupComplete (runs as SYSTEM before first logon)**
@@ -169,15 +246,11 @@ The build pipeline runs in four phases:
   - **YASB** — status bar (taskbar replacement)
   - **Windhawk** — UI mod engine (suppresses virtual desktop flyouts by default)
 - Editors: Cursor, VSCodium, Zed, Neovim (per wizard selection)
-- **Flow Launcher** and **voidtools Everything Alpha** are installed on first logon when `Developer` or `DesktopUI` is selected. If both groups are selected, the shared module still runs once. Everything Alpha runs as a background service/index provider with its tray icon hidden. The Windows Search / indexing service is left intact so Settings and shell integrations keep working.
+- **Launchers** are opt-in first-logon modules (`-Launcher FlowEverything`, `-Launcher Raycast`, or `features.launcher`). FlowEverything installs Flow Launcher plus voidtools Everything Alpha; Everything Alpha runs as a background service/index provider with its tray icon hidden. Raycast installs through winget as its own launcher choice. The Windows Search / indexing service is left intact so Settings and shell integrations keep working.
+- **Phone Link policy** and **live install audit** are opt-in live-user modules. They do not run unless `-PhoneLink`, `-LiveInstallAudit`, or matching profile features are selected.
 - AutoLogon registry cleanup on successful completion
 
-WinWS is WSL2-first. Put Linux projects under `/home/<user>/code` inside the WSL distro (that tree lives in the WSL VHDX). **Dev Drive** (ReFS) is only for Windows-native repos and build caches if you add it later; it does not replace the WSL filesystem and is not where the Linux distro lives—use Dev Drive for Windows paths, WSL for Linux paths.
-
-**Output**
-- Bootable ISO in `output/`
-- `output/WinWS-BuildManifest.json` — machine-readable build record (source ISO, all payload SHA-256 hashes, editions selected, drivers injected, build duration)
-- `output/WinWS-BuildProfile.json` — secrets-free copy of the build profile (password stripped)
+WinMint is WSL2-first. Put Linux projects under `/home/<user>/code` inside the WSL distro (that tree lives in the WSL VHDX). **Dev Drive** (ReFS) is only for Windows-native repos and build caches if you add it later; it does not replace the WSL filesystem and is not where the Linux distro lives—use Dev Drive for Windows paths, WSL for Linux paths.
 
 ---
 
@@ -185,9 +258,9 @@ WinWS is WSL2-first. Put Linux projects under `/home/<user>/code` inside the WSL
 
 ### AppX removals
 
-Grouped by category. WinWS exposes these through profile groups, not granular debloat toggles.
+Grouped by category. WinMint exposes these through profile groups, not granular debloat toggles.
 
-**Always removed** — no legitimate role in the WinWS baseline:
+**Always removed** — no legitimate role in the WinMint baseline:
 - `Microsoft.GetHelp` — links to web support, superseded by search
 - `Microsoft.MicrosoftOfficeHub` — Store upsell stub, not Office itself
 - `Microsoft.WindowsFeedbackHub` — sends system telemetry on demand
@@ -198,7 +271,7 @@ Grouped by category. WinWS exposes these through profile groups, not granular de
 
 **Advertising and AI (removed by Minimal; Copilot/WebExperience kept by `Copilot`):**
 - `Microsoft.BingNews` / `MicrosoftWindows.Client.WebExperience` (Widgets) — news feed on the taskbar; no developer use
-- `Microsoft.Windows.DevHome` — Microsoft's developer setup tool; WinWS replaces its function
+- `Microsoft.Windows.DevHome` — Microsoft's developer setup tool; WinMint replaces its function
 - `Microsoft.Copilot` — Copilot sidebar; can be re-enabled from Settings
 
 **Gaming/Xbox (removed by Minimal; kept by `Gaming`):**
@@ -218,7 +291,7 @@ Grouped by category. WinWS exposes these through profile groups, not granular de
 - **Phone Link** and **Cross Device** stay provisioned by default (coherent phone ↔ PC linking).
 - **Camera**, **Voice Recorder**, **Sticky Notes**, **Clock (Alarms & Timer)**, and **Notepad** stay provisioned by default.
 
-**Also removed by default (reinstall from Store if needed):** Zune Music/Video (legacy media inbox), OneNote (UWP), Remote Desktop (Store client), and common **trial / OEM-bundled** AppX where package names match (McAfee, Norton, ExpressVPN, Surfshark, AVG, Avast, KasperskyLab, Dolby trials, CCleaner — no-op if your SKU never shipped them). Full OEM suites (Lenovo/HP/Dell companion apps) vary by machine; extend `Get-WinWSAppxBloatwareCategories` when you have a SKU-specific list.
+**Also removed by default (reinstall from Store if needed):** Zune Music/Video (legacy media inbox), OneNote (UWP), Remote Desktop (Store client), and common **trial / OEM-bundled** AppX where package names match (McAfee, Norton, ExpressVPN, Surfshark, AVG, Avast, KasperskyLab, Dolby trials, CCleaner — no-op if your SKU never shipped them). Full OEM suites (Lenovo/HP/Dell companion apps) vary by machine; extend `Get-WinMintAppxBloatwareCategories` when you have a SKU-specific list.
 
 ### Registry tweaks (offline, applied to the mounted image)
 
@@ -226,12 +299,12 @@ Applied during setup so they take effect before the user ever logs in. Most user
 
 ### European interoperability / DMA
 
-WinMint always bakes Microsoft Digital Markets Act interoperability by installing with an EEA setup region. The generated answer file uses Germany (`de-DE`, GeoID 94) for the Windows setup/user-region path so Windows exposes EEA/DMA behavior such as Edge/Bing uninstall affordances, stronger default-browser respect, and Windows Search provider interoperability where the source Windows build supports them. Ireland (`en-IE`, GeoID 68) is retained only as a defensive fallback if Germany's region metadata cannot be resolved on the build runtime.
+WinMint can opt into Microsoft Digital Markets Act interoperability by installing with an EEA setup region. When `-DmaInterop` is selected, the generated answer file uses Ireland (`en-IE`, GeoID 68) for the Windows setup/user-region path so Windows exposes EEA/DMA behavior such as Edge/Bing uninstall affordances, stronger default-browser respect, and Windows Search provider interoperability where the source Windows build supports them. Germany (`de-DE`, GeoID 94) is retained only as a defensive fallback if Ireland's region metadata cannot be resolved on the build runtime.
 
-After the FirstLogon agent completes successfully, WinMint restores the builder's configured end-state: time zone, display language, input choices, user/system locale, and home-location GeoID. The intended split is that an English US build host in Israel produces an English US Windows UI with Israel as the actual region. Location services remain enabled by default unless `-NoLocationServices` is used. Live physical location does not undo the setup-time DMA decision.
+After the FirstLogon agent completes successfully, WinMint restores the builder's configured end-state: time zone, display language, input choices, user/system locale, and home-location GeoID. When DMA interoperability is enabled, WinMint also disables the Auto Time Zone Updater service so Windows location inference does not keep snapping the time zone back to the EEA setup location. Location services are disabled by default; users can re-enable them in Settings or builds can opt in with `-LocationServices`.
 
 Known consequences:
-- Microsoft documents DMA behavior as region-selected-at-setup behavior. WinMint intentionally chooses an EEA setup region even when the user lives elsewhere.
+- Microsoft documents DMA behavior as region-selected-at-setup behavior. `-DmaInterop` intentionally chooses an EEA setup region even when the user lives elsewhere.
 - Microsoft Store catalog, recommendations, legal prompts, or account/service experiences may briefly or persistently reflect EEA behavior. Microsoft account billing region usually remains separate, but Store/content edge cases are possible.
 - Edge is not removed automatically. If the user later uninstalls Edge, Edge-backed PWAs, sites installed as apps, widgets, and some Copilot surfaces can stop working.
 - LTSC/IoT SKUs may not expose every DMA affordance, especially Edge uninstall.
@@ -275,7 +348,7 @@ Known consequences:
 
 **Boot timeout = 2 seconds**: The default 30-second boot menu timeout is only useful on dual-boot machines. Single-boot installs waste 30 seconds on every unexpected restart.
 
-**BitLocker auto-encryption prevention**: A fresh install can auto-enable device encryption before the user has saved a recovery key. WinWS prevents surprise auto-encryption, but if BitLocker protection is already active it logs that state and leaves protection enabled.
+**BitLocker auto-encryption prevention**: A fresh install can auto-enable device encryption before the user has saved a recovery key. WinMint prevents surprise auto-encryption, but if BitLocker protection is already active it logs that state and leaves protection enabled.
 
 **System restore point**: Created immediately after setup so the user has a rollback target before the first-logon agent runs.
 
@@ -300,7 +373,15 @@ These are common in other debloat tools. WinMint does not apply them:
 
 ## Activation
 
-WinWS defaults to target-license edition selection. The generated ISO keeps the official multi-edition install image and lets Windows Setup use the target device firmware key when one is available.
+WinMint defaults to target-license edition selection. The generated ISO keeps the official multi-edition install image and lets Windows Setup use the target device firmware key when one is available.
+
+For a target device that is not the build host, prefer an explicit target edition:
+
+```powershell
+-EditionMode Fixed -Edition 'Windows 11 Pro'
+```
+
+Fixed edition mode services only that image and writes official Windows Setup image-selection metadata (`/IMAGE/NAME`) into `autounattend.xml`. WinMint does not write generic install keys or activation keys. Activation still comes from the target device's digital license, OEM firmware key, retail key, Microsoft account entitlement, or organization licensing.
 
 To check the target device's embedded OEM key before building:
 
@@ -309,23 +390,27 @@ Get-WmiObject SoftwareLicensingService |
     Select-Object OA3xOriginalProductKeyDescription, OA3xOriginalProductKey
 ```
 
-- **"Windows 11 Home"** or **"Windows 11 Pro"** → Setup uses that edition automatically.
-- **Empty / no firmware key** → Setup may ask; choose the edition that has the digital license on the target device.
-
-WinMint does not bake generic install keys into `autounattend.xml`.
+- **"Windows 11 Home"** or **"Windows 11 Pro"** → `TargetLicense` can use that edition automatically.
+- **Empty / no firmware key** → use `-EditionMode Fixed -Edition '<licensed edition>'` so Setup does not depend on the build host or a firmware key.
 
 ### Why timezone matters
 
 If the timezone is wrong, OOBE skips region selection and Windows defaults to Pacific Standard Time. For users outside the US West Coast this produces a multi-hour clock skew that breaks TLS certificate validation against Microsoft's licensing servers. The error message ("can't connect to your organization's activation server") is misleading — the real cause is the clock.
 
-The build always uses `(Get-TimeZone).Id` from the build host. Build the ISO on a machine in the target user's region.
+Set the target timezone in the profile. For CLI builds, pass `-TimeZoneId` explicitly when the target machine is in a different region than the build host:
+
+```powershell
+-TimeZoneId 'Israel Standard Time'
+```
+
+WinMint writes that timezone into `autounattend.xml`, keeps the Wi-Fi page visible so the machine can join the network before FirstLogon, and runs a Windows Time resync in `SetupComplete` before the activation audit. The timezone is target intent, not proof that the ISO was built on that target machine.
 
 ---
 
 ## Requirements
 
 - Windows 11 host (for DISM)
-- **Source ISO must be Windows 11 25H2 or newer** — the registry tweaks, AppX list, and ViVeTool feature IDs target 25H2's defaults. There is **no** separate “reference” or golden ISO inside the repo: **the ISO you choose is the base** WinWS services.
+- **Source ISO must be Windows 11 25H2 or newer** — the registry tweaks, AppX list, and ViVeTool feature IDs target 25H2's defaults. There is **no** separate “reference” or golden ISO inside the repo: **the ISO you choose is the base** WinMint services.
 - PowerShell 7.3+
 - Admin rights (the wizard auto-elevates at launch via UAC)
 - ~25 GB free disk space on TEMP drive
@@ -342,8 +427,8 @@ The build always uses `(Get-TimeZone).Id` from the build host. Build the ISO on 
 | [Sophia Script](https://github.com/farag2/Sophia-Script-for-Windows) | Source for many of the DefaultUser and HKLM privacy tweaks; particularly the ContentDeliveryManager keys, search disables, and the SvcHostSplitThreshold rationale |
 | [tiny11](https://github.com/ntdevlabs/tiny11builder) | Early proof that offline WIM modification + autounattend is a viable build model |
 | [Win11Debloat](https://github.com/Raphire/Win11Debloat) | Registry tweak catalogue; useful negative reference for what not to apply on Surface/tablet hardware |
-| [Wintoys](https://apps.microsoft.com/detail/9p8ltpgcbzxd) | Reference for exposing Windows DMA interoperability as a practical user-choice feature; WinMint bakes the setup-region path instead of adding a tweak toggle |
-| [Sparkle](https://github.com/parcoil/sparkle) | Useful reference for documented tweaks, restore-point framing, and selective app removal; its gaming/security/service toggles are treated as opt-in or rejected for WinWS Core |
+| [Wintoys](https://apps.microsoft.com/detail/9p8ltpgcbzxd) | Reference for exposing Windows DMA interoperability as a practical user-choice feature; WinMint keeps it as an explicit CLI toggle |
+| [Sparkle](https://github.com/parcoil/sparkle) | Useful reference for documented tweaks, restore-point framing, and selective app removal; its gaming/security/service toggles are treated as opt-in or rejected for WinMint Core |
 | [Schneegans unattend generator](https://schneegans.de/windows/unattend-generator/) | Authoritative reference for autounattend.xml structure, OOBE element semantics, and password encoding |
 
 ---
@@ -360,6 +445,7 @@ The build always uses `(Get-TimeZone).Id` from the build host. Build the ISO on 
 | [Windhawk](https://windhawk.net) | RamenSoftware | Freeware |
 | [Flow Launcher](https://www.flowlauncher.com) | Flow Launcher contributors | MIT |
 | [Everything Alpha](https://www.voidtools.com) | voidtools | Freeware |
+| [Raycast](https://www.raycast.com/windows) | Raycast Technologies Ltd. | Proprietary |
 
 **Build tooling**
 

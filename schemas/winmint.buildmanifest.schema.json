@@ -1,0 +1,395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winmint.yanai.sh/schemas/winmint.buildmanifest.schema.json",
+  "title": "WinMint Build Manifest",
+  "type": "object",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "target": {
+            "properties": {
+              "diskMode": { "const": "DualBootReserved" }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "target": {
+            "properties": {
+              "diskLayout": {
+                "properties": {
+                  "mode": { "const": "DualBootReserved" },
+                  "preset": { "enum": ["WindowsHeavy", "Balanced", "EvenSplit", "LinuxHeavy"] }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "target": {
+            "properties": {
+              "diskLayout": {
+                "properties": {
+                  "preset": { "const": "" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "required": [
+    "schemaVersion",
+    "builtAt",
+    "buildResult",
+    "source",
+    "target",
+    "regional",
+    "removals",
+    "sizeDelta",
+    "servicing",
+    "tweaks",
+    "drivers",
+    "payloads",
+    "firstLogon",
+    "riskFlags"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "builtAt": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when the build started"
+    },
+    "buildDurationSeconds": {
+      "type": "number"
+    },
+    "buildResult": {
+      "type": "string",
+      "enum": ["success", "failed", "dry-run"]
+    },
+    "source": {
+      "type": "object",
+      "required": ["isoPath", "architecture", "editions"],
+      "additionalProperties": false,
+      "properties": {
+        "isoPath": { "type": "string" },
+        "architecture": { "type": "string" },
+        "editions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["isoPath", "sha256", "sizeBytes"],
+      "additionalProperties": false,
+      "properties": {
+        "isoPath": { "type": "string" },
+        "sha256": { "type": "string" },
+        "sizeBytes": { "type": "integer" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["diskMode", "diskLayout"],
+      "additionalProperties": false,
+      "properties": {
+        "diskMode": { "type": "string", "enum": ["Manual", "AutoWipeDisk0", "DualBootReserved"] },
+        "diskLayout": {
+          "type": "object",
+          "required": ["mode", "preset", "roundingGb", "windowsMinimumGb", "windowsRecommendedGb", "linuxMinimumGb", "linuxRecommendedGb", "efiMb", "msrMb", "recoveryMb"],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "type": "string", "enum": ["Manual", "AutoWipeDisk0", "DualBootReserved"] },
+            "preset": { "type": "string", "enum": ["", "WindowsHeavy", "Balanced", "EvenSplit", "LinuxHeavy"] },
+            "roundingGb": { "type": "integer" },
+            "windowsMinimumGb": { "type": "integer" },
+            "windowsRecommendedGb": { "type": "integer" },
+            "linuxMinimumGb": { "type": "integer" },
+            "linuxRecommendedGb": { "type": "integer" },
+            "efiMb": { "type": "integer" },
+            "msrMb": { "type": "integer" },
+            "recoveryMb": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "regional": {
+      "type": "object",
+      "required": ["timeZoneId", "uiLanguage", "systemLocale", "userLocale", "inputLocale", "homeLocationGeoId", "dmaInterop"],
+      "additionalProperties": false,
+      "properties": {
+        "timeZoneId": { "type": "string" },
+        "uiLanguage": { "type": "string" },
+        "systemLocale": { "type": "string" },
+        "userLocale": { "type": "string" },
+        "inputLocale": { "type": "string" },
+        "homeLocationGeoId": { "type": "integer" },
+        "dmaInterop": {
+          "type": "object",
+          "required": ["enabled", "setupCountry", "setupUserLocale", "setupHomeLocationGeoId", "restoreUserLocale", "restoreHomeLocationGeoId"],
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "setupCountry": { "type": "string" },
+            "setupUserLocale": { "type": "string" },
+            "setupHomeLocationGeoId": { "type": "integer" },
+            "restoreUserLocale": { "type": "string" },
+            "restoreHomeLocationGeoId": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "removals": {
+      "type": "object",
+      "required": ["appxPrefixes", "appxRemoved", "appxRemovedCount", "capabilitiesRemoved", "languagePackagesRemoved", "languagePackagesRemovedCount", "featuresEnabled"],
+      "additionalProperties": false,
+      "properties": {
+        "appxPrefixes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "appxRemoved": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "appxRemovedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "capabilitiesRemoved": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "languagePackagesRemoved": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "languagePackagesRemovedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "featuresEnabled": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "oneDriveSetupStubs": {
+          "type": "object",
+          "required": ["intent", "removed", "notFound", "failed"],
+          "additionalProperties": false,
+          "properties": {
+            "intent": { "type": "string" },
+            "removed": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "notFound": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "failed": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["path", "error"],
+                "additionalProperties": false,
+                "properties": {
+                  "path": { "type": "string" },
+                  "error": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "sizeDelta": {
+      "type": "object",
+      "required": [
+        "sourceIsoBytes",
+        "installWimBeforeServicingBytes",
+        "installWimAfterServicingBytes",
+        "installWimAfterExportBytes",
+        "outputIsoBytes",
+        "outputMinusSourceBytes",
+        "outputToSourceRatio"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sourceIsoBytes": { "type": "integer", "minimum": 0 },
+        "installWimBeforeServicingBytes": { "type": "integer", "minimum": 0 },
+        "installWimAfterServicingBytes": { "type": "integer", "minimum": 0 },
+        "installWimAfterExportBytes": { "type": "integer", "minimum": 0 },
+        "outputIsoBytes": { "type": "integer", "minimum": 0 },
+        "outputMinusSourceBytes": { "type": "integer" },
+        "outputToSourceRatio": { "type": "number", "minimum": 0 }
+      }
+    },
+    "servicing": {
+      "type": "object",
+      "required": ["componentCleanup", "resetBase", "serviceabilityPolicy"],
+      "additionalProperties": false,
+      "properties": {
+        "componentCleanup": { "type": "string" },
+        "resetBase": { "type": "boolean" },
+        "serviceabilityPolicy": { "type": "string" }
+      }
+    },
+    "setupPlan": {
+      "type": "object",
+      "required": ["schemaVersion", "accountMode", "editionMode", "diskMode", "phases", "stagedArtifacts", "firstLogonModules", "notes"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "type": "integer", "minimum": 1 },
+        "accountMode": { "type": "string" },
+        "editionMode": { "type": "string" },
+        "diskMode": { "type": "string" },
+        "phases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "context", "entrypoint", "responsibilities"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "context": { "type": "string" },
+              "entrypoint": { "type": "string" },
+              "responsibilities": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "stagedArtifacts": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "firstLogonModules": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "tweaks": {
+      "type": "object",
+      "required": ["registryGroupsApplied"],
+      "additionalProperties": false,
+      "properties": {
+        "registryGroupsApplied": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "registryGroups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "description",
+              "scope",
+              "risk",
+              "reversible",
+              "phase",
+              "intent",
+              "status",
+              "setOperations",
+              "removeOperations",
+              "rollbackOperations",
+              "rollbackCoverage",
+              "error"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "description": { "type": "string" },
+              "scope": { "type": "string" },
+              "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+              "reversible": { "type": "boolean" },
+              "phase": { "type": "string" },
+              "intent": { "type": "string" },
+              "status": {
+                "type": "string",
+                "enum": ["pending", "applied", "skipped-not-selected", "skipped-conditional", "failed"]
+              },
+              "setOperations": { "type": "integer", "minimum": 0 },
+              "removeOperations": { "type": "integer", "minimum": 0 },
+              "rollbackOperations": { "type": "integer", "minimum": 0 },
+              "rollbackCoverage": { "type": "string", "enum": ["none", "partial", "full"] },
+              "error": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "drivers": {
+      "type": "object",
+      "required": ["source", "injectedCount", "infNames"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string" },
+        "path": { "type": "string" },
+        "injectedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "infNames": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "payloads": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "sourceUrl", "version", "sha256", "sizeBytes"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "sourceUrl": { "type": "string" },
+          "version": { "type": "string" },
+          "sha256": { "type": "string" },
+          "sizeBytes": { "type": "integer" }
+        }
+      }
+    },
+    "firstLogon": {
+      "type": "object",
+      "required": ["editors", "wslDistros", "desktopLayers"],
+      "additionalProperties": false,
+      "properties": {
+        "editors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "wslDistros": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "desktopLayers": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "riskFlags": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

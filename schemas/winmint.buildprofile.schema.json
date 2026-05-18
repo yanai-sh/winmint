@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winmint.yanai.sh/schemas/winmint.buildprofile.schema.json",
+  "title": "WinMint Build Profile",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "createdAt",
+    "profileName",
+    "source",
+    "target",
+    "identity",
+    "regional",
+    "drivers",
+    "desktop",
+    "development",
+    "removals",
+    "privacy",
+    "tweaks"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "passwordIncluded": { "const": true }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "required": ["password"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "target": {
+            "properties": {
+              "diskMode": { "const": "DualBootReserved" }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "target": {
+            "properties": {
+              "diskLayout": {
+                "properties": {
+                  "mode": { "const": "DualBootReserved" },
+                  "preset": { "enum": ["WindowsHeavy", "Balanced", "EvenSplit", "LinuxHeavy"] }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "target": {
+            "properties": {
+              "diskLayout": {
+                "properties": {
+                  "preset": { "const": "" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "createdAt": { "type": "string" },
+    "profileName": { "type": "string" },
+    "profileGroups": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["Minimal", "Developer", "CopilotPlus", "Gaming", "DesktopUI"] },
+      "uniqueItems": true
+    },
+    "setupOption": { "type": "string", "enum": ["Minimal", "CopilotPlus"] },
+    "source": {
+      "type": "object",
+      "required": ["isoPath", "architecture"],
+      "properties": {
+        "isoPath": { "type": "string" },
+        "architecture": { "type": "string", "enum": ["amd64", "arm64", "x86", ""] }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["device", "editionMode", "edition", "diskMode", "diskLayout"],
+      "properties": {
+        "device": { "type": "string", "enum": ["ThisPC", "DifferentPC"] },
+        "editionMode": { "type": "string", "enum": ["TargetLicense", "Fixed"] },
+        "edition": { "type": "string" },
+        "diskMode": { "type": "string", "enum": ["Manual", "AutoWipeDisk0", "DualBootReserved"] },
+        "diskLayout": {
+          "type": "object",
+          "required": [
+            "mode",
+            "preset",
+            "roundingGb",
+            "windowsMinimumGb",
+            "windowsRecommendedGb",
+            "linuxMinimumGb",
+            "linuxRecommendedGb",
+            "efiMb",
+            "msrMb",
+            "recoveryMb"
+          ],
+          "properties": {
+            "mode": { "type": "string", "enum": ["Manual", "AutoWipeDisk0", "DualBootReserved"] },
+            "preset": { "type": "string", "enum": ["", "WindowsHeavy", "Balanced", "EvenSplit", "LinuxHeavy"] },
+            "roundingGb": { "type": "integer", "const": 64 },
+            "windowsMinimumGb": { "type": "integer", "minimum": 256 },
+            "windowsRecommendedGb": { "type": "integer", "minimum": 384 },
+            "linuxMinimumGb": { "type": "integer", "minimum": 128 },
+            "linuxRecommendedGb": { "type": "integer", "minimum": 256 },
+            "efiMb": { "type": "integer", "const": 1024 },
+            "msrMb": { "type": "integer", "const": 16 },
+            "recoveryMb": { "type": "integer", "const": 1024 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "identity": {
+      "type": "object",
+      "required": ["computerName", "accountName", "autoLogon", "passwordSet", "passwordIncluded"],
+      "properties": {
+        "computerName": { "type": "string" },
+        "accountName": { "type": "string" },
+        "accountMode": { "type": "string", "enum": ["Local", "MicrosoftOobe"] },
+        "autoLogon": { "type": "boolean" },
+        "passwordSet": { "type": "boolean" },
+        "passwordIncluded": { "type": "boolean" },
+        "password": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "regional": {
+      "type": "object",
+      "required": ["timeZoneId", "uiLanguage", "systemLocale", "userLocale", "inputLocale"],
+      "properties": {
+        "timeZoneId": { "type": "string" },
+        "uiLanguage": { "type": "string" },
+        "systemLocale": { "type": "string" },
+        "uiLanguageFallback": { "type": "string" },
+        "userLocale": { "type": "string" },
+        "inputLocale": { "type": "string" },
+        "homeLocationGeoId": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "drivers": {
+      "type": "object",
+      "required": ["source", "path", "exportHostDrivers"],
+      "allOf": [
+        {
+          "if": {
+            "required": ["source"],
+            "properties": {
+              "source": { "const": "Host" }
+            }
+          },
+          "then": {
+            "properties": {
+              "exportHostDrivers": { "const": true }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["source"],
+            "properties": {
+              "source": { "enum": ["None", "Custom"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "exportHostDrivers": { "const": false }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "source": { "type": "string", "enum": ["None", "Host", "Custom"] },
+        "path": { "type": "string" },
+        "exportHostDrivers": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "desktop": {
+      "type": "object",
+      "required": ["cursorPack", "layers"],
+      "properties": {
+        "cursorPack": { "type": "string", "const": "Windows11Modern" },
+        "layers": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["standard", "windhawk", "yasb", "komorebi"] },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "development": {
+      "type": "object",
+      "required": ["editors", "wsl"],
+      "properties": {
+        "editors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "wsl": {
+          "type": "object",
+          "required": ["enabled", "distros"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "distros": {
+              "type": "array",
+              "items": { "type": "string" },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "features": {
+      "type": "object",
+      "required": ["launcher"],
+      "properties": {
+        "launcher": { "type": "string", "enum": ["None", "FlowEverything", "Raycast"] },
+        "liveInstallAudit": { "type": "boolean" },
+        "phoneLink": { "type": "boolean" },
+        "flowEverything": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "removals": {
+      "type": "object",
+      "required": ["advertising", "gaming", "communication", "microsoftApps"],
+      "properties": {
+        "advertising": { "type": "boolean" },
+        "gaming": { "type": "boolean" },
+        "communication": { "type": "boolean" },
+        "microsoftApps": { "type": "boolean" },
+        "effectiveAppx": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["telemetry", "advertisingId", "location", "timeline"],
+      "properties": {
+        "telemetry": { "type": "boolean" },
+        "advertisingId": { "type": "boolean" },
+        "location": { "type": "boolean" },
+        "timeline": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "tweaks": {
+      "type": "object",
+      "required": ["darkMode", "fileExtensions", "stickyKeys"],
+      "properties": {
+        "darkMode": { "type": "boolean" },
+        "fileExtensions": { "type": "boolean" },
+        "stickyKeys": { "type": "boolean" },
+        "hardwareBypass": { "type": "boolean" },
+        "dmaInterop": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

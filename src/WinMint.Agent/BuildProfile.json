@@ -1,0 +1,29 @@
+{
+  "profile": "Developer",
+  "editors": ["cursor", "vscodium", "neovim"],
+  "modules": {
+    "packageManagers": { "enabled": true },
+    "git": {
+      "enabled": false,
+      "defaultBranch": "main",
+      "credentialHelper": "manager"
+    },
+    "dotfiles": {
+      "enabled": false,
+      "repository": "",
+      "installScript": ""
+    },
+    "wsl": { "enabled": false, "distro": "None", "distros": [] },
+    "flowEverything": { "enabled": false },
+    "raycast": { "enabled": false },
+    "liveInstallAudit": { "enabled": false },
+    "phoneLink": {
+      "enabled": false,
+      "showInFileExplorer": false,
+      "crossDeviceCopyPaste": false,
+      "hideCrossDeviceHomeFolder": false
+    },
+    "shell": { "komorebi": false, "yasb": false, "whkd": false },
+    "windhawk": { "enabled": false }
+  }
+}

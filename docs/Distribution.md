@@ -5,7 +5,7 @@ WinMint is distributed as a small bootstrap script plus a versioned release bund
 The bootstrap script is intentionally small. It queries the GitHub release, downloads
 the `WinMint-<version>.zip` asset, verifies the `.sha256` asset when present,
 extracts the bundle into `%LOCALAPPDATA%\WinMint\versions\<version>`, then launches
-`WinMint-UI.ps1` with PowerShell 7.3+.
+`WinMint-GUI.ps1` with PowerShell 7.3+.
 
 ## User Launch
 
@@ -39,27 +39,33 @@ Useful launcher switches:
 .\winmint.ps1 -ExportHostDrivers
 .\winmint.ps1 -Headless -ProfilePath C:\WinMint\profiles\surface.json -Yes
 .\winmint.ps1 -Gui
+.\winmint.ps1 -LegacyUi
 .\winmint.ps1 -NoLaunch
 .\winmint.ps1 -Force
 ```
 
-`irm https://winmint.yanai.sh | iex` starts the current PowerShell/WPF UI. Use
-`irm https://winmint.yanai.sh/cli | iex` for the console build path. Use `-Gui`
-only for the WIP GPUI lab; the launcher fails with a clear message when a release
-does not package that lab yet.
+`irm https://winmint.yanai.sh | iex` and `-Gui` start the packaged GPUI entry
+point. Use `irm https://winmint.yanai.sh/cli | iex` or `-Headless` for the
+console build path. Use `-LegacyUi` only when you explicitly need the deprecated
+PowerShell/WPF fallback.
 
 ## Release Build
+
+CI is split by intent. `.github/workflows/ci.yml` validates normal pushes and pull
+requests. `.github/workflows/release.yml` publishes only when a `v*` tag is pushed
+or when the release workflow is run manually with a version input.
 
 Create the release assets from the repo root:
 
 ```powershell
-.\scripts\release\New-WinMintReleaseBundle.ps1 -Version v0.1.0
+.\tools\release\New-WinMintReleaseBundle.ps1 -Version v0.1.0
 ```
 
-The bundle shape is defined in `config\release-manifest.json`. Keep developer-only
-service source, local fixtures, and generated payloads out of the
-release by adding them to the manifest `exclude` list instead of relying on
-ad hoc cleanup in the packaging script.
+The bundle shape is defined in `config\release-manifest.json`. The release tool
+builds and packages `apps\WinMint.GPUI\bin\WinMint-GUI.exe`; release users do not
+need Rust, Cargo, MSVC, or `tools\gpui`. Keep developer-only service source,
+local fixtures, and generated payloads out of the release by adding them to the
+manifest `exclude` list instead of relying on ad hoc cleanup in the packaging script.
 
 Upload both files from `dist\` to the matching GitHub release:
 
@@ -70,6 +76,17 @@ WinMint-v0.1.0.zip.sha256
 
 The bootstrapper prefers an exact asset named `WinMint-<tag>.zip`, then falls
 back to the first WinMint-looking `.zip` asset.
+
+Manual release path:
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow reruns validation, builds `dist\WinMint-<tag>.zip` and
+`dist\WinMint-<tag>.zip.sha256`, creates the matching GitHub release when needed,
+and uploads both assets with clobber semantics for a rerun.
 
 ## Cloudflare Alias
 
@@ -102,11 +119,11 @@ irm https://raw.githubusercontent.com/yanai-sh/winmint/main/winmint.ps1 | iex
 For development, run the script directly from the working tree:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-UI.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-GUI.ps1
 ```
 
 Run validation before building a release:
 
 ```powershell
-.\scripts\Validation\Validate.ps1
+.\tools\validation\Validate.ps1
 ```

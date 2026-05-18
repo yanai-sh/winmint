@@ -1,0 +1,4 @@
+# Offline tooling to emit assets/brand/WinMint.vector.svg (GPUI-compatible mark).
+pillow>=10
+scikit-image>=0.25
+scipy>=1.13

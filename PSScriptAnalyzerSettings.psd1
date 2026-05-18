@@ -30,7 +30,7 @@
         # ScriptBlocks as if they were undeclared outer-scope captures requiring $using:
         'PSUseUsingScopeModifierInNewRunspaces',
 
-        # WinWS keeps CLI compatibility for -Password while warning automation toward
+        # WinMint keeps CLI compatibility for -Password while warning automation toward
         # -PasswordPath/-PasswordEnvVar; schema validation still permits passwordless.
         'PSAvoidUsingPlainTextForPassword',
 

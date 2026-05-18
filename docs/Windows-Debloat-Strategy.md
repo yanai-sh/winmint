@@ -3,11 +3,11 @@
 Status: design reference  
 Last researched: 2026-04-30
 
-This document is the working strategy for the WinMint Windows baseline. The goal is not to create the smallest possible Windows image. The goal is to turn official Windows media into a fast, quiet, serviceable, Linux-style developer workstation with WSL as a first-class runtime. WinWS is WSL2-first: Windows hosts the hardware, UI, security, package bootstrap, and desktop shell; Linux is the default development runtime.
+This document is the working strategy for the WinMint Windows baseline. The goal is not to create the smallest possible Windows image. The goal is to turn official Windows media into a fast, quiet, serviceable, Linux-style developer workstation with WSL as a first-class runtime. WinMint is WSL2-first: Windows hosts the hardware, UI, security, package bootstrap, and desktop shell; Linux is the default development runtime.
 
 ## Core Position
 
-WinWS should optimize the system by removing user-hostile behavior, consumer payloads, ads, AI surfaces, and setup friction. It should not win benchmarks by breaking Windows servicing, security, networking, or WSL.
+WinMint should optimize the system by removing user-hostile behavior, consumer payloads, ads, AI surfaces, and setup friction. It should not win benchmarks by breaking Windows servicing, security, networking, or WSL.
 
 Good debloat:
 
@@ -36,17 +36,17 @@ Bad debloat:
 | Windows X-Lite / Optimum11 | Clear edition split and resource-use goal. | Prebuilt opaque ISO trust model, optional security/update platform, and "lowest resources" as the top product goal. |
 | Win11Debloat | Lightweight PowerShell, Audit Mode support, admin/user targeting, and focused bloat/privacy categories. | Running every privacy/cleanup toggle as a default ISO policy. |
 | Sparkle | Modern tweak catalog, restore-point framing, documented tweak pages, selective app removal, and useful utilities/app-installer grouping. | Defender RTP/Core Isolation toggles, Ultimate Performance, global service-manual mode, hibernation/location disables, or gaming/NVIDIA/network tweaks as workstation defaults. |
-| Winhance / UnattendedWinstall | Native-feeling UX, restore point mindset, unattended install coverage, broad modern Windows cleanup categories. | High-choice model and broad toggles that are useful in a repair tool but wrong for WinWS' opinionated image. |
+| Winhance / UnattendedWinstall | Native-feeling UX, restore point mindset, unattended install coverage, broad modern Windows cleanup categories. | High-choice model and broad toggles that are useful in a repair tool but wrong for WinMint' opinionated image. |
 | O&O ShutUp10++ | Recommendation tiers are useful: some privacy settings are low-risk, others are convenience/security tradeoffs. | "Apply everything" privacy posture. Windows cannot be made truly private without breaking useful Windows behavior. |
 | AtlasOS / ReviOS | Performance-focused custom Windows projects prove there is demand for a cleaner OS personality. | Removing or disabling security, restore/reset, updates, or feature updates as a normal workstation default. |
-| Sophia Script / SophiApp / privacy.sexy | Script transparency, documented methods, reversibility, and current-state detection are valuable references. | Exposing hundreds of switches to the user. WinWS should decide, test, and document. |
+| Sophia Script / SophiApp / privacy.sexy | Script transparency, documented methods, reversibility, and current-state detection are valuable references. | Exposing hundreds of switches to the user. WinMint should decide, test, and document. |
 
-## Current WinWS Audit
+## Current WinMint Audit
 
 | Area | Current state | Recommendation |
 |------|---------------|----------------|
-| AppX cleanup | Curated provisioned package removal in `src/WinWS/Private/Catalog.ps1` and `src/WinWS/Private/Image/Staging.ps1`. | Keep. This is the right kind of image-level debloat. |
-| Windows Update | `scripts/setup/SetupComplete.ps1` restores BITS, wuauserv, UsoSvc, and WaaSMedicSvc. | Keep. This is a strong guardrail against over-debloat. |
+| AppX cleanup | Curated provisioned package removal in `src/WinMint/Private/Catalog.ps1` and `src/WinMint/Private/Image/Staging.ps1`. | Keep. This is the right kind of image-level debloat. |
+| Windows Update | `src/WinMint.Setup/SetupComplete.ps1` restores BITS, wuauserv, UsoSvc, and WaaSMedicSvc. | Keep. This is a strong guardrail against over-debloat. |
 | WSL platform | WSL, Virtual Machine Platform, and OpenSSH are enabled in the image. | Keep. These are core workstation features. |
 | Edge | Edge first-run/startup/background/promo behavior is policy-disabled. | Keep. Do not remove WebView2 or Edge runtime infrastructure. |
 | OneDrive | Fully removed during setup/first logon; sync policies stay blocked and known folders are forced back to local profile paths. | Keep. Users who want OneDrive can reinstall it after setup. |
@@ -59,14 +59,14 @@ Bad debloat:
 | `/ResetBase` | Image save runs normal `StartComponentCleanup` without `/ResetBase`. | Keep. Preserve rollback and serviceability by default; reserve ResetBase for an explicit tiny-image mode. |
 | Language feature removal | Non-selected language packages are removed. | Keep narrowly, but preserve all selected UI/input/system locales and test feature update behavior. |
 | AutoLogon | Passworded builds use `LogonCount=1`; FirstLogon clears credentials and registers retry state. | Keep guarded. One automatic logon is enough; static tests must prevent effectively infinite AutoLogon. |
-| Maintenance task | `Maintain.ps1` can re-stamp policies and re-remove provisioned AppX after OS build bumps. | **Shipped default:** boot scheduled task **disabled** (`SetupComplete.ps1`); script remains for manual/fork use. WinMint does not fight post-update drift automatically. |
-| Live install audit | `Audit-LiveInstall.ps1` records provisioned/installed AppX, Win32 uninstall entries, and Tier 0 platform health during FirstLogon. | Keep non-destructive. This is a scout and validator, not a live debloater; harvested Win32 lists must be manually classified before changing WinWS policy. |
+| Maintenance task | Post-update policy/AppX drift control. | **On ice:** WinMint does not stage a maintenance script, scheduled task, background service, or other recurring drift-control payload on the installed system. After installation, the user manages their machine. |
+| Live install audit | `Audit-LiveInstall.ps1` records provisioned/installed AppX, Win32 uninstall entries, and Tier 0 platform health during FirstLogon. | Keep non-destructive and opt-in. This is a scout and validator, not a live debloater; harvested Win32 lists must be manually classified before changing WinMint policy. |
 
 ## Decision Tiers
 
 ### Tier 0: Must Preserve
 
-These are part of the platform. WinWS should not remove or disable them by default.
+These are part of the platform. WinMint should not remove or disable them by default.
 
 | Preserve | Reason |
 |----------|--------|
@@ -83,7 +83,7 @@ These are part of the platform. WinWS should not remove or disable them by defau
 
 ### Tier 1: Apply By Default
 
-These should be part of WinWS Core because they remove noise without compromising the workstation.
+These should be part of WinMint Core because they remove noise without compromising the workstation.
 
 | Category | Default action |
 |----------|----------------|
@@ -107,11 +107,11 @@ These may be good, but need measurement or a clear hardware/workflow condition.
 |-----------|--------------------|------------------|
 | Disable DiagTrack / telemetry services | Reduces telemetry process activity. | Test Windows Update, Store, Defender, reliability monitor, and Settings. Prefer policy before service disabling. |
 | Disable background apps globally | Can reduce idle noise. | Can break notifications and Store app behavior. Consider only after AppX cleanup leaves few apps. |
-| Windows Search tuning | SearchIndexer can be noisy. | Do not disable local search or the Search service. WinWS installs **Everything + Flow Launcher** by default as the preferred fast file/app UX; that complements Start/Settings search rather than replacing the platform indexer. |
+| Windows Search tuning | SearchIndexer can be noisy. | Do not disable local search or the Search service. **Flow Launcher + Everything** and **Raycast** are opt-in launcher choices; they complement Start/Settings search rather than replacing the platform indexer. |
 | Storage Sense defaults | Can keep the system clean. | Do not auto-delete Downloads or developer artifacts. |
 | Hibernation / Fast Startup | Fast Startup can cause dual-boot/WSL/driver edge cases. | **WinMint does not disable hibernation**—respect Windows and OEM power defaults (especially on laptops). Treat disabling **Fast Startup** as an optional explicit policy if needed; do not ship hibernate-off as a default. |
 | Delivery Optimization | Peer download/upload can be unwanted. | Do not break updates. Prefer LAN-only or bandwidth-limited behavior over disabling update delivery mechanisms. |
-| Print stack | Core printing and Print to PDF stay. | **WinWS Core** removes optional **Windows Fax and Scan** (`Print.Fax.Scan` capability only). Do not disable Print Spooler or remove drivers by default. XPS *Viewer* remains a separate optional removal (viewing XPS files; unrelated to physical printers). |
+| Print stack | Core printing and Print to PDF stay. | **WinMint Core** removes optional **Windows Fax and Scan** (`Print.Fax.Scan` capability only). Do not disable Print Spooler or remove drivers by default. XPS *Viewer* remains a separate optional removal (viewing XPS files; unrelated to physical printers). |
 | Location / Maps / Sensors | Privacy win. | Time zone, hardware sensors, and app permissions can behave strangely. Disable app access first, not services. |
 | Optional Features / Capabilities | Can reduce image footprint. | Remove only obvious non-core features and test WU/feature update. Preserve OpenSSH, WSL, .NET, language/input, Windows client basics. |
 | Defender exclusions | Can greatly improve Node/Rust/Python build performance. | Folder exclusions are security holes. Prefer Dev Drive performance mode over broad exclusions. |
@@ -120,7 +120,7 @@ These may be good, but need measurement or a clear hardware/workflow condition.
 
 ### Tier 3: Reject By Default
 
-These are common in debloat/optimizer circles but should not be WinWS defaults.
+These are common in debloat/optimizer circles but should not be WinMint defaults.
 
 | Reject | Reason |
 |--------|--------|
@@ -148,7 +148,7 @@ These are common in debloat/optimizer circles but should not be WinWS defaults.
 
 Most debloat tools focus on removing things. For a developer workstation, adding the right storage model may matter more. Windows Dev Drive uses ReFS and Defender performance mode for developer workloads, and Microsoft documents it as a performance feature for code, package caches, and build output.
 
-Potential WinWS direction:
+Potential WinMint direction:
 
 - Do not silently repartition for Dev Drive.
 - Add a future "Developer workspace" step only when disk layout is already being chosen.
@@ -158,7 +158,7 @@ Potential WinWS direction:
 
 ### 2. WSL2-First Performance Profile
 
-WinWS should treat WSL as the primary Linux layer, not an optional toy. The Developer profile defaults to Ubuntu LTS, but the user can opt out, choose Debian, Arch, Fedora, or select multiple distributions. A custom distro selection must never force Ubuntu back in.
+WinMint should treat WSL as the primary Linux layer, not an optional toy. The Developer profile defaults to Ubuntu LTS, but the user can opt out, choose Debian, Arch, Fedora, or select multiple distributions. A custom distro selection must never force Ubuntu back in.
 
 Linux projects should live under `/home/<user>/code` inside the WSL filesystem. Windows-native projects and package caches can use a future Dev Drive option, but Linux source should not default to `/mnt/c/...`.
 
@@ -181,7 +181,7 @@ Current decision:
 
 - Use `gradual` for `autoMemoryReclaim`; it returns cache steadily without the sharper behavior of immediate cache drops.
 - Keep mirrored networking out of Core. It is useful for some VPN/localhost/LAN cases, but it changes firewall/network behavior. Core uses `networkingMode=nat`.
-- Container runtimes are intentionally outside the WinWS UI. The baseline should keep WSL healthy and leave distro-level container setup to the user.
+- Container runtimes are intentionally outside the WinMint UI. The baseline should keep WSL healthy and leave distro-level container setup to the user.
 
 ### 3. Replace Service Tweaking With A Service Budget
 
@@ -190,14 +190,14 @@ Instead of "disable services," define a measured service budget:
 - Record running services on first clean boot.
 - Flag unexpected third-party/OEM services.
 - Keep a denylist for obvious consumer/OEM/background services.
-- Keep an allowlist for platform services WinWS never touches.
-- Compare stock ISO vs WinWS in the build report.
+- Keep an allowlist for platform services WinMint never touches.
+- Compare stock ISO vs WinMint in the build report.
 
 This is more reliable than copying service-disable lists from gaming debloat scripts.
 
 ### 4. Scheduled Task Inventory
 
-Scheduled tasks often matter more than services for idle noise. WinWS should inventory them and only disable narrow categories:
+Scheduled tasks often matter more than services for idle noise. WinMint should inventory them and only disable narrow categories:
 
 - Feedback prompts.
 - Consumer content refresh.
@@ -209,7 +209,7 @@ Do not blanket-disable servicing, certificate, Defender, update, disk health, or
 
 ### 5. AI Removal Surface
 
-Windows AI components are moving targets. WinWS should maintain a small AI removal policy layer:
+Windows AI components are moving targets. WinMint should maintain a small AI removal policy layer:
 
 - Disable WindowsAI policy values.
 - Remove provisioned Copilot/Recall/WebExperience packages where safe.
@@ -254,11 +254,11 @@ Every build should produce a rollback/audit folder next to the ISO:
 - Download URLs and hashes.
 - Generated `.reg` undo snippets where practical.
 
-This is how WinWS answers the trust problem without exposing a giant UI.
+This is how WinMint answers the trust problem without exposing a giant UI.
 
 ### 9. Real Performance Baseline
 
-WinWS should publish its own numbers instead of inheriting claims from optimizer tools.
+WinMint should publish its own numbers instead of inheriting claims from optimizer tools.
 
 Measure in a repeatable VM:
 
@@ -281,7 +281,7 @@ No tweak should graduate to Core unless it passes this matrix.
 
 | Priority | Change | Reason |
 |----------|--------|--------|
-| P0 | Keep serviceability guardrails in `scripts\test\Test-ProfileInvariants.ps1`. | Prevent `/ResetBase`, Compact OS, broad hardware bypass, or infinite AutoLogon from returning. |
+| P0 | Keep serviceability guardrails in `tests\contract\Test-ProfileInvariants.ps1`. | Prevent `/ResetBase`, Compact OS, broad hardware bypass, or infinite AutoLogon from returning. |
 | P1 | Add a debloat/tweak manifest report with risk and reversibility metadata. | Trust and auditability; this borrows Sparkle/Sophia's best UX idea without inheriting their whole tweak matrix. |
 | P1 | Define a protected platform allowlist. | Prevent future over-debloat from breaking WSL/update/security. |
 | P1 | Expand privacy baseline to include Start/Search/content/advertising/default-user keys in one source of truth. | More complete O&O/WinUtil-style coverage without UI bloat. |

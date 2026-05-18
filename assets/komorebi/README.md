@@ -1,4 +1,4 @@
-# WinWS Komorebi preset
+# WinMint Komorebi preset
 
 This payload is copied during FirstLogon when the Komorebi desktop layer is selected.
 

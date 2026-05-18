@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-05-18T00:00:00.0000000+03:00",
+  "profileName": "Minimal",
+  "profileGroups": [
+    "Minimal"
+  ],
+  "setupOption": "Minimal",
+  "source": {
+    "isoPath": "tests/fixtures/iso/official-win11-25h2-english-arm64-v2.iso",
+    "architecture": "arm64"
+  },
+  "target": {
+    "device": "DifferentPC",
+    "editionMode": "TargetLicense",
+    "edition": "",
+    "diskMode": "Manual",
+    "diskLayout": {
+      "mode": "Manual",
+      "preset": "",
+      "roundingGb": 64,
+      "windowsMinimumGb": 256,
+      "windowsRecommendedGb": 384,
+      "linuxMinimumGb": 128,
+      "linuxRecommendedGb": 256,
+      "efiMb": 1024,
+      "msrMb": 16,
+      "recoveryMb": 1024
+    }
+  },
+  "identity": {
+    "computerName": "WinMint",
+    "accountName": "dev",
+    "accountMode": "Local",
+    "autoLogon": false,
+    "passwordSet": false,
+    "passwordIncluded": false
+  },
+  "regional": {
+    "timeZoneId": "",
+    "uiLanguage": "",
+    "systemLocale": "",
+    "uiLanguageFallback": "",
+    "userLocale": "",
+    "inputLocale": "",
+    "homeLocationGeoId": 117
+  },
+  "drivers": {
+    "source": "None",
+    "path": "",
+    "exportHostDrivers": false
+  },
+  "desktop": {
+    "cursorPack": "Windows11Modern",
+    "layers": [
+      "standard"
+    ]
+  },
+  "development": {
+    "editors": [],
+    "wsl": {
+      "enabled": false,
+      "distros": []
+    }
+  },
+  "features": {
+    "launcher": "None"
+  },
+  "removals": {
+    "advertising": true,
+    "gaming": true,
+    "communication": true,
+    "microsoftApps": true,
+    "effectiveAppx": [
+      "AvastSoftware",
+      "AVGTechnologies",
+      "Clipchamp.Clipchamp",
+      "DolbyLaboratories",
+      "ExpressVPN",
+      "KasperskyLab",
+      "McAfee",
+      "Microsoft.549981C3F5F10",
+      "Microsoft.BingNews",
+      "Microsoft.BingSearch",
+      "Microsoft.BingWeather",
+      "Microsoft.Copilot",
+      "Microsoft.GamingApp",
+      "Microsoft.GetHelp",
+      "Microsoft.Microsoft3DViewer",
+      "Microsoft.MicrosoftOfficeHub",
+      "Microsoft.MicrosoftSolitaireCollection",
+      "Microsoft.MixedReality.Portal",
+      "Microsoft.Office.OneNote",
+      "Microsoft.OutlookForWindows",
+      "Microsoft.People",
+      "Microsoft.PowerAutomateDesktop",
+      "Microsoft.RemoteDesktop",
+      "Microsoft.RemoteDesktopPreview",
+      "Microsoft.StartExperiencesApp",
+      "Microsoft.Todos",
+      "Microsoft.Whiteboard",
+      "Microsoft.Windows.DevHome",
+      "Microsoft.WindowsCalculator",
+      "Microsoft.windowscommunicationsapps",
+      "Microsoft.WindowsFeedbackHub",
+      "Microsoft.WindowsMaps",
+      "Microsoft.Xbox.TCUI",
+      "Microsoft.XboxApp",
+      "Microsoft.XboxGameOverlay",
+      "Microsoft.XboxGamingOverlay",
+      "Microsoft.XboxIdentityProvider",
+      "Microsoft.XboxSpeechToTextOverlay",
+      "Microsoft.ZuneMusic",
+      "Microsoft.ZuneVideo",
+      "MicrosoftCorporationII.MicrosoftFamily",
+      "MicrosoftCorporationII.QuickAssist",
+      "MicrosoftTeams",
+      "MicrosoftWindows.Client.WebExperience",
+      "MSTeams",
+      "NortonLifeLock",
+      "NortonSecurity",
+      "Piriform.CCleaner",
+      "Surfshark",
+      "SurfsharkVPN"
+    ]
+  },
+  "privacy": {
+    "telemetry": true,
+    "advertisingId": true,
+    "location": true,
+    "timeline": true
+  },
+  "tweaks": {
+    "darkMode": true,
+    "fileExtensions": true,
+    "stickyKeys": true,
+    "hardwareBypass": false,
+    "dmaInterop": false
+  }
+}

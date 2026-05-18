@@ -47,7 +47,7 @@
     "exportHostDrivers": false
   },
   "desktop": {
-    "cursorPack": "BreezeXLight",
+    "cursorPack": "Windows11Modern",
     "layers": [
       "standard"
     ]

@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WinMint Feature Status</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101214;
+      --panel: #171b1f;
+      --panel-2: #1f252a;
+      --text: #eef2f4;
+      --muted: #a7b0b7;
+      --line: #313941;
+      --good: #57c884;
+      --work: #e6b84e;
+      --stub: #ee766d;
+      --info: #69a7ff;
+      --chip: #27313a;
+      --shadow: rgba(0, 0, 0, 0.35);
+      font-family: "Segoe UI", Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(105, 167, 255, 0.07), transparent 340px),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 38px 0 56px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 28px;
+      margin-bottom: 28px;
+    }
+
+    h1, h2, h3 {
+      letter-spacing: 0;
+      margin: 0;
+      line-height: 1.15;
+    }
+
+    h1 {
+      font-size: 42px;
+      font-weight: 720;
+    }
+
+    h2 {
+      font-size: 24px;
+      margin-bottom: 14px;
+    }
+
+    h3 {
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .subtitle {
+      max-width: 780px;
+      margin-top: 12px;
+      font-size: 17px;
+    }
+
+    .date {
+      text-align: right;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .metric, .section, .feature, .note {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent), var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 18px 40px var(--shadow);
+    }
+
+    .metric {
+      padding: 16px;
+      min-height: 112px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 27px;
+      margin-bottom: 6px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .section {
+      padding: 22px;
+      margin: 18px 0;
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--chip);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .done .dot, .dot.done { background: var(--good); }
+    .progress .dot, .dot.progress { background: var(--work); }
+    .stub .dot, .dot.stub { background: var(--stub); }
+    .planned .dot, .dot.planned { background: var(--info); }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .feature {
+      padding: 16px;
+      background-color: var(--panel-2);
+    }
+
+    .feature-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .feature p {
+      font-size: 14px;
+    }
+
+    ul {
+      padding-left: 20px;
+      margin: 10px 0 0;
+      color: var(--muted);
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    code {
+      background: #0b0d0f;
+      border: 1px solid #252b31;
+      border-radius: 5px;
+      padding: 1px 5px;
+      color: #dce8f2;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 11px 12px;
+      vertical-align: top;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    th {
+      color: #cbd5dc;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: #15191d;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .compact td:first-child {
+      width: 210px;
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .note {
+      padding: 16px;
+      margin-top: 14px;
+      background: #12181d;
+    }
+
+    .callout {
+      border-left: 4px solid var(--info);
+      padding-left: 14px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    @media (max-width: 900px) {
+      header,
+      .status-grid,
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .date {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>WinMint Feature Status</h1>
+        <p class="subtitle">A personal snapshot of what WinMint currently does, what is still being shaped, and what is only a placeholder or lab surface.</p>
+        <div class="legend" aria-label="Status legend">
+          <span class="pill done"><span class="dot"></span> Fully implemented</span>
+          <span class="pill progress"><span class="dot"></span> In progress</span>
+          <span class="pill stub"><span class="dot"></span> Stub or lab</span>
+          <span class="pill planned"><span class="dot"></span> Deliberately off or future</span>
+        </div>
+      </div>
+      <div class="date">
+        Generated for local viewing<br>
+        May 17, 2026
+      </div>
+    </header>
+
+    <section class="status-grid" aria-label="Summary counts">
+      <div class="metric">
+        <strong>4</strong>
+        <span>major runtime layers: bootstrap, UI/CLI, engine, FirstLogon agent</span>
+      </div>
+      <div class="metric">
+        <strong>3</strong>
+        <span>first-class JSON contracts: BuildProfile, BuildManifest, state</span>
+      </div>
+      <div class="metric">
+        <strong>5</strong>
+        <span>coarse profile groups: Minimal, Developer, Copilot+, Gaming, Desktop UI</span>
+      </div>
+      <div class="metric">
+        <strong>0</strong>
+        <span>golden Windows builds pinned in repo; the selected source ISO is the base</span>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Product Shape</h2>
+      <p class="callout">WinMint is a Windows 11 ISO builder for clean developer workstation installs. The UI and CLI create intent, the engine services Windows media, reports explain the build, and FirstLogon finishes live-user setup after Windows Setup completes.</p>
+      <table class="compact">
+        <tbody>
+          <tr>
+            <td>Core posture</td>
+            <td>Opinionated, profile-driven, PowerShell-native, Windows-servicing-aware, and explicitly conservative about security, update, Store, WSL, WebView2, Defender, Firewall, WinSxS, IPv6, and other platform foundations.</td>
+          </tr>
+          <tr>
+            <td>Source model</td>
+            <td>The user-selected ISO is the truth. There is no hidden golden image inside the repo.</td>
+          </tr>
+          <tr>
+            <td>Choice model</td>
+            <td>No broad debloat matrix. Users choose coarse additive profile groups and a small number of real user-intent switches.</td>
+          </tr>
+          <tr>
+            <td>Current direction</td>
+            <td>The branch is converging on complete <code>BuildProfile.json</code> authoring, a headless backend, auditable manifests, and resumable FirstLogon setup.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>Fully Implemented</h2>
+      <div class="feature-grid">
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Headless CLI Backend</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p><code>WinMint-CLI.ps1</code> supports profile-backed builds, flag-built profiles, dry runs, validation, JSON output, work cleanup/listing, UUP source prep, profile generation, and elevation handoff.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Profile Contract</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p><code>BuildProfile.json</code> owns source, architecture, target device, edition, identity, drivers, profile groups, desktop layers, WSL distros, editors, privacy, tweaks, and feature toggles such as <code>features.launcher</code>.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>ISO and WIM Servicing Engine</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>The engine extracts/mounts source media, validates architecture, selects editions, services WIM images, applies removals and registry hives, injects drivers, stages setup scripts, and emits an ISO.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Architecture Detection</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Architecture is inferred from ISO filename and cross-checked against WIM metadata and <code>setup.exe</code>. Mismatches abort before destructive work.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>UUP Dump Source Prep</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>The CLI accepts a UUP Dump conversion zip, applies one opinionated conversion policy, requires consent for network/conversion work, and then feeds the generated ISO into the normal build. If the user already has an ISO, they provide it directly.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>AppX Removal Policy</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Minimal removes consumer, advertising, AI, communication, gaming, Microsoft-app, and common OEM trial packages by prefix. Copilot+ and Gaming groups preserve their related surfaces.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Offline Registry Tweaks</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Applies developer quality-of-life, Edge/start/search privacy, ContentDeliveryManager, UAC secure-desktop dimming, dark mode, file extension visibility, long paths, Sticky Keys, GameDVR, and OneDrive policy stamps without disabling core services.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Windows Setup Automation</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Generates and stages <code>autounattend.xml</code>, supports local-admin or official Microsoft-account OOBE, preserves Wi-Fi, sets edition policy, applies disk mode, and routes machine-phase setup through scripts.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Regional and DMA Handling</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Profiles carry target timezone, UI language, locale, keyboard, and home-location intent. <code>-DmaInterop</code> opts into EEA setup-region behavior and later restores the configured end-state.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Driver Strategy</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Supports default Windows drivers, host driver export for same-PC reinstall, and one explicit OEM driver pack for different-PC builds. Driver intent is represented in the profile.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>SetupComplete Machine Phase</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Runs once as SYSTEM to restore Windows Update policy, create a restore point, install PowerShell/Terminal when possible, tune svchost split threshold, reduce boot timeout, preserve BitLocker protection, and stage FirstLogon.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>FirstLogon Agent</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Runs live-user setup through idempotent modules with state tracking. It covers package managers, editors, WSL, opt-in launchers, shell layers, Windhawk, opt-in Phone Link policy, opt-in live install audit, and retry state.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Desktop Shell Layers</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Desktop UI layers are additive: standard Windows, Windhawk, YASB, and Komorebi can be selected independently and staged for FirstLogon installation/configuration.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Developer Setup Modules</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Developer group enables OpenSSH/developer-mode/remotesigned defaults. Editors and WSL distros are intentionally unselected until the user chooses them.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Launcher Choice</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Now opt-in through <code>-Launcher FlowEverything</code>, <code>-Launcher Raycast</code>, or <code>features.launcher</code>. Default is no launcher. FlowEverything configures Everything as a background index provider with tray noise minimized.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Build Reporting</h3>
+            <span class="pill done"><span class="dot"></span> Done</span>
+          </div>
+          <p>Produces machine-readable reports, dry-run artifacts, a setup plan, and a build manifest covering input media, selected editions, removals, features, payloads, drivers, warnings, and output paths.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Implemented Policy Guardrails</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Current behavior</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Security platform</td>
+            <td>Defender, Firewall, SmartScreen, UAC, Windows Update, Store infrastructure, winget, WebView2/Edge runtime, IPv6, WinRE, and WinSxS are protected.</td>
+            <td><span class="pill done"><span class="dot"></span> Done</span></td>
+          </tr>
+          <tr>
+            <td>Hardware bypass</td>
+            <td>TPM/Secure Boot/RAM/storage bypass is explicit advanced intent only, not a default.</td>
+            <td><span class="pill done"><span class="dot"></span> Done</span></td>
+          </tr>
+          <tr>
+            <td>Location services</td>
+            <td>Disabled by default; <code>-LocationServices</code> keeps them enabled.</td>
+            <td><span class="pill done"><span class="dot"></span> Done</span></td>
+          </tr>
+          <tr>
+            <td>Maintenance task</td>
+            <td>On ice. WinMint does not stage or retain a maintenance script, scheduled task, service, or other recurring drift-control payload on the installed machine.</td>
+            <td><span class="pill planned"><span class="dot"></span> Frozen off</span></td>
+          </tr>
+          <tr>
+            <td>Post-update drift</td>
+            <td>User-owned after installation. WinMint documents what it built, then gets out of the way instead of managing the machine with background tasks.</td>
+            <td><span class="pill planned"><span class="dot"></span> User-owned</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>In Progress</h2>
+      <div class="feature-grid">
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Backend Finalization and Polish</h3>
+            <span class="pill progress"><span class="dot"></span> Priority 1</span>
+          </div>
+          <p>The top active priority is hardening the CLI/profile/engine path: public flag surface, profile contract polish, source handling, validation, release-readiness, and making sure the backend is boring and predictable before the new UI grows around it.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>UUP Source Decision</h3>
+            <span class="pill progress"><span class="dot"></span> In progress</span>
+          </div>
+          <p>Product policy: if the user already converted UUP Dump into a final ISO, they should provide that ISO directly. UUP zip input is only for cases where WinMint should prepare or validate the ISO using its own opinionated conversion policy.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Release Automation</h3>
+            <span class="pill progress"><span class="dot"></span> In progress</span>
+          </div>
+          <p>The Cloudflare <code>irm | iex</code> path is configured. CI/CD should keep normal pushes and pull requests to validation only, then publish release assets only from a pushed version tag or explicit manual release run.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>GPUI Product Surface</h3>
+            <span class="pill progress"><span class="dot"></span> Active direction</span>
+          </div>
+          <p>WPF is deprecated. GPUI is the active UI direction, but should follow backend finalization rather than race ahead of it. Report and audit viewing belongs in the GPUI roadmap after profile authoring, source probing, and build supervision are stable.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Architecture/Profile Engine Migration</h3>
+            <span class="pill progress"><span class="dot"></span> Ongoing</span>
+          </div>
+          <p>The target architecture is clear and mostly embodied in the repo. The migration remains incremental: keep the app runnable while responsibility moves toward cleaner profile, engine, reporting, FirstLogon, and GPUI boundaries.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Stubs, Labs, and Placeholders</h2>
+      <div class="feature-grid">
+        <article class="feature">
+          <div class="feature-head">
+            <h3>GPUI Native App</h3>
+            <span class="pill progress"><span class="dot"></span> Direction</span>
+          </div>
+          <p><code>apps/WinMint.GPUI</code> is still isolated and early, but it is now the intended UI direction. It currently writes lab intent JSON and bridges through existing PowerShell scripts; it should mature after backend contracts are finalized.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>GPUI Source Probe</h3>
+            <span class="pill stub"><span class="dot"></span> Stub</span>
+          </div>
+          <p>Planned for the lab: path picker, file drop, async PowerShell source probe, UUP readiness warnings, and native prompts. These are roadmap items, not production behavior.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>GPUI Build Console</h3>
+            <span class="pill stub"><span class="dot"></span> Stub</span>
+          </div>
+          <p>Planned for the lab: launching CLI dry runs/builds, streaming logs, cancellation, reveal-output actions, and retry controls. Build logic must remain in PowerShell.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>GPUI Manifest Viewer</h3>
+            <span class="pill stub"><span class="dot"></span> Stub</span>
+          </div>
+          <p>Planned for the lab: load <code>BuildManifest.json</code>, display removed packages, warnings, staged files, source metadata, and output paths.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Terminal Wizard/TUI</h3>
+            <span class="pill planned"><span class="dot"></span> Not planned</span>
+          </div>
+          <p>The current direction explicitly avoids a v1 terminal wizard. The CLI is a profile authoring and execution surface, not a second interactive product.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Dev Drive / Workspace Provisioning</h3>
+            <span class="pill stub"><span class="dot"></span> Future</span>
+          </div>
+          <p>The debloat strategy mentions future developer workspace and Dev Drive handling. Today, WSL projects should live under the Linux filesystem, and Windows-native caches remain user-managed.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Container Runtime Setup</h3>
+            <span class="pill planned"><span class="dot"></span> Deliberately outside</span>
+          </div>
+          <p>Docker/container runtimes are intentionally outside the WinMint UI. WinMint keeps WSL healthy and leaves distro-level container choices to the user.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-head">
+            <h3>Recurring Debloat/Maintenance</h3>
+            <span class="pill planned"><span class="dot"></span> On ice</span>
+          </div>
+          <p>Not part of the installed system. WinMint should not leave behind scheduled tasks, services, or maintenance scripts for drift control. Once setup is done, the user owns ongoing machine management.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Feature Matrix</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>WPF wizard</td>
+            <td><span class="pill planned"><span class="dot"></span> Deprecated</span></td>
+            <td>Legacy fallback only. New UI work should move to GPUI.</td>
+          </tr>
+          <tr>
+            <td>CLI profile execution</td>
+            <td><span class="pill done"><span class="dot"></span> Done</span></td>
+            <td><code>-ProfilePath</code> consumes the full profile contract.</td>
+          </tr>
+          <tr>
+            <td>CLI profile authoring</td>
+            <td><span class="pill done"><span class="dot"></span> Done</span></td>
+            <td><code>-NewProfile</code> and <code>-OutProfile</code> create schema-valid editable profiles.</td>
+          </tr>
+          <tr>
+            <td>Dry run artifacts</td>
+            <td><span class="pill done"><span class="dot"></span> Done</span></td>
+            <td>Produces setup artifacts and summaries without servicing WIMs or writing an ISO.</td>
+          </tr>
+          <tr>
+            <td>Build manifest</td>
+            <td><span class="pill done"><span class="dot"></span> Done</span></td>
+            <td>Machine-readable audit record for source media, removals, staged files, and output.</td>
+          </tr>
+          <tr>
+            <td>FirstLogon retry state</td>
+            <td><span class="pill done"><span class="dot"></span> Done</span></td>
+            <td>Agent modules write state before/after execution and optional failures should not break the entire first logon.</td>
+          </tr>
+          <tr>
+            <td>Remote bootstrap</td>
+            <td><span class="pill done"><span class="dot"></span> Configured</span></td>
+            <td><code>winmint.ps1</code> and the Cloudflare worker are configured for the <code>irm https://winmint.yanai.sh | iex</code> path.</td>
+          </tr>
+          <tr>
+            <td>GPUI app</td>
+            <td><span class="pill progress"><span class="dot"></span> Direction</span></td>
+            <td>Native UI direction. Still early; backend finalization comes first.</td>
+          </tr>
+          <tr>
+            <td>Release bundle</td>
+            <td><span class="pill done"><span class="dot"></span> Done</span></td>
+            <td><code>tools\release\New-WinMintReleaseBundle.ps1</code> creates zip and hash outputs under <code>dist\</code>.</td>
+          </tr>
+          <tr>
+            <td>CI/CD release</td>
+            <td><span class="pill progress"><span class="dot"></span> Needed</span></td>
+            <td>Recommended: validate on pushes/PRs, release only on manually pushed version tags or explicit workflow dispatch.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>Personal Readout</h2>
+      <div class="stack">
+        <div class="note">
+          <h3>Most solid areas</h3>
+          <p>The backend contract, CLI/profile flow, DISM servicing pipeline, FirstLogon modular model, AppX policy, and validation suite are the strongest parts of the repo right now.</p>
+        </div>
+        <div class="note">
+          <h3>Most active areas</h3>
+          <p>Backend finalization and polish are the number one priority. The key open decisions are public CLI surface, final UUP source behavior, release automation, and keeping GPUI aligned with the backend instead of duplicating decisions.</p>
+        </div>
+        <div class="note">
+          <h3>Things that are intentionally not bugs</h3>
+          <p>No terminal wizard, no maintenance task or drift-control service, no retained maintenance script, no granular debloat matrix, no container runtime setup, no Defender/Firewall/Update/WebView2/WinSxS removal, and no automatic launcher install unless opted in.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

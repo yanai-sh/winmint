@@ -5,12 +5,12 @@ their original licenses.
 
 ## Cursor Themes
 
-### BreezeX Light
+### Windows 11 Modern Light
 
-- Source: https://github.com/ful1e5/BreezeX_Cursor
-- License: GNU General Public License v3.0
-- Packaged files: `assets/cursors/BreezeXLight/`
-- Notes: BreezeX Light is bundled as the fixed WinWS cursor scheme for the
+- Source: `assets/cursors/Windows11ModernLight`
+- License: See upstream cursor pack distribution.
+- Packaged files: `assets/cursors/Windows11ModernLight/`
+- Notes: Windows 11 Modern Light is bundled as the fixed WinMint cursor scheme for the
   default user profile in generated ISOs.
 
 ## Font Assets

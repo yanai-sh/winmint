@@ -1,4 +1,4 @@
-# WinWS YASB preset
+# WinMint YASB preset
 
 This payload is copied to `%USERPROFILE%\.config\yasb` during FirstLogon when the YASB desktop layer is selected.
 

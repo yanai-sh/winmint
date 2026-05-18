@@ -3,12 +3,17 @@
 [CmdletBinding()]
 param(
     [string]$ProfilePath,
+    [string]$NewProfile,
+    [ValidateSet('Minimal', 'Developer', 'CopilotPlus', 'Gaming', 'DesktopUI')]
+    [string]$Preset = 'Minimal',
+    [string]$OutProfile,
     [string]$SourceIso,
+    [string]$UupDumpSource,
     [string]$UupDumpZip,
     [string]$SourceIsoOverride,
     [ValidateSet('amd64', 'arm64', 'x86')]
     [string]$Architecture,
-    [string]$ComputerName = 'WinWS',
+    [string]$ComputerName = 'WinMint',
     [string]$AccountName = 'dev',
     [ValidateSet('Local', 'MicrosoftOobe')]
     [string]$AccountMode = 'Local',
@@ -43,6 +48,11 @@ param(
     [Alias('Desktop-UI')]
     [switch]$DesktopUI,
     [switch]$Gaming,
+    [switch]$DmaInterop,
+    [ValidateSet('None', 'FlowEverything', 'Raycast')]
+    [string]$Launcher = 'None',
+    [switch]$LiveInstallAudit,
+    [switch]$PhoneLink,
     [switch]$InstallWindhawk,
     [switch]$InstallYasb,
     [switch]$InstallKomorebi,
@@ -61,12 +71,16 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 Set-StrictMode -Version 2.0
 
-. "$PSScriptRoot\src\WinWS\WinWS.ps1"
+. "$PSScriptRoot\src\WinMint\WinMint.ps1"
 
-Initialize-WinWSEngine -RepositoryRoot $PSScriptRoot -DryRun:$DryRun -ExportHostDrivers:$ExportHostDrivers
+Initialize-WinMintEngine -RepositoryRoot $PSScriptRoot -DryRun:$DryRun -ExportHostDrivers:$ExportHostDrivers
 
 $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
+    $PSBoundParameters.ContainsKey('NewProfile') -or
+    $PSBoundParameters.ContainsKey('Preset') -or
+    $PSBoundParameters.ContainsKey('OutProfile') -or
     $PSBoundParameters.ContainsKey('SourceIso') -or
+    $PSBoundParameters.ContainsKey('UupDumpSource') -or
     $PSBoundParameters.ContainsKey('UupDumpZip') -or
     $PSBoundParameters.ContainsKey('SourceIsoOverride') -or
     $PSBoundParameters.ContainsKey('PasswordPath') -or
@@ -77,6 +91,10 @@ $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
     $PSBoundParameters.ContainsKey('Copilot') -or
     $PSBoundParameters.ContainsKey('DesktopUI') -or
     $PSBoundParameters.ContainsKey('Gaming') -or
+    $PSBoundParameters.ContainsKey('DmaInterop') -or
+    $PSBoundParameters.ContainsKey('Launcher') -or
+    $PSBoundParameters.ContainsKey('LiveInstallAudit') -or
+    $PSBoundParameters.ContainsKey('PhoneLink') -or
     $PSBoundParameters.ContainsKey('DryRun') -or
     $PSBoundParameters.ContainsKey('LocationServices') -or
     $PSBoundParameters.ContainsKey('NoLocationServices') -or
@@ -91,10 +109,14 @@ $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
     $NonInteractive
 
 if ($headlessMode) {
-    $headlessResult = Invoke-WinWSHeadlessCli `
+    $headlessResult = Invoke-WinMintHeadlessCli `
         -BoundParameters $PSBoundParameters `
         -ProfilePath $ProfilePath `
+        -NewProfile $NewProfile `
+        -Preset $Preset `
+        -OutProfile $OutProfile `
         -SourceIso $SourceIso `
+        -UupDumpSource $UupDumpSource `
         -UupDumpZip $UupDumpZip `
         -SourceIsoOverride $SourceIsoOverride `
         -Architecture $Architecture `
@@ -126,6 +148,10 @@ if ($headlessMode) {
         -Copilot:$Copilot `
         -DesktopUI:$DesktopUI `
         -Gaming:$Gaming `
+        -DmaInterop:$DmaInterop `
+        -Launcher $Launcher `
+        -LiveInstallAudit:$LiveInstallAudit `
+        -PhoneLink:$PhoneLink `
         -InstallWindhawk:$InstallWindhawk `
         -InstallYasb:$InstallYasb `
         -InstallKomorebi:$InstallKomorebi `
@@ -144,7 +170,7 @@ if ($headlessMode) {
     return
 }
 
-Invoke-WinWSConsoleBuild `
+Invoke-WinMintConsoleBuild `
     -ProfilePath $ProfilePath `
     -SourceIso $SourceIso `
     -Architecture $Architecture `

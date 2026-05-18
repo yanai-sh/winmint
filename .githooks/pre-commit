@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # WinMint — pre-commit hook
 #
-# Runs scripts/Validation/Validate.ps1 (PowerShell parser, schema validators, asset presence,
+# Runs tools/validation/Validate.ps1 (PowerShell parser, schema validators, asset presence,
 # JSON/XML parse checks). Blocks the commit if validation fails.
 #
 # Skipped: PSScriptAnalyzer (run manually via -RunAnalyzer before tagging a release).
@@ -20,12 +20,12 @@ if ! command -v pwsh >/dev/null 2>&1; then
 fi
 
 repo_root="$(git rev-parse --show-toplevel)"
-script="$repo_root/scripts/Validation/Validate.ps1"
+script="$repo_root/tools/validation/Validate.ps1"
 
 if [ ! -f "$script" ]; then
     echo "pre-commit: $script not found; skipping validation." >&2
     exit 0
 fi
 
-echo "pre-commit: running scripts/Validation/Validate.ps1 -SkipAnalyzer"
+echo "pre-commit: running tools/validation/Validate.ps1 -SkipAnalyzer"
 pwsh -NoProfile -ExecutionPolicy Bypass -File "$script" -SkipAnalyzer

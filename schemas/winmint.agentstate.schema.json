@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winmint.yanai.sh/schemas/winmint.agentstate.schema.json",
+  "title": "WinMint Agent State",
+  "description": "Persisted state for the WinMint FirstLogon Agent, written to %LOCALAPPDATA%\\WinMint\\state.json. Enables retry and resume across reboots.",
+  "type": "object",
+  "required": ["version", "steps"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "startedAt":   { "type": "string" },
+        "completedAt": { "type": "string" },
+        "failedAt":    { "type": "string" },
+        "rebootRequiredAt": { "type": "string" },
+        "status":                { "type": "string" },
+        "exitCode":              { "type": "integer" },
+        "failedSteps":           { "type": "array", "items": { "type": "string" } },
+        "hostArchitecture":      { "type": "string" },
+        "interactiveFirstLogon": { "type": "boolean" },
+        "progressEventLog":      { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "completedAt": { "type": "string" },
+    "failedAt":    { "type": "string" },
+    "steps": {
+      "type": "object",
+      "description": "Keyed by step ID (e.g. 'manifest', 'tool:cursor', 'wsl:ubuntu').",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["pending", "running", "ok", "failed", "skipped", "retryable", "needsReboot"]
+          },
+          "attempts":  { "type": "integer", "minimum": 0 },
+          "updatedAt": { "type": "string" },
+          "error":     { "type": "string" },
+          "result":    {}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

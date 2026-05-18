@@ -7,13 +7,14 @@ fixture.
 
 ## Design Rules
 
-- `src/` contains shipped runtime code only.
-- `scripts/` contains repo automation and Windows Setup payload scripts.
+- `apps/` contains user-facing application front ends.
+- `src/` contains shipped runtime code and staged Windows Setup payloads.
+- `tools/` contains repo automation, validation, release, bridge, and authoring tools.
 - `config/` contains product policy and repo manifests, not generated state.
 - `schemas/` contains public JSON contracts.
 - `assets/` contains source-controlled payloads and visual assets required by
   the product posture.
-- `cloudflare/` contains deployment source for the bootstrap alias, not WinWS
+- `cloudflare/` contains deployment source for the bootstrap alias, not WinMint
   runtime code.
 - `tests/` contains test fixtures and future test suites. Fixture payloads stay
   local and gitignored.
@@ -46,24 +47,31 @@ fixture.
 |   |-- Distribution.md
 |   `-- Project-Structure.md
 |-- schemas/
-|-- scripts/
-|   |-- audit/
-|   |-- release/
-|   |-- setup/
-|   |-- test/
-|   `-- validation/
+|-- apps/
+|   |-- WinMint.GPUI/
+|   `-- WinMint.LegacyWpf/
 |-- src/
-|   |-- WinWS/
-|   |-- WinWS.Agent/
-|   `-- WinWS.UI/
+|   |-- WinMint/
+|   |-- WinMint.Agent/
+|   `-- WinMint.Setup/
 |-- tests/
+|   |-- contract/
 |   `-- fixtures/
 |       |-- drivers/
 |       |-- iso/
 |       `-- uupdump/
+|-- tools/
+|   |-- assets/
+|   |-- audit/
+|   |-- brand/
+|   |-- gpui/
+|   |-- release/
+|   |-- ui-bridge/
+|   `-- validation/
 |-- vendor/
 |-- WinMint-CLI.ps1
-|-- WinMint-UI.ps1
+|-- WinMint-GUI.ps1
+|-- WinMint-LegacyUI.ps1
 |-- winmint.ps1
 `-- README.md
 ```
@@ -72,22 +80,22 @@ fixture.
 
 | Folder | Owns | Must not own |
 |--------|------|--------------|
-| `src/WinWS/` | Engine, profile contracts, ISO/WIM servicing, reporting APIs | WPF controls, live-user app installs |
-| `src/WinWS.UI/` | PowerShell WPF wizard, UI state, previews, profile creation | DISM/WIM servicing, registry hive edits |
-| `src/WinWS.Agent/` | FirstLogon user setup modules and retry state | Offline image servicing, UI wizard state |
-| `scripts/setup/` | SetupComplete, FirstLogon, DefaultUser, Specialize payloads | Repo validation helpers |
-| `scripts/audit/` | Output ISO and live-install audit tooling | Product runtime entry points |
-| `scripts/test/` | Smoke tests and profile invariant tests | Shipped setup payloads |
-| `scripts/Validation/` | Static validation helpers | Product behavior decisions |
-| `scripts/release/` | Release bundle assembly and publishing helpers | Runtime source code |
+| `src/WinMint/` | Engine, profile contracts, ISO/WIM servicing, reporting APIs | WPF controls, live-user app installs |
+| `apps/WinMint.GPUI/` | Primary GUI source-selection shell and profile intent | DISM/WIM servicing, registry hive edits |
+| `apps/WinMint.LegacyWpf/` | PowerShell WPF wizard, UI state, previews, profile creation | DISM/WIM servicing, registry hive edits |
+| `src/WinMint.Agent/` | FirstLogon user setup modules and retry state | Offline image servicing, UI wizard state |
+| `src/WinMint.Setup/` | SetupComplete, FirstLogon, DefaultUser, Specialize payloads | Repo validation helpers |
+| `tools/audit/` | Output ISO and live-install audit tooling | Product runtime entry points |
+| `tests/contract/` | Smoke tests and profile invariant tests | Shipped setup payloads |
+| `tools/validation/` | Static validation helpers | Product behavior decisions |
+| `tools/release/` | Release bundle assembly and publishing helpers | Runtime source code |
 | `tests/` | Test fixture roots and future test suites | Product runtime or release payloads |
 | `tests/fixtures/iso/` | Local ISO/WIM/ESD/SWM media for tests | Checked-in Microsoft payloads |
 | `tests/fixtures/drivers/` | Local driver fixture folders, MSI bundles, and ZIPs | Shipped driver assets |
 | `tests/fixtures/uupdump/` | Local UUP Dump zips/folders/conversion outputs | Bundled Microsoft payloads |
 
-The script subfolder layout is a migration target. Existing documented root-level
-script entry points may remain as thin wrappers until docs, tests, and release
-packaging have moved together.
+Root-level launchers remain compatibility entry points. Product code, staged
+setup payloads, and developer tooling live under their owning folders.
 
 ## Release Boundary
 
@@ -96,7 +104,7 @@ that manifest instead of accumulating hand-written cleanup rules. If a folder is
 kept for development but should not ship, exclude it in the manifest and document
 why here or in the manifest-adjacent commit.
 
-`scripts\Validation\Modules\Repository.ps1` enforces the low-noise repository
+`tools\validation\Modules\Repository.ps1` enforces the low-noise repository
 custody checks that are easy to forget: required docs, generated-artifact
 tracking, release-manifest roots, pre-commit hook target, and canonical path
 casing.
@@ -104,16 +112,16 @@ casing.
 Current non-runtime exclusions:
 
 - `cloudflare/`: service deployment source for `winmint.yanai.sh`.
-- `tests/`: local fixture roots and future test suites; executable compatibility
-  wrappers may remain under `scripts/test/` during migration.
+- `tools/`: developer-only validation, release, bridge, GPUI launcher, and asset
+  authoring tools.
+- `tests/`: contract tests and local fixture roots.
 - generated payloads and scratch files: ISO/log files, driver MSI extracts, cursor
   PNG intermediates.
 
 ## Migration Order
 
-1. Split script folders by role while preserving root-level compatibility wrappers.
-2. Move validation and test internals out of the release payload once documented
-   command wrappers exist.
+1. Keep root-level compatibility wrappers thin.
+2. Move any remaining product decisions out of `tools/` and into `src/`.
 3. Break oversized runtime files along existing ownership lines:
    UI pages/resources, setup payload generation, headless commands, and FirstLogon
    UI helpers.

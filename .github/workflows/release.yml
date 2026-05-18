@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag, for example v0.2.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release bundle
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            '${{ inputs.version }}'
+          } else {
+            $env:GITHUB_REF_NAME
+          }
+
+          if ($version -notmatch '^v\d+\.\d+\.\d+(?:[-+][A-Za-z0-9._-]+)?$') {
+            throw "Release version must look like v0.2.0; got '$version'."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Validate
+        shell: pwsh
+        run: |
+          ./tests/contract/Test-ProfileInvariants.ps1
+          ./tools/validation/Validate.ps1
+
+      - name: Build bundle
+        shell: pwsh
+        run: ./tools/release/New-WinMintReleaseBundle.ps1 -Version '${{ steps.version.outputs.version }}'
+
+      - name: Create or update GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $title = "WinMint $env:VERSION"
+          gh release view $env:VERSION *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:VERSION --title $title --notes "Release $env:VERSION"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+          gh release upload $env:VERSION "dist/WinMint-$env:VERSION.zip" "dist/WinMint-$env:VERSION.zip.sha256" --clobber
