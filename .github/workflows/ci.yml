@@ -26,8 +26,8 @@ jobs:
           ./tests/contract/Test-ProfileInvariants.ps1
           ./tools/validation/Validate.ps1
 
-  gpui_lab:
-    name: GPUI lab (Rust)
+  gui_dev:
+    name: GUI crate (Rust)
     runs-on: windows-latest
 
     steps:
@@ -37,13 +37,13 @@ jobs:
       - name: Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cargo cache for GPUI
+      - name: Cargo cache for GUI
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: apps/WinMint.GPUI
+          workspaces: apps/gui
 
-      - name: cargo check and test — GPUI crate
+      - name: cargo check and test - GUI crate
         shell: pwsh
         run: |
-          cargo check --manifest-path apps/WinMint.GPUI/Cargo.toml
-          cargo test --manifest-path apps/WinMint.GPUI/Cargo.toml
+          cargo check --manifest-path apps/gui/Cargo.toml
+          cargo test --manifest-path apps/gui/Cargo.toml

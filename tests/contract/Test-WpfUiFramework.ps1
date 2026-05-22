@@ -34,8 +34,8 @@ function Assert-Equal {
     }
 }
 
-$frameworkScript = Join-Path $root 'apps\WinMint.LegacyWpf\Services\UiFramework.ps1'
-$appScript = Join-Path $root 'apps\WinMint.LegacyWpf\App\Start-WinMintUI.ps1'
+$frameworkScript = Join-Path $root 'apps\legacy-wpf\Services\UiFramework.ps1'
+$appScript = Join-Path $root 'apps\legacy-wpf\App\Start-WinMintUI.ps1'
 Assert-True (Test-Path -LiteralPath $frameworkScript) 'UiFramework service script is missing.'
 Assert-True (Test-Path -LiteralPath $appScript) 'Start-WinMintUI app loader is missing.'
 

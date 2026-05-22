@@ -67,8 +67,8 @@ if ($RunUupHeavy) {
         Write-IntegrationSkip 'UUP heavy integration requires an elevated PowerShell session.'
     }
     else {
-        . (Join-Path $root 'src\WinMint\Core.ps1')
-        . (Join-Path $root 'src\WinMint\Private\SourcePrep.ps1')
+        . (Join-Path $root 'src\engine\Core.ps1')
+        . (Join-Path $root 'src\engine\Private\SourcePrep.ps1')
         $script:WinMintRepositoryRoot = $root
         $zip = Get-WinMintTestUupDumpZipFixturePath
         if (-not (Test-WinMintUupDumpZip -Path $zip)) {

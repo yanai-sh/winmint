@@ -13,7 +13,7 @@ The core design rule: **UI creates intent. Engine performs work. Reports explain
 - **Source choice stays simple.** The user-provided ISO is the source of truth. If the user already ran UUP Dump and has a final ISO, they must provide that ISO directly with `-SourceIso`. `-UupDumpSource` accepts a UUP Dump conversion zip only when the user wants WinMint to prepare or validate the ISO; WinMint must not expose UUP converter knobs as public product choices and must not accept converted UUP folders as a second source contract. If a UUP Dump zip is provided, WinMint prepares/uses the ISO with one opinionated policy: include updates, run component cleanup, prefer serviceable WIM output, validate the final ISO, and journal source-prep phases. Do not bundle Microsoft payloads or silently download them; require only a high-level consent/automation acknowledgement when network download or conversion is needed.
 - **No debloat/performance wizard flags.** Defaults live in engine/profile/setup scripts only—one coherent WinMint posture, not a choice matrix.
 - **Optional profile groups, not granular toggles.** The baseline is `Minimal`; additive groups are `Developer`, `CopilotPlus`, `Gaming`, and `DesktopUI`. Multiple groups may be selected together. CLI spellings are `-Developer`, `-Copilot`, `-Gaming`, and `-DesktopUI`/`--Desktop-UI`. UI pages must appear only when their group needs configuration: developer options for `Developer`, shell customization for `DesktopUI`.
-- **Maintain is on ice.** WinMint must not leave a maintenance scheduled task, background service, or maintenance script behind on the installed system. Post-update drift is the user’s responsibility after installation; the project may keep maintenance experiments in the repo, but they are not staged or retained by default.
+- **No maintenance payload.** WinMint must not leave a maintenance scheduled task, background service, or maintenance script behind on the installed system. Post-update drift is the user’s responsibility after installation; maintenance experiments do not belong under shipped runtime/setup folders.
 - **Destructive disk behavior is explicit.** Disk modes are `Manual`, `AutoWipeDisk0`, and `DualBootReserved`. Dual-boot mode reserves Windows space using one of `WindowsHeavy`, `Balanced`, `EvenSplit`, or `LinuxHeavy`, and leaves the rest unallocated for another OS.
 
 ## Commands
@@ -48,13 +48,13 @@ Bootstrap → UI/CLI → Engine → Windows Setup → FirstLogon Agent
 | Layer | Entry point | Purpose |
 |-------|-------------|---------|
 | CLI | `WinMint-CLI.ps1` | Headless/console entry; delegates directly to engine |
-| Engine | `src/WinMint/WinMint.ps1` | Dot-sources all private modules; owns DISM/WIM servicing |
-| UI | `WinMint-GUI.ps1`; `apps/WinMint.GPUI/` | GPUI is the primary GUI; WPF is available only through `WinMint-LegacyUI.ps1` as a deprecated fallback |
-| Agent | `src/WinMint.Agent/Start-WinMintAgent.ps1` | Runs at first logon; installs editors/WSL/shell layers |
-| Setup scripts | `src/WinMint.Setup/FirstLogon.ps1`, `src/WinMint.Setup/SetupComplete.ps1` | Machine-phase setup during Windows install |
+| Engine | `src/engine/WinMint.ps1` | Dot-sources all private modules; owns DISM/WIM servicing |
+| UI | `WinMint-GUI.ps1`; `apps/gui/` | GPUI is the primary GUI; WPF is available only through `WinMint-LegacyUI.ps1` as a deprecated fallback. The GPUI app uses `gpui-animation` for state-driven hover transitions; interactive wrappers must use `AnimatedWrapper::on_click` (not the inner `div`’s `on_click`) so the animation hook is not overwritten. |
+| Agent | `src/agent/Start-WinMintAgent.ps1` | Runs at first logon; installs editors/WSL/shell layers |
+| Setup scripts | `src/setup/FirstLogon.ps1`, `src/setup/SetupComplete.ps1` | Machine-phase setup during Windows install |
 | Bootstrap | `winmint.ps1` | Downloads release, verifies hash, launches UI |
 
-`src/WinMint/WinMint.ps1` dot-sources every private module in order — that is the intentional load pattern. Do not call sub-files directly.
+`src/engine/WinMint.ps1` dot-sources every private module in order — that is the intentional load pattern. Do not call sub-files directly.
 
 ## Separation of Concerns
 
@@ -101,8 +101,8 @@ Validate with `tests/contract/Test-ProfileInvariants.ps1`.
 | `config/tweaks.json` | Registry tweak definitions |
 | `schemas/winmint.*.schema.json` | JSON Schema for the profile, manifest, and agent-state contracts |
 | `config/autounattend.xml` | Windows unattended install template; generated output must ship alongside ISO |
-| `assets/windhawk/preset.json` | Windhawk mod preset (installed as a unit, not individual mods) |
-| `assets/komorebi/`, `assets/yasb/` | Shell layer configs |
+| `assets/runtime/desktop/windhawk/preset.json` | Windhawk mod preset (installed as a unit, not individual mods) |
+| `assets/runtime/desktop/komorebi/`, `assets/runtime/desktop/yasb/` | Shell layer configs |
 | `PSScriptAnalyzerSettings.psd1` | Linter settings |
 
 `output/` and `dist/` are build artifacts — gitignored, do not edit.
@@ -124,16 +124,16 @@ Standard Windows means zero added layers. Windhawk, YASB, and Komorebi can be fr
 
 | Feature | Module path |
 |---------|-------------|
-| Package managers | `src/WinMint.Agent/Modules/PackageManagers.ps1` |
-| Editor bootstrap | `src/WinMint.Agent/Modules/Editors.ps1` |
-| Git config | `src/WinMint.Agent/Modules/Git.ps1` |
-| Dotfiles | `src/WinMint.Agent/Modules/Dotfiles.ps1` |
-| WSL2 bootstrap | `src/WinMint.Agent/Modules/Wsl.ps1` |
-| Flow Launcher + Everything | `src/WinMint.Agent/Modules/FlowEverything.ps1` |
-| Raycast | `src/WinMint.Agent/Modules/Raycast.ps1` |
-| Tiling desktop (komorebi/yasb) | `src/WinMint.Agent/Modules/TilingDesktop.ps1` |
-| Windhawk | `src/WinMint.Agent/Modules/Windhawk.ps1` |
-| Profile composition | `src/WinMint.Agent/Modules/Profiles.ps1` |
+| Package managers | `src/agent/Modules/PackageManagers.ps1` |
+| Editor bootstrap | `src/agent/Modules/Editors.ps1` |
+| Git config | `src/agent/Modules/Git.ps1` |
+| Dotfiles | `src/agent/Modules/Dotfiles.ps1` |
+| WSL2 bootstrap | `src/agent/Modules/Wsl.ps1` |
+| Flow Launcher + Everything | `src/agent/Modules/FlowEverything.ps1` |
+| Raycast | `src/agent/Modules/Raycast.ps1` |
+| Tiling desktop (komorebi/yasb) | `src/agent/Modules/TilingDesktop.ps1` |
+| Windhawk | `src/agent/Modules/Windhawk.ps1` |
+| Profile composition | `src/agent/Modules/Profiles.ps1` |
 
 Launcher install is opt-in and mutually exclusive. CLI users choose `-Launcher FlowEverything` for Flow Launcher plus Everything Alpha, `-Launcher Raycast` for Raycast, or omit the flag for no launcher. Profile-backed builds set `features.launcher` to `None`, `FlowEverything`, or `Raycast`, which becomes `modules.flowEverything.enabled` or `modules.raycast.enabled` in `New-WinMintAgentProfile`. Windows Search and indexing stay on for Start/Settings integrations. Minimize tray icon bloat: Everything runs as a background service/index provider for Flow and must hide its tray icon by default; keep other optional tray icons hidden unless the icon exposes a real, user-facing status or control surface.
 
@@ -170,7 +170,7 @@ Branch `architecture/profile-engine` is converging toward:
 3. Manifest explains the build without scraping logs
 4. FirstLogon resumes after interruption via `%LOCALAPPDATA%\WinMint\state.json`
 
-Migration is incremental — the app must stay runnable after every step. Do not rewrite; refactor toward the target layout in `docs/Architecture-Plan.md`.
+Migration is incremental — the app must stay runnable after every step. Do not rewrite; use `docs/Project-Structure.md` as the repository layout contract.
 
 ## PSScriptAnalyzer
 

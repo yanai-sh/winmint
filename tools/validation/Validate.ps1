@@ -4,13 +4,13 @@ param(
     [switch]$SkipAnalyzer,
     [switch]$RunAnalyzer,
     [switch]$RunIntegration,
-    [switch]$IncludeGpuiBuild
+    [switch]$IncludeGuiBuild
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
-. (Join-Path $root 'src\WinMint\Core.ps1')
+. (Join-Path $root 'src\engine\Core.ps1')
 $errors = [System.Collections.Generic.List[string]]::new()
 
 if ($SkipAnalyzer -and $RunAnalyzer) {
@@ -54,19 +54,19 @@ $validationSteps = [ordered]@{
         Test-DismArgumentQuoting
         Test-RegistryTweakStrictModeAccess
         Test-LauncherArchitecture
-        Test-GpuiIdentity
+        Test-GuiIdentity
         Test-ReleaseManifestRuntimeSurface
         Test-NoWinWsCompatibilitySurface
     }
-    'Optional GPUI build' = {
-        Test-GpuiBuild -IncludeBuild:$IncludeGpuiBuild
+    'Optional GUI build' = {
+        Test-GuiBuild -IncludeBuild:$IncludeGuiBuild
     }
     'PowerShell parser' = {
-        # Get-ValidationPowerShellFile recurses *.ps1 (includes tools\gpui, excluded: .git\ output\ dist\).
+        # Get-ValidationPowerShellFile recurses *.ps1 (includes tools\gui, excluded: .git\ output\ dist\).
         Test-PowerShellParser
     }
     'XML files' = {
-        Test-XmlFile -Path (Get-WinMintPath -Name LegacyWpfApp -ChildPath 'Views\MainWindow.xaml') -Kind 'XAML'
+        Test-XmlFile -Path (Get-WinMintPath -Name LegacyUiApp -ChildPath 'Views\MainWindow.xaml') -Kind 'XAML'
         Test-XmlFile -Path (Get-WinMintPath -Name Agent -ChildPath 'Start-WinMintFirstLogonUI.xaml') -Kind 'FirstLogon UI XAML'
         Test-XmlFile -Path (Get-WinMintPath -Name Config -ChildPath 'autounattend.xml') -Kind 'autounattend.xml'
     }

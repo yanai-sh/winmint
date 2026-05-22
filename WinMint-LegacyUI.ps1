@@ -7,7 +7,7 @@
     Collects settings into a WinMint build profile and passes that profile to the build engine.
 </summary>
 <description>
-    Cinematic WPF UI from apps\WinMint.LegacyWpf\Views\MainWindow.xaml (requires x:Name="StageStart").
+    Cinematic WPF UI from apps\legacy-wpf\Views\MainWindow.xaml (requires x:Name="StageStart").
     Optional vendored WPF UI (Mica / FluentWindow). Auto-elevates via UAC — DISM needs admin for ISO metadata and builds.
     Run: pwsh -NoProfile -File WinMint-LegacyUI.ps1
 
@@ -33,8 +33,8 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 Set-StrictMode -Version 2.0
 
-. "$PSScriptRoot\src\WinMint\Core.ps1"
-. (Get-WinMintPath -Name LegacyWpfApp -ChildPath 'Bootstrap\Logging.ps1')
+. "$PSScriptRoot\src\engine\Core.ps1"
+. (Get-WinMintPath -Name LegacyUiApp -ChildPath 'Bootstrap\Logging.ps1')
 Initialize-WinMintUiLogging
 Register-WinMintUiProcessFaultHandlers
 
@@ -131,11 +131,11 @@ if ($nonSta -or $wpfReinit) {
 }
 
 _T 'Loading Bootstrap'
-. (Get-WinMintPath -Name LegacyWpfApp -ChildPath 'Bootstrap\Dependencies.ps1')
+. (Get-WinMintPath -Name LegacyUiApp -ChildPath 'Bootstrap\Dependencies.ps1')
 _T 'Dependencies done'
-. (Get-WinMintPath -Name LegacyWpfApp -ChildPath 'Bootstrap\Interop.ps1')
+. (Get-WinMintPath -Name LegacyUiApp -ChildPath 'Bootstrap\Interop.ps1')
 _T 'Interop done'
-. (Get-WinMintPath -Name LegacyWpfApp -ChildPath 'Bootstrap\Elevation.ps1')
+. (Get-WinMintPath -Name LegacyUiApp -ChildPath 'Bootstrap\Elevation.ps1')
 
 # Get-WindowsImage on the offline install.wim requires admin (DISM API access),
 # and the build itself needs admin for DISM/registry/disk operations. Elevate at
@@ -169,7 +169,7 @@ $script:WinMintRepositoryRoot = $PSScriptRoot
 $script:UiScriptDir         = $PSScriptRoot
 $script:WinMintFixtureMode    = [bool]$FixtureMode
 
-$_winMintLegacyUiRoot = Get-WinMintPath -Name LegacyWpfApp
+$_winMintLegacyUiRoot = Get-WinMintPath -Name LegacyUiApp
 $_mainWindowXamlPath = Join-Path $_winMintLegacyUiRoot 'Views\MainWindow.xaml'
 if (-not (Test-Path -LiteralPath $_mainWindowXamlPath)) {
     throw "Missing main window XAML: $_mainWindowXamlPath"
@@ -180,7 +180,7 @@ if ($xamlProbe -notmatch 'x:Name="StageStart"') {
 }
 
 _T 'Loading app loader'
-. (Get-WinMintPath -Name LegacyWpfApp -ChildPath 'App\Start-WinMintUI.ps1')
+. (Get-WinMintPath -Name LegacyUiApp -ChildPath 'App\Start-WinMintUI.ps1')
 _T 'App loader loaded'
 $script:WinMintUiExitCode = 0
 try {

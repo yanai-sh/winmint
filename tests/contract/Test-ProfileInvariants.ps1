@@ -6,20 +6,20 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
 
-. (Join-Path $root 'src\WinMint\Core.ps1')
-. (Join-Path $root 'src\WinMint\Private\Config\Profile.ps1')
-. (Join-Path $root 'src\WinMint\Private\Catalog.ps1')
-. (Join-Path $root 'src\WinMint\Engine.ps1')
-. (Join-Path $root 'src\WinMint\Reports.ps1')
-. (Join-Path $root 'src\WinMint\Private\Runtime.ps1')
-. (Join-Path $root 'src\WinMint\Private\Image\Drivers.ps1')
-. (Join-Path $root 'src\WinMint\Private\Image\Packages.ps1')
-. (Join-Path $root 'src\WinMint\Private\Media.ps1')
-. (Join-Path $root 'src\WinMint\Private\Image\Tweaks.ps1')
-. (Join-Path $root 'src\WinMint\Private\Image\Unattend.ps1')
-. (Join-Path $root 'src\WinMint\Private\SourcePrep.ps1')
-. (Join-Path $root 'src\WinMint\Private\Pipeline.Console.ps1')
-. (Join-Path $root 'src\WinMint\Private\Headless.ps1')
+. (Join-Path $root 'src\engine\Core.ps1')
+. (Join-Path $root 'src\engine\Private\Config\Profile.ps1')
+. (Join-Path $root 'src\engine\Private\Catalog.ps1')
+. (Join-Path $root 'src\engine\Engine.ps1')
+. (Join-Path $root 'src\engine\Reports.ps1')
+. (Join-Path $root 'src\engine\Private\Runtime.ps1')
+. (Join-Path $root 'src\engine\Private\Image\Drivers.ps1')
+. (Join-Path $root 'src\engine\Private\Image\Packages.ps1')
+. (Join-Path $root 'src\engine\Private\Media.ps1')
+. (Join-Path $root 'src\engine\Private\Image\Tweaks.ps1')
+. (Join-Path $root 'src\engine\Private\Image\Unattend.ps1')
+. (Join-Path $root 'src\engine\Private\SourcePrep.ps1')
+. (Join-Path $root 'src\engine\Private\Pipeline.Console.ps1')
+. (Join-Path $root 'src\engine\Private\Headless.ps1')
 
 $failures = [System.Collections.Generic.List[string]]::new()
 
@@ -85,7 +85,7 @@ Assert-LiveInstallAuditCoversPlatformGuardrails
 Assert-LiveInstallAuditUsesSetupProfilePrefixes
 Assert-LiveInstallAuditIsStaged
 Assert-AgentRunsLiveInstallAudit
-Assert-MaintainFallbackDoesNotRemovePlatformApps
+Assert-NoMaintenancePayloadOrRegistration
 Assert-ExternalReferenceAuditDocumentsSparkle
 Assert-WslFirstDefaultsAndGuards
 Assert-LogNoiseInvariants

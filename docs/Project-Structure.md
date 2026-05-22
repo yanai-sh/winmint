@@ -9,11 +9,12 @@ fixture.
 
 - `apps/` contains user-facing application front ends.
 - `src/` contains shipped runtime code and staged Windows Setup payloads.
-- `tools/` contains repo automation, validation, release, bridge, and authoring tools.
+- `tools/` contains repo automation, validation, release, bridge, and utility tools.
 - `config/` contains product policy and repo manifests, not generated state.
 - `schemas/` contains public JSON contracts.
-- `assets/` contains source-controlled payloads and visual assets required by
-  the product posture.
+- `assets/` contains source-controlled product assets split by intent: brand
+  identity, runtime payloads staged into the image or FirstLogon flow, and UI
+  presentation assets.
 - `cloudflare/` contains deployment source for the bootstrap alias, not WinMint
   runtime code.
 - `tests/` contains test fixtures and future test suites. Fixture payloads stay
@@ -26,14 +27,19 @@ fixture.
 ```text
 .
 |-- assets/
-|   |-- cursors/
-|   |-- editors/
-|   |-- fonts/
-|   |-- komorebi/
-|   |-- shell/
-|   |-- windhawk/
-|   |-- wsl/
-|   `-- yasb/
+|   |-- brand/
+|   |-- runtime/
+|   |   |-- cursors/
+|   |   |-- fonts/
+|   |   |-- wallpaper/
+|   |   `-- shell/
+|   |       |-- komorebi/
+|   |       |-- windhawk/
+|   |       `-- yasb/
+|   `-- ui/
+|       |-- editors/
+|       |-- shell/
+|       `-- wsl/
 |-- cloudflare/
 |   `-- winmint/
 |-- config/
@@ -43,17 +49,17 @@ fixture.
 |   |-- release-manifest.json
 |   `-- tweaks.json
 |-- docs/
-|   |-- Architecture-Plan.md
 |   |-- Distribution.md
-|   `-- Project-Structure.md
+|   |-- Project-Structure.md
+|   `-- Windows-Debloat-Strategy.md
 |-- schemas/
 |-- apps/
-|   |-- WinMint.GPUI/
-|   `-- WinMint.LegacyWpf/
+|   |-- gui/
+|   `-- legacy-wpf/
 |-- src/
-|   |-- WinMint/
-|   |-- WinMint.Agent/
-|   `-- WinMint.Setup/
+|   |-- engine/
+|   |-- agent/
+|   `-- setup/
 |-- tests/
 |   |-- contract/
 |   `-- fixtures/
@@ -63,8 +69,7 @@ fixture.
 |-- tools/
 |   |-- assets/
 |   |-- audit/
-|   |-- brand/
-|   |-- gpui/
+|   |-- gui/
 |   |-- release/
 |   |-- ui-bridge/
 |   `-- validation/
@@ -80,22 +85,25 @@ fixture.
 
 | Folder | Owns | Must not own |
 |--------|------|--------------|
-| `src/WinMint/` | Engine, profile contracts, ISO/WIM servicing, reporting APIs | WPF controls, live-user app installs |
-| `apps/WinMint.GPUI/` | Primary GUI source-selection shell and profile intent | DISM/WIM servicing, registry hive edits |
-| `apps/WinMint.LegacyWpf/` | PowerShell WPF wizard, UI state, previews, profile creation | DISM/WIM servicing, registry hive edits |
-| `src/WinMint.Agent/` | FirstLogon user setup modules and retry state | Offline image servicing, UI wizard state |
-| `src/WinMint.Setup/` | SetupComplete, FirstLogon, DefaultUser, Specialize payloads | Repo validation helpers |
+| `src/engine/` | Engine, profile contracts, ISO/WIM servicing, reporting APIs | WPF controls, live-user app installs |
+| `apps/gui/` | Primary GUI source-selection shell and profile intent | DISM/WIM servicing, registry hive edits |
+| `apps/legacy-wpf/` | PowerShell WPF wizard, UI state, previews, profile creation | DISM/WIM servicing, registry hive edits |
+| `src/agent/` | FirstLogon user setup modules and retry state | Offline image servicing, UI wizard state |
+| `src/setup/` | SetupComplete, FirstLogon, DefaultUser, Specialize payloads | Repo validation helpers |
 | `tools/audit/` | Output ISO and live-install audit tooling | Product runtime entry points |
 | `tests/contract/` | Smoke tests and profile invariant tests | Shipped setup payloads |
 | `tools/validation/` | Static validation helpers | Product behavior decisions |
 | `tools/release/` | Release bundle assembly and publishing helpers | Runtime source code |
+| `assets/brand/` | Product mark and editable brand source files | Generated brand tooling |
+| `assets/runtime/` | Payloads staged into the image or FirstLogon flow | UI-only previews |
+| `assets/ui/` | GUI preview and selection imagery | Setup/runtime configuration |
 | `tests/` | Test fixture roots and future test suites | Product runtime or release payloads |
 | `tests/fixtures/iso/` | Local ISO/WIM/ESD/SWM media for tests | Checked-in Microsoft payloads |
 | `tests/fixtures/drivers/` | Local driver fixture folders, MSI bundles, and ZIPs | Shipped driver assets |
 | `tests/fixtures/uupdump/` | Local UUP Dump zips/folders/conversion outputs | Bundled Microsoft payloads |
 
-Root-level launchers remain compatibility entry points. Product code, staged
-setup payloads, and developer tooling live under their owning folders.
+Root-level launchers are the public command surface. Product code, staged setup
+payloads, and developer tooling live under their owning folders.
 
 ## Release Boundary
 
@@ -112,18 +120,16 @@ casing.
 Current non-runtime exclusions:
 
 - `cloudflare/`: service deployment source for `winmint.yanai.sh`.
-- `tools/`: developer-only validation, release, bridge, GPUI launcher, and asset
-  authoring tools.
+- `tools/`: developer-only validation, release, bridge, GUI launcher, and
+  utility tools.
 - `tests/`: contract tests and local fixture roots.
-- generated payloads and scratch files: ISO/log files, driver MSI extracts, cursor
-  PNG intermediates.
+- generated payloads and scratch files: ISO/log files, user driver payloads,
+  driver MSI extracts, and cursor PNG intermediates.
 
-## Migration Order
+## Modularity Pressure
 
-1. Keep root-level compatibility wrappers thin.
-2. Move any remaining product decisions out of `tools/` and into `src/`.
-3. Break oversized runtime files along existing ownership lines:
-   UI pages/resources, setup payload generation, headless commands, and FirstLogon
-   UI helpers.
-4. Revisit vendored dependencies and large assets with a documented offline
-   distribution policy.
+Keep future product logic in Rust when it is not tied to Windows setup APIs.
+PowerShell remains the servicing bridge for DISM, registry hives, Windows Setup,
+and elevation handoff. New PowerShell files should have a clear runtime reason to
+exist and should be grouped under `src/engine`, `src/setup`, `src/agent`, or a
+developer-only `tools/` owner.

@@ -2,62 +2,81 @@
 
 function Test-RequiredAssets {
     $required = @(
-        'apps\WinMint.LegacyWpf\Views\MainWindow.xaml',
+        'apps\legacy-wpf\Views\MainWindow.xaml',
         'WinMint-GUI.ps1',
         'WinMint-LegacyUI.ps1',
         'config\autounattend.xml',
         'LICENSE',
         'winmint.ps1',
         'assets\brand\WinMint.svg',
-        'assets\brand\WinMint.vector.svg',
-        'assets\brand\winmint-mark-v2.svg',
-        'assets\brand\winmint-brand-final.svg',
-        'assets\brand\winmint-brand-final.png',
-        'assets\Bloom-wallpaper-OLED-muted.png',
-        'assets\drivers\README.md',
-        'assets\editors\cursor.png',
-        'assets\editors\vscodium.png',
-        'assets\editors\zed.png',
-        'assets\editors\neovim.png',
-        'assets\wsl\ubuntu.png',
-        'assets\wsl\debian.png',
-        'assets\wsl\archlinux.png',
-        'assets\wsl\fedora.png',
-        'assets\shell\standard.svg',
-        'assets\shell\standard.png',
-        'assets\shell\windhawk.svg',
-        'assets\shell\windhawk.png',
-        'assets\shell\windhawk\preview.png',
-        'assets\windhawk\preset.json',
-        'assets\windhawk\README.md',
-        'assets\shell\yasb.svg',
-        'assets\shell\yasb.png',
-        'assets\yasb\config.yaml',
-        'assets\yasb\styles.css',
-        'assets\shell\komorebi.svg',
-        'assets\shell\komorebi.png',
-        'assets\komorebi\komorebi.json',
-        'assets\komorebi\applications.json',
-        'assets\komorebi\whkdrc',
-        'assets\fonts\CascadiaCodeNF-Regular.ttf',
-        'assets\cursors\Windows11ModernLight\Alternate.cur',
-        'assets\cursors\Windows11ModernLight\Arrow.cur',
-        'assets\cursors\Windows11ModernLight\Busy.ani',
-        'assets\cursors\Windows11ModernLight\Cross.cur',
-        'assets\cursors\Windows11ModernLight\Handwriting.cur',
-        'assets\cursors\Windows11ModernLight\Help.cur',
-        'assets\cursors\Windows11ModernLight\IBeam.cur',
-        'assets\cursors\Windows11ModernLight\Link.cur',
-        'assets\cursors\Windows11ModernLight\Move.cur',
-        'assets\cursors\Windows11ModernLight\Person.cur',
-        'assets\cursors\Windows11ModernLight\Pin.cur',
-        'assets\cursors\Windows11ModernLight\Precision.cur',
-        'assets\cursors\Windows11ModernLight\SizeNESW.cur',
-        'assets\cursors\Windows11ModernLight\SizeNS.cur',
-        'assets\cursors\Windows11ModernLight\SizeNWSE.cur',
-        'assets\cursors\Windows11ModernLight\SizeWE.cur',
-        'assets\cursors\Windows11ModernLight\Unavailable.cur',
-        'assets\cursors\Windows11ModernLight\Work.ani',
+        'assets\brand\WinMint_inkscape.svg',
+        'assets\brand\winmint-mark.png',
+        'assets\runtime\wallpaper\Bloom-wallpaper-OLED-muted.png',
+        'assets\ui\editors\cursor.png',
+        'assets\ui\editors\vscodium.png',
+        'assets\ui\editors\zed.png',
+        'assets\ui\editors\neovim.png',
+        'assets\ui\wsl\ubuntu.png',
+        'assets\ui\wsl\debian.png',
+        'assets\ui\wsl\archlinux.png',
+        'assets\ui\wsl\fedora.png',
+        'assets\ui\desktop\standard.svg',
+        'assets\ui\desktop\standard.png',
+        'assets\ui\desktop\windhawk.svg',
+        'assets\ui\desktop\windhawk.png',
+        'assets\ui\desktop\windhawk\preview.png',
+        'assets\runtime\desktop\windhawk\preset.json',
+        'assets\runtime\desktop\windhawk\README.md',
+        'assets\ui\desktop\yasb.svg',
+        'assets\ui\desktop\yasb.png',
+        'assets\runtime\desktop\yasb\config.yaml',
+        'assets\runtime\desktop\yasb\styles.css',
+        'assets\ui\desktop\komorebi.svg',
+        'assets\ui\desktop\komorebi.png',
+        'assets\runtime\desktop\komorebi\komorebi.json',
+        'assets\runtime\desktop\komorebi\applications.json',
+        'assets\runtime\desktop\komorebi\whkdrc',
+        'assets\runtime\fonts\CascadiaCodeNF-Regular.ttf',
+        'assets\runtime\cursors\Windows11ModernLight\Alternate.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Arrow.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Busy.ani',
+        'assets\runtime\cursors\Windows11ModernLight\Cross.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Handwriting.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Help.cur',
+        'assets\runtime\cursors\Windows11ModernLight\IBeam.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Link.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Move.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Person.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Pin.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Precision.cur',
+        'assets\runtime\cursors\Windows11ModernLight\SizeNESW.cur',
+        'assets\runtime\cursors\Windows11ModernLight\SizeNS.cur',
+        'assets\runtime\cursors\Windows11ModernLight\SizeNWSE.cur',
+        'assets\runtime\cursors\Windows11ModernLight\SizeWE.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Unavailable.cur',
+        'assets\runtime\cursors\Windows11ModernLight\Work.ani',
+        'assets\runtime\cursors\BreezeXLight\Alternate.cur',
+        'assets\runtime\cursors\BreezeXLight\Arrow.cur',
+        'assets\runtime\cursors\BreezeXLight\Busy.ani',
+        'assets\runtime\cursors\BreezeXLight\Cross.cur',
+        'assets\runtime\cursors\BreezeXLight\Grabbing.cur',
+        'assets\runtime\cursors\BreezeXLight\Handwriting.cur',
+        'assets\runtime\cursors\BreezeXLight\Help.cur',
+        'assets\runtime\cursors\BreezeXLight\IBeam.cur',
+        'assets\runtime\cursors\BreezeXLight\Link.cur',
+        'assets\runtime\cursors\BreezeXLight\Move.cur',
+        'assets\runtime\cursors\BreezeXLight\Pan.cur',
+        'assets\runtime\cursors\BreezeXLight\Person.cur',
+        'assets\runtime\cursors\BreezeXLight\Pin.cur',
+        'assets\runtime\cursors\BreezeXLight\SizeNESW.cur',
+        'assets\runtime\cursors\BreezeXLight\SizeNS.cur',
+        'assets\runtime\cursors\BreezeXLight\SizeNWSE.cur',
+        'assets\runtime\cursors\BreezeXLight\SizeWE.cur',
+        'assets\runtime\cursors\BreezeXLight\Unavailable.cur',
+        'assets\runtime\cursors\BreezeXLight\Work.ani',
+        'assets\runtime\cursors\BreezeXLight\ZoomIn.cur',
+        'assets\runtime\cursors\BreezeXLight\ZoomOut.cur',
+        'assets\runtime\cursors\BreezeXLight\install.inf',
         'config\packages.json',
         'config\profiles.json',
         'config\release-manifest.json',
@@ -66,38 +85,38 @@ function Test-RequiredAssets {
         'cloudflare\winmint\src\index.js',
         'cloudflare\winmint\wrangler.jsonc',
         'tools\release\New-WinMintReleaseBundle.ps1',
-        'tools\release\Build-WinMintGpui.ps1',
+        'tools\release\Build-WinMintGui.ps1',
         'tools\audit\Audit-LiveInstall.ps1',
-        'src\WinMint.Setup\WindhawkBootstrap.ps1',
-        'src\WinMint.Setup\WindhawkBootstrap.Helpers.ps1',
-        'src\WinMint\Private\Pipeline.Console.ps1',
-        'apps\WinMint.LegacyWpf\Foundation\FileSystemLiterals.ps1',
-        'apps\WinMint.LegacyWpf\Foundation\UiSession.ps1',
-        'apps\WinMint.LegacyWpf\Services\Theme.ps1',
-        'apps\WinMint.LegacyWpf\Services\UiFramework.ps1',
-        'apps\WinMint.LegacyWpf\Services\UiInteraction.ps1',
+        'src\setup\WindhawkBootstrap.ps1',
+        'src\setup\WindhawkBootstrap.Helpers.ps1',
+        'src\engine\Private\Pipeline.Console.ps1',
+        'apps\legacy-wpf\Foundation\FileSystemLiterals.ps1',
+        'apps\legacy-wpf\Foundation\UiSession.ps1',
+        'apps\legacy-wpf\Services\Theme.ps1',
+        'apps\legacy-wpf\Services\UiFramework.ps1',
+        'apps\legacy-wpf\Services\UiInteraction.ps1',
         'vendor\wpf-ui\4.3.0\net8.0-windows7.0\Wpf.Ui.dll',
         'vendor\wpf-ui\4.3.0\net8.0-windows7.0\Wpf.Ui.Abstractions.dll',
         'vendor\wpf-ui\4.3.0\net8.0-windows7.0\WPF-UI-LICENSE.md',
         'vendor\wpf-ui\4.3.0\net8.0-windows7.0\WPF-UI.Abstractions-LICENSE.md',
-        'src\WinMint.Agent\Agent.Console.ps1',
-        'src\WinMint.Agent\Agent.Runtime.ps1',
-        'src\WinMint.Agent\Start-WinMintAgent.ps1',
-        'src\WinMint.Agent\Start-WinMintFirstLogonUI.ps1',
-        'src\WinMint.Agent\Start-WinMintFirstLogonUI.xaml',
-        'src\WinMint.Agent\BuildProfile.json',
-        'src\WinMint.Agent\Modules\PackageManagers.ps1',
-        'src\WinMint.Agent\Modules\Editors.ps1',
-        'src\WinMint.Agent\Modules\Git.ps1',
-        'src\WinMint.Agent\Modules\Dotfiles.ps1',
-        'src\WinMint.Agent\Modules\Wsl.ps1',
-        'src\WinMint.Agent\Modules\FlowEverything.ps1',
-        'src\WinMint.Agent\Modules\Raycast.ps1',
-        'src\WinMint.Agent\Modules\LiveInstallAudit.ps1',
-        'src\WinMint.Agent\Modules\TilingDesktop.ps1',
-        'src\WinMint.Agent\Modules\Windhawk.ps1',
-        'src\WinMint.Agent\Modules\Profiles.ps1',
-        'apps\WinMint.LegacyWpf\Views\MainWindow.xaml'
+        'src\agent\Agent.Console.ps1',
+        'src\agent\Agent.Runtime.ps1',
+        'src\agent\Start-WinMintAgent.ps1',
+        'src\agent\Start-WinMintFirstLogonUI.ps1',
+        'src\agent\Start-WinMintFirstLogonUI.xaml',
+        'src\agent\BuildProfile.json',
+        'src\agent\Modules\PackageManagers.ps1',
+        'src\agent\Modules\Editors.ps1',
+        'src\agent\Modules\Git.ps1',
+        'src\agent\Modules\Dotfiles.ps1',
+        'src\agent\Modules\Wsl.ps1',
+        'src\agent\Modules\FlowEverything.ps1',
+        'src\agent\Modules\Raycast.ps1',
+        'src\agent\Modules\LiveInstallAudit.ps1',
+        'src\agent\Modules\TilingDesktop.ps1',
+        'src\agent\Modules\Windhawk.ps1',
+        'src\agent\Modules\Profiles.ps1',
+        'apps\legacy-wpf\Views\MainWindow.xaml'
     )
     foreach ($rel in $required) {
         $path = Join-Path $root $rel
@@ -114,8 +133,8 @@ function Test-DuplicateLargeAssets {
     $files = @(Get-ChildItem -LiteralPath $assetRoot -Recurse -File -ErrorAction SilentlyContinue |
         Where-Object {
             $_.Length -ge 1MB -and
-            $_.FullName.Substring($root.Length).TrimStart('\', '/') -notlike 'assets\cursors\_extract\Assets\*' -and
-            $_.FullName.Substring($root.Length).TrimStart('\', '/') -notlike 'assets\cursors\Windows11ModernLight\*'
+            $_.FullName.Substring($root.Length).TrimStart('\', '/') -notlike 'assets\runtime\cursors\_extract\Assets\*' -and
+            $_.FullName.Substring($root.Length).TrimStart('\', '/') -notlike 'assets\runtime\cursors\Windows11ModernLight\*'
         })
     $candidates = @($files | Group-Object Length | Where-Object { $_.Count -gt 1 })
     foreach ($sizeGroup in $candidates) {
@@ -172,12 +191,12 @@ function Test-WindhawkPresetPayload {
         return @($subfolders.GetEnumerator())
     }
 
-    $legacyPayload = Join-Path $root 'assets\windhawk\current.zip'
+    $legacyPayload = Join-Path $root 'assets\runtime\desktop\windhawk\current.zip'
     if (Test-Path -LiteralPath $legacyPayload) {
-        Add-ValidationError 'Windhawk preset must not include compiled ProgramData zip payloads. Remove assets\windhawk\current.zip.'
+        Add-ValidationError 'Windhawk preset must not include compiled ProgramData zip payloads. Remove assets\runtime\desktop\windhawk\current.zip.'
     }
 
-    $presetPath = Join-Path $root 'assets\windhawk\preset.json'
+    $presetPath = Join-Path $root 'assets\runtime\desktop\windhawk\preset.json'
     if (-not (Test-Path -LiteralPath $presetPath)) { return }
 
     try {
@@ -237,7 +256,7 @@ function Test-WindhawkPresetPayload {
                 }
             }
         }
-        Write-Host 'OK Windhawk preset assets\windhawk\preset.json'
+        Write-Host 'OK Windhawk preset assets\runtime\desktop\windhawk\preset.json'
     }
     catch {
         Add-ValidationError "Windhawk preset validation failed: $($_.Exception.Message)"
@@ -245,8 +264,8 @@ function Test-WindhawkPresetPayload {
 }
 
 function Test-YasbPresetPayload {
-    $configPath = Join-Path $root 'assets\yasb\config.yaml'
-    $stylesPath = Join-Path $root 'assets\yasb\styles.css'
+    $configPath = Join-Path $root 'assets\runtime\desktop\yasb\config.yaml'
+    $stylesPath = Join-Path $root 'assets\runtime\desktop\yasb\styles.css'
     if (-not (Test-Path -LiteralPath $configPath) -or -not (Test-Path -LiteralPath $stylesPath)) { return }
 
     $config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8
@@ -263,7 +282,7 @@ function Test-YasbPresetPayload {
     if ($config -notmatch 'yasb\.clock\.ClockWidget' -or $config -notmatch 'yasb\.taskbar\.TaskbarWidget') {
         Add-ValidationError 'YASB preset should include the expected clock and taskbar widgets.'
     }
-    Write-Host 'OK YASB preset assets\yasb'
+    Write-Host 'OK YASB preset assets\runtime\desktop\yasb'
 }
 
 function Test-PackageManifestArchitecture {
@@ -313,9 +332,9 @@ function Test-PackageManifestArchitecture {
 }
 
 function Test-KomorebiPresetPayload {
-    $configPath = Join-Path $root 'assets\komorebi\komorebi.json'
-    $appsPath = Join-Path $root 'assets\komorebi\applications.json'
-    $whkdPath = Join-Path $root 'assets\komorebi\whkdrc'
+    $configPath = Join-Path $root 'assets\runtime\desktop\komorebi\komorebi.json'
+    $appsPath = Join-Path $root 'assets\runtime\desktop\komorebi\applications.json'
+    $whkdPath = Join-Path $root 'assets\runtime\desktop\komorebi\whkdrc'
     if (-not (Test-Path -LiteralPath $configPath) -or -not (Test-Path -LiteralPath $appsPath)) { return }
 
     try {
@@ -338,7 +357,7 @@ function Test-KomorebiPresetPayload {
                 Add-ValidationError "Komorebi whkdrc missing expected binding: $binding"
             }
         }
-        Write-Host 'OK Komorebi preset assets\komorebi'
+        Write-Host 'OK Komorebi preset assets\runtime\desktop\komorebi'
     }
     catch {
         Add-ValidationError "Komorebi preset validation failed: $($_.Exception.Message)"

@@ -45,8 +45,8 @@ Bad debloat:
 
 | Area | Current state | Recommendation |
 |------|---------------|----------------|
-| AppX cleanup | Curated provisioned package removal in `src/WinMint/Private/Catalog.ps1` and `src/WinMint/Private/Image/Staging.ps1`. | Keep. This is the right kind of image-level debloat. |
-| Windows Update | `src/WinMint.Setup/SetupComplete.ps1` restores BITS, wuauserv, UsoSvc, and WaaSMedicSvc. | Keep. This is a strong guardrail against over-debloat. |
+| AppX cleanup | Curated provisioned package removal in `src/engine/Private/Catalog.ps1` and `src/engine/Private/Image/Staging.ps1`. | Keep. This is the right kind of image-level debloat. |
+| Windows Update | `src/setup/SetupComplete.ps1` restores BITS, wuauserv, UsoSvc, and WaaSMedicSvc. | Keep. This is a strong guardrail against over-debloat. |
 | WSL platform | WSL, Virtual Machine Platform, and OpenSSH are enabled in the image. | Keep. These are core workstation features. |
 | Edge | Edge first-run/startup/background/promo behavior is policy-disabled. | Keep. Do not remove WebView2 or Edge runtime infrastructure. |
 | OneDrive | Fully removed during setup/first logon; sync policies stay blocked and known folders are forced back to local profile paths. | Keep. Users who want OneDrive can reinstall it after setup. |

@@ -34,8 +34,8 @@ function Assert-True {
     if (-not $Condition) { Add-Failure $Message }
 }
 
-. (Join-Path $root 'apps\WinMint.LegacyWpf\State\WinMintUiState.ps1')
-. (Join-Path $root 'apps\WinMint.LegacyWpf\Services\Summary.ps1')
+. (Join-Path $root 'apps\legacy-wpf\State\WinMintUiState.ps1')
+. (Join-Path $root 'apps\legacy-wpf\Services\Summary.ps1')
 . (Join-Path $PSScriptRoot 'TestFixtures.ps1')
 
 $state = New-WinMintUiState -RepositoryRoot $root
@@ -91,7 +91,7 @@ $fixedProContract = Get-WinMintUiLaunchContractSummary -State $fixedPro
 Assert-True ($fixedProContract.Target.Badges -contains 'Single edition') 'Fixed edition summary should include single-edition badge.'
 Assert-True ($fixedProContract.Target.Secondary -match 'Windows 11 Pro') 'Fixed edition summary should name Windows 11 Pro.'
 
-$xamlPath = Join-Path $root 'apps\WinMint.LegacyWpf\Views\MainWindow.xaml'
+$xamlPath = Join-Path $root 'apps\legacy-wpf\Views\MainWindow.xaml'
 $xaml = Get-Content -LiteralPath $xamlPath -Raw
 foreach ($requiredName in @(
         'StepLabelStart',

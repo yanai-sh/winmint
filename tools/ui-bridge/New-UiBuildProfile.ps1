@@ -60,7 +60,7 @@ function Assert-WinMintUiBridgeSettings {
 }
 
 $script:WinMintRepositoryRoot = $RepositoryRoot
-. (Join-Path $RepositoryRoot 'src\WinMint\Core.ps1')
+. (Join-Path $RepositoryRoot 'src\engine\Core.ps1')
 $engine = Get-WinMintPath -Name EngineEntry
 . $engine
 Initialize-WinMintEngine -RepositoryRoot $RepositoryRoot

@@ -71,7 +71,7 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 Set-StrictMode -Version 2.0
 
-. "$PSScriptRoot\src\WinMint\WinMint.ps1"
+. "$PSScriptRoot\src\engine\WinMint.ps1"
 
 Initialize-WinMintEngine -RepositoryRoot $PSScriptRoot -DryRun:$DryRun -ExportHostDrivers:$ExportHostDrivers
 

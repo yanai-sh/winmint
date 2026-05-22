@@ -1,10 +1,10 @@
 #Requires -Version 7.3
 
 function Assert-StaticUiFlowInvariants {
-    $statePath = Join-Path $root 'apps\WinMint.LegacyWpf\State\WinMintUiState.ps1'
-    $xamlPath = Join-Path $root 'apps\WinMint.LegacyWpf\Views\MainWindow.xaml'
-    $profileAdapterPath = Join-Path $root 'apps\WinMint.LegacyWpf\Services\ProfileAdapter.ps1'
-    $themePath = Join-Path $root 'apps\WinMint.LegacyWpf\Services\Theme.ps1'
+    $statePath = Join-Path $root 'apps\legacy-wpf\State\WinMintUiState.ps1'
+    $xamlPath = Join-Path $root 'apps\legacy-wpf\Views\MainWindow.xaml'
+    $profileAdapterPath = Join-Path $root 'apps\legacy-wpf\Services\ProfileAdapter.ps1'
+    $themePath = Join-Path $root 'apps\legacy-wpf\Services\Theme.ps1'
 
     $missingRewriteFiles = @()
     foreach ($path in @($statePath, $xamlPath, $profileAdapterPath, $themePath)) {
@@ -39,7 +39,7 @@ function Assert-StaticUiFlowInvariants {
     }
 
     if ($xamlText -notmatch 'x:Name="StageStart"') {
-        Add-SmokeFailure 'WinMint-UI.ps1 requires cinematic shell root StageStart in MainWindow.xaml.'
+        Add-SmokeFailure 'Legacy UI requires cinematic shell root StageStart in MainWindow.xaml.'
     }
 
     foreach ($requiredControl in @(
@@ -97,8 +97,8 @@ function Assert-HardwareBypassIsExplicit {
 
 function Assert-ElevationRequiredForAllRuns {
     $cliPath = Join-Path $root 'WinMint-CLI.ps1'
-    $headlessPath = Join-Path $root 'src\WinMint\Private\Headless.ps1'
-    $enginePath = Join-Path $root 'src\WinMint\Engine.ps1'
+    $headlessPath = Join-Path $root 'src\engine\Private\Headless.ps1'
+    $enginePath = Join-Path $root 'src\engine\Engine.ps1'
     $cliText = Get-Content -LiteralPath $cliPath -Raw
     $headlessText = Get-Content -LiteralPath $headlessPath -Raw
     $engineText = Get-Content -LiteralPath $enginePath -Raw
@@ -246,7 +246,7 @@ function Assert-LocalAccountUnattendGeneration {
 }
 
 function Assert-SetupCompleteDoesNotDecryptBitLocker {
-    $setupCompletePath = Join-Path $root 'src\WinMint.Setup\SetupComplete.ps1'
+    $setupCompletePath = Join-Path $root 'src\setup\SetupComplete.ps1'
     $setupCompleteText = Get-Content -LiteralPath $setupCompletePath -Raw
     if ($setupCompleteText -match '\bDisable-BitLocker\b') {
         Add-SmokeFailure 'SetupComplete.ps1 must not silently disable BitLocker; WinMint should only prevent surprise auto-encryption.'
@@ -257,7 +257,7 @@ function Assert-SetupCompleteDoesNotDecryptBitLocker {
 }
 
 function Assert-ServiceabilityGuardrails {
-    $packagesPath = Join-Path $root 'src\WinMint\Private\Image\Packages.ps1'
+    $packagesPath = Join-Path $root 'src\engine\Private\Image\Packages.ps1'
     $packagesText = Get-Content -LiteralPath $packagesPath -Raw
     if ($packagesText -match '/ResetBase') {
         Add-SmokeFailure 'Default image cleanup must not use /ResetBase; it removes component rollback and is only acceptable in an explicit tiny-image mode.'
@@ -395,7 +395,7 @@ function Assert-PhoneLinkAgentDefaults {
         }
     }
 
-    $agentPath = Join-Path $root 'src\WinMint.Agent\Modules\PhoneLink.ps1'
+    $agentPath = Join-Path $root 'src\agent\Modules\PhoneLink.ps1'
     $agentText = Get-Content -LiteralPath $agentPath -Raw
     foreach ($expected in @('CrossDevice', 'Hidden', 'System', 'EnableClipboardHistory', 'CloudClipboardAutomaticUpload')) {
         if ($agentText -notmatch [regex]::Escape($expected)) {
@@ -488,7 +488,7 @@ function Assert-LiveInstallAuditUsesSetupProfilePrefixes {
 }
 
 function Assert-LiveInstallAuditIsStaged {
-    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\WinMint\Private\Image\Unattend.ps1') -Raw
+    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Unattend.ps1') -Raw
     if ($unattendText -notmatch [regex]::Escape('Audit-LiveInstall.ps1')) {
         Add-SmokeFailure 'Install-Autounattend should stage Audit-LiveInstall.ps1 with setup scripts.'
     }
@@ -505,7 +505,7 @@ function Assert-AgentRunsLiveInstallAudit {
     if (-not [bool]$optInProfile.modules.liveInstallAudit.enabled) {
         Add-SmokeFailure 'Live install audit opt-in should enable the agent module.'
     }
-    $agentModulePath = Join-Path $root 'src\WinMint.Agent\Modules\LiveInstallAudit.ps1'
+    $agentModulePath = Join-Path $root 'src\agent\Modules\LiveInstallAudit.ps1'
     if (-not (Test-Path -LiteralPath $agentModulePath)) {
         Add-SmokeFailure 'Expected LiveInstallAudit agent module to exist.'
         return
@@ -516,7 +516,7 @@ function Assert-AgentRunsLiveInstallAudit {
             Add-SmokeFailure "LiveInstallAudit agent module should contain '$expected'."
         }
     }
-    $agentEntryText = Get-Content -LiteralPath (Join-Path $root 'src\WinMint.Agent\Start-WinMintAgent.ps1') -Raw
+    $agentEntryText = Get-Content -LiteralPath (Join-Path $root 'src\agent\Start-WinMintAgent.ps1') -Raw
     $profilesIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'profiles'")
     $packageManagersIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'package-managers'")
     $editorsIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'editors'")
@@ -528,19 +528,16 @@ function Assert-AgentRunsLiveInstallAudit {
     }
 }
 
-function Assert-MaintainFallbackDoesNotRemovePlatformApps {
-    $maintainPath = Join-Path $root 'src\WinMint.Setup\Maintain.ps1'
-    $maintainText = Get-Content -LiteralPath $maintainPath -Raw
-    foreach ($protectedPrefix in @('Microsoft.YourPhone', 'MicrosoftWindows.CrossDevice')) {
-        if ($maintainText -match [regex]::Escape("'$protectedPrefix'")) {
-            Add-SmokeFailure "Maintain.ps1 default prefix list must not include protected '$protectedPrefix'."
-        }
-    }
+function Assert-NoMaintenancePayloadOrRegistration {
+    $setupCompleteText = Get-Content -LiteralPath (Join-Path $root 'src\setup\SetupComplete.ps1') -Raw
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\setup\FirstLogon.ps1') -Raw
+    $engineText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Engine.ps1') -Raw
+    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Unattend.ps1') -Raw
+    $maintenancePayload = Join-Path $root 'src\setup\Maintain.ps1'
 
-    $setupCompleteText = Get-Content -LiteralPath (Join-Path $root 'src\WinMint.Setup\SetupComplete.ps1') -Raw
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\WinMint.Setup\FirstLogon.ps1') -Raw
-    $engineText = Get-Content -LiteralPath (Join-Path $root 'src\WinMint\Engine.ps1') -Raw
-    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\WinMint\Private\Image\Unattend.ps1') -Raw
+    if (Test-Path -LiteralPath $maintenancePayload) {
+        Add-SmokeFailure 'Maintenance payload must not live under src\setup.'
+    }
 
     foreach ($forbidden in @('WinMintSlim-Maintain', 'RegisterWinMintMaintainScheduledTask')) {
         if ($setupCompleteText -match [regex]::Escape($forbidden)) {
@@ -606,13 +603,13 @@ function Assert-WslFirstDefaultsAndGuards {
         Add-SmokeFailure 'Versioned Fedora WSL distro selections must be preserved in the build profile.'
     }
 
-    $uiPath = Join-Path $root 'apps\WinMint.LegacyWpf\Views\MainWindow.xaml'
+    $uiPath = Join-Path $root 'apps\legacy-wpf\Views\MainWindow.xaml'
     $uiText = Get-Content -LiteralPath $uiPath -Raw
     if ($uiText -match 'x:Name="ChkWslUbuntu"[\s\S]*?IsChecked="True"') {
         Add-SmokeFailure 'UI must not preselect Ubuntu WSL by default.'
     }
 
-    $wslModulePath = Join-Path $root 'src\WinMint.Agent\Modules\Wsl.ps1'
+    $wslModulePath = Join-Path $root 'src\agent\Modules\Wsl.ps1'
     $wslModuleText = Get-Content -LiteralPath $wslModulePath -Raw
     foreach ($expected in @('dnsTunneling=true', 'autoProxy=true', 'localhostForwarding=true', 'firewall=true', 'autoMemoryReclaim=gradual', 'sparseVhd=true')) {
         if ($wslModuleText -notmatch [regex]::Escape($expected)) {
@@ -635,8 +632,8 @@ function Assert-WslFirstDefaultsAndGuards {
 }
 
 function Assert-LogNoiseInvariants {
-    $pipelinePath = Join-Path $root 'src\WinMint\Private\Pipeline.ps1'
-    $displayPath = Join-Path $root 'src\WinMint\Private\Console\Display.ps1'
+    $pipelinePath = Join-Path $root 'src\engine\Private\Pipeline.ps1'
+    $displayPath = Join-Path $root 'src\engine\Private\Console\Display.ps1'
 
     $pipelineText = Get-Content -LiteralPath $pipelinePath -Raw
     $targetLicenseSummaryCount = ([regex]::Matches(
@@ -657,8 +654,8 @@ function Assert-LogNoiseInvariants {
 }
 
 function Assert-WinPEDriverInjectionDefaultsToSetupOnly {
-    $catalogPath = Join-Path $root 'src\WinMint\Private\Catalog.ps1'
-    $stagingPath = Join-Path $root 'src\WinMint\Private\Image\Staging.ps1'
+    $catalogPath = Join-Path $root 'src\engine\Private\Catalog.ps1'
+    $stagingPath = Join-Path $root 'src\engine\Private\Image\Staging.ps1'
     $catalogText = Get-Content -LiteralPath $catalogPath -Raw
     $stagingText = Get-Content -LiteralPath $stagingPath -Raw
 
@@ -731,14 +728,12 @@ function Assert-OneDriveRemovalPolicyIsComplete {
         }
     }
 
-    $firstLogonPath = Join-Path $root 'src\WinMint.Setup\FirstLogon.ps1'
-    $setupCompletePath = Join-Path $root 'src\WinMint.Setup\SetupComplete.ps1'
-    $maintainPath = Join-Path $root 'src\WinMint.Setup\Maintain.ps1'
+    $firstLogonPath = Join-Path $root 'src\setup\FirstLogon.ps1'
+    $setupCompletePath = Join-Path $root 'src\setup\SetupComplete.ps1'
     $firstLogonText = Get-Content -LiteralPath $firstLogonPath -Raw
     $setupCompleteText = Get-Content -LiteralPath $setupCompletePath -Raw
-    $maintainText = Get-Content -LiteralPath $maintainPath -Raw
-    $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\WinMint\Private\Image\Staging.ps1') -Raw
-    $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\WinMint\Private\Pipeline.ps1') -Raw
+    $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Staging.ps1') -Raw
+    $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Pipeline.ps1') -Raw
     foreach ($expected in @(
             'FirstLogon_OneDriveAudit.json',
             'OneDriveSetup.exe.bak',
@@ -774,20 +769,6 @@ function Assert-OneDriveRemovalPolicyIsComplete {
         }
     }
     foreach ($expected in @(
-            'Invoke-MaintOneDriveRemoval',
-            'DisableFileSyncNGSC',
-            'OneDriveSetup.exe.bak',
-            'Active Setup\Installed Components',
-            'StartupApproved\Run',
-            'SyncRootManager',
-            'App Paths',
-            'Unregister-ScheduledTask'
-        )) {
-        if ($maintainText -notlike "*$expected*") {
-            Add-SmokeFailure "Expected Maintain OneDrive cleanup to include $expected."
-        }
-    }
-    foreach ($expected in @(
             'Remove-WinMintOneDriveSetupStub',
             'Windows\System32\OneDriveSetup.exe',
             'Windows\SysWOW64\OneDriveSetup.exe',
@@ -804,8 +785,8 @@ function Assert-OneDriveRemovalPolicyIsComplete {
 }
 
 function Assert-CursorInstallUsesModernRegistryContract {
-    $catalogPath = Join-Path $root 'src\WinMint\Private\Catalog.ps1'
-    $assetsPath = Join-Path $root 'src\WinMint\Private\Image\Assets.ps1'
+    $catalogPath = Join-Path $root 'src\engine\Private\Catalog.ps1'
+    $assetsPath = Join-Path $root 'src\engine\Private\Image\Assets.ps1'
     $assetsText = Get-Content -LiteralPath $assetsPath -Raw
 
     $expectedOrder = @(
@@ -914,8 +895,8 @@ function Assert-RegistryTweakMetadataAndRollback {
 }
 
 function Assert-SetupRegistryStampsAreIdempotent {
-    $defaultUserPath = Join-Path $root 'src\WinMint.Setup\DefaultUser.ps1'
-    $specializePath = Join-Path $root 'src\WinMint.Setup\Specialize.ps1'
+    $defaultUserPath = Join-Path $root 'src\setup\DefaultUser.ps1'
+    $specializePath = Join-Path $root 'src\setup\Specialize.ps1'
     $defaultUserText = Get-Content -LiteralPath $defaultUserPath -Raw
     $specializeText = Get-Content -LiteralPath $specializePath -Raw
 

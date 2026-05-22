@@ -7,7 +7,7 @@ Set-StrictMode -Version 2.0
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
-. (Join-Path $root 'src\WinMint\Core.ps1')
+. (Join-Path $root 'src\engine\Core.ps1')
 
 $failures = [System.Collections.Generic.List[string]]::new()
 function Add-ReleaseManifestFailure {
@@ -25,18 +25,23 @@ foreach ($required in @(
     'WinMint-GUI.ps1',
     'WinMint-LegacyUI.ps1',
     'winmint.ps1',
-    'apps/WinMint.GPUI/bin/WinMint-GUI.exe',
-    'apps/WinMint.LegacyWpf'
+    'apps/gui/bin/WinMint-GUI.exe',
+    'apps/legacy-wpf'
 )) {
     if ($include -notcontains $required) {
         Add-ReleaseManifestFailure "Release manifest missing include: $required"
     }
 }
 
-foreach ($forbidden in @('apps', 'tools', 'WinMint-UI.ps1')) {
+foreach ($forbidden in @('apps', 'tools')) {
     if ($include -contains $forbidden) {
         Add-ReleaseManifestFailure "Release manifest must not include runtime path: $forbidden"
     }
+}
+
+$legacyShimName = 'WinMint-' + 'UI.ps1'
+if (Test-Path -LiteralPath (Join-Path $root $legacyShimName)) {
+    Add-ReleaseManifestFailure 'Deprecated legacy shim launcher must not exist.'
 }
 
 foreach ($requiredExclude in @('tools', '**/target', 'output', 'dist')) {

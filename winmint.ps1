@@ -166,11 +166,9 @@ function Expand-WinMintRelease {
 function Find-WinMintLegacyUiScript {
     param([string]$Root)
 
-    foreach ($relativePath in @('WinMint-LegacyUI.ps1', 'WinMint-UI.ps1')) {
-        $candidate = Join-Path $Root $relativePath
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-            return $candidate
-        }
+    $candidate = Join-Path $Root 'WinMint-LegacyUI.ps1'
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        return $candidate
     }
 
     throw "WinMint-LegacyUI.ps1 was not found under '$Root'."
@@ -343,10 +341,10 @@ function Test-WinMintInstalledVersion {
         'WinMint-CLI.ps1',
         'WinMint-GUI.ps1',
         'WinMint-LegacyUI.ps1',
-        'apps\WinMint.GPUI\bin\WinMint-GUI.exe',
-        'apps\WinMint.LegacyWpf\Views\MainWindow.xaml',
-        'src\WinMint\WinMint.ps1',
-        'src\WinMint.Agent\Start-WinMintAgent.ps1',
+        'apps\gui\bin\WinMint-GUI.exe',
+        'apps\legacy-wpf\Views\MainWindow.xaml',
+        'src\engine\WinMint.ps1',
+        'src\agent\Start-WinMintAgent.ps1',
         'config\packages.json'
     )) {
         $requiredPath = Join-Path $Root $relativePath

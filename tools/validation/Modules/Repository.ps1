@@ -27,7 +27,6 @@ function Test-RepositoryNoTrackedGeneratedArtifacts {
         '^uup_dump(?:/|$)',
         '^\.claude(?:/|$)',
         '^\.superpowers(?:/|$)',
-        '^\.winws-ui\.json$',
         '^\.winmint-ui\.json$',
         '(^|/)bin/',
         '(^|/)obj/',
@@ -62,7 +61,6 @@ function Test-RepositoryRequiredDocs {
         'AGENTS.md',
         'README.md',
         'docs\Project-Structure.md',
-        'docs\Architecture-Plan.md',
         'docs\Distribution.md',
         'tests\README.md'
     )
@@ -121,9 +119,9 @@ function Test-RepositoryReleaseManifest {
         'WinMint-GUI.ps1',
         'WinMint-LegacyUI.ps1',
         'winmint.ps1',
-        'apps/WinMint.GPUI/bin/WinMint-GUI.exe',
-        'apps/WinMint.GPUI/README.md',
-        'apps/WinMint.LegacyWpf',
+        'apps/gui/bin/WinMint-GUI.exe',
+        'apps/gui/README.md',
+        'apps/legacy-wpf',
         'assets',
         'config',
         'docs',
@@ -136,7 +134,7 @@ function Test-RepositoryReleaseManifest {
             Add-ValidationError "Release manifest missing required include: $item"
             continue
         }
-        if ($item -ne 'apps/WinMint.GPUI/bin/WinMint-GUI.exe' -and -not (Test-Path -LiteralPath (Join-Path $root $item))) {
+        if ($item -ne 'apps/gui/bin/WinMint-GUI.exe' -and -not (Test-Path -LiteralPath (Join-Path $root $item))) {
             Add-ValidationError "Release manifest include path does not exist: $item"
         }
     }
@@ -150,11 +148,11 @@ function Test-RepositoryReleaseManifest {
         'temp',
         '**/target',
         '**/.venv',
-        'assets/drivers/**/*.msi',
-        'assets/drivers/**/_msi_extract_*',
-        'assets/cursors/_extract',
-        'assets/cursors/*.zip',
-        'assets/cursors/*/png',
+        'input/drivers/**/*.msi',
+        'input/drivers/**/_msi_extract_*',
+        'assets/runtime/cursors/_extract',
+        'assets/runtime/cursors/*.zip',
+        'assets/runtime/cursors/*/png',
         '**/*.iso',
         '**/*.log'
     )
@@ -181,11 +179,11 @@ function Test-RepositoryTrackedPathCasing {
         'tests/fixtures/drivers/.gitkeep',
         'tests/fixtures/uupdump/.gitignore',
         'tests/fixtures/uupdump/.gitkeep',
-        'src/WinMint/WinMint.ps1',
+        'src/engine/WinMint.ps1',
         'WinMint-GUI.ps1',
         'WinMint-LegacyUI.ps1',
-        'apps/WinMint.LegacyWpf/Views/MainWindow.xaml',
-        'src/WinMint.Agent/Start-WinMintAgent.ps1',
+        'apps/legacy-wpf/Views/MainWindow.xaml',
+        'src/agent/Start-WinMintAgent.ps1',
         'config/release-manifest.json'
     )
 
@@ -241,19 +239,17 @@ function Test-RepositoryGitIgnorePolicy {
         'input/',
         'output/',
         'temp/',
-        '.winws-ui.json',
         '.winmint-ui.json',
         'node_modules/',
-        'assets/drivers/**/*.msi',
-        'assets/drivers/**/_msi_extract_*/',
+        'input/drivers/**/*.msi',
+        'input/drivers/**/_msi_extract_*/',
         '**/bin/',
         '**/obj/',
-        'tools/brand/.venv/',
         '**/target/',
-        'apps/WinMint.GPUI/bin/',
-        'assets/cursors/_extract/',
-        'assets/cursors/*.zip',
-        'assets/cursors/*/png/',
+        'apps/gui/bin/',
+        'assets/runtime/cursors/_extract/',
+        'assets/runtime/cursors/*.zip',
+        'assets/runtime/cursors/*/png/',
         '.claude/',
         '.superpowers/'
     )

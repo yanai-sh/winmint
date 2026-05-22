@@ -62,8 +62,8 @@ Create the release assets from the repo root:
 ```
 
 The bundle shape is defined in `config\release-manifest.json`. The release tool
-builds and packages `apps\WinMint.GPUI\bin\WinMint-GUI.exe`; release users do not
-need Rust, Cargo, MSVC, or `tools\gpui`. Keep developer-only service source,
+builds and packages `apps\gui\bin\WinMint-GUI.exe`; release users do not
+need Rust, Cargo, MSVC, or `tools\gui`. Keep developer-only service source,
 local fixtures, and generated payloads out of the release by adding them to the
 manifest `exclude` list instead of relying on ad hoc cleanup in the packaging script.
 

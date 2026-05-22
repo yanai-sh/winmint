@@ -6,7 +6,7 @@ param(
     [string]$Version,
 
     [string]$OutputDirectory = '',
-    [switch]$SkipGpuiBuild,
+    [switch]$SkipGuiBuild,
     [string]$RustTarget = ''
 )
 
@@ -15,7 +15,7 @@ Set-StrictMode -Version 2.0
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
-. (Join-Path $root 'src\WinMint\Core.ps1')
+. (Join-Path $root 'src\engine\Core.ps1')
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Get-WinMintPath -Name Dist
 }
@@ -117,32 +117,29 @@ function Import-BundleManifest {
 }
 
 function Assert-WinMintReleaseInputs {
-    $gpuiBinary = Get-WinMintPath -Name GpuiBinary
-    if (-not (Test-Path -LiteralPath $gpuiBinary -PathType Leaf)) {
-        throw "Packaged GPUI binary missing: $gpuiBinary"
+    $guiBinary = Get-WinMintPath -Name GuiBinary
+    if (-not (Test-Path -LiteralPath $guiBinary -PathType Leaf)) {
+        throw "Packaged GUI binary missing: $guiBinary"
     }
 
     $bootstrap = Get-Content -LiteralPath (Get-WinMintPath -Name RepoRoot -ChildPath 'winmint.ps1') -Raw
     if ($bootstrap -match '''Gui''\s*\{\s*Find-WinMintGuiScript\s+-Root\s+\$versionRoot\s*\}') {
-        throw 'winmint.ps1 must use the packaged GPUI script captured at install time, not re-resolve a fallback.'
-    }
-    if ($bootstrap -match "WinMint-UI\.ps1'.*Find-WinMintGuiScript|Find-WinMintGuiScript[\s\S]*WinMint-UI\.ps1") {
-        throw 'winmint.ps1 must not route -Gui to WinMint-UI.ps1.'
+        throw 'winmint.ps1 must use the packaged GUI script captured at install time, not re-resolve a fallback.'
     }
 
     $docHits = @(Get-ChildItem -LiteralPath (Get-WinMintPath -Name DocsRoot) -Recurse -File -Include '*.md' -ErrorAction SilentlyContinue |
-        Select-String -Pattern @('GPUI lab', 'WIP GPUI lab', 'not packaged', 'not part of the release bundle') -SimpleMatch)
+        Select-String -Pattern @('WIP GUI', 'not packaged', 'not part of the release bundle') -SimpleMatch)
     if ($docHits.Count -gt 0) {
-        throw "Documentation still describes GPUI as experimental or unpackaged: $($docHits[0].Path)"
+        throw "Documentation still describes the GUI as experimental or unpackaged: $($docHits[0].Path)"
     }
 }
 
 try {
-    if (-not $SkipGpuiBuild) {
-        $buildGpui = Get-WinMintPath -Name ReleaseTool -ChildPath 'Build-WinMintGpui.ps1'
-        & $buildGpui -RustTarget $RustTarget
+    if (-not $SkipGuiBuild) {
+        $buildGui = Get-WinMintPath -Name ReleaseTool -ChildPath 'Build-WinMintGui.ps1'
+        & $buildGui -RustTarget $RustTarget
         if ($LASTEXITCODE -ne 0) {
-            throw "GPUI build failed with exit code $LASTEXITCODE."
+            throw "GUI build failed with exit code $LASTEXITCODE."
         }
     }
     Assert-WinMintReleaseInputs

@@ -68,7 +68,7 @@ tools/      Validation, release, bridge, and authoring tools
 tests/      Contract tests and local fixture roots
 config/     Product policy and release manifests
 schemas/    JSON contracts
-assets/     Product assets staged into the image or first-logon flow
+assets/     Brand, runtime payloads, and UI presentation assets
 docs/       Architecture, distribution, UI, and debloat rationale
 ```
 
@@ -97,10 +97,8 @@ Schemas live in `schemas/`.
 ## Documentation
 
 - [Project structure](docs/Project-Structure.md)
-- [Architecture plan](docs/Architecture-Plan.md)
 - [Distribution](docs/Distribution.md)
 - [Debloat strategy](docs/Windows-Debloat-Strategy.md)
-- [GPUI roadmap](docs/ui_roadmap.md)
 
 ## License
 

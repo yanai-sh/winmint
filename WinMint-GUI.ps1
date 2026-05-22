@@ -10,11 +10,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
-. "$PSScriptRoot\src\WinMint\Core.ps1"
+. "$PSScriptRoot\src\engine\Core.ps1"
 
-$binary = Get-WinMintPath -Name GpuiBinary
+$binary = Get-WinMintPath -Name GuiBinary
 if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
-    throw "WinMint GPUI is not packaged at '$binary'. Build it with tools\release\Build-WinMintGpui.ps1 or use WinMint-LegacyUI.ps1."
+    throw "WinMint GPUI is not packaged at '$binary'. Build it with tools\release\Build-WinMintGui.ps1 or use WinMint-LegacyUI.ps1."
 }
 
 $arguments = [System.Collections.Generic.List[string]]::new()

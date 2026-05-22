@@ -26,7 +26,6 @@ function Get-ValidationPowerShellFile {
         'WinMint-CLI.ps1',
         'WinMint-GUI.ps1',
         'WinMint-LegacyUI.ps1',
-        'WinMint-UI.ps1',
         'winmint.ps1',
         'src',
         'apps',
@@ -123,11 +122,11 @@ function Invoke-AnalyzerIfAvailable {
         'WinMint-CLI.ps1',
         'WinMint-GUI.ps1',
         'WinMint-LegacyUI.ps1',
-        'tools\gpui',
-        'src\WinMint',
-        'apps\WinMint.LegacyWpf',
-        'src\WinMint.Agent',
-        'src\WinMint.Setup'
+        'tools\gui',
+        'src\engine',
+        'apps\legacy-wpf',
+        'src\agent',
+        'src\setup'
     ) | ForEach-Object { Join-Path $root $_ }
     $settings = Join-Path $root 'PSScriptAnalyzerSettings.psd1'
     $findings = @()
@@ -155,24 +154,24 @@ function Test-LauncherArchitecture {
         Add-ValidationError 'winmint.ps1 default mode must be Gui.'
     }
     $guiFunction = [regex]::Match($bootstrap, 'function Find-WinMintGuiScript[\s\S]*?function Resolve-WinMintLaunchMode')
-    if (-not $guiFunction.Success -or $guiFunction.Value -match 'WinMint-UI\.ps1|WinMint-LegacyUI\.ps1') {
-        Add-ValidationError 'Find-WinMintGuiScript must resolve only the GPUI launcher.'
+    if (-not $guiFunction.Success -or $guiFunction.Value -match 'WinMint-LegacyUI\.ps1') {
+        Add-ValidationError 'Find-WinMintGuiScript must resolve only the GUI launcher.'
     }
     Write-Host 'OK launcher architecture'
 }
 
-function Test-GpuiIdentity {
-    $cargoPath = Get-WinMintPath -Name GpuiCargoToml
+function Test-GuiIdentity {
+    $cargoPath = Get-WinMintPath -Name GuiCargoToml
     $cargoText = Get-Content -LiteralPath $cargoPath -Raw
-    if ($cargoText -notmatch '(?m)^name\s*=\s*"winmint-gpui"\s*$') {
-        Add-ValidationError 'GPUI Cargo package name must be winmint-gpui.'
+    if ($cargoText -notmatch '(?m)^name\s*=\s*"winmint-gui"\s*$') {
+        Add-ValidationError 'GUI Cargo package name must be winmint-gui.'
     }
 
-    $mainText = Get-Content -LiteralPath (Get-WinMintPath -Name GpuiApp -ChildPath 'src\main.rs') -Raw
-    if ($mainText -match 'GPUI Lab|WinWsGpuiLab|build_gpui_lab') {
-        Add-ValidationError 'GPUI source still contains lab identity.'
+    $mainText = Get-Content -LiteralPath (Get-WinMintPath -Name GuiApp -ChildPath 'src\main.rs') -Raw
+    if ($mainText -match 'GPUI Lab|WinWsGuiDev|build_gui_dev') {
+        Add-ValidationError 'GUI source still contains lab identity.'
     }
-    Write-Host 'OK GPUI identity'
+    Write-Host 'OK GUI identity'
 }
 
 function Test-ReleaseManifestRuntimeSurface {
@@ -180,7 +179,7 @@ function Test-ReleaseManifestRuntimeSurface {
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     $include = @($manifest.include)
     $exclude = @($manifest.exclude)
-    foreach ($required in @('WinMint-GUI.ps1', 'WinMint-LegacyUI.ps1', 'apps/WinMint.GPUI/bin/WinMint-GUI.exe')) {
+    foreach ($required in @('WinMint-GUI.ps1', 'WinMint-LegacyUI.ps1', 'apps/gui/bin/WinMint-GUI.exe')) {
         if ($include -notcontains $required) {
             Add-ValidationError "Release manifest must include $required."
         }
@@ -223,16 +222,16 @@ function Test-NoWinWsCompatibilitySurface {
     Write-Host 'OK no WinWS compatibility surface'
 }
 
-function Test-GpuiBuild {
+function Test-GuiBuild {
     param([switch]$IncludeBuild)
 
     $cargo = Get-Command cargo -ErrorAction SilentlyContinue
     if (-not $cargo) {
-        Write-Warning 'Rust cargo not installed; skipping optional GPUI cargo check.'
+        Write-Warning 'Rust cargo not installed; skipping optional GUI cargo check.'
         return
     }
 
-    $manifest = Get-WinMintPath -Name GpuiCargoToml
+    $manifest = Get-WinMintPath -Name GuiCargoToml
     $arguments = if ($IncludeBuild) {
         @('build', '--release', '--manifest-path', $manifest)
     } else {
@@ -240,16 +239,16 @@ function Test-GpuiBuild {
     }
     & $cargo.Source @arguments
     if ($LASTEXITCODE -ne 0) {
-        Add-ValidationError "cargo $($arguments[0]) failed for GPUI with exit code $LASTEXITCODE."
+        Add-ValidationError "cargo $($arguments[0]) failed for GUI with exit code $LASTEXITCODE."
     }
 }
 
 function Test-DismArgumentQuoting {
     $targets = @(
-        'src\WinMint\Private\Image\Assets.ps1',
-        'src\WinMint\Private\Image\Packages.ps1',
-        'src\WinMint\Private\Image\Staging.ps1',
-        'src\WinMint\Private\Image\Tweaks.ps1'
+        'src\engine\Private\Image\Assets.ps1',
+        'src\engine\Private\Image\Packages.ps1',
+        'src\engine\Private\Image\Staging.ps1',
+        'src\engine\Private\Image\Tweaks.ps1'
     )
     $patterns = @('/Image:`"', '/Driver:`"', '/PackagePath:`"')
     foreach ($relativePath in $targets) {
@@ -269,7 +268,7 @@ function Test-DismArgumentQuoting {
 }
 
 function Test-RegistryTweakStrictModeAccess {
-    $relativePath = 'src\WinMint\Private\Image\Tweaks.ps1'
+    $relativePath = 'src\engine\Private\Image\Tweaks.ps1'
     $path = Join-Path $root $relativePath
     if (-not (Test-Path -LiteralPath $path)) { return }
 

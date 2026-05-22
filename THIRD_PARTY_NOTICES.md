@@ -7,9 +7,9 @@ their original licenses.
 
 ### Windows 11 Modern Light
 
-- Source: `assets/cursors/Windows11ModernLight`
+- Source: `assets/runtime/cursors/Windows11ModernLight`
 - License: See upstream cursor pack distribution.
-- Packaged files: `assets/cursors/Windows11ModernLight/`
+- Packaged files: `assets/runtime/cursors/Windows11ModernLight/`
 - Notes: Windows 11 Modern Light is bundled as the fixed WinMint cursor scheme for the
   default user profile in generated ISOs.
 
@@ -19,7 +19,7 @@ their original licenses.
 
 - Source: https://github.com/microsoft/cascadia-code
 - License: SIL Open Font License 1.1
-- Packaged files: `assets/fonts/CascadiaCodeNF-Regular.ttf`
+- Packaged files: `assets/runtime/fonts/CascadiaCodeNF-Regular.ttf`
 - Notes: The Nerd Font variant is distributed by the upstream Cascadia Code
   release package and is installed system-wide into generated ISOs.
 
@@ -31,7 +31,7 @@ GPL-3.0 for WinMint does not relicense bundled font files.
 
 - Source: https://simpleicons.org/ and https://github.com/simple-icons/simple-icons
 - License: CC0 1.0 Universal
-- Packaged files: `assets/wsl/*.svg`, `assets/editors/*.svg`
+- Packaged files: `assets/ui/wsl/*.svg`, `assets/ui/editors/*.svg`
 - Notes: Product marks are used only as visual identifiers. Trademark rights
   remain with their respective owners.
 

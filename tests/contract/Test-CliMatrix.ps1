@@ -8,7 +8,7 @@ Set-StrictMode -Version 2.0
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:root = $root
 . (Join-Path $root 'tests\contract\TestFixtures.ps1')
-. (Join-Path $root 'src\WinMint\WinMint.ps1')
+. (Join-Path $root 'src\engine\WinMint.ps1')
 Initialize-WinMintEngine -RepositoryRoot $root -DryRun
 
 $cli = Join-Path $root 'WinMint-CLI.ps1'

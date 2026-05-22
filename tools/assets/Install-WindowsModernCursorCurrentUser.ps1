@@ -14,7 +14,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     throw 'Run this script from an elevated PowerShell session so cursor files can be copied into %SystemRoot%\Cursors.'
 }
 
-$sourceDir = Join-Path $RepositoryRoot 'assets\cursors\Windows11ModernLight'
+$sourceDir = Join-Path $RepositoryRoot 'assets\runtime\cursors\Windows11ModernLight'
 $destSegment = 'Windows11Modern'
 $destDir = Join-Path $env:SystemRoot "Cursors\$destSegment"
 $backupPath = Join-Path $env:LOCALAPPDATA 'WinMint\cursor-backup-current-user.json'

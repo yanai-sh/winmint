@@ -51,7 +51,7 @@ function Write-AgentEvent {
 }
 function Write-AgentConsoleLine { param([string]$Level, [string]$Message) [void]$Level; [void]$Message }
 
-. (Join-Path $root 'src\WinMint.Agent\Agent.Runtime.ps1')
+. (Join-Path $root 'src\agent\Agent.Runtime.ps1')
 
 function Invoke-TestAgentOkModule {
     param([object]$AgentProfile, [hashtable]$State)
