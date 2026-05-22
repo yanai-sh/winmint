@@ -39,15 +39,13 @@ Useful launcher switches:
 .\winmint.ps1 -ExportHostDrivers
 .\winmint.ps1 -Headless -ProfilePath C:\WinMint\profiles\surface.json -Yes
 .\winmint.ps1 -Gui
-.\winmint.ps1 -LegacyUi
 .\winmint.ps1 -NoLaunch
 .\winmint.ps1 -Force
 ```
 
 `irm https://winmint.yanai.sh | iex` and `-Gui` start the packaged GPUI entry
 point. Use `irm https://winmint.yanai.sh/cli | iex` or `-Headless` for the
-console build path. Use `-LegacyUi` only when you explicitly need the deprecated
-PowerShell/WPF fallback.
+console build path.
 
 ## Release Build
 

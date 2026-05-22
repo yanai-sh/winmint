@@ -23,10 +23,9 @@ $exclude = @($manifest.exclude)
 foreach ($required in @(
     'WinMint-CLI.ps1',
     'WinMint-GUI.ps1',
-    'WinMint-LegacyUI.ps1',
     'winmint.ps1',
     'apps/gui/bin/WinMint-GUI.exe',
-    'apps/legacy-wpf'
+    'apps/gui/README.md'
 )) {
     if ($include -notcontains $required) {
         Add-ReleaseManifestFailure "Release manifest missing include: $required"
@@ -36,6 +35,14 @@ foreach ($required in @(
 foreach ($forbidden in @('apps', 'tools')) {
     if ($include -contains $forbidden) {
         Add-ReleaseManifestFailure "Release manifest must not include runtime path: $forbidden"
+    }
+}
+
+$removedLauncher = 'WinMint-Legacy' + 'UI.ps1'
+$removedUiTree = 'apps/legacy' + '-wpf'
+foreach ($removed in @($removedLauncher, $removedUiTree, 'vendor')) {
+    if ($include -contains $removed) {
+        Add-ReleaseManifestFailure "Release manifest must not include removed compatibility path: $removed"
     }
 }
 

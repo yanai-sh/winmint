@@ -54,8 +54,10 @@ fixture.
 |   `-- Windows-Debloat-Strategy.md
 |-- schemas/
 |-- apps/
-|   |-- gui/
-|   `-- legacy-wpf/
+|   `-- gui/
+|-- crates/
+|   |-- winmint-core/
+|   `-- winmintctl/
 |-- src/
 |   |-- engine/
 |   |-- agent/
@@ -73,10 +75,8 @@ fixture.
 |   |-- release/
 |   |-- ui-bridge/
 |   `-- validation/
-|-- vendor/
 |-- WinMint-CLI.ps1
 |-- WinMint-GUI.ps1
-|-- WinMint-LegacyUI.ps1
 |-- winmint.ps1
 `-- README.md
 ```
@@ -85,9 +85,9 @@ fixture.
 
 | Folder | Owns | Must not own |
 |--------|------|--------------|
-| `src/engine/` | Engine, profile contracts, ISO/WIM servicing, reporting APIs | WPF controls, live-user app installs |
+| `src/engine/` | Engine, profile contracts, ISO/WIM servicing, reporting APIs | GUI controls, live-user app installs |
 | `apps/gui/` | Primary GUI source-selection shell and profile intent | DISM/WIM servicing, registry hive edits |
-| `apps/legacy-wpf/` | PowerShell WPF wizard, UI state, previews, profile creation | DISM/WIM servicing, registry hive edits |
+| `crates/` | Rust contract helpers and small validation/normalization CLIs | Windows servicing, setup orchestration |
 | `src/agent/` | FirstLogon user setup modules and retry state | Offline image servicing, UI wizard state |
 | `src/setup/` | SetupComplete, FirstLogon, DefaultUser, Specialize payloads | Repo validation helpers |
 | `tools/audit/` | Output ISO and live-install audit tooling | Product runtime entry points |

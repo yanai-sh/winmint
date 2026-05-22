@@ -4,15 +4,13 @@ param(
     [string]$Repository = 'yanai-sh/winmint',
     [string]$Version = 'latest',
     [string]$InstallRoot = '',
-    [ValidateSet('Gui','Headless','LegacyUi')]
+    [ValidateSet('Gui','Headless')]
     [string]$Mode = 'Gui',
     [switch]$Gui,
     [switch]$Headless,
-    [switch]$LegacyUi,
     [string]$ProfilePath = '',
     [string]$SourceIso = '',
     [string]$UupDumpSource = '',
-    [string]$UupDumpZip = '',
     [string]$SourceIsoOverride = '',
     [ValidateSet('amd64','arm64','x86')]
     [string]$Architecture = '',
@@ -163,17 +161,6 @@ function Expand-WinMintRelease {
     Expand-Archive -LiteralPath $ArchivePath -DestinationPath $Destination -Force
 }
 
-function Find-WinMintLegacyUiScript {
-    param([string]$Root)
-
-    $candidate = Join-Path $Root 'WinMint-LegacyUI.ps1'
-    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-        return $candidate
-    }
-
-    throw "WinMint-LegacyUI.ps1 was not found under '$Root'."
-}
-
 function Find-WinMintCliScript {
     param([string]$Root)
 
@@ -201,13 +188,12 @@ function Resolve-WinMintLaunchMode {
     param(
         [string]$RequestedMode,
         [switch]$UseGui,
-        [switch]$UseHeadless,
-        [switch]$UseLegacyUi
+        [switch]$UseHeadless
     )
 
-    $explicitModes = @($UseGui, $UseHeadless, $UseLegacyUi) | Where-Object { $_ }
+    $explicitModes = @($UseGui, $UseHeadless) | Where-Object { $_ }
     if ($explicitModes.Count -gt 1) {
-        throw 'Use only one of -Gui, -Headless, or -LegacyUi.'
+        throw 'Use only one of -Gui or -Headless.'
     }
     if ($UseGui -and $RequestedMode -ne 'Gui') {
         throw 'Use either -Mode or -Gui, not both.'
@@ -215,12 +201,8 @@ function Resolve-WinMintLaunchMode {
     if ($UseHeadless -and $RequestedMode -ne 'Gui') {
         throw 'Use either -Mode or -Headless, not both.'
     }
-    if ($UseLegacyUi -and $RequestedMode -ne 'Gui') {
-        throw 'Use either -Mode or -LegacyUi, not both.'
-    }
     if ($UseGui) { return 'Gui' }
     if ($UseHeadless) { return 'Headless' }
-    if ($UseLegacyUi) { return 'LegacyUi' }
     return $RequestedMode
 }
 
@@ -254,7 +236,6 @@ function New-WinMintLaunchArguments {
         Add-WinMintArgumentValue -Arguments $arguments -Name 'ProfilePath' -Value $ProfilePath
         Add-WinMintArgumentValue -Arguments $arguments -Name 'SourceIso' -Value $SourceIso
         Add-WinMintArgumentValue -Arguments $arguments -Name 'UupDumpSource' -Value $UupDumpSource
-        Add-WinMintArgumentValue -Arguments $arguments -Name 'UupDumpZip' -Value $UupDumpZip
         Add-WinMintArgumentValue -Arguments $arguments -Name 'SourceIsoOverride' -Value $SourceIsoOverride
         Add-WinMintArgumentValue -Arguments $arguments -Name 'Architecture' -Value $Architecture
         if ($Developer) { $arguments.Add('-Developer') }
@@ -340,9 +321,7 @@ function Test-WinMintInstalledVersion {
     foreach ($relativePath in @(
         'WinMint-CLI.ps1',
         'WinMint-GUI.ps1',
-        'WinMint-LegacyUI.ps1',
         'apps\gui\bin\WinMint-GUI.exe',
-        'apps\legacy-wpf\Views\MainWindow.xaml',
         'src\engine\WinMint.ps1',
         'src\agent\Start-WinMintAgent.ps1',
         'config\packages.json'
@@ -405,7 +384,7 @@ if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
     $InstallRoot = Join-Path $env:LOCALAPPDATA 'WinMint'
 }
 
-$launchMode = Resolve-WinMintLaunchMode -RequestedMode $Mode -UseGui:$Gui -UseHeadless:$Headless -UseLegacyUi:$LegacyUi
+$launchMode = Resolve-WinMintLaunchMode -RequestedMode $Mode -UseGui:$Gui -UseHeadless:$Headless
 
 $release = Get-WinMintRelease -Repo $Repository -RequestedVersion $Version
 $tag = [string]$release.tag_name
@@ -464,7 +443,6 @@ $pwshExe = Get-WinMintPowerShell
 $entryScript = switch ($launchMode) {
     'Gui' { $guiScript }
     'Headless' { Find-WinMintCliScript -Root $versionRoot }
-    'LegacyUi' { Find-WinMintLegacyUiScript -Root $versionRoot }
 }
 $arguments = New-WinMintLaunchArguments -ScriptPath $entryScript -LaunchMode $launchMode
 

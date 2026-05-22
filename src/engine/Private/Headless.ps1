@@ -206,10 +206,7 @@ function Assert-WinMintHeadlessParameterSet {
     if ($BoundParameters.ContainsKey('ListWork') -and $BoundParameters.ContainsKey('CleanWork')) {
         throw 'Use either -ListWork or -CleanWork, not both.'
     }
-    if ($BoundParameters.ContainsKey('UupDumpSource') -and $BoundParameters.ContainsKey('UupDumpZip')) {
-        throw 'Use -UupDumpSource for UUP Dump conversion zips. -UupDumpZip is a compatibility alias and cannot be combined with -UupDumpSource.'
-    }
-    if ($BoundParameters.ContainsKey('SourceIso') -and ($BoundParameters.ContainsKey('UupDumpSource') -or $BoundParameters.ContainsKey('UupDumpZip'))) {
+    if ($BoundParameters.ContainsKey('SourceIso') -and $BoundParameters.ContainsKey('UupDumpSource')) {
         throw 'Use either -SourceIso or -UupDumpSource, not both. If UUP Dump already produced an ISO, pass that ISO with -SourceIso.'
     }
     if ($BoundParameters.ContainsKey('SourceIsoOverride') -and -not $BoundParameters.ContainsKey('ProfilePath')) {
@@ -222,12 +219,12 @@ function Assert-WinMintHeadlessParameterSet {
         throw 'Use either -NewProfile to create a profile template or -ProfilePath to consume one, not both.'
     }
     if (($BoundParameters.ContainsKey('NewProfile') -or $BoundParameters.ContainsKey('OutProfile')) -and
-        ($BoundParameters.ContainsKey('UupDumpSource') -or $BoundParameters.ContainsKey('UupDumpZip'))) {
+        $BoundParameters.ContainsKey('UupDumpSource')) {
         throw 'Profile templates store the resolved source ISO only. Use -SourceIso for profile authoring. Use -UupDumpSource only when running a build that should perform UUP source prep.'
     }
     if ($BoundParameters.ContainsKey('DriverPack') -and
         ($BoundParameters.ContainsKey('DriverSource') -or $BoundParameters.ContainsKey('DriverPath') -or $BoundParameters.ContainsKey('ExportHostDrivers'))) {
-        throw 'Use -DriverPack or legacy -DriverSource/-DriverPath/-ExportHostDrivers, not both.'
+        throw 'Use only one driver source style: -DriverPack or -DriverSource/-DriverPath/-ExportHostDrivers.'
     }
     if ($BoundParameters.ContainsKey('LocationServices') -and $BoundParameters.ContainsKey('NoLocationServices')) {
         throw 'Use either -LocationServices or -NoLocationServices, not both.'
@@ -240,7 +237,7 @@ function Assert-WinMintHeadlessParameterSet {
     }
     if ($BoundParameters.ContainsKey('ProfilePath')) {
         $allowed = @(
-            'ProfilePath', 'SourceIsoOverride', 'UupDumpSource', 'UupDumpZip', 'Yes', 'ValidateOnly', 'Json', 'NoProgress', 'Quiet',
+            'ProfilePath', 'SourceIsoOverride', 'UupDumpSource', 'Yes', 'ValidateOnly', 'Json', 'NoProgress', 'Quiet',
             'DryRun', 'AllowElevate', 'Verbose', 'Debug', 'ErrorAction', 'WarningAction',
             'InformationAction', 'ProgressAction', 'ErrorVariable', 'WarningVariable',
             'InformationVariable', 'OutVariable', 'OutBuffer', 'PipelineVariable'
@@ -573,7 +570,6 @@ function Invoke-WinMintHeadlessCli {
         [string]$OutProfile,
         [string]$SourceIso,
         [string]$UupDumpSource,
-        [string]$UupDumpZip,
         [string]$SourceIsoOverride,
         [string]$Architecture,
         [string]$ComputerName = 'WinMint',
@@ -708,17 +704,13 @@ function Invoke-WinMintHeadlessCli {
         $warnings = [System.Collections.Generic.List[string]]::new()
         $secret = Resolve-WinMintHeadlessSecret -Password $Password -PasswordPath $PasswordPath -PasswordEnvVar $PasswordEnvVar
         if ($secret.UsedDeprecatedPassword) {
-            $warnings.Add('-Password is accepted for compatibility but is not recommended for automation. Prefer -PasswordPath or -PasswordEnvVar.')
+            $warnings.Add('Prefer -PasswordPath or -PasswordEnvVar for automation instead of inline -Password.')
         }
 
         Set-WinMintHeadlessJournalPhase -Phase 'Profile'
         $sourcePrep = $null
-        $sourcePrepPath = if (-not [string]::IsNullOrWhiteSpace($UupDumpSource)) { $UupDumpSource } else { $UupDumpZip }
-        if (-not [string]::IsNullOrWhiteSpace($sourcePrepPath)) {
-            if ([string]::IsNullOrWhiteSpace($UupDumpSource) -and -not [string]::IsNullOrWhiteSpace($UupDumpZip)) {
-                $warnings.Add('-UupDumpZip is accepted for compatibility. Prefer -UupDumpSource for UUP Dump conversion zips.')
-            }
-            $sourcePrep = Invoke-WinMintHeadlessSourcePrep -Path $sourcePrepPath -Yes:$Yes -ValidateOnly:$ValidateOnly
+        if (-not [string]::IsNullOrWhiteSpace($UupDumpSource)) {
+            $sourcePrep = Invoke-WinMintHeadlessSourcePrep -Path $UupDumpSource -Yes:$Yes -ValidateOnly:$ValidateOnly
             $script:WinMintSourcePrepResult = $sourcePrep
             if (-not [string]::IsNullOrWhiteSpace([string]$sourcePrep.GeneratedIso)) {
                 $SourceIso = [string]$sourcePrep.GeneratedIso
@@ -726,7 +718,7 @@ function Invoke-WinMintHeadlessCli {
             elseif (-not $ValidateOnly -and -not $DryRun) {
                 throw 'UUP Dump source prep did not produce a source ISO.'
             }
-            $warnings.Add("UUP Dump source selected: $([IO.Path]::GetFileName($sourcePrepPath))")
+            $warnings.Add("UUP Dump source selected: $([IO.Path]::GetFileName($UupDumpSource))")
         }
         if (-not [string]::IsNullOrWhiteSpace($ProfilePath)) {
             $profileSourceOverride = if (-not [string]::IsNullOrWhiteSpace($SourceIso)) { $SourceIso } else { $SourceIsoOverride }

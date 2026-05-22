@@ -117,17 +117,14 @@ function Test-RepositoryReleaseManifest {
     $requiredIncludes = @(
         'WinMint-CLI.ps1',
         'WinMint-GUI.ps1',
-        'WinMint-LegacyUI.ps1',
         'winmint.ps1',
         'apps/gui/bin/WinMint-GUI.exe',
         'apps/gui/README.md',
-        'apps/legacy-wpf',
         'assets',
         'config',
         'docs',
         'schemas',
-        'src',
-        'vendor'
+        'src'
     )
     foreach ($item in $requiredIncludes) {
         if ($include -notcontains $item) {
@@ -181,8 +178,6 @@ function Test-RepositoryTrackedPathCasing {
         'tests/fixtures/uupdump/.gitkeep',
         'src/engine/WinMint.ps1',
         'WinMint-GUI.ps1',
-        'WinMint-LegacyUI.ps1',
-        'apps/legacy-wpf/Views/MainWindow.xaml',
         'src/agent/Start-WinMintAgent.ps1',
         'config/release-manifest.json'
     )

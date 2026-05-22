@@ -658,7 +658,7 @@ function Write-WinMintDryRunArtifactSummary {
             )
             return
         } catch {
-            # Spectre rendering failed (no console / WPF UI ThreadJob) — fall through to plain summary.
+            # Spectre rendering failed, usually because no real console is attached.
         }
     }
 

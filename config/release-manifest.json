@@ -3,7 +3,6 @@
   "include": [
     "WinMint-CLI.ps1",
     "WinMint-GUI.ps1",
-    "WinMint-LegacyUI.ps1",
     "LICENSE",
     "README.md",
     "THIRD_PARTY_NOTICES.md",
@@ -11,13 +10,11 @@
     "winmint.ps1",
     "apps/gui/bin/WinMint-GUI.exe",
     "apps/gui/README.md",
-    "apps/legacy-wpf",
     "assets",
     "config",
     "docs",
     "schemas",
-    "src",
-    "vendor"
+    "src"
   ],
   "exclude": [
     "cloudflare",

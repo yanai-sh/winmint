@@ -13,11 +13,10 @@
         # Dot-sourcing internal helper blocks is intentional in this codebase
         'PSAvoidUsingInvokeExpression',
 
-        # Out-Null on WPF .Add() calls suppresses unwanted int return values — correct pattern
+        # Script entry points and validation helpers intentionally report directly to the console
         'PSAvoidUsingWriteHost',
 
-        # All empty catch blocks in this codebase are intentional: DLL load fallbacks,
-        # optional-feature graceful degradation, and WPF disposal on window teardown
+        # Empty catch blocks are reserved for optional-feature graceful degradation.
         'PSAvoidUsingEmptyCatchBlock',
 
         # Project targets PS 7.3+ exclusively; UTF-8 without BOM is correct and preferred
@@ -30,8 +29,8 @@
         # ScriptBlocks as if they were undeclared outer-scope captures requiring $using:
         'PSUseUsingScopeModifierInNewRunspaces',
 
-        # WinMint keeps CLI compatibility for -Password while warning automation toward
-        # -PasswordPath/-PasswordEnvVar; schema validation still permits passwordless.
+        # WinMint supports direct -Password for interactive CLI use while steering
+        # automation toward -PasswordPath/-PasswordEnvVar; schema validation still permits passwordless.
         'PSAvoidUsingPlainTextForPassword',
 
         # The profile contract deliberately models account name and optional password

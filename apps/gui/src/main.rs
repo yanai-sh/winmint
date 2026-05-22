@@ -11,24 +11,9 @@ use std::process::Command;
 
 use components as ui;
 use gpui::{
-    div,
-    prelude::*,
-    px,
-    size,
-    App,
-    Application,
-    AssetSource,
-    Bounds,
-    Context,
-    Div,
-    ExternalPaths,
-    SharedString,
-    TitlebarOptions,
-    Window,
-    WindowBackgroundAppearance,
-    WindowBounds,
-    WindowControlArea,
-    WindowOptions,
+    div, prelude::*, px, size, App, Application, AssetSource, Bounds, Context, Div, ExternalPaths,
+    SharedString, TitlebarOptions, Window, WindowBackgroundAppearance, WindowBounds,
+    WindowControlArea, WindowOptions,
 };
 use state::{
     BuildIntent, BuildRunState, ManifestViewState, SourceProbeState, SourceProbeStatus,
@@ -196,7 +181,12 @@ impl WinMintGui {
         }
     }
 
-    fn apply_external_paths(&mut self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
+    fn apply_external_paths(
+        &mut self,
+        paths: &ExternalPaths,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(first) = paths.paths().first() {
             self.set_iso_path(first.to_string_lossy().into_owned().into(), window, cx);
         }
@@ -282,8 +272,7 @@ impl WinMintGui {
         }
         format!(
             "{} · Manifest {}",
-            self.build_run.status,
-            self.manifest.manifest_path
+            self.build_run.status, self.manifest.manifest_path
         )
         .into()
     }
@@ -438,7 +427,6 @@ impl WinMintGui {
                 .into_any_element(),
         };
 
-        let title = "Source";
         let hint = match self.source.status {
             SourceProbeStatus::Empty => SPLASH_STATUS_PICK,
             SourceProbeStatus::Preparing => "Checking source.",
@@ -448,23 +436,36 @@ impl WinMintGui {
 
         div()
             .w_full()
-            .max_w(px(760.0))
+            .max_w(px(420.0))
             .flex()
             .flex_col()
-            .gap_8()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(ui::prose_title(title))
-                    .child(ui::prose_hint(hint)),
-            )
+            .items_center()
+            .gap_4()
             .child(
                 div()
                     .w_full()
-                    .child(source_panel),
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap_3()
+                    .child(ui::splash_brand_lockup())
+                    .child(
+                        div()
+                            .text_lg()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_center()
+                            .text_color(theme::color::text())
+                            .child("Build a clean Windows workstation ISO."),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_center()
+                            .text_color(theme::color::text_dim())
+                            .child(hint),
+                    ),
             )
+            .child(div().flex().justify_center().child(source_panel))
     }
 
     fn render_wizard_shell(&self, window: &mut Window, cx: &mut Context<Self>) -> Div {
@@ -472,33 +473,31 @@ impl WinMintGui {
             .flex_1()
             .w_full()
             .flex()
+            .flex_col()
             .overflow_hidden()
-            .child(ui::step_rail(self.view.stage as usize))
             .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .min_w(px(0.0))
-                    .child(
-                        div()
-                            .flex_1()
-                            .w_full()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .px_12()
-                            .pt(px(88.0))
-                            .pb(px(48.0))
-                            .child(self.render_source_body(window, cx)),
-                    )
-                    .child(ui::status_footer(self.footer_status())),
+                div().flex_1().flex().min_w(px(0.0)).child(
+                    div()
+                        .flex_1()
+                        .w_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .px_12()
+                        .pt(px(88.0))
+                        .pb(px(48.0))
+                        .child(self.render_source_body(window, cx)),
+                ),
             )
+            .child(ui::status_footer(self.footer_status()))
     }
 }
 
 fn run_source_probe(repo_root: PathBuf, path: String) -> Result<UiIsoMetadata, String> {
-    let script = repo_root.join("tools").join("ui-bridge").join("Get-UiIsoMetadata.ps1");
+    let script = repo_root
+        .join("tools")
+        .join("ui-bridge")
+        .join("Get-UiIsoMetadata.ps1");
     let output = Command::new("pwsh")
         .arg("-NoProfile")
         .arg("-ExecutionPolicy")
@@ -514,7 +513,10 @@ fn run_source_probe(repo_root: PathBuf, path: String) -> Result<UiIsoMetadata, S
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         if stderr.is_empty() {
-            return Err(format!("PowerShell source probe exited with {}.", output.status));
+            return Err(format!(
+                "PowerShell source probe exited with {}.",
+                output.status
+            ));
         }
         return Err(stderr);
     }
@@ -528,7 +530,9 @@ impl Render for WinMintGui {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut frame = ui::app_frame().relative();
 
-        frame = frame.when(self.view.custom_titlebar, |fr| fr.child(self.render_toolbar()));
+        frame = frame.when(self.view.custom_titlebar, |fr| {
+            fr.child(self.render_toolbar())
+        });
 
         frame = frame.child(self.render_wizard_shell(window, cx));
 
@@ -543,30 +547,32 @@ fn main() {
         .any(|a| a == "--system-titlebar" || a == "--native-titlebar");
     let custom_titlebar = !system_titlebar;
 
-    Application::new().with_assets(Assets {
-        base: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join(".."),
-    }).run(move |cx: &mut App| {
-        let bounds = Bounds::centered(None, size(px(1120.0), px(740.0)), cx);
-        let title: SharedString = "WinMint".into();
-        let options = WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
-            titlebar: Some(TitlebarOptions {
-                title: Some(title),
-                appears_transparent: custom_titlebar,
-                ..Default::default()
-            }),
-            window_background: WindowBackgroundAppearance::Opaque,
-            window_min_size: Some(size(
-                px(theme::WINDOW_MIN_WIDTH),
-                px(theme::WINDOW_MIN_HEIGHT),
-            )),
-            ..Default::default()
-        };
-        cx.open_window(options, move |_, cx| {
-            cx.new(|_| WinMintGui::new(custom_titlebar))
+    Application::new()
+        .with_assets(Assets {
+            base: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join(".."),
         })
-        .unwrap();
-    });
+        .run(move |cx: &mut App| {
+            let bounds = Bounds::centered(None, size(px(1120.0), px(740.0)), cx);
+            let title: SharedString = "WinMint".into();
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                titlebar: Some(TitlebarOptions {
+                    title: Some(title),
+                    appears_transparent: custom_titlebar,
+                    ..Default::default()
+                }),
+                window_background: WindowBackgroundAppearance::Opaque,
+                window_min_size: Some(size(
+                    px(theme::WINDOW_MIN_WIDTH),
+                    px(theme::WINDOW_MIN_HEIGHT),
+                )),
+                ..Default::default()
+            };
+            cx.open_window(options, move |_, cx| {
+                cx.new(|_| WinMintGui::new(custom_titlebar))
+            })
+            .unwrap();
+        });
 }

@@ -61,12 +61,14 @@ $validationSteps = [ordered]@{
     'Optional GUI build' = {
         Test-GuiBuild -IncludeBuild:$IncludeGuiBuild
     }
+    'Rust crates' = {
+        Test-RustCrates
+    }
     'PowerShell parser' = {
         # Get-ValidationPowerShellFile recurses *.ps1 (includes tools\gui, excluded: .git\ output\ dist\).
         Test-PowerShellParser
     }
     'XML files' = {
-        Test-XmlFile -Path (Get-WinMintPath -Name LegacyUiApp -ChildPath 'Views\MainWindow.xaml') -Kind 'XAML'
         Test-XmlFile -Path (Get-WinMintPath -Name Agent -ChildPath 'Start-WinMintFirstLogonUI.xaml') -Kind 'FirstLogon UI XAML'
         Test-XmlFile -Path (Get-WinMintPath -Name Config -ChildPath 'autounattend.xml') -Kind 'autounattend.xml'
     }

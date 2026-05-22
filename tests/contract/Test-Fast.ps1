@@ -12,7 +12,6 @@ foreach ($testScript in @(
         'Test-BootstrapContract.ps1',
         'Test-CloudflareWorkerContract.ps1',
         'Test-UiContractSpine.ps1',
-        'Test-WpfUiFramework.ps1',
         'Test-ServicedWimCache.ps1'
     )) {
     & (Join-Path $testRoot $testScript)

@@ -2,9 +2,7 @@
 
 function Test-RequiredAssets {
     $required = @(
-        'apps\legacy-wpf\Views\MainWindow.xaml',
         'WinMint-GUI.ps1',
-        'WinMint-LegacyUI.ps1',
         'config\autounattend.xml',
         'LICENSE',
         'winmint.ps1',
@@ -20,11 +18,8 @@ function Test-RequiredAssets {
         'assets\ui\wsl\debian.png',
         'assets\ui\wsl\archlinux.png',
         'assets\ui\wsl\fedora.png',
-        'assets\ui\desktop\standard.svg',
-        'assets\ui\desktop\standard.png',
-        'assets\ui\desktop\windhawk.svg',
-        'assets\ui\desktop\windhawk.png',
-        'assets\ui\desktop\windhawk\preview.png',
+        'assets\ui\desktop\windhawk\windhawk.svg',
+        'assets\ui\desktop\windhawk\windhawk.png',
         'assets\runtime\desktop\windhawk\preset.json',
         'assets\runtime\desktop\windhawk\README.md',
         'assets\ui\desktop\yasb.svg',
@@ -90,15 +85,6 @@ function Test-RequiredAssets {
         'src\setup\WindhawkBootstrap.ps1',
         'src\setup\WindhawkBootstrap.Helpers.ps1',
         'src\engine\Private\Pipeline.Console.ps1',
-        'apps\legacy-wpf\Foundation\FileSystemLiterals.ps1',
-        'apps\legacy-wpf\Foundation\UiSession.ps1',
-        'apps\legacy-wpf\Services\Theme.ps1',
-        'apps\legacy-wpf\Services\UiFramework.ps1',
-        'apps\legacy-wpf\Services\UiInteraction.ps1',
-        'vendor\wpf-ui\4.3.0\net8.0-windows7.0\Wpf.Ui.dll',
-        'vendor\wpf-ui\4.3.0\net8.0-windows7.0\Wpf.Ui.Abstractions.dll',
-        'vendor\wpf-ui\4.3.0\net8.0-windows7.0\WPF-UI-LICENSE.md',
-        'vendor\wpf-ui\4.3.0\net8.0-windows7.0\WPF-UI.Abstractions-LICENSE.md',
         'src\agent\Agent.Console.ps1',
         'src\agent\Agent.Runtime.ps1',
         'src\agent\Start-WinMintAgent.ps1',
@@ -115,8 +101,7 @@ function Test-RequiredAssets {
         'src\agent\Modules\LiveInstallAudit.ps1',
         'src\agent\Modules\TilingDesktop.ps1',
         'src\agent\Modules\Windhawk.ps1',
-        'src\agent\Modules\Profiles.ps1',
-        'apps\legacy-wpf\Views\MainWindow.xaml'
+        'src\agent\Modules\Profiles.ps1'
     )
     foreach ($rel in $required) {
         $path = Join-Path $root $rel

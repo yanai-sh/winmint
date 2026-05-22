@@ -30,7 +30,6 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 -DryRun
 |-------------|---------|
 | `WinMint-GUI.ps1` | Primary GPUI launcher |
 | `WinMint-CLI.ps1` | Headless/profile-driven build entry |
-| `WinMint-LegacyUI.ps1` | Deprecated WPF fallback |
 | `winmint.ps1` | Download/verify/launch latest release |
 
 ## Requirements
@@ -62,7 +61,8 @@ pwsh -NoProfile -File tools\release\New-WinMintReleaseBundle.ps1 -Version v0.2.0
 ## Repository Layout
 
 ```text
-apps/       GUI front ends: primary GPUI and legacy WPF
+apps/       Primary GPUI front end
+crates/     Rust contract helpers and small CLI tools
 src/        Engine, FirstLogon agent, and Windows Setup payloads
 tools/      Validation, release, bridge, and authoring tools
 tests/      Contract tests and local fixture roots

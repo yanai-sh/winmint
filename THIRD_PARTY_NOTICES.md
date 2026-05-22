@@ -34,14 +34,3 @@ GPL-3.0 for WinMint does not relicense bundled font files.
 - Packaged files: `assets/ui/wsl/*.svg`, `assets/ui/editors/*.svg`
 - Notes: Product marks are used only as visual identifiers. Trademark rights
   remain with their respective owners.
-
-## UI Framework
-
-### WPF UI
-
-- Source: https://github.com/lepoco/wpfui
-- Package: https://www.nuget.org/packages/WPF-UI
-- License: MIT
-- Packaged files: `vendor/wpf-ui/4.3.0/net8.0-windows7.0/`
-- Notes: Used as the WPF-native Fluent resource and control foundation for
-  the WinMint wizard shell.

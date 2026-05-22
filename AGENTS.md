@@ -49,7 +49,8 @@ Bootstrap → UI/CLI → Engine → Windows Setup → FirstLogon Agent
 |-------|-------------|---------|
 | CLI | `WinMint-CLI.ps1` | Headless/console entry; delegates directly to engine |
 | Engine | `src/engine/WinMint.ps1` | Dot-sources all private modules; owns DISM/WIM servicing |
-| UI | `WinMint-GUI.ps1`; `apps/gui/` | GPUI is the primary GUI; WPF is available only through `WinMint-LegacyUI.ps1` as a deprecated fallback. The GPUI app uses `gpui-animation` for state-driven hover transitions; interactive wrappers must use `AnimatedWrapper::on_click` (not the inner `div`’s `on_click`) so the animation hook is not overwritten. |
+| UI | `WinMint-GUI.ps1`; `apps/gui/` | GPUI is the only shipped GUI. The GPUI app uses `gpui-animation` for state-driven hover transitions; interactive wrappers must use `AnimatedWrapper::on_click` (not the inner `div`’s `on_click`) so the animation hook is not overwritten. |
+| Rust core | `crates/winmint-core/`, `crates/winmintctl/` | Typed contract helpers and small validation/normalization tools. Must not own DISM, offline registry servicing, Windows Setup orchestration, or first-logon package installs. |
 | Agent | `src/agent/Start-WinMintAgent.ps1` | Runs at first logon; installs editors/WSL/shell layers |
 | Setup scripts | `src/setup/FirstLogon.ps1`, `src/setup/SetupComplete.ps1` | Machine-phase setup during Windows install |
 | Bootstrap | `winmint.ps1` | Downloads release, verifies hash, launches UI |
@@ -64,7 +65,7 @@ Strict boundaries. Violations here are architectural bugs.
 |-------|------|--------------|
 | UI | Guided input, previews, validation messages, profile creation | DISM calls, WIM servicing, registry hive edits |
 | Profile | Defaults, derived settings, schema validation, compatibility checks | Mounting images, installing packages |
-| Engine | ISO extraction, WIM servicing, drivers, staged setup files, output ISO | WPF controls, user interaction, live-user app installs |
+| Engine | ISO extraction, WIM servicing, drivers, staged setup files, output ISO | GUI controls, user interaction, live-user app installs |
 | Setup scripts | Machine-level setup phases during Windows install | User preference prompts, package source policy |
 | FirstLogon Agent | Live-user setup, WSL, editors, shell layers, retry state | Offline image servicing, destructive disk choices |
 | Reporting | Manifest, logs, user-readable summaries | Business logic decisions |
@@ -166,7 +167,7 @@ See `docs/Windows-Debloat-Strategy.md` for the full audit and Tier 2 candidates.
 Branch `architecture/profile-engine` is converging toward:
 
 1. UI saves a complete `BuildProfile.json` before starting
-2. Engine builds from a profile without WPF loaded
+2. Engine builds from a profile without GUI code loaded
 3. Manifest explains the build without scraping logs
 4. FirstLogon resumes after interruption via `%LOCALAPPDATA%\WinMint\state.json`
 
@@ -183,7 +184,7 @@ Intentional exclusions — do not "fix" these:
 | `PSUseShouldProcessForStateChangingFunctions` | UI/build helpers don't need -WhatIf |
 | `PSReviewUnusedParameter` | DryRun param used indirectly via CmdletBinding |
 | `PSAvoidUsingInvokeExpression` | Dot-sourcing internal blocks is the load pattern |
-| `PSAvoidUsingWriteHost` | WPF `.Add()` returns int; `Out-Null` suppresses it correctly |
+| `PSAvoidUsingWriteHost` | Script entry points and validation helpers intentionally report directly to the console |
 
 ## Architecture Detection
 

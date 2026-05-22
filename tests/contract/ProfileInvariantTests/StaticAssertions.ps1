@@ -1,86 +1,61 @@
 #Requires -Version 7.3
 
 function Assert-StaticUiFlowInvariants {
-    $statePath = Join-Path $root 'apps\legacy-wpf\State\WinMintUiState.ps1'
-    $xamlPath = Join-Path $root 'apps\legacy-wpf\Views\MainWindow.xaml'
-    $profileAdapterPath = Join-Path $root 'apps\legacy-wpf\Services\ProfileAdapter.ps1'
-    $themePath = Join-Path $root 'apps\legacy-wpf\Services\Theme.ps1'
+    $guiRoot = Join-Path $root 'apps\gui'
+    $intentPath = Join-Path $guiRoot 'src\intent.rs'
+    $statePath = Join-Path $guiRoot 'src\state.rs'
+    $mainPath = Join-Path $guiRoot 'src\main.rs'
+    $coreProfilePath = Join-Path $root 'crates\winmint-core\src\profile.rs'
 
     $missingRewriteFiles = @()
-    foreach ($path in @($statePath, $xamlPath, $profileAdapterPath, $themePath)) {
+    foreach ($path in @($intentPath, $statePath, $mainPath, $coreProfilePath)) {
         if (-not (Test-Path -LiteralPath $path)) {
-            Add-SmokeFailure "Expected UI rewrite file to exist: $path"
+            Add-SmokeFailure "Expected GPUI contract file to exist: $path"
             $missingRewriteFiles += $path
         }
     }
     if ($missingRewriteFiles.Count -gt 0) { return }
 
+    $intentText = Get-Content -LiteralPath $intentPath -Raw
     $stateText = Get-Content -LiteralPath $statePath -Raw
-    $xamlText = Get-Content -LiteralPath $xamlPath -Raw
-    $profileAdapterText = Get-Content -LiteralPath $profileAdapterPath -Raw
-    $themeText = Get-Content -LiteralPath $themePath -Raw
-    $stages = @('Start', 'Machine', 'Disk', 'Profile', 'Workstation', 'Launch')
-
-    if ($stateText -notmatch '(?s)enum\s+WinMintUiStage\s*\{(?<Body>.*?)\}') {
-        Add-SmokeFailure 'Expected WinMintUiState.ps1 to define enum WinMintUiStage.'
-    } else {
-        $stageBody = $Matches.Body
-        foreach ($stage in $stages) {
-            if ($stageBody -notmatch "(?m)^\s*$([regex]::Escape($stage))\b") {
-                Add-SmokeFailure "Expected WinMintUiStage enum to contain '$stage'."
-            }
+    $mainText = Get-Content -LiteralPath $mainPath -Raw
+    $coreProfileText = Get-Content -LiteralPath $coreProfilePath -Raw
+    if ($stateText -notmatch 'pub\s+struct\s+BuildIntent') {
+        Add-SmokeFailure 'Expected GPUI state.rs to define BuildIntent.'
+    }
+    foreach ($requiredField in @('architecture', 'computer_name', 'account_name', 'selected_groups', 'toolkit', 'desktop_layers')) {
+        if ($stateText -notmatch "\b$([regex]::Escape($requiredField))\b") {
+            Add-SmokeFailure "Expected BuildIntent to contain '$requiredField'."
         }
     }
 
-    foreach ($stage in $stages) {
-        if ($xamlText -notmatch "x:Name=`"Stage$stage`"") {
-            Add-SmokeFailure "Expected MainWindow.xaml to contain Stage$stage."
+    if ($intentText -notmatch 'winmint_core::profile') {
+        Add-SmokeFailure 'GPUI intent bridge must use winmint-core profile helpers.'
+    }
+    if ($coreProfileText -notmatch 'pub struct GuiIntentInput') {
+        Add-SmokeFailure 'winmint-core must own the typed GUI intent input contract.'
+    }
+    foreach ($requiredKey in @('ISOPath', 'ProfileGroups', 'DesktopUiDefault', 'InstallWindhawk', 'Wsl2Distros')) {
+        if ($coreProfileText -notmatch [regex]::Escape($requiredKey)) {
+            Add-SmokeFailure "winmint-core GUI intent builder must emit '$requiredKey'."
         }
     }
 
-    if ($xamlText -notmatch 'x:Name="StageStart"') {
-        Add-SmokeFailure 'Legacy UI requires cinematic shell root StageStart in MainWindow.xaml.'
-    }
-
-    foreach ($requiredControl in @(
-            'BtnNext', 'BtnBack', 'BtnBrowseIso', 'TxtIsoPath', 'TxtIsoStatus', 'TxtIsoArchitecture',
-            'RbTargetThisPc', 'RbTargetDifferentPc', 'RbDriverDefault', 'RbDriverThisPc',
-            'RbDriverCustom', 'TxtDriverPath', 'BtnDriverBrowse',
-            'TxtMachineDriversSummary', 'TxtMachineEditionSummary', 'TxtMachineRegionSummary',
-            'TxtMachineActivationSummary', 'BtnChangeDrivers', 'BtnChangeEdition', 'BtnChangeRegion',
-            'AdvancedDriverPanel', 'AdvancedEditionPanel', 'AdvancedRegionPanel',
-            'RbEditionTargetLicense', 'RbEditionHome', 'RbEditionPro', 'RbEditionHomeSingleLanguage',
-            'RbDiskManual', 'RbDiskAuto', 'ChkDiskWipeConfirm',
-            'TxtComputerName', 'TxtAccountName', 'PwdPassword', 'PwdConfirm', 'ChkShellWindhawk',
-            'ChkShellYasb', 'ChkShellKomorebi', 'ChkWslUbuntu', 'ChkWslDebian', 'ChkWslArch',
-            'ChkWslFedora', 'ChkEditorNeovim', 'ChkEditorVSCodium', 'ChkEditorCursor', 'ChkEditorZed',
-            'BtnStartBuild', 'BuildProgress', 'BuildStatusText', 'LogPanel'
-        )) {
-        if ($xamlText -notmatch "x:Name=`"$requiredControl`"") {
-            Add-SmokeFailure "Expected MainWindow.xaml to contain control '$requiredControl'."
+    $removedUiTerms = @(
+        ('WinMint-Legacy' + 'UI'),
+        ('legacy' + '-wpf'),
+        ('Wpf' + '.Ui')
+    )
+    foreach ($forbidden in $removedUiTerms) {
+        if ($mainText -match [regex]::Escape($forbidden) -or
+            $intentText -match [regex]::Escape($forbidden) -or
+            $stateText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "GPUI source must not reference removed legacy UI surface '$forbidden'."
         }
     }
-
-    foreach ($editionName in @('Windows 11 Home', 'Windows 11 Pro', 'Windows 11 Home Single Language')) {
-        if ($profileAdapterText -notmatch [regex]::Escape($editionName)) {
-            Add-SmokeFailure "Expected ProfileAdapter.ps1 to map fixed edition '$editionName'."
-        }
-    }
-
-    if ($profileAdapterText -notmatch 'New-WinMintBuildProfileFromSettings') {
-        Add-SmokeFailure 'Expected WPF profile adapter to use the shared PowerShell profile factory.'
-    }
-
-    if ($themeText -notmatch 'function\s+Set-Theme\b') {
-        Add-SmokeFailure 'Expected Theme.ps1 to define Set-Theme.'
-    }
-
     foreach ($forbidden in @('Tumbleweed', 'openSUSE')) {
         if ($stateText -match [regex]::Escape($forbidden)) {
-            Add-SmokeFailure "WinMintUiState.ps1 must not contain '$forbidden'."
-        }
-        if ($xamlText -match [regex]::Escape($forbidden)) {
-            Add-SmokeFailure "MainWindow.xaml must not contain '$forbidden'."
+            Add-SmokeFailure "GPUI state.rs must not contain '$forbidden'."
         }
     }
 }
@@ -603,10 +578,10 @@ function Assert-WslFirstDefaultsAndGuards {
         Add-SmokeFailure 'Versioned Fedora WSL distro selections must be preserved in the build profile.'
     }
 
-    $uiPath = Join-Path $root 'apps\legacy-wpf\Views\MainWindow.xaml'
-    $uiText = Get-Content -LiteralPath $uiPath -Raw
-    if ($uiText -match 'x:Name="ChkWslUbuntu"[\s\S]*?IsChecked="True"') {
-        Add-SmokeFailure 'UI must not preselect Ubuntu WSL by default.'
+    $guiStatePath = Join-Path $root 'apps\gui\src\state.rs'
+    $guiStateText = Get-Content -LiteralPath $guiStatePath -Raw
+    if ($guiStateText -notmatch 'selected_groups:\s*vec!\["Minimal"\]') {
+        Add-SmokeFailure 'GPUI must default to Minimal profile group only.'
     }
 
     $wslModulePath = Join-Path $root 'src\agent\Modules\Wsl.ps1'

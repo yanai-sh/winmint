@@ -313,7 +313,7 @@ function Format-WinMintByteSize {
 # $script:PipelineTasks access throws under StrictMode v2 when this file is
 # dot-sourced into a ThreadJob scriptblock whose $script: scope diverges from
 # where the variable was assigned. The Spectre console path sets the variable;
-# the WPF UI ThreadJob path does not, and that's fine — these two functions
+# non-console callers may not, and that's fine — these two functions
 # become no-ops there.
 function Start-PipelinePhase {
     param([string]$Name)

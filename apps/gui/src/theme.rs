@@ -14,6 +14,12 @@ pub mod metric {
 pub mod asset {
     use super::*;
 
+    pub fn logo() -> PathBuf {
+        PathBuf::from("assets")
+            .join("brand")
+            .join("WinMint_inkscape.svg")
+    }
+
     pub fn mark() -> PathBuf {
         PathBuf::from("assets")
             .join("brand")
@@ -34,10 +40,6 @@ pub mod color {
 
     pub fn surface() -> Rgba {
         palette().container
-    }
-
-    pub fn sidebar() -> Rgba {
-        rgb(0x1f1f1f)
     }
 
     pub fn surface_hover() -> Rgba {

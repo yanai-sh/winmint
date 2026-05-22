@@ -14,8 +14,6 @@ function Get-WinMintPath {
             'RepoRoot',
             'Root',
             'Apps',
-            'LegacyUiApp',
-            'LegacyUiEntry',
             'GuiApp',
             'GuiCargoToml',
             'GuiBinary',
@@ -50,7 +48,6 @@ function Get-WinMintPath {
             'Tests',
             'TestsRoot',
             'ContractTests',
-            'Vendor',
             'Output',
             'OutputRoot',
             'Dist',
@@ -66,8 +63,6 @@ function Get-WinMintPath {
         'RepoRoot'       { '' }
         'Root'           { '' }
         'Apps'           { 'apps' }
-        'LegacyUiApp'    { 'apps\legacy-wpf' }
-        'LegacyUiEntry'  { 'apps\legacy-wpf\App\Start-WinMintUI.ps1' }
         'GuiApp'        { 'apps\gui' }
         'GuiCargoToml'  { 'apps\gui\Cargo.toml' }
         'GuiBinary'     { 'apps\gui\bin\WinMint-GUI.exe' }
@@ -102,7 +97,6 @@ function Get-WinMintPath {
         'Tests'          { 'tests' }
         'TestsRoot'      { 'tests' }
         'ContractTests'  { 'tests\contract' }
-        'Vendor'         { 'vendor' }
         'Output'         { 'output' }
         'OutputRoot'     { 'output' }
         'Dist'           { 'dist' }

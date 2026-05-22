@@ -6,41 +6,6 @@ use crate::intent::{DesktopLayersIntent, ToolkitIntent};
 pub const SPLASH_STATUS_PICK: &str = "Select a Windows ISO to begin.";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum WizardStage {
-    Source,
-    ProfileGroups,
-    DeveloperOptions,
-    DesktopUiOptions,
-    IdentityAndDisk,
-    Review,
-    Build,
-}
-
-impl WizardStage {
-    pub const FLOW: [WizardStage; 7] = [
-        WizardStage::Source,
-        WizardStage::ProfileGroups,
-        WizardStage::DeveloperOptions,
-        WizardStage::DesktopUiOptions,
-        WizardStage::IdentityAndDisk,
-        WizardStage::Review,
-        WizardStage::Build,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            WizardStage::Source => "Source",
-            WizardStage::ProfileGroups => "Profile",
-            WizardStage::DeveloperOptions => "Developer",
-            WizardStage::DesktopUiOptions => "Desktop UI",
-            WizardStage::IdentityAndDisk => "Identity",
-            WizardStage::Review => "Review",
-            WizardStage::Build => "Build",
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SourceProbeStatus {
     Empty,
     Preparing,
@@ -134,7 +99,11 @@ impl SourceProbeState {
     pub fn mark_ready(&mut self, metadata: UiIsoMetadata) {
         self.status = SourceProbeStatus::Ready;
         self.detected_architecture = metadata.architecture.into();
-        self.editions = metadata.editions.into_iter().map(SharedString::from).collect();
+        self.editions = metadata
+            .editions
+            .into_iter()
+            .map(SharedString::from)
+            .collect();
         self.error = "".into();
     }
 
@@ -171,15 +140,11 @@ impl Default for ManifestViewState {
 }
 
 pub struct ViewState {
-    pub stage: WizardStage,
     pub custom_titlebar: bool,
 }
 
 impl ViewState {
     pub fn new(custom_titlebar: bool) -> Self {
-        Self {
-            stage: WizardStage::Source,
-            custom_titlebar,
-        }
+        Self { custom_titlebar }
     }
 }

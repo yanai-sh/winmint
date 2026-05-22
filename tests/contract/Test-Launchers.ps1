@@ -26,11 +26,8 @@ if ($bootstrap -notmatch '''Gui''\s*\{\s*\$guiScript\s*\}') {
 if ($bootstrap -notmatch "'Headless'\s*\{\s*Find-WinMintCliScript") {
     Add-LauncherFailure 'Headless launch mode must resolve WinMint-CLI.ps1.'
 }
-if ($bootstrap -notmatch "'LegacyUi'\s*\{\s*Find-WinMintLegacyUiScript") {
-    Add-LauncherFailure 'LegacyUi launch mode must resolve WinMint-LegacyUI.ps1.'
-}
 
-foreach ($pathName in @('WinMint-GUI.ps1', 'WinMint-LegacyUI.ps1')) {
+foreach ($pathName in @('WinMint-GUI.ps1')) {
     if (-not (Test-Path -LiteralPath (Get-WinMintPath -Name RepoRoot -ChildPath $pathName) -PathType Leaf)) {
         Add-LauncherFailure "Missing launcher: $pathName"
     }
@@ -41,9 +38,9 @@ if ($guiLauncher -notmatch 'Get-WinMintPath -Name GuiBinary') {
     Add-LauncherFailure 'WinMint-GUI.ps1 must resolve the packaged GUI binary through Get-WinMintPath.'
 }
 
-$legacyEntry = Get-Content -LiteralPath (Get-WinMintPath -Name LegacyUiEntry) -Raw
-if ($legacyEntry -notmatch 'while \(-not \[string\]::IsNullOrWhiteSpace\(\$candidateRoot\)\)') {
-    Add-LauncherFailure 'Legacy WPF app entry must walk upward to find src\engine\Core.ps1.'
+$removedLauncherPattern = ('Legacy' + 'Ui|Find-WinMintLegacy' + 'UiScript|WinMint-Legacy' + 'UI')
+if ($bootstrap -match $removedLauncherPattern) {
+    Add-LauncherFailure 'Bootstrap must not expose the removed compatibility launcher path.'
 }
 
 if ($failures.Count -gt 0) {

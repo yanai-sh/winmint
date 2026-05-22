@@ -4,13 +4,16 @@
 
 use std::time::Duration;
 
-use gpui::{div, img, prelude::*, px, App, ClickEvent, Div, ExternalPaths, FontWeight, SharedString, Stateful, Window, WindowControlArea};
+use gpui::{
+    div, img, prelude::*, px, App, ClickEvent, Div, ExternalPaths, FontWeight, SharedString,
+    Stateful, Window, WindowControlArea,
+};
 use gpui_animation::{
     animation::{AnimatedWrapper, TransitionExt},
     transition,
 };
 
-use crate::{state::{SourceProbeStatus, WizardStage}, theme};
+use crate::{state::SourceProbeStatus, theme};
 
 pub fn app_frame() -> Div {
     div()
@@ -46,22 +49,12 @@ pub fn brand_wordmark(text_size: f32, line_height: f32) -> Div {
         .font_weight(FontWeight::SEMIBOLD)
         .text_size(px(text_size))
         .line_height(px(line_height))
-        .child(
-            div()
-                .text_color(theme::color::brand_win())
-                .child("Win"),
-        )
-        .child(
-            div()
-                .text_color(theme::color::brand_mint())
-                .child("Mint"),
-        )
+        .child(div().text_color(theme::color::brand_win()).child("Win"))
+        .child(div().text_color(theme::color::brand_mint()).child("Mint"))
 }
 
 fn mark_image(size: f32) -> gpui::Img {
-    img(theme::asset::mark())
-        .w(px(size))
-        .h(px(size))
+    img(theme::asset::mark()).w(px(size)).h(px(size))
 }
 
 pub fn splash_brand_lockup() -> Div {
@@ -69,132 +62,7 @@ pub fn splash_brand_lockup() -> Div {
         .flex()
         .items_center()
         .justify_center()
-        .gap_5()
-        .child(mark_image(112.0))
-        .child(brand_wordmark(62.0, 72.0))
-}
-
-pub fn rail_brand() -> impl IntoElement {
-    div()
-        .flex()
-        .items_center()
-        .gap_3()
-        .px_2()
-        .py_1()
-        .rounded_md()
-        .border_1()
-        .border_color(theme::color::canvas())
-        .id("rail-brand-lockup")
-        .child(mark_image(42.0))
-        .child(brand_wordmark(29.0, 34.0))
-        .with_transition("rail-brand-lockup")
-        .transition_on_hover(
-            Duration::from_millis(200),
-            transition::general::EaseOutQuad,
-            |hovered, state| {
-                if *hovered {
-                    state
-                        .border_color(theme::color::border_muted())
-                        .bg(theme::color::surface_hover())
-                } else {
-                    state.origin()
-                }
-            },
-        )
-}
-
-pub fn step_rail(active_index: usize) -> Div {
-    div()
-        .w(px(280.0))
-        .h_full()
-        .flex()
-        .flex_col()
-        .justify_between()
-        .px_8()
-        .pt(px(82.0))
-        .pb(px(28.0))
-        .border_r_1()
-        .border_color(theme::color::border_muted())
-        .bg(theme::color::sidebar())
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_10()
-                .child(rail_brand())
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .children(WizardStage::FLOW.iter().enumerate().map(|(index, stage)| {
-                            let state = if index < active_index {
-                                StepState::Done
-                            } else if index == active_index {
-                                StepState::Active
-                            } else {
-                                StepState::Pending
-                            };
-                            step_item(index + 1, stage.label(), state)
-                        })),
-                ),
-        )
-}
-
-enum StepState {
-    Done,
-    Active,
-    Pending,
-}
-
-fn step_item(index: usize, label: &'static str, state: StepState) -> Div {
-    let active = matches!(state, StepState::Active);
-    let done = matches!(state, StepState::Done);
-    div()
-        .h(px(44.0))
-        .flex()
-        .items_center()
-        .gap_3()
-        .rounded_sm()
-        .px_3()
-        .when(active, |item| item.bg(theme::color::surface()))
-        .child(
-            div()
-                .w(px(22.0))
-                .h(px(22.0))
-                .rounded_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_xs()
-                .font_weight(FontWeight::SEMIBOLD)
-                .bg(if active || done {
-                    theme::color::accent()
-                } else {
-                    theme::color::surface_hover()
-                })
-                .text_color(if active || done {
-                    theme::color::accent_text()
-                } else {
-                    theme::color::text_dim()
-                })
-                .child(if done { "✓".to_string() } else { index.to_string() }),
-        )
-        .child(
-            div()
-                .text_sm()
-                .font_weight(if active {
-                    FontWeight::SEMIBOLD
-                } else {
-                    FontWeight::NORMAL
-                })
-                .text_color(if active {
-                    theme::color::text()
-                } else {
-                    theme::color::text_dim()
-                })
-                .child(label),
-        )
+        .child(img(theme::asset::logo()).w(px(220.0)).h(px(220.0)))
 }
 
 pub fn status_footer(status: SharedString) -> Div {
@@ -263,7 +131,11 @@ pub fn callout(message: impl Into<String>, danger: bool) -> Div {
         .w_full()
         .rounded(px(theme::metric::RADIUS))
         .border_1()
-        .border_color(if danger { theme::color::danger() } else { theme::color::warning() })
+        .border_color(if danger {
+            theme::color::danger()
+        } else {
+            theme::color::warning()
+        })
         .bg(theme::color::surface_hover())
         .px_4()
         .py_3()
@@ -366,8 +238,13 @@ pub fn secondary_button(id: &'static str, label: &'static str) -> Stateful<Div> 
 }
 
 pub fn beat_scrub(labels: &[&'static str], active_index: usize) -> Div {
-    div().flex().items_center().justify_center().gap_4().flex_wrap().children(
-        labels.iter().enumerate().map(|(i, lab)| {
+    div()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap_4()
+        .flex_wrap()
+        .children(labels.iter().enumerate().map(|(i, lab)| {
             let on = i == active_index;
             div()
                 .flex()
@@ -388,8 +265,7 @@ pub fn beat_scrub(labels: &[&'static str], active_index: usize) -> Div {
                         })
                         .child(*lab),
                 )
-        }),
-    )
+        }))
 }
 
 pub fn fluent_icon_block(glyph: &'static str, size: f32) -> Div {
@@ -480,8 +356,8 @@ pub fn detail_row(label: &'static str, value: impl Into<String>) -> Div {
 
 pub fn source_preparing_panel(filename: impl Into<String>) -> Div {
     div()
-        .w_full()
-        .h(px(230.0))
+        .w(px(360.0))
+        .h(px(150.0))
         .flex()
         .flex_col()
         .items_center()
@@ -533,31 +409,35 @@ pub fn iso_landing_well(
         .items_center()
         .justify_center()
         .gap_3()
-        .w_full()
-        .h(px(230.))
-        .p_8()
+        .w(px(360.0))
+        .h(px(150.0))
+        .p_5()
         .rounded_md()
         .border_dashed()
         .border_2()
         .border_color(theme::color::border_muted())
         .bg(theme::color::surface())
         .drag_over::<ExternalPaths>(|style, _, _, _| {
-            style.border_color(theme::color::accent()).border_2().bg(theme::color::surface_hover())
+            style
+                .border_color(theme::color::accent())
+                .border_2()
+                .bg(theme::color::surface_hover())
         })
-        .child(fluent_icon_block("\u{E958}", 40.))
+        .child(fluent_icon_block("\u{E958}", 26.))
         .child(
             div()
-                .text_lg()
+                .text_sm()
+                .font_weight(FontWeight::SEMIBOLD)
                 .text_center()
                 .text_color(theme::color::text())
                 .child("Drop or choose Windows ISO"),
         )
         .child(
             div()
-                .text_sm()
+                .text_xs()
                 .text_center()
                 .text_color(theme::color::text_muted())
-                .child("Click this area to browse."),
+                .child("Click to browse."),
         )
         .on_drop(on_drop)
         .with_transition(id)
@@ -644,5 +524,10 @@ pub fn selectable_chip(
                 })
                 .child(fluent_glyph),
         )
-        .child(div().text_sm().text_color(theme::color::text()).child(label))
+        .child(
+            div()
+                .text_sm()
+                .text_color(theme::color::text())
+                .child(label),
+        )
 }

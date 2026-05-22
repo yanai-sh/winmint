@@ -25,7 +25,6 @@ function Get-ValidationPowerShellFile {
     $roots = @(
         'WinMint-CLI.ps1',
         'WinMint-GUI.ps1',
-        'WinMint-LegacyUI.ps1',
         'winmint.ps1',
         'src',
         'apps',
@@ -121,10 +120,8 @@ function Invoke-AnalyzerIfAvailable {
     $targets = @(
         'WinMint-CLI.ps1',
         'WinMint-GUI.ps1',
-        'WinMint-LegacyUI.ps1',
         'tools\gui',
         'src\engine',
-        'apps\legacy-wpf',
         'src\agent',
         'src\setup'
     ) | ForEach-Object { Join-Path $root $_ }
@@ -139,7 +136,7 @@ function Invoke-AnalyzerIfAvailable {
 }
 
 function Test-LauncherArchitecture {
-    foreach ($required in @('WinMint-GUI.ps1', 'WinMint-LegacyUI.ps1')) {
+    foreach ($required in @('WinMint-GUI.ps1')) {
         if (-not (Test-Path -LiteralPath (Join-Path $root $required) -PathType Leaf)) {
             Add-ValidationError "Required launcher missing: $required"
         }
@@ -147,14 +144,15 @@ function Test-LauncherArchitecture {
 
     $bootstrapPath = Join-Path $root 'winmint.ps1'
     $bootstrap = Get-Content -LiteralPath $bootstrapPath -Raw
-    if ($bootstrap -notmatch "\[ValidateSet\('Gui','Headless','LegacyUi'\)\]") {
-        Add-ValidationError 'winmint.ps1 must expose Gui, Headless, and LegacyUi modes.'
+    if ($bootstrap -notmatch "\[ValidateSet\('Gui','Headless'\)\]") {
+        Add-ValidationError 'winmint.ps1 must expose only Gui and Headless modes.'
     }
     if ($bootstrap -notmatch '\[string\]\$Mode = ''Gui''') {
         Add-ValidationError 'winmint.ps1 default mode must be Gui.'
     }
     $guiFunction = [regex]::Match($bootstrap, 'function Find-WinMintGuiScript[\s\S]*?function Resolve-WinMintLaunchMode')
-    if (-not $guiFunction.Success -or $guiFunction.Value -match 'WinMint-LegacyUI\.ps1') {
+    $removedLauncherPattern = 'WinMint-Legacy' + 'UI\.ps1'
+    if (-not $guiFunction.Success -or $guiFunction.Value -match $removedLauncherPattern) {
         Add-ValidationError 'Find-WinMintGuiScript must resolve only the GUI launcher.'
     }
     Write-Host 'OK launcher architecture'
@@ -179,7 +177,7 @@ function Test-ReleaseManifestRuntimeSurface {
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     $include = @($manifest.include)
     $exclude = @($manifest.exclude)
-    foreach ($required in @('WinMint-GUI.ps1', 'WinMint-LegacyUI.ps1', 'apps/gui/bin/WinMint-GUI.exe')) {
+    foreach ($required in @('WinMint-GUI.ps1', 'apps/gui/bin/WinMint-GUI.exe')) {
         if ($include -notcontains $required) {
             Add-ValidationError "Release manifest must include $required."
         }
@@ -189,6 +187,13 @@ function Test-ReleaseManifestRuntimeSurface {
     }
     if ($include -contains 'tools') {
         Add-ValidationError 'Release manifest must not include tools as runtime surface.'
+    }
+    $removedLauncher = 'WinMint-Legacy' + 'UI.ps1'
+    $removedUiTree = 'apps/legacy' + '-wpf'
+    foreach ($removed in @($removedLauncher, $removedUiTree, 'vendor')) {
+        if ($include -contains $removed) {
+            Add-ValidationError "Release manifest must not include removed compatibility path: $removed"
+        }
     }
     if ($exclude -notcontains 'tools') {
         Add-ValidationError 'Release manifest must continue excluding tools.'
@@ -240,6 +245,29 @@ function Test-GuiBuild {
     & $cargo.Source @arguments
     if ($LASTEXITCODE -ne 0) {
         Add-ValidationError "cargo $($arguments[0]) failed for GUI with exit code $LASTEXITCODE."
+    }
+}
+
+function Test-RustCrates {
+    $cargo = Get-Command cargo -ErrorAction SilentlyContinue
+    if (-not $cargo) {
+        Write-Warning 'Rust cargo not installed; skipping Rust crate tests.'
+        return
+    }
+
+    foreach ($manifest in @(
+            'crates\winmint-core\Cargo.toml',
+            'crates\winmintctl\Cargo.toml'
+        )) {
+        $path = Join-Path $root $manifest
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            Add-ValidationError "Rust crate manifest missing: $manifest"
+            continue
+        }
+        & $cargo.Source test --manifest-path $path
+        if ($LASTEXITCODE -ne 0) {
+            Add-ValidationError "cargo test failed for $manifest with exit code $LASTEXITCODE."
+        }
     }
 }
 

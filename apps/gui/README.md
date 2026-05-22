@@ -14,6 +14,10 @@ The PowerShell bridge converts that intent into the engine contract:
 output\gui\BuildProfile.json
 ```
 
+Profile intent shaping is shared with command-line tooling through the Rust
+core crate at `crates\winmint-core`. Keep GUI-only rendering in this app, and
+put reusable contract normalization in the core crate.
+
 Release users start the GUI through the root launcher:
 
 ```powershell

@@ -222,10 +222,9 @@ function Get-Win11IsoLogTimestampPrefix {
 }
 
 # Spectre.Console's Profile.Width setter throws "Console width must be greater
-# than zero" when no real console is attached (WPF UI ThreadJob). $script:UseSpectre
+# than zero" when no real console is attached. $script:UseSpectre
 # starts true; the first failed render latches it to false so subsequent calls
-# go straight to plain stdout — which the ThreadJob's host captures and the WPF
-# build log shows. Detected once, not retried per call.
+# go straight to plain stdout. Detected once, not retried per call.
 $script:UseSpectre = $true
 
 function Write-WinMintConsoleLine {

@@ -9,7 +9,6 @@ param(
     [string]$OutProfile,
     [string]$SourceIso,
     [string]$UupDumpSource,
-    [string]$UupDumpZip,
     [string]$SourceIsoOverride,
     [ValidateSet('amd64', 'arm64', 'x86')]
     [string]$Architecture,
@@ -81,7 +80,6 @@ $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
     $PSBoundParameters.ContainsKey('OutProfile') -or
     $PSBoundParameters.ContainsKey('SourceIso') -or
     $PSBoundParameters.ContainsKey('UupDumpSource') -or
-    $PSBoundParameters.ContainsKey('UupDumpZip') -or
     $PSBoundParameters.ContainsKey('SourceIsoOverride') -or
     $PSBoundParameters.ContainsKey('PasswordPath') -or
     $PSBoundParameters.ContainsKey('PasswordEnvVar') -or
@@ -117,7 +115,6 @@ if ($headlessMode) {
         -OutProfile $OutProfile `
         -SourceIso $SourceIso `
         -UupDumpSource $UupDumpSource `
-        -UupDumpZip $UupDumpZip `
         -SourceIsoOverride $SourceIsoOverride `
         -Architecture $Architecture `
         -ComputerName $ComputerName `
