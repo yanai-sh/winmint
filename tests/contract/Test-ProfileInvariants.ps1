@@ -98,6 +98,7 @@ Assert-SetupRegistryStampsAreIdempotent
 Assert-HeadlessConsoleProfileContract
 Assert-HeadlessCliContracts
 Assert-HeadlessSourceAndDriverInputContracts
+Assert-UiBridgeBuildProfileContract
 
 $profile = New-SmokeBuildProfile
 $result = Test-WinMintBuildProfile -BuildProfile $profile

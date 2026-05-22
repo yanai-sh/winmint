@@ -33,6 +33,10 @@ pub mod color {
         palette().container
     }
 
+    pub fn sidebar() -> Rgba {
+        rgb(0x1f1f1f)
+    }
+
     pub fn surface_hover() -> Rgba {
         rgb(0x363636)
     }

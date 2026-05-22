@@ -65,29 +65,10 @@ $script:Win11IsoCursorPackCatalog = @{
         HostSourceDir       = 'Windows11ModernLight'
         SchemeName          = 'Windows 11 Modern'
         DestSegment         = 'Windows11Modern'
-        MarkerRelPath       = 'Windows11ModernLight\00_pointer.cur'
+        MarkerRelPath       = 'Windows11ModernLight\Arrow.cur'
         ExtractedSourceDirs = @()
         ExpectedSha256      = ''
         Bundled             = $true
-        RoleFiles           = @{
-            'Arrow.cur'       = '00_pointer.cur'
-            'Help.cur'        = '01_help.cur'
-            'Work.ani'        = '02_working.ani'
-            'Busy.ani'        = '03_busy.ani'
-            'Cross.cur'       = '04_precision.cur'
-            'IBeam.cur'       = '05_beam.cur'
-            'Handwriting.cur' = '06_handwriting.cur'
-            'Unavailable.cur' = '07_unavailable.cur'
-            'SizeNS.cur'      = '08_vert.cur'
-            'SizeWE.cur'      = '09_horz.cur'
-            'SizeNWSE.cur'    = '10_dgn1.cur'
-            'SizeNESW.cur'    = '11_dgn2.cur'
-            'Move.cur'        = '12_move.cur'
-            'Alternate.cur'   = '13_alternate.cur'
-            'Link.cur'        = '14_link.cur'
-            'Pin.cur'         = '15_pin.cur'
-            'Person.cur'      = '16_person.cur'
-        }
     }
 }
 

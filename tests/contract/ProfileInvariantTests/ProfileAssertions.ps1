@@ -860,3 +860,90 @@ function Assert-HeadlessSourceAndDriverInputContracts {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+
+function Assert-UiBridgeBuildProfileContract {
+    $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-ui-bridge-' + [Guid]::NewGuid().ToString('n'))
+    $null = New-Item -ItemType Directory -Path $tempRoot -Force
+    try {
+        $settingsPath = Join-Path $tempRoot 'ui-intent.json'
+        $profilePath = Join-Path $tempRoot 'BuildProfile.json'
+        $settings = [ordered]@{
+            Profile = 'Minimal'
+            ProfileGroups = @('Minimal', 'Developer', 'DesktopUI')
+            SetupOption = 'Minimal'
+            ISOPath = ''
+            Architecture = 'amd64'
+            ComputerName = 'WinMint'
+            AccountName = 'dev'
+            AccountMode = 'Local'
+            TargetDevice = 'DifferentPC'
+            EditionMode = 'TargetLicense'
+            Edition = ''
+            DriverSource = 'None'
+            DriverPath = ''
+            DesktopUiDefault = $false
+            InstallWindhawk = $true
+            InstallYasb = $false
+            InstallKomorebi = $true
+            Editors = @('zed')
+            Wsl2Distros = @('Ubuntu')
+            RemoveGaming = $true
+            PrivLocation = $false
+            TweakHardwareBypass = $false
+        }
+        $settings | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
+
+        & pwsh.exe -NoProfile -File (Join-Path $script:WinMintRepositoryRoot 'tools\ui-bridge\New-UiBuildProfile.ps1') `
+            -RepositoryRoot $script:WinMintRepositoryRoot `
+            -SettingsPath $settingsPath `
+            -OutputPath $profilePath
+        if ($LASTEXITCODE -ne 0) {
+            Add-SmokeFailure "Expected UI bridge profile generation to exit 0, got $LASTEXITCODE."
+            return
+        }
+        if (-not (Test-Path -LiteralPath $profilePath -PathType Leaf)) {
+            Add-SmokeFailure 'Expected UI bridge to write BuildProfile.json.'
+            return
+        }
+
+        $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+        $result = Test-WinMintBuildProfile -BuildProfile $profile
+        if ($result.Failures.Count -gt 0) {
+            Add-SmokeFailure "Expected UI bridge output to validate, got: $($result.Failures -join '; ')"
+        }
+        $config = New-WinMintBuildConfig -BuildProfile $profile
+        if ($config.ProfileGroups -notcontains 'Developer' -or $config.ProfileGroups -notcontains 'DesktopUI') {
+            Add-SmokeFailure 'Expected UI bridge to preserve Developer and DesktopUI profile groups.'
+        }
+        if ($config.Editors -notcontains 'zed' -or $config.Wsl2Distros -notcontains 'Ubuntu') {
+            Add-SmokeFailure 'Expected UI bridge to preserve Developer editor and WSL intent.'
+        }
+        if (-not $config.InstallWindhawk -or $config.InstallYasb -or -not $config.InstallKomorebi) {
+            Add-SmokeFailure 'Expected UI bridge to preserve selected DesktopUI shell layers.'
+        }
+
+        $badSettingsPath = Join-Path $tempRoot 'bad-ui-intent.json'
+        [ordered]@{
+            Profile = 'Minimal'
+            ProfileGroups = @('Developer')
+            Architecture = 'amd64'
+        } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $badSettingsPath -Encoding UTF8
+        try {
+            & pwsh.exe -NoProfile -File (Join-Path $script:WinMintRepositoryRoot 'tools\ui-bridge\New-UiBuildProfile.ps1') `
+                -RepositoryRoot $script:WinMintRepositoryRoot `
+                -SettingsPath $badSettingsPath `
+                -OutputPath (Join-Path $tempRoot 'bad-profile.json') 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Add-SmokeFailure 'Expected UI bridge to reject incomplete or non-Minimal profile group intent.'
+            }
+        }
+        catch {
+            if ($_.Exception.Message -notmatch 'missing required field|Minimal') {
+                Add-SmokeFailure "Expected UI bridge validation error, got: $($_.Exception.Message)"
+            }
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}

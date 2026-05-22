@@ -1,16 +1,11 @@
 # WinMint Tests
 
-This folder is the repository home for test assets and future test suites.
-
-Current PowerShell smoke-test entrypoints remain under `tests\contract\` so the
-documented commands keep working while the repo migrates incrementally. New local
-fixtures belong under `tests\fixtures\`, not under `input\`, `output\`, `assets`,
-or ad hoc scratch folders.
-
-## Fixture Layout
+This folder contains contract tests, small profile fixtures, and ignored local
+fixture roots for large payloads.
 
 ```text
 tests/
+|-- contract/
 |-- profiles/
 `-- fixtures/
     |-- iso/
@@ -18,14 +13,11 @@ tests/
     `-- uupdump/
 ```
 
-- `profiles\`: small checked-in `BuildProfile.json` fixtures that reference local
-  fixture payload paths.
-- `fixtures\iso\`: local Windows ISO/WIM/ESD/SWM media used by UI and CLI tests.
-- `fixtures\drivers\`: local driver fixture payloads such as `.inf` folders,
-  vendor `.msi` files, or driver `.zip` archives.
-- `fixtures\uupdump\`: local UUP Dump conversion zip files and final ISO outputs
-  produced by UUP Dump. Converted folders are intentionally not a WinMint input;
-  use the generated ISO with `-SourceIso`.
+- `contract\`: PowerShell smoke and contract tests.
+- `profiles\`: small checked-in `BuildProfile.json` fixtures.
+- `fixtures\iso\`: ignored local Windows ISO/WIM/ESD/SWM media.
+- `fixtures\drivers\`: ignored local `.inf`, `.msi`, and driver ZIP payloads.
+- `fixtures\uupdump\`: ignored local UUP Dump zips and UUP-produced ISO fixtures.
 
-Fixture payloads are intentionally gitignored. Keep only small documentation or
-test metadata in git.
+Do not commit Microsoft media, driver bundles, UUP conversion output, or scratch
+payloads.

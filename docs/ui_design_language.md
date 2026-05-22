@@ -76,15 +76,27 @@ should be a focused source/action stage.
 
 The GPUI shell should use a staged layout:
 
-- Splash: brand mark, live wordmark, one primary action.
 - Source: one large source target with verification/status below it.
-- Profile: coarse group choices, architecture, and only visible follow-up
-  options when needed.
-- Review: compact intent summary and explicit write action.
+- Profile Groups: `Minimal` is implicit; `Developer`, `CopilotPlus`,
+  `Gaming`, and `DesktopUI` are additive choices.
+- Developer Options: visible only when `Developer` is selected; owns editor
+  and WSL intent only.
+- Desktop UI Options: visible only when `DesktopUI` is selected; owns
+  Windhawk, YASB, and Komorebi layer intent only.
+- Identity And Disk: local account, target device, edition mode, and explicit
+  disk mode/layout choices.
+- Review: compact resolved-intent summary and explicit profile write action.
+- Build: launches or supervises the existing PowerShell CLI; no servicing
+  logic moves into GPUI.
 
 Status belongs near the active stage, not in a persistent dashboard chrome. It
 should always be obvious whether the app is waiting on source input, shaping
 intent, or ready to write the bridge artifact.
+
+This staged contract is the replacement target for the current lab UI. Do not
+port WPF pages one-for-one. The overhaul should rebuild GPUI around this flow
+and keep conditional pages out of the navigation unless their owning profile
+group is selected.
 
 ## Component Vocabulary
 
@@ -120,6 +132,8 @@ cannot be expressed with `div`, `img`, text, and GPUI interactions.
 - UI components may display derived state, but they do not own engine policy.
 - Rust may hold a UI-side intent model, but PowerShell remains the profile
   resolver.
+- GPUI writes a bridge settings document, then `tools/ui-bridge/New-UiBuildProfile.ps1`
+  validates and resolves it into the first-class `BuildProfile.json` contract.
 - Do not duplicate AppX policy, package source policy, UUP conversion policy,
   or FirstLogon derivation in GPUI.
 - The UI scaffold may stay wireframe-level until it can create and validate a

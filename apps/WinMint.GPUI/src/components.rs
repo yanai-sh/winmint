@@ -2,9 +2,9 @@
 // Palette of composed controls; GPUI is splash-only for now but posture/tiles
 // remain for when multi-beat authoring returns.
 
-use gpui::{div, img, prelude::*, px, Div, ExternalPaths, FontWeight, Stateful, WindowControlArea};
+use gpui::{div, img, prelude::*, px, Div, ExternalPaths, FontWeight, SharedString, Stateful, WindowControlArea};
 
-use crate::theme;
+use crate::{state::WizardStage, theme};
 
 pub fn app_frame() -> Div {
     div()
@@ -15,16 +15,8 @@ pub fn app_frame() -> Div {
         .flex_col()
 }
 
-pub const SPLASH_MARK_SIZE: f32 = 160.0;
 pub const SPLASH_WORDMARK_TEXT: f32 = 78.0;
 pub const SPLASH_WORDMARK_LH: f32 = 88.0;
-pub const SPLASH_WORDMARK_W: f32 = 440.0;
-pub const SPLASH_WORDMARK_GAP: f32 = 28.0;
-pub const SPLASH_GROUP_W: f32 = SPLASH_MARK_SIZE + SPLASH_WORDMARK_GAP + SPLASH_WORDMARK_W;
-pub const SPLASH_GROUP_H: f32 = 174.0;
-pub const DOCKED_MARK_SIZE: f32 = 58.0;
-const DOCK_LEFT: f32 = 30.0;
-const DOCK_TOP: f32 = 28.0;
 
 pub fn titlebar_hit_regions() -> Div {
     div()
@@ -34,79 +26,6 @@ pub fn titlebar_hit_regions() -> Div {
         .right(px(132.0))
         .h(px(72.0))
         .window_control_area(WindowControlArea::Drag)
-}
-
-pub fn flying_brand(progress: f32, activity: f32, window_w: f32, window_h: f32) -> Div {
-    let collapse = crate::anim::ease_in_out_cubic(crate::anim::phase(progress, 0.0, 0.42));
-    let hold = crate::anim::phase(progress, 0.42, 0.62);
-    let fly = crate::anim::ease_in_out_cubic(crate::anim::phase(progress, 0.62, 0.94));
-    let settle = crate::anim::phase(progress, 0.94, 1.0);
-    let docking = fly > 0.0;
-
-    let mark_size = crate::anim::lerp(SPLASH_MARK_SIZE, DOCKED_MARK_SIZE, fly);
-    let lockup_left = (window_w - SPLASH_GROUP_W) / 2.0;
-    let lockup_top = window_h * 0.22;
-    let centered_mark_left = (window_w - SPLASH_MARK_SIZE) / 2.0;
-    let centered_mark_top = lockup_top + (SPLASH_GROUP_H - SPLASH_MARK_SIZE) / 2.0;
-    let end_left = DOCK_LEFT;
-    let end_top = DOCK_TOP;
-    let bounce = if settle > 0.0 {
-        crate::anim::damped_sin(settle, 1.3, 5.0) * 3.0
-    } else {
-        0.0
-    };
-    let merged_mark_left = crate::anim::lerp(lockup_left, centered_mark_left, collapse);
-    let merged_mark_top = centered_mark_top;
-    let mark_left = crate::anim::lerp(merged_mark_left, end_left, fly) + bounce;
-    let mark_top = crate::anim::lerp(merged_mark_top, end_top, fly);
-    let wordmark_left = crate::anim::lerp(
-        lockup_left + SPLASH_MARK_SIZE + SPLASH_WORDMARK_GAP,
-        window_w / 2.0 - SPLASH_WORDMARK_W - SPLASH_WORDMARK_GAP,
-        collapse,
-    );
-    let wordmark_top = lockup_top + (SPLASH_GROUP_H - SPLASH_WORDMARK_LH) / 2.0;
-    let wordmark_opacity = (1.0 - crate::anim::phase(collapse, 0.64, 1.0)).clamp(0.0, 1.0);
-    let show_wordmark = fly <= 0.01 && wordmark_opacity > 0.01 && hold < 1.0;
-    let waiting = !docking && hold > 0.0;
-    let pulse = if waiting {
-        ((activity * std::f32::consts::TAU * 1.25).sin() + 1.0) * 0.5
-    } else {
-        0.0
-    };
-    let shake = if waiting {
-        (activity * std::f32::consts::TAU * 4.6).sin() * 3.0
-    } else {
-        0.0
-    };
-    let active_mark_size = mark_size + pulse * 5.0;
-
-    let wordmark = div()
-        .absolute()
-        .left(px(wordmark_left))
-        .top(px(wordmark_top))
-        .w(px(SPLASH_WORDMARK_W))
-        .h(px(SPLASH_WORDMARK_LH))
-        .opacity(wordmark_opacity)
-        .child(brand_wordmark(SPLASH_WORDMARK_TEXT, SPLASH_WORDMARK_LH));
-
-    let mark = div()
-        .absolute()
-        .left(px(mark_left + shake - (active_mark_size - mark_size) / 2.0))
-        .top(px(mark_top - (active_mark_size - mark_size) / 2.0))
-        .w(px(active_mark_size))
-        .h(px(active_mark_size))
-        .opacity(crate::anim::lerp(1.0, 0.92, pulse))
-        .child(mark_image(active_mark_size));
-
-    let mut group = div()
-        .absolute()
-        .left(px(0.0))
-        .top(px(0.0))
-        .size_full();
-    if show_wordmark {
-        group = group.child(wordmark);
-    }
-    group.child(mark)
 }
 
 /// Brand-styled wordmark used in the splash flight. Two adjacent colored
@@ -133,39 +52,137 @@ pub fn brand_wordmark(text_size: f32, line_height: f32) -> Div {
         )
 }
 
+fn mark_image(size: f32) -> gpui::Img {
+    img(theme::asset::mark())
+        .w(px(size))
+        .h(px(size))
+}
+
 pub fn splash_brand_lockup() -> Div {
     div()
         .flex()
         .items_center()
         .justify_center()
         .gap_5()
-        .child(mark_image(96.0))
-        .child(brand_wordmark(54.0, 62.0))
+        .child(mark_image(112.0))
+        .child(brand_wordmark(62.0, 72.0))
 }
 
-pub fn wordmark(text_size: f32, line_height: f32) -> Div {
-    div()
-        .font_family("Segoe UI Variable Display")
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_size(px(text_size))
-        .line_height(px(line_height))
-        .text_color(theme::color::text())
-        .child("WinMint")
-}
-
-pub fn compact_brand() -> Div {
+pub fn rail_brand() -> Div {
     div()
         .flex()
         .items_center()
         .gap_3()
         .child(mark_image(42.0))
-        .child(wordmark(34.0, 38.0))
+        .child(brand_wordmark(29.0, 34.0))
 }
 
-fn mark_image(size: f32) -> gpui::Img {
-    img(theme::asset::mark())
-        .w(px(size))
-        .h(px(size))
+pub fn step_rail(active_index: usize) -> Div {
+    div()
+        .w(px(280.0))
+        .h_full()
+        .flex()
+        .flex_col()
+        .justify_between()
+        .px_8()
+        .pt(px(82.0))
+        .pb(px(28.0))
+        .border_r_1()
+        .border_color(theme::color::border_muted())
+        .bg(theme::color::sidebar())
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_10()
+                .child(rail_brand())
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .children(WizardStage::FLOW.iter().enumerate().map(|(index, stage)| {
+                            let state = if index < active_index {
+                                StepState::Done
+                            } else if index == active_index {
+                                StepState::Active
+                            } else {
+                                StepState::Pending
+                            };
+                            step_item(index + 1, stage.label(), state)
+                        })),
+                ),
+        )
+}
+
+enum StepState {
+    Done,
+    Active,
+    Pending,
+}
+
+fn step_item(index: usize, label: &'static str, state: StepState) -> Div {
+    let active = matches!(state, StepState::Active);
+    let done = matches!(state, StepState::Done);
+    div()
+        .h(px(44.0))
+        .flex()
+        .items_center()
+        .gap_3()
+        .rounded_sm()
+        .px_3()
+        .when(active, |item| item.bg(theme::color::surface()))
+        .child(
+            div()
+                .w(px(22.0))
+                .h(px(22.0))
+                .rounded_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .bg(if active || done {
+                    theme::color::accent()
+                } else {
+                    theme::color::surface_hover()
+                })
+                .text_color(if active || done {
+                    theme::color::accent_text()
+                } else {
+                    theme::color::text_dim()
+                })
+                .child(if done { "✓".to_string() } else { index.to_string() }),
+        )
+        .child(
+            div()
+                .text_sm()
+                .font_weight(if active {
+                    FontWeight::SEMIBOLD
+                } else {
+                    FontWeight::NORMAL
+                })
+                .text_color(if active {
+                    theme::color::text()
+                } else {
+                    theme::color::text_dim()
+                })
+                .child(label),
+        )
+}
+
+pub fn status_footer(status: SharedString) -> Div {
+    div()
+        .h(px(48.0))
+        .w_full()
+        .flex()
+        .items_center()
+        .px_8()
+        .border_t_1()
+        .border_color(theme::color::border_muted())
+        .text_xs()
+        .text_color(theme::color::text_dim())
+        .child(status)
 }
 
 pub fn titlebar_button(
@@ -345,6 +362,73 @@ pub fn prose_hint(text: &'static str) -> Div {
         .child(text)
 }
 
+pub fn detail_row(label: &'static str, value: impl Into<String>) -> Div {
+    div()
+        .w_full()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_6()
+        .py_3()
+        .border_b_1()
+        .border_color(theme::color::border_muted())
+        .child(
+            div()
+                .text_sm()
+                .text_color(theme::color::text_dim())
+                .child(label),
+        )
+        .child(
+            div()
+                .text_sm()
+                .text_color(theme::color::text())
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(value.into()),
+        )
+}
+
+pub fn source_preparing_panel(filename: impl Into<String>) -> Div {
+    div()
+        .w_full()
+        .h(px(230.0))
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap_4()
+        .rounded_md()
+        .border_1()
+        .border_color(theme::color::border_muted())
+        .bg(theme::color::surface())
+        .child(
+            div()
+                .w(px(220.0))
+                .h(px(6.0))
+                .rounded_full()
+                .bg(theme::color::surface_hover())
+                .overflow_hidden()
+                .child(
+                    div()
+                        .w(px(132.0))
+                        .h(px(6.0))
+                        .rounded_full()
+                        .bg(theme::color::accent()),
+                ),
+        )
+        .child(
+            div()
+                .text_lg()
+                .text_color(theme::color::text())
+                .child("Reading source"),
+        )
+        .child(
+            div()
+                .text_sm()
+                .text_color(theme::color::text_muted())
+                .child(filename.into()),
+        )
+}
+
 pub fn iso_landing_well(id: &'static str) -> Stateful<Div> {
     div()
         .id(id)
@@ -355,7 +439,7 @@ pub fn iso_landing_well(id: &'static str) -> Stateful<Div> {
         .justify_center()
         .gap_3()
         .w_full()
-        .h(px(200.))
+        .h(px(230.))
         .p_8()
         .rounded_md()
         .border_dashed()
@@ -372,14 +456,14 @@ pub fn iso_landing_well(id: &'static str) -> Stateful<Div> {
                 .text_lg()
                 .text_center()
                 .text_color(theme::color::text())
-                .child("Drop your Windows ISO"),
+                .child("Drop or choose Windows ISO"),
         )
         .child(
             div()
                 .text_sm()
                 .text_center()
                 .text_color(theme::color::text_muted())
-                .child("Release to attach, or click anywhere here to browse."),
+                .child("Click this area to browse."),
         )
 }
 

@@ -79,13 +79,19 @@ That boundary should survive every experiment.
 
 ## Design Direction
 
-Ship a **cinematic staged flow**, not a persistent dashboard:
+Ship a **cinematic staged flow**, not a persistent dashboard or a direct WPF
+screen port:
 
-- Single primary window; each beat occupies the canvas (avoid three fixed rails).
-- **Landing** merges brand with **installer capture** (`ISOPath` intent): native browse dialog plus Explorer drop targets.
-- **Stance**: additive posture atop implicit `Minimal` — Fluent icon-led posture tiles + compact segmented `amd64`/`arm64` control (no checklist farm).
-- **Toolkit** (`Developer`) and **Desktop shell** (`DesktopUI`) are the only beats with extra granularity, still chip-based.
-- **Finish**: terse receipt pills, attached-source preview, explicit “Write intent”.
+- **Source**: installer capture (`ISOPath` intent), native browse dialog,
+  Explorer drop targets, then PowerShell-backed readiness.
+- **Profile Groups**: additive posture atop implicit `Minimal`; no debloat or
+  performance choice matrix.
+- **Developer Options**: appears only when `Developer` is selected.
+- **Desktop UI Options**: appears only when `DesktopUI` is selected.
+- **Identity And Disk**: account, target device, edition mode, and explicit disk
+  mode/layout intent.
+- **Review**: terse receipt, attached-source preview, explicit profile write.
+- **Build**: run/supervise the existing CLI and render progress.
 
 Optional groups remain coarse (`Minimal`, `Developer`, `CopilotPlus`, `Gaming`, `DesktopUI`). Conditional beats appear **only where** AGENTS/UI contract requires real knobs today.
 

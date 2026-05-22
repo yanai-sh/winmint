@@ -27,16 +27,19 @@ function Test-RepositoryNoTrackedGeneratedArtifacts {
         '^uup_dump(?:/|$)',
         '^\.claude(?:/|$)',
         '^\.superpowers(?:/|$)',
-        '^\.winmint-ui\.json$',
+        '^\.winws-ui\.json$',
         '^\.winmint-ui\.json$',
         '(^|/)bin/',
         '(^|/)obj/',
-        '^tests/fixtures/(?:iso|drivers|uupdump)/(?!README\.md$|\.gitignore$)',
+        '^tests/fixtures/(?:iso|drivers|uupdump)/(?!\.gitkeep$|\.gitignore$)',
         '\.(iso|wim|esd|swm|vhd|vhdx|log)$'
     )
 
     $violations = @(
         foreach ($path in $tracked) {
+            if (-not (Test-Path -LiteralPath (Join-Path $root $path))) {
+                continue
+            }
             foreach ($pattern in $generatedPatterns) {
                 if ($path -match $pattern) {
                     $path
@@ -61,11 +64,7 @@ function Test-RepositoryRequiredDocs {
         'docs\Project-Structure.md',
         'docs\Architecture-Plan.md',
         'docs\Distribution.md',
-        'tests\README.md',
-        'tests\fixtures\README.md',
-        'tests\fixtures\iso\README.md',
-        'tests\fixtures\drivers\README.md',
-        'tests\fixtures\uupdump\README.md'
+        'tests\README.md'
     )
 
     foreach ($relativePath in $required) {
@@ -176,13 +175,12 @@ function Test-RepositoryTrackedPathCasing {
         'tools/validation/Validate.ps1',
         'tools/validation/Modules/Repository.ps1',
         'tests/README.md',
-        'tests/fixtures/README.md',
-        'tests/fixtures/iso/README.md',
         'tests/fixtures/iso/.gitignore',
-        'tests/fixtures/drivers/README.md',
+        'tests/fixtures/iso/.gitkeep',
         'tests/fixtures/drivers/.gitignore',
-        'tests/fixtures/uupdump/README.md',
+        'tests/fixtures/drivers/.gitkeep',
         'tests/fixtures/uupdump/.gitignore',
+        'tests/fixtures/uupdump/.gitkeep',
         'src/WinMint/WinMint.ps1',
         'WinMint-GUI.ps1',
         'WinMint-LegacyUI.ps1',
@@ -213,6 +211,80 @@ function Test-RepositoryTrackedPathCasing {
     Write-Host 'OK repository tracked path casing'
 }
 
+function Test-RepositoryGitIgnorePolicy {
+    $gitignorePath = Join-Path $root '.gitignore'
+    if (-not (Test-Path -LiteralPath $gitignorePath -PathType Leaf)) {
+        Add-ValidationError 'Root .gitignore is missing.'
+        return
+    }
+
+    $lines = @(Get-Content -LiteralPath $gitignorePath | ForEach-Object { [string]$_ })
+    $rules = @(
+        $lines |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and -not $_.StartsWith('#') }
+    )
+
+    foreach ($duplicate in @($rules | Group-Object | Where-Object { $_.Count -gt 1 })) {
+        Add-ValidationError "Duplicate .gitignore rule: $($duplicate.Name)"
+    }
+
+    $requiredRules = @(
+        '*.iso',
+        '*.wim',
+        '*.esd',
+        '*.swm',
+        '*.vhd',
+        '*.vhdx',
+        'uup_dump/',
+        'dist/',
+        'input/',
+        'output/',
+        'temp/',
+        '.winws-ui.json',
+        '.winmint-ui.json',
+        'node_modules/',
+        'assets/drivers/**/*.msi',
+        'assets/drivers/**/_msi_extract_*/',
+        '**/bin/',
+        '**/obj/',
+        'tools/brand/.venv/',
+        '**/target/',
+        'apps/WinMint.GPUI/bin/',
+        'assets/cursors/_extract/',
+        'assets/cursors/*.zip',
+        'assets/cursors/*/png/',
+        '.claude/',
+        '.superpowers/'
+    )
+
+    foreach ($rule in $requiredRules) {
+        if ($rules -notcontains $rule) {
+            Add-ValidationError "Root .gitignore missing required rule: $rule"
+        }
+    }
+
+    foreach ($relativePath in @(
+            'tests\fixtures\iso\.gitignore',
+            'tests\fixtures\drivers\.gitignore',
+            'tests\fixtures\uupdump\.gitignore'
+        )) {
+        $path = Join-Path $root $relativePath
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            Add-ValidationError "Fixture .gitignore missing: $relativePath"
+            continue
+        }
+        $fixtureRules = @(Get-Content -LiteralPath $path | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        foreach ($rule in @('*', '!.gitignore', '!.gitkeep')) {
+            if ($fixtureRules -notcontains $rule) {
+                Add-ValidationError "Fixture .gitignore '$relativePath' missing rule: $rule"
+            }
+        }
+    }
+
+    Write-Host 'OK repository .gitignore policy'
+}
+
 function Test-RepositoryFixtureLayout {
     $fixtureDirs = @(
         'tests\fixtures\iso',
@@ -227,7 +299,7 @@ function Test-RepositoryFixtureLayout {
             continue
         }
 
-        foreach ($requiredFile in @('README.md', '.gitignore')) {
+        foreach ($requiredFile in @('.gitignore', '.gitkeep')) {
             $requiredPath = Join-Path $path $requiredFile
             if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
                 Add-ValidationError "Required test fixture file is missing: $relativePath\$requiredFile"
@@ -241,6 +313,7 @@ function Test-RepositoryFixtureLayout {
 function Test-RepositoryHygiene {
     Test-RepositoryNoTrackedGeneratedArtifacts
     Test-RepositoryRequiredDocs
+    Test-RepositoryGitIgnorePolicy
     Test-RepositoryPreCommitHook
     Test-RepositoryReleaseManifest
     Test-RepositoryTrackedPathCasing
