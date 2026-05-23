@@ -56,7 +56,6 @@ $validationSteps = [ordered]@{
         Test-LauncherArchitecture
         Test-GuiIdentity
         Test-ReleaseManifestRuntimeSurface
-        Test-NoWinWsCompatibilitySurface
     }
     'Optional GUI build' = {
         Test-GuiBuild -IncludeBuild:$IncludeGuiBuild

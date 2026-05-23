@@ -92,12 +92,34 @@
     },
     {
       "id": "edge-policy-copilotplus",
-      "description": "Reduce Edge recommendations, shopping/rewards/wallet noise, first-run prompts, feedback, and telemetry while preserving Copilot/sidebar, web widgets, and image enhancement.",
+      "description": "Deprecated compatibility group for the old CopilotPlus-preserving Edge posture.",
       "scope": "machine policy registry",
       "risk": "low",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Reduce Edge promotional, commerce, and telemetry noise while preserving Copilot+ sidebar capabilities.",
+      "intent": "Retained for manifest compatibility only; CopilotPlus now uses edge-policy-minimal plus windows-ai-full-policy.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "windows-ai-core-policy",
+      "description": "Disable baseline Windows AI data analysis and Windows Copilot policy surfaces.",
+      "scope": "machine policy registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Suppress baseline Windows AI policy surfaces without changing protected component-store state.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "windows-ai-full-policy",
+      "description": "Disable Copilot, Recall, Edge AI, inbox app AI features, and app access to system/generative AI models.",
+      "scope": "machine and default user policy registry",
+      "risk": "medium",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Provide WinMint's serviceable full AI removal posture without CBS surgery, TrustedInstaller tricks, or maintenance payloads.",
       "offline": true,
       "online": true
     },

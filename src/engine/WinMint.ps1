@@ -13,6 +13,7 @@ $PSNativeCommandUseErrorActionPreference = $true
 . "$PSScriptRoot\Private\Console\Host.ps1"
 . "$PSScriptRoot\Private\Console\Display.ps1"
 . "$PSScriptRoot\Private\Catalog.ps1"
+. "$PSScriptRoot\Private\Image\AiRemoval.ps1"
 . "$PSScriptRoot\Private\Image\Staging.ps1"
 . "$PSScriptRoot\Private\IsoStageCache.ps1"
 . "$PSScriptRoot\Private\IntermediatesCache.ps1"

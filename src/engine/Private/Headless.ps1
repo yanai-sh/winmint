@@ -479,7 +479,7 @@ function New-WinMintHeadlessProfileFromFlags {
         LiveInstallAudit = [bool]$LiveInstallAudit
         PhoneLink = [bool]$PhoneLink
         TweakDmaInterop = [bool]$DmaInterop
-        PrivLocation = -not [bool]$LocationServices
+        PrivLocation = if ($LocationServices) { $true } elseif ($NoLocationServices) { $false } else { $false }
     } -IncludeSecrets:($AccountMode -eq 'Local' -and -not [string]::IsNullOrWhiteSpace($Password))
 }
 

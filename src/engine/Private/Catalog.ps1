@@ -197,7 +197,7 @@ $script:RegistryTweaks = @(
     }
     @{ id = 'edge-policy-copilotplus'; description = 'Edge CopilotPlus cleanup (noise/privacy and commerce only; keeps Copilot/sidebar, web widgets, image enhancement)'
         scope = 'machine policy registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
-        intent = 'Reduce Edge promotional, commerce, and telemetry noise while preserving Copilot+ sidebar capabilities.'
+        intent = 'Deprecated compatibility group; CopilotPlus now uses the strict Edge policy and windows-ai-full-policy.'
         set        = @(
             @{ path = 'zSOFTWARE\Policies\Microsoft\EdgeUpdate'; name = 'CreateDesktopShortcutDefault'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'PersonalizationReportingEnabled'; type = 'REG_DWORD'; value = '0' },
@@ -212,6 +212,45 @@ $script:RegistryTweaks = @(
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'DiagnosticData'; type = 'REG_DWORD'; value = '0' },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'CryptoWalletEnabled'; type = 'REG_DWORD'; value = '0' },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'WalletDonationEnabled'; type = 'REG_DWORD'; value = '0' }
+        ); remove  = @()
+    }
+    @{ id = 'windows-ai-core-policy'; description = 'Windows AI core policy suppression'
+        scope = 'machine policy registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
+        intent = 'Disable baseline Windows AI data analysis and Copilot policy surfaces while preserving Windows servicing.'
+        set        = @(
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableAIDataAnalysis'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsCopilot'; name = 'TurnOffWindowsCopilot'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } }
+        ); remove  = @()
+    }
+    @{ id = 'windows-ai-full-policy'; description = 'Windows AI full serviceable removal policy'
+        scope = 'machine and default user policy registry'; risk = 'medium'; reversible = $true; phase = 'offline-image'
+        intent = 'Disable Copilot, Recall, Edge AI, inbox app AI features, and app access to system/generative AI models without CBS surgery.'
+        set        = @(
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableAIDataAnalysis'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableClickToDo'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsCopilot'; name = 'TurnOffWindowsCopilot'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'HubsSidebarEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'StandaloneHubsSidebarEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'CopilotPageContext'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'CopilotCDPPageContext'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'EdgeHistoryAISearchEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'BuiltInAIAPIsEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'AIGenThemesEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'ShareBrowsingHistoryWithCopilotSearchAllowed'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\WindowsNotepad'; name = 'DisableAIFeatures'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint'; name = 'DisableCocreator'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint'; name = 'DisableImageCreator'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint'; name = 'DisableGenerativeFill'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint'; name = 'DisableGenerativeErase'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint'; name = 'DisableRemoveBackground'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\AppPrivacy'; name = 'LetAppsAccessSystemAIModels'; type = 'REG_DWORD'; value = '2'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\AppPrivacy'; name = 'LetAppsAccessGenerativeAI'; type = 'REG_DWORD'; value = '2'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\WindowsCopilot'; name = 'AllowCopilotRuntime'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'ShowCopilotButton'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoInstalledPWAs'; name = 'CopilotPWAPreinstallCompleted'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications\Microsoft.Copilot_8wekyb3d8bbwe'; name = 'Disabled'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications\Microsoft.Copilot_8wekyb3d8bbwe'; name = 'DisabledByUser'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked'; name = '{CB3B0003-8088-4EDE-8769-8B354AB2FF8C}'; type = 'REG_SZ'; value = 'Ask Copilot'; undo = @{ action = 'delete' } }
         ); remove  = @()
     }
     @{ id = 'dual-boot-windows-policy'; description = 'Dual boot: disable Fast Startup and prevent automatic BitLocker device encryption'

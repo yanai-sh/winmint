@@ -1,0 +1,107 @@
+#Requires -Version 7.3
+
+function Get-WinMintAiRemovalCatalog {
+    $path = Get-WinMintPath -Name Config -ChildPath 'ai-removal.json'
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "AI removal catalog missing: $path"
+    }
+    Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+}
+
+function Resolve-WinMintAiRemovalPolicy {
+    param(
+        [object]$Removals,
+        [string]$SetupOption = 'Minimal'
+    )
+
+    $policy = [string](Get-WinMintProfileSetting $Removals 'aiPolicy' '')
+    if ([string]::IsNullOrWhiteSpace($policy)) {
+        $policy = if ($SetupOption -eq 'CopilotPlus') { 'ServiceableFull' } else { 'Core' }
+    }
+    if ($policy -notin @('Core', 'ServiceableFull', 'AggressiveExperimental')) {
+        throw "Unsupported AI removal policy '$policy'."
+    }
+    if ($policy -eq 'AggressiveExperimental' -and [string]$env:WINMINT_ENABLE_EXPERIMENTAL_AI_REMOVAL -ne '1') {
+        throw 'AggressiveExperimental AI removal is internal-only. Set WINMINT_ENABLE_EXPERIMENTAL_AI_REMOVAL=1 to enable it for development.'
+    }
+    return $policy
+}
+
+function New-WinMintAiRemovalConfig {
+    param(
+        [object]$Removals,
+        [string]$SetupOption = 'Minimal'
+    )
+
+    $catalog = Get-WinMintAiRemovalCatalog
+    $policy = Resolve-WinMintAiRemovalPolicy -Removals $Removals -SetupOption $SetupOption
+    $serviceablePrefixes = @()
+    if ($policy -in @('ServiceableFull', 'AggressiveExperimental')) {
+        $serviceablePrefixes = @($catalog.serviceableAppxPrefixes | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
+    }
+
+    [pscustomobject]@{
+        Policy = $policy
+        CatalogVersion = [int]$catalog.catalogVersion
+        AppxPrefixes = $serviceablePrefixes
+        OptionalFeatures = @($catalog.optionalFeatures | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
+        ServicesToDisable = @($catalog.servicesToDisable | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
+        ScheduledTaskPatternsToDisable = @($catalog.scheduledTaskPatternsToDisable | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
+        AggressiveExperimental = ($policy -eq 'AggressiveExperimental')
+        AggressiveExperimentalPatterns = if ($policy -eq 'AggressiveExperimental') {
+            @($catalog.aggressiveExperimentalPatterns | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
+        } else {
+            @()
+        }
+    }
+}
+
+function Test-WinMintNameMatchesAnyPrefix {
+    param(
+        [string]$Name,
+        [string[]]$Prefixes = @()
+    )
+
+    foreach ($prefix in @($Prefixes)) {
+        if ([string]::IsNullOrWhiteSpace($prefix)) { continue }
+        if ($Name -like "*$prefix*") { return $true }
+    }
+    return $false
+}
+
+function Invoke-WinMintOfflineAiFeatureRemoval {
+    param(
+        [ValidateNotNullOrEmpty()][string]$MountDir,
+        [Parameter(Mandatory)]$AiRemoval
+    )
+
+    if ([string]$AiRemoval.Policy -eq 'Core') { return }
+    $removed = [System.Collections.Generic.List[string]]::new()
+    $failed = [System.Collections.Generic.List[object]]::new()
+
+    Write-SectionHeader 'Image: Windows AI optional features'
+    Invoke-Action 'Removing serviceable Windows AI optional features' {
+        foreach ($feature in @($AiRemoval.OptionalFeatures)) {
+            if ([string]::IsNullOrWhiteSpace([string]$feature)) { continue }
+            try {
+                Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Disable-Feature', "/FeatureName:$feature", '/Remove') | Out-Null
+                $removed.Add([string]$feature) | Out-Null
+                LogOK "Removed optional feature payload: $feature"
+            }
+            catch {
+                $failed.Add([ordered]@{
+                    action = 'RemoveOptionalFeature'
+                    target = [string]$feature
+                    error = $_.Exception.Message
+                }) | Out-Null
+                LogWarn "AI optional feature not present or could not be removed: $feature"
+            }
+        }
+    }
+
+    if ($null -ne $script:WinMintBuildManifest -and $script:WinMintBuildManifest.removals.ai) {
+        $existing = @($script:WinMintBuildManifest.removals.ai.optionalFeaturesRemoved)
+        $script:WinMintBuildManifest.removals.ai.optionalFeaturesRemoved = @($existing + $removed.ToArray() | Sort-Object -Unique)
+        $script:WinMintBuildManifest.removals.ai.failed = @(@($script:WinMintBuildManifest.removals.ai.failed) + $failed.ToArray())
+    }
+}

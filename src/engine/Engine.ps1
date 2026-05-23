@@ -90,6 +90,7 @@ function New-WinMintBuildConfig {
     $privacyAdvertisingId = [bool](Get-WinMintProfileSetting $privacy 'advertisingId' $true)
     $privacyLocation = [bool](Get-WinMintProfileSetting $privacy 'location' $false)
     $privacyTimeline = [bool](Get-WinMintProfileSetting $privacy 'timeline' $true)
+    $aiRemoval = New-WinMintAiRemovalConfig -Removals $removals -SetupOption $setupOption
     $dmaSetupRegion = Resolve-WinMintDmaInteropSetupRegion
     $restoreUserLocale = [string](Get-WinMintProfileSetting $regional 'userLocale' '')
     $restoreHomeLocationGeoId = [int](Get-WinMintProfileSetting $regional 'homeLocationGeoId' (Resolve-WinMintRegionGeoId -CultureName $restoreUserLocale))
@@ -104,7 +105,13 @@ function New-WinMintBuildConfig {
     $registryTweaks.Add('uac-no-secure-desktop')
     $registryTweaks.Add('terminal-admin-context')
     if ($privacyTelemetry -or $privacyAdvertisingId) {
-        $registryTweaks.Add($(if ($setupOption -eq 'CopilotPlus') { 'edge-policy-copilotplus' } else { 'edge-policy-minimal' }))
+        $registryTweaks.Add('edge-policy-minimal')
+    }
+    if ([string]$aiRemoval.Policy -eq 'Core') {
+        $registryTweaks.Add('windows-ai-core-policy')
+    }
+    elseif ([string]$aiRemoval.Policy -in @('ServiceableFull', 'AggressiveExperimental')) {
+        $registryTweaks.Add('windows-ai-full-policy')
     }
     if ($diskMode -eq 'DualBootReserved') {
         $registryTweaks.Add('dual-boot-windows-policy')
@@ -120,12 +127,13 @@ function New-WinMintBuildConfig {
         $registryTweaks.Add('gamebar-policy')
     }
     $profileEffectiveAppx = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $removals 'effectiveAppx' @()))
-    $appxRemovalPrefixes = if ($profileEffectiveAppx.Count -gt 0) {
+    $baseAppxRemovalPrefixes = if ($profileEffectiveAppx.Count -gt 0) {
         @($profileEffectiveAppx)
     }
     else {
         @(Get-WinMintProfileAppxRemovalPrefix -Removals $removals)
     }
+    $appxRemovalPrefixes = @($baseAppxRemovalPrefixes + @($aiRemoval.AppxPrefixes) | Where-Object { $_ } | Sort-Object -Unique)
 
     $rawEditionMode = [string](Get-WinMintProfileSetting $target 'editionMode' 'TargetLicense')
     $editionMode = switch -Regex ($rawEditionMode) {
@@ -173,6 +181,7 @@ function New-WinMintBuildConfig {
             SetupHomeLocationGeoId = $dmaSetupHomeLocationGeoId
             RestoreUserLocale = $restoreUserLocale
             RestoreHomeLocationGeoId = $restoreHomeLocationGeoId
+            RestoreLocationServices = $privacyLocation
             Policy = if ($tweakDmaInterop) {
                 'Opt-in DMA interoperability uses an EEA setup region, disables automatic time-zone updates, then restores the configured regional defaults after successful FirstLogon.'
             } else {
@@ -192,6 +201,7 @@ function New-WinMintBuildConfig {
         Wsl2Distro = $wsl2Distro
         Wsl2Distros = @($wsl2Distros)
         AppxPackages = @($appxRemovalPrefixes)
+        AiRemoval = $aiRemoval
         RegistryTweaks = $registryTweaks.ToArray()
         Features = $features.ToArray()
         Tweaks = [pscustomobject]@{

@@ -10,6 +10,41 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
+function Test-WinMintGuiAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function ConvertTo-WinMintGuiQuotedArgument {
+    param([Parameter(Mandatory)][string]$Value)
+
+    '"' + ($Value -replace '"', '\"') + '"'
+}
+
+if (-not (Test-WinMintGuiAdministrator)) {
+    $forwardArgs = [System.Collections.Generic.List[string]]::new()
+    $forwardArgs.Add('-NoProfile')
+    $forwardArgs.Add('-ExecutionPolicy')
+    $forwardArgs.Add('Bypass')
+    $forwardArgs.Add('-File')
+    $forwardArgs.Add($PSCommandPath)
+    if ($SystemTitlebar) { $forwardArgs.Add('-SystemTitlebar') }
+    if ($CustomTitlebar) { $forwardArgs.Add('-CustomTitlebar') }
+    foreach ($arg in @($AppArgs | Where-Object { $_ -ne '--' })) {
+        $forwardArgs.Add($arg)
+    }
+
+    $elevated = Start-Process `
+        -FilePath (Get-Process -Id $PID).Path `
+        -ArgumentList (($forwardArgs | ForEach-Object { ConvertTo-WinMintGuiQuotedArgument -Value ([string]$_) }) -join ' ') `
+        -Verb RunAs `
+        -WindowStyle Minimized `
+        -Wait `
+        -PassThru
+    exit $elevated.ExitCode
+}
+
 . "$PSScriptRoot\src\engine\Core.ps1"
 
 $binary = Get-WinMintPath -Name GuiBinary

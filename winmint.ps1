@@ -184,6 +184,17 @@ function Find-WinMintGuiScript {
     throw "WinMint-GUI.ps1 was not found under '$Root'. This release is missing the packaged GPUI launcher."
 }
 
+function Find-WinMintGuiExecutable {
+    param([string]$Root)
+
+    $candidate = Join-Path $Root 'apps\gui\bin\WinMint-GUI.exe'
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        return $candidate
+    }
+
+    throw "WinMint-GUI.exe was not found under '$Root'. This release is missing the packaged GPUI binary."
+}
+
 function Resolve-WinMintLaunchMode {
     param(
         [string]$RequestedMode,
@@ -206,6 +217,12 @@ function Resolve-WinMintLaunchMode {
     return $RequestedMode
 }
 
+function ConvertTo-WinMintBootstrapQuotedArgument {
+    param([Parameter(Mandatory)][string]$Value)
+
+    '"' + ($Value -replace '"', '\"') + '"'
+}
+
 function Add-WinMintArgumentValue {
     param(
         [Parameter(Mandatory)][System.Collections.Generic.List[string]]$Arguments,
@@ -219,6 +236,34 @@ function Add-WinMintArgumentValue {
 
     $Arguments.Add("-$Name")
     $Arguments.Add($Value)
+}
+
+function New-WinMintGuiExecutableArguments {
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    if ($DryRun) { $arguments.Add('--dry-run') }
+    return $arguments.ToArray()
+}
+
+function Start-WinMintElevatedGui {
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$ArgumentList = @()
+    )
+
+    $startArgs = @{
+        FilePath = $FilePath
+        Verb = 'RunAs'
+        Wait = $true
+        PassThru = $true
+    }
+    if ($ArgumentList.Count -gt 0) {
+        $startArgs.ArgumentList = (($ArgumentList | ForEach-Object {
+            ConvertTo-WinMintBootstrapQuotedArgument -Value ([string]$_)
+        }) -join ' ')
+    }
+
+    $process = Start-Process @startArgs
+    return $process.ExitCode
 }
 
 function New-WinMintLaunchArguments {
@@ -440,11 +485,18 @@ if ($NoLaunch) {
 }
 
 $pwshExe = Get-WinMintPowerShell
-$entryScript = switch ($launchMode) {
-    'Gui' { $guiScript }
-    'Headless' { Find-WinMintCliScript -Root $versionRoot }
-}
-$arguments = New-WinMintLaunchArguments -ScriptPath $entryScript -LaunchMode $launchMode
 
 Write-WinMintBootstrapLog "Starting WinMint $launchMode."
+if ($launchMode -eq 'Gui') {
+    $guiExe = Find-WinMintGuiExecutable -Root $versionRoot
+    $guiArguments = New-WinMintGuiExecutableArguments
+    $exitCode = Start-WinMintElevatedGui -FilePath $guiExe -ArgumentList $guiArguments
+    if ($exitCode -ne 0) {
+        exit $exitCode
+    }
+    return
+}
+
+$entryScript = Find-WinMintCliScript -Root $versionRoot
+$arguments = New-WinMintLaunchArguments -ScriptPath $entryScript -LaunchMode $launchMode
 & $pwshExe @arguments

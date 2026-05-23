@@ -20,10 +20,10 @@ $bootstrap = Get-Content -LiteralPath (Get-WinMintPath -Name RepoRoot -ChildPath
 if ($bootstrap -notmatch '\[string\]\$Mode = ''Gui''') {
     Add-LauncherFailure 'Default bootstrap mode must be Gui.'
 }
-if ($bootstrap -notmatch '''Gui''\s*\{\s*\$guiScript\s*\}') {
-    Add-LauncherFailure 'Gui launch mode must use the packaged GUI launcher.'
+if ($bootstrap -notmatch 'Find-WinMintGuiExecutable') {
+    Add-LauncherFailure 'Gui launch mode must resolve the packaged GUI executable.'
 }
-if ($bootstrap -notmatch "'Headless'\s*\{\s*Find-WinMintCliScript") {
+if ($bootstrap -notmatch '\$entryScript\s*=\s*Find-WinMintCliScript') {
     Add-LauncherFailure 'Headless launch mode must resolve WinMint-CLI.ps1.'
 }
 

@@ -15,15 +15,12 @@ pub mod asset {
     use super::*;
 
     pub fn logo() -> PathBuf {
-        PathBuf::from("assets")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("assets")
             .join("brand")
-            .join("WinMint_inkscape.svg")
-    }
-
-    pub fn mark() -> PathBuf {
-        PathBuf::from("assets")
-            .join("brand")
-            .join("winmint-mark.png")
+            .join("winmint.png")
     }
 }
 

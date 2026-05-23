@@ -89,8 +89,19 @@ function New-WinMintSetupProfile {
         setupComplete = [ordered]@{
             preserveWindowsUpdate = ([string]$BuildConfig.Tweaks.UpdatePolicy -eq 'All')
             disableVirtualDesktopFlyout = [bool]$BuildConfig.InstallWindhawk
-            preserveMicrosoftCopilot = ([string]$BuildConfig.SetupOption -eq 'CopilotPlus')
+            preserveMicrosoftCopilot = $false
             removeRecall = $true
+        }
+        aiRemoval = [ordered]@{
+            policy = [string]$BuildConfig.AiRemoval.Policy
+            catalogVersion = [int]$BuildConfig.AiRemoval.CatalogVersion
+            appxPrefixes = @($BuildConfig.AiRemoval.AppxPrefixes)
+            removeRecall = ([string]$BuildConfig.AiRemoval.Policy -ne 'Core')
+            disableAiServices = ([string]$BuildConfig.AiRemoval.Policy -ne 'Core')
+            disableAiTasks = ([string]$BuildConfig.AiRemoval.Policy -ne 'Core')
+            aggressiveExperimental = [bool]$BuildConfig.AiRemoval.AggressiveExperimental
+            servicesToDisable = @($BuildConfig.AiRemoval.ServicesToDisable)
+            scheduledTaskPatternsToDisable = @($BuildConfig.AiRemoval.ScheduledTaskPatternsToDisable)
         }
         windowsPolicy = [ordered]@{
             dualBoot = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
@@ -107,6 +118,7 @@ function New-WinMintSetupProfile {
                 restoreTimeZoneId = [string]$BuildConfig.TimeZoneId
                 restoreUserLocale = [string]$BuildConfig.UserLocale
                 restoreHomeLocationGeoId = [int]$BuildConfig.HomeLocationGeoId
+                restoreLocationServices = [bool]$BuildConfig.DmaInterop.RestoreLocationServices
             }
         }
         privacy = [ordered]@{

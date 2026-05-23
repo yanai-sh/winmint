@@ -2,10 +2,11 @@
 // Palette of composed controls; GPUI is splash-only for now but posture/tiles
 // remain for when multi-beat authoring returns.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
-    div, img, prelude::*, px, App, ClickEvent, Div, ExternalPaths, FontWeight, SharedString,
+    div, img, prelude::*, px, App, ClickEvent, Div, ExternalPaths, FontWeight, Image, SharedString,
     Stateful, Window, WindowControlArea,
 };
 use gpui_animation::{
@@ -53,16 +54,16 @@ pub fn brand_wordmark(text_size: f32, line_height: f32) -> Div {
         .child(div().text_color(theme::color::brand_mint()).child("Mint"))
 }
 
-fn mark_image(size: f32) -> gpui::Img {
-    img(theme::asset::mark()).w(px(size)).h(px(size))
-}
-
-pub fn splash_brand_lockup() -> Div {
-    div()
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(img(theme::asset::logo()).w(px(220.0)).h(px(220.0)))
+pub fn splash_brand_lockup(logo: Arc<Image>) -> Div {
+    div().flex().items_center().justify_center().child(
+        img(logo)
+            .id("winmint-splash-logo")
+            .w(px(220.0))
+            .h(px(220.0))
+            .with_fallback(|| {
+                brand_wordmark(SPLASH_WORDMARK_TEXT, SPLASH_WORDMARK_LH).into_any_element()
+            }),
+    )
 }
 
 pub fn status_footer(status: SharedString) -> Div {

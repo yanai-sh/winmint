@@ -241,7 +241,7 @@ function Show-BuildWelcomeHero {
     if ([string]::IsNullOrWhiteSpace($dryLine)) {
         $dryLine = '[dim grey70]-DryRun[/] [dodgerblue1]·[/] [dim grey70]read-only; no WIM mount, ISO write, disk prep, or USB.[/]'
     }
-    $heroPngPath = Join-Path (Get-WinMintRepositoryRoot) 'assets\brand\WinMint.svg'
+    $heroPngPath = Join-Path (Get-WinMintRepositoryRoot) 'assets\brand\winmint.png'
     $heroMaxW = [Math]::Max(32, [int]($cols * 0.75))
     Write-Verbose "Splash image: MaxWidth=$heroMaxW (terminal ${cols} cols)."
     $bgHex   = Get-TerminalBackgroundColor

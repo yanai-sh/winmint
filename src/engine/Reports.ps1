@@ -27,6 +27,7 @@ function New-WinMintBuildReport {
             userLocale = $Config.UserLocale
             homeLocationGeoId = $Config.HomeLocationGeoId
             dmaInterop = $Config.DmaInterop
+            aiRemoval = $Config.AiRemoval
         }
         setupScripts = $Config.SetupScripts
         assets = $Config.Assets
@@ -377,8 +378,14 @@ function Initialize-WinMintBuildManifest {
                 setupCountry = [string]$Config.DmaInterop.SetupCountry
                 setupUserLocale = [string]$Config.SetupUserLocale
                 setupHomeLocationGeoId = [int]$Config.SetupHomeLocationGeoId
+                setupLatchedCountry = [string]$Config.DmaInterop.SetupCountry
+                setupLatchedGeoId = [int]$Config.SetupHomeLocationGeoId
                 restoreUserLocale = [string]$Config.UserLocale
                 restoreHomeLocationGeoId = [int]$Config.HomeLocationGeoId
+                restoredUserLocale = [string]$Config.UserLocale
+                restoredHomeLocationGeoId = [int]$Config.HomeLocationGeoId
+                restoredTimeZoneId = [string]$Config.TimeZoneId
+                locationServicesPolicy = if ([bool]$Config.Privacy.Location) { 'enabled' } else { 'disabled' }
             }
         }
         removals            = [ordered]@{
@@ -389,6 +396,26 @@ function Initialize-WinMintBuildManifest {
             languagePackagesRemoved = @()
             languagePackagesRemovedCount = 0
             featuresEnabled     = @($Config.Features)
+            ai = [ordered]@{
+                policy = [string]$Config.AiRemoval.Policy
+                catalogVersion = [int]$Config.AiRemoval.CatalogVersion
+                appxPrefixes = @($Config.AiRemoval.AppxPrefixes)
+                appxRemoved = @()
+                optionalFeaturesRemoved = @()
+                registryPoliciesApplied = @(
+                    @($Config.RegistryTweaks) |
+                        Where-Object { $_ -in @('windows-ai-core-policy', 'windows-ai-full-policy') }
+                )
+                servicesDisabled = @()
+                scheduledTasksDisabled = @()
+                aggressiveActions = @(
+                    if ([bool]$Config.AiRemoval.AggressiveExperimental) {
+                        @($Config.AiRemoval.AggressiveExperimentalPatterns)
+                    }
+                )
+                failed = @()
+                recoveryBundlePath = ''
+            }
         }
         sizeDelta           = [ordered]@{
             sourceIsoBytes = 0
@@ -560,6 +587,110 @@ function Save-WinMintTweakAuditArtifacts {
     return [pscustomobject]@{ Json = $jsonPath; Markdown = $mdPath; Rollback = $regPath }
 }
 
+function Save-WinMintRecoveryBundle {
+    param([Parameter(Mandatory)][string]$OutputDir)
+
+    if ($null -eq $script:WinMintBuildManifest) { return $null }
+    $recoveryDir = Join-Path $OutputDir 'recovery'
+    $null = New-Item -ItemType Directory -Path $recoveryDir -Force
+
+    $aiScriptPath = Join-Path $recoveryDir 'Recover-WinMintAiPolicy.ps1'
+    $dmaScriptPath = Join-Path $recoveryDir 'Recover-WinMintDmaRegion.ps1'
+    $jsonPath = Join-Path $recoveryDir 'WinMint-Recovery.json'
+    $readmePath = Join-Path $recoveryDir 'README.md'
+
+    $aiScript = @'
+#Requires -Version 5.1
+[CmdletBinding(SupportsShouldProcess)]
+param()
+
+$ErrorActionPreference = 'Continue'
+$policyRoots = @(
+  'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI',
+  'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot',
+  'HKLM:\SOFTWARE\Policies\Microsoft\Edge',
+  'HKLM:\SOFTWARE\Policies\WindowsNotepad',
+  'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint',
+  'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy'
+)
+foreach ($path in $policyRoots) {
+  if (Test-Path -LiteralPath $path) {
+    if ($PSCmdlet.ShouldProcess($path, 'remove WinMint AI policy key')) {
+      Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+}
+foreach ($svcName in @('WSAIFabricSvc')) {
+  $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+  if ($svc -and $PSCmdlet.ShouldProcess($svcName, 'set service startup to manual')) {
+    Set-Service -Name $svcName -StartupType Manual -ErrorAction SilentlyContinue
+  }
+}
+Get-ScheduledTask -ErrorAction SilentlyContinue |
+  Where-Object { $_.TaskName -match '(?i)Recall|WindowsAI|Copilot' -or $_.TaskPath -match '(?i)Recall|WindowsAI|Copilot' } |
+  ForEach-Object {
+    if ($PSCmdlet.ShouldProcess("$($_.TaskPath)$($_.TaskName)", 'enable scheduled task')) {
+      Enable-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -ErrorAction SilentlyContinue | Out-Null
+    }
+  }
+Write-Host 'WinMint AI policy rollback finished. Removed provisioned AppX/optional feature payloads are not restored by this script.'
+'@
+    Set-Content -LiteralPath $aiScriptPath -Value $aiScript -Encoding UTF8
+
+    $dma = $script:WinMintBuildManifest.regional.dmaInterop
+    $dmaScript = @"
+#Requires -Version 5.1
+[CmdletBinding()]
+param(
+  [string]`$TimeZoneId = '$([string]$dma.restoredTimeZoneId)',
+  [string]`$UserLocale = '$([string]$dma.restoredUserLocale)',
+  [int]`$HomeLocationGeoId = $([int]$dma.restoredHomeLocationGeoId)
+)
+
+`$ErrorActionPreference = 'Continue'
+if (-not [string]::IsNullOrWhiteSpace(`$TimeZoneId)) { Set-TimeZone -Id `$TimeZoneId -ErrorAction SilentlyContinue }
+if (`$HomeLocationGeoId -gt 0) { Set-WinHomeLocation -GeoId `$HomeLocationGeoId -ErrorAction SilentlyContinue }
+if (-not [string]::IsNullOrWhiteSpace(`$UserLocale)) { Set-Culture -CultureInfo `$UserLocale -ErrorAction SilentlyContinue }
+if (Get-Command Copy-UserInternationalSettingsToSystem -ErrorAction SilentlyContinue) {
+  Copy-UserInternationalSettingsToSystem -WelcomeScreen `$true -NewUser `$true -ErrorAction SilentlyContinue
+}
+reg.exe add HKLM\SYSTEM\CurrentControlSet\Services\tzautoupdate /v Start /t REG_DWORD /d 4 /f | Out-Null
+Stop-Service -Name tzautoupdate -ErrorAction SilentlyContinue
+Set-Service -Name tzautoupdate -StartupType Disabled -ErrorAction SilentlyContinue
+Write-Host 'WinMint DMA-visible region restore finished.'
+"@
+    Set-Content -LiteralPath $dmaScriptPath -Value $dmaScript -Encoding UTF8
+
+    $recovery = [ordered]@{
+        generatedAt = [DateTimeOffset]::Now.ToString('o')
+        aiPolicy = $script:WinMintBuildManifest.removals.ai.policy
+        aiRecoveryScript = $aiScriptPath
+        dmaRecoveryScript = $dmaScriptPath
+        cannotAutomaticallyRestore = @(
+            'Removed provisioned AppX payloads',
+            'Removed optional feature payloads',
+            'Any CBS packages removed by internal experimental mode'
+        )
+    }
+    $recovery | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+
+    $readme = @(
+        '# WinMint Recovery Bundle'
+        ''
+        'These scripts reverse only serviceable policy, service, task, and visible-region state.'
+        ''
+        'They do not reinstall AppX packages, optional feature payloads, or CBS packages removed from the image. To restore those payloads, rebuild from the original source ISO, reinstall from Microsoft Store/winget where available, or perform a Windows repair install.'
+        ''
+        'This folder is a build output sidecar. It is not staged into the installed Windows system and does not create maintenance tasks.'
+    ) -join "`n"
+    Set-Content -LiteralPath $readmePath -Value $readme -Encoding UTF8
+
+    if ($script:WinMintBuildManifest.removals.ai) {
+        $script:WinMintBuildManifest.removals.ai.recoveryBundlePath = $recoveryDir
+    }
+    return [pscustomobject]@{ Directory = $recoveryDir; Ai = $aiScriptPath; Dma = $dmaScriptPath; Json = $jsonPath; Readme = $readmePath }
+}
+
 function Add-WinMintManifestPayload {
     param(
         [Parameter(Mandatory)][string]$Name,
@@ -635,6 +766,7 @@ function Save-WinMintBuildManifest {
 
     $script:WinMintBuildManifest.payloads = @(Get-WinMintDeduplicatedManifestPayload -Payloads @($script:WinMintBuildManifest.payloads))
     $null = Save-WinMintTweakAuditArtifacts -OutputDir $OutputDir
+    $null = Save-WinMintRecoveryBundle -OutputDir $OutputDir
 
     $path = Join-Path $OutputDir 'WinMint-BuildManifest.json'
     $script:WinMintBuildManifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $path -Encoding UTF8

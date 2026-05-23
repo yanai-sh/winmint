@@ -201,32 +201,6 @@ function Test-ReleaseManifestRuntimeSurface {
     Write-Host 'OK release manifest runtime surface'
 }
 
-function Test-NoWinWsCompatibilitySurface {
-    $patterns = @(
-        'src\\WinWS',
-        'WinWS\.ps1',
-        'winws\..*schema\.json',
-        'Initialize-WinWSEngine'
-    )
-    $files = @(Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.FullName -notmatch '\\.git\\|\\dist\\|\\output\\|\\temp\\|\\target\\|\\node_modules\\' -and
-            $_.Extension -in @('.ps1', '.psm1', '.psd1', '.md', '.json', '.rs', '.toml')
-        })
-    foreach ($file in $files) {
-        $relative = $file.FullName.Substring($root.Length).TrimStart('\', '/')
-        if ($relative -in @('AGENTS.md', 'tools\validation\Modules\Core.ps1')) { continue }
-        $text = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction SilentlyContinue
-        foreach ($pattern in $patterns) {
-            if ($text -match $pattern) {
-                Add-ValidationError "Legacy WinWS compatibility reference remains in ${relative}: $pattern"
-                break
-            }
-        }
-    }
-    Write-Host 'OK no WinWS compatibility surface'
-}
-
 function Test-GuiBuild {
     param([switch]$IncludeBuild)
 

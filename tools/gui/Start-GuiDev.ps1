@@ -240,7 +240,8 @@ if ([string]::IsNullOrWhiteSpace($targetVsArchitecture)) {
 }
 $hostVsArchitecture = Get-NativeVsHostArchitecture
 
-Push-Location $root
+$guiApp = Get-WinMintPath -Name GuiApp
+Push-Location $guiApp
 try {
     $vsDevCmd = Get-VsDevCmdPath
     if ([string]::IsNullOrWhiteSpace($vsDevCmd)) {

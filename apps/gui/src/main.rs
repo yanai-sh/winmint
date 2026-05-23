@@ -8,12 +8,13 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Arc;
 
 use components as ui;
 use gpui::{
     div, prelude::*, px, size, App, Application, AssetSource, Bounds, Context, Div, ExternalPaths,
-    SharedString, TitlebarOptions, Window, WindowBackgroundAppearance, WindowBounds,
-    WindowControlArea, WindowOptions,
+    Image, ImageFormat, SharedString, TitlebarOptions, Window, WindowBackgroundAppearance,
+    WindowBounds, WindowControlArea, WindowOptions,
 };
 use state::{
     BuildIntent, BuildRunState, ManifestViewState, SourceProbeState, SourceProbeStatus,
@@ -53,6 +54,7 @@ struct WinMintGui {
     build_run: BuildRunState,
     manifest: ManifestViewState,
     view: ViewState,
+    logo: Arc<Image>,
 }
 
 impl WinMintGui {
@@ -63,6 +65,7 @@ impl WinMintGui {
             build_run: BuildRunState::default(),
             manifest: ManifestViewState::default(),
             view: ViewState::new(custom_titlebar),
+            logo: load_brand_logo(),
         }
     }
 
@@ -99,7 +102,7 @@ impl WinMintGui {
         self.source.editions.clear();
         self.source.detected_architecture = "".into();
         self.build_run.status = format!(
-            "Checking {}.",
+            "Selected {}.",
             self.source
                 .iso_path
                 .as_str()
@@ -109,6 +112,8 @@ impl WinMintGui {
         )
         .into();
 
+        self.write_intent(cx);
+        self.build_run.status = "Source selected.".into();
         self.probe_source(cx);
         cx.notify();
     }
@@ -139,16 +144,12 @@ impl WinMintGui {
                 match probe {
                     Ok(metadata) if metadata.ok => {
                         let arch = metadata.architecture.clone();
-                        let edition_count = metadata.editions.len();
                         this.source.mark_ready(metadata);
                         if !arch.is_empty() {
                             this.intent.architecture = arch.into();
                         }
-                        this.build_run.status = format!(
-                            "Source ready: {edition_count} edition(s), {}.",
-                            this.intent.architecture
-                        )
-                        .into();
+                        this.write_intent(cx);
+                        this.build_run.status = "Source selected.".into();
                     }
                     Ok(metadata) => {
                         let error = if metadata.error.is_empty() {
@@ -247,25 +248,6 @@ impl WinMintGui {
         format!("…{}", &s[s.len().saturating_sub(45)..])
     }
 
-    fn edition_summary(&self) -> String {
-        if self.source.editions.is_empty() {
-            return "No editions detected yet.".to_string();
-        }
-        let visible = self
-            .source
-            .editions
-            .iter()
-            .take(3)
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        if self.source.editions.len() > 3 {
-            format!("{visible}, +{} more", self.source.editions.len() - 3)
-        } else {
-            visible
-        }
-    }
-
     fn footer_status(&self) -> SharedString {
         if self.manifest.manifest_path.is_empty() {
             return self.build_run.status.clone();
@@ -326,16 +308,46 @@ impl WinMintGui {
                 }),
             )
             .into_any_element(),
-            SourceProbeStatus::Preparing => ui::source_preparing_panel(
-                self.source
-                    .iso_path
-                    .as_str()
-                    .rsplit(['\\', '/'])
-                    .next()
-                    .unwrap_or(self.source.iso_path.as_str())
-                    .to_string(),
-            )
-            .into_any_element(),
+            SourceProbeStatus::Preparing => div()
+                .w(px(360.0))
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_4()
+                .rounded_md()
+                .border_1()
+                .border_color(theme::color::border_muted())
+                .bg(theme::color::surface())
+                .px_4()
+                .py_3()
+                .child(
+                    div()
+                        .min_w(px(0.0))
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme::color::text())
+                                .child("Source selected"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme::color::text_dim())
+                                .child(self.source_display_tail()),
+                        ),
+                )
+                .child(
+                    ui::secondary_button("pick-different-selected", "Change").on_click(
+                        cx.listener(|this, _, _, cx| {
+                            this.reset_source_pick(cx);
+                        }),
+                    ),
+                )
+                .into_any_element(),
             SourceProbeStatus::Failed => ui::surface()
                 .w_full()
                 .h(px(250.0))
@@ -348,7 +360,10 @@ impl WinMintGui {
                         .flex()
                         .justify_between()
                         .items_center()
-                        .child(ui::section_label("Source check failed", "Choose a different ISO or retry after fixing the source."))
+                        .child(ui::section_label(
+                            "Source check failed",
+                            "Choose a different ISO or retry after fixing the source.",
+                        ))
                         .child(ui::status_badge(self.source.status)),
                 )
                 .child(ui::callout(self.source.error.to_string(), true))
@@ -357,80 +372,74 @@ impl WinMintGui {
                         .flex()
                         .gap_3()
                         .child(
-                            ui::secondary_button("retry-source-probe", "Retry")
-                                .on_click(cx.listener(|this, _, _, cx| {
+                            ui::secondary_button("retry-source-probe", "Retry").on_click(
+                                cx.listener(|this, _, _, cx| {
                                     this.source.status = SourceProbeStatus::Preparing;
                                     this.build_run.status = "Checking source again.".into();
                                     this.probe_source(cx);
                                     cx.notify();
-                                })),
+                                }),
+                            ),
                         )
                         .child(
-                            ui::secondary_button("pick-different-after-error", "Choose a different ISO")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.reset_source_pick(cx);
-                                })),
+                            ui::secondary_button(
+                                "pick-different-after-error",
+                                "Choose a different ISO",
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.reset_source_pick(cx);
+                            })),
                         ),
                 )
                 .into_any_element(),
             SourceProbeStatus::Ready => div()
-                .w_full()
-                .h(px(280.0))
+                .w(px(360.0))
                 .flex()
-                .flex_col()
-                .justify_center()
+                .items_center()
+                .justify_between()
                 .gap_4()
                 .rounded_md()
                 .border_1()
                 .border_color(theme::color::border_muted())
                 .bg(theme::color::surface())
-                .p_6()
+                .px_4()
+                .py_3()
                 .child(
                     div()
+                        .min_w(px(0.0))
                         .flex()
                         .flex_col()
-                        .gap_3()
+                        .gap_1()
                         .child(
                             div()
-                                .flex()
-                                .justify_between()
-                                .items_center()
-                                .child(ui::section_label("Source ready", "WinMint read the installer metadata through the PowerShell bridge."))
-                                .child(ui::status_badge(self.source.status)),
+                                .text_sm()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme::color::text())
+                                .child("Source selected"),
                         )
-                        .child(ui::detail_row("ISO", self.source_display_tail()))
-                        .child(ui::detail_row("Architecture", self.intent.architecture.to_string()))
-                        .child(ui::detail_row("Editions", self.edition_summary())),
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme::color::text_dim())
+                                .child(self.source_display_tail()),
+                        ),
                 )
                 .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .flex_wrap()
-                        .gap_3()
-                        .justify_start()
-                        .items_center()
-                        .child(
-                            ui::primary_button("continue-source", "Continue").on_click(cx.listener(
-                                |this, _, _, cx| {
-                                    this.write_intent(cx);
-                                },
-                            )),
-                        )
-                        .child(
-                            ui::secondary_button("pick-different", "Choose a different ISO…")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.reset_source_pick(cx);
-                                })),
-                        ),
+                    ui::secondary_button("pick-different", "Change").on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.reset_source_pick(cx);
+                        },
+                    )),
                 )
                 .into_any_element(),
         };
 
         let hint = match self.source.status {
             SourceProbeStatus::Empty => SPLASH_STATUS_PICK,
-            SourceProbeStatus::Preparing => "Checking source.",
-            SourceProbeStatus::Ready => "Source ready.",
+            SourceProbeStatus::Preparing => {
+                "Source selected. WinMint is checking it in the background."
+            }
+            SourceProbeStatus::Ready => "Source selected.",
             SourceProbeStatus::Failed => "Source needs attention.",
         };
 
@@ -448,7 +457,7 @@ impl WinMintGui {
                     .flex_col()
                     .items_center()
                     .gap_3()
-                    .child(ui::splash_brand_lockup())
+                    .child(ui::splash_brand_lockup(self.logo.clone()))
                     .child(
                         div()
                             .text_lg()
@@ -490,6 +499,23 @@ impl WinMintGui {
                 ),
             )
             .child(ui::status_footer(self.footer_status()))
+    }
+}
+
+fn load_brand_logo() -> Arc<Image> {
+    let path = theme::asset::logo();
+    match fs::read(&path) {
+        Ok(bytes) => {
+            eprintln!("WinMint GUI loaded brand logo: {}", path.display());
+            Arc::new(Image::from_bytes(ImageFormat::Png, bytes))
+        }
+        Err(err) => {
+            eprintln!(
+                "WinMint GUI could not load brand logo '{}': {err}",
+                path.display()
+            );
+            Arc::new(Image::empty())
+        }
     }
 }
 

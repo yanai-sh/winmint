@@ -85,6 +85,32 @@ function Resolve-WinMintDmaInteropSetupRegion {
     }
 }
 
+function Get-WinMintProfileAiPolicy {
+    param(
+        [object]$Settings,
+        [string]$SetupOption = 'Minimal'
+    )
+
+    $raw = [string](Get-WinMintProfileSetting $Settings 'AiPolicy' '')
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        $raw = [string](Get-WinMintProfileSetting $Settings 'AIPolicy' '')
+    }
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        $raw = if ($SetupOption -eq 'CopilotPlus') { 'ServiceableFull' } else { 'Core' }
+    }
+    switch -Regex ($raw) {
+        '^(Core|Minimal|Default)$' { return 'Core' }
+        '^(ServiceableFull|Full|FullServiceable)$' { return 'ServiceableFull' }
+        '^(AggressiveExperimental|ExperimentalAggressive|Experimental)$' {
+            if ([string]$env:WINMINT_ENABLE_EXPERIMENTAL_AI_REMOVAL -ne '1') {
+                throw 'AggressiveExperimental AI removal is internal-only. Set WINMINT_ENABLE_EXPERIMENTAL_AI_REMOVAL=1 to enable it for development.'
+            }
+            return 'AggressiveExperimental'
+        }
+        default { throw "Unsupported AI removal policy '$raw'." }
+    }
+}
+
 function ConvertTo-WinMintProfileGroupArray {
     param([object]$Settings)
 
@@ -319,6 +345,7 @@ function New-WinMintBuildProfile {
     $removeGaming = [bool](Get-WinMintProfileSetting $Settings 'RemoveGaming' (-not ($profileGroups -contains 'Gaming')))
     $removeCommunication = [bool](Get-WinMintProfileSetting $Settings 'RemoveCommunication' $true)
     $removeMicrosoftApps = [bool](Get-WinMintProfileSetting $Settings 'RemoveMicrosoftApps' $true)
+    $aiPolicy = Get-WinMintProfileAiPolicy -Settings $Settings -SetupOption $setupOption
     $userLocale = [string](Get-WinMintProfileSetting $Settings 'UserLocale' '')
     $homeLocationGeoId = [int](Get-WinMintProfileSetting $Settings 'HomeLocationGeoId' (Resolve-WinMintRegionGeoId -CultureName $userLocale))
     $effectiveAppxSettings = [ordered]@{
@@ -401,19 +428,15 @@ function New-WinMintBuildProfile {
             gaming = $removeGaming
             communication = $removeCommunication
             microsoftApps = $removeMicrosoftApps
+            aiPolicy = $aiPolicy
             effectiveAppx = @(
-                $effectiveAppx = @(Get-WinMintEffectiveAppxRemovalPrefix -Settings $effectiveAppxSettings)
-                if ($setupOption -eq 'CopilotPlus') {
-                    $effectiveAppx | Where-Object { $_ -notin @('Microsoft.Copilot', 'MicrosoftWindows.Client.WebExperience') }
-                } else {
-                    $effectiveAppx
-                }
+                Get-WinMintEffectiveAppxRemovalPrefix -Settings $effectiveAppxSettings
             )
         }
         privacy = [ordered]@{
             telemetry = [bool](Get-WinMintProfileSetting $Settings 'PrivTelemetry' $true)
             advertisingId = [bool](Get-WinMintProfileSetting $Settings 'PrivAdvertising' $true)
-            location = [bool](Get-WinMintProfileSetting $Settings 'PrivLocation' $true)
+            location = [bool](Get-WinMintProfileSetting $Settings 'PrivLocation' $false)
             timeline = [bool](Get-WinMintProfileSetting $Settings 'PrivTimeline' $true)
         }
         tweaks = [ordered]@{
@@ -606,6 +629,13 @@ function Test-WinMintBuildProfile {
     & $require $removals 'profile.removals' @('advertising', 'gaming', 'communication', 'microsoftApps')
     foreach ($name in @('advertising', 'gaming', 'communication', 'microsoftApps')) {
         & $bool $removals $name "profile.removals.$name"
+    }
+    if (Test-WinMintProfileProperty -Object $removals -Name 'aiPolicy') {
+        & $enum ([string](Get-WinMintProfileSetting $removals 'aiPolicy' 'Core')) 'profile.removals.aiPolicy' @('Core', 'ServiceableFull', 'AggressiveExperimental')
+        if ([string](Get-WinMintProfileSetting $removals 'aiPolicy' 'Core') -eq 'AggressiveExperimental' -and
+            [string]$env:WINMINT_ENABLE_EXPERIMENTAL_AI_REMOVAL -ne '1') {
+            & $add 'profile.removals.aiPolicy AggressiveExperimental requires WINMINT_ENABLE_EXPERIMENTAL_AI_REMOVAL=1.'
+        }
     }
     & $require $privacy 'profile.privacy' @('telemetry', 'advertisingId', 'location', 'timeline')
     foreach ($name in @('telemetry', 'advertisingId', 'location', 'timeline')) {
