@@ -9,6 +9,7 @@ $script:WinMintRepositoryRoot = $root
 . (Join-Path $root 'src\engine\Core.ps1')
 . (Join-Path $root 'src\engine\Private\Config\Profile.ps1')
 . (Join-Path $root 'src\engine\Private\Catalog.ps1')
+. (Join-Path $root 'src\engine\Private\Image\AiRemoval.ps1')
 . (Join-Path $root 'src\engine\Engine.ps1')
 . (Join-Path $root 'src\engine\Reports.ps1')
 . (Join-Path $root 'src\engine\Private\Runtime.ps1')
@@ -78,19 +79,25 @@ Assert-SetupCompleteDoesNotDecryptBitLocker
 Assert-ServiceabilityGuardrails
 Assert-ProtectedPlatformPackagesArePreserved
 Assert-MinimalAppxRemovalCatalogCoversPolicy
+Assert-HomeFirstDefaultsAndPolicySurface
 Assert-PhoneLinkAgentDefaults
 Assert-ConsumerUtilityPackagesNeverInRemovalList
 Assert-LiveInstallAuditIsNonDestructive
 Assert-LiveInstallAuditCoversPlatformGuardrails
 Assert-LiveInstallAuditUsesSetupProfilePrefixes
 Assert-LiveInstallAuditIsStaged
+Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork
+Assert-DmaInteropUsesFixedIrelandRegion
+Assert-LiveAuditDistinguishesDmaSetupFromVisibleRegion
+Assert-AiRemovalCatalogAndGuardrails
+Assert-RecoveryBundleIsOutputOnly
 Assert-AgentRunsLiveInstallAudit
 Assert-NoMaintenancePayloadOrRegistration
 Assert-ExternalReferenceAuditDocumentsSparkle
 Assert-WslFirstDefaultsAndGuards
 Assert-LogNoiseInvariants
 Assert-WinPEDriverInjectionDefaultsToSetupOnly
-Assert-EdgePolicyPreservesCopilotSidebar
+Assert-CopilotPlusUsesFullAiRemovalPolicy
 Assert-OneDriveRemovalPolicyIsComplete
 Assert-CursorInstallUsesModernRegistryContract
 Assert-RegistryTweakMetadataAndRollback
@@ -105,14 +112,20 @@ $result = Test-WinMintBuildProfile -BuildProfile $profile
 if (-not $result.Passed) {
     Add-SmokeFailure "Expected generated profile to pass validation, got: $($result.Failures -join '; ')"
 }
+if ([int]$profile.schemaVersion -ne 2) { Add-SmokeFailure 'Expected generated profiles to use schemaVersion 2.' }
+if (-not [bool]$profile.tweaks.dmaInterop) { Add-SmokeFailure 'Expected generated profiles to enable DMA interop by default.' }
+if (-not [bool]$profile.privacy.location) { Add-SmokeFailure 'Expected generated profiles to enable location services by default.' }
+if ($profile.regional.userLocale -ne 'en-US' -or [int]$profile.regional.homeLocationGeoId -ne 244) {
+    Add-SmokeFailure 'Expected generated profiles to default visible region to en-US/GeoID 244.'
+}
 $config = New-WinMintBuildConfig -BuildProfile $profile
 if ($config.SetupOption -ne 'Minimal') { Add-SmokeFailure 'Expected Minimal to be the default setup option.' }
 if ($config.AppxPackages -notcontains 'Microsoft.Copilot' -or $config.AppxPackages -notcontains 'MicrosoftWindows.Client.WebExperience') {
     Add-SmokeFailure 'Expected Minimal setup option to remove Copilot and WebExperience packages.'
 }
 $setupProfile = New-WinMintSetupProfile -BuildConfig $config
-if ($setupProfile.setupComplete.preserveMicrosoftCopilot) {
-    Add-SmokeFailure 'Expected Minimal setup option not to preserve Microsoft Copilot surfaces.'
+if ($setupProfile.setupComplete.Contains('preserveMicrosoftCopilot')) {
+    Add-SmokeFailure 'Deprecated setupComplete.preserveMicrosoftCopilot must not be generated.'
 }
 if (-not $setupProfile.setupComplete.removeRecall) {
     Add-SmokeFailure 'Expected Minimal setup option to remove Recall.'
@@ -123,17 +136,21 @@ $settings.SetupOption = 'CopilotPlus'
 $profile = New-WinMintBuildProfile -Settings $settings
 $config = New-WinMintBuildConfig -BuildProfile $profile
 if ($config.SetupOption -ne 'CopilotPlus') { Add-SmokeFailure 'Expected CopilotPlus setup option to flow into build config.' }
-if ($config.AppxPackages -contains 'Microsoft.Copilot' -or $config.AppxPackages -contains 'MicrosoftWindows.Client.WebExperience') {
-    Add-SmokeFailure 'Expected CopilotPlus setup option to preserve Copilot and WebExperience packages.'
+if ($config.AppxPackages -notcontains 'Microsoft.Copilot' -or $config.AppxPackages -notcontains 'MicrosoftWindows.Client.WebExperience') {
+    Add-SmokeFailure 'Expected CopilotPlus setup option to remove Copilot and WebExperience packages.'
 }
-if ($config.RegistryTweaks -notcontains 'edge-policy-copilotplus') { Add-SmokeFailure 'Expected CopilotPlus builds to use the CopilotPlus Edge policy.' }
-if ($config.RegistryTweaks -contains 'edge-policy-minimal') { Add-SmokeFailure 'CopilotPlus builds must not use the strict Minimal Edge policy.' }
+if ($config.RegistryTweaks -notcontains 'edge-policy-minimal') { Add-SmokeFailure 'Expected CopilotPlus builds to use the strict Edge policy.' }
+if ($config.RegistryTweaks -notcontains 'windows-ai-full-policy') { Add-SmokeFailure 'Expected CopilotPlus builds to use the full Windows AI policy.' }
+if ($config.RegistryTweaks -contains 'edge-policy-copilotplus') { Add-SmokeFailure 'CopilotPlus builds must not use the deprecated CopilotPlus Edge policy.' }
 $setupProfile = New-WinMintSetupProfile -BuildConfig $config
-if (-not $setupProfile.setupComplete.preserveMicrosoftCopilot) {
-    Add-SmokeFailure 'Expected CopilotPlus setup option to preserve Microsoft Copilot surfaces.'
+if ($setupProfile.setupComplete.Contains('preserveMicrosoftCopilot')) {
+    Add-SmokeFailure 'Deprecated setupComplete.preserveMicrosoftCopilot must not be generated.'
 }
 if (-not $setupProfile.setupComplete.removeRecall) {
     Add-SmokeFailure 'Expected CopilotPlus setup option to still remove Recall.'
+}
+if ($setupProfile.aiRemoval.policy -ne 'ServiceableFull') {
+    Add-SmokeFailure 'Expected CopilotPlus setup option to select ServiceableFull AI removal.'
 }
 
 $profile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
@@ -146,7 +163,10 @@ if ($config.RegistryTweaks -notcontains 'edge-policy-minimal') { Add-SmokeFailur
 if ($config.RegistryTweaks -contains 'edge-policy-copilotplus') { Add-SmokeFailure 'Minimal builds must not use the CopilotPlus Edge policy.' }
 $setupProfile = New-WinMintSetupProfile -BuildConfig $config
 if (-not $setupProfile.privacy.telemetry) { Add-SmokeFailure 'Expected default setup profile telemetry privacy toggle to be enabled.' }
-if (-not $setupProfile.privacy.location) { Add-SmokeFailure 'Location services must default to disabled for a predictable workstation baseline.' }
+if (-not $setupProfile.privacy.location) { Add-SmokeFailure 'Location services must default to enabled for the laptop-first Home baseline.' }
+if (-not [bool]$setupProfile.regional.dmaInterop.enabled -or $setupProfile.regional.dmaInterop.setupCountry -ne 'Ireland' -or [int]$setupProfile.regional.dmaInterop.setupHomeLocationGeoId -ne 68) {
+    Add-SmokeFailure 'DMA interop must default on and use the Ireland setup latch.'
+}
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
 if (@($config.Editors).Count -ne 0) {
     Add-SmokeFailure 'Expected Developer group to leave editor options unselected by default.'
@@ -341,10 +361,11 @@ if ($config.RegistryTweaks -notcontains 'hardware-bypass') {
 
 $profile = New-SmokeBuildProfile
 $profile.source.isoPath = ''
+$profile.source.architecture = ''
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $pre = Test-WinMintBuildPrerequisite -Config $config -AllowMissingSourceIso
 if (-not $pre.Passed) {
-    Add-SmokeFailure "Expected profile-only dry run prerequisite check to allow a missing ISO. Failures: $($pre.Failures -join '; ')"
+    Add-SmokeFailure "Expected profile-only dry run prerequisite check to allow missing ISO and architecture. Failures: $($pre.Failures -join '; ')"
 }
 $pre = Test-WinMintBuildPrerequisite -Config $config
 if ($pre.Passed) {

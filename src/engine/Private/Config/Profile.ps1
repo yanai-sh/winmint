@@ -26,6 +26,18 @@ function Test-WinMintProfileSettingExists {
     return $null -ne $Settings.PSObject.Properties[$Name]
 }
 
+function Get-WinMintProfileStringSetting {
+    param(
+        [object]$Settings,
+        [string]$Name,
+        [string]$Default = ''
+    )
+
+    $value = [string](Get-WinMintProfileSetting $Settings $Name $Default)
+    if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
+    return $value
+}
+
 function ConvertTo-WinMintProfileStringArray {
     param($Value)
 
@@ -52,12 +64,7 @@ function Resolve-WinMintRegionGeoId {
             Write-Verbose "Could not resolve GeoID for culture '$CultureName': $($_.Exception.Message)"
         }
     }
-    try {
-        return [int](Get-WinHomeLocation).GeoId
-    }
-    catch {
-        return $Default
-    }
+    return $Default
 }
 
 function Resolve-WinMintDmaInteropSetupRegion {
@@ -133,6 +140,14 @@ function ConvertTo-WinMintProfileGroupArray {
     return @($groups.ToArray() | Select-Object -Unique)
 }
 
+function Get-WinMintAppxRemovalCatalog {
+    $path = Get-WinMintPath -Name Config -ChildPath 'appx-removal.json'
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "AppX removal catalog not found: $path"
+    }
+    Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+}
+
 function Test-WinMintProfileGroup {
     param(
         [object]$Settings,
@@ -188,37 +203,13 @@ function Get-WinMintProfileDesktopLayers {
 }
 
 function Get-WinMintAppxBloatwareCategories {
+    $catalog = Get-WinMintAppxRemovalCatalog
     [ordered]@{
-        'Always remove'    = @(
-            'Microsoft.GetHelp', 'Microsoft.MicrosoftOfficeHub', 'Microsoft.WindowsFeedbackHub',
-            'Microsoft.549981C3F5F10', 'MicrosoftCorporationII.MicrosoftFamily',
-            'Microsoft.StartExperiencesApp', 'Microsoft.BingSearch', 'Microsoft.WindowsCalculator',
-            'Microsoft.BingWeather', 'Microsoft.Whiteboard', 'Microsoft.Microsoft3DViewer',
-            'Microsoft.MixedReality.Portal', 'MicrosoftCorporationII.QuickAssist',
-            'Microsoft.WindowsMaps', 'Microsoft.Todos',
-            'Microsoft.ZuneMusic', 'Microsoft.ZuneVideo',
-            'Microsoft.Office.OneNote',
-            'Microsoft.RemoteDesktop', 'Microsoft.RemoteDesktopPreview',
-            # OEM/trial provisioned junk (best-effort; names vary by SKU — no-op if absent)
-            'McAfee', 'NortonLifeLock', 'NortonSecurity', 'ExpressVPN', 'Surfshark', 'SurfsharkVPN',
-            'AVGTechnologies', 'AvastSoftware', 'KasperskyLab', 'DolbyLaboratories', 'Piriform.CCleaner'
-        )
-        'Advertising & AI' = @(
-            'Microsoft.BingNews', 'Microsoft.Windows.DevHome',
-            'MicrosoftWindows.Client.WebExperience', 'Microsoft.Copilot'
-        )
-        'Gaming (Xbox)'    = @(
-            'Microsoft.GamingApp', 'Microsoft.XboxApp', 'Microsoft.XboxGameOverlay',
-            'Microsoft.XboxGamingOverlay', 'Microsoft.XboxIdentityProvider',
-            'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.Xbox.TCUI'
-        )
-        'Communication'    = @(
-            'MSTeams', 'MicrosoftTeams', 'Microsoft.People', 'Microsoft.windowscommunicationsapps'
-        )
-        'Microsoft apps'   = @(
-            'Microsoft.OutlookForWindows', 'Microsoft.PowerAutomateDesktop',
-            'Microsoft.MicrosoftSolitaireCollection', 'Clipchamp.Clipchamp'
-        )
+        'Core Microsoft'      = @($catalog.groups.coreMicrosoft)
+        'Communication'       = @($catalog.groups.communication)
+        'Gaming (Xbox)'       = @($catalog.groups.gaming)
+        'Consumer third-party' = @($catalog.groups.consumerThirdParty)
+        'OEM consumer'         = @($catalog.groups.oemConsumer)
     }
 }
 
@@ -227,18 +218,16 @@ function Get-WinMintEffectiveAppxRemovalPrefix {
 
     $categories = Get-WinMintAppxBloatwareCategories
     $effective = [System.Collections.Generic.List[string]]::new()
-    $effective.AddRange([string[]]$categories['Always remove'])
-    if ([bool](Get-WinMintProfileSetting $Settings 'RemoveAdvertising' $true)) {
-        $effective.AddRange([string[]]$categories['Advertising & AI'])
+    $effective.AddRange([string[]]$categories['Core Microsoft'])
+    if ([bool](Get-WinMintProfileSetting $Settings 'RemoveConsumerThirdParty' $false)) {
+        $effective.AddRange([string[]]$categories['Consumer third-party'])
+        $effective.AddRange([string[]]$categories['OEM consumer'])
     }
     if ([bool](Get-WinMintProfileSetting $Settings 'RemoveGaming' $true)) {
         $effective.AddRange([string[]]$categories['Gaming (Xbox)'])
     }
     if ([bool](Get-WinMintProfileSetting $Settings 'RemoveCommunication' $true)) {
         $effective.AddRange([string[]]$categories['Communication'])
-    }
-    if ([bool](Get-WinMintProfileSetting $Settings 'RemoveMicrosoftApps' $true)) {
-        $effective.AddRange([string[]]$categories['Microsoft apps'])
     }
     return @($effective.ToArray() | Sort-Object -Unique)
 }
@@ -318,6 +307,10 @@ function New-WinMintBuildProfile {
     $profileGroups = @(ConvertTo-WinMintProfileGroupArray -Settings $Settings)
     $setupOption = if ($profileGroups -contains 'CopilotPlus') { 'CopilotPlus' } else { Get-WinMintProfileSetupOption -Settings $Settings }
     $editionMode = Get-WinMintProfileEditionMode -Settings $Settings
+    $edition = [string](Get-WinMintProfileSetting $Settings 'Edition' '')
+    if ($editionMode -eq 'Fixed' -and [string]::IsNullOrWhiteSpace($edition)) {
+        $edition = 'Windows 11 Home Single Language'
+    }
     $diskMode = Get-WinMintProfileDiskMode -Settings $Settings
     $dualBootPreset = Get-WinMintProfileDualBootPreset -Settings $Settings
     if ($diskMode -eq 'DualBootReserved' -and [string]::IsNullOrWhiteSpace($dualBootPreset)) {
@@ -346,7 +339,7 @@ function New-WinMintBuildProfile {
     $removeCommunication = [bool](Get-WinMintProfileSetting $Settings 'RemoveCommunication' $true)
     $removeMicrosoftApps = [bool](Get-WinMintProfileSetting $Settings 'RemoveMicrosoftApps' $true)
     $aiPolicy = Get-WinMintProfileAiPolicy -Settings $Settings -SetupOption $setupOption
-    $userLocale = [string](Get-WinMintProfileSetting $Settings 'UserLocale' '')
+    $userLocale = Get-WinMintProfileStringSetting -Settings $Settings -Name 'UserLocale' -Default 'en-US'
     $homeLocationGeoId = [int](Get-WinMintProfileSetting $Settings 'HomeLocationGeoId' (Resolve-WinMintRegionGeoId -CultureName $userLocale))
     $effectiveAppxSettings = [ordered]@{
         RemoveAdvertising = $removeAdvertising
@@ -365,7 +358,7 @@ function New-WinMintBuildProfile {
     if ($IncludeSecrets) { $identity.password = $password }
 
     [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         createdAt = [DateTimeOffset]::Now.ToString('o')
         profileName = $profileName
         profileGroups = @($profileGroups)
@@ -377,7 +370,7 @@ function New-WinMintBuildProfile {
         target = [ordered]@{
             device = [string](Get-WinMintProfileSetting $Settings 'TargetDevice' 'DifferentPC')
             editionMode = $editionMode
-            edition = [string](Get-WinMintProfileSetting $Settings 'Edition' '')
+            edition = $edition
             diskMode = $diskMode
             diskLayout = [ordered]@{
                 mode = $diskMode
@@ -395,11 +388,11 @@ function New-WinMintBuildProfile {
         identity = $identity
         regional = [ordered]@{
             timeZoneId = [string](Get-WinMintProfileSetting $Settings 'TimeZoneId' '')
-            uiLanguage = [string](Get-WinMintProfileSetting $Settings 'UILanguage' '')
-            systemLocale = [string](Get-WinMintProfileSetting $Settings 'SystemLocale' '')
-            uiLanguageFallback = [string](Get-WinMintProfileSetting $Settings 'UILanguageFallback' '')
+            uiLanguage = Get-WinMintProfileStringSetting -Settings $Settings -Name 'UILanguage' -Default 'en-US'
+            systemLocale = Get-WinMintProfileStringSetting -Settings $Settings -Name 'SystemLocale' -Default 'en-US'
+            uiLanguageFallback = Get-WinMintProfileStringSetting -Settings $Settings -Name 'UILanguageFallback' -Default 'en-US'
             userLocale = $userLocale
-            inputLocale = [string](Get-WinMintProfileSetting $Settings 'InputLocale' '')
+            inputLocale = Get-WinMintProfileStringSetting -Settings $Settings -Name 'InputLocale' -Default 'en-US'
             homeLocationGeoId = $homeLocationGeoId
         }
         drivers = [ordered]@{
@@ -436,7 +429,7 @@ function New-WinMintBuildProfile {
         privacy = [ordered]@{
             telemetry = [bool](Get-WinMintProfileSetting $Settings 'PrivTelemetry' $true)
             advertisingId = [bool](Get-WinMintProfileSetting $Settings 'PrivAdvertising' $true)
-            location = [bool](Get-WinMintProfileSetting $Settings 'PrivLocation' $false)
+            location = [bool](Get-WinMintProfileSetting $Settings 'PrivLocation' $true)
             timeline = [bool](Get-WinMintProfileSetting $Settings 'PrivTimeline' $true)
         }
         tweaks = [ordered]@{
@@ -444,7 +437,7 @@ function New-WinMintBuildProfile {
             fileExtensions = [bool](Get-WinMintProfileSetting $Settings 'TweakFileExt' $true)
             stickyKeys = [bool](Get-WinMintProfileSetting $Settings 'TweakStickyKeys' $true)
             hardwareBypass = [bool](Get-WinMintProfileSetting $Settings 'TweakHardwareBypass' $false)
-            dmaInterop = [bool](Get-WinMintProfileSetting $Settings 'TweakDmaInterop' $false)
+            dmaInterop = [bool](Get-WinMintProfileSetting $Settings 'TweakDmaInterop' $true)
         }
     }
 }
@@ -518,7 +511,7 @@ function Test-WinMintBuildProfile {
     )
     if ($failures.Count -gt 0) { return [pscustomobject]@{ Passed = $false; Failures = $failures.ToArray() } }
 
-    if ([int]$BuildProfile.schemaVersion -lt 1) { & $add 'profile.schemaVersion must be >= 1.' }
+    if ([int]$BuildProfile.schemaVersion -ne 2) { & $add 'profile.schemaVersion must be 2.' }
     if (Test-WinMintProfileProperty -Object $BuildProfile -Name 'profileGroups') {
         $groups = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $BuildProfile 'profileGroups' @()))
         foreach ($group in $groups) { & $enum $group 'profile.profileGroups[]' @('Minimal', 'Developer', 'CopilotPlus', 'Gaming', 'DesktopUI') }
@@ -582,7 +575,7 @@ function Test-WinMintBuildProfile {
         & $add 'profile.identity.password is required when passwordIncluded is true.'
     }
 
-    & $require $regional 'profile.regional' @('timeZoneId', 'uiLanguage', 'systemLocale', 'userLocale', 'inputLocale')
+    & $require $regional 'profile.regional' @('timeZoneId', 'uiLanguage', 'systemLocale', 'uiLanguageFallback', 'userLocale', 'inputLocale')
     $homeLocationGeoId = Get-WinMintProfileSetting $regional 'homeLocationGeoId' $null
     if ($null -ne $homeLocationGeoId -and $homeLocationGeoId -isnot [int] -and $homeLocationGeoId -isnot [long]) {
         & $add 'profile.regional.homeLocationGeoId must be an integer.'
@@ -626,7 +619,7 @@ function Test-WinMintBuildProfile {
         }
     }
 
-    & $require $removals 'profile.removals' @('advertising', 'gaming', 'communication', 'microsoftApps')
+    & $require $removals 'profile.removals' @('advertising', 'gaming', 'communication', 'microsoftApps', 'aiPolicy')
     foreach ($name in @('advertising', 'gaming', 'communication', 'microsoftApps')) {
         & $bool $removals $name "profile.removals.$name"
     }

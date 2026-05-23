@@ -1,6 +1,7 @@
 # WinMint
 
 Opinionated Windows 11 ISO builder for clean developer workstation installs.
+The primary target is Windows 11 Home / Home Single Language / en-US.
 
 WinMint starts from the Windows ISO you provide, applies a focused workstation
 baseline, stages setup/first-logon automation, and emits a bootable ISO. It does
@@ -90,9 +91,48 @@ Schemas live in `schemas/`.
 - Defender, Firewall, SmartScreen, Windows Update, Store infrastructure,
   WebView2, WSL, IPv6, WinRE, UAC, and the component store stay intact.
 - Debloat policy is profile-group based, not a matrix of granular toggles.
+- DMA interoperability is enabled by default and uses Ireland only as an
+  internal setup latch.
+- Location services are enabled by default for laptop usefulness; they can be
+  explicitly disabled with `-NoLocationServices`.
 - WinMint does not leave behind a recurring maintenance task or background
   drift-fighting service.
 - Destructive disk modes are explicit.
+
+## Build Profiles
+
+WinMint exposes simple build intents instead of a debloat dashboard. The
+baseline profile is `Minimal`; additive groups are `Developer`, `CopilotPlus`,
+`Gaming`, and `DesktopUI`. CLI spellings are `-Developer`, `-Copilot`,
+`-Gaming`, and `-DesktopUI`.
+
+`CopilotPlus` means a Copilot+ PC hardware-aware profile with an AI-free
+WinMint posture. It removes provisioned Copilot/WebExperience-style AI AppX
+packages, removes supported AI optional features such as Recall when present,
+and applies Windows, Edge, Notepad, Paint, and App Privacy AI policies. This is
+serviceable removal: WinMint does not remove Edge, WebView2, Store
+infrastructure, winget, Windows Update, component-store metadata, or protected
+CBS packages.
+
+## DMA Interoperability
+
+DMA interop is on by default. WinMint uses Ireland internally during Windows
+Setup: `Ireland`, `en-IE`, GeoID `68`. This is a fixed internal setup region,
+not a user choice. CLI users can opt out with `-NoDmaInterop`.
+
+At the start of FirstLogon, before optional user setup modules run, WinMint
+restores the configured user region, locale, time zone, and location-services
+posture. Location services can remain enabled and use the real device location;
+DMA interop does not require leaving the visible user region set to Ireland.
+Automatic time-zone updates stay disabled by default to avoid Windows drifting
+the restored time zone after setup.
+
+Because the DMA setup latch already reduces some Microsoft default-app and
+promotion pressure, WinMint keeps the default AppX cleanup catalog focused:
+Microsoft consumer apps, communication apps, gaming apps, Copilot/WebExperience,
+and AI surfaces. Broad third-party and OEM prefixes remain cataloged as
+candidate-only drift coverage for unusual ISOs, but they are not part of the
+normal DMA-on default removal surface.
 
 ## Documentation
 

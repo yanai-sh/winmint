@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "createdAt": "2026-05-16T00:00:00+03:00",
   "profileName": "Developer",
   "setupOption": "CopilotPlus",
@@ -39,7 +39,8 @@
     "systemLocale": "he-IL",
     "uiLanguageFallback": "en-US",
     "userLocale": "he-IL",
-    "inputLocale": "en-US;he-IL"
+    "inputLocale": "en-US;he-IL",
+    "homeLocationGeoId": 117
   },
   "drivers": {
     "source": "None",
@@ -68,6 +69,7 @@
     "gaming": true,
     "communication": true,
     "microsoftApps": true,
+    "aiPolicy": "ServiceableFull",
     "effectiveAppx": [
       "AVGTechnologies",
       "AvastSoftware",
@@ -120,13 +122,14 @@
   "privacy": {
     "telemetry": true,
     "advertisingId": true,
-    "location": false,
+    "location": true,
     "timeline": true
   },
   "tweaks": {
     "darkMode": true,
     "fileExtensions": true,
     "stickyKeys": true,
-    "hardwareBypass": false
+    "hardwareBypass": false,
+    "dmaInterop": true
   }
 }

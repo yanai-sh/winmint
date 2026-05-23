@@ -423,6 +423,9 @@ function Remove-WinMintCapabilities {
 
     $capabilities = @(
         'App.StepsRecorder~~~0.0.1.0'
+        'Browser.InternetExplorer~~~~0.0.11.0'
+        'MathRecognizer~~~~0.0.1.0'
+        'Microsoft.Windows.WordPad~~~~0.0.1.0'
         'Microsoft.Windows.PowerShell.ISE~~~0.0.1.0'
         'Print.Fax.Scan~~~~0.0.1.0'
         'XPS.Viewer~~~0.0.1.0'
@@ -444,6 +447,39 @@ function Remove-WinMintCapabilities {
     }
     if ($null -ne $script:WinMintBuildManifest) {
         $script:WinMintBuildManifest.removals.capabilitiesRemoved = $removed.ToArray()
+    }
+
+    $packagePatterns = @(
+        'Microsoft-Windows-InternetExplorer-Optional-Package',
+        'Microsoft-Windows-WordPad-FoD-Package',
+        'Microsoft-Windows-TabletPCMath-Package'
+    )
+    $removedPackages = [System.Collections.Generic.List[string]]::new()
+    Invoke-Action 'Removing matching legacy optional packages when present (IE, WordPad, Math Recognizer)' {
+        $packageList = Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Get-Packages')
+        $packageNames = @(
+            $packageList.Output | ForEach-Object {
+                if ("$_" -match 'Package Identity : (.*)') { $matches[1].Trim() }
+            }
+        )
+        foreach ($packageName in $packageNames) {
+            foreach ($pattern in $packagePatterns) {
+                if ($packageName -like "*$pattern*") {
+                    try {
+                        Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Remove-Package', "/PackageName:$packageName") | Out-Null
+                        LogOK "Removed package: $packageName"
+                        $removedPackages.Add($packageName)
+                    }
+                    catch {
+                        LogWarn "Package not present or already removed: $packageName"
+                    }
+                    break
+                }
+            }
+        }
+    }
+    if ($null -ne $script:WinMintBuildManifest) {
+        $script:WinMintBuildManifest.removals.windowsPackagesRemoved = $removedPackages.ToArray()
     }
 
     Invoke-Action 'Disabling PowerShell 2.0 (pre-AMSI engine; no legitimate use on modern hardware)' {
@@ -538,6 +574,21 @@ function Invoke-AppxRemoval {
         if ($null -ne $script:WinMintBuildManifest) {
             $script:WinMintBuildManifest.removals.appxRemoved = $removedNames.ToArray()
             $script:WinMintBuildManifest.removals.appxRemovedCount = $removed
+            if ($script:WinMintBuildManifest.removals.ai) {
+                $aiRemoved = @(
+                    foreach ($name in @($removedNames)) {
+                        if (Test-WinMintNameMatchesAnyPrefix -Name ([string]$name) -Prefixes @($script:WinMintBuildManifest.removals.ai.appxPrefixes)) {
+                            [string]$name
+                        }
+                    }
+                )
+                if ($aiRemoved.Count -gt 0) {
+                    $script:WinMintBuildManifest.removals.ai.appxRemoved = @(
+                        @($script:WinMintBuildManifest.removals.ai.appxRemoved) + $aiRemoved |
+                            Sort-Object -Unique
+                    )
+                }
+            }
         }
         if ($removedNames.Count -gt 0) {
             Write-Win11IsoAppxDeprovisionedEntry -MountDir $MountDir -PackageNames $removedNames.ToArray()

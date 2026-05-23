@@ -195,8 +195,9 @@ pub fn build_gui_intent(
         "Editors": editors,
         "Wsl2Distros": wsl_distros,
         "RemoveGaming": !gaming,
-        "PrivLocation": false,
-        "TweakHardwareBypass": false
+        "PrivLocation": true,
+        "TweakHardwareBypass": false,
+        "TweakDmaInterop": true
     })
 }
 
@@ -238,6 +239,7 @@ mod tests {
             "RemoveGaming",
             "PrivLocation",
             "TweakHardwareBypass",
+            "TweakDmaInterop",
         ];
         for key in required {
             assert!(obj.contains_key(key), "missing key {key}");

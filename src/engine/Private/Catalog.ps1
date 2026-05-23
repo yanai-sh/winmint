@@ -161,11 +161,79 @@ $script:RegistryTweaks = @(
             @{ path = 'zSOFTWARE\Classes\Directory\Background\shell\OpenWTHereAsAdmin\command'; name = ''; type = 'REG_SZ'; value = $script:Win11IsoOpenAdminTerminalCommand }
         ); remove  = @()
     }
-    @{ id = 'uac-no-secure-desktop'; description = 'UAC prompts without secure desktop dimming'
-        scope = 'machine policy registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
-        intent = 'Keep UAC consent prompts enabled while avoiding the disruptive screen-dimming secure desktop switch.'
+    @{ id = 'home-privacy-policy'; description = 'Windows 11 Home privacy baseline'
+        scope = 'machine and default user registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
+        intent = 'Minimize Home-safe telemetry and suggestion surfaces without using Enterprise-only claims or disabling location services.'
         set        = @(
-            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; name = 'PromptOnSecureDesktop'; type = 'REG_DWORD'; value = '0'; undo = @{ type = 'REG_DWORD'; value = '1' } }
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\DataCollection'; name = 'AllowTelemetry'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\DataCollection'; name = 'DoNotShowFeedbackNotifications'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\System'; name = 'EnableActivityFeed'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\System'; name = 'PublishUserActivities'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\System'; name = 'UploadUserActivities'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\InputPersonalization'; name = 'AllowInputPersonalization'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\config'; name = 'AutoConnectAllowedOEM'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\config'; name = 'WiFISenseAllowed'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo'; name = 'Enabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Privacy'; name = 'TailoredExperiencesWithDiagnosticDataEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy'; name = 'HasAccepted'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Input\TIPC'; name = 'Enabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\InputPersonalization'; name = 'RestrictImplicitInkCollection'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\InputPersonalization'; name = 'RestrictImplicitTextCollection'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\InputPersonalization\TrainedDataStore'; name = 'HarvestContacts'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'Start_AccountNotifications'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.BackupReminder'; name = 'Enabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.Suggested'; name = 'Enabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\SystemSettings\AccountNotifications'; name = 'EnableAccountNotifications'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Mobility'; name = 'OptedIn'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\CDP'; name = 'DragTrayEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } }
+        ); remove  = @()
+    }
+    @{ id = 'location-disabled-policy'; description = 'Disable Windows location services and Find My Device when explicitly selected'
+        scope = 'machine policy registry'; risk = 'medium'; reversible = $true; phase = 'offline-image'
+        intent = 'Apply the explicit no-location posture; default laptop-first builds leave location and Find My Device available.'
+        set        = @(
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\LocationAndSensors'; name = 'DisableLocation'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\LocationAndSensors'; name = 'DisableWindowsLocationProvider'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\LocationAndSensors'; name = 'DisableLocationScripting'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\FindMyDevice'; name = 'AllowFindMyDevice'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } }
+        ); remove  = @()
+    }
+    @{ id = 'storage-sense-policy'; description = 'Storage Sense safe cleanup with Downloads protected'
+        scope = 'default user registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
+        intent = 'Enable safe laptop cleanup defaults while explicitly keeping Downloads auto-cleanup disabled.'
+        set        = @(
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy'; name = '01'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy'; name = '04'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy'; name = '08'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy'; name = '32'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } }
+        ); remove  = @()
+    }
+    @{ id = 'modern-standby-policy'; description = 'Modern Standby network disconnected by default'
+        scope = 'machine policy registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
+        intent = 'Use laptop-friendly Modern Standby behavior that avoids background network drain on AC and DC.'
+        set        = @(
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9'; name = 'ACSettingIndex'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9'; name = 'DCSettingIndex'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } }
+        ); remove  = @()
+    }
+    @{ id = 'oobe-rehydration-policy'; description = 'Block selected OOBE app rehydration jobs'
+        scope = 'machine registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
+        intent = 'Prevent Dev Home, Outlook, and Chat auto-install rehydration after setup without disabling Windows Update.'
+        set        = @(
+            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\DevHomeUpdate'; name = 'workCompleted'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\OutlookUpdate'; name = 'workCompleted'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\ChatAutoInstall'; name = 'workCompleted'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } }
+        ); remove  = @(
+            @{ path = 'zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\DevHomeUpdate' },
+            @{ path = 'zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\OutlookUpdate' },
+            @{ path = 'zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\ChatAutoInstall' }
+        )
+    }
+    @{ id = 'wpbt-policy'; description = 'Disable Windows Platform Binary Table execution'
+        scope = 'offline registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
+        intent = 'Prevent firmware-staged OEM executables from running during Windows setup on all Minimal builds.'
+        set        = @(
+            @{ path = 'zSYSTEM\ControlSet001\Control\Session Manager'; name = 'DisableWpbtExecution'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } }
         ); remove  = @()
     }
     @{ id = 'edge-policy-minimal'; description = 'Edge Minimal cleanup (noise/privacy, commerce, widgets, image enhancement, sidebar)'
@@ -195,25 +263,6 @@ $script:RegistryTweaks = @(
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge\ExtensionInstallBlocklist'; name = '1'; type = 'REG_SZ'; value = 'ofefcgjbeghpigppfmkologfjadafddi' }
         ); remove  = @()
     }
-    @{ id = 'edge-policy-copilotplus'; description = 'Edge CopilotPlus cleanup (noise/privacy and commerce only; keeps Copilot/sidebar, web widgets, image enhancement)'
-        scope = 'machine policy registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
-        intent = 'Deprecated compatibility group; CopilotPlus now uses the strict Edge policy and windows-ai-full-policy.'
-        set        = @(
-            @{ path = 'zSOFTWARE\Policies\Microsoft\EdgeUpdate'; name = 'CreateDesktopShortcutDefault'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'PersonalizationReportingEnabled'; type = 'REG_DWORD'; value = '0' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'ShowRecommendationsEnabled'; type = 'REG_DWORD'; value = '0' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'HideFirstRunExperience'; type = 'REG_DWORD'; value = '1' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'UserFeedbackAllowed'; type = 'REG_DWORD'; value = '0' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'ConfigureDoNotTrack'; type = 'REG_DWORD'; value = '1' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'AlternateErrorPagesEnabled'; type = 'REG_DWORD'; value = '0' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'EdgeShoppingAssistantEnabled'; type = 'REG_DWORD'; value = '0' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'MicrosoftEdgeInsiderPromotionEnabled'; type = 'REG_DWORD'; value = '0' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'ShowMicrosoftRewards'; type = 'REG_DWORD'; value = '0' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'DiagnosticData'; type = 'REG_DWORD'; value = '0' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'CryptoWalletEnabled'; type = 'REG_DWORD'; value = '0' },
-            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'WalletDonationEnabled'; type = 'REG_DWORD'; value = '0' }
-        ); remove  = @()
-    }
     @{ id = 'windows-ai-core-policy'; description = 'Windows AI core policy suppression'
         scope = 'machine policy registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
         intent = 'Disable baseline Windows AI data analysis and Copilot policy surfaces while preserving Windows servicing.'
@@ -228,15 +277,21 @@ $script:RegistryTweaks = @(
         set        = @(
             @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableAIDataAnalysis'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableClickToDo'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'AllowRecallEnablement'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'TurnOffSavingSnapshots'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableSettingsAgent'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsCopilot'; name = 'TurnOffWindowsCopilot'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'HubsSidebarEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'StandaloneHubsSidebarEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'CopilotPageContext'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'CopilotCDPPageContext'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'EdgeEntraCopilotPageContext'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'EdgeHistoryAISearchEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'BuiltInAIAPIsEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'AIGenThemesEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'ShareBrowsingHistoryWithCopilotSearchAllowed'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'GenAILocalFoundationalModelSettings'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'NewTabPageBingChatEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\WindowsNotepad'; name = 'DisableAIFeatures'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint'; name = 'DisableCocreator'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint'; name = 'DisableImageCreator'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
@@ -245,6 +300,18 @@ $script:RegistryTweaks = @(
             @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint'; name = 'DisableRemoveBackground'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\AppPrivacy'; name = 'LetAppsAccessSystemAIModels'; type = 'REG_DWORD'; value = '2'; undo = @{ action = 'delete' } },
             @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\AppPrivacy'; name = 'LetAppsAccessGenerativeAI'; type = 'REG_DWORD'; value = '2'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\generativeAI'; name = 'Value'; type = 'REG_SZ'; value = 'Deny'; undo = @{ action = 'delete' } },
+            @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\systemAIModels'; name = 'Value'; type = 'REG_SZ'; value = 'Deny'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableAIDataAnalysis'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableClickToDo'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'AllowRecallEnablement'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'TurnOffSavingSnapshots'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableSettingsAgent'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\Shell\ClickToDo'; name = 'DisableClickToDo'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Office\16.0\Word\Options'; name = 'EnableCopilot'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Office\16.0\Excel\Options'; name = 'EnableCopilot'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Office\16.0\OneNote\Options'; name = 'EnableCopilot'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Office\16.0\OneNote\Options\Copilot'; name = 'Enabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\WindowsCopilot'; name = 'AllowCopilotRuntime'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'ShowCopilotButton'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoInstalledPWAs'; name = 'CopilotPWAPreinstallCompleted'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
@@ -255,11 +322,17 @@ $script:RegistryTweaks = @(
     }
     @{ id = 'dual-boot-windows-policy'; description = 'Dual boot: disable Fast Startup and prevent automatic BitLocker device encryption'
         scope = 'offline registry'; risk = 'medium'; reversible = $true; phase = 'offline-image'
-        intent = 'Avoid dual-boot friction from Fast Startup, surprise device encryption, and firmware payload injection.'
+        intent = 'Avoid dual-boot friction from Fast Startup and surprise device encryption.'
         set        = @(
             @{ path = 'zSYSTEM\ControlSet001\Control\BitLocker'; name = 'PreventDeviceEncryption'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
-            @{ path = 'zSYSTEM\ControlSet001\Control\Session Manager\Power'; name = 'HiberbootEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ type = 'REG_DWORD'; value = '1' } },
-            @{ path = 'zSYSTEM\ControlSet001\Control\Session Manager'; name = 'DisableWpbtExecution'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } }
+            @{ path = 'zSYSTEM\ControlSet001\Control\Session Manager\Power'; name = 'HiberbootEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ type = 'REG_DWORD'; value = '1' } }
+        ); remove  = @()
+    }
+    @{ id = 'dual-boot-clock-policy'; description = 'Dual boot: keep RTC in UTC'
+        scope = 'offline registry'; risk = 'medium'; reversible = $true; phase = 'offline-image'
+        intent = 'Set RealTimeIsUniversal only for dual-boot builds to avoid clock drift with Linux.'
+        set        = @(
+            @{ path = 'zSYSTEM\ControlSet001\Control\TimeZoneInformation'; name = 'RealTimeIsUniversal'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } }
         ); remove  = @()
     }
     @{ id = 'onedrive-policy'; description = 'OneDrive: remove integration, block sync/reinstall, and force known folders back to local profile paths'
@@ -281,13 +354,7 @@ $script:RegistryTweaks = @(
             @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'My Pictures'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Pictures' },
             @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'My Music'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Music' },
             @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'My Video'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Videos' },
-            @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = '{374DE290-123F-4565-9164-39C4925E467B}'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Downloads' },
-            @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'; name = 'Desktop'; type = 'REG_SZ'; value = 'C:\Users\Default\Desktop' },
-            @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'; name = 'Personal'; type = 'REG_SZ'; value = 'C:\Users\Default\Documents' },
-            @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'; name = 'My Pictures'; type = 'REG_SZ'; value = 'C:\Users\Default\Pictures' },
-            @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'; name = 'My Music'; type = 'REG_SZ'; value = 'C:\Users\Default\Music' },
-            @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'; name = 'My Video'; type = 'REG_SZ'; value = 'C:\Users\Default\Videos' },
-            @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'; name = '{374DE290-123F-4565-9164-39C4925E467B}'; type = 'REG_SZ'; value = 'C:\Users\Default\Downloads' }
+            @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = '{374DE290-123F-4565-9164-39C4925E467B}'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Downloads' }
         ); remove  = @(
             @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDrive' },
             @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDriveSetup' },
@@ -302,6 +369,26 @@ $script:RegistryTweaks = @(
             @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\GameDVR'; name = 'AllowGameDVR'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
             @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR'; name = 'AppCaptureEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ type = 'REG_DWORD'; value = '1' } },
             @{ path = 'zNTUSER\System\GameConfigStore'; name = 'GameDVR_Enabled'; type = 'REG_DWORD'; value = '0'; undo = @{ type = 'REG_DWORD'; value = '1' } }
+        ); remove  = @()
+    }
+    @{ id = 'gaming-performance-policy'; description = 'Gaming profile performance defaults'
+        scope = 'machine and default user registry'; risk = 'medium'; reversible = $true; phase = 'offline-image'
+        intent = 'Enable Game Mode, hardware-accelerated GPU scheduling, and windowed-game optimizations only for Gaming builds.'
+        set        = @(
+            @{ path = 'zNTUSER\Software\Microsoft\GameBar'; name = 'AllowAutoGameMode'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\GameBar'; name = 'AutoGameModeEnabled'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zSYSTEM\ControlSet001\Control\GraphicsDrivers'; name = 'HwSchMode'; type = 'REG_DWORD'; value = '2'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\DirectX\UserGpuPreferences'; name = 'DirectXUserGlobalSettings'; type = 'REG_SZ'; value = 'SwapEffectUpgradeEnable=1;'; undo = @{ action = 'delete' } }
+        ); remove  = @()
+    }
+    @{ id = 'desktopui-policy'; description = 'DesktopUI profile Explorer and snap behavior'
+        scope = 'default user registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
+        intent = 'Apply DesktopUI-only shell preference defaults without affecting Minimal or Gaming builds.'
+        set        = @(
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'LastActiveClick'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'SnapAssist'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'EnableSnapBar'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
+            @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'EnableSnapAssistFlyout'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } }
         ); remove  = @()
     }
     @{ id = 'developer-mode'; description = 'Windows Developer Mode (symlinks without UAC elevation, app sideloading)'

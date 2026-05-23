@@ -74,6 +74,19 @@ function Invoke-TestAgentFailedModule {
     throw 'fixture failure'
 }
 
+function Invoke-TestLiveAuditFindingsModule {
+    param([object]$AgentProfile, [hashtable]$State)
+    [void]$AgentProfile
+    [void]$State
+    [pscustomobject]@{
+        Status = 'ok'
+        Summary = [pscustomobject]@{
+            error = 2
+            warning = 3
+        }
+    }
+}
+
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-agent-state-test-' + [Guid]::NewGuid().ToString('n'))
 try {
     $null = New-Item -ItemType Directory -Path $tempRoot -Force
@@ -119,9 +132,14 @@ try {
     Assert-Equal $State.steps['module:failed-step'].status 'failed' 'Throwing modules should persist failed status.'
     Assert-True (-not [string]::IsNullOrWhiteSpace([string]$State.steps['module:failed-step'].error)) 'Failed modules should persist error text.'
 
+    Invoke-AgentProfileModule -StepName 'liveInstallAudit' -FunctionName 'Invoke-TestLiveAuditFindingsModule' -Enabled $true
+    Assert-Equal $State.steps['module:liveInstallAudit'].status 'ok' 'Live audit findings should not fail the FirstLogon agent state.'
+    Assert-Equal $State.steps['module:liveInstallAudit'].result.Summary.error 2 'Live audit result should preserve error count for diagnostics.'
+
     $saved = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
     Assert-Equal $saved.steps.'module:ok-step'.status 'ok' 'Saved state should round-trip ok module status.'
     Assert-Equal $saved.steps.'module:reboot-step'.attempts 2 'Saved state should round-trip retry attempts.'
+    Assert-Equal $saved.steps.'module:liveInstallAudit'.status 'ok' 'Saved state should keep live audit diagnostic failures non-blocking.'
 }
 finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue

@@ -229,6 +229,9 @@ function Assert-WinMintHeadlessParameterSet {
     if ($BoundParameters.ContainsKey('LocationServices') -and $BoundParameters.ContainsKey('NoLocationServices')) {
         throw 'Use either -LocationServices or -NoLocationServices, not both.'
     }
+    if ($BoundParameters.ContainsKey('DmaInterop') -and $BoundParameters.ContainsKey('NoDmaInterop')) {
+        throw 'Use either -DmaInterop or -NoDmaInterop, not both.'
+    }
     $secretInputs = @('Password', 'PasswordPath', 'PasswordEnvVar') | Where-Object {
         $BoundParameters.ContainsKey($_) -and -not [string]::IsNullOrWhiteSpace([string]$BoundParameters[$_])
     }
@@ -408,6 +411,7 @@ function New-WinMintHeadlessProfileFromFlags {
         [switch]$DesktopUI,
         [switch]$Gaming,
         [switch]$DmaInterop,
+        [switch]$NoDmaInterop,
         [ValidateSet('None', 'FlowEverything', 'Raycast')][string]$Launcher = 'None',
         [switch]$LiveInstallAudit,
         [switch]$PhoneLink,
@@ -478,8 +482,8 @@ function New-WinMintHeadlessProfileFromFlags {
         Launcher = $Launcher
         LiveInstallAudit = [bool]$LiveInstallAudit
         PhoneLink = [bool]$PhoneLink
-        TweakDmaInterop = [bool]$DmaInterop
-        PrivLocation = if ($LocationServices) { $true } elseif ($NoLocationServices) { $false } else { $false }
+        TweakDmaInterop = if ($NoDmaInterop) { $false } else { $true }
+        PrivLocation = if ($NoLocationServices) { $false } else { $true }
     } -IncludeSecrets:($AccountMode -eq 'Local' -and -not [string]::IsNullOrWhiteSpace($Password))
 }
 
@@ -599,6 +603,7 @@ function Invoke-WinMintHeadlessCli {
         [switch]$DesktopUI,
         [switch]$Gaming,
         [switch]$DmaInterop,
+        [switch]$NoDmaInterop,
         [ValidateSet('None', 'FlowEverything', 'Raycast')][string]$Launcher = 'None',
         [switch]$LiveInstallAudit,
         [switch]$PhoneLink,
@@ -665,6 +670,7 @@ function Invoke-WinMintHeadlessCli {
                 -DesktopUI:$DesktopUI `
                 -Gaming:$Gaming `
                 -DmaInterop:$DmaInterop `
+                -NoDmaInterop:$NoDmaInterop `
                 -Launcher $Launcher `
                 -LiveInstallAudit:$LiveInstallAudit `
                 -PhoneLink:$PhoneLink `
@@ -753,6 +759,7 @@ function Invoke-WinMintHeadlessCli {
                 -DesktopUI:$DesktopUI `
                 -Gaming:$Gaming `
                 -DmaInterop:$DmaInterop `
+                -NoDmaInterop:$NoDmaInterop `
                 -Launcher $Launcher `
                 -LiveInstallAudit:$LiveInstallAudit `
                 -PhoneLink:$PhoneLink `

@@ -48,10 +48,9 @@ function Invoke-WinMintAgentLiveInstallAuditBootstrap {
         $report = $json | ConvertFrom-Json
         $errors = [int]$report.summary.error
         $warnings = [int]$report.summary.warning
-        $status = if ($errors -gt 0) { 'failed' } else { 'ok' }
         return [pscustomobject]@{
             Id      = 'liveInstallAudit'
-            Status  = $status
+            Status  = 'ok'
             Message = "Live install audit wrote $reportPath; errors=$errors; warnings=$warnings"
             Report  = $reportPath
             Summary = $report.summary

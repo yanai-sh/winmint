@@ -127,7 +127,7 @@ function Invoke-WinMintAllBuildCachesMaintenance {
 # changes in a way the fingerprint can't naturally observe (new helper, changed
 # DISM call order, etc.). A bump invalidates all existing entries.
 
-$script:WinMintServicedWimCacheSchemaVersion = 1
+$script:WinMintServicedWimCacheSchemaVersion = 2
 
 function Get-WinMintServicedWimCacheRoot {
     return (Join-Path (Get-WinMintBuildCacheRoot) 'serviced-wim')
@@ -170,7 +170,12 @@ function Get-WinMintServicedWimFingerprint {
         Architecture       = [string]$BuildConfig.Architecture
         EditionMode        = [string]$BuildConfig.EditionMode
         Edition            = [string]$BuildConfig.Edition
+        AppxCatalogVersion = [int]$BuildConfig.AppxCatalogVersion
         Appx               = (& $sortedOrEmpty $BuildConfig.AppxPackages)
+        AiRemovalPolicy    = [string]$BuildConfig.AiRemoval.Policy
+        AiCatalogVersion   = [int]$BuildConfig.AiRemoval.CatalogVersion
+        AiAppx             = (& $sortedOrEmpty $BuildConfig.AiRemoval.AppxPrefixes)
+        AiOptionalFeatures = (& $sortedOrEmpty $BuildConfig.AiRemoval.OptionalFeatures)
         RegistryTweaks     = (& $sortedOrEmpty $BuildConfig.RegistryTweaks)
         Features           = (& $sortedOrEmpty $BuildConfig.Features)
         CursorPackKind     = [string]$BuildConfig.CursorPackKind

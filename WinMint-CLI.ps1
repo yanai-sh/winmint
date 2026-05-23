@@ -48,6 +48,7 @@ param(
     [switch]$DesktopUI,
     [switch]$Gaming,
     [switch]$DmaInterop,
+    [switch]$NoDmaInterop,
     [ValidateSet('None', 'FlowEverything', 'Raycast')]
     [string]$Launcher = 'None',
     [switch]$LiveInstallAudit,
@@ -90,6 +91,7 @@ $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
     $PSBoundParameters.ContainsKey('DesktopUI') -or
     $PSBoundParameters.ContainsKey('Gaming') -or
     $PSBoundParameters.ContainsKey('DmaInterop') -or
+    $PSBoundParameters.ContainsKey('NoDmaInterop') -or
     $PSBoundParameters.ContainsKey('Launcher') -or
     $PSBoundParameters.ContainsKey('LiveInstallAudit') -or
     $PSBoundParameters.ContainsKey('PhoneLink') -or
@@ -146,6 +148,7 @@ if ($headlessMode) {
         -DesktopUI:$DesktopUI `
         -Gaming:$Gaming `
         -DmaInterop:$DmaInterop `
+        -NoDmaInterop:$NoDmaInterop `
         -Launcher $Launcher `
         -LiveInstallAudit:$LiveInstallAudit `
         -PhoneLink:$PhoneLink `

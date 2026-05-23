@@ -90,9 +90,40 @@ function Get-ScSetupProfileBool {
     return [bool]$valueProp.Value
 }
 
+function Get-ScSetupProfileValue {
+    param(
+        [string]$Section,
+        [string]$Name,
+        $Default = $null
+    )
+    if (-not $setupProfile) { return $Default }
+    $sectionProp = $setupProfile.PSObject.Properties[$Section]
+    if (-not $sectionProp) { return $Default }
+    $valueProp = $sectionProp.Value.PSObject.Properties[$Name]
+    if (-not $valueProp) { return $Default }
+    return $valueProp.Value
+}
+
+function ConvertTo-ScStringArray {
+    param($Value)
+    @(
+        @($Value) |
+            ForEach-Object { ([string]$_) -split ',' } |
+            ForEach-Object { ([string]$_).Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique
+    )
+}
+
 $preserveWindowsUpdate = Get-ScSetupProfileBool -Section 'setupComplete' -Name 'preserveWindowsUpdate' -Default $true
 $disableVirtualDesktopFlyout = Get-ScSetupProfileBool -Section 'setupComplete' -Name 'disableVirtualDesktopFlyout' -Default $false
 $removeRecall = Get-ScSetupProfileBool -Section 'setupComplete' -Name 'removeRecall' -Default $true
+$aiPolicy = [string](Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'policy' -Default 'Core')
+$aiRemoveRecall = [bool](Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'removeRecall' -Default $removeRecall)
+$aiDisableServices = [bool](Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'disableAiServices' -Default $false)
+$aiDisableTasks = [bool](Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'disableAiTasks' -Default $false)
+$aiServicesToDisable = @(ConvertTo-ScStringArray (Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'servicesToDisable' -Default @('WSAIFabricSvc')))
+$aiTaskPatternsToDisable = @(ConvertTo-ScStringArray (Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'scheduledTaskPatternsToDisable' -Default @('Recall', 'WindowsAI', 'Copilot')))
 
 function Invoke-ScOneDriveRemoval {
     Write-ScLog 'Removing OneDrive machine integration.'
@@ -208,6 +239,107 @@ function Invoke-ScOneDriveRemoval {
     Remove-Item -Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\OneDrive*.lnk" -Force -ErrorAction SilentlyContinue
 }
 
+function Invoke-ScAiServiceableCleanup {
+    $result = [ordered]@{
+        generatedAt = Get-Date -Format o
+        policy = $aiPolicy
+        optionalFeaturesRemoved = @()
+        servicesDisabled = @()
+        scheduledTasksDisabled = @()
+        failed = @()
+    }
+
+    if ($aiRemoveRecall) {
+        try {
+            $r = Get-WindowsOptionalFeature -Online -ErrorAction SilentlyContinue |
+                Where-Object { $_.State -eq 'Enabled' -and $_.FeatureName -like 'Recall' }
+            if ($r) {
+                Disable-WindowsOptionalFeature -Online -FeatureName 'Recall' -Remove -ErrorAction SilentlyContinue
+                $result.optionalFeaturesRemoved += 'Recall'
+                Write-ScLog 'Removed Recall optional feature during SetupComplete.'
+            }
+        }
+        catch {
+            $result.failed += [ordered]@{ action = 'RemoveOptionalFeature'; target = 'Recall'; error = [string]$_ }
+            "Recall removal failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+        }
+    }
+
+    if ($aiDisableServices) {
+        foreach ($svcName in @($aiServicesToDisable)) {
+            if ([string]::IsNullOrWhiteSpace([string]$svcName)) { continue }
+            try {
+                $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+                if (-not $svc) { continue }
+                Stop-Service -Name $svcName -ErrorAction SilentlyContinue
+                Set-Service -Name $svcName -StartupType Disabled -ErrorAction SilentlyContinue
+                $null = & reg.exe add "HKLM\SYSTEM\CurrentControlSet\Services\$svcName" /v Start /t REG_DWORD /d 4 /f 2>$null
+                $result.servicesDisabled += [string]$svcName
+                Write-ScLog "Disabled AI service: $svcName"
+            }
+            catch {
+                $result.failed += [ordered]@{ action = 'DisableService'; target = [string]$svcName; error = [string]$_ }
+                "AI service disable failed for ${svcName}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+            }
+        }
+    }
+
+    if ($aiDisableTasks) {
+        $pattern = '(' + (($aiTaskPatternsToDisable | ForEach-Object { [regex]::Escape([string]$_) }) -join '|') + ')'
+        if (-not [string]::IsNullOrWhiteSpace($pattern) -and $pattern -ne '()') {
+            foreach ($task in @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match $pattern -or $_.TaskPath -match $pattern })) {
+                $name = "$($task.TaskPath)$($task.TaskName)"
+                try {
+                    Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null
+                    $result.scheduledTasksDisabled += $name
+                    Write-ScLog "Disabled AI scheduled task: $name"
+                }
+                catch {
+                    $result.failed += [ordered]@{ action = 'DisableScheduledTask'; target = $name; error = [string]$_ }
+                    "AI scheduled task disable failed for ${name}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+                }
+            }
+        }
+    }
+
+    $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $logDir 'SetupComplete_AiRemoval.json') -Encoding UTF8
+}
+
+function Invoke-ScOobeRehydrationSuppression {
+    $result = [ordered]@{
+        generatedAt = Get-Date -Format o
+        removedOobeKeys = @()
+        workCompleted = @()
+        failed = @()
+    }
+    foreach ($name in @('DevHomeUpdate', 'OutlookUpdate', 'ChatAutoInstall')) {
+        $oobePath = "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\$name"
+        try {
+            if (Test-Path -LiteralPath $oobePath) {
+                Remove-Item -LiteralPath $oobePath -Recurse -Force -ErrorAction Stop
+                $result.removedOobeKeys += $name
+                Write-ScLog "Removed OOBE rehydration key: $name"
+            }
+        }
+        catch {
+            $result.failed += [ordered]@{ action = 'RemoveOobeRehydrationKey'; target = $name; error = [string]$_ }
+        }
+
+        $schedulerPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\$name"
+        try {
+            if (-not (Test-Path -LiteralPath $schedulerPath)) {
+                New-Item -Path $schedulerPath -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+            Set-ItemProperty -LiteralPath $schedulerPath -Name 'workCompleted' -Type DWord -Value 1 -Force
+            $result.workCompleted += $name
+        }
+        catch {
+            $result.failed += [ordered]@{ action = 'SetOobeWorkCompleted'; target = $name; error = [string]$_ }
+        }
+    }
+    $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $logDir 'SetupComplete_OobeRehydration.json') -Encoding UTF8
+}
+
 Write-ScLog 'SetupComplete.ps1 start'
 
 $scripts = @(
@@ -224,6 +356,7 @@ $scripts = @(
     {
         Invoke-ScOneDriveRemoval
     }
+    { Invoke-ScOobeRehydrationSuppression }
     {
         try {
             Enable-ComputerRestore -Drive $env:SystemDrive -ErrorAction Stop
@@ -273,17 +406,7 @@ $scripts = @(
             & $a[0] $a[1..($a.Count - 1)] 2>$null
         }
     }
-    {
-        if (-not $removeRecall) {
-            Write-ScLog 'Skipping Recall removal by setup profile.'
-            return
-        }
-        $r = Get-WindowsOptionalFeature -Online -ErrorAction SilentlyContinue |
-            Where-Object { $_.State -eq 'Enabled' -and $_.FeatureName -like 'Recall' }
-        if ($r) {
-            Disable-WindowsOptionalFeature -Online -FeatureName 'Recall' -Remove -ErrorAction SilentlyContinue
-        }
-    }
+    { Invoke-ScAiServiceableCleanup }
     {
         if (-not $disableVirtualDesktopFlyout) {
             Write-ScLog 'Skipping virtual desktop flyout override by setup profile.'

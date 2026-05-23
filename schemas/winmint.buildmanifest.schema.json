@@ -54,6 +54,7 @@
     "sizeDelta",
     "servicing",
     "tweaks",
+    "policies",
     "drivers",
     "payloads",
     "firstLogon",
@@ -63,7 +64,7 @@
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "minimum": 1
+      "const": 2
     },
     "builtAt": {
       "type": "string",
@@ -101,7 +102,7 @@
     },
     "target": {
       "type": "object",
-      "required": ["diskMode", "diskLayout"],
+      "required": ["diskMode", "diskLayout", "primaryAssumption"],
       "additionalProperties": false,
       "properties": {
         "diskMode": { "type": "string", "enum": ["Manual", "AutoWipeDisk0", "DualBootReserved"] },
@@ -121,7 +122,8 @@
             "msrMb": { "type": "integer" },
             "recoveryMb": { "type": "integer" }
           }
-        }
+        },
+        "primaryAssumption": { "type": "string", "const": "Windows11HomeSingleLanguageEnUS" }
       }
     },
     "regional": {
@@ -137,28 +139,36 @@
         "homeLocationGeoId": { "type": "integer" },
         "dmaInterop": {
           "type": "object",
-          "required": ["enabled", "setupCountry", "setupUserLocale", "setupHomeLocationGeoId", "restoreUserLocale", "restoreHomeLocationGeoId"],
+          "required": ["enabled", "defaultEnabled", "setupCountry", "setupUserLocale", "setupHomeLocationGeoId", "restoreUserLocale", "restoreHomeLocationGeoId"],
           "additionalProperties": false,
           "properties": {
             "enabled": { "type": "boolean" },
+            "defaultEnabled": { "type": "boolean" },
             "setupCountry": { "type": "string" },
             "setupUserLocale": { "type": "string" },
             "setupHomeLocationGeoId": { "type": "integer" },
+            "setupLatchedCountry": { "type": "string" },
+            "setupLatchedGeoId": { "type": "integer" },
             "restoreUserLocale": { "type": "string" },
-            "restoreHomeLocationGeoId": { "type": "integer" }
+            "restoreHomeLocationGeoId": { "type": "integer" },
+            "restoredUserLocale": { "type": "string" },
+            "restoredHomeLocationGeoId": { "type": "integer" },
+            "restoredTimeZoneId": { "type": "string" },
+            "locationServicesPolicy": { "type": "string", "enum": ["enabled", "disabled", "unchanged"] }
           }
         }
       }
     },
     "removals": {
       "type": "object",
-      "required": ["appxPrefixes", "appxRemoved", "appxRemovedCount", "capabilitiesRemoved", "languagePackagesRemoved", "languagePackagesRemovedCount", "featuresEnabled"],
+      "required": ["appxPrefixes", "appxCatalogVersion", "appxRemoved", "appxRemovedCount", "capabilitiesRemoved", "windowsPackagesRemoved", "languagePackagesRemoved", "languagePackagesRemovedCount", "oobeRehydration", "featuresEnabled", "ai"],
       "additionalProperties": false,
       "properties": {
         "appxPrefixes": {
           "type": "array",
           "items": { "type": "string" }
         },
+        "appxCatalogVersion": { "type": "integer", "minimum": 1 },
         "appxRemoved": {
           "type": "array",
           "items": { "type": "string" }
@@ -171,6 +181,10 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "windowsPackagesRemoved": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "languagePackagesRemoved": {
           "type": "array",
           "items": { "type": "string" }
@@ -179,9 +193,70 @@
           "type": "integer",
           "minimum": 0
         },
+        "oobeRehydration": {
+          "type": "object",
+          "required": ["blocked", "workCompleted", "failed"],
+          "additionalProperties": false,
+          "properties": {
+            "blocked": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "workCompleted": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "failed": {
+              "type": "array",
+              "items": { "type": "object" }
+            }
+          }
+        },
         "featuresEnabled": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "ai": {
+          "type": "object",
+          "required": ["policy", "catalogVersion", "appxPrefixes", "appxRemoved", "optionalFeaturesRemoved", "registryPoliciesApplied", "servicesDisabled", "scheduledTasksDisabled", "aggressiveActions", "failed", "recoveryBundlePath"],
+          "additionalProperties": false,
+          "properties": {
+            "policy": { "type": "string", "enum": ["Core", "ServiceableFull", "AggressiveExperimental"] },
+            "catalogVersion": { "type": "integer", "minimum": 1 },
+            "appxPrefixes": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "appxRemoved": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "optionalFeaturesRemoved": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "registryPoliciesApplied": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "servicesDisabled": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "scheduledTasksDisabled": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "aggressiveActions": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "failed": {
+              "type": "array",
+              "items": { "type": "object" }
+            },
+            "recoveryBundlePath": { "type": "string" }
+          }
         },
         "oneDriveSetupStubs": {
           "type": "object",
@@ -332,6 +407,73 @@
               "rollbackCoverage": { "type": "string", "enum": ["none", "partial", "full"] },
               "error": { "type": "string" }
             }
+          }
+        }
+      }
+    },
+    "policies": {
+      "type": "object",
+      "required": ["homePrivacy", "laptopDefaults", "locationPosture", "storageSense", "modernStandby", "wpbt", "dualBootClock"],
+      "additionalProperties": false,
+      "properties": {
+        "homePrivacy": {
+          "type": "object",
+          "required": ["enabled", "telemetry", "allowTelemetry"],
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "telemetry": { "type": "string" },
+            "allowTelemetry": { "type": "integer" }
+          }
+        },
+        "laptopDefaults": {
+          "type": "object",
+          "required": ["enabled"],
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        },
+        "locationPosture": {
+          "type": "object",
+          "required": ["enabled", "findMyDeviceAllowed"],
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "findMyDeviceAllowed": { "type": "boolean" }
+          }
+        },
+        "storageSense": {
+          "type": "object",
+          "required": ["enabled", "downloadsCleanup"],
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "downloadsCleanup": { "type": "string" }
+          }
+        },
+        "modernStandby": {
+          "type": "object",
+          "required": ["networkConnectivity"],
+          "additionalProperties": false,
+          "properties": {
+            "networkConnectivity": { "type": "string" }
+          }
+        },
+        "wpbt": {
+          "type": "object",
+          "required": ["disableWpbtExecution"],
+          "additionalProperties": false,
+          "properties": {
+            "disableWpbtExecution": { "type": "boolean" }
+          }
+        },
+        "dualBootClock": {
+          "type": "object",
+          "required": ["realTimeIsUniversal"],
+          "additionalProperties": false,
+          "properties": {
+            "realTimeIsUniversal": { "type": "boolean" }
           }
         }
       }

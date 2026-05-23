@@ -69,13 +69,68 @@
       "online": false
     },
     {
-      "id": "uac-no-secure-desktop",
-      "description": "Show UAC consent prompts without switching to the dimmed secure desktop.",
+      "id": "home-privacy-policy",
+      "description": "Apply Windows 11 Home-safe privacy defaults.",
+      "scope": "machine and default user registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Use required-only Home telemetry and disable suggestion/ad personalization surfaces without disabling location services.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "location-disabled-policy",
+      "description": "Disable Windows location services and Find My Device when explicitly selected.",
+      "scope": "machine policy registry",
+      "risk": "medium",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Apply the explicit no-location posture; default laptop builds keep location and Find My Device available.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "storage-sense-policy",
+      "description": "Enable Storage Sense safe cleanup while protecting Downloads.",
+      "scope": "default user registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Turn on safe laptop cleanup defaults with Downloads auto-cleanup disabled.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "modern-standby-policy",
+      "description": "Disable Modern Standby network connectivity by default.",
       "scope": "machine policy registry",
       "risk": "low",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Keep UAC consent prompts enabled while avoiding the disruptive screen-dimming secure desktop switch.",
+      "intent": "Reduce laptop sleep battery drain without disabling sleep or power management.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "oobe-rehydration-policy",
+      "description": "Suppress Dev Home, Outlook, and Chat OOBE rehydration jobs.",
+      "scope": "machine registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Prevent selected consumer app rehydration without disabling Windows Update.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "wpbt-policy",
+      "description": "Disable Windows Platform Binary Table execution.",
+      "scope": "offline registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Prevent firmware-staged OEM executables from running during setup.",
       "offline": true,
       "online": true
     },
@@ -87,17 +142,6 @@
       "reversible": true,
       "phase": "offline-image",
       "intent": "Reduce Edge promotional, commerce, telemetry, and sidebar noise for Minimal builds.",
-      "offline": true,
-      "online": true
-    },
-    {
-      "id": "edge-policy-copilotplus",
-      "description": "Deprecated compatibility group for the old CopilotPlus-preserving Edge posture.",
-      "scope": "machine policy registry",
-      "risk": "low",
-      "reversible": true,
-      "phase": "offline-image",
-      "intent": "Retained for manifest compatibility only; CopilotPlus now uses edge-policy-minimal plus windows-ai-full-policy.",
       "offline": true,
       "online": true
     },
@@ -114,7 +158,7 @@
     },
     {
       "id": "windows-ai-full-policy",
-      "description": "Disable Copilot, Recall, Edge AI, inbox app AI features, and app access to system/generative AI models.",
+      "description": "Disable Copilot, Recall, Edge AI, inbox app AI features, Office Copilot defaults, and app access to system/generative AI models.",
       "scope": "machine and default user policy registry",
       "risk": "medium",
       "reversible": true,
@@ -125,18 +169,29 @@
     },
     {
       "id": "dual-boot-windows-policy",
-      "description": "Dual boot: disable Fast Startup, prevent automatic BitLocker device encryption, and disable WPBT execution.",
+      "description": "Dual boot: disable Fast Startup and prevent automatic BitLocker device encryption.",
       "scope": "offline registry",
       "risk": "medium",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Avoid dual-boot friction from Fast Startup, surprise device encryption, and firmware payload injection.",
+      "intent": "Avoid dual-boot friction from Fast Startup and surprise device encryption.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "dual-boot-clock-policy",
+      "description": "Dual boot: keep RTC in UTC.",
+      "scope": "offline registry",
+      "risk": "medium",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Set RealTimeIsUniversal only for dual-boot builds to avoid clock drift with Linux.",
       "offline": true,
       "online": true
     },
     {
       "id": "onedrive-policy",
-      "description": "Remove OneDrive integration, block sync/reinstall policies, hide Explorer namespace, and force known folders back to local user-profile paths.",
+      "description": "Remove OneDrive integration, block sync/reinstall policies, hide Explorer namespace, and keep known folders on local user-profile paths.",
       "scope": "machine and default user registry",
       "risk": "low",
       "reversible": true,
@@ -153,6 +208,28 @@
       "reversible": true,
       "phase": "offline-image",
       "intent": "Suppress Game Bar capture prompts and GameDVR recording defaults.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "gaming-performance-policy",
+      "description": "Enable Gaming profile Game Mode, HAGS, and windowed-game optimization defaults.",
+      "scope": "machine and default user registry",
+      "risk": "medium",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Apply laptop-friendly Gaming profile performance defaults only when the Gaming group is selected.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "desktopui-policy",
+      "description": "Apply DesktopUI profile Explorer and snap behavior defaults.",
+      "scope": "default user registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Set DesktopUI-only shell preferences without changing Minimal or Gaming builds.",
       "offline": true,
       "online": true
     },

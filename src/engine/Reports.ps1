@@ -353,7 +353,7 @@ function Initialize-WinMintBuildManifest {
     if ($Config.InstallKomorebi) { $layers.Add('komorebi') }
 
     $script:WinMintBuildManifest = [ordered]@{
-        schemaVersion       = 1
+        schemaVersion       = 2
         builtAt             = [DateTimeOffset]::Now.ToString('o')
         buildDurationSeconds = $null
         buildResult         = 'pending'
@@ -365,6 +365,7 @@ function Initialize-WinMintBuildManifest {
         target              = [ordered]@{
             diskMode   = [string]$Config.DiskMode
             diskLayout = $Config.DiskLayout
+            primaryAssumption = [string]$Config.PrimaryAssumption
         }
         regional            = [ordered]@{
             timeZoneId = [string]$Config.TimeZoneId
@@ -375,6 +376,7 @@ function Initialize-WinMintBuildManifest {
             homeLocationGeoId = [int]$Config.HomeLocationGeoId
             dmaInterop = [ordered]@{
                 enabled = [bool]$Config.DmaInterop.Enabled
+                defaultEnabled = $true
                 setupCountry = [string]$Config.DmaInterop.SetupCountry
                 setupUserLocale = [string]$Config.SetupUserLocale
                 setupHomeLocationGeoId = [int]$Config.SetupHomeLocationGeoId
@@ -390,11 +392,18 @@ function Initialize-WinMintBuildManifest {
         }
         removals            = [ordered]@{
             appxPrefixes        = @($Config.AppxPackages)
+            appxCatalogVersion  = [int]$Config.AppxCatalogVersion
             appxRemoved         = @()
             appxRemovedCount    = 0
             capabilitiesRemoved = @()
+            windowsPackagesRemoved = @()
             languagePackagesRemoved = @()
             languagePackagesRemovedCount = 0
+            oobeRehydration = [ordered]@{
+                blocked = @('DevHomeUpdate', 'OutlookUpdate', 'ChatAutoInstall')
+                workCompleted = @('DevHomeUpdate', 'OutlookUpdate', 'ChatAutoInstall')
+                failed = @()
+            }
             featuresEnabled     = @($Config.Features)
             ai = [ordered]@{
                 policy = [string]$Config.AiRemoval.Policy
@@ -439,6 +448,33 @@ function Initialize-WinMintBuildManifest {
                     New-WinMintRegistryTweakDetail -Group $group -Status $status
                 }
             )
+        }
+        policies            = [ordered]@{
+            homePrivacy = [ordered]@{
+                enabled = (@($Config.RegistryTweaks) -contains 'home-privacy-policy')
+                telemetry = 'RequiredOnly'
+                allowTelemetry = 1
+            }
+            laptopDefaults = [ordered]@{
+                enabled = ((@($Config.RegistryTweaks) -contains 'storage-sense-policy') -and (@($Config.RegistryTweaks) -contains 'modern-standby-policy'))
+            }
+            locationPosture = [ordered]@{
+                enabled = [bool]$Config.Privacy.Location
+                findMyDeviceAllowed = [bool]$Config.Privacy.Location
+            }
+            storageSense = [ordered]@{
+                enabled = (@($Config.RegistryTweaks) -contains 'storage-sense-policy')
+                downloadsCleanup = 'disabled'
+            }
+            modernStandby = [ordered]@{
+                networkConnectivity = if (@($Config.RegistryTweaks) -contains 'modern-standby-policy') { 'disabled' } else { 'unchanged' }
+            }
+            wpbt = [ordered]@{
+                disableWpbtExecution = (@($Config.RegistryTweaks) -contains 'wpbt-policy')
+            }
+            dualBootClock = [ordered]@{
+                realTimeIsUniversal = (@($Config.RegistryTweaks) -contains 'dual-boot-clock-policy')
+            }
         }
         drivers             = [ordered]@{
             source        = [string]$Config.Drivers.Source
@@ -596,6 +632,7 @@ function Save-WinMintRecoveryBundle {
 
     $aiScriptPath = Join-Path $recoveryDir 'Recover-WinMintAiPolicy.ps1'
     $dmaScriptPath = Join-Path $recoveryDir 'Recover-WinMintDmaRegion.ps1'
+    $policyScriptPath = Join-Path $recoveryDir 'Recover-WinMintSystemPolicies.ps1'
     $jsonPath = Join-Path $recoveryDir 'WinMint-Recovery.json'
     $readmePath = Join-Path $recoveryDir 'README.md'
 
@@ -611,7 +648,14 @@ $policyRoots = @(
   'HKLM:\SOFTWARE\Policies\Microsoft\Edge',
   'HKLM:\SOFTWARE\Policies\WindowsNotepad',
   'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint',
-  'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy'
+  'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy',
+  'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\generativeAI',
+  'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\systemAIModels',
+  'HKCU:\Software\Policies\Microsoft\Windows\WindowsAI',
+  'HKCU:\Software\Microsoft\Windows\Shell\ClickToDo',
+  'HKCU:\Software\Microsoft\Office\16.0\Word\Options',
+  'HKCU:\Software\Microsoft\Office\16.0\Excel\Options',
+  'HKCU:\Software\Microsoft\Office\16.0\OneNote\Options\Copilot'
 )
 foreach ($path in $policyRoots) {
   if (Test-Path -LiteralPath $path) {
@@ -627,7 +671,7 @@ foreach ($svcName in @('WSAIFabricSvc')) {
   }
 }
 Get-ScheduledTask -ErrorAction SilentlyContinue |
-  Where-Object { $_.TaskName -match '(?i)Recall|WindowsAI|Copilot' -or $_.TaskPath -match '(?i)Recall|WindowsAI|Copilot' } |
+  Where-Object { $_.TaskName -match '(?i)Recall|WindowsAI|Copilot|Office Actions Server' -or $_.TaskPath -match '(?i)Recall|WindowsAI|Copilot|Office Actions Server' } |
   ForEach-Object {
     if ($PSCmdlet.ShouldProcess("$($_.TaskPath)$($_.TaskName)", 'enable scheduled task')) {
       Enable-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -ErrorAction SilentlyContinue | Out-Null
@@ -661,11 +705,56 @@ Write-Host 'WinMint DMA-visible region restore finished.'
 "@
     Set-Content -LiteralPath $dmaScriptPath -Value $dmaScript -Encoding UTF8
 
+    $policyScript = @'
+#Requires -Version 5.1
+[CmdletBinding(SupportsShouldProcess)]
+param()
+
+$ErrorActionPreference = 'Continue'
+function Remove-RegValueIfPresent {
+  param([string]$Path, [string]$Name)
+  if (-not (Test-Path -LiteralPath $Path)) { return }
+  if ($PSCmdlet.ShouldProcess("$Path\$Name", 'remove registry value')) {
+    Remove-ItemProperty -LiteralPath $Path -Name $Name -ErrorAction SilentlyContinue
+  }
+}
+function Remove-RegKeyIfPresent {
+  param([string]$Path)
+  if (-not (Test-Path -LiteralPath $Path)) { return }
+  if ($PSCmdlet.ShouldProcess($Path, 'remove registry key')) {
+    Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
+
+foreach ($name in 'DevHomeUpdate', 'OutlookUpdate', 'ChatAutoInstall') {
+  Remove-RegValueIfPresent -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\$name" -Name 'workCompleted'
+}
+foreach ($name in 'DisableLocation', 'DisableWindowsLocationProvider', 'DisableLocationScripting') {
+  Remove-RegValueIfPresent -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors' -Name $name
+}
+Remove-RegValueIfPresent -Path 'HKLM:\SOFTWARE\Policies\Microsoft\FindMyDevice' -Name 'AllowFindMyDevice'
+foreach ($root in 'HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy', 'HKU:\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy') {
+  foreach ($name in '01', '04', '08', '32') { Remove-RegValueIfPresent -Path $root -Name $name }
+}
+Remove-RegKeyIfPresent -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9'
+Remove-RegValueIfPresent -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name 'DisableWpbtExecution'
+Remove-RegValueIfPresent -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation' -Name 'RealTimeIsUniversal'
+foreach ($name in 'AllowAutoGameMode', 'AutoGameModeEnabled') { Remove-RegValueIfPresent -Path 'HKCU:\Software\Microsoft\GameBar' -Name $name }
+Remove-RegValueIfPresent -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -Name 'HwSchMode'
+Remove-RegValueIfPresent -Path 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences' -Name 'DirectXUserGlobalSettings'
+foreach ($name in 'LastActiveClick', 'SnapAssist', 'EnableSnapBar', 'EnableSnapAssistFlyout') {
+  Remove-RegValueIfPresent -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name $name
+}
+Write-Host 'WinMint system policy rollback finished. Removed provisioned AppX/optional feature payloads are not restored by this script.'
+'@
+    Set-Content -LiteralPath $policyScriptPath -Value $policyScript -Encoding UTF8
+
     $recovery = [ordered]@{
         generatedAt = [DateTimeOffset]::Now.ToString('o')
         aiPolicy = $script:WinMintBuildManifest.removals.ai.policy
         aiRecoveryScript = $aiScriptPath
         dmaRecoveryScript = $dmaScriptPath
+        systemPolicyRecoveryScript = $policyScriptPath
         cannotAutomaticallyRestore = @(
             'Removed provisioned AppX payloads',
             'Removed optional feature payloads',
@@ -677,7 +766,7 @@ Write-Host 'WinMint DMA-visible region restore finished.'
     $readme = @(
         '# WinMint Recovery Bundle'
         ''
-        'These scripts reverse only serviceable policy, service, task, and visible-region state.'
+        'These scripts reverse only serviceable policy, service, task, visible-region, and selected user-preference registry state.'
         ''
         'They do not reinstall AppX packages, optional feature payloads, or CBS packages removed from the image. To restore those payloads, rebuild from the original source ISO, reinstall from Microsoft Store/winget where available, or perform a Windows repair install.'
         ''
@@ -688,7 +777,7 @@ Write-Host 'WinMint DMA-visible region restore finished.'
     if ($script:WinMintBuildManifest.removals.ai) {
         $script:WinMintBuildManifest.removals.ai.recoveryBundlePath = $recoveryDir
     }
-    return [pscustomobject]@{ Directory = $recoveryDir; Ai = $aiScriptPath; Dma = $dmaScriptPath; Json = $jsonPath; Readme = $readmePath }
+    return [pscustomobject]@{ Directory = $recoveryDir; Ai = $aiScriptPath; Dma = $dmaScriptPath; SystemPolicies = $policyScriptPath; Json = $jsonPath; Readme = $readmePath }
 }
 
 function Add-WinMintManifestPayload {

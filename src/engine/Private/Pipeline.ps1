@@ -94,7 +94,7 @@ function Get-WinMintSelectedInstallImage {
     }
     if (-not $selected) {
         $available = ($images | ForEach-Object { $_.ImageName }) -join ', '
-        throw "Edition '$EditionName' was not found in install.wim. Available editions: $available"
+        throw "Fixed edition '$EditionName' was not found in install.wim. WinMint will not silently fall back to another edition. Available editions: $available"
     }
     return $selected
 }
@@ -441,6 +441,7 @@ function Invoke-WinMintIsoPipeline {
 
             if ($null -eq $servicedWimCacheHit) {
                 Invoke-AppxRemoval -MountDir $mountDir -PackagePrefixes $BuildConfig.AppxPackages
+                Invoke-WinMintOfflineAiFeatureRemoval -MountDir $mountDir -AiRemoval $BuildConfig.AiRemoval
                 Remove-WinMintCapabilities -MountDir $mountDir
                 Remove-NonEnglishLanguageFeature `
                     -MountDir $mountDir `

@@ -106,7 +106,7 @@ function Assert-HardwareBypassUnattendGeneration {
         TargetPCName = 'WinMint'
         TargetUser = 'dev'
         TargetPass = ''
-        EditionName = 'Windows 11 Pro'
+        EditionName = 'Windows 11 Home Single Language'
         EditionMode = 'TargetLicense'
         AutoWipeDisk = $false
         AutoLogon = $false
@@ -148,7 +148,7 @@ function Assert-MicrosoftOobeUnattendGeneration {
         TargetUser = 'Yanai'
         AccountMode = 'MicrosoftOobe'
         TargetPass = ''
-        EditionName = 'Windows 11 Pro'
+        EditionName = 'Windows 11 Home Single Language'
         EditionMode = 'TargetLicense'
         AutoWipeDisk = $true
         AutoLogon = $false
@@ -192,7 +192,7 @@ function Assert-LocalAccountUnattendGeneration {
         TargetUser = 'dev'
         AccountMode = 'Local'
         TargetPass = ''
-        EditionName = 'Windows 11 Pro'
+        EditionName = 'Windows 11 Home Single Language'
         EditionMode = 'TargetLicense'
         AutoWipeDisk = $false
         AutoLogon = $false
@@ -252,7 +252,7 @@ function Assert-ServiceabilityGuardrails {
         TargetPCName = 'WinMint'
         TargetUser = 'dev'
         TargetPass = 'passw0rd!'
-        EditionName = 'Windows 11 Pro'
+        EditionName = 'Windows 11 Home Single Language'
         EditionMode = 'Fixed'
         AutoWipeDisk = $false
         AutoLogon = $true
@@ -278,8 +278,8 @@ function Assert-ServiceabilityGuardrails {
     if ($xmlText -match '<Key>\s*[A-Z0-9]{5}-') {
         Add-SmokeFailure 'Fixed-edition autounattend should select images with /IMAGE/NAME metadata, not generic setup keys.'
     }
-    if ($xmlText -notmatch '<Key>\s*/IMAGE/NAME\s*</Key>' -or $xmlText -notmatch '<Value>\s*Windows 11 Pro\s*</Value>') {
-        Add-SmokeFailure 'Fixed Windows 11 Pro autounattend should select the image with official ImageInstall metadata.'
+    if ($xmlText -notmatch '<Key>\s*/IMAGE/NAME\s*</Key>' -or $xmlText -notmatch '<Value>\s*Windows 11 Home Single Language\s*</Value>') {
+        Add-SmokeFailure 'Fixed Windows 11 Home Single Language autounattend should select the image with official ImageInstall metadata.'
     }
 }
 
@@ -337,15 +337,28 @@ function Assert-MinimalAppxRemovalCatalogCoversPolicy {
             'Microsoft.ZuneVideo',
             'Microsoft.Office.OneNote',
             'Microsoft.RemoteDesktop',
-            'Microsoft.RemoteDesktopPreview',
-            'McAfee',
-            'NortonLifeLock',
-            'ExpressVPN',
-            'Surfshark',
-            'Piriform.CCleaner'
+            'Microsoft.RemoteDesktopPreview'
         )) {
         if ($allRemovalPrefixes -notcontains $expected) {
             Add-SmokeFailure "Expected Minimal AppX removal catalog to include '$expected'."
+        }
+    }
+    foreach ($candidateOnly in @('McAfee', 'NortonLifeLock', 'ExpressVPN', 'Surfshark', 'Piriform.CCleaner')) {
+        if ($allRemovalPrefixes -contains $candidateOnly) {
+            Add-SmokeFailure "DMA-on default AppX removal must not include broad third-party/OEM candidate '$candidateOnly'."
+        }
+    }
+
+    $catalogPath = Join-Path $root 'config\appx-removal.json'
+    $catalog = Get-Content -LiteralPath $catalogPath -Raw | ConvertFrom-Json
+    foreach ($groupName in @('consumerThirdParty', 'oemConsumer')) {
+        if (@($catalog.candidateOnlyGroups) -notcontains $groupName) {
+            Add-SmokeFailure "AppX removal catalog should keep '$groupName' as a candidate-only group for non-DMA/OEM drift."
+        }
+    }
+    foreach ($candidateOnly in @('McAfee', 'NortonLifeLock', 'ExpressVPN', 'Surfshark', 'Piriform.CCleaner')) {
+        if (@($catalog.groups.consumerThirdParty) -notcontains $candidateOnly -and @($catalog.groups.oemConsumer) -notcontains $candidateOnly) {
+            Add-SmokeFailure "Candidate AppX catalog should retain non-default fallback prefix '$candidateOnly'."
         }
     }
 }
@@ -413,6 +426,115 @@ function Assert-ConsumerUtilityPackagesNeverInRemovalList {
     }
 }
 
+function Assert-HomeFirstDefaultsAndPolicySurface {
+    $defaultProfile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
+    $defaultConfig = New-WinMintBuildConfig -BuildProfile $defaultProfile
+
+    if ([int]$defaultProfile.schemaVersion -ne 2) {
+        Add-SmokeFailure 'Default generated profile must use schemaVersion 2.'
+    }
+    if ($defaultProfile.regional.uiLanguage -ne 'en-US' -or
+        $defaultProfile.regional.uiLanguageFallback -ne 'en-US' -or
+        $defaultProfile.regional.systemLocale -ne 'en-US' -or
+        $defaultProfile.regional.userLocale -ne 'en-US' -or
+        $defaultProfile.regional.inputLocale -ne 'en-US' -or
+        [int]$defaultProfile.regional.homeLocationGeoId -ne 244) {
+        Add-SmokeFailure 'Default generated profile must use en-US regional defaults and GeoID 244.'
+    }
+    if (-not [bool]$defaultProfile.tweaks.dmaInterop -or
+        -not [bool]$defaultConfig.DmaInterop.Enabled -or
+        $defaultConfig.SetupUserLocale -ne 'en-IE' -or
+        [int]$defaultConfig.SetupHomeLocationGeoId -ne 68) {
+        Add-SmokeFailure 'DMA interop must be default-on and use Ireland/en-IE/GeoID 68 for setup.'
+    }
+    if (-not [bool]$defaultProfile.privacy.location -or @($defaultConfig.RegistryTweaks) -contains 'location-disabled-policy') {
+        Add-SmokeFailure 'Location services must default on and must not select the location-disabled policy.'
+    }
+
+    $fixedSettings = New-SmokeBuildProfileSettings
+    $fixedSettings.EditionMode = 'Fixed'
+    $fixedSettings.Edition = ''
+    $fixedProfile = New-WinMintBuildProfile -Settings $fixedSettings
+    if ($fixedProfile.target.edition -ne 'Windows 11 Home Single Language') {
+        Add-SmokeFailure 'Fixed-edition generated profiles must default to Windows 11 Home Single Language.'
+    }
+
+    foreach ($expectedDefaultTweak in @('home-privacy-policy', 'storage-sense-policy', 'modern-standby-policy', 'oobe-rehydration-policy', 'wpbt-policy')) {
+        if (@($defaultConfig.RegistryTweaks) -notcontains $expectedDefaultTweak) {
+            Add-SmokeFailure "Home-first defaults must select '$expectedDefaultTweak'."
+        }
+    }
+    foreach ($unexpectedDefaultTweak in @('dual-boot-clock-policy', 'gaming-performance-policy', 'desktopui-policy', 'location-disabled-policy')) {
+        if (@($defaultConfig.RegistryTweaks) -contains $unexpectedDefaultTweak) {
+            Add-SmokeFailure "Default Minimal policy must not select '$unexpectedDefaultTweak'."
+        }
+    }
+    foreach ($unexpectedFeature in @('Microsoft-Windows-Sandbox', 'Containers-DisposableClientVM', 'Windows-Defender-ApplicationGuard')) {
+        if (@($defaultConfig.Features) -contains $unexpectedFeature) {
+            Add-SmokeFailure "Windows 11 Home baseline must not select Pro-only feature '$unexpectedFeature'."
+        }
+    }
+
+    $locationOffSettings = New-SmokeBuildProfileSettings
+    $locationOffSettings.PrivLocation = $false
+    $locationOffConfig = New-WinMintBuildConfig -BuildProfile (New-WinMintBuildProfile -Settings $locationOffSettings)
+    if (@($locationOffConfig.RegistryTweaks) -notcontains 'location-disabled-policy') {
+        Add-SmokeFailure '-NoLocationServices/profile privacy.location=false must select location-disabled-policy.'
+    }
+
+    $dualBootSettings = New-SmokeBuildProfileSettings
+    $dualBootSettings.DiskMode = 'DualBootReserved'
+    $dualBootSettings.DualBootPreset = 'Balanced'
+    $dualBootConfig = New-WinMintBuildConfig -BuildProfile (New-WinMintBuildProfile -Settings $dualBootSettings)
+    if (@($dualBootConfig.RegistryTweaks) -notcontains 'dual-boot-clock-policy') {
+        Add-SmokeFailure 'DualBootReserved builds must set RealTimeIsUniversal through dual-boot-clock-policy.'
+    }
+
+    $gamingSettings = New-SmokeBuildProfileSettings
+    $gamingSettings.ProfileGroups = @('Minimal', 'Gaming')
+    $gamingConfig = New-WinMintBuildConfig -BuildProfile (New-WinMintBuildProfile -Settings $gamingSettings)
+    if (@($gamingConfig.RegistryTweaks) -notcontains 'gaming-performance-policy') {
+        Add-SmokeFailure 'Gaming profile must select gaming-performance-policy.'
+    }
+
+    $desktopSettings = New-SmokeBuildProfileSettings
+    $desktopSettings.ProfileGroups = @('Minimal', 'DesktopUI')
+    $desktopSettings.DesktopUiDefault = $true
+    $desktopConfig = New-WinMintBuildConfig -BuildProfile (New-WinMintBuildProfile -Settings $desktopSettings)
+    if (@($desktopConfig.RegistryTweaks) -notcontains 'desktopui-policy') {
+        Add-SmokeFailure 'DesktopUI profile must select desktopui-policy.'
+    }
+
+    $catalog = Get-Content -LiteralPath (Join-Path $root 'config\appx-removal.json') -Raw | ConvertFrom-Json
+    foreach ($expectedPrefix in @('Microsoft.BingFinance', 'Microsoft.BingTranslator', 'Microsoft.Windows.AIHub', 'Microsoft.Windows.PeopleExperienceHost', 'Windows.CBSPreview')) {
+        if (@($catalog.groups.coreMicrosoft) -notcontains $expectedPrefix) {
+            Add-SmokeFailure "AppX core catalog must include '$expectedPrefix'."
+        }
+    }
+    foreach ($expectedCandidate in @('SpotifyAB.SpotifyMusic', 'BytedancePte.Ltd.TikTok', '4DF9E0F8.Netflix', 'king.com', 'AD2F1837.HPAIExperienceCenter', 'DellInc.DellDigitalDelivery', 'E046963F.LenovoCompanion')) {
+        if (@($catalog.groups.consumerThirdParty) -notcontains $expectedCandidate -and @($catalog.groups.oemConsumer) -notcontains $expectedCandidate) {
+            Add-SmokeFailure "AppX candidate catalog must include '$expectedCandidate'."
+        }
+    }
+    foreach ($mustPreserve in @('Microsoft.WindowsStore', 'Microsoft.DesktopAppInstaller', 'Microsoft.SecHealthUI', 'Microsoft.YourPhone', 'Microsoft.WindowsCamera', 'Microsoft.WindowsSoundRecorder', 'Microsoft.MicrosoftStickyNotes', 'Microsoft.WindowsAlarms', 'Microsoft.WindowsNotepad')) {
+        if (@($catalog.preserve) -notcontains $mustPreserve) {
+            Add-SmokeFailure "AppX preserve catalog must include '$mustPreserve'."
+        }
+    }
+
+    $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Staging.ps1') -Raw
+    foreach ($expectedCapability in @('Browser.InternetExplorer', 'Microsoft.Windows.WordPad', 'MathRecognizer')) {
+        if ($stagingText -notmatch [regex]::Escape($expectedCapability)) {
+            Add-SmokeFailure "Capability removal should include '$expectedCapability'."
+        }
+    }
+    foreach ($forbiddenCapability in @('Language.OCR', 'Language.Handwriting', 'Language.Speech', 'Language.TextToSpeech')) {
+        if ($stagingText -match [regex]::Escape($forbiddenCapability)) {
+            Add-SmokeFailure "Default capability removal must not include language feature '$forbiddenCapability'."
+        }
+    }
+}
+
 function Assert-LiveInstallAuditIsNonDestructive {
     $auditPath = Join-Path $root 'tools\audit\Audit-LiveInstall.ps1'
     if (-not (Test-Path -LiteralPath $auditPath)) {
@@ -466,6 +588,117 @@ function Assert-LiveInstallAuditIsStaged {
     $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Unattend.ps1') -Raw
     if ($unattendText -notmatch [regex]::Escape('Audit-LiveInstall.ps1')) {
         Add-SmokeFailure 'Install-Autounattend should stage Audit-LiveInstall.ps1 with setup scripts.'
+    }
+}
+
+function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\setup\FirstLogon.ps1') -Raw
+    foreach ($expected in @('Restore-WinMintDmaRegionalDefaults', 'FirstLogon_RegionalRestore.json', 'Copy-UserInternationalSettingsToSystem', 'restoreLocationServices')) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon DMA restore should contain '$expected'."
+        }
+    }
+    if ($firstLogonText -match [regex]::Escape('Get-WinMintFirstLogonNestedProfileValue -Profile')) {
+        Add-SmokeFailure 'FirstLogon DMA restore must not call Get-WinMintFirstLogonNestedProfileValue with the old -Profile parameter.'
+    }
+    $restoreIndex = $firstLogonText.IndexOf('Restore-WinMintDmaRegionalDefaults')
+    $oneDriveIndex = $firstLogonText.IndexOf('Invoke-WinMintFirstLogonOneDriveRemoval')
+    $agentIndex = $firstLogonText.IndexOf('Launching WinMintAgent')
+    if ($restoreIndex -lt 0 -or $oneDriveIndex -lt 0 -or $agentIndex -lt 0 -or -not ($restoreIndex -lt $oneDriveIndex -and $restoreIndex -lt $agentIndex)) {
+        Add-SmokeFailure 'FirstLogon must restore DMA regional defaults before OneDrive cleanup and agent launch.'
+    }
+}
+
+function Assert-DmaInteropUsesFixedIrelandRegion {
+    $region = Resolve-WinMintDmaInteropSetupRegion
+    if ($region.Country -ne 'Ireland' -or $region.Culture -ne 'en-IE' -or [int]$region.GeoId -ne 68) {
+        Add-SmokeFailure "DMA interoperability must resolve Ireland/en-IE/GeoID 68, got $($region.Country)/$($region.Culture)/$($region.GeoId)."
+    }
+
+    $publicContractText = @(
+        Get-Content -LiteralPath (Join-Path $root 'WinMint-CLI.ps1') -Raw
+        Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Headless.ps1') -Raw
+        Get-Content -LiteralPath (Join-Path $root 'schemas\winmint.buildprofile.schema.json') -Raw
+    ) -join "`n"
+    foreach ($forbidden in @('EeaCountry', 'EEACountry', 'DmaCountry', 'DMACountry', 'SetupCountry')) {
+        if ($publicContractText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "DMA setup country must not be exposed as a public profile/CLI setting ('$forbidden')."
+        }
+    }
+}
+
+function Assert-LiveAuditDistinguishesDmaSetupFromVisibleRegion {
+    $auditText = Get-Content -LiteralPath (Join-Path $root 'tools\audit\Audit-LiveInstall.ps1') -Raw
+    foreach ($expected in @(
+            'knownEeaSetupGeoId',
+            'current.homeLocationGeoId',
+            'restore.homeLocationGeoId',
+            'locationServices',
+            'ai-appx-provisioned-drift',
+            'windows-update-service'
+        )) {
+        if ($auditText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Live audit should distinguish DMA setup/current visible region and AI/platform checks ('$expected')."
+        }
+    }
+}
+
+function Assert-AiRemovalCatalogAndGuardrails {
+    $catalogPath = Join-Path $root 'config\ai-removal.json'
+    if (-not (Test-Path -LiteralPath $catalogPath)) {
+        Add-SmokeFailure 'Expected config\ai-removal.json to exist.'
+        return
+    }
+    $catalogText = Get-Content -LiteralPath $catalogPath -Raw
+    foreach ($expected in @(
+            'MicrosoftWindows.Client.AIX',
+            'MicrosoftWindows.Client.CoreAI',
+            'Microsoft.Windows.Ai.Copilot.Provider',
+            'Microsoft.Edge.GameAssist',
+            'Microsoft.Office.ActionsServer',
+            'Microsoft.WritingAssistant',
+            'Microsoft.Windows.AIHub',
+            'Office Actions Server'
+        )) {
+        if ($catalogText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "AI removal catalog should include '$expected'."
+        }
+    }
+
+    $publicAiText = @(
+        Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\AiRemoval.ps1') -Raw
+        Get-Content -LiteralPath (Join-Path $root 'src\setup\SetupComplete.ps1') -Raw
+        Get-Content -LiteralPath (Join-Path $root 'tools\audit\Audit-LiveInstall.ps1') -Raw
+    ) -join "`n"
+    foreach ($forbidden in @('TrustedInstaller', 'IntegratedServicesRegionPolicySet.json', 'Remove-WindowsPackage', 'Remove-Package', 'Owners', 'DefVis')) {
+        if ($publicAiText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "Serviceable AI removal path must not contain '$forbidden'."
+        }
+    }
+    if ($publicAiText -match '\bRegister-ScheduledTask\b') {
+        Add-SmokeFailure "Serviceable AI removal path must not register scheduled maintenance tasks."
+    }
+}
+
+function Assert-RecoveryBundleIsOutputOnly {
+    $reportsText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Reports.ps1') -Raw
+    foreach ($expected in @(
+            'Save-WinMintRecoveryBundle',
+            "Join-Path `$OutputDir 'recovery'",
+            'Recover-WinMintAiPolicy.ps1',
+            'Recover-WinMintDmaRegion.ps1',
+            'WinMint-Recovery.json'
+        )) {
+        if ($reportsText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Recovery bundle output should include '$expected'."
+        }
+    }
+
+    $setupStagingText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Unattend.ps1') -Raw
+    foreach ($forbidden in @('Recover-WinMintAiPolicy.ps1', 'Recover-WinMintDmaRegion.ps1', 'WinMint-Recovery.json')) {
+        if ($setupStagingText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "Recovery bundle file '$forbidden' must not be staged into the installed OS."
+        }
     }
 }
 
@@ -648,19 +881,16 @@ function Assert-WinPEDriverInjectionDefaultsToSetupOnly {
     }
 }
 
-function Assert-EdgePolicyPreservesCopilotSidebar {
+function Assert-CopilotPlusUsesFullAiRemovalPolicy {
     $minimal = $script:RegistryTweaks | Where-Object id -eq 'edge-policy-minimal' | Select-Object -First 1
-    $copilotPlus = $script:RegistryTweaks | Where-Object id -eq 'edge-policy-copilotplus' | Select-Object -First 1
-    if (-not $minimal -or -not $copilotPlus) {
-        Add-SmokeFailure 'Expected both edge-policy-minimal and edge-policy-copilotplus registry tweaks to exist.'
+    $fullAi = $script:RegistryTweaks | Where-Object id -eq 'windows-ai-full-policy' | Select-Object -First 1
+    if (-not $minimal -or -not $fullAi) {
+        Add-SmokeFailure 'Expected edge-policy-minimal and windows-ai-full-policy registry tweaks to exist.'
         return
     }
     foreach ($expectedStrict in @('HubsSidebarEnabled', 'StandaloneHubsSidebarEnabled', 'WebWidgetAllowed', 'EdgeEnhanceImagesEnabled')) {
         if (@($minimal.set | Where-Object name -eq $expectedStrict).Count -eq 0) {
             Add-SmokeFailure "Expected Minimal Edge policy to set $expectedStrict."
-        }
-        if (@($copilotPlus.set | Where-Object name -eq $expectedStrict).Count -gt 0) {
-            Add-SmokeFailure "CopilotPlus Edge policy must not disable $expectedStrict."
         }
     }
     foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'WebWidgetAllowed', 'CryptoWalletEnabled', 'HideFirstRunExperience')) {
@@ -668,9 +898,25 @@ function Assert-EdgePolicyPreservesCopilotSidebar {
             Add-SmokeFailure "Expected Edge noise policy to set $expected."
         }
     }
-    foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'CryptoWalletEnabled', 'HideFirstRunExperience')) {
-        if (@($copilotPlus.set | Where-Object name -eq $expected).Count -eq 0) {
-            Add-SmokeFailure "Expected CopilotPlus Edge noise policy to set $expected."
+    foreach ($expected in @(
+            'DisableAIDataAnalysis',
+            'DisableClickToDo',
+            'AllowRecallEnablement',
+            'TurnOffSavingSnapshots',
+            'DisableSettingsAgent',
+            'TurnOffWindowsCopilot',
+            'CopilotPageContext',
+            'EdgeEntraCopilotPageContext',
+            'GenAILocalFoundationalModelSettings',
+            'NewTabPageBingChatEnabled',
+            'BuiltInAIAPIsEnabled',
+            'DisableAIFeatures',
+            'LetAppsAccessSystemAIModels',
+            'LetAppsAccessGenerativeAI',
+            'EnableCopilot'
+        )) {
+        if (@($fullAi.set | Where-Object name -eq $expected).Count -eq 0) {
+            Add-SmokeFailure "Expected full AI policy to set $expected."
         }
     }
 }
@@ -702,6 +948,9 @@ function Assert-OneDriveRemovalPolicyIsComplete {
             Add-SmokeFailure "OneDrive removal policy must not point known folders at $forbidden."
         }
     }
+    if (@($policy.set | Where-Object { [string]$_.path -like '*\Shell Folders' -and [string]$_.value -like 'C:\Users\Default\*' }).Count -gt 0) {
+        Add-SmokeFailure 'OneDrive removal policy must not write literal C:\Users\Default shell folder values.'
+    }
 
     $firstLogonPath = Join-Path $root 'src\setup\FirstLogon.ps1'
     $setupCompletePath = Join-Path $root 'src\setup\SetupComplete.ps1'
@@ -711,6 +960,7 @@ function Assert-OneDriveRemovalPolicyIsComplete {
     $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Pipeline.ps1') -Raw
     foreach ($expected in @(
             'FirstLogon_OneDriveAudit.json',
+            'FirstLogon_KnownFolders.json',
             'OneDriveSetup.exe.bak',
             'takeown.exe /f $setupFile',
             'icacls.exe $setupFile',
@@ -857,15 +1107,16 @@ function Assert-RegistryTweakMetadataAndRollback {
     if (@($defaultConfig.RegistryTweaks) -contains 'hardware-bypass') {
         Add-SmokeFailure 'hardware-bypass must remain opt-in and absent from default registry tweaks.'
     }
-    if (@($defaultConfig.RegistryTweaks) -notcontains 'uac-no-secure-desktop') {
-        Add-SmokeFailure 'Default registry tweaks should keep UAC prompts but disable secure-desktop dimming.'
+    if (@($defaultConfig.RegistryTweaks) -contains 'uac-no-secure-desktop') {
+        Add-SmokeFailure 'Default registry tweaks must not disable UAC secure desktop.'
     }
-    $uac = $script:RegistryTweaks | Where-Object id -eq 'uac-no-secure-desktop' | Select-Object -First 1
-    if (-not $uac) {
-        Add-SmokeFailure 'Expected uac-no-secure-desktop registry tweak to exist.'
+    if (@($script:RegistryTweaks | Where-Object id -eq 'uac-no-secure-desktop').Count -gt 0) {
+        Add-SmokeFailure 'uac-no-secure-desktop must not remain as an executable tweak.'
     }
-    elseif (@($uac.set | Where-Object { $_.name -eq 'ConsentPromptBehaviorAdmin' -or $_.name -eq 'EnableLUA' }).Count -gt 0) {
-        Add-SmokeFailure 'UAC dimming tweak must not disable UAC consent or EnableLUA.'
+    foreach ($forbiddenUacName in @('EnableLUA', 'ConsentPromptBehaviorAdmin', 'PromptOnSecureDesktop')) {
+        if (@($script:RegistryTweaks | ForEach-Object { @($_.set) } | Where-Object name -eq $forbiddenUacName).Count -gt 0) {
+            Add-SmokeFailure "WinMint default tweak catalog must not stamp UAC value '$forbiddenUacName'."
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "createdAt": "2026-05-18T00:00:00.0000000+03:00",
   "profileName": "Minimal",
   "profileGroups": [
@@ -40,12 +40,12 @@
   },
   "regional": {
     "timeZoneId": "",
-    "uiLanguage": "",
-    "systemLocale": "",
-    "uiLanguageFallback": "",
-    "userLocale": "",
-    "inputLocale": "",
-    "homeLocationGeoId": 117
+    "uiLanguage": "en-US",
+    "systemLocale": "en-US",
+    "uiLanguageFallback": "en-US",
+    "userLocale": "en-US",
+    "inputLocale": "en-US",
+    "homeLocationGeoId": 244
   },
   "drivers": {
     "source": "Host",
@@ -73,6 +73,7 @@
     "gaming": true,
     "communication": true,
     "microsoftApps": true,
+    "aiPolicy": "ServiceableFull",
     "effectiveAppx": [
       "AvastSoftware",
       "AVGTechnologies",
@@ -135,6 +136,6 @@
     "fileExtensions": true,
     "stickyKeys": true,
     "hardwareBypass": false,
-    "dmaInterop": false
+    "dmaInterop": true
   }
 }

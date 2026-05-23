@@ -146,14 +146,62 @@ function Clear-WinMintAutoLogonPassword {
     }
 }
 
-function Restore-WinMintFirstLogonRegionalDefaults {
-    $setupProfile = Read-WinMintFirstLogonSetupProfile
-    $dmaInterop = [bool](Get-WinMintFirstLogonNestedProfileValue -Profile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'enabled' -Default $false)
-    if (-not $dmaInterop) { return }
+function Set-WinMintFirstLogonLocationServicesPolicy {
+    param([bool]$Enabled)
 
-    $restoreTimeZoneId = [string](Get-WinMintFirstLogonNestedProfileValue -Profile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreTimeZoneId' -Default '')
-    $restoreGeoId = [int](Get-WinMintFirstLogonNestedProfileValue -Profile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreHomeLocationGeoId' -Default 244)
-    $restoreUserLocale = [string](Get-WinMintFirstLogonNestedProfileValue -Profile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreUserLocale' -Default '')
+    $policyPath = 'HKLM\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors'
+    $findMyDevicePath = 'HKLM\SOFTWARE\Policies\Microsoft\FindMyDevice'
+    if ($Enabled) {
+        foreach ($name in @('DisableLocation', 'DisableWindowsLocationProvider', 'DisableLocationScripting')) {
+            Invoke-WinMintFirstLogonReg -Arguments @('delete', $policyPath, '/v', $name, '/f') -AllowFailure
+        }
+        Invoke-WinMintFirstLogonReg -Arguments @('delete', $findMyDevicePath, '/v', 'AllowFindMyDevice', '/f') -AllowFailure
+        Invoke-WinMintFirstLogonReg -Arguments @('add', 'HKLM\SYSTEM\CurrentControlSet\Services\lfsvc', '/v', 'Start', '/t', 'REG_DWORD', '/d', '3', '/f') -AllowFailure
+        try { Set-Service -Name lfsvc -StartupType Manual -ErrorAction SilentlyContinue } catch { }
+    }
+    else {
+        Invoke-WinMintFirstLogonReg -Arguments @('add', $policyPath, '/v', 'DisableLocation', '/t', 'REG_DWORD', '/d', '1', '/f') -AllowFailure
+        Invoke-WinMintFirstLogonReg -Arguments @('add', $policyPath, '/v', 'DisableWindowsLocationProvider', '/t', 'REG_DWORD', '/d', '1', '/f') -AllowFailure
+        Invoke-WinMintFirstLogonReg -Arguments @('add', $policyPath, '/v', 'DisableLocationScripting', '/t', 'REG_DWORD', '/d', '1', '/f') -AllowFailure
+        Invoke-WinMintFirstLogonReg -Arguments @('add', $findMyDevicePath, '/v', 'AllowFindMyDevice', '/t', 'REG_DWORD', '/d', '0', '/f') -AllowFailure
+    }
+}
+
+function Get-WinMintFirstLogonServiceSnapshot {
+    param([string]$Name)
+    try {
+        $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        $start = (Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$Name" -Name Start -ErrorAction SilentlyContinue).Start
+        if (-not $svc) { return [ordered]@{ name = $Name; present = $false; status = ''; start = $start } }
+        return [ordered]@{ name = $Name; present = $true; status = [string]$svc.Status; startType = [string]$svc.StartType; start = $start }
+    }
+    catch {
+        return [ordered]@{ name = $Name; present = $false; status = ''; startType = ''; start = $null; error = $_.Exception.Message }
+    }
+}
+
+function Restore-WinMintDmaRegionalDefaults {
+    $setupProfile = Read-WinMintFirstLogonSetupProfile
+    $dmaInterop = [bool](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'enabled' -Default $false)
+    $reportPath = Join-Path $logDir 'FirstLogon_RegionalRestore.json'
+    if (-not $dmaInterop) {
+        $report = [ordered]@{
+            enabled = $false
+            compliant = $true
+            errors = @()
+        }
+        $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8
+        return [pscustomobject]@{ Enabled = $false; Compliant = $true; Report = $reportPath }
+    }
+
+    $errors = [System.Collections.Generic.List[string]]::new()
+    $setupCountry = [string](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'setupCountry' -Default 'Ireland')
+    $setupUserLocale = [string](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'setupUserLocale' -Default 'en-IE')
+    $setupGeoId = [int](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'setupHomeLocationGeoId' -Default 68)
+    $restoreTimeZoneId = [string](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreTimeZoneId' -Default '')
+    $restoreGeoId = [int](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreHomeLocationGeoId' -Default 244)
+    $restoreUserLocale = [string](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreUserLocale' -Default '')
+    $restoreLocationServices = [bool](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreLocationServices' -Default $true)
     if ([string]::IsNullOrWhiteSpace($restoreTimeZoneId) -and $setupProfile -and $setupProfile.PSObject.Properties['regional']) {
         $regionalTimeZoneProp = $setupProfile.regional.PSObject.Properties['timeZoneId']
         if ($regionalTimeZoneProp) { $restoreTimeZoneId = [string]$regionalTimeZoneProp.Value }
@@ -165,6 +213,7 @@ function Restore-WinMintFirstLogonRegionalDefaults {
                 Out-File (Join-Path $logDir 'FirstLogon.log') -Append
         }
         catch {
+            $errors.Add("Time zone restore failed for ${restoreTimeZoneId}: $_") | Out-Null
             Write-WinMintFirstLogonError "Time zone restore failed for ${restoreTimeZoneId}: $_"
         }
     }
@@ -174,7 +223,35 @@ function Restore-WinMintFirstLogonRegionalDefaults {
             Out-File (Join-Path $logDir 'FirstLogon.log') -Append
     }
     catch {
+        $errors.Add("Home location restore failed for GeoID ${restoreGeoId}: $_") | Out-Null
         Write-WinMintFirstLogonError "Home location restore failed for GeoID ${restoreGeoId}: $_"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale)) {
+        try {
+            Set-Culture -CultureInfo $restoreUserLocale -ErrorAction Stop
+            "$(Get-Date -Format 'o') Restored user culture to $restoreUserLocale after DMA setup." |
+                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        }
+        catch {
+            $errors.Add("User culture restore failed for ${restoreUserLocale}: $_") | Out-Null
+            Write-WinMintFirstLogonError "User culture restore failed for ${restoreUserLocale}: $_"
+        }
+    }
+    try {
+        if (Get-Command Copy-UserInternationalSettingsToSystem -ErrorAction SilentlyContinue) {
+            Copy-UserInternationalSettingsToSystem -WelcomeScreen $true -NewUser $true -ErrorAction Stop
+            "$(Get-Date -Format 'o') Copied restored international settings to system and new-user defaults." |
+                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        }
+    }
+    catch {
+        $errors.Add("International settings copy failed: $_") | Out-Null
+        Write-WinMintFirstLogonError "International settings copy failed: $_"
+    }
+    try { Set-WinMintFirstLogonLocationServicesPolicy -Enabled $restoreLocationServices }
+    catch {
+        $errors.Add("Location services policy restore failed: $_") | Out-Null
+        Write-WinMintFirstLogonError "Location services policy restore failed: $_"
     }
     try {
         Invoke-WinMintFirstLogonReg -Arguments @('add', 'HKLM\SYSTEM\CurrentControlSet\Services\tzautoupdate', '/v', 'Start', '/t', 'REG_DWORD', '/d', '4', '/f') -AllowFailure
@@ -184,18 +261,107 @@ function Restore-WinMintFirstLogonRegionalDefaults {
             Out-File (Join-Path $logDir 'FirstLogon.log') -Append
     }
     catch {
+        $errors.Add("Auto Time Zone Updater disable failed after DMA setup: $_") | Out-Null
         Write-WinMintFirstLogonError "Auto Time Zone Updater disable failed after DMA setup: $_"
     }
-    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale)) {
+
+    $observedTimeZone = $null
+    $observedHomeLocation = $null
+    $observedCulture = $null
+    try { $observedTimeZone = Get-TimeZone } catch { $errors.Add("Time zone verification failed: $_") | Out-Null }
+    try { $observedHomeLocation = Get-WinHomeLocation } catch { $errors.Add("Home location verification failed: $_") | Out-Null }
+    try { $observedCulture = Get-Culture } catch { $errors.Add("Culture verification failed: $_") | Out-Null }
+
+    $observedGeoIdText = if ($observedHomeLocation) { [string]([int]$observedHomeLocation.GeoId) } else { '0' }
+    $observedTimeZoneText = if ($observedTimeZone) { [string]$observedTimeZone.Id } else { '' }
+    $observedCultureText = if ($observedCulture) { [string]$observedCulture.Name } else { '' }
+    if ($restoreGeoId -gt 0 -and (-not $observedHomeLocation -or [int]$observedHomeLocation.GeoId -ne $restoreGeoId)) {
+        $errors.Add("Current home location GeoID '$observedGeoIdText' does not match restore GeoID '$restoreGeoId'.") | Out-Null
+    }
+    if (-not [string]::IsNullOrWhiteSpace($restoreTimeZoneId) -and (-not $observedTimeZone -or [string]$observedTimeZone.Id -ne $restoreTimeZoneId)) {
+        $errors.Add("Current time zone '$observedTimeZoneText' does not match restore time zone '$restoreTimeZoneId'.") | Out-Null
+    }
+    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale) -and (-not $observedCulture -or [string]$observedCulture.Name -ne $restoreUserLocale)) {
+        $errors.Add("Current culture '$observedCultureText' does not match restore culture '$restoreUserLocale'.") | Out-Null
+    }
+
+    $report = [ordered]@{
+        enabled = $true
+        requested = [ordered]@{
+            setupCountry = $setupCountry
+            setupUserLocale = $setupUserLocale
+            setupHomeLocationGeoId = $setupGeoId
+            restoreTimeZoneId = $restoreTimeZoneId
+            restoreUserLocale = $restoreUserLocale
+            restoreHomeLocationGeoId = $restoreGeoId
+            restoreLocationServices = $restoreLocationServices
+        }
+        observed = [ordered]@{
+            timeZoneId = if ($observedTimeZone) { [string]$observedTimeZone.Id } else { '' }
+            culture = if ($observedCulture) { [string]$observedCulture.Name } else { '' }
+            homeLocationGeoId = if ($observedHomeLocation) { [int]$observedHomeLocation.GeoId } else { 0 }
+            homeLocation = if ($observedHomeLocation) { [string]$observedHomeLocation.HomeLocation } else { '' }
+            tzautoupdate = Get-WinMintFirstLogonServiceSnapshot -Name 'tzautoupdate'
+            locationService = Get-WinMintFirstLogonServiceSnapshot -Name 'lfsvc'
+        }
+        compliant = ($errors.Count -eq 0)
+        errors = $errors.ToArray()
+    }
+    $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $reportPath -Encoding UTF8
+    return [pscustomobject]@{ Enabled = $true; Compliant = [bool]$report.compliant; Report = $reportPath; Errors = $errors.ToArray() }
+}
+
+function Repair-WinMintFirstLogonKnownFolders {
+    $errors = [System.Collections.Generic.List[string]]::new()
+    $userShellFolders = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
+    $shellFolders = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
+    $knownFolders = @(
+        @{ Name = 'Desktop'; Local = 'Desktop' },
+        @{ Name = 'Personal'; Local = 'Documents' },
+        @{ Name = 'My Pictures'; Local = 'Pictures' },
+        @{ Name = 'My Music'; Local = 'Music' },
+        @{ Name = 'My Video'; Local = 'Videos' },
+        @{ Name = '{374DE290-123F-4565-9164-39C4925E467B}'; Local = 'Downloads' }
+    )
+
+    foreach ($folder in @('Desktop', 'Documents', 'Downloads', 'Pictures', 'Music', 'Videos')) {
+        New-Item -ItemType Directory -Path (Join-Path $env:USERPROFILE $folder) -Force -ErrorAction SilentlyContinue | Out-Null
+    }
+
+    foreach ($known in $knownFolders) {
+        $expandValue = "%USERPROFILE%\$($known.Local)"
+        $absoluteValue = Join-Path $env:USERPROFILE $known.Local
         try {
-            Set-Culture -CultureInfo $restoreUserLocale -ErrorAction Stop
-            "$(Get-Date -Format 'o') Restored user culture to $restoreUserLocale after DMA setup." |
-                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+            Invoke-WinMintFirstLogonReg -Arguments @('add', $userShellFolders, '/v', $known.Name, '/t', 'REG_EXPAND_SZ', '/d', $expandValue, '/f') -AllowFailure
+            Invoke-WinMintFirstLogonReg -Arguments @('add', $shellFolders, '/v', $known.Name, '/t', 'REG_SZ', '/d', $absoluteValue, '/f') -AllowFailure
         }
         catch {
-            Write-WinMintFirstLogonError "User culture restore failed for ${restoreUserLocale}: $_"
+            $errors.Add("Known folder repair failed for $($known.Name): $_") | Out-Null
         }
     }
+
+    $userShell = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction SilentlyContinue
+    $shell = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders' -ErrorAction SilentlyContinue
+    $observed = [ordered]@{}
+    foreach ($known in $knownFolders) {
+        $userProp = if ($userShell) { $userShell.PSObject.Properties[$known.Name] } else { $null }
+        $shellProp = if ($shell) { $shell.PSObject.Properties[$known.Name] } else { $null }
+        $observed[$known.Name] = [ordered]@{
+            userShellFolder = if ($userProp) { [string]$userProp.Value } else { '' }
+            shellFolder = if ($shellProp) { [string]$shellProp.Value } else { '' }
+        }
+    }
+
+    $report = [ordered]@{
+        timestamp = Get-Date -Format o
+        expectedRoot = '%USERPROFILE%'
+        observed = $observed
+        compliant = ($errors.Count -eq 0)
+        errors = $errors.ToArray()
+    }
+    $path = Join-Path $logDir 'FirstLogon_KnownFolders.json'
+    $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $path -Encoding UTF8
+    "$(Get-Date -Format 'o') Known folder verification written to $path" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
 }
 
 function Invoke-WinMintFirstLogonOneDriveRemoval {
@@ -482,6 +648,21 @@ try { Set-WinMintFirstLogonRetry } catch { Write-WinMintFirstLogonError "FirstLo
 # RunOnce handles all retries from this point — leaving the password in HKLM until
 # the agent eventually succeeds is unnecessary and exposes it to any local admin.
 try { Clear-WinMintAutoLogonPassword } catch { Write-WinMintFirstLogonError "AutoLogon password clear failed: $_" }
+
+$dmaRestore = Restore-WinMintDmaRegionalDefaults
+if ($dmaRestore.Enabled -and -not $dmaRestore.Compliant) {
+    $state['status'] = 'failed'
+    $state['failedAt'] = Get-Date -Format o
+    $state['criticalStep'] = 'dmaInteropRestore'
+    $state['error'] = "DMA regional restore failed. Report: $($dmaRestore.Report)"
+    $state['errors'] = @($dmaRestore.Errors)
+    try { Save-WinMintFirstLogonState -State $state } catch { Write-WinMintFirstLogonError "FirstLogon state write failed: $_" }
+    Write-WinMintFirstLogonError "DMA regional restore failed; optional FirstLogon modules were not launched. Report: $($dmaRestore.Report)"
+    try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
+    exit 1
+}
+
+try { Repair-WinMintFirstLogonKnownFolders } catch { Write-WinMintFirstLogonError "Known folder repair failed: $_" }
 try { Set-WinMintFirstLogonDesktopDefaults } catch { Write-WinMintFirstLogonError "Desktop defaults failed: $_" }
 try { Invoke-WinMintFirstLogonOneDriveRemoval } catch { Write-WinMintFirstLogonError "OneDrive user cleanup failed: $_" }
 
@@ -539,7 +720,6 @@ $state['completedAt'] = Get-Date -Format o
 if ($agentExitCode -eq 0) {
     $state['status'] = 'ok'
     try {
-        Restore-WinMintFirstLogonRegionalDefaults
         Clear-WinMintFirstLogonRetry
         Disable-WinMintAutoAdminLogon
     }

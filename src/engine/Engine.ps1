@@ -84,13 +84,14 @@ function New-WinMintBuildConfig {
     $tweakFileExtensions = [bool](Get-WinMintProfileSetting $tweaks 'fileExtensions' $true)
     $tweakStickyKeys = [bool](Get-WinMintProfileSetting $tweaks 'stickyKeys' $true)
     $tweakHardwareBypass = [bool](Get-WinMintProfileSetting $tweaks 'hardwareBypass' $false)
-    $tweakDmaInterop = [bool](Get-WinMintProfileSetting $tweaks 'dmaInterop' $false)
+    $tweakDmaInterop = [bool](Get-WinMintProfileSetting $tweaks 'dmaInterop' $true)
     $updatePolicy = 'All'
     $privacyTelemetry = [bool](Get-WinMintProfileSetting $privacy 'telemetry' $true)
     $privacyAdvertisingId = [bool](Get-WinMintProfileSetting $privacy 'advertisingId' $true)
-    $privacyLocation = [bool](Get-WinMintProfileSetting $privacy 'location' $false)
+    $privacyLocation = [bool](Get-WinMintProfileSetting $privacy 'location' $true)
     $privacyTimeline = [bool](Get-WinMintProfileSetting $privacy 'timeline' $true)
     $aiRemoval = New-WinMintAiRemovalConfig -Removals $removals -SetupOption $setupOption
+    $appxCatalog = Get-WinMintAppxRemovalCatalog
     $dmaSetupRegion = Resolve-WinMintDmaInteropSetupRegion
     $restoreUserLocale = [string](Get-WinMintProfileSetting $regional 'userLocale' '')
     $restoreHomeLocationGeoId = [int](Get-WinMintProfileSetting $regional 'homeLocationGeoId' (Resolve-WinMintRegionGeoId -CultureName $restoreUserLocale))
@@ -102,8 +103,15 @@ function New-WinMintBuildConfig {
     if ($tweakFileExtensions) {
         $registryTweaks.Add('developer-qol')
     }
-    $registryTweaks.Add('uac-no-secure-desktop')
     $registryTweaks.Add('terminal-admin-context')
+    $registryTweaks.Add('home-privacy-policy')
+    $registryTweaks.Add('storage-sense-policy')
+    $registryTweaks.Add('modern-standby-policy')
+    $registryTweaks.Add('oobe-rehydration-policy')
+    $registryTweaks.Add('wpbt-policy')
+    if (-not $privacyLocation) {
+        $registryTweaks.Add('location-disabled-policy')
+    }
     if ($privacyTelemetry -or $privacyAdvertisingId) {
         $registryTweaks.Add('edge-policy-minimal')
     }
@@ -115,6 +123,7 @@ function New-WinMintBuildConfig {
     }
     if ($diskMode -eq 'DualBootReserved') {
         $registryTweaks.Add('dual-boot-windows-policy')
+        $registryTweaks.Add('dual-boot-clock-policy')
     }
     if ($enableDeveloperGroup) {
         $registryTweaks.Add('developer-mode')
@@ -125,6 +134,12 @@ function New-WinMintBuildConfig {
     }
     if ([bool](Get-WinMintProfileSetting $removals 'gaming' $true)) {
         $registryTweaks.Add('gamebar-policy')
+    }
+    if ($profileGroups -contains 'Gaming') {
+        $registryTweaks.Add('gaming-performance-policy')
+    }
+    if ($profileGroups -contains 'DesktopUI') {
+        $registryTweaks.Add('desktopui-policy')
     }
     $profileEffectiveAppx = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $removals 'effectiveAppx' @()))
     $baseAppxRemovalPrefixes = if ($profileEffectiveAppx.Count -gt 0) {
@@ -143,7 +158,7 @@ function New-WinMintBuildConfig {
     }
     $edition = [string](Get-WinMintProfileSetting $target 'edition' '')
     if ($editionMode -eq 'Fixed' -and [string]::IsNullOrWhiteSpace($edition)) {
-        $edition = 'Windows 11 Pro'
+        $edition = 'Windows 11 Home Single Language'
     }
     [pscustomobject]@{
         Profile = $profileName
@@ -183,7 +198,7 @@ function New-WinMintBuildConfig {
             RestoreHomeLocationGeoId = $restoreHomeLocationGeoId
             RestoreLocationServices = $privacyLocation
             Policy = if ($tweakDmaInterop) {
-                'Opt-in DMA interoperability uses an EEA setup region, disables automatic time-zone updates, then restores the configured regional defaults after successful FirstLogon.'
+                'Default DMA interoperability uses Ireland during setup, disables automatic time-zone updates, then restores the configured visible regional defaults at the start of FirstLogon.'
             } else {
                 'Disabled; setup uses the configured regional defaults.'
             }
@@ -201,6 +216,8 @@ function New-WinMintBuildConfig {
         Wsl2Distro = $wsl2Distro
         Wsl2Distros = @($wsl2Distros)
         AppxPackages = @($appxRemovalPrefixes)
+        AppxCatalogVersion = [int](Get-WinMintProfileSetting $appxCatalog 'catalogVersion' 1)
+        PrimaryAssumption = 'Windows11HomeSingleLanguageEnUS'
         AiRemoval = $aiRemoval
         RegistryTweaks = $registryTweaks.ToArray()
         Features = $features.ToArray()
@@ -299,7 +316,8 @@ function Test-WinMintBuildPrerequisite {
         }
     }
     elseif (-not (Test-Path -LiteralPath $Config.SourceIso)) { $failures.Add("Source ISO not found: $($Config.SourceIso)") }
-    if ([string]::IsNullOrWhiteSpace([string]$Config.Architecture)) {
+    $profileOnlyDryRun = $AllowMissingSourceIso -and $sourceIsoMissing
+    if (-not $profileOnlyDryRun -and [string]::IsNullOrWhiteSpace([string]$Config.Architecture)) {
         $failures.Add('Architecture is not set; oscdimg cannot pick a boot layout without it.')
     }
     if (-not (Test-Path -LiteralPath $Config.PackagesManifest)) { $warnings.Add("Package manifest missing: $($Config.PackagesManifest)") }
@@ -447,17 +465,27 @@ function Invoke-WinMintIsoBuild {
         "Source ISO found; architecture hint: $detected"
     }
     else {
-        "Dry run architecture: $detected"
+        if ([string]::IsNullOrWhiteSpace([string]$detected)) {
+            'Dry run architecture: not set (profile-only; no ISO provided)'
+        }
+        else {
+            "Dry run architecture: $detected"
+        }
     }
     Write-WinMintProgress `
         -Stage 'Validate' `
         -Level OK `
         -Message $sourceMessage `
         -ProgressHandler $ProgressHandler
+    $profileGroupsText = @($Config.ProfileGroups | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }) -join ', '
+    $profileMessage = "Profile: $($Config.Profile)"
+    if (-not [string]::IsNullOrWhiteSpace($profileGroupsText)) { $profileMessage += "; groups: $profileGroupsText" }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Config.SetupOption)) { $profileMessage += "; setup option: $($Config.SetupOption)" }
+    $profileMessage += "; editors: $($Config.Editors -join ', ')"
     Write-WinMintProgress `
         -Stage 'Profile' `
         -Level OK `
-        -Message "Profile: $($Config.Profile); editors: $($Config.Editors -join ', ')" `
+        -Message $profileMessage `
         -ProgressHandler $ProgressHandler
 
     $report = New-WinMintBuildReport -Config $Config -DetectedArchitecture $detected -Warnings $pre.Warnings

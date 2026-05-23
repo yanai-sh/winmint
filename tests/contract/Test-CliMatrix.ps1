@@ -106,11 +106,25 @@ function Invoke-CliFailureCase {
 Invoke-CliProfileCase -Name 'minimal-default' -Assert {
     param($Profile, $Config, $AgentProfile)
     if (@($Profile.profileGroups) -ne 'Minimal') { Add-CliMatrixFailure 'minimal-default should only select Minimal group.' }
+    if ([int]$Profile.schemaVersion -ne 2) { Add-CliMatrixFailure 'minimal-default should emit schemaVersion 2.' }
+    if (-not [bool]$Profile.tweaks.dmaInterop -or -not [bool]$Config.DmaInterop.Enabled) { Add-CliMatrixFailure 'minimal-default should enable DMA interop.' }
+    if ($Config.SetupUserLocale -ne 'en-IE' -or $Config.SetupHomeLocationGeoId -ne 68) { Add-CliMatrixFailure 'minimal-default should use Ireland/en-IE/68 for setup.' }
+    if ($Profile.regional.userLocale -ne 'en-US' -or [int]$Profile.regional.homeLocationGeoId -ne 244) { Add-CliMatrixFailure 'minimal-default should restore visible en-US/244 by default.' }
+    if (-not [bool]$Profile.privacy.location -or -not [bool]$Config.Privacy.Location) { Add-CliMatrixFailure 'minimal-default should enable location services by default.' }
     if ($Config.Launcher -ne 'None' -or $AgentProfile.modules.packageManagers.enabled -or
         $AgentProfile.modules.flowEverything.enabled -or $AgentProfile.modules.raycast.enabled -or
         $AgentProfile.modules.phoneLink.enabled -or $AgentProfile.modules.liveInstallAudit.enabled) {
         Add-CliMatrixFailure 'minimal-default should not enable residual first-logon modules.'
     }
+}
+
+Invoke-CliProfileCase -Name 'minimal-no-dma-no-location' -Arguments @('-NoDmaInterop', '-NoLocationServices') -Assert {
+    param($Profile, $Config, $AgentProfile)
+    [void]$AgentProfile
+    if ([bool]$Profile.tweaks.dmaInterop -or [bool]$Config.DmaInterop.Enabled) { Add-CliMatrixFailure 'minimal-no-dma-no-location should disable DMA interop.' }
+    if ($Config.SetupUserLocale -ne 'en-US' -or $Config.SetupHomeLocationGeoId -ne 244) { Add-CliMatrixFailure 'minimal-no-dma-no-location should use visible en-US setup region.' }
+    if ([bool]$Profile.privacy.location -or [bool]$Config.Privacy.Location) { Add-CliMatrixFailure 'minimal-no-dma-no-location should disable location services.' }
+    if (@($Config.RegistryTweaks) -notcontains 'location-disabled-policy') { Add-CliMatrixFailure 'minimal-no-dma-no-location should apply location-disabled-policy.' }
 }
 
 Invoke-CliProfileCase -Name 'developer-only' -Arguments @('-Developer') -Assert {

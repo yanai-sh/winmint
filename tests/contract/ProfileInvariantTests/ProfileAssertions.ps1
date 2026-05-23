@@ -384,6 +384,18 @@ function Assert-HeadlessCliContracts {
         if (@($template.profileGroups) -notcontains 'Developer' -or @($template.development.editors).Count -ne 0 -or @($template.development.wsl.distros).Count -ne 0) {
             Add-SmokeFailure 'Expected Developer template to include the group without preselecting editors or WSL distros.'
         }
+        if ([int]$template.schemaVersion -ne 2) {
+            Add-SmokeFailure 'Expected generated profile templates to use schemaVersion 2.'
+        }
+        if (-not [bool]$template.tweaks.dmaInterop) {
+            Add-SmokeFailure 'Expected generated profile templates to enable DMA interoperability by default.'
+        }
+        if (-not [bool]$template.privacy.location) {
+            Add-SmokeFailure 'Expected generated profile templates to enable location services by default.'
+        }
+        if ($template.regional.userLocale -ne 'en-US' -or [int]$template.regional.homeLocationGeoId -ne 244) {
+            Add-SmokeFailure 'Expected generated profile templates to default visible region to en-US/GeoID 244.'
+        }
 
         $outResult = Invoke-WinMintHeadlessCli `
             -BoundParameters @{ OutProfile = $outProfilePath; Preset = 'DesktopUI'; Gaming = $true; Architecture = 'amd64' } `
@@ -477,7 +489,7 @@ function Assert-HeadlessCliContracts {
         -DryRun
     $config = New-WinMintBuildConfig -BuildProfile $profile
     if ($config.SetupOption -ne 'CopilotPlus' -or $config.AccountMode -ne 'MicrosoftOobe') {
-        Add-SmokeFailure 'Expected flag-built headless profile to preserve CopilotPlus + MicrosoftOobe posture.'
+        Add-SmokeFailure 'Expected flag-built headless profile to preserve CopilotPlus + MicrosoftOobe profile intent.'
     }
     if ($config.TimeZoneId -ne 'Israel Standard Time' -or $config.InputLocale -ne 'en-US;he-IL') {
         Add-SmokeFailure 'Expected flag-built headless profile to preserve regional and keyboard settings.'
@@ -485,8 +497,21 @@ function Assert-HeadlessCliContracts {
     if ($config.UserLocale -ne 'he-IL' -or $config.HomeLocationGeoId -ne 117) {
         Add-SmokeFailure 'Expected flag-built headless profile to preserve the builder home region for post-FirstLogon restore.'
     }
-    if ($config.SetupUserLocale -ne 'he-IL' -or $config.SetupHomeLocationGeoId -ne 117 -or [bool]$config.DmaInterop.Enabled) {
-        Add-SmokeFailure 'Expected DMA interoperability to stay disabled unless explicitly selected.'
+    if ($config.SetupUserLocale -ne 'en-IE' -or $config.SetupHomeLocationGeoId -ne 68 -or -not [bool]$config.DmaInterop.Enabled) {
+        Add-SmokeFailure 'Expected DMA interoperability to default on and use Ireland as the setup region.'
+    }
+    if ($config.UserLocale -ne 'he-IL' -or $config.HomeLocationGeoId -ne 117) {
+        Add-SmokeFailure 'Expected default DMA interoperability to preserve the configured real restore region.'
+    }
+
+    $noDmaProfile = New-WinMintHeadlessProfileFromFlags `
+        -SourceIso '' `
+        -Architecture 'amd64' `
+        -NoDmaInterop `
+        -DryRun
+    $noDmaConfig = New-WinMintBuildConfig -BuildProfile $noDmaProfile
+    if ([bool]$noDmaConfig.DmaInterop.Enabled -or $noDmaConfig.SetupUserLocale -ne 'en-US' -or $noDmaConfig.SetupHomeLocationGeoId -ne 244) {
+        Add-SmokeFailure 'Expected -NoDmaInterop to disable the Ireland setup latch and use visible en-US setup region.'
     }
 
     $dmaProfile = New-WinMintHeadlessProfileFromFlags `
@@ -503,8 +528,32 @@ function Assert-HeadlessCliContracts {
     if ($dmaConfig.SetupUserLocale -ne 'en-IE' -or $dmaConfig.SetupHomeLocationGeoId -ne 68 -or -not [bool]$dmaConfig.DmaInterop.Enabled) {
         Add-SmokeFailure 'Expected explicit DMA interoperability to use Ireland as the setup region.'
     }
-    if ($config.AppxPackages -contains 'Microsoft.Copilot' -or $config.AppxPackages -contains 'MicrosoftWindows.Client.WebExperience') {
-        Add-SmokeFailure 'Expected CopilotPlus headless profile to preserve Copilot/WebExperience AppX packages.'
+    if ($dmaConfig.UserLocale -ne 'he-IL' -or $dmaConfig.HomeLocationGeoId -ne 117 -or $dmaConfig.TimeZoneId -ne 'Israel Standard Time') {
+        Add-SmokeFailure 'Expected DMA interoperability to preserve the configured real restore region, culture, and time zone.'
+    }
+    $dmaSetupProfile = New-WinMintSetupProfile -BuildConfig $dmaConfig
+    if ($dmaSetupProfile.regional.dmaInterop.setupCountry -ne 'Ireland' -or
+        $dmaSetupProfile.regional.dmaInterop.setupUserLocale -ne 'en-IE' -or
+        [int]$dmaSetupProfile.regional.dmaInterop.setupHomeLocationGeoId -ne 68 -or
+        $dmaSetupProfile.regional.dmaInterop.restoreUserLocale -ne 'he-IL' -or
+        [int]$dmaSetupProfile.regional.dmaInterop.restoreHomeLocationGeoId -ne 117 -or
+        $dmaSetupProfile.regional.dmaInterop.restoreTimeZoneId -ne 'Israel Standard Time') {
+        Add-SmokeFailure 'Expected setup profile to keep DMA setup values separate from user restore values.'
+    }
+    Initialize-WinMintBuildManifest -Config $dmaConfig
+    $manifestDma = $script:WinMintBuildManifest.regional.dmaInterop
+    if ($manifestDma.setupLatchedCountry -ne 'Ireland' -or
+        [int]$manifestDma.setupLatchedGeoId -ne 68 -or
+        $manifestDma.restoredUserLocale -ne 'he-IL' -or
+        [int]$manifestDma.restoredHomeLocationGeoId -ne 117 -or
+        $manifestDma.restoredTimeZoneId -ne 'Israel Standard Time') {
+        Add-SmokeFailure 'Expected manifest to record both DMA setup latch values and restored user region values.'
+    }
+    if ($config.AppxPackages -notcontains 'Microsoft.Copilot' -or $config.AppxPackages -notcontains 'MicrosoftWindows.Client.WebExperience') {
+        Add-SmokeFailure 'Expected CopilotPlus headless profile to remove Copilot/WebExperience AppX packages.'
+    }
+    if ($config.AiRemoval.Policy -ne 'ServiceableFull') {
+        Add-SmokeFailure 'Expected CopilotPlus headless profile to select ServiceableFull AI removal.'
     }
 
     $minimalProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -DryRun
@@ -522,13 +571,27 @@ function Assert-HeadlessCliContracts {
         Add-SmokeFailure 'Expected Minimal group to remove Copilot/WebExperience and Xbox gaming apps.'
     }
     if (-not [bool]$minimalConfig.Privacy.Location) {
-        Add-SmokeFailure 'Expected default headless profile to disable location services.'
+        Add-SmokeFailure 'Expected default headless profile to enable location services for laptop-first builds.'
+    }
+    if (-not [bool]$minimalConfig.DmaInterop.Enabled -or $minimalConfig.SetupUserLocale -ne 'en-IE' -or $minimalConfig.SetupHomeLocationGeoId -ne 68) {
+        Add-SmokeFailure 'Expected default headless profile to enable DMA interoperability through Ireland.'
     }
 
     $locationOnProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -LocationServices -DryRun
     $locationOnConfig = New-WinMintBuildConfig -BuildProfile $locationOnProfile
-    if ([bool]$locationOnConfig.Privacy.Location) {
+    if (-not [bool]$locationOnConfig.Privacy.Location) {
         Add-SmokeFailure 'Expected -LocationServices to keep location services enabled through the privacy policy profile.'
+    }
+    $locationOffProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -NoLocationServices -DryRun
+    $locationOffConfig = New-WinMintBuildConfig -BuildProfile $locationOffProfile
+    if ([bool]$locationOffConfig.Privacy.Location -or @($locationOffConfig.RegistryTweaks) -notcontains 'location-disabled-policy') {
+        Add-SmokeFailure 'Expected -NoLocationServices to disable location services and select the location block policy.'
+    }
+    $dmaLocationProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -DmaInterop -LocationServices -DryRun
+    $dmaLocationConfig = New-WinMintBuildConfig -BuildProfile $dmaLocationProfile
+    $dmaLocationSetupProfile = New-WinMintSetupProfile -BuildConfig $dmaLocationConfig
+    if (-not [bool]$dmaLocationConfig.Privacy.Location -or -not [bool]$dmaLocationSetupProfile.regional.dmaInterop.restoreLocationServices) {
+        Add-SmokeFailure 'Expected location services to remain enable-able while DMA interoperability is enabled.'
     }
 
     try {
@@ -538,6 +601,16 @@ function Assert-HeadlessCliContracts {
     catch {
         if ($_.Exception.Message -notmatch 'LocationServices|NoLocationServices') {
             Add-SmokeFailure "Expected location switch validation error, got: $($_.Exception.Message)"
+        }
+    }
+
+    try {
+        Assert-WinMintHeadlessParameterSet -BoundParameters @{ DmaInterop = $true; NoDmaInterop = $true }
+        Add-SmokeFailure 'Expected DmaInterop and NoDmaInterop to be mutually exclusive.'
+    }
+    catch {
+        if ($_.Exception.Message -notmatch 'DmaInterop|NoDmaInterop') {
+            Add-SmokeFailure "Expected DMA switch validation error, got: $($_.Exception.Message)"
         }
     }
 
@@ -563,10 +636,10 @@ function Assert-HeadlessCliContracts {
     if (@($groupConfig.Editors).Count -ne 0 -or @($groupConfig.Wsl2Distros).Count -ne 0) {
         Add-SmokeFailure 'Expected Developer group to leave editors and WSL distros unselected by default.'
     }
-    if ($groupConfig.AppxPackages -contains 'Microsoft.Copilot' -or
-        $groupConfig.AppxPackages -contains 'MicrosoftWindows.Client.WebExperience' -or
+    if ($groupConfig.AppxPackages -notcontains 'Microsoft.Copilot' -or
+        $groupConfig.AppxPackages -notcontains 'MicrosoftWindows.Client.WebExperience' -or
         $groupConfig.AppxPackages -contains 'Microsoft.GamingApp') {
-        Add-SmokeFailure 'Expected Copilot and Gaming groups to preserve Copilot/WebExperience and Xbox apps.'
+        Add-SmokeFailure 'Expected Copilot to remove Copilot/WebExperience while Gaming preserves Xbox apps.'
     }
     if (-not ($groupConfig.InstallWindhawk -and $groupConfig.InstallYasb -and $groupConfig.InstallKomorebi)) {
         Add-SmokeFailure 'Expected DesktopUI group to select the opinionated WinMint shell stack.'

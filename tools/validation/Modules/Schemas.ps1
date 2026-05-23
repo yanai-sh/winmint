@@ -7,7 +7,7 @@ function Test-BuildProfileSchema {
         return
     }
     $sample = [pscustomobject][ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         createdAt = [DateTimeOffset]::Now.ToString('o')
         profileName = 'Developer'
         source = [pscustomobject][ordered]@{
@@ -69,6 +69,7 @@ function Test-BuildProfileSchema {
             gaming = $true
             communication = $true
             microsoftApps = $true
+            aiPolicy = 'Core'
             effectiveAppx = @('Microsoft.BingNews')
         }
         privacy = [pscustomobject][ordered]@{
@@ -82,6 +83,7 @@ function Test-BuildProfileSchema {
             fileExtensions = $true
             stickyKeys = $true
             hardwareBypass = $false
+            dmaInterop = $true
         }
     }
     Test-JsonObjectAgainstSchema -Value $sample -SchemaPath $schema -Label 'winmint.buildprofile sample'
@@ -114,14 +116,14 @@ function Test-BuildManifestSchema {
     }
 
     $valid = [ordered]@{
-        schemaVersion        = 1
+        schemaVersion        = 2
         builtAt              = '2026-01-01T00:00:00+00:00'
         buildDurationSeconds = 42.5
         buildResult          = 'success'
         source               = [ordered]@{
             isoPath      = 'C:\test.iso'
             architecture = 'amd64'
-            editions     = @('Windows 11 Pro')
+            editions     = @('Windows 11 Home Single Language')
         }
         target               = [ordered]@{
             diskMode = 'Manual'
@@ -137,6 +139,7 @@ function Test-BuildManifestSchema {
                 msrMb = 16
                 recoveryMb = 1024
             }
+            primaryAssumption = 'Windows11HomeSingleLanguageEnUS'
         }
         regional             = [ordered]@{
             timeZoneId = 'UTC'
@@ -147,11 +150,18 @@ function Test-BuildManifestSchema {
             homeLocationGeoId = 244
             dmaInterop = [ordered]@{
                 enabled = $true
+                defaultEnabled = $true
                 setupCountry = 'Ireland'
                 setupUserLocale = 'en-IE'
                 setupHomeLocationGeoId = 68
+                setupLatchedCountry = 'Ireland'
+                setupLatchedGeoId = 68
                 restoreUserLocale = 'en-US'
                 restoreHomeLocationGeoId = 244
+                restoredUserLocale = 'en-US'
+                restoredHomeLocationGeoId = 244
+                restoredTimeZoneId = 'UTC'
+                locationServicesPolicy = 'disabled'
             }
         }
         output               = [ordered]@{
@@ -161,12 +171,32 @@ function Test-BuildManifestSchema {
         }
         removals             = [ordered]@{
             appxPrefixes        = @('Microsoft.BingNews')
+            appxCatalogVersion  = 1
             appxRemoved         = @('Microsoft.BingNews_1.0.0.0_neutral__8wekyb3d8bbwe')
             appxRemovedCount    = 1
             capabilitiesRemoved = @()
+            windowsPackagesRemoved = @()
             languagePackagesRemoved = @()
             languagePackagesRemovedCount = 0
+            oobeRehydration = [ordered]@{
+                blocked = @('DevHomeUpdate', 'OutlookUpdate', 'ChatAutoInstall')
+                workCompleted = @('DevHomeUpdate', 'OutlookUpdate', 'ChatAutoInstall')
+                failed = @()
+            }
             featuresEnabled     = @('Microsoft-Windows-Subsystem-Linux')
+            ai = [ordered]@{
+                policy = 'Core'
+                catalogVersion = 1
+                appxPrefixes = @()
+                appxRemoved = @()
+                optionalFeaturesRemoved = @()
+                registryPoliciesApplied = @('windows-ai-core-policy')
+                servicesDisabled = @()
+                scheduledTasksDisabled = @()
+                aggressiveActions = @()
+                failed = @()
+                recoveryBundlePath = ''
+            }
         }
         sizeDelta            = [ordered]@{
             sourceIsoBytes = 5123456789
@@ -201,6 +231,15 @@ function Test-BuildManifestSchema {
                     error              = ''
                 }
             )
+        }
+        policies             = [ordered]@{
+            homePrivacy = [ordered]@{ enabled = $true; telemetry = 'RequiredOnly'; allowTelemetry = 1 }
+            laptopDefaults = [ordered]@{ enabled = $true }
+            locationPosture = [ordered]@{ enabled = $true; findMyDeviceAllowed = $true }
+            storageSense = [ordered]@{ enabled = $true; downloadsCleanup = 'disabled' }
+            modernStandby = [ordered]@{ networkConnectivity = 'disabled' }
+            wpbt = [ordered]@{ disableWpbtExecution = $true }
+            dualBootClock = [ordered]@{ realTimeIsUniversal = $false }
         }
         drivers              = [ordered]@{
             source        = 'None'

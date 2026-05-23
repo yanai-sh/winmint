@@ -1,6 +1,7 @@
 # Machine-wide policy and service tweaks during specialize (SYSTEM).
 $ErrorActionPreference = 'Continue'
-$logDir = Join-Path $env:ProgramData 'WinMint\Logs'
+$programData = if ($env:ProgramData) { $env:ProgramData } else { 'C:\ProgramData' }
+$logDir = Join-Path $programData 'WinMint\Logs'
 $null = New-Item -ItemType Directory -Path $logDir -Force -ErrorAction SilentlyContinue
 $payloadDir = 'C:\Windows\Setup\Scripts'
 $setupProfilePath = Join-Path $payloadDir 'WinMintSetupProfile.json'
@@ -62,6 +63,23 @@ function Get-SpecializeNestedSetupProfileInt {
     try { return [int]$valueProp.Value } catch { return $Default }
 }
 
+function Get-SpecializeNestedSetupProfileValue {
+    param(
+        [string]$Section,
+        [string]$Nested,
+        [string]$Name,
+        $Default = $null
+    )
+    if (-not $setupProfile) { return $Default }
+    $sectionProp = $setupProfile.PSObject.Properties[$Section]
+    if (-not $sectionProp) { return $Default }
+    $nestedProp = $sectionProp.Value.PSObject.Properties[$Nested]
+    if (-not $nestedProp) { return $Default }
+    $valueProp = $nestedProp.Value.PSObject.Properties[$Name]
+    if (-not $valueProp) { return $Default }
+    return $valueProp.Value
+}
+
 function Set-SpecializeRegistryValue {
     param(
         [Parameter(Mandatory)]
@@ -84,6 +102,26 @@ function Disable-SpecializeAutoTimeZone {
     }
 }
 
+function Write-SpecializeDmaSetupMarker {
+    param(
+        [bool]$Applied,
+        [string]$Country,
+        [int]$GeoId,
+        [string]$ErrorMessage = ''
+    )
+
+    $marker = [ordered]@{
+        setupApplied = $Applied
+        setupCountry = $Country
+        setupHomeLocationGeoId = $GeoId
+        appliedAt = Get-Date -Format o
+        restoreRequired = $Applied
+        error = $ErrorMessage
+    }
+    $path = Join-Path $programData 'WinMint\DmaInterop-Setup.json'
+    $marker | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $path -Encoding UTF8
+}
+
 function Invoke-SpecializeRegistrySet {
     param(
         [Parameter(Mandatory)]
@@ -97,7 +135,8 @@ function Invoke-SpecializeRegistrySet {
 $disableFastStartup = Get-SpecializeSetupProfileBool -Section 'windowsPolicy' -Name 'disableFastStartup' -Default $false
 $preventDeviceEncryption = Get-SpecializeSetupProfileBool -Section 'windowsPolicy' -Name 'preventDeviceEncryption' -Default $false
 $dmaInterop = Get-SpecializeNestedSetupProfileBool -Section 'regional' -Nested 'dmaInterop' -Name 'enabled' -Default $false
-$dmaSetupGeoId = Get-SpecializeNestedSetupProfileInt -Section 'regional' -Nested 'dmaInterop' -Name 'setupHomeLocationGeoId' -Default 94
+$dmaSetupCountry = [string](Get-SpecializeNestedSetupProfileValue -Section 'regional' -Nested 'dmaInterop' -Name 'setupCountry' -Default 'Ireland')
+$dmaSetupGeoId = Get-SpecializeNestedSetupProfileInt -Section 'regional' -Nested 'dmaInterop' -Name 'setupHomeLocationGeoId' -Default 68
 
 $scripts = @(
     {
@@ -105,8 +144,10 @@ $scripts = @(
         try {
             Set-WinHomeLocation -GeoId $dmaSetupGeoId -ErrorAction Stop
             Disable-SpecializeAutoTimeZone
+            Write-SpecializeDmaSetupMarker -Applied $true -Country $dmaSetupCountry -GeoId $dmaSetupGeoId
         }
         catch {
+            Write-SpecializeDmaSetupMarker -Applied $false -Country $dmaSetupCountry -GeoId $dmaSetupGeoId -ErrorMessage ([string]$_)
             "DMA setup region stamp failed for GeoID ${dmaSetupGeoId}: $_" | Out-File (Join-Path $logDir 'Specialize_errors.log') -Append
         }
     }

@@ -29,7 +29,14 @@ try {
         Architecture       = 'arm64'
         EditionMode        = 'TargetLicense'
         Edition            = ''
+        AppxCatalogVersion = 1
         AppxPackages       = @('Microsoft.BingNews', 'Microsoft.GetHelp')
+        AiRemoval          = [pscustomobject]@{
+            Policy           = 'Core'
+            CatalogVersion   = 1
+            AppxPrefixes     = @()
+            OptionalFeatures = @()
+        }
         RegistryTweaks     = @('dark-mode', 'developer-qol')
         Features           = @('OpenSSH.Client')
         CursorPackKind     = 'Windows11Modern'
@@ -53,7 +60,9 @@ try {
         Architecture       = $buildConfig.Architecture
         EditionMode        = $buildConfig.EditionMode
         Edition            = $buildConfig.Edition
+        AppxCatalogVersion = $buildConfig.AppxCatalogVersion
         AppxPackages       = @('Microsoft.GetHelp', 'Microsoft.BingNews')
+        AiRemoval          = $buildConfig.AiRemoval
         RegistryTweaks     = @('developer-qol', 'dark-mode')
         Features           = $buildConfig.Features
         CursorPackKind     = $buildConfig.CursorPackKind
@@ -78,7 +87,9 @@ try {
         Architecture       = $buildConfig.Architecture
         EditionMode        = $buildConfig.EditionMode
         Edition            = $buildConfig.Edition
+        AppxCatalogVersion = $buildConfig.AppxCatalogVersion
         AppxPackages       = @('Microsoft.BingNews')
+        AiRemoval          = $buildConfig.AiRemoval
         RegistryTweaks     = $buildConfig.RegistryTweaks
         Features           = $buildConfig.Features
         CursorPackKind     = $buildConfig.CursorPackKind
@@ -92,6 +103,21 @@ try {
     }
     $fpModifiedAppx = Get-WinMintServicedWimFingerprint -BuildConfig $modifiedAppx -IsoStageKey 'abc123'
     Assert-True ($fp1 -ne $fpModifiedAppx) 'Fingerprint must change when AppxPackages changes'
+
+    $modifiedCatalog = $buildConfig.PSObject.Copy()
+    $modifiedCatalog.AppxCatalogVersion = 2
+    $fpModifiedCatalog = Get-WinMintServicedWimFingerprint -BuildConfig $modifiedCatalog -IsoStageKey 'abc123'
+    Assert-True ($fp1 -ne $fpModifiedCatalog) 'Fingerprint must change when AppxCatalogVersion changes'
+
+    $modifiedAiCatalog = $buildConfig.PSObject.Copy()
+    $modifiedAiCatalog.AiRemoval = [pscustomobject]@{
+        Policy           = 'ServiceableFull'
+        CatalogVersion   = 2
+        AppxPrefixes     = @('Microsoft.Windows.Copilot')
+        OptionalFeatures = @('Recall')
+    }
+    $fpModifiedAiCatalog = Get-WinMintServicedWimFingerprint -BuildConfig $modifiedAiCatalog -IsoStageKey 'abc123'
+    Assert-True ($fp1 -ne $fpModifiedAiCatalog) 'Fingerprint must change when AI removal catalog inputs change'
 
     # Miss → publish → hit round trip.
     Assert-True ($null -eq (Get-WinMintServicedWimCacheHit -Fingerprint $fp1)) 'Empty cache must miss'

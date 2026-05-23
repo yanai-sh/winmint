@@ -1,5 +1,5 @@
 {
-  "catalogVersion": 1,
+  "catalogVersion": 2,
   "serviceableAppxPrefixes": [
     "Microsoft.Windows.Copilot",
     "Microsoft.Copilot",
@@ -8,6 +8,7 @@
     "MicrosoftWindows.Client.CoPilot",
     "MicrosoftWindows.Client.CoreAI",
     "Microsoft.Windows.Ai.Copilot.Provider",
+    "Microsoft.Windows.AIHub",
     "Microsoft.Edge.GameAssist",
     "Microsoft.Office.ActionsServer",
     "Microsoft.WritingAssistant"
@@ -21,7 +22,8 @@
   "scheduledTaskPatternsToDisable": [
     "Recall",
     "WindowsAI",
-    "Copilot"
+    "Copilot",
+    "Office Actions Server"
   ],
   "aggressiveExperimentalPatterns": [
     "WindowsWorkload.Data.Analysis.Stx.*",

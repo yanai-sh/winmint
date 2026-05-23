@@ -76,10 +76,11 @@ function New-WinMintSetupProfile {
     param([Parameter(Mandatory)]$BuildConfig)
 
     [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         profile = [string]$BuildConfig.Profile
         setupOption = [string]$BuildConfig.SetupOption
         appxRemovalPrefixes = @($BuildConfig.AppxPackages)
+        appxCatalogVersion = [int]$BuildConfig.AppxCatalogVersion
         registryTweaks = @($BuildConfig.RegistryTweaks)
         windowsFeatures = @($BuildConfig.Features)
         defaultUser = [ordered]@{
@@ -89,7 +90,6 @@ function New-WinMintSetupProfile {
         setupComplete = [ordered]@{
             preserveWindowsUpdate = ([string]$BuildConfig.Tweaks.UpdatePolicy -eq 'All')
             disableVirtualDesktopFlyout = [bool]$BuildConfig.InstallWindhawk
-            preserveMicrosoftCopilot = $false
             removeRecall = $true
         }
         aiRemoval = [ordered]@{
@@ -100,6 +100,7 @@ function New-WinMintSetupProfile {
             disableAiServices = ([string]$BuildConfig.AiRemoval.Policy -ne 'Core')
             disableAiTasks = ([string]$BuildConfig.AiRemoval.Policy -ne 'Core')
             aggressiveExperimental = [bool]$BuildConfig.AiRemoval.AggressiveExperimental
+            optionalFeatures = @($BuildConfig.AiRemoval.OptionalFeatures)
             servicesToDisable = @($BuildConfig.AiRemoval.ServicesToDisable)
             scheduledTaskPatternsToDisable = @($BuildConfig.AiRemoval.ScheduledTaskPatternsToDisable)
         }
@@ -107,6 +108,9 @@ function New-WinMintSetupProfile {
             dualBoot = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
             disableFastStartup = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
             preventDeviceEncryption = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
+            disableWpbtExecution = $true
+            realTimeIsUniversal = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
+            primaryAssumption = [string]$BuildConfig.PrimaryAssumption
         }
         regional = [ordered]@{
             timeZoneId = [string]$BuildConfig.TimeZoneId
@@ -157,7 +161,7 @@ function New-WinMintSetupPlan {
     if (@($BuildConfig.Editors).Count -gt 0) { $firstLogonModules.Add('editors') | Out-Null }
 
     [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         profile = [string]$BuildConfig.Profile
         generatedBy = 'WinMint backend'
         accountMode = $accountMode

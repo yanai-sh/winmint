@@ -140,6 +140,36 @@ function Get-AuditServiceStatus {
     }
 }
 
+function Get-AuditWindowsOptionalFeatureStatus {
+    param([string]$Name)
+    try {
+        $feature = Get-WindowsOptionalFeature -Online -FeatureName $Name -ErrorAction SilentlyContinue
+        if (-not $feature) { return [ordered]@{ name = $Name; present = $false; state = '' } }
+        return [ordered]@{ name = $Name; present = $true; state = [string]$feature.State }
+    }
+    catch {
+        return [ordered]@{ name = $Name; present = $false; state = ''; error = $_.Exception.Message }
+    }
+}
+
+function Get-AuditScheduledTaskMatches {
+    param([string[]]$Patterns = @())
+    $regex = '(' + (($Patterns | ForEach-Object { [regex]::Escape([string]$_) }) -join '|') + ')'
+    if ([string]::IsNullOrWhiteSpace($regex) -or $regex -eq '()') { return @() }
+    try {
+        @(Get-ScheduledTask -ErrorAction SilentlyContinue |
+            Where-Object { $_.TaskName -match $regex -or $_.TaskPath -match $regex } |
+            ForEach-Object {
+                [ordered]@{
+                    path = [string]$_.TaskPath
+                    name = [string]$_.TaskName
+                    state = [string]$_.State
+                }
+            })
+    }
+    catch { @() }
+}
+
 function Test-AuditRegistryValue {
     param([string]$Path, [string]$Name)
     try {
@@ -147,6 +177,14 @@ function Test-AuditRegistryValue {
         return ($null -ne $value)
     }
     catch { return $false }
+}
+
+function Get-AuditRegistryValue {
+    param([string]$Path, [string]$Name)
+    try {
+        return (Get-ItemProperty -LiteralPath $Path -Name $Name -ErrorAction SilentlyContinue).$Name
+    }
+    catch { return $null }
 }
 
 function Get-AuditPlatformProbe {
@@ -246,13 +284,17 @@ function Get-AuditDmaInteropProbe {
 
     $timeZone = $null
     try { $timeZone = Get-TimeZone } catch { }
+    $culture = $null
+    try { $culture = Get-Culture } catch { }
     $homeLocation = $null
     try { $homeLocation = Get-WinHomeLocation } catch { }
     $autoTimeZoneService = Get-AuditServiceStatus -Name 'tzautoupdate'
+    $locationService = Get-AuditServiceStatus -Name 'lfsvc'
     $autoTimeZoneStart = $null
     try {
         $autoTimeZoneStart = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\tzautoupdate' -Name Start -ErrorAction SilentlyContinue).Start
     } catch { }
+    $restoreLocationServices = [bool](Get-AuditNestedProfileValue -Profile $SetupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreLocationServices' -Default $true)
 
     [ordered]@{
         enabled = $enabled
@@ -269,14 +311,81 @@ function Get-AuditDmaInteropProbe {
         }
         current = [ordered]@{
             timeZoneId = if ($timeZone) { [string]$timeZone.Id } else { '' }
+            culture = if ($culture) { [string]$culture.Name } else { '' }
             homeLocationGeoId = if ($homeLocation) { [int]$homeLocation.GeoId } else { 0 }
             homeLocation = if ($homeLocation) { [string]$homeLocation.HomeLocation } else { '' }
+        }
+        locationServices = [ordered]@{
+            expectedEnabled = $restoreLocationServices
+            service = $locationService
+            disableLocationPolicy = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors' -Name 'DisableLocation'
+            disableProviderPolicy = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors' -Name 'DisableWindowsLocationProvider'
         }
         autoTimeZone = [ordered]@{
             service = $autoTimeZoneService
             registryStart = $autoTimeZoneStart
             disabled = ($autoTimeZoneService.present -and [string]$autoTimeZoneService.startType -eq 'Disabled' -and $null -ne $autoTimeZoneStart -and [int]$autoTimeZoneStart -eq 4)
             policy = 'DMA builds must not leave automatic time-zone updates active; users may still set the time zone manually or re-enable location-based time zone later.'
+        }
+    }
+}
+
+function Get-AuditPolicyProbe {
+    param([object]$SetupProfile)
+
+    $privacyLocation = [bool](Get-AuditProfileValue -Profile $SetupProfile -Section 'privacy' -Name 'location' -Default $true)
+    $dualBoot = [bool](Get-AuditProfileValue -Profile $SetupProfile -Section 'windowsPolicy' -Name 'dualBoot' -Default $false)
+    $storageRoot = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy'
+    $modernStandbyRoot = 'HKLM:\SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9'
+
+    [ordered]@{
+        location = [ordered]@{
+            expectedEnabled = $privacyLocation
+            disableLocation = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors' -Name 'DisableLocation'
+            disableWindowsLocationProvider = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors' -Name 'DisableWindowsLocationProvider'
+            allowFindMyDevice = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\FindMyDevice' -Name 'AllowFindMyDevice'
+        }
+        storageSense = [ordered]@{
+            '01' = Get-AuditRegistryValue -Path $storageRoot -Name '01'
+            '04' = Get-AuditRegistryValue -Path $storageRoot -Name '04'
+            '08' = Get-AuditRegistryValue -Path $storageRoot -Name '08'
+            '32' = Get-AuditRegistryValue -Path $storageRoot -Name '32'
+        }
+        modernStandby = [ordered]@{
+            ac = Get-AuditRegistryValue -Path $modernStandbyRoot -Name 'ACSettingIndex'
+            dc = Get-AuditRegistryValue -Path $modernStandbyRoot -Name 'DCSettingIndex'
+        }
+        wpbt = [ordered]@{
+            disableWpbtExecution = Get-AuditRegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name 'DisableWpbtExecution'
+        }
+        dualBootClock = [ordered]@{
+            expected = $dualBoot
+            realTimeIsUniversal = Get-AuditRegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation' -Name 'RealTimeIsUniversal'
+        }
+        oobeRehydration = [ordered]@{
+            devHomeOobe = Test-Path -LiteralPath 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\DevHomeUpdate'
+            outlookOobe = Test-Path -LiteralPath 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\OutlookUpdate'
+            chatOobe = Test-Path -LiteralPath 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\ChatAutoInstall'
+            devHomeWorkCompleted = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\DevHomeUpdate' -Name 'workCompleted'
+            outlookWorkCompleted = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\OutlookUpdate' -Name 'workCompleted'
+            chatWorkCompleted = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\ChatAutoInstall' -Name 'workCompleted'
+        }
+        uac = [ordered]@{
+            enableLua = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'EnableLUA'
+            consentPromptBehaviorAdmin = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'ConsentPromptBehaviorAdmin'
+            promptOnSecureDesktop = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'PromptOnSecureDesktop'
+        }
+        homePrivacy = [ordered]@{
+            allowTelemetry = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry'
+            doNotShowFeedbackNotifications = Get-AuditRegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'DoNotShowFeedbackNotifications'
+        }
+        gaming = [ordered]@{
+            allowAutoGameMode = Get-AuditRegistryValue -Path 'HKCU:\Software\Microsoft\GameBar' -Name 'AllowAutoGameMode'
+            hwSchMode = Get-AuditRegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -Name 'HwSchMode'
+        }
+        desktopUi = [ordered]@{
+            lastActiveClick = Get-AuditRegistryValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name 'LastActiveClick'
+            snapAssist = Get-AuditRegistryValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name 'SnapAssist'
         }
     }
 }
@@ -330,6 +439,21 @@ $installedAppx = @(Get-AuditInstalledAppx)
 $win32Entries = @(Get-AuditWin32UninstallEntry)
 $platform = Get-AuditPlatformProbe -SetupProfile $setupProfile
 $dmaInterop = Get-AuditDmaInteropProbe -SetupProfile $setupProfile
+$policy = Get-AuditPolicyProbe -SetupProfile $setupProfile
+$aiRemoval = if ($setupProfile -and $setupProfile.PSObject.Properties['aiRemoval']) { $setupProfile.aiRemoval } else { $null }
+$aiPrefixes = @()
+$aiFeatureNames = @()
+$aiServices = @()
+$aiTaskPatterns = @()
+if ($aiRemoval) {
+    $aiPrefixes = @(ConvertTo-AuditStringArray $aiRemoval.appxPrefixes)
+    $aiFeatureNames = @(ConvertTo-AuditStringArray (@($aiRemoval.optionalFeatures) + @(if ($aiRemoval.removeRecall) { 'Recall' })))
+    if ($aiFeatureNames.Count -eq 0 -and [bool]$aiRemoval.removeRecall) { $aiFeatureNames = @('Recall') }
+    $aiServices = @(ConvertTo-AuditStringArray $aiRemoval.servicesToDisable)
+    if ($aiServices.Count -eq 0 -and [bool]$aiRemoval.disableAiServices) { $aiServices = @('WSAIFabricSvc') }
+    $aiTaskPatterns = @(ConvertTo-AuditStringArray $aiRemoval.scheduledTaskPatternsToDisable)
+    if ($aiTaskPatterns.Count -eq 0 -and [bool]$aiRemoval.disableAiTasks) { $aiTaskPatterns = @('Recall', 'WindowsAI', 'Copilot') }
+}
 
 foreach ($prefix in $expectedRemovalPrefixes) {
     foreach ($pkg in @($provisionedAppx | Where-Object { [string]$_.packageName -like "*$prefix*" -or [string]$_.displayName -like "*$prefix*" })) {
@@ -337,6 +461,56 @@ foreach ($prefix in $expectedRemovalPrefixes) {
     }
     foreach ($pkg in @($installedAppx | Where-Object { [string]$_.packageFullName -like "*$prefix*" -or [string]$_.name -like "*$prefix*" })) {
         Add-AuditFinding -Findings $findings -Severity Warning -Id 'appx-installed-drift' -Category 'appx' -Name ([string]$pkg.packageFullName) -Message "Installed AppX still matches expected removal prefix '$prefix'."
+    }
+}
+
+foreach ($prefix in $aiPrefixes) {
+    foreach ($pkg in @($provisionedAppx | Where-Object { [string]$_.packageName -like "*$prefix*" -or [string]$_.displayName -like "*$prefix*" })) {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'ai-appx-provisioned-drift' -Category 'ai' -Name ([string]$pkg.packageName) -Message "Provisioned AI AppX still matches expected removal prefix '$prefix'."
+    }
+    foreach ($pkg in @($installedAppx | Where-Object { [string]$_.packageFullName -like "*$prefix*" -or [string]$_.name -like "*$prefix*" })) {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'ai-appx-installed-drift' -Category 'ai' -Name ([string]$pkg.packageFullName) -Message "Installed AI AppX still matches expected removal prefix '$prefix'."
+    }
+}
+
+$aiFeatureStatus = @($aiFeatureNames | ForEach-Object { Get-AuditWindowsOptionalFeatureStatus -Name ([string]$_) })
+foreach ($feature in $aiFeatureStatus) {
+    if ($feature.present -and [string]$feature.state -match 'Enabled') {
+        Add-AuditFinding -Findings $findings -Severity Error -Id 'ai-optional-feature-enabled' -Category 'ai' -Name ([string]$feature.name) -Message "AI optional feature '$($feature.name)' is still enabled."
+    }
+}
+
+$aiServiceStatus = @($aiServices | ForEach-Object { Get-AuditServiceStatus -Name ([string]$_) })
+foreach ($svc in $aiServiceStatus) {
+    if ($svc.present -and [string]$svc.startType -ne 'Disabled' -and [string]$svc.status -ne 'Stopped') {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'ai-service-active' -Category 'ai' -Name ([string]$svc.name) -Message "AI service '$($svc.name)' is present and not disabled/stopped."
+    }
+}
+
+$aiTasks = @(Get-AuditScheduledTaskMatches -Patterns $aiTaskPatterns)
+foreach ($task in $aiTasks) {
+    if ([string]$task.state -ne 'Disabled') {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'ai-task-enabled' -Category 'ai' -Name "$($task.path)$($task.name)" -Message 'AI-related scheduled task is not disabled.'
+    }
+}
+
+if ($aiRemoval -and [string]$aiRemoval.policy -ne 'Core') {
+    foreach ($expected in @(
+            @('HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI', 'AllowRecallEnablement'),
+            @('HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI', 'TurnOffSavingSnapshots'),
+            @('HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI', 'DisableSettingsAgent'),
+            @('HKLM:\SOFTWARE\Policies\Microsoft\Edge', 'EdgeEntraCopilotPageContext'),
+            @('HKLM:\SOFTWARE\Policies\Microsoft\Edge', 'GenAILocalFoundationalModelSettings'),
+            @('HKLM:\SOFTWARE\Policies\Microsoft\Edge', 'NewTabPageBingChatEnabled'),
+            @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\generativeAI', 'Value'),
+            @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\systemAIModels', 'Value'),
+            @('HKCU:\Software\Microsoft\Windows\Shell\ClickToDo', 'DisableClickToDo'),
+            @('HKCU:\Software\Microsoft\Office\16.0\Word\Options', 'EnableCopilot'),
+            @('HKCU:\Software\Microsoft\Office\16.0\Excel\Options', 'EnableCopilot')
+        )) {
+        if (-not (Test-AuditRegistryValue -Path $expected[0] -Name $expected[1])) {
+            Add-AuditFinding -Findings $findings -Severity Warning -Id 'ai-policy-missing' -Category 'ai' -Name "$($expected[0])\$($expected[1])" -Message 'Expected serviceable full AI registry policy was not found.'
+        }
     }
 }
 
@@ -375,12 +549,88 @@ if ($dmaInterop.enabled) {
     if (-not [string]::IsNullOrWhiteSpace([string]$dmaInterop.restore.timeZoneId) -and [string]$dmaInterop.current.timeZoneId -ne [string]$dmaInterop.restore.timeZoneId) {
         Add-AuditFinding -Findings $findings -Severity Error -Id 'dma-time-zone-restore' -Category 'dmaInterop' -Name 'Time zone restore' -Message "Current time zone '$($dmaInterop.current.timeZoneId)' does not match configured restore time zone '$($dmaInterop.restore.timeZoneId)'."
     }
+    if (-not [string]::IsNullOrWhiteSpace([string]$dmaInterop.restore.userLocale) -and [string]$dmaInterop.current.culture -ne [string]$dmaInterop.restore.userLocale) {
+        Add-AuditFinding -Findings $findings -Severity Error -Id 'dma-culture-restore' -Category 'dmaInterop' -Name 'Culture restore' -Message "Current culture '$($dmaInterop.current.culture)' does not match configured restore culture '$($dmaInterop.restore.userLocale)'."
+    }
     if ([int]$dmaInterop.restore.homeLocationGeoId -gt 0 -and [int]$dmaInterop.current.homeLocationGeoId -ne [int]$dmaInterop.restore.homeLocationGeoId) {
         Add-AuditFinding -Findings $findings -Severity Error -Id 'dma-home-location-restore' -Category 'dmaInterop' -Name 'Home location restore' -Message "Current home location GeoID '$($dmaInterop.current.homeLocationGeoId)' does not match configured restore GeoID '$($dmaInterop.restore.homeLocationGeoId)'."
     }
     if (-not [bool]$dmaInterop.autoTimeZone.disabled) {
         Add-AuditFinding -Findings $findings -Severity Error -Id 'dma-auto-time-zone-active' -Category 'dmaInterop' -Name 'Auto Time Zone Updater' -Message 'DMA interoperability is enabled, but Auto Time Zone Updater is not disabled. Windows may automatically change the time zone after the user sets it.'
     }
+    if ($dmaInterop.locationServices.expectedEnabled) {
+        if ($null -ne $dmaInterop.locationServices.disableLocationPolicy -and [int]$dmaInterop.locationServices.disableLocationPolicy -ne 0) {
+            Add-AuditFinding -Findings $findings -Severity Error -Id 'location-services-blocked' -Category 'location' -Name 'Location services' -Message 'Location services are expected to be enabled, but DisableLocation policy is set.'
+        }
+    }
+    else {
+        if ($null -eq $dmaInterop.locationServices.disableLocationPolicy -or [int]$dmaInterop.locationServices.disableLocationPolicy -ne 1) {
+            Add-AuditFinding -Findings $findings -Severity Warning -Id 'location-services-not-blocked' -Category 'location' -Name 'Location services' -Message 'Location services are expected to be disabled, but DisableLocation policy is not set.'
+        }
+    }
+}
+
+if ($policy.location.expectedEnabled) {
+    if ($null -ne $policy.location.disableLocation -and [int]$policy.location.disableLocation -ne 0) {
+        Add-AuditFinding -Findings $findings -Severity Error -Id 'location-disabled-policy-present' -Category 'location' -Name 'DisableLocation' -Message 'Location is expected on, but DisableLocation policy is present.'
+    }
+    if ($null -ne $policy.location.allowFindMyDevice -and [int]$policy.location.allowFindMyDevice -eq 0) {
+        Add-AuditFinding -Findings $findings -Severity Error -Id 'find-my-device-blocked' -Category 'location' -Name 'Find My Device' -Message 'Location is expected on, but Find My Device is blocked.'
+    }
+}
+else {
+    if ($null -eq $policy.location.disableLocation -or [int]$policy.location.disableLocation -ne 1) {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'location-disabled-policy-missing' -Category 'location' -Name 'DisableLocation' -Message 'Location is expected off, but DisableLocation policy is not set.'
+    }
+    if ($null -eq $policy.location.allowFindMyDevice -or [int]$policy.location.allowFindMyDevice -ne 0) {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'find-my-device-not-blocked' -Category 'location' -Name 'Find My Device' -Message 'Location is expected off, but Find My Device is not blocked.'
+    }
+}
+
+foreach ($pair in @(@('01', 1), @('04', 1), @('08', 1), @('32', 0))) {
+    $actual = if ($policy.storageSense -is [System.Collections.IDictionary]) {
+        $policy.storageSense[$pair[0]]
+    } elseif ($policy.storageSense.PSObject.Properties[$pair[0]]) {
+        $policy.storageSense.PSObject.Properties[$pair[0]].Value
+    } else {
+        $null
+    }
+    if ($null -eq $actual -or [int]$actual -ne [int]$pair[1]) {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'storage-sense-policy' -Category 'storageSense' -Name $pair[0] -Message "Storage Sense policy '$($pair[0])' expected '$($pair[1])' but found '$actual'."
+    }
+}
+if ($null -eq $policy.modernStandby.ac -or [int]$policy.modernStandby.ac -ne 0 -or
+    $null -eq $policy.modernStandby.dc -or [int]$policy.modernStandby.dc -ne 0) {
+    Add-AuditFinding -Findings $findings -Severity Warning -Id 'modern-standby-network' -Category 'power' -Name 'Modern Standby network' -Message 'Modern Standby network policy should be disabled for AC and DC.'
+}
+if ($null -eq $policy.wpbt.disableWpbtExecution -or [int]$policy.wpbt.disableWpbtExecution -ne 1) {
+    Add-AuditFinding -Findings $findings -Severity Warning -Id 'wpbt-policy' -Category 'platform' -Name 'DisableWpbtExecution' -Message 'WPBT execution should be disabled in WinMint Minimal.'
+}
+if ($policy.dualBootClock.expected) {
+    if ($null -eq $policy.dualBootClock.realTimeIsUniversal -or [int]$policy.dualBootClock.realTimeIsUniversal -ne 1) {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'dual-boot-clock-policy' -Category 'dualBoot' -Name 'RealTimeIsUniversal' -Message 'Dual-boot builds should set RealTimeIsUniversal.'
+    }
+}
+elseif ($null -ne $policy.dualBootClock.realTimeIsUniversal) {
+    Add-AuditFinding -Findings $findings -Severity Error -Id 'dual-boot-clock-policy-unexpected' -Category 'dualBoot' -Name 'RealTimeIsUniversal' -Message 'RealTimeIsUniversal is present on a non-dual-boot build.'
+}
+foreach ($oobe in @(
+        @('DevHomeUpdate', $policy.oobeRehydration.devHomeOobe, $policy.oobeRehydration.devHomeWorkCompleted),
+        @('OutlookUpdate', $policy.oobeRehydration.outlookOobe, $policy.oobeRehydration.outlookWorkCompleted),
+        @('ChatAutoInstall', $policy.oobeRehydration.chatOobe, $policy.oobeRehydration.chatWorkCompleted)
+    )) {
+    if ([bool]$oobe[1]) {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'oobe-rehydration-key-present' -Category 'oobe' -Name $oobe[0] -Message 'OOBE rehydration key is still present.'
+    }
+    if ($null -eq $oobe[2] -or [int]$oobe[2] -ne 1) {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'oobe-rehydration-work-not-complete' -Category 'oobe' -Name $oobe[0] -Message 'OOBE rehydration workCompleted marker is missing.'
+    }
+}
+if ($null -ne $policy.uac.promptOnSecureDesktop -and [int]$policy.uac.promptOnSecureDesktop -eq 0) {
+    Add-AuditFinding -Findings $findings -Severity Error -Id 'uac-secure-desktop-disabled' -Category 'security' -Name 'PromptOnSecureDesktop' -Message 'WinMint must not disable the UAC secure desktop.'
+}
+if ($null -ne $policy.uac.enableLua -and [int]$policy.uac.enableLua -eq 0) {
+    Add-AuditFinding -Findings $findings -Severity Error -Id 'uac-disabled' -Category 'security' -Name 'EnableLUA' -Message 'WinMint must not disable UAC.'
 }
 
 $recommendedClassification = @()
@@ -403,7 +653,7 @@ $summary = [ordered]@{
 }
 
 $report = [ordered]@{
-    schemaVersion           = 1
+    schemaVersion           = 2
     generatedAt             = Get-Date -Format o
     setupProfilePath        = $SetupProfilePath
     recommendedListPath     = $RecommendedListPath
@@ -416,6 +666,14 @@ $report = [ordered]@{
         win32           = @($win32Entries)
         platform        = $platform
         dmaInterop      = $dmaInterop
+        policies        = $policy
+        ai              = [ordered]@{
+            policy = if ($aiRemoval) { [string]$aiRemoval.policy } else { 'Core' }
+            appxPrefixes = @($aiPrefixes)
+            optionalFeatures = @($aiFeatureStatus)
+            services = @($aiServiceStatus)
+            scheduledTasks = @($aiTasks)
+        }
         recommended     = @($recommendedClassification)
     }
 }

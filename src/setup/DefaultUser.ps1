@@ -82,7 +82,6 @@ $scripts = @(
             New-Item -ItemType Directory -Path (Join-Path 'C:\Users\Default' $folder) -Force -ErrorAction SilentlyContinue | Out-Null
         }
         $userShellFolders = 'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
-        $shellFolders = 'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
         foreach ($known in @(
                 @{ Name = 'Desktop'; Local = 'Desktop' },
                 @{ Name = 'Personal'; Local = 'Documents' },
@@ -92,7 +91,6 @@ $scripts = @(
                 @{ Name = '{374DE290-123F-4565-9164-39C4925E467B}'; Local = 'Downloads' }
             )) {
             Set-DefaultUserRegistryValue -Path $userShellFolders -Name $known.Name -Type REG_EXPAND_SZ -Data "%USERPROFILE%\$($known.Local)"
-            Set-DefaultUserRegistryValue -Path $shellFolders -Name $known.Name -Type REG_SZ -Data "C:\Users\Default\$($known.Local)"
         }
         foreach ($runKey in @(
                 'HKU\DefaultUser\SOFTWARE\Microsoft\Windows\CurrentVersion\Run',

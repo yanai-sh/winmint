@@ -77,7 +77,7 @@
     }
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "schemaVersion": { "type": "integer", "const": 2 },
     "createdAt": { "type": "string" },
     "profileName": { "type": "string" },
     "profileGroups": {
@@ -150,7 +150,7 @@
     },
     "regional": {
       "type": "object",
-      "required": ["timeZoneId", "uiLanguage", "systemLocale", "userLocale", "inputLocale"],
+      "required": ["timeZoneId", "uiLanguage", "systemLocale", "uiLanguageFallback", "userLocale", "inputLocale"],
       "properties": {
         "timeZoneId": { "type": "string" },
         "uiLanguage": { "type": "string" },
@@ -251,12 +251,13 @@
     },
     "removals": {
       "type": "object",
-      "required": ["advertising", "gaming", "communication", "microsoftApps"],
+      "required": ["advertising", "gaming", "communication", "microsoftApps", "aiPolicy"],
       "properties": {
         "advertising": { "type": "boolean" },
         "gaming": { "type": "boolean" },
         "communication": { "type": "boolean" },
         "microsoftApps": { "type": "boolean" },
+        "aiPolicy": { "type": "string", "enum": ["Core", "ServiceableFull", "AggressiveExperimental"] },
         "effectiveAppx": {
           "type": "array",
           "items": { "type": "string" }

@@ -45,7 +45,7 @@ Bad debloat:
 
 | Area | Current state | Recommendation |
 |------|---------------|----------------|
-| AppX cleanup | Curated provisioned package removal in `src/engine/Private/Catalog.ps1` and `src/engine/Private/Image/Staging.ps1`. | Keep. This is the right kind of image-level debloat. |
+| AppX cleanup | Curated provisioned package removal is cataloged in `config/appx-removal.json` and serviced by the image pipeline. DMA-on defaults keep broad third-party/OEM prefixes candidate-only. | Keep. This is the right kind of image-level debloat, but the normal Home/DMA path should stay slimmer than legacy community removal lists. |
 | Windows Update | `src/setup/SetupComplete.ps1` restores BITS, wuauserv, UsoSvc, and WaaSMedicSvc. | Keep. This is a strong guardrail against over-debloat. |
 | WSL platform | WSL, Virtual Machine Platform, and OpenSSH are enabled in the image. | Keep. These are core workstation features. |
 | Edge | Edge first-run/startup/background/promo behavior is policy-disabled. | Keep. Do not remove WebView2 or Edge runtime infrastructure. |
@@ -282,10 +282,10 @@ No tweak should graduate to Core unless it passes this matrix.
 | Priority | Change | Reason |
 |----------|--------|--------|
 | P0 | Keep serviceability guardrails in `tests\contract\Test-ProfileInvariants.ps1`. | Prevent `/ResetBase`, Compact OS, broad hardware bypass, or infinite AutoLogon from returning. |
-| P1 | Add a debloat/tweak manifest report with risk and reversibility metadata. | Trust and auditability; this borrows Sparkle/Sophia's best UX idea without inheriting their whole tweak matrix. |
-| P1 | Define a protected platform allowlist. | Prevent future over-debloat from breaking WSL/update/security. |
-| P1 | Expand privacy baseline to include Start/Search/content/advertising/default-user keys in one source of truth. | More complete O&O/WinUtil-style coverage without UI bloat. |
-| P1 | Add AI removal layer tests. | Copilot/Recall surfaces keep changing. |
+| P1 | Keep extending the build manifest report with risk and reversibility metadata as new surfaces are added. | Trust and auditability; this borrows Sparkle/Sophia's best UX idea without inheriting their whole tweak matrix. |
+| P1 | Keep the protected platform allowlist under contract tests. | Prevent future over-debloat from breaking WSL/update/security. |
+| P1 | Keep the Home privacy baseline in one source of truth. | More complete O&O/WinUtil-style coverage without UI bloat. |
+| P1 | Keep AI removal layer tests current. | Copilot/Recall surfaces keep changing. |
 | P2 | Investigate DiagTrack service state with smoke tests. | Potential idle/noise win, but needs evidence. |
 | P2 | Add optional mirrored-networking control for WSL. | Useful for some VPN/LAN workflows; not safe enough for Core default. |
 | P2 | Add Dev Drive planning/design. | High-value developer performance feature that most debloat tools ignore. |
