@@ -49,7 +49,7 @@ Bad debloat:
 | AppX cleanup | Curated provisioned package removal is cataloged in `config/appx-removal.json` and serviced by the image pipeline. DMA-on defaults keep broad third-party/OEM prefixes candidate-only. | Keep. This is the right kind of image-level debloat, but the normal Home/DMA path should stay slimmer than legacy community removal lists. |
 | Windows Update | `src/setup/SetupComplete.ps1` restores BITS, wuauserv, UsoSvc, and WaaSMedicSvc. | Keep. This is a strong guardrail against over-debloat. |
 | WSL platform | WSL, Virtual Machine Platform, and OpenSSH are enabled in the image. | Keep. These are core workstation features. |
-| Edge | Edge first-run/startup/background/promo behavior is policy-disabled. | Keep. Do not remove WebView2 or Edge runtime infrastructure. |
+| Edge | Edge browser is removed by default via the DMA-supported in-OS uninstall (EEA setup window); `-KeepEdge` keeps it. Edge first-run/startup/background/promo policies are applied either way. | Keep removing the **browser** only through the EULA-blessed DMA uninstall (skip + log when DMA is off); never patch `IntegratedServicesRegionPolicySet.json`. **Never** remove WebView2 / Edge *runtime* infrastructure. |
 | OneDrive | Fully removed during setup/first logon; sync policies stay blocked and known folders are forced back to local profile paths. | Keep. Users who want OneDrive can reinstall it after setup. |
 | Game Bar / Xbox | Xbox packages and GameDVR are removed/disabled. | Keep. This is low-value background noise for this image. |
 | Recall / Copilot | Recall is removed when detected; Copilot and WebExperience are removed/deprovisioned. | Keep, but preserve the list as an AI-removal policy surface because Microsoft keeps moving these components. |
@@ -95,7 +95,7 @@ These should be part of WinMint Core because they remove noise without compromis
 | Edge noise | Hide first-run, disable startup boost/background mode, disable recommendations/promos/personalization reporting. |
 | OneDrive pressure | Uninstall OneDrive, remove setup binaries/residue, disable personal sync and autostart, hide Explorer integration, and keep known folders local. |
 | Xbox/GameDVR | Remove Xbox packages and disable Game Bar/GameDVR overlays. |
-| Explorer/dev QoL | Show file extensions, show hidden files, enable long paths (`longpaths-policy`), set sane context/menu defaults. |
+| Explorer/dev QoL | Show file extensions, show hidden files, enable long paths (`longpaths-policy`), enable End Task on the taskbar right-click menu (`taskbar-endtask`, always on), set sane context/menu defaults. |
 | Setup privacy | Keep `ProtectYourPC=3`, hide Microsoft account screens, keep Wi-Fi OOBE visible so first-logon automation has network. |
 | OEM payloads | Disable WPBT, Razer-style auto-installers, and known vendor app injection paths where policy exists. |
 | Setup cleanup | Remove copied unattend credentials and setup residue after install. |

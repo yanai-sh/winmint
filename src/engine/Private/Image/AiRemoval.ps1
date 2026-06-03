@@ -16,7 +16,8 @@ function Resolve-WinMintAiRemovalPolicy {
 
     $policy = [string](Get-WinMintProfileSetting $Removals 'aiPolicy' '')
     if ([string]::IsNullOrWhiteSpace($policy)) {
-        $policy = if ($SetupOption -eq 'CopilotPlus') { 'ServiceableFull' } else { 'Core' }
+        # Subtractive default: full serviceable AI removal on every build.
+        $policy = 'ServiceableFull'
     }
     if ($policy -notin @('Core', 'ServiceableFull', 'AggressiveExperimental')) {
         throw "Unsupported AI removal policy '$policy'."
@@ -30,7 +31,8 @@ function Resolve-WinMintAiRemovalPolicy {
 function New-WinMintAiRemovalConfig {
     param(
         [object]$Removals,
-        [string]$SetupOption = 'Minimal'
+        [string]$SetupOption = 'Minimal',
+        [bool]$KeepCopilot = $false
     )
 
     $catalog = Get-WinMintAiRemovalCatalog
@@ -40,13 +42,27 @@ function New-WinMintAiRemovalConfig {
         $serviceablePrefixes = @($catalog.serviceableAppxPrefixes | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
     }
 
+    # -KeepCopilot keeps ALL Copilot+ AI features (apps, services, AI tasks).
+    # Recall is the security exception: its optional feature and the 'Recall'
+    # scheduled task are ALWAYS removed regardless of -KeepCopilot.
+    if ($KeepCopilot) {
+        $serviceablePrefixes = @()
+        $servicesToDisable = @()
+        $scheduledTaskPatternsToDisable = @('Recall')
+    }
+    else {
+        $servicesToDisable = @($catalog.servicesToDisable | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
+        $scheduledTaskPatternsToDisable = @($catalog.scheduledTaskPatternsToDisable | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
+    }
+
     [pscustomobject]@{
         Policy = $policy
         CatalogVersion = [int]$catalog.catalogVersion
+        KeepCopilot = $KeepCopilot
         AppxPrefixes = $serviceablePrefixes
         OptionalFeatures = @($catalog.optionalFeatures | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
-        ServicesToDisable = @($catalog.servicesToDisable | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
-        ScheduledTaskPatternsToDisable = @($catalog.scheduledTaskPatternsToDisable | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)
+        ServicesToDisable = @($servicesToDisable)
+        ScheduledTaskPatternsToDisable = @($scheduledTaskPatternsToDisable)
         AggressiveExperimental = ($policy -eq 'AggressiveExperimental')
         AggressiveExperimentalPatterns = if ($policy -eq 'AggressiveExperimental') {
             @($catalog.aggressiveExperimentalPatterns | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)

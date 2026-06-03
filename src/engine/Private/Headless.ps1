@@ -420,6 +420,9 @@ function New-WinMintHeadlessProfileFromFlags {
         [switch]$Copilot,
         [switch]$DesktopUI,
         [switch]$Gaming,
+        [switch]$KeepEdge,
+        [switch]$KeepGaming,
+        [switch]$KeepCopilot,
         [switch]$DmaInterop,
         [switch]$NoDmaInterop,
         [ValidateSet('None', 'FlowEverything', 'Raycast')][string]$Launcher = 'None',
@@ -453,17 +456,21 @@ function New-WinMintHeadlessProfileFromFlags {
         -DriverPath $DriverPath `
         -ExportHostDrivers:$ExportHostDrivers
 
-    $profileGroups = @(Resolve-WinMintHeadlessProfileGroups `
-        -Preset $Preset `
-        -SetupOption $SetupOption `
-        -Developer:$Developer `
-        -Copilot:$Copilot `
-        -DesktopUI:$DesktopUI `
-        -Gaming:$Gaming)
+    # Subtractive model: default removes everything. Opt-in keep flags suppress a
+    # domain. Legacy -Gaming / -Preset Gaming map to -KeepGaming (same meaning the
+    # old Gaming group had). -Developer is now baseline; old -Copilot / CopilotPlus
+    # (which requested MORE AI removal) are no-ops because full removal is the
+    # default — keeping Copilot+ AI now requires the explicit -KeepCopilot.
+    $resolvedKeepGaming = [bool]$KeepGaming -or [bool]$Gaming -or ($Preset -eq 'Gaming')
+    $resolvedKeepCopilot = [bool]$KeepCopilot
+    $resolvedKeepEdge = [bool]$KeepEdge
+    $resolvedDesktopUi = ([bool]$DesktopUI -or ($Preset -eq 'DesktopUI')) -and -not [bool]$TemplateMode
 
     New-WinMintBuildProfileFromSettings -Settings @{
-        Profile = 'Minimal'
-        ProfileGroups = @($profileGroups)
+        Profile = 'WinMint'
+        KeepEdge = $resolvedKeepEdge
+        KeepGaming = $resolvedKeepGaming
+        KeepCopilot = $resolvedKeepCopilot
         ISOPath = $SourceIso
         Architecture = $Architecture
         TargetDevice = $TargetDevice
@@ -473,7 +480,6 @@ function New-WinMintHeadlessProfileFromFlags {
         Password = $Password
         AutoLogon = [bool]$AutoLogon
         AutoWipeDisk = [bool]$AutoWipeDisk
-        SetupOption = if ($profileGroups -contains 'CopilotPlus') { 'CopilotPlus' } else { $SetupOption }
         EditionMode = $EditionMode
         Edition = $Edition
         DriverSource = $drivers.Source
@@ -485,7 +491,7 @@ function New-WinMintHeadlessProfileFromFlags {
         UILanguage = $UILanguage
         UILanguageFallback = $UILanguageFallback
         UserLocale = $UserLocale
-        DesktopUiDefault = ([bool]$DesktopUI -and -not [bool]$TemplateMode)
+        DesktopUiDefault = $resolvedDesktopUi
         InstallWindhawk = [bool]$InstallWindhawk
         InstallYasb = [bool]$InstallYasb
         InstallKomorebi = [bool]$InstallKomorebi
@@ -612,6 +618,9 @@ function Invoke-WinMintHeadlessCli {
         [switch]$Copilot,
         [switch]$DesktopUI,
         [switch]$Gaming,
+        [switch]$KeepEdge,
+        [switch]$KeepGaming,
+        [switch]$KeepCopilot,
         [switch]$DmaInterop,
         [switch]$NoDmaInterop,
         [ValidateSet('None', 'FlowEverything', 'Raycast')][string]$Launcher = 'None',
@@ -681,6 +690,9 @@ function Invoke-WinMintHeadlessCli {
                 -UserLocale $UserLocale `
                 -Developer:$Developer `
                 -Copilot:$Copilot `
+                -KeepEdge:$KeepEdge `
+                -KeepGaming:$KeepGaming `
+                -KeepCopilot:$KeepCopilot `
                 -DesktopUI:$DesktopUI `
                 -Gaming:$Gaming `
                 -DmaInterop:$DmaInterop `
@@ -770,6 +782,9 @@ function Invoke-WinMintHeadlessCli {
                 -UserLocale $UserLocale `
                 -Developer:$Developer `
                 -Copilot:$Copilot `
+                -KeepEdge:$KeepEdge `
+                -KeepGaming:$KeepGaming `
+                -KeepCopilot:$KeepCopilot `
                 -DesktopUI:$DesktopUI `
                 -Gaming:$Gaming `
                 -DmaInterop:$DmaInterop `

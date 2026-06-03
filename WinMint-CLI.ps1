@@ -47,6 +47,9 @@ param(
     [Alias('Desktop-UI')]
     [switch]$DesktopUI,
     [switch]$Gaming,
+    [switch]$KeepEdge,
+    [switch]$KeepGaming,
+    [switch]$KeepCopilot,
     [switch]$DmaInterop,
     [switch]$NoDmaInterop,
     [ValidateSet('None', 'FlowEverything', 'Raycast')]
@@ -94,6 +97,9 @@ $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
     $PSBoundParameters.ContainsKey('Copilot') -or
     $PSBoundParameters.ContainsKey('DesktopUI') -or
     $PSBoundParameters.ContainsKey('Gaming') -or
+    $PSBoundParameters.ContainsKey('KeepEdge') -or
+    $PSBoundParameters.ContainsKey('KeepGaming') -or
+    $PSBoundParameters.ContainsKey('KeepCopilot') -or
     $PSBoundParameters.ContainsKey('DmaInterop') -or
     $PSBoundParameters.ContainsKey('NoDmaInterop') -or
     $PSBoundParameters.ContainsKey('Launcher') -or
@@ -155,6 +161,9 @@ if ($headlessMode) {
         -Copilot:$Copilot `
         -DesktopUI:$DesktopUI `
         -Gaming:$Gaming `
+        -KeepEdge:$KeepEdge `
+        -KeepGaming:$KeepGaming `
+        -KeepCopilot:$KeepCopilot `
         -DmaInterop:$DmaInterop `
         -NoDmaInterop:$NoDmaInterop `
         -Launcher $Launcher `

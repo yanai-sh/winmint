@@ -1,22 +1,21 @@
 #Requires -Version 7.3
 
-# Applied when AI removal policy is ServiceableFull or AggressiveExperimental
-# (CopilotPlus default). Serviceable full AI removal: Copilot, Recall, Edge AI,
-# inbox app AI, Office Copilot defaults, and app access to system/generative AI
-# models — without CBS surgery. Mutually exclusive with windows-ai-core-policy.
+# Default builds remove the rest of the Copilot+ / Windows AI feature surface:
+# the Copilot app, Edge AI (sidebar/page-context/history/built-in APIs/gen-themes/
+# BingChat), Office Copilot, Paint + Notepad AI, the Windows AI settings agent,
+# and app access to system/generative AI models. `-KeepCopilot` suppresses this
+# whole module so a Copilot+ PC keeps these features — Recall stays disabled
+# regardless (see 40-windows-ai-recall-policy).
 
 Add-WinMintRegistryTweakModule @{
-    id = 'windows-ai-full-policy'
-    description = 'Windows AI full serviceable removal policy'
+    id = 'windows-ai-features-removal'
+    description = 'Remove Copilot+ AI features (Copilot app, Edge/Office/inbox AI, app AI-model access) — kept with -KeepCopilot'
     scope = 'machine and default user policy registry'; risk = 'medium'; reversible = $true; phase = 'offline-image'
-    intent = 'Disable Copilot, Recall, Edge AI, inbox app AI features, and app access to system/generative AI models without CBS surgery.'
-    appliesTo = { param($ctx) [string]$ctx.AiPolicy -in @('ServiceableFull', 'AggressiveExperimental') }
+    intent = 'Remove the non-Recall Copilot+ AI feature surface by default; kept entirely when -KeepCopilot is selected.'
+    appliesTo = { param($ctx) -not [bool]$ctx.KeepCopilot }
     set = @(
-        @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableAIDataAnalysis'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
-        @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableClickToDo'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
-        @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'AllowRecallEnablement'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
-        @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'TurnOffSavingSnapshots'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableSettingsAgent'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
+        @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableSettingsAgent'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\WindowsCopilot'; name = 'TurnOffWindowsCopilot'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'HubsSidebarEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'StandaloneHubsSidebarEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
@@ -39,12 +38,6 @@ Add-WinMintRegistryTweakModule @{
         @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\AppPrivacy'; name = 'LetAppsAccessGenerativeAI'; type = 'REG_DWORD'; value = '2'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\generativeAI'; name = 'Value'; type = 'REG_SZ'; value = 'Deny'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\systemAIModels'; name = 'Value'; type = 'REG_SZ'; value = 'Deny'; undo = @{ action = 'delete' } },
-        @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableAIDataAnalysis'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
-        @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableClickToDo'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
-        @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'AllowRecallEnablement'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
-        @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'TurnOffSavingSnapshots'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
-        @{ path = 'zNTUSER\Software\Policies\Microsoft\Windows\WindowsAI'; name = 'DisableSettingsAgent'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
-        @{ path = 'zNTUSER\Software\Microsoft\Windows\Shell\ClickToDo'; name = 'DisableClickToDo'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
         @{ path = 'zNTUSER\Software\Microsoft\Office\16.0\Word\Options'; name = 'EnableCopilot'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
         @{ path = 'zNTUSER\Software\Microsoft\Office\16.0\Excel\Options'; name = 'EnableCopilot'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
         @{ path = 'zNTUSER\Software\Microsoft\Office\16.0\OneNote\Options'; name = 'EnableCopilot'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },

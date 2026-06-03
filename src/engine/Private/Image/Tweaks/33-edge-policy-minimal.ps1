@@ -25,8 +25,6 @@ Add-WinMintRegistryTweakModule @{
         @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'MicrosoftEdgeInsiderPromotionEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'ShowMicrosoftRewards'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'WebWidgetAllowed'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
-        @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'HubsSidebarEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
-        @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'StandaloneHubsSidebarEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'DiagnosticData'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'EdgeAssetDeliveryServiceEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Policies\Microsoft\Edge'; name = 'CryptoWalletEnabled'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },

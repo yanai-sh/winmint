@@ -133,6 +133,9 @@ $telemetryTaskPatternsToDisable = @(ConvertTo-ScStringArray (Get-ScSetupProfileV
 $powerFormFactor = [string](Get-ScSetupProfileValue -Section 'power' -Name 'formFactor' -Default 'Auto')
 $powerDisableHibernationOnDesktop = [bool](Get-ScSetupProfileValue -Section 'power' -Name 'disableHibernationOnDesktop' -Default $true)
 $powerDesktopPlan = [string](Get-ScSetupProfileValue -Section 'power' -Name 'desktopPowerPlan' -Default 'HighPerformance')
+$edgeRemove = Get-ScSetupProfileBool -Section 'edge' -Name 'removeEdge' -Default $false
+$edgeKeep = Get-ScSetupProfileBool -Section 'edge' -Name 'keepEdge' -Default $false
+$edgeDmaEnabled = Get-ScSetupProfileBool -Section 'edge' -Name 'dmaInteropEnabled' -Default $false
 
 # Load the per-concern modules (each defines one or more Invoke-Sc* functions).
 foreach ($module in @(Get-ChildItem -LiteralPath (Join-Path $payloadDir 'SetupComplete') -Filter '*.ps1' -ErrorAction SilentlyContinue | Sort-Object Name)) {
@@ -167,6 +170,7 @@ $scripts = @(
     }
     { Invoke-ScDesktopShortcutCleanup }
     { Invoke-ScWindowsUpdateRestore }
+    { Invoke-ScEdgeRemoval }
     { Invoke-ScAiServiceableCleanup }
     { Invoke-ScTelemetryTaskHardening }
     { Invoke-ScPowerProfile }

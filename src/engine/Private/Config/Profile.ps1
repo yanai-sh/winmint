@@ -103,7 +103,8 @@ function Get-WinMintProfileAiPolicy {
         $raw = [string](Get-WinMintProfileSetting $Settings 'AIPolicy' '')
     }
     if ([string]::IsNullOrWhiteSpace($raw)) {
-        $raw = if ($SetupOption -eq 'CopilotPlus') { 'ServiceableFull' } else { 'Core' }
+        # Subtractive default: full serviceable AI removal on every build.
+        $raw = 'ServiceableFull'
     }
     switch -Regex ($raw) {
         '^(Core|Minimal|Default)$' { return 'Core' }
@@ -303,9 +304,26 @@ function New-WinMintBuildProfile {
         [switch]$IncludeSecrets
     )
 
-    $profileName = [string](Get-WinMintProfileSetting $Settings 'Profile' 'Developer')
-    $profileGroups = @(ConvertTo-WinMintProfileGroupArray -Settings $Settings)
-    $setupOption = if ($profileGroups -contains 'CopilotPlus') { 'CopilotPlus' } else { Get-WinMintProfileSetupOption -Settings $Settings }
+    $profileName = [string](Get-WinMintProfileSetting $Settings 'Profile' 'WinMint')
+    # Subtractive model: default removes everything; opt-in keep flags suppress a
+    # domain. profileGroups/setupOption are derived labels for downstream consumers.
+    # Back-compat bridge for the current GUI/ui-bridge, which still emits the
+    # legacy ProfileGroups array: the old 'Gaming' group always meant "keep
+    # gaming", so it maps to KeepGaming. 'CopilotPlus' (old = AI-free) and
+    # 'Developer' (now baseline) need no mapping — full removal / baseline dev
+    # tweaks are the new default, matching those old intents.
+    $legacyGroups = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $Settings 'ProfileGroups' @()))
+    $keepEdge = [bool](Get-WinMintProfileSetting $Settings 'KeepEdge' $false)
+    $keepGaming = [bool](Get-WinMintProfileSetting $Settings 'KeepGaming' $false) -or ($legacyGroups -contains 'Gaming')
+    $keepCopilot = [bool](Get-WinMintProfileSetting $Settings 'KeepCopilot' $false)
+    $desktopLayers = @(Get-WinMintProfileDesktopLayers -Settings $Settings)
+    $desktopUi = @($desktopLayers | Where-Object { $_ -and $_ -ne 'standard' }).Count -gt 0
+    $derivedGroups = [System.Collections.Generic.List[string]]::new()
+    $derivedGroups.Add('Minimal')
+    if ($keepGaming) { $derivedGroups.Add('Gaming') }
+    if ($desktopUi) { $derivedGroups.Add('DesktopUI') }
+    $profileGroups = @($derivedGroups.ToArray())
+    $setupOption = 'Minimal'
     $editionMode = Get-WinMintProfileEditionMode -Settings $Settings
     $edition = [string](Get-WinMintProfileSetting $Settings 'Edition' '')
     if ($editionMode -eq 'Fixed' -and [string]::IsNullOrWhiteSpace($edition)) {
@@ -335,7 +353,7 @@ function New-WinMintBuildProfile {
     if ($accountMode -notin @('Local', 'MicrosoftOobe')) { $accountMode = 'Local' }
     $passwordSet = [bool](Get-WinMintProfileSetting $Settings 'PasswordSet' (-not [string]::IsNullOrWhiteSpace($password)))
     $removeAdvertising = [bool](Get-WinMintProfileSetting $Settings 'RemoveAdvertising' $true)
-    $removeGaming = [bool](Get-WinMintProfileSetting $Settings 'RemoveGaming' (-not ($profileGroups -contains 'Gaming')))
+    $removeGaming = [bool](Get-WinMintProfileSetting $Settings 'RemoveGaming' (-not $keepGaming))
     $removeCommunication = [bool](Get-WinMintProfileSetting $Settings 'RemoveCommunication' $true)
     $removeMicrosoftApps = [bool](Get-WinMintProfileSetting $Settings 'RemoveMicrosoftApps' $true)
     $aiPolicy = Get-WinMintProfileAiPolicy -Settings $Settings -SetupOption $setupOption
@@ -416,6 +434,11 @@ function New-WinMintBuildProfile {
             launcher = [string](Get-WinMintProfileSetting $Settings 'Launcher' $(if ([bool](Get-WinMintProfileSetting $Settings 'InstallFlowEverything' $false)) { 'FlowEverything' } else { 'None' }))
             liveInstallAudit = [bool](Get-WinMintProfileSetting $Settings 'LiveInstallAudit' $false)
             phoneLink = [bool](Get-WinMintProfileSetting $Settings 'PhoneLink' $false)
+        }
+        keep = [ordered]@{
+            edge = $keepEdge
+            gaming = $keepGaming
+            copilot = $keepCopilot
         }
         removals = [ordered]@{
             advertising = $removeAdvertising
@@ -641,6 +664,12 @@ function Test-WinMintBuildProfile {
     & $require $tweaks 'profile.tweaks' @('darkMode', 'fileExtensions', 'stickyKeys')
     foreach ($name in @('darkMode', 'fileExtensions', 'stickyKeys', 'hardwareBypass', 'dmaInterop')) {
         & $bool $tweaks $name "profile.tweaks.$name"
+    }
+    if (Test-WinMintProfileProperty -Object $BuildProfile -Name 'keep') {
+        $keep = Get-WinMintProfileSetting $BuildProfile 'keep' @{}
+        foreach ($name in @('edge', 'gaming', 'copilot')) {
+            & $bool $keep $name "profile.keep.$name"
+        }
     }
 
     [pscustomobject]@{ Passed = ($failures.Count -eq 0); Failures = $failures.ToArray() }

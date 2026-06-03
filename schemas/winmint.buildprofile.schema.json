@@ -86,6 +86,15 @@
       "uniqueItems": true
     },
     "setupOption": { "type": "string", "enum": ["Minimal", "CopilotPlus"] },
+    "keep": {
+      "type": "object",
+      "properties": {
+        "edge": { "type": "boolean" },
+        "gaming": { "type": "boolean" },
+        "copilot": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
     "source": {
       "type": "object",
       "required": ["isoPath", "architecture"],

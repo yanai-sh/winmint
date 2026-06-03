@@ -135,26 +135,34 @@ if (-not $setupProfile.setupComplete.removeRecall) {
     Add-SmokeFailure 'Expected Minimal setup option to remove Recall.'
 }
 
+# Subtractive model: -KeepCopilot suppresses the Copilot+ AI feature surface so a
+# Copilot+ PC keeps the Copilot app + AppX and the AI feature policy, but Recall
+# stays removed on every build as a security baseline.
 $settings = New-SmokeBuildProfileSettings
-$settings.SetupOption = 'CopilotPlus'
+$settings.KeepCopilot = $true
 $profile = New-WinMintBuildProfile -Settings $settings
+if (-not [bool]$profile.keep.copilot) { Add-SmokeFailure 'Expected KeepCopilot to flow into profile.keep.copilot.' }
 $config = New-WinMintBuildConfig -BuildProfile $profile
-if ($config.SetupOption -ne 'CopilotPlus') { Add-SmokeFailure 'Expected CopilotPlus setup option to flow into build config.' }
-if ($config.AppxPackages -notcontains 'Microsoft.Copilot' -or $config.AppxPackages -notcontains 'MicrosoftWindows.Client.WebExperience') {
-    Add-SmokeFailure 'Expected CopilotPlus setup option to remove Copilot and WebExperience packages.'
+if ($config.SetupOption -ne 'Minimal') { Add-SmokeFailure 'Expected setupOption to remain the Minimal derived label.' }
+if (-not [bool]$config.Keep.Copilot) { Add-SmokeFailure 'Expected KeepCopilot to flow into build config Keep.Copilot.' }
+if ($config.AppxPackages -contains 'Microsoft.Copilot' -or $config.AppxPackages -contains 'Microsoft.Windows.AIHub') {
+    Add-SmokeFailure 'Expected KeepCopilot to keep the Copilot app and AI hub AppX packages.'
 }
-if ($config.RegistryTweaks -notcontains 'edge-policy-minimal') { Add-SmokeFailure 'Expected CopilotPlus builds to use the strict Edge policy.' }
-if ($config.RegistryTweaks -notcontains 'windows-ai-full-policy') { Add-SmokeFailure 'Expected CopilotPlus builds to use the full Windows AI policy.' }
-if ($config.RegistryTweaks -contains 'edge-policy-copilotplus') { Add-SmokeFailure 'CopilotPlus builds must not use the deprecated CopilotPlus Edge policy.' }
+if ($config.AppxPackages -notcontains 'MicrosoftWindows.Client.WebExperience') {
+    Add-SmokeFailure 'Expected KeepCopilot to still remove the WebExperience package.'
+}
+if ($config.RegistryTweaks -notcontains 'edge-policy-minimal') { Add-SmokeFailure 'Expected the strict Edge noise policy to apply even with KeepCopilot.' }
+if ($config.RegistryTweaks -contains 'windows-ai-features-removal') { Add-SmokeFailure 'Expected KeepCopilot to suppress the AI feature removal policy.' }
+if ($config.RegistryTweaks -notcontains 'windows-ai-recall-policy') { Add-SmokeFailure 'Expected Recall removal policy to apply even with KeepCopilot.' }
 $setupProfile = New-WinMintSetupProfile -BuildConfig $config
 if ($setupProfile.setupComplete.Contains('preserveMicrosoftCopilot')) {
     Add-SmokeFailure 'Deprecated setupComplete.preserveMicrosoftCopilot must not be generated.'
 }
 if (-not $setupProfile.setupComplete.removeRecall) {
-    Add-SmokeFailure 'Expected CopilotPlus setup option to still remove Recall.'
+    Add-SmokeFailure 'Expected KeepCopilot builds to still remove Recall.'
 }
 if ($setupProfile.aiRemoval.policy -ne 'ServiceableFull') {
-    Add-SmokeFailure 'Expected CopilotPlus setup option to select ServiceableFull AI removal.'
+    Add-SmokeFailure 'Expected AI removal policy to remain ServiceableFull by default.'
 }
 
 $profile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
@@ -173,14 +181,14 @@ if (-not [bool]$setupProfile.regional.dmaInterop.enabled -or $setupProfile.regio
 }
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
 if (@($config.Editors).Count -ne 0) {
-    Add-SmokeFailure 'Expected Developer group to leave editor options unselected by default.'
+    Add-SmokeFailure 'Expected the default build to leave editor options unselected.'
 }
 if ($config.Features -contains 'Microsoft-Windows-Subsystem-Linux' -or
     $config.Features -contains 'VirtualMachinePlatform') {
-    Add-SmokeFailure 'Expected Developer group to leave WSL features disabled until a distro is selected.'
+    Add-SmokeFailure 'Expected the default build to leave WSL features disabled until a distro is selected.'
 }
 if ($agentProfile.modules.wsl.enabled -or @($agentProfile.modules.wsl.distros).Count -ne 0) {
-    Add-SmokeFailure 'Expected Developer group to leave FirstLogon WSL module disabled until a distro is selected.'
+    Add-SmokeFailure 'Expected the default build to leave the FirstLogon WSL module disabled until a distro is selected.'
 }
 
 $profile = New-WinMintBuildProfile -Settings @{

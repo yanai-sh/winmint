@@ -22,14 +22,15 @@ function New-WinMintBuildConfig {
     $privacy = Get-WinMintProfileSetting $BuildProfile 'privacy' @{}
     $tweaks = Get-WinMintProfileSetting $BuildProfile 'tweaks' @{}
 
-    $profileName = [string](Get-WinMintProfileSetting $BuildProfile 'profileName' 'Developer')
-    $setupOption = [string](Get-WinMintProfileSetting $BuildProfile 'setupOption' 'Minimal')
-    if ($setupOption -notin @('Minimal', 'CopilotPlus')) { $setupOption = 'Minimal' }
-    $profileGroups = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $BuildProfile 'profileGroups' @()))
-    if ($profileGroups.Count -eq 0) {
-        $profileGroups = if ($setupOption -eq 'CopilotPlus') { @('Minimal', 'CopilotPlus') } else { @('Minimal') }
-    }
-    $enableDeveloperGroup = $profileGroups -contains 'Developer'
+    $profileName = [string](Get-WinMintProfileSetting $BuildProfile 'profileName' 'WinMint')
+    # Subtractive model: the default build removes everything; opt-in keep flags
+    # suppress a domain's removal. setupOption/profileGroups are derived labels
+    # kept for manifest/agent/report consumers, not user input.
+    $setupOption = 'Minimal'
+    $keep = Get-WinMintProfileSetting $BuildProfile 'keep' @{}
+    $keepEdge = [bool](Get-WinMintProfileSetting $keep 'edge' $false)
+    $keepGaming = [bool](Get-WinMintProfileSetting $keep 'gaming' $false)
+    $keepCopilot = [bool](Get-WinMintProfileSetting $keep 'copilot' $false)
     $selectedEditors = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $development 'editors' @()))
     $driverSource = [string](Get-WinMintProfileSetting $drivers 'source' 'None')
     $driverPath = [string](Get-WinMintProfileSetting $drivers 'path' '')
@@ -38,6 +39,13 @@ function New-WinMintBuildConfig {
     $enableWsl = [bool](Get-WinMintProfileSetting $wsl 'enabled' ($wsl2Distros.Count -gt 0)) -or $wsl2Distros.Count -gt 0
     $wsl2Distro = if ($wsl2Distros.Count -eq 0) { 'None' } elseif ($wsl2Distros.Count -eq 1) { $wsl2Distros[0] } else { $wsl2Distros -join ',' }
     $layers = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $desktop 'layers' @()))
+    $desktopUi = @($layers | Where-Object { $_ -and $_ -ne 'standard' }).Count -gt 0
+    # Derived legacy labels for manifest/report/agent consumers (no longer user input).
+    $profileGroups = [System.Collections.Generic.List[string]]::new()
+    $profileGroups.Add('Minimal')
+    if ($keepGaming) { $profileGroups.Add('Gaming') }
+    if ($desktopUi) { $profileGroups.Add('DesktopUI') }
+    $profileGroups = @($profileGroups.ToArray())
     $launcher = [string](Get-WinMintProfileSetting $featureToggles 'launcher' '')
     if ([string]::IsNullOrWhiteSpace($launcher)) {
         $launcher = if ([bool](Get-WinMintProfileSetting $featureToggles 'flowEverything' $false)) { 'FlowEverything' } else { 'None' }
@@ -76,7 +84,7 @@ function New-WinMintBuildConfig {
         }
     }
     $features = [System.Collections.Generic.List[string]]::new()
-    if ($enableDeveloperGroup) { $features.Add('OpenSSH.Client') }
+    $features.Add('OpenSSH.Client')
     if ($enableWsl) {
         $features.Add('Microsoft-Windows-Subsystem-Linux')
         $features.Add('VirtualMachinePlatform')
@@ -92,7 +100,7 @@ function New-WinMintBuildConfig {
     $privacyAdvertisingId = [bool](Get-WinMintProfileSetting $privacy 'advertisingId' $true)
     $privacyLocation = [bool](Get-WinMintProfileSetting $privacy 'location' $true)
     $privacyTimeline = [bool](Get-WinMintProfileSetting $privacy 'timeline' $true)
-    $aiRemoval = New-WinMintAiRemovalConfig -Removals $removals -SetupOption $setupOption
+    $aiRemoval = New-WinMintAiRemovalConfig -Removals $removals -SetupOption $setupOption -KeepCopilot $keepCopilot
     $appxCatalog = Get-WinMintAppxRemovalCatalog
     $dmaSetupRegion = Resolve-WinMintDmaInteropSetupRegion
     $restoreUserLocale = [string](Get-WinMintProfileSetting $regional 'userLocale' '')
@@ -106,12 +114,10 @@ function New-WinMintBuildConfig {
         -PrivacyTelemetry $privacyTelemetry `
         -PrivacyAdvertisingId $privacyAdvertisingId `
         -PrivacyLocation $privacyLocation `
-        -EnableDeveloperGroup $enableDeveloperGroup `
-        -ProfileGroups $profileGroups `
+        -KeepGaming $keepGaming `
+        -KeepCopilot $keepCopilot `
+        -DesktopUi $desktopUi `
         -DiskMode $diskMode `
-        -AiPolicy ([string]$aiRemoval.Policy) `
-        -RemoveMicrosoftApps ([bool](Get-WinMintProfileSetting $removals 'microsoftApps' $true)) `
-        -RemoveGaming ([bool](Get-WinMintProfileSetting $removals 'gaming' $true)) `
         -TweakHardwareBypass $tweakHardwareBypass `
         -TweakFileExtensions $tweakFileExtensions
     $registryTweaks.AddRange([string[]]@(Get-WinMintSelectedRegistryTweaks -Context $tweakContext))
@@ -123,6 +129,11 @@ function New-WinMintBuildConfig {
         @(Get-WinMintProfileAppxRemovalPrefix -Removals $removals)
     }
     $appxRemovalPrefixes = @($baseAppxRemovalPrefixes + @($aiRemoval.AppxPrefixes) | Where-Object { $_ } | Sort-Object -Unique)
+    if ($keepCopilot) {
+        # Keep the Copilot+ AI assistant packages; Recall is not an AppX (removed
+        # as an optional feature) so it is unaffected here.
+        $appxRemovalPrefixes = @($appxRemovalPrefixes | Where-Object { $_ -notin @('Microsoft.Copilot', 'Microsoft.Windows.Copilot', 'Microsoft.Windows.AIHub') })
+    }
 
     $rawEditionMode = [string](Get-WinMintProfileSetting $target 'editionMode' 'TargetLicense')
     $editionMode = switch -Regex ($rawEditionMode) {
@@ -138,6 +149,7 @@ function New-WinMintBuildConfig {
         Profile = $profileName
         ProfileGroups = @($profileGroups)
         SetupOption = $setupOption
+        Keep = [pscustomobject]@{ Edge = $keepEdge; Gaming = $keepGaming; Copilot = $keepCopilot }
         SourceIso = [string](Get-WinMintProfileSetting $source 'isoPath' '')
         Architecture = [string](Get-WinMintProfileSetting $source 'architecture' '')
         EditionMode = $editionMode

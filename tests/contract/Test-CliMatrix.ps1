@@ -127,9 +127,17 @@ Invoke-CliProfileCase -Name 'minimal-no-dma-no-location' -Arguments @('-NoDmaInt
     if (@($Config.RegistryTweaks) -notcontains 'location-disabled-policy') { Add-CliMatrixFailure 'minimal-no-dma-no-location should apply location-disabled-policy.' }
 }
 
+# Subtractive model: -Developer is a legacy no-op. Developer tooling (OpenSSH
+# client, Developer Mode, RemoteSigned) is now baseline on every build, so the
+# flag derives no extra profile group (Minimal only) and selects no editors/WSL.
 Invoke-CliProfileCase -Name 'developer-only' -Arguments @('-Developer') -Assert {
     param($Profile, $Config, $AgentProfile)
-    if (@($Profile.profileGroups) -notcontains 'Developer') { Add-CliMatrixFailure 'developer-only should select Developer group.' }
+    if (@($Profile.profileGroups) -ne 'Minimal') { Add-CliMatrixFailure 'developer-only (legacy -Developer no-op) should derive only the Minimal group.' }
+    if ($Config.Features -notcontains 'OpenSSH.Client' -or
+        $Config.RegistryTweaks -notcontains 'developer-mode' -or
+        $Config.RegistryTweaks -notcontains 'powershell-remotesigned') {
+        Add-CliMatrixFailure 'developer-only should carry baseline developer tooling (OpenSSH client, Developer Mode, RemoteSigned).'
+    }
     if (@($Profile.development.editors).Count -ne 0 -or @($Profile.development.wsl.distros).Count -ne 0) {
         Add-CliMatrixFailure 'developer-only should not preselect editors or WSL distros.'
     }
@@ -139,9 +147,15 @@ Invoke-CliProfileCase -Name 'developer-only' -Arguments @('-Developer') -Assert 
     }
 }
 
-Invoke-CliProfileCase -Name 'desktop-ui-only' -Arguments @('-DesktopUI') -Assert {
+# Subtractive model: the DesktopUI label is derived from selected shell layers.
+# In template (-NewProfile) authoring mode the bare -DesktopUI flag leaves layers
+# unselected, so the WinMint shell stack is exercised through explicit layer flags.
+Invoke-CliProfileCase -Name 'desktop-ui-only' -Arguments @('-InstallWindhawk', '-InstallYasb', '-InstallKomorebi') -Assert {
     param($Profile, $Config, $AgentProfile)
-    if (@($Profile.profileGroups) -notcontains 'DesktopUI') { Add-CliMatrixFailure 'desktop-ui-only should select DesktopUI group.' }
+    if (@($Profile.profileGroups) -notcontains 'DesktopUI') { Add-CliMatrixFailure 'desktop-ui-only should derive the DesktopUI group from selected shell layers.' }
+    if (-not $Config.InstallWindhawk -or -not $Config.InstallYasb -or -not $Config.InstallKomorebi) {
+        Add-CliMatrixFailure 'desktop-ui-only should preserve the selected Windhawk/YASB/Komorebi shell layers.'
+    }
     if ($Config.Launcher -ne 'None' -or $AgentProfile.modules.flowEverything.enabled -or $AgentProfile.modules.raycast.enabled) {
         Add-CliMatrixFailure 'desktop-ui-only should not imply a launcher.'
     }

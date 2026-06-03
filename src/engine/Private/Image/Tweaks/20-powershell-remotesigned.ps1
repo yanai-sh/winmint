@@ -8,7 +8,7 @@ Add-WinMintRegistryTweakModule @{
     description = 'PowerShell execution policy: RemoteSigned for Windows PowerShell and PowerShell 7'
     scope = 'machine registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
     intent = 'Permit locally authored PowerShell scripts while keeping downloaded scripts signature-gated.'
-    appliesTo = { param($ctx) [bool]$ctx.EnableDeveloperGroup }
+    appliesTo = { param($ctx) $true }
     set = @(
         @{ path = 'zSOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell'; name = 'ExecutionPolicy'; type = 'REG_SZ'; value = 'RemoteSigned'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Microsoft\PowerShellCore\ShellIds\Microsoft.PowerShell'; name = 'ExecutionPolicy'; type = 'REG_SZ'; value = 'RemoteSigned'; undo = @{ action = 'delete' } }

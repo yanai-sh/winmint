@@ -105,7 +105,7 @@ Schemas live in `schemas/`.
 - The user-provided ISO is the serviced Windows source.
 - Defender, Firewall, SmartScreen, Windows Update, Store infrastructure,
   WebView2, WSL, IPv6, WinRE, UAC, and the component store stay intact.
-- Debloat policy is profile-group based, not a matrix of granular toggles.
+- Debloat policy is a subtractive default (remove everything) plus opt-in keep flags, not a matrix of granular toggles.
 - DMA interoperability is enabled by default and uses Ireland only as an
   internal setup latch.
 - Location services are enabled by default for laptop usefulness; they can be
@@ -118,18 +118,31 @@ Schemas live in `schemas/`.
 
 ## Build Profiles
 
-WinMint exposes simple build intents instead of a debloat dashboard. The
-baseline profile is `Minimal`; additive groups are `Developer`, `CopilotPlus`,
-`Gaming`, and `DesktopUI`. CLI spellings are `-Developer`, `-Copilot`,
-`-Gaming`, and `-DesktopUI`.
+WinMint exposes a subtractive default plus a few opt-in "keep" flags instead of
+a debloat dashboard. **The default build removes everything**: full serviceable
+AI removal (Copilot, Edge/Office/inbox AI, app AI-model access), the Microsoft
+Edge browser, Xbox/gaming, and OneDrive — and folds the developer quality-of-life
+tweaks (Developer Mode, PowerShell RemoteSigned, .NET/PS telemetry opt-out,
+elevated-terminal menu, OpenSSH) into the baseline.
 
-`CopilotPlus` means a Copilot+ PC hardware-aware profile with an AI-free
-WinMint posture. It removes provisioned Copilot/WebExperience-style AI AppX
-packages, removes supported AI optional features such as Recall when present,
-and applies Windows, Edge, Notepad, Paint, and App Privacy AI policies. This is
-serviceable removal: WinMint does not remove Edge, WebView2, Store
-infrastructure, winget, Windows Update, component-store metadata, or protected
-CBS packages.
+Opt-in flags keep one domain each:
+
+- `-KeepGaming` — keep the Xbox apps and Game Bar, and apply gaming-performance
+  tweaks (Game Mode, HAGS).
+- `-KeepCopilot` — keep all Copilot+ / Windows AI features (Copilot app, Edge AI,
+  Paint/Notepad/Office AI, app AI-model access). **Recall is always removed** as a
+  security exception, even with `-KeepCopilot`.
+- `-KeepEdge` — keep the Edge browser. WinMint still applies the Edge debloat
+  policies whether Edge is kept or removed.
+- `-DesktopUI` — additive shell layers (Windhawk/YASB/Komorebi). Editors and WSL
+  are independent opt-in installs.
+
+Edge browser removal uses the **DMA-supported in-OS uninstall**, run during setup
+while the device is still in the EEA region — the EULA-blessed path. It is skipped
+(and logged) when DMA interop is disabled (`-NoDmaInterop`). This is serviceable
+removal: WinMint does **not** remove the **Edge/WebView2 runtime**, Store
+infrastructure, winget, Windows Update, component-store metadata, or protected CBS
+packages, and never patches `IntegratedServicesRegionPolicySet.json`.
 
 ## DMA Interoperability
 

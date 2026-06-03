@@ -8,7 +8,7 @@ Add-WinMintRegistryTweakModule @{
     description = 'Gaming profile performance defaults'
     scope = 'machine and default user registry'; risk = 'medium'; reversible = $true; phase = 'offline-image'
     intent = 'Enable Game Mode, hardware-accelerated GPU scheduling, and windowed-game optimizations only for Gaming builds.'
-    appliesTo = { param($ctx) @($ctx.ProfileGroups) -contains 'Gaming' }
+    appliesTo = { param($ctx) [bool]$ctx.KeepGaming }
     set = @(
         @{ path = 'zNTUSER\Software\Microsoft\GameBar'; name = 'AllowAutoGameMode'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
         @{ path = 'zNTUSER\Software\Microsoft\GameBar'; name = 'AutoGameModeEnabled'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },

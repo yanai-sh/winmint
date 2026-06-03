@@ -9,7 +9,7 @@ Add-WinMintRegistryTweakModule @{
     description = 'OneDrive: remove integration, block sync/reinstall, and force known folders back to local profile paths'
     scope = 'machine and default user registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
     intent = 'Remove OneDrive pressure and keep known folders local for new users.'
-    appliesTo = { param($ctx) [bool]$ctx.RemoveMicrosoftApps }
+    appliesTo = { param($ctx) $true }
     set = @(
         @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\OneDrive'; name = 'DisableFileSync'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\OneDrive'; name = 'DisableFileSyncNGSC'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },

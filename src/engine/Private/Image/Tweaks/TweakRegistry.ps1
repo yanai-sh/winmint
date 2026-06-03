@@ -61,12 +61,10 @@ function New-WinMintTweakContext {
         [bool]$PrivacyTelemetry = $true,
         [bool]$PrivacyAdvertisingId = $true,
         [bool]$PrivacyLocation = $true,
-        [bool]$EnableDeveloperGroup = $false,
-        [string[]]$ProfileGroups = @(),
+        [bool]$KeepGaming = $false,
+        [bool]$KeepCopilot = $false,
+        [bool]$DesktopUi = $false,
         [string]$DiskMode = 'Manual',
-        [string]$AiPolicy = 'Core',
-        [bool]$RemoveMicrosoftApps = $true,
-        [bool]$RemoveGaming = $true,
         [bool]$TweakHardwareBypass = $false,
         [bool]$TweakFileExtensions = $true
     )
@@ -75,12 +73,10 @@ function New-WinMintTweakContext {
         PrivacyTelemetry     = $PrivacyTelemetry
         PrivacyAdvertisingId = $PrivacyAdvertisingId
         PrivacyLocation      = $PrivacyLocation
-        EnableDeveloperGroup = $EnableDeveloperGroup
-        ProfileGroups        = @($ProfileGroups)
+        KeepGaming           = $KeepGaming
+        KeepCopilot          = $KeepCopilot
+        DesktopUi            = $DesktopUi
         DiskMode             = $DiskMode
-        AiPolicy             = $AiPolicy
-        RemoveMicrosoftApps  = $RemoveMicrosoftApps
-        RemoveGaming         = $RemoveGaming
         TweakHardwareBypass  = $TweakHardwareBypass
         TweakFileExtensions  = $TweakFileExtensions
     }

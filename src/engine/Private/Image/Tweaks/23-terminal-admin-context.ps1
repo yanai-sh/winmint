@@ -13,7 +13,7 @@ Add-WinMintRegistryTweakModule @{
     description = 'Open Terminal Here as Administrator Context Menu'
     scope = 'offline registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
     intent = 'Add a fast elevated terminal entry to directory context menus for developer workstations.'
-    appliesTo = { param($ctx) [bool]$ctx.EnableDeveloperGroup }
+    appliesTo = { param($ctx) $true }
     set = @(
         @{ path = 'zSOFTWARE\Classes\Directory\shell\OpenWTHereAsAdmin'; name = 'MUIVerb'; type = 'REG_SZ'; value = 'Open Terminal Here as Administrator'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Classes\Directory\shell\OpenWTHereAsAdmin'; name = 'Icon'; type = 'REG_SZ'; value = 'wt.exe'; undo = @{ action = 'delete' } },

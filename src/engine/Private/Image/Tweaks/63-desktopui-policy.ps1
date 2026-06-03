@@ -8,7 +8,7 @@ Add-WinMintRegistryTweakModule @{
     description = 'DesktopUI profile Explorer and snap behavior'
     scope = 'default user registry'; risk = 'low'; reversible = $true; phase = 'offline-image'
     intent = 'Apply DesktopUI-only shell preference defaults without affecting Minimal or Gaming builds.'
-    appliesTo = { param($ctx) @($ctx.ProfileGroups) -contains 'DesktopUI' }
+    appliesTo = { param($ctx) [bool]$ctx.DesktopUi }
     set = @(
         @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'LastActiveClick'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
         @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'SnapAssist'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },

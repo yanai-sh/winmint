@@ -2,8 +2,7 @@
 
 function New-SmokeBuildProfile {
     New-WinMintBuildProfile -Settings @{
-        Profile = 'Developer'
-        ProfileGroups = @('Minimal', 'Developer')
+        Profile = 'WinMint'
         ISOPath = (Get-WinMintTestIsoFixturePath)
         Architecture = 'arm64'
         ComputerName = 'WinMint'
@@ -16,8 +15,7 @@ function New-SmokeBuildProfile {
 
 function New-SmokeBuildProfileSettings {
     @{
-        Profile = 'Developer'
-        ProfileGroups = @('Minimal', 'Developer')
+        Profile = 'WinMint'
         ISOPath = (Get-WinMintTestIsoFixturePath)
         Architecture = 'arm64'
         ComputerName = 'WinMint'
@@ -430,9 +428,8 @@ function Assert-HeadlessCliContracts {
     $outProfilePath = Join-Path ([IO.Path]::GetTempPath()) ('winmint-out-profile-' + [Guid]::NewGuid().ToString('n') + '.json')
     try {
         $templateResult = Invoke-WinMintHeadlessCli `
-            -BoundParameters @{ NewProfile = $templatePath; Preset = 'Developer' } `
+            -BoundParameters @{ NewProfile = $templatePath } `
             -NewProfile $templatePath `
-            -Preset Developer `
             -Quiet
         if ($templateResult.result -ne 'profile-created' -or -not (Test-Path -LiteralPath $templatePath)) {
             Add-SmokeFailure 'Expected -NewProfile to create an editable profile without requiring build inputs.'
@@ -442,8 +439,11 @@ function Assert-HeadlessCliContracts {
         if (-not $templateValidation.Passed) {
             Add-SmokeFailure "Expected -NewProfile output to validate, got: $($templateValidation.Failures -join '; ')"
         }
-        if (@($template.profileGroups) -notcontains 'Developer' -or @($template.development.editors).Count -ne 0 -or @($template.development.wsl.distros).Count -ne 0) {
-            Add-SmokeFailure 'Expected Developer template to include the group without preselecting editors or WSL distros.'
+        # Subtractive model: the default template removes everything; developer
+        # tooling is now baseline (no Developer group), and the derived label is
+        # Minimal-only with no preselected editors or WSL distros.
+        if ((@($template.profileGroups) -join ',') -ne 'Minimal' -or @($template.development.editors).Count -ne 0 -or @($template.development.wsl.distros).Count -ne 0) {
+            Add-SmokeFailure 'Expected default template to derive the Minimal group without preselecting editors or WSL distros.'
         }
         if ([int]$template.schemaVersion -ne 2) {
             Add-SmokeFailure 'Expected generated profile templates to use schemaVersion 2.'
@@ -459,9 +459,8 @@ function Assert-HeadlessCliContracts {
         }
 
         $outResult = Invoke-WinMintHeadlessCli `
-            -BoundParameters @{ OutProfile = $outProfilePath; Preset = 'DesktopUI'; Gaming = $true; Architecture = 'amd64' } `
+            -BoundParameters @{ OutProfile = $outProfilePath; Gaming = $true; Architecture = 'amd64' } `
             -OutProfile $outProfilePath `
-            -Preset DesktopUI `
             -Gaming `
             -Architecture amd64 `
             -Quiet
@@ -469,10 +468,15 @@ function Assert-HeadlessCliContracts {
             Add-SmokeFailure 'Expected -OutProfile to save flag-authored intent without building.'
         }
         $outProfile = Get-Content -LiteralPath $outProfilePath -Raw | ConvertFrom-Json
-        foreach ($expectedGroup in @('Minimal', 'DesktopUI', 'Gaming')) {
+        # Subtractive model: -Gaming maps to -KeepGaming, deriving the Gaming label.
+        # Template mode leaves shell layers unselected, so DesktopUI is not derived.
+        foreach ($expectedGroup in @('Minimal', 'Gaming')) {
             if (@($outProfile.profileGroups) -notcontains $expectedGroup) {
-                Add-SmokeFailure "Expected -Preset plus group flags to include '$expectedGroup'."
+                Add-SmokeFailure "Expected -Gaming/-KeepGaming to derive profile group '$expectedGroup'."
             }
+        }
+        if (-not [bool]$outProfile.keep.gaming) {
+            Add-SmokeFailure 'Expected -Gaming to set the keep.gaming flag in the saved profile.'
         }
         if ((@($outProfile.desktop.layers) -join ',') -ne 'standard') {
             Add-SmokeFailure 'Expected profile templates to avoid preselecting shell layers unless explicit layer flags are supplied.'
@@ -540,7 +544,6 @@ function Assert-HeadlessCliContracts {
         -ComputerName $microsoftOobeComputerName `
         -AccountName 'Yanai' `
         -AccountMode MicrosoftOobe `
-        -SetupOption CopilotPlus `
         -TimeZoneId 'Israel Standard Time' `
         -InputLocale 'en-US;he-IL' `
         -SystemLocale 'he-IL' `
@@ -549,8 +552,10 @@ function Assert-HeadlessCliContracts {
         -UserLocale 'he-IL' `
         -DryRun
     $config = New-WinMintBuildConfig -BuildProfile $profile
-    if ($config.SetupOption -ne 'CopilotPlus' -or $config.AccountMode -ne 'MicrosoftOobe') {
-        Add-SmokeFailure 'Expected flag-built headless profile to preserve CopilotPlus + MicrosoftOobe profile intent.'
+    # Subtractive model: setupOption is always the Minimal derived label; the
+    # default build already removes the Copilot+ AI surface.
+    if ($config.SetupOption -ne 'Minimal' -or $config.AccountMode -ne 'MicrosoftOobe') {
+        Add-SmokeFailure 'Expected flag-built headless profile to derive Minimal setupOption and preserve MicrosoftOobe intent.'
     }
     if ($config.TimeZoneId -ne 'Israel Standard Time' -or $config.InputLocale -ne 'en-US;he-IL') {
         Add-SmokeFailure 'Expected flag-built headless profile to preserve regional and keyboard settings.'
@@ -611,10 +616,10 @@ function Assert-HeadlessCliContracts {
         Add-SmokeFailure 'Expected manifest to record both DMA setup latch values and restored user region values.'
     }
     if ($config.AppxPackages -notcontains 'Microsoft.Copilot' -or $config.AppxPackages -notcontains 'MicrosoftWindows.Client.WebExperience') {
-        Add-SmokeFailure 'Expected CopilotPlus headless profile to remove Copilot/WebExperience AppX packages.'
+        Add-SmokeFailure 'Expected default headless profile to remove Copilot/WebExperience AppX packages.'
     }
     if ($config.AiRemoval.Policy -ne 'ServiceableFull') {
-        Add-SmokeFailure 'Expected CopilotPlus headless profile to select ServiceableFull AI removal.'
+        Add-SmokeFailure 'Expected default headless profile to select ServiceableFull AI removal.'
     }
 
     $minimalProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -DryRun
@@ -622,14 +627,18 @@ function Assert-HeadlessCliContracts {
     if ((@($minimalProfile.profileGroups) -join ',') -ne 'Minimal') {
         Add-SmokeFailure 'Expected omitted headless group flags to default to the Minimal group only.'
     }
-    if ($minimalConfig.Features -contains 'OpenSSH.Client' -or
-        $minimalConfig.Features -contains 'Microsoft-Windows-Subsystem-Linux' -or
-        $minimalConfig.RegistryTweaks -contains 'developer-mode') {
-        Add-SmokeFailure 'Expected Minimal group to avoid developer-only features and tweaks.'
+    # Subtractive model: developer QoL (OpenSSH client, Developer Mode) is now
+    # baseline on every build; WSL stays opt-in until a distro is selected.
+    if ($minimalConfig.Features -notcontains 'OpenSSH.Client' -or
+        $minimalConfig.RegistryTweaks -notcontains 'developer-mode') {
+        Add-SmokeFailure 'Expected default build to include baseline developer QoL (OpenSSH client, Developer Mode).'
+    }
+    if ($minimalConfig.Features -contains 'Microsoft-Windows-Subsystem-Linux') {
+        Add-SmokeFailure 'Expected WSL features to stay disabled until a distro is selected.'
     }
     if ($minimalConfig.AppxPackages -notcontains 'Microsoft.Copilot' -or
         $minimalConfig.AppxPackages -notcontains 'Microsoft.GamingApp') {
-        Add-SmokeFailure 'Expected Minimal group to remove Copilot/WebExperience and Xbox gaming apps.'
+        Add-SmokeFailure 'Expected default build to remove Copilot/WebExperience and Xbox gaming apps.'
     }
     if (-not [bool]$minimalConfig.Privacy.Location) {
         Add-SmokeFailure 'Expected default headless profile to enable location services for laptop-first builds.'
@@ -675,6 +684,10 @@ function Assert-HeadlessCliContracts {
         }
     }
 
+    # Subtractive model: -Developer/-Copilot are legacy no-ops (developer QoL is
+    # baseline; full Copilot+ AI removal is the default). -Gaming maps to
+    # -KeepGaming (preserve Xbox), -DesktopUI selects the shell stack. The derived
+    # labels are therefore Minimal + Gaming + DesktopUI only.
     $groupProfile = New-WinMintHeadlessProfileFromFlags `
         -SourceIso '' `
         -Architecture 'arm64' `
@@ -684,26 +697,32 @@ function Assert-HeadlessCliContracts {
         -DesktopUI `
         -DryRun
     $groupConfig = New-WinMintBuildConfig -BuildProfile $groupProfile
-    foreach ($expectedGroup in @('Minimal', 'Developer', 'CopilotPlus', 'Gaming', 'DesktopUI')) {
+    foreach ($expectedGroup in @('Minimal', 'Gaming', 'DesktopUI')) {
         if (@($groupProfile.profileGroups) -notcontains $expectedGroup) {
-            Add-SmokeFailure "Expected combined headless flags to include profile group '$expectedGroup'."
+            Add-SmokeFailure "Expected combined headless flags to derive profile group '$expectedGroup'."
         }
+    }
+    if (@($groupProfile.profileGroups) -contains 'Developer' -or @($groupProfile.profileGroups) -contains 'CopilotPlus') {
+        Add-SmokeFailure 'Expected legacy -Developer/-Copilot flags to be no-ops that derive no extra profile group.'
     }
     if ($groupConfig.Features -notcontains 'OpenSSH.Client' -or
         $groupConfig.RegistryTweaks -notcontains 'developer-mode' -or
         $groupConfig.RegistryTweaks -notcontains 'powershell-remotesigned') {
-        Add-SmokeFailure 'Expected Developer group to enable OpenSSH, Developer Mode, and RemoteSigned.'
+        Add-SmokeFailure 'Expected baseline build to enable OpenSSH, Developer Mode, and RemoteSigned.'
     }
     if (@($groupConfig.Editors).Count -ne 0 -or @($groupConfig.Wsl2Distros).Count -ne 0) {
-        Add-SmokeFailure 'Expected Developer group to leave editors and WSL distros unselected by default.'
+        Add-SmokeFailure 'Expected baseline build to leave editors and WSL distros unselected by default.'
     }
     if ($groupConfig.AppxPackages -notcontains 'Microsoft.Copilot' -or
         $groupConfig.AppxPackages -notcontains 'MicrosoftWindows.Client.WebExperience' -or
         $groupConfig.AppxPackages -contains 'Microsoft.GamingApp') {
-        Add-SmokeFailure 'Expected Copilot to remove Copilot/WebExperience while Gaming preserves Xbox apps.'
+        Add-SmokeFailure 'Expected default Copilot removal to drop Copilot/WebExperience while -KeepGaming preserves Xbox apps.'
+    }
+    if ($groupConfig.RegistryTweaks -notcontains 'gaming-performance-policy' -or $groupConfig.RegistryTweaks -contains 'gamebar-policy') {
+        Add-SmokeFailure 'Expected -KeepGaming to select gaming-performance-policy and suppress gamebar-policy.'
     }
     if (-not ($groupConfig.InstallWindhawk -and $groupConfig.InstallYasb -and $groupConfig.InstallKomorebi)) {
-        Add-SmokeFailure 'Expected DesktopUI group to select the opinionated WinMint shell stack.'
+        Add-SmokeFailure 'Expected -DesktopUI to select the opinionated WinMint shell stack.'
     }
     if ($groupConfig.Launcher -ne 'None' -or $groupConfig.InstallFlowEverything -or $groupConfig.InstallRaycast) {
         Add-SmokeFailure 'Expected launcher modules to stay opt-in even when Developer/DesktopUI groups are selected.'
@@ -1046,11 +1065,13 @@ function Assert-UiBridgeBuildProfileContract {
             Add-SmokeFailure "Expected UI bridge output to validate, got: $($result.Failures -join '; ')"
         }
         $config = New-WinMintBuildConfig -BuildProfile $profile
-        if ($config.ProfileGroups -notcontains 'Developer' -or $config.ProfileGroups -notcontains 'DesktopUI') {
-            Add-SmokeFailure 'Expected UI bridge to preserve Developer and DesktopUI profile groups.'
+        # Subtractive model: the DesktopUI label is derived from the selected shell
+        # layers; Developer is no longer a derived group (dev tooling is baseline).
+        if ($config.ProfileGroups -notcontains 'DesktopUI' -or $config.ProfileGroups -contains 'Developer') {
+            Add-SmokeFailure 'Expected UI bridge to derive the DesktopUI group from shell layers without a Developer group.'
         }
         if ($config.Editors -notcontains 'zed' -or $config.Wsl2Distros -notcontains 'Ubuntu') {
-            Add-SmokeFailure 'Expected UI bridge to preserve Developer editor and WSL intent.'
+            Add-SmokeFailure 'Expected UI bridge to preserve editor and WSL intent.'
         }
         if (-not $config.InstallWindhawk -or $config.InstallYasb -or -not $config.InstallKomorebi) {
             Add-SmokeFailure 'Expected UI bridge to preserve selected DesktopUI shell layers.'

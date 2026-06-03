@@ -490,7 +490,12 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
         Add-SmokeFailure 'Fixed-edition generated profiles must default to Windows 11 Home Single Language.'
     }
 
-    foreach ($expectedDefaultTweak in @('home-privacy-policy', 'storage-sense-policy', 'modern-standby-policy', 'oobe-rehydration-policy', 'wpbt-policy')) {
+    foreach ($expectedDefaultTweak in @(
+            'home-privacy-policy', 'storage-sense-policy', 'modern-standby-policy', 'oobe-rehydration-policy', 'wpbt-policy',
+            # Subtractive baseline: developer QoL is now baseline, and the default
+            # build removes the Copilot+/AI feature surface, Recall, and the Game Bar.
+            'developer-mode', 'gamebar-policy', 'windows-ai-features-removal', 'windows-ai-recall-policy'
+        )) {
         if (@($defaultConfig.RegistryTweaks) -notcontains $expectedDefaultTweak) {
             Add-SmokeFailure "Home-first defaults must select '$expectedDefaultTweak'."
         }
@@ -522,14 +527,16 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
     }
 
     $gamingSettings = New-SmokeBuildProfileSettings
-    $gamingSettings.ProfileGroups = @('Minimal', 'Gaming')
+    $gamingSettings.KeepGaming = $true
     $gamingConfig = New-WinMintBuildConfig -BuildProfile (New-WinMintBuildProfile -Settings $gamingSettings)
     if (@($gamingConfig.RegistryTweaks) -notcontains 'gaming-performance-policy') {
-        Add-SmokeFailure 'Gaming profile must select gaming-performance-policy.'
+        Add-SmokeFailure '-KeepGaming must select gaming-performance-policy.'
+    }
+    if (@($gamingConfig.RegistryTweaks) -contains 'gamebar-policy') {
+        Add-SmokeFailure '-KeepGaming must suppress the Game Bar removal policy.'
     }
 
     $desktopSettings = New-SmokeBuildProfileSettings
-    $desktopSettings.ProfileGroups = @('Minimal', 'DesktopUI')
     $desktopSettings.DesktopUiDefault = $true
     $desktopConfig = New-WinMintBuildConfig -BuildProfile (New-WinMintBuildProfile -Settings $desktopSettings)
     if (@($desktopConfig.RegistryTweaks) -notcontains 'desktopui-policy') {
@@ -819,11 +826,8 @@ function Assert-ExternalReferenceAuditDocumentsSparkle {
 function Assert-WslFirstDefaultsAndGuards {
     $defaultProfile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
     $defaultDistros = @($defaultProfile.development.wsl.distros)
-    if (@($defaultProfile.profileGroups) -notcontains 'Developer') {
-        Add-SmokeFailure 'Smoke profile should include the Developer group.'
-    }
     if ($defaultDistros.Count -ne 0 -or [bool]$defaultProfile.development.wsl.enabled) {
-        Add-SmokeFailure 'Developer group must leave WSL unselected until a distro is explicitly selected.'
+        Add-SmokeFailure 'WSL must stay unselected until a distro is explicitly selected.'
     }
 
     $optOutSettings = New-SmokeBuildProfileSettings
@@ -924,27 +928,25 @@ function Assert-WinPEDriverInjectionDefaultsToSetupOnly {
 }
 
 function Assert-CopilotPlusUsesFullAiRemovalPolicy {
-    $minimal = $script:RegistryTweaks | Where-Object id -eq 'edge-policy-minimal' | Select-Object -First 1
-    $fullAi = $script:RegistryTweaks | Where-Object id -eq 'windows-ai-full-policy' | Select-Object -First 1
-    if (-not $minimal -or -not $fullAi) {
-        Add-SmokeFailure 'Expected edge-policy-minimal and windows-ai-full-policy registry tweaks to exist.'
+    # Subtractive model: the default build removes the Edge noise surface
+    # (edge-policy-minimal, always on), the Copilot+/Windows AI feature surface
+    # (windows-ai-features-removal, kept only with -KeepCopilot), and Recall
+    # (windows-ai-recall-policy, always on as a security baseline).
+    $edge = $script:RegistryTweaks | Where-Object id -eq 'edge-policy-minimal' | Select-Object -First 1
+    $aiFeatures = $script:RegistryTweaks | Where-Object id -eq 'windows-ai-features-removal' | Select-Object -First 1
+    $recall = $script:RegistryTweaks | Where-Object id -eq 'windows-ai-recall-policy' | Select-Object -First 1
+    if (-not $edge -or -not $aiFeatures -or -not $recall) {
+        Add-SmokeFailure 'Expected edge-policy-minimal, windows-ai-features-removal, and windows-ai-recall-policy registry tweaks to exist.'
         return
     }
-    foreach ($expectedStrict in @('HubsSidebarEnabled', 'StandaloneHubsSidebarEnabled', 'WebWidgetAllowed', 'EdgeEnhanceImagesEnabled')) {
-        if (@($minimal.set | Where-Object name -eq $expectedStrict).Count -eq 0) {
-            Add-SmokeFailure "Expected Minimal Edge policy to set $expectedStrict."
-        }
-    }
-    foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'WebWidgetAllowed', 'CryptoWalletEnabled', 'HideFirstRunExperience')) {
-        if (@($minimal.set | Where-Object name -eq $expected).Count -eq 0) {
+    foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'WebWidgetAllowed', 'CryptoWalletEnabled', 'HideFirstRunExperience', 'EdgeEnhanceImagesEnabled')) {
+        if (@($edge.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected Edge noise policy to set $expected."
         }
     }
     foreach ($expected in @(
-            'DisableAIDataAnalysis',
-            'DisableClickToDo',
-            'AllowRecallEnablement',
-            'TurnOffSavingSnapshots',
+            'HubsSidebarEnabled',
+            'StandaloneHubsSidebarEnabled',
             'DisableSettingsAgent',
             'TurnOffWindowsCopilot',
             'CopilotPageContext',
@@ -957,9 +959,27 @@ function Assert-CopilotPlusUsesFullAiRemovalPolicy {
             'LetAppsAccessGenerativeAI',
             'EnableCopilot'
         )) {
-        if (@($fullAi.set | Where-Object name -eq $expected).Count -eq 0) {
-            Add-SmokeFailure "Expected full AI policy to set $expected."
+        if (@($aiFeatures.set | Where-Object name -eq $expected).Count -eq 0) {
+            Add-SmokeFailure "Expected default AI feature removal policy to set $expected."
         }
+    }
+    foreach ($expected in @('DisableAIDataAnalysis', 'DisableClickToDo', 'AllowRecallEnablement', 'TurnOffSavingSnapshots')) {
+        if (@($recall.set | Where-Object name -eq $expected).Count -eq 0) {
+            Add-SmokeFailure "Expected Recall removal policy to set $expected."
+        }
+    }
+    # Curation: by default the AI feature removal applies; -KeepCopilot suppresses
+    # it, but Recall removal applies on every build regardless.
+    $defaultSelected = @(Get-WinMintSelectedRegistryTweaks -Context (New-WinMintTweakContext -KeepCopilot $false))
+    $keepCopilotSelected = @(Get-WinMintSelectedRegistryTweaks -Context (New-WinMintTweakContext -KeepCopilot $true))
+    if ($defaultSelected -notcontains 'windows-ai-features-removal') {
+        Add-SmokeFailure 'windows-ai-features-removal must apply by default (KeepCopilot off).'
+    }
+    if ($keepCopilotSelected -contains 'windows-ai-features-removal') {
+        Add-SmokeFailure 'windows-ai-features-removal must be suppressed when -KeepCopilot is selected.'
+    }
+    if ($defaultSelected -notcontains 'windows-ai-recall-policy' -or $keepCopilotSelected -notcontains 'windows-ai-recall-policy') {
+        Add-SmokeFailure 'Recall removal policy must apply on every build, including when -KeepCopilot is selected.'
     }
 }
 

@@ -96,9 +96,9 @@ function New-WinMintSetupProfile {
             policy = [string]$BuildConfig.AiRemoval.Policy
             catalogVersion = [int]$BuildConfig.AiRemoval.CatalogVersion
             appxPrefixes = @($BuildConfig.AiRemoval.AppxPrefixes)
-            removeRecall = ([string]$BuildConfig.AiRemoval.Policy -ne 'Core')
-            disableAiServices = ([string]$BuildConfig.AiRemoval.Policy -ne 'Core')
-            disableAiTasks = ([string]$BuildConfig.AiRemoval.Policy -ne 'Core')
+            removeRecall = $true
+            disableAiServices = (@($BuildConfig.AiRemoval.ServicesToDisable).Count -gt 0)
+            disableAiTasks = $true
             aggressiveExperimental = [bool]$BuildConfig.AiRemoval.AggressiveExperimental
             optionalFeatures = @($BuildConfig.AiRemoval.OptionalFeatures)
             servicesToDisable = @($BuildConfig.AiRemoval.ServicesToDisable)
@@ -138,6 +138,15 @@ function New-WinMintSetupProfile {
             dualBoot = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
             disableHibernationOnDesktop = $true
             desktopPowerPlan = 'HighPerformance'
+        }
+        edge = [ordered]@{
+            # Edge browser is removed by default via the DMA-supported in-OS
+            # uninstall, which only works while the device is still in the EEA
+            # setup region (DMA interop on). With -KeepEdge or -NoDmaInterop there
+            # is no EULA-blessed path, so removal is skipped and logged.
+            removeEdge = ((-not [bool]$BuildConfig.Keep.Edge) -and [bool]$BuildConfig.DmaInterop.Enabled)
+            keepEdge = [bool]$BuildConfig.Keep.Edge
+            dmaInteropEnabled = [bool]$BuildConfig.DmaInterop.Enabled
         }
     }
 }
