@@ -1,0 +1,13 @@
+# Dev recipes for the WinMint workspace — run from the repo root, e.g. `cargo gui`.
+# Aliases only: no build/target/rustflags overrides here. The GPUI build's MSVC
+# linker environment is set up by tools/gui/Start-GuiDev.ps1; plain `cargo` works
+# when link.exe is already on PATH.
+[alias]
+gui       = "run -p winmint-gui"                       # launch the GUI (custom titlebar)
+gui-sys   = "run -p winmint-gui -- --system-titlebar"  # launch with the OS titlebar
+gui-build = "build -p winmint-gui"                     # compile the GUI without launching
+gui-rel   = "run --release -p winmint-gui"             # release build + launch
+checkw    = "check --workspace --all-targets"          # fast type-check the whole workspace
+lint      = "clippy --workspace --all-targets"         # clippy across the workspace
+testw     = "test --workspace"                         # all Rust tests
+core      = "test -p winmint-core"                     # core intent/bridge-contract tests only

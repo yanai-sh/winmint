@@ -63,6 +63,10 @@ param(
     [switch]$Quiet,
     [switch]$AllowElevate,
     [switch]$Yes,
+    [switch]$WriteUsb,
+    [int]$UsbDiskNumber = -1,
+    [int]$ConfirmUsbDiskNumber = -1,
+    [switch]$AllowFixedUsbDisk,
     [switch]$ListWork,
     [string]$CleanWork
 )
@@ -104,6 +108,10 @@ $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
     $PSBoundParameters.ContainsKey('Quiet') -or
     $PSBoundParameters.ContainsKey('AllowElevate') -or
     $PSBoundParameters.ContainsKey('Yes') -or
+    $PSBoundParameters.ContainsKey('WriteUsb') -or
+    $PSBoundParameters.ContainsKey('UsbDiskNumber') -or
+    $PSBoundParameters.ContainsKey('ConfirmUsbDiskNumber') -or
+    $PSBoundParameters.ContainsKey('AllowFixedUsbDisk') -or
     $PSBoundParameters.ContainsKey('ListWork') -or
     $PSBoundParameters.ContainsKey('CleanWork') -or
     $NonInteractive
@@ -162,6 +170,10 @@ if ($headlessMode) {
         -Quiet:$Quiet `
         -AllowElevate:$AllowElevate `
         -Yes:$Yes `
+        -WriteUsb:$WriteUsb `
+        -UsbDiskNumber $UsbDiskNumber `
+        -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `
+        -AllowFixedUsbDisk:$AllowFixedUsbDisk `
         -ListWork:$ListWork `
         -CleanWork $CleanWork
     if ($headlessResult -and [string]$headlessResult.result -in @('failed', 'validation-failed')) {

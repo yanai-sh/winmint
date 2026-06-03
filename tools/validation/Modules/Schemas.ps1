@@ -169,6 +169,23 @@ function Test-BuildManifestSchema {
             sha256    = 'abc123def456'
             sizeBytes = 4123456789
         }
+        usbMedia             = [ordered]@{
+            enabled = $true
+            status = 'ok'
+            writtenAt = '2026-01-01T00:00:10+00:00'
+            diskNumber = 3
+            diskModel = 'USB Flash Drive'
+            diskSizeBytes = 64000000000
+            partitionScheme = 'GPT'
+            bootMode = 'UEFI'
+            installFilesystem = 'NTFS'
+            installDrive = 'E:\'
+            helper = 'UEFI:NTFS'
+            helperVersion = 'rufus-master-2026-05-23'
+            helperSourceUrl = 'https://raw.githubusercontent.com/pbatard/rufus/master/res/uefi/uefi-ntfs.img'
+            helperSha256 = 'D34DFA6117D1F572F115E0F85F87F6C26B65462347D011E4EB1FA03AE2B70A64'
+            architecture = 'amd64'
+        }
         removals             = [ordered]@{
             appxPrefixes        = @('Microsoft.BingNews')
             appxCatalogVersion  = 1

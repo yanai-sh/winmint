@@ -27,6 +27,46 @@ function New-SmokeBuildProfileSettings {
     }
 }
 
+function Assert-FormFactorAndPowerProfile {
+    $defaultConfig = New-WinMintBuildConfig -BuildProfile (New-SmokeBuildProfile)
+    if ([string]$defaultConfig.FormFactor -ne 'Auto') {
+        Add-SmokeFailure "Default build config FormFactor should be 'Auto', got '$($defaultConfig.FormFactor)'."
+    }
+    foreach ($expected in @('filesystem-performance-policy', 'developer-telemetry-optout', 'telemetry-tracing-policy')) {
+        if (@($defaultConfig.RegistryTweaks) -notcontains $expected) {
+            Add-SmokeFailure "Default Developer build should select registry tweak '$expected'."
+        }
+    }
+    $defaultProfile = New-WinMintSetupProfile -BuildConfig $defaultConfig
+    if ([string]$defaultProfile.power.formFactor -ne 'Auto') {
+        Add-SmokeFailure 'Setup profile power.formFactor should default to Auto.'
+    }
+    if ([string]$defaultProfile.power.desktopPowerPlan -ne 'HighPerformance') {
+        Add-SmokeFailure 'Setup profile power.desktopPowerPlan should be HighPerformance.'
+    }
+    if (-not [bool]$defaultProfile.privacy.disableTelemetryTasks) {
+        Add-SmokeFailure 'Telemetry-on default should set privacy.disableTelemetryTasks.'
+    }
+    if (@($defaultProfile.privacy.telemetryTaskPatternsToDisable).Count -eq 0) {
+        Add-SmokeFailure 'Default setup profile should carry telemetry scheduled-task patterns.'
+    }
+    $desktopProfile = New-WinMintBuildProfile -Settings @{
+        Profile = 'Developer'
+        ProfileGroups = @('Minimal', 'Developer')
+        ISOPath = (Get-WinMintTestIsoFixturePath)
+        Architecture = 'arm64'
+        ComputerName = 'WinMint'
+        AccountName = 'dev'
+        DriverSource = 'None'
+        DriverPath = ''
+        FormFactor = 'Desktop'
+    }
+    $desktopConfig = New-WinMintBuildConfig -BuildProfile $desktopProfile
+    if ([string]$desktopConfig.FormFactor -ne 'Desktop') {
+        Add-SmokeFailure "FormFactor=Desktop should flow to build config, got '$($desktopConfig.FormFactor)'."
+    }
+}
+
 function Assert-ProfileFailsWith {
     param(
         [Parameter(Mandatory)][object]$Profile,
@@ -120,6 +160,27 @@ function Assert-OscdimgSelectionPrefersNativeHostArchitecture {
     }
 }
 
+function Assert-IsoBootUsesNoPromptEfiWhenAvailable {
+    $packagesPath = Join-Path $root 'src\engine\Private\Image\Packages.ps1'
+    $stagingPath = Join-Path $root 'src\engine\Private\Image\Staging.ps1'
+    $packagesText = Get-Content -LiteralPath $packagesPath -Raw
+    $stagingText = Get-Content -LiteralPath $stagingPath -Raw
+
+    foreach ($expected in @('efisys_noprompt.bin', 'efisys.bin')) {
+        if ($packagesText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "ISO bootdata selection should reference '$expected'."
+        }
+        if ($stagingText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "ISO staging validation should reference '$expected'."
+        }
+    }
+    $noPromptIndex = $packagesText.IndexOf('efisys_noprompt.bin')
+    $promptIndex = $packagesText.IndexOf('efisys.bin')
+    if ($noPromptIndex -lt 0 -or $promptIndex -lt 0 -or $noPromptIndex -gt $promptIndex) {
+        Add-SmokeFailure 'ISO bootdata selection should prefer efisys_noprompt.bin before falling back to efisys.bin.'
+    }
+}
+
 function Assert-BuildResultContractAcceptsPipelineOutput {
     $expected = 'C:\ISO\out.iso'
     $clean = [pscustomobject]@{ OutputIsoPath = $expected; WorkDir = 'C:\Temp\WinMint'; DryRun = $false }
@@ -198,7 +259,7 @@ function Assert-TweakAuditArtifactsAreWritten {
         $config = New-WinMintBuildConfig -BuildProfile (New-SmokeBuildProfile)
         Initialize-WinMintBuildManifest -Config $config
 
-        $applied = $script:RegistryTweaks | Where-Object id -eq 'developer-qol' | Select-Object -First 1
+        $applied = $script:RegistryTweaks | Where-Object id -eq 'explorer-qol' | Select-Object -First 1
         $skipped = $script:RegistryTweaks | Where-Object id -eq 'hardware-bypass' | Select-Object -First 1
         $failed = $script:RegistryTweaks | Where-Object id -eq 'gamebar-policy' | Select-Object -First 1
         Add-WinMintManifestRegistryTweakEvent -Group $applied -Status 'applied'

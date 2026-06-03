@@ -768,7 +768,8 @@ Write-Host 'WinMint system policy rollback finished. Removed provisioned AppX/op
         ''
         'These scripts reverse only serviceable policy, service, task, visible-region, and selected user-preference registry state.'
         ''
-        'They do not reinstall AppX packages, optional feature payloads, or CBS packages removed from the image. To restore those payloads, rebuild from the original source ISO, reinstall from Microsoft Store/winget where available, or perform a Windows repair install.'
+        'They do not reinstall AppX packages, optional feature payloads, or CBS packages removed from the image.'
+        'To restore those payloads, rebuild from the original source ISO, reinstall from Microsoft Store/winget where available, or perform a Windows repair install.'
         ''
         'This folder is a build output sidecar. It is not staged into the installed Windows system and does not create maintenance tasks.'
     ) -join "`n"

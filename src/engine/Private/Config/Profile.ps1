@@ -369,6 +369,7 @@ function New-WinMintBuildProfile {
         }
         target = [ordered]@{
             device = [string](Get-WinMintProfileSetting $Settings 'TargetDevice' 'DifferentPC')
+            formFactor = [string](Get-WinMintProfileSetting $Settings 'FormFactor' 'Auto')
             editionMode = $editionMode
             edition = $edition
             diskMode = $diskMode
@@ -536,6 +537,9 @@ function Test-WinMintBuildProfile {
     & $enum ([string](Get-WinMintProfileSetting $source 'architecture' '')) 'profile.source.architecture' @('amd64', 'arm64', 'x86', '')
     & $require $target 'profile.target' @('device', 'editionMode', 'edition', 'diskMode')
     & $enum ([string](Get-WinMintProfileSetting $target 'device' '')) 'profile.target.device' @('ThisPC', 'DifferentPC')
+    if (Test-WinMintProfileProperty -Object $target -Name 'formFactor') {
+        & $enum ([string](Get-WinMintProfileSetting $target 'formFactor' '')) 'profile.target.formFactor' @('Auto', 'Laptop', 'Desktop')
+    }
     & $enum ([string](Get-WinMintProfileSetting $target 'editionMode' '')) 'profile.target.editionMode' @('TargetLicense', 'Fixed')
     $diskMode = [string](Get-WinMintProfileSetting $target 'diskMode' '')
     & $enum $diskMode 'profile.target.diskMode' @('Manual', 'AutoWipeDisk0', 'DualBootReserved')

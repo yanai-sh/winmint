@@ -218,6 +218,15 @@ function Assert-WinMintHeadlessParameterSet {
     if ($BoundParameters.ContainsKey('NewProfile') -and $BoundParameters.ContainsKey('ProfilePath')) {
         throw 'Use either -NewProfile to create a profile template or -ProfilePath to consume one, not both.'
     }
+    if ($BoundParameters.ContainsKey('WriteUsb')) {
+        if ($BoundParameters.ContainsKey('DryRun')) { throw '-WriteUsb cannot be used with -DryRun.' }
+        if ($BoundParameters.ContainsKey('ValidateOnly')) { throw '-WriteUsb cannot be used with -ValidateOnly.' }
+        if (-not $BoundParameters.ContainsKey('UsbDiskNumber')) { throw '-WriteUsb requires -UsbDiskNumber.' }
+    }
+    if (($BoundParameters.ContainsKey('UsbDiskNumber') -or $BoundParameters.ContainsKey('ConfirmUsbDiskNumber') -or $BoundParameters.ContainsKey('AllowFixedUsbDisk')) -and
+        -not $BoundParameters.ContainsKey('WriteUsb')) {
+        throw 'USB target flags require -WriteUsb.'
+    }
     if (($BoundParameters.ContainsKey('NewProfile') -or $BoundParameters.ContainsKey('OutProfile')) -and
         $BoundParameters.ContainsKey('UupDumpSource')) {
         throw 'Profile templates store the resolved source ISO only. Use -SourceIso for profile authoring. Use -UupDumpSource only when running a build that should perform UUP source prep.'
@@ -241,7 +250,8 @@ function Assert-WinMintHeadlessParameterSet {
     if ($BoundParameters.ContainsKey('ProfilePath')) {
         $allowed = @(
             'ProfilePath', 'SourceIsoOverride', 'UupDumpSource', 'Yes', 'ValidateOnly', 'Json', 'NoProgress', 'Quiet',
-            'DryRun', 'AllowElevate', 'Verbose', 'Debug', 'ErrorAction', 'WarningAction',
+            'DryRun', 'WriteUsb', 'UsbDiskNumber', 'ConfirmUsbDiskNumber', 'AllowFixedUsbDisk',
+            'AllowElevate', 'Verbose', 'Debug', 'ErrorAction', 'WarningAction',
             'InformationAction', 'ProgressAction', 'ErrorVariable', 'WarningVariable',
             'InformationVariable', 'OutVariable', 'OutBuffer', 'PipelineVariable'
         )
@@ -619,6 +629,10 @@ function Invoke-WinMintHeadlessCli {
         [switch]$NoProgress,
         [switch]$AllowElevate,
         [switch]$Yes,
+        [switch]$WriteUsb,
+        [int]$UsbDiskNumber = -1,
+        [int]$ConfirmUsbDiskNumber = -1,
+        [switch]$AllowFixedUsbDisk,
         [switch]$ListWork,
         [string]$CleanWork
     )
@@ -793,7 +807,14 @@ function Invoke-WinMintHeadlessCli {
                 elseif ($level -eq 'Warn') { Write-Warning $message }
                 else { Write-Host $message }
             }
-            $build = Start-WinMintBuild -BuildProfile $buildProfile -DryRun:$DryRun -ProgressHandler $progress
+            $build = Start-WinMintBuild `
+                -BuildProfile $buildProfile `
+                -DryRun:$DryRun `
+                -WriteUsb:$WriteUsb `
+                -UsbDiskNumber $UsbDiskNumber `
+                -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `
+                -AllowFixedUsbDisk:$AllowFixedUsbDisk `
+                -ProgressHandler $progress
             $reports = [pscustomobject]@{
                 json = $build.Paths.Json
                 markdown = $build.Paths.Markdown

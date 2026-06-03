@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-WinMint is licensed under GPL-3.0-only. Bundled third-party assets keep
+WinMint is licensed under GPL-2.0-or-later. Bundled third-party assets keep
 their original licenses.
 
 ## Cursor Themes
@@ -23,7 +23,19 @@ their original licenses.
 - Notes: The Nerd Font variant is distributed by the upstream Cascadia Code
   release package and is installed system-wide into generated ISOs.
 
-GPL-3.0 for WinMint does not relicense bundled font files.
+WinMint's GPL-2.0-or-later license does not relicense bundled third-party assets.
+
+## Boot Media Helpers
+
+### UEFI:NTFS
+
+- Source: https://github.com/pbatard/uefi-ntfs
+- License: GPL-2.0
+- Author: Pete Batard / Rufus project
+- Packaged files: None. WinMint downloads and verifies a pinned upstream
+  helper image when USB media creation requires it.
+- Notes: Used to boot UEFI Windows installation media from an NTFS install
+  partition when firmware only provides FAT/FAT32 filesystem support.
 
 ## Icon Assets
 

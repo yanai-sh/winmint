@@ -1,7 +1,8 @@
 # Windows Debloat Strategy
 
-Status: design reference  
-Last researched: 2026-04-30
+Status: design reference (not the spec — `AGENTS.md` + contract tests + code are authoritative)  
+Last researched: 2026-04-30  
+Last reconciled to shipped behavior: 2026-06-03
 
 This document is the working strategy for the WinMint Windows baseline. The goal is not to create the smallest possible Windows image. The goal is to turn official Windows media into a fast, quiet, serviceable, Linux-style developer workstation with WSL as a first-class runtime. WinMint is WSL2-first: Windows hosts the hardware, UI, security, package bootstrap, and desktop shell; Linux is the default development runtime.
 
@@ -94,7 +95,7 @@ These should be part of WinMint Core because they remove noise without compromis
 | Edge noise | Hide first-run, disable startup boost/background mode, disable recommendations/promos/personalization reporting. |
 | OneDrive pressure | Uninstall OneDrive, remove setup binaries/residue, disable personal sync and autostart, hide Explorer integration, and keep known folders local. |
 | Xbox/GameDVR | Remove Xbox packages and disable Game Bar/GameDVR overlays. |
-| Explorer/dev QoL | Show file extensions, show hidden files, enable long paths, enable End Task on taskbar, set sane context/menu defaults. |
+| Explorer/dev QoL | Show file extensions, show hidden files, enable long paths (`longpaths-policy`), set sane context/menu defaults. |
 | Setup privacy | Keep `ProtectYourPC=3`, hide Microsoft account screens, keep Wi-Fi OOBE visible so first-logon automation has network. |
 | OEM payloads | Disable WPBT, Razer-style auto-installers, and known vendor app injection paths where policy exists. |
 | Setup cleanup | Remove copied unattend credentials and setup residue after install. |
@@ -109,7 +110,7 @@ These may be good, but need measurement or a clear hardware/workflow condition.
 | Disable background apps globally | Can reduce idle noise. | Can break notifications and Store app behavior. Consider only after AppX cleanup leaves few apps. |
 | Windows Search tuning | SearchIndexer can be noisy. | Do not disable local search or the Search service. **Flow Launcher + Everything** and **Raycast** are opt-in launcher choices; they complement Start/Settings search rather than replacing the platform indexer. |
 | Storage Sense defaults | Can keep the system clean. | Do not auto-delete Downloads or developer artifacts. |
-| Hibernation / Fast Startup | Fast Startup can cause dual-boot/WSL/driver edge cases. | **WinMint does not disable hibernation**—respect Windows and OEM power defaults (especially on laptops). Treat disabling **Fast Startup** as an optional explicit policy if needed; do not ship hibernate-off as a default. |
+| Hibernation / Fast Startup / power plan | Fast Startup can cause dual-boot/WSL/driver edge cases; desktops have no battery to protect. | **Form-factor-aware**, resolved at first boot via `Win32_SystemEnclosure.ChassisTypes` in `src/setup/SetupComplete/Power.ps1`. **Laptops: untouched** — keep Windows/OEM battery defaults. **Desktops: `powercfg -h off` + High Performance plan** (deliberately conservative; *not* the Tier-3 "Ultimate Performance"). **Dual-boot** builds additionally disable Fast Startup offline (`dual-boot-windows-policy`). Never apply hibernate-off or High Performance to laptops. |
 | Delivery Optimization | Peer download/upload can be unwanted. | Do not break updates. Prefer LAN-only or bandwidth-limited behavior over disabling update delivery mechanisms. |
 | Print stack | Core printing and Print to PDF stay. | **WinMint Core** removes optional **Windows Fax and Scan** (`Print.Fax.Scan` capability only). Do not disable Print Spooler or remove drivers by default. XPS *Viewer* remains a separate optional removal (viewing XPS files; unrelated to physical printers). |
 | Location / Maps / Sensors | Privacy win. | Time zone, hardware sensors, and app permissions can behave strangely. Disable app access first, not services. |

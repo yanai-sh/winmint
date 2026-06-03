@@ -130,6 +130,14 @@ function New-WinMintSetupProfile {
             advertisingId = [bool]$BuildConfig.Privacy.AdvertisingId
             location = [bool]$BuildConfig.Privacy.Location
             timeline = [bool]$BuildConfig.Privacy.Timeline
+            disableTelemetryTasks = [bool]$BuildConfig.Privacy.Telemetry
+            telemetryTaskPatternsToDisable = @($BuildConfig.TelemetryTaskPatterns)
+        }
+        power = [ordered]@{
+            formFactor = [string]$BuildConfig.FormFactor
+            dualBoot = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
+            disableHibernationOnDesktop = $true
+            desktopPowerPlan = 'HighPerformance'
         }
     }
 }
@@ -345,7 +353,7 @@ function Install-Autounattend {
         [ValidateNotNullOrEmpty()][string]$MountDir, [ValidateNotNullOrEmpty()][string]$IsoContents,
         [ValidateNotNullOrEmpty()][string]$AutounattendTemplate, [ValidateNotNullOrEmpty()][string]$ImageArch,
         [string]$TimeZone, [string]$TargetPCName, [string]$TargetUser, [ValidateSet('Local', 'MicrosoftOobe')][string]$AccountMode = 'Local', [string]$TargetPass,
-        [string]$EditionName, [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense', [bool]$AutoWipeDisk, [bool]$AutoLogon,
+        [string]$EditionName, [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense', [int]$InstallImageCount = 0, [bool]$AutoWipeDisk, [bool]$AutoLogon,
         [object]$DiskLayout,
         [bool]$HardwareBypass = $false,
         [string]$InputLocale, [string]$SystemLocale, [string]$UILanguage, [string]$UILanguageFallback, [string]$UserLocale,
@@ -430,14 +438,39 @@ function Install-Autounattend {
     Merge-UnattendInternationalXml -XmlDoc $xmlDoc -NsMgr $nsMgr -InputLocale $InputLocale -SystemLocale $SystemLocale -UILanguage $UILanguage -UILanguageFallback $UILanguageFallback -UserLocale $UserLocale
 
     $installFromNode = $xmlDoc.SelectSingleNode('//u:ImageInstall/u:OSImage/u:InstallFrom', $nsMgr)
+    foreach ($productKeyNode in @($xmlDoc.SelectNodes('//u:ProductKey', $nsMgr))) {
+        $null = $productKeyNode.ParentNode.RemoveChild($productKeyNode)
+    }
     if ($EditionMode -eq 'Fixed') {
         $editionNode = $xmlDoc.SelectSingleNode('//u:MetaData[u:Key="/IMAGE/NAME"]/u:Value', $nsMgr)
         if ($editionNode) { $editionNode.InnerText = $EditionName }
         Log "Edition mode: fixed image selection ($EditionName) via ImageInstall metadata; activation remains the target device license."
     }
-    elseif ($installFromNode) {
-        $null = $installFromNode.ParentNode.RemoveChild($installFromNode)
-        Log 'Edition mode: target license - Windows Setup will use the target device firmware key when available.'
+    elseif ($InstallImageCount -eq 1) {
+        $xmlNs = 'urn:schemas-microsoft-com:unattend'
+        if (-not $installFromNode) {
+            $osImageNode = $xmlDoc.SelectSingleNode('//u:ImageInstall/u:OSImage', $nsMgr)
+            if ($osImageNode) {
+                $installFromNode = $xmlDoc.CreateElement('InstallFrom', $xmlNs)
+                $null = $osImageNode.PrependChild($installFromNode)
+            }
+        }
+        if ($installFromNode) {
+            foreach ($metadata in @($installFromNode.SelectNodes('u:MetaData', $nsMgr))) {
+                $null = $installFromNode.RemoveChild($metadata)
+            }
+            $metadataNode = $xmlDoc.CreateElement('MetaData', $xmlNs)
+            $keyNode = $xmlDoc.CreateElement('Key', $xmlNs); $keyNode.InnerText = '/IMAGE/INDEX'
+            $valueNode = $xmlDoc.CreateElement('Value', $xmlNs); $valueNode.InnerText = '1'
+            $null = $metadataNode.AppendChild($keyNode)
+            $null = $metadataNode.AppendChild($valueNode)
+            $null = $installFromNode.AppendChild($metadataNode)
+        }
+        Log 'Edition mode: target license on single-image media - selecting install.wim index 1 without a product key.'
+    }
+    else {
+        if ($installFromNode) { $null = $installFromNode.ParentNode.RemoveChild($installFromNode) }
+        Log 'Edition mode: target license - Windows Setup will use the target device firmware key when available; no product key is written.'
     }
 
     $pcNode = $xmlDoc.SelectSingleNode('//u:ComputerName', $nsMgr)
@@ -511,9 +544,6 @@ function Install-Autounattend {
         }
     }
 
-    $diskConfigNode = $xmlDoc.SelectSingleNode('//u:DiskConfiguration', $nsMgr)
-    if ($diskConfigNode) { $null = $diskConfigNode.ParentNode.RemoveChild($diskConfigNode) }
-
     $diskLayoutMode = if ($DiskLayout) { [string](Get-WinMintProfileSetting $DiskLayout 'mode' '') } else { '' }
     if ([string]::IsNullOrWhiteSpace($diskLayoutMode)) {
         $diskLayoutMode = if ($AutoWipeDisk) { 'AutoWipeDisk0' } else { 'Manual' }
@@ -533,10 +563,15 @@ function Install-Autounattend {
         }
     }
 
+    $diskConfigNode = $xmlDoc.SelectSingleNode('//u:DiskConfiguration', $nsMgr)
     if (-not $AutoWipeDisk) {
         Log 'Disk layout: manual — standard Setup disk UI; autounattend does not clear the primary disk.'
+        if ($diskConfigNode) { $null = $diskConfigNode.ParentNode.RemoveChild($diskConfigNode) }
         $installToNode = $xmlDoc.SelectSingleNode('//u:InstallTo', $nsMgr)
         if ($installToNode) { $null = $installToNode.ParentNode.RemoveChild($installToNode) }
+    }
+    elseif ($diskLayoutMode -eq 'AutoWipeDisk0') {
+        Log 'Disk layout: native unattend wipe — EFI (1 GB) + MSR (16 MB) + Windows on the primary disk.'
     }
     else {
         if ($diskLayoutMode -eq 'DualBootReserved') {
@@ -546,6 +581,7 @@ function Install-Autounattend {
         else {
             Log 'Disk layout: automated diskpart — EFI (1 GB) + MSR (16 MB) + Windows + WinRE (1 GB) on the primary disk.'
         }
+        if ($diskConfigNode) { $null = $diskConfigNode.ParentNode.RemoveChild($diskConfigNode) }
         # InstallTo (disk 0, partition 3) is retained: EFI=1, MSR=2, Windows=3, Recovery=4
 
         $wpSetupComp = $xmlDoc.SelectSingleNode(
@@ -637,7 +673,7 @@ function Install-Autounattend {
     Invoke-Action 'Writing autounattend.xml and setup scripts onto the ISO' {
         LogVerbose "Mount: $MountDir | ISO staging: $IsoContents"
 
-        $bundleDir = Join-Path $ScriptRoot 'scripts'
+        $bundleDir = Join-Path $ScriptRoot 'src\setup'
         if (Test-Path -LiteralPath $bundleDir) {
             $destScripts = Join-Path $MountDir 'Windows\Setup\Scripts'
             $null = New-Item -ItemType Directory -Path $destScripts -Force -ErrorAction SilentlyContinue
@@ -650,7 +686,7 @@ function Install-Autounattend {
             Copy-Item -LiteralPath $wallpaperSrc -Destination (Join-Path $wallpaperDir 'WinMint-Bloom-OLED.png') -Force
             LogOK 'Staged WinMint Bloom OLED wallpaper into the offline image.'
             $utf8Bom = [System.Text.UTF8Encoding]::new($true)
-            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'Audit-LiveInstall.ps1')) {
+            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1')) {
                 $src = Join-Path $bundleDir $n
                 if (-not (Test-Path -LiteralPath $src)) { continue }
                 $destPath = Join-Path $destScripts $n
@@ -660,6 +696,18 @@ function Install-Autounattend {
                 else {
                     [System.IO.File]::WriteAllText($destPath, (Get-Content -LiteralPath $src -Raw), $utf8Bom)
                 }
+            }
+            $setupCompleteModuleSrc = Join-Path $bundleDir 'SetupComplete'
+            if (Test-Path -LiteralPath $setupCompleteModuleSrc) {
+                $setupCompleteModuleDest = Join-Path $destScripts 'SetupComplete'
+                $null = New-Item -ItemType Directory -Path $setupCompleteModuleDest -Force -ErrorAction SilentlyContinue
+                foreach ($moduleFile in @(Get-ChildItem -LiteralPath $setupCompleteModuleSrc -Filter '*.ps1' -File)) {
+                    [System.IO.File]::WriteAllText((Join-Path $setupCompleteModuleDest $moduleFile.Name), (Get-Content -LiteralPath $moduleFile.FullName -Raw), $utf8Bom)
+                }
+            }
+            $auditSrc = Join-Path $ScriptRoot 'tools\audit\Audit-LiveInstall.ps1'
+            if (Test-Path -LiteralPath $auditSrc) {
+                [System.IO.File]::WriteAllText((Join-Path $destScripts 'Audit-LiveInstall.ps1'), (Get-Content -LiteralPath $auditSrc -Raw), $utf8Bom)
             }
             if ($SetupProfile) {
                 $setupProfileJson = $SetupProfile | ConvertTo-Json -Depth 12
@@ -724,6 +772,9 @@ function Install-Autounattend {
                 }
             }
             LogOK 'Copied setup scripts into the offline image (matching files only).'
+        }
+        else {
+            throw "WinMint setup script directory is missing: $bundleDir"
         }
 
         $outputPath = Join-Path $IsoContents 'autounattend.xml'

@@ -53,7 +53,7 @@ Bootstrap → UI/CLI → Engine → Windows Setup → FirstLogon Agent
 |-------|-------------|---------|
 | CLI | `WinMint-CLI.ps1` | Headless/console entry; delegates directly to engine |
 | Engine | `src/engine/WinMint.ps1` | Dot-sources all private modules; owns DISM/WIM servicing |
-| UI | `WinMint-GUI.ps1`; `apps/gui/` | GPUI is the only shipped GUI. The GPUI app uses `gpui-animation` for state-driven hover transitions; interactive wrappers must use `AnimatedWrapper::on_click` (not the inner `div`’s `on_click`) so the animation hook is not overwritten. |
+| UI | `WinMint-GUI.ps1`; `apps/gui/` | GPUI is the only shipped GUI. Prefer native GPUI APIs and platform abstractions over external GUI/tooling workarounds; for example, use `App::prompt_for_paths` with `PathPromptOptions` for file/folder selection instead of `rfd`, WinForms/WPF shells, or PowerShell picker helpers. The GPUI app uses `gpui-animation` for state-driven hover transitions; interactive wrappers must use `AnimatedWrapper::on_click` (not the inner `div`’s `on_click`) so the animation hook is not overwritten. Shared controls live in `apps/gui/src/components.rs` (aliased `ui::`) as stateless `pub fn` builders — keep them in that single file. Split into a `components/` directory (thematic submodules re-exported from `mod.rs` so `ui::*` call sites are unchanged) only once a component grows internal state and becomes a `#[derive(IntoElement)] + RenderOnce` struct, or the file passes ~500 lines. Don't split before then. |
 | Rust core | `crates/winmint-core/`, `crates/winmintctl/` | Typed contract helpers and small validation/normalization tools. Must not own DISM, offline registry servicing, Windows Setup orchestration, or first-logon package installs. |
 | Agent | `src/agent/Start-WinMintAgent.ps1` | Runs at first logon; installs editors/WSL/shell layers |
 | Setup scripts | `src/setup/FirstLogon.ps1`, `src/setup/SetupComplete.ps1` | Machine-phase setup during Windows install |
@@ -103,7 +103,8 @@ Validate with `tests/contract/Test-ProfileInvariants.ps1`.
 |------|---------|
 | `config/profiles.json` | Named build profiles |
 | `config/packages.json` | winget package catalog |
-| `config/tweaks.json` | Registry tweak definitions |
+| `src/engine/Private/Image/Tweaks/` | Registry tweak modules — one `NN-<id>.ps1` per tweak, each carrying its definition (`set`/`remove`/metadata) **and** its `appliesTo` curation predicate. `TweakRegistry.ps1` assembles `$script:RegistryTweaks` and `Get-WinMintSelectedRegistryTweaks`. Add/change a tweak by editing one file there. |
+| `config/tweaks.json` | Public metadata mirror of the tweak modules; kept in parity by a contract test (`StaticAssertions.ps1`). Not the executable source. |
 | `schemas/winmint.*.schema.json` | JSON Schema for the profile, manifest, and agent-state contracts |
 | `config/autounattend.xml` | Windows unattended install template; generated output must ship alongside ISO |
 | `assets/runtime/desktop/windhawk/preset.json` | Windhawk mod preset (installed as a unit, not individual mods) |

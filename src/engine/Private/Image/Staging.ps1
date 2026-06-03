@@ -24,6 +24,187 @@ function Get-ISOArchitecture {
     throw "Could not determine WIM architecture."
 }
 
+function Get-WinMintDismExeVersion {
+    $versionLine = (& dism.exe /English /? 2>&1 | Where-Object { $_ -match 'Version:\s*([0-9.]+)' } | Select-Object -First 1)
+    if ($versionLine -match 'Version:\s*([0-9.]+)') {
+        return [version]$matches[1]
+    }
+    throw 'Could not determine dism.exe version.'
+}
+
+function Get-WinMintWimImageVersion {
+    param(
+        [ValidateNotNullOrEmpty()][string]$ImagePath,
+        [int]$Index = 1
+    )
+
+    $dismOut = & dism.exe /English /Get-WimInfo /WimFile:"$ImagePath" /Index:$Index 2>&1
+    $versionLine = $dismOut | Where-Object { $_ -match '^\s*Version\s*:\s*([0-9.]+)' } | Select-Object -Last 1
+    $servicePackBuildLine = $dismOut | Where-Object { $_ -match '^\s*ServicePack Build\s*:\s*(\d+)' } | Select-Object -First 1
+
+    if ($versionLine -notmatch '^\s*Version\s*:\s*([0-9.]+)') {
+        throw "Could not determine Windows image version for $ImagePath."
+    }
+    $base = [version]$matches[1]
+    $ubr = 0
+    if ($servicePackBuildLine -match '^\s*ServicePack Build\s*:\s*(\d+)') {
+        $ubr = [int]$matches[1]
+    }
+
+    return [pscustomobject]@{
+        Version = $base
+        Build = [int]$base.Build
+        Ubr = $ubr
+        Display = if ($ubr -gt 0) { "$base.$ubr" } else { [string]$base }
+    }
+}
+
+function Get-WinMintWimImageMetadata {
+    param(
+        [ValidateNotNullOrEmpty()][string]$ImagePath,
+        [int]$Index = 1
+    )
+
+    $dismOut = & dism.exe /English /Get-WimInfo /WimFile:"$ImagePath" /Index:$Index 2>&1
+    $versionLine = $dismOut | Where-Object { $_ -match '^\s*Version\s*:\s*([0-9.]+)' } | Select-Object -Last 1
+    $servicePackBuildLine = $dismOut | Where-Object { $_ -match '^\s*ServicePack Build\s*:\s*(\d+)' } | Select-Object -First 1
+    $languages = [System.Collections.Generic.List[string]]::new()
+    $captureLanguages = $false
+    $values = @{}
+
+    foreach ($line in $dismOut) {
+        $text = [string]$line
+        if ($text -match '^\s*([^:]+?)\s*:\s*(.*)$') {
+            $key = $matches[1].Trim()
+            $value = $matches[2].Trim()
+            $values[$key] = $value
+            $captureLanguages = ($key -eq 'Languages')
+            if ($captureLanguages -and -not [string]::IsNullOrWhiteSpace($value)) {
+                $languages.Add($value) | Out-Null
+            }
+            continue
+        }
+        if ($captureLanguages -and $text -match '^\s+([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)+)\s*$') {
+            $languages.Add($matches[1].Trim()) | Out-Null
+        }
+        elseif ($captureLanguages -and -not [string]::IsNullOrWhiteSpace($text)) {
+            $captureLanguages = $false
+        }
+    }
+
+    if ($versionLine -notmatch '^\s*Version\s*:\s*([0-9.]+)') {
+        throw "Could not determine Windows image version for $ImagePath index $Index."
+    }
+    $base = [version]$matches[1]
+    $ubr = 0
+    if ($servicePackBuildLine -match '^\s*ServicePack Build\s*:\s*(\d+)') {
+        $ubr = [int]$matches[1]
+    }
+
+    [pscustomobject]@{
+        ImageIndex = $Index
+        Name = [string]$values['Name']
+        Architecture = [string]$values['Architecture']
+        Version = [string]$base
+        Build = [int]$base.Build
+        Ubr = $ubr
+        Edition = [string]$values['Edition']
+        Installation = [string]$values['Installation']
+        ProductType = [string]$values['ProductType']
+        Languages = @($languages | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    }
+}
+
+function Get-WinMintSelectedWimMetadata {
+    param(
+        [Parameter(Mandatory)][string]$ImagePath,
+        [Parameter(Mandatory)][object[]]$Images
+    )
+
+    @(
+        foreach ($image in $Images) {
+            Get-WinMintWimImageMetadata -ImagePath $ImagePath -Index ([int]$image.ImageIndex)
+        }
+    )
+}
+
+function Assert-WinMintDismCanServiceWim {
+    param(
+        [ValidateNotNullOrEmpty()][string]$ImagePath,
+        [int]$Index = 1
+    )
+
+    $dismVersion = Get-WinMintDismExeVersion
+    $imageVersion = Get-WinMintWimImageVersion -ImagePath $ImagePath -Index $Index
+    if ([int]$imageVersion.Build -gt [int]$dismVersion.Build) {
+        throw @(
+            "WinMint cannot safely service this Windows image with the current DISM engine."
+            "Image build: $($imageVersion.Display)"
+            "DISM build: $dismVersion"
+            'Use a Windows/ADK DISM version at least as new as the source ISO, or build from an ISO whose image build is not newer than this host.'
+            'Refusing to continue because downlevel DISM servicing can corrupt edition/language metadata and produce a setup product-key validation loop.'
+        ) -join [Environment]::NewLine
+    }
+}
+
+function Assert-WinMintDismCanServiceImages {
+    param(
+        [ValidateNotNullOrEmpty()][string]$ImagePath,
+        [Parameter(Mandatory)][object[]]$Images
+    )
+
+    foreach ($image in $Images) {
+        Assert-WinMintDismCanServiceWim -ImagePath $ImagePath -Index ([int]$image.ImageIndex)
+    }
+}
+
+function Assert-WinMintWimMetadataHealthy {
+    param(
+        [ValidateNotNullOrEmpty()][string]$ImagePath,
+        [Parameter(Mandatory)][object[]]$ExpectedMetadata,
+        [ValidateNotNullOrEmpty()][string]$ExpectedArchitecture,
+        [switch]$AllowIndexRenumber
+    )
+
+    $images = @(Get-WindowsImage -ImagePath $ImagePath -ErrorAction Stop | Sort-Object ImageIndex)
+    if ($images.Count -lt 1) { throw "install.wim validation failed: no images found in $ImagePath." }
+    if (-not $AllowIndexRenumber -and $images.Count -lt @($ExpectedMetadata).Count) {
+        throw "install.wim validation failed: expected at least $(@($ExpectedMetadata).Count) image(s), found $($images.Count)."
+    }
+
+    foreach ($expected in @($ExpectedMetadata)) {
+        $match = $null
+        if (-not $AllowIndexRenumber) {
+            $match = $images | Where-Object { [int]$_.ImageIndex -eq [int]$expected.ImageIndex } | Select-Object -First 1
+        }
+        if (-not $match -and -not [string]::IsNullOrWhiteSpace([string]$expected.Name)) {
+            $match = $images | Where-Object { [string]$_.ImageName -eq [string]$expected.Name } | Select-Object -First 1
+        }
+        if (-not $match) {
+            throw "install.wim validation failed: expected image '$($expected.Name)' was not found after servicing."
+        }
+
+        $actual = Get-WinMintWimImageMetadata -ImagePath $ImagePath -Index ([int]$match.ImageIndex)
+        $required = @('Edition', 'Installation', 'ProductType')
+        foreach ($field in $required) {
+            $value = [string]$actual.$field
+            if ([string]::IsNullOrWhiteSpace($value) -or $value -eq '<undefined>') {
+                throw "install.wim validation failed: image '$($actual.Name)' has invalid $field metadata ('$value'). This media will not be published."
+            }
+        }
+        if (@($actual.Languages).Count -lt 1) {
+            throw "install.wim validation failed: image '$($actual.Name)' has no language metadata. This media will not be published."
+        }
+        if ([string]$actual.Architecture -ne $ExpectedArchitecture) {
+            throw "install.wim validation failed: image '$($actual.Name)' architecture is '$($actual.Architecture)', expected '$ExpectedArchitecture'."
+        }
+        if ([int]$actual.Build -ne [int]$expected.Build) {
+            throw "install.wim validation failed: image '$($actual.Name)' build changed from $($expected.Build) to $($actual.Build)."
+        }
+    }
+    LogOK "install.wim metadata validation passed ($(@($ExpectedMetadata).Count) expected image(s))."
+}
+
 function Invoke-RobocopyChecked {
     param(
         [ValidateNotNullOrEmpty()][string]$Source,
@@ -129,6 +310,7 @@ function Test-OfflineStagingReadiness {
     if ($ExpectedArchHint -and $detected -ne $ExpectedArchHint) {
         throw "install.wim CPU architecture is '$detected' but the ISO file name or your selection indicated '$ExpectedArchHint'."
     }
+    Assert-WinMintDismCanServiceWim -ImagePath $LocalInstallWim -Index $useIndex
     LogOK "Staged install.wim looks valid ($detected, $($installMetas.Count) edition(s))."
     LogVerbose "install.wim image index in use: $($archInst.ImageIndex)."
 
@@ -242,7 +424,12 @@ function Test-RemoteBuildPrerequisite {
 
     Write-SectionHeader 'Dry run: web checks and ISO layout'
     Log 'Checking boot files required for the ISO…'
-    $efisysRel = 'efi\microsoft\boot\efisys.bin'
+    $efisysRel = if (Test-Path -LiteralPath (Join-Path $IsoContentsRoot 'efi\microsoft\boot\efisys_noprompt.bin')) {
+        'efi\microsoft\boot\efisys_noprompt.bin'
+    }
+    else {
+        'efi\microsoft\boot\efisys.bin'
+    }
     $etfsRel = 'boot\etfsboot.com'
     $bootRels = if ($TargetArch -eq 'arm64') {
         @($efisysRel)

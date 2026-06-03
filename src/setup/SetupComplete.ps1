@@ -2,7 +2,11 @@
 # One-shot — Windows runs this exactly once during the very first boot of the installed image.
 # Cleanup of C:\Windows\Panther\unattend*.xml is the priority security task here: the answer
 # file embeds the user's local-admin password in base64 in the AutoLogon block and must be
-# wiped before any interactive user can read it.
+# wiped before any interactive user can read it. That wipe is kept INLINE in this orchestrator
+# (not a dot-sourced module) so it still runs even if a per-concern module fails to load.
+#
+# Per-concern work lives in SetupComplete\*.ps1, dot-sourced below. Those modules define
+# Invoke-Sc* functions that read this orchestrator's script-scope variables and helpers.
 #Requires -Version 5.1
 $ErrorActionPreference = 'Continue'
 # Logs go to ProgramData (Administrators-readable). C:\Windows\Setup\Scripts is the staged
@@ -124,252 +128,34 @@ $aiDisableServices = [bool](Get-ScSetupProfileValue -Section 'aiRemoval' -Name '
 $aiDisableTasks = [bool](Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'disableAiTasks' -Default $false)
 $aiServicesToDisable = @(ConvertTo-ScStringArray (Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'servicesToDisable' -Default @('WSAIFabricSvc')))
 $aiTaskPatternsToDisable = @(ConvertTo-ScStringArray (Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'scheduledTaskPatternsToDisable' -Default @('Recall', 'WindowsAI', 'Copilot')))
+$disableTelemetryTasks = [bool](Get-ScSetupProfileValue -Section 'privacy' -Name 'disableTelemetryTasks' -Default $false)
+$telemetryTaskPatternsToDisable = @(ConvertTo-ScStringArray (Get-ScSetupProfileValue -Section 'privacy' -Name 'telemetryTaskPatternsToDisable' -Default @()))
+$powerFormFactor = [string](Get-ScSetupProfileValue -Section 'power' -Name 'formFactor' -Default 'Auto')
+$powerDisableHibernationOnDesktop = [bool](Get-ScSetupProfileValue -Section 'power' -Name 'disableHibernationOnDesktop' -Default $true)
+$powerDesktopPlan = [string](Get-ScSetupProfileValue -Section 'power' -Name 'desktopPowerPlan' -Default 'HighPerformance')
 
-function Invoke-ScOneDriveRemoval {
-    Write-ScLog 'Removing OneDrive machine integration.'
-    foreach ($name in @('OneDrive', 'OneDriveSetup')) {
-        Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# Load the per-concern modules (each defines one or more Invoke-Sc* functions).
+foreach ($module in @(Get-ChildItem -LiteralPath (Join-Path $payloadDir 'SetupComplete') -Filter '*.ps1' -ErrorAction SilentlyContinue | Sort-Object Name)) {
+    try {
+        . $module.FullName
     }
-
-    foreach ($setup in @(
-            "$env:SystemRoot\System32\OneDriveSetup.exe",
-            "$env:SystemRoot\SysWOW64\OneDriveSetup.exe"
-        )) {
-        if (Test-Path -LiteralPath $setup) {
-            try {
-                $p = Start-Process -FilePath $setup -ArgumentList '/uninstall' -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
-                Write-ScLog "OneDriveSetup uninstall returned $($p.ExitCode): $setup"
-            }
-            catch {
-                "OneDrive uninstall failed for ${setup}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-            }
-        }
+    catch {
+        "SetupComplete module load failed for $($module.Name): $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
     }
-
-    foreach ($setupFile in @(
-            "$env:SystemRoot\System32\OneDriveSetup.exe",
-            "$env:SystemRoot\SysWOW64\OneDriveSetup.exe",
-            "$env:SystemRoot\System32\OneDriveSetup.exe.bak",
-            "$env:SystemRoot\SysWOW64\OneDriveSetup.exe.bak"
-        )) {
-        if (-not (Test-Path -LiteralPath $setupFile)) { continue }
-        try {
-            takeown.exe /f $setupFile | Out-Null
-            icacls.exe $setupFile /grant '*S-1-5-32-544:F' | Out-Null
-            Remove-Item -LiteralPath $setupFile -Force -ErrorAction Stop
-            Write-ScLog "Removed OneDrive installer file: $setupFile"
-        }
-        catch {
-            "OneDrive installer file removal failed for ${setupFile}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-        }
-    }
-
-    foreach ($regArgs in @(
-            @('add', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive', '/v', 'DisableFileSync', '/t', 'REG_DWORD', '/d', '1', '/f'),
-            @('add', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive', '/v', 'DisableFileSyncNGSC', '/t', 'REG_DWORD', '/d', '1', '/f'),
-            @('add', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive', '/v', 'DisablePersonalSync', '/t', 'REG_DWORD', '/d', '1', '/f'),
-            @('add', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive', '/v', 'DisableLibrariesDefaultSaveToOneDrive', '/t', 'REG_DWORD', '/d', '1', '/f'),
-            @('add', 'HKLM\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\OneDrive', '/v', 'DisableFileSync', '/t', 'REG_DWORD', '/d', '1', '/f'),
-            @('add', 'HKLM\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\OneDrive', '/v', 'DisableFileSyncNGSC', '/t', 'REG_DWORD', '/d', '1', '/f'),
-            @('add', 'HKCR\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}', '/v', 'System.IsPinnedToNameSpaceTree', '/t', 'REG_DWORD', '/d', '0', '/f'),
-            @('add', 'HKCR\WOW6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}', '/v', 'System.IsPinnedToNameSpaceTree', '/t', 'REG_DWORD', '/d', '0', '/f')
-        )) {
-        & reg.exe @regArgs 2>$null
-    }
-
-    foreach ($runKey in @(
-            'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run',
-            'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce',
-            'HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Run',
-            'HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\RunOnce',
-            'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
-            'HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
-            'HKU\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Run',
-            'HKU\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce',
-            'HKU\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
-        )) {
-        foreach ($value in @('OneDrive', 'OneDriveSetup')) {
-            & reg.exe delete $runKey /v $value /f 2>$null
-        }
-    }
-
-    foreach ($root in @(
-            'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Active Setup\Installed Components',
-            'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Active Setup\Installed Components',
-            'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
-            'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall',
-            'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths',
-            'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\App Paths',
-            'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace',
-            'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace',
-            'Registry::HKEY_USERS\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager',
-            'Registry::HKEY_USERS\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace'
-        )) {
-        if (-not (Test-Path -LiteralPath $root)) { continue }
-        foreach ($key in @(Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue)) {
-            $props = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction SilentlyContinue
-            $text = @(
-                $key.PSChildName
-                if ($props) { $props.PSObject.Properties | ForEach-Object { [string]$_.Value } }
-            ) -join "`n"
-            if ($text -match '(?i)OneDrive|OneDriveSetup\.exe') {
-                try {
-                    Remove-Item -LiteralPath $key.PSPath -Recurse -Force -ErrorAction Stop
-                    Write-ScLog "Removed OneDrive registry residue: $($key.Name)"
-                }
-                catch {
-                    "OneDrive registry residue removal failed for $($key.Name): $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-                }
-            }
-        }
-    }
-
-    Get-ScheduledTask -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.TaskName -match '(?i)OneDrive' -or
-            $_.TaskPath -match '(?i)OneDrive' -or
-            @($_.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -match '(?i)OneDrive|OneDriveSetup\.exe'
-        } |
-        Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue
-
-    Remove-Item -LiteralPath @(
-        "$env:ProgramData\Microsoft OneDrive",
-        "$env:SystemDrive\OneDriveTemp"
-    ) -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\OneDrive*.lnk" -Force -ErrorAction SilentlyContinue
-}
-
-function Invoke-ScAiServiceableCleanup {
-    $result = [ordered]@{
-        generatedAt = Get-Date -Format o
-        policy = $aiPolicy
-        optionalFeaturesRemoved = @()
-        servicesDisabled = @()
-        scheduledTasksDisabled = @()
-        failed = @()
-    }
-
-    if ($aiRemoveRecall) {
-        try {
-            $r = Get-WindowsOptionalFeature -Online -ErrorAction SilentlyContinue |
-                Where-Object { $_.State -eq 'Enabled' -and $_.FeatureName -like 'Recall' }
-            if ($r) {
-                Disable-WindowsOptionalFeature -Online -FeatureName 'Recall' -Remove -ErrorAction SilentlyContinue
-                $result.optionalFeaturesRemoved += 'Recall'
-                Write-ScLog 'Removed Recall optional feature during SetupComplete.'
-            }
-        }
-        catch {
-            $result.failed += [ordered]@{ action = 'RemoveOptionalFeature'; target = 'Recall'; error = [string]$_ }
-            "Recall removal failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-        }
-    }
-
-    if ($aiDisableServices) {
-        foreach ($svcName in @($aiServicesToDisable)) {
-            if ([string]::IsNullOrWhiteSpace([string]$svcName)) { continue }
-            try {
-                $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
-                if (-not $svc) { continue }
-                Stop-Service -Name $svcName -ErrorAction SilentlyContinue
-                Set-Service -Name $svcName -StartupType Disabled -ErrorAction SilentlyContinue
-                $null = & reg.exe add "HKLM\SYSTEM\CurrentControlSet\Services\$svcName" /v Start /t REG_DWORD /d 4 /f 2>$null
-                $result.servicesDisabled += [string]$svcName
-                Write-ScLog "Disabled AI service: $svcName"
-            }
-            catch {
-                $result.failed += [ordered]@{ action = 'DisableService'; target = [string]$svcName; error = [string]$_ }
-                "AI service disable failed for ${svcName}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-            }
-        }
-    }
-
-    if ($aiDisableTasks) {
-        $pattern = '(' + (($aiTaskPatternsToDisable | ForEach-Object { [regex]::Escape([string]$_) }) -join '|') + ')'
-        if (-not [string]::IsNullOrWhiteSpace($pattern) -and $pattern -ne '()') {
-            foreach ($task in @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match $pattern -or $_.TaskPath -match $pattern })) {
-                $name = "$($task.TaskPath)$($task.TaskName)"
-                try {
-                    Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null
-                    $result.scheduledTasksDisabled += $name
-                    Write-ScLog "Disabled AI scheduled task: $name"
-                }
-                catch {
-                    $result.failed += [ordered]@{ action = 'DisableScheduledTask'; target = $name; error = [string]$_ }
-                    "AI scheduled task disable failed for ${name}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-                }
-            }
-        }
-    }
-
-    $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $logDir 'SetupComplete_AiRemoval.json') -Encoding UTF8
-}
-
-function Invoke-ScOobeRehydrationSuppression {
-    $result = [ordered]@{
-        generatedAt = Get-Date -Format o
-        removedOobeKeys = @()
-        workCompleted = @()
-        failed = @()
-    }
-    foreach ($name in @('DevHomeUpdate', 'OutlookUpdate', 'ChatAutoInstall')) {
-        $oobePath = "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\$name"
-        try {
-            if (Test-Path -LiteralPath $oobePath) {
-                Remove-Item -LiteralPath $oobePath -Recurse -Force -ErrorAction Stop
-                $result.removedOobeKeys += $name
-                Write-ScLog "Removed OOBE rehydration key: $name"
-            }
-        }
-        catch {
-            $result.failed += [ordered]@{ action = 'RemoveOobeRehydrationKey'; target = $name; error = [string]$_ }
-        }
-
-        $schedulerPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\$name"
-        try {
-            if (-not (Test-Path -LiteralPath $schedulerPath)) {
-                New-Item -Path $schedulerPath -Force -ErrorAction SilentlyContinue | Out-Null
-            }
-            Set-ItemProperty -LiteralPath $schedulerPath -Name 'workCompleted' -Type DWord -Value 1 -Force
-            $result.workCompleted += $name
-        }
-        catch {
-            $result.failed += [ordered]@{ action = 'SetOobeWorkCompleted'; target = $name; error = [string]$_ }
-        }
-    }
-    $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $logDir 'SetupComplete_OobeRehydration.json') -Encoding UTF8
 }
 
 Write-ScLog 'SetupComplete.ps1 start'
 
 $scripts = @(
-    {
-        try {
-            Start-Service w32time -ErrorAction SilentlyContinue
-            w32tm.exe /config /update | Out-Null
-            w32tm.exe /resync /force | Out-Null
-        }
-        catch {
-            "Time sync failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-        }
-    }
-    {
-        Invoke-ScOneDriveRemoval
-    }
+    { Invoke-ScTimeSync }
+    { Invoke-ScOneDriveRemoval }
     { Invoke-ScOobeRehydrationSuppression }
-    {
-        try {
-            Enable-ComputerRestore -Drive $env:SystemDrive -ErrorAction Stop
-            Checkpoint-Computer -Description 'Post-install (SetupComplete)' -RestorePointType 'APPLICATION_INSTALL' -ErrorAction Stop
-        }
-        catch {
-            "Restore point failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-        }
-    }
+    { Invoke-ScRestorePoint }
     {
         # Wildcard sweep — Setup keeps multiple phase copies of the answer file
         # under Panther (unattend.xml, unattend-original.xml, sometimes per-pass
-        # copies). All of them embed the base64 password and must go.
+        # copies). All of them embed the base64 password and must go. Kept inline
+        # so this security step never depends on a module loading successfully.
         Remove-Item -Path @(
             'C:\Windows\Panther\unattend*.xml'
             'C:\Windows\Panther\unattend\*.xml'
@@ -379,130 +165,18 @@ $scripts = @(
             'C:\Windows.old'
         ) -Recurse -Force -ErrorAction SilentlyContinue
     }
-    {
-        foreach ($p in @('C:\Users\Default\Desktop\*.lnk', 'C:\Users\Public\Desktop\*.lnk')) {
-            Remove-Item -Path $p -Force -ErrorAction SilentlyContinue
-        }
-    }
-    {
-        if (-not $preserveWindowsUpdate) {
-            Write-ScLog 'Skipping Windows Update policy restoration by setup profile.'
-            return
-        }
-        $regs = @(
-            @('reg.exe', 'delete', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU', '/v', 'NoAutoUpdate', '/f')
-            @('reg.exe', 'delete', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU', '/v', 'AUOptions', '/f')
-            @('reg.exe', 'delete', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU', '/v', 'UseWUServer', '/f')
-            @('reg.exe', 'delete', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate', '/v', 'DisableWindowsUpdateAccess', '/f')
-            @('reg.exe', 'delete', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate', '/v', 'WUServer', '/f')
-            @('reg.exe', 'delete', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate', '/v', 'WUStatusServer', '/f')
-            @('reg.exe', 'delete', 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config', '/v', 'DODownloadMode', '/f')
-            @('reg.exe', 'add', 'HKLM\SYSTEM\CurrentControlSet\Services\BITS', '/v', 'Start', '/t', 'REG_DWORD', '/d', '3', '/f')
-            @('reg.exe', 'add', 'HKLM\SYSTEM\CurrentControlSet\Services\wuauserv', '/v', 'Start', '/t', 'REG_DWORD', '/d', '3', '/f')
-            @('reg.exe', 'add', 'HKLM\SYSTEM\CurrentControlSet\Services\UsoSvc', '/v', 'Start', '/t', 'REG_DWORD', '/d', '2', '/f')
-            @('reg.exe', 'add', 'HKLM\SYSTEM\CurrentControlSet\Services\WaaSMedicSvc', '/v', 'Start', '/t', 'REG_DWORD', '/d', '3', '/f')
-        )
-        foreach ($a in $regs) {
-            & $a[0] $a[1..($a.Count - 1)] 2>$null
-        }
-    }
+    { Invoke-ScDesktopShortcutCleanup }
+    { Invoke-ScWindowsUpdateRestore }
     { Invoke-ScAiServiceableCleanup }
-    {
-        if (-not $disableVirtualDesktopFlyout) {
-            Write-ScLog 'Skipping virtual desktop flyout override by setup profile.'
-            return
-        }
-        $vive = Join-Path $payloadDir 'ViVeTool\ViVeTool.exe'
-        $viveLog = Join-Path $logDir 'ViVeTool.log'
-        if (-not (Test-Path -LiteralPath $vive)) {
-            Write-ScLog 'Skipping ViVeTool feature overrides; ViVeTool.exe was not staged.'
-            return
-        }
-        "$(Get-Date -Format 'o') Disable virtual desktop switch flyout: .\ViVeTool.exe /disable /id:34508225" |
-            Out-File $viveLog -Append
-        $out = & $vive /disable /id:34508225 2>&1
-        $code = $LASTEXITCODE
-        $out | Out-File $viveLog -Append
-        if ($code -ne 0) {
-            "ViVeTool virtual desktop flyout override failed with exit code $code." |
-                Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-        }
-        else {
-            Write-ScLog 'ViVeTool disabled virtual desktop switch flyout feature id 34508225 before first logon.'
-        }
-    }
-    {
-        try {
-            $bitLockerVolume = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction SilentlyContinue
-            if ($bitLockerVolume -and $bitLockerVolume.ProtectionStatus -eq 'On') {
-                Write-ScLog 'Leaving active BitLocker protection enabled; WinMint only prevents automatic device encryption.'
-            }
-        }
-        catch { }
-    }
-    {
-        if ((bcdedit.exe | Select-String 'path').Count -eq 2) {
-            $null = & bcdedit.exe /set '{bootmgr}' timeout 2
-        }
-    }
-    {
-        if (-not (Test-ScInternet443)) {
-            Write-ScLog 'Skipping winget toolchain (no outbound HTTPS to www.microsoft.com:443).'
-            return
-        }
-        try {
-            $machinePath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
-            $userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')
-            $env:PATH = "$machinePath;$userPath"
-            $pwsh = "$env:ProgramFiles\PowerShell\7\pwsh.exe"
-            if (-not (Test-Path -LiteralPath $pwsh)) {
-                Start-Process -FilePath 'winget.exe' -ArgumentList (New-ScWingetInstallArgs -Id 'Microsoft.PowerShell') -Wait -NoNewWindow -ErrorAction Stop
-            }
-            Start-Process -FilePath 'winget.exe' -ArgumentList (New-ScWingetInstallArgs -Id 'Microsoft.WindowsTerminal') -Wait -NoNewWindow -ErrorAction SilentlyContinue
-        }
-        catch {
-            "Toolchain install failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-        }
-    }
-    {
-        Start-Sleep -Seconds 15
-        $log = Join-Path $logDir 'Activation.log'
-        "$(Get-Date -Format s) Activation check" | Out-File $log
-        $r = & cscript.exe //nologo "$env:SystemRoot\System32\slmgr.vbs" /xpr 2>&1
-        $r | Out-File $log -Append
-        if ($r -notmatch 'permanently activated|will expire') {
-            'WARN: not activated.' | Out-File $log -Append
-        }
-    }
-    {
-        try {
-            $log = Join-Path $logDir 'NPU.log'
-            "$(Get-Date -Format s) NPU detection" | Out-File $log
-            $npu = Get-PnpDevice -ErrorAction Stop |
-                Where-Object { $_.FriendlyName -match 'Hexagon|Qualcomm.*NPU|Qualcomm.*Compute|Neural' }
-            if ($npu) {
-                'OK: NPU device(s) found:' | Out-File $log -Append
-                $npu | ForEach-Object { "  $($_.Status) - $($_.FriendlyName)" | Out-File $log -Append }
-            }
-            else {
-                'WARN: No NPU device detected.' | Out-File $log -Append
-            }
-        }
-        catch { }
-    }
-    {
-        # Split svchost per-service so Task Manager shows accurate per-process resource use.
-        # Default threshold (3.5 GB) groups services on low-RAM machines; modern hardware always splits.
-        try {
-            $ramKB = [long]([math]::Round((Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).TotalPhysicalMemory / 1024))
-            Set-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control' `
-                -Name 'SvcHostSplitThresholdInKB' -Value $ramKB -Type DWord -Force
-            Write-ScLog "SvcHostSplitThresholdInKB set to $ramKB KB (total physical RAM)."
-        }
-        catch {
-            "SvcHostSplitThreshold failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-        }
-    }
+    { Invoke-ScTelemetryTaskHardening }
+    { Invoke-ScPowerProfile }
+    { Invoke-ScViveToolOverrides }
+    { Invoke-ScBitLockerNote }
+    { Invoke-ScBootTimeout }
+    { Invoke-ScToolchainInstall }
+    { Invoke-ScActivationCheck }
+    { Invoke-ScNpuDetection }
+    { Invoke-ScSvcHostSplit }
 )
 
 $errors = @()

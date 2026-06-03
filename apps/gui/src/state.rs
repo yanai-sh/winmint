@@ -5,6 +5,30 @@ use crate::intent::{DesktopLayersIntent, ToolkitIntent};
 
 pub const SPLASH_STATUS_PICK: &str = "Select a Windows ISO to begin.";
 
+/// Target form factor for the generated image. `Auto` resolves the chassis at
+/// first boot; `Laptop`/`Desktop` force the power profile. All three are wire
+/// values consumed by the engine; `Laptop`/`Desktop` are selected on the Configure
+/// screen (UI pending), so they're matched in `as_wire` but not yet constructed here.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum FormFactor {
+    #[default]
+    Auto,
+    Laptop,
+    Desktop,
+}
+
+impl FormFactor {
+    /// Stable string emitted into the intent JSON and consumed by the engine.
+    pub fn as_wire(self) -> &'static str {
+        match self {
+            FormFactor::Auto => "Auto",
+            FormFactor::Laptop => "Laptop",
+            FormFactor::Desktop => "Desktop",
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SourceProbeStatus {
     Empty,
@@ -13,14 +37,56 @@ pub enum SourceProbeStatus {
     Failed,
 }
 
-impl SourceProbeStatus {
-    pub fn label(self) -> &'static str {
+/// Ordered wizard steps. `Source` gates progression (Next unlocks once a source
+/// is Ready); the rest are scaffolded for continued development.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum WizardStep {
+    Source,
+    Configure,
+    Build,
+    Review,
+}
+
+impl WizardStep {
+    pub const ORDER: [WizardStep; 4] = [
+        WizardStep::Source,
+        WizardStep::Configure,
+        WizardStep::Build,
+        WizardStep::Review,
+    ];
+
+    pub fn title(self) -> &'static str {
         match self {
-            SourceProbeStatus::Empty => "Waiting",
-            SourceProbeStatus::Preparing => "Checking",
-            SourceProbeStatus::Ready => "Ready",
-            SourceProbeStatus::Failed => "Needs attention",
+            WizardStep::Source => "Source",
+            WizardStep::Configure => "Configure",
+            WizardStep::Build => "Build",
+            WizardStep::Review => "Review",
         }
+    }
+
+    pub fn index(self) -> usize {
+        Self::ORDER.iter().position(|s| *s == self).unwrap_or(0)
+    }
+
+    pub fn next(self) -> Self {
+        Self::ORDER.get(self.index() + 1).copied().unwrap_or(self)
+    }
+
+    pub fn prev(self) -> Self {
+        let i = self.index();
+        if i == 0 {
+            self
+        } else {
+            Self::ORDER[i - 1]
+        }
+    }
+
+    pub fn is_first(self) -> bool {
+        self.index() == 0
+    }
+
+    pub fn is_last(self) -> bool {
+        self.index() + 1 == Self::ORDER.len()
     }
 }
 
@@ -40,6 +106,7 @@ pub struct BuildIntent {
     pub architecture: SharedString,
     pub computer_name: SharedString,
     pub account_name: SharedString,
+    pub form_factor: FormFactor,
     pub selected_groups: Vec<&'static str>,
     pub toolkit: ToolkitIntent,
     pub desktop_layers: DesktopLayersIntent,
@@ -51,6 +118,7 @@ impl Default for BuildIntent {
             architecture: "ARM64".into(),
             computer_name: "WinMint".into(),
             account_name: "dev".into(),
+            form_factor: FormFactor::Auto,
             selected_groups: vec!["Minimal"],
             toolkit: ToolkitIntent::default(),
             desktop_layers: DesktopLayersIntent::default(),
@@ -60,7 +128,9 @@ impl Default for BuildIntent {
 
 pub struct SourceProbeState {
     pub iso_path: SharedString,
+    pub iso_size: SharedString,
     pub status: SourceProbeStatus,
+    pub file_picker_open: bool,
     pub generation: u64,
     pub mount_viewport_w: f32,
     pub mount_viewport_h: f32,
@@ -73,7 +143,9 @@ impl Default for SourceProbeState {
     fn default() -> Self {
         Self {
             iso_path: "".into(),
+            iso_size: "".into(),
             status: SourceProbeStatus::Empty,
+            file_picker_open: false,
             generation: 0,
             mount_viewport_w: 0.0,
             mount_viewport_h: 0.0,
@@ -88,7 +160,9 @@ impl SourceProbeState {
     pub fn reset(&mut self) {
         self.generation = self.generation.wrapping_add(1);
         self.iso_path = "".into();
+        self.iso_size = "".into();
         self.status = SourceProbeStatus::Empty;
+        self.file_picker_open = false;
         self.mount_viewport_w = 0.0;
         self.mount_viewport_h = 0.0;
         self.detected_architecture = "".into();
@@ -98,6 +172,7 @@ impl SourceProbeState {
 
     pub fn mark_ready(&mut self, metadata: UiIsoMetadata) {
         self.status = SourceProbeStatus::Ready;
+        self.file_picker_open = false;
         self.detected_architecture = metadata.architecture.into();
         self.editions = metadata
             .editions
@@ -109,6 +184,7 @@ impl SourceProbeState {
 
     pub fn mark_failed(&mut self, error: impl Into<String>) {
         self.status = SourceProbeStatus::Failed;
+        self.file_picker_open = false;
         self.detected_architecture = "".into();
         self.editions.clear();
         self.error = error.into().into();
@@ -117,12 +193,14 @@ impl SourceProbeState {
 
 pub struct BuildRunState {
     pub status: SharedString,
+    pub spinner_phase: usize,
 }
 
 impl Default for BuildRunState {
     fn default() -> Self {
         Self {
             status: SPLASH_STATUS_PICK.into(),
+            spinner_phase: 0,
         }
     }
 }

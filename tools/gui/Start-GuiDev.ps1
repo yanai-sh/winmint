@@ -3,6 +3,7 @@
 param(
     [switch]$Release,
     [switch]$BuildOnly,
+    [switch]$Elevate,
     [switch]$CustomTitlebar,
     [switch]$SystemTitlebar,
     [string]$RustTarget = '',
@@ -211,7 +212,9 @@ if (-not $cargo) {
 }
 
 $manifest = Get-WinMintPath -Name GuiCargoToml
-$subcommand = if ($BuildOnly) { 'build' } else { 'run' }
+# -Elevate builds (non-elevated) then launches the binary under UAC, so the
+# subcommand is 'build' — cargo never runs the app itself in that mode.
+$subcommand = if ($BuildOnly -or $Elevate) { 'build' } else { 'run' }
 $arguments = @($subcommand, '--manifest-path', $manifest)
 if ($Release) {
     $arguments = @($subcommand, '--release', '--manifest-path', $manifest)
@@ -222,15 +225,17 @@ if (-not [string]::IsNullOrWhiteSpace($RustTarget)) {
 if ($CustomTitlebar -and $SystemTitlebar) {
     throw 'Use either -CustomTitlebar or -SystemTitlebar, not both.'
 }
+
+# Runtime args forwarded to the app (whether via `cargo run` or the elevated launch).
+$runtimeArgs = @()
 if (-not $BuildOnly) {
-    $runtimeArgs = @()
     if ($SystemTitlebar) {
         $runtimeArgs += '--system-titlebar'
     }
     $runtimeArgs += @($AppArgs | Where-Object { $_ -ne '--' })
-    if ($runtimeArgs.Count -gt 0) {
-        $arguments += @('--') + $runtimeArgs
-    }
+}
+if ($subcommand -eq 'run' -and $runtimeArgs.Count -gt 0) {
+    $arguments += @('--') + $runtimeArgs
 }
 
 $buildTarget = Get-RustBuildTarget -TargetOverride $RustTarget
@@ -278,6 +283,36 @@ If Build Tools is already installed, modify it in Visual Studio Installer and ad
 
     if ($LASTEXITCODE -ne 0) {
         throw "cargo $subcommand failed with exit code $LASTEXITCODE."
+    }
+
+    if ($Elevate -and -not $BuildOnly) {
+        $targetRoot = Join-Path $root 'target'
+        $targetDir = if (-not [string]::IsNullOrWhiteSpace($RustTarget)) {
+            Join-Path $targetRoot $RustTarget
+        } else {
+            $targetRoot
+        }
+        $config = if ($Release) { 'release' } else { 'debug' }
+        $exe = Join-Path (Join-Path $targetDir $config) 'winmint-gui.exe'
+        if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+            throw "Built WinMint GUI binary was not found at '$exe'."
+        }
+
+        Write-Host "Launching elevated (UAC prompt): $exe"
+        $startArgs = @{
+            FilePath         = $exe
+            Verb             = 'RunAs'
+            WorkingDirectory = $root
+            Wait             = $true
+            PassThru         = $true
+        }
+        if ($runtimeArgs.Count -gt 0) {
+            $startArgs.ArgumentList = $runtimeArgs
+        }
+        $proc = Start-Process @startArgs
+        if ($null -ne $proc -and $proc.ExitCode -ne 0) {
+            throw "Elevated WinMint GUI exited with code $($proc.ExitCode)."
+        }
     }
 }
 finally {

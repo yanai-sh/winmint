@@ -127,10 +127,51 @@ function Invoke-WinMintAllBuildCachesMaintenance {
 # changes in a way the fingerprint can't naturally observe (new helper, changed
 # DISM call order, etc.). A bump invalidates all existing entries.
 
-$script:WinMintServicedWimCacheSchemaVersion = 2
+$script:WinMintServicedWimCacheSchemaVersion = 5
 
 function Get-WinMintServicedWimCacheRoot {
     return (Join-Path (Get-WinMintBuildCacheRoot) 'serviced-wim')
+}
+
+function Get-WinMintServicingToolchainIdentity {
+    $dism = if (Get-Command Get-WinMintDismExeVersion -ErrorAction SilentlyContinue) {
+        [string](Get-WinMintDismExeVersion)
+    }
+    else {
+        $line = (& dism.exe /English /? 2>&1 | Where-Object { $_ -match 'Version:\s*([0-9.]+)' } | Select-Object -First 1)
+        if ($line -match 'Version:\s*([0-9.]+)') { $matches[1] } else { 'unknown' }
+    }
+    $cv = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction SilentlyContinue
+    [ordered]@{
+        DismVersion = $dism
+        HostBuild = if ($cv) { "$($cv.CurrentBuild).$($cv.UBR)" } else { 'unknown' }
+        HostDisplayVersion = if ($cv) { [string]$cv.DisplayVersion } else { 'unknown' }
+        ServicingSchema = $script:WinMintServicedWimCacheSchemaVersion
+    }
+}
+
+function Get-WinMintDriverPayloadFingerprint {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $item = Get-Item -LiteralPath $Path -ErrorAction Stop
+    if (-not $item.PSIsContainer) {
+        $hash = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        return "$($item.FullName)|$($item.Length)|$hash"
+    }
+
+    $extensions = @('.inf', '.sys', '.cat', '.dll', '.exe', '.msi', '.zip')
+    $root = $item.FullName.TrimEnd('\', '/')
+    $parts = @(
+        Get-ChildItem -LiteralPath $item.FullName -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $extensions -contains $_.Extension.ToLowerInvariant() } |
+            Sort-Object FullName |
+            ForEach-Object {
+                $rel = $_.FullName.Substring($root.Length).TrimStart('\', '/').ToLowerInvariant()
+                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$rel|$($_.Length)|$hash"
+            }
+    )
+    return "dir|$($item.FullName)|$($parts -join ';')"
 }
 
 function Get-WinMintServicedWimFingerprint {
@@ -153,8 +194,7 @@ function Get-WinMintServicedWimFingerprint {
             $driversFp = "Host|$((Get-WinMintHostDriverExportFingerprint))"
         }
         elseif ($src -eq 'Custom' -and -not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
-            $item = Get-Item -LiteralPath $path -ErrorAction Stop
-            $driversFp = "Custom|$($item.FullName)|$($item.Length)|$($item.LastWriteTimeUtc.Ticks)"
+            $driversFp = "Custom|$(Get-WinMintDriverPayloadFingerprint -Path $path)"
         }
         else {
             $driversFp = "$src|"
@@ -166,6 +206,7 @@ function Get-WinMintServicedWimFingerprint {
 
     $payload = [ordered]@{
         Schema             = $script:WinMintServicedWimCacheSchemaVersion
+        Toolchain          = Get-WinMintServicingToolchainIdentity
         IsoStageKey        = $IsoStageKey
         Architecture       = [string]$BuildConfig.Architecture
         EditionMode        = [string]$BuildConfig.EditionMode
@@ -208,8 +249,17 @@ function Invoke-WinMintServicedWimCacheMaintenance {
     }
 }
 
+function ConvertTo-WinMintCacheMetadataJson {
+    param([object[]]$Value)
+    if ($null -eq $Value) { return '' }
+    return ($Value | ConvertTo-Json -Compress -Depth 8)
+}
+
 function Get-WinMintServicedWimCacheHit {
-    param([Parameter(Mandatory)][string]$Fingerprint)
+    param(
+        [Parameter(Mandatory)][string]$Fingerprint,
+        [object[]]$ExpectedMetadata = @()
+    )
     Invoke-WinMintServicedWimCacheMaintenance
     if ([string]::IsNullOrWhiteSpace($Fingerprint)) { return $null }
     $key = Get-WinMintCacheKeyHex -Fingerprint $Fingerprint
@@ -231,13 +281,18 @@ function Get-WinMintServicedWimCacheHit {
     }
     if ([string]$meta.Fingerprint -ne $Fingerprint) { return $null }
     if ([int]$meta.Schema -ne $script:WinMintServicedWimCacheSchemaVersion) { return $null }
+    if (@($ExpectedMetadata).Count -gt 0) {
+        if (-not ($meta.PSObject.Properties.Name -contains 'ExpectedMetadata')) { return $null }
+        if ((ConvertTo-WinMintCacheMetadataJson @($meta.ExpectedMetadata)) -ne (ConvertTo-WinMintCacheMetadataJson @($ExpectedMetadata))) { return $null }
+    }
     return $wimPath
 }
 
 function Publish-WinMintServicedWimCache {
     param(
         [Parameter(Mandatory)][string]$Fingerprint,
-        [Parameter(Mandatory)][string]$ServicedWimPath
+        [Parameter(Mandatory)][string]$ServicedWimPath,
+        [object[]]$ExpectedMetadata = @()
     )
     if ([string]::IsNullOrWhiteSpace($Fingerprint)) { return }
     if (-not (Test-Path -LiteralPath $ServicedWimPath)) { return }
@@ -267,8 +322,10 @@ function Publish-WinMintServicedWimCache {
             Fingerprint  = $Fingerprint
             SavedUtc     = [datetime]::UtcNow.ToString('o')
             SourceBytes  = $sourceItem.Length
+            Toolchain    = Get-WinMintServicingToolchainIdentity
+            ExpectedMetadata = @($ExpectedMetadata)
         }
-        $marker | ConvertTo-Json -Compress | Set-Content -LiteralPath $markerPath -Encoding UTF8
+        $marker | ConvertTo-Json -Compress -Depth 8 | Set-Content -LiteralPath $markerPath -Encoding UTF8
     }
     catch {
         LogVerbose "serviced-wim cache publish skipped: $($_.Exception.Message)"

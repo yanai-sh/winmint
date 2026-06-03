@@ -21,6 +21,7 @@ function Convert-WinMintInstallEsdToWim {
     Log 'Converting install.esd to install.wim in the staged copy for DISM servicing.'
     if ($DryRun) { LogVerbose 'Dry run still converts the temporary staged ESD so WIM metadata validation is complete.' }
     $images = @(Get-WindowsImage -ImagePath $esd -ErrorAction Stop | Sort-Object ImageIndex)
+    Assert-WinMintDismCanServiceImages -ImagePath $esd -Images $images
     foreach ($image in $images) {
         $arguments = @(
             '/English',
@@ -90,7 +91,14 @@ function Get-WinMintSelectedInstallImage {
     if ($images.Count -eq 0) { throw "No install images found in $InstallWim." }
     $selected = $images | Where-Object { $_.ImageName -eq $EditionName } | Select-Object -First 1
     if (-not $selected) {
-        $selected = $images | Where-Object { $_.ImageName -like "*$EditionName*" } | Select-Object -First 1
+        $matches = @($images | Where-Object { $_.ImageName -like "*$EditionName*" })
+        if ($matches.Count -eq 1) {
+            $selected = $matches[0]
+        }
+        elseif ($matches.Count -gt 1) {
+            $available = ($matches | ForEach-Object { $_.ImageName }) -join ', '
+            throw "Fixed edition '$EditionName' matched more than one install image. Choose the exact edition name. Matches: $available"
+        }
     }
     if (-not $selected) {
         $available = ($images | ForEach-Object { $_.ImageName }) -join ', '
@@ -184,7 +192,10 @@ function Invoke-WinMintIsoPipeline {
         [switch]$DryRun,
         [switch]$ExportHostDrivers,
         [switch]$NoServicedWimCache,
-        [string]$PostBuildUsbDriveLetter
+        [switch]$WriteUsb,
+        [int]$UsbDiskNumber = -1,
+        [int]$ConfirmUsbDiskNumber = -1,
+        [switch]$AllowFixedUsbDisk
     )
 
     $script:DryRun = [bool]$DryRun
@@ -260,6 +271,8 @@ function Invoke-WinMintIsoPipeline {
         $editionMode = if ([string]::IsNullOrWhiteSpace([string]$BuildConfig.EditionMode)) { 'TargetLicense' } else { [string]$BuildConfig.EditionMode }
         if ($editionMode -notin @('TargetLicense', 'Fixed')) { $editionMode = 'TargetLicense' }
         $installImages = @(Get-WinMintInstallImagesForBuild -InstallWim $installWim -EditionMode $editionMode -EditionName $BuildConfig.Edition)
+        Assert-WinMintDismCanServiceImages -ImagePath $installWim -Images $installImages
+        $expectedWimMetadata = @(Get-WinMintSelectedWimMetadata -ImagePath $installWim -Images $installImages)
         if ($editionMode -eq 'TargetLicense') {
             Log "Edition mode: target license. Servicing $($installImages.Count) install image(s) so Windows Setup can choose the target device edition."
             if ($installImages.Count -gt 1) {
@@ -310,6 +323,7 @@ function Invoke-WinMintIsoPipeline {
                 -TargetPass $BuildConfig.Password `
                 -EditionName $dryRunImage.ImageName `
                 -EditionMode $editionMode `
+                -InstallImageCount $installImages.Count `
                 -AutoWipeDisk:$BuildConfig.AutoWipeDisk `
                 -AutoLogon:$BuildConfig.AutoLogon `
                 -DiskLayout $BuildConfig.DiskLayout `
@@ -347,7 +361,7 @@ function Invoke-WinMintIsoPipeline {
             try {
                 $isoStageKey = Get-WinMintIsoStageCacheKeyHex -Fingerprint (Get-WinMintIsoStageCacheFingerprint -SourceIsoPath $BuildConfig.SourceIso)
                 $servicedWimFingerprint = Get-WinMintServicedWimFingerprint -BuildConfig $BuildConfig -IsoStageKey $isoStageKey
-                $servicedWimCacheHit = Get-WinMintServicedWimCacheHit -Fingerprint $servicedWimFingerprint
+                $servicedWimCacheHit = Get-WinMintServicedWimCacheHit -Fingerprint $servicedWimFingerprint -ExpectedMetadata $expectedWimMetadata
             }
             catch {
                 LogVerbose "Serviced WIM cache probe skipped: $($_.Exception.Message)"
@@ -357,6 +371,7 @@ function Invoke-WinMintIsoPipeline {
         if ($null -ne $servicedWimCacheHit) {
             Log "Restoring serviced install.wim from temp cache (skipping driver injection, appx removal, and package install)…"
             Copy-Item -LiteralPath $servicedWimCacheHit -Destination $installWim -Force -ErrorAction Stop
+            Assert-WinMintWimMetadataHealthy -ImagePath $installWim -ExpectedMetadata $expectedWimMetadata -ExpectedArchitecture $imageArch
             if ($null -ne $script:WinMintBuildManifest) {
                 $script:WinMintBuildManifest | Add-Member -NotePropertyName servicedWimCacheRestored -NotePropertyValue $true -Force
             }
@@ -425,6 +440,7 @@ function Invoke-WinMintIsoPipeline {
                 -TargetPass $BuildConfig.Password `
                 -EditionName $imgName `
                 -EditionMode $editionMode `
+                -InstallImageCount $installImages.Count `
                 -AutoWipeDisk:$BuildConfig.AutoWipeDisk `
                 -AutoLogon:$BuildConfig.AutoLogon `
                 -DiskLayout $BuildConfig.DiskLayout `
@@ -477,8 +493,9 @@ function Invoke-WinMintIsoPipeline {
         if ($null -ne $script:WinMintBuildManifest -and (Test-Path -LiteralPath $installWim)) {
             $script:WinMintBuildManifest.sizeDelta.installWimAfterServicingBytes = (Get-Item -LiteralPath $installWim).Length
         }
+        Assert-WinMintWimMetadataHealthy -ImagePath $installWim -ExpectedMetadata $expectedWimMetadata -ExpectedArchitecture $imageArch
         if (-not $NoServicedWimCache -and $null -eq $servicedWimCacheHit -and -not [string]::IsNullOrWhiteSpace($servicedWimFingerprint) -and (Test-Path -LiteralPath $installWim)) {
-            Publish-WinMintServicedWimCache -Fingerprint $servicedWimFingerprint -ServicedWimPath $installWim
+            Publish-WinMintServicedWimCache -Fingerprint $servicedWimFingerprint -ServicedWimPath $installWim -ExpectedMetadata $expectedWimMetadata
         }
 
         if ($null -ne $script:WinMintBuildManifest) {
@@ -498,6 +515,7 @@ function Invoke-WinMintIsoPipeline {
         if ($editionMode -eq 'Fixed') {
             $selectedImage = $installImages | Select-Object -First 1
             Export-SingleEdition -LocalWim $installWim -SelectedWimIndex $selectedImage.ImageIndex -SelectedEdition $selectedImage.ImageName
+            Assert-WinMintWimMetadataHealthy -ImagePath $installWim -ExpectedMetadata $expectedWimMetadata -ExpectedArchitecture $imageArch -AllowIndexRenumber
         }
         if ($null -ne $script:WinMintBuildManifest -and (Test-Path -LiteralPath $installWim)) {
             $script:WinMintBuildManifest.sizeDelta.installWimAfterExportBytes = (Get-Item -LiteralPath $installWim).Length
@@ -523,8 +541,14 @@ function Invoke-WinMintIsoPipeline {
             LogOK "Final ISO SHA256: $isoHash"
         }
         Complete-PipelinePhase 'Assemble ISO'
-        if (-not [string]::IsNullOrWhiteSpace($PostBuildUsbDriveLetter)) {
-            Invoke-FlashWindowsInstallMediaToUsb -IsoPath $outputIso -SourceRemovableDriveLetter $PostBuildUsbDriveLetter -SkipTypedDestructiveAck
+        if ($WriteUsb) {
+            if ($UsbDiskNumber -lt 0) { throw '-WriteUsb requires -UsbDiskNumber.' }
+            Invoke-FlashWindowsInstallMediaToUsb `
+                -IsoPath $outputIso `
+                -UsbDiskNumber $UsbDiskNumber `
+                -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `
+                -Architecture $imageArch `
+                -AllowFixedUsbDisk:$AllowFixedUsbDisk
         }
         return [pscustomobject]@{ OutputIsoPath = $outputIso; WorkDir = $workDir; DryRun = $false }
     }

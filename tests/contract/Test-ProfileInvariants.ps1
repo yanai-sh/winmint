@@ -9,6 +9,7 @@ $script:WinMintRepositoryRoot = $root
 . (Join-Path $root 'src\engine\Core.ps1')
 . (Join-Path $root 'src\engine\Private\Config\Profile.ps1')
 . (Join-Path $root 'src\engine\Private\Catalog.ps1')
+. (Join-Path $root 'src\engine\Private\Image\Tweaks\TweakRegistry.ps1')
 . (Join-Path $root 'src\engine\Private\Image\AiRemoval.ps1')
 . (Join-Path $root 'src\engine\Engine.ps1')
 . (Join-Path $root 'src\engine\Reports.ps1')
@@ -63,9 +64,11 @@ foreach ($part in @(
 Assert-PayloadCopyPreservesRootAndFolders
 Assert-MountedImagePathIgnoresInvalidRecords
 Assert-OscdimgSelectionPrefersNativeHostArchitecture
+Assert-IsoBootUsesNoPromptEfiWhenAvailable
 Assert-BuildResultContractAcceptsPipelineOutput
 Assert-StartBuildReturnsSingleResultContract
 Assert-ManifestPayloadsAreDeduplicated
+Assert-FormFactorAndPowerProfile
 Assert-TweakAuditArtifactsAreWritten
 Assert-CachedDownloadResolver
 Assert-OfflinePayloadCacheStatus
@@ -73,6 +76,7 @@ Assert-StaticUiFlowInvariants
 Assert-HardwareBypassIsExplicit
 Assert-ElevationRequiredForAllRuns
 Assert-HardwareBypassUnattendGeneration
+Assert-FixedEditionSelectionIsUnambiguous
 Assert-MicrosoftOobeUnattendGeneration
 Assert-LocalAccountUnattendGeneration
 Assert-SetupCompleteDoesNotDecryptBitLocker

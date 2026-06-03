@@ -1,13 +1,20 @@
 [package]
 name = "winmint-gui"
-version = "0.1.0"
-edition = "2021"
-publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
-gpui = "0.2.2"
-gpui-animation = "0.2.4"
-rfd = "0.15"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-winmint-core = { path = "../../crates/winmint-core" }
+gpui.workspace = true
+gpui-animation.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+winmint-core.workspace = true
+
+[build-dependencies]
+embed-resource.workspace = true

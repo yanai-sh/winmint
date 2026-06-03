@@ -1,10 +1,23 @@
 //! Shared profile intent helpers for WinMint front ends.
 
-use serde::Deserialize;
-use serde_json::{json, Value};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 const SUPPORTED_PROFILE_GROUPS: &[&str] =
     &["Minimal", "Developer", "CopilotPlus", "Gaming", "DesktopUI"];
+
+fn default_form_factor() -> String {
+    "Auto".to_string()
+}
+
+/// Clamp an arbitrary form-factor string to the supported set, defaulting to `Auto`.
+pub fn normalized_form_factor(value: &str) -> &'static str {
+    match value {
+        "Laptop" => "Laptop",
+        "Desktop" => "Desktop",
+        _ => "Auto",
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ToolkitIntent {
@@ -90,6 +103,8 @@ pub struct GuiIntentInput {
     pub account_name: String,
     pub account_mode: String,
     pub target_device: String,
+    #[serde(default = "default_form_factor")]
+    pub form_factor: String,
     pub edition_mode: String,
     pub edition: String,
     pub driver_source: String,
@@ -134,11 +149,52 @@ impl GuiIntentInput {
             &selected_groups,
             toolkit,
             desktop_layers,
+            &self.form_factor,
         ))
     }
 }
 
-pub fn build_gui_intent(
+/// Typed, serializable build intent — the single source of truth for the flat
+/// `ui-intent.json` consumed by `tools/ui-bridge/New-UiBuildProfile.ps1`.
+///
+/// Field order and serialized names match that contract exactly; `#[serde(rename)]`
+/// pins the two keys PascalCase would otherwise reshape (`ISOPath`, `Wsl2Distros`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct UiIntent {
+    pub profile: &'static str,
+    pub profile_groups: Vec<String>,
+    pub setup_option: &'static str,
+    #[serde(rename = "ISOPath")]
+    pub iso_path: String,
+    pub architecture: String,
+    pub computer_name: String,
+    pub account_name: String,
+    pub account_mode: &'static str,
+    pub target_device: &'static str,
+    pub form_factor: &'static str,
+    pub edition_mode: &'static str,
+    pub edition: &'static str,
+    pub driver_source: &'static str,
+    pub driver_path: &'static str,
+    pub desktop_ui_default: bool,
+    pub install_windhawk: bool,
+    pub install_yasb: bool,
+    pub install_komorebi: bool,
+    pub editors: Vec<&'static str>,
+    #[serde(rename = "Wsl2Distros")]
+    pub wsl2_distros: Vec<&'static str>,
+    pub remove_gaming: bool,
+    pub priv_location: bool,
+    pub tweak_hardware_bypass: bool,
+    pub tweak_dma_interop: bool,
+}
+
+/// Build the typed intent from flat wizard inputs, applying the profile-group
+/// business rules (editors/WSL only for Developer; desktop layers only for DesktopUI;
+/// gaming-removal inversion).
+#[allow(clippy::too_many_arguments)] // Mirrors the wizard's flat intent fields one-to-one.
+pub fn build_ui_intent(
     iso_path: &str,
     architecture: &str,
     computer_name: &str,
@@ -146,8 +202,10 @@ pub fn build_gui_intent(
     selected_groups: &[&str],
     toolkit: ToolkitIntent,
     desktop_layers: DesktopLayersIntent,
-) -> Value {
+    form_factor: &str,
+) -> UiIntent {
     let groups = normalized_profile_groups(selected_groups);
+    let form_factor = normalized_form_factor(form_factor);
     let developer = groups.contains(&"Developer");
     let copilot = groups.contains(&"CopilotPlus");
     let gaming = groups.contains(&"Gaming");
@@ -174,31 +232,58 @@ pub fn build_gui_intent(
         }
     };
 
-    json!({
-        "Profile": "Minimal",
-        "ProfileGroups": groups,
-        "SetupOption": if copilot { "CopilotPlus" } else { "Minimal" },
-        "ISOPath": iso_path,
-        "Architecture": architecture,
-        "ComputerName": computer_name,
-        "AccountName": account_name,
-        "AccountMode": "Local",
-        "TargetDevice": "DifferentPC",
-        "EditionMode": "TargetLicense",
-        "Edition": "",
-        "DriverSource": "None",
-        "DriverPath": "",
-        "DesktopUiDefault": desktop_ui,
-        "InstallWindhawk": installs.windhawk,
-        "InstallYasb": installs.yasb,
-        "InstallKomorebi": installs.komorebi,
-        "Editors": editors,
-        "Wsl2Distros": wsl_distros,
-        "RemoveGaming": !gaming,
-        "PrivLocation": true,
-        "TweakHardwareBypass": false,
-        "TweakDmaInterop": true
-    })
+    UiIntent {
+        profile: "Minimal",
+        profile_groups: groups.iter().map(|g| (*g).to_string()).collect(),
+        setup_option: if copilot { "CopilotPlus" } else { "Minimal" },
+        iso_path: iso_path.to_string(),
+        architecture: architecture.to_string(),
+        computer_name: computer_name.to_string(),
+        account_name: account_name.to_string(),
+        account_mode: "Local",
+        target_device: "DifferentPC",
+        form_factor,
+        edition_mode: "TargetLicense",
+        edition: "",
+        driver_source: "None",
+        driver_path: "",
+        desktop_ui_default: desktop_ui,
+        install_windhawk: installs.windhawk,
+        install_yasb: installs.yasb,
+        install_komorebi: installs.komorebi,
+        editors,
+        wsl2_distros: wsl_distros,
+        remove_gaming: !gaming,
+        priv_location: true,
+        tweak_hardware_bypass: false,
+        tweak_dma_interop: true,
+    }
+}
+
+/// Back-compat JSON form of [`build_ui_intent`] for the PowerShell bridge path
+/// and existing callers; the typed [`UiIntent`] is the source of truth.
+#[allow(clippy::too_many_arguments)]
+pub fn build_gui_intent(
+    iso_path: &str,
+    architecture: &str,
+    computer_name: &str,
+    account_name: &str,
+    selected_groups: &[&str],
+    toolkit: ToolkitIntent,
+    desktop_layers: DesktopLayersIntent,
+    form_factor: &str,
+) -> Value {
+    serde_json::to_value(build_ui_intent(
+        iso_path,
+        architecture,
+        computer_name,
+        account_name,
+        selected_groups,
+        toolkit,
+        desktop_layers,
+        form_factor,
+    ))
+    .expect("UiIntent always serializes")
 }
 
 #[cfg(test)]
@@ -226,6 +311,7 @@ mod tests {
             "AccountName",
             "AccountMode",
             "TargetDevice",
+            "FormFactor",
             "EditionMode",
             "Edition",
             "DriverSource",
@@ -243,6 +329,59 @@ mod tests {
         ];
         for key in required {
             assert!(obj.contains_key(key), "missing key {key}");
+        }
+    }
+
+    const EXPECTED_INTENT_KEYS: [&str; 24] = [
+        "Profile",
+        "ProfileGroups",
+        "SetupOption",
+        "ISOPath",
+        "Architecture",
+        "ComputerName",
+        "AccountName",
+        "AccountMode",
+        "TargetDevice",
+        "FormFactor",
+        "EditionMode",
+        "Edition",
+        "DriverSource",
+        "DriverPath",
+        "DesktopUiDefault",
+        "InstallWindhawk",
+        "InstallYasb",
+        "InstallKomorebi",
+        "Editors",
+        "Wsl2Distros",
+        "RemoveGaming",
+        "PrivLocation",
+        "TweakHardwareBypass",
+        "TweakDmaInterop",
+    ];
+
+    #[test]
+    fn ui_intent_serializes_to_the_exact_bridge_contract_keys() {
+        // Guards `tools/ui-bridge/New-UiBuildProfile.ps1` — exact key set and count.
+        let intent = build_ui_intent(
+            "D:\\iso\\win.iso",
+            "amd64",
+            "WinMint",
+            "dev",
+            &["Minimal", "Developer"],
+            ToolkitIntent::default(),
+            DesktopLayersIntent::default(),
+            "Desktop",
+        );
+        let value = serde_json::to_value(&intent).expect("UiIntent serializes");
+        let obj = value.as_object().expect("object");
+        assert_eq!(
+            obj.len(),
+            EXPECTED_INTENT_KEYS.len(),
+            "UiIntent emitted an unexpected number of keys: {:?}",
+            obj.keys().collect::<Vec<_>>()
+        );
+        for key in EXPECTED_INTENT_KEYS {
+            assert!(obj.contains_key(key), "missing intent key {key}");
         }
     }
 
@@ -271,8 +410,10 @@ mod tests {
             &["Minimal"],
             ToolkitIntent::default(),
             DesktopLayersIntent::default(),
+            "Auto",
         );
         assert_intent_keys(&intent);
+        assert_eq!(intent["FormFactor"], "Auto");
         assert_eq!(intent["ISOPath"], "D:\\iso\\win.iso");
         assert_eq!(intent["Profile"], "Minimal");
         assert_eq!(str_vec(&intent["ProfileGroups"]), vec!["Minimal"]);
@@ -294,6 +435,7 @@ mod tests {
             &["Minimal", "Developer"],
             ToolkitIntent::default(),
             DesktopLayersIntent::default(),
+            "Auto",
         );
         assert_eq!(str_vec(&intent["Editors"]), vec!["zed", "neovim"]);
         assert_eq!(str_vec(&intent["Wsl2Distros"]), vec!["Ubuntu"]);
@@ -311,6 +453,7 @@ mod tests {
             &["Developer"],
             lite,
             DesktopLayersIntent::default(),
+            "Auto",
         );
         assert_eq!(str_vec(&intent2["Editors"]), vec!["zed"]);
         assert_eq!(str_vec(&intent2["Wsl2Distros"]).len(), 0);
@@ -326,6 +469,7 @@ mod tests {
             &["CopilotPlus", "Minimal"],
             ToolkitIntent::default(),
             DesktopLayersIntent::default(),
+            "Auto",
         );
         assert_eq!(with_copilot["SetupOption"], "CopilotPlus");
 
@@ -337,6 +481,7 @@ mod tests {
             &["Minimal", "Gaming"],
             ToolkitIntent::default(),
             DesktopLayersIntent::default(),
+            "Auto",
         );
         assert_eq!(with_gaming["RemoveGaming"], false);
 
@@ -348,6 +493,7 @@ mod tests {
             &["Minimal"],
             ToolkitIntent::default(),
             DesktopLayersIntent::default(),
+            "Auto",
         );
         assert_eq!(no_gaming["RemoveGaming"], true);
     }
@@ -367,7 +513,9 @@ mod tests {
             &["DesktopUI", "Minimal"],
             ToolkitIntent::default(),
             layers,
+            "Desktop",
         );
+        assert_eq!(intent["FormFactor"], "Desktop");
         assert_eq!(intent["DesktopUiDefault"], true);
         assert_eq!(intent["InstallWindhawk"], true);
         assert_eq!(intent["InstallYasb"], false);
@@ -385,6 +533,7 @@ mod tests {
             account_name: "dev".to_string(),
             account_mode: "Local".to_string(),
             target_device: "DifferentPC".to_string(),
+            form_factor: "Desktop".to_string(),
             edition_mode: "TargetLicense".to_string(),
             edition: "".to_string(),
             driver_source: "None".to_string(),
@@ -408,5 +557,6 @@ mod tests {
         assert_eq!(str_vec(&normalized["Editors"]), vec!["zed"]);
         assert_eq!(str_vec(&normalized["Wsl2Distros"]), vec!["Ubuntu"]);
         assert_eq!(normalized["InstallWindhawk"], false);
+        assert_eq!(normalized["FormFactor"], "Desktop");
     }
 }

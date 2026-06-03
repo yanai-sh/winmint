@@ -459,7 +459,7 @@ function Invoke-WinMintConsoleBuild {
                        -not (Test-Win11IsoVerboseLogging) -and
                        (Get-Command Invoke-SpectreCommandWithProgress -ErrorAction SilentlyContinue)
 
-    $result = if ($canShowProgress) {
+    if ($canShowProgress) {
         $capturedProfile = $selection.Profile
         $capturedDryRun  = [bool]$DryRun
         Invoke-SpectreCommandWithProgress -ScriptBlock {
@@ -482,11 +482,5 @@ function Invoke-WinMintConsoleBuild {
         }.GetNewClosure()
     } else {
         Start-WinMintBuild -BuildProfile $selection.Profile -DryRun:$DryRun
-    }
-    if (-not $DryRun -and $selection.Review.PostBuildUsbDriveLetter) {
-        Invoke-FlashWindowsInstallMediaToUsb `
-            -IsoPath $result.OutputPath `
-            -SourceRemovableDriveLetter $selection.Review.PostBuildUsbDriveLetter `
-            -SkipTypedDestructiveAck
     }
 }

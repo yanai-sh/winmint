@@ -337,11 +337,18 @@ function Get-OscdimgBootDataValue {
         [Parameter(Mandatory)][string]$IsoContentsRoot,
         [Parameter(Mandatory)][string]$ImageArch
     )
-    $efisys = Join-Path $IsoContentsRoot 'efi\microsoft\boot\efisys.bin'
+    $efisysNoPrompt = Join-Path $IsoContentsRoot 'efi\microsoft\boot\efisys_noprompt.bin'
+    $efisys = if (Test-Path -LiteralPath $efisysNoPrompt) {
+        $efisysNoPrompt
+    }
+    else {
+        Join-Path $IsoContentsRoot 'efi\microsoft\boot\efisys.bin'
+    }
     if (-not (Test-Path -LiteralPath $efisys)) { throw "Missing UEFI boot file for oscdimg: $efisys" }
+    $efiBootName = Split-Path -Leaf $efisys
     if ($ImageArch -eq 'arm64') {
         LogOK 'ISO boot layout: UEFI only (expected for ARM64 media).'
-        LogVerbose 'oscdimg -bootdata: efisys.bin only (no legacy BIOS sector on ARM64).'
+        LogVerbose "oscdimg -bootdata: $efiBootName only (no legacy BIOS sector on ARM64)."
         $efiTok = Resolve-OscdimgBootdataFilePath -LiteralPath $efisys
         return ('1#pEF,e,b{0}' -f $efiTok)
     }
@@ -349,7 +356,7 @@ function Get-OscdimgBootDataValue {
     $efiTok = Resolve-OscdimgBootdataFilePath -LiteralPath $efisys
     if (Test-Path -LiteralPath $etfs) {
         LogOK 'ISO boot layout: legacy BIOS + UEFI (El Torito + EFI boot).'
-        LogVerbose 'oscdimg -bootdata: etfsboot.com + efisys.bin.'
+        LogVerbose "oscdimg -bootdata: etfsboot.com + $efiBootName."
         $etfsTok = Resolve-OscdimgBootdataFilePath -LiteralPath $etfs
         return ('2#p0,e,b{0}#pEF,e,b{1}' -f $etfsTok, $efiTok)
     }

@@ -4,6 +4,8 @@ function Get-WinMintUupPrepRoot {
     Join-Path (Get-WinMintOutputDirectory) '.uup'
 }
 
+$script:WinMintUupPrepSchemaVersion = 1
+
 function Get-WinMintUupZipFingerprint {
     param([Parameter(Mandatory)][string]$Path)
     $item = Get-Item -LiteralPath $Path -ErrorAction Stop
@@ -39,17 +41,7 @@ function Set-WinMintUupConvertConfigPolicy {
 
     if (-not (Test-Path -LiteralPath $Path)) { throw "UUP ConvertConfig.ini not found: $Path" }
     $raw = Get-Content -LiteralPath $Path -Raw
-    $policy = [ordered]@{
-        AutoStart = '1'
-        AddUpdates = '1'
-        Cleanup = '1'
-        ResetBase = '0'
-        NetFx3 = '0'
-        wim2esd = '0'
-        wim2swm = '0'
-        SkipISO = '0'
-        AutoExit = '1'
-    }
+    $policy = Get-WinMintUupPrepPolicy
     foreach ($key in $policy.Keys) {
         $value = $policy[$key]
         if ($raw -match "(?m)^$([regex]::Escape($key))\s*=") {
@@ -60,6 +52,75 @@ function Set-WinMintUupConvertConfigPolicy {
         }
     }
     [System.IO.File]::WriteAllText($Path, $raw, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Get-WinMintUupPrepPolicy {
+    [ordered]@{
+        AutoStart = '1'
+        AddUpdates = '1'
+        Cleanup = '1'
+        ResetBase = '0'
+        NetFx3 = '0'
+        wim2esd = '0'
+        wim2swm = '0'
+        SkipISO = '0'
+        AutoExit = '1'
+    }
+}
+
+function Get-WinMintUupPrepMarkerPath {
+    param([Parameter(Mandatory)][string]$WorkDir)
+    Join-Path $WorkDir '.winmint-uup-prep.json'
+}
+
+function Get-WinMintUupConverterScriptHash {
+    param([Parameter(Mandatory)][string]$ExtractDir)
+    $scriptPath = Join-Path $ExtractDir 'uup_download_windows.cmd'
+    if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { return '' }
+    (Get-FileHash -LiteralPath $scriptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Test-WinMintPreparedUupIsoMarker {
+    param(
+        [Parameter(Mandatory)][string]$WorkDir,
+        [Parameter(Mandatory)][object]$ZipFingerprint
+    )
+
+    $markerPath = Get-WinMintUupPrepMarkerPath -WorkDir $WorkDir
+    if (-not (Test-Path -LiteralPath $markerPath -PathType Leaf)) { return '' }
+    try { $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json } catch { return '' }
+    if ([int]$marker.Schema -ne $script:WinMintUupPrepSchemaVersion) { return '' }
+    if ([string]$marker.UupDumpHash -ne [string]$ZipFingerprint.Hash) { return '' }
+    $expectedPolicy = Get-WinMintUupPrepPolicy | ConvertTo-Json -Compress
+    if (($marker.Policy | ConvertTo-Json -Compress) -ne $expectedPolicy) { return '' }
+    $iso = [string]$marker.GeneratedIso
+    if ([string]::IsNullOrWhiteSpace($iso) -or -not (Test-Path -LiteralPath $iso -PathType Leaf)) { return '' }
+    $actualIsoHash = (Get-FileHash -LiteralPath $iso -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ([string]$marker.GeneratedIsoHash -ne $actualIsoHash) { return '' }
+    $extractDir = Join-Path $WorkDir 'source'
+    if ([string]$marker.ConverterScriptHash -ne (Get-WinMintUupConverterScriptHash -ExtractDir $extractDir)) { return '' }
+    return $iso
+}
+
+function Write-WinMintUupPrepMarker {
+    param(
+        [Parameter(Mandatory)][string]$WorkDir,
+        [Parameter(Mandatory)][string]$ExtractDir,
+        [Parameter(Mandatory)][object]$ZipFingerprint,
+        [Parameter(Mandatory)][string]$GeneratedIso
+    )
+
+    $marker = [ordered]@{
+        Schema = $script:WinMintUupPrepSchemaVersion
+        UupDumpZip = [string]$ZipFingerprint.Path
+        UupDumpHash = [string]$ZipFingerprint.Hash
+        Policy = Get-WinMintUupPrepPolicy
+        ConverterScriptHash = Get-WinMintUupConverterScriptHash -ExtractDir $ExtractDir
+        GeneratedIso = (Get-Item -LiteralPath $GeneratedIso).FullName
+        GeneratedIsoHash = (Get-FileHash -LiteralPath $GeneratedIso -Algorithm SHA256).Hash.ToLowerInvariant()
+        SavedUtc = [datetime]::UtcNow.ToString('o')
+    }
+    $marker | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Get-WinMintUupPrepMarkerPath -WorkDir $WorkDir) -Encoding UTF8
 }
 
 function Get-WinMintPreparedUupIso {
@@ -283,7 +344,7 @@ function Invoke-WinMintUupDumpSourcePrep {
             Logs = $logDir
         }
     }
-    $existingIso = Get-WinMintPreparedUupIso -WorkDir $extractDir
+    $existingIso = Test-WinMintPreparedUupIsoMarker -WorkDir $workDir -ZipFingerprint $fp
     if (-not [string]::IsNullOrWhiteSpace($existingIso)) {
         return [pscustomobject]@{
             SourceKind = 'UupDumpZip'
@@ -335,6 +396,7 @@ function Invoke-WinMintUupDumpSourcePrep {
     if ([string]::IsNullOrWhiteSpace($iso)) {
         throw "UUP Dump conversion completed but no ISO was found under $extractDir."
     }
+    Write-WinMintUupPrepMarker -WorkDir $workDir -ExtractDir $extractDir -ZipFingerprint $fp -GeneratedIso $iso
 
     [pscustomobject]@{
         SourceKind = 'UupDumpZip'

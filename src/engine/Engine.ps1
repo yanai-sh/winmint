@@ -58,6 +58,8 @@ function New-WinMintBuildConfig {
     $passwordIncluded = [bool](Get-WinMintProfileSetting $identity 'passwordIncluded' $false)
     $diskMode = [string](Get-WinMintProfileSetting $target 'diskMode' 'Manual')
     if ($diskMode -notin @('Manual', 'AutoWipeDisk0', 'DualBootReserved')) { $diskMode = 'Manual' }
+    $formFactor = [string](Get-WinMintProfileSetting $target 'formFactor' 'Auto')
+    if ($formFactor -notin @('Auto', 'Laptop', 'Desktop')) { $formFactor = 'Auto' }
     $diskLayout = Get-WinMintProfileSetting $target 'diskLayout' $null
     if ($null -eq $diskLayout) {
         $diskLayout = [ordered]@{
@@ -97,50 +99,22 @@ function New-WinMintBuildConfig {
     $restoreHomeLocationGeoId = [int](Get-WinMintProfileSetting $regional 'homeLocationGeoId' (Resolve-WinMintRegionGeoId -CultureName $restoreUserLocale))
     $dmaSetupUserLocale = if ($tweakDmaInterop) { [string]$dmaSetupRegion.Culture } else { $restoreUserLocale }
     $dmaSetupHomeLocationGeoId = if ($tweakDmaInterop) { [int]$dmaSetupRegion.GeoId } else { $restoreHomeLocationGeoId }
-    if ($tweakHardwareBypass) {
-        $registryTweaks.Add('hardware-bypass')
-    }
-    if ($tweakFileExtensions) {
-        $registryTweaks.Add('developer-qol')
-    }
-    $registryTweaks.Add('terminal-admin-context')
-    $registryTweaks.Add('home-privacy-policy')
-    $registryTweaks.Add('storage-sense-policy')
-    $registryTweaks.Add('modern-standby-policy')
-    $registryTweaks.Add('oobe-rehydration-policy')
-    $registryTweaks.Add('wpbt-policy')
-    if (-not $privacyLocation) {
-        $registryTweaks.Add('location-disabled-policy')
-    }
-    if ($privacyTelemetry -or $privacyAdvertisingId) {
-        $registryTweaks.Add('edge-policy-minimal')
-    }
-    if ([string]$aiRemoval.Policy -eq 'Core') {
-        $registryTweaks.Add('windows-ai-core-policy')
-    }
-    elseif ([string]$aiRemoval.Policy -in @('ServiceableFull', 'AggressiveExperimental')) {
-        $registryTweaks.Add('windows-ai-full-policy')
-    }
-    if ($diskMode -eq 'DualBootReserved') {
-        $registryTweaks.Add('dual-boot-windows-policy')
-        $registryTweaks.Add('dual-boot-clock-policy')
-    }
-    if ($enableDeveloperGroup) {
-        $registryTweaks.Add('developer-mode')
-        $registryTweaks.Add('powershell-remotesigned')
-    }
-    if ([bool](Get-WinMintProfileSetting $removals 'microsoftApps' $true)) {
-        $registryTweaks.Add('onedrive-policy')
-    }
-    if ([bool](Get-WinMintProfileSetting $removals 'gaming' $true)) {
-        $registryTweaks.Add('gamebar-policy')
-    }
-    if ($profileGroups -contains 'Gaming') {
-        $registryTweaks.Add('gaming-performance-policy')
-    }
-    if ($profileGroups -contains 'DesktopUI') {
-        $registryTweaks.Add('desktopui-policy')
-    }
+    # Curation: each registry tweak module (src/engine/Private/Image/Tweaks/*.ps1)
+    # carries its own appliesTo predicate. Build the normalized context once and let
+    # Get-WinMintSelectedRegistryTweaks evaluate every module against it.
+    $tweakContext = New-WinMintTweakContext `
+        -PrivacyTelemetry $privacyTelemetry `
+        -PrivacyAdvertisingId $privacyAdvertisingId `
+        -PrivacyLocation $privacyLocation `
+        -EnableDeveloperGroup $enableDeveloperGroup `
+        -ProfileGroups $profileGroups `
+        -DiskMode $diskMode `
+        -AiPolicy ([string]$aiRemoval.Policy) `
+        -RemoveMicrosoftApps ([bool](Get-WinMintProfileSetting $removals 'microsoftApps' $true)) `
+        -RemoveGaming ([bool](Get-WinMintProfileSetting $removals 'gaming' $true)) `
+        -TweakHardwareBypass $tweakHardwareBypass `
+        -TweakFileExtensions $tweakFileExtensions
+    $registryTweaks.AddRange([string[]]@(Get-WinMintSelectedRegistryTweaks -Context $tweakContext))
     $profileEffectiveAppx = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $removals 'effectiveAppx' @()))
     $baseAppxRemovalPrefixes = if ($profileEffectiveAppx.Count -gt 0) {
         @($profileEffectiveAppx)
@@ -169,6 +143,7 @@ function New-WinMintBuildConfig {
         EditionMode = $editionMode
         Edition = $edition
         TargetDevice = [string](Get-WinMintProfileSetting $target 'device' 'DifferentPC')
+        FormFactor = $formFactor
         ComputerName = [string](Get-WinMintProfileSetting $identity 'computerName' '')
         AccountName = [string](Get-WinMintProfileSetting $identity 'accountName' '')
         AccountMode = $accountMode
@@ -220,6 +195,14 @@ function New-WinMintBuildConfig {
         PrimaryAssumption = 'Windows11HomeSingleLanguageEnUS'
         AiRemoval = $aiRemoval
         RegistryTweaks = $registryTweaks.ToArray()
+        TelemetryTaskPatterns = @(
+            'Microsoft Compatibility Appraiser'
+            'ProgramDataUpdater'
+            'Consolidator'
+            'UsbCeip'
+            'DmClient'
+            'QueueReporting'
+        )
         Features = $features.ToArray()
         Tweaks = [pscustomobject]@{
             DarkMode = $tweakDarkMode
@@ -237,7 +220,7 @@ function New-WinMintBuildConfig {
         }
         Drivers = [pscustomobject]@{ Source = $driverSource; Path = $driverPath }
         NoServicedWimCache = [bool](Get-WinMintProfileSetting $BuildProfile 'noServicedWimCache' $false)
-        SetupScripts = @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'WinMintAgent', 'ViVeTool')
+        SetupScripts = @('SetupComplete.cmd', 'SetupComplete.ps1', 'SetupComplete\*.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'WinMintAgent', 'ViVeTool')
         Assets = @('fonts', 'cursors', 'PowerShell 7', 'winget')
         PackagesManifest = $packages
     }
@@ -430,6 +413,10 @@ function Invoke-WinMintIsoBuild {
     param(
         [Parameter(Mandatory)]$Config,
         [switch]$DryRun,
+        [switch]$WriteUsb,
+        [int]$UsbDiskNumber = -1,
+        [int]$ConfirmUsbDiskNumber = -1,
+        [switch]$AllowFixedUsbDisk,
         [scriptblock]$ProgressHandler
     )
 
@@ -533,7 +520,11 @@ function Invoke-WinMintIsoBuild {
                 -BuildConfig $Config `
                 -DryRun:$DryRun `
                 -ExportHostDrivers:$Config.ExportHostDrivers `
-                -NoServicedWimCache:$Config.NoServicedWimCache
+                -NoServicedWimCache:$Config.NoServicedWimCache `
+                -WriteUsb:$WriteUsb `
+                -UsbDiskNumber $UsbDiskNumber `
+                -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `
+                -AllowFixedUsbDisk:$AllowFixedUsbDisk
             $pipelineOutputIso = Get-WinMintBuildOutputPathFromPipelineResult -PipelineResult $pipeline -FallbackPath ''
             try {
                 $manifestPath = Save-WinMintBuildManifest `
@@ -586,6 +577,10 @@ function Start-WinMintBuild {
     param(
         [Parameter(Mandatory)][object]$BuildProfile,
         [switch]$DryRun,
+        [switch]$WriteUsb,
+        [int]$UsbDiskNumber = -1,
+        [int]$ConfirmUsbDiskNumber = -1,
+        [switch]$AllowFixedUsbDisk,
         [scriptblock]$ProgressHandler
     )
 
@@ -610,5 +605,12 @@ function Start-WinMintBuild {
         Write-WinMintProgress -Stage 'Profile' -Level Warn -Message "Could not save profile artifact: $_" -ProgressHandler $ProgressHandler
     }
 
-    Invoke-WinMintIsoBuild -Config $config -DryRun:$DryRun -ProgressHandler $ProgressHandler
+    Invoke-WinMintIsoBuild `
+        -Config $config `
+        -DryRun:$DryRun `
+        -WriteUsb:$WriteUsb `
+        -UsbDiskNumber $UsbDiskNumber `
+        -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `
+        -AllowFixedUsbDisk:$AllowFixedUsbDisk `
+        -ProgressHandler $ProgressHandler
 }

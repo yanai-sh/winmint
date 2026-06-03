@@ -100,6 +100,29 @@
         "sizeBytes": { "type": "integer" }
       }
     },
+    "usbMedia": {
+      "type": "object",
+      "required": ["enabled", "status", "diskNumber"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["ok", "failed"] },
+        "writtenAt": { "type": "string" },
+        "diskNumber": { "type": "integer" },
+        "diskModel": { "type": "string" },
+        "diskSizeBytes": { "type": "integer" },
+        "partitionScheme": { "type": "string", "const": "GPT" },
+        "bootMode": { "type": "string", "const": "UEFI" },
+        "installFilesystem": { "type": "string", "const": "NTFS" },
+        "installDrive": { "type": "string" },
+        "helper": { "type": "string", "const": "UEFI:NTFS" },
+        "helperVersion": { "type": "string" },
+        "helperSourceUrl": { "type": "string" },
+        "helperSha256": { "type": "string" },
+        "architecture": { "type": "string" },
+        "error": { "type": "string" }
+      }
+    },
     "target": {
       "type": "object",
       "required": ["diskMode", "diskLayout", "primaryAssumption"],

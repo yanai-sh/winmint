@@ -37,7 +37,7 @@ try {
             AppxPrefixes     = @()
             OptionalFeatures = @()
         }
-        RegistryTweaks     = @('dark-mode', 'developer-qol')
+        RegistryTweaks     = @('dark-mode', 'explorer-qol')
         Features           = @('OpenSSH.Client')
         CursorPackKind     = 'Windows11Modern'
         InputLocale        = '0409:00000409'
@@ -63,7 +63,7 @@ try {
         AppxCatalogVersion = $buildConfig.AppxCatalogVersion
         AppxPackages       = @('Microsoft.GetHelp', 'Microsoft.BingNews')
         AiRemoval          = $buildConfig.AiRemoval
-        RegistryTweaks     = @('developer-qol', 'dark-mode')
+        RegistryTweaks     = @('explorer-qol', 'dark-mode')
         Features           = $buildConfig.Features
         CursorPackKind     = $buildConfig.CursorPackKind
         InputLocale        = $buildConfig.InputLocale
@@ -119,16 +119,30 @@ try {
     $fpModifiedAiCatalog = Get-WinMintServicedWimFingerprint -BuildConfig $modifiedAiCatalog -IsoStageKey 'abc123'
     Assert-True ($fp1 -ne $fpModifiedAiCatalog) 'Fingerprint must change when AI removal catalog inputs change'
 
+    $driverDir = Join-Path $sandbox 'drivers'
+    $null = New-Item -ItemType Directory -Path (Join-Path $driverDir 'nested') -Force
+    Set-Content -LiteralPath (Join-Path $driverDir 'device.inf') -Value 'version=1' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $driverDir 'nested\device.sys') -Value 'payload=1' -Encoding ASCII
+    $driverConfig = $buildConfig.PSObject.Copy()
+    $driverConfig.Drivers = [pscustomobject]@{ Source = 'Custom'; Path = $driverDir }
+    $fpDriver1 = Get-WinMintServicedWimFingerprint -BuildConfig $driverConfig -IsoStageKey 'abc123'
+    Set-Content -LiteralPath (Join-Path $driverDir 'nested\device.sys') -Value 'payload=2' -Encoding ASCII
+    $fpDriver2 = Get-WinMintServicedWimFingerprint -BuildConfig $driverConfig -IsoStageKey 'abc123'
+    Assert-True ($fpDriver1 -ne $fpDriver2) 'Fingerprint must change when nested driver payload content changes'
+
     # Miss → publish → hit round trip.
     Assert-True ($null -eq (Get-WinMintServicedWimCacheHit -Fingerprint $fp1)) 'Empty cache must miss'
 
     $fakeWim = Join-Path $sandbox 'fake-install.wim'
     [System.IO.File]::WriteAllBytes($fakeWim, [byte[]](1..32))
 
-    Publish-WinMintServicedWimCache -Fingerprint $fp1 -ServicedWimPath $fakeWim
-    $hit = Get-WinMintServicedWimCacheHit -Fingerprint $fp1
+    $expectedMeta = @([pscustomobject]@{ ImageIndex = 1; Name = 'Windows 11 Home'; Build = 26100; Edition = 'Core'; Languages = @('en-US') })
+    Publish-WinMintServicedWimCache -Fingerprint $fp1 -ServicedWimPath $fakeWim -ExpectedMetadata $expectedMeta
+    $hit = Get-WinMintServicedWimCacheHit -Fingerprint $fp1 -ExpectedMetadata $expectedMeta
     Assert-True ($null -ne $hit) 'Published entry must be retrievable'
     Assert-True (Test-Path -LiteralPath $hit) 'Hit must point at an existing file'
+    $wrongMeta = @([pscustomobject]@{ ImageIndex = 1; Name = 'Windows 11 Pro'; Build = 26100; Edition = 'Professional'; Languages = @('en-US') })
+    Assert-True ($null -eq (Get-WinMintServicedWimCacheHit -Fingerprint $fp1 -ExpectedMetadata $wrongMeta)) 'Cache hit must reject mismatched expected source metadata'
 
     # Different fingerprint still misses (single-slot replaces, so only one entry exists).
     Assert-True ($null -eq (Get-WinMintServicedWimCacheHit -Fingerprint $fpDifferentStage)) 'Different fingerprint must not collide'

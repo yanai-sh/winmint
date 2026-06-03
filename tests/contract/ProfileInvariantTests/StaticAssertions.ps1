@@ -1,5 +1,19 @@
 #Requires -Version 7.3
 
+function Get-WinMintSetupCompleteText {
+    # SetupComplete is now a thin orchestrator plus per-concern modules under
+    # src\setup\SetupComplete\. Content assertions must span both.
+    $parts = [System.Collections.Generic.List[string]]::new()
+    $parts.Add((Get-Content -LiteralPath (Join-Path $root 'src\setup\SetupComplete.ps1') -Raw))
+    $moduleDir = Join-Path $root 'src\setup\SetupComplete'
+    if (Test-Path -LiteralPath $moduleDir) {
+        foreach ($module in @(Get-ChildItem -LiteralPath $moduleDir -Filter '*.ps1' -File | Sort-Object Name)) {
+            $parts.Add((Get-Content -LiteralPath $module.FullName -Raw))
+        }
+    }
+    return ($parts.ToArray() -join "`n")
+}
+
 function Assert-StaticUiFlowInvariants {
     $guiRoot = Join-Path $root 'apps\gui'
     $intentPath = Join-Path $guiRoot 'src\intent.rs'
@@ -128,12 +142,30 @@ function Assert-HardwareBypassUnattendGeneration {
     if ([string]$plain.AutounattendXml -match '<Key>\s*[A-Z0-9]{5}-') {
         Add-SmokeFailure 'Expected target-license autounattend to omit generic setup product keys.'
     }
+    if ([string]$plain.AutounattendXml -match '<ProductKey') {
+        Add-SmokeFailure 'Expected target-license autounattend to omit ProductKey entirely.'
+    }
+
+    $singleImage = Install-Autounattend @common -HardwareBypass:$false -InstallImageCount 1
+    if ([string]$singleImage.AutounattendXml -notmatch '<Key>\s*/IMAGE/INDEX\s*</Key>\s*<Value>\s*1\s*</Value>') {
+        Add-SmokeFailure 'Expected single-image target-license media to pin InstallFrom /IMAGE/INDEX = 1.'
+    }
 
     $bypass = Install-Autounattend @common -HardwareBypass:$true
     foreach ($valueName in @('BypassTPMCheck', 'BypassSecureBootCheck', 'BypassCPUCheck', 'BypassRAMCheck', 'BypassStorageCheck')) {
         if ([string]$bypass.AutounattendXml -notmatch [regex]::Escape($valueName)) {
             Add-SmokeFailure "Expected generated hardware-bypass autounattend to include $valueName."
         }
+    }
+}
+
+function Assert-FixedEditionSelectionIsUnambiguous {
+    $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Pipeline.ps1') -Raw
+    if ($pipelineText -notmatch '\$matches\.Count\s+-eq\s+1') {
+        Add-SmokeFailure 'Fixed edition wildcard matching must only proceed when exactly one install image matches.'
+    }
+    if ($pipelineText -match 'ImageName\s+-like\s+"\*\$EditionName\*"\s*\}\s*\|\s*Select-Object\s+-First\s+1') {
+        Add-SmokeFailure 'Fixed edition selection must not choose the first loose wildcard match; Home and Home Single Language must stay unambiguous.'
     }
 }
 
@@ -221,8 +253,7 @@ function Assert-LocalAccountUnattendGeneration {
 }
 
 function Assert-SetupCompleteDoesNotDecryptBitLocker {
-    $setupCompletePath = Join-Path $root 'src\setup\SetupComplete.ps1'
-    $setupCompleteText = Get-Content -LiteralPath $setupCompletePath -Raw
+    $setupCompleteText = Get-WinMintSetupCompleteText
     if ($setupCompleteText -match '\bDisable-BitLocker\b') {
         Add-SmokeFailure 'SetupComplete.ps1 must not silently disable BitLocker; WinMint should only prevent surprise auto-encryption.'
     }
@@ -589,6 +620,17 @@ function Assert-LiveInstallAuditIsStaged {
     if ($unattendText -notmatch [regex]::Escape('Audit-LiveInstall.ps1')) {
         Add-SmokeFailure 'Install-Autounattend should stage Audit-LiveInstall.ps1 with setup scripts.'
     }
+    if ($unattendText -notmatch [regex]::Escape("Join-Path `$ScriptRoot 'src\setup'")) {
+        Add-SmokeFailure 'Install-Autounattend must stage setup scripts from src\setup.'
+    }
+    if ($unattendText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
+        Add-SmokeFailure 'Install-Autounattend must not rely on the removed top-level scripts directory.'
+    }
+    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1')) {
+        if ($unattendText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Install-Autounattend should stage '$expected'."
+        }
+    }
 }
 
 function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
@@ -667,7 +709,7 @@ function Assert-AiRemovalCatalogAndGuardrails {
 
     $publicAiText = @(
         Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\AiRemoval.ps1') -Raw
-        Get-Content -LiteralPath (Join-Path $root 'src\setup\SetupComplete.ps1') -Raw
+        Get-WinMintSetupCompleteText
         Get-Content -LiteralPath (Join-Path $root 'tools\audit\Audit-LiveInstall.ps1') -Raw
     ) -join "`n"
     foreach ($forbidden in @('TrustedInstaller', 'IntegratedServicesRegionPolicySet.json', 'Remove-WindowsPackage', 'Remove-Package', 'Owners', 'DefVis')) {
@@ -737,7 +779,7 @@ function Assert-AgentRunsLiveInstallAudit {
 }
 
 function Assert-NoMaintenancePayloadOrRegistration {
-    $setupCompleteText = Get-Content -LiteralPath (Join-Path $root 'src\setup\SetupComplete.ps1') -Raw
+    $setupCompleteText = Get-WinMintSetupCompleteText
     $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\setup\FirstLogon.ps1') -Raw
     $engineText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Engine.ps1') -Raw
     $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Unattend.ps1') -Raw
@@ -953,9 +995,8 @@ function Assert-OneDriveRemovalPolicyIsComplete {
     }
 
     $firstLogonPath = Join-Path $root 'src\setup\FirstLogon.ps1'
-    $setupCompletePath = Join-Path $root 'src\setup\SetupComplete.ps1'
     $firstLogonText = Get-Content -LiteralPath $firstLogonPath -Raw
-    $setupCompleteText = Get-Content -LiteralPath $setupCompletePath -Raw
+    $setupCompleteText = Get-WinMintSetupCompleteText
     $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Staging.ps1') -Raw
     $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Pipeline.ps1') -Raw
     foreach ($expected in @(

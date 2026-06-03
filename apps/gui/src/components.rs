@@ -1,6 +1,4 @@
-#![allow(dead_code)]
-// Palette of composed controls; GPUI is splash-only for now but posture/tiles
-// remain for when multi-beat authoring returns.
+//! Composed GPUI controls (`ui::*`) shared by the wizard screens and root view.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,7 +12,7 @@ use gpui_animation::{
     transition,
 };
 
-use crate::{state::SourceProbeStatus, theme};
+use crate::theme;
 
 pub fn app_frame() -> Div {
     div()
@@ -58,26 +56,74 @@ pub fn splash_brand_lockup(logo: Arc<Image>) -> Div {
     div().flex().items_center().justify_center().child(
         img(logo)
             .id("winmint-splash-logo")
-            .w(px(220.0))
-            .h(px(220.0))
+            .w(px(132.0))
+            .h(px(132.0))
             .with_fallback(|| {
                 brand_wordmark(SPLASH_WORDMARK_TEXT, SPLASH_WORDMARK_LH).into_any_element()
             }),
     )
 }
 
-pub fn status_footer(status: SharedString) -> Div {
+pub fn landing_hero_image(hero: Arc<Image>, fallback_logo: Arc<Image>) -> Div {
+    div().w_full().flex().items_center().justify_center().child(
+        img(hero)
+            .id("winmint-landing-hero")
+            .w(px(640.0))
+            .h(px(274.0))
+            .with_fallback(move || splash_brand_lockup(fallback_logo.clone()).into_any_element()),
+    )
+}
+
+pub fn titlebar_brand_mark(logo: Arc<Image>) -> Div {
     div()
+        .absolute()
+        .top(px(12.0))
+        .left(px(20.0))
+        .h(px(28.0))
+        .w(px(28.0))
+        .flex()
+        .items_center()
+        .window_control_area(WindowControlArea::Drag)
+        .child(
+            img(logo)
+                .id("winmint-titlebar-logo")
+                .w(px(28.0))
+                .h(px(28.0))
+                .with_fallback(|| brand_wordmark(18.0, 22.0).into_any_element()),
+        )
+}
+
+pub fn status_footer(status: SharedString, spinner_phase: Option<usize>) -> Div {
+    let mut footer = div()
         .h(px(48.0))
         .w_full()
         .flex()
         .items_center()
+        .gap_2()
         .px_8()
         .border_t_1()
         .border_color(theme::color::border_muted())
         .text_xs()
-        .text_color(theme::color::text_dim())
-        .child(status)
+        .text_color(theme::color::text_dim());
+
+    if let Some(phase) = spinner_phase {
+        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        footer = footer.child(
+            div()
+                .w(px(16.0))
+                .h(px(16.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_size(px(16.0))
+                .line_height(px(16.0))
+                .font_family("Cascadia Code")
+                .text_color(theme::color::accent())
+                .child(frames[phase % frames.len()]),
+        );
+    }
+
+    footer.child(status)
 }
 
 pub fn surface() -> Div {
@@ -89,45 +135,7 @@ pub fn surface() -> Div {
         .p(px(theme::metric::PANEL_PAD))
 }
 
-pub fn section_label(title: &'static str, hint: &'static str) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .child(
-            div()
-                .text_lg()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::color::text())
-                .child(title),
-        )
-        .child(
-            div()
-                .text_sm()
-                .text_color(theme::color::text_dim())
-                .child(hint),
-        )
-}
-
-pub fn status_badge(status: SourceProbeStatus) -> Div {
-    let color = match status {
-        SourceProbeStatus::Empty => theme::color::text_dim(),
-        SourceProbeStatus::Preparing => theme::color::warning(),
-        SourceProbeStatus::Ready => theme::color::success(),
-        SourceProbeStatus::Failed => theme::color::danger(),
-    };
-    div()
-        .px_3()
-        .py_1()
-        .rounded_full()
-        .border_1()
-        .border_color(color)
-        .text_xs()
-        .text_color(color)
-        .child(status.label())
-}
-
-pub fn callout(message: impl Into<String>, danger: bool) -> Div {
+pub fn callout(message: impl Into<SharedString>, danger: bool) -> Div {
     div()
         .w_full()
         .rounded(px(theme::metric::RADIUS))
@@ -153,6 +161,7 @@ pub fn titlebar_button(
 ) -> Stateful<Div> {
     div()
         .id(id)
+        .occlude()
         .w(px(42.0))
         .h(px(30.0))
         .flex()
@@ -174,38 +183,6 @@ pub fn titlebar_button(
             }
         })
         .child(glyph)
-}
-
-pub fn eyebrow(label: &'static str) -> Div {
-    div()
-        .text_xs()
-        .text_color(theme::color::text_dim())
-        .child(label)
-}
-
-pub fn pill(label: impl Into<String>, active: bool) -> Div {
-    div()
-        .px_3()
-        .py_1()
-        .rounded_sm()
-        .border_1()
-        .border_color(if active {
-            theme::color::accent()
-        } else {
-            theme::color::border_muted()
-        })
-        .bg(if active {
-            theme::color::surface_hover()
-        } else {
-            theme::color::surface()
-        })
-        .text_xs()
-        .text_color(if active {
-            theme::color::text()
-        } else {
-            theme::color::text_muted()
-        })
-        .child(label.into())
 }
 
 pub fn primary_button(id: &'static str, label: &'static str) -> Stateful<Div> {
@@ -269,134 +246,6 @@ pub fn beat_scrub(labels: &[&'static str], active_index: usize) -> Div {
         }))
 }
 
-pub fn fluent_icon_block(glyph: &'static str, size: f32) -> Div {
-    div()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_md()
-        .w(px(size + 24.))
-        .h(px(size + 24.))
-        .bg(theme::color::surface_hover())
-        .border_1()
-        .border_color(theme::color::border_muted())
-        .font_family("Segoe Fluent Icons")
-        .text_size(px(size))
-        .text_color(theme::color::text_muted())
-        .child(glyph)
-}
-
-pub fn posture_tile(
-    id: impl Into<gpui::ElementId>,
-    fluent_glyph: &'static str,
-    selected: bool,
-) -> Stateful<Div> {
-    div()
-        .id(id)
-        .cursor_pointer()
-        .flex()
-        .items_center()
-        .gap_5()
-        .p_6()
-        .rounded_md()
-        .border_2()
-        .border_color(if selected {
-            theme::color::accent()
-        } else {
-            theme::color::border_muted()
-        })
-        .bg(if selected {
-            theme::color::surface_hover()
-        } else {
-            theme::color::surface()
-        })
-        .hover(|style| style.bg(theme::color::surface_hover()))
-        .child(fluent_icon_block(fluent_glyph, 28.))
-}
-
-pub fn prose_title(text: &'static str) -> Div {
-    div()
-        .text_size(px(34.))
-        .line_height(px(40.))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(theme::color::text())
-        .child(text)
-}
-
-pub fn prose_hint(text: &'static str) -> Div {
-    div()
-        .text_sm()
-        .text_color(theme::color::text_dim())
-        .child(text)
-}
-
-pub fn detail_row(label: &'static str, value: impl Into<String>) -> Div {
-    div()
-        .w_full()
-        .flex()
-        .items_center()
-        .justify_between()
-        .gap_6()
-        .py_3()
-        .border_b_1()
-        .border_color(theme::color::border_muted())
-        .child(
-            div()
-                .text_sm()
-                .text_color(theme::color::text_dim())
-                .child(label),
-        )
-        .child(
-            div()
-                .text_sm()
-                .text_color(theme::color::text())
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(value.into()),
-        )
-}
-
-pub fn source_preparing_panel(filename: impl Into<String>) -> Div {
-    div()
-        .w(px(360.0))
-        .h(px(150.0))
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap_4()
-        .rounded_md()
-        .border_1()
-        .border_color(theme::color::border_muted())
-        .bg(theme::color::surface())
-        .child(
-            div()
-                .w(px(220.0))
-                .h(px(6.0))
-                .rounded_full()
-                .bg(theme::color::surface_hover())
-                .overflow_hidden()
-                .child(
-                    div()
-                        .w(px(132.0))
-                        .h(px(6.0))
-                        .rounded_full()
-                        .bg(theme::color::accent()),
-                ),
-        )
-        .child(
-            div()
-                .text_lg()
-                .text_color(theme::color::text())
-                .child("Reading source"),
-        )
-        .child(
-            div()
-                .text_sm()
-                .text_color(theme::color::text_muted())
-                .child(filename.into()),
-        )
-}
-
 pub fn iso_landing_well(
     id: &'static str,
     on_drop: impl Fn(&ExternalPaths, &mut Window, &mut App) + 'static,
@@ -409,11 +258,11 @@ pub fn iso_landing_well(
         .flex_col()
         .items_center()
         .justify_center()
-        .gap_3()
-        .w(px(360.0))
-        .h(px(150.0))
-        .p_5()
-        .rounded_md()
+        .gap_4()
+        .w(px(440.0))
+        .h(px(170.0))
+        .px_8()
+        .rounded(px(12.0))
         .border_dashed()
         .border_2()
         .border_color(theme::color::border_muted())
@@ -422,113 +271,51 @@ pub fn iso_landing_well(
             style
                 .border_color(theme::color::accent())
                 .border_2()
-                .bg(theme::color::surface_hover())
+                .bg(theme::color::accent_soft())
         })
-        .child(fluent_icon_block("\u{E958}", 26.))
         .child(
             div()
-                .text_sm()
+                .flex()
+                .items_center()
+                .justify_center()
+                .w(px(60.0))
+                .h(px(60.0))
+                .rounded(px(14.0))
+                .bg(theme::color::accent_soft())
+                .font_family("Segoe Fluent Icons")
+                .text_size(px(26.0))
+                .text_color(theme::color::accent())
+                .child("\u{E958}"),
+        )
+        .child(
+            div()
+                .text_size(px(15.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_center()
                 .text_color(theme::color::text())
-                .child("Drop or choose Windows ISO"),
+                .child("Drop your Windows ISO here"),
         )
         .child(
             div()
                 .text_xs()
                 .text_center()
-                .text_color(theme::color::text_muted())
-                .child("Click to browse."),
+                .text_color(theme::color::text_dim())
+                .child("or click to browse"),
         )
         .on_drop(on_drop)
         .with_transition(id)
         .transition_on_hover(
-            Duration::from_millis(180),
+            Duration::from_millis(160),
             transition::general::EaseOutQuad,
             |hovered, state| {
                 if *hovered {
                     state
                         .border_color(theme::color::accent())
-                        .bg(theme::color::surface_hover())
+                        .bg(theme::color::accent_soft())
                 } else {
                     state.origin()
                 }
             },
         )
         .on_click(on_click)
-}
-
-pub fn segmented_choice(id: &'static str, label: &'static str, selected: bool) -> Stateful<Div> {
-    div()
-        .id(id)
-        .cursor_pointer()
-        .px_6()
-        .py_3()
-        .rounded_md()
-        .border_2()
-        .border_color(if selected {
-            theme::color::accent()
-        } else {
-            theme::color::border_muted()
-        })
-        .bg(if selected {
-            theme::color::surface_hover()
-        } else {
-            theme::color::surface()
-        })
-        .text_sm()
-        .font_weight(if selected {
-            FontWeight::SEMIBOLD
-        } else {
-            FontWeight::NORMAL
-        })
-        .text_color(theme::color::text())
-        .hover(|style| style.bg(theme::color::surface_hover()))
-        .child(label)
-}
-
-pub fn selectable_chip(
-    id: &'static str,
-    fluent_glyph: &'static str,
-    label: &'static str,
-    on: bool,
-) -> Stateful<Div> {
-    div()
-        .id(id)
-        .cursor_pointer()
-        .flex()
-        .items_center()
-        .gap_3()
-        .px_4()
-        .py_2()
-        .rounded_md()
-        .border_1()
-        .border_color(if on {
-            theme::color::accent()
-        } else {
-            theme::color::border_muted()
-        })
-        .bg(if on {
-            theme::color::surface_hover()
-        } else {
-            theme::color::surface()
-        })
-        .hover(|style| style.bg(theme::color::surface_hover()))
-        .child(
-            div()
-                .font_family("Segoe Fluent Icons")
-                .text_size(px(14.))
-                .text_color(if on {
-                    theme::color::accent()
-                } else {
-                    theme::color::text_dim()
-                })
-                .child(fluent_glyph),
-        )
-        .child(
-            div()
-                .text_sm()
-                .text_color(theme::color::text())
-                .child(label),
-        )
 }

@@ -12,13 +12,24 @@
       "online": false
     },
     {
-      "id": "developer-qol",
+      "id": "explorer-qol",
       "description": "Show file extensions and hidden files.",
       "scope": "default user registry",
       "risk": "low",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Make Explorer friendlier for development by exposing file extensions and hidden files.",
+      "intent": "Make Explorer friendlier by exposing file extensions and hidden files on every build.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "longpaths-policy",
+      "description": "Enable Win32 long path support (LongPathsEnabled).",
+      "scope": "offline registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Allow applications that opt in via manifest to use paths longer than MAX_PATH, matching modern developer expectations.",
       "offline": true,
       "online": true
     },
@@ -64,7 +75,7 @@
       "risk": "low",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Add a fast elevated terminal entry to directory context menus.",
+      "intent": "Add a fast elevated terminal entry to directory context menus for developer workstations.",
       "offline": true,
       "online": false
     },
@@ -141,7 +152,7 @@
       "risk": "low",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Reduce Edge promotional, commerce, telemetry, and sidebar noise for Minimal builds.",
+      "intent": "Reduce Edge promotional, commerce, telemetry, and sidebar noise for all builds.",
       "offline": true,
       "online": true
     },
@@ -241,6 +252,39 @@
       "reversible": true,
       "phase": "offline-image",
       "intent": "Enable Windows Developer Mode features expected by developer workstations.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "developer-telemetry-optout",
+      "description": "Opt out of developer toolchain telemetry via machine environment variables.",
+      "scope": "machine environment registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Disable opt-out telemetry for common developer runtimes (.NET, PowerShell) and honor the cross-tool DO_NOT_TRACK convention for Developer builds.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "filesystem-performance-policy",
+      "description": "Disable NTFS last-access updates and 8.3 short-name creation.",
+      "scope": "offline registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Reduce NTFS metadata write overhead by disabling last-access timestamps and legacy 8.3 short-name generation, matching modern SSD-oriented defaults.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "telemetry-tracing-policy",
+      "description": "Disable DiagTrack and CEIP ETW autologger sessions.",
+      "scope": "machine registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Stop the Connected User Experiences/DiagTrack and SQM/CEIP kernel trace sessions from auto-starting, without touching diagnostics needed for crash analysis.",
       "offline": true,
       "online": true
     }

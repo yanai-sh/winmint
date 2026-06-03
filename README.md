@@ -41,6 +41,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 -DryRun
 - Windows 11 25H2+ source ISO
 - About 25 GB free scratch space
 - `oscdimg.exe` from the Windows ADK, installed manually or through WinMint
+- A DISM engine at least as new as the source ISO image build. If the host/ADK
+  `dism.exe` is older, WinMint fails before servicing and tells you the image
+  build, DISM build, and whether to install a newer ADK/host DISM or use an
+  older source ISO.
 
 ## Common Commands
 
@@ -54,6 +58,17 @@ pwsh -NoProfile -File tests\contract\Test-ProfileInvariants.ps1
 # Build from an existing profile
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
   -ProfilePath .\BuildProfile.json
+
+# Build and then write a UEFI-only USB installer
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
+  -ProfilePath .\BuildProfile.json `
+  -WriteUsb -UsbDiskNumber 3 -ConfirmUsbDiskNumber 3
+
+# Write an already-built ISO to USB
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\media\New-WinMintUsbInstaller.ps1 `
+  -IsoPath .\output\WinMint.iso `
+  -UsbDiskNumber 3 `
+  -ConfirmUsbDiskNumber 3
 
 # Create a release bundle
 pwsh -NoProfile -File tools\release\New-WinMintReleaseBundle.ps1 -Version v0.2.0
@@ -98,6 +113,8 @@ Schemas live in `schemas/`.
 - WinMint does not leave behind a recurring maintenance task or background
   drift-fighting service.
 - Destructive disk modes are explicit.
+- USB installer creation is optional and explicitly destructive. WinMint uses
+  modern UEFI-only GPT media with an NTFS install partition.
 
 ## Build Profiles
 
@@ -140,9 +157,27 @@ normal DMA-on default removal surface.
 - [Distribution](docs/Distribution.md)
 - [Debloat strategy](docs/Windows-Debloat-Strategy.md)
 
+## USB Installers
+
+WinMint can optionally write the completed ISO to a USB installer so users do
+not need a separate Rufus step. USB writing is post-build: the ISO is still the
+primary build artifact.
+
+The USB writer targets modern Windows systems: GPT, UEFI-only boot, an NTFS
+install partition, and a tiny UEFI:NTFS helper partition. This avoids FAT32's
+4 GB file limit for large `sources\install.wim` files while preserving the
+normal Windows installer layout.
+
+When creating UEFI-only USB installers with an NTFS install partition, WinMint
+downloads and verifies UEFI:NTFS by Pete Batard to boot Windows installation
+media from NTFS on firmware that only provides FAT/FAT32 boot support.
+
+UEFI:NTFS is developed by the Rufus project author and is licensed separately
+under GPL-2.0. Source and license: https://github.com/pbatard/uefi-ntfs
+
 ## License
 
-WinMint is GPL-3.0-only. See [LICENSE](LICENSE).
+WinMint is licensed under GPL-2.0-or-later. See [LICENSE](LICENSE).
 
 Bundled third-party assets retain their original licenses. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
