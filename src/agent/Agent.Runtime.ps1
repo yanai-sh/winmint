@@ -264,7 +264,11 @@ function Install-AgentTool {
                 Update-AgentProcessPath
             }
             default {
-                throw "Source not implemented in this wave: $($Tool.source)"
+                # WinMint installs tools exclusively through winget. github/store
+                # sources are reserved in packages.json's sourcePolicy but are not
+                # implemented; the build-time catalog validator rejects them, so
+                # reaching here means a catalog bypassed that check.
+                throw "Unsupported install source '$($Tool.source)' for tool '$($Tool.id)'. WinMint only supports the 'winget' install source."
             }
         }
         $State.steps[$key] = @{ status = 'ok'; updatedAt = (Get-Date -Format o); architecture = $hostArch }

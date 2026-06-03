@@ -1,8 +1,8 @@
 {
   "sourcePolicy": {
-    "winget": "GUI apps, Microsoft apps, signed installers, CLI tools, and packages where the upstream installer is canonical.",
-    "github": "Specific upstream assets, stale package metadata, architecture-specific layouts.",
-    "store": "Only where Store identity is required."
+    "winget": "GUI apps, Microsoft apps, signed installers, CLI tools, and packages where the upstream installer is canonical. This is the only implemented install source; every tool below must use it.",
+    "github": "Reserved for specific upstream assets, stale package metadata, or architecture-specific layouts. Not yet implemented — the engine's build-time catalog validator rejects tools using this source.",
+    "store": "Reserved for cases where Store identity is required. Not yet implemented — the engine's build-time catalog validator rejects tools using this source."
   },
   "tools": {
     "cursor": {

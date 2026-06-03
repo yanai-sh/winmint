@@ -122,7 +122,7 @@ function ConvertTo-ScStringArray {
 $preserveWindowsUpdate = Get-ScSetupProfileBool -Section 'setupComplete' -Name 'preserveWindowsUpdate' -Default $true
 $disableVirtualDesktopFlyout = Get-ScSetupProfileBool -Section 'setupComplete' -Name 'disableVirtualDesktopFlyout' -Default $false
 $removeRecall = Get-ScSetupProfileBool -Section 'setupComplete' -Name 'removeRecall' -Default $true
-$aiPolicy = [string](Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'policy' -Default 'Core')
+$aiPolicy = [string](Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'policy' -Default 'ServiceableFull')
 $aiRemoveRecall = [bool](Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'removeRecall' -Default $removeRecall)
 $aiDisableServices = [bool](Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'disableAiServices' -Default $false)
 $aiDisableTasks = [bool](Get-ScSetupProfileValue -Section 'aiRemoval' -Name 'disableAiTasks' -Default $false)

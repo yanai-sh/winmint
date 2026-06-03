@@ -1,5 +1,23 @@
 #Requires -Version 7.3
 
+function Assert-WinMintAgentToolSources {
+    # WinMint installs first-logon tools exclusively through winget. Validate the
+    # catalog at build time so an unsupported source fails the build here, with a
+    # clear message, rather than silently failing per-tool on the user's first
+    # logon. github/store are documented in packages.json's sourcePolicy as
+    # reserved rationale, but are not implemented.
+    param([Parameter(Mandatory)][string]$ManifestPath)
+
+    $manifest = Get-Content -LiteralPath $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $manifest.PSObject.Properties['tools']) { return }
+    foreach ($toolProp in $manifest.tools.PSObject.Properties) {
+        $toolSource = [string]$toolProp.Value.source
+        if (-not [string]::IsNullOrWhiteSpace($toolSource) -and $toolSource -ne 'winget') {
+            throw "Unsupported install source '$toolSource' for tool '$($toolProp.Name)' in packages.json. WinMint only supports the 'winget' install source."
+        }
+    }
+}
+
 function New-WinMintAgentProfile {
     param([Parameter(Mandatory)]$BuildConfig)
 
@@ -734,6 +752,7 @@ function Install-Autounattend {
                 Copy-Item -LiteralPath $agentSrc -Destination $agentDest -Recurse -Force
                 $pkgManifest = Get-WinMintPath -Name Config -ChildPath 'packages.json'
                 if (Test-Path -LiteralPath $pkgManifest) {
+                    Assert-WinMintAgentToolSources -ManifestPath $pkgManifest
                     Copy-Item -LiteralPath $pkgManifest -Destination (Join-Path $agentDest 'packages.json') -Force
                 }
                 if ($AgentProfile) {
