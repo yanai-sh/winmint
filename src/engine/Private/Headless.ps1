@@ -818,9 +818,16 @@ function Invoke-WinMintHeadlessCli {
                 if ($NoProgress -or $Quiet -or $Json) { return }
                 $level = [string]$ProgressEvent.Level
                 $message = [string]$ProgressEvent.Message
-                if ($level -eq 'Error') { Write-Error $message -ErrorAction Continue }
-                elseif ($level -eq 'Warn') { Write-Warning $message }
-                else { Write-Host $message }
+                # This handler is the sole console sink for headless builds (the
+                # engine's Log functions suppress their direct write while a handler
+                # is active), so render the same glyph cues the engine uses.
+                switch ($level) {
+                    'Error'   { Write-Error $message -ErrorAction Continue }
+                    'Warn'    { Write-Warning $message }
+                    'OK'      { Write-Host "+ $message" }
+                    'Section' { Write-Host $message }
+                    default   { Write-Host "> $message" }
+                }
             }
             $build = Start-WinMintBuild `
                 -BuildProfile $buildProfile `

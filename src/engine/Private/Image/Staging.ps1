@@ -134,6 +134,16 @@ function Assert-WinMintDismCanServiceWim {
         [int]$Index = 1
     )
 
+    # The DISM build is the servicing-capability signal, NOT the host OS build.
+    # The tool that actually mounts and commits the image is dism.exe (and the
+    # PowerShell Mount/Dismount-WindowsImage cmdlets that bind to the same
+    # servicing stack). A no-op mount+commit of a build-26200 image with a
+    # build-26100 dism was verified to strip EditionId/InstallationType/
+    # ProductType, so the host OS version is irrelevant: only a dism whose build
+    # is >= the image build can commit it without corrupting edition metadata.
+    # Note: Windows 11 25H2 ships an enablement package over the 24H2 servicing
+    # stack, so a 25H2 host's in-box dism still reports 26100 and CANNOT safely
+    # service a 26200 image; the matching ADK dism (build >= image) is required.
     $dismVersion = Get-WinMintDismExeVersion
     $imageVersion = Get-WinMintWimImageVersion -ImagePath $ImagePath -Index $Index
     if ([int]$imageVersion.Build -gt [int]$dismVersion.Build) {
@@ -141,8 +151,8 @@ function Assert-WinMintDismCanServiceWim {
             "WinMint cannot safely service this Windows image with the current DISM engine."
             "Image build: $($imageVersion.Display)"
             "DISM build: $dismVersion"
-            'Use a Windows/ADK DISM version at least as new as the source ISO, or build from an ISO whose image build is not newer than this host.'
-            'Refusing to continue because downlevel DISM servicing can corrupt edition/language metadata and produce a setup product-key validation loop.'
+            'Install a Windows ADK whose DISM build is at least as new as the source image, or build from an ISO whose image build is not newer than the DISM engine. A 25H2 (26200) image cannot be serviced by an in-box 24H2 (26100) DISM, even on a 25H2 host.'
+            'Refusing to continue because downlevel DISM servicing strips edition/language metadata and produces a setup product-key/edition validation loop.'
         ) -join [Environment]::NewLine
     }
 }

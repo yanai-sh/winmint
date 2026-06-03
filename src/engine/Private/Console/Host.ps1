@@ -229,6 +229,13 @@ $script:UseSpectre = $true
 
 function Write-WinMintConsoleLine {
     param([string]$Markup, [string]$Plain)
+    # When a progress handler is active (headless/GUI/JSON-driven builds), that
+    # handler owns console presentation and re-emits every forwarded Log line, so
+    # writing here too would print each line twice. Interactive console builds set
+    # no handler, leaving this as the sole console sink.
+    if ($null -ne (Get-Variable -Name WinMintProgressHandler -Scope Script -ValueOnly -ErrorAction SilentlyContinue)) {
+        return
+    }
     if ($script:UseSpectre) {
         try { $null = Write-SpectreHost $Markup; return }
         catch { $script:UseSpectre = $false }
