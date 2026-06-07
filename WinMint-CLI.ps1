@@ -25,11 +25,13 @@ param(
     [string]$SetupOption = 'Minimal',
     [ValidateSet('TargetLicense', 'Fixed')]
     [string]$EditionMode = 'TargetLicense',
-    # Edition selector: SingleLanguage (default) | Home | Pro | Enterprise |
-    # Education | All, or an exact edition name. SingleLanguage services only that
-    # one image (~3x faster) and falls back to all editions if absent; 'All'
-    # services every edition so Windows Setup picks the target device's edition.
-    [string]$Edition = 'SingleLanguage',
+    # Edition selector: Host (default) | Home | Pro | Enterprise | Education |
+    # SingleLanguage | All, or an exact edition name. Host detects the build
+    # machine's own edition so the image activates with its firmware/digital
+    # license (falls back to Home when undetectable, e.g. in a VM). A single
+    # edition services one image (~3x faster); 'All' services every edition so
+    # Windows Setup picks the target device's edition.
+    [string]$Edition = 'Host',
     [ValidateSet('None', 'Host', 'Custom')]
     [string]$DriverSource = 'None',
     [string]$DriverPath = '',

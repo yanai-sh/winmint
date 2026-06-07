@@ -124,7 +124,7 @@ function Get-WinMintInstallImagesForBuild {
             return @(Get-WinMintSelectedInstallImage -InstallWim $InstallWim -EditionName $EditionName)
         }
         catch {
-            # The default Single Language edition falls back to servicing all
+            # The default edition (Windows 11 Home) falls back to servicing all
             # editions when absent (robust default); any other explicitly chosen
             # edition still fails hard so the user is never silently given a
             # different edition than they asked for.
@@ -478,9 +478,14 @@ function Invoke-WinMintIsoPipeline {
                 Invoke-AppxRemoval -MountDir $mountDir -PackagePrefixes $BuildConfig.AppxPackages
                 Invoke-WinMintOfflineAiFeatureRemoval -MountDir $mountDir -AiRemoval $BuildConfig.AiRemoval
                 Remove-WinMintCapabilities -MountDir $mountDir
+                # Preserve only the display language(s); en-us is always kept by the
+                # function. System/user/setup locales are formats/region (and the
+                # DMA setup locale is en-IE), not display-language packs — including
+                # them here would leave non-US English packs behind. The default
+                # en-US build therefore keeps only the US English language packs.
                 Remove-NonEnglishLanguageFeature `
                     -MountDir $mountDir `
-                    -PreserveLanguages @($BuildConfig.UILanguage, $BuildConfig.UILanguageFallback, $BuildConfig.SystemLocale, $BuildConfig.UserLocale, $BuildConfig.SetupUserLocale) `
+                    -PreserveLanguages @($BuildConfig.UILanguage, $BuildConfig.UILanguageFallback) `
                     -Confirm:$false
                 Invoke-RegistryTweak -MountDir $mountDir -GroupIds $BuildConfig.RegistryTweaks
                 Remove-WinMintOneDriveSetupStub -MountDir $mountDir

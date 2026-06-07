@@ -257,22 +257,52 @@ function Get-WinMintProfileSetupOption {
 }
 
 function Get-WinMintDefaultEditionName {
-    # WinMint's primary target is Windows 11 Home Single Language / en-US. This is
-    # the default fixed edition: servicing one image instead of all is ~3x faster.
-    # Get-WinMintInstallImagesForBuild treats this name specially — if it is absent
-    # from a given ISO it falls back to servicing all editions (rather than failing),
-    # while any other explicitly selected edition still fails hard when missing.
-    'Windows 11 Home Single Language'
+    # Universal default/fallback edition. WinMint's primary target is standard
+    # Windows 11 Home. Get-WinMintInstallImagesForBuild treats this name specially:
+    # if it is absent from a given ISO it falls back to servicing all editions
+    # (rather than failing), while any other explicitly selected edition still
+    # fails hard when missing.
+    'Windows 11 Home'
+}
+
+function Get-WinMintHostEditionName {
+    # Map the build host's own Windows edition to the matching install.wim image
+    # name, so the default build targets the edition the host's firmware/digital
+    # license will activate. Reads registry EditionID (the running SKU, which equals
+    # the licensed SKU on virtually all real devices). Returns '' when the edition
+    # can't be determined or isn't a known client SKU (e.g. a VM with a generic
+    # edition), so callers fall back to Windows 11 Home.
+    $skuToImage = @{
+        'Core'                    = 'Windows 11 Home'
+        'CoreN'                   = 'Windows 11 Home N'
+        'CoreSingleLanguage'      = 'Windows 11 Home Single Language'
+        'Professional'            = 'Windows 11 Pro'
+        'ProfessionalN'           = 'Windows 11 Pro N'
+        'ProfessionalEducation'   = 'Windows 11 Pro Education'
+        'ProfessionalWorkstation' = 'Windows 11 Pro for Workstations'
+        'Education'               = 'Windows 11 Education'
+        'EducationN'              = 'Windows 11 Education N'
+        'Enterprise'              = 'Windows 11 Enterprise'
+        'EnterpriseN'             = 'Windows 11 Enterprise N'
+    }
+    try {
+        $cv = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction Stop
+        $editionId = [string]$cv.EditionID
+        if ($editionId -and $skuToImage.ContainsKey($editionId)) { return $skuToImage[$editionId] }
+    }
+    catch { }
+    return ''
 }
 
 function Resolve-WinMintEditionSelection {
     <#
     <summary>
     Maps the friendly -Edition selector (and legacy -EditionMode) into the
-    (Mode, Name) the build profile stores. SingleLanguage is the default and the
-    only selection that falls back to all editions when absent. 'All' (or an
-    explicit -EditionMode TargetLicense) services every edition so Windows Setup
-    can pick the target device's edition.
+    (Mode, Name) the build profile stores. The default (and the Host/Auto token)
+    detects the build host's edition so the image targets the license the host
+    will activate, falling back to Windows 11 Home when it can't be detected.
+    'All' (or an explicit -EditionMode TargetLicense) services every edition so
+    Windows Setup can pick the target device's edition.
     </summary>
     #>
     param(
@@ -281,23 +311,27 @@ function Resolve-WinMintEditionSelection {
         [bool]$EditionSpecified = $false,
         [bool]$EditionModeSpecified = $false
     )
-    $default = Get-WinMintDefaultEditionName
+    $autoName = {
+        $detected = Get-WinMintHostEditionName
+        if ([string]::IsNullOrWhiteSpace($detected)) { Get-WinMintDefaultEditionName } else { $detected }
+    }
     if ($EditionSpecified) {
         switch -Regex (([string]$Edition).Trim()) {
-            '^(All|TargetLicense|Target|License|Auto|Any)$' { return [pscustomobject]@{ Mode = 'TargetLicense'; Name = '' } }
-            '^(SingleLanguage|HomeSingleLanguage|HomeSL|SingleLang|SL)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = $default } }
+            '^(All|TargetLicense|Target|License|Any)$' { return [pscustomobject]@{ Mode = 'TargetLicense'; Name = '' } }
+            '^(Host|Auto|Detect|Match)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = (& $autoName) } }
+            '^(SingleLanguage|HomeSingleLanguage|HomeSL|SingleLang|SL)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = 'Windows 11 Home Single Language' } }
             '^(Home)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = 'Windows 11 Home' } }
             '^(Pro|Professional)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = 'Windows 11 Pro' } }
             '^(Enterprise|Ent)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = 'Windows 11 Enterprise' } }
             '^(Education|Edu)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = 'Windows 11 Education' } }
-            '^\s*$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = $default } }
+            '^\s*$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = (& $autoName) } }
             default { return [pscustomobject]@{ Mode = 'Fixed'; Name = ([string]$Edition).Trim() } }
         }
     }
-    if ($EditionModeSpecified -and ([string]$EditionMode) -match '^(TargetLicense|Target|License|Auto)$') {
+    if ($EditionModeSpecified -and ([string]$EditionMode) -match '^(TargetLicense|Target|License)$') {
         return [pscustomobject]@{ Mode = 'TargetLicense'; Name = '' }
     }
-    return [pscustomobject]@{ Mode = 'Fixed'; Name = $default }
+    return [pscustomobject]@{ Mode = 'Fixed'; Name = (& $autoName) }
 }
 
 function Get-WinMintProfileEditionMode {
