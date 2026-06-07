@@ -334,6 +334,41 @@ function Resolve-WinMintEditionSelection {
     return [pscustomobject]@{ Mode = 'Fixed'; Name = (& $autoName) }
 }
 
+function Get-WinMintGenericProductKey {
+    # Public per-edition "generic" / KMS-client setup keys. These do NOT activate;
+    # they let an unattended install select the edition and skip the Setup product-
+    # key page — used for VM/container test ISOs, or when the build host has no
+    # firmware/OEM key. Returns '' for an edition without a known generic key.
+    param([Parameter(Mandatory)][string]$EditionName)
+    $keys = @{
+        'Windows 11 Home'                 = 'YTMG3-N6DKC-DKB77-7M9GH-8HVX7'
+        'Windows 11 Home N'               = '4CPRK-NM3K3-X6XXQ-RHX7B-X9R93'
+        'Windows 11 Home Single Language' = 'BT79Q-G7N6G-PGBYW-4YWX6-6F4BT'
+        'Windows 11 Pro'                  = 'VK7JG-NPHTM-C97JM-9MPGT-3V66T'
+        'Windows 11 Pro N'                = '2B87N-8KFHP-DKV6R-Y2C8J-PKCKT'
+        'Windows 11 Pro Education'        = '8PTT6-RNW4C-6V7J2-C2D3X-MHBPB'
+        'Windows 11 Pro for Workstations' = 'DXG7C-N36C4-C4HTG-X4T3X-2YV77'
+        'Windows 11 Education'            = 'YNMGQ-8RYV3-4PGQ3-C8XTP-7CFBY'
+        'Windows 11 Education N'          = '84NGF-MHBT6-FXBX8-QWJK7-DRR8H'
+        'Windows 11 Enterprise'           = 'XGVPP-NMH47-7TTHJ-W3FW7-8HV2C'
+        'Windows 11 Enterprise N'         = 'WGGHN-J84D6-QYCPR-T7PJ7-X766F'
+    }
+    if ($keys.ContainsKey($EditionName)) { return $keys[$EditionName] }
+    return ''
+}
+
+function Test-WinMintHostHasFirmwareKey {
+    # True when the build host has an embedded OEM/firmware product key (ACPI MSDM).
+    # A host without one is typically a VM/CI builder, where the unattended install
+    # should skip the product-key prompt via a generic key. Best-effort; a read
+    # failure is treated as "no firmware key" (lean toward injecting for VMs).
+    try {
+        $sls = Get-CimInstance -ClassName SoftwareLicensingService -ErrorAction Stop
+        return -not [string]::IsNullOrWhiteSpace([string]$sls.OA3xOriginalProductKey)
+    }
+    catch { return $false }
+}
+
 function Get-WinMintProfileEditionMode {
     param([object]$Settings)
 
@@ -405,8 +440,11 @@ function New-WinMintBuildProfile {
     $editionMode = Get-WinMintProfileEditionMode -Settings $Settings
     $edition = [string](Get-WinMintProfileSetting $Settings 'Edition' '')
     if ($editionMode -eq 'Fixed' -and [string]::IsNullOrWhiteSpace($edition)) {
-        $edition = 'Windows 11 Home Single Language'
+        $edition = 'Windows 11 Home'
     }
+    # Optional generic product key (resolved by the caller). Empty = keyless, which
+    # is the default for real-hardware ISOs (defer to the device firmware license).
+    $productKey = [string](Get-WinMintProfileSetting $Settings 'ProductKey' '')
     $diskMode = Get-WinMintProfileDiskMode -Settings $Settings
     $dualBootPreset = Get-WinMintProfileDualBootPreset -Settings $Settings
     if ($diskMode -eq 'DualBootReserved' -and [string]::IsNullOrWhiteSpace($dualBootPreset)) {
@@ -468,6 +506,7 @@ function New-WinMintBuildProfile {
             formFactor = [string](Get-WinMintProfileSetting $Settings 'FormFactor' 'Auto')
             editionMode = $editionMode
             edition = $edition
+            productKey = $productKey
             diskMode = $diskMode
             diskLayout = [ordered]@{
                 mode = $diskMode

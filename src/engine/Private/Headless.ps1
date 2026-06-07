@@ -405,6 +405,7 @@ function New-WinMintHeadlessProfileFromFlags {
         [ValidateSet('Minimal', 'CopilotPlus')][string]$SetupOption = 'Minimal',
         [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
+        [string]$ProductKey = '',
         [ValidateSet('None', 'Host', 'Custom')][string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [ValidateSet('ThisPC', 'DifferentPC')][string]$TargetDevice = 'DifferentPC',
@@ -482,6 +483,7 @@ function New-WinMintHeadlessProfileFromFlags {
         AutoWipeDisk = [bool]$AutoWipeDisk
         EditionMode = $EditionMode
         Edition = $Edition
+        ProductKey = $ProductKey
         DriverSource = $drivers.Source
         DriverPath = $drivers.Path
         ExportHostDrivers = $drivers.ExportHostDrivers
@@ -603,6 +605,7 @@ function Invoke-WinMintHeadlessCli {
         [ValidateSet('Minimal', 'CopilotPlus')][string]$SetupOption = 'Minimal',
         [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
+        [string]$ProductKey = '',
         [ValidateSet('None', 'Host', 'Custom')][string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [ValidateSet('ThisPC', 'DifferentPC')][string]$TargetDevice = 'DifferentPC',
@@ -677,6 +680,7 @@ function Invoke-WinMintHeadlessCli {
                 -SetupOption $SetupOption `
                 -EditionMode $EditionMode `
                 -Edition $Edition `
+                -ProductKey $ProductKey `
                 -DriverSource $DriverSource `
                 -DriverPath $DriverPath `
                 -TargetDevice $TargetDevice `
@@ -769,6 +773,7 @@ function Invoke-WinMintHeadlessCli {
                 -SetupOption $SetupOption `
                 -EditionMode $EditionMode `
                 -Edition $Edition `
+                -ProductKey $ProductKey `
                 -DriverSource $DriverSource `
                 -DriverPath $DriverPath `
                 -TargetDevice $TargetDevice `

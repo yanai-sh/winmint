@@ -143,8 +143,12 @@ function New-WinMintBuildConfig {
     }
     $edition = [string](Get-WinMintProfileSetting $target 'edition' '')
     if ($editionMode -eq 'Fixed' -and [string]::IsNullOrWhiteSpace($edition)) {
-        $edition = 'Windows 11 Home Single Language'
+        $edition = 'Windows 11 Home'
     }
+    # Generic product key to inject into the answer file (empty = keyless default).
+    # Resolved by the CLI/headless layer from the -GenericProductKey flag and the
+    # build host's firmware-key presence; the engine just carries it through.
+    $productKey = [string](Get-WinMintProfileSetting $target 'productKey' '')
     [pscustomobject]@{
         Profile = $profileName
         ProfileGroups = @($profileGroups)
@@ -154,6 +158,7 @@ function New-WinMintBuildConfig {
         Architecture = [string](Get-WinMintProfileSetting $source 'architecture' '')
         EditionMode = $editionMode
         Edition = $edition
+        ProductKey = $productKey
         TargetDevice = [string](Get-WinMintProfileSetting $target 'device' 'DifferentPC')
         FormFactor = $formFactor
         ComputerName = [string](Get-WinMintProfileSetting $identity 'computerName' '')

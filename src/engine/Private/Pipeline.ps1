@@ -459,6 +459,7 @@ function Invoke-WinMintIsoPipeline {
                 -TargetPass $BuildConfig.Password `
                 -EditionName $imgName `
                 -EditionMode $editionMode `
+                -ProductKey $(if ($editionMode -eq 'Fixed') { [string]$BuildConfig.ProductKey } else { '' }) `
                 -InstallImageCount $installImages.Count `
                 -AutoWipeDisk:$BuildConfig.AutoWipeDisk `
                 -AutoLogon:$BuildConfig.AutoLogon `

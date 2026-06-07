@@ -146,6 +146,15 @@ function Assert-HardwareBypassUnattendGeneration {
         Add-SmokeFailure 'Expected target-license autounattend to omit ProductKey entirely.'
     }
 
+    $keyed = $common.Clone()
+    $keyed.EditionName = 'Windows 11 Home'
+    $keyed.EditionMode = 'Fixed'
+    $keyed.ProductKey = 'YTMG3-N6DKC-DKB77-7M9GH-8HVX7'
+    $withKey = Install-Autounattend @keyed -HardwareBypass:$false
+    if ([string]$withKey.AutounattendXml -notmatch '<Key>\s*YTMG3-N6DKC-DKB77-7M9GH-8HVX7\s*</Key>') {
+        Add-SmokeFailure 'Expected -ProductKey to inject the generic key into UserData/ProductKey/Key.'
+    }
+
     $singleImage = Install-Autounattend @common -HardwareBypass:$false -InstallImageCount 1
     if ([string]$singleImage.AutounattendXml -notmatch '<Key>\s*/IMAGE/INDEX\s*</Key>\s*<Value>\s*1\s*</Value>') {
         Add-SmokeFailure 'Expected single-image target-license media to pin InstallFrom /IMAGE/INDEX = 1.'
@@ -486,8 +495,8 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
     $fixedSettings.EditionMode = 'Fixed'
     $fixedSettings.Edition = ''
     $fixedProfile = New-WinMintBuildProfile -Settings $fixedSettings
-    if ($fixedProfile.target.edition -ne 'Windows 11 Home Single Language') {
-        Add-SmokeFailure 'Fixed-edition generated profiles must default to Windows 11 Home Single Language.'
+    if ($fixedProfile.target.edition -ne 'Windows 11 Home') {
+        Add-SmokeFailure 'Fixed-edition generated profiles must default to Windows 11 Home.'
     }
 
     foreach ($expectedDefaultTweak in @(

@@ -112,6 +112,7 @@
         "formFactor": { "type": "string", "enum": ["Auto", "Laptop", "Desktop"] },
         "editionMode": { "type": "string", "enum": ["TargetLicense", "Fixed"] },
         "edition": { "type": "string" },
+        "productKey": { "type": "string" },
         "diskMode": { "type": "string", "enum": ["Manual", "AutoWipeDisk0", "DualBootReserved"] },
         "diskLayout": {
           "type": "object",

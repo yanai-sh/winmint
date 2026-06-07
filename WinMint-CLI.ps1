@@ -32,6 +32,12 @@ param(
     # edition services one image (~3x faster); 'All' services every edition so
     # Windows Setup picks the target device's edition.
     [string]$Edition = 'Host',
+    # Inject a generic (non-activating) edition key so an unattended VM/container
+    # install skips the Setup product-key page. Default: auto — injected only when
+    # the build host has no firmware/OEM key (i.e. you're building in a VM/CI).
+    # -GenericProductKey forces it on; -NoGenericProductKey forces keyless.
+    [switch]$GenericProductKey,
+    [switch]$NoGenericProductKey,
     [ValidateSet('None', 'Host', 'Custom')]
     [string]$DriverSource = 'None',
     [string]$DriverPath = '',
@@ -106,6 +112,8 @@ $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
     $PSBoundParameters.ContainsKey('KeepEdge') -or
     $PSBoundParameters.ContainsKey('KeepGaming') -or
     $PSBoundParameters.ContainsKey('KeepCopilot') -or
+    $PSBoundParameters.ContainsKey('GenericProductKey') -or
+    $PSBoundParameters.ContainsKey('NoGenericProductKey') -or
     $PSBoundParameters.ContainsKey('DmaInterop') -or
     $PSBoundParameters.ContainsKey('NoDmaInterop') -or
     $PSBoundParameters.ContainsKey('Launcher') -or
@@ -138,7 +146,16 @@ if ($headlessMode) {
         -EditionModeSpecified ($PSBoundParameters.ContainsKey('EditionMode'))
     $EditionMode = $editionSelection.Mode
     $Edition = $editionSelection.Name
+    # Resolve the generic product key: forced on by -GenericProductKey, forced off
+    # by -NoGenericProductKey, otherwise auto-injected when this build host has no
+    # firmware/OEM key (a VM/CI builder). Only meaningful for a single fixed edition.
+    $injectGenericKey = $GenericProductKey -or ((-not $NoGenericProductKey) -and -not (Test-WinMintHostHasFirmwareKey))
+    $resolvedProductKey = ''
+    if ($injectGenericKey -and $editionSelection.Mode -eq 'Fixed') {
+        $resolvedProductKey = Get-WinMintGenericProductKey -EditionName $editionSelection.Name
+    }
     $headlessResult = Invoke-WinMintHeadlessCli `
+        -ProductKey $resolvedProductKey `
         -BoundParameters $PSBoundParameters `
         -ProfilePath $ProfilePath `
         -NewProfile $NewProfile `

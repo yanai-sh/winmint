@@ -380,7 +380,7 @@ function Install-Autounattend {
         [ValidateNotNullOrEmpty()][string]$MountDir, [ValidateNotNullOrEmpty()][string]$IsoContents,
         [ValidateNotNullOrEmpty()][string]$AutounattendTemplate, [ValidateNotNullOrEmpty()][string]$ImageArch,
         [string]$TimeZone, [string]$TargetPCName, [string]$TargetUser, [ValidateSet('Local', 'MicrosoftOobe')][string]$AccountMode = 'Local', [string]$TargetPass,
-        [string]$EditionName, [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense', [int]$InstallImageCount = 0, [bool]$AutoWipeDisk, [bool]$AutoLogon,
+        [string]$EditionName, [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense', [string]$ProductKey = '', [int]$InstallImageCount = 0, [bool]$AutoWipeDisk, [bool]$AutoLogon,
         [object]$DiskLayout,
         [bool]$HardwareBypass = $false,
         [string]$InputLocale, [string]$SystemLocale, [string]$UILanguage, [string]$UILanguageFallback, [string]$UserLocale,
@@ -465,8 +465,27 @@ function Install-Autounattend {
     Merge-UnattendInternationalXml -XmlDoc $xmlDoc -NsMgr $nsMgr -InputLocale $InputLocale -SystemLocale $SystemLocale -UILanguage $UILanguage -UILanguageFallback $UILanguageFallback -UserLocale $UserLocale
 
     $installFromNode = $xmlDoc.SelectSingleNode('//u:ImageInstall/u:OSImage/u:InstallFrom', $nsMgr)
-    foreach ($productKeyNode in @($xmlDoc.SelectNodes('//u:ProductKey', $nsMgr))) {
-        $null = $productKeyNode.ParentNode.RemoveChild($productKeyNode)
+    if (-not [string]::IsNullOrWhiteSpace($ProductKey)) {
+        # Inject a generic edition key (VM/container ISO or keyless build host):
+        # selects the edition and skips the Setup product-key page. This is NOT an
+        # activating key — a real device still activates via its firmware license.
+        $pkNode = $xmlDoc.SelectSingleNode('//u:UserData/u:ProductKey', $nsMgr)
+        if ($pkNode) {
+            $keyNode = $pkNode.SelectSingleNode('u:Key', $nsMgr)
+            if (-not $keyNode) {
+                $keyNode = $xmlDoc.CreateElement('Key', 'urn:schemas-microsoft-com:unattend')
+                $null = $pkNode.PrependChild($keyNode)
+            }
+            $keyNode.InnerText = $ProductKey
+            Log "Product key: injected generic key for '$EditionName' (skips the setup key page; does not activate)."
+        }
+    }
+    else {
+        # Keyless default: strip the product key so the device firmware/digital
+        # license activates the matching edition on real hardware.
+        foreach ($productKeyNode in @($xmlDoc.SelectNodes('//u:ProductKey', $nsMgr))) {
+            $null = $productKeyNode.ParentNode.RemoveChild($productKeyNode)
+        }
     }
     if ($EditionMode -eq 'Fixed') {
         $editionNode = $xmlDoc.SelectSingleNode('//u:MetaData[u:Key="/IMAGE/NAME"]/u:Value', $nsMgr)
