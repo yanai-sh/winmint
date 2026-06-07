@@ -20,8 +20,8 @@ use gpui::{
     WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowDecorations, WindowOptions,
 };
 use state::{
-    BuildIntent, BuildRunState, ManifestViewState, SourceProbeState, SourceProbeStatus, ViewState,
-    WizardStep, SPLASH_STATUS_PICK,
+    BuildIntent, BuildRunState, FormFactor, ManifestViewState, SourceProbeState, SourceProbeStatus,
+    ViewState, WizardStep, SPLASH_STATUS_PICK,
 };
 
 /// Root view. Owns the wizard state and routes rendering to the current screen.
@@ -350,6 +350,38 @@ impl WinMintApp {
             self.build_run.status, self.manifest.manifest_path
         )
         .into()
+    }
+
+    // ── Configure choices ─────────────────────────────────────────────────────
+    // Each choice re-emits ui-intent.json so the on-disk intent tracks the wizard.
+
+    fn set_edition(&mut self, value: &'static str, cx: &mut Context<Self>) {
+        if self.intent.edition.as_ref() != value {
+            self.intent.edition = value.into();
+            self.write_intent(cx);
+        }
+    }
+
+    fn set_form_factor(&mut self, form_factor: FormFactor, cx: &mut Context<Self>) {
+        if self.intent.form_factor != form_factor {
+            self.intent.form_factor = form_factor;
+            self.write_intent(cx);
+        }
+    }
+
+    fn toggle_keep_edge(&mut self, cx: &mut Context<Self>) {
+        self.intent.keep.edge = !self.intent.keep.edge;
+        self.write_intent(cx);
+    }
+
+    fn toggle_keep_gaming(&mut self, cx: &mut Context<Self>) {
+        self.intent.keep.gaming = !self.intent.keep.gaming;
+        self.write_intent(cx);
+    }
+
+    fn toggle_keep_copilot(&mut self, cx: &mut Context<Self>) {
+        self.intent.keep.copilot = !self.intent.keep.copilot;
+        self.write_intent(cx);
     }
 
     // ── Layout ───────────────────────────────────────────────────────────────

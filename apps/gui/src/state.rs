@@ -7,9 +7,7 @@ pub const SPLASH_STATUS_PICK: &str = "Select a Windows ISO to begin.";
 
 /// Target form factor for the generated image. `Auto` resolves the chassis at
 /// first boot; `Laptop`/`Desktop` force the power profile. All three are wire
-/// values consumed by the engine; `Laptop`/`Desktop` are selected on the Configure
-/// screen (UI pending), so they're matched in `as_wire` but not yet constructed here.
-#[allow(dead_code)]
+/// values consumed by the engine and selectable on the Configure screen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum FormFactor {
     #[default]

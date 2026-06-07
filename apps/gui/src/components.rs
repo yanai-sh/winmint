@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
-    div, img, prelude::*, px, App, ClickEvent, Div, ExternalPaths, FontWeight, Image, SharedString,
-    Stateful, Window, WindowControlArea,
+    div, img, prelude::*, px, App, ClickEvent, Div, ElementId, ExternalPaths, FontWeight, Image,
+    SharedString, Stateful, Window, WindowControlArea,
 };
 use gpui_animation::{
     animation::{AnimatedWrapper, TransitionExt},
@@ -244,6 +244,105 @@ pub fn beat_scrub(labels: &[&'static str], active_index: usize) -> Div {
                         .child(*lab),
                 )
         }))
+}
+
+/// A labeled on/off switch row: title + helper text on the left, a pill track on
+/// the right whose knob slides to the trailing edge when `on`. Stateless — the
+/// caller owns the bool and the click handler (typically a `cx.listener`).
+pub fn toggle_row(
+    id: &'static str,
+    title: &'static str,
+    description: &'static str,
+    on: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Stateful<Div> {
+    let track = if on {
+        theme::color::accent()
+    } else {
+        theme::color::border_muted()
+    };
+    div()
+        .id(id)
+        .w_full()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_4()
+        .py_2()
+        .cursor_pointer()
+        .child(
+            div()
+                .min_w(px(0.0))
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme::color::text())
+                        .child(title),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme::color::text_dim())
+                        .child(description),
+                ),
+        )
+        .child(
+            div()
+                .w(px(40.0))
+                .h(px(22.0))
+                .rounded_full()
+                .bg(track)
+                .flex()
+                .items_center()
+                .px(px(3.0))
+                .map(|track| if on { track.justify_end() } else { track })
+                .child(
+                    div()
+                        .w(px(16.0))
+                        .h(px(16.0))
+                        .rounded_full()
+                        .bg(theme::color::white()),
+                ),
+        )
+        .on_click(on_click)
+}
+
+/// One option in a segmented selector: a bordered pill that reads as selected when
+/// `selected`. The id is dynamic (per option value), so it takes `impl Into<ElementId>`.
+pub fn select_chip(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    selected: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Stateful<Div> {
+    div()
+        .id(id)
+        .h(px(32.0))
+        .px_3()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_sm()
+        .border_1()
+        .text_sm()
+        .map(|chip| {
+            if selected {
+                chip.border_color(theme::color::accent())
+                    .bg(theme::color::accent_soft())
+                    .text_color(theme::color::text())
+            } else {
+                chip.border_color(theme::color::border_muted())
+                    .bg(theme::color::surface())
+                    .text_color(theme::color::text_dim())
+            }
+        })
+        .hover(|style| style.bg(theme::color::surface_hover()).cursor_pointer())
+        .child(label.into())
+        .on_click(on_click)
 }
 
 pub fn iso_landing_well(
