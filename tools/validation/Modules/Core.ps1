@@ -230,8 +230,7 @@ function Test-RustCrates {
     }
 
     foreach ($manifest in @(
-            'crates\winmint-core\Cargo.toml',
-            'crates\winmintctl\Cargo.toml'
+            'crates\winmint-core\Cargo.toml'
         )) {
         $path = Join-Path $root $manifest
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {

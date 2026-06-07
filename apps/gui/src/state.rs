@@ -1,7 +1,7 @@
 use gpui::SharedString;
 use serde::Deserialize;
 
-use crate::intent::{DesktopLayersIntent, ToolkitIntent};
+use crate::intent::{DesktopLayersIntent, KeepFlags, ToolkitIntent};
 
 pub const SPLASH_STATUS_PICK: &str = "Select a Windows ISO to begin.";
 
@@ -107,7 +107,11 @@ pub struct BuildIntent {
     pub computer_name: SharedString,
     pub account_name: SharedString,
     pub form_factor: FormFactor,
-    pub selected_groups: Vec<&'static str>,
+    /// Subtractive default: all keep flags false = remove everything.
+    pub keep: KeepFlags,
+    /// Edition selector token (Host/Home/Pro/Enterprise/Education/SingleLanguage/All
+    /// or an exact name); resolved engine-side. Defaults to host-edition detection.
+    pub edition: SharedString,
     pub toolkit: ToolkitIntent,
     pub desktop_layers: DesktopLayersIntent,
 }
@@ -119,7 +123,8 @@ impl Default for BuildIntent {
             computer_name: "WinMint".into(),
             account_name: "dev".into(),
             form_factor: FormFactor::Auto,
-            selected_groups: vec!["Minimal"],
+            keep: KeepFlags::default(),
+            edition: "Host".into(),
             toolkit: ToolkitIntent::default(),
             desktop_layers: DesktopLayersIntent::default(),
         }

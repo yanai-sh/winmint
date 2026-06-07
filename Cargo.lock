@@ -6560,14 +6560,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "winmintctl"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "winmint-core",
-]
-
-[[package]]
 name = "winnow"
 version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"

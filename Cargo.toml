@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "apps/gui",
     "crates/winmint-core",
-    "crates/winmintctl",
 ]
 
 # Shared package metadata inherited by every member via `field.workspace = true`.

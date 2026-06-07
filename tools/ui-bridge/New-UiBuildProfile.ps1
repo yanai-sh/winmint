@@ -19,38 +19,27 @@ function Assert-WinMintUiBridgeSettings {
 
     $required = @(
         'Profile',
-        'ProfileGroups',
+        'KeepEdge',
+        'KeepGaming',
+        'KeepCopilot',
         'ISOPath',
         'Architecture',
         'ComputerName',
         'AccountName',
         'AccountMode',
         'TargetDevice',
-        'EditionMode',
+        'Edition',
         'DriverSource',
-        'DesktopUiDefault',
         'InstallWindhawk',
         'InstallYasb',
         'InstallKomorebi',
         'Editors',
-        'Wsl2Distros',
-        'RemoveGaming'
+        'Wsl2Distros'
     )
 
     foreach ($name in $required) {
         if (-not ($Settings.PSObject.Properties.Name -contains $name)) {
             throw "UI bridge settings missing required field '$name'."
-        }
-    }
-
-    $groups = @($Settings.ProfileGroups)
-    if ($groups.Count -eq 0 -or $groups -notcontains 'Minimal') {
-        throw "UI bridge settings must include ProfileGroups with 'Minimal'."
-    }
-
-    foreach ($group in $groups) {
-        if ($group -notin @('Minimal', 'Developer', 'CopilotPlus', 'Gaming', 'DesktopUI')) {
-            throw "UI bridge settings include unsupported profile group '$group'."
         }
     }
 
@@ -67,5 +56,10 @@ Initialize-WinMintEngine -RepositoryRoot $RepositoryRoot
 
 $settings = Get-Content -LiteralPath $SettingsPath -Raw | ConvertFrom-Json
 Assert-WinMintUiBridgeSettings -Settings $settings
+# Resolve the GUI's edition token (Host/Home/Pro/.../exact) into the concrete
+# editionMode/edition the engine consumes, reusing the resolver the CLI uses.
+$editionSelection = Resolve-WinMintEditionSelection -Edition ([string]$settings.Edition) -EditionSpecified $true
+$settings | Add-Member -NotePropertyName 'EditionMode' -NotePropertyValue $editionSelection.Mode -Force
+$settings.Edition = $editionSelection.Name
 $profile = New-WinMintBuildProfileFromSettings -Settings $settings -IncludeSecrets:$IncludeSecrets
 $null = Save-WinMintBuildProfile -BuildProfile $profile -Path $OutputPath

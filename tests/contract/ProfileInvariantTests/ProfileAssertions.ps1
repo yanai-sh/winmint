@@ -1021,26 +1021,24 @@ function Assert-UiBridgeBuildProfileContract {
         $settingsPath = Join-Path $tempRoot 'ui-intent.json'
         $profilePath = Join-Path $tempRoot 'BuildProfile.json'
         $settings = [ordered]@{
-            Profile = 'Minimal'
-            ProfileGroups = @('Minimal', 'Developer', 'DesktopUI')
-            SetupOption = 'Minimal'
+            Profile = 'WinMint'
+            KeepEdge = $false
+            KeepGaming = $false
+            KeepCopilot = $false
             ISOPath = ''
             Architecture = 'amd64'
             ComputerName = 'WinMint'
             AccountName = 'dev'
             AccountMode = 'Local'
             TargetDevice = 'DifferentPC'
-            EditionMode = 'TargetLicense'
-            Edition = ''
+            Edition = 'Pro'
             DriverSource = 'None'
             DriverPath = ''
-            DesktopUiDefault = $false
             InstallWindhawk = $true
             InstallYasb = $false
             InstallKomorebi = $true
             Editors = @('zed')
             Wsl2Distros = @('Ubuntu')
-            RemoveGaming = $true
             PrivLocation = $false
             TweakHardwareBypass = $false
         }
@@ -1065,22 +1063,18 @@ function Assert-UiBridgeBuildProfileContract {
             Add-SmokeFailure "Expected UI bridge output to validate, got: $($result.Failures -join '; ')"
         }
         $config = New-WinMintBuildConfig -BuildProfile $profile
-        # Subtractive model: the DesktopUI label is derived from the selected shell
-        # layers; Developer is no longer a derived group (dev tooling is baseline).
-        if ($config.ProfileGroups -notcontains 'DesktopUI' -or $config.ProfileGroups -contains 'Developer') {
-            Add-SmokeFailure 'Expected UI bridge to derive the DesktopUI group from shell layers without a Developer group.'
-        }
+        # Subtractive keep-flag model: the bridge carries the explicit editor, WSL,
+        # and shell-layer intent straight through to the build config.
         if ($config.Editors -notcontains 'zed' -or $config.Wsl2Distros -notcontains 'Ubuntu') {
             Add-SmokeFailure 'Expected UI bridge to preserve editor and WSL intent.'
         }
         if (-not $config.InstallWindhawk -or $config.InstallYasb -or -not $config.InstallKomorebi) {
-            Add-SmokeFailure 'Expected UI bridge to preserve selected DesktopUI shell layers.'
+            Add-SmokeFailure 'Expected UI bridge to preserve selected shell layers.'
         }
 
         $badSettingsPath = Join-Path $tempRoot 'bad-ui-intent.json'
         [ordered]@{
-            Profile = 'Minimal'
-            ProfileGroups = @('Developer')
+            Profile = 'WinMint'
             Architecture = 'amd64'
         } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $badSettingsPath -Encoding UTF8
         try {
@@ -1089,11 +1083,11 @@ function Assert-UiBridgeBuildProfileContract {
                 -SettingsPath $badSettingsPath `
                 -OutputPath (Join-Path $tempRoot 'bad-profile.json') 2>$null
             if ($LASTEXITCODE -eq 0) {
-                Add-SmokeFailure 'Expected UI bridge to reject incomplete or non-Minimal profile group intent.'
+                Add-SmokeFailure 'Expected UI bridge to reject intent missing required keep-flag fields.'
             }
         }
         catch {
-            if ($_.Exception.Message -notmatch 'missing required field|Minimal') {
+            if ($_.Exception.Message -notmatch 'missing required field') {
                 Add-SmokeFailure "Expected UI bridge validation error, got: $($_.Exception.Message)"
             }
         }

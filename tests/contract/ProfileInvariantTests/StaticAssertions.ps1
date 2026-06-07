@@ -37,7 +37,7 @@ function Assert-StaticUiFlowInvariants {
     if ($stateText -notmatch 'pub\s+struct\s+BuildIntent') {
         Add-SmokeFailure 'Expected GPUI state.rs to define BuildIntent.'
     }
-    foreach ($requiredField in @('architecture', 'computer_name', 'account_name', 'selected_groups', 'toolkit', 'desktop_layers')) {
+    foreach ($requiredField in @('architecture', 'computer_name', 'account_name', 'keep', 'edition', 'toolkit', 'desktop_layers')) {
         if ($stateText -notmatch "\b$([regex]::Escape($requiredField))\b") {
             Add-SmokeFailure "Expected BuildIntent to contain '$requiredField'."
         }
@@ -46,10 +46,10 @@ function Assert-StaticUiFlowInvariants {
     if ($intentText -notmatch 'winmint_core::profile') {
         Add-SmokeFailure 'GPUI intent bridge must use winmint-core profile helpers.'
     }
-    if ($coreProfileText -notmatch 'pub struct GuiIntentInput') {
-        Add-SmokeFailure 'winmint-core must own the typed GUI intent input contract.'
+    if ($coreProfileText -notmatch 'pub struct KeepFlags') {
+        Add-SmokeFailure 'winmint-core must own the keep-flag GUI intent input contract.'
     }
-    foreach ($requiredKey in @('ISOPath', 'ProfileGroups', 'DesktopUiDefault', 'InstallWindhawk', 'Wsl2Distros')) {
+    foreach ($requiredKey in @('ISOPath', 'KeepEdge', 'KeepGaming', 'KeepCopilot', 'Edition', 'InstallWindhawk', 'Wsl2Distros')) {
         if ($coreProfileText -notmatch [regex]::Escape($requiredKey)) {
             Add-SmokeFailure "winmint-core GUI intent builder must emit '$requiredKey'."
         }
@@ -881,8 +881,11 @@ function Assert-WslFirstDefaultsAndGuards {
 
     $guiStatePath = Join-Path $root 'apps\gui\src\state.rs'
     $guiStateText = Get-Content -LiteralPath $guiStatePath -Raw
-    if ($guiStateText -notmatch 'selected_groups:\s*vec!\["Minimal"\]') {
-        Add-SmokeFailure 'GPUI must default to Minimal profile group only.'
+    if ($guiStateText -notmatch 'keep:\s*KeepFlags::default\(\)') {
+        Add-SmokeFailure 'GPUI BuildIntent must default to the subtractive keep-flag state (remove everything).'
+    }
+    if ($guiStateText -notmatch 'edition:\s*"Host"') {
+        Add-SmokeFailure 'GPUI BuildIntent must default the edition selector to host detection.'
     }
 
     $wslModulePath = Join-Path $root 'src\agent\Modules\Wsl.ps1'

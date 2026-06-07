@@ -55,8 +55,7 @@ fixture.
 |-- apps/
 |   `-- gui/
 |-- crates/
-|   |-- winmint-core/
-|   `-- winmintctl/
+|   `-- winmint-core/
 |-- src/
 |   |-- engine/
 |   |-- agent/
