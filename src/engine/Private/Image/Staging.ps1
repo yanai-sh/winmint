@@ -643,7 +643,10 @@ function Invoke-DismAddDriverToImage {
 
 function Dismount-OfflineHive {
     param([ValidateNotNullOrEmpty()][string]$HivePath)
-    Invoke-Action 'Closing offline registry hive' {
+    # Name the hive so the several unloads per build read as distinct steps
+    # (SOFTWARE, NTUSER, ...) rather than identical-looking repeated lines.
+    $hiveLabel = (($HivePath -split '[\\/]')[-1] -replace '^z', '')
+    Invoke-Action "Closing offline registry hive ($hiveLabel)" {
         LogVerbose "Hive: $HivePath"
         for ($a = 1; $a -le 3; $a++) {
             [GC]::Collect(); [GC]::WaitForPendingFinalizers(); Start-Sleep -Milliseconds 500

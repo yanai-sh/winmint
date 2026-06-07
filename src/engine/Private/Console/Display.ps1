@@ -370,9 +370,14 @@ function Invoke-Action {
         Log $Description
         $timer = [System.Diagnostics.Stopwatch]::StartNew()
         $completed = $false
+        # Skip the live Spectre progress bar when a progress handler is active
+        # (headless/GUI/JSON builds). The handler owns the console surface and the
+        # in-place bar redraws render as repeated, out-of-order lines there — the
+        # interactive console build sets no handler and keeps the bar.
         $useLiveProgress = $SpectreProgressIndeterminate -and
             -not (Test-Win11IsoVerboseLogging) -and
             -not [Console]::IsOutputRedirected -and
+            ($null -eq (Get-Variable -Name WinMintProgressHandler -Scope Script -ValueOnly -ErrorAction SilentlyContinue)) -and
             (Get-Command Invoke-SpectreCommandWithProgress -ErrorAction SilentlyContinue)
         try {
             if ($useLiveProgress) {
