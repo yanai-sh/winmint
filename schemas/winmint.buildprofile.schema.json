@@ -77,15 +77,9 @@
     }
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 2 },
+    "schemaVersion": { "type": "integer", "const": 3 },
     "createdAt": { "type": "string" },
     "profileName": { "type": "string" },
-    "profileGroups": {
-      "type": "array",
-      "items": { "type": "string", "enum": ["Minimal", "Developer", "CopilotPlus", "Gaming", "DesktopUI"] },
-      "uniqueItems": true
-    },
-    "setupOption": { "type": "string", "enum": ["Minimal", "CopilotPlus"] },
     "keep": {
       "type": "object",
       "properties": {

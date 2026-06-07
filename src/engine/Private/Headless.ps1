@@ -369,7 +369,6 @@ function New-WinMintHeadlessProfileFromFlags {
     [CmdletBinding()]
     param(
         [string]$SourceIso,
-        [ValidateSet('Minimal', 'Developer', 'CopilotPlus', 'Gaming', 'DesktopUI')][string]$Preset = 'Minimal',
         [string]$Architecture,
         [string]$ComputerName = 'WinMint',
         [string]$AccountName = 'dev',
@@ -377,7 +376,6 @@ function New-WinMintHeadlessProfileFromFlags {
         [string]$Password = '',
         [switch]$AutoLogon,
         [switch]$AutoWipeDisk,
-        [ValidateSet('Minimal', 'CopilotPlus')][string]$SetupOption = 'Minimal',
         [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
         [string]$ProductKey = '',
@@ -392,10 +390,7 @@ function New-WinMintHeadlessProfileFromFlags {
         [string]$UILanguage = '',
         [string]$UILanguageFallback = '',
         [string]$UserLocale = '',
-        [switch]$Developer,
-        [switch]$Copilot,
         [switch]$DesktopUI,
-        [switch]$Gaming,
         [switch]$KeepEdge,
         [switch]$KeepGaming,
         [switch]$KeepCopilot,
@@ -432,15 +427,12 @@ function New-WinMintHeadlessProfileFromFlags {
         -DriverPath $DriverPath `
         -ExportHostDrivers:$ExportHostDrivers
 
-    # Subtractive model: default removes everything. Opt-in keep flags suppress a
-    # domain. Legacy -Gaming / -Preset Gaming map to -KeepGaming (same meaning the
-    # old Gaming group had). -Developer is now baseline; old -Copilot / CopilotPlus
-    # (which requested MORE AI removal) are no-ops because full removal is the
-    # default — keeping Copilot+ AI now requires the explicit -KeepCopilot.
-    $resolvedKeepGaming = [bool]$KeepGaming -or [bool]$Gaming -or ($Preset -eq 'Gaming')
+    # Subtractive model: the default build removes everything. Opt-in keep flags
+    # suppress a domain's removal.
+    $resolvedKeepGaming = [bool]$KeepGaming
     $resolvedKeepCopilot = [bool]$KeepCopilot
     $resolvedKeepEdge = [bool]$KeepEdge
-    $resolvedDesktopUi = ([bool]$DesktopUI -or ($Preset -eq 'DesktopUI')) -and -not [bool]$TemplateMode
+    $resolvedDesktopUi = [bool]$DesktopUI -and -not [bool]$TemplateMode
 
     New-WinMintBuildProfileFromSettings -Settings @{
         Profile = 'WinMint'
@@ -559,7 +551,6 @@ function Invoke-WinMintHeadlessCli {
         [hashtable]$BoundParameters,
         [string]$ProfilePath,
         [string]$NewProfile,
-        [ValidateSet('Minimal', 'Developer', 'CopilotPlus', 'Gaming', 'DesktopUI')][string]$Preset = 'Minimal',
         [string]$OutProfile,
         [string]$SourceIso,
         [string]$UupDumpSource,
@@ -573,7 +564,6 @@ function Invoke-WinMintHeadlessCli {
         [string]$PasswordEnvVar = '',
         [switch]$AutoLogon,
         [switch]$AutoWipeDisk,
-        [ValidateSet('Minimal', 'CopilotPlus')][string]$SetupOption = 'Minimal',
         [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
         [string]$ProductKey = '',
@@ -588,10 +578,7 @@ function Invoke-WinMintHeadlessCli {
         [string]$UILanguage = '',
         [string]$UILanguageFallback = '',
         [string]$UserLocale = '',
-        [switch]$Developer,
-        [switch]$Copilot,
         [switch]$DesktopUI,
-        [switch]$Gaming,
         [switch]$KeepEdge,
         [switch]$KeepGaming,
         [switch]$KeepCopilot,
@@ -640,7 +627,6 @@ function Invoke-WinMintHeadlessCli {
             $secret = Resolve-WinMintHeadlessSecret -Password $Password -PasswordPath $PasswordPath -PasswordEnvVar $PasswordEnvVar
             $buildProfile = New-WinMintHeadlessProfileFromFlags `
                 -SourceIso $SourceIso `
-                -Preset $Preset `
                 -Architecture $Architecture `
                 -ComputerName $ComputerName `
                 -AccountName $AccountName `
@@ -648,7 +634,6 @@ function Invoke-WinMintHeadlessCli {
                 -Password $secret.Password `
                 -AutoLogon:$AutoLogon `
                 -AutoWipeDisk:$AutoWipeDisk `
-                -SetupOption $SetupOption `
                 -EditionMode $EditionMode `
                 -Edition $Edition `
                 -ProductKey $ProductKey `
@@ -663,13 +648,10 @@ function Invoke-WinMintHeadlessCli {
                 -UILanguage $UILanguage `
                 -UILanguageFallback $UILanguageFallback `
                 -UserLocale $UserLocale `
-                -Developer:$Developer `
-                -Copilot:$Copilot `
                 -KeepEdge:$KeepEdge `
                 -KeepGaming:$KeepGaming `
                 -KeepCopilot:$KeepCopilot `
                 -DesktopUI:$DesktopUI `
-                -Gaming:$Gaming `
                 -DmaInterop:$DmaInterop `
                 -NoDmaInterop:$NoDmaInterop `
                 -Launcher $Launcher `
@@ -733,7 +715,6 @@ function Invoke-WinMintHeadlessCli {
         } else {
             $buildProfile = New-WinMintHeadlessProfileFromFlags `
                 -SourceIso $SourceIso `
-                -Preset $Preset `
                 -Architecture $Architecture `
                 -ComputerName $ComputerName `
                 -AccountName $AccountName `
@@ -741,7 +722,6 @@ function Invoke-WinMintHeadlessCli {
                 -Password $secret.Password `
                 -AutoLogon:$AutoLogon `
                 -AutoWipeDisk:$AutoWipeDisk `
-                -SetupOption $SetupOption `
                 -EditionMode $EditionMode `
                 -Edition $Edition `
                 -ProductKey $ProductKey `
@@ -756,13 +736,10 @@ function Invoke-WinMintHeadlessCli {
                 -UILanguage $UILanguage `
                 -UILanguageFallback $UILanguageFallback `
                 -UserLocale $UserLocale `
-                -Developer:$Developer `
-                -Copilot:$Copilot `
                 -KeepEdge:$KeepEdge `
                 -KeepGaming:$KeepGaming `
                 -KeepCopilot:$KeepCopilot `
                 -DesktopUI:$DesktopUI `
-                -Gaming:$Gaming `
                 -DmaInterop:$DmaInterop `
                 -NoDmaInterop:$NoDmaInterop `
                 -Launcher $Launcher `

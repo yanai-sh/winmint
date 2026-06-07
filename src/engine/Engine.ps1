@@ -24,9 +24,7 @@ function New-WinMintBuildConfig {
 
     $profileName = [string](Get-WinMintProfileSetting $BuildProfile 'profileName' 'WinMint')
     # Subtractive model: the default build removes everything; opt-in keep flags
-    # suppress a domain's removal. setupOption/profileGroups are derived labels
-    # kept for manifest/agent/report consumers, not user input.
-    $setupOption = 'Minimal'
+    # suppress a domain's removal.
     $keep = Get-WinMintProfileSetting $BuildProfile 'keep' @{}
     $keepEdge = [bool](Get-WinMintProfileSetting $keep 'edge' $false)
     $keepGaming = [bool](Get-WinMintProfileSetting $keep 'gaming' $false)
@@ -40,12 +38,6 @@ function New-WinMintBuildConfig {
     $wsl2Distro = if ($wsl2Distros.Count -eq 0) { 'None' } elseif ($wsl2Distros.Count -eq 1) { $wsl2Distros[0] } else { $wsl2Distros -join ',' }
     $layers = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $desktop 'layers' @()))
     $desktopUi = @($layers | Where-Object { $_ -and $_ -ne 'standard' }).Count -gt 0
-    # Derived legacy labels for manifest/report/agent consumers (no longer user input).
-    $profileGroups = [System.Collections.Generic.List[string]]::new()
-    $profileGroups.Add('Minimal')
-    if ($keepGaming) { $profileGroups.Add('Gaming') }
-    if ($desktopUi) { $profileGroups.Add('DesktopUI') }
-    $profileGroups = @($profileGroups.ToArray())
     $launcher = [string](Get-WinMintProfileSetting $featureToggles 'launcher' '')
     if ([string]::IsNullOrWhiteSpace($launcher)) {
         $launcher = if ([bool](Get-WinMintProfileSetting $featureToggles 'flowEverything' $false)) { 'FlowEverything' } else { 'None' }
@@ -100,7 +92,7 @@ function New-WinMintBuildConfig {
     $privacyAdvertisingId = [bool](Get-WinMintProfileSetting $privacy 'advertisingId' $true)
     $privacyLocation = [bool](Get-WinMintProfileSetting $privacy 'location' $true)
     $privacyTimeline = [bool](Get-WinMintProfileSetting $privacy 'timeline' $true)
-    $aiRemoval = New-WinMintAiRemovalConfig -Removals $removals -SetupOption $setupOption -KeepCopilot $keepCopilot
+    $aiRemoval = New-WinMintAiRemovalConfig -Removals $removals -KeepCopilot $keepCopilot
     $appxCatalog = Get-WinMintAppxRemovalCatalog
     $dmaSetupRegion = Resolve-WinMintDmaInteropSetupRegion
     $restoreUserLocale = [string](Get-WinMintProfileSetting $regional 'userLocale' '')
@@ -146,8 +138,6 @@ function New-WinMintBuildConfig {
     $productKey = [string](Get-WinMintProfileSetting $target 'productKey' '')
     [pscustomobject]@{
         Profile = $profileName
-        ProfileGroups = @($profileGroups)
-        SetupOption = $setupOption
         Keep = [pscustomobject]@{ Edge = $keepEdge; Gaming = $keepGaming; Copilot = $keepCopilot }
         SourceIso = [string](Get-WinMintProfileSetting $source 'isoPath' '')
         Architecture = [string](Get-WinMintProfileSetting $source 'architecture' '')
@@ -476,10 +466,12 @@ function Invoke-WinMintIsoBuild {
         -Level OK `
         -Message $sourceMessage `
         -ProgressHandler $ProgressHandler
-    $profileGroupsText = @($Config.ProfileGroups | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }) -join ', '
+    $kept = @()
+    if ($Config.Keep.Edge) { $kept += 'Edge' }
+    if ($Config.Keep.Gaming) { $kept += 'Gaming' }
+    if ($Config.Keep.Copilot) { $kept += 'Copilot' }
     $profileMessage = "Profile: $($Config.Profile)"
-    if (-not [string]::IsNullOrWhiteSpace($profileGroupsText)) { $profileMessage += "; groups: $profileGroupsText" }
-    if (-not [string]::IsNullOrWhiteSpace([string]$Config.SetupOption)) { $profileMessage += "; setup option: $($Config.SetupOption)" }
+    if ($kept.Count) { $profileMessage += "; keep: $($kept -join ', ')" }
     $profileMessage += "; editors: $($Config.Editors -join ', ')"
     Write-WinMintProgress `
         -Stage 'Profile' `

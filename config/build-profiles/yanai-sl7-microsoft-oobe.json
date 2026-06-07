@@ -1,8 +1,7 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "createdAt": "2026-05-16T00:00:00+03:00",
   "profileName": "Developer",
-  "setupOption": "CopilotPlus",
   "source": {
     "isoPath": "",
     "architecture": "arm64"

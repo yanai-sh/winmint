@@ -10,8 +10,7 @@ function Get-WinMintAiRemovalCatalog {
 
 function Resolve-WinMintAiRemovalPolicy {
     param(
-        [object]$Removals,
-        [string]$SetupOption = 'Minimal'
+        [object]$Removals
     )
 
     $policy = [string](Get-WinMintProfileSetting $Removals 'aiPolicy' '')
@@ -31,12 +30,11 @@ function Resolve-WinMintAiRemovalPolicy {
 function New-WinMintAiRemovalConfig {
     param(
         [object]$Removals,
-        [string]$SetupOption = 'Minimal',
         [bool]$KeepCopilot = $false
     )
 
     $catalog = Get-WinMintAiRemovalCatalog
-    $policy = Resolve-WinMintAiRemovalPolicy -Removals $Removals -SetupOption $SetupOption
+    $policy = Resolve-WinMintAiRemovalPolicy -Removals $Removals
     $serviceablePrefixes = @()
     if ($policy -in @('ServiceableFull', 'AggressiveExperimental')) {
         $serviceablePrefixes = @($catalog.serviceableAppxPrefixes | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)

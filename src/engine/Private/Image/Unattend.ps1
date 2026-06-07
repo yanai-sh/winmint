@@ -96,7 +96,6 @@ function New-WinMintSetupProfile {
     [ordered]@{
         schemaVersion = 2
         profile = [string]$BuildConfig.Profile
-        setupOption = [string]$BuildConfig.SetupOption
         appxRemovalPrefixes = @($BuildConfig.AppxPackages)
         appxCatalogVersion = [int]$BuildConfig.AppxCatalogVersion
         registryTweaks = @($BuildConfig.RegistryTweaks)

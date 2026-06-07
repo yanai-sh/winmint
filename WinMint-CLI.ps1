@@ -4,8 +4,6 @@
 param(
     [string]$ProfilePath,
     [string]$NewProfile,
-    [ValidateSet('Minimal', 'Developer', 'CopilotPlus', 'Gaming', 'DesktopUI')]
-    [string]$Preset = 'Minimal',
     [string]$OutProfile,
     [string]$SourceIso,
     [string]$UupDumpSource,
@@ -21,8 +19,6 @@ param(
     [string]$PasswordEnvVar = '',
     [switch]$AutoLogon,
     [switch]$AutoWipeDisk,
-    [ValidateSet('Minimal', 'CopilotPlus')]
-    [string]$SetupOption = 'Minimal',
     [ValidateSet('TargetLicense', 'Fixed')]
     [string]$EditionMode = 'TargetLicense',
     # Edition selector: Host (default) | Home | Pro | Enterprise | Education |
@@ -54,11 +50,8 @@ param(
     [switch]$NoLocationServices,
     [switch]$NonInteractive,
     [switch]$ExportHostDrivers,
-    [switch]$Developer,
-    [switch]$Copilot,
     [Alias('Desktop-UI')]
     [switch]$DesktopUI,
-    [switch]$Gaming,
     [switch]$KeepEdge,
     [switch]$KeepGaming,
     [switch]$KeepCopilot,
@@ -96,7 +89,6 @@ Initialize-WinMintEngine -RepositoryRoot $PSScriptRoot -DryRun:$DryRun -ExportHo
 
 $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
     $PSBoundParameters.ContainsKey('NewProfile') -or
-    $PSBoundParameters.ContainsKey('Preset') -or
     $PSBoundParameters.ContainsKey('OutProfile') -or
     $PSBoundParameters.ContainsKey('SourceIso') -or
     $PSBoundParameters.ContainsKey('UupDumpSource') -or
@@ -105,10 +97,7 @@ $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
     $PSBoundParameters.ContainsKey('PasswordEnvVar') -or
     $PSBoundParameters.ContainsKey('TargetDevice') -or
     $PSBoundParameters.ContainsKey('DriverPack') -or
-    $PSBoundParameters.ContainsKey('Developer') -or
-    $PSBoundParameters.ContainsKey('Copilot') -or
     $PSBoundParameters.ContainsKey('DesktopUI') -or
-    $PSBoundParameters.ContainsKey('Gaming') -or
     $PSBoundParameters.ContainsKey('KeepEdge') -or
     $PSBoundParameters.ContainsKey('KeepGaming') -or
     $PSBoundParameters.ContainsKey('KeepCopilot') -or
@@ -159,7 +148,6 @@ if ($headlessMode) {
         -BoundParameters $PSBoundParameters `
         -ProfilePath $ProfilePath `
         -NewProfile $NewProfile `
-        -Preset $Preset `
         -OutProfile $OutProfile `
         -SourceIso $SourceIso `
         -UupDumpSource $UupDumpSource `
@@ -173,7 +161,6 @@ if ($headlessMode) {
         -PasswordEnvVar $PasswordEnvVar `
         -AutoLogon:$AutoLogon `
         -AutoWipeDisk:$AutoWipeDisk `
-        -SetupOption $SetupOption `
         -EditionMode $EditionMode `
         -Edition $Edition `
         -DriverSource $DriverSource `
@@ -189,10 +176,7 @@ if ($headlessMode) {
         -LocationServices:$LocationServices `
         -NoLocationServices:$NoLocationServices `
         -ExportHostDrivers:$ExportHostDrivers `
-        -Developer:$Developer `
-        -Copilot:$Copilot `
         -DesktopUI:$DesktopUI `
-        -Gaming:$Gaming `
         -KeepEdge:$KeepEdge `
         -KeepGaming:$KeepGaming `
         -KeepCopilot:$KeepCopilot `
@@ -233,7 +217,6 @@ Invoke-WinMintConsoleBuild `
     -Password $Password `
     -AutoLogon:$AutoLogon `
     -AutoWipeDisk:$AutoWipeDisk `
-    -SetupOption $SetupOption `
     -EditionMode $EditionMode `
     -Edition $Edition `
     -DriverSource $DriverSource `

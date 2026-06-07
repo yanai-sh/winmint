@@ -1,13 +1,7 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "createdAt": "2026-05-18T00:00:00.0000000+03:00",
   "profileName": "Minimal",
-  "profileGroups": [
-    "Minimal",
-    "Developer",
-    "CopilotPlus"
-  ],
-  "setupOption": "CopilotPlus",
   "source": {
     "isoPath": "tests/fixtures/uupdump/surface-laptop-7-uupdump-26220.8474-arm64-en-us.iso",
     "architecture": "arm64"

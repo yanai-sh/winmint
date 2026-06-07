@@ -483,8 +483,8 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
     $defaultProfile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
     $defaultConfig = New-WinMintBuildConfig -BuildProfile $defaultProfile
 
-    if ([int]$defaultProfile.schemaVersion -ne 2) {
-        Add-SmokeFailure 'Default generated profile must use schemaVersion 2.'
+    if ([int]$defaultProfile.schemaVersion -ne 3) {
+        Add-SmokeFailure 'Default generated profile must use schemaVersion 3.'
     }
     if ($defaultProfile.regional.uiLanguage -ne 'en-US' -or
         $defaultProfile.regional.uiLanguageFallback -ne 'en-US' -or

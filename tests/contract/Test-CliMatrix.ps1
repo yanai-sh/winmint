@@ -105,8 +105,8 @@ function Invoke-CliFailureCase {
 
 Invoke-CliProfileCase -Name 'minimal-default' -Assert {
     param($Profile, $Config, $AgentProfile)
-    if (@($Profile.profileGroups) -ne 'Minimal') { Add-CliMatrixFailure 'minimal-default should only select Minimal group.' }
-    if ([int]$Profile.schemaVersion -ne 2) { Add-CliMatrixFailure 'minimal-default should emit schemaVersion 2.' }
+    if ([bool]$Profile.keep.edge -or [bool]$Profile.keep.gaming -or [bool]$Profile.keep.copilot) { Add-CliMatrixFailure 'minimal-default should keep nothing (full subtractive default).' }
+    if ([int]$Profile.schemaVersion -ne 3) { Add-CliMatrixFailure 'minimal-default should emit schemaVersion 3.' }
     if (-not [bool]$Profile.tweaks.dmaInterop -or -not [bool]$Config.DmaInterop.Enabled) { Add-CliMatrixFailure 'minimal-default should enable DMA interop.' }
     if ($Config.SetupUserLocale -ne 'en-IE' -or $Config.SetupHomeLocationGeoId -ne 68) { Add-CliMatrixFailure 'minimal-default should use Ireland/en-IE/68 for setup.' }
     if ($Profile.regional.userLocale -ne 'en-US' -or [int]$Profile.regional.homeLocationGeoId -ne 244) { Add-CliMatrixFailure 'minimal-default should restore visible en-US/244 by default.' }
@@ -127,12 +127,11 @@ Invoke-CliProfileCase -Name 'minimal-no-dma-no-location' -Arguments @('-NoDmaInt
     if (@($Config.RegistryTweaks) -notcontains 'location-disabled-policy') { Add-CliMatrixFailure 'minimal-no-dma-no-location should apply location-disabled-policy.' }
 }
 
-# Subtractive model: -Developer is a legacy no-op. Developer tooling (OpenSSH
-# client, Developer Mode, RemoteSigned) is now baseline on every build, so the
-# flag derives no extra profile group (Minimal only) and selects no editors/WSL.
-Invoke-CliProfileCase -Name 'developer-only' -Arguments @('-Developer') -Assert {
+# Subtractive model: developer tooling (OpenSSH client, Developer Mode,
+# RemoteSigned) is baseline on every build, with no editors/WSL preselected.
+Invoke-CliProfileCase -Name 'baseline-developer-tooling' -Assert {
     param($Profile, $Config, $AgentProfile)
-    if (@($Profile.profileGroups) -ne 'Minimal') { Add-CliMatrixFailure 'developer-only (legacy -Developer no-op) should derive only the Minimal group.' }
+    if ([bool]$Profile.keep.edge -or [bool]$Profile.keep.gaming -or [bool]$Profile.keep.copilot) { Add-CliMatrixFailure 'baseline-developer-tooling should keep nothing by default.' }
     if ($Config.Features -notcontains 'OpenSSH.Client' -or
         $Config.RegistryTweaks -notcontains 'developer-mode' -or
         $Config.RegistryTweaks -notcontains 'powershell-remotesigned') {
@@ -152,7 +151,7 @@ Invoke-CliProfileCase -Name 'developer-only' -Arguments @('-Developer') -Assert 
 # unselected, so the WinMint shell stack is exercised through explicit layer flags.
 Invoke-CliProfileCase -Name 'desktop-ui-only' -Arguments @('-InstallWindhawk', '-InstallYasb', '-InstallKomorebi') -Assert {
     param($Profile, $Config, $AgentProfile)
-    if (@($Profile.profileGroups) -notcontains 'DesktopUI') { Add-CliMatrixFailure 'desktop-ui-only should derive the DesktopUI group from selected shell layers.' }
+    if (@($Profile.desktop.layers) -notcontains 'windhawk' -or @($Profile.desktop.layers) -notcontains 'yasb' -or @($Profile.desktop.layers) -notcontains 'komorebi') { Add-CliMatrixFailure 'desktop-ui-only should record the selected shell layers in the profile.' }
     if (-not $Config.InstallWindhawk -or -not $Config.InstallYasb -or -not $Config.InstallKomorebi) {
         Add-CliMatrixFailure 'desktop-ui-only should preserve the selected Windhawk/YASB/Komorebi shell layers.'
     }
@@ -161,7 +160,7 @@ Invoke-CliProfileCase -Name 'desktop-ui-only' -Arguments @('-InstallWindhawk', '
     }
 }
 
-Invoke-CliProfileCase -Name 'developer-flow-launcher' -Arguments @('-Developer', '-Launcher', 'FlowEverything') -Assert {
+Invoke-CliProfileCase -Name 'flow-launcher' -Arguments @('-Launcher', 'FlowEverything') -Assert {
     param($Profile, $Config, $AgentProfile)
     if ($Config.Launcher -ne 'FlowEverything' -or -not $AgentProfile.modules.flowEverything.enabled -or
         $AgentProfile.modules.raycast.enabled -or -not $AgentProfile.modules.packageManagers.enabled) {

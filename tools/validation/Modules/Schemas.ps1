@@ -7,7 +7,7 @@ function Test-BuildProfileSchema {
         return
     }
     $sample = [pscustomobject][ordered]@{
-        schemaVersion = 2
+        schemaVersion = 3
         createdAt = [DateTimeOffset]::Now.ToString('o')
         profileName = 'Developer'
         source = [pscustomobject][ordered]@{

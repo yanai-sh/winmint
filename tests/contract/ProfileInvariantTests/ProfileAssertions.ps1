@@ -439,14 +439,13 @@ function Assert-HeadlessCliContracts {
         if (-not $templateValidation.Passed) {
             Add-SmokeFailure "Expected -NewProfile output to validate, got: $($templateValidation.Failures -join '; ')"
         }
-        # Subtractive model: the default template removes everything; developer
-        # tooling is now baseline (no Developer group), and the derived label is
-        # Minimal-only with no preselected editors or WSL distros.
-        if ((@($template.profileGroups) -join ',') -ne 'Minimal' -or @($template.development.editors).Count -ne 0 -or @($template.development.wsl.distros).Count -ne 0) {
-            Add-SmokeFailure 'Expected default template to derive the Minimal group without preselecting editors or WSL distros.'
+        # Subtractive model: the default template keeps nothing and preselects no
+        # editors or WSL distros; developer tooling is baseline.
+        if ([bool]$template.keep.edge -or [bool]$template.keep.gaming -or [bool]$template.keep.copilot -or @($template.development.editors).Count -ne 0 -or @($template.development.wsl.distros).Count -ne 0) {
+            Add-SmokeFailure 'Expected default template to keep nothing without preselecting editors or WSL distros.'
         }
-        if ([int]$template.schemaVersion -ne 2) {
-            Add-SmokeFailure 'Expected generated profile templates to use schemaVersion 2.'
+        if ([int]$template.schemaVersion -ne 3) {
+            Add-SmokeFailure 'Expected generated profile templates to use schemaVersion 3.'
         }
         if (-not [bool]$template.tweaks.dmaInterop) {
             Add-SmokeFailure 'Expected generated profile templates to enable DMA interoperability by default.'
@@ -459,24 +458,19 @@ function Assert-HeadlessCliContracts {
         }
 
         $outResult = Invoke-WinMintHeadlessCli `
-            -BoundParameters @{ OutProfile = $outProfilePath; Gaming = $true; Architecture = 'amd64' } `
+            -BoundParameters @{ OutProfile = $outProfilePath; KeepGaming = $true; Architecture = 'amd64' } `
             -OutProfile $outProfilePath `
-            -Gaming `
+            -KeepGaming `
             -Architecture amd64 `
             -Quiet
         if ($outResult.result -ne 'profile-created' -or -not (Test-Path -LiteralPath $outProfilePath)) {
             Add-SmokeFailure 'Expected -OutProfile to save flag-authored intent without building.'
         }
         $outProfile = Get-Content -LiteralPath $outProfilePath -Raw | ConvertFrom-Json
-        # Subtractive model: -Gaming maps to -KeepGaming, deriving the Gaming label.
-        # Template mode leaves shell layers unselected, so DesktopUI is not derived.
-        foreach ($expectedGroup in @('Minimal', 'Gaming')) {
-            if (@($outProfile.profileGroups) -notcontains $expectedGroup) {
-                Add-SmokeFailure "Expected -Gaming/-KeepGaming to derive profile group '$expectedGroup'."
-            }
-        }
+        # Subtractive model: -KeepGaming sets the keep.gaming flag. Template mode
+        # leaves shell layers unselected.
         if (-not [bool]$outProfile.keep.gaming) {
-            Add-SmokeFailure 'Expected -Gaming to set the keep.gaming flag in the saved profile.'
+            Add-SmokeFailure 'Expected -KeepGaming to set the keep.gaming flag in the saved profile.'
         }
         if ((@($outProfile.desktop.layers) -join ',') -ne 'standard') {
             Add-SmokeFailure 'Expected profile templates to avoid preselecting shell layers unless explicit layer flags are supplied.'
@@ -552,10 +546,9 @@ function Assert-HeadlessCliContracts {
         -UserLocale 'he-IL' `
         -DryRun
     $config = New-WinMintBuildConfig -BuildProfile $profile
-    # Subtractive model: setupOption is always the Minimal derived label; the
-    # default build already removes the Copilot+ AI surface.
-    if ($config.SetupOption -ne 'Minimal' -or $config.AccountMode -ne 'MicrosoftOobe') {
-        Add-SmokeFailure 'Expected flag-built headless profile to derive Minimal setupOption and preserve MicrosoftOobe intent.'
+    # Subtractive model: the default build already removes the Copilot+ AI surface.
+    if ($config.AccountMode -ne 'MicrosoftOobe') {
+        Add-SmokeFailure 'Expected flag-built headless profile to preserve MicrosoftOobe intent.'
     }
     if ($config.TimeZoneId -ne 'Israel Standard Time' -or $config.InputLocale -ne 'en-US;he-IL') {
         Add-SmokeFailure 'Expected flag-built headless profile to preserve regional and keyboard settings.'
@@ -624,8 +617,8 @@ function Assert-HeadlessCliContracts {
 
     $minimalProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -DryRun
     $minimalConfig = New-WinMintBuildConfig -BuildProfile $minimalProfile
-    if ((@($minimalProfile.profileGroups) -join ',') -ne 'Minimal') {
-        Add-SmokeFailure 'Expected omitted headless group flags to default to the Minimal group only.'
+    if ([bool]$minimalProfile.keep.edge -or [bool]$minimalProfile.keep.gaming -or [bool]$minimalProfile.keep.copilot) {
+        Add-SmokeFailure 'Expected omitted headless keep flags to default to keeping nothing.'
     }
     # Subtractive model: developer QoL (OpenSSH client, Developer Mode) is now
     # baseline on every build; WSL stays opt-in until a distro is selected.
@@ -684,26 +677,20 @@ function Assert-HeadlessCliContracts {
         }
     }
 
-    # Subtractive model: -Developer/-Copilot are legacy no-ops (developer QoL is
-    # baseline; full Copilot+ AI removal is the default). -Gaming maps to
-    # -KeepGaming (preserve Xbox), -DesktopUI selects the shell stack. The derived
-    # labels are therefore Minimal + Gaming + DesktopUI only.
+    # Subtractive model: -KeepGaming preserves Xbox apps and -DesktopUI selects the
+    # WinMint shell stack; Copilot+ AI is still removed by default.
     $groupProfile = New-WinMintHeadlessProfileFromFlags `
         -SourceIso '' `
         -Architecture 'arm64' `
-        -Developer `
-        -Copilot `
-        -Gaming `
+        -KeepGaming `
         -DesktopUI `
         -DryRun
     $groupConfig = New-WinMintBuildConfig -BuildProfile $groupProfile
-    foreach ($expectedGroup in @('Minimal', 'Gaming', 'DesktopUI')) {
-        if (@($groupProfile.profileGroups) -notcontains $expectedGroup) {
-            Add-SmokeFailure "Expected combined headless flags to derive profile group '$expectedGroup'."
-        }
+    if (-not [bool]$groupProfile.keep.gaming) {
+        Add-SmokeFailure 'Expected -KeepGaming to set the keep.gaming flag.'
     }
-    if (@($groupProfile.profileGroups) -contains 'Developer' -or @($groupProfile.profileGroups) -contains 'CopilotPlus') {
-        Add-SmokeFailure 'Expected legacy -Developer/-Copilot flags to be no-ops that derive no extra profile group.'
+    if ([bool]$groupProfile.keep.copilot) {
+        Add-SmokeFailure 'Expected Copilot to stay removed by default without -KeepCopilot.'
     }
     if ($groupConfig.Features -notcontains 'OpenSSH.Client' -or
         $groupConfig.RegistryTweaks -notcontains 'developer-mode' -or
@@ -731,7 +718,6 @@ function Assert-HeadlessCliContracts {
     $flowProfile = New-WinMintHeadlessProfileFromFlags `
         -SourceIso '' `
         -Architecture 'arm64' `
-        -Developer `
         -Launcher FlowEverything `
         -DryRun
     $flowConfig = New-WinMintBuildConfig -BuildProfile $flowProfile
@@ -746,7 +732,6 @@ function Assert-HeadlessCliContracts {
     $raycastProfile = New-WinMintHeadlessProfileFromFlags `
         -SourceIso '' `
         -Architecture 'arm64' `
-        -Developer `
         -Launcher Raycast `
         -DryRun
     $raycastConfig = New-WinMintBuildConfig -BuildProfile $raycastProfile

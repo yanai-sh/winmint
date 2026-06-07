@@ -116,14 +116,13 @@ $result = Test-WinMintBuildProfile -BuildProfile $profile
 if (-not $result.Passed) {
     Add-SmokeFailure "Expected generated profile to pass validation, got: $($result.Failures -join '; ')"
 }
-if ([int]$profile.schemaVersion -ne 2) { Add-SmokeFailure 'Expected generated profiles to use schemaVersion 2.' }
+if ([int]$profile.schemaVersion -ne 3) { Add-SmokeFailure 'Expected generated profiles to use schemaVersion 3.' }
 if (-not [bool]$profile.tweaks.dmaInterop) { Add-SmokeFailure 'Expected generated profiles to enable DMA interop by default.' }
 if (-not [bool]$profile.privacy.location) { Add-SmokeFailure 'Expected generated profiles to enable location services by default.' }
 if ($profile.regional.userLocale -ne 'en-US' -or [int]$profile.regional.homeLocationGeoId -ne 244) {
     Add-SmokeFailure 'Expected generated profiles to default visible region to en-US/GeoID 244.'
 }
 $config = New-WinMintBuildConfig -BuildProfile $profile
-if ($config.SetupOption -ne 'Minimal') { Add-SmokeFailure 'Expected Minimal to be the default setup option.' }
 if ($config.AppxPackages -notcontains 'Microsoft.Copilot' -or $config.AppxPackages -notcontains 'MicrosoftWindows.Client.WebExperience') {
     Add-SmokeFailure 'Expected Minimal setup option to remove Copilot and WebExperience packages.'
 }
@@ -143,7 +142,6 @@ $settings.KeepCopilot = $true
 $profile = New-WinMintBuildProfile -Settings $settings
 if (-not [bool]$profile.keep.copilot) { Add-SmokeFailure 'Expected KeepCopilot to flow into profile.keep.copilot.' }
 $config = New-WinMintBuildConfig -BuildProfile $profile
-if ($config.SetupOption -ne 'Minimal') { Add-SmokeFailure 'Expected setupOption to remain the Minimal derived label.' }
 if (-not [bool]$config.Keep.Copilot) { Add-SmokeFailure 'Expected KeepCopilot to flow into build config Keep.Copilot.' }
 if ($config.AppxPackages -contains 'Microsoft.Copilot' -or $config.AppxPackages -contains 'Microsoft.Windows.AIHub') {
     Add-SmokeFailure 'Expected KeepCopilot to keep the Copilot app and AI hub AppX packages.'

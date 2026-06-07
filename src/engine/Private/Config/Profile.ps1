@@ -94,8 +94,7 @@ function Resolve-WinMintDmaInteropSetupRegion {
 
 function Get-WinMintProfileAiPolicy {
     param(
-        [object]$Settings,
-        [string]$SetupOption = 'Minimal'
+        [object]$Settings
     )
 
     $raw = [string](Get-WinMintProfileSetting $Settings 'AiPolicy' '')
@@ -376,25 +375,11 @@ function New-WinMintBuildProfile {
     )
 
     $profileName = [string](Get-WinMintProfileSetting $Settings 'Profile' 'WinMint')
-    # Subtractive model: default removes everything; opt-in keep flags suppress a
-    # domain. profileGroups/setupOption are derived labels for downstream consumers.
-    # Back-compat bridge for the current GUI/ui-bridge, which still emits the
-    # legacy ProfileGroups array: the old 'Gaming' group always meant "keep
-    # gaming", so it maps to KeepGaming. 'CopilotPlus' (old = AI-free) and
-    # 'Developer' (now baseline) need no mapping — full removal / baseline dev
-    # tweaks are the new default, matching those old intents.
-    $legacyGroups = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $Settings 'ProfileGroups' @()))
+    # Subtractive model: the default build removes everything; opt-in keep flags
+    # suppress a domain's removal.
     $keepEdge = [bool](Get-WinMintProfileSetting $Settings 'KeepEdge' $false)
-    $keepGaming = [bool](Get-WinMintProfileSetting $Settings 'KeepGaming' $false) -or ($legacyGroups -contains 'Gaming')
+    $keepGaming = [bool](Get-WinMintProfileSetting $Settings 'KeepGaming' $false)
     $keepCopilot = [bool](Get-WinMintProfileSetting $Settings 'KeepCopilot' $false)
-    $desktopLayers = @(Get-WinMintProfileDesktopLayers -Settings $Settings)
-    $desktopUi = @($desktopLayers | Where-Object { $_ -and $_ -ne 'standard' }).Count -gt 0
-    $derivedGroups = [System.Collections.Generic.List[string]]::new()
-    $derivedGroups.Add('Minimal')
-    if ($keepGaming) { $derivedGroups.Add('Gaming') }
-    if ($desktopUi) { $derivedGroups.Add('DesktopUI') }
-    $profileGroups = @($derivedGroups.ToArray())
-    $setupOption = 'Minimal'
     $editionMode = Get-WinMintProfileEditionMode -Settings $Settings
     $edition = [string](Get-WinMintProfileSetting $Settings 'Edition' '')
     if ($editionMode -eq 'Fixed' -and [string]::IsNullOrWhiteSpace($edition)) {
@@ -430,7 +415,7 @@ function New-WinMintBuildProfile {
     $removeGaming = [bool](Get-WinMintProfileSetting $Settings 'RemoveGaming' (-not $keepGaming))
     $removeCommunication = [bool](Get-WinMintProfileSetting $Settings 'RemoveCommunication' $true)
     $removeMicrosoftApps = [bool](Get-WinMintProfileSetting $Settings 'RemoveMicrosoftApps' $true)
-    $aiPolicy = Get-WinMintProfileAiPolicy -Settings $Settings -SetupOption $setupOption
+    $aiPolicy = Get-WinMintProfileAiPolicy -Settings $Settings
     $userLocale = Get-WinMintProfileStringSetting -Settings $Settings -Name 'UserLocale' -Default 'en-US'
     $homeLocationGeoId = [int](Get-WinMintProfileSetting $Settings 'HomeLocationGeoId' (Resolve-WinMintRegionGeoId -CultureName $userLocale))
     $effectiveAppxSettings = [ordered]@{
@@ -450,11 +435,9 @@ function New-WinMintBuildProfile {
     if ($IncludeSecrets) { $identity.password = $password }
 
     [ordered]@{
-        schemaVersion = 2
+        schemaVersion = 3
         createdAt = [DateTimeOffset]::Now.ToString('o')
         profileName = $profileName
-        profileGroups = @($profileGroups)
-        setupOption = $setupOption
         source = [ordered]@{
             isoPath = [string](Get-WinMintProfileSetting $Settings 'ISOPath' '')
             architecture = [string](Get-WinMintProfileSetting $Settings 'Architecture' '')
@@ -610,15 +593,7 @@ function Test-WinMintBuildProfile {
     )
     if ($failures.Count -gt 0) { return [pscustomobject]@{ Passed = $false; Failures = $failures.ToArray() } }
 
-    if ([int]$BuildProfile.schemaVersion -ne 2) { & $add 'profile.schemaVersion must be 2.' }
-    if (Test-WinMintProfileProperty -Object $BuildProfile -Name 'profileGroups') {
-        $groups = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $BuildProfile 'profileGroups' @()))
-        foreach ($group in $groups) { & $enum $group 'profile.profileGroups[]' @('Minimal', 'Developer', 'CopilotPlus', 'Gaming', 'DesktopUI') }
-        if ($groups.Count -ne @($groups | Select-Object -Unique).Count) { & $add 'profile.profileGroups must be unique.' }
-    }
-    if (Test-WinMintProfileProperty -Object $BuildProfile -Name 'setupOption') {
-        & $enum ([string](Get-WinMintProfileSetting $BuildProfile 'setupOption' 'Minimal')) 'profile.setupOption' @('Minimal', 'CopilotPlus')
-    }
+    if ([int]$BuildProfile.schemaVersion -ne 3) { & $add 'profile.schemaVersion must be 3.' }
     $source = Get-WinMintProfileSetting $BuildProfile 'source' @{}
     $target = Get-WinMintProfileSetting $BuildProfile 'target' @{}
     $identity = Get-WinMintProfileSetting $BuildProfile 'identity' @{}

@@ -16,7 +16,6 @@ function New-WinMintBuildReport {
         selectedEdition = if ($Config.EditionMode -eq 'Fixed') { $Config.Edition } else { 'Target license' }
         targetDevice = $Config.TargetDevice
         profile = $Config.Profile
-        profileGroups = @($Config.ProfileGroups)
         appxRemovalPrefixes = $Config.AppxPackages
         registryTweaks = $Config.RegistryTweaks
         windowsFeatures = $Config.Features
@@ -71,9 +70,6 @@ function Save-WinMintBuildReport {
     else {
         '- Standard Windows'
     }
-    $profileGroups = @($Report.profileGroups | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
-    $profileGroupsText = if ($profileGroups.Count) { $profileGroups -join ', ' } else { $Report.profile }
-
     $md = @(
         '# WinMint Build Report'
         ''
@@ -86,7 +82,6 @@ function Save-WinMintBuildReport {
         "| Edition | $($Report.selectedEdition) |"
         "| Target device | $($Report.targetDevice) |"
         "| Profile | $($Report.profile) |"
-        "| Profile groups | $profileGroupsText |"
         ''
         '## Selected Editors'
         (($Report.editors | ForEach-Object { "- $_" }) -join "`n")

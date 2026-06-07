@@ -83,8 +83,6 @@ function New-WinMintConsoleHeadlessProfile {
         [string]$Password = '',
         [switch]$AutoLogon,
         [switch]$AutoWipeDisk,
-        [ValidateSet('Minimal', 'CopilotPlus')]
-        [string]$SetupOption = 'Minimal',
         [ValidateSet('TargetLicense', 'Fixed')]
         [string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
@@ -152,8 +150,7 @@ function New-WinMintConsoleHeadlessProfile {
     if ($UILanguageFallback) { $regional.UILanguageFallback = $UILanguageFallback }
     if ($UserLocale) { $regional.UserLocale = $UserLocale }
     New-WinMintBuildProfile -Settings @{
-        Profile = 'Developer'
-        SetupOption = $SetupOption
+        Profile = 'WinMint'
         ISOPath = $resolvedIso
         Architecture = $Architecture
         EditionMode = $EditionMode
@@ -331,8 +328,6 @@ function Invoke-WinMintConsoleBuild {
         [string]$Password = '',
         [switch]$AutoLogon,
         [switch]$AutoWipeDisk,
-        [ValidateSet('Minimal', 'CopilotPlus')]
-        [string]$SetupOption = 'Minimal',
         [ValidateSet('TargetLicense', 'Fixed')]
         [string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
@@ -373,7 +368,6 @@ function Invoke-WinMintConsoleBuild {
     if ($Password) { $switches += @('-Password', $Password) }
     if ($AutoLogon) { $switches += '-AutoLogon' }
     if ($AutoWipeDisk) { $switches += '-AutoWipeDisk' }
-    if ($SetupOption) { $switches += @('-SetupOption', $SetupOption) }
     if ($EditionMode) { $switches += @('-EditionMode', $EditionMode) }
     if ($Edition) { $switches += @('-Edition', $Edition) }
     if ($DriverSource) { $switches += @('-DriverSource', $DriverSource) }
@@ -412,7 +406,6 @@ function Invoke-WinMintConsoleBuild {
                 -Password $Password `
                 -AutoLogon:$AutoLogon `
                 -AutoWipeDisk:$AutoWipeDisk `
-                -SetupOption $SetupOption `
                 -EditionMode $EditionMode `
                 -Edition $Edition `
                 -DriverSource $DriverSource `
