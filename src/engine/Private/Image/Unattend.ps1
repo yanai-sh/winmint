@@ -732,11 +732,13 @@ function Install-Autounattend {
             Copy-Item -LiteralPath $wallpaperSrc -Destination (Join-Path $wallpaperDir 'WinMint-Bloom-OLED.png') -Force
             LogOK 'Staged WinMint Bloom OLED wallpaper into the offline image.'
             $utf8Bom = [System.Text.UTF8Encoding]::new($true)
-            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1')) {
+            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'RunSetupScript.cmd', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1')) {
                 $src = Join-Path $bundleDir $n
                 if (-not (Test-Path -LiteralPath $src)) { continue }
                 $destPath = Join-Path $destScripts $n
-                if ($n -eq 'SetupComplete.cmd') {
+                if ($n -like '*.cmd') {
+                    # Batch files must be ASCII with no BOM — a UTF-8 BOM makes cmd.exe
+                    # fail on the first line.
                     [System.IO.File]::WriteAllBytes($destPath, [System.Text.Encoding]::ASCII.GetBytes((Get-Content -LiteralPath $src -Raw)))
                 }
                 else {

@@ -62,9 +62,9 @@
         </component>
         <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
             <RunSynchronous>
-                <RunSynchronousCommand wcm:action="add"><Order>1</Order><Path>cmd.exe /c if exist "C:\Program Files\PowerShell\7\pwsh.exe" ("C:\Program Files\PowerShell\7\pwsh.exe" -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "C:\Windows\Setup\Scripts\Specialize.ps1") else (powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "C:\Windows\Setup\Scripts\Specialize.ps1")</Path></RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add"><Order>1</Order><Path>cmd.exe /c C:\Windows\Setup\Scripts\RunSetupScript.cmd Specialize.ps1</Path></RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add"><Order>2</Order><Path>reg.exe load "HKU\DefaultUser" "C:\Users\Default\NTUSER.DAT"</Path></RunSynchronousCommand>
-                <RunSynchronousCommand wcm:action="add"><Order>3</Order><Path>cmd.exe /c if exist "C:\Program Files\PowerShell\7\pwsh.exe" ("C:\Program Files\PowerShell\7\pwsh.exe" -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "C:\Windows\Setup\Scripts\DefaultUser.ps1") else (powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "C:\Windows\Setup\Scripts\DefaultUser.ps1")</Path></RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add"><Order>3</Order><Path>cmd.exe /c C:\Windows\Setup\Scripts\RunSetupScript.cmd DefaultUser.ps1</Path></RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add"><Order>4</Order><Path>reg.exe unload "HKU\DefaultUser"</Path></RunSynchronousCommand>
             </RunSynchronous>
         </component>

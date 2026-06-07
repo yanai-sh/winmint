@@ -155,6 +155,19 @@ function Assert-HardwareBypassUnattendGeneration {
         Add-SmokeFailure 'Expected -ProductKey to inject the generic key into UserData/ProductKey/Key.'
     }
 
+    # RunSynchronousCommand <Path> has a ~259-char WCM limit; exceeding it makes
+    # Windows Setup reject the answer file in the specialize pass (0x80220005),
+    # which boot-loops the install with "restarted unexpectedly".
+    $unattendXml = [xml]$plain.AutounattendXml
+    $nsRsc = [System.Xml.XmlNamespaceManager]::new($unattendXml.NameTable)
+    $nsRsc.AddNamespace('u', 'urn:schemas-microsoft-com:unattend')
+    foreach ($pathNode in $unattendXml.SelectNodes('//u:RunSynchronousCommand/u:Path', $nsRsc)) {
+        $pathText = [string]$pathNode.InnerText
+        if ($pathText.Length -gt 259) {
+            Add-SmokeFailure "RunSynchronousCommand <Path> is $($pathText.Length) chars (> 259 limit); Setup will reject specialize: '$($pathText.Substring(0, 50))...'"
+        }
+    }
+
     $singleImage = Install-Autounattend @common -HardwareBypass:$false -InstallImageCount 1
     if ([string]$singleImage.AutounattendXml -notmatch '<Key>\s*/IMAGE/INDEX\s*</Key>\s*<Value>\s*1\s*</Value>') {
         Add-SmokeFailure 'Expected single-image target-license media to pin InstallFrom /IMAGE/INDEX = 1.'
