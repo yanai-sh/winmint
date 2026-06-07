@@ -135,12 +135,7 @@ function New-WinMintBuildConfig {
         $appxRemovalPrefixes = @($appxRemovalPrefixes | Where-Object { $_ -notin @('Microsoft.Copilot', 'Microsoft.Windows.Copilot', 'Microsoft.Windows.AIHub') })
     }
 
-    $rawEditionMode = [string](Get-WinMintProfileSetting $target 'editionMode' 'TargetLicense')
-    $editionMode = switch -Regex ($rawEditionMode) {
-        '^(TargetLicense|Target|License|Auto)$' { 'TargetLicense'; break }
-        '^(Fixed|Forced|Force)$' { 'Fixed'; break }
-        default { 'TargetLicense' }
-    }
+    $editionMode = Get-WinMintProfileEditionMode -Settings $target
     $edition = [string](Get-WinMintProfileSetting $target 'edition' '')
     if ($editionMode -eq 'Fixed' -and [string]::IsNullOrWhiteSpace($edition)) {
         $edition = 'Windows 11 Home'

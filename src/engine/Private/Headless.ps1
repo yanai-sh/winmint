@@ -365,31 +365,6 @@ function Resolve-WinMintHeadlessDriverIntent {
     [pscustomobject]@{ Source = 'None'; Path = ''; ExportHostDrivers = $false }
 }
 
-function Resolve-WinMintHeadlessProfileGroups {
-    param(
-        [ValidateSet('Minimal', 'Developer', 'CopilotPlus', 'Gaming', 'DesktopUI')][string]$Preset = 'Minimal',
-        [ValidateSet('Minimal', 'CopilotPlus')][string]$SetupOption = 'Minimal',
-        [switch]$Developer,
-        [switch]$Copilot,
-        [switch]$DesktopUI,
-        [switch]$Gaming
-    )
-
-    $groups = [System.Collections.Generic.List[string]]::new()
-    $groups.Add('Minimal') | Out-Null
-    switch ($Preset) {
-        'Developer' { $groups.Add('Developer') | Out-Null }
-        'CopilotPlus' { $groups.Add('CopilotPlus') | Out-Null }
-        'Gaming' { $groups.Add('Gaming') | Out-Null }
-        'DesktopUI' { $groups.Add('DesktopUI') | Out-Null }
-    }
-    if ($Developer) { $groups.Add('Developer') | Out-Null }
-    if ($Copilot -or $SetupOption -eq 'CopilotPlus') { $groups.Add('CopilotPlus') | Out-Null }
-    if ($Gaming) { $groups.Add('Gaming') | Out-Null }
-    if ($DesktopUI) { $groups.Add('DesktopUI') | Out-Null }
-    @($groups.ToArray() | Select-Object -Unique)
-}
-
 function New-WinMintHeadlessProfileFromFlags {
     [CmdletBinding()]
     param(
@@ -543,11 +518,7 @@ function Write-WinMintHeadlessJsonResult {
 function Write-WinMintHeadlessHumanResult {
     param([Parameter(Mandatory)][object]$Result)
     $status = [string]$Result.result
-    if ($status -in @('success', 'dry-run', 'cleaned', 'listed')) {
-        Write-Host "WinMint headless result: $status"
-    } else {
-        Write-Host "WinMint headless result: $status"
-    }
+    Write-Host "WinMint headless result: $status"
     if (-not [string]::IsNullOrWhiteSpace([string]$Result.buildId)) { Write-Host "Build ID: $($Result.buildId)" }
     if (-not [string]::IsNullOrWhiteSpace([string]$Result.outputIso)) { Write-Host "Output ISO: $($Result.outputIso)" }
     if ($Result.reports -and $Result.reports.PSObject.Properties['profile'] -and

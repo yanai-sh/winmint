@@ -119,43 +119,12 @@ function Get-WinMintProfileAiPolicy {
     }
 }
 
-function ConvertTo-WinMintProfileGroupArray {
-    param([object]$Settings)
-
-    $rawGroups = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $Settings 'ProfileGroups' @()))
-    $groups = [System.Collections.Generic.List[string]]::new()
-    foreach ($group in $rawGroups) {
-        switch -Regex ($group) {
-            '^(Minimal|Base|Core)$' { $groups.Add('Minimal') | Out-Null; break }
-            '^(Developer|Dev)$' { $groups.Add('Developer') | Out-Null; break }
-            '^(CopilotPlus|Copilot|AI)$' { $groups.Add('CopilotPlus') | Out-Null; break }
-            '^(Gaming|Game)$' { $groups.Add('Gaming') | Out-Null; break }
-            '^(DesktopUI|Desktop-UI|CustomUI|Shell)$' { $groups.Add('DesktopUI') | Out-Null; break }
-        }
-    }
-
-    $setupOption = Get-WinMintProfileSetupOption -Settings $Settings
-    if ($setupOption -eq 'CopilotPlus') { $groups.Add('CopilotPlus') | Out-Null }
-
-    if ($groups.Count -eq 0) { $groups.Add('Minimal') | Out-Null }
-    return @($groups.ToArray() | Select-Object -Unique)
-}
-
 function Get-WinMintAppxRemovalCatalog {
     $path = Get-WinMintPath -Name Config -ChildPath 'appx-removal.json'
     if (-not (Test-Path -LiteralPath $path)) {
         throw "AppX removal catalog not found: $path"
     }
     Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
-}
-
-function Test-WinMintProfileGroup {
-    param(
-        [object]$Settings,
-        [Parameter(Mandatory)][string]$Group
-    )
-
-    return @(ConvertTo-WinMintProfileGroupArray -Settings $Settings) -contains $Group
 }
 
 function Get-WinMintProfileEditorIds {
@@ -243,17 +212,6 @@ function Get-WinMintProfileAppxRemovalPrefix {
         RemoveMicrosoftApps = [bool](Get-WinMintProfileSetting $Removals 'microsoftApps' $true)
     }
     Get-WinMintEffectiveAppxRemovalPrefix -Settings $settings
-}
-
-function Get-WinMintProfileSetupOption {
-    param([object]$Settings)
-
-    $raw = [string](Get-WinMintProfileSetting $Settings 'SetupOption' 'Minimal')
-    switch -Regex ($raw) {
-        '^(Minimal|Slim|Core)$' { return 'Minimal' }
-        '^(CopilotPlus|Copilot|Microsoft|MicrosoftComplete)$' { return 'CopilotPlus' }
-        default { return 'Minimal' }
-    }
 }
 
 function Get-WinMintDefaultEditionName {

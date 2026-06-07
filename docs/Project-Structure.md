@@ -45,7 +45,6 @@ fixture.
 |-- config/
 |   |-- build-profiles/
 |   |-- packages.json
-|   |-- profiles.json
 |   |-- release-manifest.json
 |   `-- tweaks.json
 |-- docs/

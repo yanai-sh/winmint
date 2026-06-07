@@ -30,7 +30,7 @@ function Assert-FormFactorAndPowerProfile {
     if ([string]$defaultConfig.FormFactor -ne 'Auto') {
         Add-SmokeFailure "Default build config FormFactor should be 'Auto', got '$($defaultConfig.FormFactor)'."
     }
-    foreach ($expected in @('filesystem-performance-policy', 'developer-telemetry-optout', 'telemetry-tracing-policy')) {
+    foreach ($expected in @('filesystem-performance-policy', 'developer-telemetry-optout', 'telemetry-tracing-policy', 'terminal-admin-context')) {
         if (@($defaultConfig.RegistryTweaks) -notcontains $expected) {
             Add-SmokeFailure "Default Developer build should select registry tweak '$expected'."
         }

@@ -74,7 +74,6 @@ function Test-RequiredAssets {
         'assets\runtime\cursors\BreezeXLight\ZoomOut.cur',
         'assets\runtime\cursors\BreezeXLight\install.inf',
         'config\packages.json',
-        'config\profiles.json',
         'config\release-manifest.json',
         'config\tweaks.json',
         'cloudflare\winmint\README.md',

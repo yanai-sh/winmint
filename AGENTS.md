@@ -101,7 +101,6 @@ Validate with `tests/contract/Test-ProfileInvariants.ps1`.
 
 | File | Purpose |
 |------|---------|
-| `config/profiles.json` | Named build profiles |
 | `config/packages.json` | winget package catalog |
 | `src/engine/Private/Image/Tweaks/` | Registry tweak modules — one `NN-<id>.ps1` per tweak, each carrying its definition (`set`/`remove`/metadata) **and** its `appliesTo` curation predicate. `TweakRegistry.ps1` assembles `$script:RegistryTweaks` and `Get-WinMintSelectedRegistryTweaks`. Add/change a tweak by editing one file there. |
 | `config/tweaks.json` | Public metadata mirror of the tweak modules; kept in parity by a contract test (`StaticAssertions.ps1`). Not the executable source. |
