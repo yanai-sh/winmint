@@ -256,6 +256,50 @@ function Get-WinMintProfileSetupOption {
     }
 }
 
+function Get-WinMintDefaultEditionName {
+    # WinMint's primary target is Windows 11 Home Single Language / en-US. This is
+    # the default fixed edition: servicing one image instead of all is ~3x faster.
+    # Get-WinMintInstallImagesForBuild treats this name specially — if it is absent
+    # from a given ISO it falls back to servicing all editions (rather than failing),
+    # while any other explicitly selected edition still fails hard when missing.
+    'Windows 11 Home Single Language'
+}
+
+function Resolve-WinMintEditionSelection {
+    <#
+    <summary>
+    Maps the friendly -Edition selector (and legacy -EditionMode) into the
+    (Mode, Name) the build profile stores. SingleLanguage is the default and the
+    only selection that falls back to all editions when absent. 'All' (or an
+    explicit -EditionMode TargetLicense) services every edition so Windows Setup
+    can pick the target device's edition.
+    </summary>
+    #>
+    param(
+        [string]$Edition = '',
+        [string]$EditionMode = '',
+        [bool]$EditionSpecified = $false,
+        [bool]$EditionModeSpecified = $false
+    )
+    $default = Get-WinMintDefaultEditionName
+    if ($EditionSpecified) {
+        switch -Regex (([string]$Edition).Trim()) {
+            '^(All|TargetLicense|Target|License|Auto|Any)$' { return [pscustomobject]@{ Mode = 'TargetLicense'; Name = '' } }
+            '^(SingleLanguage|HomeSingleLanguage|HomeSL|SingleLang|SL)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = $default } }
+            '^(Home)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = 'Windows 11 Home' } }
+            '^(Pro|Professional)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = 'Windows 11 Pro' } }
+            '^(Enterprise|Ent)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = 'Windows 11 Enterprise' } }
+            '^(Education|Edu)$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = 'Windows 11 Education' } }
+            '^\s*$' { return [pscustomobject]@{ Mode = 'Fixed'; Name = $default } }
+            default { return [pscustomobject]@{ Mode = 'Fixed'; Name = ([string]$Edition).Trim() } }
+        }
+    }
+    if ($EditionModeSpecified -and ([string]$EditionMode) -match '^(TargetLicense|Target|License|Auto)$') {
+        return [pscustomobject]@{ Mode = 'TargetLicense'; Name = '' }
+    }
+    return [pscustomobject]@{ Mode = 'Fixed'; Name = $default }
+}
+
 function Get-WinMintProfileEditionMode {
     param([object]$Settings)
 

@@ -120,7 +120,20 @@ function Get-WinMintInstallImagesForBuild {
         if ([string]::IsNullOrWhiteSpace($EditionName)) {
             throw 'Fixed edition mode requires an edition name.'
         }
-        return @(Get-WinMintSelectedInstallImage -InstallWim $InstallWim -EditionName $EditionName)
+        try {
+            return @(Get-WinMintSelectedInstallImage -InstallWim $InstallWim -EditionName $EditionName)
+        }
+        catch {
+            # The default Single Language edition falls back to servicing all
+            # editions when absent (robust default); any other explicitly chosen
+            # edition still fails hard so the user is never silently given a
+            # different edition than they asked for.
+            if ($EditionName -eq (Get-WinMintDefaultEditionName)) {
+                LogWarn "Default edition '$EditionName' is not present in this ISO; servicing all $($images.Count) edition(s) so Windows Setup can choose. ($($_.Exception.Message))"
+                return $images
+            }
+            throw
+        }
     }
 
     LogVerbose "Available editions: $(@($images | ForEach-Object { $_.ImageName }) -join ', ')"
@@ -271,6 +284,12 @@ function Invoke-WinMintIsoPipeline {
         $editionMode = if ([string]::IsNullOrWhiteSpace([string]$BuildConfig.EditionMode)) { 'TargetLicense' } else { [string]$BuildConfig.EditionMode }
         if ($editionMode -notin @('TargetLicense', 'Fixed')) { $editionMode = 'TargetLicense' }
         $installImages = @(Get-WinMintInstallImagesForBuild -InstallWim $installWim -EditionMode $editionMode -EditionName $BuildConfig.Edition)
+        if ($editionMode -eq 'Fixed' -and $installImages.Count -gt 1) {
+            # The default-edition fallback returned all editions (Fixed otherwise
+            # services exactly one). Treat the rest of the build as target-license
+            # so the per-image autounattend does not stamp a single edition.
+            $editionMode = 'TargetLicense'
+        }
         Assert-WinMintDismCanServiceImages -ImagePath $installWim -Images $installImages
         $expectedWimMetadata = @(Get-WinMintSelectedWimMetadata -ImagePath $installWim -Images $installImages)
         if ($editionMode -eq 'TargetLicense') {
@@ -421,7 +440,7 @@ function Invoke-WinMintIsoPipeline {
             Write-SectionHeader "Image ${imageOrdinal}/${imageTotal}: service $imgName"
             Log "Mounting install.wim index $($image.ImageIndex) ($imgName)… image $imageOrdinal of $imageTotal."
             $mountTimer = [System.Diagnostics.Stopwatch]::StartNew()
-            $null = Mount-WindowsImage -ImagePath $installWim -Index $image.ImageIndex -Path $mountDir -ErrorAction Stop
+            Mount-WinMintImage -ImagePath $installWim -Index $image.ImageIndex -MountDir $mountDir
             $mountTimer.Stop()
             LogOK "install.wim index $($image.ImageIndex) mounted in $(Format-WinMintDuration -Duration $mountTimer.Elapsed); proceeding to servicing."
             $mountedImage = $true
@@ -554,8 +573,7 @@ function Invoke-WinMintIsoPipeline {
     }
     catch {
         if ($mountedImage) {
-            try { Dismount-WindowsImage -Path $mountDir -Discard -ErrorAction SilentlyContinue | Out-Null }
-            catch { Write-Verbose "Discard mounted image after failure: $($_.Exception.Message)" }
+            Dismount-WinMintImageMount -MountDir $mountDir
         }
         throw
     }

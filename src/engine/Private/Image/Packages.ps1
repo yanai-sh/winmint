@@ -255,7 +255,7 @@ function Save-ImageWithCleanup {
     }
     Invoke-Action 'Saving and dismounting the Windows image (commit can take several minutes)' -SpectreProgressIndeterminate {
         LogVerbose "Mount: $MountDir"
-        $null = Dismount-WindowsImage -Path $MountDir -Save -ErrorAction Stop
+        Save-WinMintImageMount -MountDir $MountDir
         LogOK 'Windows image saved and dismounted.'
     }
 }

@@ -834,7 +834,7 @@ function Install-WinPEUtility {
         $null = New-Item -Path $bootMount -ItemType Directory -Force
 
         try {
-            $null = Mount-WindowsImage -ImagePath $bootWim -Index $script:BootWimWinPEUtilityMountIndex -Path $bootMount -ErrorAction Stop
+            Mount-WinMintImage -ImagePath $bootWim -Index $script:BootWimWinPEUtilityMountIndex -MountDir $bootMount
             Log 'Applying dark theme and FormatDisk.cmd to WinPE…'
             $peSystem = Join-Path $bootMount 'Windows\System32\config\SYSTEM'
             $peSoftware = Join-Path $bootMount 'Windows\System32\config\SOFTWARE'
@@ -883,11 +883,11 @@ echo SUCCESS: Disk %TARGET_DISK% is provisioned.
 pause
 "@
             Set-Content -Path (Join-Path $bootMount 'Windows\System32\FormatDisk.cmd') -Value $cmdScript -Encoding ASCII -Force
-            $null = Dismount-WindowsImage -Path $bootMount -Save -ErrorAction Stop
+            Save-WinMintImageMount -MountDir $bootMount
         }
         catch {
             LogWarn "WinPE Utility injection failed: $_"
-            try { $null = Dismount-WindowsImage -Path $bootMount -Discard -ErrorAction SilentlyContinue } catch { Write-Verbose "WinPE boot mount discard: $($_.Exception.Message)" }
+            Dismount-WinMintImageMount -MountDir $bootMount
         }
         finally {
             $null = Remove-Item $bootMount -Recurse -Force -ErrorAction SilentlyContinue

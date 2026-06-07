@@ -25,7 +25,11 @@ param(
     [string]$SetupOption = 'Minimal',
     [ValidateSet('TargetLicense', 'Fixed')]
     [string]$EditionMode = 'TargetLicense',
-    [string]$Edition = '',
+    # Edition selector: SingleLanguage (default) | Home | Pro | Enterprise |
+    # Education | All, or an exact edition name. SingleLanguage services only that
+    # one image (~3x faster) and falls back to all editions if absent; 'All'
+    # services every edition so Windows Setup picks the target device's edition.
+    [string]$Edition = 'SingleLanguage',
     [ValidateSet('None', 'Host', 'Custom')]
     [string]$DriverSource = 'None',
     [string]$DriverPath = '',
@@ -123,6 +127,15 @@ $headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
     $NonInteractive
 
 if ($headlessMode) {
+    # Resolve the friendly -Edition token (and legacy -EditionMode) into the
+    # concrete (mode, name) the profile stores. Default selects Single Language.
+    $editionSelection = Resolve-WinMintEditionSelection `
+        -Edition $Edition `
+        -EditionMode $EditionMode `
+        -EditionSpecified ($PSBoundParameters.ContainsKey('Edition')) `
+        -EditionModeSpecified ($PSBoundParameters.ContainsKey('EditionMode'))
+    $EditionMode = $editionSelection.Mode
+    $Edition = $editionSelection.Name
     $headlessResult = Invoke-WinMintHeadlessCli `
         -BoundParameters $PSBoundParameters `
         -ProfilePath $ProfilePath `

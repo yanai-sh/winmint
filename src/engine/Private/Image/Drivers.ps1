@@ -301,15 +301,15 @@ function Invoke-DriverInjection {
                     $null = New-Item -Path $bootMount -ItemType Directory -Force
                     try {
                         Log "Mounting boot.wim index $idx for WinPE driver injection."
-                        $null = Mount-WindowsImage -ImagePath $bootWim -Index $idx -Path $bootMount -ErrorAction Stop
+                        Mount-WinMintImage -ImagePath $bootWim -Index $idx -MountDir $bootMount
                         Invoke-DismAddDriverToImage -ImageMountPath $bootMount -DriverSource $bootDriverSource
-                        $null = Dismount-WindowsImage -Path $bootMount -Save -ErrorAction Stop
+                        Save-WinMintImageMount -MountDir $bootMount
                         $bootTimer.Stop()
                         LogOK "boot.wim index $idx driver injection saved in $(Format-WinMintDuration -Duration $bootTimer.Elapsed)."
                     }
                     catch {
                         $bootTimer.Stop()
-                        try { $null = Dismount-WindowsImage -Path $bootMount -Discard -ErrorAction SilentlyContinue } catch { Write-Verbose "WinPE driver boot mount discard: $($_.Exception.Message)" }
+                        Dismount-WinMintImageMount -MountDir $bootMount
                         throw
                     }
                     finally {

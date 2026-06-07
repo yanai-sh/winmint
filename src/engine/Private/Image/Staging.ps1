@@ -1,5 +1,91 @@
 #Requires -Version 7.3
 
+function Get-WinMintHostDismArch {
+    $a = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+    switch -Regex ([string]$a) {
+        '^ARM64$' { 'arm64'; break }
+        '^(AMD64|IA64)$' { 'amd64'; break }
+        default { 'x86' }
+    }
+}
+
+function Get-WinMintDismFileBuild {
+    param([Parameter(Mandatory)][string]$Exe)
+    try {
+        $pv = [string](Get-Item -LiteralPath $Exe -ErrorAction Stop).VersionInfo.ProductVersion
+        if ($pv -match '\d+\.\d+\.(\d+)') { return [int]$matches[1] }
+    }
+    catch { }
+    return 0
+}
+
+function Get-WinMintDismExe {
+    <#
+    <summary>
+    Resolves the dism.exe WinMint uses for servicing: the newest available by
+    build number, preferring a host-arch-native ADK build, then the in-box dism.
+    Windows 11 25H2 (build 26200) ships an enablement package over the 24H2
+    servicing stack, so the in-box dism reports build 26100 and STRIPS edition/
+    installation/product metadata when committing a 26200 image (verified). A
+    matching ADK dism whose build is >= the image build commits cleanly. Cached
+    after first resolution.
+    </summary>
+    #>
+    $cached = Get-Variable -Name WinMintDismExe -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+    if ($cached -and (Test-Path -LiteralPath $cached)) {
+        return $cached
+    }
+    $hostArch = Get-WinMintHostDismArch
+    $candidates = [System.Collections.Generic.List[object]]::new()
+    $kits = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits\10\Assessment and Deployment Kit\Deployment Tools'
+    foreach ($arch in @('arm64', 'amd64', 'x86')) {
+        $exe = Join-Path $kits "$arch\DISM\dism.exe"
+        if (Test-Path -LiteralPath $exe) {
+            $candidates.Add([pscustomobject]@{ Path = $exe; Arch = $arch; Build = (Get-WinMintDismFileBuild $exe); Native = ($arch -eq $hostArch); InBox = $false })
+        }
+    }
+    $inbox = Join-Path $env:WINDIR 'System32\dism.exe'
+    if (Test-Path -LiteralPath $inbox) {
+        $candidates.Add([pscustomobject]@{ Path = $inbox; Arch = $hostArch; Build = (Get-WinMintDismFileBuild $inbox); Native = $true; InBox = $true })
+    }
+    if ($candidates.Count -eq 0) {
+        $script:WinMintDismExe = 'dism.exe'
+        return $script:WinMintDismExe
+    }
+    # Newest build wins; tie-break to host-arch-native, then to the in-box dism.
+    $best = $candidates |
+        Sort-Object @{ Expression = { [int]$_.Build }; Descending = $true },
+                    @{ Expression = { [int][bool]$_.Native }; Descending = $true },
+                    @{ Expression = { [int][bool]$_.InBox }; Descending = $true } |
+        Select-Object -First 1
+    $script:WinMintDismExe = $best.Path
+    LogVerbose "Servicing dism: $($best.Path) (build $($best.Build), arch $($best.Arch), inbox=$($best.InBox))"
+    return $script:WinMintDismExe
+}
+
+function Mount-WinMintImage {
+    <# <summary>Mounts a WIM index via the resolved servicing dism.exe (not the in-box-bound Mount-WindowsImage cmdlet), so mount and commit share one stack.</summary> #>
+    param(
+        [Parameter(Mandatory)][string]$ImagePath,
+        [Parameter(Mandatory)][int]$Index,
+        [Parameter(Mandatory)][string]$MountDir
+    )
+    Invoke-DismExe -Arguments @('/English', '/Mount-Image', "/ImageFile:$ImagePath", "/Index:$Index", "/MountDir:$MountDir") | Out-Null
+}
+
+function Save-WinMintImageMount {
+    <# <summary>Commits and unmounts a mounted image via the resolved servicing dism.exe. Using a dism whose build is >= the image build preserves edition metadata on commit.</summary> #>
+    param([Parameter(Mandatory)][string]$MountDir)
+    Invoke-DismExe -Arguments @('/English', '/Unmount-Image', "/MountDir:$MountDir", '/Commit') | Out-Null
+}
+
+function Dismount-WinMintImageMount {
+    <# <summary>Best-effort discard of a mounted image via the resolved servicing dism.exe; used on failure/cleanup paths.</summary> #>
+    param([Parameter(Mandatory)][string]$MountDir)
+    try { Invoke-DismExe -Arguments @('/English', '/Unmount-Image', "/MountDir:$MountDir", '/Discard') | Out-Null }
+    catch { Write-Verbose "Discard mount ${MountDir}: $($_.Exception.Message)" }
+}
+
 function Get-ISOArchitecture {
     <# <summary>Identifies architecture using fixed switch syntax.</summary> #>
     param([ValidateNotNullOrEmpty()][string]$ImagePath, [int]$Index = 1)
@@ -12,7 +98,7 @@ function Get-ISOArchitecture {
         }
     }
 
-    $dismOut = & dism.exe /English /Get-ImageInfo /ImageFile:"$ImagePath" /Index:$Index 2>&1
+    $dismOut = & (Get-WinMintDismExe) /English /Get-ImageInfo /ImageFile:"$ImagePath" /Index:$Index 2>&1
     $archLine = $dismOut | Where-Object { $_ -match 'Architecture\s*:\s*(.+)$' } | Select-Object -First 1
     if ($archLine -match 'Architecture\s*:\s*(.+)$') {
         switch -Regex ($matches[1].Trim().ToLower()) {
@@ -25,7 +111,16 @@ function Get-ISOArchitecture {
 }
 
 function Get-WinMintDismExeVersion {
-    $versionLine = (& dism.exe /English /? 2>&1 | Where-Object { $_ -match 'Version:\s*([0-9.]+)' } | Select-Object -First 1)
+    # Report the version of the resolved servicing dism (the one that actually
+    # mounts/commits), so the capability guard checks the tool we will use. Read
+    # the file's ProductVersion first (reliable); fall back to parsing /?.
+    $exe = Get-WinMintDismExe
+    try {
+        $pv = [string](Get-Item -LiteralPath $exe -ErrorAction Stop).VersionInfo.ProductVersion
+        if ($pv -match '(\d+\.\d+\.\d+(?:\.\d+)?)') { return [version]$matches[1] }
+    }
+    catch { }
+    $versionLine = (& $exe /English /? 2>&1 | Where-Object { $_ -match 'Version:\s*([0-9.]+)' } | Select-Object -First 1)
     if ($versionLine -match 'Version:\s*([0-9.]+)') {
         return [version]$matches[1]
     }
@@ -38,7 +133,7 @@ function Get-WinMintWimImageVersion {
         [int]$Index = 1
     )
 
-    $dismOut = & dism.exe /English /Get-WimInfo /WimFile:"$ImagePath" /Index:$Index 2>&1
+    $dismOut = & (Get-WinMintDismExe) /English /Get-WimInfo /WimFile:"$ImagePath" /Index:$Index 2>&1
     $versionLine = $dismOut | Where-Object { $_ -match '^\s*Version\s*:\s*([0-9.]+)' } | Select-Object -Last 1
     $servicePackBuildLine = $dismOut | Where-Object { $_ -match '^\s*ServicePack Build\s*:\s*(\d+)' } | Select-Object -First 1
 
@@ -65,7 +160,7 @@ function Get-WinMintWimImageMetadata {
         [int]$Index = 1
     )
 
-    $dismOut = & dism.exe /English /Get-WimInfo /WimFile:"$ImagePath" /Index:$Index 2>&1
+    $dismOut = & (Get-WinMintDismExe) /English /Get-WimInfo /WimFile:"$ImagePath" /Index:$Index 2>&1
     $versionLine = $dismOut | Where-Object { $_ -match '^\s*Version\s*:\s*([0-9.]+)' } | Select-Object -Last 1
     $servicePackBuildLine = $dismOut | Where-Object { $_ -match '^\s*ServicePack Build\s*:\s*(\d+)' } | Select-Object -First 1
     $languages = [System.Collections.Generic.List[string]]::new()
@@ -80,11 +175,17 @@ function Get-WinMintWimImageMetadata {
             $values[$key] = $value
             $captureLanguages = ($key -eq 'Languages')
             if ($captureLanguages -and -not [string]::IsNullOrWhiteSpace($value)) {
-                $languages.Add($value) | Out-Null
+                # Some dism builds put the code inline ("Languages : en-US (Default)");
+                # capture just the language tag, dropping the "(Default)" annotation.
+                if ($value -match '^([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)+)') { $languages.Add($matches[1]) | Out-Null }
+                else { $languages.Add($value) | Out-Null }
             }
             continue
         }
-        if ($captureLanguages -and $text -match '^\s+([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)+)\s*$') {
+        # Other dism builds (incl. the in-box 26100 and ADK 28000 on a 25H2 image)
+        # list each language on its own indented line, usually with a "(Default)"
+        # suffix ("\ten-US (Default)"); match the leading tag, not the whole line.
+        if ($captureLanguages -and $text -match '^\s+([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)+)(?:\s|$)') {
             $languages.Add($matches[1].Trim()) | Out-Null
         }
         elseif ($captureLanguages -and -not [string]::IsNullOrWhiteSpace($text)) {
@@ -273,8 +374,9 @@ function Invoke-DismExe {
     $PSNativeCommandUseErrorActionPreference = $false
     try {
         $lines = [System.Collections.Generic.List[string]]::new()
+        $dismExe = Get-WinMintDismExe
         if ($null -ne $script:DismProgressCallback) {
-            & dism.exe @Arguments 2>&1 | ForEach-Object {
+            & $dismExe @Arguments 2>&1 | ForEach-Object {
                 $line = [string]$_
                 $lines.Add($line)
                 if ($line -match '\[\s*=*\s*([\d.]+)%') {
@@ -282,7 +384,7 @@ function Invoke-DismExe {
                 }
             }
         } else {
-            & dism.exe @Arguments 2>&1 | ForEach-Object { $lines.Add([string]$_) }
+            & $dismExe @Arguments 2>&1 | ForEach-Object { $lines.Add([string]$_) }
         }
         $code = $LASTEXITCODE
         if ($SuccessCodes -notcontains $code) {
