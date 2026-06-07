@@ -59,7 +59,12 @@ function Invoke-RegistryTweak {
                         $null = & reg.exe add "HKLM\$($e.path)" /v "$($e.name)" /t $e.type /d "$($e.value)" /f
                     }
                     foreach ($e in @(Get-RegistryTweakGroupValue -Group $group -Name 'remove')) {
-                        try { $null = & reg.exe delete "HKLM\$($e.path)" /f } catch { Write-Verbose "reg.exe delete skipped for $($e.path): $($_.Exception.Message)" }
+                        # Best-effort, idempotent removal: a policy key that isn't
+                        # present on a clean image is the expected case, not an error.
+                        # reg.exe writes "unable to find ..." to stderr (exit 1) then;
+                        # redirect stderr so that benign case doesn't print in red. The
+                        # catch still absorbs the exit-code throw for any other failure.
+                        try { $null = & reg.exe delete "HKLM\$($e.path)" /f 2>$null } catch { Write-Verbose "reg.exe delete skipped for $($e.path): $($_.Exception.Message)" }
                     }
                     if (Get-Command Add-WinMintManifestRegistryTweakEvent -ErrorAction SilentlyContinue) {
                         Add-WinMintManifestRegistryTweakEvent -Group $group -Status 'applied'
