@@ -732,7 +732,7 @@ function Install-Autounattend {
             Copy-Item -LiteralPath $wallpaperSrc -Destination (Join-Path $wallpaperDir 'WinMint-Bloom-OLED.png') -Force
             LogOK 'Staged WinMint Bloom OLED wallpaper into the offline image.'
             $utf8Bom = [System.Text.UTF8Encoding]::new($true)
-            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'RunSetupScript.cmd', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1')) {
+            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1')) {
                 $src = Join-Path $bundleDir $n
                 if (-not (Test-Path -LiteralPath $src)) { continue }
                 $destPath = Join-Path $destScripts $n
