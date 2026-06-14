@@ -7,6 +7,7 @@ function Sync-NerdFont {
             [Parameter(Mandatory)][string]$DisplayName,
             [Parameter(Mandatory)][string]$RepoSlug,
             [Parameter(Mandatory)][string]$AssetRegex,
+            [Parameter(Mandatory)][string[]]$CachePatterns,
             [Parameter(Mandatory)][scriptblock]$GetCacheHit,
             [Parameter(Mandatory)][scriptblock]$RestoreFromCache,
             [Parameter(Mandatory)][scriptblock]$PublishCache,
@@ -41,28 +42,29 @@ function Sync-NerdFont {
                     LogOK "$DisplayName Nerd Font restored from temp cache."
                     return
                 }
-                $rel = Invoke-RestMethod -Verbose:$false -Uri "https://api.github.com/repos/$RepoSlug/releases/latest"
-                $asset = $rel.assets | Where-Object name -match $AssetRegex | Select-Object -First 1
-                if (-not $asset) {
-                    $available = ($rel.assets | ForEach-Object { $_.name }) -join ', '
-                    LogWarn "${DisplayName}: no .zip asset matching '$AssetRegex' in latest release. Available: $available"
-                    return
-                }
-                $zipUrl = $asset.browser_download_url
-                $zipPath = Invoke-WebRequestCachedFile -Uri $zipUrl -CacheFileName $asset.name
-                $hash = Assert-Win11IsoFileHash -FilePath $zipPath -Label $DisplayName
-                Add-WinMintManifestPayload -Name "$DisplayName (Nerd Font)" -SourceUrl $zipUrl `
-                    -Version $rel.tag_name -Sha256 $hash -SizeBytes (Get-Item -LiteralPath $zipPath).Length
+                $payload = Resolve-WinMintGitHubReleasePayload `
+                    -Name "$DisplayName (Nerd Font)" `
+                    -RepoSlug $RepoSlug `
+                    -CachePatterns $CachePatterns `
+                    -HashLabel $DisplayName `
+                    -AssetSelector {
+                        param($Asset, $Release)
+                        [void]$Release
+                        if ([string]$Asset.name -match $AssetRegex) { return 1 }
+                        return 0
+                    }
+                $zipPath = [string]$payload.Path
+                Add-WinMintManifestPayloadFact -Payload $payload
                 $extRoot = Join-Path (Get-Win11IsoProcessTempPath) ($TempPrefix + [Guid]::NewGuid().ToString('n'))
                 try {
                     $null = New-Item -ItemType Directory -Path $extRoot -Force
                     [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extRoot)
                     Get-ChildItem -LiteralPath $extRoot -Recurse -Filter '*NF*.ttf' | Copy-Item -Destination $FontDir -Force
-                    & $PublishCache -FontDir $FontDir -TagName $rel.tag_name -AssetName $asset.name `
-                        -SourceUrl $zipUrl -Sha256 $hash -SizeBytes (Get-Item -LiteralPath $zipPath).Length
+                    & $PublishCache -FontDir $FontDir -TagName $payload.Version -AssetName $payload.AssetName `
+                        -SourceUrl $payload.SourceUrl -Sha256 $payload.Sha256 -SizeBytes $payload.SizeBytes
                 }
                 finally {
-                    if (-not (Test-IsPathUnderWin11IsoDependencyCache $zipPath)) { Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue }
+                    Remove-WinMintPayloadResult -Payload $payload
                     Remove-Item -LiteralPath $extRoot -Recurse -Force -ErrorAction SilentlyContinue
                 }
             }
@@ -74,6 +76,7 @@ function Sync-NerdFont {
         -DisplayName 'Cascadia Code' `
         -RepoSlug 'microsoft/cascadia-code' `
         -AssetRegex 'CascadiaCode-.*\.zip' `
+        -CachePatterns @('CascadiaCode-*.zip') `
         -GetCacheHit { Get-WinMintCascadiaNerdFontCacheHit } `
         -RestoreFromCache {
             param($FontDir, $CacheRootDir)
@@ -95,6 +98,7 @@ function Sync-NerdFont {
         -DisplayName 'Monaspace' `
         -RepoSlug 'githubnext/monaspace' `
         -AssetRegex 'monaspace-nerdfonts-.*\.zip' `
+        -CachePatterns @('monaspace-nerdfonts-*.zip') `
         -GetCacheHit { Get-WinMintMonaspaceNerdFontCacheHit } `
         -RestoreFromCache {
             param($FontDir, $CacheRootDir)
@@ -292,6 +296,8 @@ function Install-OfflineWinget {
         LogVerbose "Mount: $MountDir"
         $bundlePath = $null
         $dependencyZipPath = $null
+        $bundlePayload = $null
+        $dependencyPayload = $null
         $dependencyExpandDir = $null
         try {
             $sourceUrl = ''
@@ -321,12 +327,26 @@ function Install-OfflineWinget {
                 $dependencyAssetName = [IO.Path]::GetFileName($dependencyZipPath)
                 $sourceUrl = "cache:$assetName"
             }
-            $wingetHash = Assert-Win11IsoFileHash -FilePath $bundlePath -Label "winget ($assetName)"
-            Add-WinMintManifestPayload -Name 'winget' -SourceUrl $sourceUrl `
-                -Version $version -Sha256 $wingetHash -SizeBytes (Get-Item -LiteralPath $bundlePath).Length
-            $dependencyHash = Assert-Win11IsoFileHash -FilePath $dependencyZipPath -Label "winget dependencies ($dependencyAssetName)"
-            Add-WinMintManifestPayload -Name 'winget dependencies' -SourceUrl "cache-or-release:$dependencyAssetName" `
-                -Version $version -Sha256 $dependencyHash -SizeBytes (Get-Item -LiteralPath $dependencyZipPath).Length
+            $bundlePayload = New-WinMintPayloadResult `
+                -Name 'winget' `
+                -Path $bundlePath `
+                -SourceUrl $sourceUrl `
+                -Version $version `
+                -AssetName $assetName `
+                -SourceStatus $(if ($sourceUrl -like 'cache:*') { 'cache' } else { 'release' }) `
+                -CleanupPolicy keep `
+                -HashLabel 'winget'
+            Add-WinMintManifestPayloadFact -Payload $bundlePayload
+            $dependencyPayload = New-WinMintPayloadResult `
+                -Name 'winget dependencies' `
+                -Path $dependencyZipPath `
+                -SourceUrl "cache-or-release:$dependencyAssetName" `
+                -Version $version `
+                -AssetName $dependencyAssetName `
+                -SourceStatus $(if ($sourceUrl -like 'cache:*') { 'cache' } else { 'release' }) `
+                -CleanupPolicy keep `
+                -HashLabel 'winget dependencies'
+            Add-WinMintManifestPayloadFact -Payload $dependencyPayload
 
             $dependencyExpandDir = Join-Path (Get-Win11IsoProcessTempPath) ('winget_dependencies_' + [Guid]::NewGuid().ToString('n'))
             Expand-Archive -LiteralPath $dependencyZipPath -DestinationPath $dependencyExpandDir -Force
@@ -356,12 +376,8 @@ function Install-OfflineWinget {
         }
         catch { LogWarn "Winget pre-provisioning failed: $_" }
         finally {
-            if ($bundlePath -and (Test-Path -LiteralPath $bundlePath) -and -not (Test-IsPathUnderWin11IsoDependencyCache $bundlePath)) {
-                Remove-Item -LiteralPath $bundlePath -Force -ErrorAction SilentlyContinue
-            }
-            if ($dependencyZipPath -and (Test-Path -LiteralPath $dependencyZipPath) -and -not (Test-IsPathUnderWin11IsoDependencyCache $dependencyZipPath)) {
-                Remove-Item -LiteralPath $dependencyZipPath -Force -ErrorAction SilentlyContinue
-            }
+            Remove-WinMintPayloadResult -Payload $bundlePayload
+            Remove-WinMintPayloadResult -Payload $dependencyPayload
             if ($dependencyExpandDir -and (Test-Path -LiteralPath $dependencyExpandDir)) {
                 Remove-Item -LiteralPath $dependencyExpandDir -Recurse -Force -ErrorAction SilentlyContinue
             }

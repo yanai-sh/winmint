@@ -15,6 +15,7 @@ $script:WinMintRepositoryRoot = $root
 . (Join-Path $root 'src\runtime\image\Engine.ps1')
 . (Join-Path $root 'src\runtime\image\Reports.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Runtime.ps1')
+. (Join-Path $root 'src\runtime\image\Private\PayloadStore.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Drivers.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Packages.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Media.ps1')

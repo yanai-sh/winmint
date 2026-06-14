@@ -10,6 +10,7 @@ $PSNativeCommandUseErrorActionPreference = $true
 . "$PSScriptRoot\Engine.ps1"
 . "$PSScriptRoot\Private\Bootstrap.ps1"
 . "$PSScriptRoot\Private\Runtime.ps1"
+. "$PSScriptRoot\Private\PayloadStore.ps1"
 . "$PSScriptRoot\Private\Console\Host.ps1"
 . "$PSScriptRoot\Private\Console\Display.ps1"
 . "$PSScriptRoot\Private\Catalog.ps1"

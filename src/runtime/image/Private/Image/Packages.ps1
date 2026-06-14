@@ -26,6 +26,7 @@ function Install-OfflinePowerShell7 {
     Invoke-Action 'Installing PowerShell 7 into the offline image (pwsh for setup scripts)' {
         LogVerbose "Mount: $MountDir | arch: $TargetArch"
         $zip = $null
+        $payload = $null
         $expand = $null
         try {
             $suffix = switch ($TargetArch) {
@@ -33,40 +34,24 @@ function Install-OfflinePowerShell7 {
                 'x86' { 'win-x86' }
                 default { 'win-x64' }
             }
-            $assetName = ''
-            $sourceUrl = ''
-            $version = 'cached'
-            try {
-                # Always fetches latest PowerShell 7. To pin a specific version: replace /releases/latest with /releases/tags/v7.x.y
-                $rel = Invoke-RestMethod -Verbose:$false -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest' -Headers @{ 'User-Agent' = 'WinMint/1.0' }
-                $asset = @($rel.assets | Where-Object { $_.name -match ('PowerShell-\d+\.\d+\.\d+-' + [regex]::Escape($suffix) + '\.zip$') }) | Select-Object -First 1
-                if (-not $asset) {
-                    $asset = @($rel.assets | Where-Object { $_.name -like "*-$suffix.zip" }) | Select-Object -First 1
+            $payload = Resolve-WinMintGitHubReleasePayload `
+                -Name 'PowerShell 7' `
+                -RepoSlug 'PowerShell/PowerShell' `
+                -Headers @{ 'User-Agent' = 'WinMint/1.0' } `
+                -CachePatterns @("PowerShell-*-$suffix.zip") `
+                -VersionRegex 'PowerShell-(?<Version>\d+\.\d+\.\d+)-' `
+                -HashLabel 'PowerShell 7' `
+                -AssetSelector {
+                    param($Asset, $Release)
+                    [void]$Release
+                    $assetName = [string]$Asset.name
+                    if ($assetName -match ('PowerShell-\d+\.\d+\.\d+-' + [regex]::Escape($suffix) + '\.zip$')) { return 300 }
+                    if ($assetName -like "*-$suffix.zip") { return 200 }
+                    if ($suffix -eq 'win-x86' -and $assetName -like '*-win-x64.zip') { return 100 }
+                    return 0
                 }
-                if (-not $asset -and $suffix -eq 'win-x86') {
-                    $asset = @($rel.assets | Where-Object { $_.name -like '*-win-x64.zip' }) | Select-Object -First 1
-                }
-                if (-not $asset) { throw "PowerShell release: no .zip asset matching *-$suffix.zip" }
-
-                $zip = Invoke-WebRequestCachedFile -Uri $asset.browser_download_url -CacheFileName $asset.name -Headers @{ 'User-Agent' = 'WinMint/1.0' }
-                $assetName = $asset.name
-                $sourceUrl = $asset.browser_download_url
-                $version = $rel.tag_name
-            }
-            catch {
-                LogWarn "PowerShell 7 release lookup failed; trying cached zip. $($_.Exception.Message)"
-                $zip = Get-WinMintCachedDownloadFile -Patterns @("PowerShell-*-$suffix.zip")
-                if (-not $zip) { throw "PowerShell 7 cache missing PowerShell-*-$suffix.zip." }
-                $assetName = [IO.Path]::GetFileName($zip)
-                $sourceUrl = "cache:$assetName"
-                if ($assetName -match 'PowerShell-(?<Version>\d+\.\d+\.\d+)-') {
-                    $version = 'v' + $Matches.Version
-                }
-            }
-
-            $ps7Hash = Assert-Win11IsoFileHash -FilePath $zip -Label "PowerShell 7 ($assetName)"
-            Add-WinMintManifestPayload -Name 'PowerShell 7' -SourceUrl $sourceUrl `
-                -Version $version -Sha256 $ps7Hash -SizeBytes (Get-Item -LiteralPath $zip).Length
+            $zip = [string]$payload.Path
+            Add-WinMintManifestPayloadFact -Payload $payload
             $expand = Join-Path (Get-Win11IsoProcessTempPath) ('pwsh7_expand_' + [Guid]::NewGuid().ToString('n'))
             Expand-Archive -LiteralPath $zip -DestinationPath $expand -Force
             $sourceDir = $expand
@@ -85,16 +70,14 @@ function Install-OfflinePowerShell7 {
 
             $pwshExe = Join-Path $dest 'pwsh.exe'
             if (-not (Test-Path -LiteralPath $pwshExe)) { throw "pwsh.exe missing after staging: $pwshExe" }
-            LogOK "PowerShell 7 staged in the offline image (release: $version)."
-            LogVerbose "$pwshExe (release asset: $assetName)"
+            LogOK "PowerShell 7 staged in the offline image (release: $($payload.Version))."
+            LogVerbose "$pwshExe (release asset: $($payload.AssetName))"
         }
         catch {
             LogWarn "PowerShell 7 staging failed; setup scripts will fall back to Windows PowerShell. $($_.Exception.Message)"
         }
         finally {
-            if ($zip -and (Test-Path -LiteralPath $zip) -and -not (Test-IsPathUnderWin11IsoDependencyCache $zip)) {
-                Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
-            }
+            Remove-WinMintPayloadResult -Payload $payload
             if ($expand -and (Test-Path -LiteralPath $expand)) { Remove-Item -LiteralPath $expand -Recurse -Force -ErrorAction SilentlyContinue }
         }
     }
@@ -142,6 +125,7 @@ function Install-OfflineViveTool {
     Invoke-Action 'Staging ViVeTool for SetupComplete feature overrides' {
         LogVerbose "Mount: $MountDir | arch: $TargetArch"
         $zip = $null
+        $payload = $null
         $expand = $null
         try {
             $headers = @{
@@ -149,29 +133,26 @@ function Install-OfflineViveTool {
                 'Accept' = 'application/vnd.github+json'
                 'X-GitHub-Api-Version' = '2022-11-28'
             }
-            $assetName = ''
-            $sourceUrl = ''
-            $version = 'cached'
-            try {
-                $resolved = Get-WinMintViveToolReleaseAsset -TargetArch $TargetArch -Headers $headers
-                $zip = Invoke-WebRequestCachedFile -Uri $resolved.Asset.browser_download_url -CacheFileName $resolved.Asset.name -Headers $headers
-                $assetName = $resolved.Asset.name
-                $sourceUrl = $resolved.Asset.browser_download_url
-                $version = $resolved.Release.tag_name
-            }
-            catch {
-                LogWarn "ViVeTool release lookup failed; trying cached zip. $($_.Exception.Message)"
-                $zip = Get-WinMintCachedDownloadFile -Patterns @(Get-WinMintViveToolCachePattern -Architecture $TargetArch)
-                if (-not $zip) { throw "ViVeTool cache missing archive for architecture '$TargetArch'." }
-                $assetName = [IO.Path]::GetFileName($zip)
-                $sourceUrl = "cache:$assetName"
-                if ($assetName -match 'ViVeTool-(?<Version>v?\d+\.\d+\.\d+)') {
-                    $version = $Matches.Version
+            $payload = Resolve-WinMintGitHubReleasePayload `
+                -Name 'ViVeTool' `
+                -RepoSlug 'thebookisclosed/ViVe' `
+                -Headers $headers `
+                -CachePatterns @(Get-WinMintViveToolCachePattern -Architecture $TargetArch) `
+                -VersionRegex 'ViVeTool-(?<Version>v?\d+\.\d+\.\d+)' `
+                -HashLabel 'ViVeTool' `
+                -AssetSelector {
+                    param($Asset, $Release)
+                    [void]$Release
+                    $assetName = [string]$Asset.name
+                    if ($assetName -notmatch '\.zip$') { return $false }
+                    if ($TargetArch -eq 'arm64') {
+                        return ($assetName -match '(?i)(SnapdragonArm64|ARM64CLR|Arm64|arm64)')
+                    }
+                    if ($assetName -match '(?i)IntelAmd') { return $true }
+                    return ($assetName -notmatch '(?i)(SnapdragonArm64|ARM64CLR|Arm64)')
                 }
-            }
-            $viveHash = Assert-Win11IsoFileHash -FilePath $zip -Label "ViVeTool ($assetName)"
-            Add-WinMintManifestPayload -Name 'ViVeTool' -SourceUrl $sourceUrl `
-                -Version $version -Sha256 $viveHash -SizeBytes (Get-Item -LiteralPath $zip).Length
+            $zip = [string]$payload.Path
+            Add-WinMintManifestPayloadFact -Payload $payload
             $expand = Join-Path (Get-Win11IsoProcessTempPath) ('vivetool_expand_' + [Guid]::NewGuid().ToString('n'))
             Expand-Archive -LiteralPath $zip -DestinationPath $expand -Force
             $exe = Get-ChildItem -LiteralPath $expand -Recurse -Filter 'ViVeTool.exe' -File -ErrorAction Stop |
@@ -185,16 +166,14 @@ function Install-OfflineViveTool {
                 throw "ViVeTool.exe missing after staging: $dest"
             }
 
-            LogOK "ViVeTool staged for setup-time feature overrides (release: $version)."
-            LogVerbose "Release asset: $assetName"
+            LogOK "ViVeTool staged for setup-time feature overrides (release: $($payload.Version))."
+            LogVerbose "Release asset: $($payload.AssetName)"
         }
         catch {
             LogWarn "ViVeTool staging failed; virtual desktop flyout override will be skipped. $($_.Exception.Message)"
         }
         finally {
-            if ($zip -and (Test-Path -LiteralPath $zip) -and -not (Test-IsPathUnderWin11IsoDependencyCache $zip)) {
-                Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
-            }
+            Remove-WinMintPayloadResult -Payload $payload
             if ($expand -and (Test-Path -LiteralPath $expand)) {
                 Remove-Item -LiteralPath $expand -Recurse -Force -ErrorAction SilentlyContinue
             }
