@@ -45,11 +45,11 @@ if (-not (Test-WinMintGuiAdministrator)) {
     exit $elevated.ExitCode
 }
 
-. "$PSScriptRoot\src\engine\Core.ps1"
+. "$PSScriptRoot\src\runtime\image\Core.ps1"
 
 $binary = Get-WinMintPath -Name GuiBinary
 $guiManifest = Get-WinMintPath -Name GuiCargoToml
-$sourceLauncher = Get-WinMintPath -Name GuiTool -ChildPath 'Start-GuiDev.ps1'
+$sourceLauncher = Get-WinMintPath -Name GuiToolsRoot -ChildPath 'Start-GuiDev.ps1'
 $arguments = [System.Collections.Generic.List[string]]::new()
 if ($SystemTitlebar -and $CustomTitlebar) {
     throw 'Use either -SystemTitlebar or -CustomTitlebar, not both.'

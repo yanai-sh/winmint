@@ -3,13 +3,14 @@
   "createdAt": "2026-05-18T00:00:00.0000000+03:00",
   "profileName": "Minimal",
   "source": {
-    "isoPath": "tests/fixtures/uupdump/surface-laptop-7-uupdump-26220.8474-arm64-en-us.iso",
+    "isoPath": "tests/fixtures/iso/official-win11-25h2-english-arm64-v2.iso",
     "architecture": "arm64"
   },
   "target": {
     "device": "DifferentPC",
-    "editionMode": "TargetLicense",
-    "edition": "",
+    "editionMode": "Fixed",
+    "edition": "Windows 11 Pro",
+    "productKey": "VK7JG-NPHTM-C97JM-9MPGT-3V66T",
     "diskMode": "AutoWipeDisk0",
     "diskLayout": {
       "mode": "AutoWipeDisk0",
@@ -27,10 +28,11 @@
   "identity": {
     "computerName": "WinMintVM",
     "accountName": "dev",
-    "accountMode": "MicrosoftOobe",
-    "autoLogon": false,
-    "passwordSet": false,
-    "passwordIncluded": false
+    "accountMode": "Local",
+    "autoLogon": true,
+    "passwordSet": true,
+    "passwordIncluded": true,
+    "password": "winmint"
   },
   "regional": {
     "timeZoneId": "",
@@ -49,14 +51,25 @@
   "desktop": {
     "cursorPack": "Windows11Modern",
     "layers": [
-      "standard"
+      "standard",
+      "nilesoft"
     ]
   },
   "development": {
-    "editors": [],
+    "browsers": [
+      "zen-browser",
+      "helium"
+    ],
+    "editors": [
+      "cursor",
+      "neovim"
+    ],
     "wsl": {
-      "enabled": false,
-      "distros": []
+      "enabled": true,
+      "distros": [
+        "Ubuntu",
+        "NixOS-WSL"
+      ]
     }
   },
   "features": {
@@ -89,6 +102,7 @@
       "Microsoft.Office.OneNote",
       "Microsoft.OutlookForWindows",
       "Microsoft.People",
+      "Microsoft.MicrosoftStickyNotes",
       "Microsoft.PowerAutomateDesktop",
       "Microsoft.RemoteDesktop",
       "Microsoft.RemoteDesktopPreview",
@@ -97,6 +111,7 @@
       "Microsoft.Whiteboard",
       "Microsoft.Windows.DevHome",
       "Microsoft.WindowsCalculator",
+      "Microsoft.WindowsSoundRecorder",
       "Microsoft.windowscommunicationsapps",
       "Microsoft.WindowsFeedbackHub",
       "Microsoft.WindowsMaps",

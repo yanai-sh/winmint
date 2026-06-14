@@ -15,9 +15,9 @@ Set-StrictMode -Version 2.0
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
-. (Join-Path $root 'src\engine\Core.ps1')
+. (Join-Path $root 'src\runtime\image\Core.ps1')
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-    $OutputDirectory = Get-WinMintPath -Name Dist
+    $OutputDirectory = Get-WinMintPath -Name DistRoot
 }
 $bundleName = "WinMint-$Version"
 $zipName = "$bundleName.zip"
@@ -25,7 +25,7 @@ $zipPath = Join-Path $OutputDirectory $zipName
 $hashPath = "$zipPath.sha256"
 $stageRoot = Join-Path ([IO.Path]::GetTempPath()) "WinMintRelease-$([guid]::NewGuid().ToString('N'))"
 $stage = Join-Path $stageRoot $bundleName
-$manifestPath = Get-WinMintPath -Name Config -ChildPath 'release-manifest.json'
+$manifestPath = Get-WinMintPath -Name ConfigRoot -ChildPath 'release-manifest.json'
 
 function Write-BundleLog {
     param([string]$Message)
@@ -136,7 +136,7 @@ function Assert-WinMintReleaseInputs {
 
 try {
     if (-not $SkipGuiBuild) {
-        $buildGui = Get-WinMintPath -Name ReleaseTool -ChildPath 'Build-WinMintGui.ps1'
+    $buildGui = Get-WinMintPath -Name ReleaseToolsRoot -ChildPath 'Build-WinMintGui.ps1'
         & $buildGui -RustTarget $RustTarget
         if ($LASTEXITCODE -ne 0) {
             throw "GUI build failed with exit code $LASTEXITCODE."

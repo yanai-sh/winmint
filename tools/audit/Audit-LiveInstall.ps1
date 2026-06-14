@@ -4,6 +4,7 @@ param(
     [string]$SetupProfilePath = 'C:\Windows\Setup\Scripts\WinMintSetupProfile.json',
     [string]$RecommendedListPath = '',
     [string]$OutputPath = '',
+    [switch]$IncludeInventory,
     [switch]$AsJson
 )
 
@@ -80,6 +81,8 @@ function Get-AuditInstalledAppx {
                     packageFullName = [string]$_.PackageFullName
                     version         = [string]$_.Version
                     publisher       = [string]$_.Publisher
+                    nonRemovable    = [bool]$_.NonRemovable
+                    signatureKind   = [string]$_.SignatureKind
                 }
             })
     }
@@ -168,6 +171,94 @@ function Get-AuditScheduledTaskMatches {
             })
     }
     catch { @() }
+}
+
+function Get-AuditScheduledTaskInventory {
+    $tasks = [System.Collections.Generic.List[object]]::new()
+    try {
+        foreach ($task in @(Get-ScheduledTask -ErrorAction SilentlyContinue)) {
+            $include = $false
+            $taskPath = [string]$task.TaskPath
+            $taskName = [string]$task.TaskName
+            $state = [string]$task.State
+            if ($taskPath -notlike '\Microsoft\Windows\*') {
+                $include = $true
+            }
+            foreach ($pattern in @('Copilot', 'Recall', 'WindowsAI', 'DevHome', 'Outlook', 'Chat', 'Xbox', 'OneDrive', 'EdgeUpdate', 'GameAssist')) {
+                if ($taskPath -match [regex]::Escape($pattern) -or $taskName -match [regex]::Escape($pattern)) {
+                    $include = $true
+                    break
+                }
+            }
+            if (-not $include) { continue }
+
+            $tasks.Add([ordered]@{
+                    path = $taskPath
+                    name = $taskName
+                    state = $state
+                }) | Out-Null
+        }
+    }
+    catch { }
+    @($tasks.ToArray() | Sort-Object path, name -Unique)
+}
+
+function Get-AuditServiceInventory {
+    $services = [System.Collections.Generic.List[object]]::new()
+    try {
+        foreach ($service in @(Get-CimInstance -ClassName Win32_Service -ErrorAction SilentlyContinue)) {
+            $services.Add([ordered]@{
+                    name        = [string]$service.Name
+                    displayName = [string]$service.DisplayName
+                    state       = [string]$service.State
+                    startMode   = [string]$service.StartMode
+                    startName   = [string]$service.StartName
+                    pathName    = [string]$service.PathName
+                }) | Out-Null
+        }
+    }
+    catch { }
+    @($services.ToArray() | Sort-Object name -Unique)
+}
+
+function Get-AuditStartupInventory {
+    $entries = [System.Collections.Generic.List[object]]::new()
+    foreach ($root in @(
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run',
+            'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run',
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+        )) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        try {
+            $item = Get-ItemProperty -LiteralPath $root -ErrorAction SilentlyContinue
+            foreach ($property in @($item.PSObject.Properties)) {
+                if ($property.Name -in @('PSPath', 'PSParentPath', 'PSChildName', 'PSDrive', 'PSProvider')) { continue }
+                $entries.Add([ordered]@{
+                        source = $root
+                        name   = [string]$property.Name
+                        value  = [string]$property.Value
+                    }) | Out-Null
+            }
+        }
+        catch { }
+    }
+    foreach ($folder in @(
+            [Environment]::GetFolderPath('Startup'),
+            [Environment]::GetFolderPath('CommonStartup')
+        )) {
+        if ([string]::IsNullOrWhiteSpace($folder) -or -not (Test-Path -LiteralPath $folder)) { continue }
+        try {
+            foreach ($item in @(Get-ChildItem -LiteralPath $folder -Force -ErrorAction SilentlyContinue)) {
+                $entries.Add([ordered]@{
+                        source = $folder
+                        name   = [string]$item.Name
+                        value  = [string]$item.FullName
+                    }) | Out-Null
+            }
+        }
+        catch { }
+    }
+    @($entries.ToArray() | Sort-Object source, name -Unique)
 }
 
 function Test-AuditRegistryValue {
@@ -325,7 +416,11 @@ function Get-AuditDmaInteropProbe {
             service = $autoTimeZoneService
             registryStart = $autoTimeZoneStart
             disabled = ($autoTimeZoneService.present -and [string]$autoTimeZoneService.startType -eq 'Disabled' -and $null -ne $autoTimeZoneStart -and [int]$autoTimeZoneStart -eq 4)
-            policy = 'DMA builds must not leave automatic time-zone updates active; users may still set the time zone manually or re-enable location-based time zone later.'
+            policy = if ($restoreLocationServices) {
+                'Location services are expected on; Auto Time Zone Updater should not be disabled by WinMint.'
+            } else {
+                'Location services are expected off; Auto Time Zone Updater should be disabled.'
+            }
         }
     }
 }
@@ -440,6 +535,15 @@ $win32Entries = @(Get-AuditWin32UninstallEntry)
 $platform = Get-AuditPlatformProbe -SetupProfile $setupProfile
 $dmaInterop = Get-AuditDmaInteropProbe -SetupProfile $setupProfile
 $policy = Get-AuditPolicyProbe -SetupProfile $setupProfile
+$debugInventory = $null
+if ($IncludeInventory) {
+    $debugInventory = [ordered]@{
+        note = 'Debug-only inventory captured because live install audit was explicitly selected. WinMint does not capture this on normal builds.'
+        services = @(Get-AuditServiceInventory)
+        scheduledTasks = @(Get-AuditScheduledTaskInventory)
+        startupEntries = @(Get-AuditStartupInventory)
+    }
+}
 $aiRemoval = if ($setupProfile -and $setupProfile.PSObject.Properties['aiRemoval']) { $setupProfile.aiRemoval } else { $null }
 $aiPrefixes = @()
 $aiFeatureNames = @()
@@ -455,21 +559,39 @@ if ($aiRemoval) {
     if ($aiTaskPatterns.Count -eq 0 -and [bool]$aiRemoval.disableAiTasks) { $aiTaskPatterns = @('Recall', 'WindowsAI', 'Copilot') }
 }
 
+# Components Microsoft rehydrates after logon and provides NO supported way to durably
+# remove or prevent. Verified for Edge Game Assist: it is not provisioned (so offline
+# removal cannot catch it), Edge re-stages it even on a DMA-locked machine, a supported
+# appx uninstall does not make it stay gone, and there is no official Edge policy to
+# block it (GameAssistEnabled is folklore). WinMint disables its user-facing surfaces
+# instead (HubsSidebarEnabled / AllowGamesMenu). Report reappearance as Info, not drift,
+# so a clean build is not perpetually flagged for something no supported mechanism fixes.
+$rehydratedNoPreventionPrefixes = @('Microsoft.Edge.GameAssist')
+$rehydratedNote = 'Edge re-stages this after logon; Microsoft documents no supported prevention (DMA-verified). Its surfaces are disabled via Edge policy. Tracked as Info, not drift.'
+
 foreach ($prefix in $expectedRemovalPrefixes) {
+    $rehydrated = $rehydratedNoPreventionPrefixes -contains $prefix
+    $sev = if ($rehydrated) { 'Info' } else { 'Warning' }
     foreach ($pkg in @($provisionedAppx | Where-Object { [string]$_.packageName -like "*$prefix*" -or [string]$_.displayName -like "*$prefix*" })) {
-        Add-AuditFinding -Findings $findings -Severity Warning -Id 'appx-provisioned-drift' -Category 'appx' -Name ([string]$pkg.packageName) -Message "Provisioned AppX still matches expected removal prefix '$prefix'."
+        $msg = if ($rehydrated) { "Provisioned AppX matches '$prefix'. $rehydratedNote" } else { "Provisioned AppX still matches expected removal prefix '$prefix'." }
+        Add-AuditFinding -Findings $findings -Severity $sev -Id 'appx-provisioned-drift' -Category 'appx' -Name ([string]$pkg.packageName) -Message $msg
     }
-    foreach ($pkg in @($installedAppx | Where-Object { [string]$_.packageFullName -like "*$prefix*" -or [string]$_.name -like "*$prefix*" })) {
-        Add-AuditFinding -Findings $findings -Severity Warning -Id 'appx-installed-drift' -Category 'appx' -Name ([string]$pkg.packageFullName) -Message "Installed AppX still matches expected removal prefix '$prefix'."
+    foreach ($pkg in @($installedAppx | Where-Object { ([string]$_.packageFullName -like "*$prefix*" -or [string]$_.name -like "*$prefix*") -and -not ([bool]$_.nonRemovable -or [string]$_.signatureKind -eq 'System') })) {
+        $msg = if ($rehydrated) { "Installed AppX matches '$prefix'. $rehydratedNote" } else { "Installed AppX still matches expected removal prefix '$prefix'." }
+        Add-AuditFinding -Findings $findings -Severity $sev -Id 'appx-installed-drift' -Category 'appx' -Name ([string]$pkg.packageFullName) -Message $msg
     }
 }
 
 foreach ($prefix in $aiPrefixes) {
+    $rehydrated = $rehydratedNoPreventionPrefixes -contains $prefix
+    $sev = if ($rehydrated) { 'Info' } else { 'Warning' }
     foreach ($pkg in @($provisionedAppx | Where-Object { [string]$_.packageName -like "*$prefix*" -or [string]$_.displayName -like "*$prefix*" })) {
-        Add-AuditFinding -Findings $findings -Severity Warning -Id 'ai-appx-provisioned-drift' -Category 'ai' -Name ([string]$pkg.packageName) -Message "Provisioned AI AppX still matches expected removal prefix '$prefix'."
+        $msg = if ($rehydrated) { "Provisioned AI AppX matches '$prefix'. $rehydratedNote" } else { "Provisioned AI AppX still matches expected removal prefix '$prefix'." }
+        Add-AuditFinding -Findings $findings -Severity $sev -Id 'ai-appx-provisioned-drift' -Category 'ai' -Name ([string]$pkg.packageName) -Message $msg
     }
-    foreach ($pkg in @($installedAppx | Where-Object { [string]$_.packageFullName -like "*$prefix*" -or [string]$_.name -like "*$prefix*" })) {
-        Add-AuditFinding -Findings $findings -Severity Warning -Id 'ai-appx-installed-drift' -Category 'ai' -Name ([string]$pkg.packageFullName) -Message "Installed AI AppX still matches expected removal prefix '$prefix'."
+    foreach ($pkg in @($installedAppx | Where-Object { ([string]$_.packageFullName -like "*$prefix*" -or [string]$_.name -like "*$prefix*") -and -not ([bool]$_.nonRemovable -or [string]$_.signatureKind -eq 'System') })) {
+        $msg = if ($rehydrated) { "Installed AI AppX matches '$prefix'. $rehydratedNote" } else { "Installed AI AppX still matches expected removal prefix '$prefix'." }
+        Add-AuditFinding -Findings $findings -Severity $sev -Id 'ai-appx-installed-drift' -Category 'ai' -Name ([string]$pkg.packageFullName) -Message $msg
     }
 }
 
@@ -517,19 +639,41 @@ if ($aiRemoval -and [string]$aiRemoval.policy -ne 'Core') {
 foreach ($required in @(
         @('store', 'Store AppX', $platform.appx.store),
         @('desktop-app-installer', 'Desktop App Installer AppX', $platform.appx.desktopAppInstaller),
-        @('winget', 'winget command', $platform.commands.winget),
-        @('edge-runtime', 'Microsoft Edge runtime', $platform.runtime.edgeRuntime),
+        # winget.exe ships as the DesktopAppInstaller execution alias; that per-user PATH
+        # alias registers a moment AFTER first logon, so a PATH probe run that early (as the
+        # FirstLogon agent does) can miss it even though winget is installed and provisioned.
+        # Treat winget as present when the App Installer package is present (it provides
+        # winget) OR the command already resolves - avoids a benign first-logon false error.
+        @('winget', 'winget command', ($platform.commands.winget -or $platform.appx.desktopAppInstaller)),
         @('webview2-runtime', 'Microsoft Edge WebView2 Runtime', $platform.runtime.webView2Runtime),
         @('defender-service', 'Defender service', $platform.services.defender.present),
         @('firewall-service', 'Firewall service', $platform.services.firewall.present),
         @('windows-update-service', 'Windows Update service', $platform.services.windowsUpdate.present),
         @('bits-service', 'BITS service', $platform.services.bits.present),
-        @('waasmedic-service', 'WaaSMedic service', $platform.services.waaSMedic.present),
-        @('hns-service', 'HNS service', $platform.services.hns.present)
+        @('waasmedic-service', 'WaaSMedic service', $platform.services.waaSMedic.present)
+        # NOTE: HNS (Host Network Service) is intentionally NOT required here. It is an
+        # on-demand service that ships/starts with WSL2 / containers / Hyper-V networking, so
+        # it is legitimately absent on a base install and must not be flagged as an error.
     )) {
     if (-not [bool]$required[2]) {
         Add-AuditFinding -Findings $findings -Severity Error -Id $required[0] -Category 'platform' -Name $required[1] -Message "$($required[1]) is missing."
     }
+}
+
+# Microsoft Edge: on DMA builds, WinMint removes the browser through the normal
+# supported app uninstaller. If the removal request leaves Edge present, report it as
+# an incomplete normal uninstall. WebView2 is required either way (checked above).
+$edgeRemovalRequested = [bool](Get-AuditProfileValue -Profile $setupProfile -Section 'edge' -Name 'removeEdge' -Default $false)
+if ($edgeRemovalRequested) {
+    if ([bool]$platform.runtime.edgeRuntime) {
+        Add-AuditFinding -Findings $findings -Severity Warning -Id 'edge-removal-incomplete' -Category 'platform' -Name 'Microsoft Edge' -Message 'Edge removal was requested, but the supported app uninstaller left the Edge browser present. WebView2 preserved.'
+    }
+    else {
+        Add-AuditFinding -Findings $findings -Severity Info -Id 'edge-removed' -Category 'platform' -Name 'Microsoft Edge' -Message 'Edge browser absent; WebView2 runtime preserved.'
+    }
+}
+elseif (-not [bool]$platform.runtime.edgeRuntime) {
+    Add-AuditFinding -Findings $findings -Severity Error -Id 'edge-runtime' -Category 'platform' -Name 'Microsoft Edge runtime' -Message 'Microsoft Edge runtime is missing.'
 }
 
 if ($null -ne $platform.networking.ipv6DisabledComponents -and [int64]$platform.networking.ipv6DisabledComponents -ne 0) {
@@ -555,8 +699,11 @@ if ($dmaInterop.enabled) {
     if ([int]$dmaInterop.restore.homeLocationGeoId -gt 0 -and [int]$dmaInterop.current.homeLocationGeoId -ne [int]$dmaInterop.restore.homeLocationGeoId) {
         Add-AuditFinding -Findings $findings -Severity Error -Id 'dma-home-location-restore' -Category 'dmaInterop' -Name 'Home location restore' -Message "Current home location GeoID '$($dmaInterop.current.homeLocationGeoId)' does not match configured restore GeoID '$($dmaInterop.restore.homeLocationGeoId)'."
     }
-    if (-not [bool]$dmaInterop.autoTimeZone.disabled) {
+    if (-not [bool]$dmaInterop.locationServices.expectedEnabled -and -not [bool]$dmaInterop.autoTimeZone.disabled) {
         Add-AuditFinding -Findings $findings -Severity Error -Id 'dma-auto-time-zone-active' -Category 'dmaInterop' -Name 'Auto Time Zone Updater' -Message 'DMA interoperability is enabled, but Auto Time Zone Updater is not disabled. Windows may automatically change the time zone after the user sets it.'
+    }
+    if ([bool]$dmaInterop.locationServices.expectedEnabled -and [bool]$dmaInterop.autoTimeZone.disabled) {
+        Add-AuditFinding -Findings $findings -Severity Error -Id 'dma-auto-time-zone-disabled' -Category 'dmaInterop' -Name 'Auto Time Zone Updater' -Message 'Location services are expected on, but Auto Time Zone Updater is disabled.'
     }
     if ($dmaInterop.locationServices.expectedEnabled) {
         if ($null -ne $dmaInterop.locationServices.disableLocationPolicy -and [int]$dmaInterop.locationServices.disableLocationPolicy -ne 0) {
@@ -649,6 +796,9 @@ $summary = [ordered]@{
         provisionedAppx = $provisionedAppx.Count
         installedAppx   = $installedAppx.Count
         win32           = $win32Entries.Count
+        services        = if ($debugInventory) { @($debugInventory.services).Count } else { $null }
+        scheduledTasks  = if ($debugInventory) { @($debugInventory.scheduledTasks).Count } else { $null }
+        startupEntries  = if ($debugInventory) { @($debugInventory.startupEntries).Count } else { $null }
     }
 }
 
@@ -675,6 +825,7 @@ $report = [ordered]@{
             scheduledTasks = @($aiTasks)
         }
         recommended     = @($recommendedClassification)
+        debugInventory  = $debugInventory
     }
 }
 

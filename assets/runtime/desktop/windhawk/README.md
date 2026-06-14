@@ -11,7 +11,7 @@ The preset stores:
 - mod settings
 
 It does not store compiled Windhawk mod DLLs or local Windhawk `ProgramData` state.
-During first logon, `src/setup/WindhawkBootstrap.ps1` installs Windhawk through the
+During first logon, `src/runtime/setup/WindhawkBootstrap.ps1` installs Windhawk through the
 agent package manifest, downloads official mod source and precompiled DLLs from
 `mods.windhawk.net`, writes the Windhawk registry configuration, and restarts
 Windhawk/Explorer.

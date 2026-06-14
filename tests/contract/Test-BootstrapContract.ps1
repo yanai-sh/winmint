@@ -26,6 +26,17 @@ function Assert-BootstrapText {
     }
 }
 
+function Assert-BootstrapTextAbsent {
+    param(
+        [Parameter(Mandatory)][string]$Pattern,
+        [Parameter(Mandatory)][string]$Description
+    )
+
+    if ($bootstrap -match $Pattern) {
+        throw "Bootstrap contract violation: $Description"
+    }
+}
+
 Assert-BootstrapText -Pattern 'yanai-sh/winmint' -Description 'canonical GitHub repository'
 Assert-BootstrapText -Pattern 'WinMint-\$tag\.zip' -Description 'WinMint release archive naming'
 Assert-BootstrapText -Pattern 'WinMint-Bootstrap' -Description 'WinMint GitHub user agent'
@@ -35,10 +46,13 @@ Assert-BootstrapText -Pattern '\[switch\]\$Headless' -Description 'headless laun
 Assert-BootstrapText -Pattern 'WinMint-GUI\.ps1' -Description 'default GUI entry point'
 Assert-BootstrapText -Pattern 'WinMint-CLI\.ps1' -Description 'headless entry point'
 Assert-BootstrapText -Pattern 'ProfilePath' -Description 'headless profile forwarding'
-Assert-BootstrapText -Pattern 'UupDumpSource' -Description 'headless UUP Dump source forwarding'
-Assert-BootstrapText -Pattern 'Launcher' -Description 'headless launcher choice forwarding'
-Assert-BootstrapText -Pattern 'LiveInstallAudit' -Description 'headless live install audit forwarding'
-Assert-BootstrapText -Pattern 'PhoneLink' -Description 'headless Phone Link forwarding'
+Assert-BootstrapText -Pattern "if \(\`$ValidateOnly\) \{ 'validate' \} else \{ 'build' \}" -Description 'headless dispatches the build/validate verb'
+Assert-BootstrapText -Pattern 'SourceIso' -Description 'headless source-ISO override forwarding'
+Assert-BootstrapText -Pattern "Add\('-AllowElevate'\)" -Description 'headless elevation forwarding'
 Assert-BootstrapText -Pattern 'NoLaunch requested; not starting WinMint' -Description 'mode-neutral NoLaunch text'
+Assert-BootstrapText -Pattern 'missing required checksum asset' -Description 'release checksum asset is mandatory'
+Assert-BootstrapText -Pattern 'Refusing to install without release integrity verification' -Description 'missing checksum fails hard'
+Assert-BootstrapText -Pattern 'Test-WinMintArchiveHash -ArchivePath \$archivePath -ChecksumPath \$checksumPath' -Description 'downloaded release archive is hash-verified'
+Assert-BootstrapTextAbsent -Pattern 'hash verification skipped' -Description 'bootstrap must not downgrade to unverified release installs'
 
 Write-Host 'Bootstrap contract tests passed.'

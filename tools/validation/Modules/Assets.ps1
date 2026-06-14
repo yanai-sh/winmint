@@ -10,15 +10,21 @@ function Test-RequiredAssets {
         'assets\brand\winmint_full.png',
         'assets\brand\winmint_hero.png',
         'assets\brand\icons\winmint_simple_squircle_256.ico',
-        'assets\runtime\wallpaper\Bloom-wallpaper-OLED-muted.png',
+        'assets\runtime\wallpaper\winmint-bloom.png',
+        'assets\runtime\accountpicture\user.png',
+        'assets\runtime\accountpicture\user-192.png',
+        'assets\runtime\accountpicture\user-48.png',
+        'assets\runtime\accountpicture\user-40.png',
+        'assets\runtime\accountpicture\user-32.png',
+        'assets\runtime\defaultapps\WinMint-DefaultAppAssociations.xml',
         'assets\ui\editors\cursor.png',
-        'assets\ui\editors\vscodium.png',
         'assets\ui\editors\zed.png',
         'assets\ui\editors\neovim.png',
         'assets\ui\wsl\ubuntu.png',
-        'assets\ui\wsl\debian.png',
         'assets\ui\wsl\archlinux.png',
         'assets\ui\wsl\fedora.png',
+        'assets\ui\wsl\pengwin.png',
+        'assets\ui\wsl\nixos.png',
         'assets\ui\desktop\windhawk\windhawk.svg',
         'assets\ui\desktop\windhawk\windhawk.png',
         'assets\runtime\desktop\windhawk\preset.json',
@@ -82,26 +88,24 @@ function Test-RequiredAssets {
         'tools\release\New-WinMintReleaseBundle.ps1',
         'tools\release\Build-WinMintGui.ps1',
         'tools\audit\Audit-LiveInstall.ps1',
-        'src\setup\WindhawkBootstrap.ps1',
-        'src\setup\WindhawkBootstrap.Helpers.ps1',
-        'src\engine\Private\Pipeline.Console.ps1',
-        'src\agent\Agent.Console.ps1',
-        'src\agent\Agent.Runtime.ps1',
-        'src\agent\Start-WinMintAgent.ps1',
-        'src\agent\Start-WinMintFirstLogonUI.ps1',
-        'src\agent\Start-WinMintFirstLogonUI.xaml',
-        'src\agent\BuildProfile.json',
-        'src\agent\Modules\PackageManagers.ps1',
-        'src\agent\Modules\Editors.ps1',
-        'src\agent\Modules\Git.ps1',
-        'src\agent\Modules\Dotfiles.ps1',
-        'src\agent\Modules\Wsl.ps1',
-        'src\agent\Modules\FlowEverything.ps1',
-        'src\agent\Modules\Raycast.ps1',
-        'src\agent\Modules\LiveInstallAudit.ps1',
-        'src\agent\Modules\TilingDesktop.ps1',
-        'src\agent\Modules\Windhawk.ps1',
-        'src\agent\Modules\Profiles.ps1'
+        'src\runtime\setup\WindhawkBootstrap.ps1',
+        'src\runtime\setup\WindhawkBootstrap.Helpers.ps1',
+        'src\runtime\image\Private\Pipeline.Console.ps1',
+        'src\runtime\firstlogon\Agent.Console.ps1',
+        'src\runtime\firstlogon\Agent.Runtime.ps1',
+        'src\runtime\firstlogon\Start-WinMintAgent.ps1',
+        'src\runtime\firstlogon\BuildProfile.json',
+        'src\runtime\firstlogon\Modules\PackageManagers.ps1',
+        'src\runtime\firstlogon\Modules\Editors.ps1',
+        'src\runtime\firstlogon\Modules\Git.ps1',
+        'src\runtime\firstlogon\Modules\Dotfiles.ps1',
+        'src\runtime\firstlogon\Modules\Wsl.ps1',
+        'src\runtime\firstlogon\Modules\FlowEverything.ps1',
+        'src\runtime\firstlogon\Modules\Raycast.ps1',
+        'src\runtime\firstlogon\Modules\LiveInstallAudit.ps1',
+        'src\runtime\firstlogon\Modules\TilingDesktop.ps1',
+        'src\runtime\firstlogon\Modules\Windhawk.ps1',
+        'src\runtime\firstlogon\Modules\Profiles.ps1'
     )
     foreach ($rel in $required) {
         $path = Join-Path $root $rel
@@ -135,6 +139,36 @@ function Test-DuplicateLargeAssets {
         }
     }
     Write-Host 'OK no duplicate large assets'
+}
+
+function Test-WslTerminalIconQuality {
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+    }
+    catch {
+        Add-ValidationError "Unable to load System.Drawing for WSL icon validation: $($_.Exception.Message)"
+        return
+    }
+
+    foreach ($iconName in @('ubuntu.png', 'archlinux.png', 'fedora.png', 'nixos.png')) {
+        $iconPath = Join-Path $root "assets\ui\wsl\$iconName"
+        if (-not (Test-Path -LiteralPath $iconPath -PathType Leaf)) { continue }
+
+        $image = $null
+        try {
+            $image = [System.Drawing.Image]::FromFile($iconPath)
+            if ($image.Width -lt 512 -or $image.Height -lt 512) {
+                Add-ValidationError "WSL Terminal icon must be at least 512x512: assets\ui\wsl\$iconName is $($image.Width)x$($image.Height)."
+            }
+        }
+        catch {
+            Add-ValidationError "WSL Terminal icon is not a readable PNG: assets\ui\wsl\$iconName. $($_.Exception.Message)"
+        }
+        finally {
+            if ($image) { $image.Dispose() }
+        }
+    }
+    Write-Host 'OK WSL Terminal PNG icon quality'
 }
 
 function Test-WindhawkPresetPayload {
@@ -283,6 +317,13 @@ function Test-PackageManifestArchitecture {
         foreach ($toolProperty in $manifest.tools.PSObject.Properties) {
             $tool = $toolProperty.Value
             $id = [string]$toolProperty.Name
+            if (-not $tool.PSObject.Properties['source']) {
+                Add-ValidationError "Tool '$id' must declare a source."
+                continue
+            }
+            if ([string]$tool.source -notin @('winget', 'store', 'scoop')) {
+                Add-ValidationError "Tool '$id' must use winget, store, or scoop as its source; got '$($tool.source)'."
+            }
             if (-not $tool.PSObject.Properties['architectures']) {
                 Add-ValidationError "Tool '$id' must declare architectures."
                 continue
@@ -305,6 +346,9 @@ function Test-PackageManifestArchitecture {
                     }
                     if (@('x86', 'x64', 'arm64') -notcontains ([string]$override.Value).ToLowerInvariant()) {
                         Add-ValidationError "Tool '$id' has unsupported Winget architecture override: $($override.Value)"
+                    }
+                    if (([string]$override.Name).ToLowerInvariant() -eq 'arm64' -and ([string]$override.Value).ToLowerInvariant() -eq 'x86') {
+                        Add-ValidationError "Tool '$id' must not downgrade native ARM64 support to x86 in wingetArchitectureByHost."
                     }
                 }
             }

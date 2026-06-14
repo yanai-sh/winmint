@@ -7,6 +7,7 @@ $testRoot = $PSScriptRoot
 
 foreach ($testScript in @(
         'Test-ProfileInvariants.ps1',
+        'Test-InstallPlanContract.ps1',
         'Test-CliMatrix.ps1',
         'Test-AgentStateTransitions.ps1',
         'Test-BootstrapContract.ps1',

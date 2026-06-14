@@ -74,6 +74,32 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "required": ["development"],
+        "properties": {
+          "development": {
+            "required": ["browsers"],
+            "properties": {
+              "browsers": {
+                "contains": { "const": "edge" }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": ["keep"],
+        "properties": {
+          "keep": {
+            "required": ["edge"],
+            "properties": {
+              "edge": { "const": true }
+            }
+          }
+        }
+      }
     }
   ],
   "properties": {
@@ -163,7 +189,14 @@
         "uiLanguageFallback": { "type": "string" },
         "userLocale": { "type": "string" },
         "inputLocale": { "type": "string" },
-        "homeLocationGeoId": { "type": "integer" }
+        "homeLocationGeoId": { "type": "integer" },
+        "secondaryInputLanguages": {
+          "description": "Secondary input languages (keyboards) to add for the user while the display language stays en-US. 'Auto' (default) replicates the build host's current keyboard config; 'None' or [] adds none; an array of BCP-47 tags (e.g. ['he-IL']) sets them explicitly.",
+          "oneOf": [
+            { "type": "string", "enum": ["Auto", "None"] },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        }
       },
       "additionalProperties": false
     },
@@ -220,18 +253,23 @@
     },
     "development": {
       "type": "object",
-      "required": ["editors", "wsl"],
+      "required": ["editors", "browsers", "wsl"],
       "properties": {
         "editors": {
           "type": "array",
           "items": { "type": "string" },
           "uniqueItems": true
         },
+        "browsers": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["zen-browser", "helium", "librewolf", "brave", "edge"] },
+          "uniqueItems": true
+        },
         "wsl": {
           "type": "object",
           "required": ["enabled", "distros"],
           "properties": {
-            "enabled": { "type": "boolean" },
+            "enabled": { "type": "boolean", "const": true },
             "distros": {
               "type": "array",
               "items": { "type": "string" },

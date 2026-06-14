@@ -128,6 +128,20 @@ function Test-JsonSchemaNode {
                 Test-JsonSchemaNode -Value $items[$i] -Schema $Schema.items -Path "$Path[$i]" -Failures $Failures
             }
         }
+        if ($Schema.PSObject.Properties['contains']) {
+            $containsMatch = $false
+            for ($i = 0; $i -lt $items.Count; $i++) {
+                $containsFailures = [System.Collections.Generic.List[string]]::new()
+                Test-JsonSchemaNode -Value $items[$i] -Schema $Schema.contains -Path "$Path[$i]" -Failures $containsFailures
+                if ($containsFailures.Count -eq 0) {
+                    $containsMatch = $true
+                    break
+                }
+            }
+            if (-not $containsMatch) {
+                $Failures.Add("$Path must contain an item matching the required schema.") | Out-Null
+            }
+        }
     }
 }
 

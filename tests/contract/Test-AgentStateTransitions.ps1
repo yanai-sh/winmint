@@ -51,7 +51,21 @@ function Write-AgentEvent {
 }
 function Write-AgentConsoleLine { param([string]$Level, [string]$Message) [void]$Level; [void]$Message }
 
-. (Join-Path $root 'src\agent\Agent.Runtime.ps1')
+. (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1')
+
+$nativePreferredTool = [pscustomobject]@{
+    architectures = @('amd64', 'arm64')
+    wingetArchitectureByHost = [pscustomobject]@{
+        arm64 = 'x86'
+    }
+}
+Assert-Equal (Get-AgentToolWingetArchitecture -Tool $nativePreferredTool -HostArchitecture 'arm64' -TargetArchitecture 'arm64') 'arm64' 'Native ARM64 support must win over stale x86 overrides.'
+
+$x64Tool = [pscustomobject]@{
+    architectures = @('amd64', 'arm64')
+}
+Assert-Equal (Get-AgentToolWingetArchitecture -Tool $x64Tool -HostArchitecture 'amd64' -TargetArchitecture 'amd64') '' 'amd64 targets should use package-manager default architecture without a winget override.'
+Assert-Equal (Get-AgentToolWingetArchitecture -Tool $x64Tool -HostArchitecture 'arm64' -TargetArchitecture 'arm64') 'arm64' 'ARM64 targets should request native arm64 winget packages when supported.'
 
 function Invoke-TestAgentOkModule {
     param([object]$AgentProfile, [hashtable]$State)
@@ -92,10 +106,12 @@ try {
     $null = New-Item -ItemType Directory -Path $tempRoot -Force
     $script:statePath = Join-Path $tempRoot 'state.json'
     $script:agentProfile = [pscustomobject]@{
+        targetArchitecture = 'arm64'
         modules = [pscustomobject]@{
             packageManagers = [pscustomobject]@{ enabled = $true }
         }
     }
+    $script:AgentTargetArchitecture = 'arm64'
     $script:Force = $false
     $script:State = [ordered]@{
         version = 1

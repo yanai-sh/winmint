@@ -9,9 +9,9 @@ Set-StrictMode -Version 2.0
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
-. (Join-Path $root 'src\engine\Core.ps1')
+. (Join-Path $root 'src\runtime\image\Core.ps1')
 
-$launcher = Get-WinMintPath -Name GuiTool -ChildPath 'Start-GuiDev.ps1'
+$launcher = Get-WinMintPath -Name GuiToolsRoot -ChildPath 'Start-GuiDev.ps1'
 & $launcher -Release -BuildOnly -RustTarget $RustTarget
 if ($LASTEXITCODE -ne 0) {
     throw "GUI release build failed with exit code $LASTEXITCODE."

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://aka.ms/terminal-profiles-schema",
+  "centerOnLaunch": true,
+  "defaultProfile": "{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}",
+  "disabledProfileSources": [
+    "Windows.Terminal.WindowsPowerShell",
+    "Windows.Terminal.PowershellCore",
+    "Windows.Terminal.Azure",
+    "Windows.Terminal.SSH",
+    "Windows.Terminal.Wsl"
+  ],
+  "newTabMenu": [
+    {
+      "type": "remainingProfiles"
+    }
+  ],
+  "profiles": {
+    "defaults": {
+      "bellStyle": "none",
+      "colorScheme": "One Half Dark",
+      "font": {
+        "face": "Cascadia Code NF"
+      }
+    },
+    "list": [
+      {
+        "commandline": "\"%ProgramFiles%\\PowerShell\\7\\pwsh.exe\" -NoLogo",
+        "guid": "{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}",
+        "icon": "%ProgramFiles%\\PowerShell\\7\\pwsh.exe",
+        "name": "PowerShell",
+        "startingDirectory": "%USERPROFILE%"
+      }
+    ]
+  }
+}

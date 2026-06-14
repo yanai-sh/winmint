@@ -7,7 +7,7 @@ Set-StrictMode -Version 2.0
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
-. (Join-Path $root 'src\engine\Core.ps1')
+. (Join-Path $root 'src\runtime\image\Core.ps1')
 
 $failures = [System.Collections.Generic.List[string]]::new()
 function Add-LauncherFailure {

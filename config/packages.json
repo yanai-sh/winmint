@@ -1,10 +1,25 @@
 {
   "sourcePolicy": {
-    "winget": "GUI apps, Microsoft apps, signed installers, CLI tools, and packages where the upstream installer is canonical. This is the only implemented install source; every tool below must use it.",
+    "winget": "GUI apps, Microsoft apps, signed installers, shell integrations, desktop services, and packages where the upstream installer is canonical.",
+    "scoop": "User-local developer CLI tools and toolchain plumbing. Installed during FirstLogon through the official Scoop installer and the main bucket.",
     "github": "Reserved for specific upstream assets, stale package metadata, or architecture-specific layouts. Not yet implemented — the engine's build-time catalog validator rejects tools using this source.",
-    "store": "Reserved for cases where Store identity is required. Not yet implemented — the engine's build-time catalog validator rejects tools using this source."
+    "store": "Microsoft Store-backed packages. Used only when the upstream app is Store-distributed and winget surfaces it through the msstore source."
   },
   "tools": {
+    "mingit": {
+      "displayName": "MinGit",
+      "source": "scoop",
+      "id": "mingit",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "starship": {
+      "displayName": "Starship",
+      "source": "scoop",
+      "id": "starship",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
     "cursor": {
       "displayName": "Cursor",
       "source": "winget",
@@ -12,17 +27,45 @@
       "versionPolicy": "latest",
       "architectures": ["amd64", "arm64"]
     },
+    "antigravity": {
+      "displayName": "Antigravity",
+      "source": "winget",
+      "id": "Google.Antigravity",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "zen-browser": {
+      "displayName": "Zen Browser",
+      "source": "winget",
+      "id": "Zen-Team.Zen-Browser",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "helium": {
+      "displayName": "Helium",
+      "source": "winget",
+      "id": "ImputNet.Helium",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "librewolf": {
+      "displayName": "LibreWolf",
+      "source": "winget",
+      "id": "LibreWolf.LibreWolf",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "brave": {
+      "displayName": "Brave",
+      "source": "winget",
+      "id": "Brave.Brave",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
     "vscode": {
       "displayName": "Visual Studio Code",
       "source": "winget",
       "id": "Microsoft.VisualStudioCode",
-      "versionPolicy": "latest",
-      "architectures": ["amd64", "arm64"]
-    },
-    "vscodium": {
-      "displayName": "VSCodium",
-      "source": "winget",
-      "id": "VSCodium.VSCodium",
       "versionPolicy": "latest",
       "architectures": ["amd64", "arm64"]
     },
@@ -38,11 +81,7 @@
       "source": "winget",
       "id": "RamenSoftware.Windhawk",
       "versionPolicy": "latest",
-      "architectures": ["amd64", "arm64"],
-      "wingetArchitectureByHost": {
-        "amd64": "x86",
-        "arm64": "x86"
-      }
+      "architectures": ["amd64", "arm64"]
     },
     "yasb": {
       "displayName": "YASB",
@@ -67,8 +106,15 @@
     },
     "neovim": {
       "displayName": "Neovim",
+      "source": "scoop",
+      "id": "neovim",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "nilesoft": {
+      "displayName": "Nilesoft Shell",
       "source": "winget",
-      "id": "Neovim.Neovim",
+      "id": "Nilesoft.Shell",
       "versionPolicy": "latest",
       "architectures": ["amd64", "arm64"]
     },
@@ -77,8 +123,7 @@
       "source": "winget",
       "id": "Flow-Launcher.Flow-Launcher",
       "versionPolicy": "latest",
-      "architectures": ["amd64", "arm64"],
-      "wingetArchitectureByHost": { "arm64": "x86" }
+      "architectures": ["amd64", "arm64"]
     },
     "everything": {
       "displayName": "Everything Alpha",
@@ -89,8 +134,8 @@
     },
     "raycast": {
       "displayName": "Raycast",
-      "source": "winget",
-      "id": "Raycast.Raycast",
+      "source": "store",
+      "id": "9PFXXSHC64H3",
       "versionPolicy": "latest",
       "architectures": ["amd64", "arm64"]
     }

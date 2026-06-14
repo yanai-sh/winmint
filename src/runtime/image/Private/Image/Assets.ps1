@@ -1,0 +1,370 @@
+#Requires -Version 7.3
+
+function Sync-NerdFont {
+    param([ValidateNotNullOrEmpty()][string]$FontDir)
+    function Invoke-WinMintNerdFontPackageSync {
+        param(
+            [Parameter(Mandatory)][string]$DisplayName,
+            [Parameter(Mandatory)][string]$RepoSlug,
+            [Parameter(Mandatory)][string]$AssetRegex,
+            [Parameter(Mandatory)][scriptblock]$GetCacheHit,
+            [Parameter(Mandatory)][scriptblock]$RestoreFromCache,
+            [Parameter(Mandatory)][scriptblock]$PublishCache,
+            [Parameter(Mandatory)][string]$TempPrefix
+        )
+
+        Write-SectionHeader "Host: $DisplayName font sync"
+        Invoke-Action "Downloading $DisplayName (Nerd Font) into .\assets\runtime\fonts if missing" {
+            LogVerbose $FontDir
+            $null = New-Item -Path $FontDir -ItemType Directory -Force
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            try {
+                if ($DisplayName -eq 'Cascadia Code') {
+                    if (Get-ChildItem -LiteralPath $FontDir -Filter '*CascadiaCodeNF-Regular.ttf' -File -ErrorAction SilentlyContinue | Select-Object -First 1) {
+                        LogOK 'Cascadia Code Nerd Font is already present.'
+                        return
+                    }
+                }
+                elseif ($DisplayName -eq 'Monaspace') {
+                    if (Get-ChildItem -LiteralPath $FontDir -File -ErrorAction SilentlyContinue |
+                        Where-Object { $_.Name -match '^Monaspace.*(NF|NerdFont).*\.(ttf)$' } |
+                        Select-Object -First 1) {
+                        LogOK 'Monaspace Nerd Font is already present.'
+                        return
+                    }
+                }
+
+                $cachedRoot = & $GetCacheHit
+                if ($null -ne $cachedRoot) {
+                    Log "Restoring $DisplayName Nerd Font from temp cache (skipping GitHub + zip extract)…"
+                    & $RestoreFromCache -FontDir $FontDir -CacheRootDir $cachedRoot
+                    LogOK "$DisplayName Nerd Font restored from temp cache."
+                    return
+                }
+                $rel = Invoke-RestMethod -Verbose:$false -Uri "https://api.github.com/repos/$RepoSlug/releases/latest"
+                $asset = $rel.assets | Where-Object name -match $AssetRegex | Select-Object -First 1
+                if (-not $asset) {
+                    $available = ($rel.assets | ForEach-Object { $_.name }) -join ', '
+                    LogWarn "${DisplayName}: no .zip asset matching '$AssetRegex' in latest release. Available: $available"
+                    return
+                }
+                $zipUrl = $asset.browser_download_url
+                $zipPath = Invoke-WebRequestCachedFile -Uri $zipUrl -CacheFileName $asset.name
+                $hash = Assert-Win11IsoFileHash -FilePath $zipPath -Label $DisplayName
+                Add-WinMintManifestPayload -Name "$DisplayName (Nerd Font)" -SourceUrl $zipUrl `
+                    -Version $rel.tag_name -Sha256 $hash -SizeBytes (Get-Item -LiteralPath $zipPath).Length
+                $extRoot = Join-Path (Get-Win11IsoProcessTempPath) ($TempPrefix + [Guid]::NewGuid().ToString('n'))
+                try {
+                    $null = New-Item -ItemType Directory -Path $extRoot -Force
+                    [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extRoot)
+                    Get-ChildItem -LiteralPath $extRoot -Recurse -Filter '*NF*.ttf' | Copy-Item -Destination $FontDir -Force
+                    & $PublishCache -FontDir $FontDir -TagName $rel.tag_name -AssetName $asset.name `
+                        -SourceUrl $zipUrl -Sha256 $hash -SizeBytes (Get-Item -LiteralPath $zipPath).Length
+                }
+                finally {
+                    if (-not (Test-IsPathUnderWin11IsoDependencyCache $zipPath)) { Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue }
+                    Remove-Item -LiteralPath $extRoot -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
+            catch { LogWarn "$DisplayName sync failed: $_" }
+        }
+    }
+
+    Invoke-WinMintNerdFontPackageSync `
+        -DisplayName 'Cascadia Code' `
+        -RepoSlug 'microsoft/cascadia-code' `
+        -AssetRegex 'CascadiaCode-.*\.zip' `
+        -GetCacheHit { Get-WinMintCascadiaNerdFontCacheHit } `
+        -RestoreFromCache {
+            param($FontDir, $CacheRootDir)
+            Restore-WinMintCascadiaNerdFontFromCache -FontDir $FontDir -CacheRootDir $CacheRootDir
+        } `
+        -PublishCache {
+            param($FontDir, $TagName, $AssetName, $SourceUrl, $Sha256, $SizeBytes)
+            Publish-WinMintCascadiaNerdFontCache `
+                -FontDir $FontDir `
+                -TagName $TagName `
+                -AssetName $AssetName `
+                -SourceUrl $SourceUrl `
+                -Sha256 $Sha256 `
+                -SizeBytes $SizeBytes
+        } `
+        -TempPrefix 'Win11ISO_Cascadia_ext_'
+
+    Invoke-WinMintNerdFontPackageSync `
+        -DisplayName 'Monaspace' `
+        -RepoSlug 'githubnext/monaspace' `
+        -AssetRegex 'monaspace-nerdfonts-.*\.zip' `
+        -GetCacheHit { Get-WinMintMonaspaceNerdFontCacheHit } `
+        -RestoreFromCache {
+            param($FontDir, $CacheRootDir)
+            Restore-WinMintMonaspaceNerdFontFromCache -FontDir $FontDir -CacheRootDir $CacheRootDir
+        } `
+        -PublishCache {
+            param($FontDir, $TagName, $AssetName, $SourceUrl, $Sha256, $SizeBytes)
+            Publish-WinMintMonaspaceNerdFontCache `
+                -FontDir $FontDir `
+                -TagName $TagName `
+                -AssetName $AssetName `
+                -SourceUrl $SourceUrl `
+                -Sha256 $Sha256 `
+                -SizeBytes $SizeBytes
+        } `
+        -TempPrefix 'Win11ISO_Monaspace_ext_'
+}
+
+function Sync-Cursor {
+    param(
+        [ValidateNotNullOrEmpty()][string]$CursorsDir,
+        [string]$PackKind = 'Windows11Modern'
+    )
+    if ([string]::IsNullOrWhiteSpace($PackKind) -or $PackKind -eq 'None') {
+        $PackKind = $script:Win11IsoDefaultCursorPackKind
+    }
+    if (-not $script:Win11IsoCursorPackCatalog.ContainsKey($PackKind)) {
+        throw "Unsupported cursor pack '$PackKind'. WinMint uses Windows 11 Modern."
+    }
+    Write-SectionHeader 'Host: cursor theme'
+    Invoke-Action "Checking bundled cursor pack ($PackKind)" {
+        LogVerbose $CursorsDir
+        $meta = $script:Win11IsoCursorPackCatalog[$PackKind]
+        $srcDir = Join-Path $CursorsDir $meta.HostSourceDir
+        $marker = Join-Path $CursorsDir $meta.MarkerRelPath
+        if (-not (Test-Path -LiteralPath $marker)) {
+            throw "Bundled cursor pack missing expected file: $marker"
+        }
+        $missingRequired = @(
+            $script:Win11IsoCursorSchemeOrder |
+                Where-Object { -not (Test-Path -LiteralPath (Resolve-WinMintCursorSourceFile -PackMeta $meta -SourceDir $srcDir -RoleFile $_)) }
+        )
+        if ($missingRequired.Count -gt 0) {
+            throw "Bundled cursor pack '$PackKind' is missing required role file(s): $($missingRequired -join ', ')"
+        }
+        LogOK "Bundled Windows 11 Modern cursor pack is present."
+    }
+}
+
+function Resolve-WinMintCursorSourceFile {
+    param(
+        [Parameter(Mandatory)][hashtable]$PackMeta,
+        [Parameter(Mandatory)][string]$SourceDir,
+        [Parameter(Mandatory)][string]$RoleFile
+    )
+
+    $sourceFile = $RoleFile
+    if ($PackMeta.ContainsKey('RoleFiles') -and $PackMeta.RoleFiles.ContainsKey($RoleFile)) {
+        $sourceFile = [string]$PackMeta.RoleFiles[$RoleFile]
+    }
+    return Join-Path $SourceDir $sourceFile
+}
+
+function Install-OfflineFont {
+    param([ValidateNotNullOrEmpty()][string]$MountDir, [ValidateNotNullOrEmpty()][string]$ScriptDir)
+    Write-SectionHeader 'Image: fonts from .\assets\runtime\fonts'
+    $fontDir = Join-Path $ScriptDir 'assets\runtime\fonts'
+    if (-not (Test-Path $fontDir)) { return }
+    $fonts = @(Get-ChildItem -LiteralPath $fontDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.ttf', '.otf' })
+    if ($fonts.Count -eq 0) { return }
+
+    Invoke-Action "Installing $($fonts.Count) font file(s) into the offline Windows image" {
+        LogVerbose "Mount: $MountDir"
+        $null = & reg.exe load 'HKLM\Win11ISO_FontSOFTWARE' (Join-Path $MountDir 'Windows\System32\config\SOFTWARE')
+        try {
+            foreach ($font in $fonts) {
+                $null = Copy-Item -Path $font.FullName -Destination (Join-Path $MountDir 'Windows\Fonts') -Force
+                $suffix = ($font.Extension -eq '.ttf') ? "(TrueType)" : "(OpenType)"
+                $fontName = "$([IO.Path]::GetFileNameWithoutExtension($font.Name)) $suffix"
+                $null = & reg.exe add "HKLM\Win11ISO_FontSOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts" /v "$fontName" /t REG_SZ /d "$($font.Name)" /f
+            }
+        }
+        finally {
+            [GC]::Collect(); [GC]::WaitForPendingFinalizers(); Start-Sleep -Milliseconds 500
+            $null = & reg.exe unload 'HKLM\Win11ISO_FontSOFTWARE'
+        }
+    }
+}
+
+function Install-OfflineCursor {
+    param(
+        [ValidateNotNullOrEmpty()][string]$MountDir,
+        [ValidateNotNullOrEmpty()][string]$ScriptDir,
+        [string]$CursorPackKind = 'Windows11Modern'
+    )
+    if ([string]::IsNullOrWhiteSpace($CursorPackKind) -or $CursorPackKind -eq 'None') {
+        $CursorPackKind = $script:Win11IsoDefaultCursorPackKind
+    }
+    if (-not $script:Win11IsoCursorPackCatalog.ContainsKey($CursorPackKind)) {
+        throw "Unsupported cursor pack '$CursorPackKind'. WinMint uses Windows 11 Modern."
+    }
+    Write-SectionHeader 'Image: default user cursor scheme'
+    $cursorsDir = Join-Path $ScriptDir 'assets\runtime\cursors'
+    $meta = $script:Win11IsoCursorPackCatalog[$CursorPackKind]
+    $srcDir = Join-Path $cursorsDir $meta.HostSourceDir
+    if (-not (Test-Path -LiteralPath $srcDir)) {
+        throw "Bundled cursor pack '$CursorPackKind' folder missing: $srcDir"
+    }
+    $cursorFiles = @(
+        @(Get-ChildItem -LiteralPath $srcDir -Filter '*.cur' -File -ErrorAction SilentlyContinue) +
+        @(Get-ChildItem -LiteralPath $srcDir -Filter '*.ani' -File -ErrorAction SilentlyContinue)
+    )
+    if ($cursorFiles.Count -eq 0) {
+        LogWarn "Cursor pack '$CursorPackKind': no .cur/.ani files in $srcDir"
+        return
+    }
+    $missingRequired = @(
+        $script:Win11IsoCursorSchemeOrder |
+            Where-Object { -not (Test-Path -LiteralPath (Resolve-WinMintCursorSourceFile -PackMeta $meta -SourceDir $srcDir -RoleFile $_)) }
+    )
+    if ($missingRequired.Count -gt 0) {
+        throw "Cursor pack '$CursorPackKind': missing required Windows cursor role file(s): $($missingRequired -join ', ')"
+    }
+
+    Invoke-Action "Installing cursor scheme ($CursorPackKind) for the default user profile" {
+        LogVerbose "Mount: $MountDir"
+        $winCursors = Join-Path $MountDir 'Windows\Cursors'
+        $null = New-Item -Path $winCursors -ItemType Directory -Force
+
+        $schemeName = [string]$meta.SchemeName
+        $destSeg    = [string]$meta.DestSegment
+        $destDir    = Join-Path $winCursors $destSeg
+        $null = New-Item -Path $destDir -ItemType Directory -Force
+        foreach ($roleFile in @($script:Win11IsoCursorSchemeOrder | Sort-Object -Unique)) {
+            $sourcePath = Resolve-WinMintCursorSourceFile -PackMeta $meta -SourceDir $srcDir -RoleFile $roleFile
+            if (Test-Path -LiteralPath $sourcePath) {
+                Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $destDir $roleFile) -Force
+            }
+        }
+        $base = "%SystemRoot%\Cursors\$destSeg"
+        $order = $script:Win11IsoCursorSchemeOrder
+        $regPairs = @($script:Win11IsoCursorRegistryPairs)
+
+        $null = & reg.exe load 'HKLM\peNTUSER' (Join-Path $MountDir 'Users\Default\ntuser.dat')
+        try {
+            $schemesKey = 'HKLM\peNTUSER\Control Panel\Cursors\Schemes'
+            $cursorsKey = 'HKLM\peNTUSER\Control Panel\Cursors'
+            $schemeList = ($order | ForEach-Object { "$base\$_" }) -join ','
+            $null = & reg.exe add "`"$schemesKey`"" /v "$schemeName" /t REG_EXPAND_SZ /d "$schemeList" /f
+            $null = & reg.exe add "`"$cursorsKey`"" /ve /t REG_SZ /d "$schemeName" /f
+            foreach ($p in $regPairs) {
+                $null = & reg.exe add "`"$cursorsKey`"" /v "$($p.Name)" /t REG_EXPAND_SZ /d "$base\$($p.File)" /f
+            }
+        }
+        finally {
+            [GC]::Collect(); [GC]::WaitForPendingFinalizers(); Start-Sleep -Milliseconds 500
+            $null = & reg.exe unload 'HKLM\peNTUSER'
+        }
+        LogOK "Default user cursor scheme applied ($CursorPackKind)."
+    }
+}
+
+function Install-OfflineWindowsTerminalSettings {
+    param([ValidateNotNullOrEmpty()][string]$MountDir, [ValidateNotNullOrEmpty()][string]$ScriptDir)
+    Write-SectionHeader 'Image: Windows Terminal settings'
+    Invoke-Action 'Installing the default Windows Terminal profile for PowerShell 7' {
+        $settingsSrc = Join-Path $ScriptDir 'assets\runtime\windows-terminal\settings.json'
+        if (-not (Test-Path -LiteralPath $settingsSrc)) {
+            LogWarn "Windows Terminal settings asset missing: $settingsSrc"
+            return
+        }
+
+        $settingsDir = Join-Path $MountDir 'Users\Default\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState'
+        $null = New-Item -ItemType Directory -Path $settingsDir -Force -ErrorAction Stop
+        Copy-Item -LiteralPath $settingsSrc -Destination (Join-Path $settingsDir 'settings.json') -Force
+        $wslIconSrcDir = Join-Path $ScriptDir 'assets\ui\wsl'
+        $wslIconDstDir = Join-Path $settingsDir 'Icons'
+        $null = New-Item -ItemType Directory -Path $wslIconDstDir -Force -ErrorAction Stop
+        Get-ChildItem -LiteralPath $wslIconSrcDir -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -eq '.png' } |
+            ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $wslIconDstDir $_.Name) -Force
+        }
+        LogOK 'Staged default Windows Terminal settings for PowerShell 7.'
+    }
+}
+
+function Install-OfflineWinget {
+    param(
+        [ValidateNotNullOrEmpty()][string]$MountDir,
+        [Parameter(Mandatory)][string]$TargetArch
+    )
+    Write-SectionHeader 'Image: winget (offline bundle)'
+    Invoke-Action 'Provisioning winget with DISM (offline msixbundle)' {
+        LogVerbose "Mount: $MountDir"
+        $bundlePath = $null
+        $dependencyZipPath = $null
+        $dependencyExpandDir = $null
+        try {
+            $sourceUrl = ''
+            $version = 'cached'
+            $assetName = ''
+            $dependencyAssetName = ''
+            try {
+                $rel = Invoke-RestMethod -Verbose:$false -Uri 'https://api.github.com/repos/microsoft/winget-cli/releases/latest'
+                $asset = $rel.assets | Where-Object { $_.name -match '\.msixbundle$' } | Select-Object -First 1
+                if (-not $asset) { throw 'winget-cli: no .msixbundle asset in latest GitHub release.' }
+                $dependencyAsset = $rel.assets | Where-Object { $_.name -eq 'DesktopAppInstaller_Dependencies.zip' } | Select-Object -First 1
+                if (-not $dependencyAsset) { throw 'winget-cli: no DesktopAppInstaller_Dependencies.zip asset in latest GitHub release.' }
+                $bundlePath = Invoke-WebRequestCachedFile -Uri $asset.browser_download_url -CacheFileName $asset.name
+                $dependencyZipPath = Invoke-WebRequestCachedFile -Uri $dependencyAsset.browser_download_url -CacheFileName $dependencyAsset.name
+                $sourceUrl = $asset.browser_download_url
+                $version = $rel.tag_name
+                $assetName = $asset.name
+                $dependencyAssetName = $dependencyAsset.name
+            }
+            catch {
+                LogWarn "winget release lookup failed; trying cached msixbundle. $($_.Exception.Message)"
+                $bundlePath = Get-WinMintCachedDownloadFile -Patterns @('Microsoft.DesktopAppInstaller_*.msixbundle', '*.msixbundle')
+                if (-not $bundlePath) { throw 'winget cache missing Microsoft.DesktopAppInstaller msixbundle.' }
+                $dependencyZipPath = Get-WinMintCachedDownloadFile -Patterns @('DesktopAppInstaller_Dependencies.zip')
+                if (-not $dependencyZipPath) { throw 'winget cache missing DesktopAppInstaller_Dependencies.zip.' }
+                $assetName = [IO.Path]::GetFileName($bundlePath)
+                $dependencyAssetName = [IO.Path]::GetFileName($dependencyZipPath)
+                $sourceUrl = "cache:$assetName"
+            }
+            $wingetHash = Assert-Win11IsoFileHash -FilePath $bundlePath -Label "winget ($assetName)"
+            Add-WinMintManifestPayload -Name 'winget' -SourceUrl $sourceUrl `
+                -Version $version -Sha256 $wingetHash -SizeBytes (Get-Item -LiteralPath $bundlePath).Length
+            $dependencyHash = Assert-Win11IsoFileHash -FilePath $dependencyZipPath -Label "winget dependencies ($dependencyAssetName)"
+            Add-WinMintManifestPayload -Name 'winget dependencies' -SourceUrl "cache-or-release:$dependencyAssetName" `
+                -Version $version -Sha256 $dependencyHash -SizeBytes (Get-Item -LiteralPath $dependencyZipPath).Length
+
+            $dependencyExpandDir = Join-Path (Get-Win11IsoProcessTempPath) ('winget_dependencies_' + [Guid]::NewGuid().ToString('n'))
+            Expand-Archive -LiteralPath $dependencyZipPath -DestinationPath $dependencyExpandDir -Force
+            $dependencyArch = switch ($TargetArch) {
+                'arm64' { 'arm64' }
+                'amd64' { 'x64' }
+                'x64' { 'x64' }
+                'x86' { 'x86' }
+                default { throw "Unsupported winget dependency architecture '$TargetArch'." }
+            }
+            $dependencyPackages = @(
+                Get-ChildItem -LiteralPath (Join-Path $dependencyExpandDir $dependencyArch) -File -ErrorAction Stop |
+                    Where-Object { $_.Extension -in @('.appx', '.msix') } |
+                    Sort-Object Name |
+                    ForEach-Object { $_.FullName }
+            )
+            if ($dependencyPackages.Count -eq 0) {
+                throw "winget dependency archive contains no $dependencyArch dependency packages."
+            }
+
+            $dismArgs = @('/English', "/Image:$MountDir", '/Add-ProvisionedAppxPackage', "/PackagePath:$bundlePath")
+            foreach ($dependencyPackage in $dependencyPackages) {
+                $dismArgs += "/DependencyPackagePath:$dependencyPackage"
+            }
+            $dismArgs += '/SkipLicense'
+            Invoke-DismExe -Arguments $dismArgs | Out-Null
+        }
+        catch { LogWarn "Winget pre-provisioning failed: $_" }
+        finally {
+            if ($bundlePath -and (Test-Path -LiteralPath $bundlePath) -and -not (Test-IsPathUnderWin11IsoDependencyCache $bundlePath)) {
+                Remove-Item -LiteralPath $bundlePath -Force -ErrorAction SilentlyContinue
+            }
+            if ($dependencyZipPath -and (Test-Path -LiteralPath $dependencyZipPath) -and -not (Test-IsPathUnderWin11IsoDependencyCache $dependencyZipPath)) {
+                Remove-Item -LiteralPath $dependencyZipPath -Force -ErrorAction SilentlyContinue
+            }
+            if ($dependencyExpandDir -and (Test-Path -LiteralPath $dependencyExpandDir)) {
+                Remove-Item -LiteralPath $dependencyExpandDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}

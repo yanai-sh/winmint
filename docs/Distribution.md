@@ -35,17 +35,19 @@ Useful launcher switches:
 
 ```powershell
 .\winmint.ps1 -Version v0.1.0
-.\winmint.ps1 -DryRun
-.\winmint.ps1 -ExportHostDrivers
-.\winmint.ps1 -Headless -ProfilePath C:\WinMint\profiles\surface.json -Yes
 .\winmint.ps1 -Gui
 .\winmint.ps1 -NoLaunch
 .\winmint.ps1 -Force
 ```
 
 `irm https://winmint.yanai.sh | iex` and `-Gui` start the packaged GPUI entry
-point. Use `irm https://winmint.yanai.sh/cli | iex` or `-Headless` for the
-console build path.
+point. Use the release bundle's `WinMint-CLI.ps1` for profile-backed console
+builds:
+
+```powershell
+pwsh -NoProfile -File .\WinMint-CLI.ps1 new C:\WinMint\profiles\surface.json -TargetDevice ThisPC -DriverSource Host
+pwsh -NoProfile -File .\WinMint-CLI.ps1 build C:\WinMint\profiles\surface.json -DryRun
+```
 
 ## Release Build
 
@@ -64,6 +66,8 @@ builds and packages `apps\gui\bin\WinMint-GUI.exe`; release users do not
 need Rust, Cargo, MSVC, or `tools\gui`. Keep developer-only service source,
 local fixtures, and generated payloads out of the release by adding them to the
 manifest `exclude` list instead of relying on ad hoc cleanup in the packaging script.
+The bootstrapper requires the matching `.sha256` asset for the selected zip and
+refuses to install a release without it.
 
 Upload both files from `dist\` to the matching GitHub release:
 

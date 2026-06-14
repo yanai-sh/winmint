@@ -2,10 +2,10 @@
 
 function Get-WinMintSetupCompleteText {
     # SetupComplete is now a thin orchestrator plus per-concern modules under
-    # src\setup\SetupComplete\. Content assertions must span both.
+    # src\runtime\setup\SetupComplete\. Content assertions must span both.
     $parts = [System.Collections.Generic.List[string]]::new()
-    $parts.Add((Get-Content -LiteralPath (Join-Path $root 'src\setup\SetupComplete.ps1') -Raw))
-    $moduleDir = Join-Path $root 'src\setup\SetupComplete'
+    $parts.Add((Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.ps1') -Raw))
+    $moduleDir = Join-Path $root 'src\runtime\setup\SetupComplete'
     if (Test-Path -LiteralPath $moduleDir) {
         foreach ($module in @(Get-ChildItem -LiteralPath $moduleDir -Filter '*.ps1' -File | Sort-Object Name)) {
             $parts.Add((Get-Content -LiteralPath $module.FullName -Raw))
@@ -49,7 +49,7 @@ function Assert-StaticUiFlowInvariants {
     if ($coreProfileText -notmatch 'pub struct KeepFlags') {
         Add-SmokeFailure 'winmint-core must own the keep-flag GUI intent input contract.'
     }
-    foreach ($requiredKey in @('ISOPath', 'KeepEdge', 'KeepGaming', 'KeepCopilot', 'Edition', 'InstallWindhawk', 'Wsl2Distros')) {
+    foreach ($requiredKey in @('ISOPath', 'KeepEdge', 'KeepGaming', 'KeepCopilot', 'Edition', 'InstallWindhawk', 'InstallNilesoft', 'Browsers', 'Wsl2Distros')) {
         if ($coreProfileText -notmatch [regex]::Escape($requiredKey)) {
             Add-SmokeFailure "winmint-core GUI intent builder must emit '$requiredKey'."
         }
@@ -85,27 +85,33 @@ function Assert-HardwareBypassIsExplicit {
 }
 
 function Assert-ElevationRequiredForAllRuns {
-    $cliPath = Join-Path $root 'WinMint-CLI.ps1'
-    $headlessPath = Join-Path $root 'src\engine\Private\Headless.ps1'
-    $enginePath = Join-Path $root 'src\engine\Engine.ps1'
-    $cliText = Get-Content -LiteralPath $cliPath -Raw
+    $cliVerbPath = Join-Path $root 'src\runtime\image\Cli.ps1'
+    $headlessPath = Join-Path $root 'src\runtime\image\Private\Headless.ps1'
+    $enginePath = Join-Path $root 'src\runtime\image\Engine.ps1'
+    $cliVerbText = Get-Content -LiteralPath $cliVerbPath -Raw
     $headlessText = Get-Content -LiteralPath $headlessPath -Raw
     $engineText = Get-Content -LiteralPath $enginePath -Raw
 
-    if ($cliText -notmatch "ContainsKey\('DryRun'\)") {
-        Add-SmokeFailure 'WinMint-CLI.ps1 must route -DryRun through headless mode so tests never open the interactive ISO prompt.'
+    # build/validate run through Invoke-WinMintProfileRun, which must gate on
+    # elevation before doing any work (including -DryRun and -ValidateOnly).
+    if ($headlessText -notmatch 'Resolve-WinMintCliElevation') {
+        Add-SmokeFailure 'Invoke-WinMintProfileRun must call Resolve-WinMintCliElevation so build and validate always require admin.'
+    }
+    if ($cliVerbText -notmatch 'function Resolve-WinMintCliElevation') {
+        Add-SmokeFailure 'Cli.ps1 must define Resolve-WinMintCliElevation as the single elevation gate.'
     }
     if ($headlessText -match 'Test-WinMintAdministrator\)\s+-and\s+-not\s+\$DryRun') {
-        Add-SmokeFailure 'Headless elevation guard must not exempt -DryRun; UUP prep and ISO inspection still require admin.'
+        Add-SmokeFailure 'Elevation guard must not exempt -DryRun; UUP prep and ISO inspection still require admin.'
     }
     if ($headlessText -match 'Test-WinMintAdministrator\)\s+-and\s+-not\s+\$ValidateOnly') {
-        Add-SmokeFailure 'Headless elevation guard must not exempt -ValidateOnly; validation still probes DISM/source/driver state.'
+        Add-SmokeFailure 'Elevation guard must not exempt -ValidateOnly; validation still probes DISM/source/driver state.'
     }
     if ($engineText -match 'Test-WinMintAdministrator\)\s+-and\s+-not\s+\$DryRun') {
         Add-SmokeFailure 'Engine elevation guard must not exempt -DryRun.'
     }
-    if ($headlessText -notmatch 'including -DryRun, -ValidateOnly, UUP source prep, and driver checks') {
-        Add-SmokeFailure 'Headless elevation error should explain that dry-run, validate-only, source prep, and driver checks all require admin.'
+    # The elevation error must name -DryRun so it is clear dry-run is not exempt.
+    if ($cliVerbText -notmatch 'require an elevated shell, including -DryRun') {
+        Add-SmokeFailure 'Elevation error should explain that even -DryRun requires an elevated shell.'
     }
 }
 
@@ -182,12 +188,70 @@ function Assert-HardwareBypassUnattendGeneration {
 }
 
 function Assert-FixedEditionSelectionIsUnambiguous {
-    $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Pipeline.ps1') -Raw
-    if ($pipelineText -notmatch '\$matches\.Count\s+-eq\s+1') {
+    $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Pipeline.ps1') -Raw
+    if ($pipelineText -notmatch '\$imageMatches\.Count\s+-eq\s+1') {
         Add-SmokeFailure 'Fixed edition wildcard matching must only proceed when exactly one install image matches.'
     }
     if ($pipelineText -match 'ImageName\s+-like\s+"\*\$EditionName\*"\s*\}\s*\|\s*Select-Object\s+-First\s+1') {
         Add-SmokeFailure 'Fixed edition selection must not choose the first loose wildcard match; Home and Home Single Language must stay unambiguous.'
+    }
+}
+
+function Assert-HyperVProfileIsProAndUnattended {
+    $profilePath = Join-Path $root 'tests\profiles\hyper-v-install-arm64.json'
+    $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+
+    if ([string]$profile.target.edition -ne 'Windows 11 Pro') {
+        Add-SmokeFailure 'Hyper-V test profile must target Windows 11 Pro.'
+    }
+    if ([string]$profile.target.productKey -ne 'VK7JG-NPHTM-C97JM-9MPGT-3V66T') {
+        Add-SmokeFailure 'Hyper-V test profile must use the Pro generic key.'
+    }
+    if ([string]$profile.identity.accountMode -ne 'Local') {
+        Add-SmokeFailure 'Hyper-V test profile must use a local account for unattended install.'
+    }
+    if (-not [bool]$profile.identity.autoLogon) {
+        Add-SmokeFailure 'Hyper-V test profile must enable autoLogon.'
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$profile.identity.password)) {
+        Add-SmokeFailure 'Hyper-V test profile must include a local-account password.'
+    }
+    if (-not [bool]$profile.identity.passwordSet -or -not [bool]$profile.identity.passwordIncluded) {
+        Add-SmokeFailure 'Hyper-V test profile must mark the password as set and included.'
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$profile.identity.computerName)) {
+        Add-SmokeFailure 'Hyper-V test profile must set an explicit computer name.'
+    }
+    if (@($profile.development.editors) -notcontains 'cursor' -or @($profile.development.editors) -notcontains 'neovim') {
+        Add-SmokeFailure 'Hyper-V test profile must select Cursor and Neovim editors.'
+    }
+    foreach ($browser in @('zen-browser', 'helium')) {
+        if (@($profile.development.browsers) -notcontains $browser) {
+            Add-SmokeFailure "Hyper-V test profile must select browser '$browser'."
+        }
+    }
+    foreach ($distro in @('Ubuntu', 'NixOS-WSL')) {
+        if (@($profile.development.wsl.distros) -notcontains $distro) {
+            Add-SmokeFailure "Hyper-V test profile must select WSL distro '$distro'."
+        }
+    }
+    if (@($profile.development.wsl.distros).Count -ne 2) {
+        Add-SmokeFailure 'Hyper-V test profile must select exactly Ubuntu and NixOS-WSL.'
+    }
+    if (@($profile.desktop.layers) -notcontains 'nilesoft') {
+        Add-SmokeFailure 'Hyper-V test profile must select the Nilesoft shell layer.'
+    }
+    if ([string]$profile.features.launcher -ne 'None') {
+        Add-SmokeFailure 'Hyper-V test profile must not select a launcher for the Nilesoft/browser/editor VM acceptance pass.'
+    }
+}
+
+function Assert-SurfaceProfileUsesStandardHome {
+    $profilePath = Join-Path $root 'config\build-profiles\yanai-sl7-microsoft-oobe.json'
+    $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+
+    if ([string]$profile.target.editionMode -ne 'Fixed' -or [string]$profile.target.edition -ne 'Windows 11 Home') {
+        Add-SmokeFailure 'Surface Laptop 7 profile must target fixed standard Windows 11 Home, not Home Single Language or target-license selection.'
     }
 }
 
@@ -269,8 +333,11 @@ function Assert-LocalAccountUnattendGeneration {
             Add-SmokeFailure "Expected local account mode to include '$expected'."
         }
     }
-    if ($xml -notmatch '<HideWirelessSetupInOOBE>\s*false\s*</HideWirelessSetupInOOBE>') {
-        Add-SmokeFailure 'Expected local account mode to keep the network page visible.'
+    if ($xml -notmatch '<HideWirelessSetupInOOBE>\s*true\s*</HideWirelessSetupInOOBE>') {
+        Add-SmokeFailure 'Expected local account mode to hide the network page for unattended installs.'
+    }
+    if ($xml -notmatch '<settings pass="specialize">[\s\S]*<ComputerName>WinMint</ComputerName>') {
+        Add-SmokeFailure 'Expected local unattended answer file to stamp ComputerName during specialize.'
     }
 }
 
@@ -285,7 +352,7 @@ function Assert-SetupCompleteDoesNotDecryptBitLocker {
 }
 
 function Assert-ServiceabilityGuardrails {
-    $packagesPath = Join-Path $root 'src\engine\Private\Image\Packages.ps1'
+    $packagesPath = Join-Path $root 'src\runtime\image\Private\Image\Packages.ps1'
     $packagesText = Get-Content -LiteralPath $packagesPath -Raw
     if ($packagesText -match '/ResetBase') {
         Add-SmokeFailure 'Default image cleanup must not use /ResetBase; it removes component rollback and is only acceptable in an explicit tiny-image mode.'
@@ -322,11 +389,18 @@ function Assert-ServiceabilityGuardrails {
     }
     $withAutoLogon = Install-Autounattend @common
     $xmlText = [string]$withAutoLogon.AutounattendXml
-    if ($xmlText -match '<LogonCount>\s*9999999\s*</LogonCount>') {
-        Add-SmokeFailure 'Generated autounattend must not use effectively infinite AutoLogon.'
+    # Auto sign-in must survive the install reboots until the FirstLogon agent completes,
+    # but the staged image must NOT bake in an effectively-infinite autologon. Expect a
+    # small, bounded LogonCount; FirstLogon makes autologon persistent at runtime and
+    # disables it + wipes the password the moment the agent run succeeds.
+    if ($xmlText -match '<LogonCount>\s*(\d+)\s*</LogonCount>') {
+        $logonCount = [int]$Matches[1]
+        if ($logonCount -lt 1 -or $logonCount -gt 20) {
+            Add-SmokeFailure "Generated autounattend AutoLogon count should be a small bounded value (1-20); got $logonCount."
+        }
     }
-    if ($xmlText -notmatch '<LogonCount>\s*1\s*</LogonCount>') {
-        Add-SmokeFailure 'Generated autounattend should use one automatic logon; FirstLogon handles retry state.'
+    else {
+        Add-SmokeFailure 'Generated autounattend should set a bounded AutoLogon LogonCount.'
     }
     if ($xmlText -match '<Key>\s*[A-Z0-9]{5}-') {
         Add-SmokeFailure 'Fixed-edition autounattend should select images with /IMAGE/NAME metadata, not generic setup keys.'
@@ -386,6 +460,10 @@ function Assert-MinimalAppxRemovalCatalogCoversPolicy {
             'Microsoft.Windows.DevHome',
             'Microsoft.OutlookForWindows',
             'Microsoft.PowerAutomateDesktop',
+            'Microsoft.WindowsCalculator',
+            'MicrosoftCorporationII.QuickAssist',
+            'Microsoft.WindowsSoundRecorder',
+            'Microsoft.MicrosoftStickyNotes',
             'Microsoft.ZuneMusic',
             'Microsoft.ZuneVideo',
             'Microsoft.Office.OneNote',
@@ -436,7 +514,7 @@ function Assert-PhoneLinkAgentDefaults {
         }
     }
 
-    $agentPath = Join-Path $root 'src\agent\Modules\PhoneLink.ps1'
+    $agentPath = Join-Path $root 'src\runtime\firstlogon\Modules\PhoneLink.ps1'
     $agentText = Get-Content -LiteralPath $agentPath -Raw
     foreach ($expected in @('CrossDevice', 'Hidden', 'System', 'EnableClipboardHistory', 'CloudClipboardAutomaticUpload')) {
         if ($agentText -notmatch [regex]::Escape($expected)) {
@@ -454,8 +532,6 @@ function Assert-ConsumerUtilityPackagesNeverInRemovalList {
         })
     foreach ($mustKeep in @(
             'Microsoft.WindowsCamera',
-            'Microsoft.WindowsSoundRecorder',
-            'Microsoft.MicrosoftStickyNotes',
             'Microsoft.WindowsAlarms',
             'Microsoft.WindowsNotepad',
             'Microsoft.DesktopAppInstaller',
@@ -576,13 +652,13 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
             Add-SmokeFailure "AppX candidate catalog must include '$expectedCandidate'."
         }
     }
-    foreach ($mustPreserve in @('Microsoft.WindowsStore', 'Microsoft.DesktopAppInstaller', 'Microsoft.SecHealthUI', 'Microsoft.YourPhone', 'Microsoft.WindowsCamera', 'Microsoft.WindowsSoundRecorder', 'Microsoft.MicrosoftStickyNotes', 'Microsoft.WindowsAlarms', 'Microsoft.WindowsNotepad')) {
+    foreach ($mustPreserve in @('Microsoft.WindowsStore', 'Microsoft.DesktopAppInstaller', 'Microsoft.SecHealthUI', 'Microsoft.YourPhone', 'Microsoft.WindowsCamera', 'Microsoft.WindowsAlarms', 'Microsoft.WindowsNotepad')) {
         if (@($catalog.preserve) -notcontains $mustPreserve) {
             Add-SmokeFailure "AppX preserve catalog must include '$mustPreserve'."
         }
     }
 
-    $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Staging.ps1') -Raw
+    $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Staging.ps1') -Raw
     foreach ($expectedCapability in @('Browser.InternetExplorer', 'Microsoft.Windows.WordPad', 'MathRecognizer')) {
         if ($stagingText -notmatch [regex]::Escape($expectedCapability)) {
             Add-SmokeFailure "Capability removal should include '$expectedCapability'."
@@ -645,12 +721,12 @@ function Assert-LiveInstallAuditUsesSetupProfilePrefixes {
 }
 
 function Assert-LiveInstallAuditIsStaged {
-    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Unattend.ps1') -Raw
+    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
     if ($unattendText -notmatch [regex]::Escape('Audit-LiveInstall.ps1')) {
         Add-SmokeFailure 'Install-Autounattend should stage Audit-LiveInstall.ps1 with setup scripts.'
     }
-    if ($unattendText -notmatch [regex]::Escape("Join-Path `$ScriptRoot 'src\setup'")) {
-        Add-SmokeFailure 'Install-Autounattend must stage setup scripts from src\setup.'
+    if ($unattendText -notmatch [regex]::Escape("Join-Path `$ScriptRoot 'src\runtime\setup'")) {
+        Add-SmokeFailure 'Install-Autounattend must stage setup scripts from src\runtime\setup.'
     }
     if ($unattendText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
         Add-SmokeFailure 'Install-Autounattend must not rely on the removed top-level scripts directory.'
@@ -663,7 +739,7 @@ function Assert-LiveInstallAuditIsStaged {
 }
 
 function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
     foreach ($expected in @('Restore-WinMintDmaRegionalDefaults', 'FirstLogon_RegionalRestore.json', 'Copy-UserInternationalSettingsToSystem', 'restoreLocationServices')) {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "FirstLogon DMA restore should contain '$expected'."
@@ -680,6 +756,216 @@ function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
     }
 }
 
+function Assert-FirstLogonDefaultsToVisibleConsole {
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $defaultUserText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\DefaultUser.ps1') -Raw
+    foreach ($expected in @(
+        'return ''Console''',
+        'WindowStyle Normal',
+        'WindowStyle Hidden',
+        'Set-WinMintFirstLogonWindowsTerminalDefault',
+        'DelegationConsole',
+        'DelegationTerminal',
+        '{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}',
+        '{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}'
+    )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon agent mode wiring should contain '$expected'."
+        }
+    }
+    foreach ($expected in @('Set-DefaultUserWindowsTerminalDelegation', 'HKU\.DEFAULT', 'HKU\DefaultUser', 'DelegationConsole', 'DelegationTerminal')) {
+        if ($defaultUserText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Default user setup should set Windows Terminal as the default terminal host with '$expected'."
+        }
+    }
+    if ($firstLogonText -match [regex]::Escape('return ''Headless''') -and $firstLogonText -match [regex]::Escape('Default to a visible progress console')) {
+        # Expected: the file still supports opt-in headless mode, but the auto/default
+        # path must resolve to the visible console.
+        return
+    }
+    if ($firstLogonText -notmatch [regex]::Escape('Default to a visible progress console')) {
+        Add-SmokeFailure 'FirstLogon default mode should be a visible progress console.'
+    }
+}
+
+function Assert-FirstLogonPinsSelectedAppsToStart {
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    foreach ($expected in @(
+        'Set-WinMintFirstLogonStartPins',
+        'Resolve-WinMintFirstLogonAppExecutable',
+        'Resolve-WinMintFirstLogonStartShortcut',
+        'Get-WinMintFirstLogonPackageDisplayNames',
+        'New-WinMintFirstLogonStartShortcut',
+        'desktopAppLink',
+        'ConfigureStartPins',
+        'Start pins applied',
+        'Zen Browser',
+        'Helium',
+        'Cursor',
+        '$cliOnlyAppIds'
+    )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon should pin selected browsers/editors to Start with '$expected'."
+        }
+    }
+    if ($firstLogonText -match [regex]::Escape('Microsoft\Windows\Start Menu\Programs\WinMint')) {
+        Add-SmokeFailure 'FirstLogon must not create a WinMint Start Menu helper folder for Start pins.'
+    }
+    if ($firstLogonText -match 'New-WinMintFirstLogonStartShortcut[\s\S]{0,240}neovim') {
+        Add-SmokeFailure 'FirstLogon must not create or pin Neovim shortcuts; Neovim is CLI-only.'
+    }
+}
+
+function Assert-FirstLogonFinalizesTerminalProfiles {
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    foreach ($expected in @(
+        'Set-WinMintFirstLogonTerminalProfiles',
+        'New-WinMintFirstLogonTerminalPowerShellProfile',
+        'New-WinMintFirstLogonTerminalWslProfile',
+        'Repair-WinMintFirstLogonTerminalIcons',
+        'Windows.Terminal.WindowsPowerShell',
+        'Windows Terminal profiles finalized',
+        'NixOS',
+        'ubuntu.png',
+        'fedora.png',
+        'archlinux.png',
+        'nixos.png'
+    )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon should finalize Terminal profiles after generated stock profiles appear with '$expected'."
+        }
+    }
+    foreach ($forbiddenIcon in @('ubuntu.svg', 'fedora.svg', 'archlinux.svg', 'nixos.svg')) {
+        if ($firstLogonText -match [regex]::Escape($forbiddenIcon)) {
+            Add-SmokeFailure "FirstLogon Windows Terminal profiles must use staged PNG icons, not '$forbiddenIcon'."
+        }
+    }
+    if ($firstLogonText -match '\$agentExitCode\s+-eq\s+0[\s\S]{0,240}Set-WinMintFirstLogonTerminalProfiles') {
+        Add-SmokeFailure 'FirstLogon Terminal profile finalization must not be gated on a fully successful agent exit code.'
+    }
+    if ($firstLogonText -match '\$agentExitCode\s+-eq\s+0[\s\S]{0,320}Set-WinMintFirstLogonStartPins') {
+        Add-SmokeFailure 'FirstLogon Start pin finalization must not be gated on a fully successful agent exit code.'
+    }
+}
+
+function Assert-AgentLiveInstallFailuresAreWarnings {
+    $agentText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Start-WinMintAgent.ps1') -Raw
+    $consoleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Console.ps1') -Raw
+    foreach ($expected in @(
+        '$blockingSteps',
+        'module:profiles',
+        'warningSteps',
+        'completed with warnings',
+        'failed (non-blocking)',
+        'Wait-AgentConsoleBeforeClose -Failed $false -Warnings'
+    )) {
+        if ($agentText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Agent should treat live install failures as warnings with '$expected'."
+        }
+    }
+    foreach ($expected in @('param([bool]$Failed, [bool]$Warnings)', 'finished with warnings')) {
+        if ($consoleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Agent console should report warning-only completion with '$expected'."
+        }
+    }
+    if ($agentText -match [regex]::Escape('$advisorySteps = @(''liveInstallAudit'', ''phone-link'')')) {
+        Add-SmokeFailure 'Agent must not limit non-blocking failures to only liveInstallAudit and phone-link.'
+    }
+}
+
+function Assert-SetupCompleteRegistersFirstLogonFallback {
+    $setupCompleteText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.ps1') -Raw
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+
+    foreach ($expected in @(
+        'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce',
+        'WinMintFirstLogon',
+        'FirstLogon.ps1',
+        'Registered HKLM RunOnce fallback for FirstLogon.ps1.'
+    )) {
+        if ($setupCompleteText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "SetupComplete should register FirstLogon fallback with '$expected'."
+        }
+    }
+
+    foreach ($expected in @(
+        'Clear-WinMintFirstLogonRetry',
+        'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce',
+        'WinMintFirstLogon'
+    )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon should clean FirstLogon RunOnce fallback after success with '$expected'."
+        }
+    }
+}
+
+function Assert-SetupCompleteDoesNotDeleteWindowsOld {
+    $setupCompleteText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.ps1') -Raw
+    if ($setupCompleteText -match [regex]::Escape('C:\Windows.old')) {
+        Add-SmokeFailure 'SetupComplete must not delete C:\Windows.old; clean-install/destructive behavior must stay explicit.'
+    }
+}
+
+function Assert-EdgeRemovalIntentDoesNotDependOnDma {
+    $settings = New-SmokeBuildProfileSettings
+    $settings.DmaInterop = $false
+    $settings.KeepEdge = $false
+    $config = New-WinMintBuildConfig -BuildProfile (New-WinMintBuildProfile -Settings $settings)
+    $setupProfile = New-WinMintSetupProfile -BuildConfig $config
+    if (-not [bool]$setupProfile.edge.removeEdge) {
+        Add-SmokeFailure 'Edge removal intent should be recorded whenever KeepEdge is false, even when DMA interop is off.'
+    }
+    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+    if ($unattendText -match [regex]::Escape('$removeEdgeBrowser = ((-not [bool]$BuildConfig.Keep.Edge) -and [bool]$BuildConfig.DmaInterop.Enabled)')) {
+        Add-SmokeFailure 'New-WinMintSetupProfile must not couple Edge removal intent to DMA interop.'
+    }
+    $edgeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete\Edge.ps1') -Raw
+    foreach ($expected in @(
+        'Invoke-ScEdgeNormalUninstall',
+        '--uninstall',
+        '--system-level',
+        '--force-uninstall',
+        'supported app uninstaller'
+    )) {
+        if ($edgeText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "SetupComplete Edge removal should use the normal supported uninstaller with '$expected'."
+        }
+    }
+    foreach ($forbidden in @('WINMINT_ENABLE_EXPERIMENTAL_EDGE_REMOVAL', 'Remove-ScRegistryTree')) {
+        if ($edgeText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "SetupComplete Edge removal must not use hidden env gates or policy/file cleanup hooks: '$forbidden'."
+        }
+    }
+}
+
+function Assert-AutoTimeZoneUpdaterFollowsLocationServices {
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    foreach ($expected in @(
+        'if (-not $restoreLocationServices)',
+        'Disabled Auto Time Zone Updater because location services are off.',
+        'Enabled Auto Time Zone Updater because location services are on.'
+    )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon Auto Time Zone Updater handling should include '$expected'."
+        }
+    }
+    if ($firstLogonText -match [regex]::Escape('Disabled Auto Time Zone Updater after DMA setup.')) {
+        Add-SmokeFailure 'FirstLogon must not unconditionally disable Auto Time Zone Updater after DMA setup.'
+    }
+    $specializeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\Specialize.ps1') -Raw
+    if ($specializeText -notmatch [regex]::Escape('$restoreLocationServices') -or
+        $specializeText -notmatch [regex]::Escape('if (-not $restoreLocationServices)') -or
+        $specializeText -match [regex]::Escape("Set-WinHomeLocation -GeoId `$dmaSetupGeoId -ErrorAction Stop`r`n            Disable-SpecializeAutoTimeZone")) {
+        Add-SmokeFailure 'Specialize must not unconditionally disable Auto Time Zone Updater when location services are expected on.'
+    }
+    $auditText = Get-Content -LiteralPath (Join-Path $root 'tools\audit\Audit-LiveInstall.ps1') -Raw
+    foreach ($expected in @('dma-auto-time-zone-disabled', 'Location services are expected on, but Auto Time Zone Updater is disabled.')) {
+        if ($auditText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Live audit Auto Time Zone Updater handling should include '$expected'."
+        }
+    }
+}
+
 function Assert-DmaInteropUsesFixedIrelandRegion {
     $region = Resolve-WinMintDmaInteropSetupRegion
     if ($region.Country -ne 'Ireland' -or $region.Culture -ne 'en-IE' -or [int]$region.GeoId -ne 68) {
@@ -688,12 +974,43 @@ function Assert-DmaInteropUsesFixedIrelandRegion {
 
     $publicContractText = @(
         Get-Content -LiteralPath (Join-Path $root 'WinMint-CLI.ps1') -Raw
-        Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Headless.ps1') -Raw
+        Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Headless.ps1') -Raw
         Get-Content -LiteralPath (Join-Path $root 'schemas\winmint.buildprofile.schema.json') -Raw
     ) -join "`n"
     foreach ($forbidden in @('EeaCountry', 'EEACountry', 'DmaCountry', 'DMACountry', 'SetupCountry')) {
         if ($publicContractText -match [regex]::Escape($forbidden)) {
             Add-SmokeFailure "DMA setup country must not be exposed as a public profile/CLI setting ('$forbidden')."
+        }
+    }
+}
+
+function Assert-BuildProfileSchemaOwnsBrowserContract {
+    $schemaPath = Join-Path $root 'schemas\winmint.buildprofile.schema.json'
+    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
+    $development = $schema.properties.development
+    if (@($development.required) -notcontains 'browsers') {
+        Add-SmokeFailure 'BuildProfile schema must require profile.development.browsers as a first-class contract field.'
+    }
+
+    $browserSchema = $development.properties.browsers
+    if (-not [bool]$browserSchema.uniqueItems) {
+        Add-SmokeFailure 'BuildProfile schema must require profile.development.browsers to be unique.'
+    }
+    foreach ($browserId in @('zen-browser', 'helium', 'librewolf', 'brave', 'edge')) {
+        if (@($browserSchema.items.enum) -notcontains $browserId) {
+            Add-SmokeFailure "BuildProfile schema must allow canonical browser id '$browserId'."
+        }
+    }
+
+    $wslEnabledSchema = $development.properties.wsl.properties.enabled
+    if ($wslEnabledSchema.const -ne $true) {
+        Add-SmokeFailure 'BuildProfile schema must require profile.development.wsl.enabled to stay true in v3.'
+    }
+
+    $conditionalJson = $schema.allOf | ConvertTo-Json -Depth 30 -Compress
+    foreach ($expected in @('"contains":{"const":"edge"}', '"required":["keep"]', '"edge":{"const":true}')) {
+        if ($conditionalJson -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "BuildProfile schema must enforce edge browser selection implies keep.edge=true ('$expected')."
         }
     }
 }
@@ -737,7 +1054,7 @@ function Assert-AiRemovalCatalogAndGuardrails {
     }
 
     $publicAiText = @(
-        Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\AiRemoval.ps1') -Raw
+        Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\AiRemoval.ps1') -Raw
         Get-WinMintSetupCompleteText
         Get-Content -LiteralPath (Join-Path $root 'tools\audit\Audit-LiveInstall.ps1') -Raw
     ) -join "`n"
@@ -752,7 +1069,7 @@ function Assert-AiRemovalCatalogAndGuardrails {
 }
 
 function Assert-RecoveryBundleIsOutputOnly {
-    $reportsText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Reports.ps1') -Raw
+    $reportsText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Reports.ps1') -Raw
     foreach ($expected in @(
             'Save-WinMintRecoveryBundle',
             "Join-Path `$OutputDir 'recovery'",
@@ -765,7 +1082,7 @@ function Assert-RecoveryBundleIsOutputOnly {
         }
     }
 
-    $setupStagingText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Unattend.ps1') -Raw
+    $setupStagingText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
     foreach ($forbidden in @('Recover-WinMintAiPolicy.ps1', 'Recover-WinMintDmaRegion.ps1', 'WinMint-Recovery.json')) {
         if ($setupStagingText -match [regex]::Escape($forbidden)) {
             Add-SmokeFailure "Recovery bundle file '$forbidden' must not be staged into the installed OS."
@@ -784,18 +1101,24 @@ function Assert-AgentRunsLiveInstallAudit {
     if (-not [bool]$optInProfile.modules.liveInstallAudit.enabled) {
         Add-SmokeFailure 'Live install audit opt-in should enable the agent module.'
     }
-    $agentModulePath = Join-Path $root 'src\agent\Modules\LiveInstallAudit.ps1'
+    $agentModulePath = Join-Path $root 'src\runtime\firstlogon\Modules\LiveInstallAudit.ps1'
     if (-not (Test-Path -LiteralPath $agentModulePath)) {
         Add-SmokeFailure 'Expected LiveInstallAudit agent module to exist.'
         return
     }
     $agentModuleText = Get-Content -LiteralPath $agentModulePath -Raw
-    foreach ($expected in @('Invoke-WinMintAgentLiveInstallAuditBootstrap', 'liveInstallAudit', 'Audit-LiveInstall.ps1')) {
+    foreach ($expected in @('Invoke-WinMintAgentLiveInstallAuditBootstrap', 'liveInstallAudit', 'Audit-LiveInstall.ps1', '-IncludeInventory')) {
         if ($agentModuleText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "LiveInstallAudit agent module should contain '$expected'."
         }
     }
-    $agentEntryText = Get-Content -LiteralPath (Join-Path $root 'src\agent\Start-WinMintAgent.ps1') -Raw
+    $auditScriptText = Get-Content -LiteralPath (Join-Path $root 'tools\audit\Audit-LiveInstall.ps1') -Raw
+    foreach ($expected in @('IncludeInventory', 'debugInventory', 'Get-AuditServiceInventory', 'Get-AuditScheduledTaskInventory', 'Get-AuditStartupInventory')) {
+        if ($auditScriptText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Live install audit should expose debug inventory through the opt-in report with '$expected'."
+        }
+    }
+    $agentEntryText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Start-WinMintAgent.ps1') -Raw
     $profilesIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'profiles'")
     $packageManagersIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'package-managers'")
     $editorsIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'editors'")
@@ -807,15 +1130,126 @@ function Assert-AgentRunsLiveInstallAudit {
     }
 }
 
+function Assert-GitBootstrapDoesNotInstallFullGitByDefault {
+    $agentProfile = New-WinMintAgentProfile -BuildConfig (New-WinMintBuildConfig -BuildProfile (New-SmokeBuildProfile))
+    if ([bool]$agentProfile.modules.git.enabled) {
+        Add-SmokeFailure 'Git bootstrap must remain disabled by default; users configure Git themselves unless a future FirstLogon dependency requires it.'
+    }
+
+    $gitModuleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\Git.ps1') -Raw
+    if ($gitModuleText -notmatch 'MinGit') {
+        Add-SmokeFailure 'Git module scaffold should document MinGit as the only acceptable FirstLogon Git dependency.'
+    }
+    foreach ($forbidden in @('Git.Git', 'GitForWindows', 'usr\bin\bash.exe')) {
+        if ($gitModuleText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "Git module must not install or depend on full Git for Windows/Git Bash: '$forbidden'."
+        }
+    }
+
+    $packagesText = Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw
+    foreach ($forbidden in @('Git.Git', 'GitForWindows')) {
+        if ($packagesText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "Package catalog must not default to full Git for Windows: '$forbidden'."
+        }
+    }
+}
+
+function Assert-StarshipPromptUsesNerdFontTerminalDefaults {
+    $packagesText = Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw
+    if ($packagesText -notmatch '(?s)"displayName"\s*:\s*"Starship".*"source"\s*:\s*"scoop"') {
+        Add-SmokeFailure 'Starship catalog entry must be Scoop-owned.'
+    }
+
+    $packageManagerText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1') -Raw
+    foreach ($expected in @(
+            'Install-AgentManifestTool -ToolId ''starship''',
+            'preset'', ''nerd-font-symbols''',
+            'Invoke-Expression (&starship init powershell)',
+            'Get-WinMintAgentStarshipConfigPath',
+            'Cascadia Code NF'
+        )) {
+        if ($packageManagerText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Starship package-manager bootstrap should contain '$expected'."
+        }
+    }
+
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $wslText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\Wsl.ps1') -Raw
+    foreach ($expected in @(
+            'profiles.defaults.font.face',
+            'profiles.defaults.colorScheme',
+            'profiles.defaults.bellStyle',
+            'centerOnLaunch',
+            'Cascadia Code NF'
+        )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon terminal finalizer should enforce '$expected'."
+        }
+        if ($wslText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "WSL terminal profile updater should preserve '$expected'."
+        }
+    }
+}
+
+function Assert-AgentWingetUsesDefaultInstallerSelection {
+    $runtimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
+    $packagesText = Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw
+
+    foreach ($expected in @(
+        'Start-Process -FilePath $FilePath',
+        'winget.exe',
+        '--architecture'
+    )) {
+        if ($runtimeText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Agent runtime should invoke winget directly with '$expected'."
+        }
+    }
+
+    foreach ($forbidden in @(
+        'Invoke-AgentLimitedUserCommand',
+        'Join-AgentCommandLine',
+        'ConvertTo-AgentPowerShellLiteral',
+        '/RL LIMITED',
+        '/RP $password',
+        'WinMintAgentLimited',
+        '--scope',
+        '--ignore-dependencies',
+        'installScope',
+        'ignoreDependencies'
+    )) {
+        if ($runtimeText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "Agent runtime should not carry brittle winget override '$forbidden'."
+        }
+        if ($packagesText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "Package catalog should not carry brittle winget override '$forbidden'."
+        }
+    }
+}
+
+function Assert-ElevationChecksUseInstanceMarshalSize {
+    foreach ($relativePath in @(
+        'src\runtime\setup\FirstLogon.ps1',
+        'src\runtime\firstlogon\Agent.Runtime.ps1'
+    )) {
+        $text = Get-Content -LiteralPath (Join-Path $root $relativePath) -Raw
+        if ($text -match 'Marshal\]::SizeOf\(\[WinMint\.TokenElevation\+TOKEN_ELEVATION\]\)') {
+            Add-SmokeFailure "$relativePath should marshal the TOKEN_ELEVATION instance, not the RuntimeType."
+        }
+        if ($text -notmatch [regex]::Escape('$size = [System.Runtime.InteropServices.Marshal]::SizeOf($elevation)')) {
+            Add-SmokeFailure "$relativePath should compute TOKEN_ELEVATION size from the struct instance."
+        }
+    }
+}
+
 function Assert-NoMaintenancePayloadOrRegistration {
     $setupCompleteText = Get-WinMintSetupCompleteText
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\setup\FirstLogon.ps1') -Raw
-    $engineText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Engine.ps1') -Raw
-    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Unattend.ps1') -Raw
-    $maintenancePayload = Join-Path $root 'src\setup\Maintain.ps1'
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $engineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Engine.ps1') -Raw
+    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+    $maintenancePayload = Join-Path $root 'src\runtime\setup\Maintain.ps1'
 
     if (Test-Path -LiteralPath $maintenancePayload) {
-        Add-SmokeFailure 'Maintenance payload must not live under src\setup.'
+        Add-SmokeFailure 'Maintenance payload must not live under src\runtime\setup.'
     }
 
     foreach ($forbidden in @('WinMintSlim-Maintain', 'RegisterWinMintMaintainScheduledTask')) {
@@ -829,6 +1263,92 @@ function Assert-NoMaintenancePayloadOrRegistration {
     if ($engineText -match [regex]::Escape("'Maintain.ps1'") -or
         $unattendText -match [regex]::Escape("'Maintain.ps1'")) {
         Add-SmokeFailure 'Maintain.ps1 must not be staged as a default setup artifact.'
+    }
+}
+
+function Assert-FirstLogonFailsClosedWhenElevationIsUnavailable {
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    foreach ($expected in @(
+        'Stop-WinMintFirstLogonUnelevated',
+        "failure'] = 'notElevated'",
+        'Set-WinMintFirstLogonRetry',
+        'Set-WinMintFirstLogonAutoLogonPersistent',
+        "Remove-Item -LiteralPath (Join-Path `$logDir 'FirstLogon_self-elevation.flag')",
+        'exit 1',
+        'aborting before machine-wide setup so RunOnce can retry'
+    )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon should fail closed when elevation is unavailable with '$expected'."
+        }
+    }
+    foreach ($forbidden in @(
+        'continuing with the standard token',
+        'some machine-wide operations may fail'
+    )) {
+        if ($firstLogonText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "FirstLogon must not continue unelevated after self-elevation failure: '$forbidden'."
+        }
+    }
+}
+
+function Assert-FirstLogonRecoveryIsBounded {
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    foreach ($expected in @(
+        '$script:WinMintFirstLogonMaxAttempts = 3',
+        'New-WinMintFirstLogonRunState',
+        'Clear-WinMintFirstLogonRecovery',
+        "recovery'] = 'exhausted'",
+        'DefaultPassword',
+        'AutoLogonCount',
+        'retry cap reached'
+    )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon recovery/autologon must be bounded with '$expected'."
+        }
+    }
+}
+
+function Assert-FirstLogonCleanupOnlyDeletesWinMintOwnedPayload {
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $setupCompleteText = Get-WinMintSetupCompleteText
+    foreach ($expected in @(
+        'WinMintAgent',
+        'WinMintSetupProfile.json',
+        'WinMintSetupPlan.json',
+        'SetupComplete.ps1',
+        'Audit-LiveInstall.ps1',
+        'WinMint-owned setup payloads'
+    )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon cleanup should explicitly remove WinMint-owned payload '$expected'."
+        }
+    }
+    foreach ($expected in @('cleanupSpec', 'Resolve-WinMintCleanupPath', '-EncodedCommand', 'Resolve-WinMintPowerShellHost')) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon cleanup should use a constrained PowerShell cleanup helper with '$expected'."
+        }
+    }
+    foreach ($expected in @(
+        'WinMint post-install complete',
+        'Enable-ComputerRestore',
+        'Checkpoint-Computer',
+        'MODIFY_SETTINGS',
+        'final post-install restore point'
+    )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon final cleanup should create the post-install restore point with '$expected'."
+        }
+    }
+    if ($setupCompleteText -match 'Checkpoint-Computer|Invoke-ScRestorePoint|Post-install \(SetupComplete\)') {
+        Add-SmokeFailure 'SetupComplete must not create the restore point before FirstLogon finishes.'
+    }
+    foreach ($forbidden in @('cmd.exe', 'del /f', 'rmdir /s')) {
+        if ($firstLogonText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "FirstLogon cleanup must not use shell-string deletion through '$forbidden'."
+        }
+    }
+    if ($firstLogonText -match '\$directoryTargets\s*=\s*@\(\s*\r?\n\s*\$payloadDir\s*(?:,|\r?\n|\))') {
+        Add-SmokeFailure 'FirstLogon cleanup must not include the whole Setup\Scripts payloadDir as a directory target.'
     }
 }
 
@@ -848,35 +1368,31 @@ function Assert-ExternalReferenceAuditDocumentsSparkle {
 function Assert-WslFirstDefaultsAndGuards {
     $defaultProfile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
     $defaultDistros = @($defaultProfile.development.wsl.distros)
-    if ($defaultDistros.Count -ne 0 -or [bool]$defaultProfile.development.wsl.enabled) {
-        Add-SmokeFailure 'WSL must stay unselected until a distro is explicitly selected.'
+    if ($defaultDistros.Count -ne 0 -or -not [bool]$defaultProfile.development.wsl.enabled) {
+        Add-SmokeFailure 'WSL must stay enabled by default even when no distro is selected.'
     }
 
-    $optOutSettings = New-SmokeBuildProfileSettings
-    $optOutSettings.Wsl2Distros = @()
-    $optOutProfile = New-WinMintBuildProfile -Settings $optOutSettings
-    if (@($optOutProfile.development.wsl.distros).Count -ne 0 -or [bool]$optOutProfile.development.wsl.enabled) {
-        Add-SmokeFailure 'Explicit empty Wsl2Distros must opt out of WSL default distro selection.'
+    $emptySettings = New-SmokeBuildProfileSettings
+    $emptySettings.Wsl2Distros = @()
+    $emptyProfile = New-WinMintBuildProfile -Settings $emptySettings
+    if (@($emptyProfile.development.wsl.distros).Count -ne 0 -or -not [bool]$emptyProfile.development.wsl.enabled) {
+        Add-SmokeFailure 'Explicit empty Wsl2Distros must preserve the WSL2 baseline without adding a distro.'
     }
 
     $customSettings = New-SmokeBuildProfileSettings
-    $customSettings.Wsl2Distros = @('Debian', 'archlinux', 'FedoraLinux')
+    $customSettings.Wsl2Distros = @('Ubuntu', 'Fedora', 'archlinux', 'NixOS-WSL', 'Pengwin')
     $customProfile = New-WinMintBuildProfile -Settings $customSettings
     $customDistros = @($customProfile.development.wsl.distros)
-    foreach ($distro in @('Debian', 'archlinux', 'FedoraLinux')) {
+    foreach ($distro in @('Ubuntu', 'FedoraLinux', 'archlinux', 'NixOS-WSL', 'pengwin')) {
         if ($customDistros -notcontains $distro) {
             Add-SmokeFailure "Expected custom WSL distro '$distro' to be preserved."
         }
     }
-    if ($customDistros -contains 'Ubuntu') {
-        Add-SmokeFailure 'Custom WSL distro selection must not force Ubuntu.'
-    }
-
     $versionedFedoraSettings = New-SmokeBuildProfileSettings
     $versionedFedoraSettings.Wsl2Distros = @('FedoraLinux-44')
     $versionedFedoraProfile = New-WinMintBuildProfile -Settings $versionedFedoraSettings
-    if (@($versionedFedoraProfile.development.wsl.distros) -notcontains 'FedoraLinux-44') {
-        Add-SmokeFailure 'Versioned Fedora WSL distro selections must be preserved in the build profile.'
+    if (@($versionedFedoraProfile.development.wsl.distros) -notcontains 'FedoraLinux') {
+        Add-SmokeFailure 'Versioned Fedora WSL distro selections must normalize to the latest FedoraLinux token.'
     }
 
     $guiStatePath = Join-Path $root 'apps\gui\src\state.rs'
@@ -887,21 +1403,110 @@ function Assert-WslFirstDefaultsAndGuards {
     if ($guiStateText -notmatch 'edition:\s*"Host"') {
         Add-SmokeFailure 'GPUI BuildIntent must default the edition selector to host detection.'
     }
+    if ($coreProfileText -match 'wsl_ubuntu:\s*true' -or
+        $coreProfileText -match 'wsl_fedora:\s*true' -or
+        $coreProfileText -match 'wsl_archlinux:\s*true' -or
+        $coreProfileText -match 'wsl_nixos_wsl:\s*true' -or
+        $coreProfileText -match 'wsl_pengwin:\s*true' -or
+        $coreProfileText -match 'nilesoft:\s*true' -or
+        $guiStateText -match 'zed:\s*true' -or
+        $guiStateText -match 'neovim:\s*true') {
+        Add-SmokeFailure 'GPUI BuildIntent must not preselect editors or a WSL distro by default.'
+    }
 
-    $wslModulePath = Join-Path $root 'src\agent\Modules\Wsl.ps1'
+    $wslModulePath = Join-Path $root 'src\runtime\firstlogon\Modules\Wsl.ps1'
     $wslModuleText = Get-Content -LiteralPath $wslModulePath -Raw
-    foreach ($expected in @('dnsTunneling=true', 'autoProxy=true', 'localhostForwarding=true', 'firewall=true', 'autoMemoryReclaim=gradual', 'sparseVhd=true')) {
+    foreach ($expected in @(
+        'dnsTunneling=true',
+        'autoProxy=true',
+        'localhostForwarding=true',
+        'firewall=true',
+        'autoMemoryReclaim=gradual',
+        'sparseVhd=true',
+        'Install-WinMintWindowsTerminalWslProfiles',
+        'Get-WinMintWslTerminalIconPath',
+        'New-WinMintWslTerminalProfile',
+        'New-WinMintWindowsTerminalPowerShellProfile',
+        'Windows.Terminal.WindowsPowerShell',
+        'LocalState',
+        'Icons',
+        'ubuntu.png',
+        'fedora.png',
+        'archlinux.png',
+        'nixos.png',
+        'pengwin.png'
+    )) {
         if ($wslModuleText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "WSL module should generate .wslconfig setting '$expected'."
+        }
+    }
+    foreach ($expected in @('--update', '--web-download', 'Updating the WSL runtime.', 'Setting WSL 2 as the default version.')) {
+        if ($wslModuleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "WSL module should handle the runtime update path '$expected'."
+        }
+    }
+    foreach ($expected in @(
+        'Test-WinMintHyperVGuestWithoutNestedVirtualization',
+        'Install-WinMintWindowsTerminalWslProfiles -Distros $distros',
+        'ExposeVirtualizationExtensions $true',
+        'WSL2 distro installation skipped',
+        'nested virtualization is not exposed'
+    )) {
+        if ($wslModuleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "WSL module should explain nested Hyper-V virtualization failures with '$expected'."
+        }
+    }
+    if ($wslModuleText -notmatch 'WSL2 configured; no distro selected') {
+        Add-SmokeFailure 'WSL module should explicitly handle the no-distro baseline.'
+    }
+    $updateIndex = $wslModuleText.IndexOf('Update-WinMintWslRuntime -WslPath $wsl.Source')
+    $installIndex = $wslModuleText.IndexOf("Invoke-AgentNative -FilePath `$wsl.Source -ArgumentList @('--install', '--no-launch', '-d', `$distro)")
+    $nixosInstallIndex = $wslModuleText.IndexOf('Install-WinMintNixOsWslDistribution -WslPath $wsl.Source')
+    if ($updateIndex -lt 0 -or $installIndex -lt 0 -or $updateIndex -gt $installIndex) {
+        Add-SmokeFailure 'WSL runtime update must occur before distro install attempts.'
+    }
+    if ($updateIndex -lt 0 -or $nixosInstallIndex -lt 0 -or $updateIndex -gt $nixosInstallIndex) {
+        Add-SmokeFailure 'WSL runtime update must occur before the NixOS WSL installer path.'
+    }
+    foreach ($expected in @('nixos.aarch64.wsl', 'Get-AgentProcessorArchitecture', 'Architecture = (Get-AgentProcessorArchitecture)')) {
+        if ($wslModuleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "NixOS-WSL release selection should be architecture-aware with '$expected'."
+        }
+    }
+    foreach ($forbiddenIcon in @('ubuntu.svg', 'fedora.svg', 'archlinux.svg', 'nixos.svg')) {
+        if ($wslModuleText -match [regex]::Escape($forbiddenIcon)) {
+            Add-SmokeFailure "WSL module Windows Terminal profiles must use staged PNG icons, not '$forbiddenIcon'."
         }
     }
     if ($wslModuleText -match 'networkingMode=mirrored') {
         Add-SmokeFailure 'WSL-first default must not force mirrored networking.'
     }
-    if ($wslModuleText -match "\^FedoraLinux-\\d\+\$'\s*\{\s*return 'FedoraLinux'") {
-        Add-SmokeFailure 'WSL module must not collapse explicit FedoraLinux-44 style requests to latest FedoraLinux.'
+    $vmHarnessText = Get-Content -LiteralPath (Join-Path $root 'tools\vm\New-WinMintTestVm.ps1') -Raw
+    if ($vmHarnessText -notmatch 'ExposeVirtualizationExtensions\s+\$true') {
+        Add-SmokeFailure 'Hyper-V test VM harness must expose virtualization extensions for nested WSL2.'
     }
-
+    foreach ($expected in @(
+        'if ($NoConnect) { $SwitchName = '''' }',
+        'if ($SwitchName -and -not $DelayNetworkUntilFirstLogon)'
+    )) {
+        if ($vmHarnessText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Hyper-V test VM harness should keep -NoConnect from attaching a VM network switch with '$expected'."
+        }
+    }
+    $buildAndTestText = Get-Content -LiteralPath (Join-Path $root 'tools\vm\Build-And-TestVm.ps1') -Raw
+    foreach ($expected in @(
+        '$buildStartedAt',
+        '$builtIso.FullName',
+        "IsoPath   = `$builtIso.FullName",
+        '$profileJson.identity.accountName',
+        '$profileJson.identity.password',
+        "GuestUser'] = `$guestUser",
+        "GuestPassword'] = `$guestPassword"
+    )) {
+        if ($buildAndTestText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Build-And-TestVm.ps1 should boot the just-built ISO and use profile credentials with '$expected'."
+        }
+    }
     $strategyText = Get-Content -LiteralPath (Join-Path $root 'docs\Windows-Debloat-Strategy.md') -Raw
     foreach ($guard in @('WinMint is WSL2-first', 'Ubuntu LTS', '/home/<user>/code', 'networkingMode=nat')) {
         if ($strategyText -notmatch [regex]::Escape($guard)) {
@@ -911,8 +1516,8 @@ function Assert-WslFirstDefaultsAndGuards {
 }
 
 function Assert-LogNoiseInvariants {
-    $pipelinePath = Join-Path $root 'src\engine\Private\Pipeline.ps1'
-    $displayPath = Join-Path $root 'src\engine\Private\Console\Display.ps1'
+    $pipelinePath = Join-Path $root 'src\runtime\image\Private\Pipeline.ps1'
+    $displayPath = Join-Path $root 'src\runtime\image\Private\Console\Display.ps1'
 
     $pipelineText = Get-Content -LiteralPath $pipelinePath -Raw
     $targetLicenseSummaryCount = ([regex]::Matches(
@@ -933,8 +1538,8 @@ function Assert-LogNoiseInvariants {
 }
 
 function Assert-WinPEDriverInjectionDefaultsToSetupOnly {
-    $catalogPath = Join-Path $root 'src\engine\Private\Catalog.ps1'
-    $stagingPath = Join-Path $root 'src\engine\Private\Image\Staging.ps1'
+    $catalogPath = Join-Path $root 'src\runtime\image\Private\Catalog.ps1'
+    $stagingPath = Join-Path $root 'src\runtime\image\Private\Image\Staging.ps1'
     $catalogText = Get-Content -LiteralPath $catalogPath -Raw
     $stagingText = Get-Content -LiteralPath $stagingPath -Raw
 
@@ -964,7 +1569,7 @@ function Assert-CopilotPlusUsesFullAiRemovalPolicy {
         Add-SmokeFailure 'Expected edge-policy-minimal, windows-ai-features-removal, and windows-ai-recall-policy registry tweaks to exist.'
         return
     }
-    foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'WebWidgetAllowed', 'CryptoWalletEnabled', 'HideFirstRunExperience', 'EdgeEnhanceImagesEnabled')) {
+    foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'WebWidgetAllowed', 'CryptoWalletEnabled', 'HideFirstRunExperience', 'EdgeEnhanceImagesEnabled', 'BackgroundModeEnabled', 'StartupBoostEnabled', 'NewTabPageContentEnabled')) {
         if (@($edge.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected Edge noise policy to set $expected."
         }
@@ -988,7 +1593,7 @@ function Assert-CopilotPlusUsesFullAiRemovalPolicy {
             Add-SmokeFailure "Expected default AI feature removal policy to set $expected."
         }
     }
-    foreach ($expected in @('DisableAIDataAnalysis', 'DisableClickToDo', 'AllowRecallEnablement', 'TurnOffSavingSnapshots')) {
+    foreach ($expected in @('DisableAIDataAnalysis', 'DisableClickToDo', 'AllowRecallEnablement', 'AllowRecallExport', 'TurnOffSavingSnapshots')) {
         if (@($recall.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected Recall removal policy to set $expected."
         }
@@ -1039,11 +1644,11 @@ function Assert-OneDriveRemovalPolicyIsComplete {
         Add-SmokeFailure 'OneDrive removal policy must not write literal C:\Users\Default shell folder values.'
     }
 
-    $firstLogonPath = Join-Path $root 'src\setup\FirstLogon.ps1'
+    $firstLogonPath = Join-Path $root 'src\runtime\setup\FirstLogon.ps1'
     $firstLogonText = Get-Content -LiteralPath $firstLogonPath -Raw
     $setupCompleteText = Get-WinMintSetupCompleteText
-    $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Image\Staging.ps1') -Raw
-    $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\engine\Private\Pipeline.ps1') -Raw
+    $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Staging.ps1') -Raw
+    $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Pipeline.ps1') -Raw
     foreach ($expected in @(
             'FirstLogon_OneDriveAudit.json',
             'FirstLogon_KnownFolders.json',
@@ -1096,9 +1701,11 @@ function Assert-OneDriveRemovalPolicyIsComplete {
 }
 
 function Assert-CursorInstallUsesModernRegistryContract {
-    $catalogPath = Join-Path $root 'src\engine\Private\Catalog.ps1'
-    $assetsPath = Join-Path $root 'src\engine\Private\Image\Assets.ps1'
+    $catalogPath = Join-Path $root 'src\runtime\image\Private\Catalog.ps1'
+    $assetsPath = Join-Path $root 'src\runtime\image\Private\Image\Assets.ps1'
+    $firstLogonPath = Join-Path $root 'src\runtime\setup\FirstLogon.ps1'
     $assetsText = Get-Content -LiteralPath $assetsPath -Raw
+    $firstLogonText = Get-Content -LiteralPath $firstLogonPath -Raw
 
     $expectedOrder = @(
         'Arrow.cur', 'Help.cur', 'Work.ani', 'Busy.ani', 'Cross.cur', 'IBeam.cur', 'Handwriting.cur', 'Unavailable.cur',
@@ -1129,8 +1736,18 @@ function Assert-CursorInstallUsesModernRegistryContract {
             Add-SmokeFailure "Cursor installation must not rely on nonstandard cursor hooks or side effects: $forbiddenHook."
         }
     }
+    foreach ($expected in @('HKLM\peNTUSER', 'Control Panel\Cursors\Schemes', 'Default user cursor scheme applied')) {
+        if ($assetsText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Cursor installation must write the Windows 11 user-scheme contract field '$expected'."
+        }
+    }
     if ($assetsText -notmatch '/v "\$schemeName" /t REG_EXPAND_SZ') {
         Add-SmokeFailure 'Cursor scheme list must be written as REG_EXPAND_SZ because it uses %SystemRoot% paths.'
+    }
+    foreach ($expected in @('Set-WinMintFirstLogonCursorScheme', 'HKCU\Control Panel\Cursors\Schemes', 'HKCU\Control Panel\Cursors', 'SPI_SETCURSORS', 'Live user cursor scheme applied')) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon should apply the cursor scheme to the live user profile with '$expected'."
+        }
     }
 }
 
@@ -1204,11 +1821,62 @@ function Assert-RegistryTweakMetadataAndRollback {
             Add-SmokeFailure "WinMint default tweak catalog must not stamp UAC value '$forbiddenUacName'."
         }
     }
+
+    $cloudContent = $script:RegistryTweaks | Where-Object id -eq 'cloud-content-policy' | Select-Object -First 1
+    if (-not $cloudContent) {
+        Add-SmokeFailure 'Expected cloud-content-policy registry tweak to exist.'
+    }
+    else {
+        foreach ($expected in @(
+                'DisableCloudOptimizedContent',
+                'DisableConsumerAccountStateContent',
+                'DisableSoftLanding',
+                'DisableWindowsConsumerFeatures',
+                'DisableWindowsSpotlightFeatures',
+                'DisableWindowsSpotlightOnActionCenter',
+                'DisableWindowsSpotlightOnSettings',
+                'DisableWindowsSpotlightWindowsWelcomeExperience',
+                'DisableShareAppPromotions',
+                'DisableInlineCompose'
+            )) {
+            if (@($cloudContent.set | Where-Object name -eq $expected).Count -eq 0) {
+                Add-SmokeFailure "Cloud content policy should stamp '$expected'."
+            }
+        }
+        if (@($defaultConfig.RegistryTweaks) -notcontains 'cloud-content-policy') {
+            Add-SmokeFailure 'cloud-content-policy must apply by default.'
+        }
+    }
+
+    $explorer = $script:RegistryTweaks | Where-Object id -eq 'explorer-qol' | Select-Object -First 1
+    if (-not $explorer) {
+        Add-SmokeFailure 'Expected explorer-qol registry tweak to exist.'
+    }
+    else {
+        foreach ($expected in @(
+                @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'HideFileExt'; value = '0' },
+                @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'Hidden'; value = '1' },
+                @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'LaunchTo'; value = '2' },
+                @{ path = 'zNTUSER\Software\Classes\CLSID\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}'; name = 'System.IsPinnedToNameSpaceTree'; value = '0' }
+            )) {
+            $match = @($explorer.set | Where-Object {
+                    [string]$_.path -eq [string]$expected.path -and
+                    [string]$_.name -eq [string]$expected.name -and
+                    [string]$_.value -eq [string]$expected.value
+                })
+            if ($match.Count -eq 0) {
+                Add-SmokeFailure "Explorer QoL tweak must stamp $($expected.name) at $($expected.path)."
+            }
+        }
+        if (@($explorer.set | Where-Object { [string]$_.path -like '*{f874310e-b6b7-47dc-bc84-b9e6b38f5903}*' }).Count -gt 0) {
+            Add-SmokeFailure 'Explorer QoL tweak must not hide Home from the navigation pane.'
+        }
+    }
 }
 
 function Assert-SetupRegistryStampsAreIdempotent {
-    $defaultUserPath = Join-Path $root 'src\setup\DefaultUser.ps1'
-    $specializePath = Join-Path $root 'src\setup\Specialize.ps1'
+    $defaultUserPath = Join-Path $root 'src\runtime\setup\DefaultUser.ps1'
+    $specializePath = Join-Path $root 'src\runtime\setup\Specialize.ps1'
     $defaultUserText = Get-Content -LiteralPath $defaultUserPath -Raw
     $specializeText = Get-Content -LiteralPath $specializePath -Raw
 
@@ -1225,7 +1893,13 @@ function Assert-SetupRegistryStampsAreIdempotent {
             'SubscribedContent-353698Enabled',
             'SoftLandingEnabled',
             'SystemPaneSuggestionsEnabled',
-            'ScoobeSystemSettingEnabled'
+            'ScoobeSystemSettingEnabled',
+            'TaskbarMn',
+            'ShowCopilotButton',
+            'Start_AccountNotifications',
+            'EnableAutoTray',
+            'RotatingLockScreenEnabled',
+            'RotatingLockScreenOverlayEnabled'
         )) {
         if ($defaultUserText -notlike "*$expected*") {
             Add-SmokeFailure "DefaultUser.ps1 should idempotently stamp '$expected'."
@@ -1240,16 +1914,225 @@ function Assert-SetupRegistryStampsAreIdempotent {
             'AITEnable',
             'DisableInventory',
             'SettingsPageVisibility',
-            'hide:home'
+            'hide:home',
+            'DeliveryOptimization',
+            'DODownloadMode'
         )) {
         if ($specializeText -notlike "*$expected*") {
             Add-SmokeFailure "Specialize.ps1 should idempotently stamp '$expected'."
         }
+    }
+    if ($specializeText -notmatch 'DODownloadMode[\s\S]{0,220}-Data\s+0') {
+        Add-SmokeFailure 'Specialize.ps1 should set DODownloadMode to 0 to disable Delivery Optimization peer-to-peer.'
     }
 
     foreach ($forbidden in @('ConsentPromptBehaviorAdmin', 'EnableLUA', 'DisableWindowsConsumerFeatures')) {
         if ($defaultUserText -like "*$forbidden*" -or $specializeText -like "*$forbidden*") {
             Add-SmokeFailure "Setup registry stamps must not include '$forbidden'."
         }
+    }
+}
+
+function Assert-DefaultUserTaskbarPinsIncludeTerminal {
+    $defaultUserPath = Join-Path $root 'src\runtime\setup\DefaultUser.ps1'
+    $defaultUserText = Get-Content -LiteralPath $defaultUserPath -Raw
+    if ($defaultUserText -notmatch 'Microsoft\.Windows\.Explorer') {
+        Add-SmokeFailure 'DefaultUser taskbar layout must keep File Explorer pinned.'
+    }
+    if ($defaultUserText -notmatch 'Microsoft\.WindowsTerminal_8wekyb3d8bbwe!App') {
+        Add-SmokeFailure 'DefaultUser taskbar layout must pin Windows Terminal.'
+    }
+    if ($defaultUserText -match 'stock pins .*re-pins only File Explorer') {
+        Add-SmokeFailure 'DefaultUser taskbar pin comment must mention Windows Terminal as a baseline pin.'
+    }
+}
+
+function Assert-WinMintBloomWallpaperCoversDesktopAndLockScreen {
+    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+    $specializeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\Specialize.ps1') -Raw
+    $defaultUserText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\DefaultUser.ps1') -Raw
+    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+
+    foreach ($expected in @(
+        'assets\runtime\wallpaper\img0.jpg',
+        'assets\runtime\wallpaper\img100.jpg',
+        'Windows\Web\Wallpaper\Windows\WinMint-Bloom.jpg',
+        'Windows\Web\Screen\WinMint-Lock.jpg',
+        'LockScreenImage',
+        'WallpaperStyle',
+        'TileWallpaper',
+        'user.bmp'
+    )) {
+        if ($unattendText -notmatch [regex]::Escape($expected) -and
+            $specializeText -notmatch [regex]::Escape($expected) -and
+            $defaultUserText -notmatch [regex]::Escape($expected) -and
+            $firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Desktop/lock/account imagery should be staged through stock Windows locations: '$expected'."
+        }
+    }
+    foreach ($forbidden in @(
+        'Windows\Web\Wallpaper\WinMint',
+        'WinMint-Bloom-OLED.png',
+        'WslIcons',
+        'AccountPictures',
+        'SetUserTile'
+    )) {
+        if ($unattendText -match [regex]::Escape($forbidden) -or
+            $specializeText -match [regex]::Escape($forbidden) -or
+            $defaultUserText -match [regex]::Escape($forbidden) -or
+            $firstLogonText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "Installed system imagery must not create WinMint-specific system folders or names: '$forbidden'."
+        }
+    }
+
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        $expectedPictures = @{
+            'user.bmp' = 448
+            'user.png' = 448
+            'user-192.png' = 192
+            'user-48.png' = 48
+            'user-40.png' = 40
+            'user-32.png' = 32
+        }
+        foreach ($name in $expectedPictures.Keys) {
+            $path = Join-Path $root "assets\runtime\accountpicture\$name"
+            if (-not (Test-Path -LiteralPath $path)) {
+                Add-SmokeFailure "Default account picture asset is missing: $name."
+                continue
+            }
+            $image = [System.Drawing.Image]::FromFile($path)
+            try {
+                $size = [int]$expectedPictures[$name]
+                if ($image.Width -ne $size -or $image.Height -ne $size) {
+                    Add-SmokeFailure "Default account picture '$name' should be ${size}x${size}; got $($image.Width)x$($image.Height)."
+                }
+            }
+            finally {
+                $image.Dispose()
+            }
+        }
+    }
+    catch {
+        Add-SmokeFailure "Default account picture dimensions could not be verified: $($_.Exception.Message)"
+    }
+}
+
+function Assert-WindowsTerminalDefaultsPwsh7NoLogo {
+    $settingsPath = Join-Path $root 'assets\runtime\windows-terminal\settings.json'
+    if (-not (Test-Path -LiteralPath $settingsPath)) {
+        Add-SmokeFailure 'Windows Terminal settings asset is missing.'
+        return
+    }
+    $settingsText = Get-Content -LiteralPath $settingsPath -Raw
+    foreach ($expected in @(
+        'PowerShell',
+        'defaultProfile',
+        '-NoLogo',
+        'pwsh.exe',
+        'Cascadia Code NF',
+        'One Half Dark',
+        'bellStyle',
+        'centerOnLaunch',
+        '"font"',
+        'disabledProfileSources',
+        'Windows.Terminal.PowershellCore',
+        'Windows.Terminal.Azure',
+        'Windows.Terminal.SSH',
+        'Windows.Terminal.Wsl',
+        'Windows.Terminal.WindowsPowerShell'
+    )) {
+        if ($settingsText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Windows Terminal settings should contain '$expected'."
+        }
+    }
+    foreach ($forbidden in @('"hidden": true', 'Command Prompt', 'Windows PowerShell', 'Azure Cloud Shell')) {
+        if ($settingsText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "Windows Terminal settings should not contain stock profile '$forbidden'."
+        }
+    }
+    try {
+        $settings = $settingsText | ConvertFrom-Json
+        if ([string]$settings.profiles.defaults.colorScheme -ne 'One Half Dark') {
+            Add-SmokeFailure 'Windows Terminal default profile color scheme should be One Half Dark.'
+        }
+        if ([string]$settings.profiles.defaults.bellStyle -ne 'none') {
+            Add-SmokeFailure 'Windows Terminal audible bell should be disabled by default.'
+        }
+        if (-not [bool]$settings.centerOnLaunch) {
+            Add-SmokeFailure 'Windows Terminal should be centered on launch by default.'
+        }
+        $profiles = @($settings.profiles.list)
+        if ($profiles.Count -ne 1 -or [string]$profiles[0].name -ne 'PowerShell') {
+            Add-SmokeFailure 'Windows Terminal settings should ship exactly one base profile named PowerShell.'
+        }
+    }
+    catch {
+        Add-SmokeFailure "Windows Terminal settings should be valid JSON: $($_.Exception.Message)"
+    }
+}
+
+function Assert-PSScriptAnalyzerHonorsProjectSettings {
+    $validationCoreText = Get-Content -LiteralPath (Join-Path $root 'tools\validation\Modules\Core.ps1') -Raw
+    foreach ($expected in @(
+        'PSScriptAnalyzerSettings.psd1',
+        '$analyzerArgs.Settings = $settings',
+        "@('Error', 'Warning')"
+    )) {
+        if ($validationCoreText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Validation analyzer pass should honor project settings and warning fallback with '$expected'."
+        }
+    }
+    if ($validationCoreText -match [regex]::Escape('@{ Path = $target; Recurse = $true; Severity = @(''Error'') }')) {
+        Add-SmokeFailure 'Validation analyzer pass must not force errors-only severity when project settings request warnings.'
+    }
+}
+
+function Assert-XdgDefaultsAreStaged {
+    $defaultUserPath = Join-Path $root 'src\runtime\setup\DefaultUser.ps1'
+    $firstLogonPath = Join-Path $root 'src\runtime\setup\FirstLogon.ps1'
+    $defaultUserText = Get-Content -LiteralPath $defaultUserPath -Raw
+    $firstLogonText = Get-Content -LiteralPath $firstLogonPath -Raw
+    foreach ($expected in @(
+        'XDG_CONFIG_HOME',
+        'XDG_DATA_HOME',
+        'XDG_STATE_HOME',
+        'XDG_CACHE_HOME',
+        'XDG_RUNTIME_DIR',
+        '%USERPROFILE%\.config',
+        '%USERPROFILE%\.local\share',
+        '%USERPROFILE%\.local\state',
+        '%USERPROFILE%\.cache',
+        '%USERPROFILE%\bin',
+        '%USERPROFILE%\.local\bin',
+        '%LOCALAPPDATA%\Temp\xdg-runtime'
+    )) {
+        if ($defaultUserText -notmatch [regex]::Escape($expected) -and $firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "XDG defaults should stage '$expected'."
+        }
+    }
+    foreach ($expected in @(
+        'Add-WinMintFirstLogonUserPath',
+        'bin',
+        '.local\bin',
+        'EnableClipboardHistory',
+        'CloudClipboardAutomaticUpload',
+        'Set-WinMintFirstLogonQuietUxDefaults',
+        'Windows.SystemToast.BackupReminder',
+        'Windows.SystemToast.Suggested',
+        'TaskbarMn',
+        'ShowCopilotButton',
+        'Start_AccountNotifications',
+        'EnableAutoTray',
+        'RotatingLockScreenEnabled',
+        'RotatingLockScreenOverlayEnabled'
+    )) {
+        if ($defaultUserText -notmatch [regex]::Escape($expected) -and $firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Default profile and FirstLogon should stage user QoL default '$expected'."
+        }
+    }
+    if ($defaultUserText -match [regex]::Escape('%LOCALAPPDATA%\Temp\WinMint\xdg-runtime') -or
+        $firstLogonText -match [regex]::Escape('Temp\WinMint\xdg-runtime')) {
+        Add-SmokeFailure 'XDG_RUNTIME_DIR must not leave a WinMint-named temp folder behind.'
     }
 }

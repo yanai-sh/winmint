@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WinMint default app associations, applied to the OFFLINE image via
+  DISM /Image:<mount> /Import-DefaultAppAssociations:<this file>. This is the
+  Microsoft-sanctioned, per-new-user default mechanism - it is NOT reset by Windows the way
+  a hash-less HKCU\...\FileExts\.svg\UserChoice\ProgId write is. Only list extensions you
+  intend to override; everything else keeps the Windows default.
+-->
+<DefaultAssociations>
+  <Association Identifier=".svg" ProgId="AppXvhc4p7vz4b485xfp46hhk3fq3grkdgjg" ApplicationName="Photos" />
+</DefaultAssociations>

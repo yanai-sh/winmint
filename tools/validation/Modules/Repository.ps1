@@ -24,13 +24,12 @@ function Test-RepositoryNoTrackedGeneratedArtifacts {
         '^output(?:/|$)',
         '^input(?:/|$)',
         '^dist(?:/|$)',
-        '^uup_dump(?:/|$)',
         '^\.claude(?:/|$)',
         '^\.superpowers(?:/|$)',
         '^\.winmint-ui\.json$',
         '(^|/)bin/',
         '(^|/)obj/',
-        '^tests/fixtures/(?:iso|drivers|uupdump)/(?!\.gitkeep$|\.gitignore$)',
+        '^tests/fixtures/(?:iso|drivers)/(?!\.gitkeep$|\.gitignore$)',
         '\.(iso|wim|esd|swm|vhd|vhdx|log)$'
     )
 
@@ -174,11 +173,9 @@ function Test-RepositoryTrackedPathCasing {
         'tests/fixtures/iso/.gitkeep',
         'tests/fixtures/drivers/.gitignore',
         'tests/fixtures/drivers/.gitkeep',
-        'tests/fixtures/uupdump/.gitignore',
-        'tests/fixtures/uupdump/.gitkeep',
-        'src/engine/WinMint.ps1',
+        'src/runtime/image/WinMint.ps1',
         'WinMint-GUI.ps1',
-        'src/agent/Start-WinMintAgent.ps1',
+        'src/runtime/firstlogon/Start-WinMintAgent.ps1',
         'config/release-manifest.json'
     )
 
@@ -229,7 +226,6 @@ function Test-RepositoryGitIgnorePolicy {
         '*.swm',
         '*.vhd',
         '*.vhdx',
-        'uup_dump/',
         'dist/',
         'input/',
         'output/',
@@ -257,8 +253,7 @@ function Test-RepositoryGitIgnorePolicy {
 
     foreach ($relativePath in @(
             'tests\fixtures\iso\.gitignore',
-            'tests\fixtures\drivers\.gitignore',
-            'tests\fixtures\uupdump\.gitignore'
+            'tests\fixtures\drivers\.gitignore'
         )) {
         $path = Join-Path $root $relativePath
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -279,8 +274,7 @@ function Test-RepositoryGitIgnorePolicy {
 function Test-RepositoryFixtureLayout {
     $fixtureDirs = @(
         'tests\fixtures\iso',
-        'tests\fixtures\drivers',
-        'tests\fixtures\uupdump'
+        'tests\fixtures\drivers'
     )
 
     foreach ($relativePath in $fixtureDirs) {

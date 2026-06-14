@@ -2,7 +2,7 @@
 
 Status: design reference (not the spec — `AGENTS.md` + contract tests + code are authoritative)  
 Last researched: 2026-04-30  
-Last reconciled to shipped behavior: 2026-06-03
+Last reconciled to shipped behavior: 2026-06-13
 
 This document is the working strategy for the WinMint Windows baseline. The goal is not to create the smallest possible Windows image. The goal is to turn official Windows media into a fast, quiet, serviceable, Linux-style developer workstation with WSL as a first-class runtime. WinMint is WSL2-first: Windows hosts the hardware, UI, security, package bootstrap, and desktop shell; Linux is the default development runtime.
 
@@ -33,7 +33,7 @@ Bad debloat:
 |------|---------------|-------------|
 | Tiny11Builder | Offline AppX removal, single-edition export, unattended setup, serviceable/default path. | Tiny11 Core-style removal of WinSxS, Windows Update, WinRE, or other serviceability foundations. |
 | CTT WinUtil | Good catalog of common tweaks and a useful split between essential and cautionary tweaks. | Presenting a huge choice matrix, disabling hibernation/services by default, IPv6/Teredo removal, Edge removal, and visual "best performance" defaults. |
-| BAREbONE1 / barebones11-style scripts | Useful as an aggressive removal inventory for review. | Removing Edge/WebView-adjacent pieces, Quick Assist, Phone Link, Maps, To Do, language/speech/OCR, and using Compact OS as a default. |
+| BAREbONE1 / barebones11-style scripts | Useful as an aggressive removal inventory for review. | Removing Edge/WebView-adjacent pieces, Phone Link / Cross Device, language/speech/OCR, and using Compact OS as a default. Small reinstallable inbox apps are not platform dependencies. |
 | Windows X-Lite / Optimum11 | Clear edition split and resource-use goal. | Prebuilt opaque ISO trust model, optional security/update platform, and "lowest resources" as the top product goal. |
 | Win11Debloat | Lightweight PowerShell, Audit Mode support, admin/user targeting, and focused bloat/privacy categories. | Running every privacy/cleanup toggle as a default ISO policy. |
 | Sparkle | Modern tweak catalog, restore-point framing, documented tweak pages, selective app removal, and useful utilities/app-installer grouping. | Defender RTP/Core Isolation toggles, Ultimate Performance, global service-manual mode, hibernation/location disables, or gaming/NVIDIA/network tweaks as workstation defaults. |
@@ -47,9 +47,9 @@ Bad debloat:
 | Area | Current state | Recommendation |
 |------|---------------|----------------|
 | AppX cleanup | Curated provisioned package removal is cataloged in `config/appx-removal.json` and serviced by the image pipeline. DMA-on defaults keep broad third-party/OEM prefixes candidate-only. | Keep. This is the right kind of image-level debloat, but the normal Home/DMA path should stay slimmer than legacy community removal lists. |
-| Windows Update | `src/setup/SetupComplete.ps1` restores BITS, wuauserv, UsoSvc, and WaaSMedicSvc. | Keep. This is a strong guardrail against over-debloat. |
+| Windows Update | `src/runtime/setup/SetupComplete.ps1` restores BITS, wuauserv, UsoSvc, and WaaSMedicSvc. | Keep. This is a strong guardrail against over-debloat. |
 | WSL platform | WSL, Virtual Machine Platform, and OpenSSH are enabled in the image. | Keep. These are core workstation features. |
-| Edge | Edge browser is removed by default via the DMA-supported in-OS uninstall (EEA setup window); `-KeepEdge` keeps it. Edge first-run/startup/background/promo policies are applied either way. | Keep removing the **browser** only through the EULA-blessed DMA uninstall (skip + log when DMA is off); never patch `IntegratedServicesRegionPolicySet.json`. **Never** remove WebView2 / Edge *runtime* infrastructure. |
+| Edge | `-KeepEdge` keeps Edge installed and debloated. Without `-KeepEdge`, removal intent is serviced through the normal supported Edge app uninstaller exposed by DMA setup. | Treat Edge like a normal removable browser app on DMA builds. If the supported uninstaller leaves Edge present, report that as incomplete rather than patching policy files or applying hidden switches. Never patch `IntegratedServicesRegionPolicySet.json`. **Never** remove WebView2 / Edge *runtime* infrastructure. |
 | OneDrive | Fully removed during setup/first logon; sync policies stay blocked and known folders are forced back to local profile paths. | Keep. Users who want OneDrive can reinstall it after setup. |
 | Game Bar / Xbox | Xbox packages and GameDVR are removed/disabled. | Keep. This is low-value background noise for this image. |
 | Recall / Copilot | Recall is removed when detected; Copilot and WebExperience are removed/deprovisioned. | Keep, but preserve the list as an AI-removal policy surface because Microsoft keeps moving these components. |
@@ -59,9 +59,9 @@ Bad debloat:
 | Compact OS | The unattend does not force Compact OS. | Keep default non-compact. Compact saves disk but can add CPU overhead; reserve it for an explicit tiny-image mode. |
 | `/ResetBase` | Image save runs normal `StartComponentCleanup` without `/ResetBase`. | Keep. Preserve rollback and serviceability by default; reserve ResetBase for an explicit tiny-image mode. |
 | Language feature removal | Non-selected language packages are removed. | Keep narrowly, but preserve all selected UI/input/system locales and test feature update behavior. |
-| AutoLogon | Passworded builds use `LogonCount=1`; FirstLogon clears credentials and registers retry state. | Keep guarded. One automatic logon is enough; static tests must prevent effectively infinite AutoLogon. |
+| AutoLogon | Passworded unattended local-account builds use bounded unattend AutoLogon, then FirstLogon persists autologon only until the agent succeeds so rebooting modules can resume. FirstLogon clears credentials and retry state on success. | Keep guarded. Persistent autologon is an install-time recovery mechanism only; static tests must prevent it from surviving a successful install. |
 | Maintenance task | Post-update policy/AppX drift control. | **On ice:** WinMint does not stage a maintenance script, scheduled task, background service, or other recurring drift-control payload on the installed system. After installation, the user manages their machine. |
-| Live install audit | `Audit-LiveInstall.ps1` records provisioned/installed AppX, Win32 uninstall entries, and Tier 0 platform health during FirstLogon. | Keep non-destructive and opt-in. This is a scout and validator, not a live debloater; harvested Win32 lists must be manually classified before changing WinMint policy. |
+| Live install audit | `Audit-LiveInstall.ps1` records provisioned/installed AppX, Win32 uninstall entries, Tier 0 platform health, and debug-only service/task/startup inventory during FirstLogon. | Keep non-destructive and opt-in. This is a scout and validator, not a live debloater; harvested inventory must be manually classified before changing WinMint policy. The only residual exception is the explicit diagnostic report under `ProgramData\WinMint\Logs` when the user selected live install audit. |
 
 ## Decision Tiers
 
@@ -82,23 +82,27 @@ These are part of the platform. WinMint should not remove or disable them by def
 | WinRE / recovery / reset foundations | Trust and repairability matter. |
 | Component store / WinSxS | Required for servicing, feature changes, updates, and repair. |
 
+Reinstallable inbox apps such as Calculator, Sound Recorder, Sticky Notes, Quick Assist, Maps, To Do, OneNote, the Remote Desktop Store client, and legacy media apps are not Tier 0. Removing them does not gimp the operating system: the Store/App Installer platform remains intact, so users can reinstall any of these apps after setup if they want them.
+
 ### Tier 1: Apply By Default
 
 These should be part of WinMint Core because they remove noise without compromising the workstation.
 
 | Category | Default action |
 |----------|----------------|
-| Consumer AppX | Remove Clipchamp, News, Weather, Whiteboard, 3D Viewer, Mixed Reality Portal, Xbox apps, Solitaire, Feedback Hub, Get Help, Teams consumer, Outlook new, Dev Home, Power Automate, Microsoft Family, People, Office Hub, Calculator, Quick Assist, Maps, Microsoft To Do, **Zune** media apps (`Microsoft.ZuneMusic` / `Microsoft.ZuneVideo`), **OneNote** (`Microsoft.Office.OneNote`), **Remote Desktop** Store client (`Microsoft.RemoteDesktop*`), and **best-effort trial/OEM provisioned** prefixes (McAfee, Norton, ExpressVPN, Surfshark, AVG, Avast, KasperskyLab, Dolby trials, CCleaner). Preserve **Phone Link** / **Cross Device**, plus **Camera**, **Sound Recorder**, **Sticky Notes**, **Clock/Alarms**, and **Notepad** (explicit invariant tests). |
+| Consumer AppX | Remove Clipchamp, News, Weather, Whiteboard, 3D Viewer, Mixed Reality Portal, Xbox apps, Solitaire, Feedback Hub, Get Help, Teams consumer, Outlook new, Dev Home, Power Automate, Microsoft Family, People, Office Hub, Calculator, Quick Assist, Sound Recorder, Sticky Notes, Maps, Microsoft To Do, **Zune** media apps (`Microsoft.ZuneMusic` / `Microsoft.ZuneVideo`), **OneNote** (`Microsoft.Office.OneNote`), **Remote Desktop** Store client (`Microsoft.RemoteDesktop*`), and **best-effort trial/OEM provisioned** prefixes (McAfee, Norton, ExpressVPN, Surfshark, AVG, Avast, KasperskyLab, Dolby trials, CCleaner). These are reinstallable Store/inbox apps, not platform dependencies. Preserve **Phone Link** / **Cross Device**, plus **Camera**, **Clock/Alarms**, **Notepad**, Store infrastructure, Desktop App Installer, and WebView2. |
 | AI surfaces | Disable/remove Copilot, Recall, Windows AI data analysis, AI-first search/sidebar hooks, and AI provisioned packages where serviceable. |
-| Advertising/content | Disable Windows consumer features, soft landing, suggested apps, cloud optimized content, advertising ID, tailored experiences, tips, and Start recommendations. |
+| Advertising/content | Disable Windows consumer features, soft landing, suggested apps, cloud optimized content, advertising ID, tailored experiences, tips, Start recommendations, backup/setup pressure prompts, and Spotlight promotional surfaces. |
 | Search noise | Disable Start menu Bing/web search and search highlights; keep local search/indexing functional. |
 | Edge noise | Hide first-run, disable startup boost/background mode, disable recommendations/promos/personalization reporting. |
 | OneDrive pressure | Uninstall OneDrive, remove setup binaries/residue, disable personal sync and autostart, hide Explorer integration, and keep known folders local. |
 | Xbox/GameDVR | Remove Xbox packages and disable Game Bar/GameDVR overlays. |
-| Explorer/dev QoL | Show file extensions, show hidden files, enable long paths (`longpaths-policy`), enable End Task on the taskbar right-click menu (`taskbar-endtask`, always on), set sane context/menu defaults. |
-| Setup privacy | Keep `ProtectYourPC=3`, hide Microsoft account screens, keep Wi-Fi OOBE visible so first-logon automation has network. |
+| Developer package managers | Keep winget/msstore for GUI/system apps and install Scoop as the user-local owner for developer CLI tools. MinGit is installed through Scoop as baseline Windows-host Git plumbing; Starship is installed through Scoop with the `nerd-font-symbols` preset; selected Neovim is Scoop-owned. ARM64 builds prefer native ARM64/aarch64 package assets where package-manager metadata supports them; amd64 builds use default package-manager architecture selection. |
+| Explorer/dev QoL | Show file extensions, show hidden files, keep Explorer Home as the launch page, hide Gallery, enable long paths (`longpaths-policy`), enable End Task on the taskbar right-click menu (`taskbar-endtask`, always on), hide noisy taskbar/tray affordances, keep local clipboard history on with cloud upload off, and set sane context/menu defaults. |
+| Setup privacy | Keep `ProtectYourPC=3`. Fully unattended local-account installs hide OOBE network/account friction and use the profile computer name directly; Microsoft OOBE account installs leave the normal network/account pages visible. |
 | OEM payloads | Disable WPBT, Razer-style auto-installers, and known vendor app injection paths where policy exists. |
 | Setup cleanup | Remove copied unattend credentials and setup residue after install. |
+| Final restore point | After successful FirstLogon cleanup, enable System Restore for the system drive and create a `WinMint post-install complete` restore point. |
 
 ### Tier 2: Conditional Or Experimental
 
@@ -110,13 +114,13 @@ These may be good, but need measurement or a clear hardware/workflow condition.
 | Disable background apps globally | Can reduce idle noise. | Can break notifications and Store app behavior. Consider only after AppX cleanup leaves few apps. |
 | Windows Search tuning | SearchIndexer can be noisy. | Do not disable local search or the Search service. **Flow Launcher + Everything** and **Raycast** are opt-in launcher choices; they complement Start/Settings search rather than replacing the platform indexer. |
 | Storage Sense defaults | Can keep the system clean. | Do not auto-delete Downloads or developer artifacts. |
-| Hibernation / Fast Startup / power plan | Fast Startup can cause dual-boot/WSL/driver edge cases; desktops have no battery to protect. | **Form-factor-aware**, resolved at first boot via `Win32_SystemEnclosure.ChassisTypes` in `src/setup/SetupComplete/Power.ps1`. **Laptops: untouched** — keep Windows/OEM battery defaults. **Desktops: `powercfg -h off` + High Performance plan** (deliberately conservative; *not* the Tier-3 "Ultimate Performance"). **Dual-boot** builds additionally disable Fast Startup offline (`dual-boot-windows-policy`). Never apply hibernate-off or High Performance to laptops. |
-| Delivery Optimization | Peer download/upload can be unwanted. | Do not break updates. Prefer LAN-only or bandwidth-limited behavior over disabling update delivery mechanisms. |
+| Hibernation / Fast Startup / power plan | Fast Startup can cause dual-boot/WSL/driver edge cases; desktops have no battery to protect. | **Form-factor-aware**, resolved at first boot via `Win32_SystemEnclosure.ChassisTypes` in `src/runtime/setup/SetupComplete/Power.ps1`. **Laptops: untouched** — keep Windows/OEM battery defaults. **Desktops: `powercfg -h off` + High Performance plan** (deliberately conservative; *not* the Tier-3 "Ultimate Performance"). **Dual-boot** builds additionally disable Fast Startup offline (`dual-boot-windows-policy`). Never apply hibernate-off or High Performance to laptops. |
+| Delivery Optimization | Peer download/upload can be unwanted. | Keep Windows Update enabled, but set Delivery Optimization policy so the PC is not used as a peer update source for other devices. |
 | Print stack | Core printing and Print to PDF stay. | **WinMint Core** removes optional **Windows Fax and Scan** (`Print.Fax.Scan` capability only). Do not disable Print Spooler or remove drivers by default. XPS *Viewer* remains a separate optional removal (viewing XPS files; unrelated to physical printers). |
 | Location / Maps / Sensors | Privacy win. | Time zone, hardware sensors, and app permissions can behave strangely. Disable app access first, not services. |
 | Optional Features / Capabilities | Can reduce image footprint. | Remove only obvious non-core features and test WU/feature update. Preserve OpenSSH, WSL, .NET, language/input, Windows client basics. |
 | Defender exclusions | Can greatly improve Node/Rust/Python build performance. | Folder exclusions are security holes. Prefer Dev Drive performance mode over broad exclusions. |
-| Dev Drive | Real developer performance feature using ReFS and Defender performance mode for **Windows-hosted** trees. | Not interchangeable with WSL2: the Linux distro stays in its **WSL VHDX**; Dev Drive cannot host that layout. Offer Dev Drive only as an explicit disk step for Windows-native work; WSL-first repos remain in the distro filesystem. |
+| Dev Drive | Real developer performance feature using ReFS and Defender performance mode for **Windows-hosted** trees. | Not a WinMint default. User-managed only. Not interchangeable with WSL2: the Linux distro stays in its **WSL VHDX**; Dev Drive cannot host that layout. |
 | WSL `.wslconfig` | `autoMemoryReclaim`, `dnsTunneling`, `sparseVhd`, and networking modes can improve dev ergonomics. | Mirrored networking can interact poorly with VPNs/firewalls. Use conservative defaults and document. |
 
 ### Tier 3: Reject By Default
@@ -145,15 +149,14 @@ These are common in debloat/optimizer circles but should not be WinMint defaults
 
 ## Additional Ideas To Consider
 
-### 1. Dev Drive As A First-Class Workstation Feature
+### 1. Dev Drive As A User-Managed Option
 
-Most debloat tools focus on removing things. For a developer workstation, adding the right storage model may matter more. Windows Dev Drive uses ReFS and Defender performance mode for developer workloads, and Microsoft documents it as a performance feature for code, package caches, and build output.
+Most debloat tools focus on removing things. For a developer workstation, adding the right storage model may matter more. Windows Dev Drive uses ReFS and Defender performance mode for developer workloads, and Microsoft documents it as a performance feature for code, package caches, and build output. WinMint does not enable it by default; users can set it up separately if they want that storage model.
 
 Potential WinMint direction:
 
 - Do not silently repartition for Dev Drive.
 - Add a future "Developer workspace" step only when disk layout is already being chosen.
-- Offer either a real partition or a mounted VHDX-backed Dev Drive.
 - Route **Windows-native** code, package caches, and build output there when the user opts in.
 - Keep WSL Linux files inside the WSL VHD (`\\wsl$\...` / ext4), not on `/mnt/c` on a Dev Drive, unless the user knowingly accepts cross-OS IO tradeoffs.
 
@@ -161,7 +164,7 @@ Potential WinMint direction:
 
 WinMint should treat WSL as the primary Linux layer, not an optional toy. The Developer profile defaults to Ubuntu LTS, but the user can opt out, choose Debian, Arch, Fedora, or select multiple distributions. A custom distro selection must never force Ubuntu back in.
 
-Linux projects should live under `/home/<user>/code` inside the WSL filesystem. Windows-native projects and package caches can use a future Dev Drive option, but Linux source should not default to `/mnt/c/...`.
+Linux projects should live under `/home/<user>/code` inside the WSL filesystem. Windows-native projects and package caches can use a user-managed Dev Drive if the user chooses to configure one, but Linux source should not default to `/mnt/c/...`.
 
 Candidate defaults:
 
@@ -226,7 +229,7 @@ The usual developer answer is to add broad Defender exclusions for `node_modules
 
 Preferred order:
 
-1. Use Dev Drive performance mode for Windows-hosted source.
+1. Use Dev Drive performance mode for Windows-hosted source if the user configures it.
 2. Keep Linux source inside WSL's native filesystem for Linux workloads.
 3. Add narrow, documented exclusions only for generated build/cache directories.
 4. Never exclude the whole user profile, whole system drive, or downloads folder.
@@ -241,7 +244,7 @@ The first-logon agent should have a contract:
 - It must clean temporary credentials and AutoLogon values.
 - It must not fight the user after success.
 
-The current default is `LogonCount=1`; keep the static guard that prevents effectively infinite AutoLogon from returning.
+AutoLogon may be persisted during first-logon recovery so selected modules can resume after a reboot, but success must always clear retry state, disable AutoAdminLogon, and wipe the plaintext password.
 
 ### 8. Rollback Kit
 
@@ -289,7 +292,7 @@ No tweak should graduate to Core unless it passes this matrix.
 | P1 | Keep AI removal layer tests current. | Copilot/Recall surfaces keep changing. |
 | P2 | Investigate DiagTrack service state with smoke tests. | Potential idle/noise win, but needs evidence. |
 | P2 | Add optional mirrored-networking control for WSL. | Useful for some VPN/LAN workflows; not safe enough for Core default. |
-| P2 | Add Dev Drive planning/design. | High-value developer performance feature that most debloat tools ignore. |
+| P2 | Document Dev Drive as a user-managed option only. | Keep the product stance explicit without making it a default baseline. |
 | P3 | Scheduled task inventory and narrow disable list. | Better idle optimization than blind service disabling. |
 | P3 | Optional "tiny image" mode with ResetBase/Compact tradeoffs clearly labeled. | Useful for private forks, not default. |
 

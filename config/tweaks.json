@@ -13,12 +13,12 @@
     },
     {
       "id": "explorer-qol",
-      "description": "Show file extensions and hidden files.",
+      "description": "Show file extensions and hidden files, keep File Explorer opening to Home, and hide Gallery.",
       "scope": "default user registry",
       "risk": "low",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Make Explorer friendlier by exposing file extensions and hidden files on every build.",
+      "intent": "Make Explorer friendlier by exposing file extensions and hidden files, keeping Home as the launch page, and hiding Gallery on every build.",
       "offline": true,
       "online": true
     },
@@ -43,6 +43,17 @@
       "intent": "Always expose End Task on the taskbar right-click menu on every build, matching developer/power-user expectations.",
       "offline": true,
       "online": true
+    },
+    {
+      "id": "start-recommended-cleanup",
+      "description": "Hide the Start menu Recommended section and ship a clean pinned-apps layout.",
+      "scope": "machine policy registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Remove the seeded Get Started/recommendations from Start and strip default promotional pins, leaving a minimal pin set.",
+      "offline": true,
+      "online": false
     },
     {
       "id": "powershell-remotesigned",
@@ -146,6 +157,17 @@
       "online": true
     },
     {
+      "id": "oobe-privacy-experience",
+      "description": "Skip the OOBE privacy-settings page.",
+      "scope": "machine registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Suppress the redundant OOBE privacy-settings page so an otherwise-unattended install does not stop for it; WinMint privacy policy remains authoritative.",
+      "offline": true,
+      "online": true
+    },
+    {
       "id": "wpbt-policy",
       "description": "Disable Windows Platform Binary Table execution.",
       "scope": "offline registry",
@@ -158,7 +180,7 @@
     },
     {
       "id": "edge-policy-minimal",
-      "description": "Reduce Edge recommendations, shopping/rewards/wallet noise, first-run prompts, web widgets, image enhancement, sidebar, feedback, and telemetry.",
+      "description": "Reduce Edge recommendations, shopping/rewards/wallet noise, first-run prompts, web widgets, image enhancement, sidebar, startup/background, new-tab content, feedback, and telemetry.",
       "scope": "machine policy registry",
       "risk": "low",
       "reversible": true,
@@ -168,8 +190,19 @@
       "online": true
     },
     {
+      "id": "cloud-content-policy",
+      "description": "Disable cloud-backed Windows consumer content, Spotlight tips, Share Sheet promotions, and fallback suggestion surfaces.",
+      "scope": "machine and default user policy registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Reduce Microsoft cloud recommendations, consumer-account content, welcome/tips surfaces, and promotional app suggestions without disabling Store, winget, or Windows Update.",
+      "offline": true,
+      "online": true
+    },
+    {
       "id": "windows-ai-recall-policy",
-      "description": "Disable Windows Recall (snapshots, data analysis, Click-to-Do).",
+      "description": "Disable Windows Recall (snapshots, data analysis, Click-to-Do, export).",
       "scope": "machine and default user policy registry",
       "risk": "medium",
       "reversible": true,

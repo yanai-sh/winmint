@@ -549,6 +549,13 @@
         "desktopLayers": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "wingetConfigurationPath": {
+          "type": "string"
+        },
+        "wingetConfigurationPackageCount": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },

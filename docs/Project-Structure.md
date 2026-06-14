@@ -31,14 +31,16 @@ fixture.
 |   |-- runtime/
 |   |   |-- cursors/
 |   |   |-- fonts/
+|   |   |-- accountpicture/
+|   |   |-- defaultapps/
 |   |   |-- wallpaper/
-|   |   `-- shell/
+|   |   `-- desktop/
 |   |       |-- komorebi/
 |   |       |-- windhawk/
 |   |       `-- yasb/
 |   `-- ui/
 |       |-- editors/
-|       |-- shell/
+|       |-- desktop/
 |       `-- wsl/
 |-- cloudflare/
 |   `-- winmint/
@@ -57,20 +59,22 @@ fixture.
 |-- crates/
 |   `-- winmint-core/
 |-- src/
-|   |-- engine/
-|   |-- agent/
-|   `-- setup/
+|   `-- runtime/
+|       |-- image/
+|       |   `-- Private/
+|       |-- firstlogon/
+|       `-- setup/
 |-- tests/
 |   |-- contract/
 |   `-- fixtures/
 |       |-- drivers/
 |       |-- iso/
-|       `-- uupdump/
 |-- tools/
 |   |-- assets/
 |   |-- audit/
 |   |-- gui/
 |   |-- release/
+|   |-- vm/
 |   |-- ui-bridge/
 |   `-- validation/
 |-- WinMint-CLI.ps1
@@ -83,12 +87,13 @@ fixture.
 
 | Folder | Owns | Must not own |
 |--------|------|--------------|
-| `src/engine/` | Engine, profile contracts, ISO/WIM servicing, reporting APIs | GUI controls, live-user app installs |
+| `src/runtime/image/` | Engine, profile contracts, ISO/WIM servicing, reporting APIs | GUI controls, live-user app installs |
 | `apps/gui/` | Primary GUI source-selection shell and profile intent | DISM/WIM servicing, registry hive edits |
 | `crates/` | Rust contract helpers and small validation/normalization CLIs | Windows servicing, setup orchestration |
-| `src/agent/` | FirstLogon user setup modules and retry state | Offline image servicing, UI wizard state |
-| `src/setup/` | SetupComplete, FirstLogon, DefaultUser, Specialize payloads | Repo validation helpers |
+| `src/runtime/firstlogon/` | FirstLogon user setup modules and retry state | Offline image servicing, UI wizard state |
+| `src/runtime/setup/` | SetupComplete, FirstLogon, DefaultUser, Specialize payloads | Repo validation helpers |
 | `tools/audit/` | Output ISO and live-install audit tooling | Product runtime entry points |
+| `tools/vm/` | Hyper-V fixtures, guest push helpers, and VM acceptance harnesses | Product runtime entry points |
 | `tests/contract/` | Smoke tests and profile invariant tests | Shipped setup payloads |
 | `tools/validation/` | Static validation helpers | Product behavior decisions |
 | `tools/release/` | Release bundle assembly and publishing helpers | Runtime source code |
@@ -98,7 +103,6 @@ fixture.
 | `tests/` | Test fixture roots and future test suites | Product runtime or release payloads |
 | `tests/fixtures/iso/` | Local ISO/WIM/ESD/SWM media for tests | Checked-in Microsoft payloads |
 | `tests/fixtures/drivers/` | Local driver fixture folders, MSI bundles, and ZIPs | Shipped driver assets |
-| `tests/fixtures/uupdump/` | Local UUP Dump zips/folders/conversion outputs | Bundled Microsoft payloads |
 
 Root-level launchers are the public command surface. Product code, staged setup
 payloads, and developer tooling live under their owning folders.
@@ -129,5 +133,5 @@ Current non-runtime exclusions:
 Keep future product logic in Rust when it is not tied to Windows setup APIs.
 PowerShell remains the servicing bridge for DISM, registry hives, Windows Setup,
 and elevation handoff. New PowerShell files should have a clear runtime reason to
-exist and should be grouped under `src/engine`, `src/setup`, `src/agent`, or a
+exist and should be grouped under `src/runtime/image`, `src/runtime/setup`, `src/runtime/firstlogon`, or a
 developer-only `tools/` owner.

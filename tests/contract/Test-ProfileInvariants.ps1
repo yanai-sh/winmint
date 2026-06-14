@@ -6,22 +6,24 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
 
-. (Join-Path $root 'src\engine\Core.ps1')
-. (Join-Path $root 'src\engine\Private\Config\Profile.ps1')
-. (Join-Path $root 'src\engine\Private\Catalog.ps1')
-. (Join-Path $root 'src\engine\Private\Image\Tweaks\TweakRegistry.ps1')
-. (Join-Path $root 'src\engine\Private\Image\AiRemoval.ps1')
-. (Join-Path $root 'src\engine\Engine.ps1')
-. (Join-Path $root 'src\engine\Reports.ps1')
-. (Join-Path $root 'src\engine\Private\Runtime.ps1')
-. (Join-Path $root 'src\engine\Private\Image\Drivers.ps1')
-. (Join-Path $root 'src\engine\Private\Image\Packages.ps1')
-. (Join-Path $root 'src\engine\Private\Media.ps1')
-. (Join-Path $root 'src\engine\Private\Image\Tweaks.ps1')
-. (Join-Path $root 'src\engine\Private\Image\Unattend.ps1')
-. (Join-Path $root 'src\engine\Private\SourcePrep.ps1')
-. (Join-Path $root 'src\engine\Private\Pipeline.Console.ps1')
-. (Join-Path $root 'src\engine\Private\Headless.ps1')
+. (Join-Path $root 'src\runtime\image\Core.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Config\Profile.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Catalog.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Image\Tweaks\TweakRegistry.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Image\AiRemoval.ps1')
+. (Join-Path $root 'src\runtime\image\Private\IntermediatesCache.ps1')
+. (Join-Path $root 'src\runtime\image\Engine.ps1')
+. (Join-Path $root 'src\runtime\image\Reports.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Runtime.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Image\Drivers.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Image\Packages.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Media.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Image\Tweaks.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1')
+. (Join-Path $root 'src\runtime\image\Private\InstallPlan.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Pipeline.Console.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Headless.ps1')
+. (Join-Path $root 'src\runtime\image\Cli.ps1')
 
 $failures = [System.Collections.Generic.List[string]]::new()
 
@@ -70,12 +72,15 @@ Assert-StartBuildReturnsSingleResultContract
 Assert-ManifestPayloadsAreDeduplicated
 Assert-FormFactorAndPowerProfile
 Assert-TweakAuditArtifactsAreWritten
+Assert-XdgDefaultsAreStaged
 Assert-CachedDownloadResolver
 Assert-OfflinePayloadCacheStatus
 Assert-StaticUiFlowInvariants
 Assert-HardwareBypassIsExplicit
 Assert-ElevationRequiredForAllRuns
 Assert-HardwareBypassUnattendGeneration
+Assert-HyperVProfileIsProAndUnattended
+Assert-SurfaceProfileUsesStandardHome
 Assert-FixedEditionSelectionIsUnambiguous
 Assert-MicrosoftOobeUnattendGeneration
 Assert-LocalAccountUnattendGeneration
@@ -92,10 +97,18 @@ Assert-LiveInstallAuditUsesSetupProfilePrefixes
 Assert-LiveInstallAuditIsStaged
 Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork
 Assert-DmaInteropUsesFixedIrelandRegion
+Assert-BuildProfileSchemaOwnsBrowserContract
 Assert-LiveAuditDistinguishesDmaSetupFromVisibleRegion
 Assert-AiRemovalCatalogAndGuardrails
 Assert-RecoveryBundleIsOutputOnly
 Assert-AgentRunsLiveInstallAudit
+Assert-GitBootstrapDoesNotInstallFullGitByDefault
+Assert-StarshipPromptUsesNerdFontTerminalDefaults
+Assert-AgentWingetUsesDefaultInstallerSelection
+Assert-ElevationChecksUseInstanceMarshalSize
+Assert-FirstLogonFailsClosedWhenElevationIsUnavailable
+Assert-FirstLogonRecoveryIsBounded
+Assert-FirstLogonCleanupOnlyDeletesWinMintOwnedPayload
 Assert-NoMaintenancePayloadOrRegistration
 Assert-ExternalReferenceAuditDocumentsSparkle
 Assert-WslFirstDefaultsAndGuards
@@ -103,6 +116,17 @@ Assert-LogNoiseInvariants
 Assert-WinPEDriverInjectionDefaultsToSetupOnly
 Assert-CopilotPlusUsesFullAiRemovalPolicy
 Assert-OneDriveRemovalPolicyIsComplete
+Assert-DefaultUserTaskbarPinsIncludeTerminal
+Assert-WinMintBloomWallpaperCoversDesktopAndLockScreen
+Assert-FirstLogonDefaultsToVisibleConsole
+Assert-FirstLogonPinsSelectedAppsToStart
+Assert-FirstLogonFinalizesTerminalProfiles
+Assert-AgentLiveInstallFailuresAreWarnings
+Assert-SetupCompleteRegistersFirstLogonFallback
+Assert-SetupCompleteDoesNotDeleteWindowsOld
+Assert-EdgeRemovalIntentDoesNotDependOnDma
+Assert-AutoTimeZoneUpdaterFollowsLocationServices
+Assert-PSScriptAnalyzerHonorsProjectSettings
 Assert-CursorInstallUsesModernRegistryContract
 Assert-RegistryTweakMetadataAndRollback
 Assert-SetupRegistryStampsAreIdempotent
@@ -132,6 +156,12 @@ if ($setupProfile.setupComplete.Contains('preserveMicrosoftCopilot')) {
 }
 if (-not $setupProfile.setupComplete.removeRecall) {
     Add-SmokeFailure 'Expected Minimal setup option to remove Recall.'
+}
+if (-not [bool]$setupProfile.edge.removeEdge -or [bool]$setupProfile.edge.keepEdge) {
+    Add-SmokeFailure 'Expected default setup profile to request Edge removal intent unless KeepEdge is selected.'
+}
+if ($setupProfile.edge.Contains('aggressiveExperimental')) {
+    Add-SmokeFailure 'Edge removal must not be controlled by an environment-variable experimental gate.'
 }
 
 # Subtractive model: -KeepCopilot suppresses the Copilot+ AI feature surface so a
@@ -181,12 +211,12 @@ $agentProfile = New-WinMintAgentProfile -BuildConfig $config
 if (@($config.Editors).Count -ne 0) {
     Add-SmokeFailure 'Expected the default build to leave editor options unselected.'
 }
-if ($config.Features -contains 'Microsoft-Windows-Subsystem-Linux' -or
-    $config.Features -contains 'VirtualMachinePlatform') {
-    Add-SmokeFailure 'Expected the default build to leave WSL features disabled until a distro is selected.'
+if ($config.Features -notcontains 'Microsoft-Windows-Subsystem-Linux' -or
+    $config.Features -notcontains 'VirtualMachinePlatform') {
+    Add-SmokeFailure 'Expected the default build to include WSL2 and Virtual Machine Platform as a baseline.'
 }
-if ($agentProfile.modules.wsl.enabled -or @($agentProfile.modules.wsl.distros).Count -ne 0) {
-    Add-SmokeFailure 'Expected the default build to leave the FirstLogon WSL module disabled until a distro is selected.'
+if (-not [bool]$agentProfile.modules.wsl.enabled -or @($agentProfile.modules.wsl.distros).Count -ne 0) {
+    Add-SmokeFailure 'Expected the default build to keep the FirstLogon WSL module enabled with no distro selected.'
 }
 
 $profile = New-WinMintBuildProfile -Settings @{
@@ -201,8 +231,8 @@ $profile = New-WinMintBuildProfile -Settings @{
 }
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($agentProfile.modules.packageManagers.enabled) {
-    Add-SmokeFailure 'Expected package managers to be disabled for Minimal when no module needs winget.'
+if (-not $agentProfile.modules.packageManagers.enabled) {
+    Add-SmokeFailure 'Expected package managers to be enabled for the baseline Scoop + MinGit bootstrap.'
 }
 
 $profile = New-SmokeBuildProfile
@@ -249,13 +279,50 @@ if (-not $agentProfile.modules.windhawk.enabled) {
 
 $settings = New-SmokeBuildProfileSettings
 $settings.EditorCursor = $false
-$settings.EditorVSCodium = $false
 $settings.EditorVSCode = $false
 $settings.EditorZed = $false
+$settings.EditorAntigravity = $false
 $settings.EditorNeovim = $false
 $profile = New-WinMintBuildProfile -Settings $settings
 if (@($profile.development.editors).Count -ne 0) {
     Add-SmokeFailure 'Expected explicit false editor flags to disable profile default editors.'
+}
+
+$settings = New-SmokeBuildProfileSettings
+$settings.BrowserZen = $false
+$settings.BrowserHelium = $false
+$settings.BrowserLibreWolf = $false
+$settings.BrowserBrave = $false
+$settings.BrowserEdge = $false
+$profile = New-WinMintBuildProfile -Settings $settings
+if (@($profile.development.browsers).Count -ne 0) {
+    Add-SmokeFailure 'Expected explicit false browser flags to disable profile default browsers.'
+}
+
+$settings = New-SmokeBuildProfileSettings
+$settings.InstallNilesoft = $true
+$profile = New-WinMintBuildProfile -Settings $settings
+if (@($profile.desktop.layers) -notcontains 'nilesoft') {
+    Add-SmokeFailure 'Expected InstallNilesoft to flow into the build profile desktop layers.'
+}
+
+$settings = New-SmokeBuildProfileSettings
+$settings.Wsl2Distros = @('Ubuntu', 'Fedora', 'archlinux', 'NixOS-WSL', 'Pengwin')
+$profile = New-WinMintBuildProfile -Settings $settings
+if (@($profile.development.wsl.distros) -notcontains 'Ubuntu' -or
+    @($profile.development.wsl.distros) -notcontains 'FedoraLinux' -or
+    @($profile.development.wsl.distros) -notcontains 'archlinux' -or
+    @($profile.development.wsl.distros) -notcontains 'NixOS-WSL' -or
+    @($profile.development.wsl.distros) -notcontains 'pengwin') {
+    Add-SmokeFailure 'Expected WSL distro suggestions to normalize into canonical build-profile tokens.'
+}
+$config = New-WinMintBuildConfig -BuildProfile $profile
+if ($config.Wsl2Distros -notcontains 'NixOS-WSL' -or $config.Wsl2Distros -notcontains 'FedoraLinux') {
+    Add-SmokeFailure 'Expected canonical WSL selections to flow into the build config.'
+}
+$agentProfile = New-WinMintAgentProfile -BuildConfig $config
+if (@($agentProfile.modules.wsl.distros) -notcontains 'NixOS' -or @($agentProfile.modules.wsl.distros) -notcontains 'FedoraLinux') {
+    Add-SmokeFailure 'Expected NixOS-WSL to normalize to NixOS for first-logon installation.'
 }
 
 $settings = New-SmokeBuildProfileSettings

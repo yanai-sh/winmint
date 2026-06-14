@@ -11,7 +11,7 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 function Log { param([string]$m) }
 function LogVerbose { param([string]$m) }
 
-. (Join-Path $root 'src\engine\Private\IntermediatesCache.ps1')
+. (Join-Path $root 'src\runtime\image\Private\IntermediatesCache.ps1')
 
 # Redirect the build cache root to a sandbox so we never touch the real
 # %LOCALAPPDATA%\WinMint\cache on the developer's machine.
@@ -38,7 +38,7 @@ try {
             OptionalFeatures = @()
         }
         RegistryTweaks     = @('dark-mode', 'explorer-qol')
-        Features           = @('OpenSSH.Client')
+        Features           = @('OpenSSH.Client', 'Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform')
         CursorPackKind     = 'Windows11Modern'
         InputLocale        = '0409:00000409'
         SystemLocale       = 'en-US'

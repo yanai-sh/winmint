@@ -14,8 +14,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
 $script:WinMintRepositoryRoot = $RepositoryRoot
-. (Join-Path $RepositoryRoot 'src\engine\Core.ps1')
-$engine = Get-WinMintPath -Name EngineEntry
+. (Join-Path $RepositoryRoot 'src\runtime\image\Core.ps1')
+$engine = Get-WinMintPath -Name RuntimeImageEntry
 . $engine
 Initialize-WinMintEngine -RepositoryRoot $RepositoryRoot -DryRun:$DryRun
 

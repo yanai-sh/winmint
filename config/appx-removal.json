@@ -52,7 +52,11 @@
       "Microsoft.ZuneMusic",
       "Microsoft.ZuneVideo",
       "Clipchamp.Clipchamp",
-      "Windows.CBSPreview"
+      "Windows.CBSPreview",
+      "Microsoft.WindowsCalculator",
+      "MicrosoftCorporationII.QuickAssist",
+      "Microsoft.WindowsSoundRecorder",
+      "Microsoft.MicrosoftStickyNotes"
     ],
     "communication": [
       "MSTeams",
@@ -141,8 +145,6 @@
     "Microsoft.YourPhone",
     "MicrosoftWindows.CrossDevice",
     "Microsoft.WindowsCamera",
-    "Microsoft.WindowsSoundRecorder",
-    "Microsoft.MicrosoftStickyNotes",
     "Microsoft.WindowsAlarms",
     "Microsoft.WindowsNotepad",
     "Microsoft.ScreenSketch",

@@ -369,11 +369,6 @@ impl WinMintApp {
         }
     }
 
-    fn toggle_keep_edge(&mut self, cx: &mut Context<Self>) {
-        self.intent.keep.edge = !self.intent.keep.edge;
-        self.write_intent(cx);
-    }
-
     fn toggle_keep_gaming(&mut self, cx: &mut Context<Self>) {
         self.intent.keep.gaming = !self.intent.keep.gaming;
         self.write_intent(cx);
@@ -382,6 +377,109 @@ impl WinMintApp {
     fn toggle_keep_copilot(&mut self, cx: &mut Context<Self>) {
         self.intent.keep.copilot = !self.intent.keep.copilot;
         self.write_intent(cx);
+    }
+
+    fn toggle_toolkit_flag<F>(&mut self, cx: &mut Context<Self>, select: F)
+    where
+        F: FnOnce(&mut crate::intent::ToolkitIntent) -> &mut bool,
+    {
+        let flag = select(&mut self.intent.toolkit);
+        *flag = !*flag;
+        self.write_intent(cx);
+    }
+
+    fn toggle_editor_cursor(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.editor_cursor);
+    }
+
+    fn toggle_editor_vscode(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.editor_vscode);
+    }
+
+    fn toggle_editor_zed(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.editor_zed);
+    }
+
+    fn toggle_editor_antigravity(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.editor_antigravity);
+    }
+
+    fn toggle_editor_neovim(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.editor_neovim);
+    }
+
+    fn toggle_browser_zen(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_zen);
+    }
+
+    fn toggle_browser_helium(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_helium);
+    }
+
+    fn toggle_browser_librewolf(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_librewolf);
+    }
+
+    fn toggle_browser_brave(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_brave);
+    }
+
+    fn toggle_browser_edge(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_edge);
+    }
+
+    fn toggle_shell_flag<F>(&mut self, cx: &mut Context<Self>, select: F)
+    where
+        F: FnOnce(&mut crate::intent::DesktopLayersIntent) -> &mut bool,
+    {
+        let flag = select(&mut self.intent.desktop_layers);
+        *flag = !*flag;
+        self.write_intent(cx);
+    }
+
+    fn toggle_shell_windhawk(&mut self, cx: &mut Context<Self>) {
+        self.toggle_shell_flag(cx, |layers| &mut layers.windhawk);
+    }
+
+    fn toggle_shell_yasb(&mut self, cx: &mut Context<Self>) {
+        self.toggle_shell_flag(cx, |layers| &mut layers.yasb);
+    }
+
+    fn toggle_shell_komorebi(&mut self, cx: &mut Context<Self>) {
+        self.toggle_shell_flag(cx, |layers| &mut layers.komorebi);
+    }
+
+    fn toggle_shell_nilesoft(&mut self, cx: &mut Context<Self>) {
+        self.toggle_shell_flag(cx, |layers| &mut layers.nilesoft);
+    }
+
+    fn toggle_wsl_flag<F>(&mut self, cx: &mut Context<Self>, select: F)
+    where
+        F: FnOnce(&mut crate::intent::ToolkitIntent) -> &mut bool,
+    {
+        let flag = select(&mut self.intent.toolkit);
+        *flag = !*flag;
+        self.write_intent(cx);
+    }
+
+    fn toggle_wsl_ubuntu(&mut self, cx: &mut Context<Self>) {
+        self.toggle_wsl_flag(cx, |toolkit| &mut toolkit.wsl_ubuntu);
+    }
+
+    fn toggle_wsl_fedora(&mut self, cx: &mut Context<Self>) {
+        self.toggle_wsl_flag(cx, |toolkit| &mut toolkit.wsl_fedora);
+    }
+
+    fn toggle_wsl_archlinux(&mut self, cx: &mut Context<Self>) {
+        self.toggle_wsl_flag(cx, |toolkit| &mut toolkit.wsl_archlinux);
+    }
+
+    fn toggle_wsl_nixos_wsl(&mut self, cx: &mut Context<Self>) {
+        self.toggle_wsl_flag(cx, |toolkit| &mut toolkit.wsl_nixos_wsl);
+    }
+
+    fn toggle_wsl_pengwin(&mut self, cx: &mut Context<Self>) {
+        self.toggle_wsl_flag(cx, |toolkit| &mut toolkit.wsl_pengwin);
     }
 
     // ── Layout ───────────────────────────────────────────────────────────────

@@ -8,8 +8,8 @@
   },
   "target": {
     "device": "DifferentPC",
-    "editionMode": "TargetLicense",
-    "edition": "",
+    "editionMode": "Fixed",
+    "edition": "Windows 11 Home",
     "diskMode": "AutoWipeDisk0",
     "diskLayout": {
       "mode": "AutoWipeDisk0",
@@ -53,14 +53,11 @@
     ]
   },
   "development": {
-    "editors": [
-      "cursor"
-    ],
+    "browsers": [],
+    "editors": [],
     "wsl": {
       "enabled": true,
-      "distros": [
-        "Ubuntu"
-      ]
+      "distros": []
     }
   },
   "removals": {

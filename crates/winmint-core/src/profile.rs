@@ -1,11 +1,14 @@
 //! Shared profile intent helpers for WinMint front ends.
 //!
 //! WinMint uses a subtractive **keep-flag** profile model: the default build
-//! removes everything (full AI removal, Edge browser, Xbox/gaming, OneDrive) and
-//! `KeepEdge`/`KeepGaming`/`KeepCopilot` opt a domain back in. Editors, WSL, and
-//! the desktop shell layers are independent installs; `Edition` is a selector
-//! token resolved engine-side. This module is the single source of truth for the
-//! flat `ui-intent.json` consumed by `tools/ui-bridge/New-UiBuildProfile.ps1`.
+//! removes full AI, Xbox/gaming, and OneDrive; Edge browser noise policy is
+//! always applied because supported scripted browser removal is not available.
+//! `KeepEdge`/`KeepGaming`/`KeepCopilot` capture user intent for those domains.
+//! Editors, browsers, and WSL distros are explicit selections; WSL2 itself is
+//! baseline on every build, and the desktop shell layers remain independent installs.
+//! `Edition` is a selector token resolved engine-side. This module is the single
+//! source of truth for the flat `ui-intent.json` consumed by
+//! `tools/ui-bridge/New-UiBuildProfile.ps1`.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -21,17 +24,41 @@ pub fn normalized_form_factor(value: &str) -> &'static str {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ToolkitIntent {
-    pub zed: bool,
-    pub neovim: bool,
+    pub editor_cursor: bool,
+    pub editor_vscode: bool,
+    pub editor_zed: bool,
+    pub editor_antigravity: bool,
+    pub editor_neovim: bool,
+    pub browser_zen: bool,
+    pub browser_helium: bool,
+    pub browser_librewolf: bool,
+    pub browser_brave: bool,
+    pub browser_edge: bool,
     pub wsl_ubuntu: bool,
+    pub wsl_fedora: bool,
+    pub wsl_archlinux: bool,
+    pub wsl_nixos_wsl: bool,
+    pub wsl_pengwin: bool,
 }
 
 impl Default for ToolkitIntent {
     fn default() -> Self {
         Self {
-            zed: true,
-            neovim: true,
-            wsl_ubuntu: true,
+            editor_cursor: false,
+            editor_vscode: false,
+            editor_zed: false,
+            editor_antigravity: false,
+            editor_neovim: false,
+            browser_zen: false,
+            browser_helium: false,
+            browser_librewolf: false,
+            browser_brave: false,
+            browser_edge: false,
+            wsl_ubuntu: false,
+            wsl_fedora: false,
+            wsl_archlinux: false,
+            wsl_nixos_wsl: false,
+            wsl_pengwin: false,
         }
     }
 }
@@ -41,6 +68,7 @@ pub struct DesktopLayersIntent {
     pub windhawk: bool,
     pub yasb: bool,
     pub komorebi: bool,
+    pub nilesoft: bool,
 }
 
 impl Default for DesktopLayersIntent {
@@ -49,6 +77,7 @@ impl Default for DesktopLayersIntent {
             windhawk: true,
             yasb: true,
             komorebi: true,
+            nilesoft: false,
         }
     }
 }
@@ -64,21 +93,62 @@ pub struct KeepFlags {
 
 pub fn editors_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
     let mut editors = Vec::new();
-    if toolkit.zed {
+    if toolkit.editor_cursor {
+        editors.push("cursor");
+    }
+    if toolkit.editor_vscode {
+        editors.push("vscode");
+    }
+    if toolkit.editor_zed {
         editors.push("zed");
     }
-    if toolkit.neovim {
+    if toolkit.editor_antigravity {
+        editors.push("antigravity");
+    }
+    if toolkit.editor_neovim {
         editors.push("neovim");
     }
     editors
 }
 
-pub fn wsl_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
-    if toolkit.wsl_ubuntu {
-        vec!["Ubuntu"]
-    } else {
-        Vec::new()
+pub fn browsers_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
+    let mut browsers = Vec::new();
+    if toolkit.browser_zen {
+        browsers.push("zen-browser");
     }
+    if toolkit.browser_helium {
+        browsers.push("helium");
+    }
+    if toolkit.browser_librewolf {
+        browsers.push("librewolf");
+    }
+    if toolkit.browser_brave {
+        browsers.push("brave");
+    }
+    if toolkit.browser_edge {
+        browsers.push("edge");
+    }
+    browsers
+}
+
+pub fn wsl_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
+    let mut distros = Vec::new();
+    if toolkit.wsl_ubuntu {
+        distros.push("Ubuntu");
+    }
+    if toolkit.wsl_fedora {
+        distros.push("FedoraLinux");
+    }
+    if toolkit.wsl_archlinux {
+        distros.push("archlinux");
+    }
+    if toolkit.wsl_nixos_wsl {
+        distros.push("NixOS-WSL");
+    }
+    if toolkit.wsl_pengwin {
+        distros.push("pengwin");
+    }
+    distros
 }
 
 /// Clamp the edition selector token. `Host` (default) detects the build host's
@@ -119,7 +189,9 @@ pub struct UiIntent {
     pub install_windhawk: bool,
     pub install_yasb: bool,
     pub install_komorebi: bool,
+    pub install_nilesoft: bool,
     pub editors: Vec<&'static str>,
+    pub browsers: Vec<&'static str>,
     #[serde(rename = "Wsl2Distros")]
     pub wsl2_distros: Vec<&'static str>,
     pub priv_location: bool,
@@ -128,8 +200,9 @@ pub struct UiIntent {
 }
 
 /// Build the typed intent from flat wizard inputs. In the keep-flag model the
-/// keep flags, editors/WSL, desktop layers, and edition selector are all explicit
-/// — there is no profile-group gating or gaming-removal inversion to apply.
+/// keep flags, editors/WSL distro selections, desktop layers, and edition
+/// selector are all explicit — there is no profile-group gating or gaming-removal
+/// inversion to apply.
 #[allow(clippy::too_many_arguments)] // Mirrors the wizard's flat intent fields one-to-one.
 pub fn build_ui_intent(
     iso_path: &str,
@@ -160,7 +233,9 @@ pub fn build_ui_intent(
         install_windhawk: desktop_layers.windhawk,
         install_yasb: desktop_layers.yasb,
         install_komorebi: desktop_layers.komorebi,
+        install_nilesoft: desktop_layers.nilesoft,
         editors: editors_from_toolkit(toolkit),
+        browsers: browsers_from_toolkit(toolkit),
         wsl2_distros: wsl_from_toolkit(toolkit),
         priv_location: true,
         tweak_hardware_bypass: false,
@@ -209,7 +284,7 @@ mod tests {
             .collect()
     }
 
-    const EXPECTED_INTENT_KEYS: [&str; 22] = [
+    const EXPECTED_INTENT_KEYS: [&str; 24] = [
         "Profile",
         "KeepEdge",
         "KeepGaming",
@@ -227,7 +302,9 @@ mod tests {
         "InstallWindhawk",
         "InstallYasb",
         "InstallKomorebi",
+        "InstallNilesoft",
         "Editors",
+        "Browsers",
         "Wsl2Distros",
         "PrivLocation",
         "TweakHardwareBypass",
@@ -282,6 +359,9 @@ mod tests {
         assert_eq!(intent["KeepEdge"], false);
         assert_eq!(intent["KeepGaming"], false);
         assert_eq!(intent["KeepCopilot"], false);
+        assert_eq!(str_vec(&intent["Editors"]).len(), 0);
+        assert_eq!(str_vec(&intent["Browsers"]).len(), 0);
+        assert_eq!(str_vec(&intent["Wsl2Distros"]).len(), 0);
         assert_eq!(intent["Edition"], "Host");
         assert_eq!(intent["FormFactor"], "Auto");
         assert_eq!(intent["TweakDmaInterop"], true);
@@ -314,7 +394,11 @@ mod tests {
 
     #[test]
     fn editors_and_wsl_are_explicit_not_group_gated() {
-        // Editors/WSL come straight from the toolkit now — no Developer group.
+        // Editors/WSL distros come straight from the toolkit now — no
+        // Developer group, and no implicit default distro.
+        let empty = sample(KeepFlags::default(), "Home", "Auto");
+        assert_eq!(str_vec(&empty["Editors"]).len(), 0);
+        assert_eq!(str_vec(&empty["Wsl2Distros"]).len(), 0);
         let intent = build_gui_intent(
             "",
             "arm64",
@@ -326,13 +410,19 @@ mod tests {
             DesktopLayersIntent::default(),
             "Auto",
         );
-        assert_eq!(str_vec(&intent["Editors"]), vec!["zed", "neovim"]);
-        assert_eq!(str_vec(&intent["Wsl2Distros"]), vec!["Ubuntu"]);
+        assert_eq!(str_vec(&intent["Editors"]), Vec::<String>::new());
+        assert_eq!(str_vec(&intent["Browsers"]), Vec::<String>::new());
+        assert_eq!(str_vec(&intent["Wsl2Distros"]).len(), 0);
 
         let lite = ToolkitIntent {
-            zed: true,
-            neovim: false,
+            editor_zed: true,
+            editor_neovim: true,
+            browser_brave: true,
+            browser_edge: true,
+            wsl_fedora: true,
+            wsl_nixos_wsl: true,
             wsl_ubuntu: false,
+            ..ToolkitIntent::default()
         };
         let intent2 = build_gui_intent(
             "",
@@ -345,8 +435,9 @@ mod tests {
             DesktopLayersIntent::default(),
             "Auto",
         );
-        assert_eq!(str_vec(&intent2["Editors"]), vec!["zed"]);
-        assert_eq!(str_vec(&intent2["Wsl2Distros"]).len(), 0);
+        assert_eq!(str_vec(&intent2["Editors"]), vec!["zed", "neovim"]);
+        assert_eq!(str_vec(&intent2["Browsers"]), vec!["brave", "edge"]);
+        assert_eq!(str_vec(&intent2["Wsl2Distros"]), vec!["FedoraLinux", "NixOS-WSL"]);
     }
 
     #[test]
@@ -355,6 +446,7 @@ mod tests {
             windhawk: true,
             yasb: false,
             komorebi: true,
+            nilesoft: true,
         };
         let intent = build_gui_intent(
             "",
@@ -370,6 +462,7 @@ mod tests {
         assert_eq!(intent["InstallWindhawk"], true);
         assert_eq!(intent["InstallYasb"], false);
         assert_eq!(intent["InstallKomorebi"], true);
+        assert_eq!(intent["InstallNilesoft"], true);
     }
 
     #[test]

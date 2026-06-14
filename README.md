@@ -23,8 +23,9 @@ ship a hidden golden Windows image; your source ISO is the serviced source.
 # GUI
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-GUI.ps1
 
-# Headless dry run (read-only; no WIM mount or disk writes)
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 -DryRun
+# Author a profile, then dry-run a build from it (read-only; no WIM mount or disk writes)
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 new .\BuildProfile.json
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 build .\BuildProfile.json -DryRun
 ```
 
 ```powershell
@@ -43,20 +44,60 @@ irm https://winmint.yanai.sh | iex
 WinMint uses a subtractive default plus a small set of opt-in keep flags, not a
 debloat dashboard. The default build removes everything and folds the developer
 quality-of-life tweaks (Developer Mode, PowerShell RemoteSigned, .NET and
-PowerShell telemetry opt-out, elevated-terminal menu, OpenSSH) into the baseline.
+PowerShell telemetry opt-out, elevated-terminal menu, OpenSSH, WSL2/VMP, and
+the default system fonts/cursors) into the baseline. PowerShell 7 is staged by
+default, Windows Terminal opens it as the default profile with `-NoLogo`, uses
+Cascadia Code NF with the One Half Dark color scheme, disables the audible bell,
+and centers on launch. FirstLogon installs Scoop using the official installer
+and installs MinGit plus Starship through Scoop as Windows-host developer shell
+plumbing. XDG-aware tools get Linux-like defaults: config, data,
+state, and cache live under dotfolders in the user profile, and runtime data
+uses a temp-backed per-user directory. WinMint also creates `~/bin` and
+`~/.local/bin`, adds both to the user `PATH`, keeps clipboard history local-on,
+and leaves cloud clipboard upload off unless Phone Link is explicitly selected.
+Cloud-backed consumer suggestions, Spotlight tips, Share Sheet promotions, and
+welcome/recommendation surfaces are disabled through documented policy where the
+source Windows SKU honors those policies. FirstLogon also mirrors those quiet
+defaults into the live user profile: backup/setup pressure prompts stay off,
+the lock screen uses the local WinMint image instead of Spotlight rotation, and
+nonessential taskbar/tray affordances start hidden. Windows Update remains
+enabled, but Delivery Optimization peer upload/download behavior is disabled so
+the PC is not used to serve updates to other devices. Archive handling stays
+native; WinMint does not install a third-party archive manager by default. After
+FirstLogon succeeds, WinMint removes its setup residue and creates a final
+`WinMint post-install complete` System Restore point.
+WinMint is WSL-first by design: the platform plumbing is always enabled, while
+individual Linux distros remain optional installs. Dev Drive is not a WinMint
+default; users set that up separately if they want it.
 
-| Domain | Default | Opt-in flag |
+Build output includes `WinMint-Toolchain.winget`, a reviewable WinGet
+Configuration handoff for selected winget/msstore Windows-side tools. Scoop-owned
+developer CLIs are intentionally excluded from that file. WinMint does not
+auto-run the handoff during setup.
+
+Configuration is set when you author a profile — `WinMint-CLI.ps1 new <out> ...`
+or the GUI. The opt-in flags below are `new` flags; `build <profile>` then
+consumes the profile.
+
+| Domain | Default | Opt-in flag (on `new`) |
 |--------|---------|-------------|
 | AI / Copilot / Recall | Full serviceable removal | `-KeepCopilot` keeps all Copilot+ AI; Recall stays removed |
-| Edge browser | Removed via DMA uninstall | `-KeepEdge` keeps Edge; debloat applies either way |
+| Edge browser | Removal requested; debloat policies always applied | `-KeepEdge` keeps the browser installed and debloated |
 | Xbox / Game Bar | Removed | `-KeepGaming` keeps gaming apps and performance tweaks |
-| Shell layers | Off | `-DesktopUI` adds Windhawk, YASB, Komorebi |
-| Dev tweaks and OpenSSH | Always on | baseline |
+| File Explorer | Shows extensions/hidden files, keeps Home, hides Gallery | baseline |
+| Shell layers | Off | `-DesktopUI`, or `-Install windhawk,yasb,komorebi` |
+| Dev tweaks, OpenSSH, WSL2, Scoop, MinGit, Starship, fonts/cursors | Always on | baseline |
 
-Edge browser removal uses the DMA-supported in-OS uninstall, run during setup
-while the device is still in the EEA region. It is skipped and logged when DMA
-interop is off (`-NoDmaInterop`). The Edge and WebView2 runtime, Store, winget,
-and Windows Update are always preserved.
+On DMA builds, Windows exposes Edge as an uninstallable normal application.
+Without `-KeepEdge`, WinMint requests Edge removal and first attempts the
+supported Edge app uninstaller. If that normal uninstall path leaves browser
+files behind, WinMint reports that as an incomplete supported uninstall rather
+than applying ownership hacks or hidden cleanup switches. WebView2, Store,
+winget, and Windows Update are preserved.
+
+Local-account builds are fully unattended: the computer name comes from the
+profile, the password is injected into the profile, and OOBE hides the network
+page instead of stopping for personal/work setup.
 
 ## Guardrails
 
@@ -81,11 +122,15 @@ and Windows Update are always preserved.
 pwsh -NoProfile -File tools\validation\Validate.ps1
 
 # Build from a saved profile
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 -ProfilePath .\BuildProfile.json
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 build .\BuildProfile.json
 
 # Build, then write a UEFI-only USB installer
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
-  -ProfilePath .\BuildProfile.json -WriteUsb -UsbDiskNumber 3 -ConfirmUsbDiskNumber 3
+  build .\BuildProfile.json -WriteUsb -Disk 3 -ConfirmDisk 3
+
+# Hyper-V test loop helpers
+pwsh -NoProfile -File .\tools\vm\New-WinMintHyperVProfile.ps1 -OutPath .\output\hyper-v.json -SourceIso .\tests\fixtures\iso\official-win11-25h2-english-arm64-v2.iso
+pwsh -NoProfile -File .\tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profiles\hyper-v-install-arm64.json
 ```
 
 > USB writing is post-build and destructive. WinMint targets UEFI-only GPT media

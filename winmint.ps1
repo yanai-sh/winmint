@@ -8,27 +8,13 @@ param(
     [string]$Mode = 'Gui',
     [switch]$Gui,
     [switch]$Headless,
+    # Headless launch runs a profile-backed build (or -ValidateOnly). Profile
+    # authoring lives in the GUI or `WinMint-CLI.ps1 new`, not on this launcher.
     [string]$ProfilePath = '',
     [string]$SourceIso = '',
-    [string]$UupDumpSource = '',
-    [string]$SourceIsoOverride = '',
-    [ValidateSet('amd64','arm64','x86')]
-    [string]$Architecture = '',
     [switch]$DryRun,
-    [switch]$ExportHostDrivers,
-    [switch]$NoServicedWimCache,
-    [switch]$Developer,
-    [switch]$Copilot,
-    [switch]$DesktopUI,
-    [switch]$Gaming,
-    [ValidateSet('None','FlowEverything','Raycast')]
-    [string]$Launcher = 'None',
-    [switch]$LiveInstallAudit,
-    [switch]$PhoneLink,
-    [switch]$NonInteractive,
     [switch]$ValidateOnly,
     [switch]$Json,
-    [switch]$NoProgress,
     [switch]$Quiet,
     [switch]$AllowElevate,
     [switch]$Yes,
@@ -278,33 +264,21 @@ function New-WinMintLaunchArguments {
     }
 
     if ($LaunchMode -eq 'Headless') {
-        Add-WinMintArgumentValue -Arguments $arguments -Name 'ProfilePath' -Value $ProfilePath
-        Add-WinMintArgumentValue -Arguments $arguments -Name 'SourceIso' -Value $SourceIso
-        Add-WinMintArgumentValue -Arguments $arguments -Name 'UupDumpSource' -Value $UupDumpSource
-        Add-WinMintArgumentValue -Arguments $arguments -Name 'SourceIsoOverride' -Value $SourceIsoOverride
-        Add-WinMintArgumentValue -Arguments $arguments -Name 'Architecture' -Value $Architecture
-        if ($Developer) { $arguments.Add('-Developer') }
-        if ($Copilot) { $arguments.Add('-Copilot') }
-        if ($DesktopUI) { $arguments.Add('-DesktopUI') }
-        if ($Gaming) { $arguments.Add('-Gaming') }
-        if ($Launcher -ne 'None') {
-            $arguments.Add('-Launcher')
-            $arguments.Add($Launcher)
+        # Profile is the source of truth: dispatch the build (or validate) verb
+        # with only run-specific overrides.
+        $verb = if ($ValidateOnly) { 'validate' } else { 'build' }
+        $arguments.Add($verb)
+        if (-not [string]::IsNullOrWhiteSpace($ProfilePath)) {
+            $arguments.Add($ProfilePath)
         }
-        if ($LiveInstallAudit) { $arguments.Add('-LiveInstallAudit') }
-        if ($PhoneLink) { $arguments.Add('-PhoneLink') }
-        if ($NonInteractive) { $arguments.Add('-NonInteractive') }
-        if ($ValidateOnly) { $arguments.Add('-ValidateOnly') }
+        Add-WinMintArgumentValue -Arguments $arguments -Name 'SourceIso' -Value $SourceIso
+        if ($DryRun -and -not $ValidateOnly) { $arguments.Add('-DryRun') }
         if ($Json) { $arguments.Add('-Json') }
-        if ($NoProgress) { $arguments.Add('-NoProgress') }
         if ($Quiet) { $arguments.Add('-Quiet') }
         if ($AllowElevate) { $arguments.Add('-AllowElevate') }
         if ($Yes) { $arguments.Add('-Yes') }
     }
 
-    if ($DryRun) { $arguments.Add('-DryRun') }
-    if ($ExportHostDrivers -and $LaunchMode -ne 'Gui') { $arguments.Add('-ExportHostDrivers') }
-    if ($NoServicedWimCache -and $LaunchMode -ne 'Gui') { $arguments.Add('-NoServicedWimCache') }
     return $arguments.ToArray()
 }
 
@@ -367,8 +341,8 @@ function Test-WinMintInstalledVersion {
         'WinMint-CLI.ps1',
         'WinMint-GUI.ps1',
         'apps\gui\bin\WinMint-GUI.exe',
-        'src\engine\WinMint.ps1',
-        'src\agent\Start-WinMintAgent.ps1',
+        'src\runtime\image\WinMint.ps1',
+        'src\runtime\firstlogon\Start-WinMintAgent.ps1',
         'config\packages.json'
     )) {
         $requiredPath = Join-Path $Root $relativePath
@@ -444,9 +418,12 @@ if (-not $archive) {
 }
 
 $checksumName = "$($archive.name).sha256"
-$checksum = Select-WinMintAsset -Release $release -Extension '.sha256' -PreferredName $checksumName
+$checksum = @($release.assets | Where-Object { $_.name -eq $checksumName } | Select-Object -First 1)
+if (-not $checksum) {
+    throw "Release '$tag' is missing required checksum asset '$checksumName'. Refusing to install without release integrity verification."
+}
 $archivePath = Join-Path $downloadRoot $archive.name
-$checksumPath = if ($checksum) { Join-Path $downloadRoot $checksum.name } else { $null }
+$checksumPath = Join-Path $downloadRoot $checksum.name
 
 New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
 
@@ -461,12 +438,8 @@ if ($useInstalledVersion) {
     Write-WinMintBootstrapLog "Using installed version '$tag' at '$versionRoot'."
 } else {
     Save-WinMintAsset -Asset $archive -Destination $archivePath
-    if ($checksum) {
-        Save-WinMintAsset -Asset $checksum -Destination $checksumPath
-        Test-WinMintArchiveHash -ArchivePath $archivePath -ChecksumPath $checksumPath
-    } else {
-        Write-WinMintBootstrapLog "No .sha256 asset found for '$($archive.name)'; hash verification skipped." 'WARN'
-    }
+    Save-WinMintAsset -Asset $checksum -Destination $checksumPath
+    Test-WinMintArchiveHash -ArchivePath $archivePath -ChecksumPath $checksumPath
 
     Write-WinMintBootstrapLog "Extracting to '$versionRoot'."
     Expand-WinMintRelease -ArchivePath $archivePath -Destination $versionRoot -Overwrite

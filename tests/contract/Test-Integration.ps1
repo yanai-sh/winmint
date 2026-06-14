@@ -2,7 +2,6 @@
 [CmdletBinding()]
 param(
     [switch]$RunIsoDryRun,
-    [switch]$RunUupHeavy,
     [switch]$RequireAdmin
 )
 
@@ -35,19 +34,40 @@ if ($RunIsoDryRun) {
     }
     else {
         $iso = Get-WinMintTestIsoFixturePath
+        $cli = Join-Path $root 'WinMint-CLI.ps1'
+        $pwshPath = (Get-Process -Id $PID).Path
         $logDir = Join-Path (Join-Path $root 'output') 'integration-test'
         $null = New-Item -ItemType Directory -Path $logDir -Force
+        $tempProfile = Join-Path $logDir 'iso-dry-run.profile.json'
+
+        # Profile is the source of truth: author one with `new`, then `build` it.
+        $newOut = Join-Path $logDir 'iso-dry-run.new.out.log'
+        $newErr = Join-Path $logDir 'iso-dry-run.new.err.log'
+        $newProc = Start-Process `
+            -FilePath $pwshPath `
+            -ArgumentList @(
+                '-NoProfile',
+                '-File', $cli,
+                'new', $tempProfile,
+                '-SourceIso', $iso,
+                '-Architecture', 'arm64',
+                '-Quiet'
+            ) `
+            -Wait -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput $newOut -RedirectStandardError $newErr
+        if ($newProc.ExitCode -ne 0) {
+            throw "ISO dry-run profile authoring failed with exit code $($newProc.ExitCode). Logs: $newOut $newErr"
+        }
+
         $stdout = Join-Path $logDir 'iso-dry-run.out.log'
         $stderr = Join-Path $logDir 'iso-dry-run.err.log'
         $process = Start-Process `
-            -FilePath (Get-Process -Id $PID).Path `
+            -FilePath $pwshPath `
             -ArgumentList @(
                 '-NoProfile',
-                '-File', (Join-Path $root 'WinMint-CLI.ps1'),
-                '-SourceIso', $iso,
-                '-Architecture', 'arm64',
+                '-File', $cli,
+                'build', $tempProfile,
                 '-DryRun',
-                '-NoProgress',
                 '-Quiet'
             ) `
             -Wait `
@@ -62,29 +82,6 @@ if ($RunIsoDryRun) {
     }
 }
 
-if ($RunUupHeavy) {
-    if (-not $isAdmin) {
-        Write-IntegrationSkip 'UUP heavy integration requires an elevated PowerShell session.'
-    }
-    else {
-        . (Join-Path $root 'src\engine\Core.ps1')
-        . (Join-Path $root 'src\engine\Private\SourcePrep.ps1')
-        $script:WinMintRepositoryRoot = $root
-        $zip = Get-WinMintTestUupDumpZipFixturePath
-        if (-not (Test-WinMintUupDumpZip -Path $zip)) {
-            throw "UUP Dump fixture zip is invalid: $zip"
-        }
-        $result = Invoke-WinMintUupDumpSourcePrep -UupDumpZip $zip -Yes
-        if (-not [string]::IsNullOrWhiteSpace([string]$result.GeneratedIso) -and
-            (Test-Path -LiteralPath ([string]$result.GeneratedIso) -PathType Leaf)) {
-            Write-Host 'UUP heavy integration passed.'
-        }
-        else {
-            throw 'UUP heavy integration did not produce or reuse an ISO.'
-        }
-    }
-}
-
-if (-not $RunIsoDryRun -and -not $RunUupHeavy) {
-    Write-Host 'No integration switches selected. Use -RunIsoDryRun or -RunUupHeavy.'
+if (-not $RunIsoDryRun) {
+    Write-Host 'No integration switches selected. Use -RunIsoDryRun.'
 }

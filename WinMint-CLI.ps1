@@ -1,235 +1,69 @@
 #Requires -Version 7.3
 
+# WinMint command-line entry point. This is a thin dispatcher: the first
+# positional token selects a verb, and everything after it is forwarded to that
+# verb's own parameter block (see src/runtime/image/Cli.ps1). With no verb it launches
+# the interactive build wizard.
+#
+#   WinMint-CLI.ps1 build <profile> [-DryRun] [-SourceIso p] [-WriteUsb -Disk n] ...
+#   WinMint-CLI.ps1 new <out> [-Edition Pro] [-KeepGaming] [-Install yasb] ...
+#   WinMint-CLI.ps1 validate <profile>
+#   WinMint-CLI.ps1 list | clean <id|AllStale> | help
+#   WinMint-CLI.ps1                       interactive wizard
+
 [CmdletBinding()]
 param(
-    [string]$ProfilePath,
-    [string]$NewProfile,
-    [string]$OutProfile,
-    [string]$SourceIso,
-    [string]$UupDumpSource,
-    [string]$SourceIsoOverride,
-    [ValidateSet('amd64', 'arm64', 'x86')]
-    [string]$Architecture,
-    [string]$ComputerName = 'WinMint',
-    [string]$AccountName = 'dev',
-    [ValidateSet('Local', 'MicrosoftOobe')]
-    [string]$AccountMode = 'Local',
-    [string]$Password = '',
-    [string]$PasswordPath = '',
-    [string]$PasswordEnvVar = '',
-    [switch]$AutoLogon,
-    [switch]$AutoWipeDisk,
-    [ValidateSet('TargetLicense', 'Fixed')]
-    [string]$EditionMode = 'TargetLicense',
-    # Edition selector: Host (default) | Home | Pro | Enterprise | Education |
-    # SingleLanguage | All, or an exact edition name. Host detects the build
-    # machine's own edition so the image activates with its firmware/digital
-    # license (falls back to Home when undetectable, e.g. in a VM). A single
-    # edition services one image (~3x faster); 'All' services every edition so
-    # Windows Setup picks the target device's edition.
-    [string]$Edition = 'Host',
-    # Inject a generic (non-activating) edition key so an unattended VM/container
-    # install skips the Setup product-key page. Default: auto — injected only when
-    # the build host has no firmware/OEM key (i.e. you're building in a VM/CI).
-    # -GenericProductKey forces it on; -NoGenericProductKey forces keyless.
-    [switch]$GenericProductKey,
-    [switch]$NoGenericProductKey,
-    [ValidateSet('None', 'Host', 'Custom')]
-    [string]$DriverSource = 'None',
-    [string]$DriverPath = '',
-    [ValidateSet('ThisPC', 'DifferentPC')]
-    [string]$TargetDevice = 'DifferentPC',
-    [string]$DriverPack = '',
-    [string]$TimeZoneId,
-    [string]$InputLocale,
-    [string]$SystemLocale,
-    [string]$UILanguage,
-    [string]$UILanguageFallback,
-    [string]$UserLocale,
-    [switch]$LocationServices,
-    [switch]$NoLocationServices,
-    [switch]$NonInteractive,
-    [switch]$ExportHostDrivers,
-    [Alias('Desktop-UI')]
-    [switch]$DesktopUI,
-    [switch]$KeepEdge,
-    [switch]$KeepGaming,
-    [switch]$KeepCopilot,
-    [switch]$DmaInterop,
-    [switch]$NoDmaInterop,
-    [ValidateSet('None', 'FlowEverything', 'Raycast')]
-    [string]$Launcher = 'None',
-    [switch]$LiveInstallAudit,
-    [switch]$PhoneLink,
-    [switch]$InstallWindhawk,
-    [switch]$InstallYasb,
-    [switch]$InstallKomorebi,
-    [switch]$DryRun,
-    [switch]$ValidateOnly,
-    [switch]$Json,
-    [switch]$NoProgress,
-    [switch]$Quiet,
-    [switch]$AllowElevate,
-    [switch]$Yes,
-    [switch]$WriteUsb,
-    [int]$UsbDiskNumber = -1,
-    [int]$ConfirmUsbDiskNumber = -1,
-    [switch]$AllowFixedUsbDisk,
-    [switch]$ListWork,
-    [string]$CleanWork
+    [Parameter(Position = 0)][string]$Command = '',
+    [Parameter(ValueFromRemainingArguments = $true)][object[]]$Rest = @()
 )
 
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 Set-StrictMode -Version 2.0
 
-. "$PSScriptRoot\src\engine\WinMint.ps1"
+. "$PSScriptRoot\src\runtime\image\WinMint.ps1"
 
-Initialize-WinMintEngine -RepositoryRoot $PSScriptRoot -DryRun:$DryRun -ExportHostDrivers:$ExportHostDrivers
+Initialize-WinMintEngine -RepositoryRoot $PSScriptRoot
 
-$headlessMode = $PSBoundParameters.ContainsKey('ProfilePath') -or
-    $PSBoundParameters.ContainsKey('NewProfile') -or
-    $PSBoundParameters.ContainsKey('OutProfile') -or
-    $PSBoundParameters.ContainsKey('SourceIso') -or
-    $PSBoundParameters.ContainsKey('UupDumpSource') -or
-    $PSBoundParameters.ContainsKey('SourceIsoOverride') -or
-    $PSBoundParameters.ContainsKey('PasswordPath') -or
-    $PSBoundParameters.ContainsKey('PasswordEnvVar') -or
-    $PSBoundParameters.ContainsKey('TargetDevice') -or
-    $PSBoundParameters.ContainsKey('DriverPack') -or
-    $PSBoundParameters.ContainsKey('DesktopUI') -or
-    $PSBoundParameters.ContainsKey('KeepEdge') -or
-    $PSBoundParameters.ContainsKey('KeepGaming') -or
-    $PSBoundParameters.ContainsKey('KeepCopilot') -or
-    $PSBoundParameters.ContainsKey('GenericProductKey') -or
-    $PSBoundParameters.ContainsKey('NoGenericProductKey') -or
-    $PSBoundParameters.ContainsKey('DmaInterop') -or
-    $PSBoundParameters.ContainsKey('NoDmaInterop') -or
-    $PSBoundParameters.ContainsKey('Launcher') -or
-    $PSBoundParameters.ContainsKey('LiveInstallAudit') -or
-    $PSBoundParameters.ContainsKey('PhoneLink') -or
-    $PSBoundParameters.ContainsKey('DryRun') -or
-    $PSBoundParameters.ContainsKey('LocationServices') -or
-    $PSBoundParameters.ContainsKey('NoLocationServices') -or
-    $PSBoundParameters.ContainsKey('ValidateOnly') -or
-    $PSBoundParameters.ContainsKey('Json') -or
-    $PSBoundParameters.ContainsKey('NoProgress') -or
-    $PSBoundParameters.ContainsKey('Quiet') -or
-    $PSBoundParameters.ContainsKey('AllowElevate') -or
-    $PSBoundParameters.ContainsKey('Yes') -or
-    $PSBoundParameters.ContainsKey('WriteUsb') -or
-    $PSBoundParameters.ContainsKey('UsbDiskNumber') -or
-    $PSBoundParameters.ContainsKey('ConfirmUsbDiskNumber') -or
-    $PSBoundParameters.ContainsKey('AllowFixedUsbDisk') -or
-    $PSBoundParameters.ContainsKey('ListWork') -or
-    $PSBoundParameters.ContainsKey('CleanWork') -or
-    $NonInteractive
+# Remember the verbatim invocation so build/validate can self-elevate by
+# relaunching this exact verb command under a UAC prompt.
+$script:WinMintInvocationArgs = @($Command) + @($Rest)
 
-if ($headlessMode) {
-    # Resolve the friendly -Edition token (and legacy -EditionMode) into the
-    # concrete (mode, name) the profile stores. Default selects Single Language.
-    $editionSelection = Resolve-WinMintEditionSelection `
-        -Edition $Edition `
-        -EditionMode $EditionMode `
-        -EditionSpecified ($PSBoundParameters.ContainsKey('Edition')) `
-        -EditionModeSpecified ($PSBoundParameters.ContainsKey('EditionMode'))
-    $EditionMode = $editionSelection.Mode
-    $Edition = $editionSelection.Name
-    # Resolve the generic product key: forced on by -GenericProductKey, forced off
-    # by -NoGenericProductKey, otherwise auto-injected when this build host has no
-    # firmware/OEM key (a VM/CI builder). Only meaningful for a single fixed edition.
-    $injectGenericKey = $GenericProductKey -or ((-not $NoGenericProductKey) -and -not (Test-WinMintHostHasFirmwareKey))
-    $resolvedProductKey = ''
-    if ($injectGenericKey -and $editionSelection.Mode -eq 'Fixed') {
-        $resolvedProductKey = Get-WinMintGenericProductKey -EditionName $editionSelection.Name
+$wantsJson = '-Json' -in $Rest
+$exitCode = 0
+$result = $null
+
+try {
+    switch -Regex ($Command.Trim()) {
+        '^build$'    { $result = Invoke-WinMintVerbFunction 'Invoke-WinMintBuildCommand' $Rest }
+        '^new$'      { $result = Invoke-WinMintVerbFunction 'Invoke-WinMintNewProfileCommand' $Rest }
+        '^validate$' { $result = Invoke-WinMintVerbFunction 'Invoke-WinMintValidateCommand' $Rest }
+        '^list$'     { $result = Invoke-WinMintVerbFunction 'Invoke-WinMintListCommand' $Rest }
+        '^clean$'    { $result = Invoke-WinMintVerbFunction 'Invoke-WinMintCleanCommand' $Rest }
+        '^(help|-h|-help|--help)$' { Show-WinMintCliHelp }
+        '^$' {
+            if (@('-h', '-help', '--help', '/?') | Where-Object { $_ -in $Rest }) {
+                Show-WinMintCliHelp
+            } else {
+                Invoke-WinMintConsoleBuild
+            }
+        }
+        default {
+            throw "Unknown command '$Command'. Run 'WinMint-CLI.ps1 help' for usage."
+        }
     }
-    $headlessResult = Invoke-WinMintHeadlessCli `
-        -ProductKey $resolvedProductKey `
-        -BoundParameters $PSBoundParameters `
-        -ProfilePath $ProfilePath `
-        -NewProfile $NewProfile `
-        -OutProfile $OutProfile `
-        -SourceIso $SourceIso `
-        -UupDumpSource $UupDumpSource `
-        -SourceIsoOverride $SourceIsoOverride `
-        -Architecture $Architecture `
-        -ComputerName $ComputerName `
-        -AccountName $AccountName `
-        -AccountMode $AccountMode `
-        -Password $Password `
-        -PasswordPath $PasswordPath `
-        -PasswordEnvVar $PasswordEnvVar `
-        -AutoLogon:$AutoLogon `
-        -AutoWipeDisk:$AutoWipeDisk `
-        -EditionMode $EditionMode `
-        -Edition $Edition `
-        -DriverSource $DriverSource `
-        -DriverPath $DriverPath `
-        -TargetDevice $TargetDevice `
-        -DriverPack $DriverPack `
-        -TimeZoneId $TimeZoneId `
-        -InputLocale $InputLocale `
-        -SystemLocale $SystemLocale `
-        -UILanguage $UILanguage `
-        -UILanguageFallback $UILanguageFallback `
-        -UserLocale $UserLocale `
-        -LocationServices:$LocationServices `
-        -NoLocationServices:$NoLocationServices `
-        -ExportHostDrivers:$ExportHostDrivers `
-        -DesktopUI:$DesktopUI `
-        -KeepEdge:$KeepEdge `
-        -KeepGaming:$KeepGaming `
-        -KeepCopilot:$KeepCopilot `
-        -DmaInterop:$DmaInterop `
-        -NoDmaInterop:$NoDmaInterop `
-        -Launcher $Launcher `
-        -LiveInstallAudit:$LiveInstallAudit `
-        -PhoneLink:$PhoneLink `
-        -InstallWindhawk:$InstallWindhawk `
-        -InstallYasb:$InstallYasb `
-        -InstallKomorebi:$InstallKomorebi `
-        -DryRun:$DryRun `
-        -ValidateOnly:$ValidateOnly `
-        -Json:$Json `
-        -NoProgress:$NoProgress `
-        -Quiet:$Quiet `
-        -AllowElevate:$AllowElevate `
-        -Yes:$Yes `
-        -WriteUsb:$WriteUsb `
-        -UsbDiskNumber $UsbDiskNumber `
-        -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `
-        -AllowFixedUsbDisk:$AllowFixedUsbDisk `
-        -ListWork:$ListWork `
-        -CleanWork $CleanWork
-    if ($headlessResult -and [string]$headlessResult.result -in @('failed', 'validation-failed')) {
-        exit 1
+
+    if ($result -and ([string]$result.result -in @('failed', 'validation-failed'))) {
+        $exitCode = 1
     }
-    return
+}
+catch {
+    if ($wantsJson) {
+        Write-WinMintHeadlessJsonResult -Result (New-WinMintHeadlessResult -Result 'failed' -Failures @($_.Exception.Message))
+    } else {
+        Write-Error $_.Exception.Message -ErrorAction Continue
+    }
+    $exitCode = 1
 }
 
-Invoke-WinMintConsoleBuild `
-    -ProfilePath $ProfilePath `
-    -SourceIso $SourceIso `
-    -Architecture $Architecture `
-    -ComputerName $ComputerName `
-    -AccountName $AccountName `
-    -AccountMode $AccountMode `
-    -Password $Password `
-    -AutoLogon:$AutoLogon `
-    -AutoWipeDisk:$AutoWipeDisk `
-    -EditionMode $EditionMode `
-    -Edition $Edition `
-    -DriverSource $DriverSource `
-    -DriverPath $DriverPath `
-    -TimeZoneId $TimeZoneId `
-    -InputLocale $InputLocale `
-    -SystemLocale $SystemLocale `
-    -UILanguage $UILanguage `
-    -UILanguageFallback $UILanguageFallback `
-    -UserLocale $UserLocale `
-    -NonInteractive:$NonInteractive `
-    -DryRun:$DryRun `
-    -ExportHostDrivers:$ExportHostDrivers `
-    -InstallWindhawk:$InstallWindhawk `
-    -InstallYasb:$InstallYasb `
-    -InstallKomorebi:$InstallKomorebi
+exit $exitCode

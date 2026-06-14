@@ -53,9 +53,10 @@
     ]
   },
   "development": {
+    "browsers": [],
     "editors": [],
     "wsl": {
-      "enabled": false,
+      "enabled": true,
       "distros": []
     }
   },
@@ -90,6 +91,7 @@
       "Microsoft.Office.OneNote",
       "Microsoft.OutlookForWindows",
       "Microsoft.People",
+      "Microsoft.MicrosoftStickyNotes",
       "Microsoft.PowerAutomateDesktop",
       "Microsoft.RemoteDesktop",
       "Microsoft.RemoteDesktopPreview",
@@ -98,6 +100,7 @@
       "Microsoft.Whiteboard",
       "Microsoft.Windows.DevHome",
       "Microsoft.WindowsCalculator",
+      "Microsoft.WindowsSoundRecorder",
       "Microsoft.windowscommunicationsapps",
       "Microsoft.WindowsFeedbackHub",
       "Microsoft.WindowsMaps",

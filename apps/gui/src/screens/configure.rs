@@ -42,6 +42,10 @@ pub fn render(app: &WinMintApp, _window: &mut Window, cx: &mut Context<WinMintAp
         )
         .child(edition_card(app, cx))
         .child(keep_card(app, cx))
+        .child(browser_card(app, cx))
+        .child(editor_card(app, cx))
+        .child(shell_card(app, cx))
+        .child(wsl_card(app, cx))
         .child(form_factor_card(app, cx))
 }
 
@@ -101,13 +105,6 @@ fn keep_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
             "Everything is removed by default. Turn an item on to keep it.",
         ))
         .child(ui::toggle_row(
-            "keep-edge",
-            "Microsoft Edge",
-            "Keep the Edge browser and its WebView components.",
-            app.intent.keep.edge,
-            cx.listener(|this, _, _, cx| this.toggle_keep_edge(cx)),
-        ))
-        .child(ui::toggle_row(
             "keep-gaming",
             "Xbox & gaming",
             "Keep the Xbox app, Game Bar, and gaming services.",
@@ -120,6 +117,187 @@ fn keep_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
             "Keep Windows Copilot and Recall AI components.",
             app.intent.keep.copilot,
             cx.listener(|this, _, _, cx| this.toggle_keep_copilot(cx)),
+        ))
+}
+
+fn browser_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
+    ui::surface()
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(section_title(
+            "Browsers",
+            "Pick any browsers you want installed. Leave everything off for no browser.",
+        ))
+        .child(ui::toggle_row(
+            "browser-zen",
+            "Zen Browser",
+            "Install Zen Browser.",
+            app.intent.toolkit.browser_zen,
+            cx.listener(|this, _, _, cx| this.toggle_browser_zen(cx)),
+        ))
+        .child(ui::toggle_row(
+            "browser-helium",
+            "Helium",
+            "Install Helium.",
+            app.intent.toolkit.browser_helium,
+            cx.listener(|this, _, _, cx| this.toggle_browser_helium(cx)),
+        ))
+        .child(ui::toggle_row(
+            "browser-librewolf",
+            "LibreWolf",
+            "Install LibreWolf.",
+            app.intent.toolkit.browser_librewolf,
+            cx.listener(|this, _, _, cx| this.toggle_browser_librewolf(cx)),
+        ))
+        .child(ui::toggle_row(
+            "browser-brave",
+            "Brave",
+            "Install Brave.",
+            app.intent.toolkit.browser_brave,
+            cx.listener(|this, _, _, cx| this.toggle_browser_brave(cx)),
+        ))
+        .child(ui::toggle_row(
+            "browser-edge",
+            "Microsoft Edge",
+            "Keep Microsoft Edge installed.",
+            app.intent.toolkit.browser_edge,
+            cx.listener(|this, _, _, cx| this.toggle_browser_edge(cx)),
+        ))
+}
+
+fn editor_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
+    ui::surface()
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(section_title(
+            "Editors",
+            "Pick any editors you want installed. Leave everything off for none.",
+        ))
+        .child(ui::toggle_row(
+            "editor-neovim",
+            "Neovim",
+            "Install Neovim.",
+            app.intent.toolkit.editor_neovim,
+            cx.listener(|this, _, _, cx| this.toggle_editor_neovim(cx)),
+        ))
+        .child(ui::toggle_row(
+            "editor-vscode",
+            "Visual Studio Code",
+            "Install Visual Studio Code.",
+            app.intent.toolkit.editor_vscode,
+            cx.listener(|this, _, _, cx| this.toggle_editor_vscode(cx)),
+        ))
+        .child(ui::toggle_row(
+            "editor-cursor",
+            "Cursor",
+            "Install Cursor.",
+            app.intent.toolkit.editor_cursor,
+            cx.listener(|this, _, _, cx| this.toggle_editor_cursor(cx)),
+        ))
+        .child(ui::toggle_row(
+            "editor-zed",
+            "Zed",
+            "Install Zed.",
+            app.intent.toolkit.editor_zed,
+            cx.listener(|this, _, _, cx| this.toggle_editor_zed(cx)),
+        ))
+        .child(ui::toggle_row(
+            "editor-antigravity",
+            "Antigravity",
+            "Install Antigravity.",
+            app.intent.toolkit.editor_antigravity,
+            cx.listener(|this, _, _, cx| this.toggle_editor_antigravity(cx)),
+        ))
+}
+
+fn shell_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
+    ui::surface()
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(section_title(
+            "Shell",
+            "Pick any shell layers you want installed. Leave everything off for standard Windows.",
+        ))
+        .child(ui::toggle_row(
+            "shell-windhawk",
+            "Windhawk",
+            "Install Windhawk.",
+            app.intent.desktop_layers.windhawk,
+            cx.listener(|this, _, _, cx| this.toggle_shell_windhawk(cx)),
+        ))
+        .child(ui::toggle_row(
+            "shell-yasb",
+            "YASB",
+            "Install YASB.",
+            app.intent.desktop_layers.yasb,
+            cx.listener(|this, _, _, cx| this.toggle_shell_yasb(cx)),
+        ))
+        .child(ui::toggle_row(
+            "shell-komorebi",
+            "Komorebi",
+            "Install Komorebi.",
+            app.intent.desktop_layers.komorebi,
+            cx.listener(|this, _, _, cx| this.toggle_shell_komorebi(cx)),
+        ))
+        .child(ui::toggle_row(
+            "shell-nilesoft",
+            "Nilesoft Shell",
+            "Install Nilesoft Shell.",
+            app.intent.desktop_layers.nilesoft,
+            cx.listener(|this, _, _, cx| this.toggle_shell_nilesoft(cx)),
+        ))
+}
+
+fn wsl_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
+    ui::surface()
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(section_title(
+            "WSL",
+            "Pick any WSL distros you want installed. WSL2 itself stays enabled either way.",
+        ))
+        .child(ui::toggle_row(
+            "wsl-ubuntu",
+            "Ubuntu",
+            "Install Ubuntu.",
+            app.intent.toolkit.wsl_ubuntu,
+            cx.listener(|this, _, _, cx| this.toggle_wsl_ubuntu(cx)),
+        ))
+        .child(ui::toggle_row(
+            "wsl-fedora",
+            "Fedora",
+            "Install the latest Fedora WSL image.",
+            app.intent.toolkit.wsl_fedora,
+            cx.listener(|this, _, _, cx| this.toggle_wsl_fedora(cx)),
+        ))
+        .child(ui::toggle_row(
+            "wsl-archlinux",
+            "Arch Linux",
+            "Install Arch Linux.",
+            app.intent.toolkit.wsl_archlinux,
+            cx.listener(|this, _, _, cx| this.toggle_wsl_archlinux(cx)),
+        ))
+        .child(ui::toggle_row(
+            "wsl-nixos-wsl",
+            "NixOS-WSL",
+            "Install NixOS-WSL from the community release.",
+            app.intent.toolkit.wsl_nixos_wsl,
+            cx.listener(|this, _, _, cx| this.toggle_wsl_nixos_wsl(cx)),
+        ))
+        .child(ui::toggle_row(
+            "wsl-pengwin",
+            "Pengwin",
+            "Install Pengwin.",
+            app.intent.toolkit.wsl_pengwin,
+            cx.listener(|this, _, _, cx| this.toggle_wsl_pengwin(cx)),
         ))
 }
 

@@ -27,4 +27,21 @@ Assert-WorkerText -Pattern '\[scriptblock\]::Create\(\$bootstrap\)\) -Headless @
 Assert-WorkerText -Pattern 'Invoke-RestMethod -UseBasicParsing -Uri' -Description 'CLI wrapper fetches canonical bootstrap'
 Assert-WorkerText -Pattern 'url\.pathname === "/winmint/" \|\| url\.pathname === "/cli/"' -Description 'trailing slash redirects'
 
+foreach ($legacyFlag in @(
+        'SourceIsoOverride',
+        'Architecture',
+        'ExportHostDrivers',
+        'Developer',
+        'Copilot',
+        'DesktopUI',
+        'Gaming',
+        'InstallFlowEverything',
+        'NonInteractive',
+        'NoProgress'
+    )) {
+    if ($worker -match "\b$legacyFlag\b") {
+        throw "Cloudflare Worker contract violation: legacy CLI flag '$legacyFlag' must not be exposed."
+    }
+}
+
 Write-Host 'Cloudflare Worker contract tests passed.'

@@ -33,7 +33,9 @@ function Assert-WinMintUiBridgeSettings {
         'InstallWindhawk',
         'InstallYasb',
         'InstallKomorebi',
+        'InstallNilesoft',
         'Editors',
+        'Browsers',
         'Wsl2Distros'
     )
 
@@ -49,8 +51,8 @@ function Assert-WinMintUiBridgeSettings {
 }
 
 $script:WinMintRepositoryRoot = $RepositoryRoot
-. (Join-Path $RepositoryRoot 'src\engine\Core.ps1')
-$engine = Get-WinMintPath -Name EngineEntry
+. (Join-Path $RepositoryRoot 'src\runtime\image\Core.ps1')
+$engine = Get-WinMintPath -Name RuntimeImageEntry
 . $engine
 Initialize-WinMintEngine -RepositoryRoot $RepositoryRoot
 

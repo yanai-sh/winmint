@@ -16,7 +16,7 @@ $PSNativeCommandUseErrorActionPreference = $true
 Set-StrictMode -Version 2.0
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repoRoot 'src\engine\WinMint.ps1')
+. (Join-Path $repoRoot 'src\runtime\image\WinMint.ps1')
 Initialize-WinMintEngine -RepositoryRoot $repoRoot
 
 if ($ListUsbDisks) {

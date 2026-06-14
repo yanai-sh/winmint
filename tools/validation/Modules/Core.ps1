@@ -121,15 +121,20 @@ function Invoke-AnalyzerIfAvailable {
         'WinMint-CLI.ps1',
         'WinMint-GUI.ps1',
         'tools\gui',
-        'src\engine',
-        'src\agent',
-        'src\setup'
+        'src\runtime\image',
+        'src\runtime\firstlogon',
+        'src\runtime\setup'
     ) | ForEach-Object { Join-Path $root $_ }
     $settings = Join-Path $root 'PSScriptAnalyzerSettings.psd1'
     $findings = @()
     foreach ($target in $targets) {
-        $analyzerArgs = @{ Path = $target; Recurse = $true; Severity = @('Error') }
-        if (Test-Path -LiteralPath $settings) { $analyzerArgs.Settings = $settings }
+        $analyzerArgs = @{ Path = $target; Recurse = $true }
+        if (Test-Path -LiteralPath $settings) {
+            $analyzerArgs.Settings = $settings
+        }
+        else {
+            $analyzerArgs.Severity = @('Error', 'Warning')
+        }
         $findings += @(Invoke-ScriptAnalyzer @analyzerArgs)
     }
     foreach ($f in $findings) { Add-ValidationError "PSScriptAnalyzer $($f.RuleName): $($f.ScriptPath):$($f.Line) $($f.Message)" }
@@ -173,7 +178,7 @@ function Test-GuiIdentity {
 }
 
 function Test-ReleaseManifestRuntimeSurface {
-    $manifestPath = Get-WinMintPath -Name Config -ChildPath 'release-manifest.json'
+    $manifestPath = Get-WinMintPath -Name ConfigRoot -ChildPath 'release-manifest.json'
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     $include = @($manifest.include)
     $exclude = @($manifest.exclude)
@@ -246,10 +251,10 @@ function Test-RustCrates {
 
 function Test-DismArgumentQuoting {
     $targets = @(
-        'src\engine\Private\Image\Assets.ps1',
-        'src\engine\Private\Image\Packages.ps1',
-        'src\engine\Private\Image\Staging.ps1',
-        'src\engine\Private\Image\Tweaks.ps1'
+        'src\runtime\image\Private\Image\Assets.ps1',
+        'src\runtime\image\Private\Image\Packages.ps1',
+        'src\runtime\image\Private\Image\Staging.ps1',
+        'src\runtime\image\Private\Image\Tweaks.ps1'
     )
     $patterns = @('/Image:`"', '/Driver:`"', '/PackagePath:`"')
     foreach ($relativePath in $targets) {
@@ -269,7 +274,7 @@ function Test-DismArgumentQuoting {
 }
 
 function Test-RegistryTweakStrictModeAccess {
-    $relativePath = 'src\engine\Private\Image\Tweaks.ps1'
+    $relativePath = 'src\runtime\image\Private\Image\Tweaks.ps1'
     $path = Join-Path $root $relativePath
     if (-not (Test-Path -LiteralPath $path)) { return }
 

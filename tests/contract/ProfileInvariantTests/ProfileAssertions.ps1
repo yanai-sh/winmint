@@ -159,8 +159,8 @@ function Assert-OscdimgSelectionPrefersNativeHostArchitecture {
 }
 
 function Assert-IsoBootUsesNoPromptEfiWhenAvailable {
-    $packagesPath = Join-Path $root 'src\engine\Private\Image\Packages.ps1'
-    $stagingPath = Join-Path $root 'src\engine\Private\Image\Staging.ps1'
+    $packagesPath = Join-Path $root 'src\runtime\image\Private\Image\Packages.ps1'
+    $stagingPath = Join-Path $root 'src\runtime\image\Private\Image\Staging.ps1'
     $packagesText = Get-Content -LiteralPath $packagesPath -Raw
     $stagingText = Get-Content -LiteralPath $stagingPath -Raw
 
@@ -337,6 +337,7 @@ function Assert-OfflinePayloadCacheStatus {
         Set-Content -LiteralPath (Join-Path $downloads 'ViVeTool-v0.3.4-SnapdragonArm64.zip') -Value 'vive' -Encoding ASCII
         Set-Content -LiteralPath (Join-Path $downloads 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle') -Value 'winget' -Encoding ASCII
         Set-Content -LiteralPath (Join-Path $fonts 'CascadiaCodeNF-Regular.ttf') -Value 'font' -Encoding ASCII
+        Set-Content -LiteralPath (Join-Path $fonts 'MonaspaceNeonNerdFont-Regular.ttf') -Value 'font' -Encoding ASCII
 
         $complete = Get-WinMintOfflinePayloadCacheStatus -Architecture 'arm64' -DownloadDir $downloads -FontDir $fonts
         if (-not $complete.Complete) {
@@ -427,12 +428,9 @@ function Assert-HeadlessCliContracts {
     $templatePath = Join-Path ([IO.Path]::GetTempPath()) ('winmint-new-profile-' + [Guid]::NewGuid().ToString('n') + '.json')
     $outProfilePath = Join-Path ([IO.Path]::GetTempPath()) ('winmint-out-profile-' + [Guid]::NewGuid().ToString('n') + '.json')
     try {
-        $templateResult = Invoke-WinMintHeadlessCli `
-            -BoundParameters @{ NewProfile = $templatePath } `
-            -NewProfile $templatePath `
-            -Quiet
+        $templateResult = Invoke-WinMintNewProfileCommand -OutPath $templatePath -Quiet
         if ($templateResult.result -ne 'profile-created' -or -not (Test-Path -LiteralPath $templatePath)) {
-            Add-SmokeFailure 'Expected -NewProfile to create an editable profile without requiring build inputs.'
+            Add-SmokeFailure 'Expected `new` to create an editable profile without requiring build inputs.'
         }
         $template = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json
         $templateValidation = Test-WinMintBuildProfile -BuildProfile $template
@@ -457,14 +455,9 @@ function Assert-HeadlessCliContracts {
             Add-SmokeFailure 'Expected generated profile templates to default visible region to en-US/GeoID 244.'
         }
 
-        $outResult = Invoke-WinMintHeadlessCli `
-            -BoundParameters @{ OutProfile = $outProfilePath; KeepGaming = $true; Architecture = 'amd64' } `
-            -OutProfile $outProfilePath `
-            -KeepGaming `
-            -Architecture amd64 `
-            -Quiet
+        $outResult = Invoke-WinMintNewProfileCommand -OutPath $outProfilePath -KeepGaming -Architecture amd64 -Quiet
         if ($outResult.result -ne 'profile-created' -or -not (Test-Path -LiteralPath $outProfilePath)) {
-            Add-SmokeFailure 'Expected -OutProfile to save flag-authored intent without building.'
+            Add-SmokeFailure 'Expected `new` to save flag-authored intent without building.'
         }
         $outProfile = Get-Content -LiteralPath $outProfilePath -Raw | ConvertFrom-Json
         # Subtractive model: -KeepGaming sets the keep.gaming flag. Template mode
@@ -481,53 +474,15 @@ function Assert-HeadlessCliContracts {
         Remove-Item -LiteralPath $outProfilePath -Force -ErrorAction SilentlyContinue
     }
 
+    # Profile is the source of truth: the build verb structurally has no
+    # authoring/identity parameters, so passing one is rejected at parameter binding.
     try {
-        Assert-WinMintHeadlessParameterSet -BoundParameters @{
-            ProfilePath = 'config\build-profiles\yanai-sl7-microsoft-oobe.json'
-            ComputerName = 'Other'
-        }
-        Add-SmokeFailure 'Expected headless parameter validation to reject mixed ProfilePath identity flags.'
+        $null = Invoke-WinMintBuildCommand -ProfilePath 'config\build-profiles\yanai-sl7-microsoft-oobe.json' -ComputerName 'Other'
+        Add-SmokeFailure 'Expected the build verb to reject authoring/identity flags.'
     }
     catch {
-        if ($_.Exception.Message -notmatch 'source of truth') {
-            Add-SmokeFailure "Expected ProfilePath source-of-truth error, got: $($_.Exception.Message)"
-        }
-    }
-
-    try {
-        Assert-WinMintHeadlessParameterSet -BoundParameters @{
-            SourceIsoOverride = 'C:\ISO\override.iso'
-            SourceIso = 'C:\ISO\base.iso'
-        }
-        Add-SmokeFailure 'Expected SourceIsoOverride to require ProfilePath.'
-    }
-    catch {
-        if ($_.Exception.Message -notmatch 'SourceIsoOverride') {
-            Add-SmokeFailure "Expected SourceIsoOverride validation error, got: $($_.Exception.Message)"
-        }
-    }
-
-    try {
-        Assert-WinMintHeadlessParameterSet -BoundParameters @{
-            ProfilePath = 'config\build-profiles\surface-uup.json'
-            UupDumpSource = 'C:\UUP\source.zip'
-            Yes = $true
-        }
-    }
-    catch {
-        Add-SmokeFailure "Expected ProfilePath + UupDumpSource to be valid for profile-backed UUP source prep, got: $($_.Exception.Message)"
-    }
-
-    try {
-        Assert-WinMintHeadlessParameterSet -BoundParameters @{
-            NewProfile = 'C:\Profiles\BuildProfile.json'
-            UupDumpSource = 'C:\UUP\source.zip'
-        }
-        Add-SmokeFailure 'Expected profile authoring with unresolved UUP source to be rejected.'
-    }
-    catch {
-        if ($_.Exception.Message -notmatch 'resolved source ISO') {
-            Add-SmokeFailure "Expected profile authoring UUP source validation error, got: $($_.Exception.Message)"
+        if ($_.Exception.Message -notmatch 'ComputerName|parameter') {
+            Add-SmokeFailure "Expected build verb to reject -ComputerName, got: $($_.Exception.Message)"
         }
     }
 
@@ -566,7 +521,7 @@ function Assert-HeadlessCliContracts {
     $noDmaProfile = New-WinMintHeadlessProfileFromFlags `
         -SourceIso '' `
         -Architecture 'amd64' `
-        -NoDmaInterop `
+        -Dma Off `
         -DryRun
     $noDmaConfig = New-WinMintBuildConfig -BuildProfile $noDmaProfile
     if ([bool]$noDmaConfig.DmaInterop.Enabled -or $noDmaConfig.SetupUserLocale -ne 'en-US' -or $noDmaConfig.SetupHomeLocationGeoId -ne 244) {
@@ -581,7 +536,7 @@ function Assert-HeadlessCliContracts {
         -SystemLocale 'en-US' `
         -UILanguage 'en-US' `
         -UserLocale 'he-IL' `
-        -DmaInterop `
+        -Dma On `
         -DryRun
     $dmaConfig = New-WinMintBuildConfig -BuildProfile $dmaProfile
     if ($dmaConfig.SetupUserLocale -ne 'en-IE' -or $dmaConfig.SetupHomeLocationGeoId -ne 68 -or -not [bool]$dmaConfig.DmaInterop.Enabled) {
@@ -621,13 +576,15 @@ function Assert-HeadlessCliContracts {
         Add-SmokeFailure 'Expected omitted headless keep flags to default to keeping nothing.'
     }
     # Subtractive model: developer QoL (OpenSSH client, Developer Mode) is now
-    # baseline on every build; WSL stays opt-in until a distro is selected.
+    # baseline on every build; WSL2 is also baseline even when no distro is
+    # selected yet.
     if ($minimalConfig.Features -notcontains 'OpenSSH.Client' -or
         $minimalConfig.RegistryTweaks -notcontains 'developer-mode') {
         Add-SmokeFailure 'Expected default build to include baseline developer QoL (OpenSSH client, Developer Mode).'
     }
-    if ($minimalConfig.Features -contains 'Microsoft-Windows-Subsystem-Linux') {
-        Add-SmokeFailure 'Expected WSL features to stay disabled until a distro is selected.'
+    if ($minimalConfig.Features -notcontains 'Microsoft-Windows-Subsystem-Linux' -or
+        $minimalConfig.Features -notcontains 'VirtualMachinePlatform') {
+        Add-SmokeFailure 'Expected WSL2 and Virtual Machine Platform to be baseline features.'
     }
     if ($minimalConfig.AppxPackages -notcontains 'Microsoft.Copilot' -or
         $minimalConfig.AppxPackages -notcontains 'Microsoft.GamingApp') {
@@ -640,40 +597,42 @@ function Assert-HeadlessCliContracts {
         Add-SmokeFailure 'Expected default headless profile to enable DMA interoperability through Ireland.'
     }
 
-    $locationOnProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -LocationServices -DryRun
+    $locationOnProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -Location On -DryRun
     $locationOnConfig = New-WinMintBuildConfig -BuildProfile $locationOnProfile
     if (-not [bool]$locationOnConfig.Privacy.Location) {
-        Add-SmokeFailure 'Expected -LocationServices to keep location services enabled through the privacy policy profile.'
+        Add-SmokeFailure 'Expected -Location On to keep location services enabled through the privacy policy profile.'
     }
-    $locationOffProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -NoLocationServices -DryRun
+    $locationOffProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -Location Off -DryRun
     $locationOffConfig = New-WinMintBuildConfig -BuildProfile $locationOffProfile
     if ([bool]$locationOffConfig.Privacy.Location -or @($locationOffConfig.RegistryTweaks) -notcontains 'location-disabled-policy') {
-        Add-SmokeFailure 'Expected -NoLocationServices to disable location services and select the location block policy.'
+        Add-SmokeFailure 'Expected -Location Off to disable location services and select the location block policy.'
     }
-    $dmaLocationProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -DmaInterop -LocationServices -DryRun
+    $dmaLocationProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -Dma On -Location On -DryRun
     $dmaLocationConfig = New-WinMintBuildConfig -BuildProfile $dmaLocationProfile
     $dmaLocationSetupProfile = New-WinMintSetupProfile -BuildConfig $dmaLocationConfig
     if (-not [bool]$dmaLocationConfig.Privacy.Location -or -not [bool]$dmaLocationSetupProfile.regional.dmaInterop.restoreLocationServices) {
         Add-SmokeFailure 'Expected location services to remain enable-able while DMA interoperability is enabled.'
     }
 
+    # The -Dma/-Location settings are single On|Off selectors, so a conflicting
+    # pair is structurally impossible; an out-of-set value is rejected by ValidateSet.
     try {
-        Assert-WinMintHeadlessParameterSet -BoundParameters @{ LocationServices = $true; NoLocationServices = $true }
-        Add-SmokeFailure 'Expected LocationServices and NoLocationServices to be mutually exclusive.'
+        $null = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -Location 'Maybe' -DryRun
+        Add-SmokeFailure 'Expected -Location to reject values outside On|Off.'
     }
     catch {
-        if ($_.Exception.Message -notmatch 'LocationServices|NoLocationServices') {
-            Add-SmokeFailure "Expected location switch validation error, got: $($_.Exception.Message)"
+        if ($_.Exception.Message -notmatch 'Location|ValidateSet|set') {
+            Add-SmokeFailure "Expected -Location ValidateSet error, got: $($_.Exception.Message)"
         }
     }
 
     try {
-        Assert-WinMintHeadlessParameterSet -BoundParameters @{ DmaInterop = $true; NoDmaInterop = $true }
-        Add-SmokeFailure 'Expected DmaInterop and NoDmaInterop to be mutually exclusive.'
+        $null = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -Dma 'Maybe' -DryRun
+        Add-SmokeFailure 'Expected -Dma to reject values outside On|Off.'
     }
     catch {
-        if ($_.Exception.Message -notmatch 'DmaInterop|NoDmaInterop') {
-            Add-SmokeFailure "Expected DMA switch validation error, got: $($_.Exception.Message)"
+        if ($_.Exception.Message -notmatch 'Dma|ValidateSet|set') {
+            Add-SmokeFailure "Expected -Dma ValidateSet error, got: $($_.Exception.Message)"
         }
     }
 
@@ -699,6 +658,14 @@ function Assert-HeadlessCliContracts {
     }
     if (@($groupConfig.Editors).Count -ne 0 -or @($groupConfig.Wsl2Distros).Count -ne 0) {
         Add-SmokeFailure 'Expected baseline build to leave editors and WSL distros unselected by default.'
+    }
+    if ($groupConfig.Features -notcontains 'Microsoft-Windows-Subsystem-Linux' -or
+        $groupConfig.Features -notcontains 'VirtualMachinePlatform') {
+        Add-SmokeFailure 'Expected baseline build to include WSL2 and Virtual Machine Platform as developer baseline features.'
+    }
+    $groupAgentProfile = New-WinMintAgentProfile -BuildConfig $groupConfig
+    if (-not [bool]$groupAgentProfile.modules.wsl.enabled -or @($groupAgentProfile.modules.wsl.distros).Count -ne 0) {
+        Add-SmokeFailure 'Expected baseline build to keep the FirstLogon WSL module enabled with no distro selected.'
     }
     if ($groupConfig.AppxPackages -notcontains 'Microsoft.Copilot' -or
         $groupConfig.AppxPackages -notcontains 'MicrosoftWindows.Client.WebExperience' -or
@@ -791,36 +758,6 @@ function Assert-HeadlessCliContracts {
         Add-SmokeFailure 'Expected headless JSON result contract to round-trip as a single object.'
     }
 
-    $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-uup-zip-test-' + [Guid]::NewGuid().ToString('n'))
-    try {
-        $src = Join-Path $tempRoot 'src'
-        $files = Join-Path $src 'files'
-        $zip = Join-Path $tempRoot 'uup.zip'
-        $badZip = Join-Path $tempRoot 'bad.zip'
-        $null = New-Item -ItemType Directory -Path $files -Force
-        Set-Content -LiteralPath (Join-Path $src 'uup_download_windows.cmd') -Value '@echo off' -Encoding ASCII
-        Set-Content -LiteralPath (Join-Path $src 'ConvertConfig.ini') -Value "[convert-UUP]`nAddUpdates=0`nCleanup=0`nwim2esd=1`nSkipISO=1" -Encoding ASCII
-        Set-Content -LiteralPath (Join-Path $files 'get_aria2.ps1') -Value '' -Encoding ASCII
-        Compress-Archive -Path (Join-Path $src '*') -DestinationPath $zip -Force
-        Set-Content -LiteralPath (Join-Path $tempRoot 'bad.txt') -Value 'bad' -Encoding ASCII
-        Compress-Archive -Path (Join-Path $tempRoot 'bad.txt') -DestinationPath $badZip -Force
-        if (-not (Test-WinMintUupDumpZip -Path $zip)) {
-            Add-SmokeFailure 'Expected fake UUP Dump conversion zip to validate.'
-        }
-        if (Test-WinMintUupDumpZip -Path $badZip) {
-            Add-SmokeFailure 'Expected invalid UUP zip to be rejected.'
-        }
-        Assert-WinMintHeadlessParameterSet -BoundParameters @{ UupDumpSource = $zip; SourceIso = 'C:\ISO\win.iso' }
-        Add-SmokeFailure 'Expected SourceIso + UupDumpSource to be rejected.'
-    }
-    catch {
-        if ($_.Exception.Message -notmatch 'SourceIso|UupDumpSource') {
-            Add-SmokeFailure "Unexpected UUP zip validation error: $($_.Exception.Message)"
-        }
-    }
-    finally {
-        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
 }
 
 function Assert-HeadlessSourceAndDriverInputContracts {
@@ -828,53 +765,18 @@ function Assert-HeadlessSourceAndDriverInputContracts {
     try {
         $null = New-Item -ItemType Directory -Path $tempRoot -Force
 
-        $uupZip = Get-WinMintTestUupDumpZipFixturePath
-        if (-not (Test-WinMintUupDumpZip -Path $uupZip)) {
-            Add-SmokeFailure "Expected UUP Dump fixture zip to validate before source prep: $uupZip"
-        }
-        else {
-            $mockPreparedIso = Get-WinMintTestUupDumpPreparedIsoFixturePath
-            $uupPrepArgs = @{
-                UupDumpZip = $uupZip
-                ValidateOnly = $true
-            }
-            if (-not [string]::IsNullOrWhiteSpace($mockPreparedIso)) {
-                $uupPrepArgs.MockPreparedIso = $mockPreparedIso
-            }
-            $uupPrep = Invoke-WinMintUupDumpSourcePrep @uupPrepArgs
-            if ($uupPrep.SourceKind -ne 'UupDumpZip' -or $uupPrep.RanConversion) {
-                Add-SmokeFailure 'Expected UUP validate-only prep to fingerprint the fixture zip without converting.'
-            }
-            $resolvedZipPrep = Invoke-WinMintHeadlessSourcePrep -Path $uupZip -ValidateOnly
-            if ($resolvedZipPrep.SourceKind -ne 'UupDumpZip' -or $resolvedZipPrep.RanConversion) {
-                Add-SmokeFailure 'Expected preferred UUP source resolver to accept UUP Dump zip input without converting in validate-only mode.'
-            }
-            if (-not [string]::IsNullOrWhiteSpace($mockPreparedIso) -and -not [bool]$uupPrep.Mocked) {
-                Add-SmokeFailure 'Expected prepared UUP fixture output to activate mocked source prep.'
-            }
-            if (-not [string]::IsNullOrWhiteSpace([string]$uupPrep.GeneratedIso) -and -not $uupPrep.Reused) {
-                Add-SmokeFailure 'Expected validate-only UUP prep to report a generated ISO only when reusing a prepared fixture artifact.'
-            }
-        }
-
         $officialIso = Get-WinMintTestOfficialIsoFixturePath
-        $uupIso = Get-WinMintTestUupDumpIsoFixturePath
         $fixtureComputerName = 'iso-pc'
-        foreach ($sourceCase in @(
-                @{ Name = 'official-base'; Path = $officialIso },
-                @{ Name = 'uupdump-generated'; Path = $uupIso }
-            )) {
-            $sourceProfile = New-WinMintHeadlessProfileFromFlags `
-                -SourceIso $sourceCase.Path `
-                -Architecture 'arm64' `
-                -ComputerName "$($sourceCase.Name)-pc" `
-                -AccountName 'dev' `
-                -ValidateOnly
-            $sourceConfig = New-WinMintBuildConfig -BuildProfile $sourceProfile
-            $sourcePreflight = Test-WinMintBuildPrerequisite -Config $sourceConfig -AllowMissingSourceIso
-            if (-not $sourcePreflight.Passed) {
-                Add-SmokeFailure "Expected $($sourceCase.Name) ISO fixture path to pass source preflight, got: $($sourcePreflight.Failures -join '; ')"
-            }
+        $sourceProfile = New-WinMintHeadlessProfileFromFlags `
+            -SourceIso $officialIso `
+            -Architecture 'arm64' `
+            -ComputerName "$fixtureComputerName-pc" `
+            -AccountName 'dev' `
+            -ValidateOnly
+        $sourceConfig = New-WinMintBuildConfig -BuildProfile $sourceProfile
+        $sourcePreflight = Test-WinMintBuildPrerequisite -Config $sourceConfig -AllowMissingSourceIso
+        if (-not $sourcePreflight.Passed) {
+            Add-SmokeFailure "Expected official ISO fixture path to pass source preflight, got: $($sourcePreflight.Failures -join '; ')"
         }
 
         $iso = $officialIso
@@ -961,37 +863,15 @@ function Assert-HeadlessSourceAndDriverInputContracts {
             }
         }
         else {
-            if ($hostDriverPreflight.Passed -or ($hostDriverPreflight.Failures -join '; ') -notmatch 'Export-WindowsDriver|pnputil') {
+        if ($hostDriverPreflight.Passed -or ($hostDriverPreflight.Failures -join '; ') -notmatch 'Export-WindowsDriver|pnputil') {
                 Add-SmokeFailure 'Expected host driver dry-run preflight to fail when host driver export tooling is unavailable.'
-            }
-        }
-
-        $ini = Join-Path $tempRoot 'ConvertConfig.ini'
-        Set-Content -LiteralPath $ini -Value "[convert-UUP]`nAddUpdates=0`nCleanup=0`nwim2esd=1`nSkipISO=1" -Encoding ASCII
-        Set-WinMintUupConvertConfigPolicy -Path $ini
-        $iniText = Get-Content -LiteralPath $ini -Raw
-        foreach ($expected in @('AutoStart=1', 'AddUpdates=1', 'Cleanup=1', 'wim2esd=0', 'SkipISO=0', 'AutoExit=1')) {
-            if ($iniText -notmatch "(?m)^$([regex]::Escape($expected))\r?$") {
-                Add-SmokeFailure "Expected UUP conversion policy to enforce '$expected'."
-            }
-        }
-
-        $preparedUup = Join-Path $tempRoot 'prepared-uup'
-        $null = New-Item -ItemType Directory -Path $preparedUup -Force
-        try {
-            $null = Invoke-WinMintHeadlessSourcePrep -Path $preparedUup
-            Add-SmokeFailure 'Expected preferred UUP source resolver to reject prepared UUP Dump folder input.'
-        }
-        catch {
-            if ($_.Exception.Message -notmatch 'pass that ISO with -SourceIso') {
-                Add-SmokeFailure "Expected prepared UUP folder rejection to direct users to -SourceIso, got: $($_.Exception.Message)"
             }
         }
         $preparedIso = Join-Path $tempRoot '26100.1.240331-1435.ge_release_CLIENT_ARM64FRE_en-us.iso'
         Set-Content -LiteralPath $preparedIso -Value 'already converted iso fixture path only' -Encoding ASCII
         $resolvedIsoPrep = Invoke-WinMintHeadlessSourcePrep -Path $preparedIso
         if ($resolvedIsoPrep.SourceKind -ne 'Iso' -or $resolvedIsoPrep.GeneratedIso -ne $preparedIso -or -not $resolvedIsoPrep.Reused -or $resolvedIsoPrep.RanConversion) {
-            Add-SmokeFailure 'Expected preferred UUP source resolver to treat final ISO input as reusable source ISO.'
+            Add-SmokeFailure 'Expected source resolver to treat final ISO input as reusable source ISO.'
         }
     }
     finally {
@@ -1022,8 +902,10 @@ function Assert-UiBridgeBuildProfileContract {
             InstallWindhawk = $true
             InstallYasb = $false
             InstallKomorebi = $true
+            InstallNilesoft = $true
             Editors = @('zed')
-            Wsl2Distros = @('Ubuntu')
+            Browsers = @('brave', 'edge')
+            Wsl2Distros = @('Ubuntu', 'NixOS-WSL')
             PrivLocation = $false
             TweakHardwareBypass = $false
         }
@@ -1050,10 +932,10 @@ function Assert-UiBridgeBuildProfileContract {
         $config = New-WinMintBuildConfig -BuildProfile $profile
         # Subtractive keep-flag model: the bridge carries the explicit editor, WSL,
         # and shell-layer intent straight through to the build config.
-        if ($config.Editors -notcontains 'zed' -or $config.Wsl2Distros -notcontains 'Ubuntu') {
-            Add-SmokeFailure 'Expected UI bridge to preserve editor and WSL intent.'
+        if ($config.Editors -notcontains 'zed' -or $config.Browsers -notcontains 'brave' -or $config.Wsl2Distros -notcontains 'Ubuntu' -or $config.Wsl2Distros -notcontains 'NixOS-WSL') {
+            Add-SmokeFailure 'Expected UI bridge to preserve editor, browser, and WSL intent.'
         }
-        if (-not $config.InstallWindhawk -or $config.InstallYasb -or -not $config.InstallKomorebi) {
+        if (-not $config.InstallWindhawk -or $config.InstallYasb -or -not $config.InstallKomorebi -or -not $config.InstallNilesoft) {
             Add-SmokeFailure 'Expected UI bridge to preserve selected shell layers.'
         }
 

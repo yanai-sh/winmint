@@ -58,6 +58,7 @@ function Test-BuildProfileSchema {
             layers = @('standard')
         }
         development = [pscustomobject][ordered]@{
+            browsers = @()
             editors = @('cursor')
             wsl = [pscustomobject][ordered]@{
                 enabled = $true

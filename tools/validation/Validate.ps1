@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
-. (Join-Path $root 'src\engine\Core.ps1')
+. (Join-Path $root 'src\runtime\image\Core.ps1')
 $errors = [System.Collections.Generic.List[string]]::new()
 
 if ($SkipAnalyzer -and $RunAnalyzer) {
@@ -38,6 +38,7 @@ $validationSteps = [ordered]@{
     'Required assets' = {
         Test-RequiredAssets
         Test-DuplicateLargeAssets
+        Test-WslTerminalIconQuality
     }
     'Preset payloads' = {
         Test-WindhawkPresetPayload
@@ -68,20 +69,19 @@ $validationSteps = [ordered]@{
         Test-PowerShellParser
     }
     'XML files' = {
-        Test-XmlFile -Path (Get-WinMintPath -Name Agent -ChildPath 'Start-WinMintFirstLogonUI.xaml') -Kind 'FirstLogon UI XAML'
-        Test-XmlFile -Path (Get-WinMintPath -Name Config -ChildPath 'autounattend.xml') -Kind 'autounattend.xml'
+        Test-XmlFile -Path (Get-WinMintPath -Name ConfigRoot -ChildPath 'autounattend.xml') -Kind 'autounattend.xml'
     }
     'JSON files' = {
-        Get-ChildItem -LiteralPath (Get-WinMintPath -Name Config) -Filter '*.json' |
+        Get-ChildItem -LiteralPath (Get-WinMintPath -Name ConfigRoot) -Filter '*.json' |
             ForEach-Object { Test-JsonFile -Path $_.FullName }
-        Get-ChildItem -LiteralPath (Get-WinMintPath -Name Schemas) -Filter '*.json' -ErrorAction SilentlyContinue |
+        Get-ChildItem -LiteralPath (Get-WinMintPath -Name SchemasRoot) -Filter '*.json' -ErrorAction SilentlyContinue |
             ForEach-Object { Test-JsonFile -Path $_.FullName }
-        Test-JsonFile -Path (Get-WinMintPath -Name Agent -ChildPath 'BuildProfile.json')
+        Test-JsonFile -Path (Get-WinMintPath -Name RuntimeFirstLogonRoot -ChildPath 'BuildProfile.json')
     }
     'PSScriptAnalyzer' = { Invoke-AnalyzerIfAvailable }
     'Optional integration' = {
         if ($RunIntegration) {
-            & (Get-WinMintPath -Name ContractTests -ChildPath 'Test-Integration.ps1') -RunIsoDryRun
+            & (Get-WinMintPath -Name ContractTestsRoot -ChildPath 'Test-Integration.ps1') -RunIsoDryRun
         }
         else {
             Write-Host 'Skipping integration tests. Use -RunIntegration to opt in.'
