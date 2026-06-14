@@ -20,6 +20,7 @@ function Add-PayloadStoreFailure {
 
 $cacheFile = $null
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-payload-store-' + [Guid]::NewGuid().ToString('n'))
+$fakeOscdimgRoot = $null
 try {
     $downloadDir = Join-Path (Get-Win11IsoDependencyCacheRoot) 'downloads'
     $null = New-Item -ItemType Directory -Path $downloadDir -Force
@@ -80,6 +81,16 @@ try {
     if (-not (Test-Path -LiteralPath $cacheFile)) {
         Add-PayloadStoreFailure 'Expected payload cleanup to keep files inside the dependency cache.'
     }
+
+    $fakeOscdimgRoot = Join-Path (Join-Path (Get-Win11IsoDependencyCacheRoot) 'OSCDIMG_winget') ('PayloadStoreTest-' + [Guid]::NewGuid().ToString('n'))
+    $fakeOscdimgDir = Join-Path $fakeOscdimgRoot 'tools\amd64\Oscdimg'
+    $null = New-Item -ItemType Directory -Path $fakeOscdimgDir -Force
+    $fakeOscdimg = Join-Path $fakeOscdimgDir 'oscdimg.exe'
+    Set-Content -LiteralPath $fakeOscdimg -Value 'payload-store-oscdimg-fixture' -Encoding ASCII
+    $oscdimgCandidates = @(Resolve-WinMintWingetDownloadedOscdimgCandidates)
+    if ($fakeOscdimg -notin $oscdimgCandidates) {
+        Add-PayloadStoreFailure 'Expected oscdimg winget payload resolution to return dependency-cache candidates without invoking winget.'
+    }
 }
 finally {
     if ($cacheFile -and (Test-Path -LiteralPath $cacheFile)) {
@@ -87,6 +98,9 @@ finally {
     }
     if (Test-Path -LiteralPath $tempRoot) {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($fakeOscdimgRoot -and (Test-Path -LiteralPath $fakeOscdimgRoot)) {
+        Remove-Item -LiteralPath $fakeOscdimgRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
     $script:WinMintBuildManifest = $null
 }

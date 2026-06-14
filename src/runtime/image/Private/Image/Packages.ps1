@@ -379,130 +379,31 @@ function Get-OscdimgBootDataValue {
     return ('1#pEF,e,b{0}' -f $efiTok)
 }
 
-function Get-Win11IsoWingetExePath {
-    <# <summary>Resolves winget.exe for package downloads (PATH or Desktop App Installer install location).</summary> #>
-    $wingetCmd = (Get-Command winget -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source)
-    if (-not $wingetCmd) {
-        $wingetPkg = Get-AppxPackage -Name 'Microsoft.DesktopAppInstaller' -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($null -ne $wingetPkg -and $wingetPkg.InstallLocation) {
-            $wingetCmd = Join-Path $wingetPkg.InstallLocation 'winget.exe'
-        }
-    }
-    if ($wingetCmd -and (Test-Path -LiteralPath $wingetCmd)) { return $wingetCmd }
-    return $null
-}
-
-function Get-WindowsKitsOscdimgCandidates {
-    $kitsRoot = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits'
-    if (-not (Test-Path -LiteralPath $kitsRoot)) { return @() }
-    return @(Get-ChildItem -LiteralPath $kitsRoot -Recurse -Filter 'oscdimg.exe' -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
-}
-
-function Invoke-Win11IsoWingetCommand {
-    param(
-        [Parameter(Mandatory)][string]$WingetPath,
-        [Parameter(Mandatory)][string[]]$Arguments
-    )
-    $oldPref = $PSNativeCommandUseErrorActionPreference
-    try {
-        $PSNativeCommandUseErrorActionPreference = $false
-        $output = & $WingetPath @Arguments 2>&1
-        return [pscustomobject]@{
-            ExitCode = $LASTEXITCODE
-            Output   = ($output | Out-String)
-        }
-    }
-    finally {
-        $PSNativeCommandUseErrorActionPreference = $oldPref
-    }
-}
-
-function Install-Win11IsoWindowsAdkForOscdimg {
-    <# <summary>Installs ADK Deployment Tools through WinGet. ADK manifests are x64-only, but include ARM64 oscdimg payloads.</summary> #>
-    param([Parameter(Mandatory)][string]$WingetPath)
-
-    $attempts = @(
-        @('install', '-e', '--id', 'Microsoft.WindowsADK', '--architecture', 'x64', '--accept-package-agreements', '--accept-source-agreements'),
-        @('install', '-e', '--id', 'Microsoft.WindowsADK', '--version', '10.1.26100.2454', '--architecture', 'x64', '--accept-package-agreements', '--accept-source-agreements')
-    )
-
-    $errors = [System.Collections.Generic.List[string]]::new()
-    foreach ($wingetArgs in $attempts) {
-        Log "Installing Windows ADK Deployment Tools via winget ($($wingetArgs -join ' '))."
-        $result = Invoke-Win11IsoWingetCommand -WingetPath $WingetPath -Arguments $wingetArgs
-        if ($result.ExitCode -eq 0) { return }
-        $errors.Add("winget $($wingetArgs -join ' ') exited $($result.ExitCode)`n$($result.Output)")
-        LogVerbose "Windows ADK winget install failed: $($result.Output)"
-    }
-
-    throw ($errors -join "`n---`n")
-}
-
 function Resolve-OscdimgPath {
     $hostArch = Get-BuildHostProcessorArchitecture
-    # Resolve via the environment instead of a hardcoded C: drive — Windows can be
-    # installed on any drive letter and the user may have the ADK on D:\ or similar.
-    $kitsCandidates = Get-WindowsKitsOscdimgCandidates
+    # Resolve via the environment instead of a hardcoded C: drive; Windows and
+    # the ADK can live on non-C: volumes.
+    $kitsCandidates = Get-WinMintWindowsKitsOscdimgCandidates
     $oscdimg = Select-PreferredOscdimgExe -CandidatePaths $kitsCandidates -HostProcessorArch $hostArch
     if (-not $oscdimg) {
-        $wingetPkgRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Microsoft\WinGet\Packages'
-        $wgCandidates = @(
-            Get-ChildItem -LiteralPath $wingetPkgRoot -Recurse -Filter 'oscdimg.exe' -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -match 'Microsoft\.OSCDIMG' } |
-                ForEach-Object { $_.FullName }
-        )
+        $wgCandidates = Get-WinMintInstalledWingetOscdimgCandidates
         $oscdimg = Select-PreferredOscdimgExe -CandidatePaths $wgCandidates -HostProcessorArch $hostArch
     }
     if (-not $oscdimg) {
-        $dlRoot = Join-Path (Get-Win11IsoDependencyCacheRoot) 'OSCDIMG_winget'
-        try {
-            $null = New-Item -ItemType Directory -Path $dlRoot -Force
-            $foundCache = @(Get-ChildItem -LiteralPath $dlRoot -Recurse -Filter 'oscdimg.exe' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
-            $oscdimg = Select-PreferredOscdimgExe -CandidatePaths $foundCache -HostProcessorArch $hostArch
-            if ($oscdimg) {
-                LogVerbose "oscdimg from dependency cache: $oscdimg"
-            }
-            else {
-                $wingetCmd = Get-Win11IsoWingetExePath
-                if (-not $wingetCmd) {
-                    throw 'winget.exe not found.'
-                }
-                $wgResult = Invoke-Win11IsoWingetCommand -WingetPath $wingetCmd -Arguments @(
-                    'download',
-                    '-e',
-                    '--id',
-                    'Microsoft.OSCDIMG',
-                    '--download-directory',
-                    $dlRoot,
-                    '--accept-package-agreements',
-                    '--accept-source-agreements'
-                )
-                if ($wgResult.ExitCode -ne 0) {
-                    throw "winget download exited $($wgResult.ExitCode)`n$($wgResult.Output)"
-                }
-                $found = @(Get-ChildItem -LiteralPath $dlRoot -Recurse -Filter 'oscdimg.exe' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
-                $oscdimg = Select-PreferredOscdimgExe -CandidatePaths $found -HostProcessorArch $hostArch
-                if (-not $oscdimg) {
-                    Remove-Item -LiteralPath $dlRoot -Recurse -Force -ErrorAction SilentlyContinue
-                }
-            }
-        }
-        catch {
-            Write-Verbose "oscdimg winget download failed: $($_.Exception.Message)"
-            if (Test-Path -LiteralPath $dlRoot) {
-                $still = @(Get-ChildItem -LiteralPath $dlRoot -Recurse -Filter 'oscdimg.exe' -File -ErrorAction SilentlyContinue)
-                if ($still.Count -eq 0) { Remove-Item -LiteralPath $dlRoot -Recurse -Force -ErrorAction SilentlyContinue }
-            }
+        $downloadedCandidates = Resolve-WinMintWingetDownloadedOscdimgCandidates
+        $oscdimg = Select-PreferredOscdimgExe -CandidatePaths $downloadedCandidates -HostProcessorArch $hostArch
+        if ($oscdimg) {
+            LogVerbose "oscdimg from dependency cache: $oscdimg"
         }
     }
     if (-not $oscdimg) {
         try {
-            $wingetCmd = Get-Win11IsoWingetExePath
+            $wingetCmd = Get-WinMintWingetExePath
             if (-not $wingetCmd) {
                 throw 'winget.exe not found.'
             }
-            Install-Win11IsoWindowsAdkForOscdimg -WingetPath $wingetCmd
-            $oscdimg = Select-PreferredOscdimgExe -CandidatePaths (Get-WindowsKitsOscdimgCandidates) -HostProcessorArch $hostArch
+            Install-WinMintWindowsAdkForOscdimg -WingetPath $wingetCmd
+            $oscdimg = Select-PreferredOscdimgExe -CandidatePaths (Get-WinMintWindowsKitsOscdimgCandidates) -HostProcessorArch $hostArch
         }
         catch {
             Write-Verbose "Windows ADK winget install failed: $($_.Exception.Message)"
