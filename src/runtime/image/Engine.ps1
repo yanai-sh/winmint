@@ -508,6 +508,7 @@ function Invoke-WinMintIsoBuild {
         -Level OK `
         -Message $sourceMessage `
         -ProgressHandler $ProgressHandler
+    $installPlan = New-WinMintInstallPlanFromBuildConfig -BuildConfig $Config
     $kept = @()
     if ($Config.Keep.Edge) { $kept += 'Edge' }
     if ($Config.Keep.Gaming) { $kept += 'Gaming' }
@@ -525,7 +526,7 @@ function Invoke-WinMintIsoBuild {
     $report = New-WinMintBuildReport -Config $Config -DetectedArchitecture $detected -Warnings $pre.Warnings
     $paths = Save-WinMintBuildReport -Report $report
     Write-WinMintProgress -Stage 'Report' -Level OK -Message "Wrote $($paths.Json)" -ProgressHandler $ProgressHandler
-    Initialize-WinMintBuildManifest -Config $Config
+    Initialize-WinMintBuildManifest -Config $Config -InstallPlan $installPlan
     if ($DryRun -and -not $sourceIsoAvailable) {
         Write-WinMintProgress `
             -Stage 'DryRun' `
@@ -568,6 +569,7 @@ function Invoke-WinMintIsoBuild {
                 -DryRun:$DryRun `
                 -ExportHostDrivers:$Config.ExportHostDrivers `
                 -NoServicedWimCache:$Config.NoServicedWimCache `
+                -InstallPlan $installPlan `
                 -WriteUsb:$WriteUsb `
                 -UsbDiskNumber $UsbDiskNumber `
                 -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `

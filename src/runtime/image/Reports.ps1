@@ -464,14 +464,52 @@ function New-WinMintRegistryTweakDetail {
     }
 }
 
-function Initialize-WinMintBuildManifest {
-    param([Parameter(Mandatory)]$Config)
+function Get-WinMintManifestInstallPlanFacts {
+    param(
+        [Parameter(Mandatory)]$Config,
+        [AllowNull()]$InstallPlan
+    )
 
-    $layers = [System.Collections.Generic.List[string]]::new()
-    if ($Config.InstallWindhawk) { $layers.Add('windhawk') }
-    if ($Config.InstallYasb)     { $layers.Add('yasb') }
-    if ($Config.InstallKomorebi) { $layers.Add('komorebi') }
-    if ($Config.InstallNilesoft) { $layers.Add('nilesoft') }
+    if ($null -ne $InstallPlan -and $InstallPlan.PSObject.Properties['Facts']) {
+        return $InstallPlan.Facts
+    }
+
+    $layers = @(
+        if ($Config.InstallWindhawk) { 'windhawk' }
+        if ($Config.InstallYasb) { 'yasb' }
+        if ($Config.InstallKomorebi) { 'komorebi' }
+        if ($Config.InstallNilesoft) { 'nilesoft' }
+    )
+
+    [ordered]@{
+        regional = [ordered]@{
+            dmaInterop = [bool]$Config.DmaInterop.Enabled
+            setupUserLocale = [string]$Config.SetupUserLocale
+            setupHomeLocationGeoId = [int]$Config.SetupHomeLocationGeoId
+            restoreUserLocale = [string]$Config.UserLocale
+            restoreHomeLocationGeoId = [int]$Config.HomeLocationGeoId
+            restoreLocationServices = [bool]$Config.DmaInterop.RestoreLocationServices
+        }
+        removals = [ordered]@{
+            appxPrefixes = @($Config.AppxPackages)
+            aiPolicy = [string]$Config.AiRemoval.Policy
+            aiAppxPrefixes = @($Config.AiRemoval.AppxPrefixes)
+        }
+        firstLogon = [ordered]@{
+            editors = @($Config.Editors)
+            wslDistros = @($Config.Wsl2Distros)
+            shellLayers = @($layers)
+        }
+    }
+}
+
+function Initialize-WinMintBuildManifest {
+    param(
+        [Parameter(Mandatory)]$Config,
+        [AllowNull()]$InstallPlan = $null
+    )
+
+    $planFacts = Get-WinMintManifestInstallPlanFacts -Config $Config -InstallPlan $InstallPlan
 
     $script:WinMintBuildManifest = [ordered]@{
         schemaVersion       = 2
@@ -499,20 +537,20 @@ function Initialize-WinMintBuildManifest {
                 enabled = [bool]$Config.DmaInterop.Enabled
                 defaultEnabled = $true
                 setupCountry = [string]$Config.DmaInterop.SetupCountry
-                setupUserLocale = [string]$Config.SetupUserLocale
-                setupHomeLocationGeoId = [int]$Config.SetupHomeLocationGeoId
+                setupUserLocale = [string]$planFacts.regional.setupUserLocale
+                setupHomeLocationGeoId = [int]$planFacts.regional.setupHomeLocationGeoId
                 setupLatchedCountry = [string]$Config.DmaInterop.SetupCountry
-                setupLatchedGeoId = [int]$Config.SetupHomeLocationGeoId
-                restoreUserLocale = [string]$Config.UserLocale
-                restoreHomeLocationGeoId = [int]$Config.HomeLocationGeoId
-                restoredUserLocale = [string]$Config.UserLocale
-                restoredHomeLocationGeoId = [int]$Config.HomeLocationGeoId
+                setupLatchedGeoId = [int]$planFacts.regional.setupHomeLocationGeoId
+                restoreUserLocale = [string]$planFacts.regional.restoreUserLocale
+                restoreHomeLocationGeoId = [int]$planFacts.regional.restoreHomeLocationGeoId
+                restoredUserLocale = [string]$planFacts.regional.restoreUserLocale
+                restoredHomeLocationGeoId = [int]$planFacts.regional.restoreHomeLocationGeoId
                 restoredTimeZoneId = [string]$Config.TimeZoneId
                 locationServicesPolicy = if ([bool]$Config.Privacy.Location) { 'enabled' } else { 'disabled' }
             }
         }
         removals            = [ordered]@{
-            appxPrefixes        = @($Config.AppxPackages)
+            appxPrefixes        = @($planFacts.removals.appxPrefixes)
             appxCatalogVersion  = [int]$Config.AppxCatalogVersion
             appxRemoved         = @()
             appxRemovedCount    = 0
@@ -527,9 +565,9 @@ function Initialize-WinMintBuildManifest {
             }
             featuresEnabled     = @($Config.Features)
             ai = [ordered]@{
-                policy = [string]$Config.AiRemoval.Policy
+                policy = [string]$planFacts.removals.aiPolicy
                 catalogVersion = [int]$Config.AiRemoval.CatalogVersion
-                appxPrefixes = @($Config.AiRemoval.AppxPrefixes)
+                appxPrefixes = @($planFacts.removals.aiAppxPrefixes)
                 appxRemoved = @()
                 optionalFeaturesRemoved = @()
                 registryPoliciesApplied = @(
@@ -605,9 +643,9 @@ function Initialize-WinMintBuildManifest {
         }
         payloads            = [System.Collections.Generic.List[object]]::new()
         firstLogon          = [ordered]@{
-            editors      = @($Config.Editors)
-            wslDistros   = @($Config.Wsl2Distros)
-            desktopLayers = $layers.ToArray()
+            editors      = @($planFacts.firstLogon.editors)
+            wslDistros   = @($planFacts.firstLogon.wslDistros)
+            desktopLayers = @($planFacts.firstLogon.shellLayers)
         }
         riskFlags           = @(if ($Config.RegistryTweaks -contains 'hardware-bypass') { 'hardware-bypass' })
     }

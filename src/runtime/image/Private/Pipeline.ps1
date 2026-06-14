@@ -205,6 +205,7 @@ function Invoke-WinMintIsoPipeline {
         [switch]$DryRun,
         [switch]$ExportHostDrivers,
         [switch]$NoServicedWimCache,
+        [AllowNull()]$InstallPlan = $null,
         [switch]$WriteUsb,
         [int]$UsbDiskNumber = -1,
         [int]$ConfirmUsbDiskNumber = -1,
@@ -325,7 +326,7 @@ function Invoke-WinMintIsoPipeline {
             $script:WinMintBuildManifest.source.editions = $editionNames
         }
 
-        $installPlan = New-WinMintInstallPlanFromBuildConfig -BuildConfig $BuildConfig
+        $installPlan = Get-WinMintInstallPlanForBuildConfig -BuildConfig $BuildConfig -ExistingPlan $InstallPlan
 
         if ($DryRun) {
             $dryRunImage = $installImages | Select-Object -First 1
