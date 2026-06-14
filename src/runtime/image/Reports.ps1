@@ -48,6 +48,14 @@ function New-WinMintBuildReport {
             liveInstallAudit = [bool]$Config.LiveInstallAudit
             phoneLink = [bool]$Config.PhoneLink
         }
+        updates = @{
+            mode = [string]$Config.Updates.Mode
+            targetFeatureVersion = [string]$Config.Updates.TargetFeatureVersion
+            releaseCadence = [string]$Config.Updates.ReleaseCadence
+            includeOptionalPreviews = [bool]$Config.Updates.IncludeOptionalPreviews
+            payloadRoot = [string]$Config.Updates.PayloadRoot
+            provisionedApps = [bool]$Config.Updates.ProvisionedApps
+        }
         warnings = $Warnings
         failures = $Failures
     }
@@ -83,6 +91,8 @@ function Save-WinMintBuildReport {
         "| Edition | $($Report.selectedEdition) |"
         "| Target device | $($Report.targetDevice) |"
         "| Profile | $($Report.profile) |"
+        "| Image updates | $($Report.updates.mode) ($($Report.updates.releaseCadence), $($Report.updates.targetFeatureVersion)) |"
+        "| Update payload root | $($Report.updates.payloadRoot) |"
         ''
         '## Selected Editors'
         (($Report.editors | ForEach-Object { "- $_" }) -join "`n")
@@ -598,6 +608,22 @@ function Initialize-WinMintBuildManifest {
             componentCleanup = 'StartComponentCleanup'
             resetBase = $false
             serviceabilityPolicy = 'Preserve component-store uninstall/repair metadata; do not run ResetBase by default.'
+            updates = [ordered]@{
+                mode = [string]$Config.Updates.Mode
+                targetFeatureVersion = [string]$Config.Updates.TargetFeatureVersion
+                releaseCadence = [string]$Config.Updates.ReleaseCadence
+                includeOptionalPreviews = [bool]$Config.Updates.IncludeOptionalPreviews
+                payloadRoot = [string]$Config.Updates.PayloadRoot
+                qualitySecurity = [bool]$Config.Updates.QualitySecurity
+                dynamicUpdate = [bool]$Config.Updates.DynamicUpdate
+                defender = [bool]$Config.Updates.Defender
+                dotnet = [bool]$Config.Updates.DotNet
+                provisionedApps = [bool]$Config.Updates.ProvisionedApps
+                appliedPackages = @()
+                provisionedAppx = @()
+                skipped = @()
+                failed = @()
+            }
         }
         tweaks              = [ordered]@{
             registryGroupsApplied = @($Config.RegistryTweaks)
@@ -760,6 +786,60 @@ function Set-WinMintManifestComponentCleanupFact {
     $script:WinMintBuildManifest.servicing.componentCleanup = $ComponentCleanup
     $script:WinMintBuildManifest.servicing.resetBase = $ResetBase
     $script:WinMintBuildManifest.servicing.serviceabilityPolicy = $ServiceabilityPolicy
+}
+
+function Add-WinMintManifestUpdatePackageFact {
+    param(
+        [Parameter(Mandatory)][string]$Category,
+        [Parameter(Mandatory)][string]$Path
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $item = Get-Item -LiteralPath $Path -ErrorAction Stop
+    $script:WinMintBuildManifest.servicing.updates.appliedPackages += [ordered]@{
+        category = $Category
+        path = $item.FullName
+        sha256 = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash
+        sizeBytes = [long]$item.Length
+    }
+}
+
+function Add-WinMintManifestUpdateAppxFact {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [int]$DependencyCount = 0
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $item = Get-Item -LiteralPath $Path -ErrorAction Stop
+    $script:WinMintBuildManifest.servicing.updates.provisionedAppx += [ordered]@{
+        path = $item.FullName
+        sha256 = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash
+        sizeBytes = [long]$item.Length
+        dependencyCount = $DependencyCount
+    }
+}
+
+function Add-WinMintManifestUpdateSkippedFact {
+    param([Parameter(Mandatory)][string]$Message)
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.servicing.updates.skipped += $Message
+}
+
+function Add-WinMintManifestUpdateFailureFact {
+    param(
+        [Parameter(Mandatory)][string]$Category,
+        [string]$Path = '',
+        [Parameter(Mandatory)][string]$ErrorMessage
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.servicing.updates.failed += [ordered]@{
+        category = $Category
+        path = $Path
+        error = $ErrorMessage
+    }
 }
 
 function Set-WinMintManifestCapabilityRemovalFacts {

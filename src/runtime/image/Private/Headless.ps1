@@ -329,6 +329,9 @@ function New-WinMintHeadlessProfileFromFlags {
         [switch]$LiveInstallAudit,
         [switch]$PhoneLink,
         [ValidateSet('On', 'Off')][string]$Location = 'On',
+        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'None',
+        [string]$UpdatePayloadRoot = '',
+        [ValidateSet('On', 'Off')][string]$UpdateProvisionedApps = 'On',
         [ValidateSet('windhawk', 'yasb', 'komorebi', 'nilesoft')][string[]]$Install = @(),
         [switch]$DryRun,
         [switch]$ValidateOnly,
@@ -437,6 +440,9 @@ function New-WinMintHeadlessProfileFromFlags {
         PhoneLink = [bool]$PhoneLink
         TweakDmaInterop = ($Dma -ne 'Off')
         PrivLocation = ($Location -ne 'Off')
+        UpdateImage = $UpdateImage
+        UpdatePayloadRoot = $UpdatePayloadRoot
+        UpdateProvisionedApps = $UpdateProvisionedApps
     } -IncludeSecrets:($AccountMode -eq 'Local' -and -not [string]::IsNullOrWhiteSpace($Password))
 }
 

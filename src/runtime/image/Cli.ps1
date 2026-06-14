@@ -189,6 +189,9 @@ function Invoke-WinMintNewProfileCommand {
         [switch]$LiveInstallAudit,
         [ValidateSet('On', 'Off')][string]$Dma = 'On',
         [ValidateSet('On', 'Off')][string]$Location = 'On',
+        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'None',
+        [string]$UpdatePayloadRoot = '',
+        [ValidateSet('On', 'Off')][string]$UpdateProvisionedApps = 'On',
         [switch]$Json,
         [switch]$Quiet
     )
@@ -254,6 +257,9 @@ function Invoke-WinMintNewProfileCommand {
         -PhoneLink:$PhoneLink `
         -Dma $Dma `
         -Location $Location `
+        -UpdateImage $UpdateImage `
+        -UpdatePayloadRoot $UpdatePayloadRoot `
+        -UpdateProvisionedApps $UpdateProvisionedApps `
         -DryRun `
         -ValidateOnly `
         -TemplateMode
@@ -330,6 +336,9 @@ new options (configuration lives here):
   -Launcher None|FlowEverything|Raycast
   -Dma On|Off                      DMA interop tweak (default On).
   -Location On|Off                 Location services (default On).
+  -UpdateImage None|Stable25H2     Pre-service explicit stable 25H2 update payloads.
+  -UpdatePayloadRoot <dir>          Root containing packages\, appx\, and dependency payloads.
+  -UpdateProvisionedApps On|Off     Include Store/MSIX app provisioning payloads.
   -Wsl2Distros Ubuntu,Fedora,archlinux,NixOS-WSL,pengwin
   -PhoneLink -LiveInstallAudit
   Identity/locale/driver flags: -ComputerName -AccountName -AccountMode

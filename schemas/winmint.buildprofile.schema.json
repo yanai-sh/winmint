@@ -292,6 +292,34 @@
       },
       "additionalProperties": false
     },
+    "updates": {
+      "type": "object",
+      "required": [
+        "mode",
+        "targetFeatureVersion",
+        "releaseCadence",
+        "includeOptionalPreviews",
+        "payloadRoot",
+        "qualitySecurity",
+        "dynamicUpdate",
+        "defender",
+        "dotnet",
+        "provisionedApps"
+      ],
+      "properties": {
+        "mode": { "type": "string", "enum": ["None", "Stable25H2"] },
+        "targetFeatureVersion": { "type": "string", "const": "25H2" },
+        "releaseCadence": { "type": "string", "const": "BRelease" },
+        "includeOptionalPreviews": { "type": "boolean", "const": false },
+        "payloadRoot": { "type": "string" },
+        "qualitySecurity": { "type": "boolean" },
+        "dynamicUpdate": { "type": "boolean" },
+        "defender": { "type": "boolean" },
+        "dotnet": { "type": "boolean" },
+        "provisionedApps": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
     "removals": {
       "type": "object",
       "required": ["advertising", "gaming", "communication", "microsoftApps", "aiPolicy"],

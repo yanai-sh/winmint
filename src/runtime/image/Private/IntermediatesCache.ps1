@@ -129,7 +129,7 @@ function Invoke-WinMintAllBuildCachesMaintenance {
 
 # Bump when the serviced-image pipeline changes in a way that can leave cached
 # WIMs semantically stale even if the broad inputs look unchanged.
-$script:WinMintServicedWimCacheSchemaVersion = 7
+$script:WinMintServicedWimCacheSchemaVersion = 8
 
 function Get-WinMintServicedWimCacheRoot {
     return (Join-Path (Get-WinMintBuildCacheRoot) 'serviced-wim')
@@ -176,6 +176,29 @@ function Get-WinMintDriverPayloadFingerprint {
     return "dir|$($item.FullName)|$($parts -join ';')"
 }
 
+function Get-WinMintUpdatePayloadFingerprint {
+    param([AllowNull()]$Updates)
+
+    if ($null -eq $Updates -or [string]$Updates.Mode -eq 'None') { return 'None' }
+    $root = [string]$Updates.PayloadRoot
+    if ([string]::IsNullOrWhiteSpace($root) -or -not (Test-Path -LiteralPath $root -PathType Container)) {
+        return "$([string]$Updates.Mode)|<unresolved>"
+    }
+
+    $parts = @(
+        Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in @('.msu', '.cab', '.msixbundle', '.appxbundle', '.msix', '.appx') } |
+            Sort-Object FullName |
+            ForEach-Object {
+                $rel = $_.FullName.Substring($root.TrimEnd('\', '/').Length).TrimStart('\', '/').ToLowerInvariant()
+                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$rel|$($_.Length)|$hash"
+            }
+    )
+
+    return "$([string]$Updates.Mode)|$([string]$Updates.TargetFeatureVersion)|$([string]$Updates.ReleaseCadence)|$([bool]$Updates.ProvisionedApps)|$($parts -join ';')"
+}
+
 function Get-WinMintServicedWimFingerprint {
     param(
         [Parameter(Mandatory)]$BuildConfig,
@@ -206,6 +229,7 @@ function Get-WinMintServicedWimFingerprint {
         $driversFp = "$([string]$BuildConfig.Drivers.Source)|<unresolved>"
     }
 
+    $updatesConfig = if ($BuildConfig.PSObject.Properties['Updates']) { $BuildConfig.Updates } else { $null }
     $payload = [ordered]@{
         Schema             = $script:WinMintServicedWimCacheSchemaVersion
         Toolchain          = Get-WinMintServicingToolchainIdentity
@@ -229,6 +253,7 @@ function Get-WinMintServicedWimFingerprint {
         UserLocale         = [string]$BuildConfig.UserLocale
         SetupUserLocale    = [string]$BuildConfig.SetupUserLocale
         Drivers            = $driversFp
+        Updates            = Get-WinMintUpdatePayloadFingerprint -Updates $updatesConfig
     }
     return ($payload | ConvertTo-Json -Compress -Depth 4)
 }

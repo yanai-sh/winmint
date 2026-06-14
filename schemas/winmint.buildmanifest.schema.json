@@ -335,12 +335,86 @@
     },
     "servicing": {
       "type": "object",
-      "required": ["componentCleanup", "resetBase", "serviceabilityPolicy"],
+      "required": ["componentCleanup", "resetBase", "serviceabilityPolicy", "updates"],
       "additionalProperties": false,
       "properties": {
         "componentCleanup": { "type": "string" },
         "resetBase": { "type": "boolean" },
-        "serviceabilityPolicy": { "type": "string" }
+        "serviceabilityPolicy": { "type": "string" },
+        "updates": {
+          "type": "object",
+          "required": [
+            "mode",
+            "targetFeatureVersion",
+            "releaseCadence",
+            "includeOptionalPreviews",
+            "payloadRoot",
+            "qualitySecurity",
+            "dynamicUpdate",
+            "defender",
+            "dotnet",
+            "provisionedApps",
+            "appliedPackages",
+            "provisionedAppx",
+            "skipped",
+            "failed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "type": "string", "enum": ["None", "Stable25H2"] },
+            "targetFeatureVersion": { "type": "string" },
+            "releaseCadence": { "type": "string" },
+            "includeOptionalPreviews": { "type": "boolean" },
+            "payloadRoot": { "type": "string" },
+            "qualitySecurity": { "type": "boolean" },
+            "dynamicUpdate": { "type": "boolean" },
+            "defender": { "type": "boolean" },
+            "dotnet": { "type": "boolean" },
+            "provisionedApps": { "type": "boolean" },
+            "appliedPackages": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["category", "path", "sha256", "sizeBytes"],
+                "additionalProperties": false,
+                "properties": {
+                  "category": { "type": "string" },
+                  "path": { "type": "string" },
+                  "sha256": { "type": "string" },
+                  "sizeBytes": { "type": "integer" }
+                }
+              }
+            },
+            "provisionedAppx": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["path", "sha256", "sizeBytes", "dependencyCount"],
+                "additionalProperties": false,
+                "properties": {
+                  "path": { "type": "string" },
+                  "sha256": { "type": "string" },
+                  "sizeBytes": { "type": "integer" },
+                  "dependencyCount": { "type": "integer" }
+                }
+              }
+            },
+            "skipped": { "type": "array", "items": { "type": "string" } },
+            "failed": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["category", "path", "error"],
+                "additionalProperties": false,
+                "properties": {
+                  "category": { "type": "string" },
+                  "path": { "type": "string" },
+                  "error": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "setupPlan": {

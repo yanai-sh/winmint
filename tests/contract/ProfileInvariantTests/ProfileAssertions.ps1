@@ -357,6 +357,74 @@ function Assert-OfflinePayloadCacheStatus {
     }
 }
 
+function Assert-ImageUpdateProfileContract {
+    $defaultProfile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
+    if ([string]$defaultProfile.updates.mode -ne 'None') {
+        Add-SmokeFailure "Expected image updates to default to None, got '$($defaultProfile.updates.mode)'."
+    }
+    $defaultConfig = New-WinMintBuildConfig -BuildProfile $defaultProfile
+    if ([string]$defaultConfig.Updates.Mode -ne 'None') {
+        Add-SmokeFailure "Expected build config updates to default to None, got '$($defaultConfig.Updates.Mode)'."
+    }
+
+    $missingSettings = New-SmokeBuildProfileSettings
+    $missingSettings.UpdateImage = 'Stable25H2'
+    $missingProfile = New-WinMintBuildProfile -Settings $missingSettings
+    $missingConfig = New-WinMintBuildConfig -BuildProfile $missingProfile
+    $missingPreflight = Test-WinMintBuildPrerequisite -Config $missingConfig -AllowMissingSourceIso
+    if ($missingPreflight.Passed -or ($missingPreflight.Failures -join '; ') -notmatch 'updates.payloadRoot') {
+        Add-SmokeFailure 'Expected Stable25H2 preflight to require an explicit update payload root.'
+    }
+
+    $tempRoot = Join-Path ([IO.Path]::GetTempPath().TrimEnd('\', '/')) ('winmint_update_payload_test_' + [Guid]::NewGuid().ToString('n'))
+    try {
+        $packages = Join-Path $tempRoot 'packages'
+        $appx = Join-Path $tempRoot 'appx'
+        $deps = Join-Path $tempRoot 'appx-dependencies\arm64'
+        $null = New-Item -ItemType Directory -Path $packages, $appx, $deps -Force
+        $lcu = Join-Path $packages 'windows11.0-kb0000000-arm64.msu'
+        $terminal = Join-Path $appx 'Microsoft.WindowsTerminal.msixbundle'
+        $vclibs = Join-Path $deps 'Microsoft.VCLibs.arm64.appx'
+        Set-Content -LiteralPath $lcu -Value 'lcu' -Encoding ASCII
+        Set-Content -LiteralPath $terminal -Value 'terminal' -Encoding ASCII
+        Set-Content -LiteralPath $vclibs -Value 'dependency' -Encoding ASCII
+
+        $settings = New-SmokeBuildProfileSettings
+        $settings.UpdateImage = 'Stable25H2'
+        $settings.UpdatePayloadRoot = $tempRoot
+        $profile = New-WinMintBuildProfile -Settings $settings
+        $result = Test-WinMintBuildProfile -BuildProfile $profile
+        if (-not $result.Passed) {
+            Add-SmokeFailure "Expected Stable25H2 update profile to validate, got: $($result.Failures -join '; ')"
+        }
+        $config = New-WinMintBuildConfig -BuildProfile $profile
+        if ([string]$config.Updates.Mode -ne 'Stable25H2' -or [string]$config.Updates.ReleaseCadence -ne 'BRelease' -or [bool]$config.Updates.IncludeOptionalPreviews) {
+            Add-SmokeFailure 'Expected Stable25H2 update settings to flow to build config with B-release previews disabled.'
+        }
+        $preflight = Test-WinMintBuildPrerequisite -Config $config -AllowMissingSourceIso
+        if (-not $preflight.Passed) {
+            Add-SmokeFailure "Expected Stable25H2 preflight to pass with a payload root. Failures: $($preflight.Failures -join '; ')"
+        }
+        $resolvedPackages = @(Get-WinMintOfflineUpdatePackageFiles -PayloadRoot $tempRoot -Category 'packages')
+        if ($resolvedPackages -ne $lcu) {
+            Add-SmokeFailure "Expected update package resolver to find the LCU fixture, got: $($resolvedPackages -join ', ')"
+        }
+        $resolvedAppx = @(Get-WinMintOfflineUpdateAppxFiles -PayloadRoot $tempRoot)
+        if ($resolvedAppx -ne $terminal) {
+            Add-SmokeFailure "Expected update AppX resolver to find Terminal fixture, got: $($resolvedAppx -join ', ')"
+        }
+        $resolvedDeps = @(Get-WinMintOfflineUpdateAppxDependencyFiles -PayloadRoot $tempRoot -TargetArch 'arm64')
+        if ($resolvedDeps -ne $vclibs) {
+            Add-SmokeFailure "Expected update AppX dependency resolver to find ARM64 dependency fixture, got: $($resolvedDeps -join ', ')"
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $tempRoot) {
+            Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Assert-HeadlessConsoleProfileContract {
     $headlessComputerName = 'headless-pc'
     $microsoftOobeComputerName = 'SL7'

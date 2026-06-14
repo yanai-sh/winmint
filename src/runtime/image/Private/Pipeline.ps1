@@ -368,7 +368,11 @@ function Invoke-WinMintIsoPipeline {
         # so autounattend/setup scripts can be re-stamped per build.
         $servicedWimCacheHit = $null
         $servicedWimFingerprint = $null
-        if (-not $NoServicedWimCache) {
+        $updatesRequested = ($BuildConfig.Updates -and [string]$BuildConfig.Updates.Mode -ne 'None')
+        if ($updatesRequested) {
+            Log 'Stable image updates selected; serviced WIM cache is disabled so update payload application remains auditable.'
+        }
+        if (-not $NoServicedWimCache -and -not $updatesRequested) {
             try {
                 $isoStageKey = Get-WinMintIsoStageCacheKeyHex -Fingerprint (Get-WinMintIsoStageCacheFingerprint -SourceIsoPath $BuildConfig.SourceIso)
                 $servicedWimFingerprint = Get-WinMintServicedWimFingerprint -BuildConfig $BuildConfig -IsoStageKey $isoStageKey
@@ -487,6 +491,7 @@ function Invoke-WinMintIsoPipeline {
                 Install-OfflineCursor -MountDir $mountDir -ScriptDir $root -CursorPackKind $BuildConfig.CursorPackKind
                 Install-OfflineWindowsTerminalSettings -MountDir $mountDir -ScriptDir $root
                 Install-OfflineWinget -MountDir $mountDir -TargetArch $imageArch
+                Invoke-WinMintOfflineImageUpdates -MountDir $mountDir -Updates $BuildConfig.Updates -TargetArch $imageArch
 
                 foreach ($driverSource in $driverSources) {
                     Invoke-DriverInjection `
@@ -508,7 +513,7 @@ function Invoke-WinMintIsoPipeline {
         Complete-PipelinePhase 'Service WIM'
         Set-WinMintManifestSizeDeltaFromPath -Name 'installWimAfterServicingBytes' -Path $installWim
         Assert-WinMintWimMetadataHealthy -ImagePath $installWim -ExpectedMetadata $expectedWimMetadata -ExpectedArchitecture $imageArch
-        if (-not $NoServicedWimCache -and $null -eq $servicedWimCacheHit -and -not [string]::IsNullOrWhiteSpace($servicedWimFingerprint) -and (Test-Path -LiteralPath $installWim)) {
+        if (-not $NoServicedWimCache -and -not $updatesRequested -and $null -eq $servicedWimCacheHit -and -not [string]::IsNullOrWhiteSpace($servicedWimFingerprint) -and (Test-Path -LiteralPath $installWim)) {
             Publish-WinMintServicedWimCache -Fingerprint $servicedWimFingerprint -ServicedWimPath $installWim -ExpectedMetadata $expectedWimMetadata
         }
 

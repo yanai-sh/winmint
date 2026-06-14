@@ -259,6 +259,177 @@ function Import-WinMintDefaultAppAssociations {
     }
 }
 
+function Get-WinMintOfflineUpdatePackageFiles {
+    param(
+        [Parameter(Mandatory)][string]$PayloadRoot,
+        [Parameter(Mandatory)][string]$Category
+    )
+
+    $categoryDir = Join-Path $PayloadRoot $Category
+    if (-not (Test-Path -LiteralPath $categoryDir -PathType Container)) { return @() }
+    @(
+        Get-ChildItem -LiteralPath $categoryDir -Recurse -File -ErrorAction Stop |
+            Where-Object { $_.Extension -in @('.msu', '.cab') } |
+            Sort-Object FullName |
+            ForEach-Object { $_.FullName }
+    )
+}
+
+function Get-WinMintOfflineUpdateAppxFiles {
+    param([Parameter(Mandatory)][string]$PayloadRoot)
+
+    $appxDir = Join-Path $PayloadRoot 'appx'
+    if (-not (Test-Path -LiteralPath $appxDir -PathType Container)) { return @() }
+    @(
+        Get-ChildItem -LiteralPath $appxDir -Recurse -File -ErrorAction Stop |
+            Where-Object { $_.Extension -in @('.msixbundle', '.appxbundle', '.msix', '.appx') } |
+            Sort-Object FullName |
+            ForEach-Object { $_.FullName }
+    )
+}
+
+function Get-WinMintOfflineUpdateAppxDependencyFiles {
+    param(
+        [Parameter(Mandatory)][string]$PayloadRoot,
+        [Parameter(Mandatory)][string]$TargetArch
+    )
+
+    $dependencyRoot = Join-Path $PayloadRoot 'appx-dependencies'
+    if (-not (Test-Path -LiteralPath $dependencyRoot -PathType Container)) { return @() }
+    $archFolder = switch ($TargetArch) {
+        'arm64' { 'arm64' }
+        'amd64' { 'x64' }
+        'x64' { 'x64' }
+        'x86' { 'x86' }
+        default { $TargetArch }
+    }
+    $candidateRoots = @(
+        Join-Path $dependencyRoot $archFolder
+        $dependencyRoot
+    ) | Select-Object -Unique
+
+    @(
+        foreach ($root in $candidateRoots) {
+            if (-not (Test-Path -LiteralPath $root -PathType Container)) { continue }
+            Get-ChildItem -LiteralPath $root -File -ErrorAction Stop |
+                Where-Object { $_.Extension -in @('.appx', '.msix') } |
+                Sort-Object FullName |
+                ForEach-Object { $_.FullName }
+        }
+    ) | Select-Object -Unique
+}
+
+function Invoke-WinMintOfflineUpdatePackages {
+    param(
+        [Parameter(Mandatory)][string]$MountDir,
+        [Parameter(Mandatory)]$Updates
+    )
+
+    $payloadRoot = [string]$Updates.PayloadRoot
+    $categories = @(
+        [pscustomobject]@{ Id = 'packages'; Enabled = [bool]$Updates.QualitySecurity; Label = 'quality/security packages' }
+        [pscustomobject]@{ Id = 'dynamic-update'; Enabled = [bool]$Updates.DynamicUpdate; Label = 'dynamic update packages' }
+        [pscustomobject]@{ Id = 'defender'; Enabled = [bool]$Updates.Defender; Label = 'Defender packages' }
+        [pscustomobject]@{ Id = 'dotnet'; Enabled = [bool]$Updates.DotNet; Label = '.NET packages' }
+    )
+
+    $appliedCount = 0
+    foreach ($category in $categories) {
+        if (-not [bool]$category.Enabled) {
+            Add-WinMintManifestUpdateSkippedFact -Message "$($category.Id): disabled"
+            continue
+        }
+        $packages = @(Get-WinMintOfflineUpdatePackageFiles -PayloadRoot $payloadRoot -Category ([string]$category.Id))
+        if ($packages.Count -eq 0) {
+            Add-WinMintManifestUpdateSkippedFact -Message "$($category.Id): no .msu/.cab payloads found"
+            continue
+        }
+        foreach ($package in $packages) {
+            try {
+                Log "Applying $($category.Label): $(Split-Path -Leaf $package)"
+                Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Add-Package', "/PackagePath:$package", '/Quiet', '/NoRestart') | Out-Null
+                Add-WinMintManifestUpdatePackageFact -Category ([string]$category.Id) -Path $package
+                $appliedCount++
+            }
+            catch {
+                Add-WinMintManifestUpdateFailureFact -Category ([string]$category.Id) -Path $package -ErrorMessage $_.Exception.Message
+                throw
+            }
+        }
+    }
+
+    return $appliedCount
+}
+
+function Invoke-WinMintOfflineUpdateAppx {
+    param(
+        [Parameter(Mandatory)][string]$MountDir,
+        [Parameter(Mandatory)]$Updates,
+        [Parameter(Mandatory)][string]$TargetArch
+    )
+
+    if (-not [bool]$Updates.ProvisionedApps) {
+        Add-WinMintManifestUpdateSkippedFact -Message 'appx: disabled'
+        return 0
+    }
+
+    $payloadRoot = [string]$Updates.PayloadRoot
+    $bundles = @(Get-WinMintOfflineUpdateAppxFiles -PayloadRoot $payloadRoot)
+    if ($bundles.Count -eq 0) {
+        Add-WinMintManifestUpdateSkippedFact -Message 'appx: no MSIX/AppX payloads found'
+        return 0
+    }
+    $dependencies = @(Get-WinMintOfflineUpdateAppxDependencyFiles -PayloadRoot $payloadRoot -TargetArch $TargetArch)
+
+    $provisionedCount = 0
+    foreach ($bundle in $bundles) {
+        try {
+            Log "Provisioning app package: $(Split-Path -Leaf $bundle)"
+            $dismArgs = @('/English', "/Image:$MountDir", '/Add-ProvisionedAppxPackage', "/PackagePath:$bundle")
+            foreach ($dependency in $dependencies) {
+                $dismArgs += "/DependencyPackagePath:$dependency"
+            }
+            $dismArgs += '/SkipLicense'
+            Invoke-DismExe -Arguments $dismArgs | Out-Null
+            Add-WinMintManifestUpdateAppxFact -Path $bundle -DependencyCount $dependencies.Count
+            $provisionedCount++
+        }
+        catch {
+            Add-WinMintManifestUpdateFailureFact -Category 'appx' -Path $bundle -ErrorMessage $_.Exception.Message
+            throw
+        }
+    }
+
+    return $provisionedCount
+}
+
+function Invoke-WinMintOfflineImageUpdates {
+    param(
+        [Parameter(Mandatory)][string]$MountDir,
+        [Parameter(Mandatory)]$Updates,
+        [Parameter(Mandatory)][string]$TargetArch
+    )
+
+    if ($null -eq $Updates -or [string]$Updates.Mode -eq 'None') { return }
+    if ([string]$Updates.Mode -ne 'Stable25H2') {
+        throw "Unsupported image update mode: $($Updates.Mode)"
+    }
+    if ([bool]$Updates.IncludeOptionalPreviews) {
+        throw 'Optional preview updates are not allowed in Stable25H2 image servicing.'
+    }
+
+    Write-SectionHeader 'Image: stable 25H2 update payloads'
+    Invoke-Action 'Applying explicit stable 25H2 update payloads to the offline image' -SpectreProgressIndeterminate {
+        LogVerbose "Mount: $MountDir | payloadRoot: $($Updates.PayloadRoot)"
+        $packageCount = Invoke-WinMintOfflineUpdatePackages -MountDir $MountDir -Updates $Updates
+        $appxCount = Invoke-WinMintOfflineUpdateAppx -MountDir $MountDir -Updates $Updates -TargetArch $TargetArch
+        if (($packageCount + $appxCount) -eq 0) {
+            throw "Stable25H2 update mode was selected, but no update payloads were applied from '$($Updates.PayloadRoot)'."
+        }
+        LogOK "Applied $packageCount package payload(s) and provisioned $appxCount app package(s)."
+    }
+}
+
 function Save-ImageWithCleanup {
     param([ValidateNotNullOrEmpty()][string]$MountDir)
     Write-SectionHeader 'Image: cleanup and save' -Accent Yellow -RuleColor Grey -DimLine 'Component cleanup and save can take several minutes; the bar below is normal.'

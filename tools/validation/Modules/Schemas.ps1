@@ -229,6 +229,22 @@ function Test-BuildManifestSchema {
             componentCleanup = 'StartComponentCleanup'
             resetBase = $false
             serviceabilityPolicy = 'Preserve component-store uninstall/repair metadata; do not run ResetBase by default.'
+            updates = [ordered]@{
+                mode = 'None'
+                targetFeatureVersion = '25H2'
+                releaseCadence = 'BRelease'
+                includeOptionalPreviews = $false
+                payloadRoot = ''
+                qualitySecurity = $true
+                dynamicUpdate = $true
+                defender = $true
+                dotnet = $true
+                provisionedApps = $true
+                appliedPackages = @()
+                provisionedAppx = @()
+                skipped = @()
+                failed = @()
+            }
         }
         tweaks               = [ordered]@{
             registryGroupsApplied = @('developer-qol')

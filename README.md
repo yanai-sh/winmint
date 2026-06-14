@@ -87,6 +87,7 @@ consumes the profile.
 | File Explorer | Shows extensions/hidden files, keeps Home, hides Gallery | baseline |
 | Shell layers | Off | `-DesktopUI`, or `-Install windhawk,yasb,komorebi` |
 | Dev tweaks, OpenSSH, WSL2, Scoop, MinGit, Starship, fonts/cursors | Always on | baseline |
+| Offline image updates | Off | `-UpdateImage Stable25H2 -UpdatePayloadRoot <dir>` |
 
 On DMA builds, Windows exposes Edge as an uninstallable normal application.
 Without `-KeepEdge`, WinMint requests Edge removal and first attempts the
@@ -94,6 +95,37 @@ supported Edge app uninstaller. If that normal uninstall path leaves browser
 files behind, WinMint reports that as an incomplete supported uninstall rather
 than applying ownership hacks or hidden cleanup switches. WebView2, Store,
 winget, and Windows Update are preserved.
+
+### Stable 25H2 Pre-Update Payloads
+
+WinMint can pre-service the user-provided Microsoft ISO with explicit offline
+payloads so first logon has less left to update. This is profile-backed:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 new .\BuildProfile.json `
+  -SourceIso .\Win11_25H2_English_Arm64.iso `
+  -Architecture arm64 `
+  -UpdateImage Stable25H2 `
+  -UpdatePayloadRoot D:\WinMintPayloads\25H2-BRelease
+```
+
+The payload root is reviewable and deterministic:
+
+```text
+25H2-BRelease\
+  packages\            # Patch Tuesday quality/security .msu/.cab payloads
+  dynamic-update\      # Windows Setup / install-image dynamic update .msu/.cab payloads
+  defender\            # Defender offline image update .cab/.msu payloads
+  dotnet\              # .NET cumulative update .msu/.cab payloads
+  appx\                # Store/MSIX bundles such as Windows Terminal/App Installer
+  appx-dependencies\   # Dependency .appx/.msix files, optionally under x64\ or arm64\
+```
+
+`Stable25H2` means broad Windows 11 25H2 Patch Tuesday/B-release payloads only.
+WinMint rejects optional preview intent and does not apply device-specific
+drivers, firmware, or OEM payloads through this path. It also does not silently
+scrape or download Microsoft update files; the manifest records every package
+and app bundle that was applied from the supplied root.
 
 Local-account builds are fully unattended: the computer name comes from the
 profile, the password is injected into the profile, and OOBE hides the network

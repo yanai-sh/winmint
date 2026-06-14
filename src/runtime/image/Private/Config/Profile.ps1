@@ -499,6 +499,35 @@ function Get-WinMintProfileDualBootPreset {
     }
 }
 
+function Resolve-WinMintProfileUpdateConfig {
+    param([object]$Settings)
+
+    $mode = [string](Get-WinMintProfileSetting $Settings 'UpdateImage' (Get-WinMintProfileSetting $Settings 'UpdateMode' 'None'))
+    switch -Regex ($mode) {
+        '^(None|Off|Disabled)$' { $mode = 'None'; break }
+        '^(Stable25H2|LatestStable25H2|25H2)$' { $mode = 'Stable25H2'; break }
+        default { throw "Unsupported update image mode '$mode'." }
+    }
+
+    $provisionedApps = [string](Get-WinMintProfileSetting $Settings 'UpdateProvisionedApps' 'On')
+    if ($provisionedApps -notin @('On', 'Off')) {
+        throw "UpdateProvisionedApps must be On or Off."
+    }
+
+    [ordered]@{
+        mode = $mode
+        targetFeatureVersion = '25H2'
+        releaseCadence = 'BRelease'
+        includeOptionalPreviews = $false
+        payloadRoot = [string](Get-WinMintProfileSetting $Settings 'UpdatePayloadRoot' '')
+        qualitySecurity = [bool](Get-WinMintProfileSetting $Settings 'UpdateQualitySecurity' $true)
+        dynamicUpdate = [bool](Get-WinMintProfileSetting $Settings 'UpdateDynamicUpdate' $true)
+        defender = [bool](Get-WinMintProfileSetting $Settings 'UpdateDefender' $true)
+        dotnet = [bool](Get-WinMintProfileSetting $Settings 'UpdateDotNet' $true)
+        provisionedApps = ($provisionedApps -eq 'On')
+    }
+}
+
 function New-WinMintBuildProfile {
     [CmdletBinding()]
     param(
@@ -542,6 +571,7 @@ function New-WinMintBuildProfile {
     $removeCommunication = [bool](Get-WinMintProfileSetting $Settings 'RemoveCommunication' $true)
     $removeMicrosoftApps = [bool](Get-WinMintProfileSetting $Settings 'RemoveMicrosoftApps' $true)
     $aiPolicy = Get-WinMintProfileAiPolicy -Settings $Settings
+    $updateConfig = Resolve-WinMintProfileUpdateConfig -Settings $Settings
     $userLocale = Get-WinMintProfileStringSetting -Settings $Settings -Name 'UserLocale' -Default 'en-US'
     $homeLocationGeoId = [int](Get-WinMintProfileSetting $Settings 'HomeLocationGeoId' (Resolve-WinMintRegionGeoId -CultureName $userLocale))
     $effectiveAppxSettings = [ordered]@{
@@ -623,6 +653,7 @@ function New-WinMintBuildProfile {
             liveInstallAudit = [bool](Get-WinMintProfileSetting $Settings 'LiveInstallAudit' $false)
             phoneLink = [bool](Get-WinMintProfileSetting $Settings 'PhoneLink' $false)
         }
+        updates = $updateConfig
         keep = [ordered]@{
             edge = $keepEdge
             gaming = $keepGaming
@@ -732,6 +763,7 @@ function Test-WinMintBuildProfile {
     $desktop = Get-WinMintProfileSetting $BuildProfile 'desktop' @{}
     $development = Get-WinMintProfileSetting $BuildProfile 'development' @{}
     $features = Get-WinMintProfileSetting $BuildProfile 'features' @{}
+    $updates = Get-WinMintProfileSetting $BuildProfile 'updates' @{ mode = 'None' }
     $removals = Get-WinMintProfileSetting $BuildProfile 'removals' @{}
     $privacy = Get-WinMintProfileSetting $BuildProfile 'privacy' @{}
     $tweaks = Get-WinMintProfileSetting $BuildProfile 'tweaks' @{}
@@ -840,6 +872,23 @@ function Test-WinMintBuildProfile {
         }
         if (Test-WinMintProfileProperty -Object $features -Name 'flowEverything') {
             & $bool $features 'flowEverything' 'profile.features.flowEverything'
+        }
+    }
+
+    if (Test-WinMintProfileProperty -Object $BuildProfile -Name 'updates') {
+        & $require $updates 'profile.updates' @(
+            'mode', 'targetFeatureVersion', 'releaseCadence', 'includeOptionalPreviews',
+            'payloadRoot', 'qualitySecurity', 'dynamicUpdate', 'defender', 'dotnet',
+            'provisionedApps'
+        )
+        & $enum ([string](Get-WinMintProfileSetting $updates 'mode' 'None')) 'profile.updates.mode' @('None', 'Stable25H2')
+        & $enum ([string](Get-WinMintProfileSetting $updates 'targetFeatureVersion' '25H2')) 'profile.updates.targetFeatureVersion' @('25H2')
+        & $enum ([string](Get-WinMintProfileSetting $updates 'releaseCadence' 'BRelease')) 'profile.updates.releaseCadence' @('BRelease')
+        foreach ($name in @('includeOptionalPreviews', 'qualitySecurity', 'dynamicUpdate', 'defender', 'dotnet', 'provisionedApps')) {
+            & $bool $updates $name "profile.updates.$name"
+        }
+        if ([bool](Get-WinMintProfileSetting $updates 'includeOptionalPreviews' $false)) {
+            & $add 'profile.updates.includeOptionalPreviews must remain false for Stable25H2 builds.'
         }
     }
 

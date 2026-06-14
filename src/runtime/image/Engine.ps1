@@ -17,6 +17,7 @@ function New-WinMintBuildConfig {
     $desktop = Get-WinMintProfileSetting $BuildProfile 'desktop' @{}
     $development = Get-WinMintProfileSetting $BuildProfile 'development' @{}
     $featureToggles = Get-WinMintProfileSetting $BuildProfile 'features' @{}
+    $updates = Get-WinMintProfileSetting $BuildProfile 'updates' @{ mode = 'None' }
     $wsl = Get-WinMintProfileSetting $development 'wsl' @{}
     $removals = Get-WinMintProfileSetting $BuildProfile 'removals' @{}
     $privacy = Get-WinMintProfileSetting $BuildProfile 'privacy' @{}
@@ -198,6 +199,18 @@ function New-WinMintBuildConfig {
         InstallRaycast = $installRaycast
         LiveInstallAudit = $enableLiveInstallAudit
         PhoneLink = $enablePhoneLink
+        Updates = [pscustomobject]@{
+            Mode = [string](Get-WinMintProfileSetting $updates 'mode' 'None')
+            TargetFeatureVersion = [string](Get-WinMintProfileSetting $updates 'targetFeatureVersion' '25H2')
+            ReleaseCadence = [string](Get-WinMintProfileSetting $updates 'releaseCadence' 'BRelease')
+            IncludeOptionalPreviews = [bool](Get-WinMintProfileSetting $updates 'includeOptionalPreviews' $false)
+            PayloadRoot = [string](Get-WinMintProfileSetting $updates 'payloadRoot' '')
+            QualitySecurity = [bool](Get-WinMintProfileSetting $updates 'qualitySecurity' $true)
+            DynamicUpdate = [bool](Get-WinMintProfileSetting $updates 'dynamicUpdate' $true)
+            Defender = [bool](Get-WinMintProfileSetting $updates 'defender' $true)
+            DotNet = [bool](Get-WinMintProfileSetting $updates 'dotnet' $true)
+            ProvisionedApps = [bool](Get-WinMintProfileSetting $updates 'provisionedApps' $true)
+        }
         Wsl2Distro = $wsl2Distro
         Wsl2Distros = @($wsl2Distros)
         AppxPackages = @($appxRemovalPrefixes)
@@ -348,6 +361,24 @@ function Test-WinMintBuildPrerequisite {
     }
     if ($Config.PasswordSet -and -not $Config.PasswordIncluded) {
         $failures.Add('The build profile says a password was set, but the password secret is not included. Re-enter the password in the UI before building.')
+    }
+    if ($Config.Updates -and [string]$Config.Updates.Mode -ne 'None') {
+        if ([string]$Config.Updates.Mode -ne 'Stable25H2') {
+            $failures.Add("Unsupported image update mode: $($Config.Updates.Mode)")
+        }
+        if ([string]$Config.Updates.TargetFeatureVersion -ne '25H2') {
+            $failures.Add('Stable image updates are limited to Windows 11 25H2 broad-release media.')
+        }
+        if ([string]$Config.Updates.ReleaseCadence -ne 'BRelease' -or [bool]$Config.Updates.IncludeOptionalPreviews) {
+            $failures.Add('Stable image updates must use Patch Tuesday B-release payloads; optional C/D previews are not accepted.')
+        }
+        $payloadRoot = [string]$Config.Updates.PayloadRoot
+        if ([string]::IsNullOrWhiteSpace($payloadRoot)) {
+            $failures.Add('Stable25H2 image updates require updates.payloadRoot with explicit Microsoft update/MSIX payloads.')
+        }
+        elseif (-not (Test-Path -LiteralPath $payloadRoot -PathType Container)) {
+            $failures.Add("Update payload root not found: $payloadRoot")
+        }
     }
     if ($Config.AutoLogon -and [string]::IsNullOrWhiteSpace([string]$Config.Password)) {
         $failures.Add('Autologon requires an included account password.')
