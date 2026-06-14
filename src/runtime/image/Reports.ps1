@@ -780,6 +780,90 @@ function Set-WinMintManifestWindowsPackageRemovalFacts {
     $script:WinMintBuildManifest.removals.windowsPackagesRemoved = @($PackageNames)
 }
 
+function Add-WinMintManifestAiOptionalFeatureRemovalFacts {
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$RemovedFeatures,
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Failed
+    )
+
+    if ($null -eq $script:WinMintBuildManifest -or -not $script:WinMintBuildManifest.removals.ai) { return }
+    $existing = @($script:WinMintBuildManifest.removals.ai.optionalFeaturesRemoved)
+    $script:WinMintBuildManifest.removals.ai.optionalFeaturesRemoved = @($existing + @($RemovedFeatures) | Sort-Object -Unique)
+    $script:WinMintBuildManifest.removals.ai.failed = @(@($script:WinMintBuildManifest.removals.ai.failed) + @($Failed))
+}
+
+function Set-WinMintManifestOneDriveSetupStubRemovalFacts {
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Removed,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$NotFound,
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Failed
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.removals['oneDriveSetupStubs'] = [ordered]@{
+        intent = 'Do not offer or auto-provision OneDrive on fresh installs; users can reinstall OneDrive later from Microsoft or winget.'
+        removed = @($Removed)
+        notFound = @($NotFound)
+        failed = @($Failed)
+    }
+}
+
+function Set-WinMintManifestAppxRemovalFacts {
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$RemovedPackageNames,
+        [int]$RemovedCount = @($RemovedPackageNames).Count,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$AiRemovedPackageNames
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.removals.appxRemoved = @($RemovedPackageNames)
+    $script:WinMintBuildManifest.removals.appxRemovedCount = [int]$RemovedCount
+    if ($script:WinMintBuildManifest.removals.ai -and @($AiRemovedPackageNames).Count -gt 0) {
+        $script:WinMintBuildManifest.removals.ai.appxRemoved = @(
+            @($script:WinMintBuildManifest.removals.ai.appxRemoved) + @($AiRemovedPackageNames) |
+                Sort-Object -Unique
+        )
+    }
+}
+
+function Set-WinMintManifestUsbMediaFact {
+    param([Parameter(Mandatory)]$Result)
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest['usbMedia'] = [ordered]@{
+        enabled = $true
+        status = [string]$Result.Status
+        writtenAt = [string]$Result.WrittenAt
+        diskNumber = [int]$Result.DiskNumber
+        diskModel = [string]$Result.DiskModel
+        diskSizeBytes = [long]$Result.DiskSizeBytes
+        partitionScheme = 'GPT'
+        bootMode = 'UEFI'
+        installFilesystem = 'NTFS'
+        installDrive = [string]$Result.InstallDrive
+        helper = 'UEFI:NTFS'
+        helperVersion = [string]$Result.HelperVersion
+        helperSourceUrl = [string]$Result.HelperSourceUrl
+        helperSha256 = [string]$Result.HelperSha256
+        architecture = [string]$Result.Architecture
+    }
+}
+
+function Set-WinMintManifestUsbMediaFailureFact {
+    param(
+        [Parameter(Mandatory)][int]$DiskNumber,
+        [Parameter(Mandatory)][string]$ErrorMessage
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest['usbMedia'] = [ordered]@{
+        enabled = $true
+        status = 'failed'
+        diskNumber = [int]$DiskNumber
+        error = $ErrorMessage
+    }
+}
+
 function Add-WinMintManifestRegistryTweakEvent {
     param(
         [Parameter(Mandatory)]$Group,

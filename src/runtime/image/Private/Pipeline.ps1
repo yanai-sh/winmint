@@ -464,7 +464,7 @@ function Invoke-WinMintIsoPipeline {
                 -SetupPlan $installPlan.SetupPlan
 
             if ($null -eq $servicedWimCacheHit) {
-                Invoke-AppxRemoval -MountDir $mountDir -PackagePrefixes $BuildConfig.AppxPackages
+                Invoke-AppxRemoval -MountDir $mountDir -PackagePrefixes $BuildConfig.AppxPackages -AiPackagePrefixes $BuildConfig.AiRemoval.AppxPrefixes
                 Invoke-WinMintOfflineAiFeatureRemoval -MountDir $mountDir -AiRemoval $BuildConfig.AiRemoval
                 Remove-WinMintCapabilities -MountDir $mountDir
                 # Preserve only the display language(s); en-us is always kept by the

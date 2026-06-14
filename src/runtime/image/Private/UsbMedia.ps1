@@ -273,24 +273,8 @@ function Test-WinMintUsbInstallMedia {
 
 function Set-WinMintManifestUsbMedia {
     param([Parameter(Mandatory)]$Result)
-    if ($null -eq $script:WinMintBuildManifest) { return }
-    $script:WinMintBuildManifest['usbMedia'] = [ordered]@{
-        enabled = $true
-        status = [string]$Result.Status
-        writtenAt = [string]$Result.WrittenAt
-        diskNumber = [int]$Result.DiskNumber
-        diskModel = [string]$Result.DiskModel
-        diskSizeBytes = [long]$Result.DiskSizeBytes
-        partitionScheme = 'GPT'
-        bootMode = 'UEFI'
-        installFilesystem = 'NTFS'
-        installDrive = [string]$Result.InstallDrive
-        helper = 'UEFI:NTFS'
-        helperVersion = [string]$Result.HelperVersion
-        helperSourceUrl = [string]$Result.HelperSourceUrl
-        helperSha256 = [string]$Result.HelperSha256
-        architecture = [string]$Result.Architecture
-    }
+
+    Set-WinMintManifestUsbMediaFact -Result $Result
 }
 
 function Invoke-FlashWindowsInstallMediaToUsb {
@@ -345,14 +329,7 @@ function Invoke-FlashWindowsInstallMediaToUsb {
         return $result
     }
     catch {
-        if ($null -ne $script:WinMintBuildManifest) {
-            $script:WinMintBuildManifest['usbMedia'] = [ordered]@{
-                enabled = $true
-                status = 'failed'
-                diskNumber = [int]$UsbDiskNumber
-                error = $_.Exception.Message
-            }
-        }
+        Set-WinMintManifestUsbMediaFailureFact -DiskNumber $UsbDiskNumber -ErrorMessage $_.Exception.Message
         throw
     }
     finally {

@@ -113,9 +113,5 @@ function Invoke-WinMintOfflineAiFeatureRemoval {
         }
     }
 
-    if ($null -ne $script:WinMintBuildManifest -and $script:WinMintBuildManifest.removals.ai) {
-        $existing = @($script:WinMintBuildManifest.removals.ai.optionalFeaturesRemoved)
-        $script:WinMintBuildManifest.removals.ai.optionalFeaturesRemoved = @($existing + $removed.ToArray() | Sort-Object -Unique)
-        $script:WinMintBuildManifest.removals.ai.failed = @(@($script:WinMintBuildManifest.removals.ai.failed) + $failed.ToArray())
-    }
+    Add-WinMintManifestAiOptionalFeatureRemovalFacts -RemovedFeatures $removed.ToArray() -Failed $failed.ToArray()
 }

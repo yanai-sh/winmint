@@ -1662,6 +1662,8 @@ function Assert-OneDriveRemovalPolicyIsComplete {
     $firstLogonText = Get-Content -LiteralPath $firstLogonPath -Raw
     $setupCompleteText = Get-WinMintSetupCompleteText
     $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Staging.ps1') -Raw
+    $offlineOneDriveReportText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Reports.ps1') -Raw
+    $offlineOneDriveText = $stagingText + "`n" + $offlineOneDriveReportText
     $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Pipeline.ps1') -Raw
     foreach ($expected in @(
             'FirstLogon_OneDriveAudit.json',
@@ -1705,7 +1707,7 @@ function Assert-OneDriveRemovalPolicyIsComplete {
             'oneDriveSetupStubs',
             'users can reinstall OneDrive later'
         )) {
-        if ($stagingText -notlike "*$expected*") {
+        if ($offlineOneDriveText -notlike "*$expected*") {
             Add-SmokeFailure "Expected offline OneDrive setup-stub removal to include $expected."
         }
     }

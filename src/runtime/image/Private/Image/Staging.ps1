@@ -836,20 +836,17 @@ function Remove-WinMintOneDriveSetupStub {
         }
     }
 
-    if ($null -ne $script:WinMintBuildManifest) {
-        $script:WinMintBuildManifest.removals['oneDriveSetupStubs'] = [ordered]@{
-            intent = 'Do not offer or auto-provision OneDrive on fresh installs; users can reinstall OneDrive later from Microsoft or winget.'
-            removed = $removed.ToArray()
-            notFound = $notFound.ToArray()
-            failed = $failed.ToArray()
-        }
-    }
+    Set-WinMintManifestOneDriveSetupStubRemovalFacts `
+        -Removed $removed.ToArray() `
+        -NotFound $notFound.ToArray() `
+        -Failed $failed.ToArray()
 }
 
 function Invoke-AppxRemoval {
     param(
         [ValidateNotNullOrEmpty()][string]$MountDir,
-        [string[]]$PackagePrefixes = $script:AppxBloatware
+        [string[]]$PackagePrefixes = $script:AppxBloatware,
+        [string[]]$AiPackagePrefixes = @()
     )
     Write-SectionHeader 'Image: optional apps'
     Invoke-Action 'Removing optional preinstalled Store apps from the image' {
@@ -872,25 +869,19 @@ function Invoke-AppxRemoval {
             }
         }
         LogOK "Optional apps pass finished ($removed package(s) removed)."
-        if ($null -ne $script:WinMintBuildManifest) {
-            $script:WinMintBuildManifest.removals.appxRemoved = $removedNames.ToArray()
-            $script:WinMintBuildManifest.removals.appxRemovedCount = $removed
-            if ($script:WinMintBuildManifest.removals.ai) {
-                $aiRemoved = @(
-                    foreach ($name in @($removedNames)) {
-                        if (Test-WinMintNameMatchesAnyPrefix -Name ([string]$name) -Prefixes @($script:WinMintBuildManifest.removals.ai.appxPrefixes)) {
-                            [string]$name
-                        }
+        $aiRemoved = @(
+            if (@($AiPackagePrefixes).Count -gt 0) {
+                foreach ($name in @($removedNames)) {
+                    if (Test-WinMintNameMatchesAnyPrefix -Name ([string]$name) -Prefixes @($AiPackagePrefixes)) {
+                        [string]$name
                     }
-                )
-                if ($aiRemoved.Count -gt 0) {
-                    $script:WinMintBuildManifest.removals.ai.appxRemoved = @(
-                        @($script:WinMintBuildManifest.removals.ai.appxRemoved) + $aiRemoved |
-                            Sort-Object -Unique
-                    )
                 }
             }
-        }
+        )
+        Set-WinMintManifestAppxRemovalFacts `
+            -RemovedPackageNames $removedNames.ToArray() `
+            -RemovedCount $removed `
+            -AiRemovedPackageNames $aiRemoved
         if ($removedNames.Count -gt 0) {
             Write-Win11IsoAppxDeprovisionedEntry -MountDir $MountDir -PackageNames $removedNames.ToArray()
         }
