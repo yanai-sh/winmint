@@ -230,7 +230,11 @@ function New-WinMintBuildConfig {
         }
         Drivers = [pscustomobject]@{ Source = $driverSource; Path = $driverPath }
         NoServicedWimCache = [bool](Get-WinMintProfileSetting $BuildProfile 'noServicedWimCache' $false)
-        SetupScripts = @('SetupComplete.cmd', 'SetupComplete.ps1', 'SetupComplete\*.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Runtime.ps1', 'WinMintAgent', 'ViVeTool')
+        SetupScripts = @(
+            'SetupComplete.cmd', 'SetupComplete.ps1', 'SetupComplete\*.ps1', 'Specialize.ps1',
+            'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1',
+            'FirstLogon.Runtime.ps1', 'WinMintAgent', 'ViVeTool'
+        )
         Assets = @('fonts', 'cursors', 'PowerShell 7', 'windows-terminal', 'winget')
         PackagesManifest = $packages
     }

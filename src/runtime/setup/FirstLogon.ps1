@@ -16,7 +16,7 @@ $script:WinMintFirstLogonMaxAttempts = 3
 try { Start-Transcript -Path (Join-Path $logDir 'FirstLogon_transcript.log') -Append -ErrorAction SilentlyContinue | Out-Null } catch { }
 
 $script:WinMintFirstLogonEntryPath = $PSCommandPath
-$supportPath = Join-Path $PSScriptRoot 'FirstLogon.Support.ps1'
+$supportPath = Join-Path $payloadDir 'FirstLogon.Support.ps1'
 if (-not (Test-Path -LiteralPath $supportPath -PathType Leaf)) {
     "$(Get-Date -Format 'o') FirstLogon support module is missing: $supportPath" | Out-File (Join-Path $logDir 'FirstLogon_errors.log') -Append
     try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
@@ -24,7 +24,7 @@ if (-not (Test-Path -LiteralPath $supportPath -PathType Leaf)) {
 }
 . $supportPath
 
-$runtimePath = Join-Path $PSScriptRoot 'FirstLogon.Runtime.ps1'
+$runtimePath = Join-Path $payloadDir 'FirstLogon.Runtime.ps1'
 if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) {
     Write-WinMintFirstLogonError "FirstLogon runtime module is missing: $runtimePath"
     try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
@@ -32,4 +32,3 @@ if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) {
 }
 . $runtimePath
 exit (Invoke-WinMintFirstLogonSetupPhase -AgentMode $AgentMode)
-
