@@ -677,6 +677,68 @@ function Set-WinMintManifestSetupPlanFact {
     }
 }
 
+function Set-WinMintManifestSizeDeltaFact {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [AllowNull()]$Value
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    if (-not $script:WinMintBuildManifest.Contains('sizeDelta')) { return }
+    if ($null -eq $Value) { return }
+    $script:WinMintBuildManifest.sizeDelta[$Name] = [long]$Value
+}
+
+function Set-WinMintManifestSizeDeltaFromPath {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [AllowNull()][string]$Path
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    Set-WinMintManifestSizeDeltaFact -Name $Name -Value (Get-Item -LiteralPath $Path).Length
+}
+
+function Set-WinMintManifestOutputIsoSizeFact {
+    param(
+        [Parameter(Mandatory)][long]$SizeBytes
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    Set-WinMintManifestSizeDeltaFact -Name 'outputIsoBytes' -Value $SizeBytes
+    $sourceBytes = $script:WinMintBuildManifest.sizeDelta.sourceIsoBytes
+    if ([long]$sourceBytes -gt 0) {
+        $script:WinMintBuildManifest.sizeDelta.outputMinusSourceBytes = [long]$SizeBytes - [long]$sourceBytes
+        $script:WinMintBuildManifest.sizeDelta.outputToSourceRatio = [math]::Round(([double]$SizeBytes / [double]$sourceBytes), 4)
+    }
+}
+
+function Set-WinMintManifestSourceEditionsFact {
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$EditionNames
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.source.editions = @($EditionNames)
+}
+
+function Set-WinMintManifestServicedWimCacheFact {
+    param([bool]$Restored)
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest | Add-Member -NotePropertyName servicedWimCacheRestored -NotePropertyValue $Restored -Force
+}
+
+function Set-WinMintManifestDriverFacts {
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$InfNames
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.drivers.injectedCount = @($InfNames).Count
+    $script:WinMintBuildManifest.drivers.infNames = @($InfNames | Sort-Object -Unique)
+}
+
 function Add-WinMintManifestRegistryTweakEvent {
     param(
         [Parameter(Mandatory)]$Group,

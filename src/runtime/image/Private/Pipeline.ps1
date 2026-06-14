@@ -255,14 +255,8 @@ function Invoke-WinMintIsoPipeline {
             $null = Convert-WinMintInstallEsdToWim -IsoContentsRoot $isoContents -DryRun:$DryRun
         }
         $installWim = Join-Path $isoContents 'sources\install.wim'
-        if ($null -ne $script:WinMintBuildManifest) {
-            if (Test-Path -LiteralPath $BuildConfig.SourceIso) {
-                $script:WinMintBuildManifest.sizeDelta.sourceIsoBytes = (Get-Item -LiteralPath $BuildConfig.SourceIso).Length
-            }
-            if (Test-Path -LiteralPath $installWim) {
-                $script:WinMintBuildManifest.sizeDelta.installWimBeforeServicingBytes = (Get-Item -LiteralPath $installWim).Length
-            }
-        }
+        Set-WinMintManifestSizeDeltaFromPath -Name 'sourceIsoBytes' -Path $BuildConfig.SourceIso
+        Set-WinMintManifestSizeDeltaFromPath -Name 'installWimBeforeServicingBytes' -Path $installWim
         $readiness = Test-OfflineStagingReadiness `
             -LocalInstallWim $installWim `
             -IsoContentsRoot $isoContents `
@@ -317,14 +311,12 @@ function Invoke-WinMintIsoPipeline {
             return ''
         }
 
-        if ($null -ne $script:WinMintBuildManifest) {
-            $editionNames = @($installImages | ForEach-Object { Get-WimImageName -img $_ } | Where-Object { $_ })
-            if ($editionNames.Count -lt $installImages.Count) {
-                $firstImagePropertyNames = (@($installImages)[0].PSObject.Properties.Name) -join ', '
-                LogWarn "Get-WindowsImage returned $($installImages.Count) image(s) but only $($editionNames.Count) had a readable ImageName. Properties on first object: $firstImagePropertyNames"
-            }
-            $script:WinMintBuildManifest.source.editions = $editionNames
+        $editionNames = @($installImages | ForEach-Object { Get-WimImageName -img $_ } | Where-Object { $_ })
+        if ($editionNames.Count -lt $installImages.Count) {
+            $firstImagePropertyNames = (@($installImages)[0].PSObject.Properties.Name) -join ', '
+            LogWarn "Get-WindowsImage returned $($installImages.Count) image(s) but only $($editionNames.Count) had a readable ImageName. Properties on first object: $firstImagePropertyNames"
         }
+        Set-WinMintManifestSourceEditionsFact -EditionNames $editionNames
 
         $installPlan = Get-WinMintInstallPlanForBuildConfig -BuildConfig $BuildConfig -ExistingPlan $InstallPlan
 
@@ -391,9 +383,7 @@ function Invoke-WinMintIsoPipeline {
             Log "Restoring serviced install.wim from temp cache (skipping driver injection, appx removal, and package install)…"
             Copy-Item -LiteralPath $servicedWimCacheHit -Destination $installWim -Force -ErrorAction Stop
             Assert-WinMintWimMetadataHealthy -ImagePath $installWim -ExpectedMetadata $expectedWimMetadata -ExpectedArchitecture $imageArch
-            if ($null -ne $script:WinMintBuildManifest) {
-                $script:WinMintBuildManifest | Add-Member -NotePropertyName servicedWimCacheRestored -NotePropertyValue $true -Force
-            }
+            Set-WinMintManifestServicedWimCacheFact -Restored $true
         }
 
         Sync-NerdFont -FontDir (Join-Path $root 'assets\runtime\fonts')
@@ -516,26 +506,21 @@ function Invoke-WinMintIsoPipeline {
             $firstServicedImage = $false
         }
         Complete-PipelinePhase 'Service WIM'
-        if ($null -ne $script:WinMintBuildManifest -and (Test-Path -LiteralPath $installWim)) {
-            $script:WinMintBuildManifest.sizeDelta.installWimAfterServicingBytes = (Get-Item -LiteralPath $installWim).Length
-        }
+        Set-WinMintManifestSizeDeltaFromPath -Name 'installWimAfterServicingBytes' -Path $installWim
         Assert-WinMintWimMetadataHealthy -ImagePath $installWim -ExpectedMetadata $expectedWimMetadata -ExpectedArchitecture $imageArch
         if (-not $NoServicedWimCache -and $null -eq $servicedWimCacheHit -and -not [string]::IsNullOrWhiteSpace($servicedWimFingerprint) -and (Test-Path -LiteralPath $installWim)) {
             Publish-WinMintServicedWimCache -Fingerprint $servicedWimFingerprint -ServicedWimPath $installWim -ExpectedMetadata $expectedWimMetadata
         }
 
-        if ($null -ne $script:WinMintBuildManifest) {
-            $infNames = @(
-                foreach ($ds in $driverSources) {
-                    if ($ds.Source -and (Test-Path -LiteralPath $ds.Source)) {
-                        Get-ChildItem -LiteralPath $ds.Source -Recurse -Filter '*.inf' -ErrorAction SilentlyContinue |
-                            Select-Object -ExpandProperty Name
-                    }
+        $infNames = @(
+            foreach ($ds in $driverSources) {
+                if ($ds.Source -and (Test-Path -LiteralPath $ds.Source)) {
+                    Get-ChildItem -LiteralPath $ds.Source -Recurse -Filter '*.inf' -ErrorAction SilentlyContinue |
+                        Select-Object -ExpandProperty Name
                 }
-            )
-            $script:WinMintBuildManifest.drivers.injectedCount = $infNames.Count
-            $script:WinMintBuildManifest.drivers.infNames = @($infNames | Sort-Object -Unique)
-        }
+            }
+        )
+        Set-WinMintManifestDriverFacts -InfNames $infNames
 
         Install-WinPEUtility -IsoContents $isoContents -AutoWipeDisk:$BuildConfig.AutoWipeDisk
         if ($editionMode -eq 'Fixed') {
@@ -543,9 +528,7 @@ function Invoke-WinMintIsoPipeline {
             Export-SingleEdition -LocalWim $installWim -SelectedWimIndex $selectedImage.ImageIndex -SelectedEdition $selectedImage.ImageName
             Assert-WinMintWimMetadataHealthy -ImagePath $installWim -ExpectedMetadata $expectedWimMetadata -ExpectedArchitecture $imageArch -AllowIndexRenumber
         }
-        if ($null -ne $script:WinMintBuildManifest -and (Test-Path -LiteralPath $installWim)) {
-            $script:WinMintBuildManifest.sizeDelta.installWimAfterExportBytes = (Get-Item -LiteralPath $installWim).Length
-        }
+        Set-WinMintManifestSizeDeltaFromPath -Name 'installWimAfterExportBytes' -Path $installWim
         Start-PipelinePhase 'Assemble ISO'
         if (Get-Command Set-WinMintHeadlessJournalPhase -ErrorAction SilentlyContinue) {
             Set-WinMintHeadlessJournalPhase -Phase 'AssembleIso' -WorkDir $workDir -MountDir $mountDir -IsoContents $isoContents
@@ -554,14 +537,7 @@ function Invoke-WinMintIsoPipeline {
         if (Test-Path -LiteralPath $outputIso) {
             $isoItem = Get-Item -LiteralPath $outputIso
             $isoHash = (Get-FileHash -LiteralPath $outputIso -Algorithm SHA256).Hash
-            if ($null -ne $script:WinMintBuildManifest) {
-                $script:WinMintBuildManifest.sizeDelta.outputIsoBytes = $isoItem.Length
-                $sourceBytes = $script:WinMintBuildManifest.sizeDelta.sourceIsoBytes
-                if ([long]$sourceBytes -gt 0) {
-                    $script:WinMintBuildManifest.sizeDelta.outputMinusSourceBytes = [long]$isoItem.Length - [long]$sourceBytes
-                    $script:WinMintBuildManifest.sizeDelta.outputToSourceRatio = [math]::Round(([double]$isoItem.Length / [double]$sourceBytes), 4)
-                }
-            }
+            Set-WinMintManifestOutputIsoSizeFact -SizeBytes ([long]$isoItem.Length)
             LogOK "Final ISO: $outputIso"
             LogOK "Final ISO size: $(Format-WinMintByteSize -Bytes $isoItem.Length) ($($isoItem.Length) bytes)."
             LogOK "Final ISO SHA256: $isoHash"
