@@ -505,7 +505,7 @@ function Install-Autounattend {
                 LogOK 'Staged WinMint account picture into the offline image.'
             }
             $utf8Bom = [System.Text.UTF8Encoding]::new($true)
-            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Runtime.ps1')) {
+            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Runtime.ps1')) {
                 $src = Join-Path $bundleDir $n
                 if (-not (Test-Path -LiteralPath $src)) { continue }
                 $destPath = Join-Path $destScripts $n
@@ -521,7 +521,7 @@ function Install-Autounattend {
             # Loud build-time guard: the install boots to a vanilla desktop (no
             # personalization, no debloat, no agent) if these never make it into the
             # image. Fail the build here rather than ship a silently broken ISO.
-            foreach ($must in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Runtime.ps1')) {
+            foreach ($must in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Runtime.ps1')) {
                 if (-not (Test-Path -LiteralPath (Join-Path $bundleDir $must))) {
                     throw "WinMint setup payload missing from the repository: $(Join-Path $bundleDir $must). Cannot guarantee FirstLogon/SetupComplete will run."
                 }

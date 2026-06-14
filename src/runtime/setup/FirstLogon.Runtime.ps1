@@ -20,7 +20,7 @@ function Invoke-WinMintFirstLogonSetupPhase {
                 Set-Content -LiteralPath $p7Flag -Value (Get-Date -Format o) -Encoding ASCII
                 "$(Get-Date -Format 'o') Re-launching FirstLogon under PowerShell 7 ($pwsh7); the 5.1 instance waits for it." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
                 try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
-                $p7 = Start-Process -FilePath $pwsh7 -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$PSCommandPath`"") -Wait -PassThru
+                $p7 = Start-Process -FilePath $pwsh7 -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$script:WinMintFirstLogonEntryPath`"") -Wait -PassThru
                 return ([int]$p7.ExitCode)
             }
             catch {

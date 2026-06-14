@@ -18,6 +18,7 @@ function Get-WinMintFirstLogonText {
     $parts = [System.Collections.Generic.List[string]]::new()
     foreach ($relativePath in @(
         'src\runtime\setup\FirstLogon.ps1',
+        'src\runtime\setup\FirstLogon.Support.ps1',
         'src\runtime\setup\FirstLogon.Runtime.ps1'
     )) {
         $path = Join-Path $root $relativePath
@@ -745,7 +746,7 @@ function Assert-LiveInstallAuditIsStaged {
     if ($unattendText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
         Add-SmokeFailure 'Install-Autounattend must not rely on the removed top-level scripts directory.'
     }
-    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Runtime.ps1')) {
+    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Runtime.ps1')) {
         if ($unattendText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Install-Autounattend should stage '$expected'."
         }
@@ -1242,7 +1243,7 @@ function Assert-AgentWingetUsesDefaultInstallerSelection {
 
 function Assert-ElevationChecksUseInstanceMarshalSize {
     foreach ($relativePath in @(
-        'src\runtime\setup\FirstLogon.ps1',
+        'src\runtime\setup\FirstLogon.Support.ps1',
         'src\runtime\firstlogon\Agent.Runtime.ps1'
     )) {
         $text = Get-Content -LiteralPath (Join-Path $root $relativePath) -Raw
@@ -1658,8 +1659,7 @@ function Assert-OneDriveRemovalPolicyIsComplete {
         Add-SmokeFailure 'OneDrive removal policy must not write literal C:\Users\Default shell folder values.'
     }
 
-    $firstLogonPath = Join-Path $root 'src\runtime\setup\FirstLogon.ps1'
-    $firstLogonText = Get-Content -LiteralPath $firstLogonPath -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     $setupCompleteText = Get-WinMintSetupCompleteText
     $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Staging.ps1') -Raw
     $offlineOneDriveReportText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Reports.ps1') -Raw
@@ -1719,9 +1719,8 @@ function Assert-OneDriveRemovalPolicyIsComplete {
 function Assert-CursorInstallUsesModernRegistryContract {
     $catalogPath = Join-Path $root 'src\runtime\image\Private\Catalog.ps1'
     $assetsPath = Join-Path $root 'src\runtime\image\Private\Image\Assets.ps1'
-    $firstLogonPath = Join-Path $root 'src\runtime\setup\FirstLogon.ps1'
     $assetsText = Get-Content -LiteralPath $assetsPath -Raw
-    $firstLogonText = Get-Content -LiteralPath $firstLogonPath -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
 
     $expectedOrder = @(
         'Arrow.cur', 'Help.cur', 'Work.ani', 'Busy.ani', 'Cross.cur', 'IBeam.cur', 'Handwriting.cur', 'Unavailable.cur',
@@ -2106,9 +2105,8 @@ function Assert-PSScriptAnalyzerHonorsProjectSettings {
 
 function Assert-XdgDefaultsAreStaged {
     $defaultUserPath = Join-Path $root 'src\runtime\setup\DefaultUser.ps1'
-    $firstLogonPath = Join-Path $root 'src\runtime\setup\FirstLogon.ps1'
     $defaultUserText = Get-Content -LiteralPath $defaultUserPath -Raw
-    $firstLogonText = Get-Content -LiteralPath $firstLogonPath -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     foreach ($expected in @(
         'XDG_CONFIG_HOME',
         'XDG_DATA_HOME',
