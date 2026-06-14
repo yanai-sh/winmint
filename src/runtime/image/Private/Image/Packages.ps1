@@ -234,10 +234,7 @@ function Remove-NonEnglishLanguageFeature {
                 $removedPackages.Add($pkg) | Out-Null
             }
         }
-        if ($null -ne $script:WinMintBuildManifest) {
-            $script:WinMintBuildManifest.removals.languagePackagesRemoved = $removedPackages.ToArray()
-            $script:WinMintBuildManifest.removals.languagePackagesRemovedCount = $removedPackages.Count
-        }
+        Set-WinMintManifestLanguagePackageRemovalFacts -PackageNames $removedPackages.ToArray()
     }
 }
 
@@ -267,11 +264,7 @@ function Save-ImageWithCleanup {
     Write-SectionHeader 'Image: cleanup and save' -Accent Yellow -RuleColor Grey -DimLine 'Component cleanup and save can take several minutes; the bar below is normal.'
     Invoke-Action 'Running DISM component cleanup on the mounted Windows image' -SpectreProgressIndeterminate {
         LogVerbose "Mount: $MountDir"
-        if ($null -ne $script:WinMintBuildManifest) {
-            $script:WinMintBuildManifest.servicing.componentCleanup = 'StartComponentCleanup'
-            $script:WinMintBuildManifest.servicing.resetBase = $false
-            $script:WinMintBuildManifest.servicing.serviceabilityPolicy = 'Preserve component-store uninstall/repair metadata; do not run ResetBase by default.'
-        }
+        Set-WinMintManifestComponentCleanupFact
         Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Cleanup-Image', '/StartComponentCleanup') | Out-Null
         LogOK 'DISM component cleanup finished.'
     }

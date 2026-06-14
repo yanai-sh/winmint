@@ -739,6 +739,47 @@ function Set-WinMintManifestDriverFacts {
     $script:WinMintBuildManifest.drivers.infNames = @($InfNames | Sort-Object -Unique)
 }
 
+function Set-WinMintManifestLanguagePackageRemovalFacts {
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$PackageNames
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.removals.languagePackagesRemoved = @($PackageNames)
+    $script:WinMintBuildManifest.removals.languagePackagesRemovedCount = @($PackageNames).Count
+}
+
+function Set-WinMintManifestComponentCleanupFact {
+    param(
+        [string]$ComponentCleanup = 'StartComponentCleanup',
+        [bool]$ResetBase = $false,
+        [string]$ServiceabilityPolicy = 'Preserve component-store uninstall/repair metadata; do not run ResetBase by default.'
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.servicing.componentCleanup = $ComponentCleanup
+    $script:WinMintBuildManifest.servicing.resetBase = $ResetBase
+    $script:WinMintBuildManifest.servicing.serviceabilityPolicy = $ServiceabilityPolicy
+}
+
+function Set-WinMintManifestCapabilityRemovalFacts {
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$CapabilityNames
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.removals.capabilitiesRemoved = @($CapabilityNames)
+}
+
+function Set-WinMintManifestWindowsPackageRemovalFacts {
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$PackageNames
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.removals.windowsPackagesRemoved = @($PackageNames)
+}
+
 function Add-WinMintManifestRegistryTweakEvent {
     param(
         [Parameter(Mandatory)]$Group,

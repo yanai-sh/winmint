@@ -750,9 +750,7 @@ function Remove-WinMintCapabilities {
             catch { LogWarn "Capability not present or already removed: $cap" }
         }
     }
-    if ($null -ne $script:WinMintBuildManifest) {
-        $script:WinMintBuildManifest.removals.capabilitiesRemoved = $removed.ToArray()
-    }
+    Set-WinMintManifestCapabilityRemovalFacts -CapabilityNames $removed.ToArray()
 
     $packagePatterns = @(
         'Microsoft-Windows-InternetExplorer-Optional-Package',
@@ -783,9 +781,7 @@ function Remove-WinMintCapabilities {
             }
         }
     }
-    if ($null -ne $script:WinMintBuildManifest) {
-        $script:WinMintBuildManifest.removals.windowsPackagesRemoved = $removedPackages.ToArray()
-    }
+    Set-WinMintManifestWindowsPackageRemovalFacts -PackageNames $removedPackages.ToArray()
 
     Invoke-Action 'Disabling PowerShell 2.0 (pre-AMSI engine; no legitimate use on modern hardware)' {
         foreach ($feature in $features) {
