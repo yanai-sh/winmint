@@ -499,10 +499,21 @@ function Get-WinMintProfileDualBootPreset {
     }
 }
 
+function Get-WinMintDefaultUpdatePayloadRoot {
+    $temp = [System.IO.Path]::GetTempPath()
+    if ([string]::IsNullOrWhiteSpace($temp)) {
+        $temp = $env:TEMP
+    }
+    if ([string]::IsNullOrWhiteSpace($temp)) {
+        return ''
+    }
+    Join-Path ($temp.TrimEnd([char]'\', [char]'/')) 'Win11ISO_dependency_cache\updates\25H2-BRelease'
+}
+
 function Resolve-WinMintProfileUpdateConfig {
     param([object]$Settings)
 
-    $mode = [string](Get-WinMintProfileSetting $Settings 'UpdateImage' (Get-WinMintProfileSetting $Settings 'UpdateMode' 'None'))
+    $mode = [string](Get-WinMintProfileSetting $Settings 'UpdateImage' (Get-WinMintProfileSetting $Settings 'UpdateMode' 'Stable25H2'))
     switch -Regex ($mode) {
         '^(None|Off|Disabled)$' { $mode = 'None'; break }
         '^(Stable25H2|LatestStable25H2|25H2)$' { $mode = 'Stable25H2'; break }
@@ -513,13 +524,17 @@ function Resolve-WinMintProfileUpdateConfig {
     if ($provisionedApps -notin @('On', 'Off')) {
         throw "UpdateProvisionedApps must be On or Off."
     }
+    $payloadRoot = [string](Get-WinMintProfileSetting $Settings 'UpdatePayloadRoot' (Get-WinMintDefaultUpdatePayloadRoot))
+    if ($mode -eq 'Stable25H2' -and [string]::IsNullOrWhiteSpace($payloadRoot)) {
+        $payloadRoot = Get-WinMintDefaultUpdatePayloadRoot
+    }
 
     [ordered]@{
         mode = $mode
         targetFeatureVersion = '25H2'
         releaseCadence = 'BRelease'
         includeOptionalPreviews = $false
-        payloadRoot = [string](Get-WinMintProfileSetting $Settings 'UpdatePayloadRoot' '')
+        payloadRoot = $payloadRoot
         qualitySecurity = [bool](Get-WinMintProfileSetting $Settings 'UpdateQualitySecurity' $true)
         dynamicUpdate = [bool](Get-WinMintProfileSetting $Settings 'UpdateDynamicUpdate' $true)
         defender = [bool](Get-WinMintProfileSetting $Settings 'UpdateDefender' $true)

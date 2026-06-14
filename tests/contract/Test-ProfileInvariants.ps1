@@ -199,7 +199,7 @@ $profile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
 $config = New-WinMintBuildConfig -BuildProfile $profile
 if ($config.CursorPackKind -ne 'Windows11Modern') { Add-SmokeFailure 'Expected Windows11Modern cursor pack in build config.' }
 if ($config.Tweaks.UpdatePolicy -ne 'All') { Add-SmokeFailure 'Expected All update policy in build config.' }
-if ([string]$config.Updates.Mode -ne 'None') { Add-SmokeFailure 'Expected offline image updates to be opt-in.' }
+if ([string]$config.Updates.Mode -ne 'Stable25H2') { Add-SmokeFailure 'Expected offline image updates to be enabled by default.' }
 if ($config.ExportHostDrivers) { Add-SmokeFailure 'Expected host driver export to be disabled for drivers.source None.' }
 if ($config.RegistryTweaks -contains 'hardware-bypass') { Add-SmokeFailure 'hardware-bypass must not be in the default registry tweaks for a standard build.' }
 if ($config.RegistryTweaks -notcontains 'edge-policy-minimal') { Add-SmokeFailure 'Expected Minimal builds to use the strict Edge policy.' }

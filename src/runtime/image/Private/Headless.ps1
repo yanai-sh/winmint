@@ -329,7 +329,7 @@ function New-WinMintHeadlessProfileFromFlags {
         [switch]$LiveInstallAudit,
         [switch]$PhoneLink,
         [ValidateSet('On', 'Off')][string]$Location = 'On',
-        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'None',
+        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'Stable25H2',
         [string]$UpdatePayloadRoot = '',
         [ValidateSet('On', 'Off')][string]$UpdateProvisionedApps = 'On',
         [ValidateSet('windhawk', 'yasb', 'komorebi', 'nilesoft')][string[]]$Install = @(),

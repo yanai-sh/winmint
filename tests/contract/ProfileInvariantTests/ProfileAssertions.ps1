@@ -359,20 +359,32 @@ function Assert-OfflinePayloadCacheStatus {
 
 function Assert-ImageUpdateProfileContract {
     $defaultProfile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
-    if ([string]$defaultProfile.updates.mode -ne 'None') {
-        Add-SmokeFailure "Expected image updates to default to None, got '$($defaultProfile.updates.mode)'."
+    if ([string]$defaultProfile.updates.mode -ne 'Stable25H2') {
+        Add-SmokeFailure "Expected image updates to default to Stable25H2, got '$($defaultProfile.updates.mode)'."
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$defaultProfile.updates.payloadRoot)) {
+        Add-SmokeFailure 'Expected default image updates to carry a default payload root.'
     }
     $defaultConfig = New-WinMintBuildConfig -BuildProfile $defaultProfile
-    if ([string]$defaultConfig.Updates.Mode -ne 'None') {
-        Add-SmokeFailure "Expected build config updates to default to None, got '$($defaultConfig.Updates.Mode)'."
+    if ([string]$defaultConfig.Updates.Mode -ne 'Stable25H2') {
+        Add-SmokeFailure "Expected build config updates to default to Stable25H2, got '$($defaultConfig.Updates.Mode)'."
+    }
+
+    $optOutSettings = New-SmokeBuildProfileSettings
+    $optOutSettings.UpdateImage = 'None'
+    $optOutProfile = New-WinMintBuildProfile -Settings $optOutSettings
+    $optOutConfig = New-WinMintBuildConfig -BuildProfile $optOutProfile
+    if ([string]$optOutProfile.updates.mode -ne 'None' -or [string]$optOutConfig.Updates.Mode -ne 'None') {
+        Add-SmokeFailure 'Expected UpdateImage None to opt out of offline image updates.'
     }
 
     $missingSettings = New-SmokeBuildProfileSettings
-    $missingSettings.UpdateImage = 'Stable25H2'
+    $missingSettings.UpdatePayloadRoot = Join-Path ([IO.Path]::GetTempPath().TrimEnd('\', '/')) ('winmint-missing-update-root-' + [Guid]::NewGuid().ToString('n'))
+    $missingSettings.ISOPath = Get-WinMintTestOfficialIsoFixturePath
     $missingProfile = New-WinMintBuildProfile -Settings $missingSettings
     $missingConfig = New-WinMintBuildConfig -BuildProfile $missingProfile
     $missingPreflight = Test-WinMintBuildPrerequisite -Config $missingConfig -AllowMissingSourceIso
-    if ($missingPreflight.Passed -or ($missingPreflight.Failures -join '; ') -notmatch 'updates.payloadRoot') {
+    if ($missingPreflight.Passed -or ($missingPreflight.Failures -join '; ') -notmatch 'Update payload root not found') {
         Add-SmokeFailure 'Expected Stable25H2 preflight to require an explicit update payload root.'
     }
 
@@ -840,6 +852,7 @@ function Assert-HeadlessSourceAndDriverInputContracts {
             -Architecture 'arm64' `
             -ComputerName "$fixtureComputerName-pc" `
             -AccountName 'dev' `
+            -UpdateImage None `
             -ValidateOnly
         $sourceConfig = New-WinMintBuildConfig -BuildProfile $sourceProfile
         $sourcePreflight = Test-WinMintBuildPrerequisite -Config $sourceConfig -AllowMissingSourceIso
@@ -853,6 +866,7 @@ function Assert-HeadlessSourceAndDriverInputContracts {
             -Architecture 'arm64' `
             -ComputerName $fixtureComputerName `
             -AccountName 'dev' `
+            -UpdateImage None `
             -ValidateOnly
         $isoConfig = New-WinMintBuildConfig -BuildProfile $isoProfile
         $isoPreflight = Test-WinMintBuildPrerequisite -Config $isoConfig -AllowMissingSourceIso

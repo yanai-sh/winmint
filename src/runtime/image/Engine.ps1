@@ -17,7 +17,18 @@ function New-WinMintBuildConfig {
     $desktop = Get-WinMintProfileSetting $BuildProfile 'desktop' @{}
     $development = Get-WinMintProfileSetting $BuildProfile 'development' @{}
     $featureToggles = Get-WinMintProfileSetting $BuildProfile 'features' @{}
-    $updates = Get-WinMintProfileSetting $BuildProfile 'updates' @{ mode = 'None' }
+    $updates = Get-WinMintProfileSetting $BuildProfile 'updates' @{
+        mode = 'Stable25H2'
+        targetFeatureVersion = '25H2'
+        releaseCadence = 'BRelease'
+        includeOptionalPreviews = $false
+        payloadRoot = Get-WinMintDefaultUpdatePayloadRoot
+        qualitySecurity = $true
+        dynamicUpdate = $true
+        defender = $true
+        dotnet = $true
+        provisionedApps = $true
+    }
     $wsl = Get-WinMintProfileSetting $development 'wsl' @{}
     $removals = Get-WinMintProfileSetting $BuildProfile 'removals' @{}
     $privacy = Get-WinMintProfileSetting $BuildProfile 'privacy' @{}
@@ -373,7 +384,10 @@ function Test-WinMintBuildPrerequisite {
             $failures.Add('Stable image updates must use Patch Tuesday B-release payloads; optional C/D previews are not accepted.')
         }
         $payloadRoot = [string]$Config.Updates.PayloadRoot
-        if ([string]::IsNullOrWhiteSpace($payloadRoot)) {
+        if ($profileOnlyDryRun) {
+            $warnings.Add("Profile-only dry run: Stable25H2 update payload root was not checked: $payloadRoot")
+        }
+        elseif ([string]::IsNullOrWhiteSpace($payloadRoot)) {
             $failures.Add('Stable25H2 image updates require updates.payloadRoot with explicit Microsoft update/MSIX payloads.')
         }
         elseif (-not (Test-Path -LiteralPath $payloadRoot -PathType Container)) {

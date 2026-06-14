@@ -87,7 +87,7 @@ consumes the profile.
 | File Explorer | Shows extensions/hidden files, keeps Home, hides Gallery | baseline |
 | Shell layers | Off | `-DesktopUI`, or `-Install windhawk,yasb,komorebi` |
 | Dev tweaks, OpenSSH, WSL2, Scoop, MinGit, Starship, fonts/cursors | Always on | baseline |
-| Offline image updates | Off | `-UpdateImage Stable25H2 -UpdatePayloadRoot <dir>` |
+| Offline image updates | Stable 25H2 B-release payloads | `-UpdateImage None` opts out; `-UpdatePayloadRoot <dir>` overrides the cache root |
 
 On DMA builds, Windows exposes Edge as an uninstallable normal application.
 Without `-KeepEdge`, WinMint requests Edge removal and first attempts the
@@ -98,18 +98,20 @@ winget, and Windows Update are preserved.
 
 ### Stable 25H2 Pre-Update Payloads
 
-WinMint can pre-service the user-provided Microsoft ISO with explicit offline
-payloads so first logon has less left to update. This is profile-backed:
+WinMint pre-services the user-provided Microsoft ISO with explicit offline
+payloads so first logon has less left to update. This is profile-backed and can
+be disabled with `-UpdateImage None`:
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 new .\BuildProfile.json `
   -SourceIso .\Win11_25H2_English_Arm64.iso `
   -Architecture arm64 `
-  -UpdateImage Stable25H2 `
   -UpdatePayloadRoot D:\WinMintPayloads\25H2-BRelease
 ```
 
-The payload root is reviewable and deterministic:
+If `-UpdatePayloadRoot` is omitted, generated profiles use the default cache
+root under `%TEMP%\Win11ISO_dependency_cache\updates\25H2-BRelease`. The payload
+root is reviewable and deterministic:
 
 ```text
 25H2-BRelease\
