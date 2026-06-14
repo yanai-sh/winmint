@@ -300,52 +300,31 @@ function Install-OfflineWinget {
         $dependencyPayload = $null
         $dependencyExpandDir = $null
         try {
-            $sourceUrl = ''
-            $version = 'cached'
-            $assetName = ''
-            $dependencyAssetName = ''
-            try {
-                $rel = Invoke-RestMethod -Verbose:$false -Uri 'https://api.github.com/repos/microsoft/winget-cli/releases/latest'
-                $asset = $rel.assets | Where-Object { $_.name -match '\.msixbundle$' } | Select-Object -First 1
-                if (-not $asset) { throw 'winget-cli: no .msixbundle asset in latest GitHub release.' }
-                $dependencyAsset = $rel.assets | Where-Object { $_.name -eq 'DesktopAppInstaller_Dependencies.zip' } | Select-Object -First 1
-                if (-not $dependencyAsset) { throw 'winget-cli: no DesktopAppInstaller_Dependencies.zip asset in latest GitHub release.' }
-                $bundlePath = Invoke-WebRequestCachedFile -Uri $asset.browser_download_url -CacheFileName $asset.name
-                $dependencyZipPath = Invoke-WebRequestCachedFile -Uri $dependencyAsset.browser_download_url -CacheFileName $dependencyAsset.name
-                $sourceUrl = $asset.browser_download_url
-                $version = $rel.tag_name
-                $assetName = $asset.name
-                $dependencyAssetName = $dependencyAsset.name
+            $wingetPayloads = Resolve-WinMintGitHubReleasePayloadSet `
+                -RepoSlug 'microsoft/winget-cli' `
+                -PayloadSpecs @(
+                    [ordered]@{
+                        Name = 'winget'
+                        AssetSelector = { param($Asset, $Release) [void]$Release; if ([string]$Asset.name -match '\.msixbundle$') { 1 } else { 0 } }
+                        CachePatterns = @('Microsoft.DesktopAppInstaller_*.msixbundle', '*.msixbundle')
+                        HashLabel = 'winget'
+                    }
+                    [ordered]@{
+                        Name = 'winget dependencies'
+                        AssetSelector = { param($Asset, $Release) [void]$Release; if ([string]$Asset.name -eq 'DesktopAppInstaller_Dependencies.zip') { 1 } else { 0 } }
+                        CachePatterns = @('DesktopAppInstaller_Dependencies.zip')
+                        HashLabel = 'winget dependencies'
+                    }
+                )
+
+            $bundlePayload = $wingetPayloads | Where-Object { [string]$_.Name -eq 'winget' } | Select-Object -First 1
+            $dependencyPayload = $wingetPayloads | Where-Object { [string]$_.Name -eq 'winget dependencies' } | Select-Object -First 1
+            if (-not $bundlePayload -or -not $dependencyPayload) {
+                throw 'winget payload store did not return both required payloads.'
             }
-            catch {
-                LogWarn "winget release lookup failed; trying cached msixbundle. $($_.Exception.Message)"
-                $bundlePath = Get-WinMintCachedDownloadFile -Patterns @('Microsoft.DesktopAppInstaller_*.msixbundle', '*.msixbundle')
-                if (-not $bundlePath) { throw 'winget cache missing Microsoft.DesktopAppInstaller msixbundle.' }
-                $dependencyZipPath = Get-WinMintCachedDownloadFile -Patterns @('DesktopAppInstaller_Dependencies.zip')
-                if (-not $dependencyZipPath) { throw 'winget cache missing DesktopAppInstaller_Dependencies.zip.' }
-                $assetName = [IO.Path]::GetFileName($bundlePath)
-                $dependencyAssetName = [IO.Path]::GetFileName($dependencyZipPath)
-                $sourceUrl = "cache:$assetName"
-            }
-            $bundlePayload = New-WinMintPayloadResult `
-                -Name 'winget' `
-                -Path $bundlePath `
-                -SourceUrl $sourceUrl `
-                -Version $version `
-                -AssetName $assetName `
-                -SourceStatus $(if ($sourceUrl -like 'cache:*') { 'cache' } else { 'release' }) `
-                -CleanupPolicy keep `
-                -HashLabel 'winget'
+            $bundlePath = [string]$bundlePayload.Path
+            $dependencyZipPath = [string]$dependencyPayload.Path
             Add-WinMintManifestPayloadFact -Payload $bundlePayload
-            $dependencyPayload = New-WinMintPayloadResult `
-                -Name 'winget dependencies' `
-                -Path $dependencyZipPath `
-                -SourceUrl "cache-or-release:$dependencyAssetName" `
-                -Version $version `
-                -AssetName $dependencyAssetName `
-                -SourceStatus $(if ($sourceUrl -like 'cache:*') { 'cache' } else { 'release' }) `
-                -CleanupPolicy keep `
-                -HashLabel 'winget dependencies'
             Add-WinMintManifestPayloadFact -Payload $dependencyPayload
 
             $dependencyExpandDir = Join-Path (Get-Win11IsoProcessTempPath) ('winget_dependencies_' + [Guid]::NewGuid().ToString('n'))

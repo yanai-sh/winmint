@@ -103,6 +103,117 @@ function Resolve-WinMintCachedPayload {
         -HashLabel $HashLabel
 }
 
+function Select-WinMintGitHubReleaseAsset {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)]$Release,
+        [Parameter(Mandatory)][scriptblock]$AssetSelector
+    )
+
+    $asset = $null
+    $bestScore = 0
+    foreach ($candidate in @($Release.assets)) {
+        $selected = & $AssetSelector $candidate $Release
+        $score = 0
+        if ($selected -is [int] -or $selected -is [long]) {
+            $score = [int]$selected
+        }
+        elseif ([bool]$selected) {
+            $score = 1
+        }
+        if ($score -gt $bestScore) {
+            $asset = $candidate
+            $bestScore = $score
+        }
+    }
+    if (-not $asset) {
+        $available = (@($Release.assets) | ForEach-Object { $_.name }) -join ', '
+        throw "$Name release $($Release.tag_name) has no matching asset. Available: $available"
+    }
+    return $asset
+}
+
+function Get-WinMintPayloadSpecValue {
+    param(
+        [Parameter(Mandatory)]$Spec,
+        [Parameter(Mandatory)][string]$Name,
+        $Default = $null
+    )
+
+    if ($Spec -is [System.Collections.IDictionary] -and $Spec.Contains($Name)) {
+        return $Spec[$Name]
+    }
+    if ($Spec.PSObject.Properties[$Name]) {
+        return $Spec.$Name
+    }
+    return $Default
+}
+
+function Resolve-WinMintGitHubReleasePayloadSet {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoSlug,
+        [Parameter(Mandatory)][object[]]$PayloadSpecs,
+        [hashtable]$Headers = @{ 'User-Agent' = 'WinMint/1.0' }
+    )
+
+    $releaseError = $null
+    try {
+        $release = Invoke-RestMethod -Verbose:$false -Uri "https://api.github.com/repos/$RepoSlug/releases/latest" -Headers $Headers
+        $results = [System.Collections.Generic.List[object]]::new()
+        foreach ($spec in @($PayloadSpecs)) {
+            $name = [string](Get-WinMintPayloadSpecValue -Spec $spec -Name 'Name')
+            $selector = Get-WinMintPayloadSpecValue -Spec $spec -Name 'AssetSelector'
+            $hashLabel = [string](Get-WinMintPayloadSpecValue -Spec $spec -Name 'HashLabel' -Default $name)
+            if ([string]::IsNullOrWhiteSpace($name) -or -not ($selector -is [scriptblock])) {
+                throw "Invalid payload spec for $RepoSlug; Name and AssetSelector are required."
+            }
+
+            $asset = Select-WinMintGitHubReleaseAsset -Name $name -Release $release -AssetSelector $selector
+            $path = Invoke-WebRequestCachedFile -Uri $asset.browser_download_url -CacheFileName $asset.name -Headers $Headers
+            $results.Add((New-WinMintPayloadResult `
+                        -Name $name `
+                        -Path $path `
+                        -SourceUrl ([string]$asset.browser_download_url) `
+                        -Version ([string]$release.tag_name) `
+                        -AssetName ([string]$asset.name) `
+                        -SourceStatus release `
+                        -CleanupPolicy keep `
+                        -HashLabel $hashLabel)) | Out-Null
+        }
+        return $results.ToArray()
+    }
+    catch {
+        $releaseError = $_
+        if (Get-Command LogWarn -ErrorAction SilentlyContinue) {
+            LogWarn "$RepoSlug release lookup failed; trying cached payloads. $($releaseError.Exception.Message)"
+        }
+    }
+
+    try {
+        $results = [System.Collections.Generic.List[object]]::new()
+        foreach ($spec in @($PayloadSpecs)) {
+            $name = [string](Get-WinMintPayloadSpecValue -Spec $spec -Name 'Name')
+            $patterns = [string[]]@(Get-WinMintPayloadSpecValue -Spec $spec -Name 'CachePatterns')
+            $versionRegex = [string](Get-WinMintPayloadSpecValue -Spec $spec -Name 'VersionRegex' -Default '')
+            $hashLabel = [string](Get-WinMintPayloadSpecValue -Spec $spec -Name 'HashLabel' -Default $name)
+            if ([string]::IsNullOrWhiteSpace($name) -or $patterns.Count -eq 0) {
+                throw "Invalid cached payload spec for $RepoSlug; Name and CachePatterns are required."
+            }
+            $results.Add((Resolve-WinMintCachedPayload `
+                        -Name $name `
+                        -Patterns $patterns `
+                        -VersionRegex $versionRegex `
+                        -HashLabel $hashLabel)) | Out-Null
+        }
+        return $results.ToArray()
+    }
+    catch {
+        throw "$RepoSlug payload-set resolution failed. Release error: $($releaseError.Exception.Message) Cache error: $($_.Exception.Message)"
+    }
+}
+
 function Resolve-WinMintGitHubReleasePayload {
     [CmdletBinding()]
     param(
@@ -118,27 +229,7 @@ function Resolve-WinMintGitHubReleasePayload {
     $releaseError = $null
     try {
         $release = Invoke-RestMethod -Verbose:$false -Uri "https://api.github.com/repos/$RepoSlug/releases/latest" -Headers $Headers
-        $asset = $null
-        $bestScore = 0
-        foreach ($candidate in @($release.assets)) {
-            $selected = & $AssetSelector $candidate $release
-            $score = 0
-            if ($selected -is [int] -or $selected -is [long]) {
-                $score = [int]$selected
-            }
-            elseif ([bool]$selected) {
-                $score = 1
-            }
-            if ($score -gt $bestScore) {
-                $asset = $candidate
-                $bestScore = $score
-            }
-        }
-        if (-not $asset) {
-            $available = (@($release.assets) | ForEach-Object { $_.name }) -join ', '
-            throw "$Name release $($release.tag_name) has no matching asset. Available: $available"
-        }
-
+        $asset = Select-WinMintGitHubReleaseAsset -Name $Name -Release $release -AssetSelector $AssetSelector
         $path = Invoke-WebRequestCachedFile -Uri $asset.browser_download_url -CacheFileName $asset.name -Headers $Headers
         return New-WinMintPayloadResult `
             -Name $Name `
