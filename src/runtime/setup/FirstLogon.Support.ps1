@@ -888,11 +888,17 @@ function Set-WinMintFirstLogonLocationServicesPolicy {
 
     $policyPath = 'HKLM\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors'
     $findMyDevicePath = 'HKLM\SOFTWARE\Policies\Microsoft\FindMyDevice'
+    $machineConsentPath = 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location'
+    $userConsentPath = 'HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location'
+    $sensorOverridePath = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}'
     if ($Enabled) {
         foreach ($name in @('DisableLocation', 'DisableWindowsLocationProvider', 'DisableLocationScripting')) {
             Invoke-WinMintFirstLogonReg -Arguments @('delete', $policyPath, '/v', $name, '/f') -AllowFailure
         }
         Invoke-WinMintFirstLogonReg -Arguments @('delete', $findMyDevicePath, '/v', 'AllowFindMyDevice', '/f') -AllowFailure
+        Invoke-WinMintFirstLogonReg -Arguments @('add', $machineConsentPath, '/v', 'Value', '/t', 'REG_SZ', '/d', 'Allow', '/f') -AllowFailure
+        Invoke-WinMintFirstLogonReg -Arguments @('add', $userConsentPath, '/v', 'Value', '/t', 'REG_SZ', '/d', 'Allow', '/f') -AllowFailure
+        Invoke-WinMintFirstLogonReg -Arguments @('add', $sensorOverridePath, '/v', 'SensorPermissionState', '/t', 'REG_DWORD', '/d', '1', '/f') -AllowFailure
         Invoke-WinMintFirstLogonReg -Arguments @('add', 'HKLM\SYSTEM\CurrentControlSet\Services\lfsvc', '/v', 'Start', '/t', 'REG_DWORD', '/d', '3', '/f') -AllowFailure
         try { Set-Service -Name lfsvc -StartupType Manual -ErrorAction SilentlyContinue } catch { }
     }
@@ -901,6 +907,9 @@ function Set-WinMintFirstLogonLocationServicesPolicy {
         Invoke-WinMintFirstLogonReg -Arguments @('add', $policyPath, '/v', 'DisableWindowsLocationProvider', '/t', 'REG_DWORD', '/d', '1', '/f') -AllowFailure
         Invoke-WinMintFirstLogonReg -Arguments @('add', $policyPath, '/v', 'DisableLocationScripting', '/t', 'REG_DWORD', '/d', '1', '/f') -AllowFailure
         Invoke-WinMintFirstLogonReg -Arguments @('add', $findMyDevicePath, '/v', 'AllowFindMyDevice', '/t', 'REG_DWORD', '/d', '0', '/f') -AllowFailure
+        Invoke-WinMintFirstLogonReg -Arguments @('add', $machineConsentPath, '/v', 'Value', '/t', 'REG_SZ', '/d', 'Deny', '/f') -AllowFailure
+        Invoke-WinMintFirstLogonReg -Arguments @('add', $userConsentPath, '/v', 'Value', '/t', 'REG_SZ', '/d', 'Deny', '/f') -AllowFailure
+        Invoke-WinMintFirstLogonReg -Arguments @('add', $sensorOverridePath, '/v', 'SensorPermissionState', '/t', 'REG_DWORD', '/d', '0', '/f') -AllowFailure
     }
 }
 

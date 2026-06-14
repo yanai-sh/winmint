@@ -112,6 +112,42 @@ function Test-AgentRebootPending {
     return $false
 }
 
+function Remove-AgentDesktopShortcuts {
+    $desktopPaths = [System.Collections.Generic.List[string]]::new()
+    foreach ($candidate in @(
+            [Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory),
+            [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonDesktopDirectory),
+            (Join-Path $env:PUBLIC 'Desktop')
+        )) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) { $desktopPaths.Add($candidate) | Out-Null }
+    }
+
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $removed = [System.Collections.Generic.List[string]]::new()
+    foreach ($desktopPath in @($desktopPaths | Where-Object { $seen.Add($_) })) {
+        if (-not (Test-Path -LiteralPath $desktopPath -PathType Container)) { continue }
+        foreach ($shortcut in @(Get-ChildItem -LiteralPath $desktopPath -Filter '*.lnk' -File -Force -ErrorAction SilentlyContinue)) {
+            try {
+                Remove-Item -LiteralPath $shortcut.FullName -Force -ErrorAction Stop
+                $removed.Add($shortcut.FullName) | Out-Null
+            }
+            catch {
+                Write-AgentLog "Desktop shortcut cleanup warning: $($shortcut.FullName) :: $($_.Exception.Message)"
+            }
+        }
+    }
+
+    if ($removed.Count -gt 0) {
+        Write-AgentLog "Removed desktop shortcut(s): $($removed -join ', ')"
+        Write-AgentEvent -Type 'cleanup' -Status 'ok' -Message 'Removed desktop shortcuts created by installers.' -Data @{
+            shortcuts = @($removed)
+        }
+    }
+    else {
+        Write-AgentLog 'No desktop shortcuts found after live package installs.'
+    }
+}
+
 function Invoke-AgentNative {
     param([string]$FilePath, [string[]]$ArgumentList)
     $script:AgentCommandCounter++
@@ -651,6 +687,7 @@ function Invoke-WinMintAgentStepRuntime {
     Invoke-AgentProfileModule -StepName 'windhawk' -FunctionName 'Invoke-WinMintAgentWindhawkBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'windhawk')
     Invoke-AgentProfileModule -StepName 'browsers' -FunctionName 'Invoke-WinMintAgentBrowsersBootstrap' -Enabled (@($agentProfile.browsers).Count -gt 0)
     Invoke-AgentProfileModule -StepName 'editors' -FunctionName 'Invoke-WinMintAgentEditorBootstrap' -Enabled (@($agentProfile.editors).Count -gt 0)
+    Remove-AgentDesktopShortcuts
 
     if (@($agentProfile.editors) -contains 'neovim') {
         $neovimStepOk = $false

@@ -896,6 +896,16 @@ function Assert-AgentLiveInstallFailuresAreWarnings {
     if ($agentText -match [regex]::Escape('$advisorySteps = @(''liveInstallAudit'', ''phone-link'')')) {
         Add-SmokeFailure 'Agent must not limit non-blocking failures to only liveInstallAudit and phone-link.'
     }
+    foreach ($expected in @(
+        'Remove-AgentDesktopShortcuts',
+        'CommonDesktopDirectory',
+        "Filter '*.lnk'",
+        'Removed desktop shortcuts created by installers.'
+    )) {
+        if ($agentText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Agent should remove live installer-created desktop shortcuts with '$expected'."
+        }
+    }
 }
 
 function Assert-SetupCompleteRegistersFirstLogonFallback {
@@ -968,7 +978,11 @@ function Assert-AutoTimeZoneUpdaterFollowsLocationServices {
     foreach ($expected in @(
         'if (-not $restoreLocationServices)',
         'Disabled Auto Time Zone Updater because location services are off.',
-        'Enabled Auto Time Zone Updater because location services are on.'
+        'Enabled Auto Time Zone Updater because location services are on.',
+        'ConsentStore\location',
+        'SensorPermissionState',
+        "'Allow'",
+        "'Deny'"
     )) {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "FirstLogon Auto Time Zone Updater handling should include '$expected'."
