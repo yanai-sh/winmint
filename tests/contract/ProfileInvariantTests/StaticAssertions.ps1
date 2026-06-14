@@ -14,6 +14,20 @@ function Get-WinMintSetupCompleteText {
     return ($parts.ToArray() -join "`n")
 }
 
+function Get-WinMintFirstLogonText {
+    $parts = [System.Collections.Generic.List[string]]::new()
+    foreach ($relativePath in @(
+        'src\runtime\setup\FirstLogon.ps1',
+        'src\runtime\setup\FirstLogon.Runtime.ps1'
+    )) {
+        $path = Join-Path $root $relativePath
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            $parts.Add((Get-Content -LiteralPath $path -Raw))
+        }
+    }
+    return ($parts.ToArray() -join "`n")
+}
+
 function Assert-StaticUiFlowInvariants {
     $guiRoot = Join-Path $root 'apps\gui'
     $intentPath = Join-Path $guiRoot 'src\intent.rs'
@@ -731,7 +745,7 @@ function Assert-LiveInstallAuditIsStaged {
     if ($unattendText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
         Add-SmokeFailure 'Install-Autounattend must not rely on the removed top-level scripts directory.'
     }
-    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1')) {
+    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Runtime.ps1')) {
         if ($unattendText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Install-Autounattend should stage '$expected'."
         }
@@ -739,7 +753,7 @@ function Assert-LiveInstallAuditIsStaged {
 }
 
 function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     foreach ($expected in @('Restore-WinMintDmaRegionalDefaults', 'FirstLogon_RegionalRestore.json', 'Copy-UserInternationalSettingsToSystem', 'restoreLocationServices')) {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "FirstLogon DMA restore should contain '$expected'."
@@ -757,7 +771,7 @@ function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
 }
 
 function Assert-FirstLogonDefaultsToVisibleConsole {
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     $defaultUserText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\DefaultUser.ps1') -Raw
     foreach ($expected in @(
         'return ''Console''',
@@ -789,7 +803,7 @@ function Assert-FirstLogonDefaultsToVisibleConsole {
 }
 
 function Assert-FirstLogonPinsSelectedAppsToStart {
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     foreach ($expected in @(
         'Set-WinMintFirstLogonStartPins',
         'Resolve-WinMintFirstLogonAppExecutable',
@@ -817,7 +831,7 @@ function Assert-FirstLogonPinsSelectedAppsToStart {
 }
 
 function Assert-FirstLogonFinalizesTerminalProfiles {
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     foreach ($expected in @(
         'Set-WinMintFirstLogonTerminalProfiles',
         'New-WinMintFirstLogonTerminalPowerShellProfile',
@@ -875,7 +889,7 @@ function Assert-AgentLiveInstallFailuresAreWarnings {
 
 function Assert-SetupCompleteRegistersFirstLogonFallback {
     $setupCompleteText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.ps1') -Raw
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
 
     foreach ($expected in @(
         'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce',
@@ -939,7 +953,7 @@ function Assert-EdgeRemovalIntentDoesNotDependOnDma {
 }
 
 function Assert-AutoTimeZoneUpdaterFollowsLocationServices {
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     foreach ($expected in @(
         'if (-not $restoreLocationServices)',
         'Disabled Auto Time Zone Updater because location services are off.',
@@ -1173,7 +1187,7 @@ function Assert-StarshipPromptUsesNerdFontTerminalDefaults {
         }
     }
 
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     $wslText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\Wsl.ps1') -Raw
     foreach ($expected in @(
             'profiles.defaults.font.face',
@@ -1243,7 +1257,7 @@ function Assert-ElevationChecksUseInstanceMarshalSize {
 
 function Assert-NoMaintenancePayloadOrRegistration {
     $setupCompleteText = Get-WinMintSetupCompleteText
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     $engineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Engine.ps1') -Raw
     $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
     $maintenancePayload = Join-Path $root 'src\runtime\setup\Maintain.ps1'
@@ -1267,7 +1281,7 @@ function Assert-NoMaintenancePayloadOrRegistration {
 }
 
 function Assert-FirstLogonFailsClosedWhenElevationIsUnavailable {
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     foreach ($expected in @(
         'Stop-WinMintFirstLogonUnelevated',
         "failure'] = 'notElevated'",
@@ -1292,7 +1306,7 @@ function Assert-FirstLogonFailsClosedWhenElevationIsUnavailable {
 }
 
 function Assert-FirstLogonRecoveryIsBounded {
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     foreach ($expected in @(
         '$script:WinMintFirstLogonMaxAttempts = 3',
         'New-WinMintFirstLogonRunState',
@@ -1309,7 +1323,7 @@ function Assert-FirstLogonRecoveryIsBounded {
 }
 
 function Assert-FirstLogonCleanupOnlyDeletesWinMintOwnedPayload {
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
     $setupCompleteText = Get-WinMintSetupCompleteText
     foreach ($expected in @(
         'WinMintAgent',
@@ -1951,7 +1965,7 @@ function Assert-WinMintBloomWallpaperCoversDesktopAndLockScreen {
     $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
     $specializeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\Specialize.ps1') -Raw
     $defaultUserText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\DefaultUser.ps1') -Raw
-    $firstLogonText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $firstLogonText = Get-WinMintFirstLogonText
 
     foreach ($expected in @(
         'assets\runtime\wallpaper\img0.jpg',
@@ -2136,3 +2150,4 @@ function Assert-XdgDefaultsAreStaged {
         Add-SmokeFailure 'XDG_RUNTIME_DIR must not leave a WinMint-named temp folder behind.'
     }
 }
+
