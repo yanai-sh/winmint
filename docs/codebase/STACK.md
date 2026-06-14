@@ -4,7 +4,7 @@
 
 | Area | Value | Evidence |
 |------|-------|----------|
-| Primary runtime language | PowerShell for shipped Windows servicing/runtime scripts; Rust for the GPUI front end; JavaScript for the Cloudflare bootstrap alias. | `README.md`, `WinMint-CLI.ps1`, `src/runtime/image/WinMint.ps1`, `apps/gui/Cargo.toml`, `cloudflare/winmint/src/index.js` |
+| Primary runtime language | PowerShell for shipped Windows servicing/runtime scripts, Rust for the GPUI front end, and JavaScript for the Cloudflare bootstrap alias. | `README.md`, `WinMint-CLI.ps1`, `src/runtime/image/WinMint.ps1`, `apps/gui/Cargo.toml`, `cloudflare/winmint/src/index.js` |
 | Runtime + version | PowerShell 7.3+ for project scripts; bootstrap accepts Windows PowerShell 5.1 and then launches PowerShell 7.3+; Rust workspace edition 2021. Exact Rust compiler version is [TODO]. | `WinMint-CLI.ps1`, `WinMint-GUI.ps1`, `winmint.ps1`, `Cargo.toml` |
 | Package manager | Cargo for Rust crates; winget, msstore, and Scoop are runtime package sources for installed tools; `bunx wrangler@latest` is documented for Worker deploy. | `Cargo.toml`, `config/packages.json`, `docs/Distribution.md`, `cloudflare/winmint/README.md` |
 | Module/build system | Cargo workspace with `apps/gui` and `crates/winmint-core`; PowerShell dot-sourcing module graph under `src/runtime/image`; Cloudflare Worker configured by Wrangler. | `Cargo.toml`, `src/runtime/image/WinMint.ps1`, `cloudflare/winmint/wrangler.jsonc` |
@@ -13,7 +13,7 @@
 
 | Dependency | Version | Role in system | Evidence |
 |------------|---------|----------------|----------|
-| PowerShell | 7.3+ | CLI, engine, validation, setup payload authoring, FirstLogon agent, release tooling. | `README.md`, `WinMint-CLI.ps1`, `tools/validation/Validate.ps1` |
+| PowerShell | 7.3+ | Runs the CLI, engine, validation, setup payload authoring, FirstLogon agent, and release tooling. | `README.md`, `WinMint-CLI.ps1`, `tools/validation/Validate.ps1` |
 | Windows PowerShell | 5.1 | Bootstrap and staged setup scripts that run inside Windows Setup/first boot contexts. | `winmint.ps1`, `src/runtime/setup/SetupComplete.ps1`, `src/runtime/setup/FirstLogon.ps1` |
 | Rust | edition 2021 | GPUI application and typed profile-intent helpers. | `Cargo.toml`, `apps/gui/Cargo.toml`, `crates/winmint-core/Cargo.toml` |
 | `gpui` | 0.2.2 | Native GUI framework. | `Cargo.toml`, `apps/gui/Cargo.toml`, `apps/gui/src/main.rs` |
@@ -51,13 +51,15 @@ pwsh -NoProfile -File tools\release\New-WinMintReleaseBundle.ps1 -Version v0.2.0
 - Config sources: `config/packages.json`, `config/appx-removal.json`, `config/ai-removal.json`, `config/tweaks.json`, `config/autounattend.xml`, `config/release-manifest.json`, `schemas/*.json`.
 - Required environment variables: `LOCALAPPDATA` is required by `winmint.ps1`; `WINMINT_ENABLE_EXPERIMENTAL_AI_REMOVAL=1` is required only for aggressive experimental AI removal; other required variables are [TODO].
 - Deployment/runtime constraints: Windows 11 host, Administrator for real builds and ISO validation, Windows 11 25H2+ source ISO, ADK `oscdimg.exe`, and DISM new enough for the source image.
-- Containers/orchestration: none detected in repository configs.
+- Containers/orchestration: the repo has no container or orchestration config.
+- License metadata: documentation states GPL-2.0-or-later, while Cargo workspace metadata states GPL-2.0-only; this is tracked in `CONCERNS.md` as an `[ASK USER]` item.
 
 ## 6) Evidence
 
 - `README.md`
 - `AGENTS.md`
 - `Cargo.toml`
+- `THIRD_PARTY_NOTICES.md`
 - `apps/gui/Cargo.toml`
 - `crates/winmint-core/Cargo.toml`
 - `.cargo/config.toml`
@@ -65,4 +67,3 @@ pwsh -NoProfile -File tools\release\New-WinMintReleaseBundle.ps1 -Version v0.2.0
 - `.github/workflows/release.yml`
 - `PSScriptAnalyzerSettings.psd1`
 - `cloudflare/winmint/wrangler.jsonc`
-

@@ -70,8 +70,6 @@ impl WinMintApp {
         }
     }
 
-    // ── Navigation ──────────────────────────────────────────────────────────
-
     /// Whether the current step permits advancing. Source requires a ready probe.
     fn can_advance(&self) -> bool {
         match self.step {
@@ -103,8 +101,6 @@ impl WinMintApp {
     fn on_back(&mut self, _: &Back, _: &mut Window, cx: &mut Context<Self>) {
         self.retreat(cx);
     }
-
-    // ── Source selection + probe (shared across the Source screen) ───────────
 
     fn reset_source_pick(&mut self, cx: &mut Context<Self>) {
         self.source.reset();
@@ -352,7 +348,6 @@ impl WinMintApp {
         .into()
     }
 
-    // ── Configure choices ─────────────────────────────────────────────────────
     // Each choice re-emits ui-intent.json so the on-disk intent tracks the wizard.
 
     fn set_edition(&mut self, value: &'static str, cx: &mut Context<Self>) {
@@ -481,8 +476,6 @@ impl WinMintApp {
     fn toggle_wsl_pengwin(&mut self, cx: &mut Context<Self>) {
         self.toggle_wsl_flag(cx, |toolkit| &mut toolkit.wsl_pengwin);
     }
-
-    // ── Layout ───────────────────────────────────────────────────────────────
 
     fn render_toolbar(&self) -> impl IntoElement {
         let show_brand_mark = !matches!(self.source.status, SourceProbeStatus::Empty);

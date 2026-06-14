@@ -130,7 +130,3 @@ $script:HiveMap = @{
 # Filled by Test-OfflineStagingReadiness after ISO files are staged (overrides defaults)
 $script:BootWimDriverMountIndexes = @(2)
 $script:BootWimWinPEUtilityMountIndex = 2
-
-# ═══════════════════════════════════════════════════════════════════════════
-# HELPER FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════

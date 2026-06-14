@@ -4,9 +4,9 @@
 
 | Path | Purpose | Evidence |
 |------|---------|----------|
-| `WinMint-CLI.ps1` | Verb-based command-line entry point for profile creation, validation, builds, listing, and cleanup. | `WinMint-CLI.ps1`, `README.md` |
+| `WinMint-CLI.ps1` | Verb-based CLI for profile creation, validation, builds, listing, and cleanup. | `WinMint-CLI.ps1`, `README.md` |
 | `WinMint-GUI.ps1` | Launches the packaged or source GPUI front end, with elevation handling. | `WinMint-GUI.ps1`, `apps/gui/README.md` |
-| `winmint.ps1` | Remote bootstrapper that downloads a GitHub release zip, verifies hash when present, installs under `%LOCALAPPDATA%`, and launches GUI/headless mode. | `winmint.ps1`, `docs/Distribution.md` |
+| `winmint.ps1` | Remote bootstrapper. It downloads a GitHub release zip, verifies the hash, installs under `%LOCALAPPDATA%`, and launches GUI/headless mode. | `winmint.ps1`, `docs/Distribution.md` |
 | `apps/gui/` | Rust/GPUI source for the shipped GUI. | `apps/gui/README.md`, `apps/gui/src/main.rs` |
 | `crates/winmint-core/` | Rust helper crate for typed UI/profile intent. | `Cargo.toml`, `crates/winmint-core/src/profile.rs` |
 | `src/runtime/image/` | PowerShell image engine, profile handling, DISM/WIM servicing, reports, ISO assembly, and USB media support. | `src/runtime/image/WinMint.ps1`, `src/runtime/image/Engine.ps1`, `src/runtime/image/Private/Pipeline.ps1` |
@@ -14,7 +14,7 @@
 | `src/runtime/firstlogon/` | FirstLogon agent and modules for live-user package, WSL, shell, launcher, and audit work. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Modules/` |
 | `config/` | Product policy catalogs and release manifest. | `config/packages.json`, `config/appx-removal.json`, `config/release-manifest.json` |
 | `schemas/` | JSON Schema contracts for build profile, build manifest, and agent state. | `schemas/winmint.buildprofile.schema.json`, `schemas/winmint.buildmanifest.schema.json`, `schemas/winmint.agentstate.schema.json` |
-| `assets/` | Brand images, runtime payloads, desktop shell presets, default apps, fonts, cursors, wallpaper, and UI preview assets. | `docs/Project-Structure.md`, `THIRD_PARTY_NOTICES.md`, `assets/runtime/` |
+| `assets/` | Brand images, runtime payloads, desktop shell presets, default apps, fonts, cursors, wallpaper, and UI previews. | `docs/Project-Structure.md`, `THIRD_PARTY_NOTICES.md`, `assets/runtime/` |
 | `tools/` | Validation, release, GUI dev, UI bridge, audit, media, and VM tooling. | `tools/validation/Validate.ps1`, `tools/release/New-WinMintReleaseBundle.ps1`, `tools/ui-bridge/` |
 | `tests/` | PowerShell contract tests, profile fixtures, and ignored large fixture roots. | `tests/README.md`, `tests/contract/`, `tests/profiles/` |
 | `cloudflare/winmint/` | Worker source for the short bootstrap alias, not product runtime. | `cloudflare/winmint/README.md`, `cloudflare/winmint/src/index.js` |
@@ -48,6 +48,7 @@
 - Rust modules use snake_case file names, with `main.rs` declaring sibling modules and screen submodules under `apps/gui/src/screens/`.
 - The Rust workspace is package-based: root `Cargo.toml` lists `apps/gui` and `crates/winmint-core`.
 - PowerShell runtime loading is explicit dot-sourcing, especially in `src/runtime/image/WinMint.ps1` and `src/runtime/firstlogon/Start-WinMintAgent.ps1`.
+- Generated and local artifact directories are not source: `.gitignore` ignores `output/`, `dist/`, `node_modules/`, `**/target/`, ISO/WIM/ESD/SWM/VHD files, and `apps/gui/bin/`. The local `crates/winmintctl/target` directory is not an active source module unless a `crates/winmintctl/Cargo.toml` is restored.
 
 ## 5) Evidence
 
@@ -59,5 +60,5 @@
 - `src/runtime/firstlogon/Start-WinMintAgent.ps1`
 - `apps/gui/src/main.rs`
 - `Cargo.toml`
+- `.gitignore`
 - `tests/README.md`
-
