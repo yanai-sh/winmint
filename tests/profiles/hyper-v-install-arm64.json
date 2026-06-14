@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "createdAt": "2026-05-18T00:00:00.0000000+03:00",
-  "profileName": "Minimal",
+  "profileName": "Hyper-V Test",
   "source": {
     "isoPath": "tests/fixtures/iso/official-win11-25h2-english-arm64-v2.iso",
     "architecture": "arm64"

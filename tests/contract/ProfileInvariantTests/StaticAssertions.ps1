@@ -216,6 +216,9 @@ function Assert-HyperVProfileIsProAndUnattended {
     $profilePath = Join-Path $root 'tests\profiles\hyper-v-install-arm64.json'
     $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
 
+    if ([string]$profile.profileName -ne 'Hyper-V Test') {
+        Add-SmokeFailure 'Hyper-V test profile must use profileName Hyper-V Test so FirstLogon retains VM diagnostics.'
+    }
     if ([string]$profile.target.edition -ne 'Windows 11 Pro') {
         Add-SmokeFailure 'Hyper-V test profile must target Windows 11 Pro.'
     }
@@ -1348,6 +1351,16 @@ function Assert-FirstLogonCleanupOnlyDeletesWinMintOwnedPayload {
     foreach ($expected in @('cleanupSpec', 'Resolve-WinMintCleanupPath', '-EncodedCommand', 'Resolve-WinMintPowerShellHost')) {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "FirstLogon cleanup should use a constrained PowerShell cleanup helper with '$expected'."
+        }
+    }
+    foreach ($expected in @(
+        'Test-WinMintFirstLogonRetainDiagnosticState',
+        "profileName -eq 'Hyper-V Test'",
+        'retainDiagnosticState',
+        'Hyper-V test diagnostic state retained'
+    )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon cleanup should retain diagnostic state for Hyper-V test builds with '$expected'."
         }
     }
     foreach ($expected in @(

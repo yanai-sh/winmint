@@ -33,6 +33,11 @@ function Add-Failure {
     $failures.Add($Message) | Out-Null
 }
 
+$profileName = [string]$profile.profileName
+if ($profileName -ne 'Hyper-V Test') {
+    Add-Failure "Hyper-V test profiles must set profileName to 'Hyper-V Test' so FirstLogon retains diagnostic state files; got '$profileName'."
+}
+
 $edition = [string]$profile.target.edition
 if ($edition -ne 'Windows 11 Pro') {
     Add-Failure "Hyper-V test profiles must target Windows 11 Pro; got '$edition'."

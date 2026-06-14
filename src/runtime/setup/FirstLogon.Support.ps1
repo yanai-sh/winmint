@@ -1394,6 +1394,13 @@ function Clear-WinMintFirstLogonRecovery {
     try { Clear-WinMintAutoLogonPassword } catch { Write-WinMintFirstLogonError "AutoLogon password cleanup failed: $_" }
 }
 
+function Test-WinMintFirstLogonRetainDiagnosticState {
+    $setupProfile = Read-WinMintFirstLogonSetupProfile
+    if (-not $setupProfile) { return $false }
+
+    return ([string]$setupProfile.profileName -eq 'Hyper-V Test')
+}
+
 function Remove-WinMintResidualPayload {
     # No-trace cleanup after a SUCCESSFUL run: the FirstLogon experience is meant to be
     # transient. Remove WinMint-owned setup payloads without deleting the whole
@@ -1417,17 +1424,21 @@ function Remove-WinMintResidualPayload {
     if ([string]::IsNullOrWhiteSpace($localAppDataRoot)) { $localAppDataRoot = $env:LOCALAPPDATA }
     $payloadDirectoryNames = @('SetupComplete', 'WinMintAgent')
     $fileTargets = $fileNames | ForEach-Object { Join-Path $payloadDir $_ }
-    $directoryTargets = @(
-        @($payloadDirectoryNames | ForEach-Object { Join-Path $payloadDir $_ })
-        (Join-Path $programDataRoot 'WinMint'),
-        (Join-Path $localAppDataRoot 'WinMint')
-    )
+    $retainDiagnosticState = Test-WinMintFirstLogonRetainDiagnosticState
+    $directoryTargets = @($payloadDirectoryNames | ForEach-Object { Join-Path $payloadDir $_ })
+    if (-not $retainDiagnosticState) {
+        $directoryTargets += @(
+            (Join-Path $programDataRoot 'WinMint'),
+            (Join-Path $localAppDataRoot 'WinMint')
+        )
+    }
     $cleanupSpec = [ordered]@{
         payloadRoot = $payloadDir
         fileNames = @($fileNames)
         payloadDirectoryNames = @($payloadDirectoryNames)
         stateRoots = @($programDataRoot, $localAppDataRoot)
         stateDirectoryName = 'WinMint'
+        retainDiagnosticState = $retainDiagnosticState
         fileTargets = @($fileTargets)
         directoryTargets = @($directoryTargets)
     }
@@ -1507,8 +1518,14 @@ try {
             '-EncodedCommand',
             $encodedCleanup
         ) -WindowStyle Hidden | Out-Null
-        "$(Get-Date -Format 'o') Scheduled no-trace purge and final post-install restore point." |
-            Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        if ($retainDiagnosticState) {
+            "$(Get-Date -Format 'o') Scheduled payload purge and final post-install restore point; Hyper-V test diagnostic state retained." |
+                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        }
+        else {
+            "$(Get-Date -Format 'o') Scheduled no-trace purge and final post-install restore point." |
+                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        }
     }
     catch { Write-WinMintFirstLogonError "No-trace purge schedule failed: $_" }
 }

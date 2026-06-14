@@ -77,6 +77,10 @@ if ($LASTEXITCODE -ne 0) {
     throw "Hyper-V profile authoring failed with exit code $LASTEXITCODE."
 }
 
+$profile = Get-Content -LiteralPath $OutPath -Raw | ConvertFrom-Json
+$profile.profileName = 'Hyper-V Test'
+$profile | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $OutPath -Encoding UTF8
+
 & $pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Test-WinMintHyperVProfile.ps1') -ProfilePath $OutPath
 if ($LASTEXITCODE -ne 0) {
     throw "Hyper-V profile validation failed with exit code $LASTEXITCODE."
