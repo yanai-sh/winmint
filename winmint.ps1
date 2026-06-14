@@ -137,6 +137,45 @@ function Test-WinMintArchiveHash {
     Write-WinMintBootstrapLog "Verified SHA256 $actual." 'OK'
 }
 
+function Resolve-WinMintBootstrapReleasePayload {
+    param(
+        [Parameter(Mandatory)]$Release,
+        [Parameter(Mandatory)][string]$Tag,
+        [Parameter(Mandatory)][string]$DownloadRoot
+    )
+
+    $archiveName = "WinMint-$tag.zip"
+    $archive = Select-WinMintAsset -Release $Release -Extension '.zip' -PreferredName $archiveName
+    if (-not $archive) {
+        throw "Release '$Tag' does not include a WinMint zip asset."
+    }
+
+    $checksumName = "$($archive.name).sha256"
+    $checksum = @($Release.assets | Where-Object { $_.name -eq $checksumName } | Select-Object -First 1)
+    if (-not $checksum) {
+        throw "Release '$Tag' is missing required checksum asset '$checksumName'. Refusing to install without release integrity verification."
+    }
+
+    [pscustomobject]@{
+        Archive = $archive
+        Checksum = $checksum
+        ArchivePath = Join-Path $DownloadRoot $archive.name
+        ChecksumPath = Join-Path $DownloadRoot $checksum.name
+        SourceUrl = [string]$archive.browser_download_url
+        Version = $Tag
+    }
+}
+
+function Save-WinMintBootstrapReleasePayload {
+    param([Parameter(Mandatory)]$Payload)
+
+    $archivePath = [string]$Payload.ArchivePath
+    $checksumPath = [string]$Payload.ChecksumPath
+    Save-WinMintAsset -Asset $Payload.Archive -Destination $archivePath
+    Save-WinMintAsset -Asset $Payload.Checksum -Destination $checksumPath
+    Test-WinMintArchiveHash -ArchivePath $archivePath -ChecksumPath $checksumPath
+}
+
 function Expand-WinMintRelease {
     param([string]$ArchivePath, [string]$Destination, [switch]$Overwrite)
 
@@ -411,19 +450,9 @@ $safeTag = $tag -replace '[^A-Za-z0-9._-]', '_'
 $downloadRoot = Join-Path $InstallRoot 'downloads'
 $versionRoot = Join-Path (Join-Path $InstallRoot 'versions') $safeTag
 $installMarkerPath = Join-Path $versionRoot '.winmint-install-complete.json'
-$archiveName = "WinMint-$tag.zip"
-$archive = Select-WinMintAsset -Release $release -Extension '.zip' -PreferredName $archiveName
-if (-not $archive) {
-    throw "Release '$tag' does not include a WinMint zip asset."
-}
-
-$checksumName = "$($archive.name).sha256"
-$checksum = @($release.assets | Where-Object { $_.name -eq $checksumName } | Select-Object -First 1)
-if (-not $checksum) {
-    throw "Release '$tag' is missing required checksum asset '$checksumName'. Refusing to install without release integrity verification."
-}
-$archivePath = Join-Path $downloadRoot $archive.name
-$checksumPath = Join-Path $downloadRoot $checksum.name
+$releasePayload = Resolve-WinMintBootstrapReleasePayload -Release $release -Tag $tag -DownloadRoot $downloadRoot
+$archive = $releasePayload.Archive
+$archivePath = [string]$releasePayload.ArchivePath
 
 New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
 
@@ -437,9 +466,7 @@ $useInstalledVersion = (-not $Force) -and (Test-WinMintInstalledVersion `
 if ($useInstalledVersion) {
     Write-WinMintBootstrapLog "Using installed version '$tag' at '$versionRoot'."
 } else {
-    Save-WinMintAsset -Asset $archive -Destination $archivePath
-    Save-WinMintAsset -Asset $checksum -Destination $checksumPath
-    Test-WinMintArchiveHash -ArchivePath $archivePath -ChecksumPath $checksumPath
+    Save-WinMintBootstrapReleasePayload -Payload $releasePayload
 
     Write-WinMintBootstrapLog "Extracting to '$versionRoot'."
     Expand-WinMintRelease -ArchivePath $archivePath -Destination $versionRoot -Overwrite

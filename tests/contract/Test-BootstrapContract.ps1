@@ -52,6 +52,8 @@ Assert-BootstrapText -Pattern "Add\('-AllowElevate'\)" -Description 'headless el
 Assert-BootstrapText -Pattern 'NoLaunch requested; not starting WinMint' -Description 'mode-neutral NoLaunch text'
 Assert-BootstrapText -Pattern 'missing required checksum asset' -Description 'release checksum asset is mandatory'
 Assert-BootstrapText -Pattern 'Refusing to install without release integrity verification' -Description 'missing checksum fails hard'
+Assert-BootstrapText -Pattern 'Resolve-WinMintBootstrapReleasePayload' -Description 'bootstrap release payload resolution is centralized'
+Assert-BootstrapText -Pattern 'Save-WinMintBootstrapReleasePayload' -Description 'bootstrap release payload download and verification are centralized'
 Assert-BootstrapText -Pattern 'Test-WinMintArchiveHash -ArchivePath \$archivePath -ChecksumPath \$checksumPath' -Description 'downloaded release archive is hash-verified'
 Assert-BootstrapTextAbsent -Pattern 'hash verification skipped' -Description 'bootstrap must not downgrade to unverified release installs'
 
