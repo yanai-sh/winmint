@@ -7,6 +7,26 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
+
+function Initialize-WinMintAgentConsoleEncoding {
+    try {
+        $utf8 = [System.Text.UTF8Encoding]::new($false)
+        [Console]::InputEncoding = $utf8
+        [Console]::OutputEncoding = $utf8
+        $global:OutputEncoding = $utf8
+        $global:PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+        $global:PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
+        $global:PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
+    }
+    catch { }
+    try {
+        $chcpExe = Join-Path $env:SystemRoot 'System32\chcp.com'
+        $null = & $chcpExe 65001 2>$null
+    }
+    catch { }
+}
+
+Initialize-WinMintAgentConsoleEncoding
 $agentRoot = Split-Path -Parent $PSCommandPath
 $stateDir = Join-Path $env:LOCALAPPDATA 'WinMint'
 $logDir = Join-Path $stateDir 'Logs'

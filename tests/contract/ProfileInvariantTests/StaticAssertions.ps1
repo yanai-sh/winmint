@@ -763,9 +763,10 @@ function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
     if ($firstLogonText -match [regex]::Escape('Get-WinMintFirstLogonNestedProfileValue -Profile')) {
         Add-SmokeFailure 'FirstLogon DMA restore must not call Get-WinMintFirstLogonNestedProfileValue with the old -Profile parameter.'
     }
-    $restoreIndex = $firstLogonText.IndexOf('Restore-WinMintDmaRegionalDefaults')
-    $oneDriveIndex = $firstLogonText.IndexOf('Invoke-WinMintFirstLogonOneDriveRemoval')
-    $agentIndex = $firstLogonText.IndexOf('Launching WinMintAgent')
+    $firstLogonRuntimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Runtime.ps1') -Raw
+    $restoreIndex = $firstLogonRuntimeText.IndexOf('Restore-WinMintDmaRegionalDefaults')
+    $oneDriveIndex = $firstLogonRuntimeText.IndexOf('Invoke-WinMintFirstLogonOneDriveRemoval')
+    $agentIndex = $firstLogonRuntimeText.IndexOf('Launching WinMintAgent')
     if ($restoreIndex -lt 0 -or $oneDriveIndex -lt 0 -or $agentIndex -lt 0 -or -not ($restoreIndex -lt $oneDriveIndex -and $restoreIndex -lt $agentIndex)) {
         Add-SmokeFailure 'FirstLogon must restore DMA regional defaults before OneDrive cleanup and agent launch.'
     }
@@ -776,6 +777,12 @@ function Assert-FirstLogonDefaultsToVisibleConsole {
     $defaultUserText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\DefaultUser.ps1') -Raw
     foreach ($expected in @(
         'return ''Console''',
+        'Resolve-WinMintWindowsTerminalHost',
+        'Wait-WinMintWindowsTerminalHost',
+        'Start-WinMintFirstLogonAgentInTerminal',
+        'Waiting for Windows Terminal before launching WinMintAgent.',
+        'new-tab',
+        'WinMint FirstLogon',
         'WindowStyle Normal',
         'WindowStyle Hidden',
         'Set-WinMintFirstLogonWindowsTerminalDefault',
@@ -2150,4 +2157,3 @@ function Assert-XdgDefaultsAreStaged {
         Add-SmokeFailure 'XDG_RUNTIME_DIR must not leave a WinMint-named temp folder behind.'
     }
 }
-

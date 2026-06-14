@@ -94,11 +94,22 @@ function Invoke-WinMintFirstLogonSetupPhase {
             $mode = Resolve-WinMintFirstLogonAgentMode -RequestedMode $AgentMode
             "$(Get-Date -Format 'o') Launching WinMintAgent in $mode mode" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
             if ($mode -eq 'Console') {
-                $agentProcess = Start-Process -FilePath $exe -ArgumentList @(
-                    '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-                    '-File', "`"$agent`"", '-InteractiveFirstLogon'
-                ) -WindowStyle Normal -Wait -PassThru
-                $agentExitCode = [int]$agentProcess.ExitCode
+                "$(Get-Date -Format 'o') Waiting for Windows Terminal before launching WinMintAgent." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+                $terminal = Wait-WinMintWindowsTerminalHost -TimeoutSeconds 120
+                if (-not [string]::IsNullOrWhiteSpace($terminal)) {
+                    $agentExitCode = Start-WinMintFirstLogonAgentInTerminal `
+                        -TerminalPath $terminal `
+                        -PowerShellPath $exe `
+                        -AgentPath $agent
+                }
+                else {
+                    Write-WinMintFirstLogonError 'Windows Terminal was not available; falling back to a visible PowerShell console for WinMintAgent.'
+                    $agentProcess = Start-Process -FilePath $exe -ArgumentList @(
+                        '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                        '-File', "`"$agent`"", '-InteractiveFirstLogon'
+                    ) -WindowStyle Normal -Wait -PassThru
+                    $agentExitCode = [int]$agentProcess.ExitCode
+                }
             }
             else {
                 # Headless mode stays available for automation, but it is opt-in now.

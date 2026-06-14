@@ -52,6 +52,7 @@ function Update-AgentProcessPath {
     }
 
     foreach ($candidate in @(
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'),
             (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'),
             (Join-Path $env:USERPROFILE 'scoop\shims'),
             (Join-Path $env:ProgramFiles 'PowerShell\7'),
@@ -175,6 +176,13 @@ function Invoke-AgentNative {
 function Get-WingetPath {
     $cmd = Get-Command winget.exe -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($cmd) { return $cmd.Source }
+
+    foreach ($candidate in @(
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'),
+            (Join-Path $env:USERPROFILE 'AppData\Local\Microsoft\WindowsApps\winget.exe')
+        )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
+    }
 
     $pkg = Get-AppxPackage -Name Microsoft.DesktopAppInstaller -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($pkg -and $pkg.InstallLocation) {

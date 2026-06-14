@@ -16,6 +16,26 @@ $logDir = Join-Path $env:ProgramData 'WinMint\Logs'
 $null = New-Item -ItemType Directory -Path $logDir -Force -ErrorAction SilentlyContinue
 $payloadDir = 'C:\Windows\Setup\Scripts'
 
+function Set-ScPowerShellConsoleEncoding {
+    try {
+        $utf8 = [System.Text.UTF8Encoding]::new($false)
+        [Console]::InputEncoding = $utf8
+        [Console]::OutputEncoding = $utf8
+        $global:OutputEncoding = $utf8
+        $global:PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+        $global:PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
+        $global:PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
+    }
+    catch { }
+    try {
+        $chcpExe = Join-Path $env:SystemRoot 'System32\chcp.com'
+        $null = & $chcpExe 65001 2>$null
+    }
+    catch { }
+}
+
+Set-ScPowerShellConsoleEncoding
+
 $transcriptPath = Join-Path $logDir 'SetupComplete_transcript.log'
 try { Stop-Transcript -ErrorAction SilentlyContinue } catch { }
 Start-Transcript -Path $transcriptPath -Force -ErrorAction SilentlyContinue | Out-Null
