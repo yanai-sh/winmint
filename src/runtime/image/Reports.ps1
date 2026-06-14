@@ -651,6 +651,32 @@ function Initialize-WinMintBuildManifest {
     }
 }
 
+function Set-WinMintManifestSetupPlanFact {
+    param(
+        [AllowNull()]$SetupPlan
+    )
+
+    if ($null -eq $script:WinMintBuildManifest -or $null -eq $SetupPlan) { return }
+
+    $script:WinMintBuildManifest['setupPlan'] = [ordered]@{
+        schemaVersion = [int]$SetupPlan.schemaVersion
+        accountMode = [string]$SetupPlan.accountMode
+        editionMode = [string]$SetupPlan.editionMode
+        diskMode = [string]$SetupPlan.diskMode
+        phases = @($SetupPlan.phases | ForEach-Object {
+                [ordered]@{
+                    id = [string]$_.id
+                    context = [string]$_.context
+                    entrypoint = [string]$_.entrypoint
+                    responsibilities = @($_.responsibilities)
+                }
+            })
+        stagedArtifacts = @($SetupPlan.stagedArtifacts)
+        firstLogonModules = @($SetupPlan.firstLogon.modules)
+        notes = @($SetupPlan.notes)
+    }
+}
+
 function Add-WinMintManifestRegistryTweakEvent {
     param(
         [Parameter(Mandatory)]$Group,

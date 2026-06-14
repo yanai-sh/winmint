@@ -159,25 +159,7 @@ function Install-Autounattend {
 
     Log 'Updating autounattend (PC name, account, edition mode, locales, disk behavior)...'
 
-    if ($SetupPlan -and $null -ne $script:WinMintBuildManifest) {
-        $script:WinMintBuildManifest['setupPlan'] = [ordered]@{
-            schemaVersion = [int]$SetupPlan.schemaVersion
-            accountMode = [string]$SetupPlan.accountMode
-            editionMode = [string]$SetupPlan.editionMode
-            diskMode = [string]$SetupPlan.diskMode
-            phases = @($SetupPlan.phases | ForEach-Object {
-                [ordered]@{
-                    id = [string]$_.id
-                    context = [string]$_.context
-                    entrypoint = [string]$_.entrypoint
-                    responsibilities = @($_.responsibilities)
-                }
-            })
-            stagedArtifacts = @($SetupPlan.stagedArtifacts)
-            firstLogonModules = @($SetupPlan.firstLogon.modules)
-            notes = @($SetupPlan.notes)
-        }
-    }
+    Set-WinMintManifestSetupPlanFact -SetupPlan $SetupPlan
 
     $components = $xmlDoc.SelectNodes('//u:component', $nsMgr)
     foreach ($comp in $components) {
