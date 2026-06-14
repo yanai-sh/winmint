@@ -849,7 +849,7 @@ function Assert-FirstLogonFinalizesTerminalProfiles {
 }
 
 function Assert-AgentLiveInstallFailuresAreWarnings {
-    $agentText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Start-WinMintAgent.ps1') -Raw
+    $agentText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
     $consoleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Console.ps1') -Raw
     foreach ($expected in @(
         '$blockingSteps',
@@ -1118,7 +1118,7 @@ function Assert-AgentRunsLiveInstallAudit {
             Add-SmokeFailure "Live install audit should expose debug inventory through the opt-in report with '$expected'."
         }
     }
-    $agentEntryText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Start-WinMintAgent.ps1') -Raw
+    $agentEntryText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
     $profilesIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'profiles'")
     $packageManagersIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'package-managers'")
     $editorsIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'editors'")
@@ -1126,7 +1126,7 @@ function Assert-AgentRunsLiveInstallAudit {
     $failedIndex = $agentEntryText.IndexOf('$failed = @')
     if ($profilesIndex -lt 0 -or $packageManagersIndex -lt 0 -or $editorsIndex -lt 0 -or $auditIndex -lt 0 -or $failedIndex -lt 0 -or
         -not ($profilesIndex -lt $packageManagersIndex -and $packageManagersIndex -lt $editorsIndex -and $editorsIndex -lt $auditIndex -and $auditIndex -lt $failedIndex)) {
-        Add-SmokeFailure 'Start-WinMintAgent.ps1 should run liveInstallAudit during final validation before failed-step evaluation.'
+        Add-SmokeFailure 'Agent step runtime should run liveInstallAudit during final validation before failed-step evaluation.'
     }
 }
 
