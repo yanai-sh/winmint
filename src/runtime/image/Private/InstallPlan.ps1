@@ -1,14 +1,303 @@
 #Requires -Version 7.3
 
+function New-WinMintInstallPlanAgentProfile {
+    param([Parameter(Mandatory)]$BuildConfig)
+
+    $normalizeWslDistro = {
+        param([string]$Distro)
+        switch -Regex ($Distro) {
+            '^Ubuntu-\d+\.\d+$'     { 'Ubuntu'; break }
+            '^Fedora(?:Linux)?-\d+$' { 'FedoraLinux'; break }
+            '^(Fedora|FedoraLinux)$' { 'FedoraLinux'; break }
+            '^(Arch(?: Linux)?|archlinux)$' { 'archlinux'; break }
+            '^(NixOS-WSL|NixOS|nixos-wsl)$' { 'NixOS'; break }
+            '^(Pengwin|pengwin)$' { 'pengwin'; break }
+            default                 { $Distro }
+        }
+    }
+    $wslDistros = @(
+        @($BuildConfig.Wsl2Distros) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) -and [string]$_ -ne 'None' } |
+            ForEach-Object { ([string]$_) -split ',' } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) -and [string]$_ -ne 'None' } |
+            ForEach-Object { & $normalizeWslDistro ([string]$_).Trim() } |
+            Select-Object -Unique
+    )
+    if ($wslDistros.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($BuildConfig.Wsl2Distro) -and $BuildConfig.Wsl2Distro -ne 'None') {
+        $wslDistros = @([string]$BuildConfig.Wsl2Distro -split ',' | ForEach-Object { & $normalizeWslDistro ([string]$_).Trim() } | Where-Object { $_ -and $_ -ne 'None' } | Select-Object -Unique)
+    }
+    $wslDistro = if ($wslDistros.Count -eq 0) { 'None' } elseif ($wslDistros.Count -eq 1) { $wslDistros[0] } else { $wslDistros -join ',' }
+    # Package-manager bootstrap is baseline: Scoop + MinGit are developer
+    # plumbing, and winget remains the owner for selected GUI/system tools.
+    $needsPackageManagers = $true
+    $needsFlowEverything = [bool]$BuildConfig.InstallFlowEverything
+    $needsRaycast = [bool]$BuildConfig.InstallRaycast
+    if ($needsFlowEverything -or $needsRaycast) { $needsPackageManagers = $true }
+    [ordered]@{
+        profile = [string]$BuildConfig.Profile
+        targetArchitecture = [string]$BuildConfig.Architecture
+        editors = @($BuildConfig.Editors)
+        browsers = @($BuildConfig.Browsers)
+        modules = [ordered]@{
+            packageManagers = [ordered]@{ enabled = $needsPackageManagers }
+            git = [ordered]@{
+                enabled = $false
+                defaultBranch = 'main'
+                credentialHelper = 'manager'
+            }
+            dotfiles = [ordered]@{
+                enabled = $false
+                repository = ''
+                installScript = ''
+            }
+            wsl = [ordered]@{
+                # WSL2 is baseline. The agent stays enabled even when no
+                # distro is selected so it can lay down .wslconfig and set the
+                # default version to 2.
+                enabled = $true
+                distro = $wslDistro
+                distros = @($wslDistros)
+            }
+            # Optional launcher + instant file search.
+            flowEverything = [ordered]@{ enabled = $needsFlowEverything }
+            raycast = [ordered]@{ enabled = $needsRaycast }
+            browsers = [ordered]@{ enabled = (@($BuildConfig.Browsers).Count -gt 0) }
+            liveInstallAudit = [ordered]@{ enabled = [bool]$BuildConfig.LiveInstallAudit }
+            phoneLink = [ordered]@{
+                enabled = [bool]$BuildConfig.PhoneLink
+                showInFileExplorer = [bool]$BuildConfig.PhoneLink
+                crossDeviceCopyPaste = [bool]$BuildConfig.PhoneLink
+                hideCrossDeviceHomeFolder = [bool]$BuildConfig.PhoneLink
+            }
+            shell = [ordered]@{
+                komorebi = [bool]$BuildConfig.InstallKomorebi
+                yasb = [bool]$BuildConfig.InstallYasb
+                whkd = [bool]$BuildConfig.InstallKomorebi
+                nilesoft = [bool]$BuildConfig.InstallNilesoft
+            }
+            windhawk = [ordered]@{ enabled = [bool]$BuildConfig.InstallWindhawk }
+        }
+    }
+}
+
+function New-WinMintInstallPlanSetupProfile {
+    param([Parameter(Mandatory)]$BuildConfig)
+
+    $removeEdgeBrowser = (-not [bool]$BuildConfig.Keep.Edge)
+
+    [ordered]@{
+        schemaVersion = 2
+        profile = [string]$BuildConfig.Profile
+        # FirstLogon re-establishes the FULL autologon (user + password) before every
+        # install reboot so auto sign-in never breaks mid-install, and wipes it (and this
+        # staged secret, via the residual cleanup) once setup completes. The plaintext
+        # password is an intentional, bounded local-machine secret for a hands-off install.
+        account = [ordered]@{
+            userName = [string]$BuildConfig.AccountName
+            accountMode = [string]$BuildConfig.AccountMode
+            autoLogon = [bool]$BuildConfig.AutoLogon
+            password = [string]$BuildConfig.Password
+        }
+        appxRemovalPrefixes = @($BuildConfig.AppxPackages)
+        appxCatalogVersion = [int]$BuildConfig.AppxCatalogVersion
+        registryTweaks = @($BuildConfig.RegistryTweaks)
+        windowsFeatures = @($BuildConfig.Features)
+        defaultUser = [ordered]@{
+            darkMode = $true
+            stickyKeysOff = [bool]$BuildConfig.Tweaks.StickyKeys
+        }
+        setupComplete = [ordered]@{
+            preserveWindowsUpdate = ([string]$BuildConfig.Tweaks.UpdatePolicy -eq 'All')
+            disableVirtualDesktopFlyout = [bool]$BuildConfig.InstallWindhawk
+            removeRecall = $true
+        }
+        aiRemoval = [ordered]@{
+            policy = [string]$BuildConfig.AiRemoval.Policy
+            catalogVersion = [int]$BuildConfig.AiRemoval.CatalogVersion
+            appxPrefixes = @($BuildConfig.AiRemoval.AppxPrefixes)
+            removeRecall = $true
+            disableAiServices = (@($BuildConfig.AiRemoval.ServicesToDisable).Count -gt 0)
+            disableAiTasks = $true
+            aggressiveExperimental = [bool]$BuildConfig.AiRemoval.AggressiveExperimental
+            optionalFeatures = @($BuildConfig.AiRemoval.OptionalFeatures)
+            servicesToDisable = @($BuildConfig.AiRemoval.ServicesToDisable)
+            scheduledTaskPatternsToDisable = @($BuildConfig.AiRemoval.ScheduledTaskPatternsToDisable)
+        }
+        windowsPolicy = [ordered]@{
+            dualBoot = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
+            disableFastStartup = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
+            preventDeviceEncryption = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
+            disableWpbtExecution = $true
+            realTimeIsUniversal = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
+            primaryAssumption = [string]$BuildConfig.PrimaryAssumption
+        }
+        regional = [ordered]@{
+            timeZoneId = [string]$BuildConfig.TimeZoneId
+            # Resolved secondary input languages (keyboards) FirstLogon adds to the user list
+            # while keeping en-US as the display language. Empty = none.
+            secondaryInputLanguages = @($BuildConfig.SecondaryInputLanguages)
+            dmaInterop = [ordered]@{
+                enabled = [bool]$BuildConfig.DmaInterop.Enabled
+                setupCountry = [string]$BuildConfig.DmaInterop.SetupCountry
+                setupUserLocale = [string]$BuildConfig.SetupUserLocale
+                setupHomeLocationGeoId = [int]$BuildConfig.SetupHomeLocationGeoId
+                restoreTimeZoneId = [string]$BuildConfig.TimeZoneId
+                restoreUserLocale = [string]$BuildConfig.UserLocale
+                restoreHomeLocationGeoId = [int]$BuildConfig.HomeLocationGeoId
+                restoreLocationServices = [bool]$BuildConfig.DmaInterop.RestoreLocationServices
+            }
+        }
+        privacy = [ordered]@{
+            telemetry = [bool]$BuildConfig.Privacy.Telemetry
+            advertisingId = [bool]$BuildConfig.Privacy.AdvertisingId
+            location = [bool]$BuildConfig.Privacy.Location
+            timeline = [bool]$BuildConfig.Privacy.Timeline
+            disableTelemetryTasks = [bool]$BuildConfig.Privacy.Telemetry
+            telemetryTaskPatternsToDisable = @($BuildConfig.TelemetryTaskPatterns)
+        }
+        power = [ordered]@{
+            formFactor = [string]$BuildConfig.FormFactor
+            dualBoot = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
+            disableHibernationOnDesktop = $true
+            desktopPowerPlan = 'HighPerformance'
+        }
+        edge = [ordered]@{
+            # Edge removal intent is serviced by SetupComplete through the normal
+            # supported app uninstaller. WebView2 / Edge runtime infrastructure is
+            # preserved.
+            removeEdge = $removeEdgeBrowser
+            keepEdge = [bool]$BuildConfig.Keep.Edge
+            dmaInteropEnabled = [bool]$BuildConfig.DmaInterop.Enabled
+        }
+    }
+}
+
+function New-WinMintInstallPlanSetupPlan {
+    param(
+        [Parameter(Mandatory)]$BuildConfig,
+        [Parameter(Mandatory)]$SetupProfile,
+        [Parameter(Mandatory)]$AgentProfile
+    )
+
+    $diskMode = [string]$BuildConfig.DiskMode
+    $accountMode = [string]$BuildConfig.AccountMode
+    $firstLogonModules = [System.Collections.Generic.List[string]]::new()
+    foreach ($module in @($AgentProfile.modules.PSObject.Properties.Name)) {
+        $value = $AgentProfile.modules.$module
+        $enabled = $false
+        if ($value -is [bool]) {
+            $enabled = [bool]$value
+        }
+        elseif ($value -and $value.PSObject.Properties['enabled']) {
+            $enabled = [bool]$value.enabled
+        }
+        elseif ($module -eq 'shell' -and $value) {
+            $enabled = [bool]$value.komorebi -or [bool]$value.yasb -or [bool]$value.whkd
+        }
+        if ($enabled) { $firstLogonModules.Add($module) | Out-Null }
+    }
+    if (@($BuildConfig.Editors).Count -gt 0) { $firstLogonModules.Add('editors') | Out-Null }
+    if (@($BuildConfig.Browsers).Count -gt 0) { $firstLogonModules.Add('browsers') | Out-Null }
+
+    [ordered]@{
+        schemaVersion = 2
+        profile = [string]$BuildConfig.Profile
+        generatedBy = 'WinMint backend'
+        accountMode = $accountMode
+        editionMode = [string]$BuildConfig.EditionMode
+        diskMode = $diskMode
+        phases = @(
+            [ordered]@{
+                id = 'windowsPE'
+                context = 'Windows PE'
+                entrypoint = 'autounattend.xml RunSynchronous'
+                responsibilities = @(
+                    'apply optional hardware compatibility bypass',
+                    'prepare disk layout when automated disk mode is selected',
+                    'hand Windows Setup the selected edition policy'
+                )
+            }
+            [ordered]@{
+                id = 'specialize'
+                context = 'SYSTEM before first user'
+                entrypoint = 'C:\Windows\Setup\Scripts\Specialize.ps1'
+                responsibilities = @(
+                    'apply machine policy that must exist before OOBE',
+                    'load setup profile from WinMintSetupProfile.json'
+                )
+            }
+            [ordered]@{
+                id = 'setupComplete'
+                context = 'SYSTEM after Windows Setup'
+                entrypoint = 'C:\Windows\Setup\Scripts\SetupComplete.cmd'
+                responsibilities = @(
+                    'run SetupComplete.ps1',
+                    'finish machine-level cleanup',
+                    'keep Windows Update and serviceability infrastructure intact'
+                )
+            }
+            [ordered]@{
+                id = 'defaultUser'
+                context = 'Default user registry hive'
+                entrypoint = 'C:\Windows\Setup\Scripts\DefaultUser.ps1'
+                responsibilities = @(
+                    'apply HKCU defaults for newly-created users',
+                    'keep known folders local',
+                    'remove default-user first-run pressure'
+                )
+            }
+            [ordered]@{
+                id = 'firstLogon'
+                context = 'Live user at first sign-in'
+                entrypoint = 'C:\Windows\Setup\Scripts\FirstLogon.ps1'
+                responsibilities = @(
+                    'clear autologon residue',
+                    'run WinMintAgent',
+                    'write retry/audit state',
+                    'finish live-user package and shell setup'
+                )
+            }
+        )
+        stagedArtifacts = @(
+            'autounattend.xml',
+            'C:\Windows\Setup\Scripts\WinMintSetupProfile.json',
+            'C:\Windows\Setup\Scripts\Specialize.ps1',
+            'C:\Windows\Setup\Scripts\DefaultUser.ps1',
+            'C:\Windows\Setup\Scripts\SetupComplete.cmd',
+            'C:\Windows\Setup\Scripts\SetupComplete.ps1',
+            'C:\Windows\Setup\Scripts\FirstLogon.ps1',
+            'C:\Windows\Setup\Scripts\WinMintAgent\BuildProfile.json'
+        )
+        generatedProfiles = [ordered]@{
+            setupProfile = $SetupProfile
+            agentProfile = $AgentProfile
+        }
+        firstLogon = [ordered]@{
+            modules = @($firstLogonModules | Select-Object -Unique)
+            editors = @($BuildConfig.Editors)
+            wslDistros = @($BuildConfig.Wsl2Distros)
+        }
+        notes = @(
+            'UI and CLI must treat this plan as backend output; neither should duplicate setup-phase business logic.',
+            $(if ([bool]$BuildConfig.DmaInterop.Enabled) {
+                    'Windows setup uses an EEA region for opt-in DMA interoperability, then FirstLogon restores the configured regional defaults and location-services posture.'
+                } else {
+                    'DMA interoperability setup-region override is disabled; setup uses the configured regional defaults.'
+                }),
+            'OneDrive is not offered or auto-provisioned by default; manual reinstall remains possible after setup.'
+        )
+    }
+}
+
 function New-WinMintInstallPlanFromBuildConfig {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]$BuildConfig
     )
 
-    $setupProfile = New-WinMintSetupProfile -BuildConfig $BuildConfig
-    $agentProfile = New-WinMintAgentProfile -BuildConfig $BuildConfig
-    $setupPlan = New-WinMintSetupPlan `
+    $setupProfile = New-WinMintInstallPlanSetupProfile -BuildConfig $BuildConfig
+    $agentProfile = New-WinMintInstallPlanAgentProfile -BuildConfig $BuildConfig
+    $setupPlan = New-WinMintInstallPlanSetupPlan `
         -BuildConfig $BuildConfig `
         -SetupProfile $setupProfile `
         -AgentProfile $agentProfile
@@ -97,3 +386,4 @@ function Get-WinMintInstallPlanForBuildConfig {
 
     New-WinMintInstallPlanFromBuildConfig -BuildConfig $BuildConfig
 }
+
