@@ -29,10 +29,11 @@ $guiIntentPath = Join-Path $root 'apps\gui\src\intent.rs'
 $guiStatePath = Join-Path $root 'apps\gui\src\state.rs'
 $coreProfilePath = Join-Path $root 'crates\winmint-core\src\profile.rs'
 $bridgePath = Join-Path $root 'tools\ui-bridge\New-UiBuildProfile.ps1'
+$uiIntentSchemaPath = Join-Path $root 'schemas\winmint.uiintent.schema.json'
 $pipelineConsolePath = Join-Path $root 'src\runtime\image\Private\Pipeline.Console.ps1'
 $reviewConsolePath = Join-Path $root 'src\runtime\image\Private\Console\Review.ps1'
 
-foreach ($path in @($guiIntentPath, $guiStatePath, $coreProfilePath, $bridgePath, $pipelineConsolePath, $reviewConsolePath)) {
+foreach ($path in @($guiIntentPath, $guiStatePath, $coreProfilePath, $bridgePath, $uiIntentSchemaPath, $pipelineConsolePath, $reviewConsolePath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         Add-Failure "Required UI contract file is missing: $path"
     }
@@ -43,6 +44,7 @@ if ($failures.Count -eq 0) {
     $guiState = Get-Content -LiteralPath $guiStatePath -Raw
     $coreProfile = Get-Content -LiteralPath $coreProfilePath -Raw
     $bridge = Get-Content -LiteralPath $bridgePath -Raw
+    $uiIntentSchema = Get-Content -LiteralPath $uiIntentSchemaPath -Raw
     $pipelineConsole = Get-Content -LiteralPath $pipelineConsolePath -Raw
     $reviewConsole = Get-Content -LiteralPath $reviewConsolePath -Raw
 
@@ -50,7 +52,10 @@ if ($failures.Count -eq 0) {
     Assert-Text $coreProfile 'pub struct KeepFlags' 'winmint-core must define the keep-flag intent inputs.'
     Assert-Text $coreProfile 'pub fn build_ui_intent' 'winmint-core must expose the typed UI intent builder.'
     Assert-Text $coreProfile 'fn ui_intent_serializes_to_the_exact_bridge_contract_keys' 'winmint-core must test the bridge contract key set.'
+    Assert-Text $coreProfile 'winmint\.uiintent\.schema\.json' 'winmint-core tests must compare UI intent keys with the schema.'
     Assert-Text $bridge 'Assert-WinMintUiBridgeSettings' 'PowerShell bridge must keep a boundary assertion before engine profile creation.'
+    Assert-Text $bridge 'winmint\.uiintent\.schema\.json' 'PowerShell bridge must read the UI intent schema.'
+    Assert-Text $uiIntentSchema '"required"\s*:\s*\[' 'UI intent schema must define required bridge keys.'
     Assert-Text $pipelineConsole 'InstallNilesoft' 'Interactive console build path must carry the Nilesoft shell option.'
     Assert-Text $pipelineConsole 'Wsl2Distros' 'Interactive console build path must carry WSL distro selections.'
     Assert-Text $reviewConsole 'InstallNilesoft' 'Build summary must surface Nilesoft.'

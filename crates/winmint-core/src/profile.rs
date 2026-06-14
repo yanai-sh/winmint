@@ -311,6 +311,30 @@ mod tests {
         "TweakDmaInterop",
     ];
 
+    fn ui_intent_schema_property_keys() -> Vec<String> {
+        let schema_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../schemas/winmint.uiintent.schema.json");
+        let schema_text = std::fs::read_to_string(&schema_path)
+            .unwrap_or_else(|err| panic!("read {}: {err}", schema_path.display()));
+        let schema: Value = serde_json::from_str(&schema_text)
+            .unwrap_or_else(|err| panic!("parse {}: {err}", schema_path.display()));
+        let properties = schema["properties"]
+            .as_object()
+            .expect("ui intent schema properties object");
+        let mut keys = properties.keys().cloned().collect::<Vec<_>>();
+        keys.sort();
+        keys
+    }
+
+    fn sorted_expected_intent_keys() -> Vec<String> {
+        let mut keys = EXPECTED_INTENT_KEYS
+            .iter()
+            .map(|key| key.to_string())
+            .collect::<Vec<_>>();
+        keys.sort();
+        keys
+    }
+
     fn sample(keep: KeepFlags, edition: &str, form_factor: &str) -> Value {
         build_gui_intent(
             "D:\\iso\\win.iso",
@@ -350,6 +374,11 @@ mod tests {
         for key in EXPECTED_INTENT_KEYS {
             assert!(obj.contains_key(key), "missing intent key {key}");
         }
+        assert_eq!(
+            ui_intent_schema_property_keys(),
+            sorted_expected_intent_keys(),
+            "UI intent schema properties must match UiIntent serialization"
+        );
     }
 
     #[test]

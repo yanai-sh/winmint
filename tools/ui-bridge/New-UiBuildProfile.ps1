@@ -17,27 +17,12 @@ Set-StrictMode -Version 2.0
 function Assert-WinMintUiBridgeSettings {
     param([Parameter(Mandatory)][object]$Settings)
 
-    $required = @(
-        'Profile',
-        'KeepEdge',
-        'KeepGaming',
-        'KeepCopilot',
-        'ISOPath',
-        'Architecture',
-        'ComputerName',
-        'AccountName',
-        'AccountMode',
-        'TargetDevice',
-        'Edition',
-        'DriverSource',
-        'InstallWindhawk',
-        'InstallYasb',
-        'InstallKomorebi',
-        'InstallNilesoft',
-        'Editors',
-        'Browsers',
-        'Wsl2Distros'
-    )
+    $schemaPath = Join-Path $RepositoryRoot 'schemas\winmint.uiintent.schema.json'
+    if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) {
+        throw "UI intent schema not found: $schemaPath"
+    }
+    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
+    $required = @($schema.required | ForEach-Object { [string]$_ })
 
     foreach ($name in $required) {
         if (-not ($Settings.PSObject.Properties.Name -contains $name)) {
