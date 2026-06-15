@@ -11,7 +11,7 @@ Snapshot note: this document reflects the current development state of the repo.
 | Primary language | PowerShell for the headless backend and real product work: servicing, setup, first-logon, profile/report logic, validation, release, and VM automation. | `WinMint-CLI.ps1`, `WinMint-GUI.ps1`, `src/runtime/image/WinMint.ps1`, `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `tools/validation/Validate.ps1` |
 | Secondary languages | Rust for GPUI frontend layers and shared UI/profile intent helpers; JavaScript for the Cloudflare bootstrap Worker. | `Cargo.toml`, `apps/gui/src/main.rs`, `apps/firstlogon-gui/src/main.rs`, `crates/winmint-core/src/profile.rs`, `cloudflare/winmint/src/index.js` |
 | Runtime + version | Project scripts require PowerShell 7.3+; remote bootstrap starts in Windows PowerShell 5.1 and then requires PowerShell 7.3+; Rust workspace uses edition 2021. Exact Rust compiler version is `[TODO]`. | `WinMint-CLI.ps1`, `WinMint-GUI.ps1`, `winmint.ps1`, `Cargo.toml`, `.github/workflows/ci.yml` |
-| Package manager | Cargo for Rust workspace dependencies; winget/msstore/Scoop are runtime package sources; `bunx wrangler@latest` is the documented Worker deploy command. Root `package.json` is empty and not a product package manifest. | `Cargo.toml`, `config/packages.json`, `cloudflare/winmint/README.md`, `package.json` |
+| Package manager | Cargo for Rust workspace dependencies; winget/msstore/Scoop are runtime package sources; `bunx wrangler@latest` is the documented Worker deploy command. The repo has no root Node package manifest. | `Cargo.toml`, `config/packages.json`, `cloudflare/winmint/README.md` |
 | Module/build system | PowerShell dot-sourced runtime modules; Cargo workspace with `apps/firstlogon-gui`, `apps/gui`, and `crates/winmint-core`; Wrangler Worker config for the bootstrap alias. | `src/runtime/image/WinMint.ps1`, `Cargo.toml`, `cloudflare/winmint/wrangler.jsonc` |
 
 ### 2) Production Frameworks and Dependencies
@@ -45,6 +45,7 @@ pwsh -NoProfile -File tests\contract\Test-ProfileInvariants.ps1
 pwsh -NoProfile -File tests\contract\Test-Fast.ps1
 cargo test --manifest-path crates\winmint-core\Cargo.toml
 cargo check --manifest-path apps\gui\Cargo.toml
+cargo test --manifest-path apps\gui\Cargo.toml
 pwsh -NoProfile -File WinMint-CLI.ps1 new BuildProfile.json
 pwsh -NoProfile -File WinMint-CLI.ps1 build BuildProfile.json -DryRun
 pwsh -NoProfile -File tools\release\New-WinMintReleaseBundle.ps1 -Version v0.2.0

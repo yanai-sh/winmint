@@ -24,7 +24,7 @@ Snapshot note: this document reflects the current development state of the repo.
 | Store | Role | Access layer | Key risk | Evidence |
 |-------|------|--------------|----------|----------|
 | `BuildProfile.json` | Build intent consumed by engine/setup/agent. | `src/runtime/image/Private/Config/Profile.ps1`, `tools/ui-bridge/New-UiBuildProfile.ps1` | Contract drift between GUI, CLI, schema, and setup consumers. | `schemas/winmint.buildprofile.schema.json`, `crates/winmint-core/src/profile.rs` |
-| `BuildManifest.json` / report artifacts | Machine-readable build outcome, payload facts, recovery/tweak audit outputs. | `src/runtime/image/Reports.ps1` | Unsupported claims if facts are inferred outside manifest helpers. | `schemas/winmint.buildmanifest.schema.json`, `src/runtime/image/Reports.ps1` |
+| `BuildManifest.json` / report artifacts | Machine-readable build outcome, payload facts, recovery/tweak audit outputs. | `src/runtime/image/Private/Manifest.ps1`, `src/runtime/image/Reports.ps1` | Unsupported claims if facts are inferred outside manifest helpers or install-plan facts. | `schemas/winmint.buildmanifest.schema.json`, `src/runtime/image/Private/Manifest.ps1`, `src/runtime/image/Reports.ps1` |
 | `%LOCALAPPDATA%\WinMint\state.json` | FirstLogon retry/resume state. | `src/runtime/firstlogon/Agent.Runtime.ps1` | Partial state or stale step status across failed/rebooted runs. | `schemas/winmint.agentstate.schema.json`, `src/runtime/firstlogon/Start-WinMintAgent.ps1` |
 | `%LOCALAPPDATA%\WinMint\Logs` | FirstLogon event and command logs. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Agent.Console.ps1` | Logs can contain installer output; redaction policy is `[TODO]`. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Agent.Runtime.ps1` |
 | `%TEMP%\Win11ISO_dependency_cache` and output work dirs | Cached downloads, staged ISO/intermediate build state. | `src/runtime/image/Private/Runtime.ps1`, `src/runtime/image/Private/IsoStageCache.ps1`, `src/runtime/image/Private/IntermediatesCache.ps1` | Cache invalidation/fingerprint mistakes can reuse stale payloads. | `src/runtime/image/Private/Runtime.ps1`, `src/runtime/image/Private/IntermediatesCache.ps1` |
@@ -52,6 +52,7 @@ Snapshot note: this document reflects the current development state of the repo.
 
 - `winmint.ps1`
 - `config/packages.json`
+- `src/runtime/image/Private/Manifest.ps1`
 - `src/runtime/image/Private/UpdatePayloads.ps1`
 - `src/runtime/image/Private/PayloadStore.ps1`
 - `src/runtime/image/Private/UsbMedia.ps1`

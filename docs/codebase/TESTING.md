@@ -30,7 +30,7 @@ pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profile
 | Scope | Covered? | Typical target | Notes |
 |-------|----------|----------------|-------|
 | Unit | Yes | Rust UI intent helpers and small PowerShell helpers. | `crates/winmint-core/src/profile.rs` has `#[cfg(test)]` tests; PowerShell contract scripts call helper assertions directly. |
-| Contract/static | Yes | Profile invariants, schemas, release manifest, CLI matrix, payload store, bootstrap, Cloudflare Worker, UI contract spine. | `tests/contract/Test-Fast.ps1` composes the fast suite. |
+| Contract/static | Yes | Profile invariants, schemas, release manifest, install plan, FirstLogon transaction plan, agent state/runtime plan, CLI matrix, payload store, bootstrap, Cloudflare Worker, UI contract spine. | `tests/contract/Test-Fast.ps1` composes the fast suite. |
 | Integration | Partial | Optional ISO dry-run, payload/source checks, VM helpers. | `tools/validation/Validate.ps1 -RunIntegration` invokes `Test-Integration.ps1`; VM scripts require Hyper-V/Admin and local fixtures. |
 | E2E installer | Manual/fixture-based | Generated ISO boot/install in Hyper-V. | `tools/vm/Build-And-TestVm.ps1` and `tests/profiles/hyper-v-install-arm64.json` exist; CI does not run Hyper-V E2E. |
 | CI | Yes | Validation and GUI crate checks/tests. | `.github/workflows/ci.yml` runs profile invariants, validation, `cargo check`, and `cargo test` for `apps/gui`. |
@@ -53,6 +53,9 @@ pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profile
 - `tests/contract/Test-Fast.ps1`
 - `tests/contract/Test-ProfileInvariants.ps1`
 - `tests/contract/Test-UiContractSpine.ps1`
+- `tests/contract/Test-InstallPlanContract.ps1`
+- `tests/contract/Test-FirstLogonTransactionPlan.ps1`
+- `tests/contract/Test-AgentStateTransitions.ps1`
 - `tests/contract/ProfileInvariantTests/StaticAssertions.ps1`
 - `tests/contract/ProfileInvariantTests/ProfileAssertions.ps1`
 - `tools/validation/Validate.ps1`

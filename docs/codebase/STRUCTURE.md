@@ -16,7 +16,7 @@ Snapshot note: this document reflects the current development state of the repo.
 | `src/runtime/firstlogon/` | Live-user FirstLogon agent, retry state, package installs, WSL/editor/shell modules, and console output. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Agent.Runtime.ps1`, `src/runtime/firstlogon/Modules/` |
 | `apps/gui/` | Main Rust GPUI frontend, wizard, previews, and PowerShell bridge caller. | `apps/gui/Cargo.toml`, `apps/gui/src/main.rs`, `apps/gui/src/bridge.rs` |
 | `apps/firstlogon-gui/` | Rust GPUI status/demo surface for first-logon progress. | `apps/firstlogon-gui/Cargo.toml`, `apps/firstlogon-gui/src/main.rs` |
-| `crates/winmint-core/` | Rust shared UI intent/profile helper crate. | `crates/winmint-core/Cargo.toml`, `crates/winmint-core/src/profile.rs` |
+| `crates/winmint-core/` | Rust shared UI intent/profile helper crate and serialized option-token catalog. | `crates/winmint-core/Cargo.toml`, `crates/winmint-core/src/profile.rs`, `crates/winmint-core/src/options.rs` |
 | `tools/` | Developer automation for validation, release bundling, GUI bridge, VM tests, audits, and utilities. | `tools/validation/Validate.ps1`, `tools/release/New-WinMintReleaseBundle.ps1`, `tools/ui-bridge/New-UiBuildProfile.ps1`, `tools/vm/Build-And-TestVm.ps1` |
 | `tests/` | Contract tests, profile fixtures, and ignored large fixture roots. | `tests/README.md`, `tests/contract/Test-Fast.ps1`, `tests/profiles/hyper-v-install-arm64.json` |
 | `config/` | Product catalogs, release manifest, unattended setup template, and build-profile samples. | `config/packages.json`, `config/release-manifest.json`, `config/autounattend.xml` |
@@ -39,14 +39,14 @@ Snapshot note: this document reflects the current development state of the repo.
 | Engine (`src/runtime/image`) | ISO staging, WIM servicing, driver injection, staged setup files, reports, USB media output. | GUI controls or live-user package installs. |
 | Setup scripts (`src/runtime/setup`) | Machine-phase setup during Windows install. | User-facing selection prompts or offline image servicing. |
 | FirstLogon agent (`src/runtime/firstlogon`) | Live-user package managers, WSL, editors, shell layers, retry state. | Offline WIM servicing or destructive disk choices. |
-| Reports (`src/runtime/image/Reports.ps1`) | Manifest/report artifacts, tweak audit artifacts, recovery bundle output. | Primary business decisions. |
+| Reports (`src/runtime/image/Private/Manifest.ps1`, `src/runtime/image/Reports.ps1`) | Manifest lifecycle and report artifacts, tweak audit artifacts, recovery bundle output. | Primary business decisions. |
 | Tools/tests (`tools`, `tests`) | Repo validation, release packaging, VM/audit harnesses, contract tests. | Shipped runtime behavior unless explicitly included by release manifest. |
 
 ### 4) Naming and Organization Rules
 
 - File naming pattern: PowerShell entry/module files mostly use PascalCase or descriptive kebab-like tweak IDs, for example `WinMint-CLI.ps1`, `SetupComplete.ps1`, `Private/Image/Tweaks/33-edge-policy-minimal.ps1`; Rust modules use snake_case filenames, for example `apps/gui/src/main.rs` and `crates/winmint-core/src/profile.rs`.
 - Directory organization pattern: layer-based runtime split (`image`, `setup`, `firstlogon`) plus domain subdirectories inside those layers (`Private/Image/Tweaks`, `Modules`, `SetupComplete`).
-- Import aliasing or path conventions: PowerShell runtime modules are dot-sourced in explicit order from `src/runtime/image/WinMint.ps1`; GUI Rust aliases `components` as `ui`; repo paths should resolve through `Get-WinMintPath` in `src/runtime/image/Core.ps1` when available.
+- Import aliasing or path conventions: PowerShell runtime modules are dot-sourced in explicit order from `src/runtime/image/WinMint.ps1`; GUI Rust aliases `components` as `ui`; repo paths should resolve through `Get-WinMintPath` in `src/runtime/image/Core.ps1` when available. Shared serialized UI values should come from `winmint_core::options` and GPUI display rows from `apps/gui/src/options.rs`.
 
 ### 5) Evidence
 

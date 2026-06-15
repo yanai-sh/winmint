@@ -24,11 +24,11 @@ Snapshot note: this document reflects the current development state of the repo.
 
 - Import grouping/order: `src/runtime/image/WinMint.ps1` is the canonical ordered dot-source list for engine modules; tests that need internals dot-source the same runtime families directly.
 - Alias vs relative import policy: PowerShell uses repo-root path helpers such as `Get-WinMintPath` after `Core.ps1` is loaded; Rust uses module declarations and direct `use` statements, with `components as ui` in the GPUI app.
-- Public exports/barrel policy: no PowerShell module manifest/barrel is present; functions are made available by dot-sourcing. Rust `crates/winmint-core/src/lib.rs` re-exports the `profile` module.
+- Public exports/barrel policy: no PowerShell module manifest/barrel is present; functions are made available by dot-sourcing. Rust `crates/winmint-core/src/lib.rs` exposes `profile` and `options`.
 
 ### 4) Error and Logging Conventions
 
-- Error strategy by layer: entry points commonly set `$ErrorActionPreference = 'Stop'`; validation and tests collect failures into lists and throw at the end; FirstLogon optional modules catch/record advisory failures while only `profiles` is treated as blocking.
+- Error strategy by layer: entry points commonly set `$ErrorActionPreference = 'Stop'`; validation and tests collect failures into lists and throw at the end; FirstLogon runtime steps carry `FailurePolicy` in `New-WinMintAgentRuntimeStepPlan`, with `profiles` blocking and normal live-user modules advisory.
 - Logging style and required context fields: engine console logging flows through `Log`, `LogOK`, `LogWarn`, and manifest facts; FirstLogon writes text logs, JSONL events, command stdout/stderr logs, and `state.json`.
 - Sensitive-data redaction rules: local-account passwords can come from `-Password`, `-PasswordPath`, or `-PasswordEnvVar`; direct password use is allowed by project lint exclusions, but explicit redaction/lifecycle rules beyond setup cleanup are `[TODO]`.
 
@@ -45,6 +45,7 @@ Snapshot note: this document reflects the current development state of the repo.
 - `src/runtime/image/WinMint.ps1`
 - `src/runtime/image/Core.ps1`
 - `src/runtime/image/Cli.ps1`
+- `crates/winmint-core/src/options.rs`
 - `src/runtime/firstlogon/Agent.Runtime.ps1`
 - `tests/contract/Test-ProfileInvariants.ps1`
 - `tests/contract/Test-UiContractSpine.ps1`
