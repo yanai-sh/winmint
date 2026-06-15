@@ -2,7 +2,9 @@
 //! card and unlocks Next immediately; the background mount/probe only enriches the
 //! card (editions, confirmed arch) and never blocks. Form factor lives on Configure.
 
-use gpui::{div, prelude::*, px, AnyElement, Context, Div, ExternalPaths, FontWeight, SharedString, Window};
+use gpui::{
+    div, prelude::*, px, AnyElement, Context, Div, ExternalPaths, FontWeight, SharedString, Window,
+};
 
 use crate::components as ui;
 use crate::state::SourceProbeStatus;

@@ -44,6 +44,7 @@ $commandLogDir = Join-Path $logDir 'Commands'
 $null = New-Item -ItemType Directory -Path $commandLogDir -Force -ErrorAction SilentlyContinue
 $script:AgentConsoleReady = $false
 $script:AgentCommandCounter = 0
+$script:AgentConsoleSplashImagePath = Join-Path $agentRoot 'Assets\Brand\winmint_logo_wordmark.png'
 
 . (Join-Path $agentRoot 'Agent.Console.ps1')
 . (Join-Path $agentRoot 'Agent.Runtime.ps1')

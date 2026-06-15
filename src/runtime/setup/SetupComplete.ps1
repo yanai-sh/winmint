@@ -190,9 +190,13 @@ Write-ScLog 'SetupComplete.ps1 start'
 try {
     $firstLogonPath = Join-Path $payloadDir 'FirstLogon.ps1'
     if (Test-Path -LiteralPath $firstLogonPath) {
-        $runOnceCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$firstLogonPath`""
+        $pwsh = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
+        if (-not (Test-Path -LiteralPath $pwsh -PathType Leaf)) {
+            throw "PowerShell 7 is required for FirstLogon but was not found: $pwsh"
+        }
+        $runOnceCommand = "`"$pwsh`" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$firstLogonPath`""
         $null = & reg.exe add 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' /v 'WinMintFirstLogon' /t REG_SZ /d $runOnceCommand /f
-        Write-ScLog 'Registered HKLM RunOnce fallback for FirstLogon.ps1.'
+        Write-ScLog 'Registered HKLM RunOnce fallback for FirstLogon.ps1 under PowerShell 7.'
     }
 }
 catch {

@@ -246,7 +246,7 @@ function Assert-ManifestPayloadsAreDeduplicated {
         if (Test-Path -LiteralPath $tempRoot) {
             Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
-        $script:WinMintBuildManifest = $null
+        Clear-WinMintBuildManifest
     }
 }
 
@@ -296,7 +296,7 @@ function Assert-TweakAuditArtifactsAreWritten {
         if (Test-Path -LiteralPath $tempRoot) {
             Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
-        $script:WinMintBuildManifest = $null
+        Clear-WinMintBuildManifest
     }
 }
 
@@ -359,33 +359,48 @@ function Assert-OfflinePayloadCacheStatus {
 
 function Assert-ImageUpdateProfileContract {
     $defaultProfile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
-    if ([string]$defaultProfile.updates.mode -ne 'Stable25H2') {
-        Add-SmokeFailure "Expected image updates to default to Stable25H2, got '$($defaultProfile.updates.mode)'."
+    if ([string]$defaultProfile.updates.mode -ne 'None') {
+        Add-SmokeFailure "Expected image updates to default to None, got '$($defaultProfile.updates.mode)'."
     }
-    if ([string]::IsNullOrWhiteSpace([string]$defaultProfile.updates.payloadRoot)) {
-        Add-SmokeFailure 'Expected default image updates to carry a default payload root.'
+    if (-not [string]::IsNullOrWhiteSpace([string]$defaultProfile.updates.payloadRoot)) {
+        Add-SmokeFailure 'Expected default image updates to leave payload root empty.'
     }
     $defaultConfig = New-WinMintBuildConfig -BuildProfile $defaultProfile
-    if ([string]$defaultConfig.Updates.Mode -ne 'Stable25H2') {
-        Add-SmokeFailure "Expected build config updates to default to Stable25H2, got '$($defaultConfig.Updates.Mode)'."
+    if ([string]$defaultConfig.Updates.Mode -ne 'None') {
+        Add-SmokeFailure "Expected build config updates to default to None, got '$($defaultConfig.Updates.Mode)'."
     }
 
-    $optOutSettings = New-SmokeBuildProfileSettings
-    $optOutSettings.UpdateImage = 'None'
-    $optOutProfile = New-WinMintBuildProfile -Settings $optOutSettings
-    $optOutConfig = New-WinMintBuildConfig -BuildProfile $optOutProfile
-    if ([string]$optOutProfile.updates.mode -ne 'None' -or [string]$optOutConfig.Updates.Mode -ne 'None') {
-        Add-SmokeFailure 'Expected UpdateImage None to opt out of offline image updates.'
+    $optInSettings = New-SmokeBuildProfileSettings
+    $optInSettings.UpdateImage = 'Stable25H2'
+    $optInProfile = New-WinMintBuildProfile -Settings $optInSettings
+    $optInConfig = New-WinMintBuildConfig -BuildProfile $optInProfile
+    if ([string]$optInProfile.updates.mode -ne 'Stable25H2' -or [string]$optInConfig.Updates.Mode -ne 'Stable25H2') {
+        Add-SmokeFailure 'Expected UpdateImage Stable25H2 to opt in to offline image updates.'
     }
 
     $missingSettings = New-SmokeBuildProfileSettings
+    $missingSettings.UpdateImage = 'Stable25H2'
     $missingSettings.UpdatePayloadRoot = Join-Path ([IO.Path]::GetTempPath().TrimEnd('\', '/')) ('winmint-missing-update-root-' + [Guid]::NewGuid().ToString('n'))
     $missingSettings.ISOPath = Get-WinMintTestOfficialIsoFixturePath
     $missingProfile = New-WinMintBuildProfile -Settings $missingSettings
     $missingConfig = New-WinMintBuildConfig -BuildProfile $missingProfile
-    $missingPreflight = Test-WinMintBuildPrerequisite -Config $missingConfig -AllowMissingSourceIso
+    $missingPreflight = Test-WinMintBuildPrerequisite -Config $missingConfig -RunMode DryRun
     if ($missingPreflight.Passed -or ($missingPreflight.Failures -join '; ') -notmatch 'Update payload root not found') {
         Add-SmokeFailure 'Expected Stable25H2 preflight to require an explicit update payload root.'
+    }
+    if (@($missingPreflight.Findings | Where-Object Code -eq 'updates.payloadRoot.notFound').Count -ne 1) {
+        Add-SmokeFailure 'Expected missing Stable25H2 payload root to emit updates.payloadRoot.notFound.'
+    }
+    $buildPreflightContext = New-WinMintBuildPreflightContext -RunMode Build
+    $dryRunPreflightContext = New-WinMintBuildPreflightContext -RunMode DryRun
+    if (-not [bool]$buildPreflightContext.RequireOnlinePayloadCache -or [bool]$dryRunPreflightContext.RequireOnlinePayloadCache) {
+        Add-SmokeFailure 'Expected preflight context to require online/cache payload readiness only for real builds.'
+    }
+    if ([string]$buildPreflightContext.SourceIsoPolicy -ne 'Required' -or [string]$dryRunPreflightContext.SourceIsoPolicy -ne 'ProfileOnlyOptional') {
+        Add-SmokeFailure 'Expected preflight context to expose run-mode-specific source ISO policy.'
+    }
+    if ($buildPreflightContext.PSObject.Properties['AllowMissingSourceIso'] -or $dryRunPreflightContext.PSObject.Properties['AllowMissingSourceIso']) {
+        Add-SmokeFailure 'Expected generated preflight contexts to avoid legacy AllowMissingSourceIso flags.'
     }
 
     $tempRoot = Join-Path ([IO.Path]::GetTempPath().TrimEnd('\', '/')) ('winmint_update_payload_test_' + [Guid]::NewGuid().ToString('n'))
@@ -413,9 +428,12 @@ function Assert-ImageUpdateProfileContract {
         if ([string]$config.Updates.Mode -ne 'Stable25H2' -or [string]$config.Updates.ReleaseCadence -ne 'BRelease' -or [bool]$config.Updates.IncludeOptionalPreviews) {
             Add-SmokeFailure 'Expected Stable25H2 update settings to flow to build config with B-release previews disabled.'
         }
-        $preflight = Test-WinMintBuildPrerequisite -Config $config -AllowMissingSourceIso
+        $preflight = Test-WinMintBuildPrerequisite -Config $config -RunMode DryRun
         if (-not $preflight.Passed) {
             Add-SmokeFailure "Expected Stable25H2 preflight to pass with a payload root. Failures: $($preflight.Failures -join '; ')"
+        }
+        if (@($preflight.Findings | Where-Object Severity -eq 'failure').Count -ne 0) {
+            Add-SmokeFailure 'Expected Stable25H2 preflight with a payload root to have no failure findings.'
         }
         $resolvedPackages = @(Get-WinMintOfflineUpdatePackageFiles -PayloadRoot $tempRoot -Category 'packages')
         if ($resolvedPackages -ne $lcu) {
@@ -434,6 +452,22 @@ function Assert-ImageUpdateProfileContract {
         if (Test-Path -LiteralPath $tempRoot) {
             Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
+    }
+}
+
+function Assert-UpdatePayloadHashHelpers {
+    $catalogSha256 = 'TT00I9uVmDM8VR+eMEpWxho251EODaPXr2NpI/Q7hBI='
+    $expectedHex = '4D3D3423DB9598333C551F9E304A56C61A36E7510E0DA3D7AF636923F43B8412'
+    $actualHex = ConvertFrom-WinMintCatalogBase64Sha256 -Sha256Base64 $catalogSha256
+    if ($actualHex -ne $expectedHex) {
+        Add-SmokeFailure "Expected Catalog Base64 SHA256 to convert to $expectedHex, got $actualHex."
+    }
+
+    try {
+        $null = ConvertFrom-WinMintCatalogBase64Sha256 -Sha256Base64 'not-a-valid-hash'
+        Add-SmokeFailure 'Expected invalid Catalog Base64 SHA256 metadata to fail closed.'
+    }
+    catch {
     }
 }
 
@@ -635,7 +669,7 @@ function Assert-HeadlessCliContracts {
         Add-SmokeFailure 'Expected setup profile to keep DMA setup values separate from user restore values.'
     }
     Initialize-WinMintBuildManifest -Config $dmaConfig
-    $manifestDma = $script:WinMintBuildManifest.regional.dmaInterop
+    $manifestDma = (Get-WinMintBuildManifest).regional.dmaInterop
     if ($manifestDma.setupLatchedCountry -ne 'Ireland' -or
         [int]$manifestDma.setupLatchedGeoId -ne 68 -or
         $manifestDma.restoredUserLocale -ne 'he-IL' -or
@@ -855,7 +889,7 @@ function Assert-HeadlessSourceAndDriverInputContracts {
             -UpdateImage None `
             -ValidateOnly
         $sourceConfig = New-WinMintBuildConfig -BuildProfile $sourceProfile
-        $sourcePreflight = Test-WinMintBuildPrerequisite -Config $sourceConfig -AllowMissingSourceIso
+        $sourcePreflight = Test-WinMintBuildPrerequisite -Config $sourceConfig -RunMode ValidateOnly
         if (-not $sourcePreflight.Passed) {
             Add-SmokeFailure "Expected official ISO fixture path to pass source preflight, got: $($sourcePreflight.Failures -join '; ')"
         }
@@ -869,7 +903,7 @@ function Assert-HeadlessSourceAndDriverInputContracts {
             -UpdateImage None `
             -ValidateOnly
         $isoConfig = New-WinMintBuildConfig -BuildProfile $isoProfile
-        $isoPreflight = Test-WinMintBuildPrerequisite -Config $isoConfig -AllowMissingSourceIso
+        $isoPreflight = Test-WinMintBuildPrerequisite -Config $isoConfig -RunMode ValidateOnly
         if (-not $isoPreflight.Passed) {
             Add-SmokeFailure "Expected existing ISO fixture path to pass source preflight, got: $($isoPreflight.Failures -join '; ')"
         }
@@ -911,7 +945,7 @@ function Assert-HeadlessSourceAndDriverInputContracts {
                 -DriverPath $validDriverPath `
                 -DryRun
             $driverConfig = New-WinMintBuildConfig -BuildProfile $driverProfile
-            $driverPreflight = Test-WinMintBuildPrerequisite -Config $driverConfig -AllowMissingSourceIso
+            $driverPreflight = Test-WinMintBuildPrerequisite -Config $driverConfig -RunMode DryRun
             if (-not $driverPreflight.Passed) {
                 Add-SmokeFailure "Expected custom driver fixture to pass preflight: $validDriverPath; failures: $($driverPreflight.Failures -join '; ')"
             }
@@ -935,7 +969,7 @@ function Assert-HeadlessSourceAndDriverInputContracts {
             -TargetDevice ThisPC `
             -DryRun
         $hostDriverConfig = New-WinMintBuildConfig -BuildProfile $hostDriverProfile
-        $hostDriverPreflight = Test-WinMintBuildPrerequisite -Config $hostDriverConfig -AllowMissingSourceIso
+        $hostDriverPreflight = Test-WinMintBuildPrerequisite -Config $hostDriverConfig -RunMode DryRun
         if (
             (Get-Command Export-WindowsDriver -ErrorAction SilentlyContinue) -or
             (Get-Command pnputil.exe -CommandType Application -ErrorAction SilentlyContinue)
@@ -978,6 +1012,7 @@ function Assert-UiBridgeBuildProfileContract {
             AccountName = 'dev'
             AccountMode = 'Local'
             TargetDevice = 'DifferentPC'
+            FormFactor = 'Auto'
             Edition = 'Pro'
             DriverSource = 'None'
             DriverPath = ''
@@ -990,6 +1025,7 @@ function Assert-UiBridgeBuildProfileContract {
             Wsl2Distros = @('Ubuntu', 'NixOS-WSL')
             PrivLocation = $false
             TweakHardwareBypass = $false
+            TweakDmaInterop = $true
         }
         $settings | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
 

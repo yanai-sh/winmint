@@ -44,6 +44,14 @@ if (-not (Test-Path -LiteralPath $supportPath -PathType Leaf)) {
 }
 . $supportPath
 
+$transactionPath = Join-Path $payloadDir 'FirstLogon.Transaction.ps1'
+if (-not (Test-Path -LiteralPath $transactionPath -PathType Leaf)) {
+    Write-WinMintFirstLogonError "FirstLogon transaction module is missing: $transactionPath"
+    try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
+    exit 1
+}
+. $transactionPath
+
 $runtimePath = Join-Path $payloadDir 'FirstLogon.Runtime.ps1'
 if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) {
     Write-WinMintFirstLogonError "FirstLogon runtime module is missing: $runtimePath"

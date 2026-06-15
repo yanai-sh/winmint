@@ -1,72 +1,76 @@
 # Codebase Concerns
 
-## 1) Top Risks (Prioritized)
+Snapshot note: this document reflects the current development state of the repo. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+
+## Core Sections (Required)
+
+### 1) Top Risks (Prioritized)
 
 | Severity | Concern | Evidence | Impact | Suggested action |
 |----------|---------|----------|--------|------------------|
-| High | License metadata differs between docs and Cargo. | `README.md` and `THIRD_PARTY_NOTICES.md` say GPL-2.0-or-later; root `Cargo.toml` says `license = "GPL-2.0-only"`. | Release metadata and legal terms can disagree between packaged docs and Rust crates. | [ASK USER] Pick the intended license expression and update the other source to match. |
-| Medium | `crates/winmintctl/target` exists without an active source crate. | `Get-ChildItem crates\winmintctl -Force -Recurse` shows only `target/`; `Cargo.toml` workspace members are `apps/gui` and `crates/winmint-core`; `Get-Content crates\winmintctl\Cargo.toml` fails. | Maintainers and scanners may treat ignored build output as a missing or half-removed crate. | [ASK USER] Decide whether to remove the ignored artifact, restore the crate, or document it as intentionally local. |
-| Medium | Cloudflare `/cli` wrapper must stay profile-backed. | `cloudflare/winmint/src/index.js` keeps bootstrap/headless profile parameters; `AGENTS.md` says configuration flags live only on `new`. | Reintroducing flat flags would recreate a parallel command surface. | Keep `Test-CloudflareWorkerContract.ps1` checking that legacy flags stay absent. |
-| Medium | Several orchestration files are long and cover multiple concerns. | Local line-count output: `src/runtime/setup/FirstLogon.Support.ps1` 1451, `src/runtime/image/Reports.ps1` 1153, `src/runtime/image/Private/Image/Staging.ps1` 819, `src/runtime/image/Private/Config/Profile.ps1` 810, `src/runtime/firstlogon/Agent.Runtime.ps1` 681, `apps/gui/src/main.rs` 632. | Higher review cost and greater regression risk when changing setup/profile/report/GUI behavior. | Extract only when a stable boundary appears; keep tests around each extracted contract. |
-| Medium | Release and setup flows handle sensitive local-account passwords. | `src/runtime/image/Engine.ps1` strips password/autologon from public profile artifacts; `src/runtime/setup/SetupComplete.ps1` deletes Panther unattend files. | Any missed cleanup or ACL gap can expose install credentials on the build host or target system. | Keep static tests for credential cleanup and ACL handling; audit dry-run artifacts before release. |
-| Medium | Full ISO servicing depends on local Windows/ADK/DISM/administrator state. | `README.md`, `src/runtime/image/Private/Image/Staging.ps1`, `tools/ui-bridge/Get-UiIsoMetadata.ps1`. | CI can validate contracts but cannot fully prove all host-specific build paths. | Maintain VM acceptance scripts and periodically run full ARM64/x64 install loops. |
+| High | Contract drift across Rust UI intent, PowerShell bridge/profile generation, JSON schemas, setup payloads, and tests. | `crates/winmint-core/src/profile.rs`, `schemas/winmint.uiintent.schema.json`, `tools/ui-bridge/New-UiBuildProfile.ps1`, `src/runtime/image/Private/Config/Profile.ps1`, `tests/contract/Test-UiContractSpine.ps1` | A field can appear correct in the UI but build or setup can consume a different shape. | Keep schema, Rust builder, PowerShell bridge, and contract tests in the same change. |
+| High | Build engine and setup code depend on mutable Windows host state and admin-only tooling. | `src/runtime/image/Engine.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, `tools/ui-bridge/Get-UiIsoMetadata.ps1`, `tools/vm/Build-And-TestVm.ps1` | Reproducibility and CI coverage are limited when DISM/ADK/Hyper-V/source ISO state changes. | Continue expanding dry-run/static contracts and document host preflight failures precisely. |
+| Medium | Several core files exceed 500 lines and mix multiple related responsibilities. | `src/runtime/setup/FirstLogon.Support.ps1`, `src/runtime/image/Reports.ps1`, `src/runtime/image/Private/Config/Profile.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, `apps/gui/src/main.rs` | Higher review cost and harder surgical changes. | Extract only along existing layer boundaries when a change touches one of these areas. |
+| Medium | Network/download supply chain spans GitHub latest releases, Microsoft Catalog scraping, package managers, and raw helper images. | `winmint.ps1`, `src/runtime/image/Private/UpdatePayloads.ps1`, `src/runtime/image/Private/PayloadStore.ps1`, `src/runtime/image/Private/UsbMedia.ps1`, `config/packages.json` | Upstream changes can break builds or alter payloads. | Keep hash/signature verification where possible and define a pinning policy for non-Microsoft latest-release assets. |
+| Medium | Network/download supply chain should stay on stable release channels. | `winmint.ps1`, `src/runtime/image/Private/UpdatePayloads.ps1`, `src/runtime/image/Private/PayloadStore.ps1`, `config/packages.json` | Preview/nightly/canary payloads could reduce ISO reproducibility or install safety. | Prefer latest stable releases and gate any preview channel behind explicit development behavior. |
+| Low | `docs/codebase/` snapshots can go stale or be mistaken for authoritative product docs. | `docs/codebase/`, `config/release-manifest.json`, `docs/Project-Structure.md` | Contributors may follow stale audit notes instead of current contracts. | Keep them excluded from release bundles and defer to `README.md`, `AGENTS.md`, schemas, and tests when conflicts appear. |
 
-## 2) Technical Debt
+### 2) Technical Debt
 
 | Debt item | Why it exists | Where | Risk if ignored | Suggested fix |
 |-----------|---------------|-------|-----------------|---------------|
-| Ignored Rust build output sits under a crate-like path. | A previous `winmintctl` build appears to have left `target/` under `crates/winmintctl`. | `crates/winmintctl/target`, `.gitignore`, `Cargo.toml` | Scans and maintainers can misread the tree as an incomplete crate. | Remove the ignored directory if it is not intentionally preserved; restore source if `winmintctl` is still planned. |
-| Cloudflare CLI wrapper no-legacy policy needs a guard. | Previous headless model exposed flat flags; product stance is now profile-backed verbs. | `cloudflare/winmint/src/index.js`, `winmint.ps1`, `src/runtime/image/Cli.ps1` | Legacy flags could return accidentally. | Keep a contract assertion that `/cli` does not expose removed flags. |
-| Large setup/profile/report modules. | Windows setup orchestration has many tightly ordered phases. | `src/runtime/setup/FirstLogon.Support.ps1`, `src/runtime/image/Reports.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, `src/runtime/image/Private/Config/Profile.ps1` | Local edits can unintentionally affect unrelated phases. | Split only around tested contracts such as profile normalization, cleanup, and report writers. |
-| No coverage reporting. | Tests are script-driven contract checks. | `.github/workflows/ci.yml`, `tools/validation/Validate.ps1` | Unclear behavioral coverage for edge cases. | Add lightweight coverage only if it produces actionable signal for PowerShell/Rust paths. |
+| Large FirstLogon support module | Accumulated live-user setup helpers in one phase file. | `src/runtime/setup/FirstLogon.Support.ps1` | Small preference changes can affect unrelated first-logon behavior. | Extract by domain only when a domain changes and contract tests cover the split. |
+| Large reporting module | Manifest, winget handoff, tweak audit, and recovery bundle are colocated. | `src/runtime/image/Reports.ps1` | Reporting changes can accidentally affect manifest contract output. | Move mature subdomains to private report modules while keeping exported function names stable. |
+| Dual GUI/profile contract surface | Rust builds typed UI intent while PowerShell owns final profile shape. | `crates/winmint-core/src/profile.rs`, `tools/ui-bridge/New-UiBuildProfile.ps1` | Field defaults can diverge. | Treat `Test-UiContractSpine.ps1` as mandatory for every UI/profile change. |
+| Stable-channel enforcement | Latest stable release is intended, but remote acquisition paths still need explicit guards where upstream APIs expose preview/nightly assets. | `src/runtime/image/Private/PayloadStore.ps1`, `src/runtime/image/Private/UpdatePayloads.ps1` | Preview payloads can enter builds accidentally if matching logic is too broad. | Add focused assertions or filters around channel selection when touching acquisition code. |
 
-## 3) Security Concerns
+### 3) Security Concerns
 
-| Risk | OWASP category | Evidence | Current mitigation | Gap |
-|------|----------------|----------|--------------------|-----|
-| Local-account password appears in unattend/setup artifacts during build/install. | N/A desktop/install tooling | `src/runtime/image/Engine.ps1`, `src/runtime/setup/SetupComplete.ps1`, `src/runtime/image/Private/Pipeline.ps1` | Work directories get restricted ACLs; public profile strips secrets; SetupComplete deletes Panther unattend files. | Needs recurring validation on real installs and dry-run artifact review. |
-| Remote bootstrap uses `irm | iex`. | N/A | `README.md`, `docs/Distribution.md`, `winmint.ps1` | Inspect-first path documented; bootstrap now requires the matching `.sha256` asset and verifies the selected zip before install. | No signature verification found. |
-| Downloads from GitHub/latest package releases. | N/A supply chain | `src/runtime/image/Private/Image/Assets.ps1`, `src/runtime/image/Private/Image/Packages.ps1`, `winmint.ps1` | Some downloaded payloads are hashed and recorded in manifests. | Upstream release pinning/signature policy is [TODO]. |
-| Package-manager installs at FirstLogon. | N/A supply chain | `config/packages.json`, `src/runtime/firstlogon/Agent.Runtime.ps1` | Catalog restricts source values to winget/store/scoop; validation checks package manifest architecture/source. | Package version pinning defaults to `latest`; exact reproducibility is limited. |
+| Risk | OWASP category (if applicable) | Evidence | Current mitigation | Gap |
+|------|--------------------------------|----------|--------------------|-----|
+| Local-account password can be passed on the CLI. | N/A local tooling secret handling | `src/runtime/image/Cli.ps1`, `src/runtime/image/Private/Headless.ps1`, `PSScriptAnalyzerSettings.psd1` | Alternatives exist via `-PasswordPath` and `-PasswordEnvVar`; lint exclusion documents the deliberate allowance. | End-to-end redaction/lifecycle policy is `[TODO]`. |
+| Remote bootstrap uses `irm | iex` distribution path. | N/A supply chain | `README.md`, `docs/Distribution.md`, `winmint.ps1`, `cloudflare/winmint/src/index.js` | Bootstrap verifies release zip SHA256 and serves plain text with `nosniff`; inspect-first path is documented. | Trust model for Cloudflare/GitHub compromise is `[TODO]`. |
+| Downloaded latest-release/package payloads can change upstream. | N/A supply chain | `src/runtime/image/Private/PayloadStore.ps1`, `src/runtime/image/Private/Image/Packages.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, `config/packages.json` | Some payloads are hashed, signed, or recorded in manifests; Microsoft Catalog downloads verify SHA256 metadata. Latest stable release is intentional; nightly/preview/beta/canary channels should be avoided. | Stable-channel filtering and signature policy for every non-Microsoft latest-release asset is `[TODO]`. |
+| Destructive USB/disk operations exist. | N/A local destructive operation | `src/runtime/image/Private/UsbMedia.ps1`, `src/runtime/image/Private/Console/Review.ps1`, `README.md` | Explicit flags, disk confirmation, and typed/destructive confirmations are present. | Automated destructive-path acceptance coverage is `[TODO]`. |
 
-## 4) Performance and Scaling Concerns
+### 4) Performance and Scaling Concerns
 
 | Concern | Evidence | Current symptom | Scaling risk | Suggested improvement |
 |---------|----------|-----------------|-------------|-----------------------|
-| ISO/WIM servicing is inherently heavy. | `src/runtime/image/Private/Pipeline.ps1`, `src/runtime/image/Private/Image/Staging.ps1` | Pipeline comments mention multi-minute ISO assembly and 30-60 minute DISM servicing avoided by cache on hit. | Larger source ISOs or multi-edition servicing increase build time. | Preserve serviced WIM and ISO stage caches; keep cache-key contract tests current. |
-| Large source files slow review. | Local line-count output listed multiple files over 800 lines. | Each change needs more context. | Higher defect probability in setup/profile/report edits. | Extract narrowly around tested contracts; avoid broad rewrites. |
-| External package installs are serialized through agent steps. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Agent.Runtime.ps1` | Modules run step-by-step and command output is serialized. | FirstLogon duration grows with selected tools. | Only parallelize after proving package managers and installers tolerate it. |
-| Validation can be host-dependent. | `tools/validation/Validate.ps1`, `tests/contract/Test-Integration.ps1` | Integration ISO dry-run requires admin and fixtures. | Local machines may get different confidence levels. | Keep fast suite deterministic; document fixture requirements. |
+| WIM servicing can be long-running and host-sensitive. | `src/runtime/image/Private/Pipeline.ps1`, `src/runtime/image/Private/IntermediatesCache.ps1`, `src/runtime/image/Private/IsoStageCache.ps1` | Cache modules exist for staged ISO/intermediates/serviced WIMs. | Cache fingerprint bugs can trade speed for stale output. | Keep cache fingerprints tied to source ISO, profile, toolchain, drivers, and update payloads. |
+| Stable update payload acquisition scrapes/searches remote catalogs. | `src/runtime/image/Private/UpdatePayloads.ps1` | Build time and success depend on Microsoft Catalog availability/shape. | Catalog changes can break opt-in update builds. | Add more contract fixtures around catalog parsing and manifest verification. |
+| FirstLogon package installs are sequential through agent steps. | `src/runtime/firstlogon/Agent.Runtime.ps1`, `src/runtime/firstlogon/Modules/*.ps1` | Simpler logs/state, slower first logon. | More selected tools means longer first-logon setup. | Parallelize only after state/log semantics are designed and tested. |
 
-## 5) Fragile/High-Churn Areas
+### 5) Fragile/High-Churn Areas
 
 | Area | Why fragile | Churn signal | Safe change strategy |
 |------|-------------|--------------|----------------------|
-| `AGENTS.md`, `README.md`, `docs/*.md` | Product contract and user behavior are active design surfaces. | Recent-history output: `AGENTS.md` 12, `README.md` 10, `docs/Project-Structure.md` 8, `docs/Windows-Debloat-Strategy.md` 8. | Update docs with behavior/schema/test changes in the same commit. |
-| CLI/profile engine | Public verb surface and schema v3 profile defaults. | Recent-history output: `WinMint-CLI.ps1` 12, `tests/contract/ProfileInvariantTests/StaticAssertions.ps1` 15, `tests/contract/Test-ProfileInvariants.ps1` 9, schema 7. | Add or update `Test-CliMatrix.ps1` and profile invariant assertions before changing flags/contracts. |
-| Image pipeline/setup staging | DISM, WIM, unattended setup, and setup script staging are tightly coupled. | Large files and recent-history output include `src/runtime/image/Reports.ps1`, `src/runtime/image/Private/Config/Profile.ps1`, and setup modules. | Run parser/static guards and do at least dry-run integration with a fixture ISO. |
-| FirstLogon/setup cleanup | Handles credentials, autologon, package installs, retry state, and user cleanup. | Large files and many modules under `src/runtime/setup` and `src/runtime/firstlogon`. | Keep state schema and cleanup tests current; make optional modules non-blocking unless explicitly required. |
+| `tests/contract/ProfileInvariantTests/StaticAssertions.ps1` | Encodes many static product/architecture guards. | Highest recent churn in scan output. | Update assertions with the behavior change, not after. |
+| `README.md` / `AGENTS.md` | Product stance and implementation contract evolve together. | Both are high-churn files in recent history. | Update README for user behavior and AGENTS for agent/repo contracts in the same PR when applicable. |
+| `src/runtime/image/Private/Config/Profile.ps1` | Central profile/default normalization. | High churn and broad downstream consumers. | Run profile invariants, UI contract spine, and schema validation for every edit. |
+| `src/runtime/image/Engine.ps1` and `src/runtime/image/Private/Pipeline.ps1` | Host preflight, manifest lifecycle, and build orchestration. | High churn plus Windows/DISM side effects. | Prefer small changes with dry-run and contract verification. |
+| `apps/gui/src/main.rs` | Main wizard state/rendering is concentrated in one file. | High churn and >500 lines. | Keep components in `components.rs` until stateful extraction is justified by local conventions. |
 
-## 6) `[ASK USER]` Questions
+### 6) Resolved Product/Repo Decisions
 
-1. [ASK USER] Should the project license metadata be `GPL-2.0-or-later` everywhere, or should the README/notice files be changed to match Cargo's `GPL-2.0-only`?
-2. [ASK USER] Is `crates/winmintctl/target` just local generated residue to delete, or should a `winmintctl` crate be restored/documented?
+1. PowerShell owns the backend and all real work. GPUI/Rust is a frontend layer, and the actual build logic stays headless.
+2. `docs/codebase/` is a current-development snapshot for onboarding/audits, not a continuous authoritative source of truth, and should not ship in release bundles.
+3. Starship is baseline behavior by default with the Nerd Font symbols preset.
+4. Testing is important for an ISO builder, but the project should stay pragmatic rather than chase overkill coverage. Fast contract/static tests plus targeted dry-run/VM acceptance are the preferred shape.
+5. External acquisition should use latest stable releases. Nightly, preview, beta, and canary channels are not intended product behavior.
+6. The intended current license expression is `GPL-2.0-or-later`; the app is alpha and the license can change later if needed.
 
-## 7) Evidence
+### 7) Evidence
 
-- `git status --short` terminal output
-- `Cargo.toml`
+- `AGENTS.md`
 - `README.md`
+- `roadmap.md`
+- `Cargo.toml`
 - `THIRD_PARTY_NOTICES.md`
-- `.gitignore`
-- `crates/winmintctl/target` terminal output
-- `cloudflare/winmint/src/index.js`
-- `winmint.ps1`
-- `WinMint-CLI.ps1`
-- `src/runtime/image/WinMint.ps1`
+- `config/release-manifest.json`
+- `src/runtime/image/Private/Config/Profile.ps1`
 - `src/runtime/image/Private/Pipeline.ps1`
-- `src/runtime/setup/SetupComplete.ps1`
-- `src/runtime/setup/FirstLogon.ps1`
+- `src/runtime/image/Reports.ps1`
 - `src/runtime/firstlogon/Agent.Runtime.ps1`
-- `docs/Project-Structure.md`
-- `tools/validation/Validate.ps1`
+- `tests/contract/Test-UiContractSpine.ps1`
+- `PSScriptAnalyzerSettings.psd1`

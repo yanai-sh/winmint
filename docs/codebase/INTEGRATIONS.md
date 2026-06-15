@@ -1,63 +1,62 @@
 # External Integrations
 
-## 1) Integration Inventory
+Snapshot note: this document reflects the current development state of the repo. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
-| System | Type | Purpose | Auth model | Criticality | Evidence |
-|--------|------|---------|------------|-------------|----------|
-| GitHub Releases API | HTTPS API | Bootstrap release lookup; build-time payload discovery for PowerShell, Cascadia Code, winget-cli, and ViVeTool. | Public API with `User-Agent`; no token observed in product scripts. | High | `winmint.ps1`, `src/runtime/image/Private/Image/Packages.ps1`, `src/runtime/image/Private/Image/Assets.ps1` |
-| GitHub release assets / raw GitHub | HTTPS downloads | Download release zip/checksum and upstream payload archives. | Public HTTPS. | High | `winmint.ps1`, `docs/Distribution.md`, `cloudflare/winmint/wrangler.jsonc` |
-| Cloudflare Workers | Edge Worker | Serves `winmint.yanai.sh` bootstrap and `/cli` wrapper. | Cloudflare deployment via Wrangler; runtime requests are unauthenticated GET/HEAD. | Medium | `cloudflare/winmint/src/index.js`, `cloudflare/winmint/wrangler.jsonc` |
-| Windows DISM / Imaging APIs | OS tooling/API | Mount, inspect, and service Windows WIM/ESD images. | Local Administrator. | High | `src/runtime/image/Private/Image/Staging.ps1`, `tools/ui-bridge/Get-UiIsoMetadata.ps1` |
-| Windows Storage APIs | OS tooling/API | Mount/dismount source ISOs. | Local Administrator. | High | `src/runtime/image/Private/Pipeline.ps1`, `tools/ui-bridge/Get-UiIsoMetadata.ps1` |
-| Windows ADK `oscdimg.exe` | Local external tool | Assemble bootable ISO output. | Local executable; may be installed/downloaded through winget/ADK. | High | `src/runtime/image/Private/Image/Packages.ps1`, `README.md` |
-| winget / msstore | Package manager | Install GUI/system apps and Store-backed packages during FirstLogon or generate handoff. | User/system package manager agreements; no repo secret. | High | `config/packages.json`, `src/runtime/firstlogon/Agent.Runtime.ps1`, `src/runtime/image/Reports.ps1` |
-| Scoop | Package manager | Install user-local developer CLI tools such as MinGit, Starship, and Neovim. | Official install script from `https://get.scoop.sh`; no repo secret. | High | `config/packages.json`, `src/runtime/firstlogon/Agent.Runtime.ps1` |
-| Microsoft Store / AppX | OS package platform | AppX deprovisioning, Desktop App Installer/winget provisioning, Store source installs. | Local Windows APIs and package manager. | High | `src/runtime/image/Private/Image/Staging.ps1`, `src/runtime/image/Private/Image/Assets.ps1`, `config/packages.json` |
-| Hyper-V PowerShell | Local OS API | VM test harnesses and guest acceptance helpers. | Local Administrator. | Low for product, high for VM tests | `tools/vm/Build-And-TestVm.ps1`, `tools/vm/New-WinMintTestVm.ps1` |
-| GitHub CLI (`gh`) | CLI API client | Release workflow creates/uploads GitHub release assets. | `GH_TOKEN` from GitHub Actions. | Medium | `.github/workflows/release.yml` |
+## Core Sections (Required)
 
-## 2) Data Stores
+### 1) Integration Inventory
+
+| System | Type (API/DB/Queue/etc) | Purpose | Auth model | Criticality | Evidence |
+|--------|---------------------------|---------|------------|-------------|----------|
+| Windows DISM / Storage / registry / Setup APIs | Host OS tooling | Mount source ISO, inspect WIM metadata, service images, edit offline/live registry, run setup phases. | Local administrator token. | High | `tools/ui-bridge/Get-UiIsoMetadata.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, `src/runtime/image/Private/Image/Unattend.ps1`, `src/runtime/setup/SetupComplete.ps1` |
+| GitHub Releases API | HTTPS API | Bootstrap release lookup and build-time latest release asset lookup for payloads such as PowerShell/ViveTool/Cascadia/winget assets. | Public API with `User-Agent`; no repo secret in code. | High | `winmint.ps1`, `src/runtime/image/Private/PayloadStore.ps1`, `src/runtime/image/Private/Image/Packages.ps1`, `src/runtime/image/Private/Image/Staging.ps1` |
+| Microsoft Update Catalog | HTTPS web endpoint | Resolve and download stable 25H2 update payloads with SHA256 metadata. | Public Microsoft endpoint. | High when `Stable25H2` is selected | `src/runtime/image/Private/UpdatePayloads.ps1`, `README.md` |
+| Microsoft Defender definition endpoint | HTTPS endpoint | Acquire Defender offline image update payloads. | Public Microsoft endpoint. | Medium | `src/runtime/image/Private/UpdatePayloads.ps1` |
+| winget / msstore | Package manager sources | Install GUI/system apps, Store-backed Raycast, PowerShell/Terminal fallback, and runtime tools. | User/package agreement flags; no app secrets. | High for FirstLogon modules | `config/packages.json`, `src/runtime/firstlogon/Agent.Runtime.ps1`, `src/runtime/setup/SetupComplete/Toolchain.ps1` |
+| Scoop | Package manager | Install user-local developer CLIs such as MinGit, Starship, and Neovim. | Official installer download; no app secrets. | High for developer baseline | `config/packages.json`, `src/runtime/firstlogon/Agent.Runtime.ps1`, `src/runtime/firstlogon/Modules/PackageManagers.ps1` |
+| Cloudflare Workers | Edge runtime | Serve `winmint.yanai.sh` bootstrap and `/cli` wrapper. | Wrangler/Cloudflare deployment credentials outside repo. | Medium | `cloudflare/winmint/src/index.js`, `cloudflare/winmint/wrangler.jsonc`, `cloudflare/winmint/README.md` |
+| Hyper-V | Host virtualization | Build/test VM acceptance profiles and guest acceptance checks. | Local administrator token / PowerShell Direct. | Medium for acceptance testing | `tools/vm/Build-And-TestVm.ps1`, `tools/vm/New-WinMintTestVm.ps1`, `tests/profiles/hyper-v-install-arm64.json` |
+| UEFI:NTFS helper image | GitHub raw asset | Boot UEFI-only NTFS USB installer media. | Public raw GitHub URL; SHA256 checked in code. | Medium when `-WriteUsb` is used | `src/runtime/image/Private/UsbMedia.ps1`, `README.md` |
+| Windhawk mod source | HTTPS endpoint | Download/restore selected Windhawk mod source and DLL assets during setup. | Public endpoint. | Medium when Windhawk selected | `src/runtime/setup/WindhawkBootstrap.ps1`, `src/runtime/setup/WindhawkBootstrap.Helpers.ps1` |
+
+### 2) Data Stores
 
 | Store | Role | Access layer | Key risk | Evidence |
 |-------|------|--------------|----------|----------|
-| JSON files in `config/` | Package, removal, tweak, unattend, and release policy catalogs. | Engine/profile/setup/reporting scripts. | Schema or catalog drift changes shipped behavior. | `config/packages.json`, `config/appx-removal.json`, `config/tweaks.json` |
-| JSON schemas in `schemas/` | Build profile, build manifest, and agent state contracts. | Validation modules and contract tests. | Contract mismatch between UI, engine, and setup/agent. | `schemas/*.json`, `tools/validation/Modules/Schemas.ps1` |
-| `%LOCALAPPDATA%\WinMint\state.json` | FirstLogon agent retry/resume state. | `src/runtime/firstlogon/Agent.Runtime.ps1` | Corrupt or stale state can affect idempotent reruns. | `src/runtime/firstlogon/Agent.Runtime.ps1`, `schemas/winmint.agentstate.schema.json` |
-| `output/` | Local build reports, manifests, dry-run artifacts, ISO outputs, and headless state. | Engine/reporting/headless modules. | Generated artifacts can contain sensitive install material if ACLs fail. | `src/runtime/image/Reports.ps1`, `src/runtime/image/Private/Headless.ps1`, `.gitignore` |
-| `%LOCALAPPDATA%\WinMint\versions\<version>` | Bootstrap-installed release bundles. | `winmint.ps1` | Missing marker or required files triggers reinstall. | `winmint.ps1` |
-| `C:\ProgramData\WinMint\Logs` | SetupComplete and FirstLogon machine logs. | `src/runtime/setup/SetupComplete.ps1`, `src/runtime/setup/FirstLogon.ps1` | Logs may reveal operational details; location is Administrators-readable per comments. | `src/runtime/setup/SetupComplete.ps1` |
+| `BuildProfile.json` | Build intent consumed by engine/setup/agent. | `src/runtime/image/Private/Config/Profile.ps1`, `tools/ui-bridge/New-UiBuildProfile.ps1` | Contract drift between GUI, CLI, schema, and setup consumers. | `schemas/winmint.buildprofile.schema.json`, `crates/winmint-core/src/profile.rs` |
+| `BuildManifest.json` / report artifacts | Machine-readable build outcome, payload facts, recovery/tweak audit outputs. | `src/runtime/image/Reports.ps1` | Unsupported claims if facts are inferred outside manifest helpers. | `schemas/winmint.buildmanifest.schema.json`, `src/runtime/image/Reports.ps1` |
+| `%LOCALAPPDATA%\WinMint\state.json` | FirstLogon retry/resume state. | `src/runtime/firstlogon/Agent.Runtime.ps1` | Partial state or stale step status across failed/rebooted runs. | `schemas/winmint.agentstate.schema.json`, `src/runtime/firstlogon/Start-WinMintAgent.ps1` |
+| `%LOCALAPPDATA%\WinMint\Logs` | FirstLogon event and command logs. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Agent.Console.ps1` | Logs can contain installer output; redaction policy is `[TODO]`. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Agent.Runtime.ps1` |
+| `%TEMP%\Win11ISO_dependency_cache` and output work dirs | Cached downloads, staged ISO/intermediate build state. | `src/runtime/image/Private/Runtime.ps1`, `src/runtime/image/Private/IsoStageCache.ps1`, `src/runtime/image/Private/IntermediatesCache.ps1` | Cache invalidation/fingerprint mistakes can reuse stale payloads. | `src/runtime/image/Private/Runtime.ps1`, `src/runtime/image/Private/IntermediatesCache.ps1` |
 
-The repository has no configured database, queue, cache server, ORM, or service mesh.
+### 3) Secrets and Credentials Handling
 
-## 3) Secrets and Credentials Handling
+- Credential sources: CLI local-account password via `-Password`, `-PasswordPath`, or `-PasswordEnvVar`; GitHub Actions uses `${{ github.token }}` for release publishing; Cloudflare deploy credentials are outside repo and not represented in `wrangler.jsonc`.
+- Hardcoding checks: package IDs, generic Windows setup keys, public URLs, and SHA256 constants are checked in; no API tokens or Cloudflare secrets were found in source files inspected.
+- Rotation or lifecycle notes: release publishing token lifecycle is managed by GitHub Actions; Cloudflare credential lifecycle is `[TODO]`; local-account password cleanup is implemented in setup/FirstLogon code paths but an end-to-end redaction policy is `[TODO]`.
 
-- Credential sources: CLI supports `-Password`, `-PasswordPath`, and `-PasswordEnvVar`; build profiles may include a password only when `identity.passwordIncluded` is true; GitHub release workflow uses `GH_TOKEN`.
-- Hardcoding checks: generic Windows setup product keys are intentional in `src/runtime/image/Private/Config/Profile.ps1`; no committed `.env.example` or secret template exists.
-- Lifecycle notes: public build-profile artifacts remove password and autologon state; SetupComplete deletes `C:\Windows\Panther\unattend*.xml`; FirstLogon clears autologon credentials on success.
-- Rotation/lifecycle for external deployment credentials is [TODO].
+### 4) Reliability and Failure Behavior
 
-## 4) Reliability and Failure Behavior
+- Retry/backoff behavior: FirstLogon records per-step attempts and skips completed `ok` steps unless `-Force`; WSL virtualization errors can return retry/reboot state; package install failures are generally recorded rather than always blocking setup.
+- Release-channel policy: external payload acquisition should prefer latest stable releases only; nightly, preview, beta, and canary channels are outside the intended product behavior unless explicitly gated for development.
+- Timeout policy: GitHub API reachability preflight uses `-TimeoutSec`; many package/download operations rely on platform/tool defaults, so a repo-wide timeout policy is `[TODO]`.
+- Circuit-breaker or fallback behavior: bootstrap refuses releases without a `.sha256`; update payload downloads verify hashes/signatures where implemented; `SetupComplete` skips winget toolchain when outbound HTTPS to Microsoft is unavailable; oscdimg can be located from installed/downloaded ADK sources.
 
-- Retry/backoff behavior: FirstLogon agent records step attempts and statuses in `state.json`; bootstrap reuses completed install markers and reinstalls incomplete/mismatched bundles; winget/Scoop path discovery waits in loops.
-- Timeout policy: GitHub API reachability preflight uses a 5-second timeout; broader download and package install timeouts are [TODO].
-- Fallback behavior: winget/PowerShell/font payload lookup falls back to cached files in several engine paths; CLI can self-elevate when `-AllowElevate` is passed; UI ISO probe can relaunch elevated and return JSON through a relay file.
-- Circuit breaker: no explicit circuit-breaker abstraction appears in the scanned files.
+### 5) Observability for Integrations
 
-## 5) Observability for Integrations
+- Logging around external calls: engine logs through console helpers and manifests; FirstLogon writes command stdout/stderr logs and JSONL events; Cloudflare Worker returns plain-text status codes.
+- Metrics/tracing coverage: no central metrics, tracing, APM, or monitoring config was found.
+- Missing visibility gaps: remote package-manager reliability, Worker health, and download latency/error trends are `[TODO]`.
 
-- Logging around external calls: bootstrap logs release queries/downloads/hash verification; engine logs payload staging and records payload hashes in `BuildManifest`; FirstLogon records command stdout/stderr files and JSONL events.
-- Metrics/tracing: no metrics or distributed tracing config appears in the repo.
-- Missing visibility gaps: package-manager install failures are logged, but central telemetry/monitoring is absent; deployment health for Cloudflare Worker is [TODO].
-
-## 6) Evidence
+### 6) Evidence
 
 - `winmint.ps1`
-- `cloudflare/winmint/src/index.js`
-- `cloudflare/winmint/wrangler.jsonc`
-- `.github/workflows/release.yml`
 - `config/packages.json`
-- `src/runtime/image/Private/Image/Staging.ps1`
-- `src/runtime/image/Private/Image/Packages.ps1`
-- `src/runtime/image/Private/Image/Assets.ps1`
+- `src/runtime/image/Private/UpdatePayloads.ps1`
+- `src/runtime/image/Private/PayloadStore.ps1`
+- `src/runtime/image/Private/UsbMedia.ps1`
 - `src/runtime/firstlogon/Agent.Runtime.ps1`
-- `tools/ui-bridge/Get-UiIsoMetadata.ps1`
+- `src/runtime/firstlogon/Modules/Wsl.ps1`
+- `src/runtime/setup/SetupComplete/Toolchain.ps1`
+- `cloudflare/winmint/src/index.js`
+- `.github/workflows/release.yml`

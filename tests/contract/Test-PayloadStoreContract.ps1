@@ -102,7 +102,7 @@ finally {
     if ($fakeOscdimgRoot -and (Test-Path -LiteralPath $fakeOscdimgRoot)) {
         Remove-Item -LiteralPath $fakeOscdimgRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
-    $script:WinMintBuildManifest = $null
+    Clear-WinMintBuildManifest
 }
 
 if ($failures.Count -gt 0) {

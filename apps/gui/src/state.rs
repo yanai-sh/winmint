@@ -197,6 +197,11 @@ impl SourceProbeState {
 pub struct BuildRunState {
     pub status: SharedString,
     pub spinner_phase: usize,
+    pub running: bool,
+    pub profile_path: SharedString,
+    pub output_path: SharedString,
+    pub report_path: SharedString,
+    pub last_progress: SharedString,
 }
 
 impl Default for BuildRunState {
@@ -204,6 +209,11 @@ impl Default for BuildRunState {
         Self {
             status: SPLASH_STATUS_PICK.into(),
             spinner_phase: 0,
+            running: false,
+            profile_path: "".into(),
+            output_path: "".into(),
+            report_path: "".into(),
+            last_progress: "".into(),
         }
     }
 }

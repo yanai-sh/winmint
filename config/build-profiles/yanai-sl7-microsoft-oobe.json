@@ -3,7 +3,7 @@
   "createdAt": "2026-05-16T00:00:00+03:00",
   "profileName": "Developer",
   "source": {
-    "isoPath": "",
+    "isoPath": "C:\\Users\\yanai\\Projects\\winmint\\output\\WinMint-20260614-201331.iso",
     "architecture": "arm64"
   },
   "target": {
@@ -59,6 +59,18 @@
       "enabled": true,
       "distros": []
     }
+  },
+  "updates": {
+    "mode": "None",
+    "targetFeatureVersion": "25H2",
+    "releaseCadence": "BRelease",
+    "includeOptionalPreviews": false,
+    "payloadRoot": "",
+    "qualitySecurity": true,
+    "dynamicUpdate": true,
+    "defender": true,
+    "dotnet": true,
+    "provisionedApps": false
   },
   "removals": {
     "advertising": true,

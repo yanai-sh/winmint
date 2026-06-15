@@ -74,11 +74,7 @@ function Update-AgentProcessPath {
 function Resolve-AgentPowerShellHost {
     $pwsh = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
     if (Test-Path -LiteralPath $pwsh) { return $pwsh }
-    $sysnative = Join-Path $env:WINDIR 'Sysnative\WindowsPowerShell\v1.0\powershell.exe'
-    if (Test-Path -LiteralPath $sysnative) { return $sysnative }
-    $system32 = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    if (Test-Path -LiteralPath $system32) { return $system32 }
-    return 'powershell.exe'
+    throw "PowerShell 7 is required for WinMint Agent but was not found: $pwsh"
 }
 
 function Get-AgentStepAttempts {
@@ -598,11 +594,108 @@ function Test-AgentModuleEnabled {
     return $false
 }
 
+function New-WinMintAgentRuntimeStepPlan {
+    $steps = [System.Collections.Generic.List[object]]::new()
+
+    function Add-AgentRuntimeStep {
+        param(
+            [Parameter(Mandatory)][string]$StepName,
+            [Parameter(Mandatory)][string]$FunctionName,
+            [Parameter(Mandatory)][bool]$Enabled,
+            [Parameter(Mandatory)][string]$Enablement,
+            [ValidateSet('blocking', 'advisory')][string]$FailurePolicy = 'advisory',
+            [ValidateSet('main', 'finalValidation')][string]$Phase = 'main',
+            [string]$PostStepHook = ''
+        )
+
+        $steps.Add([pscustomobject]@{
+            Id = "module:$StepName"
+            Order = ($steps.Count + 1)
+            Phase = $Phase
+            StepName = $StepName
+            FunctionName = $FunctionName
+            Enabled = $Enabled
+            Enablement = $Enablement
+            FailurePolicy = $FailurePolicy
+            PostStepHook = $PostStepHook
+        }) | Out-Null
+    }
+
+    Add-AgentRuntimeStep -StepName 'profiles' -FunctionName 'Invoke-WinMintAgentProfileBootstrap' -Enabled $true -Enablement 'always' -FailurePolicy 'blocking'
+    Add-AgentRuntimeStep -StepName 'package-managers' -FunctionName 'Invoke-WinMintAgentPackageManagerBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'packageManagers') -Enablement 'modules.packageManagers.enabled'
+    Add-AgentRuntimeStep -StepName 'wsl' -FunctionName 'Invoke-WinMintAgentWslBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'wsl') -Enablement 'modules.wsl.enabled'
+    Add-AgentRuntimeStep -StepName 'git' -FunctionName 'Invoke-WinMintAgentGitBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'git') -Enablement 'modules.git.enabled'
+    Add-AgentRuntimeStep -StepName 'dotfiles' -FunctionName 'Invoke-WinMintAgentDotfileBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'dotfiles') -Enablement 'modules.dotfiles.enabled'
+    Add-AgentRuntimeStep -StepName 'flow-everything' -FunctionName 'Invoke-WinMintAgentFlowEverythingBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'flowEverything') -Enablement 'modules.flowEverything.enabled'
+    Add-AgentRuntimeStep -StepName 'raycast' -FunctionName 'Invoke-WinMintAgentRaycastBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'raycast') -Enablement 'modules.raycast.enabled'
+    Add-AgentRuntimeStep -StepName 'phone-link' -FunctionName 'Invoke-WinMintAgentPhoneLinkBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'phoneLink') -Enablement 'modules.phoneLink.enabled'
+    Add-AgentRuntimeStep -StepName 'tiling-desktop' -FunctionName 'Invoke-WinMintAgentTilingDesktopBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'shell') -Enablement 'modules.shell.enabled'
+    Add-AgentRuntimeStep -StepName 'windhawk' -FunctionName 'Invoke-WinMintAgentWindhawkBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'windhawk') -Enablement 'modules.windhawk.enabled'
+    Add-AgentRuntimeStep -StepName 'browsers' -FunctionName 'Invoke-WinMintAgentBrowsersBootstrap' -Enabled (@($agentProfile.browsers).Count -gt 0) -Enablement 'browsers.count > 0'
+    Add-AgentRuntimeStep -StepName 'editors' -FunctionName 'Invoke-WinMintAgentEditorBootstrap' -Enabled (@($agentProfile.editors).Count -gt 0) -Enablement 'editors.count > 0' -PostStepHook 'Set-WinMintAgentNeovimEnvironment'
+    Add-AgentRuntimeStep -StepName 'liveInstallAudit' -FunctionName 'Invoke-WinMintAgentLiveInstallAuditBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'liveInstallAudit') -Enablement 'modules.liveInstallAudit.enabled' -Phase 'finalValidation'
+
+    return @($steps)
+}
+
+function Set-WinMintAgentNeovimEnvironment {
+    param(
+        [Parameter(Mandatory)][object]$AgentProfile,
+        [Parameter(Mandatory)][hashtable]$State
+    )
+
+    if (@($AgentProfile.editors) -notcontains 'neovim') { return }
+
+    $neovimStepOk = $false
+    try {
+        $nvTool = Get-AgentManifestTool -ToolId 'neovim'
+        $nvKey = "tool:$([string]$nvTool.id)"
+        if ($State.steps.ContainsKey($nvKey) -and [string]$State.steps[$nvKey].status -eq 'ok') {
+            $neovimStepOk = $true
+        }
+    }
+    catch {
+        Write-AgentLog "Neovim manifest lookup for EDITOR/VISUAL: $($_.Exception.Message)"
+    }
+    if (-not $neovimStepOk -and $State.steps.ContainsKey('tool:neovim') -and
+        [string]$State.steps['tool:neovim'].status -eq 'ok') {
+        $neovimStepOk = $true
+    }
+    if ($neovimStepOk) {
+        [Environment]::SetEnvironmentVariable('EDITOR', 'nvim', 'User')
+        [Environment]::SetEnvironmentVariable('VISUAL', 'nvim', 'User')
+    }
+}
+
+function Invoke-WinMintAgentPostStepHook {
+    param(
+        [string]$HookName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($HookName)) { return }
+
+    $cmd = Get-Command $HookName -ErrorAction SilentlyContinue
+    if (-not $cmd) {
+        Write-AgentLog "Post-step hook not found: $HookName"
+        Write-AgentConsoleLine -Level Warn -Message "Post-step hook not found: $HookName"
+        return
+    }
+
+    try {
+        & $HookName -AgentProfile $agentProfile -State $State
+    }
+    catch {
+        Write-AgentLog "Post-step hook '$HookName' failed: $($_.Exception.Message)"
+        Write-AgentConsoleLine -Level Warn -Message "Post-step hook '$HookName' failed: $($_.Exception.Message)"
+    }
+}
+
 function Invoke-AgentProfileModule {
     param(
         [Parameter(Mandatory)][string]$StepName,
         [Parameter(Mandatory)][string]$FunctionName,
-        [bool]$Enabled
+        [bool]$Enabled,
+        [string]$PostStepHook = ''
     )
 
     $key = "module:$StepName"
@@ -616,6 +709,7 @@ function Invoke-AgentProfileModule {
         Write-AgentLog "SKIP $key already ok"
         Write-AgentEvent -Type 'step' -Status 'ok' -Step $key -Message "$StepName already completed."
         Write-AgentConsoleLine -Level OK -Message "$StepName already completed."
+        Invoke-WinMintAgentPostStepHook -HookName $PostStepHook
         return
     }
     $cmd = Get-Command $FunctionName -ErrorAction SilentlyContinue
@@ -672,51 +766,24 @@ function Invoke-AgentProfileModule {
         Write-AgentConsoleLine -Level Error -Message "$StepName failed: $($_.Exception.Message)"
     }
     Save-AgentState -State $State
+    Invoke-WinMintAgentPostStepHook -HookName $PostStepHook
 }
 
 function Invoke-WinMintAgentStepRuntime {
-    Invoke-AgentProfileModule -StepName 'profiles' -FunctionName 'Invoke-WinMintAgentProfileBootstrap' -Enabled $true
-    Invoke-AgentProfileModule -StepName 'package-managers' -FunctionName 'Invoke-WinMintAgentPackageManagerBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'packageManagers')
-    Invoke-AgentProfileModule -StepName 'wsl' -FunctionName 'Invoke-WinMintAgentWslBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'wsl')
-    Invoke-AgentProfileModule -StepName 'git' -FunctionName 'Invoke-WinMintAgentGitBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'git')
-    Invoke-AgentProfileModule -StepName 'dotfiles' -FunctionName 'Invoke-WinMintAgentDotfileBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'dotfiles')
-    Invoke-AgentProfileModule -StepName 'flow-everything' -FunctionName 'Invoke-WinMintAgentFlowEverythingBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'flowEverything')
-    Invoke-AgentProfileModule -StepName 'raycast' -FunctionName 'Invoke-WinMintAgentRaycastBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'raycast')
-    Invoke-AgentProfileModule -StepName 'phone-link' -FunctionName 'Invoke-WinMintAgentPhoneLinkBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'phoneLink')
-    Invoke-AgentProfileModule -StepName 'tiling-desktop' -FunctionName 'Invoke-WinMintAgentTilingDesktopBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'shell')
-    Invoke-AgentProfileModule -StepName 'windhawk' -FunctionName 'Invoke-WinMintAgentWindhawkBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'windhawk')
-    Invoke-AgentProfileModule -StepName 'browsers' -FunctionName 'Invoke-WinMintAgentBrowsersBootstrap' -Enabled (@($agentProfile.browsers).Count -gt 0)
-    Invoke-AgentProfileModule -StepName 'editors' -FunctionName 'Invoke-WinMintAgentEditorBootstrap' -Enabled (@($agentProfile.editors).Count -gt 0)
+    $runtimePlan = @(New-WinMintAgentRuntimeStepPlan)
+    foreach ($step in @($runtimePlan | Where-Object { $_.Phase -eq 'main' } | Sort-Object Order)) {
+        Invoke-AgentProfileModule -StepName $step.StepName -FunctionName $step.FunctionName -Enabled ([bool]$step.Enabled) -PostStepHook ([string]$step.PostStepHook)
+    }
     Remove-AgentDesktopShortcuts
 
-    if (@($agentProfile.editors) -contains 'neovim') {
-        $neovimStepOk = $false
-        try {
-            $nvTool = Get-AgentManifestTool -ToolId 'neovim'
-            $nvKey = "tool:$([string]$nvTool.id)"
-            if ($state.steps.ContainsKey($nvKey) -and [string]$state.steps[$nvKey].status -eq 'ok') {
-                $neovimStepOk = $true
-            }
-        }
-        catch {
-            Write-AgentLog "Neovim manifest lookup for EDITOR/VISUAL: $($_.Exception.Message)"
-        }
-        if (-not $neovimStepOk -and $state.steps.ContainsKey('tool:neovim') -and
-            [string]$state.steps['tool:neovim'].status -eq 'ok') {
-            $neovimStepOk = $true
-        }
-        if ($neovimStepOk) {
-            [Environment]::SetEnvironmentVariable('EDITOR', 'nvim', 'User')
-            [Environment]::SetEnvironmentVariable('VISUAL', 'nvim', 'User')
-        }
+    foreach ($step in @($runtimePlan | Where-Object { $_.Phase -eq 'finalValidation' } | Sort-Object Order)) {
+        Invoke-AgentProfileModule -StepName $step.StepName -FunctionName $step.FunctionName -Enabled ([bool]$step.Enabled) -PostStepHook ([string]$step.PostStepHook)
     }
-
-    Invoke-AgentProfileModule -StepName 'liveInstallAudit' -FunctionName 'Invoke-WinMintAgentLiveInstallAuditBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'liveInstallAudit')
 
     # Live-user modules are best-effort. A failed app/tool install must not keep
     # autologon credentials resident or block final desktop personalization; the
     # summary and state file carry the retry/manual-repair details.
-    $blockingSteps = @('module:profiles')
+    $blockingSteps = @($runtimePlan | Where-Object { $_.FailurePolicy -eq 'blocking' } | ForEach-Object { [string]$_.Id })
     $allFailed = @($state.steps.GetEnumerator() | Where-Object { $_.Value.status -eq 'failed' })
     $advisoryFailed = @($allFailed | Where-Object { [string]$_.Key -notin $blockingSteps })
     $failed = @($allFailed | Where-Object { [string]$_.Key -in $blockingSteps })

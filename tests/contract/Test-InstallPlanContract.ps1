@@ -92,6 +92,95 @@ function Assert-InstallPlanMatchesWrappers {
     }
 }
 
+function Assert-WslSelectionNormalizationContract {
+    try {
+        $selection = Normalize-WinMintWslSelection -Values @('Ubuntu,NixOS-WSL', 'FedoraLinux-44', 'Arch Linux', 'Pengwin')
+        foreach ($expected in @('Ubuntu', 'NixOS-WSL', 'FedoraLinux', 'archlinux', 'pengwin')) {
+            if (@($selection.ProfileTokens) -notcontains $expected) {
+                Add-InstallPlanFailure "WSL selection profile tokens are missing '$expected'."
+            }
+        }
+        foreach ($expected in @('Ubuntu', 'NixOS', 'FedoraLinux', 'archlinux', 'pengwin')) {
+            if (@($selection.AgentTokens) -notcontains $expected) {
+                Add-InstallPlanFailure "WSL selection agent tokens are missing '$expected'."
+            }
+        }
+        $nixos = @($selection.Items | Where-Object { [string]$_.profileToken -eq 'NixOS-WSL' } | Select-Object -First 1)
+        if (-not $nixos -or [string]$nixos.agentToken -ne 'NixOS' -or [string]$nixos.installIdentity -ne 'NixOS') {
+            Add-InstallPlanFailure 'Expected NixOS-WSL profile token to map to NixOS agent/install identity.'
+        }
+
+        $profile = New-InstallPlanCaseProfile -Overrides @{ Wsl2Distros = @('Ubuntu', 'NixOS-WSL', 'FedoraLinux-44') }
+        $plan = New-WinMintInstallPlan -BuildProfile $profile
+        if (@($plan.BuildConfig.Wsl2Distros) -notcontains 'NixOS-WSL') {
+            Add-InstallPlanFailure 'Expected build config WSL distros to preserve the NixOS-WSL profile token.'
+        }
+        if (@($plan.AgentProfile.modules.wsl.distros) -notcontains 'NixOS') {
+            Add-InstallPlanFailure 'Expected agent profile WSL distros to use the NixOS runtime token.'
+        }
+        if (@($plan.Facts.firstLogon.wslDistros) -notcontains 'NixOS-WSL' -or
+            @($plan.Facts.firstLogon.wslAgentDistros) -notcontains 'NixOS') {
+            Add-InstallPlanFailure 'Expected install-plan facts to expose both WSL profile and agent tokens.'
+        }
+    }
+    catch {
+        Add-InstallPlanFailure "WSL selection normalization contract failed: $($_.Exception.Message)"
+    }
+}
+
+function Assert-ManifestConsumesInstallPlanFacts {
+    try {
+        $profile = New-InstallPlanCaseProfile -Overrides @{
+            Wsl2Distros = @('NixOS-WSL')
+            KeepEdge = $true
+        }
+        $plan = New-WinMintInstallPlan -BuildProfile $profile
+        $plan.Facts.regional.setupCountry = 'PlanCountry'
+        $plan.Facts.regional.setupUserLocale = 'en-GB'
+        $plan.Facts.regional.setupHomeLocationGeoId = 242
+        $plan.Facts.regional.restoreTimeZoneId = 'Plan Standard Time'
+        $plan.Facts.regional.restoreUserLocale = 'en-AU'
+        $plan.Facts.regional.restoreHomeLocationGeoId = 12
+        $plan.Facts.regional.locationServicesPolicy = 'disabled'
+        $plan.Facts.removals.appxPrefixes = @('Plan.Appx')
+        $plan.Facts.removals.appxCatalogVersion = 99
+        $plan.Facts.removals.featuresEnabled = @('PlanFeature')
+        $plan.Facts.removals.aiPolicy = 'Core'
+        $plan.Facts.removals.aiCatalogVersion = 98
+        $plan.Facts.removals.aiAppxPrefixes = @('Plan.Ai')
+        $plan.Facts.removals.aiRegistryPolicies = @('windows-ai-core-policy')
+        $plan.Facts.removals.aiAggressiveActions = @('plan-aggressive-action')
+        Initialize-WinMintBuildManifest -Config $plan.BuildConfig -InstallPlan $plan
+        $manifest = Get-WinMintBuildManifest
+
+        if ([string]$manifest.regional.dmaInterop.setupCountry -ne 'PlanCountry' -or
+            [string]$manifest.regional.dmaInterop.setupUserLocale -ne 'en-GB' -or
+            [int]$manifest.regional.dmaInterop.setupHomeLocationGeoId -ne 242 -or
+            [string]$manifest.regional.dmaInterop.restoredTimeZoneId -ne 'Plan Standard Time' -or
+            [string]$manifest.regional.dmaInterop.restoredUserLocale -ne 'en-AU' -or
+            [int]$manifest.regional.dmaInterop.restoredHomeLocationGeoId -ne 12 -or
+            [string]$manifest.regional.dmaInterop.locationServicesPolicy -ne 'disabled') {
+            Add-InstallPlanFailure 'Expected manifest regional facts to come from InstallPlan.Facts.'
+        }
+        if (@($manifest.removals.appxPrefixes) -notcontains 'Plan.Appx' -or
+            [int]$manifest.removals.appxCatalogVersion -ne 99 -or
+            @($manifest.removals.featuresEnabled) -notcontains 'PlanFeature' -or
+            [string]$manifest.removals.ai.policy -ne 'Core' -or
+            [int]$manifest.removals.ai.catalogVersion -ne 98 -or
+            @($manifest.removals.ai.appxPrefixes) -notcontains 'Plan.Ai' -or
+            @($manifest.removals.ai.registryPoliciesApplied) -notcontains 'windows-ai-core-policy' -or
+            @($manifest.removals.ai.aggressiveActions) -notcontains 'plan-aggressive-action') {
+            Add-InstallPlanFailure 'Expected manifest removal and AI facts to come from InstallPlan.Facts.'
+        }
+    }
+    catch {
+        Add-InstallPlanFailure "Manifest install-plan fact consumption failed: $($_.Exception.Message)"
+    }
+    finally {
+        Clear-WinMintBuildManifest
+    }
+}
+
 $cases = @(
     @{ Name = 'default'; Profile = (New-InstallPlanCaseProfile) },
     @{ Name = 'keep-edge'; Profile = (New-InstallPlanCaseProfile -Overrides @{ KeepEdge = $true }) },
@@ -110,6 +199,8 @@ $cases = @(
 foreach ($case in $cases) {
     Assert-InstallPlanMatchesWrappers -Name $case.Name -Profile $case.Profile
 }
+Assert-WslSelectionNormalizationContract
+Assert-ManifestConsumesInstallPlanFacts
 
 if ($failures.Count -gt 0) {
     throw "Install-plan contract failed:`n$($failures -join "`n")"

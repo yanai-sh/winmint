@@ -505,7 +505,7 @@ function Install-Autounattend {
                 LogOK 'Staged WinMint account picture into the offline image.'
             }
             $utf8Bom = [System.Text.UTF8Encoding]::new($true)
-            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Runtime.ps1')) {
+            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
                 $src = Join-Path $bundleDir $n
                 if (-not (Test-Path -LiteralPath $src)) { continue }
                 $destPath = Join-Path $destScripts $n
@@ -521,7 +521,7 @@ function Install-Autounattend {
             # Loud build-time guard: the install boots to a vanilla desktop (no
             # personalization, no debloat, no agent) if these never make it into the
             # image. Fail the build here rather than ship a silently broken ISO.
-            foreach ($must in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Runtime.ps1')) {
+            foreach ($must in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
                 if (-not (Test-Path -LiteralPath (Join-Path $bundleDir $must))) {
                     throw "WinMint setup payload missing from the repository: $(Join-Path $bundleDir $must). Cannot guarantee FirstLogon/SetupComplete will run."
                 }
@@ -585,6 +585,13 @@ function Install-Autounattend {
                     $profileJson = $AgentProfile | ConvertTo-Json -Depth 12
                     Set-Content -LiteralPath (Join-Path $agentDest 'BuildProfile.json') -Value $profileJson -Encoding UTF8
                     LogOK 'Generated WinMintAgent profile from the selected wizard options.'
+                }
+                $brandImageSource = Join-Path $ScriptRoot 'assets\brand\winmint_hero.png'
+                if (Test-Path -LiteralPath $brandImageSource -PathType Leaf) {
+                    $brandAssetDir = Join-Path $agentDest 'Assets\Brand'
+                    $null = New-Item -ItemType Directory -Path $brandAssetDir -Force
+                    Copy-Item -LiteralPath $brandImageSource -Destination (Join-Path $brandAssetDir 'winmint_logo_wordmark.png') -Force
+                    LogOK 'Staged WinMint logo wordmark PNG for the first-logon console splash.'
                 }
                 $terminalIconSourceDir = Join-Path $ScriptRoot 'assets\ui\wsl'
                 if (Test-Path -LiteralPath $terminalIconSourceDir -PathType Container) {
@@ -728,4 +735,3 @@ pause
         }
     }
 }
-

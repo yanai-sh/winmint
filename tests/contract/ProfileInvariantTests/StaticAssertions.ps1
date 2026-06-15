@@ -19,6 +19,7 @@ function Get-WinMintFirstLogonText {
     foreach ($relativePath in @(
         'src\runtime\setup\FirstLogon.ps1',
         'src\runtime\setup\FirstLogon.Support.ps1',
+        'src\runtime\setup\FirstLogon.Transaction.ps1',
         'src\runtime\setup\FirstLogon.Runtime.ps1'
     )) {
         $path = Join-Path $root $relativePath
@@ -749,7 +750,7 @@ function Assert-LiveInstallAuditIsStaged {
     if ($unattendText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
         Add-SmokeFailure 'Install-Autounattend must not rely on the removed top-level scripts directory.'
     }
-    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Runtime.ps1')) {
+    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
         if ($unattendText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Install-Autounattend should stage '$expected'."
         }
@@ -758,7 +759,7 @@ function Assert-LiveInstallAuditIsStaged {
 
 function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
     $firstLogonText = Get-WinMintFirstLogonText
-    foreach ($expected in @('Restore-WinMintDmaRegionalDefaults', 'FirstLogon_RegionalRestore.json', 'Copy-UserInternationalSettingsToSystem', 'restoreLocationServices')) {
+    foreach ($expected in @('Restore-WinMintDmaRegionalDefaults', 'FirstLogon_RegionalRestore.json', 'Copy-UserInternationalSettingsToSystem', 'restoreLocationServices', 'New-WinMintFirstLogonTransactionPlan', 'FirstLogon.Transaction.ps1')) {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "FirstLogon DMA restore should contain '$expected'."
         }
@@ -769,7 +770,7 @@ function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
     $firstLogonRuntimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Runtime.ps1') -Raw
     $restoreIndex = $firstLogonRuntimeText.IndexOf('Restore-WinMintDmaRegionalDefaults')
     $oneDriveIndex = $firstLogonRuntimeText.IndexOf('Invoke-WinMintFirstLogonOneDriveRemoval')
-    $agentIndex = $firstLogonRuntimeText.IndexOf('Launching WinMintAgent')
+    $agentIndex = $firstLogonRuntimeText.IndexOf('Invoke-WinMintFirstLogonAgentLaunch')
     if ($restoreIndex -lt 0 -or $oneDriveIndex -lt 0 -or $agentIndex -lt 0 -or -not ($restoreIndex -lt $oneDriveIndex -and $restoreIndex -lt $agentIndex)) {
         Add-SmokeFailure 'FirstLogon must restore DMA regional defaults before OneDrive cleanup and agent launch.'
     }
@@ -810,6 +811,84 @@ function Assert-FirstLogonDefaultsToVisibleConsole {
     }
     if ($firstLogonText -notmatch [regex]::Escape('Default to a visible progress console')) {
         Add-SmokeFailure 'FirstLogon default mode should be a visible progress console.'
+    }
+}
+
+function Assert-FirstLogonDemoHarnessIsNonMutating {
+    $demoPath = Join-Path $root 'tools\firstlogon\Show-WinMintFirstLogonDemo.ps1'
+    if (-not (Test-Path -LiteralPath $demoPath -PathType Leaf)) {
+        Add-SmokeFailure 'Expected tools\firstlogon\Show-WinMintFirstLogonDemo.ps1 to exist.'
+        return
+    }
+
+    $demoText = Get-Content -LiteralPath $demoPath -Raw
+    $consoleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Console.ps1') -Raw
+    $agentStartText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Start-WinMintAgent.ps1') -Raw
+    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+    foreach ($expected in @(
+        "[ValidateSet('Success', 'Warnings', 'Failure', 'LongRun')]",
+        'WinMintFirstLogonDemo-',
+        'Agent.Console.ps1',
+        'Show-AgentPlan',
+        'Show-AgentFinalSummary',
+        'Show-DemoRunOverview',
+        'Show-DemoArtifacts',
+        'Initialize-DemoUtf8Console',
+        'wt.exe',
+        'UseWindowsTerminal',
+        'ForceSixel',
+        'NoPause'
+    )) {
+        if ($demoText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon demo harness should contain '$expected'."
+        }
+    }
+    foreach ($expected in @(
+        'Get-SpectreImage',
+        'AgentConsoleSplashImagePath',
+        'AgentConsoleForceSixel',
+        'AgentConsoleSplashMaxWidth',
+        'Show-AgentSplashImage',
+        'Format-SpectreAligned',
+        "Format = 'Sixel'",
+        'Force = $true',
+        '$env:WT_SESSION',
+        'Out-SpectreHost'
+    )) {
+        if ($consoleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon console should support image splash rendering with '$expected'."
+        }
+    }
+    if ($agentStartText -notmatch [regex]::Escape('Assets\Brand\winmint_logo_wordmark.png')) {
+        Add-SmokeFailure 'FirstLogon agent should point the console splash at the staged WinMint logo wordmark PNG.'
+    }
+    foreach ($expected in @('assets\brand\winmint_hero.png', 'Assets\Brand', 'winmint_logo_wordmark.png', 'Staged WinMint logo wordmark PNG')) {
+        if ($unattendText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "ISO staging should include the FirstLogon splash asset with '$expected'."
+        }
+    }
+
+    foreach ($forbidden in @(
+        'Start-WinMintAgent.ps1',
+        'Agent.Runtime.ps1',
+        'Set-WinMintFirstLogonAutoLogonPersistent',
+        'Clear-WinMintFirstLogonRetry',
+        'Invoke-WinMintFirstLogonAppxCleanup',
+        'Invoke-WinMintFirstLogonOneDriveRemoval',
+        '$env:LOCALAPPDATA\WinMint'
+    )) {
+        if ($demoText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "FirstLogon demo harness must not call or target mutating setup path '$forbidden'."
+        }
+    }
+
+    foreach ($forbiddenPattern in @(
+        '(?m)^\s*&\s*(winget|wsl|schtasks|reg)(\.exe)?\b',
+        '(?m)^\s*Start-Process\s+.*\b(winget|wsl|schtasks|reg)(\.exe)?\b'
+    )) {
+        if ($demoText -match $forbiddenPattern) {
+            Add-SmokeFailure "FirstLogon demo harness must not execute installer or setup commands matching '$forbiddenPattern'."
+        }
     }
 }
 
@@ -878,7 +957,7 @@ function Assert-AgentLiveInstallFailuresAreWarnings {
     $consoleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Console.ps1') -Raw
     foreach ($expected in @(
         '$blockingSteps',
-        'module:profiles',
+        'FailurePolicy',
         'warningSteps',
         'completed with warnings',
         'failed (non-blocking)',
@@ -916,7 +995,7 @@ function Assert-SetupCompleteRegistersFirstLogonFallback {
         'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce',
         'WinMintFirstLogon',
         'FirstLogon.ps1',
-        'Registered HKLM RunOnce fallback for FirstLogon.ps1.'
+        'Registered HKLM RunOnce fallback for FirstLogon.ps1 under PowerShell 7.'
     )) {
         if ($setupCompleteText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "SetupComplete should register FirstLogon fallback with '$expected'."
@@ -1108,7 +1187,7 @@ function Assert-AiRemovalCatalogAndGuardrails {
 }
 
 function Assert-RecoveryBundleIsOutputOnly {
-    $reportsText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Reports.ps1') -Raw
+    $manifestText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Manifest.ps1') -Raw
     foreach ($expected in @(
             'Save-WinMintRecoveryBundle',
             "Join-Path `$OutputDir 'recovery'",
@@ -1116,7 +1195,7 @@ function Assert-RecoveryBundleIsOutputOnly {
             'Recover-WinMintDmaRegion.ps1',
             'WinMint-Recovery.json'
         )) {
-        if ($reportsText -notmatch [regex]::Escape($expected)) {
+        if ($manifestText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Recovery bundle output should include '$expected'."
         }
     }
@@ -1158,10 +1237,22 @@ function Assert-AgentRunsLiveInstallAudit {
         }
     }
     $agentEntryText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
-    $profilesIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'profiles'")
-    $packageManagersIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'package-managers'")
-    $editorsIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'editors'")
-    $auditIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'liveInstallAudit'")
+    foreach ($expected in @(
+        'New-WinMintAgentRuntimeStepPlan',
+        'FailurePolicy',
+        '''blocking''',
+        '''advisory''',
+        'finalValidation',
+        '$blockingSteps = @($runtimePlan'
+    )) {
+        if ($agentEntryText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Agent runtime should expose plan-driven ordering and failure policy with '$expected'."
+        }
+    }
+    $profilesIndex = $agentEntryText.IndexOf("Add-AgentRuntimeStep -StepName 'profiles'")
+    $packageManagersIndex = $agentEntryText.IndexOf("Add-AgentRuntimeStep -StepName 'package-managers'")
+    $editorsIndex = $agentEntryText.IndexOf("Add-AgentRuntimeStep -StepName 'editors'")
+    $auditIndex = $agentEntryText.IndexOf("Add-AgentRuntimeStep -StepName 'liveInstallAudit'")
     $failedIndex = $agentEntryText.IndexOf('$failed = @')
     if ($profilesIndex -lt 0 -or $packageManagersIndex -lt 0 -or $editorsIndex -lt 0 -or $auditIndex -lt 0 -or $failedIndex -lt 0 -or
         -not ($profilesIndex -lt $packageManagersIndex -and $packageManagersIndex -lt $editorsIndex -and $editorsIndex -lt $auditIndex -and $auditIndex -lt $failedIndex)) {
@@ -1232,6 +1323,7 @@ function Assert-StarshipPromptUsesNerdFontTerminalDefaults {
 
 function Assert-AgentWingetUsesDefaultInstallerSelection {
     $runtimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
+    $packageManagerText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1') -Raw
     $packagesText = Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw
 
     foreach ($expected in @(
@@ -1241,6 +1333,18 @@ function Assert-AgentWingetUsesDefaultInstallerSelection {
     )) {
         if ($runtimeText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Agent runtime should invoke winget directly with '$expected'."
+        }
+    }
+    foreach ($expected in @(
+        'Invoke-WinMintAgentWingetUpgradeAll',
+        '''upgrade''',
+        '''--all''',
+        '''--accept-source-agreements''',
+        '''--accept-package-agreements''',
+        'package-manager:winget-upgrade-all'
+    )) {
+        if ($packageManagerText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Package manager bootstrap should run and track winget upgrade --all with '$expected'."
         }
     }
 
@@ -1262,6 +1366,34 @@ function Assert-AgentWingetUsesDefaultInstallerSelection {
         if ($packagesText -match [regex]::Escape($forbidden)) {
             Add-SmokeFailure "Package catalog should not carry brittle winget override '$forbidden'."
         }
+    }
+}
+
+function Assert-OfficialUpdatePayloadAcquisition {
+    $moduleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\UpdatePayloads.ps1') -Raw
+    $engineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Engine.ps1') -Raw
+    $entryText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\WinMint.ps1') -Raw
+    foreach ($expected in @(
+        'catalog.update.microsoft.com/Search.aspx',
+        'catalog.update.microsoft.com/DownloadDialog.aspx',
+        'ConvertFrom-WinMintCatalogBase64Sha256',
+        'Save-WinMintVerifiedDownload',
+        'Invoke-WinMintUpdatePayloadDownload',
+        'Start-BitsTransfer',
+        'definitionupdates.microsoft.com/packages?package=dismpackage',
+        'Get-AuthenticodeSignature',
+        'UpdatePayloadManifest.json',
+        'Optional preview update acquisition is not allowed'
+    )) {
+        if ($moduleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Official update payload acquisition should contain '$expected'."
+        }
+    }
+    if ($engineText -notmatch 'Invoke-WinMintStable25H2UpdatePayloadAcquisition') {
+        Add-SmokeFailure 'Engine must acquire official Stable25H2 payloads before enforcing update payload preflight.'
+    }
+    if ($entryText -notmatch 'Private\\UpdatePayloads\.ps1') {
+        Add-SmokeFailure 'WinMint.ps1 must dot-source the update payload acquisition module.'
     }
 }
 
@@ -1696,8 +1828,8 @@ function Assert-OneDriveRemovalPolicyIsComplete {
     $firstLogonText = Get-WinMintFirstLogonText
     $setupCompleteText = Get-WinMintSetupCompleteText
     $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Staging.ps1') -Raw
-    $offlineOneDriveReportText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Reports.ps1') -Raw
-    $offlineOneDriveText = $stagingText + "`n" + $offlineOneDriveReportText
+    $offlineOneDriveManifestText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Manifest.ps1') -Raw
+    $offlineOneDriveText = $stagingText + "`n" + $offlineOneDriveManifestText
     $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Pipeline.ps1') -Raw
     foreach ($expected in @(
             'FirstLogon_OneDriveAudit.json',
@@ -2118,6 +2250,88 @@ function Assert-WindowsTerminalDefaultsPwsh7NoLogo {
     }
     catch {
         Add-SmokeFailure "Windows Terminal settings should be valid JSON: $($_.Exception.Message)"
+    }
+}
+
+function Assert-PowerShell7IsBundledAndRequired {
+    $packagesText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Packages.ps1') -Raw
+    foreach ($expected in @(
+        'Resolve-WinMintGitHubReleasePayload',
+        'PowerShell/PowerShell',
+        'PowerShell-\d+\.\d+\.\d+-',
+        'PowerShell 7 staged in the offline image',
+        'PowerShell 7 staging failed; build cannot continue'
+    )) {
+        if ($packagesText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Offline PowerShell 7 staging should contain '$expected'."
+        }
+    }
+    if ($packagesText -match 'fall back to Windows PowerShell') {
+        Add-SmokeFailure 'PowerShell 7 staging must fail the build instead of falling back to Windows PowerShell.'
+    }
+
+    $setupCompleteCmd = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.cmd') -Raw
+    foreach ($expected in @(
+        '%ProgramFiles%\PowerShell\7\pwsh.exe',
+        'PowerShell 7 is required',
+        'exit /b 1'
+    )) {
+        if ($setupCompleteCmd -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "SetupComplete.cmd should require staged PowerShell 7 with '$expected'."
+        }
+    }
+    if ($setupCompleteCmd -match 'powershell\.exe[\s\S]{0,160}SetupComplete\.ps1') {
+        Add-SmokeFailure 'SetupComplete.cmd must not run SetupComplete.ps1 under Windows PowerShell when PowerShell 7 is missing.'
+    }
+
+    $setupCompleteText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.ps1') -Raw
+    foreach ($expected in @(
+        "Join-Path `$env:ProgramFiles 'PowerShell\7\pwsh.exe'",
+        'PowerShell 7 is required for FirstLogon',
+        '-NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File',
+        'under PowerShell 7'
+    )) {
+        if ($setupCompleteText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "SetupComplete.ps1 should register FirstLogon under PowerShell 7 with '$expected'."
+        }
+    }
+    if ($setupCompleteText -match 'runOnceCommand\s*=\s*"powershell\.exe') {
+        Add-SmokeFailure 'SetupComplete.ps1 must not register FirstLogon RunOnce under Windows PowerShell.'
+    }
+
+    $firstLogonRuntimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Runtime.ps1') -Raw
+    foreach ($expected in @(
+        'PowerShell 7 is bundled into the image and is required',
+        'PowerShell 7 is required for FirstLogon',
+        'PowerShell 7 re-launch failed',
+        'return 1'
+    )) {
+        if ($firstLogonRuntimeText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon runtime should fail closed around PowerShell 7 with '$expected'."
+        }
+    }
+    if ($firstLogonRuntimeText -match 'continuing under Windows PowerShell') {
+        Add-SmokeFailure 'FirstLogon runtime must not continue under Windows PowerShell after PowerShell 7 handoff fails.'
+    }
+
+    $firstLogonSupportText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Support.ps1') -Raw
+    foreach ($expected in @(
+        'function Resolve-WinMintPowerShellHost',
+        'PowerShell 7 is required for WinMint FirstLogon'
+    )) {
+        if ($firstLogonSupportText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon host resolution should require PowerShell 7 with '$expected'."
+        }
+    }
+
+    $agentRuntimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
+    foreach ($expected in @(
+        'function Resolve-AgentPowerShellHost',
+        'PowerShell 7 is required for WinMint Agent'
+    )) {
+        if ($agentRuntimeText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Agent host resolution should require PowerShell 7 with '$expected'."
+        }
     }
 }
 

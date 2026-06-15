@@ -15,13 +15,21 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
 function Assert-WinMintUiBridgeSettings {
-    param([Parameter(Mandatory)][object]$Settings)
+    param(
+        [Parameter(Mandatory)][string]$SettingsJson,
+        [Parameter(Mandatory)][object]$Settings
+    )
 
     $schemaPath = Join-Path $RepositoryRoot 'schemas\winmint.uiintent.schema.json'
     if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) {
         throw "UI intent schema not found: $schemaPath"
     }
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
+    $schemaJson = Get-Content -LiteralPath $schemaPath -Raw
+    if (-not (Test-Json -Json $SettingsJson -Schema $schemaJson)) {
+        throw "UI bridge settings do not match schemas\winmint.uiintent.schema.json."
+    }
+
+    $schema = $schemaJson | ConvertFrom-Json
     $required = @($schema.required | ForEach-Object { [string]$_ })
 
     foreach ($name in $required) {
@@ -33,6 +41,9 @@ function Assert-WinMintUiBridgeSettings {
     if ([string]::IsNullOrWhiteSpace([string]$Settings.Architecture)) {
         throw 'UI bridge settings must include Architecture.'
     }
+    if ([string]$Settings.Architecture -eq 'Unknown') {
+        throw 'UI bridge settings must include a resolved Architecture before profile generation.'
+    }
 }
 
 $script:WinMintRepositoryRoot = $RepositoryRoot
@@ -41,8 +52,9 @@ $engine = Get-WinMintPath -Name RuntimeImageEntry
 . $engine
 Initialize-WinMintEngine -RepositoryRoot $RepositoryRoot
 
-$settings = Get-Content -LiteralPath $SettingsPath -Raw | ConvertFrom-Json
-Assert-WinMintUiBridgeSettings -Settings $settings
+$settingsJson = Get-Content -LiteralPath $SettingsPath -Raw
+$settings = $settingsJson | ConvertFrom-Json
+Assert-WinMintUiBridgeSettings -SettingsJson $settingsJson -Settings $settings
 # Resolve the GUI's edition token (Host/Home/Pro/.../exact) into the concrete
 # editionMode/edition the engine consumes, reusing the resolver the CLI uses.
 $editionSelection = Resolve-WinMintEditionSelection -Edition ([string]$settings.Edition) -EditionSpecified $true

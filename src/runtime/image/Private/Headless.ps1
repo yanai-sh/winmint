@@ -329,7 +329,7 @@ function New-WinMintHeadlessProfileFromFlags {
         [switch]$LiveInstallAudit,
         [switch]$PhoneLink,
         [ValidateSet('On', 'Off')][string]$Location = 'On',
-        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'Stable25H2',
+        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'None',
         [string]$UpdatePayloadRoot = '',
         [ValidateSet('On', 'Off')][string]$UpdateProvisionedApps = 'On',
         [ValidateSet('windhawk', 'yasb', 'komorebi', 'nilesoft')][string[]]$Install = @(),
@@ -366,26 +366,7 @@ function New-WinMintHeadlessProfileFromFlags {
 
     $selectedEditors = & $normalizeSelection $Editor @('cursor', 'vscode', 'zed', 'antigravity', 'neovim') 'Editor'
     $selectedBrowsers = & $normalizeSelection $Browser @('zen-browser', 'helium', 'librewolf', 'brave', 'edge') 'Browser'
-    $normalizeWslSelection = {
-        param([string[]]$Values)
-        @(
-            @($Values) |
-                ForEach-Object { ([string]$_) -split ',' } |
-                ForEach-Object {
-                    switch -Regex (([string]$_).Trim()) {
-                        '^(Ubuntu|Ubuntu-\d+\.\d+)$' { 'Ubuntu'; break }
-                        '^(Fedora|FedoraLinux|FedoraLinux-\d+)$' { 'FedoraLinux'; break }
-                        '^(Arch(?: Linux)?|archlinux)$' { 'archlinux'; break }
-                        '^(NixOS-WSL|NixOS|nixos-wsl)$' { 'NixOS-WSL'; break }
-                        '^(Pengwin|pengwin)$' { 'pengwin'; break }
-                        default { ([string]$_).Trim() }
-                    }
-                } |
-                Where-Object { $_ -and $_ -ne 'None' } |
-                Select-Object -Unique
-        )
-    }
-    $selectedWslDistros = & $normalizeWslSelection $Wsl2Distros
+    $selectedWslDistros = @((Normalize-WinMintWslSelection -Values $Wsl2Distros).ProfileTokens)
 
     $drivers = Resolve-WinMintHeadlessDriverIntent `
         -TargetDevice $TargetDevice `
@@ -504,7 +485,8 @@ function Invoke-WinMintHeadlessValidateOnly {
 
     Set-WinMintHeadlessJournalPhase -Phase 'Preflight'
     $config = New-WinMintBuildConfig -BuildProfile $BuildProfile
-    $pre = Test-WinMintBuildPrerequisite -Config $config -AllowMissingSourceIso:$DryRun
+    $runMode = if ($DryRun) { 'DryRun' } else { 'ValidateOnly' }
+    $pre = Test-WinMintBuildPrerequisite -Config $config -RunMode $runMode
     $report = New-WinMintBuildReport -Config $config -DetectedArchitecture $config.Architecture -Warnings $pre.Warnings -Failures $pre.Failures
     $paths = Save-WinMintBuildReport -Report $report
     $reports = [pscustomobject]@{

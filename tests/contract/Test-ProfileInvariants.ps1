@@ -12,10 +12,13 @@ $script:WinMintRepositoryRoot = $root
 . (Join-Path $root 'src\runtime\image\Private\Image\Tweaks\TweakRegistry.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\AiRemoval.ps1')
 . (Join-Path $root 'src\runtime\image\Private\IntermediatesCache.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Manifest.ps1')
 . (Join-Path $root 'src\runtime\image\Engine.ps1')
 . (Join-Path $root 'src\runtime\image\Reports.ps1')
+. (Join-Path $root 'src\runtime\image\Private\WslSelection.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Runtime.ps1')
 . (Join-Path $root 'src\runtime\image\Private\PayloadStore.ps1')
+. (Join-Path $root 'src\runtime\image\Private\UpdatePayloads.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Drivers.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Packages.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Media.ps1')
@@ -77,6 +80,8 @@ Assert-XdgDefaultsAreStaged
 Assert-CachedDownloadResolver
 Assert-OfflinePayloadCacheStatus
 Assert-ImageUpdateProfileContract
+Assert-UpdatePayloadHashHelpers
+Assert-OfficialUpdatePayloadAcquisition
 Assert-StaticUiFlowInvariants
 Assert-HardwareBypassIsExplicit
 Assert-ElevationRequiredForAllRuns
@@ -119,8 +124,11 @@ Assert-WinPEDriverInjectionDefaultsToSetupOnly
 Assert-CopilotPlusUsesFullAiRemovalPolicy
 Assert-OneDriveRemovalPolicyIsComplete
 Assert-DefaultUserTaskbarPinsIncludeTerminal
+Assert-WindowsTerminalDefaultsPwsh7NoLogo
+Assert-PowerShell7IsBundledAndRequired
 Assert-WinMintBloomWallpaperCoversDesktopAndLockScreen
 Assert-FirstLogonDefaultsToVisibleConsole
+Assert-FirstLogonDemoHarnessIsNonMutating
 Assert-FirstLogonPinsSelectedAppsToStart
 Assert-FirstLogonFinalizesTerminalProfiles
 Assert-AgentLiveInstallFailuresAreWarnings
@@ -199,7 +207,7 @@ $profile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
 $config = New-WinMintBuildConfig -BuildProfile $profile
 if ($config.CursorPackKind -ne 'Windows11Modern') { Add-SmokeFailure 'Expected Windows11Modern cursor pack in build config.' }
 if ($config.Tweaks.UpdatePolicy -ne 'All') { Add-SmokeFailure 'Expected All update policy in build config.' }
-if ([string]$config.Updates.Mode -ne 'Stable25H2') { Add-SmokeFailure 'Expected offline image updates to be enabled by default.' }
+if ([string]$config.Updates.Mode -ne 'None') { Add-SmokeFailure 'Expected offline image updates to be disabled by default.' }
 if ($config.ExportHostDrivers) { Add-SmokeFailure 'Expected host driver export to be disabled for drivers.source None.' }
 if ($config.RegistryTweaks -contains 'hardware-bypass') { Add-SmokeFailure 'hardware-bypass must not be in the default registry tweaks for a standard build.' }
 if ($config.RegistryTweaks -notcontains 'edge-policy-minimal') { Add-SmokeFailure 'Expected Minimal builds to use the strict Edge policy.' }
@@ -443,13 +451,19 @@ $profile = New-SmokeBuildProfile
 $profile.source.isoPath = ''
 $profile.source.architecture = ''
 $config = New-WinMintBuildConfig -BuildProfile $profile
-$pre = Test-WinMintBuildPrerequisite -Config $config -AllowMissingSourceIso
+$pre = Test-WinMintBuildPrerequisite -Config $config -RunMode DryRun
 if (-not $pre.Passed) {
     Add-SmokeFailure "Expected profile-only dry run prerequisite check to allow missing ISO and architecture. Failures: $($pre.Failures -join '; ')"
+}
+if (@($pre.Findings | Where-Object Code -eq 'source.iso.missing.profileOnlyDryRun').Count -ne 1) {
+    Add-SmokeFailure 'Expected profile-only dry run preflight to emit source.iso.missing.profileOnlyDryRun.'
 }
 $pre = Test-WinMintBuildPrerequisite -Config $config
 if ($pre.Passed) {
     Add-SmokeFailure 'Expected normal build prerequisite check to reject a missing ISO.'
+}
+if (@($pre.Findings | Where-Object Code -eq 'source.iso.missing').Count -ne 1) {
+    Add-SmokeFailure 'Expected normal build preflight to emit source.iso.missing.'
 }
 
 if ($failures.Count -gt 0) {

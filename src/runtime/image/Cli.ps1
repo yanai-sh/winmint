@@ -189,7 +189,7 @@ function Invoke-WinMintNewProfileCommand {
         [switch]$LiveInstallAudit,
         [ValidateSet('On', 'Off')][string]$Dma = 'On',
         [ValidateSet('On', 'Off')][string]$Location = 'On',
-        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'Stable25H2',
+        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'None',
         [string]$UpdatePayloadRoot = '',
         [ValidateSet('On', 'Off')][string]$UpdateProvisionedApps = 'On',
         [switch]$Json,
@@ -336,7 +336,7 @@ new options (configuration lives here):
   -Launcher None|FlowEverything|Raycast
   -Dma On|Off                      DMA interop tweak (default On).
   -Location On|Off                 Location services (default On).
-  -UpdateImage Stable25H2|None     Pre-service explicit stable 25H2 update payloads; None opts out.
+  -UpdateImage None|Stable25H2     Pre-service explicit stable 25H2 update payloads; Stable25H2 opts in.
   -UpdatePayloadRoot <dir>          Root containing packages\, appx\, and dependency payloads.
   -UpdateProvisionedApps On|Off     Include Store/MSIX app provisioning payloads.
   -Wsl2Distros Ubuntu,Fedora,archlinux,NixOS-WSL,pengwin

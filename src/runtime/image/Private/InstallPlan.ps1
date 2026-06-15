@@ -3,30 +3,9 @@
 function New-WinMintInstallPlanAgentProfile {
     param([Parameter(Mandatory)]$BuildConfig)
 
-    $normalizeWslDistro = {
-        param([string]$Distro)
-        switch -Regex ($Distro) {
-            '^Ubuntu-\d+\.\d+$'     { 'Ubuntu'; break }
-            '^Fedora(?:Linux)?-\d+$' { 'FedoraLinux'; break }
-            '^(Fedora|FedoraLinux)$' { 'FedoraLinux'; break }
-            '^(Arch(?: Linux)?|archlinux)$' { 'archlinux'; break }
-            '^(NixOS-WSL|NixOS|nixos-wsl)$' { 'NixOS'; break }
-            '^(Pengwin|pengwin)$' { 'pengwin'; break }
-            default                 { $Distro }
-        }
-    }
-    $wslDistros = @(
-        @($BuildConfig.Wsl2Distros) |
-            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) -and [string]$_ -ne 'None' } |
-            ForEach-Object { ([string]$_) -split ',' } |
-            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) -and [string]$_ -ne 'None' } |
-            ForEach-Object { & $normalizeWslDistro ([string]$_).Trim() } |
-            Select-Object -Unique
-    )
-    if ($wslDistros.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($BuildConfig.Wsl2Distro) -and $BuildConfig.Wsl2Distro -ne 'None') {
-        $wslDistros = @([string]$BuildConfig.Wsl2Distro -split ',' | ForEach-Object { & $normalizeWslDistro ([string]$_).Trim() } | Where-Object { $_ -and $_ -ne 'None' } | Select-Object -Unique)
-    }
-    $wslDistro = if ($wslDistros.Count -eq 0) { 'None' } elseif ($wslDistros.Count -eq 1) { $wslDistros[0] } else { $wslDistros -join ',' }
+    $wslSelection = Normalize-WinMintWslSelection -Values @($BuildConfig.Wsl2Distros) -FallbackValues @($BuildConfig.Wsl2Distro)
+    $wslDistros = @($wslSelection.AgentTokens)
+    $wslDistro = [string]$wslSelection.AgentToken
     # Package-manager bootstrap is baseline: Scoop + MinGit are developer
     # plumbing, and winget remains the owner for selected GUI/system tools.
     $needsPackageManagers = $true
@@ -297,6 +276,7 @@ function New-WinMintInstallPlanFromBuildConfig {
 
     $setupProfile = New-WinMintInstallPlanSetupProfile -BuildConfig $BuildConfig
     $agentProfile = New-WinMintInstallPlanAgentProfile -BuildConfig $BuildConfig
+    $wslSelection = Normalize-WinMintWslSelection -Values @($BuildConfig.Wsl2Distros) -FallbackValues @($BuildConfig.Wsl2Distro)
     $setupPlan = New-WinMintInstallPlanSetupPlan `
         -BuildConfig $BuildConfig `
         -SetupProfile $setupProfile `
@@ -316,18 +296,34 @@ function New-WinMintInstallPlanFromBuildConfig {
             }
             regional = [ordered]@{
                 dmaInterop = [bool]$BuildConfig.DmaInterop.Enabled
+                setupCountry = [string]$BuildConfig.DmaInterop.SetupCountry
                 setupUserLocale = [string]$BuildConfig.SetupUserLocale
                 setupHomeLocationGeoId = [int]$BuildConfig.SetupHomeLocationGeoId
+                restoreTimeZoneId = [string]$BuildConfig.TimeZoneId
                 restoreUserLocale = [string]$BuildConfig.UserLocale
                 restoreHomeLocationGeoId = [int]$BuildConfig.HomeLocationGeoId
                 restoreLocationServices = [bool]$BuildConfig.DmaInterop.RestoreLocationServices
+                locationServicesPolicy = if ([bool]$BuildConfig.Privacy.Location) { 'enabled' } else { 'disabled' }
             }
             removals = [ordered]@{
                 appxPrefixes = @($BuildConfig.AppxPackages)
+                appxCatalogVersion = [int]$BuildConfig.AppxCatalogVersion
+                featuresEnabled = @($BuildConfig.Features)
                 aiPolicy = [string]$BuildConfig.AiRemoval.Policy
+                aiCatalogVersion = [int]$BuildConfig.AiRemoval.CatalogVersion
                 aiAppxPrefixes = @($BuildConfig.AiRemoval.AppxPrefixes)
                 aiOptionalFeatures = @($BuildConfig.AiRemoval.OptionalFeatures)
+                aiRegistryPolicies = @(
+                    @($BuildConfig.RegistryTweaks) |
+                        Where-Object { $_ -in @('windows-ai-core-policy', 'windows-ai-full-policy') }
+                )
+                aiAggressiveActions = @(
+                    if ([bool]$BuildConfig.AiRemoval.AggressiveExperimental) {
+                        @($BuildConfig.AiRemoval.AggressiveExperimentalPatterns)
+                    }
+                )
                 removeEdge = [bool]$setupProfile.edge.removeEdge
+                keepEdge = [bool]$setupProfile.edge.keepEdge
             }
             setup = [ordered]@{
                 accountMode = [string]$BuildConfig.AccountMode
@@ -341,7 +337,9 @@ function New-WinMintInstallPlanFromBuildConfig {
                 modules = @($setupPlan.firstLogon.modules)
                 editors = @($BuildConfig.Editors)
                 browsers = @($BuildConfig.Browsers)
-                wslDistros = @($BuildConfig.Wsl2Distros)
+                wslDistros = @($wslSelection.ProfileTokens)
+                wslAgentDistros = @($wslSelection.AgentTokens)
+                wslSelections = @($wslSelection.Items)
                 launcher = [string]$BuildConfig.Launcher
                 shellLayers = @(
                     if ([bool]$BuildConfig.InstallWindhawk) { 'windhawk' }
@@ -386,4 +384,3 @@ function Get-WinMintInstallPlanForBuildConfig {
 
     New-WinMintInstallPlanFromBuildConfig -BuildConfig $BuildConfig
 }
-

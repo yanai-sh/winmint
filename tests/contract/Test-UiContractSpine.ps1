@@ -25,15 +25,52 @@ function Assert-Text {
     if ($Text -notmatch $Pattern) { Add-Failure $Message }
 }
 
+function ConvertTo-WinMintTestJson {
+    param([Parameter(Mandatory)]$Value)
+
+    $Value | ConvertTo-Json -Depth 16 -Compress
+}
+
+function Copy-WinMintUiIntentFixture {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Fixture)
+
+    $copy = [ordered]@{}
+    foreach ($key in $Fixture.Keys) {
+        $copy[$key] = $Fixture[$key]
+    }
+    return $copy
+}
+
+function Assert-UiIntentSchemaResult {
+    param(
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Fixture,
+        [Parameter(Mandatory)][bool]$Expected,
+        [Parameter(Mandatory)][string]$Message
+    )
+
+    $json = ConvertTo-WinMintTestJson -Value $Fixture
+    $actual = Test-Json -Json $json -Schema $script:UiIntentSchema -ErrorAction SilentlyContinue
+    if ([bool]$actual -ne $Expected) {
+        Add-Failure $Message
+    }
+}
+
 $guiIntentPath = Join-Path $root 'apps\gui\src\intent.rs'
 $guiStatePath = Join-Path $root 'apps\gui\src\state.rs'
+$guiOptionsPath = Join-Path $root 'apps\gui\src\options.rs'
+$guiBridgePath = Join-Path $root 'apps\gui\src\bridge.rs'
+$guiMainPath = Join-Path $root 'apps\gui\src\main.rs'
+$guiConfigureScreenPath = Join-Path $root 'apps\gui\src\screens\configure.rs'
+$guiBuildScreenPath = Join-Path $root 'apps\gui\src\screens\build.rs'
+$guiReviewScreenPath = Join-Path $root 'apps\gui\src\screens\review.rs'
+$coreOptionsPath = Join-Path $root 'crates\winmint-core\src\options.rs'
 $coreProfilePath = Join-Path $root 'crates\winmint-core\src\profile.rs'
 $bridgePath = Join-Path $root 'tools\ui-bridge\New-UiBuildProfile.ps1'
 $uiIntentSchemaPath = Join-Path $root 'schemas\winmint.uiintent.schema.json'
 $pipelineConsolePath = Join-Path $root 'src\runtime\image\Private\Pipeline.Console.ps1'
 $reviewConsolePath = Join-Path $root 'src\runtime\image\Private\Console\Review.ps1'
 
-foreach ($path in @($guiIntentPath, $guiStatePath, $coreProfilePath, $bridgePath, $uiIntentSchemaPath, $pipelineConsolePath, $reviewConsolePath)) {
+foreach ($path in @($guiIntentPath, $guiStatePath, $guiOptionsPath, $guiBridgePath, $guiMainPath, $guiConfigureScreenPath, $guiBuildScreenPath, $guiReviewScreenPath, $coreOptionsPath, $coreProfilePath, $bridgePath, $uiIntentSchemaPath, $pipelineConsolePath, $reviewConsolePath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         Add-Failure "Required UI contract file is missing: $path"
     }
@@ -42,6 +79,13 @@ foreach ($path in @($guiIntentPath, $guiStatePath, $coreProfilePath, $bridgePath
 if ($failures.Count -eq 0) {
     $guiIntent = Get-Content -LiteralPath $guiIntentPath -Raw
     $guiState = Get-Content -LiteralPath $guiStatePath -Raw
+    $guiOptions = Get-Content -LiteralPath $guiOptionsPath -Raw
+    $guiBridge = Get-Content -LiteralPath $guiBridgePath -Raw
+    $guiMain = Get-Content -LiteralPath $guiMainPath -Raw
+    $guiConfigureScreen = Get-Content -LiteralPath $guiConfigureScreenPath -Raw
+    $guiBuildScreen = Get-Content -LiteralPath $guiBuildScreenPath -Raw
+    $guiReviewScreen = Get-Content -LiteralPath $guiReviewScreenPath -Raw
+    $coreOptions = Get-Content -LiteralPath $coreOptionsPath -Raw
     $coreProfile = Get-Content -LiteralPath $coreProfilePath -Raw
     $bridge = Get-Content -LiteralPath $bridgePath -Raw
     $uiIntentSchema = Get-Content -LiteralPath $uiIntentSchemaPath -Raw
@@ -49,13 +93,122 @@ if ($failures.Count -eq 0) {
     $reviewConsole = Get-Content -LiteralPath $reviewConsolePath -Raw
 
     Assert-Text $guiIntent 'winmint_core::profile' 'GPUI intent module must delegate reusable contract shaping to winmint-core.'
+    Assert-Text $coreOptions 'pub const EDITION_OPTIONS' 'winmint-core must expose UI edition option tokens.'
+    Assert-Text $coreOptions 'pub const EDITOR_OPTIONS' 'winmint-core must expose editor option tokens.'
+    Assert-Text $coreOptions 'pub const BROWSER_OPTIONS' 'winmint-core must expose browser option tokens.'
+    Assert-Text $coreOptions 'pub const WSL_OPTIONS' 'winmint-core must expose WSL option tokens.'
+    Assert-Text $guiOptions 'pub const EDITIONS' 'GPUI must expose a display catalog for edition options.'
+    Assert-Text $guiOptions 'pub const EDITORS' 'GPUI must expose a display catalog for editor options.'
+    Assert-Text $guiOptions 'pub const BROWSERS' 'GPUI must expose a display catalog for browser options.'
+    Assert-Text $guiOptions 'winmint_core::options' 'GPUI option catalog must reuse winmint-core wire tokens.'
+    Assert-Text $guiConfigureScreen 'options::EDITIONS' 'Configure screen should render edition options from the catalog.'
+    Assert-Text $guiConfigureScreen 'options::BROWSERS' 'Configure screen should render browser options from the catalog.'
+    Assert-Text $guiConfigureScreen 'options::EDITORS' 'Configure screen should render editor options from the catalog.'
+    Assert-Text $guiConfigureScreen 'options::WSL_DISTROS' 'Configure screen should render WSL options from the catalog.'
     Assert-Text $coreProfile 'pub struct KeepFlags' 'winmint-core must define the keep-flag intent inputs.'
     Assert-Text $coreProfile 'pub fn build_ui_intent' 'winmint-core must expose the typed UI intent builder.'
     Assert-Text $coreProfile 'fn ui_intent_serializes_to_the_exact_bridge_contract_keys' 'winmint-core must test the bridge contract key set.'
+    Assert-Text $coreProfile 'fn ui_intent_schema_enums_match_option_tokens' 'winmint-core tests must compare UI intent enum tokens with the schema.'
     Assert-Text $coreProfile 'winmint\.uiintent\.schema\.json' 'winmint-core tests must compare UI intent keys with the schema.'
     Assert-Text $bridge 'Assert-WinMintUiBridgeSettings' 'PowerShell bridge must keep a boundary assertion before engine profile creation.'
     Assert-Text $bridge 'winmint\.uiintent\.schema\.json' 'PowerShell bridge must read the UI intent schema.'
+    Assert-Text $bridge 'Test-Json' 'PowerShell bridge must validate UI intent with the JSON schema.'
+    foreach ($expected in @(
+            'enum UiBridgeScript',
+            'fn script_path',
+            'struct BridgeCommandSpec',
+            'struct BridgeCommandOutput',
+            'struct BridgeBuildResult',
+            'struct BridgeProgressEvent',
+            'fn parse_powershell_json',
+            'fn parse_powershell_result_json',
+            'fn require_powershell_success',
+            'pub fn write_ui_intent',
+            'pub fn generate_build_profile',
+            'pub fn start_build_from_profile',
+            'fn profile_generation_command',
+            'fn build_invocation_command',
+            'fn run_source_probe_with'
+        )) {
+        Assert-Text $guiBridge ([regex]::Escape($expected)) "Rust GUI bridge should own '$expected'."
+    }
+    Assert-Text $guiMain 'bridge::write_ui_intent' 'WinMintApp should delegate UI intent persistence to bridge.rs.'
+    Assert-Text $guiMain 'bridge::generate_build_profile' 'WinMintApp should generate BuildProfile.json through bridge.rs.'
+    Assert-Text $guiMain 'bridge::start_build_from_profile' 'WinMintApp should invoke builds through bridge.rs.'
+    if ($guiMain -match 'serde_json::to_string_pretty|fs::write\(&output_path') {
+        Add-Failure 'WinMintApp must not serialize or write ui-intent.json directly; bridge.rs owns that IO.'
+    }
+    Assert-Text $guiBuildScreen 'Generate profile' 'GPUI build screen should expose profile generation.'
+    Assert-Text $guiBuildScreen 'Dry run' 'GPUI build screen should expose dry-run invocation.'
+    Assert-Text $guiBuildScreen 'Manifest' 'GPUI build screen should surface manifest path.'
+    Assert-Text $guiBuildScreen 'Report' 'GPUI build screen should surface report path.'
+    Assert-Text $guiReviewScreen 'Last status' 'GPUI review screen should surface bridge status.'
+    Assert-Text $guiReviewScreen 'Output' 'GPUI review screen should surface build output path.'
+    Assert-Text $guiReviewScreen 'Progress' 'GPUI review screen should surface last bridge progress.'
+    Assert-Text (Get-Content -LiteralPath (Join-Path $root 'tools\ui-bridge\Start-UiBuildFromProfile.ps1') -Raw) 'Ok\s*=' 'UI build invocation bridge should emit a normalized JSON result.'
+    foreach ($screen in @(
+            @{ Name = 'Build screen'; Text = $guiBuildScreen },
+            @{ Name = 'Review screen'; Text = $guiReviewScreen }
+        )) {
+        if ($screen.Text -match 'Coming soon') {
+            Add-Failure "$($screen.Name) must not regress to a placeholder."
+        }
+    }
     Assert-Text $uiIntentSchema '"required"\s*:\s*\[' 'UI intent schema must define required bridge keys.'
+    Assert-Text $uiIntentSchema '"additionalProperties"\s*:\s*false' 'UI intent schema must reject unknown bridge keys.'
+    foreach ($expectedEnumToken in @(
+            '"arm64"', '"amd64"', '"x86"', '"Unknown"',
+            '"Auto"', '"Laptop"', '"Desktop"',
+            '"Host"', '"Home"', '"Pro"', '"Enterprise"', '"Education"', '"SingleLanguage"', '"All"',
+            '"cursor"', '"vscode"', '"zed"', '"antigravity"', '"neovim"',
+            '"zen-browser"', '"helium"', '"librewolf"', '"brave"', '"edge"',
+            '"Ubuntu"', '"FedoraLinux"', '"archlinux"', '"NixOS-WSL"', '"pengwin"'
+        )) {
+        Assert-Text $uiIntentSchema ([regex]::Escape($expectedEnumToken)) "UI intent schema must define enum token $expectedEnumToken."
+    }
+    $script:UiIntentSchema = $uiIntentSchema
+    $validUiIntent = [ordered]@{
+        Profile              = 'WinMint'
+        KeepEdge             = $false
+        KeepGaming           = $false
+        KeepCopilot          = $false
+        ISOPath              = 'C:\iso\win.iso'
+        Architecture         = 'arm64'
+        ComputerName         = 'WinMint'
+        AccountName          = 'dev'
+        AccountMode          = 'Local'
+        TargetDevice         = 'DifferentPC'
+        FormFactor           = 'Auto'
+        Edition              = 'Host'
+        DriverSource         = 'None'
+        DriverPath           = ''
+        InstallWindhawk      = $true
+        InstallYasb          = $true
+        InstallKomorebi      = $true
+        InstallNilesoft      = $false
+        Editors              = @('cursor', 'neovim')
+        Browsers             = @('brave', 'edge')
+        Wsl2Distros          = @('Ubuntu', 'FedoraLinux')
+        PrivLocation         = $true
+        TweakHardwareBypass  = $false
+        TweakDmaInterop      = $true
+    }
+    Assert-UiIntentSchemaResult -Fixture $validUiIntent -Expected $true -Message 'UI intent schema should accept the bridge fixture.'
+    $unknownKeyIntent = Copy-WinMintUiIntentFixture -Fixture $validUiIntent
+    $unknownKeyIntent['Unexpected'] = $true
+    Assert-UiIntentSchemaResult -Fixture $unknownKeyIntent -Expected $false -Message 'UI intent schema should reject unknown keys.'
+    $invalidEditorIntent = Copy-WinMintUiIntentFixture -Fixture $validUiIntent
+    $invalidEditorIntent['Editors'] = @('cursor', 'unknown-editor')
+    Assert-UiIntentSchemaResult -Fixture $invalidEditorIntent -Expected $false -Message 'UI intent schema should reject unknown editor ids.'
+    $invalidBrowserIntent = Copy-WinMintUiIntentFixture -Fixture $validUiIntent
+    $invalidBrowserIntent['Browsers'] = @('unknown-browser')
+    Assert-UiIntentSchemaResult -Fixture $invalidBrowserIntent -Expected $false -Message 'UI intent schema should reject unknown browser ids.'
+    $invalidWslIntent = Copy-WinMintUiIntentFixture -Fixture $validUiIntent
+    $invalidWslIntent['Wsl2Distros'] = @('Fedora')
+    Assert-UiIntentSchemaResult -Fixture $invalidWslIntent -Expected $false -Message 'UI intent schema should reject non-profile WSL distro tokens.'
+    $invalidFormFactorIntent = Copy-WinMintUiIntentFixture -Fixture $validUiIntent
+    $invalidFormFactorIntent['FormFactor'] = 'Tablet'
+    Assert-UiIntentSchemaResult -Fixture $invalidFormFactorIntent -Expected $false -Message 'UI intent schema should reject unsupported form factors.'
     Assert-Text $pipelineConsole 'InstallNilesoft' 'Interactive console build path must carry the Nilesoft shell option.'
     Assert-Text $pipelineConsole 'Wsl2Distros' 'Interactive console build path must carry WSL distro selections.'
     Assert-Text $reviewConsole 'InstallNilesoft' 'Build summary must surface Nilesoft.'
@@ -75,7 +228,8 @@ if ($failures.Count -eq 0) {
     Assert-Text $terminalSettings '"bellStyle"\s*:\s*"none"' 'Windows Terminal audible bell should be disabled by default.'
     Assert-Text $terminalSettings '"centerOnLaunch"\s*:\s*true' 'Windows Terminal should be centered on launch by default.'
     $editorsModule = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\Editors.ps1') -Raw
-    Assert-Text $editorsModule 'Install-AgentTool -Tool \$tool -State \$State' 'Editors should install through their package-manager owner from packages.json.'
+    Assert-Text $packageManagerModule 'Install-AgentTool -Tool \$tool -State \$State' 'Editor/browser selections should install through their package-manager owner from packages.json.'
+    Assert-Text $editorsModule 'Invoke-WinMintAgentManifestToolSelection' 'Editors should delegate package selection to the package manager module.'
     if ($editorsModule -match 'nvim-win-arm64\.zip|Neovim\.Neovim|nvim-qt\.exe') {
         Add-Failure 'Neovim must no longer use the old GitHub ZIP/winget special case.'
     }

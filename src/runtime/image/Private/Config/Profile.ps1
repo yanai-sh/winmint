@@ -250,37 +250,14 @@ function Get-WinMintProfileBrowserIds {
 function Get-WinMintProfileWslDistroIds {
     param([object]$Settings)
 
-    function Convert-WinMintWslDistroSelection {
-        param([string]$Value)
-
-        switch -Regex (([string]$Value).Trim()) {
-            '^(Ubuntu|Ubuntu-\d+\.\d+)$' { 'Ubuntu'; break }
-            '^(Fedora|FedoraLinux|FedoraLinux-\d+)$' { 'FedoraLinux'; break }
-            '^(Arch(?: Linux)?|archlinux)$' { 'archlinux'; break }
-            '^(NixOS-WSL|NixOS|nixos-wsl)$' { 'NixOS-WSL'; break }
-            '^(Pengwin|pengwin)$' { 'pengwin'; break }
-            default { ([string]$Value).Trim() }
-        }
-    }
-
     $wslDistros = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $Settings 'Wsl2Distros' @()))
     if ($wslDistros.Count -gt 0 -or (Test-WinMintProfileSettingExists -Settings $Settings -Name 'Wsl2Distros')) {
-        return @(
-            $wslDistros |
-                ForEach-Object { Convert-WinMintWslDistroSelection ([string]$_) } |
-                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                Select-Object -Unique
-        )
+        return @((Normalize-WinMintWslSelection -Values $wslDistros).ProfileTokens)
     }
 
     $legacyWslDistro = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $Settings 'Wsl2Distro' 'None'))
     if ($legacyWslDistro.Count -gt 0 -or (Test-WinMintProfileSettingExists -Settings $Settings -Name 'Wsl2Distro')) {
-        return @(
-            $legacyWslDistro |
-                ForEach-Object { Convert-WinMintWslDistroSelection ([string]$_) } |
-                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                Select-Object -Unique
-        )
+        return @((Normalize-WinMintWslSelection -Values $legacyWslDistro).ProfileTokens)
     }
 
     @()
@@ -513,7 +490,7 @@ function Get-WinMintDefaultUpdatePayloadRoot {
 function Resolve-WinMintProfileUpdateConfig {
     param([object]$Settings)
 
-    $mode = [string](Get-WinMintProfileSetting $Settings 'UpdateImage' (Get-WinMintProfileSetting $Settings 'UpdateMode' 'Stable25H2'))
+    $mode = [string](Get-WinMintProfileSetting $Settings 'UpdateImage' (Get-WinMintProfileSetting $Settings 'UpdateMode' 'None'))
     switch -Regex ($mode) {
         '^(None|Off|Disabled)$' { $mode = 'None'; break }
         '^(Stable25H2|LatestStable25H2|25H2)$' { $mode = 'Stable25H2'; break }
@@ -524,7 +501,7 @@ function Resolve-WinMintProfileUpdateConfig {
     if ($provisionedApps -notin @('On', 'Off')) {
         throw "UpdateProvisionedApps must be On or Off."
     }
-    $payloadRoot = [string](Get-WinMintProfileSetting $Settings 'UpdatePayloadRoot' (Get-WinMintDefaultUpdatePayloadRoot))
+    $payloadRoot = [string](Get-WinMintProfileSetting $Settings 'UpdatePayloadRoot' '')
     if ($mode -eq 'Stable25H2' -and [string]::IsNullOrWhiteSpace($payloadRoot)) {
         $payloadRoot = Get-WinMintDefaultUpdatePayloadRoot
     }

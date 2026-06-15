@@ -18,6 +18,7 @@
   ],
   "exclude": [
     "cloudflare",
+    "docs/codebase",
     "tests",
     "tools",
     "node_modules",

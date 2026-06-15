@@ -26,31 +26,8 @@ function Invoke-WinMintAgentEditorBootstrap {
         }
     }
 
-    $failedEditors = [System.Collections.Generic.List[string]]::new()
-    foreach ($editorId in $editors) {
-        $property = $manifest.tools.PSObject.Properties[$editorId]
-        $tool = if ($property) { $property.Value } else { $null }
-        if (-not $tool) {
-            $State.steps["editor:$editorId"] = @{
-                status = 'failed'
-                updatedAt = (Get-Date -Format o)
-                error = "Unknown editor id: $editorId"
-            }
-            Write-AgentLog "Unknown editor id in profile: $editorId"
-            Save-AgentState -State $State
-            $failedEditors.Add($editorId) | Out-Null
-            continue
-        }
-
-        Install-AgentTool -Tool $tool -State $State
-        Save-AgentState -State $State
-
-        $key = "tool:$($tool.id)"
-        $status = if ($State.steps.ContainsKey($key)) { [string]$State.steps[$key].status } else { '' }
-        if ($status -ne 'ok' -and $status -ne 'skipped') {
-            $failedEditors.Add($editorId) | Out-Null
-        }
-    }
+    $selection = Invoke-WinMintAgentManifestToolSelection -SelectionId 'editors' -SelectedIds $editors -State $State -StateKeyPrefix 'editor'
+    $failedEditors = @($selection.FailedIds)
 
     if ($failedEditors.Count -gt 0) {
         return [pscustomobject]@{

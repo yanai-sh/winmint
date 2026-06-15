@@ -52,6 +52,19 @@ function Write-AgentEvent {
 function Write-AgentConsoleLine { param([string]$Level, [string]$Message) [void]$Level; [void]$Message }
 
 . (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1')
+. (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1')
+
+function Install-AgentTool {
+    param($Tool, [hashtable]$State)
+
+    $key = "tool:$($Tool.id)"
+    $State.steps[$key] = @{
+        status = 'ok'
+        updatedAt = (Get-Date -Format o)
+        source = [string]$Tool.source
+    }
+    Save-AgentState -State $State
+}
 
 $nativePreferredTool = [pscustomobject]@{
     architectures = @('amd64', 'arm64')
@@ -101,14 +114,32 @@ function Invoke-TestLiveAuditFindingsModule {
     }
 }
 
+function Invoke-TestPostStepHook {
+    param([object]$AgentProfile, [hashtable]$State)
+    [void]$AgentProfile
+    [void]$State
+    $script:postStepHookCalls++
+}
+
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-agent-state-test-' + [Guid]::NewGuid().ToString('n'))
 try {
     $null = New-Item -ItemType Directory -Path $tempRoot -Force
     $script:statePath = Join-Path $tempRoot 'state.json'
     $script:agentProfile = [pscustomobject]@{
         targetArchitecture = 'arm64'
+        browsers = @('firefox')
+        editors = @('neovim')
         modules = [pscustomobject]@{
             packageManagers = [pscustomobject]@{ enabled = $true }
+            wsl = [pscustomobject]@{ enabled = $true }
+            git = [pscustomobject]@{ enabled = $true }
+            dotfiles = [pscustomobject]@{ enabled = $true }
+            flowEverything = [pscustomobject]@{ enabled = $true }
+            raycast = [pscustomobject]@{ enabled = $true }
+            phoneLink = [pscustomobject]@{ enabled = $true }
+            shell = [pscustomobject]@{ enabled = $true }
+            windhawk = [pscustomobject]@{ enabled = $true }
+            liveInstallAudit = [pscustomobject]@{ enabled = $true }
         }
     }
     $script:AgentTargetArchitecture = 'arm64'
@@ -118,6 +149,54 @@ try {
         steps = @{}
     }
 
+    $runtimePlan = @(New-WinMintAgentRuntimeStepPlan)
+    $expectedStepOrder = @(
+        'profiles',
+        'package-managers',
+        'wsl',
+        'git',
+        'dotfiles',
+        'flow-everything',
+        'raycast',
+        'phone-link',
+        'tiling-desktop',
+        'windhawk',
+        'browsers',
+        'editors',
+        'liveInstallAudit'
+    )
+    Assert-Equal (@($runtimePlan | Sort-Object Order | ForEach-Object { $_.StepName }) -join ',') ($expectedStepOrder -join ',') 'Agent runtime step plan should preserve module order.'
+    $profilesStep = $runtimePlan | Where-Object { $_.StepName -eq 'profiles' } | Select-Object -First 1
+    $editorsStep = $runtimePlan | Where-Object { $_.StepName -eq 'editors' } | Select-Object -First 1
+    $auditStep = $runtimePlan | Where-Object { $_.StepName -eq 'liveInstallAudit' } | Select-Object -First 1
+    Assert-Equal $profilesStep.Id 'module:profiles' 'Agent runtime step ids should match state keys.'
+    Assert-Equal $profilesStep.FailurePolicy 'blocking' 'Profile bootstrap should be the blocking FirstLogon step.'
+    Assert-Equal $editorsStep.PostStepHook 'Set-WinMintAgentNeovimEnvironment' 'Editors should declare the Neovim environment post-step hook.'
+    Assert-Equal $auditStep.Phase 'finalValidation' 'Live install audit should run during final validation.'
+    Assert-Equal $auditStep.FailurePolicy 'advisory' 'Live install audit should remain advisory.'
+    Assert-True ([bool]$runtimePlan[1].Enabled) 'Enabled module config should be reflected in the runtime plan.'
+
+    $script:manifest = [pscustomobject]@{
+        tools = [pscustomobject]@{
+            firefox = [pscustomobject]@{
+                id = 'Mozilla.Firefox'
+                source = 'winget'
+            }
+            neovim = [pscustomobject]@{
+                id = 'neovim'
+                source = 'scoop'
+            }
+        }
+    }
+    $selection = Invoke-WinMintAgentManifestToolSelection -SelectionId 'browsers' -SelectedIds @('edge', 'firefox', 'missing-browser') -State $State -StateKeyPrefix 'browser' -ExcludedIds @('edge')
+    Assert-Equal (@($selection.SelectedIds) -join ',') 'edge,firefox,missing-browser' 'Package selection should preserve selected ids.'
+    Assert-Equal (@($selection.InstallIds) -join ',') 'firefox,missing-browser' 'Package selection should omit excluded ids from installs.'
+    Assert-Equal (@($selection.ExcludedIds) -join ',') 'edge' 'Package selection should surface excluded ids.'
+    Assert-Equal (@($selection.UnknownIds) -join ',') 'missing-browser' 'Package selection should surface unknown ids.'
+    Assert-Equal $selection.ToolResults[0].Source 'winget' 'Package selection should expose package source ownership.'
+    Assert-Equal $selection.ToolResults[0].StateKey 'tool:Mozilla.Firefox' 'Package selection should expose tool state key naming.'
+    Assert-Equal $State.steps['browser:missing-browser'].status 'failed' 'Unknown selected package ids should write the domain state key.'
+
     Invoke-AgentProfileModule -StepName 'disabled' -FunctionName 'Invoke-TestAgentOkModule' -Enabled $false
     Assert-Equal $State.steps['module:disabled'].status 'skipped' 'Disabled modules should persist skipped status.'
     Assert-True (Test-Path -LiteralPath $statePath) 'Save-AgentState should create state.json for skipped modules.'
@@ -126,6 +205,12 @@ try {
     Assert-Equal $State.steps['module:ok-step'].status 'ok' 'Successful modules should persist ok status.'
     Assert-Equal $State.steps['module:ok-step'].attempts 1 'Successful modules should record first attempt.'
     Assert-Equal $State.steps['module:ok-step'].result.Marker 'ok-result' 'Successful modules should persist result payload.'
+
+    $script:postStepHookCalls = 0
+    Invoke-AgentProfileModule -StepName 'hook-step' -FunctionName 'Invoke-TestAgentOkModule' -Enabled $true -PostStepHook 'Invoke-TestPostStepHook'
+    Assert-Equal $script:postStepHookCalls 1 'Successful modules should invoke their post-step hook.'
+    Invoke-AgentProfileModule -StepName 'hook-step' -FunctionName 'Invoke-TestAgentFailedModule' -Enabled $true -PostStepHook 'Invoke-TestPostStepHook'
+    Assert-Equal $script:postStepHookCalls 2 'Idempotently skipped completed modules should still invoke their post-step hook.'
 
     Invoke-AgentProfileModule -StepName 'ok-step' -FunctionName 'Invoke-TestAgentFailedModule' -Enabled $true
     Assert-Equal $State.steps['module:ok-step'].status 'ok' 'Completed modules should be idempotently skipped without Force.'

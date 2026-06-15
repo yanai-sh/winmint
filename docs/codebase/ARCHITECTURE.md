@@ -1,68 +1,73 @@
 # Architecture
 
-## 1) Architectural Style
+Snapshot note: this document reflects the current development state of the repo. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
-- Primary style: layered runtime pipeline. UI, profile/config, image servicing, Windows Setup payloads, FirstLogon, and reporting each have their own boundary.
-- Why this classification: the documented flow is `Bootstrap -> UI/CLI -> Engine -> Windows Setup -> FirstLogon Agent`; the engine loads modules in a fixed dot-source order; setup and first-logon scripts are staged artifacts rather than GUI code.
+## Core Sections (Required)
+
+### 1) Architectural Style
+
+- Primary style: layered, contract-first build pipeline.
+- Why this classification: repository docs define the flow as `Bootstrap -> UI/CLI -> Engine -> Windows Setup -> FirstLogon Agent`; source files keep these layers in separate entry points and directories; JSON schemas define the contracts between layers.
 - Primary constraints:
-  - Windows-native PowerShell execution for servicing and setup.
-  - Profile-backed operation: `BuildProfile.json` is the engine input contract.
-  - No bundled golden Windows image; source ISO selected by the user is serviced.
+  - Windows-native PowerShell owns the headless backend and real product work: profile normalization, DISM/WIM servicing, registry hives, Windows Setup, FirstLogon, reports, release tooling, validation, elevation, and host tooling.
+  - GPUI/Rust is a frontend layer for intent, previews, and bridge calls into the headless PowerShell engine; it must not own servicing or setup orchestration.
+  - `BuildProfile.json`, `BuildManifest.json`, and `state.json` are first-class contracts with schemas.
+  - Public behavior is profile-backed and subtractive by default, with keep flags instead of a broad debloat option matrix.
 
-## 2) System Flow
+### 2) System Flow
 
 ```text
-WinMint-GUI.ps1 or WinMint-CLI.ps1 -> BuildProfile.json -> src/runtime/image engine -> staged Windows Setup scripts -> FirstLogon agent -> reports/manifests/state
+winmint.ps1 / WinMint-GUI.ps1 / WinMint-CLI.ps1 -> profile authoring/validation -> Start-WinMintBuild -> Invoke-WinMintIsoPipeline -> staged Windows Setup -> Start-WinMintAgent.ps1 -> reports/state
 ```
 
-1. The GUI writes flat UI intent to `output/gui/ui-intent.json`; the UI bridge converts it to the profile contract with `New-WinMintBuildProfileFromSettings`.
-2. The CLI `new` verb also authors a schema v3 build profile; the `build` and `validate` verbs consume a profile with run-specific overrides only.
-3. `src/runtime/image/WinMint.ps1` dot-sources core, profile, engine, image, reporting, pipeline, headless, and CLI modules before `Initialize-WinMintEngine` records repository state.
-4. `Start-WinMintBuild` validates and normalizes the profile into a build config, writes a sanitized profile artifact, creates reports, initializes a manifest, and calls `Invoke-WinMintIsoPipeline`.
-5. The ISO pipeline stages the source ISO, converts ESD to WIM if needed, validates DISM and architecture metadata, stages unattend/setup/agent payloads, services WIM images, assembles the ISO, and optionally writes USB media.
-6. During install, `SetupComplete.ps1` performs machine-phase cleanup and registers `FirstLogon.ps1`; `FirstLogon.ps1` launches `Start-WinMintAgent.ps1`, whose modules update `%LOCALAPPDATA%\WinMint\state.json`.
+1. `winmint.ps1` can download and verify a release bundle, then launch GUI or headless mode; local runs can start `WinMint-GUI.ps1` or `WinMint-CLI.ps1` directly.
+2. The Rust GUI writes `output/gui/ui-intent.json` and calls PowerShell bridge scripts; the CLI `new` verb builds a profile from flags.
+3. Profile creation and normalization flow through `New-WinMintBuildProfile`, `Assert-WinMintBuildProfile`, and schemas before the engine runs.
+4. `Start-WinMintBuild` creates build config, initializes the manifest, preflights prerequisites, and calls the ISO pipeline.
+5. The pipeline stages the ISO, selects install images, stamps autounattend/setup/agent profiles, services mounted WIM images, assembles the output ISO, and optionally writes USB media.
+6. During Windows install and first logon, setup scripts run machine-phase work and `Start-WinMintAgent.ps1` executes live-user modules while writing `%LOCALAPPDATA%\WinMint\state.json` and command/event logs.
 
-## 3) Layer/Module Responsibilities
+### 3) Layer/Module Responsibilities
 
 | Layer or module | Owns | Must not own | Evidence |
 |-----------------|------|--------------|----------|
-| Bootstrap | GitHub release lookup, zip/hash download, local install marker, GUI/headless launch. | Image servicing and profile authoring. | `winmint.ps1`, `docs/Distribution.md` |
-| GUI | Source selection, wizard state, visual choices, UI intent JSON. | DISM/WIM servicing. | `apps/gui/src/main.rs`, `apps/gui/README.md` |
-| UI bridge | ISO metadata probe, UI intent to build profile conversion, build-from-profile bridge. | Persistent product defaults outside profile helpers. | `tools/ui-bridge/Get-UiIsoMetadata.ps1`, `tools/ui-bridge/New-UiBuildProfile.ps1` |
-| CLI | Verb dispatch and command surfaces for `new`, `build`, `validate`, `list`, `clean`. | Parallel flat flag-built build mode. | `WinMint-CLI.ps1`, `src/runtime/image/Cli.ps1` |
-| Profile | Schema v3 generation/validation, defaults, keep flags, locale, disk, driver, desktop, WSL, package selections. | Mounting images or installing packages. | `src/runtime/image/Private/Config/Profile.ps1`, `schemas/winmint.buildprofile.schema.json` |
-| Engine/pipeline | Source ISO staging, DISM/WIM servicing, drivers, AppX/capability removals, assets, output ISO, USB media. | GUI controls and live-user app installs. | `src/runtime/image/Engine.ps1`, `src/runtime/image/Private/Pipeline.ps1` |
-| Setup scripts | SYSTEM/setup-phase cleanup, Windows Update restoration, Edge/OneDrive/AppX/AI cleanup, FirstLogon registration. | User preference prompts. | `src/runtime/setup/SetupComplete.ps1`, `src/runtime/setup/SetupComplete/*.ps1` |
-| FirstLogon agent | Package managers, WSL distros, editors, launchers, shell layers, live audit, retry state. | Offline image servicing and disk partitioning. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Modules/` |
-| Reports | Build report, manifest, dry-run artifacts, recovery bundle, winget handoff. | Deciding profile behavior. | `src/runtime/image/Reports.ps1` |
+| Bootstrap | Release lookup, asset download, SHA256 verification, install under `%LOCALAPPDATA%\WinMint`, launch mode. | Profile authoring or WIM servicing. | `winmint.ps1`, `docs/Distribution.md` |
+| GUI | Source selection, wizard state, previews, intent JSON, PowerShell bridge calls into the headless engine. | DISM/WIM servicing, setup orchestration, live-user package installs. | `apps/gui/src/main.rs`, `apps/gui/src/bridge.rs`, `tools/ui-bridge/New-UiBuildProfile.ps1` |
+| CLI verbs | `build`, `new`, `validate`, `list`, `clean`, argument binding, elevation gate. | Parallel flat build-flag execution for `build`. | `WinMint-CLI.ps1`, `src/runtime/image/Cli.ps1` |
+| Profile/config | Profile defaults, keep flags, edition/region/update normalization, validation. | Mounting images or installing packages. | `src/runtime/image/Private/Config/Profile.ps1`, `schemas/winmint.buildprofile.schema.json` |
+| Engine/pipeline | Build config, prerequisites, ISO staging, WIM servicing, offline assets, drivers, final ISO/USB. | GUI state and live-user package installs. | `src/runtime/image/Engine.ps1`, `src/runtime/image/Private/Pipeline.ps1` |
+| Reporting | Build manifest, dry-run artifacts, tweak audit, recovery bundle, winget handoff. | Primary selection or servicing policy. | `src/runtime/image/Reports.ps1`, `schemas/winmint.buildmanifest.schema.json` |
+| Setup scripts | `Specialize`, `SetupComplete`, default-user, first-logon launch/fallback, machine hygiene. | Offline image servicing. | `src/runtime/setup/SetupComplete.ps1`, `src/runtime/setup/FirstLogon.Runtime.ps1`, `src/runtime/setup/SetupComplete/` |
+| FirstLogon agent | Live-user module orchestration, idempotent step state, command logs, package installs. | Destructive disk operations or WIM servicing. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Agent.Runtime.ps1`, `src/runtime/firstlogon/Modules/` |
 
-## 4) Reused Patterns
+### 4) Reused Patterns
 
 | Pattern | Where found | Why it exists |
 |---------|-------------|---------------|
-| Fixed dot-source load order | `src/runtime/image/WinMint.ps1`, `src/runtime/firstlogon/Start-WinMintAgent.ps1` | Keeps script-scoped functions and state available without dynamic imports. |
-| Profile as contract | `src/runtime/image/Cli.ps1`, `src/runtime/image/Private/Config/Profile.ps1`, `tools/ui-bridge/New-UiBuildProfile.ps1` | Keeps UI/CLI intent separate from engine execution. |
-| JSON contract validation | `schemas/*.json`, `tools/validation/Modules/Schemas.ps1`, `tests/contract/Test-ProfileInvariants.ps1` | Guards profile, manifest, and agent state shapes. |
-| Build manifest sidecar | `src/runtime/image/Reports.ps1` | Records what the build did without scraping logs. |
-| Step state machine | `src/runtime/firstlogon/Agent.Runtime.ps1`, `schemas/winmint.agentstate.schema.json` | Enables retry/resume and records `running`, `ok`, `failed`, `skipped`, `retryable`, `needsReboot`. |
-| Catalog-driven packages | `config/packages.json`, `src/runtime/firstlogon/Agent.Runtime.ps1` | Keeps winget/msstore/Scoop package metadata and architecture handling in one catalog. |
-| Per-concern setup modules | `src/runtime/setup/SetupComplete.ps1`, `src/runtime/setup/SetupComplete/*.ps1` | Splits machine-phase setup work while sharing setup profile context. |
+| Ordered dot-source composition | `src/runtime/image/WinMint.ps1`, `tests/contract/Test-ProfileInvariants.ps1` | Makes internal PowerShell functions available without packaging modules. |
+| Contract normalization before side effects | `src/runtime/image/Private/Config/Profile.ps1`, `tools/ui-bridge/New-UiBuildProfile.ps1`, `src/runtime/image/Engine.ps1` | Converts UI/CLI settings into a stable `BuildProfile.json` before build execution. |
+| Idempotent step journal/state | `src/runtime/firstlogon/Agent.Runtime.ps1`, `schemas/winmint.agentstate.schema.json` | Allows first-logon retry/resume and prevents optional module failures from blocking all setup. |
+| Manifest projection | `src/runtime/image/Reports.ps1`, `schemas/winmint.buildmanifest.schema.json` | Explains build outputs without scraping logs. |
+| Catalog-driven package ownership | `config/packages.json`, `src/runtime/firstlogon/Agent.Runtime.ps1`, `src/runtime/image/Private/Image/Unattend.ps1` | Keeps package source decisions centralized and testable. |
+| Source-controlled registry tweak modules | `src/runtime/image/Private/Image/Tweaks/TweakRegistry.ps1`, `src/runtime/image/Private/Image/Tweaks/*.ps1`, `config/tweaks.json` | Keeps executable tweak logic and public metadata organized by tweak ID. |
 
-## 5) Known Architectural Risks
+### 5) Known Architectural Risks
 
-- Several orchestration files are large enough to slow reviews: local line-count output shows `src/runtime/setup/FirstLogon.Support.ps1` at 1451 lines, `src/runtime/image/Reports.ps1` at 1153 lines, `src/runtime/image/Private/Image/Staging.ps1` at 819 lines, `src/runtime/image/Private/Config/Profile.ps1` at 810 lines, `src/runtime/firstlogon/Agent.Runtime.ps1` at 681 lines, and `apps/gui/src/main.rs` at 632 lines.
-- An ignored generated Rust target directory exists at `crates/winmintctl/target`, but `Cargo.toml` lists only `apps/gui` and `crates/winmint-core` as workspace members and no `crates/winmintctl/Cargo.toml` exists. This is a generated-artifact cleanup/intent question, not an active source module.
-- The Cloudflare `/cli` wrapper exposes profile-backed bootstrap/headless parameters; future changes should not reintroduce flat configuration flags because `AGENTS.md` and `src/runtime/image/Cli.ps1` make `new` the only configuration verb.
+- Contract duplication risk: UI intent keys exist in Rust, a JSON schema, PowerShell bridge validation, and contract tests; changes must update all of those together.
+- Large mixed-responsibility files exist in core paths, including `src/runtime/setup/FirstLogon.Support.ps1`, `src/runtime/image/Reports.ps1`, `src/runtime/image/Private/Config/Profile.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, and `apps/gui/src/main.rs`.
+- UI/backend boundary drift remains possible because Rust/GPUI owns frontend state while PowerShell owns profile generation and build execution; keep bridge contracts and tests updated together.
+- `docs/codebase/` is intentionally a development snapshot and is excluded from release bundles; contributors should not treat it as authoritative over `README.md`, `AGENTS.md`, schemas, or executable tests.
 
-## 6) Evidence
+### 6) Evidence
 
 - `AGENTS.md`
 - `README.md`
+- `docs/Project-Structure.md`
 - `WinMint-CLI.ps1`
+- `WinMint-GUI.ps1`
+- `winmint.ps1`
 - `src/runtime/image/WinMint.ps1`
-- `src/runtime/image/Cli.ps1`
 - `src/runtime/image/Engine.ps1`
 - `src/runtime/image/Private/Pipeline.ps1`
-- `src/runtime/setup/SetupComplete.ps1`
-- `src/runtime/firstlogon/Start-WinMintAgent.ps1`
 - `src/runtime/firstlogon/Agent.Runtime.ps1`
+- `config/release-manifest.json`

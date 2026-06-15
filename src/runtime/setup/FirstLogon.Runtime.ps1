@@ -7,15 +7,17 @@ function Invoke-WinMintFirstLogonSetupPhase {
         [string]$AgentMode = 'Auto'
     )
 
-    # Prefer PowerShell 7 (the agent + modern tooling expect it). The not-elevated path above
-    # already re-launches under pwsh 7 (Resolve-WinMintPowerShellHost). If we are elevated but
-    # under Windows PowerShell 5.1, re-launch IN-PLACE under pwsh 7 - Start-Process inherits the
-    # current (already elevated) token. A flag prevents a re-launch loop, and the International
-    # cmdlets the DMA restore needs are available under pwsh 7.
+    # PowerShell 7 is bundled into the image and is required for WinMint setup work. If this
+    # elevated instance is still under Windows PowerShell 5.1, re-launch in-place under pwsh 7;
+    # Start-Process inherits the current elevated token. A flag prevents a re-launch loop.
     if ($script:WinMintElevated -and $PSVersionTable.PSVersion.Major -lt 7) {
         $pwsh7 = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
         $p7Flag = Join-Path $logDir 'FirstLogon_pwsh7.flag'
-        if ((Test-Path -LiteralPath $pwsh7) -and -not (Test-Path -LiteralPath $p7Flag)) {
+        if (-not (Test-Path -LiteralPath $pwsh7 -PathType Leaf)) {
+            Write-WinMintFirstLogonError "PowerShell 7 is required for FirstLogon but was not found: $pwsh7"
+            return 1
+        }
+        if (-not (Test-Path -LiteralPath $p7Flag)) {
             try {
                 Set-Content -LiteralPath $p7Flag -Value (Get-Date -Format o) -Encoding ASCII
                 "$(Get-Date -Format 'o') Re-launching FirstLogon under PowerShell 7 ($pwsh7); the 5.1 instance waits for it." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
@@ -24,12 +26,18 @@ function Invoke-WinMintFirstLogonSetupPhase {
                 return ([int]$p7.ExitCode)
             }
             catch {
-                Write-WinMintFirstLogonError "pwsh 7 re-launch failed: $_; continuing under Windows PowerShell $($PSVersionTable.PSVersion)."
+                Write-WinMintFirstLogonError "PowerShell 7 re-launch failed: $_"
                 try { Start-Transcript -Path (Join-Path $logDir 'FirstLogon_transcript.log') -Append -ErrorAction SilentlyContinue | Out-Null } catch { }
+                return 1
             }
         }
     }
     "$(Get-Date -Format 'o') FirstLogon host: PowerShell $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+    $transactionPlan = @()
+    if (Get-Command New-WinMintFirstLogonTransactionPlan -ErrorAction SilentlyContinue) {
+        $transactionPlan = @(New-WinMintFirstLogonTransactionPlan -AgentMode $AgentMode)
+    }
+    [void]$transactionPlan
     try { Set-WinMintFirstLogonWindowsTerminalDefault } catch { Write-WinMintFirstLogonError "Windows Terminal default-host setup failed: $_" }
 
     $state = New-WinMintFirstLogonRunState
@@ -83,53 +91,9 @@ function Invoke-WinMintFirstLogonSetupPhase {
     try { Invoke-WinMintFirstLogonAppxCleanup } catch { Write-WinMintFirstLogonError "Live AppX cleanup failed: $_" }
     try { Invoke-WinMintFirstLogonOneDriveRemoval } catch { Write-WinMintFirstLogonError "OneDrive user cleanup failed: $_" }
 
-    $agentExitCode = 0
     $agentRoot = Join-Path $payloadDir 'WinMintAgent'
     $agent     = Join-Path $agentRoot 'Start-WinMintAgent.ps1'
-    if (Test-Path -LiteralPath $agent) {
-        try {
-            $exe = Resolve-WinMintPowerShellHost
-            # The agent is the source of truth and does all first-logon work. Default is a
-            # visible console so the user can see progress while the automation runs.
-            $mode = Resolve-WinMintFirstLogonAgentMode -RequestedMode $AgentMode
-            "$(Get-Date -Format 'o') Launching WinMintAgent in $mode mode" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
-            if ($mode -eq 'Console') {
-                "$(Get-Date -Format 'o') Waiting for Windows Terminal before launching WinMintAgent." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
-                $terminal = Wait-WinMintWindowsTerminalHost -TimeoutSeconds 120
-                if (-not [string]::IsNullOrWhiteSpace($terminal)) {
-                    $agentExitCode = Start-WinMintFirstLogonAgentInTerminal `
-                        -TerminalPath $terminal `
-                        -PowerShellPath $exe `
-                        -AgentPath $agent
-                }
-                else {
-                    Write-WinMintFirstLogonError 'Windows Terminal was not available; falling back to a visible PowerShell console for WinMintAgent.'
-                    $agentProcess = Start-Process -FilePath $exe -ArgumentList @(
-                        '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-                        '-File', "`"$agent`"", '-InteractiveFirstLogon'
-                    ) -WindowStyle Normal -Wait -PassThru
-                    $agentExitCode = [int]$agentProcess.ExitCode
-                }
-            }
-            else {
-                # Headless mode stays available for automation, but it is opt-in now.
-                $agentProcess = Start-Process -FilePath $exe -ArgumentList @(
-                    '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-                    '-File', "`"$agent`""
-                ) -WindowStyle Hidden -Wait -PassThru
-                $agentExitCode = [int]$agentProcess.ExitCode
-            }
-            if ($agentExitCode -ne 0) { Write-WinMintFirstLogonError "WinMintAgent exited with code $agentExitCode" }
-        }
-        catch {
-            $agentExitCode = 1
-            Write-WinMintFirstLogonError "WinMintAgent launch failed: $_"
-        }
-    }
-    else {
-        $agentExitCode = 1
-        Write-WinMintFirstLogonError "WinMintAgent script was not found: $agent"
-    }
+    $agentExitCode = Invoke-WinMintFirstLogonAgentLaunch -AgentMode $AgentMode -AgentRoot $agentRoot -AgentPath $agent
 
     $state['agentExitCode'] = $agentExitCode
     $state['completedAt'] = Get-Date -Format o

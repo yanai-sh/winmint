@@ -96,11 +96,7 @@ function Get-WinMintFirstLogonNestedProfileValue {
 function Resolve-WinMintPowerShellHost {
     $pwsh = "$env:ProgramFiles\PowerShell\7\pwsh.exe"
     if (Test-Path -LiteralPath $pwsh) { return $pwsh }
-    $sysnative = Join-Path $env:WINDIR 'Sysnative\WindowsPowerShell\v1.0\powershell.exe'
-    if (Test-Path -LiteralPath $sysnative) { return $sysnative }
-    $system32 = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    if (Test-Path -LiteralPath $system32) { return $system32 }
-    return 'powershell.exe'
+    throw "PowerShell 7 is required for WinMint FirstLogon but was not found: $pwsh"
 }
 
 function Resolve-WinMintWindowsTerminalHost {

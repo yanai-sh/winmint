@@ -50,7 +50,8 @@ default, Windows Terminal opens it as the default profile with `-NoLogo`, uses
 Cascadia Code NF with the One Half Dark color scheme, disables the audible bell,
 and centers on launch. FirstLogon installs Scoop using the official installer
 and installs MinGit plus Starship through Scoop as Windows-host developer shell
-plumbing. XDG-aware tools get Linux-like defaults: config, data,
+plumbing. Starship is configured with the `nerd-font-symbols` preset by default.
+XDG-aware tools get Linux-like defaults: config, data,
 state, and cache live under dotfolders in the user profile, and runtime data
 uses a temp-backed per-user directory. WinMint also creates `~/bin` and
 `~/.local/bin`, adds both to the user `PATH`, keeps clipboard history local-on,
@@ -86,8 +87,8 @@ consumes the profile.
 | Xbox / Game Bar | Removed | `-KeepGaming` keeps gaming apps and performance tweaks |
 | File Explorer | Shows extensions/hidden files, keeps Home, hides Gallery | baseline |
 | Shell layers | Off | `-DesktopUI`, or `-Install windhawk,yasb,komorebi` |
-| Dev tweaks, OpenSSH, WSL2, Scoop, MinGit, Starship, fonts/cursors | Always on | baseline |
-| Offline image updates | Stable 25H2 B-release payloads | `-UpdateImage None` opts out; `-UpdatePayloadRoot <dir>` overrides the cache root |
+| Dev tweaks, OpenSSH, WSL2, Scoop, MinGit, Starship with `nerd-font-symbols`, fonts/cursors | Always on | baseline |
+| Offline image updates | Disabled by default | `-UpdateImage Stable25H2` opts in; `-UpdatePayloadRoot <dir>` overrides the cache root |
 
 On DMA builds, Windows exposes Edge as an uninstallable normal application.
 Without `-KeepEdge`, WinMint requests Edge removal and first attempts the
@@ -98,36 +99,48 @@ winget, and Windows Update are preserved.
 
 ### Stable 25H2 Pre-Update Payloads
 
-WinMint pre-services the user-provided Microsoft ISO with explicit offline
-payloads so first logon has less left to update. This is profile-backed and can
-be disabled with `-UpdateImage None`:
+WinMint can pre-service the user-provided Microsoft ISO with explicit offline
+payloads so first logon has less left to update. This is profile-backed and
+opt-in because it downloads large payloads and materially increases build time:
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 new .\BuildProfile.json `
   -SourceIso .\Win11_25H2_English_Arm64.iso `
   -Architecture arm64 `
+  -UpdateImage Stable25H2 `
   -UpdatePayloadRoot D:\WinMintPayloads\25H2-BRelease
 ```
 
 If `-UpdatePayloadRoot` is omitted, generated profiles use the default cache
-root under `%TEMP%\Win11ISO_dependency_cache\updates\25H2-BRelease`. The payload
-root is reviewable and deterministic:
+root under `%TEMP%\Win11ISO_dependency_cache\updates\25H2-BRelease`. On real
+builds, WinMint populates that root from official Microsoft sources before
+preflight: Microsoft Update Catalog for cumulative/checkpoint updates, Setup
+Dynamic Update and Safe OS Dynamic Update payloads, and matching .NET payloads
+when Microsoft publishes them, plus Microsoft's Defender offline image update
+endpoint for Defender. Microsoft Update Catalog downloads must carry Catalog
+SHA256 metadata and are verified before DISM sees them. The payload root is
+reviewable and deterministic:
 
 ```text
 25H2-BRelease\
   packages\            # Patch Tuesday quality/security .msu/.cab payloads
-  dynamic-update\      # Windows Setup / install-image dynamic update .msu/.cab payloads
+  dynamic-update\      # Windows Setup / Safe OS dynamic update .msu/.cab payloads
   defender\            # Defender offline image update .cab/.msu payloads
   dotnet\              # .NET cumulative update .msu/.cab payloads
   appx\                # Store/MSIX bundles such as Windows Terminal/App Installer
   appx-dependencies\   # Dependency .appx/.msix files, optionally under x64\ or arm64\
+  UpdatePayloadManifest.json
 ```
 
 `Stable25H2` means broad Windows 11 25H2 Patch Tuesday/B-release payloads only.
-WinMint rejects optional preview intent and does not apply device-specific
-drivers, firmware, or OEM payloads through this path. It also does not silently
-scrape or download Microsoft update files; the manifest records every package
-and app bundle that was applied from the supplied root.
+The offline `install.wim` servicing path applies the OS quality/security chain
+and matching .NET payloads when available. Setup/Safe OS Dynamic Update payloads
+and Defender offline image payloads are acquired and reported, but are not fed
+to mounted `install.wim` as generic OS packages. WinMint rejects optional
+preview intent and does not apply device-specific drivers, firmware, or OEM
+payloads through this path. Store app catch-up is live user work: FirstLogon
+runs `winget upgrade --all` with package/source agreement acceptance and records
+the command logs in the agent state.
 
 Local-account builds are fully unattended: the computer name comes from the
 profile, the password is injected into the profile, and OOBE hides the network
@@ -166,6 +179,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 `
 pwsh -NoProfile -File .\tools\vm\New-WinMintHyperVProfile.ps1 -OutPath .\output\hyper-v.json -SourceIso .\tests\fixtures\iso\official-win11-25h2-english-arm64-v2.iso
 pwsh -NoProfile -File .\tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profiles\hyper-v-install-arm64.json
 ```
+
+Hyper-V acceptance profiles intentionally target Windows 11 Pro with the Pro
+generic key because Enhanced Session testing depends on Pro. A Home-only ISO is
+not a valid source for the VM test profile.
 
 > USB writing is post-build and destructive. WinMint targets UEFI-only GPT media
 > with an NTFS install partition (avoiding the FAT32 4 GB `install.wim` limit),

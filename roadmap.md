@@ -47,6 +47,7 @@
   - `XDG_RUNTIME_DIR` as a temp-backed per-user runtime directory
 - Keep PowerShell 7 and Windows Terminal as the default shell surface.
 - Keep `Windows Terminal` on the taskbar and `Cascadia Code NF` as the default terminal font.
+- Keep Starship installed/configured by default with the Nerd Font symbols preset.
 - Keep developer mode, OpenSSH, WSL2, and symlink friendliness enabled by default.
 - Treat WinMint as a WSL-first development environment even when no distro is installed yet.
 - Keep the Windows-side quality-of-life defaults useful for general daily use, not just for WSL.
@@ -56,7 +57,7 @@
 #### Developer opt-in
 
 - Allow per-folder case sensitivity where the user explicitly wants it.
-- Keep a prompt standard like Starship as an opt-in layer for users who want it.
+- Keep prompt customization beyond the default Starship preset as user-managed configuration.
 - Keep SSH agent and Git defaults in the developer layer, not the core baseline.
 
 #### Too invasive

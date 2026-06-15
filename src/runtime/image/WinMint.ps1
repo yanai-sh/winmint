@@ -5,12 +5,15 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 
 . "$PSScriptRoot\Core.ps1"
+. "$PSScriptRoot\Private\Manifest.ps1"
 . "$PSScriptRoot\Reports.ps1"
+. "$PSScriptRoot\Private\WslSelection.ps1"
 . "$PSScriptRoot\Private\Config\Profile.ps1"
 . "$PSScriptRoot\Engine.ps1"
 . "$PSScriptRoot\Private\Bootstrap.ps1"
 . "$PSScriptRoot\Private\Runtime.ps1"
 . "$PSScriptRoot\Private\PayloadStore.ps1"
+. "$PSScriptRoot\Private\UpdatePayloads.ps1"
 . "$PSScriptRoot\Private\Console\Host.ps1"
 . "$PSScriptRoot\Private\Console\Display.ps1"
 . "$PSScriptRoot\Private\Catalog.ps1"
