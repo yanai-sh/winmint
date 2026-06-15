@@ -30,14 +30,14 @@ pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profile
 | Scope | Covered? | Typical target | Notes |
 |-------|----------|----------------|-------|
 | Unit | Yes | Rust UI intent helpers and small PowerShell helpers. | `crates/winmint-core/src/profile.rs` has `#[cfg(test)]` tests; PowerShell contract scripts call helper assertions directly. |
-| Contract/static | Yes | Profile invariants, schemas, release manifest, install plan, FirstLogon transaction plan, agent state/runtime plan, CLI matrix, payload store, bootstrap, Cloudflare Worker, UI contract spine. | `tests/contract/Test-Fast.ps1` composes the fast suite. |
+| Contract/static | Yes | Profile invariants, option-catalog/schema parity, schemas, release manifest, install plan, setup payload staging, executable FirstLogon transaction plan, agent state/runtime plan, CLI matrix, payload store, bootstrap, Cloudflare Worker, UI contract spine. | `tests/contract/Test-Fast.ps1` composes the fast suite. |
 | Integration | Partial | Optional ISO dry-run, payload/source checks, VM helpers. | `tools/validation/Validate.ps1 -RunIntegration` invokes `Test-Integration.ps1`; VM scripts require Hyper-V/Admin and local fixtures. |
 | E2E installer | Manual/fixture-based | Generated ISO boot/install in Hyper-V. | `tools/vm/Build-And-TestVm.ps1` and `tests/profiles/hyper-v-install-arm64.json` exist; CI does not run Hyper-V E2E. |
 | CI | Yes | Validation and GUI crate checks/tests. | `.github/workflows/ci.yml` runs profile invariants, validation, `cargo check`, and `cargo test` for `apps/gui`. |
 
 ### 4) Mocking and Isolation Strategy
 
-- Main mocking approach: temp directories, fixture profiles, ignored fixture roots for large ISO/driver payloads, string/static source assertions, and local JSON round trips.
+- Main mocking approach: temp directories, fixture profiles, ignored fixture roots for large ISO/driver payloads, string/static source assertions, option-catalog/schema comparisons, fake FirstLogon transaction adapters, setup payload staging into temp mounted-tree shapes, and local JSON round trips.
 - Isolation guarantees: tests create temp files/directories for generated profiles and remove them in `finally` blocks where implemented; fixture roots are gitignored except `.gitkeep`/`.gitignore`.
 - Common failure mode in tests: host-dependent tooling such as DISM, ADK/oscdimg, Hyper-V, cargo, PSScriptAnalyzer, and local ISO/driver fixtures can be absent; validation modules skip some optional tooling but contract/VM tests can fail hard.
 

@@ -7,6 +7,7 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
 
 . (Join-Path $root 'src\runtime\image\Core.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Config\OptionCatalog.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Config\Profile.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Catalog.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Tweaks\TweakRegistry.ps1')
@@ -23,6 +24,7 @@ $script:WinMintRepositoryRoot = $root
 . (Join-Path $root 'src\runtime\image\Private\Image\Packages.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Media.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Tweaks.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Image\SetupPayloadStaging.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1')
 . (Join-Path $root 'src\runtime\image\Private\InstallPlan.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Pipeline.Console.ps1')
@@ -335,6 +337,10 @@ $agentProfile = New-WinMintAgentProfile -BuildConfig $config
 if (@($agentProfile.modules.wsl.distros) -notcontains 'NixOS' -or @($agentProfile.modules.wsl.distros) -notcontains 'FedoraLinux') {
     Add-SmokeFailure 'Expected NixOS-WSL to normalize to NixOS for first-logon installation.'
 }
+
+$profile = New-SmokeBuildProfile
+$profile.development.wsl.distros = @('Fedora')
+Assert-ProfileFailsWith -Profile $profile -Expected 'profile.development.wsl.distros[] must be one of: Ubuntu, FedoraLinux, archlinux, NixOS-WSL, pengwin.'
 
 $settings = New-SmokeBuildProfileSettings
 $profile = New-WinMintBuildProfile -Settings $settings

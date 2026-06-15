@@ -55,6 +55,31 @@ function Assert-UiIntentSchemaResult {
     }
 }
 
+function Get-UiIntentSchemaEnumValues {
+    param(
+        [Parameter(Mandatory)]$Schema,
+        [Parameter(Mandatory)][string]$PropertyName
+    )
+
+    $property = $Schema.properties.$PropertyName
+    if ($property.PSObject.Properties['items']) {
+        return @($property.items.enum | ForEach-Object { [string]$_ })
+    }
+    @($property.enum | ForEach-Object { [string]$_ })
+}
+
+function Assert-SequenceEqual {
+    param(
+        [string[]]$Actual,
+        [string[]]$Expected,
+        [string]$Message
+    )
+
+    if (($Actual -join "`n") -ne ($Expected -join "`n")) {
+        Add-Failure "$Message Actual: [$($Actual -join ', ')] Expected: [$($Expected -join ', ')]"
+    }
+}
+
 $guiIntentPath = Join-Path $root 'apps\gui\src\intent.rs'
 $guiStatePath = Join-Path $root 'apps\gui\src\state.rs'
 $guiOptionsPath = Join-Path $root 'apps\gui\src\options.rs'
@@ -66,11 +91,13 @@ $guiReviewScreenPath = Join-Path $root 'apps\gui\src\screens\review.rs'
 $coreOptionsPath = Join-Path $root 'crates\winmint-core\src\options.rs'
 $coreProfilePath = Join-Path $root 'crates\winmint-core\src\profile.rs'
 $bridgePath = Join-Path $root 'tools\ui-bridge\New-UiBuildProfile.ps1'
+$profileOptionCatalogPath = Join-Path $root 'src\runtime\image\Private\Config\OptionCatalog.ps1'
+$profileAuthoringPath = Join-Path $root 'src\runtime\image\Private\Config\ProfileAuthoring.ps1'
 $uiIntentSchemaPath = Join-Path $root 'schemas\winmint.uiintent.schema.json'
 $pipelineConsolePath = Join-Path $root 'src\runtime\image\Private\Pipeline.Console.ps1'
 $reviewConsolePath = Join-Path $root 'src\runtime\image\Private\Console\Review.ps1'
 
-foreach ($path in @($guiIntentPath, $guiStatePath, $guiOptionsPath, $guiBridgePath, $guiMainPath, $guiConfigureScreenPath, $guiBuildScreenPath, $guiReviewScreenPath, $coreOptionsPath, $coreProfilePath, $bridgePath, $uiIntentSchemaPath, $pipelineConsolePath, $reviewConsolePath)) {
+foreach ($path in @($guiIntentPath, $guiStatePath, $guiOptionsPath, $guiBridgePath, $guiMainPath, $guiConfigureScreenPath, $guiBuildScreenPath, $guiReviewScreenPath, $coreOptionsPath, $coreProfilePath, $bridgePath, $profileOptionCatalogPath, $profileAuthoringPath, $uiIntentSchemaPath, $pipelineConsolePath, $reviewConsolePath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         Add-Failure "Required UI contract file is missing: $path"
     }
@@ -88,6 +115,8 @@ if ($failures.Count -eq 0) {
     $coreOptions = Get-Content -LiteralPath $coreOptionsPath -Raw
     $coreProfile = Get-Content -LiteralPath $coreProfilePath -Raw
     $bridge = Get-Content -LiteralPath $bridgePath -Raw
+    $profileOptionCatalog = Get-Content -LiteralPath $profileOptionCatalogPath -Raw
+    $profileAuthoring = Get-Content -LiteralPath $profileAuthoringPath -Raw
     $uiIntentSchema = Get-Content -LiteralPath $uiIntentSchemaPath -Raw
     $pipelineConsole = Get-Content -LiteralPath $pipelineConsolePath -Raw
     $reviewConsole = Get-Content -LiteralPath $reviewConsolePath -Raw
@@ -97,6 +126,8 @@ if ($failures.Count -eq 0) {
     Assert-Text $coreOptions 'pub const EDITOR_OPTIONS' 'winmint-core must expose editor option tokens.'
     Assert-Text $coreOptions 'pub const BROWSER_OPTIONS' 'winmint-core must expose browser option tokens.'
     Assert-Text $coreOptions 'pub const WSL_OPTIONS' 'winmint-core must expose WSL option tokens.'
+    Assert-Text $profileOptionCatalog 'function Get-WinMintOptionCatalog' 'PowerShell backend must expose an option catalog.'
+    Assert-Text $profileOptionCatalog 'WslDistro' 'PowerShell option catalog must expose WSL profile tokens.'
     Assert-Text $guiOptions 'pub const EDITIONS' 'GPUI must expose a display catalog for edition options.'
     Assert-Text $guiOptions 'pub const EDITORS' 'GPUI must expose a display catalog for editor options.'
     Assert-Text $guiOptions 'pub const BROWSERS' 'GPUI must expose a display catalog for browser options.'
@@ -110,9 +141,11 @@ if ($failures.Count -eq 0) {
     Assert-Text $coreProfile 'fn ui_intent_serializes_to_the_exact_bridge_contract_keys' 'winmint-core must test the bridge contract key set.'
     Assert-Text $coreProfile 'fn ui_intent_schema_enums_match_option_tokens' 'winmint-core tests must compare UI intent enum tokens with the schema.'
     Assert-Text $coreProfile 'winmint\.uiintent\.schema\.json' 'winmint-core tests must compare UI intent keys with the schema.'
-    Assert-Text $bridge 'Assert-WinMintUiBridgeSettings' 'PowerShell bridge must keep a boundary assertion before engine profile creation.'
-    Assert-Text $bridge 'winmint\.uiintent\.schema\.json' 'PowerShell bridge must read the UI intent schema.'
-    Assert-Text $bridge 'Test-Json' 'PowerShell bridge must validate UI intent with the JSON schema.'
+    Assert-Text $bridge 'Save-WinMintBuildProfileFromUiIntent' 'PowerShell bridge must delegate UI intent profile generation to the backend authoring module.'
+    Assert-Text $profileAuthoring 'Assert-WinMintUiIntentSettings' 'Profile authoring module must keep an intent assertion before engine profile creation.'
+    Assert-Text $profileAuthoring 'winmint\.uiintent\.schema\.json' 'Profile authoring module must read the UI intent schema.'
+    Assert-Text $profileAuthoring 'Test-Json' 'Profile authoring module must validate UI intent with the JSON schema.'
+    Assert-Text $profileAuthoring 'Get-WinMintOptionValues' 'Profile authoring module must validate intent tokens through the PowerShell option catalog.'
     foreach ($expected in @(
             'enum UiBridgeScript',
             'fn script_path',
@@ -166,7 +199,18 @@ if ($failures.Count -eq 0) {
         )) {
         Assert-Text $uiIntentSchema ([regex]::Escape($expectedEnumToken)) "UI intent schema must define enum token $expectedEnumToken."
     }
+    . $profileOptionCatalogPath
     $script:UiIntentSchema = $uiIntentSchema
+    $uiIntentSchemaObject = $uiIntentSchema | ConvertFrom-Json
+    Assert-SequenceEqual -Actual (Get-UiIntentSchemaEnumValues -Schema $uiIntentSchemaObject -PropertyName 'Architecture') -Expected (Get-WinMintOptionValues -Name UiArchitecture) -Message 'UI intent Architecture enum must match the PowerShell option catalog.'
+    Assert-SequenceEqual -Actual (Get-UiIntentSchemaEnumValues -Schema $uiIntentSchemaObject -PropertyName 'AccountMode') -Expected (Get-WinMintOptionValues -Name AccountMode) -Message 'UI intent AccountMode enum must match the PowerShell option catalog.'
+    Assert-SequenceEqual -Actual (Get-UiIntentSchemaEnumValues -Schema $uiIntentSchemaObject -PropertyName 'TargetDevice') -Expected (Get-WinMintOptionValues -Name TargetDevice) -Message 'UI intent TargetDevice enum must match the PowerShell option catalog.'
+    Assert-SequenceEqual -Actual (Get-UiIntentSchemaEnumValues -Schema $uiIntentSchemaObject -PropertyName 'FormFactor') -Expected (Get-WinMintOptionValues -Name FormFactor) -Message 'UI intent FormFactor enum must match the PowerShell option catalog.'
+    Assert-SequenceEqual -Actual (Get-UiIntentSchemaEnumValues -Schema $uiIntentSchemaObject -PropertyName 'Edition') -Expected (Get-WinMintOptionValues -Name Edition) -Message 'UI intent Edition enum must match the PowerShell option catalog.'
+    Assert-SequenceEqual -Actual (Get-UiIntentSchemaEnumValues -Schema $uiIntentSchemaObject -PropertyName 'DriverSource') -Expected (Get-WinMintOptionValues -Name DriverSource) -Message 'UI intent DriverSource enum must match the PowerShell option catalog.'
+    Assert-SequenceEqual -Actual (Get-UiIntentSchemaEnumValues -Schema $uiIntentSchemaObject -PropertyName 'Editors') -Expected (Get-WinMintOptionValues -Name Editor) -Message 'UI intent Editors enum must match the PowerShell option catalog.'
+    Assert-SequenceEqual -Actual (Get-UiIntentSchemaEnumValues -Schema $uiIntentSchemaObject -PropertyName 'Browsers') -Expected (Get-WinMintOptionValues -Name Browser) -Message 'UI intent Browsers enum must match the PowerShell option catalog.'
+    Assert-SequenceEqual -Actual (Get-UiIntentSchemaEnumValues -Schema $uiIntentSchemaObject -PropertyName 'Wsl2Distros') -Expected (Get-WinMintOptionValues -Name WslDistro) -Message 'UI intent Wsl2Distros enum must match the PowerShell option catalog.'
     $validUiIntent = [ordered]@{
         Profile              = 'WinMint'
         KeepEdge             = $false

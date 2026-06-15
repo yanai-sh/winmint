@@ -4,9 +4,6 @@ function New-WinMintFirstLogonTransactionStep {
     param(
         [Parameter(Mandatory)][int]$Order,
         [Parameter(Mandatory)][string]$Id,
-        [Parameter(Mandatory)][string]$Phase,
-        [Parameter(Mandatory)][string]$Description,
-        [string[]]$Functions = @(),
         [ValidateSet('blocking', 'bestEffort', 'conditional')][string]$FailurePolicy = 'bestEffort',
         [string]$Condition = 'always'
     )
@@ -14,9 +11,6 @@ function New-WinMintFirstLogonTransactionStep {
     [pscustomobject]@{
         Order = $Order
         Id = $Id
-        Phase = $Phase
-        Description = $Description
-        Functions = @($Functions)
         FailurePolicy = $FailurePolicy
         Condition = $Condition
     }
@@ -37,63 +31,36 @@ function New-WinMintFirstLogonTransactionPlan {
     $steps.Add((New-WinMintFirstLogonTransactionStep `
                 -Order $order `
                 -Id 'prepare-host' `
-                -Phase 'prepare' `
-                -Description 'Prepare the elevated FirstLogon host and initialize state.' `
-                -Functions @('Set-WinMintFirstLogonWindowsTerminalDefault', 'New-WinMintFirstLogonRunState', 'Save-WinMintFirstLogonState') `
-                -FailurePolicy 'bestEffort')) | Out-Null
+                -FailurePolicy 'blocking')) | Out-Null
 
     $order++
     $steps.Add((New-WinMintFirstLogonTransactionStep `
                 -Order $order `
                 -Id 'persist-retry-autologon' `
-                -Phase 'prepare' `
-                -Description 'Persist RunOnce retry and autologon until the agent succeeds.' `
-                -Functions @('Set-WinMintFirstLogonRetry', 'Set-WinMintFirstLogonAutoLogonPersistent') `
                 -FailurePolicy 'bestEffort')) | Out-Null
 
     $order++
     $steps.Add((New-WinMintFirstLogonTransactionStep `
                 -Order $order `
                 -Id 'restore-visible-user-posture' `
-                -Phase 'restore' `
-                -Description 'Restore the visible user region, locale, time zone, input languages, and location posture before optional work.' `
-                -Functions @('Restore-WinMintDmaRegionalDefaults', 'Read-WinMintFirstLogonSetupProfile', 'Set-WinMintFirstLogonInputLanguages') `
                 -FailurePolicy 'bestEffort')) | Out-Null
 
     $order++
     $steps.Add((New-WinMintFirstLogonTransactionStep `
                 -Order $order `
                 -Id 'apply-live-user-defaults' `
-                -Phase 'customize' `
-                -Description 'Apply live-user folders, XDG defaults, clipboard, quiet UX, desktop, cursor, AppX cleanup, and OneDrive cleanup.' `
-                -Functions @(
-                    'Repair-WinMintFirstLogonKnownFolders',
-                    'Set-WinMintFirstLogonXdgDefaults',
-                    'Set-WinMintFirstLogonClipboardDefaults',
-                    'Set-WinMintFirstLogonQuietUxDefaults',
-                    'Set-WinMintFirstLogonDesktopDefaults',
-                    'Set-WinMintFirstLogonCursorScheme',
-                    'Invoke-WinMintFirstLogonAppxCleanup',
-                    'Invoke-WinMintFirstLogonOneDriveRemoval'
-                ) `
                 -FailurePolicy 'bestEffort')) | Out-Null
 
     $order++
     $steps.Add((New-WinMintFirstLogonTransactionStep `
                 -Order $order `
                 -Id 'launch-agent' `
-                -Phase 'agent' `
-                -Description 'Launch the WinMint first-logon agent and capture its exit code.' `
-                -Functions @('Resolve-WinMintPowerShellHost', 'Resolve-WinMintFirstLogonAgentMode', 'Start-WinMintFirstLogonAgentInTerminal', 'Start-Process') `
                 -FailurePolicy 'blocking')) | Out-Null
 
     $order++
     $steps.Add((New-WinMintFirstLogonTransactionStep `
                 -Order $order `
                 -Id 'finalize-user-shell' `
-                -Phase 'finalize' `
-                -Description 'Finalize terminal profiles and Start pins after the agent has run.' `
-                -Functions @('Set-WinMintFirstLogonTerminalProfiles', 'Set-WinMintFirstLogonStartPins') `
                 -FailurePolicy 'bestEffort' `
                 -Condition 'agent-script-staged')) | Out-Null
 
@@ -101,9 +68,6 @@ function New-WinMintFirstLogonTransactionPlan {
     $steps.Add((New-WinMintFirstLogonTransactionStep `
                 -Order $order `
                 -Id 'finalize-success' `
-                -Phase 'finalize' `
-                -Description 'Clear retry/autologon state and schedule residual payload cleanup after a successful agent exit.' `
-                -Functions @('Clear-WinMintFirstLogonRetry', 'Disable-WinMintAutoAdminLogon', 'Clear-WinMintAutoLogonPassword', 'Remove-WinMintResidualPayload') `
                 -FailurePolicy 'conditional' `
                 -Condition 'agentExitCode == 0')) | Out-Null
 
@@ -111,13 +75,71 @@ function New-WinMintFirstLogonTransactionPlan {
     $steps.Add((New-WinMintFirstLogonTransactionStep `
                 -Order $order `
                 -Id 'finalize-recovery' `
-                -Phase 'recovery' `
-                -Description 'Retain or clear bounded recovery state after an incomplete agent run.' `
-                -Functions @('Clear-WinMintFirstLogonRecovery', 'Save-WinMintFirstLogonState') `
                 -FailurePolicy 'conditional' `
                 -Condition 'agentExitCode != 0')) | Out-Null
 
     return @($steps)
+}
+
+function Test-WinMintFirstLogonTransactionCondition {
+    param(
+        [Parameter(Mandatory)][string]$Condition,
+        [Parameter(Mandatory)][hashtable]$Context
+    )
+
+    switch ($Condition) {
+        'always' { return $true }
+        'agent-script-staged' { return [bool]$Context.AgentScriptStaged }
+        'agentExitCode == 0' { return ([int]$Context.AgentExitCode -eq 0) }
+        'agentExitCode != 0' { return ([int]$Context.AgentExitCode -ne 0) }
+        default { throw "Unsupported FirstLogon transaction condition: $Condition" }
+    }
+}
+
+function Write-WinMintFirstLogonTransactionAdapterError {
+    param(
+        [Parameter(Mandatory)][object]$Step,
+        [Parameter(Mandatory)][System.Management.Automation.ErrorRecord]$ErrorRecord
+    )
+
+    $message = "FirstLogon transaction step '$($Step.Id)' failed: $($ErrorRecord.Exception.Message)"
+    if (Get-Command Write-WinMintFirstLogonError -ErrorAction SilentlyContinue) {
+        Write-WinMintFirstLogonError $message
+    }
+    else {
+        Write-Warning $message
+    }
+}
+
+function Invoke-WinMintFirstLogonTransactionPlan {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object[]]$Plan,
+        [Parameter(Mandatory)][hashtable]$Context,
+        [Parameter(Mandatory)][hashtable]$StepAdapters
+    )
+
+    foreach ($step in @($Plan | Sort-Object Order)) {
+        if (-not (Test-WinMintFirstLogonTransactionCondition -Condition ([string]$step.Condition) -Context $Context)) {
+            continue
+        }
+
+        if (-not $StepAdapters.ContainsKey([string]$step.Id)) {
+            throw "No FirstLogon transaction adapter registered for step '$($step.Id)'."
+        }
+
+        try {
+            $null = & $StepAdapters[[string]$step.Id] -Context $Context -Step $step
+        }
+        catch {
+            if ([string]$step.FailurePolicy -eq 'blocking') {
+                throw
+            }
+            Write-WinMintFirstLogonTransactionAdapterError -Step $step -ErrorRecord $_
+        }
+    }
+
+    return $Context
 }
 
 function Invoke-WinMintFirstLogonAgentLaunch {

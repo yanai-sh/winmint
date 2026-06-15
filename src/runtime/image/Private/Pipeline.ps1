@@ -505,6 +505,7 @@ function Invoke-WinMintIsoPipeline {
             else {
                 Log "Serviced WIM cache hit: skipping appx removal, package install, and driver injection for image $imgName."
             }
+            Assert-OfflinePowerShell7Staged -MountDir $mountDir
 
             Save-ImageWithCleanup -MountDir $mountDir
             $mountedImage = $false

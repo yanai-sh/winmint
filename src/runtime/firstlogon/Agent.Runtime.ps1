@@ -594,6 +594,16 @@ function Test-AgentModuleEnabled {
     return $false
 }
 
+function Test-WinMintAgentStateStepOk {
+    param(
+        [Parameter(Mandatory)][hashtable]$State,
+        [Parameter(Mandatory)][string]$Key
+    )
+
+    if (-not $State.steps.ContainsKey($Key)) { return $false }
+    return ([string]$State.steps[$Key].status -eq 'ok')
+}
+
 function New-WinMintAgentRuntimeStepPlan {
     $steps = [System.Collections.Generic.List[object]]::new()
 
@@ -646,22 +656,17 @@ function Set-WinMintAgentNeovimEnvironment {
 
     if (@($AgentProfile.editors) -notcontains 'neovim') { return }
 
-    $neovimStepOk = $false
+    $stateKey = 'tool:neovim'
     try {
         $nvTool = Get-AgentManifestTool -ToolId 'neovim'
-        $nvKey = "tool:$([string]$nvTool.id)"
-        if ($State.steps.ContainsKey($nvKey) -and [string]$State.steps[$nvKey].status -eq 'ok') {
-            $neovimStepOk = $true
-        }
+        $stateKey = "tool:$([string]$nvTool.id)"
     }
     catch {
         Write-AgentLog "Neovim manifest lookup for EDITOR/VISUAL: $($_.Exception.Message)"
     }
-    if (-not $neovimStepOk -and $State.steps.ContainsKey('tool:neovim') -and
-        [string]$State.steps['tool:neovim'].status -eq 'ok') {
-        $neovimStepOk = $true
-    }
-    if ($neovimStepOk) {
+
+    if ((Test-WinMintAgentStateStepOk -State $State -Key $stateKey) -or
+        (Test-WinMintAgentStateStepOk -State $State -Key 'tool:neovim')) {
         [Environment]::SetEnvironmentVariable('EDITOR', 'nvim', 'User')
         [Environment]::SetEnvironmentVariable('VISUAL', 'nvim', 'User')
     }

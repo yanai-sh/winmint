@@ -129,7 +129,7 @@ function Invoke-WinMintAllBuildCachesMaintenance {
 
 # Bump when the serviced-image pipeline changes in a way that can leave cached
 # WIMs semantically stale even if the broad inputs look unchanged.
-$script:WinMintServicedWimCacheSchemaVersion = 8
+$script:WinMintServicedWimCacheSchemaVersion = 9
 
 function Get-WinMintServicedWimCacheRoot {
     return (Join-Path (Get-WinMintBuildCacheRoot) 'serviced-wim')

@@ -740,19 +740,19 @@ function Assert-LiveInstallAuditUsesSetupProfilePrefixes {
 }
 
 function Assert-LiveInstallAuditIsStaged {
-    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
-    if ($unattendText -notmatch [regex]::Escape('Audit-LiveInstall.ps1')) {
-        Add-SmokeFailure 'Install-Autounattend should stage Audit-LiveInstall.ps1 with setup scripts.'
+    $setupPayloadText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\SetupPayloadStaging.ps1') -Raw
+    if ($setupPayloadText -notmatch [regex]::Escape('Audit-LiveInstall.ps1')) {
+        Add-SmokeFailure 'Setup payload staging should stage Audit-LiveInstall.ps1 with setup scripts.'
     }
-    if ($unattendText -notmatch [regex]::Escape("Join-Path `$ScriptRoot 'src\runtime\setup'")) {
-        Add-SmokeFailure 'Install-Autounattend must stage setup scripts from src\runtime\setup.'
+    if ($setupPayloadText -notmatch [regex]::Escape("Join-Path `$ScriptRoot 'src\runtime\setup'")) {
+        Add-SmokeFailure 'Setup payload staging must stage setup scripts from src\runtime\setup.'
     }
-    if ($unattendText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
-        Add-SmokeFailure 'Install-Autounattend must not rely on the removed top-level scripts directory.'
+    if ($setupPayloadText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
+        Add-SmokeFailure 'Setup payload staging must not rely on the removed top-level scripts directory.'
     }
     foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
-        if ($unattendText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "Install-Autounattend should stage '$expected'."
+        if ($setupPayloadText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Setup payload staging should stage '$expected'."
         }
     }
 }
@@ -824,7 +824,7 @@ function Assert-FirstLogonDemoHarnessIsNonMutating {
     $demoText = Get-Content -LiteralPath $demoPath -Raw
     $consoleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Console.ps1') -Raw
     $agentStartText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Start-WinMintAgent.ps1') -Raw
-    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+    $setupPayloadText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\SetupPayloadStaging.ps1') -Raw
     foreach ($expected in @(
         "[ValidateSet('Success', 'Warnings', 'Failure', 'LongRun')]",
         'WinMintFirstLogonDemo-',
@@ -863,7 +863,7 @@ function Assert-FirstLogonDemoHarnessIsNonMutating {
         Add-SmokeFailure 'FirstLogon agent should point the console splash at the staged WinMint logo wordmark PNG.'
     }
     foreach ($expected in @('assets\brand\winmint_hero.png', 'Assets\Brand', 'winmint_logo_wordmark.png', 'Staged WinMint logo wordmark PNG')) {
-        if ($unattendText -notmatch [regex]::Escape($expected)) {
+        if ($setupPayloadText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "ISO staging should include the FirstLogon splash asset with '$expected'."
         }
     }
@@ -1106,6 +1106,21 @@ function Assert-BuildProfileSchemaOwnsBrowserContract {
     $schemaPath = Join-Path $root 'schemas\winmint.buildprofile.schema.json'
     $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
     $development = $schema.properties.development
+
+    function Assert-BuildProfileSchemaEnum {
+        param(
+            [Parameter(Mandatory)][object[]]$Actual,
+            [Parameter(Mandatory)][object[]]$Expected,
+            [Parameter(Mandatory)][string]$Name
+        )
+
+        $actualText = @($Actual | ForEach-Object { [string]$_ })
+        $expectedText = @($Expected | ForEach-Object { [string]$_ })
+        if (($actualText -join "`n") -ne ($expectedText -join "`n")) {
+            Add-SmokeFailure "BuildProfile schema enum '$Name' must match the backend option catalog. Actual: [$($actualText -join ', ')] Expected: [$($expectedText -join ', ')]"
+        }
+    }
+
     if (@($development.required) -notcontains 'browsers') {
         Add-SmokeFailure 'BuildProfile schema must require profile.development.browsers as a first-class contract field.'
     }
@@ -1119,6 +1134,25 @@ function Assert-BuildProfileSchemaOwnsBrowserContract {
             Add-SmokeFailure "BuildProfile schema must allow canonical browser id '$browserId'."
         }
     }
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.source.properties.architecture.enum -Expected (Get-WinMintOptionValues -Name ProfileArchitecture) -Name 'profile.source.architecture'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.device.enum -Expected (Get-WinMintOptionValues -Name TargetDevice) -Name 'profile.target.device'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.formFactor.enum -Expected (Get-WinMintOptionValues -Name FormFactor) -Name 'profile.target.formFactor'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.editionMode.enum -Expected (Get-WinMintOptionValues -Name EditionMode) -Name 'profile.target.editionMode'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.diskMode.enum -Expected (Get-WinMintOptionValues -Name DiskMode) -Name 'profile.target.diskMode'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.diskLayout.properties.mode.enum -Expected (Get-WinMintOptionValues -Name DiskMode) -Name 'profile.target.diskLayout.mode'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.diskLayout.properties.preset.enum -Expected (Get-WinMintOptionValues -Name DiskLayoutPreset) -Name 'profile.target.diskLayout.preset'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.identity.properties.accountMode.enum -Expected (Get-WinMintOptionValues -Name AccountMode) -Name 'profile.identity.accountMode'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.drivers.properties.source.enum -Expected (Get-WinMintOptionValues -Name DriverSource) -Name 'profile.drivers.source'
+    Assert-BuildProfileSchemaEnum -Actual @($schema.properties.desktop.properties.cursorPack.const) -Expected (Get-WinMintOptionValues -Name DesktopCursorPack) -Name 'profile.desktop.cursorPack'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.desktop.properties.layers.items.enum -Expected (Get-WinMintOptionValues -Name DesktopLayer) -Name 'profile.desktop.layers[]'
+    Assert-BuildProfileSchemaEnum -Actual $development.properties.editors.items.enum -Expected (Get-WinMintOptionValues -Name Editor) -Name 'profile.development.editors[]'
+    Assert-BuildProfileSchemaEnum -Actual $development.properties.browsers.items.enum -Expected (Get-WinMintOptionValues -Name Browser) -Name 'profile.development.browsers[]'
+    Assert-BuildProfileSchemaEnum -Actual $development.properties.wsl.properties.distros.items.enum -Expected (Get-WinMintOptionValues -Name WslDistro) -Name 'profile.development.wsl.distros[]'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.features.properties.launcher.enum -Expected (Get-WinMintOptionValues -Name Launcher) -Name 'profile.features.launcher'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.updates.properties.mode.enum -Expected (Get-WinMintOptionValues -Name UpdateMode) -Name 'profile.updates.mode'
+    Assert-BuildProfileSchemaEnum -Actual @($schema.properties.updates.properties.targetFeatureVersion.const) -Expected (Get-WinMintOptionValues -Name UpdateTargetFeatureVersion) -Name 'profile.updates.targetFeatureVersion'
+    Assert-BuildProfileSchemaEnum -Actual @($schema.properties.updates.properties.releaseCadence.const) -Expected (Get-WinMintOptionValues -Name UpdateReleaseCadence) -Name 'profile.updates.releaseCadence'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.removals.properties.aiPolicy.enum -Expected (Get-WinMintOptionValues -Name AiPolicy) -Name 'profile.removals.aiPolicy'
 
     $wslEnabledSchema = $development.properties.wsl.properties.enabled
     if ($wslEnabledSchema.const -ne $true) {
@@ -1200,7 +1234,10 @@ function Assert-RecoveryBundleIsOutputOnly {
         }
     }
 
-    $setupStagingText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+    $setupStagingText = @(
+        Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+        Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\SetupPayloadStaging.ps1') -Raw
+    ) -join [Environment]::NewLine
     foreach ($forbidden in @('Recover-WinMintAiPolicy.ps1', 'Recover-WinMintDmaRegion.ps1', 'WinMint-Recovery.json')) {
         if ($setupStagingText -match [regex]::Escape($forbidden)) {
             Add-SmokeFailure "Recovery bundle file '$forbidden' must not be staged into the installed OS."
@@ -1416,7 +1453,7 @@ function Assert-NoMaintenancePayloadOrRegistration {
     $setupCompleteText = Get-WinMintSetupCompleteText
     $firstLogonText = Get-WinMintFirstLogonText
     $engineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Engine.ps1') -Raw
-    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+    $setupPayloadText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\SetupPayloadStaging.ps1') -Raw
     $maintenancePayload = Join-Path $root 'src\runtime\setup\Maintain.ps1'
 
     if (Test-Path -LiteralPath $maintenancePayload) {
@@ -1432,7 +1469,7 @@ function Assert-NoMaintenancePayloadOrRegistration {
         Add-SmokeFailure 'FirstLogon cleanup must not preserve Maintain.ps1 on the installed system.'
     }
     if ($engineText -match [regex]::Escape("'Maintain.ps1'") -or
-        $unattendText -match [regex]::Escape("'Maintain.ps1'")) {
+        $setupPayloadText -match [regex]::Escape("'Maintain.ps1'")) {
         Add-SmokeFailure 'Maintain.ps1 must not be staged as a default setup artifact.'
     }
 }
@@ -2256,10 +2293,12 @@ function Assert-WindowsTerminalDefaultsPwsh7NoLogo {
 function Assert-PowerShell7IsBundledAndRequired {
     $packagesText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Packages.ps1') -Raw
     foreach ($expected in @(
+        'function Assert-OfflinePowerShell7Staged',
         'Resolve-WinMintGitHubReleasePayload',
         'PowerShell/PowerShell',
         'PowerShell-\d+\.\d+\.\d+-',
         'PowerShell 7 staged in the offline image',
+        'PowerShell 7 is missing from the offline image',
         'PowerShell 7 staging failed; build cannot continue'
     )) {
         if ($packagesText -notmatch [regex]::Escape($expected)) {
@@ -2268,6 +2307,16 @@ function Assert-PowerShell7IsBundledAndRequired {
     }
     if ($packagesText -match 'fall back to Windows PowerShell') {
         Add-SmokeFailure 'PowerShell 7 staging must fail the build instead of falling back to Windows PowerShell.'
+    }
+
+    $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Pipeline.ps1') -Raw
+    if ($pipelineText -notmatch 'Assert-OfflinePowerShell7Staged\s+-MountDir\s+\$mountDir') {
+        Add-SmokeFailure 'Service WIM pipeline must assert bundled PowerShell 7 after servicing or serviced-WIM cache restore.'
+    }
+
+    $cacheText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\IntermediatesCache.ps1') -Raw
+    if ($cacheText -notmatch '\$script:WinMintServicedWimCacheSchemaVersion\s*=\s*9') {
+        Add-SmokeFailure 'Serviced-WIM cache schema should be bumped after adding the bundled PowerShell 7 image invariant.'
     }
 
     $setupCompleteCmd = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.cmd') -Raw

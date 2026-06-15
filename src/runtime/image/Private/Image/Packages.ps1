@@ -16,6 +16,15 @@ function Copy-WinMintPayloadDirectoryChildren {
     }
 }
 
+function Assert-OfflinePowerShell7Staged {
+    param([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$MountDir)
+
+    $pwshExe = Join-Path $MountDir 'Program Files\PowerShell\7\pwsh.exe'
+    if (-not (Test-Path -LiteralPath $pwshExe -PathType Leaf)) {
+        throw "PowerShell 7 is missing from the offline image: $pwshExe. SetupComplete and FirstLogon require bundled PowerShell 7; rebuild without the serviced-WIM cache or refresh the payload cache."
+    }
+}
+
 function Install-OfflinePowerShell7 {
     <# <summary>Extract GitHub PowerShell release zip into the offline image so specialize / SetupComplete / FirstLogon can run pwsh.exe.</summary> #>
     param(
@@ -70,6 +79,7 @@ function Install-OfflinePowerShell7 {
 
             $pwshExe = Join-Path $dest 'pwsh.exe'
             if (-not (Test-Path -LiteralPath $pwshExe)) { throw "pwsh.exe missing after staging: $pwshExe" }
+            Assert-OfflinePowerShell7Staged -MountDir $MountDir
             LogOK "PowerShell 7 staged in the offline image (release: $($payload.Version))."
             LogVerbose "$pwshExe (release asset: $($payload.AssetName))"
         }

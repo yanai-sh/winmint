@@ -238,14 +238,8 @@ function New-WinMintInstallPlanSetupPlan {
             }
         )
         stagedArtifacts = @(
-            'autounattend.xml',
-            'C:\Windows\Setup\Scripts\WinMintSetupProfile.json',
-            'C:\Windows\Setup\Scripts\Specialize.ps1',
-            'C:\Windows\Setup\Scripts\DefaultUser.ps1',
-            'C:\Windows\Setup\Scripts\SetupComplete.cmd',
-            'C:\Windows\Setup\Scripts\SetupComplete.ps1',
-            'C:\Windows\Setup\Scripts\FirstLogon.ps1',
-            'C:\Windows\Setup\Scripts\WinMintAgent\BuildProfile.json'
+            'autounattend.xml'
+            Get-WinMintSetupPayloadRequiredArtifacts
         )
         generatedProfiles = [ordered]@{
             setupProfile = $SetupProfile

@@ -245,7 +245,7 @@
         "cursorPack": { "type": "string", "const": "Windows11Modern" },
         "layers": {
           "type": "array",
-          "items": { "type": "string", "enum": ["standard", "windhawk", "yasb", "komorebi"] },
+          "items": { "type": "string", "enum": ["standard", "windhawk", "yasb", "komorebi", "nilesoft"] },
           "uniqueItems": true
         }
       },
@@ -257,7 +257,7 @@
       "properties": {
         "editors": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": { "type": "string", "enum": ["cursor", "vscode", "zed", "antigravity", "neovim"] },
           "uniqueItems": true
         },
         "browsers": {
@@ -272,7 +272,7 @@
             "enabled": { "type": "boolean", "const": true },
             "distros": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": { "type": "string", "enum": ["Ubuntu", "FedoraLinux", "archlinux", "NixOS-WSL", "pengwin"] },
               "uniqueItems": true
             }
           },

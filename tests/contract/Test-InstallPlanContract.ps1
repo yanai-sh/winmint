@@ -86,6 +86,11 @@ function Assert-InstallPlanMatchesWrappers {
             $plan.Facts.artifacts.setupPlan -ne 'WinMintSetupPlan.json') {
             Add-InstallPlanFailure "Install-plan case '$Name' changed generated artifact names."
         }
+        foreach ($artifact in @(Get-WinMintSetupPayloadRequiredArtifacts)) {
+            if (@($plan.SetupPlan.stagedArtifacts) -notcontains $artifact) {
+                Add-InstallPlanFailure "Install-plan case '$Name' staged artifacts are missing '$artifact'."
+            }
+        }
     }
     catch {
         Add-InstallPlanFailure "Install-plan case '$Name' failed: $($_.Exception.Message)"
@@ -181,6 +186,76 @@ function Assert-ManifestConsumesInstallPlanFacts {
     }
 }
 
+function Assert-SetupPayloadStagingContract {
+    $tempRoot = Join-Path ([IO.Path]::GetTempPath().TrimEnd('\', '/')) ('winmint_setup_payload_test_' + [Guid]::NewGuid().ToString('n'))
+    try {
+        $profile = New-InstallPlanCaseProfile -Overrides @{
+            InstallWindhawk = $true
+            InstallYasb = $true
+            InstallKomorebi = $true
+        }
+        $plan = New-WinMintInstallPlan -BuildProfile $profile
+        $null = New-Item -ItemType Directory -Path $tempRoot -Force
+
+        $result = Invoke-WinMintSetupPayloadStaging `
+            -MountDir $tempRoot `
+            -ScriptRoot $root `
+            -AgentProfile $plan.AgentProfile `
+            -SetupProfile $plan.SetupProfile `
+            -SetupPlan $plan.SetupPlan
+
+        $scriptsRoot = Join-Path $tempRoot 'Windows\Setup\Scripts'
+        foreach ($relativePath in @(
+            'SetupComplete.cmd',
+            'SetupComplete.ps1',
+            'Specialize.ps1',
+            'DefaultUser.ps1',
+            'FirstLogon.ps1',
+            'FirstLogon.Support.ps1',
+            'FirstLogon.Transaction.ps1',
+            'FirstLogon.Runtime.ps1',
+            'SetupComplete\Edge.ps1',
+            'Audit-LiveInstall.ps1',
+            'WinMintSetupProfile.json',
+            'WinMintSetupPlan.json',
+            'WinMintAgent\Start-WinMintAgent.ps1',
+            'WinMintAgent\BuildProfile.json',
+            'WinMintAgent\packages.json',
+            'WinMintAgent\Assets\Brand\winmint_logo_wordmark.png',
+            'WinMintAgent\Assets\Windhawk\preset.json',
+            'WinMintAgent\Assets\Yasb\config.yaml',
+            'WinMintAgent\Assets\Yasb\styles.css',
+            'WinMintAgent\Assets\Komorebi\komorebi.json',
+            'WinMintAgent\Assets\Komorebi\applications.json',
+            'WinMintAgent\Assets\Komorebi\whkdrc'
+        )) {
+            $path = Join-Path $scriptsRoot $relativePath
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                Add-InstallPlanFailure "Setup payload staging did not write expected artifact '$relativePath'."
+            }
+        }
+
+        if (Test-Path -LiteralPath (Join-Path $scriptsRoot 'WinMintAgent\agent')) {
+            Add-InstallPlanFailure 'Setup payload staging nested the agent payload under WinMintAgent\agent.'
+        }
+
+        foreach ($artifact in @(Get-WinMintSetupPayloadRequiredArtifacts)) {
+            if (@($result.RequiredArtifacts) -notcontains $artifact) {
+                Add-InstallPlanFailure "Setup payload staging result omitted required artifact '$artifact'."
+            }
+            if (@($plan.SetupPlan.stagedArtifacts) -notcontains $artifact) {
+                Add-InstallPlanFailure "Setup plan stagedArtifacts omitted setup payload artifact '$artifact'."
+            }
+        }
+    }
+    catch {
+        Add-InstallPlanFailure "Setup payload staging contract failed: $($_.Exception.Message)"
+    }
+    finally {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 $cases = @(
     @{ Name = 'default'; Profile = (New-InstallPlanCaseProfile) },
     @{ Name = 'keep-edge'; Profile = (New-InstallPlanCaseProfile -Overrides @{ KeepEdge = $true }) },
@@ -201,6 +276,7 @@ foreach ($case in $cases) {
 }
 Assert-WslSelectionNormalizationContract
 Assert-ManifestConsumesInstallPlanFacts
+Assert-SetupPayloadStagingContract
 
 if ($failures.Count -gt 0) {
     throw "Install-plan contract failed:`n$($failures -join "`n")"
