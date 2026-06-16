@@ -1,70 +1,464 @@
 # WinMint Roadmap
 
-## Current Phase
+## Purpose
 
-WinMint is in backend/product proof before GUI work resumes.
+This roadmap is a living project document.
 
-The next work is to prove the PowerShell-owned build, setup, FirstLogon, and
-bootstrap behavior on real hardware. GPUI/Rust remains a frontend-only layer for
-intent, preview, validation messages, and invoking the headless engine; it should
-not drive backend behavior.
+It has two jobs:
 
-Both ARM64/aarch64 and amd64/x86-64 remain first-class support targets.
+1. clearly state the **next development priorities**
+2. keep the **broader strategic backlog** visible so WinMint does not optimize one area while neglecting the rest of the product
 
-## Hardware Reality
+It is intentionally broader than a short-term sprint plan. It should still be readable as an execution document: the highest-priority tracks come first, each track is phased, and lower-priority tracks remain visible without pretending they are next.
 
-- Primary development and acceptance machine: Surface Laptop 7 ARM64/aarch64,
-  Snapdragon X Elite, Copilot+ PC.
-- Available x64/amd64 machines: Alienware Aurora desktop and ThinkPad work
-  laptop.
-- Neither x64 machine is Copilot+. Copilot-key hardware validation belongs only
-  on the Surface Laptop 7.
-- The ThinkPad is temporary and will be returned around June 30, 2026. It is a
-  time-boxed destructive x64 acceptance target.
-- The Alienware is the longer-lived x64 regression/build machine. It is used
-  primarily for gaming, so destructive testing there stays deliberate.
+## Current State
 
-## Tracked Acceptance Profiles
+WinMint is no longer primarily blocked on backend architecture.
 
-- `config/build-profiles/yanai-sl7-microsoft-oobe.json`: ARM64 Surface
-  dev/Copilot+ acceptance profile with YASB, thide, and Raycast. Windhawk is
-  intentionally deferred.
-- `config/build-profiles/yanai-thinkpad-return-amd64.json`: work PC return
-  profile with a minimal, familiar Windows surface. Keeps Edge, installs no
-  extra browsers/editors/launcher or shell layers, installs WSL Ubuntu, and uses
-  `AutoWipeDisk0`.
-- `config/build-profiles/yanai-alienware-aurora-amd64.json`: amd64 gaming
-  desktop profile with Helium, Zen, Neovim, Zed, and Nilesoft. It has no
-  launcher, still removes Xbox apps, and uses manual disk mode.
+The project now has:
 
-## Priority Order
+- a PowerShell module-first backend runtime under `src/runtime/modules/`
+- explicit build contracts: `BuildProfile.json`, `BuildManifest.json`, `BuildDelta.json`, and `state.json`
+- a headless engine that owns profile normalization, install-plan derivation, ISO/WIM servicing, setup payload staging, FirstLogon orchestration, reporting, and audit generation
+- a GPUI frontend that can create intent, generate profiles, invoke builds, and render backend-generated review data
+- a stronger contract and validation spine around setup payloads, FirstLogon, profile invariants, bootstrap behavior, and release boundaries
 
-1. Prove ARM64 Surface live install acceptance first.
-2. Verify the release/bootstrap path.
-3. Use live install audit output as the feedback loop for product fixes, run
-   explicitly after acceptance installs or through an audit-enabled acceptance
-   run/profile. The tracked profiles do not imply audit is enabled by default.
-4. Stabilize x64 after ARM64 is stable, using the ThinkPad before return and the
-   Alienware as the long-term x64 regression/build host.
-5. Resume GUI work only after backend behavior is proven.
+The main project risk has shifted.
 
-## Surface Acceptance Items
+The hard problem is less "can the backend do the work?" and more:
 
-- FirstLogon completes and resumes correctly after interruption.
-- YASB, thide, and Raycast install, configure, and start at first logon.
-- Raycast Copilot-key app policy is applied, and the physical Copilot key works
-  on the Surface Laptop 7.
-- Everything uses the pinned ARM64 direct-download backend and quiet config.
-- ViVeTool virtual desktop flyout suppression works for the YASB+thide baseline
-  without Windhawk.
-- Windhawk remains deferred until baseline ARM64 performance is known.
+- can the shipped product path be trusted by real users
+- can acceptance be proven systematically
+- can the GUI become the normal product surface
+- can the live desktop result be made deliberate and polished
 
-## GUI Return Criteria
+## Next Priorities
 
-GUI work resumes after the backend path has evidence from live installs:
+These are the current top priorities for continued development.
 
-- Profile-backed build and validation behavior is stable.
-- FirstLogon and setup payloads behave idempotently on real hardware.
-- Release/bootstrap can install the current product without local repo state.
-- ARM64 acceptance is complete, with x64 stabilization underway or clearly
-  bounded by tracked follow-up work.
+1. **Release and bootstrap hardening**
+   WinMint needs a trustworthy end-user path through `irm | iex`, release acquisition, runtime gating, and packaged GUI launch.
+
+2. **Live hardware acceptance**
+   VM testing is necessary but not sufficient. Real ARM64 and amd64 installs still need more systematic coverage and evidence handling.
+
+3. **FirstLogon and desktop experience maturity**
+   Shell layers, launcher behavior, package installs, and live-user setup need stronger end-state validation and refinement.
+
+4. **Hyper-V VM test architecture**
+   The existing VM scripts work, but they still need a more intentional structure for repeatable unattended-install and first-logon acceptance.
+
+5. **GPUI completion**
+   The GUI is real, but it is not yet the fully finished primary surface for users.
+
+The order above is deliberate:
+
+- **release/bootstrap comes first** because there is no credible public product path without it
+- **live hardware comes second** because WinMint is ultimately judged on real installs, not only on dry runs or VMs
+- **FirstLogon and desktop maturity comes third** because that is where the product either feels intentional or falls apart after installation
+- **Hyper-V architecture comes fourth** because it improves repeatability and regression speed, but it is still a support system for the product rather than the product itself
+- **GPUI completion comes fifth** because a polished frontend is valuable, but it should not outrun release trust, real install evidence, or live-user experience quality
+
+The order is still not rigid. If evidence from hardware installs or release testing shows a higher-severity failure, that track should jump ahead.
+
+## Track A — Release and Bootstrap Hardening
+
+### Phase A1 — Clean-Machine Launch Path
+
+Goal: make the normal user entry path reliable on a machine that does not already resemble the maintainer's workstation.
+
+Work:
+
+- verify the release bundle contents against the actual packaged runtime
+- verify `winmint.ps1` acquisition, hash validation, and launch behavior on clean machines
+- confirm the packaged GUI path works without repo-local assumptions
+- ensure bootstrap/runtime acquisition works when `pwsh` is missing or too old
+- remove any remaining hidden dependency on source-tree state
+
+Exit criteria:
+
+- the release path works from a clean Windows machine
+- the bootstrapper launches the intended packaged product, not a dev fallback
+- runtime re-entry is predictable and explainable
+
+### Phase A2 — Failure and Recovery UX
+
+Goal: make bootstrap and release failures understandable instead of mysterious.
+
+Work:
+
+- improve messaging for download failure, hash mismatch, elevation failure, runtime acquisition failure, and relaunch failure
+- make restart/re-entry behavior explicit
+- ensure the user can tell whether the failure is network, permission, runtime, or product-specific
+- define safe retry behavior
+
+Exit criteria:
+
+- bootstrap failures are diagnosable without reading source
+- recovery paths are explicit and do not feel accidental
+
+### Phase A3 — Public Usage Readiness
+
+Goal: define and prove the minimum release-hardening bar before broader real-user adoption.
+
+Work:
+
+- define release acceptance criteria
+- tighten release-bundle verification and documented host requirements
+- ensure README and bootstrap docs describe the real shipped path
+- keep release and bootstrap validation part of normal regression discipline
+
+Exit criteria:
+
+- there is a defensible answer to "is WinMint ready for broader external use?"
+
+## Track B — Live Hardware Acceptance
+
+### Phase B1 — Acceptance Inventory
+
+Goal: explicitly document what must be proven on real hardware and cannot be delegated to VMs.
+
+Work:
+
+- separate ARM64-only, amd64-only, and shared checks
+- identify hardware-only checks such as Copilot-key behavior and Copilot+ specifics
+- define destructive-install discipline for each tracked machine
+- map tracked profiles to acceptance purpose
+
+Exit criteria:
+
+- there is a concrete hardware acceptance matrix, not just informal maintainer knowledge
+
+### Phase B2 — Evidence Loop
+
+Goal: make live installs produce reusable evidence.
+
+Work:
+
+- standardize what logs, manifests, deltas, and audit outputs are collected after a hardware install
+- define a repeatable post-install acceptance checklist
+- use live install audit output as structured feedback rather than incidental diagnostics
+
+Exit criteria:
+
+- hardware acceptance produces comparable evidence instead of one-off observations
+
+### Phase B3 — Ongoing Regression Coverage
+
+Goal: make hardware acceptance sustainable over time.
+
+Work:
+
+- decide which profiles are recurring regression profiles
+- decide which checks are release-gating versus occasional deep validation
+- keep the matrix realistic for available hardware
+
+Exit criteria:
+
+- hardware validation remains practical and deliberate
+
+## Track C — FirstLogon and Desktop Experience Maturity
+
+### Phase C1 — FirstLogon Reliability
+
+Goal: strengthen live-user setup as a product surface rather than a best-effort script chain.
+
+Work:
+
+- continue hardening resumability and idempotency
+- improve optional-module isolation and diagnostics
+- refine retryable and reboot-requiring flows
+- ensure module success means real end-state success, not only command completion
+
+Exit criteria:
+
+- FirstLogon failures are narrower, clearer, and easier to recover from
+
+### Phase C2 — Shell-Layer Maturity
+
+Goal: make shell selections produce a polished desktop, not just installed packages.
+
+Work:
+
+- improve `windhawk` preset confidence and lifecycle handling
+- improve `yasb` + `thide` combined behavior and end-state ergonomics
+- improve `komorebi` + `whkd` defaults and workspace behavior
+- refine `nilesoft` integration
+- align the actual installed desktop with UI preview intent
+
+Exit criteria:
+
+- selected desktop layers result in a desktop that feels deliberate and finished
+
+### Phase C3 — Launcher and Desktop Integration
+
+Goal: finish the user-facing experience around Raycast, Search fallback, tray behavior, and shell coexistence.
+
+Work:
+
+- verify launcher key behavior across launcher/no-launcher paths
+- confirm Raycast extension curation remains intentional
+- refine status icons and startup behavior
+- ensure desktop layers and launcher behavior coexist predictably
+
+Exit criteria:
+
+- launcher and shell behavior feels like one product, not separate features stitched together
+
+## Track D — Hyper-V VM Test Architecture
+
+### Phase D1 — VM Testing Model
+
+Goal: turn the current collection of scripts into an explicit test system.
+
+Work:
+
+- define VM test classes: install smoke, unattended install, first-logon completion, shell/app acceptance, audit runs, diagnostics
+- define the boundaries between profile fixture, ISO build, VM provisioning, guest execution, evidence collection, and result evaluation
+- make the Pro-for-Hyper-V invariant a first-class design rule
+
+Exit criteria:
+
+- VM testing has named layers and responsibilities
+- maintainers can explain what each script owns
+
+### Phase D2 — Harness Restructure
+
+Goal: make VM testing composable and repeatable.
+
+Work:
+
+- restructure the harness into explicit phases
+- reduce ad hoc coupling between build, VM creation, guest mutation, rerun, and log collection helpers
+- standardize output layout and evidence directories
+- support partial reruns at deliberate boundaries
+
+Exit criteria:
+
+- VM runs can be resumed and inspected by phase
+- the harness no longer feels like a loose collection of convenience scripts
+
+### Phase D3 — Scenario Matrix
+
+Goal: stop overloading one VM profile with too many product concerns.
+
+Work:
+
+- define a small matrix of VM acceptance profiles by purpose
+- split browser/editor/WSL checks from shell-layer checks where useful
+- decide which desktop-layer and launcher scenarios belong in VM acceptance versus live hardware
+- keep scenarios narrow enough that failures are attributable
+
+Exit criteria:
+
+- VM scenarios are intentional and diagnosable
+
+### Phase D4 — Evidence and Evaluation
+
+Goal: make VM outcomes machine-readable and comparable across runs.
+
+Work:
+
+- define required evidence artifacts
+- evaluate success/failure from `BuildManifest`, `BuildDelta`, setup logs, and `state.json`
+- standardize result summaries
+- prepare the harness for future gated automation, even if full VM runs stay local for now
+
+Exit criteria:
+
+- VM acceptance outcomes are systematic, not mostly manual interpretation
+
+## Track E — GPUI Completion
+
+### Phase E1 — Wizard Completion
+
+Goal: complete the main GUI flow as a full profile-authoring surface.
+
+Work:
+
+- finish the Configure, Build, and Review flows
+- ensure all important profile dimensions are visible and understandable
+- keep the frontend strictly contract-driven
+
+Exit criteria:
+
+- a realistic WinMint build can be authored end-to-end through GPUI
+
+### Phase E2 — Review and Reporting UX
+
+Goal: make the review experience genuinely useful before a build.
+
+Work:
+
+- deepen `BuildDelta` rendering
+- group change summaries by phase and subsystem
+- explain keep/suppress behavior clearly
+- keep artifact paths secondary to the actual planned-change story
+
+Exit criteria:
+
+- the review page answers "what will change?" without raw JSON inspection
+
+### Phase E3 — Build Execution UX
+
+Goal: make the GUI comfortable during long-running real usage.
+
+Work:
+
+- improve progress presentation
+- improve failure-state clarity
+- improve artifact discovery after builds
+- keep elevation and relaunch flows understandable
+
+Exit criteria:
+
+- GUI builds are understandable during execution and after failure
+
+### Phase E4 — Product Polish
+
+Goal: make GPUI feel like the primary user-facing product.
+
+Work:
+
+- refine navigation, layout, component consistency, and state handling
+- tighten packaged GUI assumptions
+- keep Rust logic frontend-only while still making the app feel complete
+
+Exit criteria:
+
+- the packaged GUI feels like the normal WinMint experience
+
+## Track F — Reporting and Audit Polish
+
+### Phase F1 — Human-Facing Summaries
+
+Goal: make backend-generated outputs more useful to humans.
+
+Work:
+
+- improve manifest and delta summaries
+- ensure CLI and GUI review surfaces align
+- make reports more useful after real builds and installs
+
+Exit criteria:
+
+- reports are useful as evidence, not only as raw artifacts
+
+### Phase F2 — Audit Usefulness After Install
+
+Goal: make audit output a real feedback mechanism for product refinement.
+
+Work:
+
+- refine live-install audit output
+- better connect audit findings to profile/setup/first-logon behavior
+- define which warnings matter most for release readiness
+
+Exit criteria:
+
+- audit results feed roadmap prioritization directly
+
+## Track G — CLI and Product Surface Polish
+
+### Phase G1 — CLI Ergonomics
+
+Goal: keep the CLI coherent even if GPUI becomes the default path.
+
+Work:
+
+- improve help text and failure messages
+- ensure `new`, `build`, `validate`, `list`, and `clean` remain coherent
+- keep JSON and human output predictable
+
+Exit criteria:
+
+- CLI remains a strong headless interface, not a neglected fallback
+
+### Phase G2 — Cross-Surface Consistency
+
+Goal: ensure CLI, GUI, reports, and docs all describe the same product.
+
+Work:
+
+- align wording and behavior across surfaces
+- keep contract-driven behavior authoritative
+- prevent UI/CLI drift on defaults and option meanings
+
+Exit criteria:
+
+- the product reads as one system, not multiple competing surfaces
+
+## Track H — Documentation and README Maturity
+
+### Phase H1 — Documentation Boundaries
+
+Goal: reduce both under-documentation and over-documentation.
+
+Work:
+
+- tighten what belongs in `README.md`, `AGENTS.md`, and `docs/`
+- remove stale or duplicative detail
+- keep executable truth in contracts and tests, not documentation drift
+
+Exit criteria:
+
+- docs are clearer, smaller where possible, and more trustworthy
+
+### Phase H2 — Root README Maturity
+
+Goal: make the repo front page feel like a mature GitHub-facing project.
+
+Work:
+
+- improve the product pitch and current-status framing
+- explain what WinMint is, who it is for, and what its safety/product stance is
+- present realistic setup and usage paths
+- improve architecture and roadmap summaries for readers
+
+Exit criteria:
+
+- the root README looks intentional, credible, and current
+
+## Lower-Priority / Future Tracks
+
+These are not unimportant. They are simply not the most urgent right now.
+
+### Distribution Variants
+
+- future installer choices beyond the current bootstrap and zip path
+- possible packaging refinements for different user audiences
+
+### Broader Automation
+
+- more CI-friendly validation where Windows host restrictions permit it
+- stronger automated release verification
+
+### Additional UX Surfaces
+
+- first-logon status/demo UI maturation
+- future visual/reporting helpers if they stay aligned with the headless backend
+
+## Roadmap Maintenance Rules
+
+When this roadmap changes:
+
+- keep **Next Priorities** short and explicit
+- keep each major track phased
+- do not pretend lower-priority tracks are unimportant; keep them visible
+- promote a lower-priority track when evidence says it is blocking adoption, correctness, or user trust
+- remove completed phases instead of letting the roadmap become a graveyard
+
+## Definition of Wider Readiness
+
+WinMint is not ready for broader real-user usage merely because one area looks polished.
+
+Wider readiness requires credible progress across:
+
+- release and bootstrap trust
+- VM acceptance structure
+- live hardware evidence
+- FirstLogon and desktop-layer maturity
+- a product-quality GUI or clearly acceptable CLI/bootstrap fallback
+- trustworthy docs and project presentation
+
+That is why this roadmap is broader than only GPUI and VM testing, even though those remain important tracks.
