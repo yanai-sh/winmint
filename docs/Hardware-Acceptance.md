@@ -1,0 +1,115 @@
+# Hardware Acceptance
+
+This runbook tracks the real-machine acceptance work that should happen before
+GUI work resumes. It is maintainer-facing and intentionally calls out checks
+that require physical hardware, destructive installs, or release assets.
+
+## Hardware Roles
+
+| Machine | Role | Notes |
+|---------|------|-------|
+| Surface Laptop 7 ARM64/aarch64 Snapdragon X Elite Copilot+ PC | Primary development, ARM64 acceptance, Copilot+ validation, physical Copilot-key validation | Prove the ARM64 path first. Keep Windhawk out until baseline performance is known. |
+| ThinkPad amd64/x64 work laptop | Temporary destructive acceptance target before return around June 30, 2026 | Not Copilot+. Should feel like vanilla Windows 11 after install. Use first for time-boxed x64 acceptance. |
+| Alienware Aurora amd64/x64 desktop | Long-lived x64 regression and build machine | Gaming-focused. Not Copilot+. Use after ARM64 is proven and ThinkPad coverage is complete. |
+
+## Tracked Profiles
+
+| Profile | Intent |
+|---------|--------|
+| `config/build-profiles/yanai-sl7-microsoft-oobe.json` | ARM64 Surface profile with YASB, thide, and Raycast. No Windhawk yet. |
+| `config/build-profiles/yanai-thinkpad-return-amd64.json` | Keep Edge, no extra browsers, editors, launcher, or shell layers; WSL Ubuntu; `AutoWipeDisk0`. |
+| `config/build-profiles/yanai-alienware-aurora-amd64.json` | Helium and Zen browsers, Neovim and Zed, Nilesoft, no launcher, Xbox apps removed, manual disk mode. |
+
+## Local Preflight
+
+Run these from the repository root before real-machine installs:
+
+```powershell
+pwsh -NoProfile -File tools\validation\Validate.ps1
+pwsh -NoProfile -File tests\contract\Test-Fast.ps1
+```
+
+Validate the tracked profiles from an elevated PowerShell session. If the
+session is not already elevated, add `-AllowElevate` to let the CLI show an
+explicit UAC prompt:
+
+```powershell
+pwsh -NoProfile -File WinMint-CLI.ps1 validate config\build-profiles\yanai-sl7-microsoft-oobe.json
+pwsh -NoProfile -File WinMint-CLI.ps1 validate config\build-profiles\yanai-thinkpad-return-amd64.json
+pwsh -NoProfile -File WinMint-CLI.ps1 validate config\build-profiles\yanai-alienware-aurora-amd64.json
+```
+
+Dry-run each profile before burning media or writing USB. `build -DryRun` also
+requires an elevated PowerShell session or `-AllowElevate`:
+
+```powershell
+pwsh -NoProfile -File WinMint-CLI.ps1 build config\build-profiles\yanai-sl7-microsoft-oobe.json -DryRun
+pwsh -NoProfile -File WinMint-CLI.ps1 build config\build-profiles\yanai-thinkpad-return-amd64.json -DryRun
+pwsh -NoProfile -File WinMint-CLI.ps1 build config\build-profiles\yanai-alienware-aurora-amd64.json -DryRun
+```
+
+## Surface ARM64 Acceptance
+
+Use the Surface Laptop 7 as the first acceptance target. Confirm:
+
+- FirstLogon completes and can resume cleanly after interruption or reboot.
+- YASB, thide, and Raycast start for the live user.
+- Raycast Copilot-key app policy is present and the physical Copilot key opens
+  the expected target.
+- Raycast file search uses the pinned native ARM64 Everything direct-download
+  backend with quiet configuration.
+- ViVeTool suppresses the virtual desktop flyout for the YASB plus thide profile
+  while Windhawk is absent.
+- Windhawk remains excluded until baseline ARM64 performance and startup behavior
+  are known.
+
+## Release And Bootstrap
+
+After profile acceptance is credible, verify the release path without inventing
+or assuming a version:
+
+```powershell
+$Version = Read-Host 'Release version'
+pwsh -NoProfile -File tools\release\New-WinMintReleaseBundle.ps1 -Version $Version
+```
+
+Confirm `dist\` contains the release zip and matching `.sha256` file. The
+bootstrap path must refuse a release when the expected hash asset is missing or
+does not match. Smoke-test `winmint.ps1` and the Cloudflare alias path at a high
+level by confirming they fetch the intended release, verify the hash, install
+under the expected local version directory, and launch the packaged entry point.
+
+## Live Install Audit
+
+Live install audit is opt-in and is not enabled by the tracked profiles by
+default. Run it explicitly after acceptance installs, or create a separate
+audit-enabled profile/run for diagnostics.
+
+From the repo, run the audit script directly against the installed setup profile:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\audit\Audit-LiveInstall.ps1 `
+  -SetupProfilePath C:\Windows\Setup\Scripts\WinMintSetupProfile.json `
+  -OutputPath C:\ProgramData\WinMint\Logs\LiveInstallAudit.json `
+  -IncludeInventory
+```
+
+If the audit was enabled in the build profile, FirstLogon runs the staged copy at
+`C:\Windows\Setup\Scripts\Audit-LiveInstall.ps1` and writes
+`C:\ProgramData\WinMint\Logs\LiveInstallAudit.json`. Use the repo script for
+manual reruns so the audit logic matches the current checkout, and use the
+staged path only when verifying the exact payload installed by the ISO.
+
+Treat audit findings as signals, not acceptance blockers by themselves. Convert
+real product issues into contract tests, setup fixes, or FirstLogon fixes.
+
+## x64 Follow-Up
+
+Stabilize amd64/x64 only after the ARM64 path is proven. Use the ThinkPad first
+because the install is destructive and time-boxed before return around
+June 30, 2026. Use the Alienware Aurora later for long-term x64 regression and
+build loops.
+
+Review this runbook around June 30, 2026. If the ThinkPad has already been
+returned or the deadline changed, remove or update the temporary ThinkPad
+acceptance target before relying on this plan.

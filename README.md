@@ -23,7 +23,7 @@ ship a hidden golden Windows image; your source ISO is the serviced source.
 # GUI
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-GUI.ps1
 
-# Author a profile, then dry-run a build from it (read-only; no WIM mount or disk writes)
+# Author a profile, then dry-run a build from it (requires elevated PowerShell, or add -AllowElevate)
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 new .\BuildProfile.json
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 build .\BuildProfile.json -DryRun
 ```
@@ -211,10 +211,10 @@ Schemas live in [`schemas/`](schemas).
 - [Project structure](docs/Project-Structure.md)
 - [Distribution](docs/Distribution.md)
 - [Debloat strategy](docs/Windows-Debloat-Strategy.md)
+- [Hardware acceptance](docs/Hardware-Acceptance.md)
 
 ## License
 
 WinMint is licensed under GPL-2.0-or-later; see [LICENSE](LICENSE). Bundled
 third-party assets retain their original licenses; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-</content>
