@@ -63,8 +63,10 @@ defaults into the live user profile: backup/setup pressure prompts stay off,
 the lock screen uses the local WinMint image instead of Spotlight rotation, and
 nonessential taskbar/tray affordances start hidden. Windows Update remains
 enabled, but Delivery Optimization peer upload/download behavior is disabled so
-the PC is not used to serve updates to other devices. Archive handling stays
-native; WinMint does not install a third-party archive manager by default. After
+the PC is not used to serve updates to other devices. Windows Update driver
+delivery stays enabled, but vendor driver co-installers are blocked so hardware
+drivers do not silently bring companion apps and tray utilities with them.
+Archive handling stays native; WinMint does not install a third-party archive manager by default. After
 FirstLogon succeeds, WinMint removes its setup residue and creates a final
 `WinMint post-install complete` System Restore point.
 WinMint is WSL-first by design: the platform plumbing is always enabled, while
@@ -84,11 +86,12 @@ consumes the profile.
 |--------|---------|-------------|
 | AI / Copilot / Recall | Recall removed; imposed Copilot app/shell, Notepad AI, web AI APIs, and app AI-model access disabled | `-KeepCopilot` keeps non-Recall Copilot+ AI policy/app surfaces; Recall stays removed |
 | Edge browser | Removal requested; debloat policies always applied | `-KeepEdge` keeps the browser installed and debloated |
-| Xbox / Game Bar | Removed | `-KeepGaming` keeps gaming apps and performance tweaks |
+| Xbox / Game Bar | Removed; Game Bar protocol prompts are no-op'd | `-KeepGaming` keeps gaming apps and performance tweaks |
 | File Explorer | Shows extensions/hidden files, keeps Home, hides Gallery | baseline |
 | Shell layers | Off | `-DesktopUI`, or `-Install windhawk,yasb,thide,komorebi,nilesoft` |
 | Launcher | Off, except `thide` defaults to Raycast | `-Launcher Raycast` |
 | Browsers | None installed by default | `-Browser zen-browser,helium,firefox-developer-edition,brave,edge` |
+| Power plan | Balanced | `-PowerPlan EnergySaver`, `HighPerformance`, or `UltimatePerformance`; other schemes are preserved |
 | Dev tweaks, OpenSSH, WSL2, Scoop, MinGit, Starship with `nerd-font-symbols`, fonts/cursors | Always on | baseline |
 | Offline image updates | Disabled by default | `-UpdateImage Stable25H2` opts in; `-UpdatePayloadRoot <dir>` overrides the cache root |
 

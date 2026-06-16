@@ -130,6 +130,7 @@
       "properties": {
         "device": { "type": "string", "enum": ["ThisPC", "DifferentPC"] },
         "formFactor": { "type": "string", "enum": ["Auto", "Laptop", "Desktop"] },
+        "powerPlan": { "type": "string", "enum": ["Balanced", "EnergySaver", "HighPerformance", "UltimatePerformance"] },
         "editionMode": { "type": "string", "enum": ["TargetLicense", "Fixed"] },
         "edition": { "type": "string" },
         "productKey": { "type": "string" },

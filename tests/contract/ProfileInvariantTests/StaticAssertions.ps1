@@ -693,6 +693,7 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
 
     foreach ($expectedDefaultTweak in @(
             'home-privacy-policy', 'storage-sense-policy', 'modern-standby-policy', 'oobe-rehydration-policy', 'wpbt-policy',
+            'driver-coinstaller-policy',
             # Subtractive baseline: developer QoL is now baseline, and the default
             # build removes imposed Copilot/AI surfaces, Recall, and the Game Bar.
             'developer-mode', 'gamebar-policy', 'windows-ai-features-removal', 'windows-ai-recall-policy'
@@ -1221,6 +1222,7 @@ function Assert-BuildProfileSchemaOwnsBrowserContract {
     Assert-BuildProfileSchemaEnum -Actual $schema.properties.source.properties.architecture.enum -Expected (Get-WinMintOptionValues -Name ProfileArchitecture) -Name 'profile.source.architecture'
     Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.device.enum -Expected (Get-WinMintOptionValues -Name TargetDevice) -Name 'profile.target.device'
     Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.formFactor.enum -Expected (Get-WinMintOptionValues -Name FormFactor) -Name 'profile.target.formFactor'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.powerPlan.enum -Expected (Get-WinMintOptionValues -Name PowerPlan) -Name 'profile.target.powerPlan'
     Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.editionMode.enum -Expected (Get-WinMintOptionValues -Name EditionMode) -Name 'profile.target.editionMode'
     Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.diskMode.enum -Expected (Get-WinMintOptionValues -Name DiskMode) -Name 'profile.target.diskMode'
     Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.diskLayout.properties.mode.enum -Expected (Get-WinMintOptionValues -Name DiskMode) -Name 'profile.target.diskLayout.mode'
@@ -2100,6 +2102,22 @@ function Assert-RegistryTweakMetadataAndRollback {
     $publicIds = @($publicTweaks | ForEach-Object { [string]$_.id })
     $executableIds = @($script:RegistryTweaks | ForEach-Object { [string]$_.id })
 
+    foreach ($expectedFunction in @(
+            'Assert-WinMintRegistryTweakCatalog',
+            'Invoke-WinMintRegistryOperation',
+            'Assert-WinMintRegistryDeleteTarget'
+        )) {
+        if (-not (Get-Command $expectedFunction -ErrorAction SilentlyContinue)) {
+            Add-SmokeFailure "Registry tweak backend should expose '$expectedFunction'."
+        }
+    }
+    try {
+        Assert-WinMintRegistryTweakCatalog
+    }
+    catch {
+        Add-SmokeFailure "Registry tweak catalog static safety validation failed: $($_.Exception.Message)"
+    }
+
     foreach ($group in @($script:RegistryTweaks)) {
         $id = [string]$group.id
         if ($publicIds -notcontains $id) {
@@ -2122,6 +2140,21 @@ function Assert-RegistryTweakMetadataAndRollback {
             )
             if ($rollbackOps.Count -eq 0) {
                 Add-SmokeFailure "Reversible registry tweak '$id' must include at least partial rollback metadata."
+            }
+        }
+        $registryOperations = @((Get-WinMintProfileSetting (Get-WinMintProfileSetting $group 'operations' @{}) 'registry' @()))
+        if ($registryOperations.Count -ne (@($group.set).Count + @($group.remove).Count)) {
+            Add-SmokeFailure "Registry tweak '$id' must expose a typed operations.registry DOM matching set/remove entries."
+        }
+        foreach ($operation in $registryOperations) {
+            foreach ($field in @('kind', 'phase', 'hive', 'subPath', 'path')) {
+                $value = Get-WinMintProfileSetting $operation $field $null
+                if ($null -eq $value -or ($value -is [string] -and [string]::IsNullOrWhiteSpace($value))) {
+                    Add-SmokeFailure "Registry tweak '$id' operation must define '$field'."
+                }
+            }
+            if ([string](Get-WinMintProfileSetting $operation 'phase' '') -ne 'offline-image') {
+                Add-SmokeFailure "Registry tweak '$id' operation phase must currently be offline-image."
             }
         }
     }
@@ -2187,6 +2220,48 @@ function Assert-RegistryTweakMetadataAndRollback {
         }
         if (@($defaultConfig.RegistryTweaks) -notcontains 'cloud-content-policy') {
             Add-SmokeFailure 'cloud-content-policy must apply by default.'
+        }
+    }
+
+    $driverCoInstaller = $script:RegistryTweaks | Where-Object id -eq 'driver-coinstaller-policy' | Select-Object -First 1
+    if (-not $driverCoInstaller) {
+        Add-SmokeFailure 'Expected driver-coinstaller-policy registry tweak to exist.'
+    }
+    else {
+        $match = @($driverCoInstaller.set | Where-Object {
+                [string]$_.path -eq 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Device Installer' -and
+                [string]$_.name -eq 'DisableCoInstallers' -and
+                [string]$_.value -eq '1'
+            })
+        if ($match.Count -eq 0) {
+            Add-SmokeFailure 'driver-coinstaller-policy must stamp DisableCoInstallers=1 under Device Installer.'
+        }
+        if (@($defaultConfig.RegistryTweaks) -notcontains 'driver-coinstaller-policy') {
+            Add-SmokeFailure 'driver-coinstaller-policy must apply by default.'
+        }
+    }
+
+    $gamebar = $script:RegistryTweaks | Where-Object id -eq 'gamebar-policy' | Select-Object -First 1
+    if (-not $gamebar) {
+        Add-SmokeFailure 'Expected gamebar-policy registry tweak to exist.'
+    }
+    else {
+        foreach ($protocol in @('ms-gamebar', 'ms-gamebarservices')) {
+            $rootPath = "zSOFTWARE\Classes\$protocol"
+            $commandPath = "$rootPath\shell\open\command"
+            foreach ($expected in @(
+                    @{ path = $rootPath; name = 'URL Protocol' },
+                    @{ path = $rootPath; name = 'NoOpenWith' },
+                    @{ path = $commandPath; name = '' }
+                )) {
+                $match = @($gamebar.set | Where-Object {
+                        [string]$_.path -eq [string]$expected.path -and
+                        [string]$_.name -eq [string]$expected.name
+                    })
+                if ($match.Count -eq 0) {
+                    Add-SmokeFailure "gamebar-policy must stamp '$($expected.name)' under $($expected.path)."
+                }
+            }
         }
     }
 

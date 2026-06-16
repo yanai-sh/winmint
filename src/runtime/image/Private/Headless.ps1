@@ -309,6 +309,7 @@ function New-WinMintHeadlessProfileFromFlags {
         [ValidateSet('None', 'Host', 'Custom')][string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [ValidateSet('ThisPC', 'DifferentPC')][string]$TargetDevice = 'DifferentPC',
+        [ValidateSet('Balanced', 'EnergySaver', 'HighPerformance', 'UltimatePerformance')][string]$PowerPlan = 'Balanced',
         [string]$DriverPack = '',
         [switch]$ExportHostDrivers,
         [string]$TimeZoneId = '',
@@ -390,6 +391,7 @@ function New-WinMintHeadlessProfileFromFlags {
         ISOPath = $SourceIso
         Architecture = $Architecture
         TargetDevice = $TargetDevice
+        PowerPlan = $PowerPlan
         ComputerName = $ComputerName
         AccountName = $AccountName
         AccountMode = $AccountMode

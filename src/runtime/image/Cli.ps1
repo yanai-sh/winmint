@@ -166,6 +166,7 @@ function Invoke-WinMintNewProfileCommand {
         [string]$DriverPath = '',
         [string]$DriverPack = '',
         [ValidateSet('ThisPC', 'DifferentPC')][string]$TargetDevice = 'DifferentPC',
+        [ValidateSet('Balanced', 'EnergySaver', 'HighPerformance', 'UltimatePerformance')][string]$PowerPlan = 'Balanced',
         [switch]$ExportHostDrivers,
         [string]$TimeZoneId = '',
         [string]$InputLocale = '',
@@ -236,6 +237,7 @@ function Invoke-WinMintNewProfileCommand {
         -DriverSource $DriverSource `
         -DriverPath $DriverPath `
         -TargetDevice $TargetDevice `
+        -PowerPlan $PowerPlan `
         -DriverPack $DriverPack `
         -ExportHostDrivers:$ExportHostDrivers `
         -TimeZoneId $TimeZoneId `
@@ -340,6 +342,7 @@ new options (configuration lives here):
   -UpdatePayloadRoot <dir>          Root containing packages\, appx\, and dependency payloads.
   -UpdateProvisionedApps On|Off     Include Store/MSIX app provisioning payloads.
   -Wsl2Distros Ubuntu,Fedora,archlinux,NixOS-WSL,pengwin
+  -PowerPlan Balanced|EnergySaver|HighPerformance|UltimatePerformance
   -PhoneLink -LiveInstallAudit
   Identity/locale/driver flags: -ComputerName -AccountName -AccountMode
   -Password/-PasswordPath/-PasswordEnvVar -AutoLogon -AutoWipeDisk -Architecture

@@ -594,6 +594,7 @@ function New-WinMintBuildProfile {
         target = [ordered]@{
             device = [string](Get-WinMintProfileSetting $Settings 'TargetDevice' 'DifferentPC')
             formFactor = [string](Get-WinMintProfileSetting $Settings 'FormFactor' 'Auto')
+            powerPlan = [string](Get-WinMintProfileSetting $Settings 'PowerPlan' 'Balanced')
             editionMode = $editionMode
             edition = $edition
             productKey = $productKey
@@ -768,6 +769,9 @@ function Test-WinMintBuildProfile {
     & $enum ([string](Get-WinMintProfileSetting $target 'device' '')) 'profile.target.device' @($options['TargetDevice'])
     if (Test-WinMintProfileProperty -Object $target -Name 'formFactor') {
         & $enum ([string](Get-WinMintProfileSetting $target 'formFactor' '')) 'profile.target.formFactor' @($options['FormFactor'])
+    }
+    if (Test-WinMintProfileProperty -Object $target -Name 'powerPlan') {
+        & $enum ([string](Get-WinMintProfileSetting $target 'powerPlan' '')) 'profile.target.powerPlan' @($options['PowerPlan'])
     }
     & $enum ([string](Get-WinMintProfileSetting $target 'editionMode' '')) 'profile.target.editionMode' @($options['EditionMode'])
     $diskMode = [string](Get-WinMintProfileSetting $target 'diskMode' '')

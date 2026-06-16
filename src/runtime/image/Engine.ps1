@@ -74,6 +74,8 @@ function New-WinMintBuildConfig {
     if ($diskMode -notin @('Manual', 'AutoWipeDisk0', 'DualBootReserved')) { $diskMode = 'Manual' }
     $formFactor = [string](Get-WinMintProfileSetting $target 'formFactor' 'Auto')
     if ($formFactor -notin @('Auto', 'Laptop', 'Desktop')) { $formFactor = 'Auto' }
+    $powerPlan = [string](Get-WinMintProfileSetting $target 'powerPlan' 'Balanced')
+    if ($powerPlan -notin @('Balanced', 'EnergySaver', 'HighPerformance', 'UltimatePerformance')) { $powerPlan = 'Balanced' }
     $diskLayout = Get-WinMintProfileSetting $target 'diskLayout' $null
     if ($null -eq $diskLayout) {
         $diskLayout = [ordered]@{
@@ -160,6 +162,7 @@ function New-WinMintBuildConfig {
         ProductKey = $productKey
         TargetDevice = [string](Get-WinMintProfileSetting $target 'device' 'DifferentPC')
         FormFactor = $formFactor
+        PowerPlan = $powerPlan
         ComputerName = [string](Get-WinMintProfileSetting $identity 'computerName' '')
         AccountName = [string](Get-WinMintProfileSetting $identity 'accountName' '')
         AccountMode = $accountMode

@@ -173,7 +173,8 @@ function New-WinMintInstallPlanSetupProfile {
             formFactor = [string]$BuildConfig.FormFactor
             dualBoot = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
             disableHibernationOnDesktop = $true
-            desktopPowerPlan = 'HighPerformance'
+            desktopPowerPlan = [string]$BuildConfig.PowerPlan
+            selectedPlan = [string]$BuildConfig.PowerPlan
         }
         edge = [ordered]@{
             # Edge removal intent is serviced by SetupComplete through the normal

@@ -30,7 +30,10 @@ function Assert-FormFactorAndPowerProfile {
     if ([string]$defaultConfig.FormFactor -ne 'Auto') {
         Add-SmokeFailure "Default build config FormFactor should be 'Auto', got '$($defaultConfig.FormFactor)'."
     }
-    foreach ($expected in @('filesystem-performance-policy', 'developer-telemetry-optout', 'telemetry-tracing-policy', 'terminal-admin-context')) {
+    if ([string]$defaultConfig.PowerPlan -ne 'Balanced') {
+        Add-SmokeFailure "Default build config PowerPlan should be 'Balanced', got '$($defaultConfig.PowerPlan)'."
+    }
+    foreach ($expected in @('filesystem-performance-policy', 'developer-telemetry-optout', 'telemetry-tracing-policy', 'terminal-admin-context', 'driver-coinstaller-policy')) {
         if (@($defaultConfig.RegistryTweaks) -notcontains $expected) {
             Add-SmokeFailure "Default Developer build should select registry tweak '$expected'."
         }
@@ -39,8 +42,8 @@ function Assert-FormFactorAndPowerProfile {
     if ([string]$defaultProfile.power.formFactor -ne 'Auto') {
         Add-SmokeFailure 'Setup profile power.formFactor should default to Auto.'
     }
-    if ([string]$defaultProfile.power.desktopPowerPlan -ne 'HighPerformance') {
-        Add-SmokeFailure 'Setup profile power.desktopPowerPlan should be HighPerformance.'
+    if ([string]$defaultProfile.power.desktopPowerPlan -ne 'Balanced' -or [string]$defaultProfile.power.selectedPlan -ne 'Balanced') {
+        Add-SmokeFailure 'Setup profile power plan should default to Balanced.'
     }
     if (-not [bool]$defaultProfile.privacy.disableTelemetryTasks) {
         Add-SmokeFailure 'Telemetry-on default should set privacy.disableTelemetryTasks.'
@@ -62,6 +65,21 @@ function Assert-FormFactorAndPowerProfile {
     $desktopConfig = New-WinMintBuildConfig -BuildProfile $desktopProfile
     if ([string]$desktopConfig.FormFactor -ne 'Desktop') {
         Add-SmokeFailure "FormFactor=Desktop should flow to build config, got '$($desktopConfig.FormFactor)'."
+    }
+    $ultimateProfile = New-WinMintBuildProfile -Settings @{
+        Profile = 'WinMint'
+        ISOPath = (Get-WinMintTestIsoFixturePath)
+        Architecture = 'arm64'
+        ComputerName = 'WinMint'
+        AccountName = 'dev'
+        DriverSource = 'None'
+        DriverPath = ''
+        PowerPlan = 'UltimatePerformance'
+    }
+    $ultimateConfig = New-WinMintBuildConfig -BuildProfile $ultimateProfile
+    $ultimateSetup = New-WinMintSetupProfile -BuildConfig $ultimateConfig
+    if ([string]$ultimateSetup.power.selectedPlan -ne 'UltimatePerformance') {
+        Add-SmokeFailure 'Explicit PowerPlan=UltimatePerformance should flow to the setup profile.'
     }
 }
 

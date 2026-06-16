@@ -16,6 +16,86 @@ function Get-RegistryTweakGroupValue {
     return $null
 }
 
+function Invoke-WinMintRegAdd {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [AllowEmptyString()][string]$Name,
+        [Parameter(Mandatory)][string]$Type,
+        [AllowEmptyString()][string]$Value
+    )
+
+    $args = [System.Collections.Generic.List[string]]::new()
+    $args.Add('add') | Out-Null
+    $args.Add($Path) | Out-Null
+    if ([string]::IsNullOrEmpty($Name)) {
+        $args.Add('/ve') | Out-Null
+    }
+    else {
+        $args.Add('/v') | Out-Null
+        $args.Add($Name) | Out-Null
+    }
+    $args.Add('/t') | Out-Null
+    $args.Add($Type) | Out-Null
+    $args.Add('/d') | Out-Null
+    $args.Add($Value) | Out-Null
+    $args.Add('/f') | Out-Null
+    $null = & reg.exe @args
+}
+
+function Assert-WinMintRegistryDeleteTarget {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $normalized = $Path.Trim('\')
+    $parts = @($normalized -split '\\' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($parts.Count -lt 4) {
+        throw "Refusing shallow registry delete target '$Path'."
+    }
+    foreach ($protected in @(
+            'HKLM\zSYSTEM\ControlSet001',
+            'HKLM\zSYSTEM\ControlSet001\Control',
+            'HKLM\zSYSTEM\ControlSet001\Services',
+            'HKLM\zSOFTWARE\Microsoft',
+            'HKLM\zSOFTWARE\Policies',
+            'HKLM\zSOFTWARE\Classes',
+            'HKLM\zNTUSER\Software',
+            'HKLM\zDEFAULT\SOFTWARE'
+        )) {
+        if ($normalized -ieq $protected) {
+            throw "Refusing protected registry delete target '$Path'."
+        }
+    }
+}
+
+function Invoke-WinMintRegistryOperation {
+    param([Parameter(Mandatory)]$Operation)
+
+    $kind = [string](Get-RegistryTweakGroupValue -Group $Operation -Name 'kind')
+    $path = [string](Get-RegistryTweakGroupValue -Group $Operation -Name 'path')
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        $hive = [string](Get-RegistryTweakGroupValue -Group $Operation -Name 'hive')
+        $subPath = [string](Get-RegistryTweakGroupValue -Group $Operation -Name 'subPath')
+        $path = "$hive\$subPath"
+    }
+    $fullPath = "HKLM\$path"
+
+    switch ($kind) {
+        'setValue' {
+            Invoke-WinMintRegAdd `
+                -Path $fullPath `
+                -Name ([string](Get-RegistryTweakGroupValue -Group $Operation -Name 'name')) `
+                -Type ([string](Get-RegistryTweakGroupValue -Group $Operation -Name 'type')) `
+                -Value ([string](Get-RegistryTweakGroupValue -Group $Operation -Name 'value'))
+        }
+        'removeKey' {
+            Assert-WinMintRegistryDeleteTarget -Path $fullPath
+            try { $null = & reg.exe delete $fullPath /f 2>$null } catch { Write-Verbose "reg.exe delete skipped for ${fullPath}: $($_.Exception.Message)" }
+        }
+        default {
+            throw "Unsupported registry operation kind '$kind'."
+        }
+    }
+}
+
 function Invoke-RegistryTweak {
     param(
         [ValidateNotNullOrEmpty()][string]$MountDir,
@@ -55,16 +135,12 @@ function Invoke-RegistryTweak {
                 }
                 Log "Registry: $($group.description)"
                 try {
-                    foreach ($e in @(Get-RegistryTweakGroupValue -Group $group -Name 'set')) {
-                        $null = & reg.exe add "HKLM\$($e.path)" /v "$($e.name)" /t $e.type /d "$($e.value)" /f
+                    $operations = @(Get-RegistryTweakGroupValue -Group (Get-RegistryTweakGroupValue -Group $group -Name 'operations') -Name 'registry' -Default @())
+                    if ($operations.Count -eq 0) {
+                        throw "Registry tweak '$($group.id)' has no normalized registry operations."
                     }
-                    foreach ($e in @(Get-RegistryTweakGroupValue -Group $group -Name 'remove')) {
-                        # Best-effort, idempotent removal: a policy key that isn't
-                        # present on a clean image is the expected case, not an error.
-                        # reg.exe writes "unable to find ..." to stderr (exit 1) then;
-                        # redirect stderr so that benign case doesn't print in red. The
-                        # catch still absorbs the exit-code throw for any other failure.
-                        try { $null = & reg.exe delete "HKLM\$($e.path)" /f 2>$null } catch { Write-Verbose "reg.exe delete skipped for $($e.path): $($_.Exception.Message)" }
+                    foreach ($operation in $operations) {
+                        Invoke-WinMintRegistryOperation -Operation $operation
                     }
                     if (Get-Command Add-WinMintManifestRegistryTweakEvent -ErrorAction SilentlyContinue) {
                         Add-WinMintManifestRegistryTweakEvent -Group $group -Status 'applied'

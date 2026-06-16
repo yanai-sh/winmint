@@ -7,6 +7,7 @@ function Get-WinMintOptionCatalog {
         AccountMode = @('Local', 'MicrosoftOobe')
         TargetDevice = @('ThisPC', 'DifferentPC')
         FormFactor = @('Auto', 'Laptop', 'Desktop')
+        PowerPlan = @('Balanced', 'EnergySaver', 'HighPerformance', 'UltimatePerformance')
         Edition = @('Host', 'Home', 'Pro', 'Enterprise', 'Education', 'SingleLanguage', 'All')
         EditionMode = @('TargetLicense', 'Fixed')
         DriverSource = @('None', 'Host', 'Custom')
