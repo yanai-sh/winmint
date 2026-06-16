@@ -48,6 +48,7 @@ $validationSteps = [ordered]@{
     'Package manifest' = { Test-PackageManifestArchitecture }
     'JSON schemas' = {
         Test-BuildProfileSchema
+        Test-TrackedBuildProfileSchemas
         Test-BuildManifestSchema
         Test-AgentStateSchema
     }

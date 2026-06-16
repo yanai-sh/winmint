@@ -89,7 +89,7 @@ Assert-HardwareBypassIsExplicit
 Assert-ElevationRequiredForAllRuns
 Assert-HardwareBypassUnattendGeneration
 Assert-HyperVProfileIsProAndUnattended
-Assert-SurfaceProfileUsesStandardHome
+Assert-TrackedHardwareBuildProfiles
 Assert-FixedEditionSelectionIsUnambiguous
 Assert-MicrosoftOobeUnattendGeneration
 Assert-LocalAccountUnattendGeneration

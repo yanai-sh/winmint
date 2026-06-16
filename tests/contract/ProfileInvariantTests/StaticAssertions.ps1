@@ -265,12 +265,96 @@ function Assert-HyperVProfileIsProAndUnattended {
     }
 }
 
-function Assert-SurfaceProfileUsesStandardHome {
+function Test-WinMintSmokeStringArrayExactly {
+    param(
+        [Parameter(Mandatory)][object[]]$Actual,
+        [Parameter(Mandatory)][string[]]$Expected
+    )
+
+    $actualValues = @($Actual | ForEach-Object { [string]$_ } | Sort-Object)
+    $expectedValues = @($Expected | Sort-Object)
+    if ($actualValues.Count -ne $expectedValues.Count) {
+        return $false
+    }
+    for ($i = 0; $i -lt $expectedValues.Count; $i++) {
+        if ($actualValues[$i] -ne $expectedValues[$i]) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Assert-TrackedHardwareBuildProfiles {
     $profilePath = Join-Path $root 'config\build-profiles\yanai-sl7-microsoft-oobe.json'
     $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
 
+    if ([string]$profile.source.architecture -ne 'arm64') {
+        Add-SmokeFailure 'Surface Laptop 7 profile must target arm64 source media.'
+    }
     if ([string]$profile.target.editionMode -ne 'Fixed' -or [string]$profile.target.edition -ne 'Windows 11 Home') {
         Add-SmokeFailure 'Surface Laptop 7 profile must target fixed standard Windows 11 Home, not Home Single Language or target-license selection.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.desktop.layers) -Expected @('yasb', 'thide'))) {
+        Add-SmokeFailure 'Surface Laptop 7 profile desktop layers must be exactly yasb and thide.'
+    }
+    if ([string]$profile.features.launcher -ne 'Raycast') {
+        Add-SmokeFailure 'Surface Laptop 7 profile must select the Raycast launcher.'
+    }
+
+    $profilePath = Join-Path $root 'config\build-profiles\yanai-thinkpad-return-amd64.json'
+    $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+
+    if ([string]$profile.source.architecture -ne 'amd64') {
+        Add-SmokeFailure 'ThinkPad return profile must target amd64 source media.'
+    }
+    if ([string]$profile.target.formFactor -ne 'Laptop') {
+        Add-SmokeFailure 'ThinkPad return profile must use Laptop form factor.'
+    }
+    if ([string]$profile.target.diskMode -ne 'AutoWipeDisk0') {
+        Add-SmokeFailure 'ThinkPad return profile must use AutoWipeDisk0 disk mode.'
+    }
+    if (-not [bool]$profile.keep.edge) {
+        Add-SmokeFailure 'ThinkPad return profile must keep Edge.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.desktop.layers) -Expected @('standard'))) {
+        Add-SmokeFailure 'ThinkPad return profile desktop layers must be exactly standard.'
+    }
+    if (@($profile.development.browsers).Count -ne 0 -or @($profile.development.editors).Count -ne 0) {
+        Add-SmokeFailure 'ThinkPad return profile must not select browsers or editors.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.development.wsl.distros) -Expected @('Ubuntu'))) {
+        Add-SmokeFailure 'ThinkPad return profile WSL distros must be exactly Ubuntu.'
+    }
+    if ([string]$profile.features.launcher -ne 'None') {
+        Add-SmokeFailure 'ThinkPad return profile must not select a launcher.'
+    }
+
+    $profilePath = Join-Path $root 'config\build-profiles\yanai-alienware-aurora-amd64.json'
+    $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+
+    if ([string]$profile.source.architecture -ne 'amd64') {
+        Add-SmokeFailure 'Alienware Aurora profile must target amd64 source media.'
+    }
+    if ([string]$profile.target.formFactor -ne 'Desktop') {
+        Add-SmokeFailure 'Alienware Aurora profile must use Desktop form factor.'
+    }
+    if ([string]$profile.target.diskMode -ne 'Manual') {
+        Add-SmokeFailure 'Alienware Aurora profile must use Manual disk mode.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.development.browsers) -Expected @('helium', 'zen-browser'))) {
+        Add-SmokeFailure 'Alienware Aurora profile browsers must be exactly helium and zen-browser.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.development.editors) -Expected @('neovim', 'zed'))) {
+        Add-SmokeFailure 'Alienware Aurora profile editors must be exactly neovim and zed.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.desktop.layers) -Expected @('nilesoft'))) {
+        Add-SmokeFailure 'Alienware Aurora profile desktop layers must be exactly nilesoft.'
+    }
+    if ([string]$profile.features.launcher -ne 'None') {
+        Add-SmokeFailure 'Alienware Aurora profile must not select a launcher.'
+    }
+    if ([bool]$profile.keep.gaming -or -not [bool]$profile.removals.gaming) {
+        Add-SmokeFailure 'Alienware Aurora profile must remove gaming and must not keep gaming.'
     }
 }
 

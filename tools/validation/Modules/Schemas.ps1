@@ -109,6 +109,38 @@ function Test-BuildProfileSchema {
     Test-JsonObjectRejectedBySchema -Value $badDualBoot -SchemaPath $schema -Label 'winmint.buildprofile dual boot preset required'
 }
 
+function Test-TrackedBuildProfileSchemas {
+    $schema = Get-WinMintPath -Name BuildProfileSchema
+    if (-not (Test-Path -LiteralPath $schema)) {
+        Add-ValidationError 'Build profile schema is missing.'
+        return
+    }
+
+    $profileRoot = Get-WinMintPath -Name ConfigRoot -ChildPath 'build-profiles'
+    if (-not (Test-Path -LiteralPath $profileRoot -PathType Container)) {
+        Add-ValidationError "Tracked build profile directory is missing: $profileRoot"
+        return
+    }
+
+    $trackedProfilePaths = @(
+        Get-RepositoryTrackedPath |
+            Where-Object { $_ -match '^config/build-profiles/[^/]+\.json$' } |
+            Sort-Object
+    )
+
+    foreach ($profilePath in $trackedProfilePaths) {
+        $profileFullPath = Join-Path $root $profilePath
+        try {
+            $profileFile = Get-Item -LiteralPath $profileFullPath -ErrorAction Stop
+            $profile = Get-Content -LiteralPath $profileFile.FullName -Raw | ConvertFrom-Json
+            Test-JsonObjectAgainstSchema -Value $profile -SchemaPath $schema -Label "tracked build profile $($profileFile.Name)"
+        }
+        catch {
+            Add-ValidationError "Tracked build profile parse failed: $profileFullPath :: $($_.Exception.Message)"
+        }
+    }
+}
+
 function Test-BuildManifestSchema {
     $schemaPath = Get-WinMintPath -Name BuildManifestSchema
     if (-not (Test-Path -LiteralPath $schemaPath)) {
