@@ -76,7 +76,6 @@ Snapshot note: this document reflects the current development state of the repo 
 - `AGENTS.md`
 - `README.md`
 - `roadmap.md`
-- `docs/codebase/.codebase-scan.txt`
 - `Cargo.toml`
 - `THIRD_PARTY_NOTICES.md`
 - `config/release-manifest.json`

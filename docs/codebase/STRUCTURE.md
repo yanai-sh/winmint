@@ -53,7 +53,6 @@ Snapshot note: this document reflects the current development state of the repo 
 
 - `docs/Project-Structure.md`
 - `AGENTS.md`
-- `docs/codebase/.codebase-scan.txt`
 - `WinMint-CLI.ps1`
 - `WinMint-GUI.ps1`
 - `winmint.ps1`

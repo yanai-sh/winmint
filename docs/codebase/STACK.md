@@ -62,7 +62,6 @@ pwsh -NoProfile -File tools\release\New-WinMintReleaseBundle.ps1 -Version v0.2.0
 
 - `README.md`
 - `AGENTS.md`
-- `docs/codebase/.codebase-scan.txt`
 - `Cargo.toml`
 - `config/packages.json`
 - `src/runtime/image/WinMint.ps1`

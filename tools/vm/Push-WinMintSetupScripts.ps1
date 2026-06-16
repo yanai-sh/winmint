@@ -15,8 +15,8 @@
 
     Requires an elevated host shell (PowerShell Direct needs Administrator) and the
     guest running with a known local account (the password WinMint baked into the
-    profile). The generated BuildProfile.json / WinMintSetupProfile.json / packages.json
-    in the guest are left in place - only code files are pushed.
+    profile). The generated WinMintAgent\BuildProfile.json / WinMintSetupProfile.json /
+    packages.json in the guest are left in place - only code files are pushed.
 
 .EXAMPLE
     pwsh -NoProfile -File .\tools\vm\Push-WinMintSetupScripts.ps1
@@ -55,8 +55,8 @@ try {
     }
     Copy-Item -Path (Join-Path $repoRoot 'src\runtime\setup\SetupComplete\*') -Destination "$guestScripts\SetupComplete" -ToSession $session -Recurse -Force
 
-    Write-Host 'Pushing src\runtime\firstlogon (code; preserving generated BuildProfile.json/packages.json) ...'
-    foreach ($f in Get-ChildItem -LiteralPath (Join-Path $repoRoot 'src\runtime\firstlogon') -File | Where-Object { $_.Name -ne 'BuildProfile.json' }) {
+    Write-Host 'Pushing src\runtime\firstlogon (code; preserving generated guest profiles/packages) ...'
+    foreach ($f in Get-ChildItem -LiteralPath (Join-Path $repoRoot 'src\runtime\firstlogon') -File) {
         Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $guestAgent $f.Name) -ToSession $session -Force
     }
     Copy-Item -Path (Join-Path $repoRoot 'src\runtime\firstlogon\Modules\*') -Destination "$guestAgent\Modules" -ToSession $session -Recurse -Force

@@ -94,7 +94,6 @@ function Test-RequiredAssets {
         'src\runtime\firstlogon\Agent.Console.ps1',
         'src\runtime\firstlogon\Agent.Runtime.ps1',
         'src\runtime\firstlogon\Start-WinMintAgent.ps1',
-        'src\runtime\firstlogon\BuildProfile.json',
         'src\runtime\firstlogon\Modules\PackageManagers.ps1',
         'src\runtime\firstlogon\Modules\Editors.ps1',
         'src\runtime\firstlogon\Modules\Git.ps1',

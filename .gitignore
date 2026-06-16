@@ -12,11 +12,14 @@ output/
 temp/
 .winmint-ui.json
 node_modules/
+docs/codebase/.codebase-scan.txt
+src/runtime/firstlogon/BuildProfile.json
 
 # Local editor / OS / runtime noise
 .vscode/
 .idea/
 .vs/
+.agents/
 .env
 .env.*
 *.log

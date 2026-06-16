@@ -78,7 +78,6 @@ $validationSteps = [ordered]@{
             ForEach-Object { Test-JsonFile -Path $_.FullName }
         Get-ChildItem -LiteralPath (Get-WinMintPath -Name SchemasRoot) -Filter '*.json' -ErrorAction SilentlyContinue |
             ForEach-Object { Test-JsonFile -Path $_.FullName }
-        Test-JsonFile -Path (Get-WinMintPath -Name RuntimeFirstLogonRoot -ChildPath 'BuildProfile.json')
     }
     'PSScriptAnalyzer' = { Invoke-AnalyzerIfAvailable }
     'Optional integration' = {

@@ -53,7 +53,6 @@ Snapshot note: this document reflects the current development state of the repo 
 ### 6) Evidence
 
 - `winmint.ps1`
-- `docs/codebase/.codebase-scan.txt`
 - `config/packages.json`
 - `src/runtime/image/Private/Manifest.ps1`
 - `src/runtime/image/Private/UpdatePayloads.ps1`

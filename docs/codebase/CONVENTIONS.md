@@ -42,7 +42,6 @@ Snapshot note: this document reflects the current development state of the repo 
 
 - `.editorconfig`
 - `PSScriptAnalyzerSettings.psd1`
-- `docs/codebase/.codebase-scan.txt`
 - `src/runtime/image/WinMint.ps1`
 - `src/runtime/image/Core.ps1`
 - `src/runtime/image/Cli.ps1`

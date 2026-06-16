@@ -51,7 +51,6 @@ pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profile
 ### 6) Evidence
 
 - `tests/README.md`
-- `docs/codebase/.codebase-scan.txt`
 - `tests/contract/Test-Fast.ps1`
 - `tests/contract/Test-ProfileInvariants.ps1`
 - `tests/contract/Test-UiContractSpine.ps1`

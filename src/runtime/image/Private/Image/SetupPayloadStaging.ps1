@@ -201,10 +201,12 @@ function Copy-WinMintAgentRuntimePayload {
         Copy-Item -LiteralPath $pkgManifest -Destination (Join-Path $Destination 'packages.json') -Force
     }
 
-    if ($null -ne $AgentProfile) {
-        Save-WinMintSetupPayloadJson -Value $AgentProfile -Path (Join-Path $Destination 'BuildProfile.json') -Depth 12
-        LogOK 'Generated WinMintAgent profile from the selected wizard options.'
+    if ($null -eq $AgentProfile) {
+        throw 'WinMintAgent payload staging requires a generated agent profile. Refusing to fall back to a checked-in BuildProfile.json sample.'
     }
+
+    Save-WinMintSetupPayloadJson -Value $AgentProfile -Path (Join-Path $Destination 'BuildProfile.json') -Depth 12
+    LogOK 'Generated WinMintAgent profile from the selected wizard options.'
 }
 
 function Copy-WinMintAgentBrandAssets {

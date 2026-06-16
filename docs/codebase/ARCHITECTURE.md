@@ -68,7 +68,6 @@ winmint.ps1 / WinMint-GUI.ps1 / WinMint-CLI.ps1 -> profile authoring/validation 
 
 - `AGENTS.md`
 - `README.md`
-- `docs/codebase/.codebase-scan.txt`
 - `docs/Project-Structure.md`
 - `WinMint-CLI.ps1`
 - `WinMint-GUI.ps1`
