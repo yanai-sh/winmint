@@ -266,6 +266,35 @@ function Assert-EverythingConfigurationContract {
     }
 }
 
+function Assert-VirtualDesktopFlyoutSuppressionContract {
+    try {
+        $defaultPlan = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile)
+        if ([bool]$defaultPlan.SetupProfile.setupComplete.disableVirtualDesktopFlyout) {
+            Add-InstallPlanFailure 'Expected default builds to leave the virtual desktop flyout override disabled.'
+        }
+
+        $thidePlan = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile -Overrides @{ InstallThide = $true })
+        if (-not [bool]$thidePlan.SetupProfile.setupComplete.disableVirtualDesktopFlyout) {
+            Add-InstallPlanFailure 'Expected thide builds to disable the virtual desktop switch flyout even when Windhawk is not selected.'
+        }
+
+        $windhawkPlan = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile -Overrides @{ InstallWindhawk = $true })
+        if (-not [bool]$windhawkPlan.SetupProfile.setupComplete.disableVirtualDesktopFlyout) {
+            Add-InstallPlanFailure 'Expected Windhawk builds to keep disabling the virtual desktop switch flyout.'
+        }
+
+        $systemHygieneText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete\SystemHygiene.ps1') -Raw
+        foreach ($featureId in @('42105254', '42316343', '34508225', '40459297')) {
+            if ($systemHygieneText -notmatch [regex]::Escape($featureId)) {
+                Add-InstallPlanFailure "Expected SetupComplete ViVeTool flyout suppression to include feature id '$featureId'."
+            }
+        }
+    }
+    catch {
+        Add-InstallPlanFailure "Virtual desktop flyout suppression contract failed: $($_.Exception.Message)"
+    }
+}
+
 function Assert-ManifestConsumesInstallPlanFacts {
     try {
         $profile = New-InstallPlanCaseProfile -Overrides @{
@@ -471,6 +500,7 @@ Assert-WslSelectionNormalizationContract
 Assert-RayCastEverythingBackendContract
 Assert-RaycastExtensionCurationContract
 Assert-EverythingConfigurationContract
+Assert-VirtualDesktopFlyoutSuppressionContract
 Assert-ManifestConsumesInstallPlanFacts
 Assert-SetupPayloadStagingContract
 Assert-DirectPackageValidationContract

@@ -122,7 +122,7 @@ function New-WinMintInstallPlanSetupProfile {
         }
         setupComplete = [ordered]@{
             preserveWindowsUpdate = ([string]$BuildConfig.Tweaks.UpdatePolicy -eq 'All')
-            disableVirtualDesktopFlyout = [bool]$BuildConfig.InstallWindhawk
+            disableVirtualDesktopFlyout = ([bool]$BuildConfig.InstallWindhawk -or [bool]$BuildConfig.InstallThide)
             removeRecall = $true
         }
         aiRemoval = [ordered]@{
