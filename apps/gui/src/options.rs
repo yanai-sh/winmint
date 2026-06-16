@@ -6,7 +6,7 @@ use crate::state::FormFactor;
 pub enum ConfigureToggle {
     BrowserZen,
     BrowserHelium,
-    BrowserLibreWolf,
+    BrowserFirefoxDeveloperEdition,
     BrowserBrave,
     BrowserEdge,
     EditorNeovim,
@@ -109,10 +109,10 @@ pub const BROWSERS: &[ToggleOption] = &[
         toggle: ConfigureToggle::BrowserHelium,
     },
     ToggleOption {
-        element_id: "browser-librewolf",
-        title: "LibreWolf",
-        description: "Install LibreWolf.",
-        toggle: ConfigureToggle::BrowserLibreWolf,
+        element_id: "browser-firefox-developer-edition",
+        title: "Firefox Developer Edition",
+        description: "Install Firefox Developer Edition.",
+        toggle: ConfigureToggle::BrowserFirefoxDeveloperEdition,
     },
     ToggleOption {
         element_id: "browser-brave",

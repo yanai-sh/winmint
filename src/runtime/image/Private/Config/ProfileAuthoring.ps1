@@ -55,9 +55,9 @@ function New-WinMintBuildProfileFromUiIntent {
         -Settings $settings
 
     $resolvedSettings = Resolve-WinMintUiIntentProfileSettings -Settings $settings
-    $profile = New-WinMintBuildProfileFromSettings -Settings $resolvedSettings -IncludeSecrets:$IncludeSecrets
-    Assert-WinMintBuildProfile -BuildProfile $profile
-    return $profile
+    $buildProfile = New-WinMintBuildProfileFromSettings -Settings $resolvedSettings -IncludeSecrets:$IncludeSecrets
+    Assert-WinMintBuildProfile -BuildProfile $buildProfile
+    return $buildProfile
 }
 
 function Save-WinMintBuildProfileFromUiIntent {
@@ -70,10 +70,10 @@ function Save-WinMintBuildProfileFromUiIntent {
     )
 
     $settingsJson = Get-Content -LiteralPath $SettingsPath -Raw
-    $profile = New-WinMintBuildProfileFromUiIntent `
+    $buildProfile = New-WinMintBuildProfileFromUiIntent `
         -RepositoryRoot $RepositoryRoot `
         -SettingsJson $settingsJson `
         -IncludeSecrets:$IncludeSecrets
 
-    Save-WinMintBuildProfile -BuildProfile $profile -Path $OutputPath
+    Save-WinMintBuildProfile -BuildProfile $buildProfile -Path $OutputPath
 }

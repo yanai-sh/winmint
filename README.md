@@ -86,9 +86,16 @@ consumes the profile.
 | Edge browser | Removal requested; debloat policies always applied | `-KeepEdge` keeps the browser installed and debloated |
 | Xbox / Game Bar | Removed | `-KeepGaming` keeps gaming apps and performance tweaks |
 | File Explorer | Shows extensions/hidden files, keeps Home, hides Gallery | baseline |
-| Shell layers | Off | `-DesktopUI`, or `-Install windhawk,yasb,komorebi` |
+| Shell layers | Off | `-DesktopUI`, or `-Install windhawk,yasb,thide,komorebi,nilesoft` |
+| Launcher | Off, except `thide` defaults to Raycast | `-Launcher Raycast` |
+| Browsers | None installed by default | `-Browser zen-browser,helium,firefox-developer-edition,brave,edge` |
 | Dev tweaks, OpenSSH, WSL2, Scoop, MinGit, Starship with `nerd-font-symbols`, fonts/cursors | Always on | baseline |
 | Offline image updates | Disabled by default | `-UpdateImage Stable25H2` opts in; `-UpdatePayloadRoot <dir>` overrides the cache root |
+
+Raycast is installed through the Microsoft Store source when selected. Its
+Everything backend stays local and quiet: amd64/x86-64 builds use the winget
+Everything Beta package, while ARM64 builds use a pinned native upstream
+Everything 1.5 ARM64 installer with SHA256 verification.
 
 On DMA builds, Windows exposes Edge as an uninstallable normal application.
 Without `-KeepEdge`, WinMint requests Edge removal and first attempts the

@@ -540,8 +540,8 @@ impl WinMintApp {
         self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_helium);
     }
 
-    fn toggle_browser_librewolf(&mut self, cx: &mut Context<Self>) {
-        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_librewolf);
+    fn toggle_browser_firefox_developer_edition(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_firefox_developer_edition);
     }
 
     fn toggle_browser_brave(&mut self, cx: &mut Context<Self>) {

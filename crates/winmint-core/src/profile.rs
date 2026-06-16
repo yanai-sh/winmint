@@ -43,7 +43,7 @@ pub struct ToolkitIntent {
     pub editor_neovim: bool,
     pub browser_zen: bool,
     pub browser_helium: bool,
-    pub browser_librewolf: bool,
+    pub browser_firefox_developer_edition: bool,
     pub browser_brave: bool,
     pub browser_edge: bool,
     pub wsl_ubuntu: bool,
@@ -63,7 +63,7 @@ impl Default for ToolkitIntent {
             editor_neovim: false,
             browser_zen: false,
             browser_helium: false,
-            browser_librewolf: false,
+            browser_firefox_developer_edition: false,
             browser_brave: false,
             browser_edge: false,
             wsl_ubuntu: false,
@@ -131,8 +131,8 @@ pub fn browsers_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
     if toolkit.browser_helium {
         browsers.push(options::BROWSER_HELIUM);
     }
-    if toolkit.browser_librewolf {
-        browsers.push(options::BROWSER_LIBREWOLF);
+    if toolkit.browser_firefox_developer_edition {
+        browsers.push(options::BROWSER_FIREFOX_DEVELOPER_EDITION);
     }
     if toolkit.browser_brave {
         browsers.push(options::BROWSER_BRAVE);

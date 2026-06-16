@@ -459,7 +459,7 @@ function Get-WinMintFirstLogonAppDisplayName {
     switch ($Id) {
         'zen-browser' { 'Zen Browser' }
         'helium' { 'Helium' }
-        'librewolf' { 'LibreWolf' }
+        'firefox-developer-edition' { 'Firefox Developer Edition' }
         'brave' { 'Brave' }
         'cursor' { 'Cursor' }
         'vscode' { 'Visual Studio Code' }

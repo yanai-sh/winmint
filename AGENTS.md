@@ -134,9 +134,11 @@ Layers are **additive and composable**, not mutually exclusive.
 | Standard Windows | Clean WinMint baseline; no extra shell |
 | Windhawk | Shell polish, dock/taskbar styling |
 | YASB | Top bar / status surface |
+| thide | Taskbar hiding for launcher-centered workflows |
 | Komorebi | Tiling window manager |
+| Nilesoft Shell | Context-menu polish |
 
-Standard Windows means zero added layers. Windhawk, YASB, and Komorebi can be freely combined. The build/agent must install, configure, and start each selected layer so the desktop matches any UI preview.
+Standard Windows means zero added layers. Windhawk, YASB, thide, Komorebi, and Nilesoft can be freely combined unless a future contract says otherwise. The build/agent must install, configure, and start each selected layer so the desktop matches any UI preview.
 
 ## Agent Module Map
 
@@ -147,13 +149,13 @@ Standard Windows means zero added layers. Windhawk, YASB, and Komorebi can be fr
 | Git config | `src/runtime/firstlogon/Modules/Git.ps1` |
 | Dotfiles | `src/runtime/firstlogon/Modules/Dotfiles.ps1` |
 | WSL2 bootstrap | `src/runtime/firstlogon/Modules/Wsl.ps1` |
-| Flow Launcher + Everything | `src/runtime/firstlogon/Modules/FlowEverything.ps1` |
 | Raycast | `src/runtime/firstlogon/Modules/Raycast.ps1` |
-| Tiling desktop (komorebi/yasb) | `src/runtime/firstlogon/Modules/TilingDesktop.ps1` |
+| Launcher key binding | `src/runtime/firstlogon/Modules/LauncherKey.ps1` |
+| Shell layers (yasb/thide/komorebi/nilesoft) | `src/runtime/firstlogon/Modules/TilingDesktop.ps1` |
 | Windhawk | `src/runtime/firstlogon/Modules/Windhawk.ps1` |
 | Profile composition | `src/runtime/firstlogon/Modules/Profiles.ps1` |
 
-Launcher install is opt-in and mutually exclusive. CLI users choose `-Launcher FlowEverything` for Flow Launcher plus Everything Alpha, `-Launcher Raycast` for Raycast, or omit the flag for no launcher. Profile-backed builds set `features.launcher` to `None`, `FlowEverything`, or `Raycast`, which becomes `modules.flowEverything.enabled` or `modules.raycast.enabled` in `New-WinMintAgentProfile`. Windows Search and indexing stay on for Start/Settings integrations. Minimize tray icon bloat: Everything runs as a background service/index provider for Flow and must hide its tray icon by default; keep other optional tray icons hidden unless the icon exposes a real, user-facing status or control surface.
+Launcher install is opt-in. CLI users choose `-Launcher Raycast` for Raycast or omit the flag for no launcher; selecting `thide` without an explicit launcher defaults the launcher to Raycast. Profile-backed builds set `features.launcher` to `None` or `Raycast`, which becomes `modules.raycast.enabled` in `New-WinMintAgentProfile`. Raycast installs through the Store source, requests only curated no-API-key extensions, and uses Everything as a quiet local filesystem backend: ARM64 targets use the pinned, SHA256-verified upstream `Everything-1.5.0.1415b.ARM64.en-US-Setup.exe`; amd64/x86-64 targets use package-manager `voidtools.Everything.Beta`. Do not add alternate launcher tokens or the ES CLI package unless a runtime requirement proves it is needed. The launcher key module always records the common Copilot hardware-key chord, `Win+Shift+F23`: Store-backed launchers use native Copilot-key app policy when their AUMID is available, and no-launcher builds clear Copilot app key policy so Windows can use the native Search target/fallback. Windows Search and indexing stay on for Start/Settings integrations. Keep optional tray icons hidden unless the icon exposes a real, user-facing status or control surface.
 
 Phone Link policy and live install audit are also opt-in live-user modules. They must stay disabled unless `features.phoneLink` / `features.liveInstallAudit` or the matching CLI flags are explicitly selected. Live install audit is diagnostic and non-blocking: it must write a report and return warning/error counts without failing FirstLogon.
 
@@ -169,6 +171,7 @@ The user does not choose package sources. WinMint decides.
 | Scoop | User-local developer CLI tools and toolchain plumbing. Scoop is installed during FirstLogon with the official installer; MinGit is the baseline Windows-host Git provider; Starship is the baseline Windows-host prompt with the `nerd-font-symbols` preset; selected Neovim is Scoop-owned. |
 | GitHub release | Reserved for future upstream-asset-backed tools when winget metadata lags or a specific release asset/architecture is needed |
 | Store source | Store-backed packages where the upstream app is distributed through Microsoft Store and winget surfaces them via `msstore` |
+| Direct download | Narrow pinned exception only: the SHA256-verified native Everything 1.5 ARM64 installer used as Raycast's ARM64 file-search backend |
 
 For an ARM64/aarch64 source ISO, FirstLogon must aggressively prefer native ARM64 package assets in both winget and Scoop where the package-manager metadata supports them. For an amd64/x64 ISO, do not force architecture flags; use the package manager's default selection.
 

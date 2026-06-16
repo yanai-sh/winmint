@@ -159,8 +159,12 @@ function New-DemoAgentProfile {
                 whkd = $usesKomorebi
             }
             windhawk = [pscustomobject]@{ enabled = $usesWindhawk }
-            flowEverything = [pscustomobject]@{ enabled = ($launcher -eq 'FlowEverything') }
             raycast = [pscustomobject]@{ enabled = ($launcher -eq 'Raycast') }
+            launcherKey = [pscustomobject]@{
+                enabled = $true
+                target = $(if ($launcher -eq 'Raycast') { 'Raycast' } else { 'Search' })
+                chord = 'Win+Shift+F23'
+            }
         }
     }
 }
@@ -173,7 +177,6 @@ function Test-AgentModuleEnabled {
         'wsl' { return [bool]$script:agentProfile.modules.wsl.enabled }
         'shell' { return [bool]$script:agentProfile.modules.shell.enabled }
         'windhawk' { return [bool]$script:agentProfile.modules.windhawk.enabled }
-        'flowEverything' { return [bool]$script:agentProfile.modules.flowEverything.enabled }
         'raycast' { return [bool]$script:agentProfile.modules.raycast.enabled }
         default {
             $module = $script:agentProfile.modules.PSObject.Properties[$Name]

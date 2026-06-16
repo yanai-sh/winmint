@@ -52,7 +52,7 @@ function New-WinMintWslSelectionItem {
     }
 }
 
-function Normalize-WinMintWslSelection {
+function ConvertTo-WinMintWslSelection {
     [CmdletBinding()]
     param(
         [AllowNull()][object[]]$Values = @(),

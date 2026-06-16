@@ -1129,7 +1129,7 @@ function Assert-BuildProfileSchemaOwnsBrowserContract {
     if (-not [bool]$browserSchema.uniqueItems) {
         Add-SmokeFailure 'BuildProfile schema must require profile.development.browsers to be unique.'
     }
-    foreach ($browserId in @('zen-browser', 'helium', 'librewolf', 'brave', 'edge')) {
+    foreach ($browserId in @('zen-browser', 'helium', 'firefox-developer-edition', 'brave', 'edge')) {
         if (@($browserSchema.items.enum) -notcontains $browserId) {
             Add-SmokeFailure "BuildProfile schema must allow canonical browser id '$browserId'."
         }
@@ -1366,11 +1366,29 @@ function Assert-AgentWingetUsesDefaultInstallerSelection {
     foreach ($expected in @(
         'Start-Process -FilePath $FilePath',
         'winget.exe',
-        '--architecture'
+        '--architecture',
+        'Save-AgentDirectToolInstaller',
+        'Get-FileHash -LiteralPath $installerPath -Algorithm SHA256',
+        'Invoke-WebRequest -Uri $url -OutFile $installerPath',
+        '''direct'''
     )) {
         if ($runtimeText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "Agent runtime should invoke winget directly with '$expected'."
+            Add-SmokeFailure "Agent runtime should carry package install primitive '$expected'."
         }
+    }
+    foreach ($expected in @(
+        '"everything-arm64-beta"',
+        '"source": "direct"',
+        '"version": "1.5.0.1415b"',
+        '"architectures": ["arm64"]',
+        '"sha256": "2D511A33A3494147F921DCB488772125E6CC654E677196AACB0235967A27D2DA"'
+    )) {
+        if ($packagesText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Package catalog should declare the pinned ARM64 Everything payload with '$expected'."
+        }
+    }
+    if ($packagesText -match [regex]::Escape('"everything-cli"')) {
+        Add-SmokeFailure 'Package catalog should not include ES CLI as a Raycast backend dependency.'
     }
     foreach ($expected in @(
         'Invoke-WinMintAgentWingetUpgradeAll',

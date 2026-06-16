@@ -15,8 +15,8 @@
       "installScript": ""
     },
     "wsl": { "enabled": true, "distro": "None", "distros": [] },
-    "flowEverything": { "enabled": false },
     "raycast": { "enabled": false },
+    "launcherKey": { "enabled": true, "target": "Search", "chord": "Win+Shift+F23" },
     "liveInstallAudit": { "enabled": false },
     "phoneLink": {
       "enabled": false,

@@ -56,7 +56,7 @@
     "Browsers": {
       "type": "array",
       "uniqueItems": true,
-      "items": { "type": "string", "enum": ["zen-browser", "helium", "librewolf", "brave", "edge"] }
+      "items": { "type": "string", "enum": ["zen-browser", "helium", "firefox-developer-edition", "brave", "edge"] }
     },
     "Wsl2Distros": {
       "type": "array",

@@ -6,14 +6,14 @@
 
 - Fonts: bundled system font options, including Nerd Font payloads.
 - Cursor: `Windows 11 Modern`.
-- Browsers: `Zen Browser`, `Helium`, `LibreWolf`, `Brave`, and `Edge`.
+- Browsers: `Zen Browser`, `Helium`, `Firefox Developer Edition`, `Brave`, and `Edge`.
 - WSL distros: `Ubuntu 26.04 LTS`, `Fedora 44`, `Arch Linux`, `NixOS-WSL`, and `Pengwin`.
 - Shell layers: the WinMint desktop shell stack remains additive and composable.
 - Editors: `Neovim`, `VS Code`, `Cursor`, `Zed`, and `Antigravity`.
 
 ### Browser selection
 
-- Add browser install choices to the profile and UI: `Zen Browser`, `Helium`, `LibreWolf`, `Brave`, and `Edge`.
+- Add browser install choices to the profile and UI: `Zen Browser`, `Helium`, `Firefox Developer Edition`, `Brave`, and `Edge`.
 - Make browser selection opt-in. If the user selects nothing, WinMint installs no browser.
 - Treat `Edge` as a keep/install choice, so the default subtractive behavior leaves Edge uninstalled unless it is explicitly selected.
 - Add a subtle UI warning later when no browser is selected, to reduce accidental no-browser builds without turning the flow into a forced decision.

@@ -377,6 +377,58 @@ function Get-AgentToolWingetArchitecture {
     return $null
 }
 
+function Get-AgentDirectToolCachePath {
+    param([Parameter(Mandatory)]$Tool)
+
+    $cacheRoot = Join-Path $env:LOCALAPPDATA 'WinMint\Cache\Packages'
+    $null = New-Item -ItemType Directory -Path $cacheRoot -Force -ErrorAction Stop
+    $fileName = [IO.Path]::GetFileName(([Uri][string]$Tool.url).AbsolutePath)
+    if ([string]::IsNullOrWhiteSpace($fileName)) {
+        $fileName = ([string]$Tool.id -replace '[^A-Za-z0-9_.-]', '_') + '.exe'
+    }
+    return (Join-Path $cacheRoot $fileName)
+}
+
+function Save-AgentDirectToolInstaller {
+    param([Parameter(Mandatory)]$Tool)
+
+    $url = [string]$Tool.url
+    $expectedHash = ([string]$Tool.sha256).ToUpperInvariant()
+    if ([string]::IsNullOrWhiteSpace($url) -or [string]::IsNullOrWhiteSpace($expectedHash)) {
+        throw "Direct package '$($Tool.id)' is missing url or sha256 metadata."
+    }
+
+    $installerPath = Get-AgentDirectToolCachePath -Tool $Tool
+    $needsDownload = $true
+    if (Test-Path -LiteralPath $installerPath -PathType Leaf) {
+        $existingHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToUpperInvariant()
+        if ($existingHash -eq $expectedHash) {
+            $needsDownload = $false
+        }
+        else {
+            Remove-Item -LiteralPath $installerPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if ($needsDownload) {
+        Write-AgentConsoleLine -Level Info -Message "Downloading $($Tool.id)."
+        Invoke-WebRequest -Uri $url -OutFile $installerPath -UseBasicParsing -ErrorAction Stop
+    }
+
+    $actualHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($actualHash -ne $expectedHash) {
+        Remove-Item -LiteralPath $installerPath -Force -ErrorAction SilentlyContinue
+        throw "Direct package '$($Tool.id)' SHA256 mismatch. Expected $expectedHash; got $actualHash."
+    }
+
+    return [pscustomobject]@{
+        Path = $installerPath
+        Url = $url
+        Version = [string]$Tool.version
+        Sha256 = $expectedHash
+    }
+}
+
 function Invoke-AgentScoop {
     param([Parameter(Mandatory)][string[]]$ArgumentList)
 
@@ -427,6 +479,7 @@ function Install-AgentTool {
     $key = "tool:$($Tool.id)"
     $hostArch = Get-AgentProcessorArchitecture
     $targetArch = Get-AgentTargetArchitecture
+    $directPayload = $null
     if (-not $Force -and $State.steps.ContainsKey($key) -and $State.steps[$key].status -eq 'ok') {
         Write-AgentLog "SKIP $key already ok"
         Write-AgentConsoleLine -Level OK -Message "$($Tool.id) already installed."
@@ -499,13 +552,35 @@ function Install-AgentTool {
                 Invoke-AgentScoop -ArgumentList $installArgs
                 Update-AgentProcessPath
             }
+            'direct' {
+                $directPayload = Save-AgentDirectToolInstaller -Tool $Tool
+                $installArgs = @()
+                if ($Tool.PSObject.Properties['silentArgs']) {
+                    $installArgs = @($Tool.silentArgs | ForEach-Object { [string]$_ })
+                }
+                Invoke-AgentNative -FilePath ([string]$directPayload.Path) -ArgumentList $installArgs
+                Update-AgentProcessPath
+            }
             default {
                 # WinMint installs tools through explicit package-manager owners:
-                # winget/msstore for GUI/system apps and Scoop for developer CLIs.
-                throw "Unsupported install source '$($Tool.source)' for tool '$($Tool.id)'. WinMint only supports the 'winget', 'store', and 'scoop' install sources."
+                # winget/msstore for GUI/system apps, Scoop for developer CLIs,
+                # and a narrow hash-pinned direct installer exception.
+                throw "Unsupported install source '$($Tool.source)' for tool '$($Tool.id)'. WinMint only supports the 'winget', 'store', 'scoop', and approved 'direct' install sources."
             }
         }
-        $State.steps[$key] = @{ status = 'ok'; updatedAt = (Get-Date -Format o); architecture = $targetArch }
+        $record = @{
+            status = 'ok'
+            updatedAt = (Get-Date -Format o)
+            architecture = $targetArch
+        }
+        if ($null -ne $directPayload) {
+            $record.source = 'direct'
+            $record.url = [string]$directPayload.Url
+            $record.version = [string]$directPayload.Version
+            $record.sha256 = [string]$directPayload.Sha256
+            $record.path = [string]$directPayload.Path
+        }
+        $State.steps[$key] = $record
         Save-AgentState -State $State
         Write-AgentEvent -Type 'step' -Status 'ok' -Step $key -Message "$($Tool.id) installed." -Data @{
             architecture = $targetArch
@@ -636,14 +711,22 @@ function New-WinMintAgentRuntimeStepPlan {
     Add-AgentRuntimeStep -StepName 'wsl' -FunctionName 'Invoke-WinMintAgentWslBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'wsl') -Enablement 'modules.wsl.enabled'
     Add-AgentRuntimeStep -StepName 'git' -FunctionName 'Invoke-WinMintAgentGitBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'git') -Enablement 'modules.git.enabled'
     Add-AgentRuntimeStep -StepName 'dotfiles' -FunctionName 'Invoke-WinMintAgentDotfileBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'dotfiles') -Enablement 'modules.dotfiles.enabled'
-    Add-AgentRuntimeStep -StepName 'flow-everything' -FunctionName 'Invoke-WinMintAgentFlowEverythingBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'flowEverything') -Enablement 'modules.flowEverything.enabled'
     Add-AgentRuntimeStep -StepName 'raycast' -FunctionName 'Invoke-WinMintAgentRaycastBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'raycast') -Enablement 'modules.raycast.enabled'
+    Add-AgentRuntimeStep -StepName 'launcher-key' -FunctionName 'Invoke-WinMintAgentLauncherKeyBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'launcherKey') -Enablement 'modules.launcherKey.enabled'
     Add-AgentRuntimeStep -StepName 'phone-link' -FunctionName 'Invoke-WinMintAgentPhoneLinkBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'phoneLink') -Enablement 'modules.phoneLink.enabled'
     Add-AgentRuntimeStep -StepName 'tiling-desktop' -FunctionName 'Invoke-WinMintAgentTilingDesktopBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'shell') -Enablement 'modules.shell.enabled'
     Add-AgentRuntimeStep -StepName 'windhawk' -FunctionName 'Invoke-WinMintAgentWindhawkBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'windhawk') -Enablement 'modules.windhawk.enabled'
     Add-AgentRuntimeStep -StepName 'browsers' -FunctionName 'Invoke-WinMintAgentBrowsersBootstrap' -Enabled (@($agentProfile.browsers).Count -gt 0) -Enablement 'browsers.count > 0'
-    Add-AgentRuntimeStep -StepName 'editors' -FunctionName 'Invoke-WinMintAgentEditorBootstrap' -Enabled (@($agentProfile.editors).Count -gt 0) -Enablement 'editors.count > 0' -PostStepHook 'Set-WinMintAgentNeovimEnvironment'
-    Add-AgentRuntimeStep -StepName 'liveInstallAudit' -FunctionName 'Invoke-WinMintAgentLiveInstallAuditBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'liveInstallAudit') -Enablement 'modules.liveInstallAudit.enabled' -Phase 'finalValidation'
+    Add-AgentRuntimeStep -StepName 'editors' `
+        -FunctionName 'Invoke-WinMintAgentEditorBootstrap' `
+        -Enabled (@($agentProfile.editors).Count -gt 0) `
+        -Enablement 'editors.count > 0' `
+        -PostStepHook 'Set-WinMintAgentNeovimEnvironment'
+    Add-AgentRuntimeStep -StepName 'liveInstallAudit' `
+        -FunctionName 'Invoke-WinMintAgentLiveInstallAuditBootstrap' `
+        -Enabled (Test-AgentModuleEnabled -Name 'liveInstallAudit') `
+        -Enablement 'modules.liveInstallAudit.enabled' `
+        -Phase 'finalValidation'
 
     return @($steps)
 }

@@ -127,7 +127,7 @@ fn is_toggle_selected(app: &WinMintApp, toggle: ConfigureToggle) -> bool {
     match toggle {
         ConfigureToggle::BrowserZen => app.intent.toolkit.browser_zen,
         ConfigureToggle::BrowserHelium => app.intent.toolkit.browser_helium,
-        ConfigureToggle::BrowserLibreWolf => app.intent.toolkit.browser_librewolf,
+        ConfigureToggle::BrowserFirefoxDeveloperEdition => app.intent.toolkit.browser_firefox_developer_edition,
         ConfigureToggle::BrowserBrave => app.intent.toolkit.browser_brave,
         ConfigureToggle::BrowserEdge => app.intent.toolkit.browser_edge,
         ConfigureToggle::EditorNeovim => app.intent.toolkit.editor_neovim,
@@ -151,7 +151,7 @@ fn toggle_option(app: &mut WinMintApp, toggle: ConfigureToggle, cx: &mut Context
     match toggle {
         ConfigureToggle::BrowserZen => app.toggle_browser_zen(cx),
         ConfigureToggle::BrowserHelium => app.toggle_browser_helium(cx),
-        ConfigureToggle::BrowserLibreWolf => app.toggle_browser_librewolf(cx),
+        ConfigureToggle::BrowserFirefoxDeveloperEdition => app.toggle_browser_firefox_developer_edition(cx),
         ConfigureToggle::BrowserBrave => app.toggle_browser_brave(cx),
         ConfigureToggle::BrowserEdge => app.toggle_browser_edge(cx),
         ConfigureToggle::EditorNeovim => app.toggle_editor_neovim(cx),

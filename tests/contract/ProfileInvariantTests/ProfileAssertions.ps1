@@ -403,6 +403,18 @@ function Assert-ImageUpdateProfileContract {
         Add-SmokeFailure 'Expected generated preflight contexts to avoid legacy AllowMissingSourceIso flags.'
     }
 
+    $unsupportedPackageSettings = New-SmokeBuildProfileSettings
+    $unsupportedPackageSettings.InstallWindhawk = $true
+    $unsupportedPackageProfile = New-WinMintBuildProfile -Settings $unsupportedPackageSettings
+    $unsupportedPackageConfig = New-WinMintBuildConfig -BuildProfile $unsupportedPackageProfile
+    $unsupportedPackagePreflight = Test-WinMintBuildPrerequisite -Config $unsupportedPackageConfig -RunMode DryRun
+    if (-not $unsupportedPackagePreflight.Passed) {
+        Add-SmokeFailure "Expected unsupported optional package architecture to warn, not fail: $($unsupportedPackagePreflight.Failures -join '; ')"
+    }
+    if (@($unsupportedPackagePreflight.Findings | Where-Object { $_.Code -eq 'packages.tool.architectureUnsupported' -and $_.Severity -eq 'warning' }).Count -lt 1) {
+        Add-SmokeFailure 'Expected ARM64 Windhawk selection to emit packages.tool.architectureUnsupported warning.'
+    }
+
     $tempRoot = Join-Path ([IO.Path]::GetTempPath().TrimEnd('\', '/')) ('winmint_update_payload_test_' + [Guid]::NewGuid().ToString('n'))
     try {
         $packages = Join-Path $tempRoot 'packages'
@@ -792,22 +804,8 @@ function Assert-HeadlessCliContracts {
     if (-not ($groupConfig.InstallWindhawk -and $groupConfig.InstallYasb -and $groupConfig.InstallKomorebi)) {
         Add-SmokeFailure 'Expected -DesktopUI to select the opinionated WinMint shell stack.'
     }
-    if ($groupConfig.Launcher -ne 'None' -or $groupConfig.InstallFlowEverything -or $groupConfig.InstallRaycast) {
+    if ($groupConfig.Launcher -ne 'None' -or $groupConfig.InstallRaycast) {
         Add-SmokeFailure 'Expected launcher modules to stay opt-in even when Developer/DesktopUI groups are selected.'
-    }
-
-    $flowProfile = New-WinMintHeadlessProfileFromFlags `
-        -SourceIso '' `
-        -Architecture 'arm64' `
-        -Launcher FlowEverything `
-        -DryRun
-    $flowConfig = New-WinMintBuildConfig -BuildProfile $flowProfile
-    $flowAgentProfile = New-WinMintAgentProfile -BuildConfig $flowConfig
-    if ($flowConfig.Launcher -ne 'FlowEverything' -or -not $flowConfig.InstallFlowEverything -or -not $flowAgentProfile.modules.flowEverything.enabled -or $flowAgentProfile.modules.raycast.enabled) {
-        Add-SmokeFailure 'Expected -Launcher FlowEverything to enable only Flow Launcher and Everything in the FirstLogon agent profile.'
-    }
-    if (-not $flowAgentProfile.modules.packageManagers.enabled) {
-        Add-SmokeFailure 'Expected -Launcher FlowEverything to enable package managers for first-logon installation.'
     }
 
     $raycastProfile = New-WinMintHeadlessProfileFromFlags `
@@ -817,11 +815,28 @@ function Assert-HeadlessCliContracts {
         -DryRun
     $raycastConfig = New-WinMintBuildConfig -BuildProfile $raycastProfile
     $raycastAgentProfile = New-WinMintAgentProfile -BuildConfig $raycastConfig
-    if ($raycastConfig.Launcher -ne 'Raycast' -or -not $raycastConfig.InstallRaycast -or -not $raycastAgentProfile.modules.raycast.enabled -or $raycastAgentProfile.modules.flowEverything.enabled) {
+    if ($raycastConfig.Launcher -ne 'Raycast' -or -not $raycastConfig.InstallRaycast -or -not $raycastAgentProfile.modules.raycast.enabled) {
         Add-SmokeFailure 'Expected -Launcher Raycast to enable only Raycast in the FirstLogon agent profile.'
+    }
+    if (-not $raycastAgentProfile.modules.launcherKey.enabled -or $raycastAgentProfile.modules.launcherKey.target -ne 'Raycast' -or $raycastAgentProfile.modules.launcherKey.chord -ne 'Win+Shift+F23') {
+        Add-SmokeFailure 'Expected Raycast builds to bind the launcher key to Raycast on the common Copilot hardware-key chord.'
     }
     if (-not $raycastAgentProfile.modules.packageManagers.enabled) {
         Add-SmokeFailure 'Expected -Launcher Raycast to enable package managers for first-logon installation.'
+    }
+    if ([string]$raycastAgentProfile.modules.raycast.everythingBackend.package -ne 'everything-arm64-beta') {
+        Add-SmokeFailure 'Expected ARM64 Raycast builds to use the pinned native Everything ARM64 backend.'
+    }
+
+    $raycastAmd64Profile = New-WinMintHeadlessProfileFromFlags `
+        -SourceIso '' `
+        -Architecture 'amd64' `
+        -Launcher Raycast `
+        -DryRun
+    $raycastAmd64Config = New-WinMintBuildConfig -BuildProfile $raycastAmd64Profile
+    $raycastAmd64AgentProfile = New-WinMintAgentProfile -BuildConfig $raycastAmd64Config
+    if ([string]$raycastAmd64AgentProfile.modules.raycast.everythingBackend.package -ne 'everything-beta') {
+        Add-SmokeFailure 'Expected amd64 Raycast builds to use the package-manager Everything Beta backend.'
     }
 
     $thisPcProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -TargetDevice ThisPC -DryRun

@@ -304,7 +304,7 @@ if (@($profile.development.editors).Count -ne 0) {
 $settings = New-SmokeBuildProfileSettings
 $settings.BrowserZen = $false
 $settings.BrowserHelium = $false
-$settings.BrowserLibreWolf = $false
+$settings.BrowserFirefoxDeveloperEdition = $false
 $settings.BrowserBrave = $false
 $settings.BrowserEdge = $false
 $profile = New-WinMintBuildProfile -Settings $settings
@@ -370,7 +370,7 @@ Assert-ProfileFailsWith -Profile $profile -Expected 'profile.desktop.cursorPack 
 $profile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($agentProfile.modules.flowEverything.enabled -or $agentProfile.modules.raycast.enabled -or $config.Launcher -ne 'None') {
+if ($agentProfile.modules.raycast.enabled -or $config.Launcher -ne 'None') {
     Add-SmokeFailure 'Expected launcher modules to stay disabled by default for the Developer group.'
 }
 if ($agentProfile.modules.phoneLink.enabled -or $agentProfile.modules.liveInstallAudit.enabled) {
@@ -378,23 +378,11 @@ if ($agentProfile.modules.phoneLink.enabled -or $agentProfile.modules.liveInstal
 }
 
 $settings = New-SmokeBuildProfileSettings
-$settings.Launcher = 'FlowEverything'
-$profile = New-WinMintBuildProfile -Settings $settings
-$config = New-WinMintBuildConfig -BuildProfile $profile
-$agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($config.Launcher -ne 'FlowEverything' -or -not $config.InstallFlowEverything -or -not $agentProfile.modules.flowEverything.enabled -or $agentProfile.modules.raycast.enabled) {
-    Add-SmokeFailure 'Expected FlowEverything launcher choice to enable only the Flow/Everything agent module.'
-}
-if (-not $agentProfile.modules.packageManagers.enabled) {
-    Add-SmokeFailure 'Expected launcher opt-in to require package managers.'
-}
-
-$settings = New-SmokeBuildProfileSettings
 $settings.Launcher = 'Raycast'
 $profile = New-WinMintBuildProfile -Settings $settings
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($config.Launcher -ne 'Raycast' -or -not $config.InstallRaycast -or -not $agentProfile.modules.raycast.enabled -or $agentProfile.modules.flowEverything.enabled) {
+if ($config.Launcher -ne 'Raycast' -or -not $config.InstallRaycast -or -not $agentProfile.modules.raycast.enabled) {
     Add-SmokeFailure 'Expected Raycast launcher choice to enable only the Raycast agent module.'
 }
 if (-not $agentProfile.modules.packageManagers.enabled) {
@@ -413,7 +401,7 @@ $profile = New-WinMintBuildProfile -Settings @{
 }
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($agentProfile.modules.flowEverything.enabled -or $agentProfile.modules.raycast.enabled) {
+if ($agentProfile.modules.raycast.enabled) {
     Add-SmokeFailure 'Expected launcher modules to stay disabled for the Minimal group.'
 }
 if ($agentProfile.modules.phoneLink.enabled -or $agentProfile.modules.liveInstallAudit.enabled) {
@@ -433,7 +421,7 @@ $profile = New-WinMintBuildProfile -Settings @{
 }
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($agentProfile.modules.flowEverything.enabled -or $agentProfile.modules.raycast.enabled -or $config.Launcher -ne 'None') {
+if ($agentProfile.modules.raycast.enabled -or $config.Launcher -ne 'None') {
     Add-SmokeFailure 'Expected launcher modules to stay disabled by default for the DesktopUI group.'
 }
 

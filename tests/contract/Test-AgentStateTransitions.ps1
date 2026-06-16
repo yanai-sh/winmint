@@ -53,6 +53,7 @@ function Write-AgentConsoleLine { param([string]$Level, [string]$Message) [void]
 
 . (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1')
+. (Join-Path $root 'src\runtime\firstlogon\Modules\LauncherKey.ps1')
 
 function Install-AgentTool {
     param($Tool, [hashtable]$State)
@@ -134,8 +135,8 @@ try {
             wsl = [pscustomobject]@{ enabled = $true }
             git = [pscustomobject]@{ enabled = $true }
             dotfiles = [pscustomobject]@{ enabled = $true }
-            flowEverything = [pscustomobject]@{ enabled = $true }
             raycast = [pscustomobject]@{ enabled = $true }
+            launcherKey = [pscustomobject]@{ enabled = $true; target = 'Raycast'; chord = 'Win+Shift+F23' }
             phoneLink = [pscustomobject]@{ enabled = $true }
             shell = [pscustomobject]@{ enabled = $true }
             windhawk = [pscustomobject]@{ enabled = $true }
@@ -156,8 +157,8 @@ try {
         'wsl',
         'git',
         'dotfiles',
-        'flow-everything',
         'raycast',
+        'launcher-key',
         'phone-link',
         'tiling-desktop',
         'windhawk',
@@ -175,6 +176,12 @@ try {
     Assert-Equal $auditStep.Phase 'finalValidation' 'Live install audit should run during final validation.'
     Assert-Equal $auditStep.FailurePolicy 'advisory' 'Live install audit should remain advisory.'
     Assert-True ([bool]$runtimePlan[1].Enabled) 'Enabled module config should be reflected in the runtime plan.'
+    $launcherKeyStep = $runtimePlan | Where-Object { $_.StepName -eq 'launcher-key' } | Select-Object -First 1
+    Assert-Equal $launcherKeyStep.Enablement 'modules.launcherKey.enabled' 'Launcher key binding should be controlled by the launcherKey module.'
+
+    $raycastKeyPlan = Get-WinMintAgentLauncherKeyPlan -AgentProfile $script:agentProfile
+    Assert-Equal $raycastKeyPlan.Target 'Raycast' 'Launcher key plan should prefer explicit launcherKey target.'
+    Assert-Equal $raycastKeyPlan.Chord 'Win+Shift+F23' 'Launcher key plan should preserve the common Copilot hardware-key chord.'
 
     $script:manifest = [pscustomobject]@{
         tools = [pscustomobject]@{

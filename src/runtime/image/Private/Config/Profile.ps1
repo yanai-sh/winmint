@@ -215,7 +215,7 @@ function Get-WinMintProfileBrowserIds {
                     switch -Regex (([string]$_).Trim()) {
                         '^(Zen|Zen Browser|Zen-Browser|ZenBrowser)$' { 'zen-browser'; break }
                         '^(Helium)$' { 'helium'; break }
-                        '^(LibreWolf|Librewolf|Libre Wolf)$' { 'librewolf'; break }
+                        '^(Firefox Developer Edition|Firefox Dev|FirefoxDeveloperEdition|FirefoxDev|FDE)$' { 'firefox-developer-edition'; break }
                         '^(Brave)$' { 'brave'; break }
                         '^(Edge|Microsoft Edge)$' { 'edge'; break }
                         default { ([string]$_).Trim().ToLowerInvariant() }
@@ -229,7 +229,7 @@ function Get-WinMintProfileBrowserIds {
     $browserFlags = @(
         @('BrowserZen', 'zen-browser'),
         @('BrowserHelium', 'helium'),
-        @('BrowserLibreWolf', 'librewolf'),
+        @('BrowserFirefoxDeveloperEdition', 'firefox-developer-edition'),
         @('BrowserBrave', 'brave'),
         @('BrowserEdge', 'edge')
     )
@@ -252,12 +252,12 @@ function Get-WinMintProfileWslDistroIds {
 
     $wslDistros = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $Settings 'Wsl2Distros' @()))
     if ($wslDistros.Count -gt 0 -or (Test-WinMintProfileSettingExists -Settings $Settings -Name 'Wsl2Distros')) {
-        return @((Normalize-WinMintWslSelection -Values $wslDistros).ProfileTokens)
+        return @((ConvertTo-WinMintWslSelection -Values $wslDistros).ProfileTokens)
     }
 
     $legacyWslDistro = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $Settings 'Wsl2Distro' 'None'))
     if ($legacyWslDistro.Count -gt 0 -or (Test-WinMintProfileSettingExists -Settings $Settings -Name 'Wsl2Distro')) {
-        return @((Normalize-WinMintWslSelection -Values $legacyWslDistro).ProfileTokens)
+        return @((ConvertTo-WinMintWslSelection -Values $legacyWslDistro).ProfileTokens)
     }
 
     @()
@@ -274,6 +274,7 @@ function Get-WinMintProfileDesktopLayers {
     }
     if ([bool](Get-WinMintProfileSetting $Settings 'InstallWindhawk' $false)) { $layers.Add('windhawk') }
     if ([bool](Get-WinMintProfileSetting $Settings 'InstallYasb' $false)) { $layers.Add('yasb') }
+    if ([bool](Get-WinMintProfileSetting $Settings 'InstallThide' $false)) { $layers.Add('thide') }
     if ([bool](Get-WinMintProfileSetting $Settings 'InstallKomorebi' $false)) { $layers.Add('komorebi') }
     if ([bool](Get-WinMintProfileSetting $Settings 'InstallNilesoft' $false)) { $layers.Add('nilesoft') }
     if ($layers.Count -eq 0) { $layers.Add('standard') }
@@ -641,7 +642,7 @@ function New-WinMintBuildProfile {
             }
         }
         features = [ordered]@{
-            launcher = [string](Get-WinMintProfileSetting $Settings 'Launcher' $(if ([bool](Get-WinMintProfileSetting $Settings 'InstallFlowEverything' $false)) { 'FlowEverything' } else { 'None' }))
+            launcher = [string](Get-WinMintProfileSetting $Settings 'Launcher' 'None')
             liveInstallAudit = [bool](Get-WinMintProfileSetting $Settings 'LiveInstallAudit' $false)
             phoneLink = [bool](Get-WinMintProfileSetting $Settings 'PhoneLink' $false)
         }
@@ -869,9 +870,6 @@ function Test-WinMintBuildProfile {
         }
         if (Test-WinMintProfileProperty -Object $features -Name 'phoneLink') {
             & $bool $features 'phoneLink' 'profile.features.phoneLink'
-        }
-        if (Test-WinMintProfileProperty -Object $features -Name 'flowEverything') {
-            & $bool $features 'flowEverything' 'profile.features.flowEverything'
         }
     }
 

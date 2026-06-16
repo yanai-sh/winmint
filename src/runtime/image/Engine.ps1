@@ -52,10 +52,12 @@ function New-WinMintBuildConfig {
     $desktopUi = @($layers | Where-Object { $_ -and $_ -ne 'standard' }).Count -gt 0
     $launcher = [string](Get-WinMintProfileSetting $featureToggles 'launcher' '')
     if ([string]::IsNullOrWhiteSpace($launcher)) {
-        $launcher = if ([bool](Get-WinMintProfileSetting $featureToggles 'flowEverything' $false)) { 'FlowEverything' } else { 'None' }
+        $launcher = 'None'
     }
-    if ($launcher -notin @('None', 'FlowEverything', 'Raycast')) { $launcher = 'None' }
-    $installFlowEverything = ($launcher -eq 'FlowEverything')
+    if ($launcher -eq 'None' -and $layers -contains 'thide') {
+        $launcher = 'Raycast'
+    }
+    if ($launcher -notin @('None', 'Raycast')) { $launcher = 'None' }
     $installRaycast = ($launcher -eq 'Raycast')
     $enableLiveInstallAudit = [bool](Get-WinMintProfileSetting $featureToggles 'liveInstallAudit' $false)
     $enablePhoneLink = [bool](Get-WinMintProfileSetting $featureToggles 'phoneLink' $false)
@@ -203,10 +205,10 @@ function New-WinMintBuildConfig {
         Browsers = @($selectedBrowsers)
         InstallWindhawk = ($layers -contains 'windhawk')
         InstallYasb = ($layers -contains 'yasb')
+        InstallThide = ($layers -contains 'thide')
         InstallKomorebi = ($layers -contains 'komorebi')
         InstallNilesoft = ($layers -contains 'nilesoft')
         Launcher = $launcher
-        InstallFlowEverything = $installFlowEverything
         InstallRaycast = $installRaycast
         LiveInstallAudit = $enableLiveInstallAudit
         PhoneLink = $enablePhoneLink
@@ -434,17 +436,73 @@ function Test-WinMintBuildPrerequisite {
     if (-not (Test-Path -LiteralPath $Config.PackagesManifest)) {
         Add-WinMintBuildPreflightFinding -Severity warning -Code 'packages.manifest.missing' -Message "Package manifest missing: $($Config.PackagesManifest)"
     }
-    if (-not $profileOnlyDryRun -and [bool]$PreflightContext.RequireOnlinePayloadCache -and -not (Test-WinMintGitHubApiReachable -TimeoutSec 5)) {
-            $cache = Get-WinMintOfflinePayloadCacheStatus -Architecture ([string]$Config.Architecture)
-            if ($cache.Complete) {
-                Add-WinMintBuildPreflightFinding -Severity warning -Code 'network.github.offline.cacheComplete' -Message 'No internet connectivity to api.github.com; cached PowerShell 7, ViVeTool, winget, Cascadia, and Monaspace payloads are present, so the build can continue offline.'
+    elseif (-not [string]::IsNullOrWhiteSpace([string]$Config.Architecture)) {
+        try {
+            $manifest = Get-Content -LiteralPath $Config.PackagesManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($toolId in @(Get-WinMintWingetHandoffToolIds -Config $Config)) {
+                $property = if ($manifest.tools) { $manifest.tools.PSObject.Properties[$toolId] } else { $null }
+                if (-not $property) { continue }
+                $tool = $property.Value
+                $unsupported = @()
+                if ($tool.PSObject.Properties['unsupportedArchitectures']) {
+                    if ($tool.unsupportedArchitectures -is [array]) {
+                        $unsupported = @($tool.unsupportedArchitectures | ForEach-Object { ([string]$_).ToLowerInvariant() })
+                    }
+                    else {
+                        $unsupported = @($tool.unsupportedArchitectures.PSObject.Properties.Name | ForEach-Object { ([string]$_).ToLowerInvariant() })
+                    }
+                }
+                if ($unsupported -contains ([string]$Config.Architecture).ToLowerInvariant()) {
+                    $displayName = if ($tool.PSObject.Properties['displayName']) { [string]$tool.displayName } else { [string]$toolId }
+                    $message = @(
+                        "$displayName is selected, but packages.json marks $($Config.Architecture)"
+                        'as unsupported for its package source. FirstLogon will skip that package'
+                        'on this architecture.'
+                    ) -join ' '
+                    Add-WinMintBuildPreflightFinding -Severity warning `
+                        -Code 'packages.tool.architectureUnsupported' `
+                        -Message $message
+                }
             }
+        }
+        catch {
+            $message = "Package manifest could not be inspected for architecture support: $($_.Exception.Message)"
+            Add-WinMintBuildPreflightFinding -Severity warning `
+                -Code 'packages.manifest.readFailed' `
+                -Message $message
+        }
+    }
+    if (-not $profileOnlyDryRun -and [bool]$PreflightContext.RequireOnlinePayloadCache -and -not (Test-WinMintGitHubApiReachable -TimeoutSec 5)) {
+        $cache = Get-WinMintOfflinePayloadCacheStatus -Architecture ([string]$Config.Architecture)
+        if ($cache.Complete) {
+            $message = @(
+                'No internet connectivity to api.github.com; cached PowerShell 7,'
+                'ViVeTool, winget, Cascadia, and Monaspace payloads are present,'
+                'so the build can continue offline.'
+            ) -join ' '
+            Add-WinMintBuildPreflightFinding -Severity warning `
+                -Code 'network.github.offline.cacheComplete' `
+                -Message $message
+        }
         else {
-            Add-WinMintBuildPreflightFinding -Severity failure -Code 'network.github.offline.cacheIncomplete' -Message "No internet connectivity to api.github.com and offline payload cache is incomplete. Missing: $($cache.Missing -join ', '). Connect and retry once to refresh the cache."
+            $message = @(
+                'No internet connectivity to api.github.com and offline payload cache is incomplete.'
+                "Missing: $($cache.Missing -join ', ')."
+                'Connect and retry once to refresh the cache.'
+            ) -join ' '
+            Add-WinMintBuildPreflightFinding -Severity failure `
+                -Code 'network.github.offline.cacheIncomplete' `
+                -Message $message
         }
     }
     if ($Config.PasswordSet -and -not $Config.PasswordIncluded) {
-        Add-WinMintBuildPreflightFinding -Severity failure -Code 'identity.password.secretMissing' -Message 'The build profile says a password was set, but the password secret is not included. Re-enter the password in the UI before building.'
+        $message = @(
+            'The build profile says a password was set, but the password secret is not included.'
+            'Re-enter the password in the UI before building.'
+        ) -join ' '
+        Add-WinMintBuildPreflightFinding -Severity failure `
+            -Code 'identity.password.secretMissing' `
+            -Message $message
     }
     if ($Config.Updates -and [string]$Config.Updates.Mode -ne 'None') {
         if ([string]$Config.Updates.Mode -ne 'Stable25H2') {
@@ -494,19 +552,39 @@ function Test-WinMintBuildPrerequisite {
     if ($Config.TargetDevice -eq 'ThisPC' -and $Config.Architecture) {
         $hostArch = Get-BuildHostProcessorArchitecture
         if ($hostArch -ne $Config.Architecture) {
-            Add-WinMintBuildPreflightFinding -Severity failure -Code 'target.thisPc.architectureMismatch' -Message "This PC target requires the ISO architecture ($($Config.Architecture)) to match this PC ($hostArch). Choose Different PC for cross-machine builds."
+            $message = @(
+                "This PC target requires the ISO architecture ($($Config.Architecture))"
+                "to match this PC ($hostArch)."
+                'Choose Different PC for cross-machine builds.'
+            ) -join ' '
+            Add-WinMintBuildPreflightFinding -Severity failure `
+                -Code 'target.thisPc.architectureMismatch' `
+                -Message $message
         }
     }
     if ($Config.Drivers.Source -eq 'Host' -and $Config.Architecture) {
         $hostArch = Get-BuildHostProcessorArchitecture
         if ($hostArch -ne $Config.Architecture) {
-            Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.host.architectureMismatch' -Message "Mirror PC drivers require the build PC architecture ($hostArch) to match the target ISO architecture ($($Config.Architecture))."
+            $message = @(
+                "Mirror PC drivers require the build PC architecture ($hostArch)"
+                "to match the target ISO architecture ($($Config.Architecture))."
+            ) -join ' '
+            Add-WinMintBuildPreflightFinding -Severity failure `
+                -Code 'drivers.host.architectureMismatch' `
+                -Message $message
         }
         if (
             -not (Get-Command Export-WindowsDriver -ErrorAction SilentlyContinue) -and
             -not (Get-Command pnputil.exe -CommandType Application -ErrorAction SilentlyContinue)
         ) {
-            Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.host.exportToolMissing' -Message 'Mirror PC drivers were requested, but neither Export-WindowsDriver nor pnputil.exe is available. Install/configure Windows driver export tooling or choose a custom driver pack.'
+            $message = @(
+                'Mirror PC drivers were requested, but neither Export-WindowsDriver nor'
+                'pnputil.exe is available. Install/configure Windows driver export tooling'
+                'or choose a custom driver pack.'
+            ) -join ' '
+            Add-WinMintBuildPreflightFinding -Severity failure `
+                -Code 'drivers.host.exportToolMissing' `
+                -Message $message
         }
     }
     if ($Config.InstallWindhawk) {

@@ -152,6 +152,7 @@ function Get-WinMintManifestInstallPlanFacts {
     $layers = @(
         if ($Config.InstallWindhawk) { 'windhawk' }
         if ($Config.InstallYasb) { 'yasb' }
+        if ($Config.InstallThide) { 'thide' }
         if ($Config.InstallKomorebi) { 'komorebi' }
         if ($Config.InstallNilesoft) { 'nilesoft' }
     )

@@ -325,14 +325,14 @@ function New-WinMintHeadlessProfileFromFlags {
         [switch]$KeepGaming,
         [switch]$KeepCopilot,
         [ValidateSet('On', 'Off')][string]$Dma = 'On',
-        [ValidateSet('None', 'FlowEverything', 'Raycast')][string]$Launcher = 'None',
+        [ValidateSet('None', 'Raycast')][string]$Launcher = 'None',
         [switch]$LiveInstallAudit,
         [switch]$PhoneLink,
         [ValidateSet('On', 'Off')][string]$Location = 'On',
         [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'None',
         [string]$UpdatePayloadRoot = '',
         [ValidateSet('On', 'Off')][string]$UpdateProvisionedApps = 'On',
-        [ValidateSet('windhawk', 'yasb', 'komorebi', 'nilesoft')][string[]]$Install = @(),
+        [ValidateSet('windhawk', 'yasb', 'thide', 'komorebi', 'nilesoft')][string[]]$Install = @(),
         [switch]$DryRun,
         [switch]$ValidateOnly,
         [switch]$TemplateMode
@@ -365,8 +365,8 @@ function New-WinMintHeadlessProfileFromFlags {
     }
 
     $selectedEditors = & $normalizeSelection $Editor @('cursor', 'vscode', 'zed', 'antigravity', 'neovim') 'Editor'
-    $selectedBrowsers = & $normalizeSelection $Browser @('zen-browser', 'helium', 'librewolf', 'brave', 'edge') 'Browser'
-    $selectedWslDistros = @((Normalize-WinMintWslSelection -Values $Wsl2Distros).ProfileTokens)
+    $selectedBrowsers = & $normalizeSelection $Browser @('zen-browser', 'helium', 'firefox-developer-edition', 'brave', 'edge') 'Browser'
+    $selectedWslDistros = @((ConvertTo-WinMintWslSelection -Values $Wsl2Distros).ProfileTokens)
 
     $drivers = Resolve-WinMintHeadlessDriverIntent `
         -TargetDevice $TargetDevice `
@@ -414,6 +414,7 @@ function New-WinMintHeadlessProfileFromFlags {
         DesktopUiDefault = $resolvedDesktopUi
         InstallWindhawk = [bool]('windhawk' -in $Install)
         InstallYasb = [bool]('yasb' -in $Install)
+        InstallThide = [bool]('thide' -in $Install)
         InstallKomorebi = [bool]('komorebi' -in $Install)
         InstallNilesoft = [bool]('nilesoft' -in $Install)
         Launcher = $Launcher

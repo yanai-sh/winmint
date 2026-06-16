@@ -184,7 +184,7 @@ function Invoke-WinMintNewProfileCommand {
         # binds the same whether invoked interactively (-Install a,b splits into an
         # array) or via `pwsh -File` (which passes a,b as one literal token).
         [string[]]$Install = @(),
-        [ValidateSet('None', 'FlowEverything', 'Raycast')][string]$Launcher = 'None',
+        [ValidateSet('None', 'Raycast')][string]$Launcher = 'None',
         [switch]$PhoneLink,
         [switch]$LiveInstallAudit,
         [ValidateSet('On', 'Off')][string]$Dma = 'On',
@@ -204,7 +204,7 @@ function Invoke-WinMintNewProfileCommand {
         throw 'Use only one driver source style: -DriverPack or -DriverSource/-DriverPath/-ExportHostDrivers.'
     }
 
-    $allowedTools = @('windhawk', 'yasb', 'komorebi', 'nilesoft')
+    $allowedTools = @('windhawk', 'yasb', 'thide', 'komorebi', 'nilesoft')
     $installTools = @($Install | ForEach-Object { $_ -split '[,\s]+' } | Where-Object { $_ } | ForEach-Object { $_.ToLowerInvariant() })
     $badTools = @($installTools | Where-Object { $_ -notin $allowedTools })
     if ($badTools.Count -gt 0) {
@@ -332,8 +332,8 @@ new options (configuration lives here):
   -GenericKey Auto|On|Off          Bake a generic (non-activating) edition key.
   -KeepEdge -KeepGaming -KeepCopilot   Keep/restore intent for those domains.
   -DesktopUI                       Add the alternate desktop shell layer.
-  -Install windhawk,yasb,komorebi,nilesoft  Shell tooling to install.
-  -Launcher None|FlowEverything|Raycast
+  -Install windhawk,yasb,thide,komorebi,nilesoft  Shell tooling to install.
+  -Launcher None|Raycast
   -Dma On|Off                      DMA interop tweak (default On).
   -Location On|Off                 Location services (default On).
   -UpdateImage None|Stable25H2     Pre-service explicit stable 25H2 update payloads; Stable25H2 opts in.

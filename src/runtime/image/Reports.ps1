@@ -34,6 +34,7 @@ function New-WinMintBuildReport {
         desktop = @{
             windhawk = $Config.InstallWindhawk
             yasb = $Config.InstallYasb
+            thide = $Config.InstallThide
             komorebi = $Config.InstallKomorebi
             nilesoft = $Config.InstallNilesoft
         }
@@ -43,7 +44,6 @@ function New-WinMintBuildReport {
         }
         features = @{
             launcher = [string]$Config.Launcher
-            flowEverything = [bool]$Config.InstallFlowEverything
             raycast = [bool]$Config.InstallRaycast
             liveInstallAudit = [bool]$Config.LiveInstallAudit
             phoneLink = [bool]$Config.PhoneLink
@@ -72,6 +72,7 @@ function Save-WinMintBuildReport {
     $desktopLayers = [System.Collections.Generic.List[string]]::new()
     if ([bool]$Report.desktop.windhawk) { $desktopLayers.Add('Windhawk') | Out-Null }
     if ([bool]$Report.desktop.yasb) { $desktopLayers.Add('YASB') | Out-Null }
+    if ([bool]$Report.desktop.thide) { $desktopLayers.Add('thide') | Out-Null }
     if ([bool]$Report.desktop.komorebi) { $desktopLayers.Add('Komorebi') | Out-Null }
     $desktopMarkdown = if ($desktopLayers.Count) {
         ($desktopLayers | ForEach-Object { "- $_" }) -join "`n"
@@ -142,15 +143,19 @@ function Get-WinMintWingetHandoffToolIds {
     }
     if ([bool]$Config.InstallWindhawk) { $ids.Add('windhawk') | Out-Null }
     if ([bool]$Config.InstallYasb) { $ids.Add('yasb') | Out-Null }
+    if ([bool]$Config.InstallRaycast) {
+        if ([string]$Config.Architecture -eq 'arm64') {
+            $ids.Add('everything-arm64-beta') | Out-Null
+        }
+        else {
+            $ids.Add('everything-beta') | Out-Null
+        }
+    }
     if ([bool]$Config.InstallKomorebi) {
         $ids.Add('komorebi') | Out-Null
         $ids.Add('whkd') | Out-Null
     }
     if ([bool]$Config.InstallNilesoft) { $ids.Add('nilesoft') | Out-Null }
-    if ([bool]$Config.InstallFlowEverything) {
-        $ids.Add('everything') | Out-Null
-        $ids.Add('flow-launcher') | Out-Null
-    }
     if ([bool]$Config.InstallRaycast) { $ids.Add('raycast') | Out-Null }
 
     return @($ids.ToArray() | Select-Object -Unique)
@@ -309,6 +314,7 @@ function Save-WinMintDryRunArtifacts {
         desktop = [ordered]@{
             windhawk = [bool]$Config.InstallWindhawk
             yasb = [bool]$Config.InstallYasb
+            thide = [bool]$Config.InstallThide
             komorebi = [bool]$Config.InstallKomorebi
             nilesoft = [bool]$Config.InstallNilesoft
         }
@@ -317,7 +323,6 @@ function Save-WinMintDryRunArtifacts {
         }
         features = [ordered]@{
             launcher = [string]$Config.Launcher
-            flowEverything = [bool]$Config.InstallFlowEverything
             raycast = [bool]$Config.InstallRaycast
             liveInstallAudit = [bool]$Config.LiveInstallAudit
             phoneLink = [bool]$Config.PhoneLink

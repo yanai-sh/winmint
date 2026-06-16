@@ -60,13 +60,13 @@ pub const EDITOR_OPTIONS: &[&str] = &[
 
 pub const BROWSER_ZEN: &str = "zen-browser";
 pub const BROWSER_HELIUM: &str = "helium";
-pub const BROWSER_LIBREWOLF: &str = "librewolf";
+pub const BROWSER_FIREFOX_DEVELOPER_EDITION: &str = "firefox-developer-edition";
 pub const BROWSER_BRAVE: &str = "brave";
 pub const BROWSER_EDGE: &str = "edge";
 pub const BROWSER_OPTIONS: &[&str] = &[
     BROWSER_ZEN,
     BROWSER_HELIUM,
-    BROWSER_LIBREWOLF,
+    BROWSER_FIREFOX_DEVELOPER_EDITION,
     BROWSER_BRAVE,
     BROWSER_EDGE,
 ];
@@ -87,12 +87,14 @@ pub const WSL_OPTIONS: &[&str] = &[
 pub const SHELL_STANDARD: &str = "standard";
 pub const SHELL_WINDHAWK: &str = "windhawk";
 pub const SHELL_YASB: &str = "yasb";
+pub const SHELL_THIDE: &str = "thide";
 pub const SHELL_KOMOREBI: &str = "komorebi";
 pub const SHELL_NILESOFT: &str = "nilesoft";
 pub const SHELL_OPTIONS: &[&str] = &[
     SHELL_STANDARD,
     SHELL_WINDHAWK,
     SHELL_YASB,
+    SHELL_THIDE,
     SHELL_KOMOREBI,
     SHELL_NILESOFT,
 ];

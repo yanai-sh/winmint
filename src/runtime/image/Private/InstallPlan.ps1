@@ -3,15 +3,34 @@
 function New-WinMintInstallPlanAgentProfile {
     param([Parameter(Mandatory)]$BuildConfig)
 
-    $wslSelection = Normalize-WinMintWslSelection -Values @($BuildConfig.Wsl2Distros) -FallbackValues @($BuildConfig.Wsl2Distro)
+    $wslSelection = ConvertTo-WinMintWslSelection `
+        -Values @($BuildConfig.Wsl2Distros) `
+        -FallbackValues @($BuildConfig.Wsl2Distro)
     $wslDistros = @($wslSelection.AgentTokens)
     $wslDistro = [string]$wslSelection.AgentToken
     # Package-manager bootstrap is baseline: Scoop + MinGit are developer
     # plumbing, and winget remains the owner for selected GUI/system tools.
     $needsPackageManagers = $true
-    $needsFlowEverything = [bool]$BuildConfig.InstallFlowEverything
     $needsRaycast = [bool]$BuildConfig.InstallRaycast
-    if ($needsFlowEverything -or $needsRaycast) { $needsPackageManagers = $true }
+    $launcherKeyTarget = if ($needsRaycast) { 'Raycast' } else { 'Search' }
+    $everythingPackage = if ([string]$BuildConfig.Architecture -eq 'arm64') { 'everything-arm64-beta' } else { 'everything-beta' }
+    $raycastExtensions = [System.Collections.Generic.List[object]]::new()
+    if ($needsRaycast) {
+        $raycastExtensions.Add([ordered]@{ id = 'everything-search'; owner = 'anastasiy_safari'; source = 'Raycast Store'; requires = @($everythingPackage) }) | Out-Null
+        $raycastExtensions.Add([ordered]@{ id = 'windows-terminal'; owner = 'lunaris'; source = 'Raycast Store'; requires = @() }) | Out-Null
+        if ([bool]$BuildConfig.InstallThide) {
+            $raycastExtensions.Add([ordered]@{ id = 'window-walker'; owner = 'nazzy_wazzy_lu'; source = 'Raycast Store'; requires = @() }) | Out-Null
+        }
+        if (@($BuildConfig.Editors) -contains 'vscode') {
+            $raycastExtensions.Add([ordered]@{ id = 'visual-studio-code'; owner = 'thomas'; source = 'Raycast Store'; requires = @() }) | Out-Null
+        }
+        if (@($BuildConfig.Editors) -contains 'zed') {
+            $raycastExtensions.Add([ordered]@{ id = 'zed-recent-projects'; owner = 'ewgenius'; source = 'Raycast Store'; requires = @() }) | Out-Null
+        }
+        if (@($BuildConfig.Browsers) -contains 'zen-browser') {
+            $raycastExtensions.Add([ordered]@{ id = 'zen-browser'; owner = 'Keyruu'; source = 'Raycast Store'; requires = @() }) | Out-Null
+        }
+    }
     [ordered]@{
         profile = [string]$BuildConfig.Profile
         targetArchitecture = [string]$BuildConfig.Architecture
@@ -37,9 +56,24 @@ function New-WinMintInstallPlanAgentProfile {
                 distro = $wslDistro
                 distros = @($wslDistros)
             }
-            # Optional launcher + instant file search.
-            flowEverything = [ordered]@{ enabled = $needsFlowEverything }
-            raycast = [ordered]@{ enabled = $needsRaycast }
+            # Optional command launcher.
+            raycast = [ordered]@{
+                enabled = $needsRaycast
+                extensions = @($raycastExtensions.ToArray())
+                everythingBackend = [ordered]@{
+                    enabled = $needsRaycast
+                    package = $everythingPackage
+                    localFilesystemOnly = $true
+                    trayIcon = 'hidden'
+                    serverSearch = 'disabled'
+                    sdkSearch = 'disabled'
+                }
+            }
+            launcherKey = [ordered]@{
+                enabled = $true
+                target = $launcherKeyTarget
+                chord = 'Win+Shift+F23'
+            }
             browsers = [ordered]@{ enabled = (@($BuildConfig.Browsers).Count -gt 0) }
             liveInstallAudit = [ordered]@{ enabled = [bool]$BuildConfig.LiveInstallAudit }
             phoneLink = [ordered]@{
@@ -51,6 +85,7 @@ function New-WinMintInstallPlanAgentProfile {
             shell = [ordered]@{
                 komorebi = [bool]$BuildConfig.InstallKomorebi
                 yasb = [bool]$BuildConfig.InstallYasb
+                thide = [bool]$BuildConfig.InstallThide
                 whkd = [bool]$BuildConfig.InstallKomorebi
                 nilesoft = [bool]$BuildConfig.InstallNilesoft
             }
@@ -171,7 +206,7 @@ function New-WinMintInstallPlanSetupPlan {
             $enabled = [bool]$value.enabled
         }
         elseif ($module -eq 'shell' -and $value) {
-            $enabled = [bool]$value.komorebi -or [bool]$value.yasb -or [bool]$value.whkd
+            $enabled = [bool]$value.komorebi -or [bool]$value.yasb -or [bool]$value.thide -or [bool]$value.whkd
         }
         if ($enabled) { $firstLogonModules.Add($module) | Out-Null }
     }
@@ -270,7 +305,9 @@ function New-WinMintInstallPlanFromBuildConfig {
 
     $setupProfile = New-WinMintInstallPlanSetupProfile -BuildConfig $BuildConfig
     $agentProfile = New-WinMintInstallPlanAgentProfile -BuildConfig $BuildConfig
-    $wslSelection = Normalize-WinMintWslSelection -Values @($BuildConfig.Wsl2Distros) -FallbackValues @($BuildConfig.Wsl2Distro)
+    $wslSelection = ConvertTo-WinMintWslSelection `
+        -Values @($BuildConfig.Wsl2Distros) `
+        -FallbackValues @($BuildConfig.Wsl2Distro)
     $setupPlan = New-WinMintInstallPlanSetupPlan `
         -BuildConfig $BuildConfig `
         -SetupProfile $setupProfile `
@@ -338,6 +375,7 @@ function New-WinMintInstallPlanFromBuildConfig {
                 shellLayers = @(
                     if ([bool]$BuildConfig.InstallWindhawk) { 'windhawk' }
                     if ([bool]$BuildConfig.InstallYasb) { 'yasb' }
+                    if ([bool]$BuildConfig.InstallThide) { 'thide' }
                     if ([bool]$BuildConfig.InstallKomorebi) { 'komorebi' }
                     if ([bool]$BuildConfig.InstallNilesoft) { 'nilesoft' }
                 )

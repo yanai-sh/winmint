@@ -35,7 +35,6 @@ foreach ($legacyFlag in @(
         'Copilot',
         'DesktopUI',
         'Gaming',
-        'InstallFlowEverything',
         'NonInteractive',
         'NoProgress'
     )) {

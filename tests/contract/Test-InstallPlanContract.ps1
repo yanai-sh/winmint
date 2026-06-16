@@ -99,7 +99,12 @@ function Assert-InstallPlanMatchesWrappers {
 
 function Assert-WslSelectionNormalizationContract {
     try {
-        $selection = Normalize-WinMintWslSelection -Values @('Ubuntu,NixOS-WSL', 'FedoraLinux-44', 'Arch Linux', 'Pengwin')
+        $selection = ConvertTo-WinMintWslSelection -Values @(
+            'Ubuntu,NixOS-WSL',
+            'FedoraLinux-44',
+            'Arch Linux',
+            'Pengwin'
+        )
         foreach ($expected in @('Ubuntu', 'NixOS-WSL', 'FedoraLinux', 'archlinux', 'pengwin')) {
             if (@($selection.ProfileTokens) -notcontains $expected) {
                 Add-InstallPlanFailure "WSL selection profile tokens are missing '$expected'."
@@ -130,6 +135,134 @@ function Assert-WslSelectionNormalizationContract {
     }
     catch {
         Add-InstallPlanFailure "WSL selection normalization contract failed: $($_.Exception.Message)"
+    }
+}
+
+function Assert-RayCastEverythingBackendContract {
+    try {
+        $armProfile = New-InstallPlanCaseProfile -Overrides @{ Launcher = 'Raycast'; Architecture = 'arm64' }
+        $armPlan = New-WinMintInstallPlan -BuildProfile $armProfile
+        if ([string]$armPlan.AgentProfile.modules.raycast.everythingBackend.package -ne 'everything-arm64-beta') {
+            Add-InstallPlanFailure 'Expected ARM64 Raycast builds to use the pinned native Everything 1.5 ARM64 direct payload rather than x64-only winget beta metadata.'
+        }
+        $armRequires = @(
+            @($armPlan.AgentProfile.modules.raycast.extensions) |
+                Where-Object { [string]$_.id -eq 'everything-search' } |
+                Select-Object -First 1
+        ).requires
+        if (@($armRequires) -notcontains 'everything-arm64-beta' -or @($armRequires) -contains 'everything-cli') {
+            Add-InstallPlanFailure 'Expected ARM64 Raycast Everything extension requirements to include only the pinned ARM64 backend package.'
+        }
+
+        $amdProfile = New-InstallPlanCaseProfile -Overrides @{ Launcher = 'Raycast'; Architecture = 'amd64' }
+        $amdPlan = New-WinMintInstallPlan -BuildProfile $amdProfile
+        if ([string]$amdPlan.AgentProfile.modules.raycast.everythingBackend.package -ne 'everything-beta') {
+            Add-InstallPlanFailure 'Expected amd64 Raycast builds to use Everything Beta.'
+        }
+        $amdRequires = @(
+            @($amdPlan.AgentProfile.modules.raycast.extensions) |
+                Where-Object { [string]$_.id -eq 'everything-search' } |
+                Select-Object -First 1
+        ).requires
+        if (@($amdRequires) -notcontains 'everything-beta' -or @($amdRequires) -contains 'everything-cli') {
+            Add-InstallPlanFailure 'Expected amd64 Raycast Everything extension requirements to include only Everything Beta.'
+        }
+    }
+    catch {
+        Add-InstallPlanFailure "Raycast Everything backend contract failed: $($_.Exception.Message)"
+    }
+}
+
+function Assert-RaycastExtensionCurationContract {
+    try {
+        $profile = New-InstallPlanCaseProfile -Overrides @{
+            Launcher = 'Raycast'
+            InstallThide = $true
+            Editors = @('vscode', 'zed')
+            Browsers = @('zen-browser', 'helium')
+        }
+        $plan = New-WinMintInstallPlan -BuildProfile $profile
+        $extensions = @($plan.AgentProfile.modules.raycast.extensions)
+        $extensionIds = @($extensions | ForEach-Object { [string]$_.id })
+        foreach ($expected in @(
+                'everything-search',
+                'windows-terminal',
+                'window-walker',
+                'visual-studio-code',
+                'zed-recent-projects',
+                'zen-browser'
+            )) {
+            if ($extensionIds -notcontains $expected) {
+                Add-InstallPlanFailure "Expected Raycast extension curation to include '$expected'."
+            }
+        }
+        foreach ($unexpected in @(
+                'winget',
+                'scoop',
+                'browser-bookmarks',
+                'system-commands',
+                'emoji',
+                'calculator',
+                'snippets'
+            )) {
+            if ($extensionIds -contains $unexpected) {
+                Add-InstallPlanFailure "Raycast extension curation must not include '$unexpected'."
+            }
+        }
+
+        $everything = $extensions | Where-Object { [string]$_.id -eq 'everything-search' } | Select-Object -First 1
+        if (-not $everything -or [string]$everything.owner -ne 'anastasiy_safari') {
+            Add-InstallPlanFailure 'Expected Everything Raycast extension owner to remain anastasiy_safari.'
+        }
+        $walker = $extensions | Where-Object { [string]$_.id -eq 'window-walker' } | Select-Object -First 1
+        if (-not $walker -or [string]$walker.owner -ne 'nazzy_wazzy_lu') {
+            Add-InstallPlanFailure 'Expected Window Walker Raycast extension owner to remain nazzy_wazzy_lu.'
+        }
+    }
+    catch {
+        Add-InstallPlanFailure "Raycast extension curation contract failed: $($_.Exception.Message)"
+    }
+}
+
+function Assert-EverythingConfigurationContract {
+    try {
+        $raycastText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\Raycast.ps1') -Raw
+        foreach ($expected in @(
+                'exclude_hidden_files_and_folders',
+                'exclude_system_files_and_folders',
+                'exclude_list_enabled',
+                'C:\$Recycle.Bin\**',
+                'C:\Windows\SoftwareDistribution\**',
+                'C:\Windows\WinSxS\**',
+                'C:\Windows\Installer\**',
+                'C:\ProgramData\Microsoft\Windows\WER\**',
+                'C:\Users\*\AppData\Local\Temp\**',
+                'http_server_enabled',
+                'etp_server_enabled',
+                'ftp_server_enabled',
+                'content_index_enabled',
+                'NO_ALPHA_INSTANCE'
+            )) {
+            if ($raycastText -notmatch [regex]::Escape($expected)) {
+                Add-InstallPlanFailure "Everything backend configuration should contain '$expected'."
+            }
+        }
+        foreach ($forbidden in @(
+                'C:\Users\*\AppData\**',
+                'node_modules',
+                '.git',
+                '.venv',
+                'browser cache',
+                'Everything.Cli',
+                'everything-cli'
+            )) {
+            if ($raycastText -match [regex]::Escape($forbidden)) {
+                Add-InstallPlanFailure "Everything backend configuration must not include broad/noisy exclusion or CLI dependency '$forbidden'."
+            }
+        }
+    }
+    catch {
+        Add-InstallPlanFailure "Everything configuration contract failed: $($_.Exception.Message)"
     }
 }
 
@@ -256,12 +389,72 @@ function Assert-SetupPayloadStagingContract {
     }
 }
 
+function Assert-DirectPackageValidationContract {
+    $tempRoot = Join-Path ([IO.Path]::GetTempPath().TrimEnd('\', '/')) ('winmint_direct_package_test_' + [Guid]::NewGuid().ToString('n'))
+    try {
+        $null = New-Item -ItemType Directory -Path $tempRoot -Force
+        $missingHashPath = Join-Path $tempRoot 'packages-missing-hash.json'
+        [ordered]@{
+            tools = [ordered]@{
+                'everything-arm64-beta' = [ordered]@{
+                    displayName = 'Everything 1.5 Beta ARM64'
+                    source = 'direct'
+                    id = 'Everything-1.5.0.1415b.ARM64'
+                    version = '1.5.0.1415b'
+                    url = 'https://www.voidtools.com/Everything-1.5.0.1415b.ARM64.en-US-Setup.exe'
+                    architectures = @('arm64')
+                    silentArgs = @('/S')
+                }
+            }
+        } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $missingHashPath -Encoding UTF8
+
+        try {
+            Assert-WinMintAgentToolSources -ManifestPath $missingHashPath
+            Add-InstallPlanFailure 'Expected direct package validation to reject a missing SHA256 hash.'
+        }
+        catch {
+            if ($_.Exception.Message -notmatch 'pinned Everything 1\.5\.0\.1415b ARM64') {
+                Add-InstallPlanFailure "Direct package missing-hash validation failed with the wrong message: $($_.Exception.Message)"
+            }
+        }
+
+        $unexpectedDirectPath = Join-Path $tempRoot 'packages-unexpected-direct.json'
+        [ordered]@{
+            tools = [ordered]@{
+                'some-tool' = [ordered]@{
+                    displayName = 'Some Tool'
+                    source = 'direct'
+                    id = 'Some.Tool'
+                    version = '1.0.0'
+                    url = 'https://example.invalid/tool.exe'
+                    sha256 = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+                    architectures = @('amd64')
+                    silentArgs = @('/S')
+                }
+            }
+        } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $unexpectedDirectPath -Encoding UTF8
+
+        try {
+            Assert-WinMintAgentToolSources -ManifestPath $unexpectedDirectPath
+            Add-InstallPlanFailure 'Expected direct package validation to reject non-Everything direct tools.'
+        }
+        catch {
+            if ($_.Exception.Message -notmatch 'restricted to the pinned Everything') {
+                Add-InstallPlanFailure "Unexpected direct package validation failed with the wrong message: $($_.Exception.Message)"
+            }
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 $cases = @(
     @{ Name = 'default'; Profile = (New-InstallPlanCaseProfile) },
     @{ Name = 'keep-edge'; Profile = (New-InstallPlanCaseProfile -Overrides @{ KeepEdge = $true }) },
     @{ Name = 'keep-gaming'; Profile = (New-InstallPlanCaseProfile -Overrides @{ KeepGaming = $true }) },
     @{ Name = 'keep-copilot'; Profile = (New-InstallPlanCaseProfile -Overrides @{ KeepCopilot = $true }) },
-    @{ Name = 'flow-launcher'; Profile = (New-InstallPlanCaseProfile -Overrides @{ Launcher = 'FlowEverything' }) },
+    @{ Name = 'raycast-launcher'; Profile = (New-InstallPlanCaseProfile -Overrides @{ Launcher = 'Raycast' }) },
     @{ Name = 'shell-layers'; Profile = (New-InstallPlanCaseProfile -Overrides @{ InstallWindhawk = $true; InstallYasb = $true; InstallKomorebi = $true; InstallNilesoft = $true }) },
     @{ Name = 'local-account-password'; Profile = (New-InstallPlanCaseProfile -Overrides @{ Password = 'contract-secret'; PasswordSet = $true; AccountMode = 'Local' } -IncludeSecrets) },
     @{ Name = 'microsoft-oobe'; Profile = (New-InstallPlanCaseProfile -Overrides @{ AccountMode = 'MicrosoftOobe' }) },
@@ -275,8 +468,12 @@ foreach ($case in $cases) {
     Assert-InstallPlanMatchesWrappers -Name $case.Name -Profile $case.Profile
 }
 Assert-WslSelectionNormalizationContract
+Assert-RayCastEverythingBackendContract
+Assert-RaycastExtensionCurationContract
+Assert-EverythingConfigurationContract
 Assert-ManifestConsumesInstallPlanFacts
 Assert-SetupPayloadStagingContract
+Assert-DirectPackageValidationContract
 
 if ($failures.Count -gt 0) {
     throw "Install-plan contract failed:`n$($failures -join "`n")"

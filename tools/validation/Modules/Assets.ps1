@@ -100,8 +100,8 @@ function Test-RequiredAssets {
         'src\runtime\firstlogon\Modules\Git.ps1',
         'src\runtime\firstlogon\Modules\Dotfiles.ps1',
         'src\runtime\firstlogon\Modules\Wsl.ps1',
-        'src\runtime\firstlogon\Modules\FlowEverything.ps1',
         'src\runtime\firstlogon\Modules\Raycast.ps1',
+        'src\runtime\firstlogon\Modules\LauncherKey.ps1',
         'src\runtime\firstlogon\Modules\LiveInstallAudit.ps1',
         'src\runtime\firstlogon\Modules\TilingDesktop.ps1',
         'src\runtime\firstlogon\Modules\Windhawk.ps1',
@@ -321,22 +321,39 @@ function Test-PackageManifestArchitecture {
                 Add-ValidationError "Tool '$id' must declare a source."
                 continue
             }
-            if ([string]$tool.source -notin @('winget', 'store', 'scoop')) {
-                Add-ValidationError "Tool '$id' must use winget, store, or scoop as its source; got '$($tool.source)'."
+            if ([string]$tool.source -notin @('winget', 'store', 'scoop', 'direct')) {
+                Add-ValidationError "Tool '$id' must use winget, store, scoop, or approved direct as its source; got '$($tool.source)'."
             }
             if (-not $tool.PSObject.Properties['architectures']) {
                 Add-ValidationError "Tool '$id' must declare architectures."
                 continue
             }
             $architectures = @($tool.architectures | ForEach-Object { ([string]$_).ToLowerInvariant() })
+            $unsupportedArchitectures = @()
+            if ($tool.PSObject.Properties['unsupportedArchitectures']) {
+                if ($tool.unsupportedArchitectures -is [array]) {
+                    $unsupportedArchitectures = @($tool.unsupportedArchitectures | ForEach-Object { ([string]$_).ToLowerInvariant() })
+                }
+                else {
+                    $unsupportedArchitectures = @($tool.unsupportedArchitectures.PSObject.Properties.Name | ForEach-Object { ([string]$_).ToLowerInvariant() })
+                }
+            }
             foreach ($requiredArch in @('amd64', 'arm64')) {
-                if ($architectures -notcontains $requiredArch) {
+                if ($architectures -notcontains $requiredArch -and $unsupportedArchitectures -notcontains $requiredArch) {
                     Add-ValidationError "Tool '$id' must declare $requiredArch support or an explicit unsupported policy."
                 }
             }
             foreach ($arch in $architectures) {
                 if (@('amd64', 'arm64', 'x86') -notcontains $arch) {
                     Add-ValidationError "Tool '$id' declares unsupported architecture token: $arch"
+                }
+            }
+            foreach ($arch in $unsupportedArchitectures) {
+                if (@('amd64', 'arm64', 'x86') -notcontains $arch) {
+                    Add-ValidationError "Tool '$id' declares unsupported architecture token in unsupportedArchitectures: $arch"
+                }
+                if ($architectures -contains $arch) {
+                    Add-ValidationError "Tool '$id' declares $arch as both supported and unsupported."
                 }
             }
             if ($tool.PSObject.Properties['wingetArchitectureByHost']) {
@@ -350,6 +367,26 @@ function Test-PackageManifestArchitecture {
                     if (([string]$override.Name).ToLowerInvariant() -eq 'arm64' -and ([string]$override.Value).ToLowerInvariant() -eq 'x86') {
                         Add-ValidationError "Tool '$id' must not downgrade native ARM64 support to x86 in wingetArchitectureByHost."
                     }
+                }
+            }
+            if ([string]$tool.source -eq 'direct') {
+                foreach ($requiredField in @('url', 'sha256', 'version')) {
+                    $fieldProperty = $tool.PSObject.Properties[$requiredField]
+                    if (-not $fieldProperty -or [string]::IsNullOrWhiteSpace([string]$fieldProperty.Value)) {
+                        Add-ValidationError "Direct tool '$id' must declare $requiredField."
+                    }
+                }
+                if ([string]$id -ne 'everything-arm64-beta' -or
+                    [string]$tool.id -ne 'Everything-1.5.0.1415b.ARM64' -or
+                    [string]$tool.version -ne '1.5.0.1415b' -or
+                    [string]$tool.url -ne 'https://www.voidtools.com/Everything-1.5.0.1415b.ARM64.en-US-Setup.exe' -or
+                    [string]$tool.sha256 -ne '2D511A33A3494147F921DCB488772125E6CC654E677196AACB0235967A27D2DA' -or
+                    $architectures.Count -ne 1 -or
+                    $architectures[0] -ne 'arm64') {
+                    Add-ValidationError "Direct tool '$id' must be the approved pinned Everything 1.5.0.1415b ARM64 payload."
+                }
+                if (-not $tool.PSObject.Properties['silentArgs'] -or @($tool.silentArgs).Count -eq 0) {
+                    Add-ValidationError "Direct tool '$id' must declare silentArgs."
                 }
             }
         }

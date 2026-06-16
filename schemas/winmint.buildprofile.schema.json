@@ -245,7 +245,7 @@
         "cursorPack": { "type": "string", "const": "Windows11Modern" },
         "layers": {
           "type": "array",
-          "items": { "type": "string", "enum": ["standard", "windhawk", "yasb", "komorebi", "nilesoft"] },
+          "items": { "type": "string", "enum": ["standard", "windhawk", "yasb", "thide", "komorebi", "nilesoft"] },
           "uniqueItems": true
         }
       },
@@ -262,7 +262,7 @@
         },
         "browsers": {
           "type": "array",
-          "items": { "type": "string", "enum": ["zen-browser", "helium", "librewolf", "brave", "edge"] },
+          "items": { "type": "string", "enum": ["zen-browser", "helium", "firefox-developer-edition", "brave", "edge"] },
           "uniqueItems": true
         },
         "wsl": {
@@ -285,10 +285,9 @@
       "type": "object",
       "required": ["launcher"],
       "properties": {
-        "launcher": { "type": "string", "enum": ["None", "FlowEverything", "Raycast"] },
+        "launcher": { "type": "string", "enum": ["None", "Raycast"] },
         "liveInstallAudit": { "type": "boolean" },
-        "phoneLink": { "type": "boolean" },
-        "flowEverything": { "type": "boolean" }
+        "phoneLink": { "type": "boolean" }
       },
       "additionalProperties": false
     },
