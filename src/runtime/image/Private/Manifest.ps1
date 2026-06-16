@@ -775,15 +775,10 @@ $policyRoots = @(
   'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot',
   'HKLM:\SOFTWARE\Policies\Microsoft\Edge',
   'HKLM:\SOFTWARE\Policies\WindowsNotepad',
-  'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Paint',
   'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy',
   'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\generativeAI',
   'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\systemAIModels',
-  'HKCU:\Software\Policies\Microsoft\Windows\WindowsAI',
-  'HKCU:\Software\Microsoft\Windows\Shell\ClickToDo',
-  'HKCU:\Software\Microsoft\Office\16.0\Word\Options',
-  'HKCU:\Software\Microsoft\Office\16.0\Excel\Options',
-  'HKCU:\Software\Microsoft\Office\16.0\OneNote\Options\Copilot'
+  'HKCU:\Software\Policies\Microsoft\Windows\WindowsAI'
 )
 foreach ($path in $policyRoots) {
   if (Test-Path -LiteralPath $path) {
@@ -799,7 +794,7 @@ foreach ($svcName in @('WSAIFabricSvc')) {
   }
 }
 Get-ScheduledTask -ErrorAction SilentlyContinue |
-  Where-Object { $_.TaskName -match '(?i)Recall|WindowsAI|Copilot|Office Actions Server' -or $_.TaskPath -match '(?i)Recall|WindowsAI|Copilot|Office Actions Server' } |
+  Where-Object { $_.TaskName -match '(?i)Recall|WindowsAI|Copilot' -or $_.TaskPath -match '(?i)Recall|WindowsAI|Copilot' } |
   ForEach-Object {
     if ($PSCmdlet.ShouldProcess("$($_.TaskPath)$($_.TaskName)", 'enable scheduled task')) {
       Enable-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -ErrorAction SilentlyContinue | Out-Null

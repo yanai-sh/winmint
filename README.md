@@ -82,7 +82,7 @@ consumes the profile.
 
 | Domain | Default | Opt-in flag (on `new`) |
 |--------|---------|-------------|
-| AI / Copilot / Recall | Full serviceable removal | `-KeepCopilot` keeps all Copilot+ AI; Recall stays removed |
+| AI / Copilot / Recall | Recall removed; imposed Copilot app/shell, Notepad AI, web AI APIs, and app AI-model access disabled | `-KeepCopilot` keeps non-Recall Copilot+ AI policy/app surfaces; Recall stays removed |
 | Edge browser | Removal requested; debloat policies always applied | `-KeepEdge` keeps the browser installed and debloated |
 | Xbox / Game Bar | Removed | `-KeepGaming` keeps gaming apps and performance tweaks |
 | File Explorer | Shows extensions/hidden files, keeps Home, hides Gallery | baseline |

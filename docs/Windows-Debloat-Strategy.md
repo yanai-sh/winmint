@@ -91,7 +91,7 @@ These should be part of WinMint Core because they remove noise without compromis
 | Category | Default action |
 |----------|----------------|
 | Consumer AppX | Remove Clipchamp, News, Weather, Whiteboard, 3D Viewer, Mixed Reality Portal, Xbox apps, Solitaire, Feedback Hub, Get Help, Teams consumer, Outlook new, Dev Home, Power Automate, Microsoft Family, People, Office Hub, Calculator, Quick Assist, Sound Recorder, Sticky Notes, Maps, Microsoft To Do, **Zune** media apps (`Microsoft.ZuneMusic` / `Microsoft.ZuneVideo`), **OneNote** (`Microsoft.Office.OneNote`), **Remote Desktop** Store client (`Microsoft.RemoteDesktop*`), and **best-effort trial/OEM provisioned** prefixes (McAfee, Norton, ExpressVPN, Surfshark, AVG, Avast, KasperskyLab, Dolby trials, CCleaner). These are reinstallable Store/inbox apps, not platform dependencies. Preserve **Phone Link** / **Cross Device**, plus **Camera**, **Clock/Alarms**, **Notepad**, Store infrastructure, Desktop App Installer, and WebView2. |
-| AI surfaces | Disable/remove Copilot, Recall, Windows AI data analysis, AI-first search/sidebar hooks, and AI provisioned packages where serviceable. |
+| AI surfaces | Remove Recall and imposed Copilot app/shell surfaces; disable Notepad AI, web AI APIs, and app access to system/generative AI models. Keep explicit app-local tools such as Edge Copilot page-context chat, Paint AI, Click to Do, and the local Settings agent. |
 | Advertising/content | Disable Windows consumer features, soft landing, suggested apps, cloud optimized content, advertising ID, tailored experiences, tips, Start recommendations, backup/setup pressure prompts, and Spotlight promotional surfaces. |
 | Search noise | Disable Start menu Bing/web search and search highlights; keep local search/indexing functional. |
 | Edge noise | Hide first-run, disable startup boost/background mode, disable recommendations/promos/personalization reporting. |
@@ -213,13 +213,14 @@ Do not blanket-disable servicing, certificate, Defender, update, disk health, or
 
 ### 5. AI Removal Surface
 
-Windows AI components are moving targets. WinMint should maintain a small AI removal policy layer:
+Windows AI components are moving targets. WinMint should maintain a small AI policy layer:
 
-- Disable WindowsAI policy values.
+- Disable Recall snapshot, export, and data-analysis policy values.
 - Remove provisioned Copilot/Recall/WebExperience packages where safe.
 - Disable Recall optional feature when present.
-- Disable Edge Copilot/sidebar/promo policies.
-- Disable AI additions in inbox apps only when package identity is clear and reinstall path is known.
+- Disable Edge inline compose/rewrite, web AI APIs, and promo policies while preserving explicit Edge Copilot page-context chat.
+- Disable AI additions in inbox apps only when they are imposed or low-value. Notepad AI is disabled by default; Paint AI is preserved.
+- Do not touch Office AI policy, agent connectors, workspaces, or remote connectors.
 
 Avoid deleting servicing packages unless tests prove updates and repair still work.
 

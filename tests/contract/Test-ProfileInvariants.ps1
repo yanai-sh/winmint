@@ -176,9 +176,9 @@ if ($setupProfile.edge.Contains('aggressiveExperimental')) {
     Add-SmokeFailure 'Edge removal must not be controlled by an environment-variable experimental gate.'
 }
 
-# Subtractive model: -KeepCopilot suppresses the Copilot+ AI feature surface so a
-# Copilot+ PC keeps the Copilot app + AppX and the AI feature policy, but Recall
-# stays removed on every build as a security baseline.
+# Subtractive model: -KeepCopilot suppresses the non-Recall AI feature policy so
+# a Copilot+ PC keeps app-local AI and the Copilot app surface, but Recall stays
+# removed on every build as a security baseline.
 $settings = New-SmokeBuildProfileSettings
 $settings.KeepCopilot = $true
 $profile = New-WinMintBuildProfile -Settings $settings

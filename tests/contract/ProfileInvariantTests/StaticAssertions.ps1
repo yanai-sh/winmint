@@ -694,7 +694,7 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
     foreach ($expectedDefaultTweak in @(
             'home-privacy-policy', 'storage-sense-policy', 'modern-standby-policy', 'oobe-rehydration-policy', 'wpbt-policy',
             # Subtractive baseline: developer QoL is now baseline, and the default
-            # build removes the Copilot+/AI feature surface, Recall, and the Game Bar.
+            # build removes imposed Copilot/AI surfaces, Recall, and the Game Bar.
             'developer-mode', 'gamebar-policy', 'windows-ai-features-removal', 'windows-ai-recall-policy'
         )) {
         if (@($defaultConfig.RegistryTweaks) -notcontains $expectedDefaultTweak) {
@@ -1279,13 +1279,16 @@ function Assert-AiRemovalCatalogAndGuardrails {
             'MicrosoftWindows.Client.CoreAI',
             'Microsoft.Windows.Ai.Copilot.Provider',
             'Microsoft.Edge.GameAssist',
-            'Microsoft.Office.ActionsServer',
-            'Microsoft.WritingAssistant',
             'Microsoft.Windows.AIHub',
-            'Office Actions Server'
+            'WindowsAI'
         )) {
         if ($catalogText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "AI removal catalog should include '$expected'."
+        }
+    }
+    foreach ($forbidden in @('Microsoft.Office.ActionsServer', 'Microsoft.WritingAssistant', 'Office Actions Server')) {
+        if ($catalogText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "AI removal catalog should not touch Office-dependent AI surface '$forbidden'."
         }
     }
 
@@ -1878,10 +1881,12 @@ function Assert-WinPEDriverInjectionDefaultsToSetupOnly {
 }
 
 function Assert-CopilotPlusUsesFullAiRemovalPolicy {
-    # Subtractive model: the default build removes the Edge noise surface
-    # (edge-policy-minimal, always on), the Copilot+/Windows AI feature surface
+    # Subtractive model: the default build removes Edge noise
+    # (edge-policy-minimal, always on), imposed Copilot/Windows AI surfaces
     # (windows-ai-features-removal, kept only with -KeepCopilot), and Recall
-    # (windows-ai-recall-policy, always on as a security baseline).
+    # (windows-ai-recall-policy, always on as a security baseline), while
+    # preserving explicit app-local tools such as Edge Copilot page-context chat,
+    # Paint AI, Click to Do, and the local Settings agent.
     $edge = $script:RegistryTweaks | Where-Object id -eq 'edge-policy-minimal' | Select-Object -First 1
     $aiFeatures = $script:RegistryTweaks | Where-Object id -eq 'windows-ai-features-removal' | Select-Object -First 1
     $recall = $script:RegistryTweaks | Where-Object id -eq 'windows-ai-recall-policy' | Select-Object -First 1
@@ -1889,33 +1894,50 @@ function Assert-CopilotPlusUsesFullAiRemovalPolicy {
         Add-SmokeFailure 'Expected edge-policy-minimal, windows-ai-features-removal, and windows-ai-recall-policy registry tweaks to exist.'
         return
     }
-    foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'WebWidgetAllowed', 'CryptoWalletEnabled', 'HideFirstRunExperience', 'EdgeEnhanceImagesEnabled', 'BackgroundModeEnabled', 'StartupBoostEnabled', 'NewTabPageContentEnabled')) {
+    foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'WebWidgetAllowed', 'CryptoWalletEnabled', 'HideFirstRunExperience', 'EdgeEnhanceImagesEnabled', 'BackgroundModeEnabled', 'StartupBoostEnabled', 'NewTabPageContentEnabled', 'ComposeInlineEnabled')) {
         if (@($edge.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected Edge noise policy to set $expected."
         }
     }
     foreach ($expected in @(
-            'HubsSidebarEnabled',
-            'StandaloneHubsSidebarEnabled',
-            'DisableSettingsAgent',
             'TurnOffWindowsCopilot',
-            'CopilotPageContext',
-            'EdgeEntraCopilotPageContext',
             'GenAILocalFoundationalModelSettings',
-            'NewTabPageBingChatEnabled',
             'BuiltInAIAPIsEnabled',
             'DisableAIFeatures',
             'LetAppsAccessSystemAIModels',
-            'LetAppsAccessGenerativeAI',
-            'EnableCopilot'
+            'LetAppsAccessGenerativeAI'
         )) {
         if (@($aiFeatures.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected default AI feature removal policy to set $expected."
         }
     }
-    foreach ($expected in @('DisableAIDataAnalysis', 'DisableClickToDo', 'AllowRecallEnablement', 'AllowRecallExport', 'TurnOffSavingSnapshots')) {
+    foreach ($expected in @('DisableAIDataAnalysis', 'AllowRecallEnablement', 'AllowRecallExport', 'TurnOffSavingSnapshots')) {
         if (@($recall.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected Recall removal policy to set $expected."
+        }
+    }
+    $allAiPolicySets = @($edge.set) + @($aiFeatures.set) + @($recall.set)
+    foreach ($forbidden in @(
+            'HubsSidebarEnabled',
+            'StandaloneHubsSidebarEnabled',
+            'CopilotPageContext',
+            'CopilotCDPPageContext',
+            'EdgeEntraCopilotPageContext',
+            'NewTabPageBingChatEnabled',
+            'DisableSettingsAgent',
+            'DisableClickToDo',
+            'DisableCocreator',
+            'DisableImageCreator',
+            'DisableGenerativeFill',
+            'DisableGenerativeErase',
+            'DisableRemoveBackground',
+            'EnableCopilot',
+            'DisableAgentConnectors',
+            'DisableAgentWorkspaces',
+            'DisableRemoteAgentConnectors'
+        )) {
+        if (@($allAiPolicySets | Where-Object name -eq $forbidden).Count -ne 0) {
+            Add-SmokeFailure "WinMint should preserve explicit/local AI or Office-dependent policy '$forbidden'."
         }
     }
     # Curation: by default the AI feature removal applies; -KeepCopilot suppresses
