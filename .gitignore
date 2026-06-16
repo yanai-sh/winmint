@@ -54,3 +54,7 @@ assets/runtime/cursors/*/png/
 # Claude Code project config (user-specific)
 .claude/
 .superpowers/
+
+# Local Superpowers design/mockup output
+docs/superpowers/
+assets/ui/desktop/presets/
