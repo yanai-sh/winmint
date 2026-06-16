@@ -273,9 +273,19 @@ function Assert-VirtualDesktopFlyoutSuppressionContract {
             Add-InstallPlanFailure 'Expected default builds to leave the virtual desktop flyout override disabled.'
         }
 
-        $thidePlan = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile -Overrides @{ InstallThide = $true })
-        if (-not [bool]$thidePlan.SetupProfile.setupComplete.disableVirtualDesktopFlyout) {
-            Add-InstallPlanFailure 'Expected thide builds to disable the virtual desktop switch flyout even when Windhawk is not selected.'
+        $thideOnlyPlan = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile -Overrides @{ InstallThide = $true })
+        if ([bool]$thideOnlyPlan.SetupProfile.setupComplete.disableVirtualDesktopFlyout) {
+            Add-InstallPlanFailure 'Expected thide-only builds to leave the virtual desktop switch flyout override disabled.'
+        }
+
+        $yasbOnlyPlan = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile -Overrides @{ InstallYasb = $true })
+        if ([bool]$yasbOnlyPlan.SetupProfile.setupComplete.disableVirtualDesktopFlyout) {
+            Add-InstallPlanFailure 'Expected YASB-only builds to leave the virtual desktop switch flyout override disabled.'
+        }
+
+        $yasbThidePlan = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile -Overrides @{ InstallYasb = $true; InstallThide = $true })
+        if (-not [bool]$yasbThidePlan.SetupProfile.setupComplete.disableVirtualDesktopFlyout) {
+            Add-InstallPlanFailure 'Expected YASB+thide builds to disable the virtual desktop switch flyout even when Windhawk is not selected.'
         }
 
         $windhawkPlan = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile -Overrides @{ InstallWindhawk = $true })
