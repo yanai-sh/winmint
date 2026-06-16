@@ -1,68 +1,70 @@
 # WinMint Roadmap
 
-## Planned
+## Current Phase
 
-### Current customization surfaces
+WinMint is in backend/product proof before GUI work resumes.
 
-- Fonts: bundled system font options, including Nerd Font payloads.
-- Cursor: `Windows 11 Modern`.
-- Browsers: `Zen Browser`, `Helium`, `Firefox Developer Edition`, `Brave`, and `Edge`.
-- WSL distros: `Ubuntu 26.04 LTS`, `Fedora 44`, `Arch Linux`, `NixOS-WSL`, and `Pengwin`.
-- Shell layers: the WinMint desktop shell stack remains additive and composable.
-- Editors: `Neovim`, `VS Code`, `Cursor`, `Zed`, and `Antigravity`.
+The next work is to prove the PowerShell-owned build, setup, FirstLogon, and
+bootstrap behavior on real hardware. GPUI/Rust remains a frontend-only layer for
+intent, preview, validation messages, and invoking the headless engine; it should
+not drive backend behavior.
 
-### Browser selection
+Both ARM64/aarch64 and amd64/x86-64 remain first-class support targets.
 
-- Add browser install choices to the profile and UI: `Zen Browser`, `Helium`, `Firefox Developer Edition`, `Brave`, and `Edge`.
-- Make browser selection opt-in. If the user selects nothing, WinMint installs no browser.
-- Treat `Edge` as a keep/install choice, so the default subtractive behavior leaves Edge uninstalled unless it is explicitly selected.
-- Add a subtle UI warning later when no browser is selected, to reduce accidental no-browser builds without turning the flow into a forced decision.
+## Hardware Reality
 
-### WSL distro suggestions
+- Primary development and acceptance machine: Surface Laptop 7 ARM64/aarch64,
+  Snapdragon X Elite, Copilot+ PC.
+- Available x64/amd64 machines: Alienware Aurora desktop and ThinkPad work
+  laptop.
+- Neither x64 machine is Copilot+. Copilot-key hardware validation belongs only
+  on the Surface Laptop 7.
+- The ThinkPad is temporary and will be returned around June 30, 2026. It is a
+  time-boxed destructive x64 acceptance target.
+- The Alienware is the longer-lived x64 regression/build machine. It is used
+  primarily for gaming, so destructive testing there stays deliberate.
 
-- Keep WSL2 enabled by default, with no distro preinstalled.
-- Surface distro suggestions in the UI and profile flow for:
-  - `Ubuntu 26.04 LTS`
-  - `Fedora 44`
-  - `Arch Linux`
-  - [`NixOS-WSL`](https://github.com/nix-community/NixOS-WSL)
-  - `Pengwin`
-- Keep these as suggestions only; the developer still chooses whether to install any distro.
+## Tracked Acceptance Profiles
 
-### Editor selection
+- `config/build-profiles/yanai-sl7-microsoft-oobe.json`: ARM64 Surface
+  dev/Copilot+ acceptance profile with YASB, thide, and Raycast. Windhawk is
+  intentionally deferred.
+- `config/build-profiles/yanai-thinkpad-return-amd64.json`: work PC return
+  profile with a minimal, familiar Windows surface. Keeps Edge, installs no
+  extra browsers/editors/launcher or shell layers, installs WSL Ubuntu, and uses
+  `AutoWipeDisk0`.
+- `config/build-profiles/yanai-alienware-aurora-amd64.json`: amd64 gaming
+  desktop profile with Helium, Zen, Neovim, Zed, and Nilesoft. It has no
+  launcher, still removes Xbox apps, and uses manual disk mode.
 
-- Add editor install choices to the profile and UI: `Neovim`, `VS Code`, `Cursor`, `Zed`, and `Antigravity`.
-- Keep editors opt-in and leave them unset by default.
-- Treat editor selection as independent from browser and WSL choices.
+## Priority Order
 
-### Linux-like workstation baseline
+1. Prove ARM64 Surface live install acceptance first.
+2. Verify the release/bootstrap path.
+3. Use live install audit output as the feedback loop for product fixes, run
+   explicitly after acceptance installs or through an audit-enabled acceptance
+   run/profile. The tracked profiles do not imply audit is enabled by default.
+4. Stabilize x64 after ARM64 is stable, using the ThinkPad before return and the
+   Alienware as the long-term x64 regression/build host.
+5. Resume GUI work only after backend behavior is proven.
 
-#### Safe defaults
+## Surface Acceptance Items
 
-- Keep the XDG layout as the default for WinMint users:
-  - `XDG_CONFIG_HOME=%USERPROFILE%\.config`
-  - `XDG_DATA_HOME=%USERPROFILE%\.local\share`
-  - `XDG_STATE_HOME=%USERPROFILE%\.local\state`
-  - `XDG_CACHE_HOME=%USERPROFILE%\.cache`
-  - `XDG_RUNTIME_DIR` as a temp-backed per-user runtime directory
-- Keep PowerShell 7 and Windows Terminal as the default shell surface.
-- Keep `Windows Terminal` on the taskbar and `Cascadia Code NF` as the default terminal font.
-- Keep Starship installed/configured by default with the Nerd Font symbols preset.
-- Keep developer mode, OpenSSH, WSL2, and symlink friendliness enabled by default.
-- Treat WinMint as a WSL-first development environment even when no distro is installed yet.
-- Keep the Windows-side quality-of-life defaults useful for general daily use, not just for WSL.
-- Keep a dotfiles-friendly user layout and prefer user-owned config/state directories over `AppData` when the app supports it.
-- Keep user-owned script/shim paths (`~/bin` and `~/.local/bin`) on the user `PATH`.
+- FirstLogon completes and resumes correctly after interruption.
+- YASB, thide, and Raycast install, configure, and start at first logon.
+- Raycast Copilot-key app policy is applied, and the physical Copilot key works
+  on the Surface Laptop 7.
+- Everything uses the pinned ARM64 direct-download backend and quiet config.
+- ViVeTool virtual desktop flyout suppression works for the YASB+thide baseline
+  without Windhawk.
+- Windhawk remains deferred until baseline ARM64 performance is known.
 
-#### Developer opt-in
+## GUI Return Criteria
 
-- Allow per-folder case sensitivity where the user explicitly wants it.
-- Keep prompt customization beyond the default Starship preset as user-managed configuration.
-- Keep SSH agent and Git defaults in the developer layer, not the core baseline.
+GUI work resumes after the backend path has evidence from live installs:
 
-#### Too invasive
-
-- Forcing all apps into a single package ecosystem.
-- Globally changing Windows path semantics.
-- Replacing native Windows shell behavior with custom wrappers where a supported setting already exists.
-- Moving all Windows apps out of `AppData` even when the app does not support XDG or equivalent paths.
+- Profile-backed build and validation behavior is stable.
+- FirstLogon and setup payloads behave idempotently on real hardware.
+- Release/bootstrap can install the current product without local repo state.
+- ARM64 acceptance is complete, with x64 stabilization underway or clearly
+  bounded by tracked follow-up work.
