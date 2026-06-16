@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 3,
+  "createdAt": "2026-06-16T05:51:28.1983069+03:00",
+  "profileName": "Alienware Aurora Gaming",
+  "source": {
+    "isoPath": "",
+    "architecture": "amd64"
+  },
+  "target": {
+    "device": "ThisPC",
+    "formFactor": "Desktop",
+    "editionMode": "TargetLicense",
+    "edition": "",
+    "productKey": "",
+    "diskMode": "Manual",
+    "diskLayout": {
+      "mode": "Manual",
+      "preset": "",
+      "roundingGb": 64,
+      "windowsMinimumGb": 256,
+      "windowsRecommendedGb": 384,
+      "linuxMinimumGb": 128,
+      "linuxRecommendedGb": 256,
+      "efiMb": 1024,
+      "msrMb": 16,
+      "recoveryMb": 1024
+    }
+  },
+  "identity": {
+    "computerName": "AURORA",
+    "accountName": "Yanai",
+    "accountMode": "MicrosoftOobe",
+    "autoLogon": false,
+    "passwordSet": false,
+    "passwordIncluded": false
+  },
+  "regional": {
+    "timeZoneId": "Israel Standard Time",
+    "uiLanguage": "en-US",
+    "systemLocale": "he-IL",
+    "uiLanguageFallback": "en-US",
+    "userLocale": "he-IL",
+    "inputLocale": "en-US;he-IL",
+    "homeLocationGeoId": 117,
+    "secondaryInputLanguages": "Auto"
+  },
+  "drivers": {
+    "source": "None",
+    "path": "",
+    "exportHostDrivers": false
+  },
+  "desktop": {
+    "cursorPack": "Windows11Modern",
+    "layers": [
+      "nilesoft"
+    ]
+  },
+  "development": {
+    "editors": [
+      "neovim",
+      "zed"
+    ],
+    "browsers": [
+      "helium",
+      "zen-browser"
+    ],
+    "wsl": {
+      "enabled": true,
+      "distros": []
+    }
+  },
+  "features": {
+    "launcher": "None",
+    "liveInstallAudit": false,
+    "phoneLink": false
+  },
+  "updates": {
+    "mode": "None",
+    "targetFeatureVersion": "25H2",
+    "releaseCadence": "BRelease",
+    "includeOptionalPreviews": false,
+    "payloadRoot": "",
+    "qualitySecurity": true,
+    "dynamicUpdate": true,
+    "defender": true,
+    "dotnet": true,
+    "provisionedApps": true
+  },
+  "keep": {
+    "edge": false,
+    "gaming": false,
+    "copilot": false
+  },
+  "removals": {
+    "advertising": true,
+    "gaming": true,
+    "communication": true,
+    "microsoftApps": true,
+    "aiPolicy": "ServiceableFull",
+    "effectiveAppx": [
+      "Clipchamp.Clipchamp",
+      "Microsoft.549981C3F5F10",
+      "Microsoft.BingFinance",
+      "Microsoft.BingFoodAndDrink",
+      "Microsoft.BingHealthAndFitness",
+      "Microsoft.BingNews",
+      "Microsoft.BingSearch",
+      "Microsoft.BingSports",
+      "Microsoft.BingTranslator",
+      "Microsoft.BingTravel",
+      "Microsoft.BingWeather",
+      "Microsoft.CommsPhone",
+      "Microsoft.ConnectivityStore",
+      "Microsoft.Copilot",
+      "Microsoft.GamingApp",
+      "Microsoft.GetHelp",
+      "Microsoft.Getstarted",
+      "Microsoft.Messaging",
+      "Microsoft.MicrosoftOfficeHub",
+      "Microsoft.MicrosoftPowerBIForWindows",
+      "Microsoft.MicrosoftSolitaireCollection",
+      "Microsoft.MicrosoftStickyNotes",
+      "Microsoft.MixedReality.Portal",
+      "Microsoft.NetworkSpeedTest",
+      "Microsoft.Office.OneNote",
+      "Microsoft.Office.Sway",
+      "Microsoft.OneConnect",
+      "Microsoft.OutlookForWindows",
+      "Microsoft.People",
+      "Microsoft.PowerAutomateDesktop",
+      "Microsoft.RemoteDesktop",
+      "Microsoft.RemoteDesktopPreview",
+      "Microsoft.SkypeApp",
+      "Microsoft.StartExperiencesApp",
+      "Microsoft.Todos",
+      "Microsoft.Wallet",
+      "Microsoft.Whiteboard",
+      "Microsoft.Windows.AIHub",
+      "Microsoft.Windows.DevHome",
+      "Microsoft.Windows.PeopleExperienceHost",
+      "Microsoft.WindowsCalculator",
+      "Microsoft.windowscommunicationsapps",
+      "Microsoft.WindowsFeedbackHub",
+      "Microsoft.WindowsMaps",
+      "Microsoft.WindowsPhone",
+      "Microsoft.WindowsReadingList",
+      "Microsoft.WindowsSoundRecorder",
+      "Microsoft.Xbox.TCUI",
+      "Microsoft.XboxApp",
+      "Microsoft.XboxGameOverlay",
+      "Microsoft.XboxGamingOverlay",
+      "Microsoft.XboxIdentityProvider",
+      "Microsoft.XboxSpeechToTextOverlay",
+      "Microsoft.ZuneMusic",
+      "Microsoft.ZuneVideo",
+      "MicrosoftCorporationII.MicrosoftFamily",
+      "MicrosoftCorporationII.QuickAssist",
+      "MicrosoftTeams",
+      "MicrosoftWindows.Client.WebExperience",
+      "MSTeams",
+      "Windows.CBSPreview"
+    ]
+  },
+  "privacy": {
+    "telemetry": true,
+    "advertisingId": true,
+    "location": true,
+    "timeline": true
+  },
+  "tweaks": {
+    "darkMode": true,
+    "fileExtensions": true,
+    "stickyKeys": true,
+    "hardwareBypass": false,
+    "dmaInterop": true
+  }
+}
