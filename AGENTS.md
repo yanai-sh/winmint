@@ -1,6 +1,6 @@
 # WinMint — Agent context
 
-Windows 11 ISO builder. Windows-native. Requires PS 7.3+ for product scripts.
+Windows 11 ISO builder. Windows-native. Requires `pwsh` 7.6.2+ for backend/runtime scripts.
 Development usually happens from WSL or an editor, but all project scripts execute on Windows.
 
 `AGENTS.md` is the compact implementation contract for coding agents. User-facing product behavior, usage examples, and rationale belong in `README.md`.
@@ -8,6 +8,8 @@ Development usually happens from WSL or an editor, but all project scripts execu
 The core design rule: **UI creates intent. Engine performs work. Reports explain work. FirstLogon finishes live-user setup.**
 
 PowerShell owns the backend and all real product work: profile normalization, ISO/WIM servicing, setup payloads, FirstLogon, reports, release tooling, and validation tooling. The actual build logic must stay headless. GPUI/Rust is a frontend layer that creates intent, previews choices, and invokes the headless PowerShell engine; it must not own servicing, setup orchestration, offline registry edits, or live-user package installation.
+
+Backend composition is module-first under `src/runtime/modules/`. Public backend entrypoints import explicit script modules (`WinMint.Bootstrap`, `WinMint.Profile`, `WinMint.Catalog`, `WinMint.Engine`, `WinMint.Setup`, `WinMint.FirstLogon`, `WinMint.Audit`, `WinMint.Reporting`) instead of treating `src/runtime/image/WinMint.ps1` as the primary composition root. The legacy dot-sourced image runtime remains as a compatibility adapter while callers are migrated.
 
 ## Product stance (opinionated)
 
@@ -96,10 +98,13 @@ Three first-class contracts. All business logic passes through these — never b
 |----------|-------------|-------------|----------|
 | `BuildProfile.json` | UI or CLI | Engine, FirstLogon Agent | `output/<build>/` |
 | `BuildManifest.json` | Engine | Reports, human audit | `output/<build>/` |
+| `BuildDelta.json` | Audit pipeline | GUI review, CLI summaries, reports | `output/<build>/` |
 | `state.json` | FirstLogon Agent | Agent retry logic | `%LOCALAPPDATA%\WinMint\state.json` |
 
 **BuildProfile owns:** source ISO path, architecture, device mode (`ThisPC`/`DifferentPC`), edition mode, disk mode/layout, driver source, identity, desktop layers, WSL distros, editors, feature toggles.  
 **BuildProfile does not own:** build timestamps, WIM mount paths, download hashes, step success/failure state, UI display strings.
+
+**BuildDelta owns:** generated backend truth for "what WinMint changes" after profile normalization and install-plan derivation. Every record must include phase, contributor source, applicability/suppression metadata, and a concise change list. Do not maintain a separate handwritten authoritative backend behavior summary once a behavior is represented in `BuildDelta`.
 
 **Agent step status values:** `pending`, `running`, `ok`, `failed`, `skipped`, `retryable`, `needsReboot`.
 

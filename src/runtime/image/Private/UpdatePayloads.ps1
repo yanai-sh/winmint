@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function ConvertTo-WinMintPlainText {
     param([AllowNull()][string]$Html)
@@ -506,3 +506,4 @@ function Invoke-WinMintStable25H2UpdatePayloadAcquisition {
         Payloads = $payloads.ToArray()
     }
 }
+

@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-RegistryTweakGroupValue {
     param(
@@ -443,3 +443,4 @@ function Get-Win11IsoDiskLayoutExtraMarkup {
         '[dim]Push-button reset and Windows Recovery Environment are fully functional.[/]'
     ) -join ' '
 }
+

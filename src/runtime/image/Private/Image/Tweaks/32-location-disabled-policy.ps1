@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Explicit opt-out only (privacy.location = false / -NoLocationServices). Default
 # laptop-first builds keep location and Find My Device available.
@@ -17,3 +17,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

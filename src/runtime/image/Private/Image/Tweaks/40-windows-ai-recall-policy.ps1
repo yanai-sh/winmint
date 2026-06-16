@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Always applied (security): disable Recall and its data-analysis / snapshot /
 # export surface. Recall is the one Copilot+ AI feature treated as a blatant
@@ -25,3 +25,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

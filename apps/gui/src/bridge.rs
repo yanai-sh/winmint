@@ -84,11 +84,52 @@ pub struct BridgeBuildResult {
     #[serde(default)]
     pub manifest_path: String,
     #[serde(default)]
+    pub build_delta_path: String,
+    #[serde(default)]
     pub report_path: String,
     #[serde(default)]
     pub progress: Vec<BridgeProgressEvent>,
     #[serde(default)]
     pub error: String,
+    #[serde(skip_deserializing, default)]
+    pub build_delta: BuildDeltaSummary,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BuildDeltaSummary {
+    pub total_records: usize,
+    pub user_controlled_records: usize,
+    pub phase_counts: Vec<(String, usize)>,
+    pub highlighted_records: Vec<BuildDeltaRecordSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuildDeltaRecordSummary {
+    pub title: String,
+    pub phase: String,
+    pub kind: String,
+    pub change_count: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct BuildDeltaDocument {
+    #[serde(default)]
+    records: Vec<BuildDeltaRecord>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BuildDeltaRecord {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    phase: String,
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    user_controlled: bool,
+    #[serde(default)]
+    changes: Vec<String>,
 }
 
 trait BridgeCommandRunner {
@@ -327,7 +368,51 @@ fn start_build_from_profile_with(
 ) -> Result<BridgeBuildResult, String> {
     let spec = build_invocation_command(repo_root, profile_path, dry_run);
     let output = runner.run(&spec)?;
-    parse_powershell_result_json(output, "Build invocation")
+    let mut result: BridgeBuildResult = parse_powershell_result_json(output, "Build invocation")?;
+    result.build_delta = load_build_delta_summary(&result.build_delta_path);
+    Ok(result)
+}
+
+fn load_build_delta_summary(path: &str) -> BuildDeltaSummary {
+    if path.trim().is_empty() {
+        return BuildDeltaSummary::default();
+    }
+
+    let Ok(json) = fs::read_to_string(path) else {
+        return BuildDeltaSummary::default();
+    };
+    let Ok(document) = serde_json::from_str::<BuildDeltaDocument>(&json) else {
+        return BuildDeltaSummary::default();
+    };
+
+    let mut phase_counts = std::collections::BTreeMap::<String, usize>::new();
+    let mut user_controlled_records = 0usize;
+    let mut highlighted_records = Vec::new();
+
+    for record in &document.records {
+        if !record.phase.is_empty() {
+            *phase_counts.entry(record.phase.clone()).or_default() += 1;
+        }
+        if record.user_controlled {
+            user_controlled_records += 1;
+        }
+    }
+
+    for record in document.records.iter().take(8) {
+        highlighted_records.push(BuildDeltaRecordSummary {
+            title: record.title.clone(),
+            phase: record.phase.clone(),
+            kind: record.kind.clone(),
+            change_count: record.changes.len(),
+        });
+    }
+
+    BuildDeltaSummary {
+        total_records: document.records.len(),
+        user_controlled_records,
+        phase_counts: phase_counts.into_iter().collect(),
+        highlighted_records,
+    }
 }
 
 /// Probe a Windows ISO via `tools/ui-bridge/Get-UiIsoMetadata.ps1`.
@@ -459,7 +544,7 @@ mod tests {
     #[test]
     fn build_invocation_should_call_bridge_script_with_profile_and_dry_run() {
         let runner = CapturingRunner::new(ok_output(
-            r#"{"Ok":true,"DryRun":true,"OutputPath":"C:\\repo\\output","OutputIsoPath":"","ManifestPath":"C:\\repo\\output\\WinMint-BuildManifest.json","ReportPath":"C:\\repo\\output\\BuildReport.json","Progress":[],"Error":""}"#,
+            r#"{"Ok":true,"DryRun":true,"OutputPath":"C:\\repo\\output","OutputIsoPath":"","ManifestPath":"C:\\repo\\output\\WinMint-BuildManifest.json","BuildDeltaPath":"C:\\repo\\output\\WinMint-BuildDelta.json","ReportPath":"C:\\repo\\output\\BuildReport.json","Progress":[],"Error":""}"#,
         ));
         let repo = Path::new("C:\\repo");
         let profile = repo.join("output").join("gui").join("BuildProfile.json");
@@ -479,6 +564,11 @@ mod tests {
             result.manifest_path,
             "C:\\repo\\output\\WinMint-BuildManifest.json"
         );
+        assert_eq!(
+            result.build_delta_path,
+            "C:\\repo\\output\\WinMint-BuildDelta.json"
+        );
+        assert_eq!(result.build_delta.total_records, 0);
     }
 
     #[test]
@@ -486,7 +576,7 @@ mod tests {
         let runner = CapturingRunner::new(BridgeCommandOutput {
             success: false,
             status: "exit status: 1".to_string(),
-            stdout: br#"{"Ok":false,"DryRun":true,"OutputPath":"","OutputIsoPath":"","ManifestPath":"C:\\repo\\output\\WinMint-BuildManifest.json","ReportPath":"","Progress":[{"Time":"","Stage":"Validate","Level":"Error","Message":"failed"}],"Error":"failed"}"#.to_vec(),
+            stdout: br#"{"Ok":false,"DryRun":true,"OutputPath":"","OutputIsoPath":"","ManifestPath":"C:\\repo\\output\\WinMint-BuildManifest.json","BuildDeltaPath":"C:\\repo\\output\\WinMint-BuildDelta.json","ReportPath":"","Progress":[{"Time":"","Stage":"Validate","Level":"Error","Message":"failed"}],"Error":"failed"}"#.to_vec(),
             stderr: b"failed".to_vec(),
         });
         let repo = Path::new("C:\\repo");
@@ -497,7 +587,39 @@ mod tests {
 
         assert!(!result.ok);
         assert_eq!(result.error, "failed");
+        assert_eq!(
+            result.build_delta_path,
+            "C:\\repo\\output\\WinMint-BuildDelta.json"
+        );
         assert_eq!(result.progress[0].message, "failed");
+    }
+
+    #[test]
+    fn build_delta_summary_should_parse_local_delta_artifact() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("winmint-build-delta-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).expect("temp dir should exist");
+        let delta_path = temp_dir.join("WinMint-BuildDelta.json");
+        fs::write(
+            &delta_path,
+            r#"{"schemaVersion":1,"generatedAt":"2026-06-16T00:00:00Z","records":[{"title":"Apply AI cleanup policy","phase":"offline-image","kind":"ai-cleanup","userControlled":false,"changes":["a","b"]},{"title":"Install selected editors","phase":"first-logon","kind":"first-logon-module","userControlled":true,"changes":["a"]}]}"#,
+        )
+        .expect("delta artifact should write");
+
+        let summary = load_build_delta_summary(&delta_path.display().to_string());
+
+        assert_eq!(summary.total_records, 2);
+        assert_eq!(summary.user_controlled_records, 1);
+        assert_eq!(
+            summary.phase_counts,
+            vec![
+                ("first-logon".to_string(), 1),
+                ("offline-image".to_string(), 1)
+            ]
+        );
+        assert_eq!(summary.highlighted_records[0].change_count, 2);
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Invoke-WinMintAgentBrowsersBootstrap {
     [CmdletBinding()]
@@ -60,3 +60,4 @@ function Invoke-WinMintAgentBrowsersBootstrap {
         Message = $message
     }
 }
+

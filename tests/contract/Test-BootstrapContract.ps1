@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -40,6 +40,10 @@ function Assert-BootstrapTextAbsent {
 Assert-BootstrapText -Pattern 'yanai-sh/winmint' -Description 'canonical GitHub repository'
 Assert-BootstrapText -Pattern 'WinMint-\$tag\.zip' -Description 'WinMint release archive naming'
 Assert-BootstrapText -Pattern 'WinMint-Bootstrap' -Description 'WinMint GitHub user agent'
+Assert-BootstrapText -Pattern '\[version\]''7\.6\.2''' -Description 'bootstrap minimum runtime pin is PowerShell 7.6.2'
+Assert-BootstrapText -Pattern 'PowerShell 7\.6\.2\+ is required' -Description 'bootstrap explains the 7.6.2 runtime requirement'
+Assert-BootstrapText -Pattern 'Microsoft\.PowerShell' -Description 'bootstrap installs PowerShell through winget package id Microsoft.PowerShell'
+Assert-BootstrapText -Pattern 'Installing PowerShell 7\.6\.2\+ via WinGet' -Description 'bootstrap logs the winget acquisition path for PowerShell 7.6.2'
 Assert-BootstrapText -Pattern "\[ValidateSet\('Gui','Headless'\)\]" -Description 'explicit launcher mode set'
 Assert-BootstrapText -Pattern '\[switch\]\$Gui' -Description 'primary GUI launcher switch'
 Assert-BootstrapText -Pattern '\[switch\]\$Headless' -Description 'headless launcher switch'
@@ -58,3 +62,4 @@ Assert-BootstrapText -Pattern 'Test-WinMintArchiveHash -ArchivePath \$archivePat
 Assert-BootstrapTextAbsent -Pattern 'hash verification skipped' -Description 'bootstrap must not downgrade to unverified release installs'
 
 Write-Host 'Bootstrap contract tests passed.'
+

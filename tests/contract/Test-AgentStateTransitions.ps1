@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -151,6 +151,7 @@ try {
     }
 
     $runtimePlan = @(New-WinMintAgentRuntimeStepPlan)
+    $moduleCatalog = @(Get-WinMintAgentModuleCatalog)
     $expectedStepOrder = @(
         'profiles',
         'package-managers',
@@ -166,6 +167,8 @@ try {
         'editors',
         'liveInstallAudit'
     )
+    Assert-Equal (@($moduleCatalog | ForEach-Object { $_.Id }) -join ',') 'profiles,packageManagers,wsl,git,dotfiles,raycast,launcherKey,phoneLink,shell,windhawk,browsers,editors,liveInstallAudit' 'Agent module catalog should declare the explicit FirstLogon registration order.'
+    Assert-Equal (@($moduleCatalog | ForEach-Object { $_.BootstrapFunction }) -join ',') 'Invoke-WinMintAgentProfileBootstrap,Invoke-WinMintAgentPackageManagerBootstrap,Invoke-WinMintAgentWslBootstrap,Invoke-WinMintAgentGitBootstrap,Invoke-WinMintAgentDotfileBootstrap,Invoke-WinMintAgentRaycastBootstrap,Invoke-WinMintAgentLauncherKeyBootstrap,Invoke-WinMintAgentPhoneLinkBootstrap,Invoke-WinMintAgentTilingDesktopBootstrap,Invoke-WinMintAgentWindhawkBootstrap,Invoke-WinMintAgentBrowsersBootstrap,Invoke-WinMintAgentEditorBootstrap,Invoke-WinMintAgentLiveInstallAuditBootstrap' 'Agent module catalog should declare the required bootstrap functions explicitly.'
     Assert-Equal (@($runtimePlan | Sort-Object Order | ForEach-Object { $_.StepName }) -join ',') ($expectedStepOrder -join ',') 'Agent runtime step plan should preserve module order.'
     $profilesStep = $runtimePlan | Where-Object { $_.StepName -eq 'profiles' } | Select-Object -First 1
     $editorsStep = $runtimePlan | Where-Object { $_.StepName -eq 'editors' } | Select-Object -First 1
@@ -258,3 +261,4 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host 'Agent state transition tests passed.'
+

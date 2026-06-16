@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 <#
 .SYNOPSIS
     Author a Hyper-V-ready WinMint build profile.
@@ -87,3 +87,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Hyper-V profile written: $OutPath"
+

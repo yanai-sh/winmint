@@ -413,24 +413,53 @@ function Write-WinMintInstallMarker {
 }
 
 function Get-WinMintPowerShell {
-    $pwsh = Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue
-    if (-not $pwsh) {
-        throw 'PowerShell 7.3+ is required. Install PowerShell 7, then run this launcher again.'
+    function Get-WinMintPowerShellCandidate {
+        $pwsh = Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue
+        if (-not $pwsh) { return $null }
+
+        $versionText = & $pwsh.Source -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>$null |
+            Select-Object -First 1
+        try {
+            return [pscustomobject]@{
+                Path = $pwsh.Source
+                Version = [version]([string]$versionText).Trim()
+            }
+        }
+        catch {
+            throw "Could not determine PowerShell version from '$($pwsh.Source)'. Install PowerShell 7.6.2+, then run this launcher again."
+        }
     }
 
-    $versionText = & $pwsh.Source -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>$null |
-        Select-Object -First 1
-    try {
-        $version = [version]([string]$versionText).Trim()
-    }
-    catch {
-        throw "Could not determine PowerShell version from '$($pwsh.Source)'. Install PowerShell 7.3+, then run this launcher again."
-    }
-    if ($version -lt [version]'7.3') {
-        throw "PowerShell 7.3+ is required. Found $version at '$($pwsh.Source)'. Update PowerShell, then run this launcher again."
+    function Install-WinMintBootstrapPowerShell {
+        $winget = Get-Command 'winget.exe' -ErrorAction SilentlyContinue
+        if (-not $winget) {
+            throw 'PowerShell 7.6.2+ is required, and WinGet was not available for automatic installation.'
+        }
+
+        Write-WinMintBootstrapLog 'Installing PowerShell 7.6.2+ via WinGet.'
+        & $winget.Source install `
+            --id Microsoft.PowerShell `
+            --source winget `
+            --accept-package-agreements `
+            --accept-source-agreements `
+            --disable-interactivity `
+            --silent | Out-Null
     }
 
-    return $pwsh.Source
+    $minimumVersion = [version]'7.6.2'
+    $candidate = Get-WinMintPowerShellCandidate
+    if (-not $candidate -or $candidate.Version -lt $minimumVersion) {
+        Install-WinMintBootstrapPowerShell
+        $candidate = Get-WinMintPowerShellCandidate
+    }
+    if (-not $candidate -or $candidate.Version -lt $minimumVersion) {
+        $foundVersion = if ($candidate) { $candidate.Version } else { 'none' }
+        $foundPath = if ($candidate) { $candidate.Path } else { 'pwsh.exe not found' }
+        throw "PowerShell 7.6.2+ is required. Found $foundVersion at '$foundPath'. Update PowerShell, then run this launcher again."
+    }
+
+    Write-WinMintBootstrapLog "Using PowerShell $($candidate.Version) at '$($candidate.Path)'."
+    return $candidate.Path
 }
 
 Enable-WinMintBootstrapTls

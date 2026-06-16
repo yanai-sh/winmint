@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintOptionCatalog {
     [ordered]@{
@@ -35,3 +35,4 @@ function Get-WinMintOptionValues {
     }
     @($catalog[$Name])
 }
+

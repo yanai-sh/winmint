@@ -1,6 +1,6 @@
 # Codebase Concerns
 
-Snapshot note: this document reflects the current development state of the repo. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-16. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
 ## Core Sections (Required)
 
@@ -13,6 +13,7 @@ Snapshot note: this document reflects the current development state of the repo.
 | Medium | Several core files exceed 500 lines and mix multiple related responsibilities. | `src/runtime/setup/FirstLogon.Support.ps1`, `src/runtime/image/Private/Manifest.ps1`, `src/runtime/image/Private/Config/Profile.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, `apps/gui/src/main.rs` | Higher review cost and harder surgical changes. | Extract only along existing layer boundaries when a change touches one of these areas. |
 | Medium | Network/download supply chain spans GitHub latest releases, Microsoft Catalog scraping, package managers, and raw helper images. | `winmint.ps1`, `src/runtime/image/Private/UpdatePayloads.ps1`, `src/runtime/image/Private/PayloadStore.ps1`, `src/runtime/image/Private/UsbMedia.ps1`, `config/packages.json` | Upstream changes can break builds or alter payloads. | Keep hash/signature verification where possible and define a pinning policy for non-Microsoft latest-release assets. |
 | Medium | Network/download supply chain should stay on stable release channels. | `winmint.ps1`, `src/runtime/image/Private/UpdatePayloads.ps1`, `src/runtime/image/Private/PayloadStore.ps1`, `config/packages.json` | Preview/nightly/canary payloads could reduce ISO reproducibility or install safety. | Prefer latest stable releases and gate any preview channel behind explicit development behavior. |
+| Medium | Validation command intent is inconsistent between docs and implementation. | `AGENTS.md`, `tools/validation/Validate.ps1`, `tools/validation/Modules/Core.ps1`, `.github/workflows/ci.yml` | Users or agents may believe PSScriptAnalyzer ran when default validation skipped it. | [ASK USER] Decide whether to make `Validate.ps1` run analyzer by default or update command docs to include `-RunAnalyzer`. |
 | Low | `docs/codebase/` snapshots can go stale or be mistaken for authoritative product docs. | `docs/codebase/`, `config/release-manifest.json`, `docs/Project-Structure.md` | Contributors may follow stale audit notes instead of current contracts. | Keep them excluded from release bundles and defer to `README.md`, `AGENTS.md`, schemas, and tests when conflicts appear. |
 
 ### 2) Technical Debt
@@ -30,9 +31,9 @@ Snapshot note: this document reflects the current development state of the repo.
 
 | Risk | OWASP category (if applicable) | Evidence | Current mitigation | Gap |
 |------|--------------------------------|----------|--------------------|-----|
-| Local-account password can be passed on the CLI. | N/A local tooling secret handling | `src/runtime/image/Cli.ps1`, `src/runtime/image/Private/Headless.ps1`, `PSScriptAnalyzerSettings.psd1` | Alternatives exist via `-PasswordPath` and `-PasswordEnvVar`; lint exclusion documents the deliberate allowance. | End-to-end redaction/lifecycle policy is `[TODO]`. |
+| Local-account password can be passed on the CLI. | N/A local tooling secret handling | `src/runtime/image/Cli.ps1`, `src/runtime/image/Private/Headless.ps1`, `PSScriptAnalyzerSettings.psd1` | Alternatives exist via `-PasswordPath` and `-PasswordEnvVar`; lint exclusion documents the deliberate allowance. | End-to-end redaction/lifecycle policy is `[ASK USER]`. |
 | Remote bootstrap uses `irm | iex` distribution path. | N/A supply chain | `README.md`, `docs/Distribution.md`, `winmint.ps1`, `cloudflare/winmint/src/index.js` | Bootstrap verifies release zip SHA256 and serves plain text with `nosniff`; inspect-first path is documented. | Trust model for Cloudflare/GitHub compromise is `[TODO]`. |
-| Downloaded latest-release/package payloads can change upstream. | N/A supply chain | `src/runtime/image/Private/PayloadStore.ps1`, `src/runtime/image/Private/Image/Packages.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, `config/packages.json` | Some payloads are hashed, signed, or recorded in manifests; Microsoft Catalog downloads verify SHA256 metadata. Latest stable release is intentional; nightly/preview/beta/canary channels should be avoided. | Stable-channel filtering and signature policy for every non-Microsoft latest-release asset is `[TODO]`. |
+| Downloaded latest-release/package payloads can change upstream. | N/A supply chain | `src/runtime/image/Private/PayloadStore.ps1`, `src/runtime/image/Private/Image/Packages.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, `config/packages.json` | Some payloads are hashed, signed, or recorded in manifests; Microsoft Catalog downloads verify SHA256 metadata. Latest stable release is intentional; nightly/preview/beta/canary channels should be avoided. | Stable-channel filtering and signature policy for every non-Microsoft latest-release asset is `[ASK USER]`. |
 | Destructive USB/disk operations exist. | N/A local destructive operation | `src/runtime/image/Private/UsbMedia.ps1`, `src/runtime/image/Private/Console/Review.ps1`, `README.md` | Explicit flags, disk confirmation, and typed/destructive confirmations are present. | Automated destructive-path acceptance coverage is `[TODO]`. |
 
 ### 4) Performance and Scaling Concerns
@@ -62,11 +63,20 @@ Snapshot note: this document reflects the current development state of the repo.
 5. External acquisition should use latest stable releases. Nightly, preview, beta, and canary channels are not intended product behavior.
 6. The intended current license expression is `GPL-2.0-or-later`; the app is alpha and the license can change later if needed.
 
-### 7) Evidence
+### 7) `[ASK USER]` Questions
+
+1. [ASK USER] Should `tools\validation\Validate.ps1` run PSScriptAnalyzer by default to match the agent instructions, or should `AGENTS.md`/README commands explicitly use `-RunAnalyzer`?
+2. [ASK USER] What is the intended end-to-end redaction/lifecycle policy for local-account passwords and installer logs?
+3. [ASK USER] What stable-channel pinning/signature policy should apply to every non-Microsoft latest-release payload?
+4. [ASK USER] What credential lifecycle expectations should be documented for Cloudflare Worker deployment credentials?
+5. [ASK USER] Should download/package operations have a repo-wide timeout/retry policy, or remain tool-specific?
+
+### 8) Evidence
 
 - `AGENTS.md`
 - `README.md`
 - `roadmap.md`
+- `docs/codebase/.codebase-scan.txt`
 - `Cargo.toml`
 - `THIRD_PARTY_NOTICES.md`
 - `config/release-manifest.json`

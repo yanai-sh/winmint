@@ -1,9 +1,10 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintSetupPayloadRequiredScriptNames {
     @(
         'SetupComplete.cmd'
         'SetupComplete.ps1'
+        'Setup.Actions.ps1'
         'Specialize.ps1'
         'DefaultUser.ps1'
         'FirstLogon.ps1'
@@ -361,3 +362,4 @@ function Invoke-WinMintSetupPayloadStaging {
         RequiredArtifacts = @(Get-WinMintSetupPayloadRequiredArtifacts)
     }
 }
+

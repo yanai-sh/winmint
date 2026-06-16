@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintAgentRaycastConfig {
     param([Parameter(Mandatory)][object]$AgentProfile)
@@ -321,3 +321,4 @@ function Invoke-WinMintAgentRaycastBootstrap {
         ExtensionsFailed = @($failed)
     }
 }
+

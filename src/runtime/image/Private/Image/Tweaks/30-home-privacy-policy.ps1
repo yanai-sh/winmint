@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline Home-safe privacy posture. Telemetry stays at AllowTelemetry=1
 # (Required) — the Home-correct minimum; it is NOT set to 0 (Enterprise-only,
@@ -35,3 +35,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

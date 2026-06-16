@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 <#
 .SYNOPSIS
     Validate that a WinMint profile is suitable for Hyper-V testing.
@@ -93,3 +93,4 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host "Hyper-V profile is ready: $ProfilePath"
+

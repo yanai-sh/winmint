@@ -26,10 +26,26 @@ pub fn render(app: &WinMintApp, _window: &mut Window, _cx: &mut Context<WinMintA
     } else {
         app.build_run.report_path.clone()
     };
+    let build_delta_path = if app.build_run.build_delta_path.is_empty() {
+        "Not available".into()
+    } else {
+        app.build_run.build_delta_path.clone()
+    };
     let last_progress = if app.build_run.last_progress.is_empty() {
         "None".into()
     } else {
         app.build_run.last_progress.clone()
+    };
+    let build_delta_summary = &app.build_run.build_delta_summary;
+    let phase_summary = if build_delta_summary.phase_counts.is_empty() {
+        "Not available".to_string()
+    } else {
+        build_delta_summary
+            .phase_counts
+            .iter()
+            .map(|(phase, count)| format!("{phase}={count}"))
+            .collect::<Vec<_>>()
+            .join(", ")
     };
 
     div()
@@ -54,9 +70,28 @@ pub fn render(app: &WinMintApp, _window: &mut Window, _cx: &mut Context<WinMintA
                 .child(summary_row("Profile", profile_path))
                 .child(summary_row("Output", output_path))
                 .child(summary_row("Manifest", manifest_path))
+                .child(summary_row("BuildDelta", build_delta_path))
+                .child(summary_row(
+                    "Records",
+                    build_delta_summary.total_records.to_string().into(),
+                ))
+                .child(summary_row(
+                    "User controlled",
+                    build_delta_summary
+                        .user_controlled_records
+                        .to_string()
+                        .into(),
+                ))
+                .child(summary_row("Phases", phase_summary.into()))
                 .child(summary_row("Report", report_path))
                 .child(summary_row("Progress", last_progress))
-                .child(summary_row("Last status", app.build_run.status.clone())),
+                .child(summary_row("Last status", app.build_run.status.clone()))
+                .children(
+                    build_delta_summary
+                        .highlighted_records
+                        .iter()
+                        .map(highlight_row),
+                ),
         )
 }
 
@@ -82,5 +117,31 @@ fn summary_row(label: &'static str, value: SharedString) -> Div {
                 .text_color(theme::color::text())
                 .truncate()
                 .child(value),
+        )
+}
+
+fn highlight_row(record: &crate::bridge::BuildDeltaRecordSummary) -> Div {
+    let detail = if record.kind.is_empty() {
+        format!("{} change(s)", record.change_count)
+    } else {
+        format!("{} · {} change(s)", record.kind, record.change_count)
+    };
+
+    div()
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .text_sm()
+                .text_color(theme::color::text())
+                .child(record.title.clone()),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(theme::color::text_dim())
+                .child(format!("{} · {}", record.phase, detail)),
         )
 }

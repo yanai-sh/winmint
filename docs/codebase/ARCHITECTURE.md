@@ -1,6 +1,6 @@
 # Architecture
 
-Snapshot note: this document reflects the current development state of the repo. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-16. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
 ## Core Sections (Required)
 
@@ -61,12 +61,14 @@ winmint.ps1 / WinMint-GUI.ps1 / WinMint-CLI.ps1 -> profile authoring/validation 
 - Contract duplication risk: UI intent keys and option tokens exist in Rust, a JSON schema, backend profile authoring/catalog modules, the PowerShell bridge adapter, and contract tests; changes must update all of those together.
 - Large mixed-responsibility files exist in core paths, including `src/runtime/setup/FirstLogon.Support.ps1`, `src/runtime/image/Private/Manifest.ps1`, `src/runtime/image/Private/Config/Profile.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, and `apps/gui/src/main.rs`.
 - UI/backend boundary drift remains possible because Rust/GPUI owns frontend state while PowerShell owns profile generation and build execution; keep bridge contracts and tests updated together.
+- Documentation/automation mismatch: `AGENTS.md` presents `tools\validation\Validate.ps1` as syntax plus PSScriptAnalyzer, while `tools/validation/Modules/Core.ps1` skips PSScriptAnalyzer unless `-RunAnalyzer` is supplied. [ASK USER] Decide whether docs or validation defaults should change.
 - `docs/codebase/` is intentionally a development snapshot and is excluded from release bundles; contributors should not treat it as authoritative over `README.md`, `AGENTS.md`, schemas, or executable tests.
 
 ### 6) Evidence
 
 - `AGENTS.md`
 - `README.md`
+- `docs/codebase/.codebase-scan.txt`
 - `docs/Project-Structure.md`
 - `WinMint-CLI.ps1`
 - `WinMint-GUI.ps1`

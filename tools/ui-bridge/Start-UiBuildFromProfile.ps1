@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 5.1
 <#
 .SYNOPSIS
   Runs the WinMint engine build from an on-disk BuildProfile.json.
@@ -13,10 +13,19 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
+Import-Module (Join-Path $RepositoryRoot 'src\runtime\modules\WinMint.Bootstrap\WinMint.Bootstrap.psd1') -Force
+$bootstrapArgs = @(
+    '-RepositoryRoot', $RepositoryRoot,
+    '-ProfilePath', $ProfilePath
+)
+if ($DryRun) { $bootstrapArgs += '-DryRun' }
+$bootstrap = Invoke-WinMintRuntimeBootstrap -Entrypoint $PSCommandPath -Arguments $bootstrapArgs
+if ($bootstrap.Relaunched) {
+    exit $bootstrap.ExitCode
+}
+
 $script:WinMintRepositoryRoot = $RepositoryRoot
-. (Join-Path $RepositoryRoot 'src\runtime\image\Core.ps1')
-$engine = Get-WinMintPath -Name RuntimeImageEntry
-. $engine
+Import-Module (Join-Path $RepositoryRoot 'src\runtime\modules\WinMint.Engine\WinMint.Engine.psd1') -Force
 Initialize-WinMintEngine -RepositoryRoot $RepositoryRoot -DryRun:$DryRun
 
 $buildProfile = Get-Content -LiteralPath $ProfilePath -Raw | ConvertFrom-Json
@@ -37,6 +46,7 @@ try {
         OutputPath   = $outputPath
         OutputIsoPath = if ($outputPath -match '(?i)\.iso$') { $outputPath } else { '' }
         ManifestPath = if (Test-Path -LiteralPath $manifestPath -PathType Leaf) { $manifestPath } else { '' }
+        BuildDeltaPath = (Join-Path $outputDir 'WinMint-BuildDelta.json')
         ReportPath   = if ($build -and $build.Paths -and $build.Paths.PSObject.Properties['Json']) { [string]$build.Paths.Json } else { '' }
         Progress     = @($progress)
         Error        = ''
@@ -52,6 +62,7 @@ catch {
         OutputPath   = ''
         OutputIsoPath = ''
         ManifestPath = if (Test-Path -LiteralPath $manifestPath -PathType Leaf) { $manifestPath } else { '' }
+        BuildDeltaPath = (Join-Path $outputDir 'WinMint-BuildDelta.json')
         ReportPath   = ''
         Progress     = @($progress)
         Error        = $_.Exception.Message

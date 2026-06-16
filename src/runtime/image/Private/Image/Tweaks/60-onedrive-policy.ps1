@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Applied when Microsoft-apps removal is on (default). Removes OneDrive
 # integration, blocks sync/reinstall policies, hides the Explorer namespace, and
@@ -35,3 +35,4 @@ Add-WinMintRegistryTweakModule @{
         @{ path = 'zDEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDriveSetup' }
     )
 }
+

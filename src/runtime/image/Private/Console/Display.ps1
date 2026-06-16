@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Write-SpectreSpacing {
     <# <summary>One blank line via Spectre.Console (keeps all visual output on the Spectre stack; no Host.UI).</summary> #>
@@ -419,3 +419,4 @@ function Invoke-Action {
         }
     }
 }
+

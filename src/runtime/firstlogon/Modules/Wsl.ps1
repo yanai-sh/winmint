@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Convert-WinMintWslDistroAlias {
     param([string]$Distro)
@@ -478,3 +478,4 @@ function Invoke-WinMintAgentWslBootstrap {
         Message = $messages -join '; '
     }
 }
+

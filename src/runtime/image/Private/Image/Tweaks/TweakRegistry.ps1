@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Registry tweak catalog assembly.
 #
@@ -297,3 +297,4 @@ Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1' -ErrorAction Stop |
     ForEach-Object { . $_.FullName }
 
 Assert-WinMintRegistryTweakCatalog
+

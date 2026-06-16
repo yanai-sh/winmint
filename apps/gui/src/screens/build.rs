@@ -29,6 +29,27 @@ pub fn render(app: &WinMintApp, _window: &mut Window, cx: &mut Context<WinMintAp
     } else {
         app.build_run.report_path.clone()
     };
+    let build_delta_path = if app.build_run.build_delta_path.is_empty() {
+        "Not available".into()
+    } else {
+        app.build_run.build_delta_path.clone()
+    };
+    let build_delta_total = if app.build_run.build_delta_summary.total_records == 0 {
+        "Not available".to_string()
+    } else {
+        app.build_run.build_delta_summary.total_records.to_string()
+    };
+    let phase_summary = if app.build_run.build_delta_summary.phase_counts.is_empty() {
+        "Not available".to_string()
+    } else {
+        app.build_run
+            .build_delta_summary
+            .phase_counts
+            .iter()
+            .map(|(phase, count)| format!("{phase}={count}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
     let last_progress = if app.build_run.last_progress.is_empty() {
         "None".into()
     } else {
@@ -60,6 +81,9 @@ pub fn render(app: &WinMintApp, _window: &mut Window, cx: &mut Context<WinMintAp
                 .child(summary_row("Edition", app.intent.edition.clone()))
                 .child(summary_row("Profile", profile_path))
                 .child(summary_row("Manifest", manifest_path))
+                .child(summary_row("BuildDelta", build_delta_path))
+                .child(summary_row("Delta records", build_delta_total.into()))
+                .child(summary_row("Delta phases", phase_summary.into()))
                 .child(summary_row("Report", report_path))
                 .child(summary_row("Progress", last_progress))
                 .child(summary_row("Status", app.build_run.status.clone())),

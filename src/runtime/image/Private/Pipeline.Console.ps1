@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Resolve-WinMintConsoleIsoPath {
     param([string]$DefaultPath)
@@ -533,3 +533,4 @@ function Invoke-WinMintConsoleBuild {
         Start-WinMintBuild -BuildProfile $selection.Profile -DryRun:$DryRun
     }
 }
+

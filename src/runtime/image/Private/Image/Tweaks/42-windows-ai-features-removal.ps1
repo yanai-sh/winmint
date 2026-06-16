@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Default builds remove imposed Copilot+ / Windows AI surfaces: the Windows
 # Copilot app/shell surface, Edge AI APIs that websites can call, Notepad AI,
@@ -43,3 +43,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

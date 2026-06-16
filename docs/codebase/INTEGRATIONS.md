@@ -1,6 +1,6 @@
 # External Integrations
 
-Snapshot note: this document reflects the current development state of the repo. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-16. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
 ## Core Sections (Required)
 
@@ -35,13 +35,13 @@ Snapshot note: this document reflects the current development state of the repo.
 
 - Credential sources: CLI local-account password via `-Password`, `-PasswordPath`, or `-PasswordEnvVar`; GitHub Actions uses `${{ github.token }}` for release publishing; Cloudflare deploy credentials are outside repo and not represented in `wrangler.jsonc`.
 - Hardcoding checks: package IDs, generic Windows setup keys, public URLs, and SHA256 constants are checked in; no API tokens or Cloudflare secrets were found in source files inspected.
-- Rotation or lifecycle notes: release publishing token lifecycle is managed by GitHub Actions; Cloudflare credential lifecycle is `[TODO]`; local-account password cleanup is implemented in setup/FirstLogon code paths but an end-to-end redaction policy is `[TODO]`.
+- Rotation or lifecycle notes: release publishing token lifecycle is managed by GitHub Actions; Cloudflare credential lifecycle is `[ASK USER]`; local-account password cleanup is implemented in setup/FirstLogon code paths but an end-to-end redaction policy is `[ASK USER]`.
 
 ### 4) Reliability and Failure Behavior
 
 - Retry/backoff behavior: FirstLogon records per-step attempts and skips completed `ok` steps unless `-Force`; WSL virtualization errors can return retry/reboot state; package install failures are generally recorded rather than always blocking setup.
 - Release-channel policy: external payload acquisition should prefer latest stable releases unless a product contract names an exception. Current exception: Raycast file search uses `voidtools.Everything.Beta` on amd64/x86-64, and a pinned SHA256-verified upstream `Everything-1.5.0.1415b.ARM64.en-US-Setup.exe` on ARM64 because the winget beta package has no ARM64 installer.
-- Timeout policy: GitHub API reachability preflight uses `-TimeoutSec`; many package/download operations rely on platform/tool defaults, so a repo-wide timeout policy is `[TODO]`.
+- Timeout policy: GitHub API reachability preflight uses `-TimeoutSec`; many package/download operations rely on platform/tool defaults, so a repo-wide timeout policy is `[ASK USER]`.
 - Circuit-breaker or fallback behavior: bootstrap refuses releases without a `.sha256`; update payload downloads verify hashes/signatures where implemented; `SetupComplete` skips winget toolchain when outbound HTTPS to Microsoft is unavailable; oscdimg can be located from installed/downloaded ADK sources.
 
 ### 5) Observability for Integrations
@@ -53,6 +53,7 @@ Snapshot note: this document reflects the current development state of the repo.
 ### 6) Evidence
 
 - `winmint.ps1`
+- `docs/codebase/.codebase-scan.txt`
 - `config/packages.json`
 - `src/runtime/image/Private/Manifest.ps1`
 - `src/runtime/image/Private/UpdatePayloads.ps1`

@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Test-RequiredAssets {
     $required = @(
@@ -429,3 +429,4 @@ function Test-KomorebiPresetPayload {
         Add-ValidationError "Komorebi preset validation failed: $($_.Exception.Message)"
     }
 }
+

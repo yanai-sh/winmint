@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 <#
 .SYNOPSIS
@@ -773,3 +773,4 @@ function Publish-WinMintMonaspaceNerdFontCache {
         if (Test-Path -LiteralPath $dir) { Remove-WinMintIntermediatesCacheTree -Path $dir }
     }
 }
+

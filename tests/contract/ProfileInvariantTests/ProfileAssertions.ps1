@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function New-SmokeBuildProfile {
     New-WinMintBuildProfile -Settings @{
@@ -286,7 +286,8 @@ function Assert-TweakAuditArtifactsAreWritten {
         $auditPath = Join-Path $tempRoot 'WinMint-TweakAudit.json'
         $mdPath = Join-Path $tempRoot 'WinMint-TweakAudit.md'
         $regPath = Join-Path $tempRoot 'WinMint-TweakRollback.reg'
-        foreach ($path in @($manifestPath, $auditPath, $mdPath, $regPath)) {
+        $buildDeltaPath = Join-Path $tempRoot 'WinMint-BuildDelta.json'
+        foreach ($path in @($manifestPath, $auditPath, $mdPath, $regPath, $buildDeltaPath)) {
             if (-not (Test-Path -LiteralPath $path)) {
                 Add-SmokeFailure "Expected tweak audit artifact to exist: $path"
             }
@@ -299,9 +300,16 @@ function Assert-TweakAuditArtifactsAreWritten {
         if (@($manifest.tweaks.registryGroups).Count -eq 0) {
             Add-SmokeFailure 'Expected manifest to include detailed tweaks.registryGroups.'
         }
+        if (-not $manifest.audit -or [string]::IsNullOrWhiteSpace([string]$manifest.audit.buildDeltaPath)) {
+            Add-SmokeFailure 'Expected manifest audit metadata to include the BuildDelta artifact path.'
+        }
         $audit = Get-Content -LiteralPath $auditPath -Raw | ConvertFrom-Json
         if ([int]$audit.summary.applied -lt 1 -or [int]$audit.summary.failed -lt 1) {
             Add-SmokeFailure 'Expected tweak audit JSON to summarize applied and failed events.'
+        }
+        $buildDelta = Get-Content -LiteralPath $buildDeltaPath -Raw | ConvertFrom-Json
+        if (@($buildDelta.records).Count -eq 0) {
+            Add-SmokeFailure 'Expected BuildDelta to contain at least one selected backend change record.'
         }
         $regText = Get-Content -LiteralPath $regPath -Raw
         foreach ($expected in @('Windows Registry Editor Version 5.00', 'HideFileExt', 'dword:00000001')) {
@@ -1114,3 +1122,4 @@ function Assert-UiBridgeBuildProfileContract {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+

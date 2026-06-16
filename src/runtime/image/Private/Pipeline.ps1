@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Convert-WinMintInstallEsdToWim {
     param(
@@ -573,3 +573,4 @@ function Invoke-WinMintIsoPipeline {
         Invoke-Cleanup -MountDir $mountDir -SourceIso $BuildConfig.SourceIso -WorkDir $workDir
     }
 }
+

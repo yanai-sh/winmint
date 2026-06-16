@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -380,6 +380,7 @@ function Assert-SetupPayloadStagingContract {
         foreach ($relativePath in @(
             'SetupComplete.cmd',
             'SetupComplete.ps1',
+            'Setup.Actions.ps1',
             'Specialize.ps1',
             'DefaultUser.ps1',
             'FirstLogon.ps1',
@@ -425,6 +426,49 @@ function Assert-SetupPayloadStagingContract {
     }
     finally {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Assert-BuildDeltaContributorCoverage {
+    try {
+        $plan = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile -Overrides @{
+                Launcher = 'Raycast'
+                InstallWindhawk = $true
+                InstallYasb = $true
+                InstallThide = $true
+                PhoneLink = $true
+                LiveInstallAudit = $true
+                Editors = @('neovim')
+                Browsers = @('zen-browser')
+            })
+        $buildDelta = New-WinMintBuildDeltaCatalog -BuildConfig $plan.BuildConfig -InstallPlan $plan
+        $recordIds = @($buildDelta.records | ForEach-Object { [string]$_.id })
+
+        foreach ($expected in @(
+                'setup-action:windows-update-restore',
+                'setup-action:edge-removal',
+                'setup-action:ai-cleanup',
+                'setup-action:inline-secret-cleanup',
+                'setup-action:first-logon-runonce',
+                'firstlogon:profiles',
+                'firstlogon:packageManagers',
+                'firstlogon:wsl',
+                'firstlogon:raycast',
+                'firstlogon:launcherKey',
+                'firstlogon:phoneLink',
+                'firstlogon:shell',
+                'firstlogon:windhawk',
+                'firstlogon:browsers',
+                'firstlogon:editors',
+                'firstlogon:liveInstallAudit'
+            )) {
+            if ($recordIds -notcontains $expected) {
+                Add-InstallPlanFailure "BuildDelta should contain contributor record '$expected'."
+            }
+        }
+    }
+    catch {
+        Add-InstallPlanFailure "BuildDelta contributor coverage failed: $($_.Exception.Message)"
     }
 }
 
@@ -514,9 +558,11 @@ Assert-VirtualDesktopFlyoutSuppressionContract
 Assert-ManifestConsumesInstallPlanFacts
 Assert-SetupPayloadStagingContract
 Assert-DirectPackageValidationContract
+Assert-BuildDeltaContributorCoverage
 
 if ($failures.Count -gt 0) {
     throw "Install-plan contract failed:`n$($failures -join "`n")"
 }
 
 Write-Host 'Install-plan contract smoke passed.'
+

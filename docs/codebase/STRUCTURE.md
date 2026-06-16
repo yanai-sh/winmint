@@ -1,6 +1,6 @@
 # Codebase Structure
 
-Snapshot note: this document reflects the current development state of the repo. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-16. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
 ## Core Sections (Required)
 
@@ -23,6 +23,7 @@ Snapshot note: this document reflects the current development state of the repo.
 | `schemas/` | JSON schemas for profile, manifest, agent state, and UI intent contracts. | `schemas/winmint.buildprofile.schema.json`, `schemas/winmint.buildmanifest.schema.json`, `schemas/winmint.agentstate.schema.json`, `schemas/winmint.uiintent.schema.json` |
 | `assets/` | Brand/UI assets plus runtime payloads staged into images or first-logon setup. | `assets/brand/`, `assets/runtime/`, `assets/ui/`, `docs/Project-Structure.md` |
 | `cloudflare/winmint/` | Distribution alias Worker, outside the WinMint runtime bundle. | `cloudflare/winmint/src/index.js`, `cloudflare/winmint/wrangler.jsonc`, `docs/Distribution.md` |
+| `output/`, `dist/`, `target/`, `node_modules/`, `temp/` | Generated or local dependency/build artifacts; not source layout. | `.gitignore`, `docs/Project-Structure.md`, `tools/validation/Modules/Core.ps1` |
 
 ### 2) Entry Points
 
@@ -52,6 +53,7 @@ Snapshot note: this document reflects the current development state of the repo.
 
 - `docs/Project-Structure.md`
 - `AGENTS.md`
+- `docs/codebase/.codebase-scan.txt`
 - `WinMint-CLI.ps1`
 - `WinMint-GUI.ps1`
 - `winmint.ps1`

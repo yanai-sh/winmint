@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -128,6 +128,7 @@ Assert-OneDriveRemovalPolicyIsComplete
 Assert-DefaultUserTaskbarPinsIncludeTerminal
 Assert-WindowsTerminalDefaultsPwsh7NoLogo
 Assert-PowerShell7IsBundledAndRequired
+Assert-SetupAndFirstLogonCatalogsAreExplicit
 Assert-WinMintBloomWallpaperCoversDesktopAndLockScreen
 Assert-FirstLogonDefaultsToVisibleConsole
 Assert-FirstLogonDemoHarnessIsNonMutating
@@ -465,3 +466,4 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host 'Profile invariant smoke passed.'
+

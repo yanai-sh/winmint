@@ -1,4 +1,7 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
+if (-not (Get-Command New-WinMintBuildDeltaCatalog -ErrorAction SilentlyContinue)) {
+    . (Join-Path $PSScriptRoot 'Private\Audit.ps1')
+}
 
 function New-WinMintBuildConfig {
     [CmdletBinding()]
@@ -747,6 +750,7 @@ function Invoke-WinMintIsoBuild {
         -Message $sourceMessage `
         -ProgressHandler $ProgressHandler
     $installPlan = New-WinMintInstallPlanFromBuildConfig -BuildConfig $Config
+    $buildDelta = New-WinMintBuildDeltaCatalog -BuildConfig $Config -InstallPlan $installPlan
     $kept = @()
     if ($Config.Keep.Edge) { $kept += 'Edge' }
     if ($Config.Keep.Gaming) { $kept += 'Gaming' }
@@ -764,7 +768,7 @@ function Invoke-WinMintIsoBuild {
     $report = New-WinMintBuildReport -Config $Config -DetectedArchitecture $detected -Warnings $pre.Warnings
     $paths = Save-WinMintBuildReport -Report $report
     Write-WinMintProgress -Stage 'Report' -Level OK -Message "Wrote $($paths.Json)" -ProgressHandler $ProgressHandler
-    Initialize-WinMintBuildManifest -Config $Config -InstallPlan $installPlan
+    Initialize-WinMintBuildManifest -Config $Config -InstallPlan $installPlan -BuildDelta $buildDelta
     if ($DryRun -and -not $sourceIsoAvailable) {
         Write-WinMintProgress `
             -Stage 'DryRun' `
@@ -901,3 +905,4 @@ function Start-WinMintBuild {
         -AllowFixedUsbDisk:$AllowFixedUsbDisk `
         -ProgressHandler $ProgressHandler
 }
+

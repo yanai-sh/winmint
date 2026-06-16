@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # WinMint CLI verb layer. WinMint-CLI.ps1 is a thin dispatcher that routes the
 # first positional token to one of these commands. Each verb owns a small,
@@ -354,3 +354,4 @@ new options (configuration lives here):
 '@
     Write-Host $text
 }
+

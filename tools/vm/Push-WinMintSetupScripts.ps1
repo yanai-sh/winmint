@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 <#
 .SYNOPSIS
     Fast-iterate WinMint setup/agent scripts in a RUNNING Hyper-V test VM without a
@@ -92,3 +92,4 @@ try {
 finally {
     Remove-PSSession $session -ErrorAction SilentlyContinue
 }
+

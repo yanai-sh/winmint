@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -44,3 +44,4 @@ foreach ($legacyFlag in @(
 }
 
 Write-Host 'Cloudflare Worker contract tests passed.'
+

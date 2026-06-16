@@ -6,7 +6,7 @@ Windows 11 ISO builder for clean developer workstation installs.
 
 [![License](https://img.shields.io/badge/License-GPL--2.0--or--later-3ABf7c?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011%2025H2%2B-0078D6?style=flat-square&logo=windows11&logoColor=white)](#requirements)
-[![PowerShell](https://img.shields.io/badge/PowerShell-7.3%2B-5391FE?style=flat-square&logo=powershell&logoColor=white)](#requirements)
+[![PowerShell](https://img.shields.io/badge/PowerShell-7.6.2%2B-5391FE?style=flat-square&logo=powershell&logoColor=white)](#requirements)
 [![UI](https://img.shields.io/badge/UI-GPUI%20%2F%20Rust-DEA584?style=flat-square&logo=rust&logoColor=white)](apps/gui)
 
 </div>
@@ -166,7 +166,7 @@ page instead of stopping for personal/work setup.
 
 ## Requirements
 
-- Windows 11 build host, PowerShell 7.3+, Administrator rights for real builds.
+- Windows 11 build host, PowerShell 7.6.2+, Administrator rights for real builds.
 - Windows 11 25H2+ source ISO and about 25 GB of free scratch space.
 - `oscdimg.exe` from the Windows ADK (installed manually or through WinMint).
 - A `dism.exe` at least as new as the source image build. WinMint fails early
@@ -205,6 +205,7 @@ not a valid source for the VM test profile.
 |----------|---------|
 | `BuildProfile.json` | Build intent from GUI, CLI, or automation |
 | `BuildManifest.json` | Machine-readable record of what the engine did |
+| `BuildDelta.json` | Generated backend audit of what WinMint intends to change and stage |
 | `state.json` | FirstLogon agent retry and resume state |
 
 Schemas live in [`schemas/`](schemas).

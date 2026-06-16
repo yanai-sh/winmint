@@ -1,10 +1,14 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintSetupCompleteText {
     # SetupComplete is now a thin orchestrator plus per-concern modules under
     # src\runtime\setup\SetupComplete\. Content assertions must span both.
     $parts = [System.Collections.Generic.List[string]]::new()
     $parts.Add((Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.ps1') -Raw))
+    $setupCatalogPath = Join-Path $root 'src\runtime\setup\Setup.Actions.ps1'
+    if (Test-Path -LiteralPath $setupCatalogPath -PathType Leaf) {
+        $parts.Add((Get-Content -LiteralPath $setupCatalogPath -Raw))
+    }
     $moduleDir = Join-Path $root 'src\runtime\setup\SetupComplete'
     if (Test-Path -LiteralPath $moduleDir) {
         foreach ($module in @(Get-ChildItem -LiteralPath $moduleDir -Filter '*.ps1' -File | Sort-Object Name)) {
@@ -28,6 +32,12 @@ function Get-WinMintFirstLogonText {
         }
     }
     return ($parts.ToArray() -join "`n")
+}
+
+function Get-WinMintRepositoryText {
+    param([Parameter(Mandatory)][string]$RelativePath)
+
+    return (Get-Content -LiteralPath (Join-Path $root $RelativePath) -Raw)
 }
 
 function Assert-StaticUiFlowInvariants {
@@ -1375,10 +1385,10 @@ function Assert-AgentRunsLiveInstallAudit {
             Add-SmokeFailure "Agent runtime should expose plan-driven ordering and failure policy with '$expected'."
         }
     }
-    $profilesIndex = $agentEntryText.IndexOf("Add-AgentRuntimeStep -StepName 'profiles'")
-    $packageManagersIndex = $agentEntryText.IndexOf("Add-AgentRuntimeStep -StepName 'package-managers'")
-    $editorsIndex = $agentEntryText.IndexOf("Add-AgentRuntimeStep -StepName 'editors'")
-    $auditIndex = $agentEntryText.IndexOf("Add-AgentRuntimeStep -StepName 'liveInstallAudit'")
+    $profilesIndex = $agentEntryText.IndexOf("RuntimeStepName = 'profiles'")
+    $packageManagersIndex = $agentEntryText.IndexOf("RuntimeStepName = 'package-managers'")
+    $editorsIndex = $agentEntryText.IndexOf("RuntimeStepName = 'editors'")
+    $auditIndex = $agentEntryText.IndexOf("RuntimeStepName = 'liveInstallAudit'")
     $failedIndex = $agentEntryText.IndexOf('$failed = @')
     if ($profilesIndex -lt 0 -or $packageManagersIndex -lt 0 -or $editorsIndex -lt 0 -or $auditIndex -lt 0 -or $failedIndex -lt 0 -or
         -not ($profilesIndex -lt $packageManagersIndex -and $packageManagersIndex -lt $editorsIndex -and $editorsIndex -lt $auditIndex -and $auditIndex -lt $failedIndex)) {
@@ -2489,9 +2499,26 @@ function Assert-WindowsTerminalDefaultsPwsh7NoLogo {
     }
 }
 
-function Assert-PowerShell7IsBundledAndRequired {
-    $packagesText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Packages.ps1') -Raw
+function Assert-StaticTextContainsAll {
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][string[]]$Expected,
+        [Parameter(Mandatory)][string]$FailurePrefix
+    )
+
     foreach ($expected in @(
+        $Expected
+    )) {
+        if ($Text -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "$FailurePrefix '$expected'."
+        }
+    }
+}
+
+function Assert-OfflinePowerShell7StagingContract {
+    param([Parameter(Mandatory)][string]$PackagesText)
+
+    Assert-StaticTextContainsAll -Text $PackagesText -FailurePrefix 'Offline PowerShell 7 staging should contain' -Expected @(
         'function Assert-OfflinePowerShell7Staged',
         'Resolve-WinMintGitHubReleasePayload',
         'PowerShell/PowerShell',
@@ -2499,88 +2526,129 @@ function Assert-PowerShell7IsBundledAndRequired {
         'PowerShell 7 staged in the offline image',
         'PowerShell 7 is missing from the offline image',
         'PowerShell 7 staging failed; build cannot continue'
-    )) {
-        if ($packagesText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "Offline PowerShell 7 staging should contain '$expected'."
-        }
-    }
-    if ($packagesText -match 'fall back to Windows PowerShell') {
+    )
+    if ($PackagesText -match 'fall back to Windows PowerShell') {
         Add-SmokeFailure 'PowerShell 7 staging must fail the build instead of falling back to Windows PowerShell.'
     }
+}
 
-    $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Pipeline.ps1') -Raw
+function Assert-ServiceWimRequiresBundledPowerShell7 {
+    $pipelineText = Get-WinMintRepositoryText 'src\runtime\image\Private\Pipeline.ps1'
     if ($pipelineText -notmatch 'Assert-OfflinePowerShell7Staged\s+-MountDir\s+\$mountDir') {
         Add-SmokeFailure 'Service WIM pipeline must assert bundled PowerShell 7 after servicing or serviced-WIM cache restore.'
     }
 
-    $cacheText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\IntermediatesCache.ps1') -Raw
+    $cacheText = Get-WinMintRepositoryText 'src\runtime\image\Private\IntermediatesCache.ps1'
     if ($cacheText -notmatch '\$script:WinMintServicedWimCacheSchemaVersion\s*=\s*9') {
         Add-SmokeFailure 'Serviced-WIM cache schema should be bumped after adding the bundled PowerShell 7 image invariant.'
     }
+}
 
-    $setupCompleteCmd = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.cmd') -Raw
-    foreach ($expected in @(
+function Assert-SetupCompleteCmdRequiresBundledPowerShell7 {
+    param([Parameter(Mandatory)][string]$SetupCompleteCmd)
+
+    Assert-StaticTextContainsAll -Text $SetupCompleteCmd -FailurePrefix 'SetupComplete.cmd should require staged PowerShell 7 with' -Expected @(
         '%ProgramFiles%\PowerShell\7\pwsh.exe',
         'PowerShell 7 is required',
         'exit /b 1'
-    )) {
-        if ($setupCompleteCmd -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "SetupComplete.cmd should require staged PowerShell 7 with '$expected'."
-        }
-    }
-    if ($setupCompleteCmd -match 'powershell\.exe[\s\S]{0,160}SetupComplete\.ps1') {
+    )
+    if ($SetupCompleteCmd -match 'powershell\.exe[\s\S]{0,160}SetupComplete\.ps1') {
         Add-SmokeFailure 'SetupComplete.cmd must not run SetupComplete.ps1 under Windows PowerShell when PowerShell 7 is missing.'
     }
+}
 
-    $setupCompleteText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.ps1') -Raw
-    foreach ($expected in @(
+function Assert-SetupCompleteRegistersFirstLogonUnderPowerShell7 {
+    param([Parameter(Mandatory)][string]$SetupCompleteText)
+
+    Assert-StaticTextContainsAll -Text $SetupCompleteText -FailurePrefix 'SetupComplete.ps1 should register FirstLogon under PowerShell 7 with' -Expected @(
         "Join-Path `$env:ProgramFiles 'PowerShell\7\pwsh.exe'",
         'PowerShell 7 is required for FirstLogon',
         '-NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File',
         'under PowerShell 7'
-    )) {
-        if ($setupCompleteText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "SetupComplete.ps1 should register FirstLogon under PowerShell 7 with '$expected'."
-        }
-    }
-    if ($setupCompleteText -match 'runOnceCommand\s*=\s*"powershell\.exe') {
+    )
+    if ($SetupCompleteText -match 'runOnceCommand\s*=\s*"powershell\.exe') {
         Add-SmokeFailure 'SetupComplete.ps1 must not register FirstLogon RunOnce under Windows PowerShell.'
     }
+}
 
-    $firstLogonRuntimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Runtime.ps1') -Raw
-    foreach ($expected in @(
+function Assert-SetupCompleteToolchainDoesNotInstallPowerShell7Fallback {
+    param([Parameter(Mandatory)][string]$ToolchainText)
+
+    if ($ToolchainText -match 'Microsoft\.PowerShell') {
+        Add-SmokeFailure 'SetupComplete toolchain must not install PowerShell 7 via winget; PowerShell 7 is bundled offline and required before SetupComplete.ps1 runs.'
+    }
+}
+
+function Assert-FirstLogonRuntimeRequiresPowerShell7 {
+    param([Parameter(Mandatory)][string]$FirstLogonRuntimeText)
+
+    Assert-StaticTextContainsAll -Text $FirstLogonRuntimeText -FailurePrefix 'FirstLogon runtime should fail closed around PowerShell 7 with' -Expected @(
         'PowerShell 7 is bundled into the image and is required',
         'PowerShell 7 is required for FirstLogon',
         'PowerShell 7 re-launch failed',
         'return 1'
-    )) {
-        if ($firstLogonRuntimeText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "FirstLogon runtime should fail closed around PowerShell 7 with '$expected'."
-        }
-    }
-    if ($firstLogonRuntimeText -match 'continuing under Windows PowerShell') {
+    )
+    if ($FirstLogonRuntimeText -match 'continuing under Windows PowerShell') {
         Add-SmokeFailure 'FirstLogon runtime must not continue under Windows PowerShell after PowerShell 7 handoff fails.'
     }
+}
 
-    $firstLogonSupportText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Support.ps1') -Raw
-    foreach ($expected in @(
+function Assert-FirstLogonSupportRequiresPowerShell7 {
+    param([Parameter(Mandatory)][string]$FirstLogonSupportText)
+
+    Assert-StaticTextContainsAll -Text $FirstLogonSupportText -FailurePrefix 'FirstLogon host resolution should require PowerShell 7 with' -Expected @(
         'function Resolve-WinMintPowerShellHost',
         'PowerShell 7 is required for WinMint FirstLogon'
-    )) {
-        if ($firstLogonSupportText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "FirstLogon host resolution should require PowerShell 7 with '$expected'."
-        }
-    }
+    )
+}
 
-    $agentRuntimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
-    foreach ($expected in @(
+function Assert-AgentRuntimeRequiresPowerShell7 {
+    param([Parameter(Mandatory)][string]$AgentRuntimeText)
+
+    Assert-StaticTextContainsAll -Text $AgentRuntimeText -FailurePrefix 'Agent host resolution should require PowerShell 7 with' -Expected @(
         'function Resolve-AgentPowerShellHost',
         'PowerShell 7 is required for WinMint Agent'
-    )) {
-        if ($agentRuntimeText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "Agent host resolution should require PowerShell 7 with '$expected'."
-        }
+    )
+}
+
+function Assert-SetupAndFirstLogonCatalogsAreExplicit {
+    $setupActionsText = Get-WinMintRepositoryText 'src\runtime\setup\Setup.Actions.ps1'
+    $setupCompleteText = Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete.ps1'
+    $agentRuntimeText = Get-WinMintRepositoryText 'src\runtime\firstlogon\Agent.Runtime.ps1'
+
+    Assert-StaticTextContainsAll -Text $setupActionsText -FailurePrefix 'Setup action catalog should contain' -Expected @(
+        'function Get-WinMintSetupActionCatalog',
+        'Import-WinMintSetupActionModules',
+        'edge-removal',
+        'inline-secret-cleanup',
+        'first-logon-runonce'
+    )
+    Assert-StaticTextContainsAll -Text $setupCompleteText -FailurePrefix 'SetupComplete orchestrator should use the explicit setup action catalog with' -Expected @(
+        'Import-WinMintSetupActionModules',
+        'Get-WinMintSetupActionCatalog'
+    )
+    if ($setupCompleteText -match 'Get-ChildItem\s+-LiteralPath\s+\(Join-Path \$payloadDir ''SetupComplete''\)') {
+        Add-SmokeFailure 'SetupComplete.ps1 must not discover action modules by folder globbing.'
     }
+
+    Assert-StaticTextContainsAll -Text $agentRuntimeText -FailurePrefix 'FirstLogon runtime should use the explicit module catalog with' -Expected @(
+        'function Get-WinMintAgentModuleCatalog',
+        'function Get-WinMintAgentModuleRuntimeState',
+        'RuntimeStepName',
+        'FailurePolicy',
+        'PostStepHook'
+    )
+}
+
+function Assert-PowerShell7IsBundledAndRequired {
+    Assert-OfflinePowerShell7StagingContract -PackagesText (Get-WinMintRepositoryText 'src\runtime\image\Private\Image\Packages.ps1')
+    Assert-ServiceWimRequiresBundledPowerShell7
+    Assert-SetupCompleteCmdRequiresBundledPowerShell7 -SetupCompleteCmd (Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete.cmd')
+    Assert-SetupCompleteRegistersFirstLogonUnderPowerShell7 -SetupCompleteText (Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete.ps1')
+    Assert-SetupCompleteToolchainDoesNotInstallPowerShell7Fallback -ToolchainText (Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete\Toolchain.ps1')
+    Assert-FirstLogonRuntimeRequiresPowerShell7 -FirstLogonRuntimeText (Get-WinMintRepositoryText 'src\runtime\setup\FirstLogon.Runtime.ps1')
+    Assert-FirstLogonSupportRequiresPowerShell7 -FirstLogonSupportText (Get-WinMintRepositoryText 'src\runtime\setup\FirstLogon.Support.ps1')
+    Assert-AgentRuntimeRequiresPowerShell7 -AgentRuntimeText (Get-WinMintRepositoryText 'src\runtime\firstlogon\Agent.Runtime.ps1')
 }
 
 function Assert-PSScriptAnalyzerHonorsProjectSettings {
@@ -2646,3 +2714,4 @@ function Assert-XdgDefaultsAreStaged {
         Add-SmokeFailure 'XDG_RUNTIME_DIR must not leave a WinMint-named temp folder behind.'
     }
 }
+

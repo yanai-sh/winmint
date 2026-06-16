@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -174,11 +174,14 @@ if ($failures.Count -eq 0) {
     Assert-Text $guiBuildScreen 'Generate profile' 'GPUI build screen should expose profile generation.'
     Assert-Text $guiBuildScreen 'Dry run' 'GPUI build screen should expose dry-run invocation.'
     Assert-Text $guiBuildScreen 'Manifest' 'GPUI build screen should surface manifest path.'
+    Assert-Text $guiBuildScreen 'BuildDelta' 'GPUI build screen should surface BuildDelta path.'
     Assert-Text $guiBuildScreen 'Report' 'GPUI build screen should surface report path.'
     Assert-Text $guiReviewScreen 'Last status' 'GPUI review screen should surface bridge status.'
     Assert-Text $guiReviewScreen 'Output' 'GPUI review screen should surface build output path.'
+    Assert-Text $guiReviewScreen 'BuildDelta' 'GPUI review screen should surface BuildDelta path.'
     Assert-Text $guiReviewScreen 'Progress' 'GPUI review screen should surface last bridge progress.'
     Assert-Text (Get-Content -LiteralPath (Join-Path $root 'tools\ui-bridge\Start-UiBuildFromProfile.ps1') -Raw) 'Ok\s*=' 'UI build invocation bridge should emit a normalized JSON result.'
+    Assert-Text (Get-Content -LiteralPath (Join-Path $root 'tools\ui-bridge\Start-UiBuildFromProfile.ps1') -Raw) 'BuildDeltaPath' 'UI build invocation bridge should emit the BuildDelta artifact path.'
     foreach ($screen in @(
             @{ Name = 'Build screen'; Text = $guiBuildScreen },
             @{ Name = 'Review screen'; Text = $guiReviewScreen }
@@ -309,3 +312,4 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host 'UI contract spine tests passed.'
+

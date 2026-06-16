@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Invoke-WinMintAgentProfileBootstrap {
     [CmdletBinding()]
@@ -84,3 +84,4 @@ function Invoke-WinMintAgentProfileBootstrap {
         Message = "Profile validated: $($AgentProfile.profile); editors=$editorCount; browsers=$browserCount; distros=$distroCount"
     }
 }
+

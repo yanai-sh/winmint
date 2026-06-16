@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Test-BuildProfileSchema {
     $schema = Get-WinMintPath -Name BuildProfileSchema
@@ -327,6 +327,10 @@ function Test-BuildManifestSchema {
             wslDistros    = @('ubuntu')
             desktopLayers = @('windhawk')
         }
+        audit                = [ordered]@{
+            buildDeltaCount = 3
+            buildDeltaPath = 'C:\output\WinMint-BuildDelta.json'
+        }
         riskFlags            = @()
     }
     $validPso = $valid | ConvertTo-Json -Depth 10 | ConvertFrom-Json
@@ -344,6 +348,60 @@ function Test-BuildManifestSchema {
     $failedNoOutput.buildResult = 'failed'
     $failedNoOutput.PSObject.Properties.Remove('output')
     Test-JsonObjectAgainstSchema -Value $failedNoOutput -SchemaPath $schemaPath -Label 'winmint.buildmanifest (failed; no output)'
+}
+
+function Test-BuildDeltaSchema {
+    $schemaPath = Get-WinMintPath -Name BuildDeltaSchema
+    if (-not (Test-Path -LiteralPath $schemaPath)) {
+        Add-ValidationError "winmint.builddelta.schema.json not found at $schemaPath"
+        return
+    }
+
+    $valid = [ordered]@{
+        schemaVersion = 1
+        generatedAt = '2026-01-01T00:00:00+00:00'
+        records = @(
+            [ordered]@{
+                id = 'registry:edge-policy-minimal'
+                phase = 'offline-image'
+                kind = 'registry-tweak'
+                title = 'Edge Minimal cleanup'
+                default = $true
+                requires = @()
+                suppressedBy = @()
+                userControlled = $false
+                changes = @('Set HKLM policy value')
+                artifacts = @('WinMint-TweakAudit.json')
+                reversible = $true
+                source = [ordered]@{
+                    subsystem = 'WinMint.Catalog'
+                    contributorId = 'edge-policy-minimal'
+                }
+            }
+        )
+    } | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+    Test-JsonObjectAgainstSchema -Value $valid -SchemaPath $schemaPath -Label 'winmint.builddelta (valid)'
+
+    $invalid = [ordered]@{
+        schemaVersion = 1
+        generatedAt = '2026-01-01T00:00:00+00:00'
+        records = @(
+            [ordered]@{
+                id = 'broken'
+                phase = 'offline-image'
+                kind = 'registry-tweak'
+                title = 'Broken'
+                default = $true
+                requires = @()
+                suppressedBy = @()
+                userControlled = $false
+                changes = @()
+                artifacts = @()
+                reversible = $true
+            }
+        )
+    } | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+    Test-JsonObjectRejectedBySchema -Value $invalid -SchemaPath $schemaPath -Label 'winmint.builddelta missing source'
 }
 
 function Test-AgentStateSchema {
@@ -385,3 +443,4 @@ function Test-AgentStateSchema {
     $badStatus.steps.wsl.status = 'reboot'
     Test-JsonObjectRejectedBySchema -Value $badStatus -SchemaPath $schemaPath -Label 'winmint.agentstate invalid step status'
 }
+

@@ -1,6 +1,6 @@
 # Coding Conventions
 
-Snapshot note: this document reflects the current development state of the repo. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-16. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
 ## Core Sections (Required)
 
@@ -30,7 +30,7 @@ Snapshot note: this document reflects the current development state of the repo.
 
 - Error strategy by layer: entry points commonly set `$ErrorActionPreference = 'Stop'`; validation and tests collect failures into lists and throw at the end; FirstLogon runtime steps carry `FailurePolicy` in `New-WinMintAgentRuntimeStepPlan`, with `profiles` blocking and normal live-user modules advisory.
 - Logging style and required context fields: engine console logging flows through `Log`, `LogOK`, `LogWarn`, and manifest facts; FirstLogon writes text logs, JSONL events, command stdout/stderr logs, and `state.json`.
-- Sensitive-data redaction rules: local-account passwords can come from `-Password`, `-PasswordPath`, or `-PasswordEnvVar`; direct password use is allowed by project lint exclusions, but explicit redaction/lifecycle rules beyond setup cleanup are `[TODO]`.
+- Sensitive-data redaction rules: local-account passwords can come from `-Password`, `-PasswordPath`, or `-PasswordEnvVar`; direct password use is allowed by project lint exclusions, but explicit redaction/lifecycle rules beyond setup cleanup are `[ASK USER]`.
 
 ### 5) Testing Conventions
 
@@ -42,6 +42,7 @@ Snapshot note: this document reflects the current development state of the repo.
 
 - `.editorconfig`
 - `PSScriptAnalyzerSettings.psd1`
+- `docs/codebase/.codebase-scan.txt`
 - `src/runtime/image/WinMint.ps1`
 - `src/runtime/image/Core.ps1`
 - `src/runtime/image/Cli.ps1`

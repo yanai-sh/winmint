@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Copy-WinMintPayloadDirectoryChildren {
     param(
@@ -714,3 +714,4 @@ function Resolve-OscdimgPath {
     }
     return $oscdimg
 }
+

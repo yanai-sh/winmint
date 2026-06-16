@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 $script:WinMintHeadlessBuildId = ''
 $script:WinMintHeadlessStatePath = ''
@@ -475,6 +475,28 @@ function Write-WinMintHeadlessHumanResult {
         -not [string]::IsNullOrWhiteSpace([string]$Result.reports.profile)) {
         Write-Host "Profile: $($Result.reports.profile)"
     }
+    $buildDeltaPath = ''
+    if ($Result.reports -and $Result.reports.PSObject.Properties['buildDelta']) {
+        $buildDeltaPath = [string]$Result.reports.buildDelta
+    }
+    if (-not [string]::IsNullOrWhiteSpace($buildDeltaPath) -and
+        (Get-Command Get-WinMintBuildDeltaSummary -ErrorAction SilentlyContinue)) {
+        $deltaSummary = Get-WinMintBuildDeltaSummary -BuildDeltaPath $buildDeltaPath
+        if ($deltaSummary -and $deltaSummary.totalRecords -gt 0) {
+            Write-Host "BuildDelta: $buildDeltaPath"
+            Write-Host "  Records: $($deltaSummary.totalRecords) total, $($deltaSummary.userControlledCount) user-controlled"
+            $phaseSegments = @(
+                @($deltaSummary.phaseCounts.PSObject.Properties) |
+                    ForEach-Object { "$($_.Name)=$($_.Value)" }
+            )
+            if ($phaseSegments.Count -gt 0) {
+                Write-Host "  Phases:  $($phaseSegments -join ', ')"
+            }
+            foreach ($highlight in @($deltaSummary.highlights | Select-Object -First 5)) {
+                Write-Host "  - $($highlight.title) [$($highlight.phase)]"
+            }
+        }
+    }
     foreach ($warning in @($Result.warnings)) { Write-Warning $warning }
     foreach ($failure in @($Result.failures)) { Write-Error $failure -ErrorAction Continue }
 }
@@ -488,6 +510,9 @@ function Invoke-WinMintHeadlessValidateOnly {
 
     Set-WinMintHeadlessJournalPhase -Phase 'Preflight'
     $config = New-WinMintBuildConfig -BuildProfile $BuildProfile
+    $installPlan = New-WinMintInstallPlanFromBuildConfig -BuildConfig $config
+    $null = New-WinMintBuildDeltaCatalog -BuildConfig $config -InstallPlan $installPlan
+    $buildDeltaPath = Save-WinMintBuildDeltaCatalog -OutputDir (Get-WinMintOutputDirectory)
     $runMode = if ($DryRun) { 'DryRun' } else { 'ValidateOnly' }
     $pre = Test-WinMintBuildPrerequisite -Config $config -RunMode $runMode
     $report = New-WinMintBuildReport -Config $config -DetectedArchitecture $config.Architecture -Warnings $pre.Warnings -Failures $pre.Failures
@@ -496,6 +521,7 @@ function Invoke-WinMintHeadlessValidateOnly {
         json = $paths.Json
         markdown = $paths.Markdown
         manifest = ''
+        buildDelta = $buildDeltaPath
         state = Get-WinMintHeadlessStatePath -BuildId $BuildId
     }
     $resultName = if ($pre.Passed) { 'success' } else { 'validation-failed' }
@@ -574,6 +600,7 @@ function Invoke-WinMintProfileRun {
                 json = $build.Paths.Json
                 markdown = $build.Paths.Markdown
                 manifest = Join-Path (Get-WinMintOutputDirectory) 'WinMint-BuildManifest.json'
+                buildDelta = Join-Path (Get-WinMintOutputDirectory) 'WinMint-BuildDelta.json'
                 state = Get-WinMintHeadlessStatePath -BuildId $script:WinMintHeadlessBuildId
             }
             $resultName = if ($DryRun) { 'dry-run' } else { 'success' }
@@ -598,3 +625,4 @@ function Invoke-WinMintProfileRun {
     if ($Json) { Write-WinMintHeadlessJsonResult -Result $result } elseif (-not $Quiet) { Write-WinMintHeadlessHumanResult -Result $result }
     return $result
 }
+

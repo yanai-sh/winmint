@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline Edge noise reduction (Tier 1 apply-by-default). Reduces promotional,
 # commerce, telemetry, widget, inline compose, startup/background, new-tab
@@ -41,3 +41,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

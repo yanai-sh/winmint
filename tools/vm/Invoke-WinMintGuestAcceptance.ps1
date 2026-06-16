@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 <#
 .SYNOPSIS
     Inspect a running WinMint Hyper-V guest and report the live desktop / Terminal
@@ -51,3 +51,4 @@ Invoke-Command -VMName $VMName -Credential $cred -ScriptBlock {
         StartPins = (Get-ItemProperty -LiteralPath 'HKCU:\Software\Policies\Microsoft\Windows\Explorer' -Name ConfigureStartPins -ErrorAction SilentlyContinue).ConfigureStartPins
     }
 } | ConvertTo-Json -Depth 6
+

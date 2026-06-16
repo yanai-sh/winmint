@@ -1,4 +1,60 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
+
+function Get-WinMintBuildDeltaSummary {
+    param(
+        [object]$BuildDelta = $null,
+        [string]$BuildDeltaPath = ''
+    )
+
+    if ($null -eq $BuildDelta -and -not [string]::IsNullOrWhiteSpace($BuildDeltaPath) -and
+        (Test-Path -LiteralPath $BuildDeltaPath -PathType Leaf)) {
+        $BuildDelta = Get-Content -LiteralPath $BuildDeltaPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    elseif ($null -eq $BuildDelta -and (Get-Command Get-WinMintBuildDeltaCatalog -ErrorAction SilentlyContinue)) {
+        $BuildDelta = Get-WinMintBuildDeltaCatalog
+    }
+
+    $records = @()
+    if ($BuildDelta -and $BuildDelta.PSObject.Properties['records']) {
+        $records = @($BuildDelta.records)
+    }
+
+    $phaseCounts = [ordered]@{}
+    $kindCounts = [ordered]@{}
+    $userControlledCount = 0
+    foreach ($record in $records) {
+        $phase = [string]$record.phase
+        $kind = [string]$record.kind
+        if (-not [string]::IsNullOrWhiteSpace($phase)) {
+            $phaseCounts[$phase] = (0 + $phaseCounts[$phase]) + 1
+        }
+        if (-not [string]::IsNullOrWhiteSpace($kind)) {
+            $kindCounts[$kind] = (0 + $kindCounts[$kind]) + 1
+        }
+        if ([bool]$record.userControlled) {
+            $userControlledCount++
+        }
+    }
+
+    $highlights = [System.Collections.Generic.List[object]]::new()
+    foreach ($record in @($records | Select-Object -First 8)) {
+        $highlights.Add([pscustomobject]@{
+                id = [string]$record.id
+                title = [string]$record.title
+                phase = [string]$record.phase
+                kind = [string]$record.kind
+                changeCount = @($record.changes).Count
+            }) | Out-Null
+    }
+
+    [pscustomobject]@{
+        totalRecords = @($records).Count
+        userControlledCount = $userControlledCount
+        phaseCounts = [pscustomobject]$phaseCounts
+        kindCounts = [pscustomobject]$kindCounts
+        highlights = @($highlights.ToArray())
+    }
+}
 
 function New-WinMintBuildReport {
     param(
@@ -80,6 +136,31 @@ function Save-WinMintBuildReport {
     else {
         '- Standard Windows'
     }
+    $deltaSummary = Get-WinMintBuildDeltaSummary
+    $phaseSummaryMarkdown = if (@($deltaSummary.phaseCounts.PSObject.Properties).Count -gt 0) {
+        (@($deltaSummary.phaseCounts.PSObject.Properties) | ForEach-Object {
+                "- $($_.Name): $($_.Value)"
+            }) -join "`n"
+    }
+    else {
+        '- None'
+    }
+    $kindSummaryMarkdown = if (@($deltaSummary.kindCounts.PSObject.Properties).Count -gt 0) {
+        (@($deltaSummary.kindCounts.PSObject.Properties) | ForEach-Object {
+                "- $($_.Name): $($_.Value)"
+            }) -join "`n"
+    }
+    else {
+        '- None'
+    }
+    $highlightMarkdown = if (@($deltaSummary.highlights).Count -gt 0) {
+        (@($deltaSummary.highlights) | ForEach-Object {
+                "- $($_.title) [$($_.phase)]"
+            }) -join "`n"
+    }
+    else {
+        '- None'
+    }
     $md = @(
         '# WinMint Build Report'
         ''
@@ -100,6 +181,21 @@ function Save-WinMintBuildReport {
         ''
         '## Desktop Layers'
         $desktopMarkdown
+        ''
+        '## Build Delta Summary'
+        "| Item | Value |"
+        "| --- | --- |"
+        "| Records | $($deltaSummary.totalRecords) |"
+        "| User-controlled | $($deltaSummary.userControlledCount) |"
+        ''
+        '### By Phase'
+        $phaseSummaryMarkdown
+        ''
+        '### By Kind'
+        $kindSummaryMarkdown
+        ''
+        '### Highlights'
+        $highlightMarkdown
         ''
         '## Warnings'
         ($(if ($Report.warnings.Count) { ($Report.warnings | ForEach-Object { "- $_" }) -join "`n" } else { '- None' }))
@@ -401,3 +497,4 @@ function Write-WinMintDryRunArtifactSummary {
     Write-Host "  Detected editions: $($Artifacts.Editions)"
     Write-Host "  Summary:           $($Artifacts.Summary)"
 }
+

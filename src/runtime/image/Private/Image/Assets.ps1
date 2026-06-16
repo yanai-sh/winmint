@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Sync-NerdFont {
     param([ValidateNotNullOrEmpty()][string]$FontDir)
@@ -363,3 +363,4 @@ function Install-OfflineWinget {
         }
     }
 }
+

@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Applied when gaming-apps removal is on (default; i.e. NOT a Gaming build).
 # Suppresses the Game Bar capture prompt, GameDVR recording defaults, and
@@ -25,3 +25,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

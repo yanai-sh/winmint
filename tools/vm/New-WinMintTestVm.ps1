@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 <#
 .SYNOPSIS
     Create and boot a Hyper-V Gen 2 VM (UEFI + Secure Boot + vTPM) from a WinMint
@@ -201,3 +201,4 @@ if (-not $NoConnect) {
         Write-Warning "Could not maximize the VMConnect window: $($_.Exception.Message)"
     }
 }
+

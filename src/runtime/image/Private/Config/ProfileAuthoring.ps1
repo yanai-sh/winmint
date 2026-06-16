@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Assert-WinMintUiIntentSettings {
     param(
@@ -77,3 +77,4 @@ function Save-WinMintBuildProfileFromUiIntent {
 
     Save-WinMintBuildProfile -BuildProfile $buildProfile -Path $OutputPath
 }
+

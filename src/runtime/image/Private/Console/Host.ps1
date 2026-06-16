@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Sync-Win11IsoSpectreConsoleDimension {
     <#
@@ -325,3 +325,4 @@ function LogVerbose {
     if (-not (Test-Win11IsoVerboseLogging)) { return }
     $null = Write-SpectreHost "[grey]$((Get-Date).ToString('HH:mm:ss'))[/] [dim]$Message[/]"
 }
+

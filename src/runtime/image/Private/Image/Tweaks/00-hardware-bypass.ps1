@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Opt-in only: never part of a default build. Lets Windows Setup proceed on
 # explicitly selected unsupported hardware (TPM 2.0 / Secure Boot / CPU / RAM / Storage).
@@ -19,3 +19,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

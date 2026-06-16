@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Resolve-AgentWindhawkInstallRoot {
     $candidates = [System.Collections.Generic.List[string]]::new()
@@ -109,3 +109,4 @@ function Invoke-WinMintAgentWindhawkBootstrap {
         Message = 'Windhawk installed with the WinMint preset.'
     }
 }
+

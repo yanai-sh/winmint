@@ -1,6 +1,6 @@
 # Technology Stack
 
-Snapshot note: this document reflects the current development state of the repo. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-16. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
 ## Core Sections (Required)
 
@@ -31,7 +31,7 @@ Snapshot note: this document reflects the current development state of the repo.
 
 | Tool | Purpose | Evidence |
 |------|---------|----------|
-| PSScriptAnalyzer | Optional PowerShell linting with repo-specific exclusions and PS 7.3 syntax checks. | `PSScriptAnalyzerSettings.psd1`, `tools/validation/Modules/Core.ps1` |
+| PSScriptAnalyzer | Optional PowerShell linting with repo-specific exclusions and PS 7.3 syntax checks; `Validate.ps1` skips it unless `-RunAnalyzer` is passed. | `PSScriptAnalyzerSettings.psd1`, `tools/validation/Modules/Core.ps1` |
 | PowerShell parser / JSON / XML validation | Static validation for scripts and config contracts. | `tools/validation/Validate.ps1`, `tools/validation/Modules/Core.ps1`, `tools/validation/Modules/Schemas.ps1` |
 | Cargo | Rust checking and tests for GUI/core crates. | `.github/workflows/ci.yml`, `tools/validation/Modules/Core.ps1` |
 | GitHub Actions | CI and release automation. | `.github/workflows/ci.yml`, `.github/workflows/release.yml` |
@@ -41,6 +41,7 @@ Snapshot note: this document reflects the current development state of the repo.
 
 ```powershell
 pwsh -NoProfile -File tools\validation\Validate.ps1
+pwsh -NoProfile -File tools\validation\Validate.ps1 -RunAnalyzer
 pwsh -NoProfile -File tests\contract\Test-ProfileInvariants.ps1
 pwsh -NoProfile -File tests\contract\Test-Fast.ps1
 cargo test --manifest-path crates\winmint-core\Cargo.toml
@@ -61,6 +62,7 @@ pwsh -NoProfile -File tools\release\New-WinMintReleaseBundle.ps1 -Version v0.2.0
 
 - `README.md`
 - `AGENTS.md`
+- `docs/codebase/.codebase-scan.txt`
 - `Cargo.toml`
 - `config/packages.json`
 - `src/runtime/image/WinMint.ps1`

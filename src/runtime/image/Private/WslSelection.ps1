@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function ConvertTo-WinMintWslSelectionToken {
     param([AllowNull()][string]$Value)
@@ -91,3 +91,4 @@ function ConvertTo-WinMintWslSelection {
         InstallIdentities = @($items | ForEach-Object { [string]$_.installIdentity })
     }
 }
+

@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Best-effort Cloud Content / Experience policy layer. Several of these policies
 # are formally scoped to Enterprise/Education, but stamping the documented policy
@@ -30,3 +30,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

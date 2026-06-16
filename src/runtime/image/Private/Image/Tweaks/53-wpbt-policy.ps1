@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline: disable Windows Platform Binary Table execution so firmware-staged OEM
 # executables do not run during Windows setup.
@@ -14,3 +14,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

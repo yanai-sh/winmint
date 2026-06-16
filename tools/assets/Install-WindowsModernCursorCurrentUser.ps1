@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
@@ -178,3 +178,4 @@ $cursorKey.Close()
 Update-CursorSystemParameters
 Write-Host "Installed $SchemeName for the current user."
 Write-Host "Backup: $backupPath"
+

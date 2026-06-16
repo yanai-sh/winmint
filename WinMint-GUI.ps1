@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 5.1
 [CmdletBinding()]
 param(
     [switch]$SystemTitlebar,
@@ -9,6 +9,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
+
+Import-Module (Join-Path $PSScriptRoot 'src\runtime\modules\WinMint.Bootstrap\WinMint.Bootstrap.psd1') -Force
+$bootstrapArgs = [System.Collections.Generic.List[string]]::new()
+if ($SystemTitlebar) { $bootstrapArgs.Add('-SystemTitlebar') | Out-Null }
+if ($CustomTitlebar) { $bootstrapArgs.Add('-CustomTitlebar') | Out-Null }
+foreach ($arg in @($AppArgs | Where-Object { $_ -ne '--' })) {
+    $bootstrapArgs.Add([string]$arg) | Out-Null
+}
+$bootstrap = Invoke-WinMintRuntimeBootstrap -Entrypoint $PSCommandPath -Arguments @($bootstrapArgs.ToArray())
+if ($bootstrap.Relaunched) {
+    exit $bootstrap.ExitCode
+}
 
 function Test-WinMintGuiAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()

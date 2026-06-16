@@ -1,6 +1,9 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 $script:WinMintBuildManifest = $null
+if (-not (Get-Command Get-WinMintBuildDeltaCatalog -ErrorAction SilentlyContinue)) {
+    . (Join-Path $PSScriptRoot 'Audit.ps1')
+}
 
 function Get-WinMintBuildManifest {
     [CmdletBinding()]
@@ -199,8 +202,17 @@ function Get-WinMintManifestInstallPlanFacts {
 function Initialize-WinMintBuildManifest {
     param(
         [Parameter(Mandatory)]$Config,
-        [AllowNull()]$InstallPlan = $null
+        [AllowNull()]$InstallPlan = $null,
+        $BuildDelta = $null
     )
+
+    if ($null -eq $BuildDelta) {
+        $BuildDelta = [ordered]@{
+            schemaVersion = 1
+            generatedAt = [DateTimeOffset]::Now.ToString('o')
+            records = @()
+        }
+    }
 
     $planFacts = Get-WinMintManifestInstallPlanFacts -Config $Config -InstallPlan $InstallPlan
 
@@ -348,6 +360,10 @@ function Initialize-WinMintBuildManifest {
             editors      = @($planFacts.firstLogon.editors)
             wslDistros   = @($planFacts.firstLogon.wslDistros)
             desktopLayers = @($planFacts.firstLogon.shellLayers)
+        }
+        audit               = [ordered]@{
+            buildDeltaCount = @($BuildDelta.records).Count
+            buildDeltaPath = ''
         }
         riskFlags           = @(if ($Config.RegistryTweaks -contains 'hardware-bypass') { 'hardware-bypass' })
     }
@@ -987,8 +1003,14 @@ function Save-WinMintBuildManifest {
     $script:WinMintBuildManifest.payloads = @(Get-WinMintDeduplicatedManifestPayload -Payloads @($script:WinMintBuildManifest.payloads))
     $null = Save-WinMintTweakAuditArtifacts -OutputDir $OutputDir
     $null = Save-WinMintRecoveryBundle -OutputDir $OutputDir
+    $buildDeltaPath = Save-WinMintBuildDeltaCatalog -OutputDir $OutputDir
+    if ($buildDeltaPath) {
+        $script:WinMintBuildManifest.audit.buildDeltaPath = $buildDeltaPath
+        $script:WinMintBuildManifest.audit.buildDeltaCount = @((Get-WinMintBuildDeltaCatalog).records).Count
+    }
 
     $path = Join-Path $OutputDir 'WinMint-BuildManifest.json'
     $script:WinMintBuildManifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $path -Encoding UTF8
     return $path
 }
+

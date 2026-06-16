@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-Win11IsoProcessTempPath {
     <# <summary>Per-process temp directory from [IO.Path]::GetTempPath() (trimmed); callers use this instead of the TEMP shell variable.</summary> #>
@@ -111,3 +111,4 @@ function Test-IsPathUnderWin11IsoDependencyCache {
         return $false
     }
 }
+

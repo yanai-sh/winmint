@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Dismount-Win11IsoDiskImageLiteral {
     <# <summary>Dismounts a mounted ISO (or other disk image) by file path so the virtual drive letter is released. Idempotent.</summary> #>
@@ -235,3 +235,4 @@ function Invoke-Win11IsoStartupCleanup {
 
     try { Invoke-WinMintAllBuildCachesMaintenance } catch { Write-Verbose "Invoke-Win11IsoStartupCleanup build caches: $($_.Exception.Message)" }
 }
+

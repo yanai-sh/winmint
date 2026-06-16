@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-RepositoryTrackedPath {
     $git = Get-Command git -ErrorAction SilentlyContinue
@@ -304,3 +304,4 @@ function Test-RepositoryHygiene {
     Test-RepositoryTrackedPathCasing
     Test-RepositoryFixtureLayout
 }
+

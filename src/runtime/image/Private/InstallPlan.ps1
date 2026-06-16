@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function New-WinMintInstallPlanAgentProfile {
     param([Parameter(Mandatory)]$BuildConfig)
@@ -197,17 +197,36 @@ function New-WinMintInstallPlanSetupPlan {
     $diskMode = [string]$BuildConfig.DiskMode
     $accountMode = [string]$BuildConfig.AccountMode
     $firstLogonModules = [System.Collections.Generic.List[string]]::new()
-    foreach ($module in @($AgentProfile.modules.PSObject.Properties.Name)) {
-        $value = $AgentProfile.modules.$module
+    $moduleNames = if ($AgentProfile.modules -is [System.Collections.IDictionary]) {
+        @($AgentProfile.modules.Keys | ForEach-Object { [string]$_ })
+    }
+    else {
+        @($AgentProfile.modules.PSObject.Properties.Name | ForEach-Object { [string]$_ })
+    }
+    foreach ($module in $moduleNames) {
+        $value = if ($AgentProfile.modules -is [System.Collections.IDictionary]) {
+            $AgentProfile.modules[$module]
+        }
+        else {
+            $AgentProfile.modules.$module
+        }
         $enabled = $false
         if ($value -is [bool]) {
             $enabled = [bool]$value
+        }
+        elseif ($value -is [System.Collections.IDictionary] -and $value.Contains('enabled')) {
+            $enabled = [bool]$value['enabled']
         }
         elseif ($value -and $value.PSObject.Properties['enabled']) {
             $enabled = [bool]$value.enabled
         }
         elseif ($module -eq 'shell' -and $value) {
-            $enabled = [bool]$value.komorebi -or [bool]$value.yasb -or [bool]$value.thide -or [bool]$value.whkd
+            if ($value -is [System.Collections.IDictionary]) {
+                $enabled = [bool]$value['komorebi'] -or [bool]$value['yasb'] -or [bool]$value['thide'] -or [bool]$value['whkd'] -or [bool]$value['nilesoft']
+            }
+            else {
+                $enabled = [bool]$value.komorebi -or [bool]$value.yasb -or [bool]$value.thide -or [bool]$value.whkd -or [bool]$value.nilesoft
+            }
         }
         if ($enabled) { $firstLogonModules.Add($module) | Out-Null }
     }
@@ -417,3 +436,4 @@ function Get-WinMintInstallPlanForBuildConfig {
 
     New-WinMintInstallPlanFromBuildConfig -BuildConfig $BuildConfig
 }
+

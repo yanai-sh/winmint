@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Invoke-WinMintAgentEditorBootstrap {
     [CmdletBinding()]
@@ -43,3 +43,4 @@ function Invoke-WinMintAgentEditorBootstrap {
         Message = "Editors installed: $($editors -join ', ')"
     }
 }
+

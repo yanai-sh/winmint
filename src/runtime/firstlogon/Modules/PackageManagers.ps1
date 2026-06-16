@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintAgentStarshipConfigPath {
     $configRoot = if (-not [string]::IsNullOrWhiteSpace([string]$env:XDG_CONFIG_HOME)) {
@@ -272,3 +272,4 @@ function Invoke-WinMintAgentPackageManagerBootstrap {
         Message = 'winget ready; Scoop, MinGit, and Starship installed.'
     }
 }
+

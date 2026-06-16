@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [string]$RustTarget = ''
@@ -36,3 +36,4 @@ $destinationDirectory = Split-Path -Parent $destination
 New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
 Copy-Item -LiteralPath $sourceExe -Destination $destination -Force
 Write-Host "GUI binary: $destination"
+

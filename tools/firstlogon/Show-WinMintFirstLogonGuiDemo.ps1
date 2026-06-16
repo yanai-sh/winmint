@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 [CmdletBinding()]
 param(
@@ -67,3 +67,4 @@ try {
 finally {
     Pop-Location
 }
+

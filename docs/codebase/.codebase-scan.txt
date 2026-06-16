@@ -1,0 +1,418 @@
+
+=== DIRECTORY TREE (max depth 3, source files only) ===
+.agents
+.agents\skills
+.agents\skills\gpui
+.agents\skills\gpui\references
+.agents\skills\gpui\SKILL.md
+.agents\skills\gpui-component
+.agents\skills\gpui-component\references
+.agents\skills\gpui-component\SKILL.md
+.cargo
+.cargo\config.toml
+.claude
+.claude\settings.local.json
+.editorconfig
+.gitattributes
+.githooks
+.githooks\pre-commit
+.github
+.github\workflows
+.github\workflows\ci.yml
+.github\workflows\release.yml
+.gitignore
+AGENTS.md
+apps
+apps\firstlogon-gui
+apps\firstlogon-gui\build.rs
+apps\firstlogon-gui\Cargo.toml
+apps\firstlogon-gui\src
+apps\firstlogon-gui\src\main.rs
+apps\firstlogon-gui\winmint-firstlogon-gui.rc
+apps\gui
+apps\gui\build.rs
+apps\gui\Cargo.toml
+apps\gui\output
+apps\gui\output\gui
+apps\gui\README.md
+apps\gui\src
+apps\gui\src\actions.rs
+apps\gui\src\assets.rs
+apps\gui\src\bridge.rs
+apps\gui\src\components.rs
+apps\gui\src\intent.rs
+apps\gui\src\main.rs
+apps\gui\src\options.rs
+apps\gui\src\screens
+apps\gui\src\state.rs
+apps\gui\src\theme.rs
+apps\gui\winmint-gui.rc
+assets
+assets\brand
+assets\brand\favicon.ico
+assets\brand\favicon_simple.ico
+assets\brand\icons
+assets\brand\icons\winmint_full_squircle_24.ico
+assets\brand\icons\winmint_full_squircle_256.ico
+assets\brand\icons\winmint_full_squircle_32.ico
+assets\brand\icons\winmint_full_squircle_48.ico
+assets\brand\icons\winmint_simple_squircle_24.ico
+assets\brand\icons\winmint_simple_squircle_256.ico
+assets\brand\icons\winmint_simple_squircle_32.ico
+assets\brand\icons\winmint_simple_squircle_48.ico
+assets\brand\window_logo.svg
+assets\brand\winget_wordmark.png
+assets\brand\winmint_full.png
+assets\brand\winmint_full_squircle.png
+assets\brand\winmint_full_squircle_ui_28.png
+assets\brand\winmint_full_ui_132.png
+assets\brand\winmint_hero.png
+assets\brand\winmint_hero_ui.png
+assets\brand\winmint_simple.png
+assets\brand\winmint_simple_squircle.png
+assets\brand\winmint_simple_ui_28.png
+assets\runtime
+assets\runtime\accountpicture
+assets\runtime\accountpicture\user-192.png
+assets\runtime\accountpicture\user-32.png
+assets\runtime\accountpicture\user-40.png
+assets\runtime\accountpicture\user-48.png
+assets\runtime\accountpicture\user.bmp
+assets\runtime\accountpicture\user.png
+assets\runtime\cursors
+assets\runtime\cursors\BreezeXLight
+assets\runtime\cursors\Windows11ModernLight
+assets\runtime\defaultapps
+assets\runtime\defaultapps\WinMint-DefaultAppAssociations.xml
+assets\runtime\desktop
+assets\runtime\desktop\komorebi
+assets\runtime\desktop\windhawk
+assets\runtime\desktop\yasb
+assets\runtime\fonts
+assets\runtime\fonts\CascadiaCodeNF-Regular.ttf
+assets\runtime\wallpaper
+assets\runtime\wallpaper\img0.jpg
+assets\runtime\wallpaper\img100.jpg
+assets\runtime\wallpaper\winmint-bloom.png
+assets\runtime\windows-terminal
+assets\runtime\windows-terminal\settings.json
+assets\ui
+assets\ui\desktop
+assets\ui\desktop\komorebi.png
+assets\ui\desktop\komorebi.svg
+assets\ui\desktop\presets
+assets\ui\desktop\windhawk
+assets\ui\desktop\yasb.png
+assets\ui\desktop\yasb.svg
+assets\ui\editors
+assets\ui\editors\cursor.png
+assets\ui\editors\cursor.svg
+assets\ui\editors\neovim.png
+assets\ui\editors\neovim.svg
+assets\ui\editors\vscodium.png
+assets\ui\editors\zed.png
+assets\ui\editors\zedindustries.svg
+assets\ui\wsl
+assets\ui\wsl\archlinux.png
+assets\ui\wsl\archlinux.svg
+assets\ui\wsl\fedora.png
+assets\ui\wsl\fedora.svg
+assets\ui\wsl\nixos.png
+assets\ui\wsl\nixos.svg
+assets\ui\wsl\pengwin.png
+assets\ui\wsl\ubuntu.png
+assets\ui\wsl\ubuntu.svg
+Cargo.lock
+Cargo.toml
+CLAUDE.md
+cloudflare
+cloudflare\winmint
+cloudflare\winmint\README.md
+cloudflare\winmint\src
+cloudflare\winmint\src\index.js
+cloudflare\winmint\wrangler.jsonc
+config
+config\ai-removal.json
+config\appx-removal.json
+config\autounattend.xml
+config\build-profiles
+config\build-profiles\yanai-alienware-aurora-amd64.json
+config\build-profiles\yanai-sl7-microsoft-oobe.json
+config\build-profiles\yanai-thinkpad-return-amd64.json
+config\packages.json
+config\release-manifest.json
+config\tweaks.json
+crates
+crates\winmint-core
+crates\winmint-core\Cargo.toml
+crates\winmint-core\src
+crates\winmint-core\src\lib.rs
+crates\winmint-core\src\options.rs
+crates\winmint-core\src\profile.rs
+crates\winmintctl
+docs
+docs\codebase
+docs\codebase\.codebase-scan.txt
+docs\codebase\ARCHITECTURE.md
+docs\codebase\CONCERNS.md
+docs\codebase\CONVENTIONS.md
+docs\codebase\INTEGRATIONS.md
+docs\codebase\STACK.md
+docs\codebase\STRUCTURE.md
+docs\codebase\TESTING.md
+docs\Distribution.md
+docs\Hardware-Acceptance.md
+docs\Project-Structure.md
+docs\superpowers
+docs\superpowers\mockups
+docs\superpowers\mockups\gpui-approaches-demo.html
+docs\superpowers\mockups\gpui-premium-assistant-drafts.html
+docs\superpowers\specs
+docs\superpowers\specs\2026-06-15-gpui-preinstall-oobe-design.md
+docs\Windows-Debloat-Strategy.md
+LICENSE
+output
+output\.state
+output\.state\20260516-222947-1ff15f1e.json
+output\.state\20260516-223552-8a267cfe.json
+output\.state\20260516-234556-ab27cd2e.json
+output\.state\20260517-004131-46430fbd.json
+output\.state\20260517-013357-b6db2d8f.json
+output\.state\20260517-013848-5f811d8f.json
+output\.state\20260517-014257-4aab0daa.json
+output\.state\20260517-020417-743adb05.json
+output\.state\20260517-110650-85446cd1.json
+output\.state\20260517-111404-d676e8eb.json
+output\.state\20260517-124253-36575c8a.json
+output\.state\20260517-124258-553acd63.json
+output\.state\20260517-215354-5013cdf5.json
+output\.state\20260517-215411-13654662.json
+output\.state\20260517-215551-ad4fb96d.json
+output\.state\20260518-082159-fb15f76a.json
+output\.state\20260523-111907-bb8d0996.json
+output\.state\20260523-112111-ed58d219.json
+output\.state\20260523-123216-e8c10f82.json
+output\.state\20260523-123223-5017a377.json
+output\.state\20260523-124508-cf8f958b.json
+output\.state\20260523-130929-3435fbb0.json
+output\.state\20260525-140014-54b83ec5.json
+output\.state\20260525-160728-8ca1bfe5.json
+output\.state\20260525-160759-68315053.json
+output\.state\20260525-194948-2add194e.json
+output\.state\20260525-195043-e3a6fa56.json
+
+=== STACK DETECTION (manifest files) ===
+
+--- Cargo.lock ---
+# This file is automatically @generated by Cargo.
+# It is not intended for manual editing.
+version = 4
+
+[[package]]
+name = "adler2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
+
+[[package]]
+name = "aes"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
+dependencies = [
+ "cfg-if",
+ "cipher",
+ "cpufeatures",
+ "zeroize",
+]
+
+[[package]]
+name = "ahash"
+version = "0.8.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
+dependencies = [
+ "cfg-if",
+ "const-random",
+ "once_cell",
+ "version_check",
+ "zerocopy",
+]
+
+[[package]]
+name = "aho-corasick"
+version = "1.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddd31a130427c27518df266943a5308ed92d4b226cc639f5a8f1002816174301"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "aligned"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee4508988c62edf04abd8d92897fca0c2995d907ce1dfeaf369dac3716a40685"
+dependencies = [
+ "as-slice",
+]
+
+[[package]]
+name = "aligned-vec"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc890384c8602f339876ded803c97ad529f3842aba97f6392b3dba0dd171769b"
+dependencies = [
+ "equator",
+]
+
+[[package]]
+name = "android_system_properties"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "819e7219dbd41043ac279b19830f2efc897156490d7fd6ea916720117ee66311"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "anyhow"
+version = "1.0.102"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+
+[[package]]
+name = "ar_archive_writer"
+version = "0.5.1"
+
+[TRUNCATED] Showing first 80 of 7791 lines.
+--- Cargo.toml ---
+[workspace]
+resolver = "2"
+members = [
+    "apps/firstlogon-gui",
+    "apps/gui",
+    "crates/winmint-core",
+]
+
+# Shared package metadata inherited by every member via `field.workspace = true`.
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-2.0-or-later"
+authors = ["Yanai Klugman"]
+publish = false
+
+# Single source of truth for dependency versions across the workspace.
+[workspace.dependencies]
+winmint-core = { path = "crates/winmint-core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+gpui = "0.2.2"
+gpui-animation = "0.2.4"
+gpui-component = "0.5.1"
+embed-resource = "3.0"
+
+# Lints applied to every member that opts in with `[lints] workspace = true`.
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+
+[profile.release]
+lto = "thin"
+strip = true
+
+
+=== ENTRY POINTS ===
+No common entry points found. Check 'main' or 'scripts.start' in manifest files above.
+
+=== LINTING AND FORMATTING CONFIG ===
+Found: .editorconfig
+
+=== ENVIRONMENT VARIABLE TEMPLATES ===
+No .env.example or .env.template found. Identify required environment variables by searching the code and config for environment variable reads.
+
+=== TODO / FIXME / HACK (production code only, test dirs excluded) ===
+None found.
+
+=== GIT RECENT COMMITS (last 20) ===
+d23e215 feat(backend): harden tweaks and expose power plans
+3b56c2c fix(profile): preserve explicit Microsoft AI tools
+32a39c3 docs(acceptance): add hardware runbook
+602a68f test(profile): validate tracked hardware profiles
+1834db9 docs(roadmap): focus on hardware acceptance
+ce95bc2 fix(setup): narrow virtual desktop flyout override
+88a5263 feat(profile): enable surface launcher shell stack
+5544e9e chore(profile): add x64 hardware build profiles
+9f9d8f5 chore(repo): ignore local superpowers mockups
+e9c2ae2 feat(firstlogon): complete raycast launcher backend
+ea9b92f refactor(engine): deepen backend setup seams
+5ec35d1 docs(codebase): refresh architecture snapshots
+314f7f5 refactor(architecture): deepen headless runtime seams
+de12913 feat(profile): make stable image updates opt-out
+35bebc0 feat(engine): pre-service stable 25h2 update payloads
+10f649f fix(firstlogon): clean desktop shortcuts and restore location
+a941408 fix(vm): retain firstlogon state for test builds
+fc216fb fix(firstlogon): launch agent in utf8 terminal
+554fe91 fix(setup): satisfy strict validation
+b058a1b docs: refresh codebase notes
+
+=== HIGH-CHURN FILES (last 90 days, top 20) ===
+  24 tests/contract/ProfileInvariantTests/StaticAssertions.ps1
+  17 README.md
+  16 AGENTS.md
+  16 tests/contract/Test-ProfileInvariants.ps1
+  14 tests/contract/ProfileInvariantTests/ProfileAssertions.ps1
+  12 WinMint-CLI.ps1
+  11 docs/Windows-Debloat-Strategy.md
+  11 schemas/winmint.buildprofile.schema.json
+  11 src/engine/Private/Image/Unattend.ps1
+  10 src/runtime/image/Engine.ps1
+  10 apps/gui/src/main.rs
+  10 src/engine/Engine.ps1
+  10 src/engine/Private/Config/Profile.ps1
+  10 src/engine/Private/Headless.ps1
+   9 src/runtime/image/Reports.ps1
+   9 tests/contract/Test-UiContractSpine.ps1
+   9 tools/validation/Modules/Assets.ps1
+   9 docs/Project-Structure.md
+   8 config/tweaks.json
+   8 src/runtime/image/Private/InstallPlan.ps1
+
+=== MONOREPO SIGNALS ===
+Sub-package directory found: apps/
+
+=== CODE METRICS ===
+Total files scanned: 5485
+Total lines of code: 162648
+
+Files by language:
+  Other: 5463
+  Rust: 20
+  JavaScript: 1
+  Python: 1
+
+Top 10 largest files:
+output\WinMint-20260517-014259.iso: 9401932.0KB
+output\WinMint-20260517-020418.iso: 9401924.0KB
+output\WinMint-20260517-215554.iso: 9399732.0KB
+output\WinMint-20260523-130931.iso: 8271194.0KB
+output\WinMint-20260610-124943.iso: 8266460.0KB
+output\WinMint-20260525-setupdisk-eicfg-hotfix.iso: 8266456.0KB
+output\WinMint-20260525-setupdisk-index-hotfix.iso: 8266456.0KB
+output\WinMint-20260525-vmtest-homekey.iso: 8266456.0KB
+output\WinMint-20260525-140016.iso: 8266452.0KB
+output\WinMint-20260525-setupdisk-hotfix.iso: 8266452.0KB
+
+=== CI/CD PIPELINES ===
+CI/CD: GitHub Actions
+
+=== CONTAINERS & ORCHESTRATION ===
+No containerization configs detected.
+
+=== SECURITY & COMPLIANCE ===
+No security configs detected.
+
+=== PERFORMANCE & TESTING ===
+No performance testing configs detected.
+
+=== SCAN COMPLETE ===

@@ -364,6 +364,8 @@ impl WinMintApp {
     ) {
         self.build_run.profile_path = profile_path.display().to_string().into();
         self.build_run.output_path = result.output_path.into();
+        self.build_run.build_delta_path = result.build_delta_path.into();
+        self.build_run.build_delta_summary = result.build_delta;
         self.build_run.report_path = result.report_path.into();
         self.manifest.manifest_path = result.manifest_path.into();
         self.build_run.last_progress = result
@@ -470,11 +472,14 @@ impl WinMintApp {
         if self.manifest.manifest_path.is_empty() {
             return self.build_run.status.clone();
         }
-        format!(
-            "{} · Manifest {}",
-            self.build_run.status, self.manifest.manifest_path
-        )
-        .into()
+        let mut segments = vec![
+            self.build_run.status.to_string(),
+            format!("Manifest {}", self.manifest.manifest_path),
+        ];
+        if !self.build_run.build_delta_path.is_empty() {
+            segments.push(format!("Delta {}", self.build_run.build_delta_path));
+        }
+        segments.join(" · ").into()
     }
 
     // Each choice re-emits ui-intent.json so the on-disk intent tracks the wizard.

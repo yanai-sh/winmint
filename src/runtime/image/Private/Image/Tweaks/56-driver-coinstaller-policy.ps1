@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline driver hygiene: allow Windows Update drivers, but block vendor
 # co-installers that commonly pull companion apps and tray utilities alongside
@@ -15,3 +15,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

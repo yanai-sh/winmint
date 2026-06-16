@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 [CmdletBinding()]
 param(
@@ -34,3 +34,4 @@ Invoke-FlashWindowsInstallMediaToUsb `
     -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `
     -Architecture $Architecture `
     -AllowFixedUsbDisk:$AllowFixedUsbDisk
+

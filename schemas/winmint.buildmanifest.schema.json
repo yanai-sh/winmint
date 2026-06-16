@@ -58,6 +58,7 @@
     "drivers",
     "payloads",
     "firstLogon",
+    "audit",
     "riskFlags"
   ],
   "additionalProperties": false,
@@ -630,6 +631,20 @@
         "wingetConfigurationPackageCount": {
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "required": ["buildDeltaCount", "buildDeltaPath"],
+      "additionalProperties": false,
+      "properties": {
+        "buildDeltaCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "buildDeltaPath": {
+          "type": "string"
         }
       }
     },

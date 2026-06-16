@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -8,7 +8,8 @@ Set-StrictMode -Version 2.0
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:root = $root
 . (Join-Path $root 'tests\contract\TestFixtures.ps1')
-. (Join-Path $root 'src\runtime\image\WinMint.ps1')
+Import-Module (Join-Path $root 'src\runtime\modules\WinMint.Engine\WinMint.Engine.psd1') -Force
+Import-Module (Join-Path $root 'src\runtime\modules\WinMint.Profile\WinMint.Profile.psd1') -Force
 Initialize-WinMintEngine -RepositoryRoot $root -DryRun
 
 $cli = Join-Path $root 'WinMint-CLI.ps1'
@@ -248,3 +249,4 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host 'CLI matrix smoke passed.'
+

@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-JsonSchemaValueType {
     param($Value)
@@ -188,3 +188,4 @@ function Test-JsonObjectRejectedBySchema {
         Add-ValidationError "$Label schema rejection test failed: $($_.Exception.Message)"
     }
 }
+

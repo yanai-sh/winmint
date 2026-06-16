@@ -1,6 +1,6 @@
 # Testing Patterns
 
-Snapshot note: this document reflects the current development state of the repo. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-16. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
 ## Core Sections (Required)
 
@@ -14,6 +14,7 @@ Snapshot note: this document reflects the current development state of the repo.
 pwsh -NoProfile -File tests\contract\Test-ProfileInvariants.ps1
 pwsh -NoProfile -File tests\contract\Test-Fast.ps1
 pwsh -NoProfile -File tools\validation\Validate.ps1
+pwsh -NoProfile -File tools\validation\Validate.ps1 -RunAnalyzer
 cargo test --manifest-path crates\winmint-core\Cargo.toml
 cargo test --manifest-path apps\gui\Cargo.toml
 pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profiles\hyper-v-install-arm64.json
@@ -45,11 +46,12 @@ pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profile
 
 - Coverage tool + threshold: no numeric threshold is configured. The intended bar is pragmatic rather than exhaustive: protect profile/schema/release invariants with fast tests, use Rust unit tests for typed helpers, and add targeted dry-run or VM acceptance checks for risky image/setup behavior.
 - Current reported coverage: `[TODO]`.
-- Known gaps/flaky areas: no automated full Windows install E2E in CI; live package-manager and network paths are only indirectly covered by contract/static checks; production TODO/FIXME/HACK markers were not found by scan/search outside excluded artifacts.
+- Known gaps/flaky areas: no automated full Windows install E2E in CI; live package-manager and network paths are only indirectly covered by contract/static checks; production TODO/FIXME/HACK markers were not found by the 2026-06-16 scan outside excluded artifacts.
 
 ### 6) Evidence
 
 - `tests/README.md`
+- `docs/codebase/.codebase-scan.txt`
 - `tests/contract/Test-Fast.ps1`
 - `tests/contract/Test-ProfileInvariants.ps1`
 - `tests/contract/Test-UiContractSpine.ps1`

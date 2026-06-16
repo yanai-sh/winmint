@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Write-AgentLog {
     param([string]$Message)
@@ -306,3 +306,4 @@ function Wait-AgentConsoleBeforeClose {
     Write-AgentConsoleLine -Level OK -Message 'First-logon automation finished. This window will close shortly.'
     Start-Sleep -Seconds 8
 }
+

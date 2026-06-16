@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline NTFS hygiene for modern SSDs: disable last-access timestamp updates
 # and legacy 8.3 short-name generation. Undo values restore the Windows defaults
@@ -16,3 +16,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

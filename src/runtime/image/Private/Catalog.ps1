@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Hero splash titles and oscdimg volume label (banner art is the primary logo).
 $script:Win11IsoBuildShortName = 'WinMint'
@@ -130,3 +130,4 @@ $script:HiveMap = @{
 # Filled by Test-OfflineStagingReadiness after ISO files are staged (overrides defaults)
 $script:BootWimDriverMountIndexes = @(2)
 $script:BootWimWinPEUtilityMountIndex = 2
+

@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Add-ValidationError {
     param([string]$Message)
@@ -293,3 +293,4 @@ function Test-RegistryTweakStrictModeAccess {
     }
     Write-Host 'OK registry tweak optional key access'
 }
+

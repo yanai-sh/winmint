@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # DualBootReserved disk mode only: keep the RTC in UTC (RealTimeIsUniversal) to
 # avoid clock drift against a Linux install on the same machine.
@@ -14,3 +14,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

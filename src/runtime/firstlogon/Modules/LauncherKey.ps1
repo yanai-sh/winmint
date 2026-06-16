@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintAgentLauncherKeyModule {
     param([Parameter(Mandatory)][object]$AgentProfile)
@@ -127,3 +127,4 @@ function Invoke-WinMintAgentLauncherKeyBootstrap {
         Message = "Launcher key target: $($plan.Target)."
     }
 }
+

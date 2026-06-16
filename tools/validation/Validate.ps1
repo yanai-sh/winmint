@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [switch]$SkipAnalyzer,
@@ -51,6 +51,7 @@ $validationSteps = [ordered]@{
         Test-TrackedBuildProfileSchemas
         Test-BuildManifestSchema
         Test-AgentStateSchema
+        Test-BuildDeltaSchema
     }
     'Static source guards' = {
         Test-DismArgumentQuoting
@@ -98,3 +99,4 @@ if ($errors.Count -gt 0) {
     throw "Validation failed with $($errors.Count) error(s)."
 }
 Write-Host 'Validation passed.'
+

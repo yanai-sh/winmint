@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Invoke-DriverMsiAdministrativeInstall {
     <# <summary>msiexec /a administrative install; fails if the tree contains no .inf (DISM requirement).</summary> #>
@@ -323,3 +323,4 @@ function Invoke-DriverInjection {
         }
     }
 }
+

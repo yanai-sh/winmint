@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 5.1
 <#
 .SYNOPSIS
   Builds a WinMint BuildProfile JSON file from UI settings JSON.
@@ -14,11 +14,20 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
+Import-Module (Join-Path $RepositoryRoot 'src\runtime\modules\WinMint.Bootstrap\WinMint.Bootstrap.psd1') -Force
+$bootstrapArgs = @(
+    '-RepositoryRoot', $RepositoryRoot,
+    '-SettingsPath', $SettingsPath,
+    '-OutputPath', $OutputPath
+)
+if ($IncludeSecrets) { $bootstrapArgs += '-IncludeSecrets' }
+$bootstrap = Invoke-WinMintRuntimeBootstrap -Entrypoint $PSCommandPath -Arguments $bootstrapArgs
+if ($bootstrap.Relaunched) {
+    exit $bootstrap.ExitCode
+}
+
 $script:WinMintRepositoryRoot = $RepositoryRoot
-. (Join-Path $RepositoryRoot 'src\runtime\image\Core.ps1')
-$engine = Get-WinMintPath -Name RuntimeImageEntry
-. $engine
-Initialize-WinMintEngine -RepositoryRoot $RepositoryRoot
+Import-Module (Join-Path $RepositoryRoot 'src\runtime\modules\WinMint.Profile\WinMint.Profile.psd1') -Force
 
 $null = Save-WinMintBuildProfileFromUiIntent `
     -RepositoryRoot $RepositoryRoot `
