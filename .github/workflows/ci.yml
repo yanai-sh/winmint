@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - architecture/**
+      - codex/**
   pull_request:
   workflow_dispatch:
 
@@ -19,6 +20,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup PowerShell 7.6
+        uses: actions/setup-powershell@v1
+        with:
+          version: '7.6.2'
 
       - name: Validate syntax and profile invariants
         shell: pwsh
