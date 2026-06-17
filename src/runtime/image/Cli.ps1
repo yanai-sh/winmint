@@ -162,7 +162,7 @@ function Invoke-WinMintNewProfileCommand {
         # install skips the Setup product-key page. Auto injects only when the
         # build host has no firmware/OEM key. Only meaningful for a fixed edition.
         [ValidateSet('Auto', 'On', 'Off')][string]$GenericKey = 'Auto',
-        [ValidateSet('None', 'Host', 'Custom')][string]$DriverSource = 'None',
+        [ValidateSet('None', 'Host', 'Custom', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')][string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [string]$DriverPack = '',
         [ValidateSet('ThisPC', 'DifferentPC')][string]$TargetDevice = 'DifferentPC',
@@ -350,7 +350,8 @@ new options (configuration lives here):
      OOBE "Create a password" page; use -AccountMode MicrosoftOobe for interactive
      account setup instead)
   -TimeZoneId -InputLocale -SystemLocale -UILanguage -UILanguageFallback -UserLocale
-  -DriverSource None|Host|Custom -DriverPath -DriverPack -TargetDevice -ExportHostDrivers
+  -DriverSource None|Host|Custom|HostExport|CustomInfFolder|OemMsi|SurfaceMsiSafe|SurfaceCatalog
+  -DriverPath -DriverPack -TargetDevice -ExportHostDrivers
 '@
     Write-Host $text
 }

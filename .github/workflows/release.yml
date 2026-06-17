@@ -49,6 +49,10 @@ jobs:
         shell: pwsh
         run: ./tools/release/New-WinMintReleaseBundle.ps1 -Version '${{ steps.version.outputs.version }}'
 
+      - name: Smoke release bundle
+        shell: pwsh
+        run: ./tools/release/Test-WinMintReleaseLaunch.ps1 -BundlePath "dist/WinMint-${{ steps.version.outputs.version }}.zip" -Version '${{ steps.version.outputs.version }}'
+
       - name: Create or update GitHub release
         shell: pwsh
         env:

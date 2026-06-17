@@ -209,7 +209,7 @@
           "if": {
             "required": ["source"],
             "properties": {
-              "source": { "const": "Host" }
+              "source": { "enum": ["Host", "HostExport"] }
             }
           },
           "then": {
@@ -222,7 +222,7 @@
           "if": {
             "required": ["source"],
             "properties": {
-              "source": { "enum": ["None", "Custom"] }
+              "source": { "enum": ["None", "Custom", "CustomInfFolder", "OemMsi", "SurfaceMsiSafe", "SurfaceCatalog"] }
             }
           },
           "then": {
@@ -233,7 +233,7 @@
         }
       ],
       "properties": {
-        "source": { "type": "string", "enum": ["None", "Host", "Custom"] },
+        "source": { "type": "string", "enum": ["None", "Host", "Custom", "HostExport", "CustomInfFolder", "OemMsi", "SurfaceMsiSafe", "SurfaceCatalog"] },
         "path": { "type": "string" },
         "exportHostDrivers": { "type": "boolean" }
       },

@@ -352,11 +352,11 @@ if (@($profile.development.editors).Count -ne 0) {
 $profile = New-SmokeBuildProfile
 $profile.drivers.source = 'Host'
 $profile.drivers.exportHostDrivers = $false
-Assert-ProfileFailsWith -Profile $profile -Expected 'profile.drivers.exportHostDrivers must be true when profile.drivers.source is Host.'
+Assert-ProfileFailsWith -Profile $profile -Expected 'profile.drivers.exportHostDrivers must be true when profile.drivers.source is Host or HostExport.'
 
 $profile = New-SmokeBuildProfile
 $profile.drivers.exportHostDrivers = $true
-Assert-ProfileFailsWith -Profile $profile -Expected 'profile.drivers.exportHostDrivers must be false unless profile.drivers.source is Host.'
+Assert-ProfileFailsWith -Profile $profile -Expected 'profile.drivers.exportHostDrivers must be false unless profile.drivers.source is Host or HostExport.'
 
 $profile = New-SmokeBuildProfile
 $profile.drivers.source = 'Host'

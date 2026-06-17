@@ -106,6 +106,8 @@ Three first-class contracts. All business logic passes through these — never b
 
 **BuildDelta owns:** generated backend truth for "what WinMint changes" after profile normalization and install-plan derivation. Every record must include phase, contributor source, applicability/suppression metadata, and a concise change list. Do not maintain a separate handwritten authoritative backend behavior summary once a behavior is represented in `BuildDelta`.
 
+Driver sources are conservative by design. `None`, `Host`, and `Custom` remain compatibility values, but Surface driver packs should use either `SurfaceCatalog` or `SurfaceMsiSafe`. `SurfaceCatalog` means `profile.drivers.path` is an exact WinMint Surface catalog device id from `config/surface-drivers.json`; it resolves the official Microsoft Download Center package at build time, downloads it into the temp work directory, verifies Microsoft ownership/signature evidence, then runs the same safe Surface classification path. `SurfaceMsiSafe` is the manual official Surface MSI path. Both paths extract the MSI, require the `SurfaceUpdate` payload, exclude firmware-class drivers from offline injection, and write `WinMint-DriverInventory.json`. The catalog must use Microsoft-owned URLs only; third-party catalogs such as SurfaceTip are research references only and must not be runtime download sources. Do not route Surface recovery-critical installs through raw recursive `Custom` injection unless deliberately investigating an experimental failure.
+
 **Agent step status values:** `pending`, `running`, `ok`, `failed`, `skipped`, `retryable`, `needsReboot`.
 
 Schemas:
@@ -223,7 +225,17 @@ Parsed from ISO filename via case-insensitive regex. Cross-checked against WIM m
 
 ## Distribution
 
-Short launch path: `irm https://winmint.yanai.sh | iex`  
+Short launch path: `irm https://winmint.yanai.sh | iex`
+Default bootstrap behavior is ephemeral: download the release zip and `.sha256`
+to a unique `%TEMP%` session, verify SHA256, extract and run from that session,
+wait for the launched process, then best-effort remove the session. Do not
+reintroduce a default `%LOCALAPPDATA%\WinMint\versions` install/cache path.
+Durable release cache behavior is explicit opt-in only through launcher switches
+such as `-InstallRoot` or `-CacheRelease`.
+Bootstrap failures must go through the friendly failure envelope in `winmint.ps1`
+with operation, failure kind, reason, recovery guidance, and retry-safety text.
+Preserve the explicit failure kinds: network, integrity, package, runtime,
+elevation, relaunch, usage, and unexpected.
 Cloudflare Worker source: `cloudflare/winmint/` — deploy with `bunx wrangler@latest deploy --config wrangler.jsonc`
 
 Release bundle: `tools/release/New-WinMintReleaseBundle.ps1` → produces `dist/WinMint-<version>.zip` + `.sha256`. Upload both to the matching GitHub release.

@@ -87,6 +87,7 @@ function Test-RequiredAssets {
         'cloudflare\winmint\wrangler.jsonc',
         'tools\release\New-WinMintReleaseBundle.ps1',
         'tools\release\Build-WinMintGui.ps1',
+        'tools\release\Test-WinMintReleaseLaunch.ps1',
         'tools\audit\Audit-LiveInstall.ps1',
         'src\runtime\setup\WindhawkBootstrap.ps1',
         'src\runtime\setup\WindhawkBootstrap.Helpers.ps1',

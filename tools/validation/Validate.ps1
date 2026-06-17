@@ -4,7 +4,8 @@ param(
     [switch]$SkipAnalyzer,
     [switch]$RunAnalyzer,
     [switch]$RunIntegration,
-    [switch]$IncludeGuiBuild
+    [switch]$IncludeGuiBuild,
+    [switch]$RunReleaseSmoke
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,6 +63,23 @@ $validationSteps = [ordered]@{
     }
     'Optional GUI build' = {
         Test-GuiBuild -IncludeBuild:$IncludeGuiBuild
+    }
+    'Optional release smoke' = {
+        if ($RunReleaseSmoke) {
+            $version = 'v0.0.0-validation'
+            & (Get-WinMintPath -Name ReleaseToolsRoot -ChildPath 'New-WinMintReleaseBundle.ps1') -Version $version -SkipGuiBuild
+            if ($LASTEXITCODE -ne 0) {
+                throw "Release bundle build failed with exit code $LASTEXITCODE."
+            }
+            $bundle = Join-Path (Get-WinMintPath -Name DistRoot) "WinMint-$version.zip"
+            & (Get-WinMintPath -Name ReleaseToolsRoot -ChildPath 'Test-WinMintReleaseLaunch.ps1') -BundlePath $bundle -Version $version
+            if ($LASTEXITCODE -ne 0) {
+                throw "Release smoke failed with exit code $LASTEXITCODE."
+            }
+        }
+        else {
+            Write-Host 'Skipping release smoke. Use -RunReleaseSmoke after building the packaged GUI.'
+        }
     }
     'Rust crates' = {
         Test-RustCrates

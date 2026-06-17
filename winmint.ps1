@@ -3,7 +3,9 @@
 param(
     [string]$Repository = 'yanai-sh/winmint',
     [string]$Version = 'latest',
+    [string]$ReleaseApiRoot = 'https://api.github.com',
     [string]$InstallRoot = '',
+    [switch]$CacheRelease,
     [ValidateSet('Gui','Headless')]
     [string]$Mode = 'Gui',
     [switch]$Gui,
@@ -36,6 +38,44 @@ function Write-WinMintBootstrapLog {
     Write-Host "[$stamp] [$Level] $Message"
 }
 
+$script:WinMintBootstrapOperation = 'Starting WinMint bootstrap.'
+$script:WinMintBootstrapFailureKind = 'Unexpected'
+$script:WinMintBootstrapRecovery = 'Retry the command. If it fails again, inspect the error text above and report the bootstrap log.'
+$script:WinMintBootstrapRetrySafe = $true
+
+function Set-WinMintBootstrapOperation {
+    param(
+        [Parameter(Mandatory)][string]$Operation,
+        [ValidateSet('Network','Integrity','Package','Runtime','Elevation','Relaunch','Usage','Unexpected')]
+        [string]$FailureKind = 'Unexpected',
+        [string]$Recovery = 'Retry the command. If it fails again, inspect the error text above and report the bootstrap log.',
+        [bool]$RetrySafe = $true
+    )
+
+    $script:WinMintBootstrapOperation = $Operation
+    $script:WinMintBootstrapFailureKind = $FailureKind
+    $script:WinMintBootstrapRecovery = $Recovery
+    $script:WinMintBootstrapRetrySafe = $RetrySafe
+}
+
+function Write-WinMintBootstrapFailure {
+    param([Parameter(Mandatory)][System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+    $message = [string]$ErrorRecord.Exception.Message
+    $retryText = if ($script:WinMintBootstrapRetrySafe) {
+        'Safe to retry: yes. A retry starts from a fresh temporary session unless -InstallRoot or -CacheRelease was used.'
+    }
+    else {
+        'Safe to retry: no, not until the release asset or local input is corrected.'
+    }
+
+    Write-WinMintBootstrapLog "Bootstrap failed during: $script:WinMintBootstrapOperation" 'ERROR'
+    Write-WinMintBootstrapLog "Failure kind: $script:WinMintBootstrapFailureKind" 'ERROR'
+    Write-WinMintBootstrapLog "Reason: $message" 'ERROR'
+    Write-WinMintBootstrapLog "Recovery: $script:WinMintBootstrapRecovery" 'ERROR'
+    Write-WinMintBootstrapLog $retryText 'ERROR'
+}
+
 function Enable-WinMintBootstrapTls {
     try {
         $tls12 = [Net.SecurityProtocolType]::Tls12
@@ -49,15 +89,24 @@ function Enable-WinMintBootstrapTls {
 }
 
 function Get-WinMintRelease {
-    param([string]$Repo, [string]$RequestedVersion)
+    param(
+        [string]$Repo,
+        [string]$RequestedVersion,
+        [string]$ApiRoot
+    )
 
     $encodedVersion = [uri]::EscapeDataString($RequestedVersion)
+    $apiBase = $ApiRoot.TrimEnd('/')
     $releasePath = if ($RequestedVersion -eq 'latest') {
-        "https://api.github.com/repos/$Repo/releases/latest"
+        "$apiBase/repos/$Repo/releases/latest"
     } else {
-        "https://api.github.com/repos/$Repo/releases/tags/$encodedVersion"
+        "$apiBase/repos/$Repo/releases/tags/$encodedVersion"
     }
 
+    Set-WinMintBootstrapOperation `
+        -Operation "Querying release metadata for '$RequestedVersion' from $Repo." `
+        -FailureKind 'Network' `
+        -Recovery 'Check network access to GitHub or the configured release API root, then retry. If using the short URL, verify Cloudflare is not challenging command-line clients.'
     Write-WinMintBootstrapLog "Querying GitHub release '$RequestedVersion' from $Repo."
     Invoke-RestMethod -Uri $releasePath -Headers @{
         'Accept' = 'application/vnd.github+json'
@@ -94,6 +143,10 @@ function Save-WinMintAsset {
         [string]$Destination
     )
 
+    Set-WinMintBootstrapOperation `
+        -Operation "Downloading release asset '$($Asset.name)'." `
+        -FailureKind 'Network' `
+        -Recovery 'Check network access, proxy/VPN/firewall policy, and GitHub release asset availability, then retry.'
     Write-WinMintBootstrapLog "Downloading $($Asset.name)."
     Invoke-WebRequest -Uri $Asset.browser_download_url -OutFile $Destination -Headers @{
         'User-Agent' = 'WinMint-Bootstrap'
@@ -122,6 +175,12 @@ function Get-WinMintFileSha256 {
 function Test-WinMintArchiveHash {
     param([string]$ArchivePath, [string]$ChecksumPath)
 
+    Set-WinMintBootstrapOperation `
+        -Operation 'Verifying release archive SHA256.' `
+        -FailureKind 'Integrity' `
+        -Recovery 'Do not run this release asset. Wait for the release zip and .sha256 assets to be corrected, then retry.' `
+        -RetrySafe $false
+
     $text = Get-Content -LiteralPath $ChecksumPath -Raw
     $match = [regex]::Match($text, '(?i)\b[a-f0-9]{64}\b')
     if (-not $match.Success) {
@@ -145,6 +204,11 @@ function Resolve-WinMintBootstrapReleasePayload {
     )
 
     $archiveName = "WinMint-$tag.zip"
+    Set-WinMintBootstrapOperation `
+        -Operation "Resolving release assets for '$Tag'." `
+        -FailureKind 'Package' `
+        -Recovery 'The selected GitHub release is incomplete. Use another version or wait for the release assets to be republished.' `
+        -RetrySafe $false
     $archive = Select-WinMintAsset -Release $Release -Extension '.zip' -PreferredName $archiveName
     if (-not $archive) {
         throw "Release '$Tag' does not include a WinMint zip asset."
@@ -179,11 +243,43 @@ function Save-WinMintBootstrapReleasePayload {
 function Expand-WinMintRelease {
     param([string]$ArchivePath, [string]$Destination, [switch]$Overwrite)
 
+    Set-WinMintBootstrapOperation `
+        -Operation "Extracting release archive to '$Destination'." `
+        -FailureKind 'Package' `
+        -Recovery 'The archive may be corrupt or locked by local security software. Retry after verifying the release hash and available disk space.'
+
     if ((Test-Path -LiteralPath $Destination) -and $Overwrite) {
         Remove-Item -LiteralPath $Destination -Recurse -Force
     }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
     Expand-Archive -LiteralPath $ArchivePath -DestinationPath $Destination -Force
+}
+
+function New-WinMintBootstrapSessionRoot {
+    param([string]$Tag)
+
+    $safeTag = $Tag -replace '[^A-Za-z0-9._-]', '_'
+    $name = "WinMintBootstrap-$safeTag-$([guid]::NewGuid().ToString('N'))"
+    return Join-Path ([IO.Path]::GetTempPath()) $name
+}
+
+function Remove-WinMintBootstrapSessionRoot {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return
+    }
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    try {
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+        Write-WinMintBootstrapLog "Removed temporary session '$Path'." 'OK'
+    }
+    catch {
+        Write-WinMintBootstrapLog "Could not remove temporary session '$Path': $($_.Exception.Message)" 'WARN'
+    }
 }
 
 function Find-WinMintCliScript {
@@ -227,7 +323,7 @@ function Resolve-WinMintLaunchMode {
         [switch]$UseHeadless
     )
 
-    $explicitModes = @($UseGui, $UseHeadless) | Where-Object { $_ }
+    $explicitModes = @(@($UseGui, $UseHeadless) | Where-Object { $_ })
     if ($explicitModes.Count -gt 1) {
         throw 'Use only one of -Gui or -Headless.'
     }
@@ -275,6 +371,10 @@ function Start-WinMintElevatedGui {
         [string[]]$ArgumentList = @()
     )
 
+    Set-WinMintBootstrapOperation `
+        -Operation "Launching packaged GUI with elevation: '$FilePath'." `
+        -FailureKind 'Elevation' `
+        -Recovery 'Approve the Windows elevation prompt. If it was cancelled, rerun the bootstrap command.'
     $startArgs = @{
         FilePath = $FilePath
         Verb = 'RunAs'
@@ -414,6 +514,10 @@ function Write-WinMintInstallMarker {
 
 function Get-WinMintPowerShell {
     function Get-WinMintPowerShellCandidate {
+        Set-WinMintBootstrapOperation `
+            -Operation 'Locating PowerShell 7.6.2 or newer.' `
+            -FailureKind 'Runtime' `
+            -Recovery 'Install or update PowerShell 7.6.2+, then rerun the bootstrap command.'
         $pwsh = Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue
         if (-not $pwsh) { return $null }
 
@@ -431,6 +535,10 @@ function Get-WinMintPowerShell {
     }
 
     function Install-WinMintBootstrapPowerShell {
+        Set-WinMintBootstrapOperation `
+            -Operation 'Installing PowerShell 7.6.2+ through WinGet.' `
+            -FailureKind 'Runtime' `
+            -Recovery 'Install PowerShell 7.6.2+ manually from Microsoft or fix WinGet availability, then rerun the bootstrap command.'
         $winget = Get-Command 'winget.exe' -ErrorAction SilentlyContinue
         if (-not $winget) {
             throw 'PowerShell 7.6.2+ is required, and WinGet was not available for automatic installation.'
@@ -464,68 +572,126 @@ function Get-WinMintPowerShell {
 
 Enable-WinMintBootstrapTls
 
-if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-    throw 'LOCALAPPDATA is not set. This launcher must run on Windows.'
-}
-if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
-    $InstallRoot = Join-Path $env:LOCALAPPDATA 'WinMint'
-}
+$sessionRoot = ''
+$createdEphemeralSession = $false
+$scriptExitCode = 0
 
-$launchMode = Resolve-WinMintLaunchMode -RequestedMode $Mode -UseGui:$Gui -UseHeadless:$Headless
-
-$release = Get-WinMintRelease -Repo $Repository -RequestedVersion $Version
-$tag = [string]$release.tag_name
-$safeTag = $tag -replace '[^A-Za-z0-9._-]', '_'
-$downloadRoot = Join-Path $InstallRoot 'downloads'
-$versionRoot = Join-Path (Join-Path $InstallRoot 'versions') $safeTag
-$installMarkerPath = Join-Path $versionRoot '.winmint-install-complete.json'
-$releasePayload = Resolve-WinMintBootstrapReleasePayload -Release $release -Tag $tag -DownloadRoot $downloadRoot
-$archive = $releasePayload.Archive
-$archivePath = [string]$releasePayload.ArchivePath
-
-New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
-
-$guiScript = $null
-$useInstalledVersion = (-not $Force) -and (Test-WinMintInstalledVersion `
-    -Root $versionRoot `
-    -MarkerPath $installMarkerPath `
-    -Tag $tag `
-    -ArchiveName $archive.name)
-
-if ($useInstalledVersion) {
-    Write-WinMintBootstrapLog "Using installed version '$tag' at '$versionRoot'."
-} else {
-    Save-WinMintBootstrapReleasePayload -Payload $releasePayload
-
-    Write-WinMintBootstrapLog "Extracting to '$versionRoot'."
-    Expand-WinMintRelease -ArchivePath $archivePath -Destination $versionRoot -Overwrite
-    $guiScript = Find-WinMintGuiScript -Root $versionRoot
-    Write-WinMintInstallMarker -MarkerPath $installMarkerPath -Tag $tag -ArchiveName $archive.name -GuiScript $guiScript
-}
-
-if (-not $guiScript) {
-    $guiScript = Find-WinMintGuiScript -Root $versionRoot
-}
-Write-WinMintBootstrapLog "Ready: $guiScript" 'OK'
-
-if ($NoLaunch) {
-    Write-WinMintBootstrapLog 'NoLaunch requested; not starting WinMint.'
-    return
-}
-
-$pwshExe = Get-WinMintPowerShell
-
-Write-WinMintBootstrapLog "Starting WinMint $launchMode."
-if ($launchMode -eq 'Gui') {
-    $guiExe = Find-WinMintGuiExecutable -Root $versionRoot
-    $guiArguments = New-WinMintGuiExecutableArguments
-    $exitCode = Start-WinMintElevatedGui -FilePath $guiExe -ArgumentList $guiArguments
-    if ($exitCode -ne 0) {
-        exit $exitCode
+try {
+    Set-WinMintBootstrapOperation `
+        -Operation 'Resolving launch mode and cache policy.' `
+        -FailureKind 'Usage' `
+        -Recovery 'Use only one launch mode, and use -InstallRoot or -CacheRelease only when a durable release cache is intentional.'
+    $useDurableReleaseCache = $CacheRelease -or (-not [string]::IsNullOrWhiteSpace($InstallRoot))
+    if ($useDurableReleaseCache -and [string]::IsNullOrWhiteSpace($InstallRoot)) {
+        if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+            throw 'LOCALAPPDATA is not set. Pass -InstallRoot or run on Windows.'
+        }
+        $InstallRoot = Join-Path $env:LOCALAPPDATA 'WinMint'
     }
-    return
+
+    $launchMode = Resolve-WinMintLaunchMode -RequestedMode $Mode -UseGui:$Gui -UseHeadless:$Headless
+
+    $release = Get-WinMintRelease -Repo $Repository -RequestedVersion $Version -ApiRoot $ReleaseApiRoot
+    $tag = [string]$release.tag_name
+    $safeTag = $tag -replace '[^A-Za-z0-9._-]', '_'
+    $downloadRoot = ''
+    $versionRoot = ''
+    $installMarkerPath = ''
+
+    if ($useDurableReleaseCache) {
+        $downloadRoot = Join-Path $InstallRoot 'downloads'
+        $versionRoot = Join-Path (Join-Path $InstallRoot 'versions') $safeTag
+        $installMarkerPath = Join-Path $versionRoot '.winmint-install-complete.json'
+        Write-WinMintBootstrapLog "Using explicit release cache root '$InstallRoot'."
+    }
+    else {
+        $sessionRoot = New-WinMintBootstrapSessionRoot -Tag $tag
+        $downloadRoot = Join-Path $sessionRoot 'downloads'
+        $versionRoot = Join-Path $sessionRoot 'release'
+        $createdEphemeralSession = $true
+        Write-WinMintBootstrapLog "Using temporary session '$sessionRoot'."
+    }
+
+    $releasePayload = Resolve-WinMintBootstrapReleasePayload -Release $release -Tag $tag -DownloadRoot $downloadRoot
+    $archive = $releasePayload.Archive
+    $archivePath = [string]$releasePayload.ArchivePath
+
+    New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
+
+    $guiScript = $null
+    $useInstalledVersion = $false
+    if ($useDurableReleaseCache) {
+        $useInstalledVersion = (-not $Force) -and (Test-WinMintInstalledVersion `
+            -Root $versionRoot `
+            -MarkerPath $installMarkerPath `
+            -Tag $tag `
+            -ArchiveName $archive.name)
+    }
+
+    if ($useInstalledVersion) {
+        Write-WinMintBootstrapLog "Using cached version '$tag' at '$versionRoot'."
+    }
+    else {
+        Save-WinMintBootstrapReleasePayload -Payload $releasePayload
+
+        Write-WinMintBootstrapLog "Extracting to '$versionRoot'."
+        Expand-WinMintRelease -ArchivePath $archivePath -Destination $versionRoot -Overwrite
+        $guiScript = Find-WinMintGuiScript -Root $versionRoot
+        if ($useDurableReleaseCache) {
+            Write-WinMintInstallMarker -MarkerPath $installMarkerPath -Tag $tag -ArchiveName $archive.name -GuiScript $guiScript
+        }
+    }
+
+    if (-not $guiScript) {
+        $guiScript = Find-WinMintGuiScript -Root $versionRoot
+    }
+    Write-WinMintBootstrapLog "Ready: $guiScript" 'OK'
+    Write-WinMintBootstrapLog 'Retry behavior: rerunning the bootstrap is safe; the default path starts from a fresh temporary session.' 'INFO'
+
+    if ($NoLaunch) {
+        Write-WinMintBootstrapLog 'NoLaunch requested; not starting WinMint.'
+    }
+    else {
+        $pwshExe = Get-WinMintPowerShell
+
+        Write-WinMintBootstrapLog "Starting WinMint $launchMode."
+        if ($launchMode -eq 'Gui') {
+            $guiExe = Find-WinMintGuiExecutable -Root $versionRoot
+            $guiArguments = New-WinMintGuiExecutableArguments
+            $scriptExitCode = Start-WinMintElevatedGui -FilePath $guiExe -ArgumentList $guiArguments
+            if ($scriptExitCode -ne 0) {
+                Set-WinMintBootstrapOperation `
+                    -Operation "Waiting for packaged GUI process '$guiExe'." `
+                    -FailureKind 'Relaunch' `
+                    -Recovery 'Review any GUI error message, then rerun the bootstrap command. If the process exited before the wizard opened, verify the release bundle and host requirements.'
+                throw "Packaged GUI exited with code $scriptExitCode."
+            }
+        }
+        else {
+            $entryScript = Find-WinMintCliScript -Root $versionRoot
+            $arguments = New-WinMintLaunchArguments -ScriptPath $entryScript -LaunchMode $launchMode
+            Set-WinMintBootstrapOperation `
+                -Operation "Handing off to packaged CLI through PowerShell: '$entryScript'." `
+                -FailureKind 'Relaunch' `
+                -Recovery 'Review the CLI error output, fix the profile or run-specific arguments, then rerun the bootstrap command.'
+            & $pwshExe @arguments
+            $scriptExitCode = if ($LASTEXITCODE -ne $null) { [int]$LASTEXITCODE } else { 0 }
+            if ($scriptExitCode -ne 0) {
+                throw "Packaged CLI exited with code $scriptExitCode."
+            }
+        }
+    }
+}
+catch {
+    Write-WinMintBootstrapFailure -ErrorRecord $_
+    $scriptExitCode = 1
+}
+finally {
+    if ($createdEphemeralSession) {
+        Remove-WinMintBootstrapSessionRoot -Path $sessionRoot
+    }
 }
 
-$entryScript = Find-WinMintCliScript -Root $versionRoot
-$arguments = New-WinMintLaunchArguments -ScriptPath $entryScript -LaunchMode $launchMode
-& $pwshExe @arguments
+if ($scriptExitCode -ne 0) {
+    exit $scriptExitCode
+}

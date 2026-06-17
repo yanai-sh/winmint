@@ -876,7 +876,7 @@ function Assert-HeadlessCliContracts {
         Set-Content -LiteralPath $fakePack -Value 'not a real msi; normalization only' -Encoding ASCII
         $packProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -TargetDevice ThisPC -DriverPack $fakePack -DryRun
         $packConfig = New-WinMintBuildConfig -BuildProfile $packProfile
-        if ($packConfig.Drivers.Source -ne 'Custom' -or $packConfig.ExportHostDrivers) {
+        if ($packConfig.Drivers.Source -ne 'OemMsi' -or $packConfig.ExportHostDrivers) {
             Add-SmokeFailure 'Expected explicit DriverPack to override ThisPC host driver export.'
         }
     }
@@ -989,6 +989,233 @@ function Assert-HeadlessSourceAndDriverInputContracts {
             $driverPreflight = Test-WinMintBuildPrerequisite -Config $driverConfig -RunMode DryRun
             if (-not $driverPreflight.Passed) {
                 Add-SmokeFailure "Expected custom driver fixture to pass preflight: $validDriverPath; failures: $($driverPreflight.Failures -join '; ')"
+            }
+        }
+        $surfaceCatalog = Import-WinMintSurfaceDriverCatalog
+        if ([int]$surfaceCatalog.schemaVersion -ne 1 -or @($surfaceCatalog.devices).Count -lt 5) {
+            Add-SmokeFailure 'Expected Surface driver catalog to use schemaVersion 1 and include multiple supported Surface devices.'
+        }
+        $surfaceIds = @($surfaceCatalog.devices | ForEach-Object { [string]$_.id })
+        if ($surfaceIds.Count -ne @($surfaceIds | Select-Object -Unique).Count) {
+            Add-SmokeFailure 'Surface driver catalog device ids must be unique.'
+        }
+        foreach ($surfaceDevice in @($surfaceCatalog.devices)) {
+            foreach ($requiredProperty in @('id', 'name', 'family', 'architecture', 'downloadCenterId', 'detailsUrl', 'expectedFileNameRegex', 'minimumWindowsBuild')) {
+                if (-not $surfaceDevice.PSObject.Properties[$requiredProperty] -or [string]::IsNullOrWhiteSpace([string]$surfaceDevice.$requiredProperty)) {
+                    Add-SmokeFailure "Surface driver catalog entry is missing required property '$requiredProperty'."
+                }
+            }
+            if (-not (Test-WinMintMicrosoftDownloadUri -Uri ([string]$surfaceDevice.detailsUrl))) {
+                Add-SmokeFailure "Surface driver catalog entry '$($surfaceDevice.id)' must use a Microsoft details URL."
+            }
+            if ([string]$surfaceDevice.detailsUrl -match '(?i)surfacetip|github|raw\.githubusercontent') {
+                Add-SmokeFailure "Surface driver catalog entry '$($surfaceDevice.id)' must not use third-party catalog URLs."
+            }
+        }
+        $sl7Match = Resolve-WinMintSurfaceDriverDevice -Query '7th gen surface laptop' -Top 1 | Select-Object -First 1
+        if ($null -eq $sl7Match -or [string]$sl7Match.id -ne 'surface-laptop-7' -or [string]$sl7Match.downloadCenterId -ne '106120') {
+            Add-SmokeFailure 'Expected fuzzy Surface resolver to match "7th gen surface laptop" to Surface Laptop (7th Edition).'
+        }
+        $sl7FileMatch = Resolve-WinMintSurfaceDriverDevice -Query 'SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi' -Top 1 | Select-Object -First 1
+        if ($null -eq $sl7FileMatch -or [string]$sl7FileMatch.id -ne 'surface-laptop-7') {
+            Add-SmokeFailure 'Expected fuzzy Surface resolver to match the SurfaceLaptop7 MSI filename to Surface Laptop (7th Edition).'
+        }
+        $businessMatch = Resolve-WinMintSurfaceDriverDevice -Query 'surface laptop 7 for business' -Top 1 | Select-Object -First 1
+        if ($null -eq $businessMatch -or [string]$businessMatch.id -ne 'surface-laptop-business-7') {
+            Add-SmokeFailure 'Expected fuzzy Surface resolver to prefer the Business Surface Laptop 7 entry for business queries.'
+        }
+        $fakeSl7Identity = [pscustomobject]@{
+            manufacturer = 'Microsoft Corporation'
+            model = 'Microsoft Surface Laptop, 7th Edition'
+            productName = 'Microsoft Surface Laptop, 7th Edition'
+            baseBoardProduct = 'Microsoft Surface Laptop, 7th Edition'
+        }
+        $hostDeviceMatch = Resolve-WinMintSurfaceDriverDeviceForInput `
+            -MsiName 'SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi' `
+            -TargetDevice ThisPC `
+            -HostIdentity $fakeSl7Identity
+        if ($null -eq $hostDeviceMatch -or [string]$hostDeviceMatch.id -ne 'surface-laptop-7' -or [string]$hostDeviceMatch.matchSource -ne 'host-system-info') {
+            Add-SmokeFailure 'Expected ThisPC Surface matching to prefer dynamically retrieved host system info.'
+        }
+        $differentPcMatch = Resolve-WinMintSurfaceDriverDeviceForInput `
+            -MsiName 'SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi' `
+            -TargetDevice DifferentPC `
+            -HostIdentity $fakeSl7Identity
+        if ($null -eq $differentPcMatch -or [string]$differentPcMatch.id -ne 'surface-laptop-7' -or [string]$differentPcMatch.matchSource -ne 'driver-msi-name') {
+            Add-SmokeFailure 'Expected DifferentPC Surface matching to ignore host system info and use the provided MSI identity.'
+        }
+        $catalogProfile = New-WinMintHeadlessProfileFromFlags `
+            -SourceIso '' `
+            -Architecture 'arm64' `
+            -DriverSource SurfaceCatalog `
+            -DriverPath 'surface-laptop-7' `
+            -DryRun
+        $catalogConfig = New-WinMintBuildConfig -BuildProfile $catalogProfile
+        $catalogPreflight = Test-WinMintBuildPrerequisite -Config $catalogConfig -RunMode DryRun
+        if (-not $catalogPreflight.Passed) {
+            Add-SmokeFailure "Expected SurfaceCatalog preflight to pass for Surface Laptop 7 ARM64, got: $($catalogPreflight.Failures -join '; ')"
+        }
+        $catalogDryRun = Resolve-Win11IsoCustomDriverSource `
+            -Path 'surface-laptop-7' `
+            -WorkDir (Join-Path $tempRoot 'surface-catalog-dryrun') `
+            -DriverSource SurfaceCatalog `
+            -TargetArchitecture 'arm64' `
+            -WindowsBuild 26100 `
+            -DryRun
+        if ($null -eq $catalogDryRun -or [string]$catalogDryRun.Strategy -ne 'SurfaceCatalog' -or [string]$catalogDryRun.DeviceMatch.id -ne 'surface-laptop-7') {
+            Add-SmokeFailure 'Expected SurfaceCatalog dry-run resolver to attach the exact catalog device without downloading.'
+        }
+        try {
+            $null = Resolve-Win11IsoCustomDriverSource `
+                -Path 'surface-laptop-7' `
+                -WorkDir (Join-Path $tempRoot 'surface-catalog-bad-arch') `
+                -DriverSource SurfaceCatalog `
+                -TargetArchitecture 'amd64' `
+                -WindowsBuild 26100 `
+                -DryRun
+            Add-SmokeFailure 'Expected SurfaceCatalog to reject architecture mismatches.'
+        }
+        catch {
+            if ($_.Exception.Message -notmatch 'targets arm64') {
+                Add-SmokeFailure "Expected SurfaceCatalog architecture mismatch error, got: $($_.Exception.Message)"
+            }
+        }
+        try {
+            $null = Resolve-Win11IsoCustomDriverSource `
+                -Path 'surface-laptop-8-snapdragon' `
+                -WorkDir (Join-Path $tempRoot 'surface-catalog-bad-build') `
+                -DriverSource SurfaceCatalog `
+                -TargetArchitecture 'arm64' `
+                -WindowsBuild 26100 `
+                -DryRun
+            Add-SmokeFailure 'Expected SurfaceCatalog to reject source images below the device package minimum build.'
+        }
+        catch {
+            if ($_.Exception.Message -notmatch 'requires Windows build 28000') {
+                Add-SmokeFailure "Expected SurfaceCatalog minimum-build error, got: $($_.Exception.Message)"
+            }
+        }
+        $surfacePageFixture = @'
+<html>
+<h1>Surface Laptop 7th Edition</h1>
+<a href="https://download.microsoft.com/download/b7ca2c3f-d320-4795-be0f-529a0117abb4/SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi">Download</a>
+<h3>Date Published:</h3><p>5/1/2026</p>
+</html>
+'@
+        $catalogDevice = Resolve-WinMintSurfaceCatalogDevice -DeviceId 'surface-laptop-7'
+        $asset = Resolve-WinMintSurfaceDriverDownloadAsset -Device $catalogDevice -PageContent $surfacePageFixture
+        if ([string]$asset.fileName -ne 'SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi' -or [string]$asset.deviceId -ne 'surface-laptop-7') {
+            Add-SmokeFailure 'Expected Surface Download Center fixture parsing to resolve the exact Surface Laptop 7 MSI asset.'
+        }
+        try {
+            $badSurfacePageFixture = '<a href="https://download.surfacetip.com/SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi">Download</a>'
+            $null = Resolve-WinMintSurfaceDriverDownloadAsset -Device $catalogDevice -PageContent $badSurfacePageFixture
+            Add-SmokeFailure 'Expected Surface Download Center parser to reject third-party driver URLs.'
+        }
+        catch {
+            if ($_.Exception.Message -notmatch 'No direct Microsoft MSI download URL|non-Microsoft') {
+                Add-SmokeFailure "Expected Microsoft-only Surface download URL error, got: $($_.Exception.Message)"
+            }
+        }
+        $nonSurfaceOemIdentities = @(
+            [pscustomobject]@{
+                manufacturer = 'Dell Inc.'
+                model = 'Alienware Aurora R16'
+                productName = 'Alienware Aurora R16'
+                baseBoardProduct = '0F5N4V'
+            }
+            [pscustomobject]@{
+                manufacturer = 'Dell Inc.'
+                model = 'XPS 13 9345'
+                productName = 'XPS 13 9345'
+                baseBoardProduct = '0XPS9345'
+            }
+            [pscustomobject]@{
+                manufacturer = 'HP'
+                model = 'HP Spectre x360 14'
+                productName = 'HP Spectre x360 14-eu0000'
+                baseBoardProduct = '8C32'
+            }
+            [pscustomobject]@{
+                manufacturer = 'LENOVO'
+                model = '21KC ThinkPad X1 Carbon Gen 12'
+                productName = 'ThinkPad X1 Carbon Gen 12'
+                baseBoardProduct = '21KC'
+            }
+            [pscustomobject]@{
+                manufacturer = 'ASUSTeK COMPUTER INC.'
+                model = 'ROG Zephyrus G14 GA403'
+                productName = 'ROG Zephyrus G14 GA403'
+                baseBoardProduct = 'GA403'
+            }
+            [pscustomobject]@{
+                manufacturer = 'Acer'
+                model = 'Swift 14 AI'
+                productName = 'Swift 14 AI SF14-11'
+                baseBoardProduct = 'Swift14'
+            }
+            [pscustomobject]@{
+                manufacturer = 'Micro-Star International Co., Ltd.'
+                model = 'MSI Stealth A16 AI+'
+                productName = 'Stealth A16 AI+'
+                baseBoardProduct = 'MS-15M1'
+            }
+        )
+        foreach ($oemIdentity in $nonSurfaceOemIdentities) {
+            $oemMatch = Resolve-WinMintSurfaceDriverDeviceForInput `
+                -MsiName '' `
+                -TargetDevice ThisPC `
+                -HostIdentity $oemIdentity
+            if ($null -ne $oemMatch) {
+                Add-SmokeFailure "Expected non-Surface OEM '$($oemIdentity.manufacturer) $($oemIdentity.model)' not to match the Surface driver catalog."
+            }
+        }
+        foreach ($nonSurfaceMsiName in @(
+            'Dell-Alienware-Aurora-R16-Win11-x64-Driver-Pack.msi',
+            'HP-Spectre-x360-14-Win11-Driver-Pack.msi',
+            'Lenovo-ThinkPad-X1-Carbon-Gen-12-SCCM-Package.msi',
+            'ASUS-ROG-Zephyrus-G14-GA403-Driver-Package.msi'
+        )) {
+            $oemMsiMatch = Resolve-WinMintSurfaceDriverDeviceForInput `
+                -MsiName $nonSurfaceMsiName `
+                -TargetDevice DifferentPC
+            if ($null -ne $oemMsiMatch) {
+                Add-SmokeFailure "Expected non-Surface OEM MSI '$nonSurfaceMsiName' not to match the Surface driver catalog."
+            }
+        }
+        $surfaceMsi = Join-Path $root 'tests\fixtures\drivers\SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi'
+        if (Test-Path -LiteralPath $surfaceMsi -PathType Leaf) {
+            if (-not (Test-WinMintSurfaceDriverPackageSignature -Path $surfaceMsi)) {
+                Add-SmokeFailure 'Expected local Surface Laptop 7 MSI fixture to have a valid Microsoft Authenticode signature.'
+            }
+            $surfaceProfile = New-WinMintHeadlessProfileFromFlags `
+                -SourceIso '' `
+                -Architecture 'arm64' `
+                -DriverSource SurfaceMsiSafe `
+                -DriverPath $surfaceMsi `
+                -DryRun
+            $surfaceConfig = New-WinMintBuildConfig -BuildProfile $surfaceProfile
+            $surfacePreflight = Test-WinMintBuildPrerequisite -Config $surfaceConfig -RunMode DryRun
+            if (-not $surfacePreflight.Passed) {
+                Add-SmokeFailure "Expected SurfaceMsiSafe fixture to pass dry-run preflight, got: $($surfacePreflight.Failures -join '; ')"
+            }
+            $surfaceWork = Join-Path $tempRoot 'surface-safe'
+            $null = New-Item -ItemType Directory -Path $surfaceWork -Force
+            $preparedSurface = Resolve-Win11IsoCustomDriverSource -Path $surfaceMsi -WorkDir $surfaceWork -DriverSource SurfaceMsiSafe
+            if (-not $preparedSurface.Ready -or [string]$preparedSurface.Strategy -ne 'SurfaceMsiSafe') {
+                Add-SmokeFailure 'Expected SurfaceMsiSafe resolver to return a ready classified driver source.'
+            }
+            if ([int]$preparedSurface.Inventory.includedOfflineCount -lt 1) {
+                Add-SmokeFailure 'Expected SurfaceMsiSafe resolver to include at least one offline-safe INF.'
+            }
+            if (@($preparedSurface.Inventory.includedClasses) -contains 'firmware') {
+                Add-SmokeFailure 'SurfaceMsiSafe must not include firmware-class drivers in the offline subset.'
+            }
+            if (@($preparedSurface.Inventory.excludedClasses) -notcontains 'firmware') {
+                Add-SmokeFailure 'Expected SurfaceMsiSafe inventory to report firmware-class drivers as excluded/deferred.'
+            }
+            if ($null -eq $preparedSurface.DeviceMatch -or [string]$preparedSurface.DeviceMatch.id -ne 'surface-laptop-7') {
+                Add-SmokeFailure 'Expected SurfaceMsiSafe resolver to attach the matched Surface Laptop 7 device metadata.'
             }
         }
         if (Test-Win11IsoDriverPath -Path $bad) {

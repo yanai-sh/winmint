@@ -24,22 +24,22 @@ function Invoke-WinMintRegAdd {
         [AllowEmptyString()][string]$Value
     )
 
-    $args = [System.Collections.Generic.List[string]]::new()
-    $args.Add('add') | Out-Null
-    $args.Add($Path) | Out-Null
+    $regArgs = [System.Collections.Generic.List[string]]::new()
+    $regArgs.Add('add') | Out-Null
+    $regArgs.Add($Path) | Out-Null
     if ([string]::IsNullOrEmpty($Name)) {
-        $args.Add('/ve') | Out-Null
+        $regArgs.Add('/ve') | Out-Null
     }
     else {
-        $args.Add('/v') | Out-Null
-        $args.Add($Name) | Out-Null
+        $regArgs.Add('/v') | Out-Null
+        $regArgs.Add($Name) | Out-Null
     }
-    $args.Add('/t') | Out-Null
-    $args.Add($Type) | Out-Null
-    $args.Add('/d') | Out-Null
-    $args.Add($Value) | Out-Null
-    $args.Add('/f') | Out-Null
-    $null = & reg.exe @args
+    $regArgs.Add('/t') | Out-Null
+    $regArgs.Add($Type) | Out-Null
+    $regArgs.Add('/d') | Out-Null
+    $regArgs.Add($Value) | Out-Null
+    $regArgs.Add('/f') | Out-Null
+    $null = & reg.exe @regArgs
 }
 
 function Assert-WinMintRegistryDeleteTarget {

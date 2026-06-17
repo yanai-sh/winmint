@@ -352,8 +352,24 @@ function Initialize-WinMintBuildManifest {
         drivers             = [ordered]@{
             source        = [string]$Config.Drivers.Source
             path          = [string]$Config.Drivers.Path
+            strategy      = [string]$Config.Drivers.Source
             injectedCount = 0
             infNames      = @()
+            includedClasses = @()
+            excludedClasses = @()
+            excludedCount = 0
+            inventoryPath = ''
+            warnings = @()
+            surface = [ordered]@{
+                deviceId = ''
+                deviceName = ''
+                architecture = ''
+                downloadCenterId = ''
+                detailsUrl = ''
+                packageFileName = ''
+                packageUrl = ''
+                sha256 = ''
+            }
         }
         payloads            = [System.Collections.Generic.List[object]]::new()
         firstLogon          = [ordered]@{
@@ -449,12 +465,52 @@ function Set-WinMintManifestServicedWimCacheFact {
 
 function Set-WinMintManifestDriverFacts {
     param(
-        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$InfNames
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$InfNames,
+        [AllowEmptyCollection()][object[]]$Inventories = @(),
+        [string]$InventoryPath = ''
     )
 
     if ($null -eq $script:WinMintBuildManifest) { return }
     $script:WinMintBuildManifest.drivers.injectedCount = @($InfNames).Count
     $script:WinMintBuildManifest.drivers.infNames = @($InfNames | Sort-Object -Unique)
+    $includedClasses = [System.Collections.Generic.List[string]]::new()
+    $excludedClasses = [System.Collections.Generic.List[string]]::new()
+    $warnings = [System.Collections.Generic.List[string]]::new()
+    $excludedCount = 0
+    foreach ($inventory in @($Inventories)) {
+        if ($null -eq $inventory) { continue }
+        foreach ($class in @($inventory.includedClasses)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$class)) { $includedClasses.Add([string]$class) | Out-Null }
+        }
+        foreach ($class in @($inventory.excludedClasses)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$class)) { $excludedClasses.Add([string]$class) | Out-Null }
+        }
+        foreach ($warning in @($inventory.warnings)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$warning)) { $warnings.Add([string]$warning) | Out-Null }
+        }
+        if ($inventory.PSObject.Properties['surfaceDevice'] -and $null -ne $inventory.surfaceDevice) {
+            $device = $inventory.surfaceDevice
+            $script:WinMintBuildManifest.drivers.surface.deviceId = [string]$device.id
+            $script:WinMintBuildManifest.drivers.surface.deviceName = [string]$device.name
+            $script:WinMintBuildManifest.drivers.surface.architecture = [string]$device.architecture
+            $script:WinMintBuildManifest.drivers.surface.downloadCenterId = [string]$device.downloadCenterId
+            $script:WinMintBuildManifest.drivers.surface.detailsUrl = [string]$device.detailsUrl
+        }
+        if ($inventory.PSObject.Properties['surfacePackage'] -and $null -ne $inventory.surfacePackage) {
+            $package = $inventory.surfacePackage
+            $script:WinMintBuildManifest.drivers.surface.packageFileName = [string]$package.fileName
+            $script:WinMintBuildManifest.drivers.surface.packageUrl = [string]$package.downloadUrl
+            $script:WinMintBuildManifest.drivers.surface.sha256 = [string]$package.sha256
+        }
+        $excludedCount += [int]$inventory.excludedCount
+    }
+    $script:WinMintBuildManifest.drivers.includedClasses = @($includedClasses | Sort-Object -Unique)
+    $script:WinMintBuildManifest.drivers.excludedClasses = @($excludedClasses | Sort-Object -Unique)
+    $script:WinMintBuildManifest.drivers.excludedCount = [int]$excludedCount
+    $script:WinMintBuildManifest.drivers.warnings = @($warnings | Sort-Object -Unique)
+    if (-not [string]::IsNullOrWhiteSpace($InventoryPath)) {
+        $script:WinMintBuildManifest.drivers.inventoryPath = $InventoryPath
+    }
 }
 
 function Set-WinMintManifestLanguagePackageRemovalFacts {

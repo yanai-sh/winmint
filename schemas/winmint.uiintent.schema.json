@@ -42,7 +42,7 @@
     "TargetDevice": { "type": "string", "enum": ["ThisPC", "DifferentPC"] },
     "FormFactor": { "type": "string", "enum": ["Auto", "Laptop", "Desktop"] },
     "Edition": { "type": "string", "enum": ["Host", "Home", "Pro", "Enterprise", "Education", "SingleLanguage", "All"] },
-    "DriverSource": { "type": "string", "enum": ["None", "Host", "Custom"] },
+    "DriverSource": { "type": "string", "enum": ["None", "Host", "Custom", "HostExport", "CustomInfFolder", "OemMsi", "SurfaceMsiSafe", "SurfaceCatalog"] },
     "DriverPath": { "type": "string" },
     "InstallWindhawk": { "type": "boolean" },
     "InstallYasb": { "type": "boolean" },

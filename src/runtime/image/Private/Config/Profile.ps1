@@ -625,8 +625,8 @@ function New-WinMintBuildProfile {
         }
         drivers = [ordered]@{
             source = $driverSource
-            path = if ($driverSource -eq 'Custom') { $driverPath } else { '' }
-            exportHostDrivers = ($driverSource -eq 'Host')
+            path = if ((Test-WinMintDriverSourceUsesPath -Source $driverSource) -or (Test-WinMintDriverSourceUsesSurfaceCatalog -Source $driverSource)) { $driverPath } else { '' }
+            exportHostDrivers = (Test-WinMintDriverSourceUsesHostExport -Source $driverSource)
         }
         desktop = [ordered]@{
             cursorPack = 'Windows11Modern'
@@ -823,12 +823,18 @@ function Test-WinMintBuildProfile {
     & $bool $drivers 'exportHostDrivers' 'profile.drivers.exportHostDrivers'
     $exportHostDrivers = Get-WinMintProfileSetting $drivers 'exportHostDrivers' $null
     if ($exportHostDrivers -is [bool]) {
-        if ($driverSource -eq 'Host' -and -not $exportHostDrivers) {
-            & $add 'profile.drivers.exportHostDrivers must be true when profile.drivers.source is Host.'
+        if ((Test-WinMintDriverSourceUsesHostExport -Source $driverSource) -and -not $exportHostDrivers) {
+            & $add 'profile.drivers.exportHostDrivers must be true when profile.drivers.source is Host or HostExport.'
         }
-        elseif ($driverSource -ne 'Host' -and $exportHostDrivers) {
-            & $add 'profile.drivers.exportHostDrivers must be false unless profile.drivers.source is Host.'
+        elseif (-not (Test-WinMintDriverSourceUsesHostExport -Source $driverSource) -and $exportHostDrivers) {
+            & $add 'profile.drivers.exportHostDrivers must be false unless profile.drivers.source is Host or HostExport.'
         }
+    }
+    if ((Test-WinMintDriverSourceUsesPath -Source $driverSource) -and [string]::IsNullOrWhiteSpace([string](Get-WinMintProfileSetting $drivers 'path' ''))) {
+        & $add "profile.drivers.path is required when profile.drivers.source is $driverSource."
+    }
+    if ((Test-WinMintDriverSourceUsesSurfaceCatalog -Source $driverSource) -and [string]::IsNullOrWhiteSpace([string](Get-WinMintProfileSetting $drivers 'path' ''))) {
+        & $add 'profile.drivers.path is required when profile.drivers.source is SurfaceCatalog and must contain a Surface catalog device id.'
     }
 
     & $require $desktop 'profile.desktop' @('cursorPack', 'layers')

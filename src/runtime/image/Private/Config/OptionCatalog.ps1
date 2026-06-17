@@ -10,7 +10,7 @@ function Get-WinMintOptionCatalog {
         PowerPlan = @('Balanced', 'EnergySaver', 'HighPerformance', 'UltimatePerformance')
         Edition = @('Host', 'Home', 'Pro', 'Enterprise', 'Education', 'SingleLanguage', 'All')
         EditionMode = @('TargetLicense', 'Fixed')
-        DriverSource = @('None', 'Host', 'Custom')
+        DriverSource = @('None', 'Host', 'Custom', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')
         DiskMode = @('Manual', 'AutoWipeDisk0', 'DualBootReserved')
         DiskLayoutPreset = @('', 'WindowsHeavy', 'Balanced', 'EvenSplit', 'LinuxHeavy')
         DesktopCursorPack = @('Windows11Modern')
@@ -24,6 +24,30 @@ function Get-WinMintOptionCatalog {
         UpdateReleaseCadence = @('BRelease')
         AiPolicy = @('Core', 'ServiceableFull', 'AggressiveExperimental')
     }
+}
+
+function Test-WinMintDriverSourceUsesHostExport {
+    param([string]$Source)
+
+    $Source -in @('Host', 'HostExport')
+}
+
+function Test-WinMintDriverSourceUsesPath {
+    param([string]$Source)
+
+    $Source -in @('Custom', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe')
+}
+
+function Test-WinMintDriverSourceRequiresMsi {
+    param([string]$Source)
+
+    $Source -in @('OemMsi', 'SurfaceMsiSafe')
+}
+
+function Test-WinMintDriverSourceUsesSurfaceCatalog {
+    param([string]$Source)
+
+    $Source -eq 'SurfaceCatalog'
 }
 
 function Get-WinMintOptionValues {

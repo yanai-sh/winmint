@@ -48,7 +48,7 @@ function New-WinMintBuildConfig {
     $selectedBrowsers = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $development 'browsers' @()))
     $driverSource = [string](Get-WinMintProfileSetting $drivers 'source' 'None')
     $driverPath = [string](Get-WinMintProfileSetting $drivers 'path' '')
-    $exportHostDrivers = ($driverSource -eq 'Host')
+    $exportHostDrivers = (Test-WinMintDriverSourceUsesHostExport -Source $driverSource)
     $wsl2Distros = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $wsl 'distros' @()))
     $wsl2Distro = if ($wsl2Distros.Count -eq 0) { 'None' } elseif ($wsl2Distros.Count -eq 1) { $wsl2Distros[0] } else { $wsl2Distros -join ',' }
     $layers = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $desktop 'layers' @()))
@@ -568,7 +568,7 @@ function Test-WinMintBuildPrerequisite {
                 -Message $message
         }
     }
-    if ($Config.Drivers.Source -eq 'Host' -and $Config.Architecture) {
+    if ((Test-WinMintDriverSourceUsesHostExport -Source ([string]$Config.Drivers.Source)) -and $Config.Architecture) {
         $hostArch = Get-BuildHostProcessorArchitecture
         if ($hostArch -ne $Config.Architecture) {
             $message = @(
@@ -623,17 +623,44 @@ function Test-WinMintBuildPrerequisite {
             }
         }
     }
-    if ($Config.Drivers.Source -eq 'Custom') {
+    if (Test-WinMintDriverSourceUsesSurfaceCatalog -Source ([string]$Config.Drivers.Source)) {
+        $deviceId = [string]$Config.Drivers.Path
+        if ([string]::IsNullOrWhiteSpace($deviceId)) {
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.surfaceCatalog.idMissing' -Message 'SurfaceCatalog driver source requires profile.drivers.path to contain a Surface catalog device id.'
+        }
+        else {
+            try {
+                $surfaceDevice = Resolve-WinMintSurfaceCatalogDevice -DeviceId $deviceId
+                Assert-WinMintSurfaceCatalogDeviceCompatible -Device $surfaceDevice -TargetArchitecture ([string]$Config.Architecture)
+            }
+            catch {
+                Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.surfaceCatalog.invalid' -Message $_.Exception.Message
+            }
+        }
+    }
+    elseif (Test-WinMintDriverSourceUsesPath -Source ([string]$Config.Drivers.Source)) {
         $driverPath = [string]$Config.Drivers.Path
         if ([string]::IsNullOrWhiteSpace($driverPath)) {
-            Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.pathMissing' -Message 'Custom driver source was selected, but no driver path was provided.'
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.pathMissing' -Message "Driver source '$($Config.Drivers.Source)' was selected, but no driver path was provided."
         }
         elseif (-not (Test-Path -LiteralPath $driverPath)) {
             Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.pathNotFound' -Message "Custom driver path not found: $driverPath"
         }
         else {
             $item = Get-Item -LiteralPath $driverPath
-            if (-not $item.PSIsContainer -and $item.Extension -notin '.inf', '.msi', '.zip') {
+            if ((Test-WinMintDriverSourceRequiresMsi -Source ([string]$Config.Drivers.Source)) -and ($item.PSIsContainer -or $item.Extension -ine '.msi')) {
+                Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.msiRequired' -Message "Driver source '$($Config.Drivers.Source)' requires an OEM .msi file: $driverPath"
+            }
+            elseif ([string]$Config.Drivers.Source -eq 'CustomInfFolder' -and -not ($item.PSIsContainer -or $item.Extension -ieq '.inf')) {
+                Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.infFolderRequired' -Message "Driver source 'CustomInfFolder' requires a .inf file or folder containing INF drivers: $driverPath"
+            }
+            elseif ([string]$Config.Drivers.Source -eq 'CustomInfFolder' -and $item.PSIsContainer) {
+                $infCount = (Get-ChildItem -LiteralPath $item.FullName -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue | Measure-Object).Count
+                if ($infCount -lt 1) {
+                    Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.infFolderEmpty' -Message "Driver source 'CustomInfFolder' requires a folder containing .inf drivers: $driverPath"
+                }
+            }
+            elseif (-not $item.PSIsContainer -and $item.Extension -notin '.inf', '.msi', '.zip') {
                 Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.pathUnsupported' -Message "Custom driver path must be a .inf file, .msi file, .zip file, or folder: $driverPath"
             }
         }

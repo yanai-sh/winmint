@@ -266,7 +266,7 @@ function Resolve-WinMintHeadlessDriverIntent {
     param(
         [ValidateSet('ThisPC', 'DifferentPC')][string]$TargetDevice = 'DifferentPC',
         [string]$DriverPack = '',
-        [ValidateSet('None', 'Host', 'Custom')][string]$DriverSource = 'None',
+        [ValidateSet('None', 'Host', 'Custom', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')][string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [switch]$ExportHostDrivers
     )
@@ -279,14 +279,22 @@ function Resolve-WinMintHeadlessDriverIntent {
         if ($item.Extension -notin '.msi', '.zip') {
             throw 'DriverPack must be an OEM .msi or .zip file.'
         }
-        return [pscustomobject]@{ Source = 'Custom'; Path = $item.FullName; ExportHostDrivers = $false }
+        $source = if ($item.Extension -ieq '.msi') { 'OemMsi' } else { 'Custom' }
+        return [pscustomobject]@{ Source = $source; Path = $item.FullName; ExportHostDrivers = $false }
     }
     if ($ExportHostDrivers) { return [pscustomobject]@{ Source = 'Host'; Path = ''; ExportHostDrivers = $true } }
-    if ($DriverSource -eq 'Custom') {
-        if ([string]::IsNullOrWhiteSpace($DriverPath)) { throw 'Custom driver source requires -DriverPath.' }
-        return [pscustomobject]@{ Source = 'Custom'; Path = $DriverPath; ExportHostDrivers = $false }
+    if (Test-WinMintDriverSourceUsesSurfaceCatalog -Source $DriverSource) {
+        if ([string]::IsNullOrWhiteSpace($DriverPath)) { throw 'SurfaceCatalog driver source requires -DriverPath with a Surface catalog device id.' }
+        return [pscustomobject]@{ Source = $DriverSource; Path = $DriverPath; ExportHostDrivers = $false }
     }
-    if ($DriverSource -eq 'Host' -or $TargetDevice -eq 'ThisPC') {
+    if (Test-WinMintDriverSourceUsesPath -Source $DriverSource) {
+        if ([string]::IsNullOrWhiteSpace($DriverPath)) { throw 'Custom driver source requires -DriverPath.' }
+        if ((Test-WinMintDriverSourceRequiresMsi -Source $DriverSource) -and -not ($DriverPath -match '(?i)\.msi$')) {
+            throw "$DriverSource requires an OEM .msi file."
+        }
+        return [pscustomobject]@{ Source = $DriverSource; Path = $DriverPath; ExportHostDrivers = $false }
+    }
+    if ((Test-WinMintDriverSourceUsesHostExport -Source $DriverSource) -or $TargetDevice -eq 'ThisPC') {
         return [pscustomobject]@{ Source = 'Host'; Path = ''; ExportHostDrivers = $true }
     }
     [pscustomobject]@{ Source = 'None'; Path = ''; ExportHostDrivers = $false }
@@ -306,7 +314,7 @@ function New-WinMintHeadlessProfileFromFlags {
         [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
         [string]$ProductKey = '',
-        [ValidateSet('None', 'Host', 'Custom')][string]$DriverSource = 'None',
+        [ValidateSet('None', 'Host', 'Custom', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')][string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [ValidateSet('ThisPC', 'DifferentPC')][string]$TargetDevice = 'DifferentPC',
         [ValidateSet('Balanced', 'EnergySaver', 'HighPerformance', 'UltimatePerformance')][string]$PowerPlan = 'Balanced',

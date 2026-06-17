@@ -29,7 +29,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 build .\BuildPro
 ```
 
 ```powershell
-# Remote launcher (downloads, verifies, and launches the latest release)
+# Remote launcher (downloads, verifies, launches, then cleans up the release)
 irm https://winmint.yanai.sh | iex
 ```
 
@@ -37,7 +37,11 @@ irm https://winmint.yanai.sh | iex
 |-------------|---------|
 | `WinMint-GUI.ps1` | GPUI launcher |
 | `WinMint-CLI.ps1` | Headless and profile-driven builds |
-| `winmint.ps1` | Download, verify, and launch the latest release |
+| `winmint.ps1` | Download, SHA256-verify, temp-extract, launch, and clean up the latest release |
+
+The remote launcher is intentionally ephemeral. A normal `irm | iex` launch does
+not install WinMint into `%LOCALAPPDATA%` or leave a release cache behind; the
+intended durable output is the ISO and artifacts you explicitly choose.
 
 ## What it builds
 
@@ -94,6 +98,18 @@ consumes the profile.
 | Power plan | Balanced | `-PowerPlan EnergySaver`, `HighPerformance`, or `UltimatePerformance`; other schemes are preserved |
 | Dev tweaks, OpenSSH, WSL2, Scoop, MinGit, Starship with `nerd-font-symbols`, fonts/cursors | Always on | baseline |
 | Offline image updates | Disabled by default | `-UpdateImage Stable25H2` opts in; `-UpdatePayloadRoot <dir>` overrides the cache root |
+
+Surface driver handling is intentionally conservative. For exact Surface targets,
+prefer `-DriverSource SurfaceCatalog -DriverPath <surface-device-id>` so WinMint
+resolves the official Microsoft Download Center package, downloads it into the
+temp build workspace, verifies Microsoft ownership/signature evidence, extracts
+the MSI, and injects only the safe offline subset. Manual official Surface MSI
+input remains available with `-DriverSource SurfaceMsiSafe -DriverPath <Surface.msi>`.
+Both paths require the `SurfaceUpdate` payload, exclude firmware-class drivers
+from offline injection, and write driver include/defer decisions to
+`WinMint-DriverInventory.json`. Generic `Custom` driver injection remains
+available for non-Surface packs, but it is not the recommended path for Surface
+recovery-critical installs.
 
 Raycast is installed through the Microsoft Store source when selected. Its
 Everything backend stays local and quiet: amd64/x86-64 builds use the winget
@@ -177,6 +193,9 @@ page instead of stopping for personal/work setup.
 ```powershell
 # Validate repository syntax and contracts
 pwsh -NoProfile -File tools\validation\Validate.ps1
+
+# Validate a packaged release launch path after building apps\gui\bin\WinMint-GUI.exe
+pwsh -NoProfile -File tools\validation\Validate.ps1 -RunReleaseSmoke
 
 # Build from a saved profile
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\WinMint-CLI.ps1 build .\BuildProfile.json

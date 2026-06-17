@@ -215,11 +215,11 @@ function Get-WinMintServicedWimFingerprint {
     try {
         $src = [string]$BuildConfig.Drivers.Source
         $path = [string]$BuildConfig.Drivers.Path
-        if ($src -eq 'Host') {
+        if (Test-WinMintDriverSourceUsesHostExport -Source $src) {
             $driversFp = "Host|$((Get-WinMintHostDriverExportFingerprint))"
         }
-        elseif ($src -eq 'Custom' -and -not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
-            $driversFp = "Custom|$(Get-WinMintDriverPayloadFingerprint -Path $path)"
+        elseif ((Test-WinMintDriverSourceUsesPath -Source $src) -and -not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
+            $driversFp = "$src|$(Get-WinMintDriverPayloadFingerprint -Path $path)"
         }
         else {
             $driversFp = "$src|"

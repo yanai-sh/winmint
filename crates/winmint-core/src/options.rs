@@ -42,8 +42,21 @@ pub const EDITION_OPTIONS: &[&str] = &[
 pub const DRIVER_SOURCE_NONE: &str = "None";
 pub const DRIVER_SOURCE_HOST: &str = "Host";
 pub const DRIVER_SOURCE_CUSTOM: &str = "Custom";
-pub const DRIVER_SOURCE_OPTIONS: &[&str] =
-    &[DRIVER_SOURCE_NONE, DRIVER_SOURCE_HOST, DRIVER_SOURCE_CUSTOM];
+pub const DRIVER_SOURCE_HOST_EXPORT: &str = "HostExport";
+pub const DRIVER_SOURCE_CUSTOM_INF_FOLDER: &str = "CustomInfFolder";
+pub const DRIVER_SOURCE_OEM_MSI: &str = "OemMsi";
+pub const DRIVER_SOURCE_SURFACE_MSI_SAFE: &str = "SurfaceMsiSafe";
+pub const DRIVER_SOURCE_SURFACE_CATALOG: &str = "SurfaceCatalog";
+pub const DRIVER_SOURCE_OPTIONS: &[&str] = &[
+    DRIVER_SOURCE_NONE,
+    DRIVER_SOURCE_HOST,
+    DRIVER_SOURCE_CUSTOM,
+    DRIVER_SOURCE_HOST_EXPORT,
+    DRIVER_SOURCE_CUSTOM_INF_FOLDER,
+    DRIVER_SOURCE_OEM_MSI,
+    DRIVER_SOURCE_SURFACE_MSI_SAFE,
+    DRIVER_SOURCE_SURFACE_CATALOG,
+];
 
 pub const EDITOR_CURSOR: &str = "cursor";
 pub const EDITOR_VSCODE: &str = "vscode";

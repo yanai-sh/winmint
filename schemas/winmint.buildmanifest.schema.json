@@ -583,6 +583,7 @@
       "properties": {
         "source": { "type": "string" },
         "path": { "type": "string" },
+        "strategy": { "type": "string" },
         "injectedCount": {
           "type": "integer",
           "minimum": 0
@@ -590,6 +591,40 @@
         "infNames": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "includedClasses": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "excludedClasses": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "excludedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inventoryPath": {
+          "type": "string"
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "surface": {
+          "type": "object",
+          "required": ["deviceId", "deviceName", "architecture", "downloadCenterId", "detailsUrl", "packageFileName", "packageUrl", "sha256"],
+          "additionalProperties": false,
+          "properties": {
+            "deviceId": { "type": "string" },
+            "deviceName": { "type": "string" },
+            "architecture": { "type": "string" },
+            "downloadCenterId": { "type": "string" },
+            "detailsUrl": { "type": "string" },
+            "packageFileName": { "type": "string" },
+            "packageUrl": { "type": "string" },
+            "sha256": { "type": "string" }
+          }
         }
       }
     },

@@ -22,6 +22,8 @@ The project now has:
 - a headless engine that owns profile normalization, install-plan derivation, ISO/WIM servicing, setup payload staging, FirstLogon orchestration, reporting, and audit generation
 - a GPUI frontend that can create intent, generate profiles, invoke builds, and render backend-generated review data
 - a stronger contract and validation spine around setup payloads, FirstLogon, profile invariants, bootstrap behavior, and release boundaries
+- an ephemeral default bootstrap path: `irm | iex` downloads and verifies a release in a unique temp session, launches from that session, and removes it afterward instead of installing into `%LOCALAPPDATA%\WinMint\versions`
+- bootstrap failure handling that reports the active operation, failure category, reason, recovery guidance, and retry safety instead of surfacing only raw PowerShell errors
 
 The main project risk has shifted.
 
@@ -37,7 +39,7 @@ The hard problem is less "can the backend do the work?" and more:
 These are the current top priorities for continued development.
 
 1. **Release and bootstrap hardening**
-   WinMint needs a trustworthy end-user path through `irm | iex`, release acquisition, runtime gating, and packaged GUI launch.
+   WinMint now has the core ephemeral `irm | iex` execution path and bootstrap failure/recovery envelope. The remaining near-term release work is broader clean-machine proof and public-usage readiness.
 
 2. **Live hardware acceptance**
    VM testing is necessary but not sufficient. Real ARM64 and amd64 installs still need more systematic coverage and evidence handling.
@@ -53,7 +55,7 @@ These are the current top priorities for continued development.
 
 The order above is deliberate:
 
-- **release/bootstrap comes first** because there is no credible public product path without it
+- **release/bootstrap remains first** because a clean temp launch path and failure envelope now exist, but release-readiness proof still determines public trust
 - **live hardware comes second** because WinMint is ultimately judged on real installs, not only on dry runs or VMs
 - **FirstLogon and desktop maturity comes third** because that is where the product either feels intentional or falls apart after installation
 - **Hyper-V architecture comes fourth** because it improves repeatability and regression speed, but it is still a support system for the product rather than the product itself
@@ -63,39 +65,9 @@ The order is still not rigid. If evidence from hardware installs or release test
 
 ## Track A — Release and Bootstrap Hardening
 
-### Phase A1 — Clean-Machine Launch Path
+Phase A1, **Ephemeral Bootstrap and Clean Host Footprint**, is complete and no longer active roadmap work. The active code path is `winmint.ps1`; the regression guard is `tools/release/Test-WinMintReleaseLaunch.ps1`, which verifies SHA256 enforcement, packaged runtime shape, temp-session execution, cleanup, and the absence of a default `%LOCALAPPDATA%\WinMint\versions` release cache. Durable release caching remains an explicit opt-in through `-InstallRoot` or `-CacheRelease`.
 
-Goal: make the normal user entry path reliable on a machine that does not already resemble the maintainer's workstation.
-
-Work:
-
-- verify the release bundle contents against the actual packaged runtime
-- verify `winmint.ps1` acquisition, hash validation, and launch behavior on clean machines
-- confirm the packaged GUI path works without repo-local assumptions
-- ensure bootstrap/runtime acquisition works when `pwsh` is missing or too old
-- remove any remaining hidden dependency on source-tree state
-
-Exit criteria:
-
-- the release path works from a clean Windows machine
-- the bootstrapper launches the intended packaged product, not a dev fallback
-- runtime re-entry is predictable and explainable
-
-### Phase A2 — Failure and Recovery UX
-
-Goal: make bootstrap and release failures understandable instead of mysterious.
-
-Work:
-
-- improve messaging for download failure, hash mismatch, elevation failure, runtime acquisition failure, and relaunch failure
-- make restart/re-entry behavior explicit
-- ensure the user can tell whether the failure is network, permission, runtime, or product-specific
-- define safe retry behavior
-
-Exit criteria:
-
-- bootstrap failures are diagnosable without reading source
-- recovery paths are explicit and do not feel accidental
+Phase A2, **Failure and Recovery UX**, is complete and no longer active roadmap work. The bootstrapper now wraps failures with operation, failure kind, reason, recovery guidance, and retry safety. Release smoke covers the bad-checksum integrity path and verifies cleanup still happens after failure.
 
 ### Phase A3 — Public Usage Readiness
 

@@ -407,7 +407,7 @@ function Test-OfflineStagingReadiness {
         [Parameter(Mandatory)][string]$IsoContentsRoot,
         [string]$ExpectedArchHint,
         [Parameter(Mandatory)][string]$ScriptDirForChecks,
-        [ValidateSet('None', 'Custom', 'Host')][string]$DriverSource = 'None',
+        [ValidateSet('None', 'Custom', 'Host', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')][string]$DriverSource = 'None',
         [string]$CustomDriverPath,
         [bool]$ExportHostDrivers
     )
@@ -461,17 +461,29 @@ function Test-OfflineStagingReadiness {
     $sourcesReported = 0
 
     # 1. Custom path (.inf, .msi, or folder containing either) — primary source when DriverSource=Custom.
-    if ($DriverSource -eq 'Custom') {
+    if (Test-WinMintDriverSourceUsesSurfaceCatalog -Source $DriverSource) {
+        try {
+            $surfaceDevice = Resolve-WinMintSurfaceCatalogDevice -DeviceId $CustomDriverPath
+            LogOK "Surface catalog driver package: $($surfaceDevice.name) ($($surfaceDevice.architecture)); downloaded during full build."
+        }
+        catch {
+            LogWarn $_.Exception.Message
+        }
+    }
+    elseif (Test-WinMintDriverSourceUsesPath -Source $DriverSource) {
         $sourcesReported++
         if ([string]::IsNullOrWhiteSpace($CustomDriverPath)) {
-            LogWarn 'Custom drivers selected but no path is set.'
+            LogWarn "Driver source '$DriverSource' selected but no path is set."
         }
         elseif (-not (Test-Path -LiteralPath $CustomDriverPath)) {
             LogWarn "Custom driver path not found: $CustomDriverPath"
         }
         else {
             $item = Get-Item -LiteralPath $CustomDriverPath -ErrorAction Stop
-            if ($item.PSIsContainer) {
+            if ((Test-WinMintDriverSourceRequiresMsi -Source $DriverSource) -and ($item.PSIsContainer -or $item.Extension -ine '.msi')) {
+                LogWarn "Driver source '$DriverSource' requires an OEM .msi file: $($item.FullName)"
+            }
+            elseif ($item.PSIsContainer) {
                 $infs = @(Get-ChildItem -LiteralPath $item.FullName -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue)
                 $msis = @(Get-ChildItem -LiteralPath $item.FullName -Recurse -Filter '*.msi' -File -ErrorAction SilentlyContinue)
                 if ($infs.Count -ge 1) {
@@ -639,9 +651,12 @@ function Invoke-DismAddDriverToImage {
     <# <summary>Offline /Add-Driver with full DISM output on failure.</summary> #>
     param(
         [ValidateNotNullOrEmpty()][string]$ImageMountPath,
-        [ValidateNotNullOrEmpty()][string]$DriverSource
+        [ValidateNotNullOrEmpty()][string]$DriverSource,
+        [switch]$ForceUnsigned
     )
-    Invoke-DismExe -Arguments @('/English', "/Image:$ImageMountPath", '/Add-Driver', "/Driver:$DriverSource", '/Recurse', '/ForceUnsigned') | Out-Null
+    $arguments = @('/English', "/Image:$ImageMountPath", '/Add-Driver', "/Driver:$DriverSource", '/Recurse')
+    if ($ForceUnsigned) { $arguments += '/ForceUnsigned' }
+    Invoke-DismExe -Arguments $arguments | Out-Null
 }
 
 function Dismount-OfflineHive {

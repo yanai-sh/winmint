@@ -1890,6 +1890,9 @@ function Assert-WinPEDriverInjectionDefaultsToSetupOnly {
     if ($stagingText -notmatch 'Setup-only') {
         Add-SmokeFailure 'Expected staging log to make setup-only WinPE driver mode visible.'
     }
+    if ($stagingText -match "@\('/English',\s*`"/Image:\$ImageMountPath`",\s*'/Add-Driver',\s*`"/Driver:\$DriverSource`",\s*'/Recurse',\s*'/ForceUnsigned'\)") {
+        Add-SmokeFailure 'Driver injection must not force unsigned drivers by default.'
+    }
 }
 
 function Assert-CopilotPlusUsesFullAiRemovalPolicy {

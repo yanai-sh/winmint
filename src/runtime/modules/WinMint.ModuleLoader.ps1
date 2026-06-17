@@ -10,8 +10,11 @@ if (-not (Get-Variable -Name WinMintModuleLoadedFiles -Scope Script -ErrorAction
 function Get-WinMintModuleRepositoryRoot {
     $current = Split-Path -Parent $PSScriptRoot
     while ($current) {
-        if ((Test-Path -LiteralPath (Join-Path $current 'AGENTS.md')) -or
-            (Test-Path -LiteralPath (Join-Path $current '.git'))) {
+        $hasSourceRootMarker = (Test-Path -LiteralPath (Join-Path $current 'AGENTS.md')) -or
+            (Test-Path -LiteralPath (Join-Path $current '.git'))
+        $hasReleaseRootMarker = (Test-Path -LiteralPath (Join-Path $current 'WinMint-CLI.ps1') -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $current 'src\runtime\modules') -PathType Container)
+        if ($hasSourceRootMarker -or $hasReleaseRootMarker) {
             return (Resolve-Path -LiteralPath $current).Path
         }
         $parent = Split-Path -Parent $current
