@@ -22,9 +22,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup PowerShell 7.6
-        uses: actions/setup-powershell@v1
+        uses: PSModule/install-powershell@v1
         with:
-          version: '7.6.2'
+          Version: '7.6.2'
 
       - name: Validate syntax and profile invariants
         shell: pwsh
