@@ -26,6 +26,16 @@ jobs:
         with:
           Version: '7.6.2'
 
+      - name: Prepare contract test fixtures
+        shell: pwsh
+        run: |
+          $isoDir = 'tests/fixtures/iso'
+          $isoPath = Join-Path $isoDir 'official-win11-25h2-english-arm64-v2.iso'
+          New-Item -ItemType Directory -Force -Path $isoDir | Out-Null
+          if (-not (Test-Path -LiteralPath $isoPath)) {
+            New-Item -ItemType File -Force -Path $isoPath | Out-Null
+          }
+
       - name: Validate syntax and profile invariants
         shell: pwsh
         run: |
