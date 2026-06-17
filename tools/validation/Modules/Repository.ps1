@@ -61,6 +61,8 @@ function Test-RepositoryRequiredDocs {
         'README.md',
         'docs\Project-Structure.md',
         'docs\Distribution.md',
+        'docs\Release-Readiness.md',
+        'docs\Hardware-Acceptance.md',
         'tests\README.md'
     )
 
@@ -159,6 +161,202 @@ function Test-RepositoryReleaseManifest {
     }
 
     Write-Host 'OK repository release manifest boundary'
+}
+
+function Test-RepositoryReleaseReadiness {
+    $relativePath = 'config\release-readiness.json'
+    $path = Join-Path $root $relativePath
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        Add-ValidationError "Release readiness contract is missing: $relativePath"
+        return
+    }
+
+    try {
+        $contract = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        Add-ValidationError "Release readiness contract parse failed: $relativePath :: $($_.Exception.Message)"
+        return
+    }
+
+    if ([string]$contract.schema -ne 'winmint.releaseReadiness.v1') {
+        Add-ValidationError "Unsupported release readiness schema: $($contract.schema)"
+    }
+    if ([string]$contract.publicLaunch.command -ne 'irm https://winmint.yanai.sh | iex') {
+        Add-ValidationError 'Release readiness public launch command must remain irm https://winmint.yanai.sh | iex.'
+    }
+    if ([string]$contract.publicLaunch.mode -ne 'ephemeral') {
+        Add-ValidationError 'Release readiness public launch mode must be ephemeral.'
+    }
+    foreach ($booleanField in @('requiresChecksum', 'forbidsDefaultLocalAppDataCache', 'durableCacheOptInOnly')) {
+        $property = $contract.publicLaunch.PSObject.Properties[$booleanField]
+        if (-not $property -or $property.Value -ne $true) {
+            Add-ValidationError "Release readiness publicLaunch.$booleanField must be true."
+        }
+    }
+
+    if ([string]$contract.hostRequirements.backendPowerShell -ne '7.6.2+') {
+        Add-ValidationError 'Release readiness backend PowerShell requirement must be 7.6.2+.'
+    }
+    if ([string]$contract.hostRequirements.sourceIso -notmatch '25H2\+') {
+        Add-ValidationError 'Release readiness source ISO requirement must mention Windows 11 25H2+.'
+    }
+
+    $gateIds = @($contract.gates | ForEach-Object { [string]$_.id })
+    foreach ($requiredGate in @('release-bundle-smoke', 'contract-validation', 'repository-validation', 'clean-host-smoke')) {
+        if ($gateIds -notcontains $requiredGate) {
+            Add-ValidationError "Release readiness contract missing required gate: $requiredGate"
+        }
+    }
+    foreach ($gate in @($contract.gates)) {
+        if ($gate.required -ne $true) {
+            Add-ValidationError "Release readiness gate must be required: $($gate.id)"
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$gate.evidence)) {
+            Add-ValidationError "Release readiness gate missing evidence command/path: $($gate.id)"
+        }
+        if (@($gate.covers).Count -eq 0) {
+            Add-ValidationError "Release readiness gate missing coverage list: $($gate.id)"
+        }
+    }
+    if (@($contract.notReadyIf).Count -lt 4) {
+        Add-ValidationError 'Release readiness contract must list concrete not-ready conditions.'
+    }
+
+    $readme = Get-Content -LiteralPath (Join-Path $root 'README.md') -Raw -Encoding UTF8
+    $distribution = Get-Content -LiteralPath (Join-Path $root 'docs\Distribution.md') -Raw -Encoding UTF8
+    $readiness = Get-Content -LiteralPath (Join-Path $root 'docs\Release-Readiness.md') -Raw -Encoding UTF8
+    foreach ($document in @(
+            [pscustomobject]@{ Name = 'README.md'; Text = $readme },
+            [pscustomobject]@{ Name = 'docs\Distribution.md'; Text = $distribution },
+            [pscustomobject]@{ Name = 'docs\Release-Readiness.md'; Text = $readiness }
+        )) {
+        if ($document.Text -notmatch [regex]::Escape('irm https://winmint.yanai.sh | iex')) {
+            Add-ValidationError "Release readiness launch command missing from $($document.Name)."
+        }
+    }
+    if ($readme -notmatch 'PowerShell 7\.6\.2\+' -or $readme -notmatch 'Windows 11 25H2\+') {
+        Add-ValidationError 'README.md must document PowerShell 7.6.2+ and Windows 11 25H2+ release requirements.'
+    }
+    if ($distribution -notmatch 'temporary session' -or $distribution -notmatch '\.sha256') {
+        Add-ValidationError 'docs\Distribution.md must document temporary-session bootstrap and SHA256 verification.'
+    }
+    if ($readiness -notmatch 'config/release-readiness\.json' -and $readiness -notmatch 'config\\release-readiness\.json') {
+        Add-ValidationError 'docs\Release-Readiness.md must point to config\release-readiness.json.'
+    }
+
+    Write-Host 'OK repository release readiness contract'
+}
+
+function Test-RepositoryHardwareAcceptance {
+    $relativePath = 'config\hardware-acceptance.json'
+    $path = Join-Path $root $relativePath
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        Add-ValidationError "Hardware acceptance contract is missing: $relativePath"
+        return
+    }
+
+    try {
+        $contract = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        Add-ValidationError "Hardware acceptance contract parse failed: $relativePath :: $($_.Exception.Message)"
+        return
+    }
+
+    if ([string]$contract.schema -ne 'winmint.hardwareAcceptance.v1') {
+        Add-ValidationError "Unsupported hardware acceptance schema: $($contract.schema)"
+    }
+
+    $machines = @($contract.machines)
+    if ($machines.Count -lt 3) {
+        Add-ValidationError 'Hardware acceptance contract must track ARM64 Surface, amd64 laptop, and amd64 desktop coverage.'
+    }
+    $machineIds = @($machines | ForEach-Object { [string]$_.id })
+    foreach ($requiredId in @('surface-laptop-7-arm64', 'thinkpad-return-amd64', 'alienware-aurora-amd64')) {
+        if ($machineIds -notcontains $requiredId) {
+            Add-ValidationError "Hardware acceptance contract missing required machine: $requiredId"
+        }
+    }
+
+    $priority = @($contract.priority | ForEach-Object { [string]$_ })
+    if ($priority.Count -eq 0 -or $priority[0] -ne 'surface-laptop-7-arm64') {
+        Add-ValidationError 'Hardware acceptance priority must put Surface Laptop 7 ARM64 first.'
+    }
+    foreach ($id in $priority) {
+        if ($machineIds -notcontains $id) {
+            Add-ValidationError "Hardware acceptance priority references unknown machine: $id"
+        }
+    }
+
+    foreach ($machine in $machines) {
+        $profileRelative = [string]$machine.profile
+        if ([string]::IsNullOrWhiteSpace($profileRelative)) {
+            Add-ValidationError "Hardware acceptance machine '$($machine.id)' is missing profile."
+            continue
+        }
+        $profilePath = Join-Path $root ($profileRelative -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $profilePath -PathType Leaf)) {
+            Add-ValidationError "Hardware acceptance profile is missing for '$($machine.id)': $profileRelative"
+            continue
+        }
+
+        try {
+            $profile = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+        catch {
+            Add-ValidationError "Hardware acceptance profile parse failed for '$($machine.id)': $profileRelative :: $($_.Exception.Message)"
+            continue
+        }
+
+        if ([string]$profile.source.architecture -ne [string]$machine.architecture) {
+            Add-ValidationError "Hardware acceptance architecture mismatch for '$($machine.id)': contract=$($machine.architecture), profile=$($profile.source.architecture)"
+        }
+        if ([string]$profile.drivers.source -ne [string]$machine.requiredDriverSource) {
+            Add-ValidationError "Hardware acceptance driver source mismatch for '$($machine.id)': contract=$($machine.requiredDriverSource), profile=$($profile.drivers.source)"
+        }
+        if ([string]$profile.drivers.path -ne [string]$machine.requiredDriverPath) {
+            Add-ValidationError "Hardware acceptance driver path mismatch for '$($machine.id)': contract=$($machine.requiredDriverPath), profile=$($profile.drivers.path)"
+        }
+        if ($machine.surface -eq $true -and [string]$machine.requiredDriverSource -ne 'SurfaceCatalog') {
+            Add-ValidationError "Surface hardware acceptance machine '$($machine.id)' must use SurfaceCatalog."
+        }
+        if (@($machine.checks).Count -lt 4) {
+            Add-ValidationError "Hardware acceptance machine '$($machine.id)' must list concrete checks."
+        }
+    }
+
+    $evidence = @($contract.evidence | ForEach-Object { [string]$_ })
+    if ($evidence.Count -lt 5) {
+        Add-ValidationError 'Hardware acceptance contract must list required evidence artifacts.'
+    }
+    foreach ($expectedEvidence in @(
+            'BuildProfile.json',
+            'BuildManifest.json',
+            'BuildDelta.json',
+            '%LOCALAPPDATA%\WinMint\state.json',
+            'C:\ProgramData\WinMint\Logs'
+        )) {
+        if ($evidence -notcontains $expectedEvidence) {
+            Add-ValidationError "Hardware acceptance evidence list missing: $expectedEvidence"
+        }
+    }
+
+    $hardwareDocPath = Join-Path $root 'docs\Hardware-Acceptance.md'
+    $hardwareDoc = Get-Content -LiteralPath $hardwareDocPath -Raw -Encoding UTF8
+    foreach ($requiredText in @(
+            'config/hardware-acceptance.json',
+            'surface-laptop-7',
+            'SurfaceCatalog',
+            'LiveInstallAudit.json',
+            'notes.md'
+        )) {
+        if ($hardwareDoc -notmatch [regex]::Escape($requiredText)) {
+            Add-ValidationError "docs\Hardware-Acceptance.md must mention '$requiredText'."
+        }
+    }
+
+    Write-Host 'OK repository hardware acceptance contract'
 }
 
 function Test-RepositoryTrackedPathCasing {
@@ -301,6 +499,8 @@ function Test-RepositoryHygiene {
     Test-RepositoryGitIgnorePolicy
     Test-RepositoryPreCommitHook
     Test-RepositoryReleaseManifest
+    Test-RepositoryReleaseReadiness
+    Test-RepositoryHardwareAcceptance
     Test-RepositoryTrackedPathCasing
     Test-RepositoryFixtureLayout
 }

@@ -170,3 +170,6 @@ Use release-mode validation only after the packaged GUI binary exists:
 ```powershell
 .\tools\validation\Validate.ps1 -RunReleaseSmoke
 ```
+
+The release readiness checklist lives in `docs\Release-Readiness.md`; its
+machine-readable gate contract lives in `config\release-readiness.json`.

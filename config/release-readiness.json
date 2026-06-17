@@ -1,0 +1,78 @@
+{
+  "schema": "winmint.releaseReadiness.v1",
+  "publicLaunch": {
+    "command": "irm https://winmint.yanai.sh | iex",
+    "mode": "ephemeral",
+    "requiresChecksum": true,
+    "forbidsDefaultLocalAppDataCache": true,
+    "durableCacheOptInOnly": true
+  },
+  "hostRequirements": {
+    "os": "Windows 11 build host",
+    "backendPowerShell": "7.6.2+",
+    "bootstrapPowerShell": "Windows PowerShell 5.1+",
+    "adminRequiredForRealBuilds": true,
+    "sourceIso": "Windows 11 25H2+ official Microsoft ISO",
+    "scratchSpace": "25 GB+",
+    "dism": "Host or ADK DISM at least as new as the source image build",
+    "oscdimg": "Windows ADK oscdimg.exe, installed manually or acquired by WinMint"
+  },
+  "gates": [
+    {
+      "id": "release-bundle-smoke",
+      "required": true,
+      "evidence": "tools/release/Test-WinMintReleaseLaunch.ps1",
+      "covers": [
+        "sha256 verification",
+        "packaged runtime shape",
+        "packaged CLI launch",
+        "ephemeral bootstrap cleanup",
+        "bad-checksum failure messaging"
+      ]
+    },
+    {
+      "id": "contract-validation",
+      "required": true,
+      "evidence": "tests/contract/Test-ProfileInvariants.ps1",
+      "covers": [
+        "profile invariants",
+        "schema compatibility",
+        "driver source invariants",
+        "static backend contracts"
+      ]
+    },
+    {
+      "id": "repository-validation",
+      "required": true,
+      "evidence": "tools/validation/Validate.ps1 -RunAnalyzer",
+      "covers": [
+        "repository hygiene",
+        "release manifest boundary",
+        "required assets",
+        "schemas",
+        "PowerShell parser",
+        "Rust contracts",
+        "PSScriptAnalyzer"
+      ]
+    },
+    {
+      "id": "clean-host-smoke",
+      "required": true,
+      "evidence": "tools/validation/Validate.ps1 -RunReleaseSmoke",
+      "covers": [
+        "release build",
+        "mock release endpoint",
+        "no default durable release cache",
+        "bootstrap retry-safety output"
+      ]
+    }
+  ],
+  "notReadyIf": [
+    "release zip is missing its matching .sha256",
+    "normal irm | iex leaves a default %LOCALAPPDATA%\\WinMint\\versions cache",
+    "packaged GUI executable is absent",
+    "release bundle includes tests, tools, dist, output, temp, or ISO/WIM artifacts",
+    "bootstrap failure path lacks recovery guidance",
+    "README and docs/Distribution.md disagree about the public launch path"
+  ]
+}

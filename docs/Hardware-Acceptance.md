@@ -1,14 +1,21 @@
 # Hardware Acceptance
 
-This runbook tracks the real-machine acceptance work that should happen before
-GUI work resumes. It is maintainer-facing and intentionally calls out checks
+This runbook tracks the real-machine acceptance work that cannot be delegated to
+dry runs or Hyper-V. It is maintainer-facing and intentionally calls out checks
 that require physical hardware, destructive installs, or release assets.
+
+Physical installs are intentionally deferred until the Hyper-V acceptance path is
+credible. Use this document to define the later real-device evidence loop, not as
+permission to skip VM validation.
+
+The machine-readable inventory is `config/hardware-acceptance.json`. Keep this
+runbook, the inventory, and the tracked build profiles in sync.
 
 ## Hardware Roles
 
 | Machine | Role | Notes |
 |---------|------|-------|
-| Surface Laptop 7 ARM64/aarch64 Snapdragon X Elite Copilot+ PC | Primary development, ARM64 acceptance, Copilot+ validation, physical Copilot-key validation | Prove the ARM64 path first. Keep Windhawk out until baseline performance is known. |
+| Surface Laptop 7 ARM64/aarch64 Snapdragon X Elite Copilot+ PC | Primary development, ARM64 acceptance, Copilot+ validation, physical Copilot-key validation | Prove the ARM64 path first. Use `SurfaceCatalog` with `surface-laptop-7`. Keep Windhawk out until baseline performance is known. |
 | ThinkPad amd64/x64 work laptop | Temporary destructive acceptance target before return around June 30, 2026 | Not Copilot+. Should feel like vanilla Windows 11 after install. Use first for time-boxed x64 acceptance. |
 | Alienware Aurora amd64/x64 desktop | Long-lived x64 regression and build machine | Gaming-focused. Not Copilot+. Use after ARM64 is proven and ThinkPad coverage is complete. |
 
@@ -16,13 +23,14 @@ that require physical hardware, destructive installs, or release assets.
 
 | Profile | Intent |
 |---------|--------|
-| `config/build-profiles/yanai-sl7-microsoft-oobe.json` | ARM64 Surface profile with YASB, thide, and Raycast. No Windhawk yet. |
+| `config/build-profiles/yanai-sl7-microsoft-oobe.json` | ARM64 Surface profile with `SurfaceCatalog` / `surface-laptop-7`, YASB, thide, and Raycast. No Windhawk yet. |
 | `config/build-profiles/yanai-thinkpad-return-amd64.json` | Keep Edge, no extra browsers, editors, launcher, or shell layers; WSL Ubuntu; `AutoWipeDisk0`. |
 | `config/build-profiles/yanai-alienware-aurora-amd64.json` | Helium and Zen browsers, Neovim and Zed, Nilesoft, no launcher, Xbox apps removed, manual disk mode. |
 
 ## Local Preflight
 
-Run these from the repository root before real-machine installs:
+Run these from the repository root before real-machine installs. Do this only
+after the VM acceptance path has already passed for the same build class:
 
 ```powershell
 pwsh -NoProfile -File tools\validation\Validate.ps1
@@ -50,9 +58,13 @@ pwsh -NoProfile -File WinMint-CLI.ps1 build config\build-profiles\yanai-alienwar
 
 ## Surface ARM64 Acceptance
 
-Use the Surface Laptop 7 as the first acceptance target. Confirm:
+After VM acceptance is credible, use the Surface Laptop 7 as the first physical
+acceptance target. Confirm:
 
 - FirstLogon completes and can resume cleanly after interruption or reboot.
+- The build profile selects `SurfaceCatalog` with `surface-laptop-7`.
+- `WinMint-DriverInventory.json` reports the included offline-safe Surface
+  driver subset and the excluded/deferred firmware-class drivers.
 - YASB, thide, and Raycast start for the live user.
 - Raycast Copilot-key app policy is present and the physical Copilot key opens
   the expected target.
@@ -76,8 +88,12 @@ pwsh -NoProfile -File tools\release\New-WinMintReleaseBundle.ps1 -Version $Versi
 Confirm `dist\` contains the release zip and matching `.sha256` file. The
 bootstrap path must refuse a release when the expected hash asset is missing or
 does not match. Smoke-test `winmint.ps1` and the Cloudflare alias path at a high
-level by confirming they fetch the intended release, verify the hash, install
-under the expected local version directory, and launch the packaged entry point.
+level by confirming they fetch the intended release, verify the hash, run from a
+temporary session, remove that session afterward, and launch the packaged entry
+point.
+
+The release readiness gates live in `docs\Release-Readiness.md` and
+`config\release-readiness.json`.
 
 ## Live Install Audit
 
@@ -102,6 +118,37 @@ staged path only when verifying the exact payload installed by the ISO.
 
 Treat audit findings as signals, not acceptance blockers by themselves. Convert
 real product issues into contract tests, setup fixes, or FirstLogon fixes.
+
+## Evidence Loop
+
+After each real hardware install, copy enough evidence to compare runs without
+inventing a new artifact system. Do not start this loop until VM acceptance has
+passed for the same build class. Keep one folder per machine and date under a
+local, ignored output path such as `output\hardware-evidence\<machine>-<date>`.
+
+Collect these when available:
+
+- `BuildProfile.json`
+- `BuildManifest.json`
+- `BuildDelta.json`
+- `WinMint-DriverInventory.json` when drivers were selected
+- `C:\Windows\Setup\Scripts\WinMintSetupProfile.json`
+- `%LOCALAPPDATA%\WinMint\state.json`
+- `C:\ProgramData\WinMint\Logs`
+- `LiveInstallAudit.json` when audit was enabled or run manually
+
+Add a short `notes.md` beside the copied artifacts with:
+
+- machine id from `config/hardware-acceptance.json`
+- source ISO name and architecture
+- install date
+- whether FirstLogon completed without retry
+- hardware-only observations such as Wi-Fi, keyboard/trackpad, Copilot key,
+  sleep/resume, display scaling, and shell-layer startup
+- any issue that should become a contract test or product fix
+
+Do not automate this further until at least one Surface Laptop 7 run and one x64
+run show which parts are repetitive or error-prone.
 
 ## x64 Follow-Up
 

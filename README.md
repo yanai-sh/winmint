@@ -229,6 +229,18 @@ not a valid source for the VM test profile.
 
 Schemas live in [`schemas/`](schemas).
 
+## Release readiness
+
+The public launch path is `irm https://winmint.yanai.sh | iex`. Public-ready
+releases must pass the release readiness gates in
+[`docs/Release-Readiness.md`](docs/Release-Readiness.md), backed by
+[`config/release-readiness.json`](config/release-readiness.json).
+
+Hardware acceptance is tracked separately because VM and dry-run coverage cannot
+prove Surface firmware/driver, Copilot-key, and live desktop behavior. The
+inventory lives in [`config/hardware-acceptance.json`](config/hardware-acceptance.json)
+and the runbook lives in [`docs/Hardware-Acceptance.md`](docs/Hardware-Acceptance.md).
+
 ## Documentation
 
 - [Project structure](docs/Project-Structure.md)

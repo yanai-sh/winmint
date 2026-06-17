@@ -1,0 +1,85 @@
+{
+  "schema": "winmint.hardwareAcceptance.v1",
+  "priority": [
+    "surface-laptop-7-arm64",
+    "thinkpad-return-amd64",
+    "alienware-aurora-amd64"
+  ],
+  "machines": [
+    {
+      "id": "surface-laptop-7-arm64",
+      "label": "Surface Laptop 7 ARM64",
+      "architecture": "arm64",
+      "platform": "Windows on ARM",
+      "profile": "config/build-profiles/yanai-sl7-microsoft-oobe.json",
+      "deviceRole": "primary-arm64-surface-acceptance",
+      "destructiveInstall": true,
+      "surface": true,
+      "copilotPlus": true,
+      "requiredDriverSource": "SurfaceCatalog",
+      "requiredDriverPath": "surface-laptop-7",
+      "checks": [
+        "FirstLogon completes and resumes after interruption",
+        "Surface catalog driver package is selected and classified",
+        "offline driver injection excludes firmware-class drivers",
+        "YASB and thide start for the live user",
+        "Raycast starts and owns the launcher path",
+        "physical Copilot key opens the expected target",
+        "ARM64 Everything backend is native and hash-verified",
+        "Windhawk remains excluded until baseline ARM64 behavior is known"
+      ]
+    },
+    {
+      "id": "thinkpad-return-amd64",
+      "label": "ThinkPad Return AMD64",
+      "architecture": "amd64",
+      "platform": "standard x64 laptop",
+      "profile": "config/build-profiles/yanai-thinkpad-return-amd64.json",
+      "deviceRole": "temporary-destructive-x64-laptop-acceptance",
+      "destructiveInstall": true,
+      "surface": false,
+      "copilotPlus": false,
+      "requiredDriverSource": "None",
+      "requiredDriverPath": "",
+      "checks": [
+        "FirstLogon completes",
+        "AutoWipeDisk0 behavior is explicitly confirmed",
+        "standard Windows desktop starts without extra shell layers",
+        "Edge keep path is honored",
+        "Ubuntu WSL selection completes",
+        "no launcher is installed"
+      ]
+    },
+    {
+      "id": "alienware-aurora-amd64",
+      "label": "Alienware Aurora AMD64",
+      "architecture": "amd64",
+      "platform": "standard x64 desktop",
+      "profile": "config/build-profiles/yanai-alienware-aurora-amd64.json",
+      "deviceRole": "long-lived-x64-desktop-regression",
+      "destructiveInstall": false,
+      "surface": false,
+      "copilotPlus": false,
+      "requiredDriverSource": "None",
+      "requiredDriverPath": "",
+      "checks": [
+        "Manual disk mode is preserved",
+        "Helium and Zen browser selections install",
+        "Neovim and Zed editor selections install",
+        "Nilesoft shell integration applies",
+        "no launcher is installed",
+        "gaming removal remains selected"
+      ]
+    }
+  ],
+  "evidence": [
+    "BuildProfile.json",
+    "BuildManifest.json",
+    "BuildDelta.json",
+    "WinMint-DriverInventory.json when drivers are selected",
+    "C:\\Windows\\Setup\\Scripts\\WinMintSetupProfile.json",
+    "%LOCALAPPDATA%\\WinMint\\state.json",
+    "C:\\ProgramData\\WinMint\\Logs",
+    "LiveInstallAudit.json when audit is enabled or run manually"
+  ]
+}

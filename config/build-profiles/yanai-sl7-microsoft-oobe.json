@@ -42,8 +42,8 @@
     "homeLocationGeoId": 117
   },
   "drivers": {
-    "source": "None",
-    "path": "",
+    "source": "SurfaceCatalog",
+    "path": "surface-laptop-7",
     "exportHostDrivers": false
   },
   "desktop": {

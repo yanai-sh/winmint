@@ -310,6 +310,9 @@ function Assert-TrackedHardwareBuildProfiles {
     if ([string]$profile.features.launcher -ne 'Raycast') {
         Add-SmokeFailure 'Surface Laptop 7 profile must select the Raycast launcher.'
     }
+    if ([string]$profile.drivers.source -ne 'SurfaceCatalog' -or [string]$profile.drivers.path -ne 'surface-laptop-7') {
+        Add-SmokeFailure 'Surface Laptop 7 profile must use SurfaceCatalog with the surface-laptop-7 catalog id.'
+    }
 
     $profilePath = Join-Path $root 'config\build-profiles\yanai-thinkpad-return-amd64.json'
     $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json

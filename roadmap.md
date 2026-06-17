@@ -24,12 +24,13 @@ The project now has:
 - a stronger contract and validation spine around setup payloads, FirstLogon, profile invariants, bootstrap behavior, and release boundaries
 - an ephemeral default bootstrap path: `irm | iex` downloads and verifies a release in a unique temp session, launches from that session, and removes it afterward instead of installing into `%LOCALAPPDATA%\WinMint\versions`
 - bootstrap failure handling that reports the active operation, failure category, reason, recovery guidance, and retry safety instead of surfacing only raw PowerShell errors
+- a release readiness contract in `config/release-readiness.json`, with `docs/Release-Readiness.md` and validation checks keeping the public launch path, host requirements, and release gates aligned
+- a hardware acceptance inventory in `config/hardware-acceptance.json`, with Surface Laptop 7 ARM64 first, tracked amd64 follow-up targets, profile links, driver requirements, destructive-install flags, and required evidence
 
 The main project risk has shifted.
 
 The hard problem is less "can the backend do the work?" and more:
 
-- can the shipped product path be trusted by real users
 - can acceptance be proven systematically
 - can the GUI become the normal product surface
 - can the live desktop result be made deliberate and polished
@@ -38,30 +39,30 @@ The hard problem is less "can the backend do the work?" and more:
 
 These are the current top priorities for continued development.
 
-1. **Release and bootstrap hardening**
-   WinMint now has the core ephemeral `irm | iex` execution path and bootstrap failure/recovery envelope. The remaining near-term release work is broader clean-machine proof and public-usage readiness.
+1. **FirstLogon and desktop experience maturity**
+   Shell layers, launcher behavior, package installs, and live-user setup need stronger end-state validation and refinement. VM acceptance should prove the common live-user path before hardware installs begin.
 
 2. **Live hardware acceptance**
-   VM testing is necessary but not sufficient. Real ARM64 and amd64 installs still need more systematic coverage and evidence handling.
+   VM testing is necessary but not sufficient, but it is the current safety gate. The hardware inventory exists and the evidence loop is intentionally lightweight; real Surface Laptop 7 and x64 installs should wait until VM acceptance is green.
 
-3. **FirstLogon and desktop experience maturity**
-   Shell layers, launcher behavior, package installs, and live-user setup need stronger end-state validation and refinement.
-
-4. **Hyper-V VM test architecture**
-   The existing VM scripts work, but they still need a more intentional structure for repeatable unattended-install and first-logon acceptance.
-
-5. **GPUI completion**
+3. **GPUI completion**
    The GUI is real, but it is not yet the fully finished primary surface for users.
+
+4. **Release and bootstrap regression discipline**
+   The core public launch path is now defined and guarded. Keep it green through release readiness validation, clean-host smoke, and docs consistency as other product areas change.
+
+5. **Hyper-V VM test architecture**
+   Hyper-V is the acceptance gate before physical installs, not the highest product priority. The VM work should stay focused: prove unattended install, FirstLogon completion, evidence capture, and result evaluation well enough to safely move into real hardware acceptance.
 
 The order above is deliberate:
 
-- **release/bootstrap remains first** because a clean temp launch path and failure envelope now exist, but release-readiness proof still determines public trust
-- **live hardware comes second** because WinMint is ultimately judged on real installs, not only on dry runs or VMs
-- **FirstLogon and desktop maturity comes third** because that is where the product either feels intentional or falls apart after installation
-- **Hyper-V architecture comes fourth** because it improves repeatability and regression speed, but it is still a support system for the product rather than the product itself
-- **GPUI completion comes fifth** because a polished frontend is valuable, but it should not outrun release trust, real install evidence, or live-user experience quality
+- **FirstLogon and desktop maturity is first** because the installed system is the product outcome; if this is unreliable or visually unfinished, the ISO builder has not succeeded
+- **live hardware acceptance is second** because WinMint must ultimately prove itself on real Surface and x64 machines, even though physical installs remain blocked until the VM gate is credible
+- **GPUI completion follows the product proof tracks** because a polished frontend is valuable, but it should not outrun install confidence or live-user experience quality
+- **release/bootstrap remains visible** because regressions in the public launch path can still block adoption even though A1-A3 are complete
+- **Hyper-V architecture is fifth in product priority but still gates physical installs** because it is a safety mechanism and regression loop, not the product outcome itself
 
-The order is still not rigid. If evidence from hardware installs or release testing shows a higher-severity failure, that track should jump ahead.
+The order is still not rigid. If VM acceptance or release testing shows a higher-severity failure, that track should jump ahead.
 
 ## Track A — Release and Bootstrap Hardening
 
@@ -69,50 +70,31 @@ Phase A1, **Ephemeral Bootstrap and Clean Host Footprint**, is complete and no l
 
 Phase A2, **Failure and Recovery UX**, is complete and no longer active roadmap work. The bootstrapper now wraps failures with operation, failure kind, reason, recovery guidance, and retry safety. Release smoke covers the bad-checksum integrity path and verifies cleanup still happens after failure.
 
-### Phase A3 — Public Usage Readiness
-
-Goal: define and prove the minimum release-hardening bar before broader real-user adoption.
-
-Work:
-
-- define release acceptance criteria
-- tighten release-bundle verification and documented host requirements
-- ensure README and bootstrap docs describe the real shipped path
-- keep release and bootstrap validation part of normal regression discipline
-
-Exit criteria:
-
-- there is a defensible answer to "is WinMint ready for broader external use?"
+Phase A3, **Public Usage Readiness**, is complete and no longer active roadmap work. The release readiness bar is documented in `docs/Release-Readiness.md`, backed by `config/release-readiness.json`, checked by repository validation, and exercised by release smoke. Future release work is regression discipline unless a concrete launch failure reopens Track A.
 
 ## Track B — Live Hardware Acceptance
 
 ### Phase B1 — Acceptance Inventory
 
-Goal: explicitly document what must be proven on real hardware and cannot be delegated to VMs.
-
-Work:
-
-- separate ARM64-only, amd64-only, and shared checks
-- identify hardware-only checks such as Copilot-key behavior and Copilot+ specifics
-- define destructive-install discipline for each tracked machine
-- map tracked profiles to acceptance purpose
-
-Exit criteria:
-
-- there is a concrete hardware acceptance matrix, not just informal maintainer knowledge
+Phase B1, **Acceptance Inventory**, is complete and no longer active roadmap work. The inventory is `config/hardware-acceptance.json`; the runbook is `docs/Hardware-Acceptance.md`; repository validation enforces profile existence, architecture matching, SurfaceCatalog use for Surface Laptop 7, and required evidence/check coverage.
 
 ### Phase B2 — Evidence Loop
 
 Goal: make live installs produce reusable evidence.
 
+Status: deferred behind Track D. The runbook now defines a manual evidence folder, required copied artifacts, and `notes.md` contents, but physical installs should not begin until VM acceptance is credible. Do not add a collector or evidence-package schema until real Surface and x64 runs show repeated manual collection pain.
+
 Work:
 
-- standardize what logs, manifests, deltas, and audit outputs are collected after a hardware install
-- define a repeatable post-install acceptance checklist
+- complete the VM acceptance path in Track D before the first real-machine install
+- collect the first Surface Laptop 7 evidence folder after a real install
+- collect at least one x64 evidence folder after a real install
 - use live install audit output as structured feedback rather than incidental diagnostics
+- convert repeated findings into focused contract tests or product fixes
 
 Exit criteria:
 
+- VM acceptance has passed enough to make physical installs a hardware-specific validation step, not the first end-to-end test
 - hardware acceptance produces comparable evidence instead of one-off observations
 
 ### Phase B3 — Ongoing Regression Coverage
@@ -178,6 +160,10 @@ Exit criteria:
 - launcher and shell behavior feels like one product, not separate features stitched together
 
 ## Track D — Hyper-V VM Test Architecture
+
+Track D is the current acceptance gate before Track B physical installs. It is
+not the highest product priority, but it must be credible before real machines
+are used for destructive ISO testing.
 
 ### Phase D1 — VM Testing Model
 
