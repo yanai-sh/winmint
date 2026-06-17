@@ -622,6 +622,15 @@ function Get-AgentManifestTool {
     return $property.Value
 }
 
+function Get-AgentManifestToolStateKey {
+    param(
+        [Parameter(Mandatory)][string]$ToolId
+    )
+
+    $tool = Get-AgentManifestTool -ToolId $ToolId
+    return "tool:$([string]$tool.id)"
+}
+
 function Install-AgentManifestTool {
     param(
         [Parameter(Mandatory)][string]$ToolId,
@@ -630,7 +639,7 @@ function Install-AgentManifestTool {
 
     $tool = Get-AgentManifestTool -ToolId $ToolId
     Install-AgentTool -Tool $tool -State $State
-    $key = "tool:$($tool.id)"
+    $key = Get-AgentManifestToolStateKey -ToolId $ToolId
     if (-not $State.steps.ContainsKey($key)) {
         throw "Tool '$ToolId' did not record install state."
     }
@@ -814,8 +823,8 @@ function Get-WinMintAgentModuleCatalog {
         [pscustomobject]@{
             Id = 'shell'
             RelativePath = 'Modules\TilingDesktop.ps1'
-            BootstrapFunction = 'Invoke-WinMintAgentTilingDesktopBootstrap'
-            RuntimeStepName = 'tiling-desktop'
+            BootstrapFunction = 'Invoke-WinMintAgentDesktopEnvironmentBootstrap'
+            RuntimeStepName = 'desktop-environment'
             Enablement = 'modules.shell.enabled'
             Title = 'Install and configure selected shell layers'
             Kind = 'first-logon-module'
@@ -976,6 +985,53 @@ function Test-WinMintAgentStateStepOk {
     return ([string]$State.steps[$Key].status -eq 'ok')
 }
 
+function Assert-WinMintAgentStateStepsOk {
+    param(
+        [Parameter(Mandatory)][hashtable]$State,
+        [Parameter(Mandatory)][string[]]$Keys,
+        [Parameter(Mandatory)][string]$Context
+    )
+
+    $missing = [System.Collections.Generic.List[string]]::new()
+    $notOk = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($key in @($Keys)) {
+        if ([string]::IsNullOrWhiteSpace($key)) { continue }
+        if (-not $State.steps.ContainsKey($key)) {
+            $missing.Add($key) | Out-Null
+            continue
+        }
+
+        $step = $State.steps[$key]
+        $status = [string]$step.status
+        if ($status -eq 'ok') { continue }
+
+        $reason = if ($step -is [hashtable] -and $step.ContainsKey('error') -and -not [string]::IsNullOrWhiteSpace([string]$step.error)) {
+            [string]$step.error
+        }
+        elseif ($step -is [hashtable] -and $step.ContainsKey('reason') -and -not [string]::IsNullOrWhiteSpace([string]$step.reason)) {
+            [string]$step.reason
+        }
+        elseif ($step.PSObject.Properties['error'] -and -not [string]::IsNullOrWhiteSpace([string]$step.error)) {
+            [string]$step.error
+        }
+        elseif ($step.PSObject.Properties['reason'] -and -not [string]::IsNullOrWhiteSpace([string]$step.reason)) {
+            [string]$step.reason
+        }
+        else {
+            $status
+        }
+        $notOk.Add("$key=$reason") | Out-Null
+    }
+
+    if (($missing.Count -eq 0) -and ($notOk.Count -eq 0)) { return }
+
+    $parts = [System.Collections.Generic.List[string]]::new()
+    if ($missing.Count -gt 0) { $parts.Add("missing: $($missing -join ', ')") | Out-Null }
+    if ($notOk.Count -gt 0) { $parts.Add("not ok: $($notOk -join ', ')") | Out-Null }
+    throw "$Context did not complete required state step(s): $($parts -join '; ')"
+}
+
 function New-WinMintAgentRuntimeStepPlan {
     $steps = [System.Collections.Generic.List[object]]::new()
     foreach ($moduleDefinition in @(Get-WinMintAgentModuleCatalog)) {
@@ -1090,6 +1146,9 @@ function Invoke-AgentProfileModule {
         Write-AgentConsoleLine -Level Section -Message "Starting $StepName."
         $result = & $FunctionName -AgentProfile $agentProfile -State $State
         $status = if ($result -and $result.PSObject.Properties['Status']) { [string]$result.Status } else { 'ok' }
+        if ($status -eq 'ok' -and $result -and $result.PSObject.Properties['RequiredStateSteps']) {
+            Assert-WinMintAgentStateStepsOk -State $State -Keys @($result.RequiredStateSteps) -Context "$StepName bootstrap"
+        }
         $State.steps[$key] = @{
             status = $status
             updatedAt = (Get-Date -Format o)

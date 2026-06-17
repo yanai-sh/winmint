@@ -14,7 +14,5 @@ gpui.workspace = true
 gpui-animation.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-winmint-core.workspace = true
-
 [build-dependencies]
 embed-resource.workspace = true

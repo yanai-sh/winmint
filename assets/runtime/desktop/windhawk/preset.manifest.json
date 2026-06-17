@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "tool": "windhawk",
+  "displayName": "Windhawk",
+  "stageDirectory": "Windhawk",
+  "files": [
+    {
+      "source": "preset.json",
+      "destination": "preset.json",
+      "role": "preset"
+    }
+  ]
+}

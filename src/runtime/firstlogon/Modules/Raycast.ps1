@@ -299,8 +299,13 @@ function Invoke-WinMintAgentRaycastBootstrap {
     }
 
     Install-AgentManifestTool -ToolId 'raycast' -State $State
+    $requiredStateSteps = [System.Collections.Generic.List[string]]::new()
+    $requiredStateSteps.Add((Get-AgentManifestToolStateKey -ToolId 'raycast')) | Out-Null
     Start-WinMintRaycastApp -State $State
     $everythingConfigured = Install-WinMintRaycastEverythingBackend -RaycastConfig $cfg -State $State
+    if ($everythingConfigured) {
+        $requiredStateSteps.Add('config:everything-search-backend') | Out-Null
+    }
 
     $requested = [System.Collections.Generic.List[string]]::new()
     $failed = [System.Collections.Generic.List[string]]::new()
@@ -319,6 +324,7 @@ function Invoke-WinMintAgentRaycastBootstrap {
         Message = "Raycast installed. Extensions requested: $($requested.Count). Everything backend: $everythingConfigured."
         ExtensionsRequested = @($requested)
         ExtensionsFailed = @($failed)
+        RequiredStateSteps = @($requiredStateSteps)
     }
 }
 

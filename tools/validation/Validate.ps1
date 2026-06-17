@@ -42,6 +42,7 @@ $validationSteps = [ordered]@{
         Test-WslTerminalIconQuality
     }
     'Preset payloads' = {
+        Test-DesktopPresetManifestContracts
         Test-WindhawkPresetPayload
         Test-YasbPresetPayload
         Test-KomorebiPresetPayload

@@ -171,6 +171,53 @@ function Test-WslTerminalIconQuality {
     Write-Host 'OK WSL Terminal PNG icon quality'
 }
 
+function Test-DesktopPresetManifestContracts {
+    foreach ($toolId in @('windhawk', 'yasb')) {
+        $toolDir = Join-Path $root "assets\runtime\desktop\$toolId"
+        $manifestPath = Join-Path $toolDir 'preset.manifest.json'
+        if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+            Add-ValidationError "Desktop preset manifest is missing: assets\runtime\desktop\$toolId\preset.manifest.json"
+            continue
+        }
+
+        try {
+            $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+        catch {
+            Add-ValidationError "Desktop preset manifest parse failed for ${toolId}: $($_.Exception.Message)"
+            continue
+        }
+
+        if ([int]$manifest.schemaVersion -ne 1) {
+            Add-ValidationError "Desktop preset manifest for $toolId must use schemaVersion 1."
+        }
+        if ([string]$manifest.tool -ne $toolId) {
+            Add-ValidationError "Desktop preset manifest tool id mismatch for ${toolId}: '$($manifest.tool)'."
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$manifest.stageDirectory)) {
+            Add-ValidationError "Desktop preset manifest for $toolId is missing stageDirectory."
+        }
+        if (-not $manifest.files -or @($manifest.files).Count -eq 0) {
+            Add-ValidationError "Desktop preset manifest for $toolId must declare at least one file."
+            continue
+        }
+
+        foreach ($file in @($manifest.files)) {
+            $sourceName = [string]$file.source
+            if ([string]::IsNullOrWhiteSpace($sourceName)) {
+                Add-ValidationError "Desktop preset manifest for $toolId contains a file without source."
+                continue
+            }
+            $sourcePath = Join-Path $toolDir $sourceName
+            if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
+                Add-ValidationError "Desktop preset manifest for ${toolId} lists missing source file: $sourceName"
+            }
+        }
+    }
+
+    Write-Host 'OK desktop preset manifest contracts'
+}
+
 function Test-WindhawkPresetPayload {
     function Test-WindhawkPresetUrl {
         param([Parameter(Mandatory)][string]$Uri)

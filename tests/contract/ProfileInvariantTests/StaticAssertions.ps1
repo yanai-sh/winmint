@@ -45,7 +45,7 @@ function Assert-StaticUiFlowInvariants {
     $intentPath = Join-Path $guiRoot 'src\intent.rs'
     $statePath = Join-Path $guiRoot 'src\state.rs'
     $mainPath = Join-Path $guiRoot 'src\main.rs'
-    $coreProfilePath = Join-Path $root 'crates\winmint-core\src\profile.rs'
+    $coreProfilePath = Join-Path $root 'apps\gui\src\core\profile.rs'
 
     $missingRewriteFiles = @()
     foreach ($path in @($intentPath, $statePath, $mainPath, $coreProfilePath)) {
@@ -69,15 +69,15 @@ function Assert-StaticUiFlowInvariants {
         }
     }
 
-    if ($intentText -notmatch 'winmint_core::profile') {
-        Add-SmokeFailure 'GPUI intent bridge must use winmint-core profile helpers.'
+    if ($intentText -notmatch 'crate::core::profile') {
+        Add-SmokeFailure 'GPUI intent bridge must use core profile helpers.'
     }
     if ($coreProfileText -notmatch 'pub struct KeepFlags') {
-        Add-SmokeFailure 'winmint-core must own the keep-flag GUI intent input contract.'
+        Add-SmokeFailure 'GUI core profile module must own the keep-flag GUI intent input contract.'
     }
     foreach ($requiredKey in @('ISOPath', 'KeepEdge', 'KeepGaming', 'KeepCopilot', 'Edition', 'InstallWindhawk', 'InstallNilesoft', 'Browsers', 'Wsl2Distros')) {
         if ($coreProfileText -notmatch [regex]::Escape($requiredKey)) {
-            Add-SmokeFailure "winmint-core GUI intent builder must emit '$requiredKey'."
+            Add-SmokeFailure "GUI core profile builder must emit '$requiredKey'."
         }
     }
 

@@ -120,11 +120,16 @@ function Invoke-WinMintAgentLauncherKeyBootstrap {
 
     $State.steps['config:launcher-key'] = $result
     Save-AgentState -State $State
+    $requiredStateSteps = @()
+    if ([string]$result.status -eq 'ok') {
+        $requiredStateSteps = @('config:launcher-key')
+    }
 
     [pscustomobject]@{
         Id = 'launcher-key'
         Status = [string]$result.status
         Message = "Launcher key target: $($plan.Target)."
+        RequiredStateSteps = $requiredStateSteps
     }
 }
 

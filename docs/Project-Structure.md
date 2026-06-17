@@ -56,8 +56,8 @@ fixture.
 |-- schemas/
 |-- apps/
 |   `-- gui/
-|-- crates/
-|   `-- winmint-core/
+|       `-- src/core/          # UI intent/options helpers (formerly crates/winmint-core)
+|-- assets/runtime/desktop/    # windhawk/yasb preset.manifest.json + curated config payloads
 |-- src/
 |   `-- runtime/
 |       |-- image/

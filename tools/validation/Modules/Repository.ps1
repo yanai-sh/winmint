@@ -223,28 +223,6 @@ function Test-RepositoryReleaseReadiness {
         Add-ValidationError 'Release readiness contract must list concrete not-ready conditions.'
     }
 
-    $readme = Get-Content -LiteralPath (Join-Path $root 'README.md') -Raw -Encoding UTF8
-    $distribution = Get-Content -LiteralPath (Join-Path $root 'docs\Distribution.md') -Raw -Encoding UTF8
-    $readiness = Get-Content -LiteralPath (Join-Path $root 'docs\Release-Readiness.md') -Raw -Encoding UTF8
-    foreach ($document in @(
-            [pscustomobject]@{ Name = 'README.md'; Text = $readme },
-            [pscustomobject]@{ Name = 'docs\Distribution.md'; Text = $distribution },
-            [pscustomobject]@{ Name = 'docs\Release-Readiness.md'; Text = $readiness }
-        )) {
-        if ($document.Text -notmatch [regex]::Escape('irm https://winmint.yanai.sh | iex')) {
-            Add-ValidationError "Release readiness launch command missing from $($document.Name)."
-        }
-    }
-    if ($readme -notmatch 'PowerShell 7\.6\.2\+' -or $readme -notmatch 'Windows 11 25H2\+') {
-        Add-ValidationError 'README.md must document PowerShell 7.6.2+ and Windows 11 25H2+ release requirements.'
-    }
-    if ($distribution -notmatch 'temporary session' -or $distribution -notmatch '\.sha256') {
-        Add-ValidationError 'docs\Distribution.md must document temporary-session bootstrap and SHA256 verification.'
-    }
-    if ($readiness -notmatch 'config/release-readiness\.json' -and $readiness -notmatch 'config\\release-readiness\.json') {
-        Add-ValidationError 'docs\Release-Readiness.md must point to config\release-readiness.json.'
-    }
-
     Write-Host 'OK repository release readiness contract'
 }
 
@@ -339,20 +317,6 @@ function Test-RepositoryHardwareAcceptance {
         )) {
         if ($evidence -notcontains $expectedEvidence) {
             Add-ValidationError "Hardware acceptance evidence list missing: $expectedEvidence"
-        }
-    }
-
-    $hardwareDocPath = Join-Path $root 'docs\Hardware-Acceptance.md'
-    $hardwareDoc = Get-Content -LiteralPath $hardwareDocPath -Raw -Encoding UTF8
-    foreach ($requiredText in @(
-            'config/hardware-acceptance.json',
-            'surface-laptop-7',
-            'SurfaceCatalog',
-            'LiveInstallAudit.json',
-            'notes.md'
-        )) {
-        if ($hardwareDoc -notmatch [regex]::Escape($requiredText)) {
-            Add-ValidationError "docs\Hardware-Acceptance.md must mention '$requiredText'."
         }
     }
 

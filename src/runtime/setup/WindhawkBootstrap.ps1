@@ -34,6 +34,10 @@ param(
     [string]$LogPath = (Join-Path ([System.IO.Path]::GetTempPath()) 'WindhawkBootstrap.log'),
 
     [Parameter()]
+    [ValidateNotNullOrEmpty()]
+    [string]$EvidencePath = '',
+
+    [Parameter()]
     [switch]$NoRestartExplorer
 )
 
@@ -52,6 +56,10 @@ try {
 
     $PresetFile = [System.IO.Path]::GetFullPath($PresetFile)
     $WindhawkRoot = [System.IO.Path]::GetFullPath($WindhawkRoot)
+    if ([string]::IsNullOrWhiteSpace($EvidencePath)) {
+        $EvidencePath = Join-Path $WindhawkRoot 'WinMint\preset-application.json'
+    }
+    $EvidencePath = [System.IO.Path]::GetFullPath($EvidencePath)
     if (-not (Test-Path -LiteralPath $PresetFile)) { throw "Windhawk preset not found: $PresetFile" }
     $WindhawkInstallRoot = Resolve-WindhawkInstallRoot
     Write-WindhawkLog "Windhawk install root: $WindhawkInstallRoot"
@@ -154,6 +162,16 @@ try {
         Remove-WindhawkOldModFile -ModId $item.Id -Subfolders $item.Subfolders -CurrentLibraryFileName $item.LibraryFileName
     }
     Remove-WindhawkPresetDrift -PresetModIds @($applied | ForEach-Object { $_.Id })
+    $evidenceParent = Split-Path -Parent $EvidencePath
+    if (-not (Test-Path -LiteralPath $evidenceParent)) {
+        $null = New-Item -ItemType Directory -Path $evidenceParent -Force
+    }
+    [ordered]@{
+        status = 'ok'
+        presetPath = $PresetFile
+        installRoot = $WindhawkInstallRoot
+        timestamp = (Get-Date -Format o)
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $EvidencePath -Encoding UTF8
     Write-WindhawkLog "Windhawk preset applied ($($applied.Count) mods)." -Level OK
 }
 catch {

@@ -234,18 +234,15 @@ function Test-RustCrates {
         return
     }
 
-    foreach ($manifest in @(
-            'crates\winmint-core\Cargo.toml'
-        )) {
-        $path = Join-Path $root $manifest
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-            Add-ValidationError "Rust crate manifest missing: $manifest"
-            continue
-        }
-        & $cargo.Source test --manifest-path $path
-        if ($LASTEXITCODE -ne 0) {
-            Add-ValidationError "cargo test failed for $manifest with exit code $LASTEXITCODE."
-        }
+    $manifest = 'apps\gui\Cargo.toml'
+    $path = Join-Path $root $manifest
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        Add-ValidationError "Rust crate manifest missing: $manifest"
+        return
+    }
+    & $cargo.Source test --manifest-path $path
+    if ($LASTEXITCODE -ne 0) {
+        Add-ValidationError "cargo test failed for $manifest with exit code $LASTEXITCODE."
     }
 }
 

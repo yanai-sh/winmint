@@ -53,8 +53,10 @@ function Remove-WinMintIntermediatesCacheTree {
     }
 }
 
-function Invoke-WinMintDriverMsiBundleCacheMaintenance {
-    $root = Join-Path (Get-WinMintBuildCacheRoot) 'driver-msi-bundle'
+function Invoke-WinMintKeyedJsonMarkerCacheMaintenance {
+    param([Parameter(Mandatory)][string]$CacheSubdir)
+
+    $root = Join-Path (Get-WinMintBuildCacheRoot) $CacheSubdir
     if (-not (Test-Path -LiteralPath $root)) { return }
     foreach ($json in @(Get-ChildItem -LiteralPath $root -Filter '*.json' -File -ErrorAction SilentlyContinue)) {
         if (-not (Test-WinMintIntermediatesCacheMarkerFileFresh -MarkerJsonPath $json.FullName)) {
@@ -69,42 +71,18 @@ function Invoke-WinMintDriverMsiBundleCacheMaintenance {
             Remove-WinMintIntermediatesCacheTree -Path $dir.FullName
         }
     }
+}
+
+function Invoke-WinMintDriverMsiBundleCacheMaintenance {
+    Invoke-WinMintKeyedJsonMarkerCacheMaintenance -CacheSubdir 'driver-msi-bundle'
 }
 
 function Invoke-WinMintDriverMsiSingleCacheMaintenance {
-    $root = Join-Path (Get-WinMintBuildCacheRoot) 'driver-msi-single'
-    if (-not (Test-Path -LiteralPath $root)) { return }
-    foreach ($json in @(Get-ChildItem -LiteralPath $root -Filter '*.json' -File -ErrorAction SilentlyContinue)) {
-        if (-not (Test-WinMintIntermediatesCacheMarkerFileFresh -MarkerJsonPath $json.FullName)) {
-            $key = [IO.Path]::GetFileNameWithoutExtension($json.Name)
-            Remove-WinMintIntermediatesCacheTree -Path (Join-Path $root $key)
-            Remove-Item -LiteralPath $json.FullName -Force -ErrorAction SilentlyContinue
-        }
-    }
-    foreach ($dir in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
-        $marker = Join-Path $root ($dir.Name + '.json')
-        if (-not (Test-Path -LiteralPath $marker)) {
-            Remove-WinMintIntermediatesCacheTree -Path $dir.FullName
-        }
-    }
+    Invoke-WinMintKeyedJsonMarkerCacheMaintenance -CacheSubdir 'driver-msi-single'
 }
 
 function Invoke-WinMintHostDriverExportCacheMaintenance {
-    $root = Join-Path (Get-WinMintBuildCacheRoot) 'host-drivers'
-    if (-not (Test-Path -LiteralPath $root)) { return }
-    foreach ($json in @(Get-ChildItem -LiteralPath $root -Filter '*.json' -File -ErrorAction SilentlyContinue)) {
-        if (-not (Test-WinMintIntermediatesCacheMarkerFileFresh -MarkerJsonPath $json.FullName)) {
-            $key = [IO.Path]::GetFileNameWithoutExtension($json.Name)
-            Remove-WinMintIntermediatesCacheTree -Path (Join-Path $root $key)
-            Remove-Item -LiteralPath $json.FullName -Force -ErrorAction SilentlyContinue
-        }
-    }
-    foreach ($dir in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
-        $marker = Join-Path $root ($dir.Name + '.json')
-        if (-not (Test-Path -LiteralPath $marker)) {
-            Remove-WinMintIntermediatesCacheTree -Path $dir.FullName
-        }
-    }
+    Invoke-WinMintKeyedJsonMarkerCacheMaintenance -CacheSubdir 'host-drivers'
 }
 
 function Invoke-WinMintAllBuildCachesMaintenance {

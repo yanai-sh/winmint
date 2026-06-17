@@ -9,7 +9,7 @@ The core design rule: **UI creates intent. Engine performs work. Reports explain
 
 PowerShell owns the backend and all real product work: profile normalization, ISO/WIM servicing, setup payloads, FirstLogon, reports, release tooling, and validation tooling. The actual build logic must stay headless. GPUI/Rust is a frontend layer that creates intent, previews choices, and invokes the headless PowerShell engine; it must not own servicing, setup orchestration, offline registry edits, or live-user package installation.
 
-Backend composition is module-first under `src/runtime/modules/`. Public backend entrypoints import explicit script modules (`WinMint.Bootstrap`, `WinMint.Profile`, `WinMint.Catalog`, `WinMint.Engine`, `WinMint.Setup`, `WinMint.FirstLogon`, `WinMint.Audit`, `WinMint.Reporting`) instead of treating `src/runtime/image/WinMint.ps1` as the primary composition root. The legacy dot-sourced image runtime remains as a compatibility adapter while callers are migrated.
+Backend composition uses thin PowerShell modules under `src/runtime/modules/`. Public entrypoints import `WinMint.Bootstrap` (elevation/relaunch), `WinMint.Profile` (profile authoring for the UI bridge), and `WinMint.Engine` (dot-sources `src/runtime/image/WinMint.ps1` as the single canonical runtime load order). Do not add parallel per-area module wrappers unless they have real consumers.
 
 ## Product stance (opinionated)
 
@@ -30,8 +30,9 @@ Backend composition is module-first under `src/runtime/modules/`. Public backend
 ## Commands
 
 ```powershell
-# Validate syntax + PSScriptAnalyzer (run from project root on Windows)
+# Validate syntax (PSScriptAnalyzer runs in CI and via -RunAnalyzer locally)
 pwsh -NoProfile -File tools\validation\Validate.ps1
+pwsh -NoProfile -File tools\validation\Validate.ps1 -RunAnalyzer
 
 # Smoke-test profile invariants (no ISO or Windows required)
 pwsh -NoProfile -File tests\contract\Test-ProfileInvariants.ps1
@@ -70,7 +71,7 @@ from Pro-capable source media.
 | CLI | `WinMint-CLI.ps1` | Headless verb dispatcher (`build`/`new`/`validate`/`list`/`clean`; no verb = interactive wizard). Verb functions live in `src/runtime/image/Cli.ps1` and delegate to the engine |
 | Engine | `src/runtime/image/WinMint.ps1` | Dot-sources all private modules; owns DISM/WIM servicing |
 | UI | `WinMint-GUI.ps1`; `apps/gui/` | GPUI is the only shipped GUI and is frontend-only: guided input, previews, validation messages, and bridge calls into the headless PowerShell engine. Prefer native GPUI APIs and platform abstractions over external GUI/tooling workarounds; for example, use `App::prompt_for_paths` with `PathPromptOptions` for file/folder selection instead of `rfd`, WinForms/WPF shells, or PowerShell picker helpers. The GPUI app uses `gpui-animation` for state-driven hover transitions; interactive wrappers must use `AnimatedWrapper::on_click` (not the inner `div`’s `on_click`) so the animation hook is not overwritten. Shared controls live in `apps/gui/src/components.rs` (aliased `ui::`) as stateless `pub fn` builders — keep them in that single file. Split into a `components/` directory (thematic submodules re-exported from `mod.rs` so `ui::*` call sites are unchanged) only once a component grows internal state and becomes a `#[derive(IntoElement)] + RenderOnce` struct, or the file passes ~500 lines. Don't split before then. |
-| Rust core | `crates/winmint-core/` | Typed contract helpers shared by the GPUI front end. Must not own DISM, offline registry servicing, Windows Setup orchestration, or first-logon package installs. |
+| GUI core | `apps/gui/src/core/` | Typed UI intent/options helpers used only by the GPUI front end. Must not own DISM, offline registry servicing, Windows Setup orchestration, or first-logon package installs. |
 | Agent | `src/runtime/firstlogon/Start-WinMintAgent.ps1` | Runs at first logon; installs editors, WSL distros, and shell layers |
 | Setup scripts | `src/runtime/setup/FirstLogon.ps1`, `src/runtime/setup/SetupComplete.ps1` | Machine-phase setup during Windows install |
 | Bootstrap | `winmint.ps1` | Downloads release, verifies hash, launches UI |
@@ -127,7 +128,8 @@ Validate with `tests/contract/Test-ProfileInvariants.ps1`.
 | `config/tweaks.json` | Public metadata mirror of the tweak modules; kept in parity by a contract test (`StaticAssertions.ps1`). Not the executable source. |
 | `schemas/winmint.*.schema.json` | JSON Schema for the profile, manifest, and agent-state contracts |
 | `config/autounattend.xml` | Windows unattended install template; generated output must ship alongside ISO |
-| `assets/runtime/desktop/windhawk/preset.json` | Windhawk mod preset (installed as a unit, not individual mods) |
+| `assets/runtime/desktop/windhawk/preset.manifest.json` | Windhawk mod preset manifest (installed as a unit, not individual mods) |
+| `assets/runtime/desktop/yasb/preset.manifest.json` | YASB preset manifest |
 | `assets/runtime/desktop/komorebi/`, `assets/runtime/desktop/yasb/` | Shell layer configs |
 | `PSScriptAnalyzerSettings.psd1` | Linter settings |
 
@@ -197,7 +199,7 @@ See `docs/Windows-Debloat-Strategy.md` for the full audit and Tier 2 candidates.
 
 ## Architecture Phase (current branch)
 
-Branch `architecture/profile-engine` is converging toward:
+Branch `codex/architecture-refactor-backend-seams` is converging toward:
 
 1. UI saves a complete `BuildProfile.json` before starting
 2. Engine builds from a profile without GUI code loaded

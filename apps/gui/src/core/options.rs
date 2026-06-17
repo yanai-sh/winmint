@@ -1,4 +1,5 @@
 //! Stable UI intent option tokens shared by Rust front ends.
+#![allow(dead_code)] // Wire tokens mirror schema/catalog parity; the GUI builder uses a subset.
 
 pub const PROFILE_NAME: &str = "WinMint";
 

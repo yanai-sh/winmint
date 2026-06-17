@@ -1,6 +1,6 @@
 # External Integrations
 
-Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-16. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-17. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
 ## Core Sections (Required)
 
@@ -12,6 +12,7 @@ Snapshot note: this document reflects the current development state of the repo 
 | GitHub Releases API | HTTPS API | Bootstrap release lookup and build-time latest release asset lookup for payloads such as PowerShell/ViveTool/Cascadia/winget assets; thide is installed from its upstream release when selected. | Public API with `User-Agent`; no repo secret in code. | High | `winmint.ps1`, `src/runtime/image/Private/PayloadStore.ps1`, `src/runtime/image/Private/Image/Packages.ps1`, `src/runtime/image/Private/Image/Staging.ps1`, `src/runtime/firstlogon/Modules/TilingDesktop.ps1` |
 | Microsoft Update Catalog | HTTPS web endpoint | Resolve and download stable 25H2 update payloads with SHA256 metadata. | Public Microsoft endpoint. | High when `Stable25H2` is selected | `src/runtime/image/Private/UpdatePayloads.ps1`, `README.md` |
 | Microsoft Defender definition endpoint | HTTPS endpoint | Acquire Defender offline image update payloads. | Public Microsoft endpoint. | Medium | `src/runtime/image/Private/UpdatePayloads.ps1` |
+| Microsoft Download Center (Surface driver catalog) | HTTPS web endpoint | Resolve and download the official Surface driver/firmware MSI for a `SurfaceCatalog` device id, then run the safe offline classification path. | Public Microsoft endpoint; host allowlist restricted to `download.microsoft.com`/`www.microsoft.com`, ownership/signature evidence verified before injection. | High when `-DriverSource SurfaceCatalog` is selected | `config/surface-drivers.json`, `src/runtime/image/Private/Image/Drivers.ps1`, `README.md` |
 | winget / msstore | Package manager sources | Install GUI/system apps, Store-backed Raycast, amd64 Everything Beta, PowerShell/Terminal fallback, and runtime tools. | User/package agreement flags; no app secrets. | High for FirstLogon modules | `config/packages.json`, `src/runtime/firstlogon/Agent.Runtime.ps1`, `src/runtime/setup/SetupComplete/Toolchain.ps1` |
 | voidtools direct installer | HTTPS download | Install the pinned native Everything 1.5 ARM64 backend when Raycast is selected on ARM64 media. | Public upstream installer; SHA256 verified before execution. | Medium for ARM64 Raycast builds | `config/packages.json`, `src/runtime/firstlogon/Agent.Runtime.ps1`, `src/runtime/firstlogon/Modules/Raycast.ps1` |
 | Raycast extension URL scheme | Local app protocol | Request curated Raycast extensions during FirstLogon after Raycast is installed. | User-context app protocol; no API keys. | Medium when Raycast selected | `src/runtime/firstlogon/Modules/Raycast.ps1`, `src/runtime/image/Private/InstallPlan.ps1` |
@@ -25,8 +26,9 @@ Snapshot note: this document reflects the current development state of the repo 
 
 | Store | Role | Access layer | Key risk | Evidence |
 |-------|------|--------------|----------|----------|
-| `BuildProfile.json` | Build intent consumed by engine/setup/agent. | `src/runtime/image/Private/Config/Profile.ps1`, `tools/ui-bridge/New-UiBuildProfile.ps1` | Contract drift between GUI, CLI, schema, and setup consumers. | `schemas/winmint.buildprofile.schema.json`, `crates/winmint-core/src/profile.rs` |
+| `BuildProfile.json` | Build intent consumed by engine/setup/agent. | `src/runtime/image/Private/Config/Profile.ps1`, `tools/ui-bridge/New-UiBuildProfile.ps1` | Contract drift between GUI, CLI, schema, and setup consumers. | `schemas/winmint.buildprofile.schema.json`, `apps/gui/src/core/profile.rs` |
 | `BuildManifest.json` / report artifacts | Machine-readable build outcome, payload facts, recovery/tweak audit outputs. | `src/runtime/image/Private/Manifest.ps1`, `src/runtime/image/Reports.ps1` | Unsupported claims if facts are inferred outside manifest helpers or install-plan facts. | `schemas/winmint.buildmanifest.schema.json`, `src/runtime/image/Private/Manifest.ps1`, `src/runtime/image/Reports.ps1` |
+| `BuildDelta.json` | Normalized backend audit of intended changes (phase/kind/default/requires/suppressedBy/changes/artifacts/reversible/source) consumed by GUI review, CLI summaries, and reports. | `src/runtime/image/Private/Audit.ps1` (`New-WinMintBuildDeltaCatalog`, `Save-WinMintBuildDeltaCatalog`). | Delta records drift from actual servicing if contributors bypass the catalog helpers. | `schemas/winmint.builddelta.schema.json`, `src/runtime/image/Private/Audit.ps1`, `output/WinMint-BuildDelta.json` |
 | `%LOCALAPPDATA%\WinMint\state.json` | FirstLogon retry/resume state. | `src/runtime/firstlogon/Agent.Runtime.ps1` | Partial state or stale step status across failed/rebooted runs. | `schemas/winmint.agentstate.schema.json`, `src/runtime/firstlogon/Start-WinMintAgent.ps1` |
 | `%LOCALAPPDATA%\WinMint\Logs` | FirstLogon event and command logs. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Agent.Console.ps1` | Logs can contain installer output; redaction policy is `[TODO]`. | `src/runtime/firstlogon/Start-WinMintAgent.ps1`, `src/runtime/firstlogon/Agent.Runtime.ps1` |
 | `%TEMP%\Win11ISO_dependency_cache` and output work dirs | Cached downloads, staged ISO/intermediate build state. | `src/runtime/image/Private/Runtime.ps1`, `src/runtime/image/Private/IsoStageCache.ps1`, `src/runtime/image/Private/IntermediatesCache.ps1` | Cache invalidation/fingerprint mistakes can reuse stale payloads. | `src/runtime/image/Private/Runtime.ps1`, `src/runtime/image/Private/IntermediatesCache.ps1` |
@@ -57,6 +59,8 @@ Snapshot note: this document reflects the current development state of the repo 
 - `src/runtime/image/Private/Manifest.ps1`
 - `src/runtime/image/Private/UpdatePayloads.ps1`
 - `src/runtime/image/Private/PayloadStore.ps1`
+- `src/runtime/image/Private/Image/Drivers.ps1`
+- `config/surface-drivers.json`
 - `src/runtime/image/Private/UsbMedia.ps1`
 - `src/runtime/firstlogon/Agent.Runtime.ps1`
 - `src/runtime/firstlogon/Modules/Wsl.ps1`

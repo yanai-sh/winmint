@@ -9,6 +9,69 @@ function Get-WinMintShellLayerConfig {
     return $null
 }
 
+function Get-WinMintDesktopEnvironmentLayerDefinitions {
+    @(
+        [pscustomobject]@{
+            Key = 'yasb'
+            DisplayName = 'YASB'
+            ProfileProperty = 'yasb'
+            InstallFunction = 'Install-WinMintYasbLayer'
+            RequiredStateResolver = { @(Get-AgentManifestToolStateKey -ToolId 'yasb') }
+        },
+        [pscustomobject]@{
+            Key = 'thide'
+            DisplayName = 'thide'
+            ProfileProperty = 'thide'
+            InstallFunction = 'Install-WinMintThideLayer'
+            RequiredStateResolver = { @('shell:thide') }
+        },
+        [pscustomobject]@{
+            Key = 'nilesoft'
+            DisplayName = 'Nilesoft Shell'
+            ProfileProperty = 'nilesoft'
+            InstallFunction = 'Install-WinMintNilesoftLayer'
+            RequiredStateResolver = { @(Get-AgentManifestToolStateKey -ToolId 'nilesoft') }
+        },
+        [pscustomobject]@{
+            Key = 'komorebi'
+            DisplayName = 'Komorebi'
+            ProfileProperty = 'komorebi'
+            InstallFunction = 'Install-WinMintKomorebiLayer'
+            RequiredStateResolver = { @((Get-AgentManifestToolStateKey -ToolId 'komorebi'), (Get-AgentManifestToolStateKey -ToolId 'whkd')) }
+        }
+    )
+}
+
+function Get-WinMintSelectedDesktopEnvironmentLayers {
+    param([Parameter(Mandatory)]$Shell)
+
+    $selected = [System.Collections.Generic.List[object]]::new()
+    foreach ($definition in @(Get-WinMintDesktopEnvironmentLayerDefinitions)) {
+        $property = $Shell.PSObject.Properties[[string]$definition.ProfileProperty]
+        if ($property -and [bool]$property.Value) {
+            $selected.Add($definition) | Out-Null
+        }
+    }
+
+    return @($selected)
+}
+
+function Get-WinMintShellLayerRequiredStateSteps {
+    param([Parameter(Mandatory)]$Shell)
+
+    $steps = [System.Collections.Generic.List[string]]::new()
+    foreach ($layer in @(Get-WinMintSelectedDesktopEnvironmentLayers -Shell $Shell)) {
+        $resolved = & $layer.RequiredStateResolver
+        foreach ($step in @($resolved)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$step)) {
+                $steps.Add([string]$step) | Out-Null
+            }
+        }
+    }
+
+    return @($steps)
+}
+
 function Resolve-WinMintYasbCli {
     $cmd = Get-Command -Name @('yasbc.exe', 'yasbc') -ErrorAction SilentlyContinue |
         Select-Object -First 1
@@ -346,7 +409,7 @@ function Install-WinMintThideLayer {
     }
 }
 
-function Invoke-WinMintAgentTilingDesktopBootstrap {
+function Invoke-WinMintAgentDesktopEnvironmentBootstrap {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][object]$AgentProfile,
@@ -356,44 +419,37 @@ function Invoke-WinMintAgentTilingDesktopBootstrap {
     $shell = Get-WinMintShellLayerConfig -AgentProfile $AgentProfile
     if (-not $shell) {
         return [pscustomobject]@{
-            Id      = 'tiling-desktop'
+            Id      = 'desktop-environment'
             Status  = 'skipped'
             Message = 'No desktop shell layers selected.'
         }
     }
 
     $completed = [System.Collections.Generic.List[string]]::new()
-
-    if ([bool]$shell.yasb) {
-        Install-WinMintYasbLayer -State $State
-        $completed.Add('YASB') | Out-Null
-    }
-    if ([bool]$shell.thide) {
-        Install-WinMintThideLayer -State $State
-        $completed.Add('thide') | Out-Null
-    }
-    if ([bool]$shell.nilesoft) {
-        Install-WinMintNilesoftLayer -State $State
-        $completed.Add('Nilesoft Shell') | Out-Null
-    }
-    if ([bool]$shell.komorebi) {
-        Install-WinMintKomorebiLayer -State $State
-        $completed.Add('Komorebi') | Out-Null
-        if ([bool]$shell.whkd) { $completed.Add('whkd') | Out-Null }
+    $selectedLayers = @(Get-WinMintSelectedDesktopEnvironmentLayers -Shell $shell)
+    foreach ($layer in $selectedLayers) {
+        & ([string]$layer.InstallFunction) -State $State
+        $completed.Add([string]$layer.DisplayName) | Out-Null
+        if ([string]$layer.Key -eq 'komorebi' -and [bool]$shell.whkd) {
+            $completed.Add('whkd') | Out-Null
+        }
     }
 
     if ($completed.Count -eq 0) {
         return [pscustomobject]@{
-            Id      = 'tiling-desktop'
+            Id      = 'desktop-environment'
             Status  = 'skipped'
             Message = 'Standard Windows desktop selected.'
         }
     }
 
+    $requiredStateSteps = @(Get-WinMintShellLayerRequiredStateSteps -Shell $shell)
+
     [pscustomobject]@{
-        Id      = 'tiling-desktop'
-        Status  = 'ok'
-        Message = "Configured: $($completed -join ', ')."
+        Id                 = 'desktop-environment'
+        Status             = 'ok'
+        Message            = "Configured: $($completed -join ', ')."
+        RequiredStateSteps = $requiredStateSteps
     }
 }
 

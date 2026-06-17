@@ -1,6 +1,8 @@
 # Windhawk Preset
 
 `preset.json` is the version-controlled WinMint Windhawk desktop preset.
+`preset.manifest.json` is the WinMint curation contract that tells build
+staging which preset files to ship into the FirstLogon agent payload.
 
 The preset stores:
 

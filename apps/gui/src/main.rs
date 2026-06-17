@@ -2,6 +2,7 @@ mod actions;
 mod assets;
 mod bridge;
 mod components;
+mod core;
 mod intent;
 mod options;
 mod screens;

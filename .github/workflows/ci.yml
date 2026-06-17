@@ -24,7 +24,7 @@ jobs:
         shell: pwsh
         run: |
           ./tests/contract/Test-ProfileInvariants.ps1
-          ./tools/validation/Validate.ps1
+          ./tools/validation/Validate.ps1 -RunAnalyzer
 
   gui_dev:
     name: GUI crate (Rust)

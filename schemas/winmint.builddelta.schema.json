@@ -22,14 +22,8 @@
           "phase",
           "kind",
           "title",
-          "default",
-          "requires",
-          "suppressedBy",
           "userControlled",
-          "changes",
-          "artifacts",
-          "reversible",
-          "source"
+          "changes"
         ],
         "additionalProperties": false,
         "properties": {
@@ -37,33 +31,10 @@
           "phase": { "type": "string" },
           "kind": { "type": "string" },
           "title": { "type": "string" },
-          "default": { "type": "boolean" },
-          "requires": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "suppressedBy": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
           "userControlled": { "type": "boolean" },
           "changes": {
             "type": "array",
             "items": { "type": "string" }
-          },
-          "artifacts": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "reversible": { "type": "boolean" },
-          "source": {
-            "type": "object",
-            "required": ["subsystem", "contributorId"],
-            "additionalProperties": false,
-            "properties": {
-              "subsystem": { "type": "string" },
-              "contributorId": { "type": "string" }
-            }
           }
         }
       }

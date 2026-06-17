@@ -240,6 +240,91 @@ function Copy-WinMintAgentTerminalIconAssets {
     }
 }
 
+function Get-WinMintDesktopPresetManifest {
+    param(
+        [Parameter(Mandatory)][string]$RepositoryRoot,
+        [Parameter(Mandatory)][string]$ToolId
+    )
+
+    $sourceDir = Join-Path $RepositoryRoot "assets\runtime\desktop\$ToolId"
+    $manifestPath = Join-Path $sourceDir 'preset.manifest.json'
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw "Desktop preset manifest is missing for '$ToolId': $manifestPath"
+    }
+
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ([int]$manifest.schemaVersion -ne 1) { throw "Unsupported desktop preset manifest schema for '$ToolId': $manifestPath" }
+    if ([string]$manifest.tool -ne $ToolId) { throw "Desktop preset manifest tool mismatch for '$ToolId': $manifestPath" }
+    if ([string]::IsNullOrWhiteSpace([string]$manifest.displayName)) { throw "Desktop preset manifest has no displayName: $manifestPath" }
+    if ([string]::IsNullOrWhiteSpace([string]$manifest.stageDirectory)) { throw "Desktop preset manifest has no stageDirectory: $manifestPath" }
+    if (-not $manifest.files -or @($manifest.files).Count -eq 0) { throw "Desktop preset manifest has no files: $manifestPath" }
+
+    [pscustomobject]@{
+        ToolId = $ToolId
+        SourceDir = $sourceDir
+        ManifestPath = $manifestPath
+        DisplayName = [string]$manifest.displayName
+        StageDirectory = [string]$manifest.stageDirectory
+        Files = @($manifest.files)
+    }
+}
+
+function Get-WinMintDesktopPresetSourceFiles {
+    param([Parameter(Mandatory)]$Manifest)
+
+    $files = [System.Collections.Generic.List[object]]::new()
+    $files.Add([pscustomobject]@{
+        Source = [string]$Manifest.ManifestPath
+        Destination = 'preset.manifest.json'
+        Role = 'manifest'
+    }) | Out-Null
+
+    foreach ($file in @($Manifest.Files)) {
+        $sourceName = [string]$file.source
+        if ([string]::IsNullOrWhiteSpace($sourceName)) {
+            throw "Desktop preset manifest has a file without source: $($Manifest.ManifestPath)"
+        }
+        $destinationName = if ($file.PSObject.Properties['destination'] -and -not [string]::IsNullOrWhiteSpace([string]$file.destination)) {
+            [string]$file.destination
+        } else {
+            $sourceName
+        }
+        $files.Add([pscustomobject]@{
+            Source = (Join-Path $Manifest.SourceDir $sourceName)
+            Destination = $destinationName
+            Role = if ($file.PSObject.Properties['role']) { [string]$file.role } else { '' }
+        }) | Out-Null
+    }
+
+    return @($files)
+}
+
+function Copy-WinMintAgentDesktopPresetAssets {
+    param(
+        [Parameter(Mandatory)][string]$RepositoryRoot,
+        [Parameter(Mandatory)][string]$AgentDestination,
+        [Parameter(Mandatory)][string]$ToolId
+    )
+
+    $manifest = Get-WinMintDesktopPresetManifest -RepositoryRoot $RepositoryRoot -ToolId $ToolId
+    $assetDir = Join-Path $AgentDestination "Assets\$($manifest.StageDirectory)"
+    $null = New-Item -ItemType Directory -Path $assetDir -Force
+
+    foreach ($file in @(Get-WinMintDesktopPresetSourceFiles -Manifest $manifest)) {
+        if (-not (Test-Path -LiteralPath $file.Source -PathType Leaf)) {
+            throw "$($manifest.DisplayName) preset asset is missing: $($file.Source)"
+        }
+        $destination = Join-Path $assetDir ([string]$file.Destination)
+        $destinationParent = Split-Path -Parent $destination
+        if (-not (Test-Path -LiteralPath $destinationParent)) {
+            $null = New-Item -ItemType Directory -Path $destinationParent -Force
+        }
+        Copy-Item -LiteralPath $file.Source -Destination $destination -Force
+    }
+
+    LogOK "Staged $($manifest.DisplayName) curated preset for first-logon setup."
+}
+
 function Copy-WinMintAgentWindhawkAssets {
     param(
         [Parameter(Mandatory)][string]$RepositoryRoot,
@@ -256,8 +341,7 @@ function Copy-WinMintAgentWindhawkAssets {
     Copy-Item -LiteralPath (Get-WinMintPath -Name RuntimeSetupRoot -ChildPath 'WindhawkBootstrap.ps1') -Destination (Join-Path $windhawkAssetDir 'WindhawkBootstrap.ps1') -Force
     Copy-Item -LiteralPath (Get-WinMintPath -Name RuntimeSetupRoot -ChildPath 'WindhawkBootstrap.Helpers.ps1') -Destination (Join-Path $windhawkAssetDir 'WindhawkBootstrap.Helpers.ps1') -Force
     Copy-Item -LiteralPath (Get-WinMintPath -Name RuntimeSetupRoot -ChildPath 'DisableVirtualDesktopFlyouts.ps1') -Destination (Join-Path $windhawkAssetDir 'DisableVirtualDesktopFlyouts.ps1') -Force
-    Copy-Item -LiteralPath (Join-Path $RepositoryRoot 'assets\runtime\desktop\windhawk\preset.json') -Destination (Join-Path $windhawkAssetDir 'preset.json') -Force
-    LogOK 'Staged Windhawk preset for first-logon setup.'
+    Copy-WinMintAgentDesktopPresetAssets -RepositoryRoot $RepositoryRoot -AgentDestination $AgentDestination -ToolId 'windhawk'
 }
 
 function Copy-WinMintAgentYasbAssets {
@@ -271,16 +355,7 @@ function Copy-WinMintAgentYasbAssets {
         return
     }
 
-    $yasbSourceDir = Join-Path $RepositoryRoot 'assets\runtime\desktop\yasb'
-    if (-not (Test-Path -LiteralPath $yasbSourceDir -PathType Container)) {
-        throw "YASB preset assets are missing: $yasbSourceDir"
-    }
-
-    $yasbAssetDir = Join-Path $AgentDestination 'Assets\Yasb'
-    $null = New-Item -ItemType Directory -Path $yasbAssetDir -Force
-    Copy-Item -LiteralPath (Join-Path $yasbSourceDir 'config.yaml') -Destination (Join-Path $yasbAssetDir 'config.yaml') -Force
-    Copy-Item -LiteralPath (Join-Path $yasbSourceDir 'styles.css') -Destination (Join-Path $yasbAssetDir 'styles.css') -Force
-    LogOK 'Staged YASB preset for first-logon setup.'
+    Copy-WinMintAgentDesktopPresetAssets -RepositoryRoot $RepositoryRoot -AgentDestination $AgentDestination -ToolId 'yasb'
 }
 
 function Copy-WinMintAgentKomorebiAssets {

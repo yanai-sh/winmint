@@ -13,7 +13,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::options;
+use super::options;
 
 /// Clamp an arbitrary form-factor string to the supported set, defaulting to `Auto`.
 pub fn normalized_form_factor(value: &str) -> &'static str {

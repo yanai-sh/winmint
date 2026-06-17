@@ -15,7 +15,7 @@ output\gui\BuildProfile.json
 ```
 
 Profile intent shaping is shared with command-line tooling through the Rust
-core crate at `crates\winmint-core`. Keep GUI-only rendering in this app, and
+UI intent helpers live in `apps\gui\src\core`. Keep GUI-only rendering in this app, and
 put reusable contract normalization in the core crate.
 
 Release users start the GUI through the root launcher:

@@ -265,11 +265,16 @@ function Invoke-WinMintAgentPackageManagerBootstrap {
     Install-AgentScoop -State $State
     Install-AgentManifestTool -ToolId 'mingit' -State $State
     Install-WinMintAgentStarshipPrompt -State $State
+    $mingitStateKey = Get-AgentManifestToolStateKey -ToolId 'mingit'
+    $packageManagerStateSteps = @('package-manager:scoop', $mingitStateKey)
+    $shellPromptStateSteps = @('shell:starship')
 
     [pscustomobject]@{
-        Id      = 'package-managers'
-        Status  = 'ok'
-        Message = 'winget ready; Scoop, MinGit, and Starship installed.'
+        Id                       = 'package-managers'
+        Status                   = 'ok'
+        Message                  = 'winget ready; Scoop and MinGit installed; Starship prompt configured.'
+        RequiredStateSteps       = @($packageManagerStateSteps + $shellPromptStateSteps)
+        PackageManagerStateSteps = $packageManagerStateSteps
+        ShellPromptStateSteps    = $shellPromptStateSteps
     }
 }
-

@@ -1,12 +1,12 @@
 # Testing Patterns
 
-Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-16. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-18. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
 
 ## Core Sections (Required)
 
 ### 1) Test Stack and Commands
 
-- Primary test framework: custom PowerShell contract/smoke scripts plus Rust `cargo test` for `winmint-core` and GUI crates.
+- Primary test framework: custom PowerShell contract/smoke scripts plus Rust `cargo test` for the GUI crate (including `apps/gui/src/core/` contract tests).
 - Assertion/mocking tools: PowerShell helper functions that collect failures and throw; JSON schema checks in validation modules; Rust built-in `#[test]`. No Pester dependency was found.
 - Commands:
 
@@ -15,7 +15,6 @@ pwsh -NoProfile -File tests\contract\Test-ProfileInvariants.ps1
 pwsh -NoProfile -File tests\contract\Test-Fast.ps1
 pwsh -NoProfile -File tools\validation\Validate.ps1
 pwsh -NoProfile -File tools\validation\Validate.ps1 -RunAnalyzer
-cargo test --manifest-path crates\winmint-core\Cargo.toml
 cargo test --manifest-path apps\gui\Cargo.toml
 pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profiles\hyper-v-install-arm64.json
 ```
@@ -24,13 +23,13 @@ pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profile
 
 - Test file placement pattern: PowerShell contract tests live under `tests/contract/`; shared assertion libraries live under `tests/contract/ProfileInvariantTests/`; profile fixtures live under `tests/profiles/`; local large fixture roots live under `tests/fixtures/iso` and `tests/fixtures/drivers`.
 - Naming convention: `Test-*.ps1` for executable test scripts; `Assert-*` functions inside shared assertion files.
-- Setup files and where they run: `tests/contract/Test-ProfileInvariants.ps1` dot-sources runtime internals and assertion files; `tools/validation/Validate.ps1` dot-sources validation modules from `tools/validation/Modules/`.
+- Setup files and where they run: `tests/contract/Test-ProfileInvariants.ps1` dot-sources runtime internals and assertion files; `tests/contract/Test-CliMatrix.ps1` exercises the verb dispatch through the module-imported entrypoint; `tools/validation/Validate.ps1` dot-sources validation modules from `tools/validation/Modules/`.
 
 ### 3) Test Scope Matrix
 
 | Scope | Covered? | Typical target | Notes |
 |-------|----------|----------------|-------|
-| Unit | Yes | Rust UI intent helpers and small PowerShell helpers. | `crates/winmint-core/src/profile.rs` has `#[cfg(test)]` tests; PowerShell contract scripts call helper assertions directly. |
+| Unit | Yes | Rust UI intent helpers and small PowerShell helpers. | `apps/gui/src/core//src/profile.rs` has `#[cfg(test)]` tests; PowerShell contract scripts call helper assertions directly. |
 | Contract/static | Yes | Profile invariants, option-catalog/schema parity, schemas, release manifest, install plan, setup payload staging, executable FirstLogon transaction plan, agent state/runtime plan, CLI matrix, payload store, bootstrap, Cloudflare Worker, UI contract spine. | `tests/contract/Test-Fast.ps1` composes the fast suite. |
 | Integration | Partial | Optional ISO dry-run, payload/source checks, VM helpers. | `tools/validation/Validate.ps1 -RunIntegration` invokes `Test-Integration.ps1`; VM scripts require Hyper-V/Admin and local fixtures. |
 | E2E installer | Manual/fixture-based | Generated ISO boot/install in Hyper-V. | `tools/vm/Build-And-TestVm.ps1` and `tests/profiles/hyper-v-install-arm64.json` exist; CI does not run Hyper-V E2E. |
@@ -46,7 +45,7 @@ pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profile
 
 - Coverage tool + threshold: no numeric threshold is configured. The intended bar is pragmatic rather than exhaustive: protect profile/schema/release invariants with fast tests, use Rust unit tests for typed helpers, and add targeted dry-run or VM acceptance checks for risky image/setup behavior.
 - Current reported coverage: `[TODO]`.
-- Known gaps/flaky areas: no automated full Windows install E2E in CI; live package-manager and network paths are only indirectly covered by contract/static checks; production TODO/FIXME/HACK markers were not found by the 2026-06-16 scan outside excluded artifacts.
+- Known gaps/flaky areas: no automated full Windows install E2E in CI; live package-manager and network paths are only indirectly covered by contract/static checks; production TODO/FIXME/HACK markers were not found by the 2026-06-17 scan outside excluded artifacts.
 
 ### 6) Evidence
 
@@ -62,4 +61,4 @@ pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profile
 - `tools/validation/Validate.ps1`
 - `tools/validation/Modules/Core.ps1`
 - `.github/workflows/ci.yml`
-- `crates/winmint-core/src/profile.rs`
+- `apps/gui/src/core//src/profile.rs`

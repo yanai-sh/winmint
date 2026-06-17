@@ -366,17 +366,8 @@ function Test-BuildDeltaSchema {
                 phase = 'offline-image'
                 kind = 'registry-tweak'
                 title = 'Edge Minimal cleanup'
-                default = $true
-                requires = @()
-                suppressedBy = @()
                 userControlled = $false
                 changes = @('Set HKLM policy value')
-                artifacts = @('WinMint-TweakAudit.json')
-                reversible = $true
-                source = [ordered]@{
-                    subsystem = 'WinMint.Catalog'
-                    contributorId = 'edge-policy-minimal'
-                }
             }
         )
     } | ConvertTo-Json -Depth 10 | ConvertFrom-Json
@@ -391,17 +382,11 @@ function Test-BuildDeltaSchema {
                 phase = 'offline-image'
                 kind = 'registry-tweak'
                 title = 'Broken'
-                default = $true
-                requires = @()
-                suppressedBy = @()
                 userControlled = $false
-                changes = @()
-                artifacts = @()
-                reversible = $true
             }
         )
     } | ConvertTo-Json -Depth 10 | ConvertFrom-Json
-    Test-JsonObjectRejectedBySchema -Value $invalid -SchemaPath $schemaPath -Label 'winmint.builddelta missing source'
+    Test-JsonObjectRejectedBySchema -Value $invalid -SchemaPath $schemaPath -Label 'winmint.builddelta missing changes'
 }
 
 function Test-AgentStateSchema {

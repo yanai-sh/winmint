@@ -419,6 +419,38 @@ function Test-WinMintBuildPrerequisite {
             $failures.Add($Message) | Out-Null
         }
     }
+    function Test-WinMintDesktopPresetAssets {
+        param(
+            [Parameter(Mandatory)][string]$ToolId,
+            [Parameter(Mandatory)][string]$FailureCode
+        )
+
+        $repositoryRoot = Get-WinMintRepositoryRoot
+        $sourceDir = Join-Path $repositoryRoot "assets\runtime\desktop\$ToolId"
+        $manifestPath = Join-Path $sourceDir 'preset.manifest.json'
+        if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+            Add-WinMintBuildPreflightFinding -Severity failure -Code $FailureCode -Message "WinMint desktop preset manifest is missing: $manifestPath"
+            return
+        }
+
+        try {
+            $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ([int]$manifest.schemaVersion -ne 1) { throw "Unsupported schema version '$($manifest.schemaVersion)'." }
+            if ([string]$manifest.tool -ne $ToolId) { throw "Manifest tool id '$($manifest.tool)' does not match '$ToolId'." }
+            if (-not $manifest.files -or @($manifest.files).Count -eq 0) { throw 'Manifest does not declare any files.' }
+            foreach ($file in @($manifest.files)) {
+                $sourceName = [string]$file.source
+                if ([string]::IsNullOrWhiteSpace($sourceName)) { throw 'Manifest has a file entry without source.' }
+                $path = Join-Path $sourceDir $sourceName
+                if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                    Add-WinMintBuildPreflightFinding -Severity failure -Code $FailureCode -Message "WinMint desktop preset asset is missing: $path"
+                }
+            }
+        }
+        catch {
+            Add-WinMintBuildPreflightFinding -Severity failure -Code $FailureCode -Message "WinMint desktop preset manifest is invalid: $manifestPath :: $($_.Exception.Message)"
+        }
+    }
 
     $sourceIsoMissing = [string]::IsNullOrWhiteSpace($Config.SourceIso)
     if ($sourceIsoMissing) {
@@ -596,24 +628,16 @@ function Test-WinMintBuildPrerequisite {
     if ($Config.InstallWindhawk) {
         $windhawkBootstrap = Get-WinMintPath -Name RuntimeSetupRoot -ChildPath 'WindhawkBootstrap.ps1'
         $virtualDesktopFlyouts = Get-WinMintPath -Name RuntimeSetupRoot -ChildPath 'DisableVirtualDesktopFlyouts.ps1'
-        $windhawkPreset = Join-Path (Get-WinMintRepositoryRoot) 'assets\runtime\desktop\windhawk\preset.json'
         if (-not (Test-Path -LiteralPath $windhawkBootstrap)) {
             Add-WinMintBuildPreflightFinding -Severity failure -Code 'assets.windhawk.bootstrapMissing' -Message "WinMint Windhawk bootstrap script is missing from the repository: $windhawkBootstrap"
         }
         if (-not (Test-Path -LiteralPath $virtualDesktopFlyouts)) {
             Add-WinMintBuildPreflightFinding -Severity failure -Code 'assets.windhawk.flyoutScriptMissing' -Message "WinMint virtual desktop flyout script is missing from the repository: $virtualDesktopFlyouts"
         }
-        if (-not (Test-Path -LiteralPath $windhawkPreset)) {
-            Add-WinMintBuildPreflightFinding -Severity failure -Code 'assets.windhawk.presetMissing' -Message "WinMint Windhawk preset is missing from the repository: $windhawkPreset"
-        }
+        Test-WinMintDesktopPresetAssets -ToolId 'windhawk' -FailureCode 'assets.windhawk.presetMissing'
     }
     if ($Config.InstallYasb) {
-        foreach ($asset in @('assets\runtime\desktop\yasb\config.yaml', 'assets\runtime\desktop\yasb\styles.css')) {
-            $path = Join-Path (Get-WinMintRepositoryRoot) $asset
-            if (-not (Test-Path -LiteralPath $path)) {
-                Add-WinMintBuildPreflightFinding -Severity failure -Code 'assets.yasb.presetMissing' -Message "WinMint YASB preset asset is missing from the repository: $path"
-            }
-        }
+        Test-WinMintDesktopPresetAssets -ToolId 'yasb' -FailureCode 'assets.yasb.presetMissing'
     }
     if ($Config.InstallKomorebi) {
         foreach ($asset in @('assets\runtime\desktop\komorebi\komorebi.json', 'assets\runtime\desktop\komorebi\applications.json', 'assets\runtime\desktop\komorebi\whkdrc')) {

@@ -88,8 +88,8 @@ $guiMainPath = Join-Path $root 'apps\gui\src\main.rs'
 $guiConfigureScreenPath = Join-Path $root 'apps\gui\src\screens\configure.rs'
 $guiBuildScreenPath = Join-Path $root 'apps\gui\src\screens\build.rs'
 $guiReviewScreenPath = Join-Path $root 'apps\gui\src\screens\review.rs'
-$coreOptionsPath = Join-Path $root 'crates\winmint-core\src\options.rs'
-$coreProfilePath = Join-Path $root 'crates\winmint-core\src\profile.rs'
+$coreOptionsPath = Join-Path $root 'apps\gui\src\core\options.rs'
+$coreProfilePath = Join-Path $root 'apps\gui\src\core\profile.rs'
 $bridgePath = Join-Path $root 'tools\ui-bridge\New-UiBuildProfile.ps1'
 $profileOptionCatalogPath = Join-Path $root 'src\runtime\image\Private\Config\OptionCatalog.ps1'
 $profileAuthoringPath = Join-Path $root 'src\runtime\image\Private\Config\ProfileAuthoring.ps1'
@@ -121,26 +121,26 @@ if ($failures.Count -eq 0) {
     $pipelineConsole = Get-Content -LiteralPath $pipelineConsolePath -Raw
     $reviewConsole = Get-Content -LiteralPath $reviewConsolePath -Raw
 
-    Assert-Text $guiIntent 'winmint_core::profile' 'GPUI intent module must delegate reusable contract shaping to winmint-core.'
-    Assert-Text $coreOptions 'pub const EDITION_OPTIONS' 'winmint-core must expose UI edition option tokens.'
-    Assert-Text $coreOptions 'pub const EDITOR_OPTIONS' 'winmint-core must expose editor option tokens.'
-    Assert-Text $coreOptions 'pub const BROWSER_OPTIONS' 'winmint-core must expose browser option tokens.'
-    Assert-Text $coreOptions 'pub const WSL_OPTIONS' 'winmint-core must expose WSL option tokens.'
+    Assert-Text $guiIntent 'crate::core::profile' 'GPUI intent module must delegate reusable contract shaping to the GUI core module.'
+    Assert-Text $coreOptions 'pub const EDITION_OPTIONS' 'GUI core options must expose UI edition option tokens.'
+    Assert-Text $coreOptions 'pub const EDITOR_OPTIONS' 'GUI core options must expose editor option tokens.'
+    Assert-Text $coreOptions 'pub const BROWSER_OPTIONS' 'GUI core options must expose browser option tokens.'
+    Assert-Text $coreOptions 'pub const WSL_OPTIONS' 'GUI core options must expose WSL option tokens.'
     Assert-Text $profileOptionCatalog 'function Get-WinMintOptionCatalog' 'PowerShell backend must expose an option catalog.'
     Assert-Text $profileOptionCatalog 'WslDistro' 'PowerShell option catalog must expose WSL profile tokens.'
     Assert-Text $guiOptions 'pub const EDITIONS' 'GPUI must expose a display catalog for edition options.'
     Assert-Text $guiOptions 'pub const EDITORS' 'GPUI must expose a display catalog for editor options.'
     Assert-Text $guiOptions 'pub const BROWSERS' 'GPUI must expose a display catalog for browser options.'
-    Assert-Text $guiOptions 'winmint_core::options' 'GPUI option catalog must reuse winmint-core wire tokens.'
+    Assert-Text $guiOptions 'crate::core::options' 'GPUI option catalog must reuse core wire tokens.'
     Assert-Text $guiConfigureScreen 'options::EDITIONS' 'Configure screen should render edition options from the catalog.'
     Assert-Text $guiConfigureScreen 'options::BROWSERS' 'Configure screen should render browser options from the catalog.'
     Assert-Text $guiConfigureScreen 'options::EDITORS' 'Configure screen should render editor options from the catalog.'
     Assert-Text $guiConfigureScreen 'options::WSL_DISTROS' 'Configure screen should render WSL options from the catalog.'
-    Assert-Text $coreProfile 'pub struct KeepFlags' 'winmint-core must define the keep-flag intent inputs.'
-    Assert-Text $coreProfile 'pub fn build_ui_intent' 'winmint-core must expose the typed UI intent builder.'
-    Assert-Text $coreProfile 'fn ui_intent_serializes_to_the_exact_bridge_contract_keys' 'winmint-core must test the bridge contract key set.'
-    Assert-Text $coreProfile 'fn ui_intent_schema_enums_match_option_tokens' 'winmint-core tests must compare UI intent enum tokens with the schema.'
-    Assert-Text $coreProfile 'winmint\.uiintent\.schema\.json' 'winmint-core tests must compare UI intent keys with the schema.'
+    Assert-Text $coreProfile 'pub struct KeepFlags' 'GUI core profile must define the keep-flag intent inputs.'
+    Assert-Text $coreProfile 'pub fn build_ui_intent' 'GUI core profile must expose the typed UI intent builder.'
+    Assert-Text $coreProfile 'fn ui_intent_serializes_to_the_exact_bridge_contract_keys' 'GUI core profile must test the bridge contract key set.'
+    Assert-Text $coreProfile 'fn ui_intent_schema_enums_match_option_tokens' 'GUI core profile tests must compare UI intent enum tokens with the schema.'
+    Assert-Text $coreProfile 'winmint\.uiintent\.schema\.json' 'GUI core profile tests must compare UI intent keys with the schema.'
     Assert-Text $bridge 'Save-WinMintBuildProfileFromUiIntent' 'PowerShell bridge must delegate UI intent profile generation to the backend authoring module.'
     Assert-Text $profileAuthoring 'Assert-WinMintUiIntentSettings' 'Profile authoring module must keep an intent assertion before engine profile creation.'
     Assert-Text $profileAuthoring 'winmint\.uiintent\.schema\.json' 'Profile authoring module must read the UI intent schema.'
@@ -297,7 +297,7 @@ if ($failures.Count -eq 0) {
         foreach ($pair in @(
                 @{ Name = 'GPUI intent'; Text = $guiIntent },
                 @{ Name = 'GPUI state'; Text = $guiState },
-                @{ Name = 'winmint-core profile'; Text = $coreProfile },
+                @{ Name = 'GUI core profile'; Text = $coreProfile },
                 @{ Name = 'UI bridge'; Text = $bridge }
             )) {
             if ($pair.Text -match [regex]::Escape($removed)) {

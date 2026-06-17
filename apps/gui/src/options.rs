@@ -1,4 +1,4 @@
-//! GUI option catalog: display metadata mapped to stable winmint-core wire tokens.
+//! GUI option catalog: display metadata mapped to stable core wire tokens.
 
 use crate::state::FormFactor;
 
@@ -48,48 +48,48 @@ pub struct ToggleOption {
 
 pub const EDITIONS: &[SelectOption] = &[
     SelectOption {
-        value: winmint_core::options::EDITION_HOST,
+        value: crate::core::options::EDITION_HOST,
         label: "Host",
     },
     SelectOption {
-        value: winmint_core::options::EDITION_HOME,
+        value: crate::core::options::EDITION_HOME,
         label: "Home",
     },
     SelectOption {
-        value: winmint_core::options::EDITION_PRO,
+        value: crate::core::options::EDITION_PRO,
         label: "Pro",
     },
     SelectOption {
-        value: winmint_core::options::EDITION_ENTERPRISE,
+        value: crate::core::options::EDITION_ENTERPRISE,
         label: "Enterprise",
     },
     SelectOption {
-        value: winmint_core::options::EDITION_EDUCATION,
+        value: crate::core::options::EDITION_EDUCATION,
         label: "Education",
     },
     SelectOption {
-        value: winmint_core::options::EDITION_SINGLE_LANGUAGE,
+        value: crate::core::options::EDITION_SINGLE_LANGUAGE,
         label: "Single Language",
     },
     SelectOption {
-        value: winmint_core::options::EDITION_ALL,
+        value: crate::core::options::EDITION_ALL,
         label: "All",
     },
 ];
 
 pub const FORM_FACTORS: &[FormFactorOption] = &[
     FormFactorOption {
-        value: winmint_core::options::FORM_FACTOR_AUTO,
+        value: crate::core::options::FORM_FACTOR_AUTO,
         label: "Auto",
         form_factor: FormFactor::Auto,
     },
     FormFactorOption {
-        value: winmint_core::options::FORM_FACTOR_LAPTOP,
+        value: crate::core::options::FORM_FACTOR_LAPTOP,
         label: "Laptop",
         form_factor: FormFactor::Laptop,
     },
     FormFactorOption {
-        value: winmint_core::options::FORM_FACTOR_DESKTOP,
+        value: crate::core::options::FORM_FACTOR_DESKTOP,
         label: "Desktop",
         form_factor: FormFactor::Desktop,
     },
@@ -232,7 +232,7 @@ mod tests {
             .map(|option| option.value)
             .collect::<Vec<_>>();
 
-        assert_eq!(values, winmint_core::options::EDITION_OPTIONS);
+        assert_eq!(values, crate::core::options::EDITION_OPTIONS);
     }
 
     #[test]
@@ -242,6 +242,6 @@ mod tests {
             .map(|option| option.value)
             .collect::<Vec<_>>();
 
-        assert_eq!(values, winmint_core::options::FORM_FACTOR_OPTIONS);
+        assert_eq!(values, crate::core::options::FORM_FACTOR_OPTIONS);
     }
 }

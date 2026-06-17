@@ -5,9 +5,7 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'WinMint.ModuleLoader.ps1')
 $root = Get-WinMintModuleRepositoryRoot
-foreach ($relativePath in @(Get-WinMintRuntimeModuleFileList -Area Engine)) {
-    . (Join-Path $root $relativePath)
-}
+. (Join-Path $root 'src\runtime\image\WinMint.ps1')
 
 Export-ModuleMember -Function @(
     'Initialize-WinMintEngine',
