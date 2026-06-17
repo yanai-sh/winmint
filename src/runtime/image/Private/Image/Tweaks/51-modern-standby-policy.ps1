@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline laptop-friendly Modern Standby: disconnect network during standby on
 # both AC and DC to avoid background battery drain. Does not disable sleep.
@@ -15,3 +15,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

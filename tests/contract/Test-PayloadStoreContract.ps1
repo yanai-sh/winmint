@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -102,7 +102,7 @@ finally {
     if ($fakeOscdimgRoot -and (Test-Path -LiteralPath $fakeOscdimgRoot)) {
         Remove-Item -LiteralPath $fakeOscdimgRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
-    $script:WinMintBuildManifest = $null
+    Clear-WinMintBuildManifest
 }
 
 if ($failures.Count -gt 0) {
@@ -110,3 +110,4 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host 'Payload store contract smoke passed.'
+

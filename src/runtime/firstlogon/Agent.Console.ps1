@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Write-AgentLog {
     param([string]$Message)
@@ -83,6 +83,110 @@ function Get-AgentEscapedText {
     return [string]$Text
 }
 
+function Get-AgentConsoleWidth {
+    try {
+        return [Math]::Clamp([int]$Host.UI.RawUI.WindowSize.Width, 60, 220)
+    }
+    catch {
+        return 80
+    }
+}
+
+function Get-AgentPanelWidth {
+    param(
+        [int]$Preferred = 96,
+        [int]$Minimum = 56
+    )
+    return [Math]::Min($Preferred, [Math]::Max($Minimum, (Get-AgentConsoleWidth) - 4))
+}
+
+function Write-AgentSplashTextFallback {
+    return
+}
+
+function Out-AgentSpectreRenderable {
+    param([Parameter(ValueFromPipeline)]$Renderable)
+    process {
+        if ($null -eq $Renderable) { return }
+        $Renderable | Out-SpectreHost | Out-Host
+    }
+}
+
+function New-AgentSpectrePanel {
+    param(
+        [Parameter(Mandatory)]$Data,
+        [Parameter(Mandatory)][string]$Header,
+        [string]$Color = 'Grey',
+        [int]$Width = 0,
+        [switch]$Expand
+    )
+
+    $panelArgs = @{
+        Header = $Header
+        Border = 'Rounded'
+        Color = $Color
+    }
+    if ($Expand) { $panelArgs.Expand = $true }
+    if ($Width -gt 0) { $panelArgs.Width = $Width }
+    return $Data | Format-SpectrePanel @panelArgs
+}
+
+function Show-AgentSplashImage {
+    if (-not $InteractiveFirstLogon) { return }
+    if (-not $script:AgentConsoleReady) { return }
+    try {
+        if ([string]::IsNullOrWhiteSpace($script:AgentConsoleSplashImagePath)) { return }
+        if (-not (Test-Path -LiteralPath $script:AgentConsoleSplashImagePath -PathType Leaf)) { return }
+
+        $renderSixel = -not [string]::IsNullOrWhiteSpace($env:WT_SESSION)
+        try {
+            if ([bool]$script:AgentConsoleForceSixel) {
+                $renderSixel = $true
+            }
+        }
+        catch { }
+
+        if (-not $renderSixel) {
+            Write-AgentSplashTextFallback
+            return
+        }
+        if (-not (Get-Command Get-SpectreImage -ErrorAction SilentlyContinue)) {
+            Write-AgentSplashTextFallback
+            return
+        }
+
+        $maxWidth = 52
+        try {
+            if ([int]$script:AgentConsoleSplashMaxWidth -gt 0) {
+                $maxWidth = [int]$script:AgentConsoleSplashMaxWidth
+            }
+        }
+        catch { }
+        $availableWidth = [Math]::Max(32, (Get-AgentConsoleWidth) - 4)
+        $maxWidth = [Math]::Min($maxWidth, $availableWidth)
+        $imageArgs = @{
+            ImagePath = [string]$script:AgentConsoleSplashImagePath
+            MaxWidth = $maxWidth
+            Format = 'Sixel'
+            Force = $true
+        }
+        $image = Get-SpectreImage @imageArgs
+        if (Get-Command Format-SpectreAligned -ErrorAction SilentlyContinue) {
+            $image | Format-SpectreAligned -HorizontalAlignment Center | Out-SpectreHost | Out-Host
+        }
+        else {
+            $image | Out-SpectreHost | Out-Host
+        }
+        Write-Host ''
+    }
+    catch {
+        Write-AgentLog "Splash image render failed: $($_.Exception.Message)"
+        if ($script:AgentConsoleReady) {
+            Write-AgentSplashTextFallback
+        }
+    }
+}
+
 function Write-AgentConsoleLine {
     param(
         [ValidateSet('Info','OK','Warn','Error','Section')][string]$Level,
@@ -92,13 +196,13 @@ function Write-AgentConsoleLine {
     $safe = Get-AgentEscapedText -Text $Message
     if ($script:AgentConsoleReady) {
         $prefix = switch ($Level) {
-            'OK' { '[green]+[/]' }
-            'Warn' { '[yellow]![/]' }
-            'Error' { '[red]x[/]' }
-            'Section' { '[dodgerblue1]>[/]' }
-            default { '[grey]>[/]' }
+            'OK' { '[green]done[/]' }
+            'Warn' { '[yellow]warn[/]' }
+            'Error' { '[red]fail[/]' }
+            'Section' { '[dodgerblue1]step[/]' }
+            default { '[grey]run [/]' }
         }
-        $null = Write-SpectreHost "$prefix [white]$safe[/]"
+        $null = Write-SpectreHost "$prefix  [white]$safe[/]"
         return
     }
     $color = switch ($Level) {
@@ -113,18 +217,30 @@ function Write-AgentConsoleLine {
 
 function Show-AgentConsoleHeader {
     if (-not $InteractiveFirstLogon) { return }
+    $logLabel = '%LOCALAPPDATA%\WinMint\Logs'
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($script:AgentConsoleLogLabel)) {
+            $logLabel = [string]$script:AgentConsoleLogLabel
+        }
+    }
+    catch { }
+    Show-AgentSplashImage
     if ($script:AgentConsoleReady) {
+        $safeLogLabel = Get-AgentEscapedText -Text $logLabel
         $body = @(
-            '[white]WinMint is applying the selected first-logon preset.[/]'
-            '[grey]This window can be left alone. Detailed logs are written under[/] [silver]%LOCALAPPDATA%\WinMint\Logs[/][grey].[/]'
+            '[bold white]WinMint FirstLogon[/]'
+            '[grey]Applying the selected first-logon preset.[/]'
+            ''
+            "[grey]Logs[/]  [silver]$safeLogLabel[/]"
         ) -join "`n"
-        $null = Format-SpectrePanel -Data $body -Header '[bold dodgerblue1]WinMint FirstLogon[/]' -Border Rounded -Color DodgerBlue1 -Expand |
-            Out-SpectreHost | Out-Host
+        New-AgentSpectrePanel -Data $body -Header '[bold dodgerblue1]Setup[/]' -Color DodgerBlue1 -Width (Get-AgentPanelWidth -Preferred 96 -Minimum 64) |
+            Out-AgentSpectreRenderable
+        Write-Host ''
         return
     }
     Write-Host ''
     Write-Host 'WinMint FirstLogon' -ForegroundColor Cyan
-    Write-Host 'Applying the selected first-logon preset. Logs are under %LOCALAPPDATA%\\WinMint\\Logs.' -ForegroundColor Gray
+    Write-Host "Applying the selected first-logon preset. Logs are under $logLabel." -ForegroundColor Gray
     Write-Host ''
 }
 
@@ -132,18 +248,20 @@ function Show-AgentPlan {
     if (-not $InteractiveFirstLogon) { return }
     $shellLayers = @()
     if ($agentProfile.modules.shell.nilesoft) { $shellLayers += 'Nilesoft' }
+    if ($agentProfile.modules.shell.yasb) { $shellLayers += 'YASB' }
+    if ($agentProfile.modules.shell.komorebi) { $shellLayers += 'Komorebi' }
+    if (Test-AgentModuleEnabled -Name 'windhawk') { $shellLayers += 'Windhawk' }
     $rows = @(
-        [pscustomobject]@{ Step = 'Package managers'; Selection = if (Test-AgentModuleEnabled -Name 'packageManagers') { 'Selected' } else { 'Not needed' } }
-        [pscustomobject]@{ Step = 'WSL'; Selection = if (@($agentProfile.modules.wsl.distros).Count) { @($agentProfile.modules.wsl.distros) -join ', ' } else { 'Baseline only' } }
-        [pscustomobject]@{ Step = 'Desktop layers'; Selection = if (Test-AgentModuleEnabled -Name 'shell') { 'Selected' } else { 'Standard' } }
-        [pscustomobject]@{ Step = 'Shell tools'; Selection = if ($shellLayers.Count) { $shellLayers -join ', ' } else { 'None' } }
-        [pscustomobject]@{ Step = 'Windhawk'; Selection = if (Test-AgentModuleEnabled -Name 'windhawk') { 'Selected' } else { 'Not selected' } }
-        [pscustomobject]@{ Step = 'Browsers'; Selection = if (@($agentProfile.browsers).Count) { @($agentProfile.browsers) -join ', ' } else { 'None' } }
-        [pscustomobject]@{ Step = 'Editors'; Selection = if (@($agentProfile.editors).Count) { @($agentProfile.editors) -join ', ' } else { 'None' } }
+        [pscustomobject]@{ Area = 'Apps'; Selected = if (@($agentProfile.browsers).Count) { @($agentProfile.browsers) -join ', ' } else { 'None' } }
+        [pscustomobject]@{ Area = 'Editors'; Selected = if (@($agentProfile.editors).Count) { @($agentProfile.editors) -join ', ' } else { 'None' } }
+        [pscustomobject]@{ Area = 'WSL'; Selected = if (@($agentProfile.modules.wsl.distros).Count) { @($agentProfile.modules.wsl.distros) -join ', ' } else { 'Baseline only' } }
+        [pscustomobject]@{ Area = 'Desktop'; Selected = if ($shellLayers.Count) { $shellLayers -join ', ' } else { 'Standard Windows' } }
     )
     if ($script:AgentConsoleReady) {
-        $null = Format-SpectreTable -Data $rows -Property Step, Selection -Border Rounded -Color Grey -Title '[bold white]Selected automation[/]' |
-            Out-SpectreHost | Out-Host
+        $table = Format-SpectreTable -Data $rows -Property Area, Selected -Border Minimal -Color Grey -HeaderColor Grey -TextColor White
+        New-AgentSpectrePanel -Data $table -Header '[bold white]Selected setup[/]' -Color Grey -Width (Get-AgentPanelWidth -Preferred 72 -Minimum 56) |
+            Out-AgentSpectreRenderable
+        Write-Host ''
         return
     }
     $rows | Format-Table -AutoSize
@@ -163,8 +281,10 @@ function Show-AgentFinalSummary {
             }
     )
     if ($script:AgentConsoleReady) {
-        $null = Format-SpectreTable -Data $rows -Property Step, Status -Border Rounded -Color Grey -Title '[bold white]FirstLogon result[/]' |
-            Out-SpectreHost | Out-Host
+        Write-SpectreHost ''
+        $table = Format-SpectreTable -Data $rows -Property Step, Status -Border Minimal -Color Grey -HeaderColor Grey -TextColor White
+        New-AgentSpectrePanel -Data $table -Header '[bold white]FirstLogon result[/]' -Color Grey -Width (Get-AgentPanelWidth -Preferred 68 -Minimum 56) |
+            Out-AgentSpectreRenderable
         return
     }
     $rows | Format-Table -AutoSize
@@ -186,3 +306,4 @@ function Wait-AgentConsoleBeforeClose {
     Write-AgentConsoleLine -Level OK -Message 'First-logon automation finished. This window will close shortly.'
     Start-Sleep -Seconds 8
 }
+

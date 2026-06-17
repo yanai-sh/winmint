@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline: enable Win32 long-path support (paths > 260 chars). Part of the
 # Tier 1 dev-QoL defaults promised in AGENTS.md ("show extensions, hidden files,
@@ -15,3 +15,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

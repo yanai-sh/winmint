@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 <#
 .SYNOPSIS
@@ -175,3 +175,4 @@ function Publish-WinMintIsoStageCache {
         if ($null -ne $dest -and (Test-Path -LiteralPath $dest)) { Remove-WinMintIsoStageCacheDirectory -Path $dest }
     }
 }
+

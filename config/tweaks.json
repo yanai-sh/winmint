@@ -179,13 +179,24 @@
       "online": true
     },
     {
+      "id": "driver-coinstaller-policy",
+      "description": "Block device-driver companion co-installers.",
+      "scope": "machine registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Prevent hardware vendors from auto-installing companion apps with drivers while preserving Windows Update driver delivery.",
+      "offline": true,
+      "online": true
+    },
+    {
       "id": "edge-policy-minimal",
-      "description": "Reduce Edge recommendations, shopping/rewards/wallet noise, first-run prompts, web widgets, image enhancement, sidebar, startup/background, new-tab content, feedback, and telemetry.",
+      "description": "Reduce Edge recommendations, shopping/rewards/wallet noise, first-run prompts, web widgets, image enhancement, inline compose, startup/background, new-tab content, feedback, and telemetry.",
       "scope": "machine policy registry",
       "risk": "low",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Reduce Edge promotional, commerce, telemetry, and sidebar noise for all builds.",
+      "intent": "Reduce Edge promotional, commerce, telemetry, and inline compose noise for all builds while keeping explicit Copilot page-context chat available.",
       "offline": true,
       "online": true
     },
@@ -202,7 +213,7 @@
     },
     {
       "id": "windows-ai-recall-policy",
-      "description": "Disable Windows Recall (snapshots, data analysis, Click-to-Do, export).",
+      "description": "Disable Windows Recall (snapshots, data analysis, export).",
       "scope": "machine and default user policy registry",
       "risk": "medium",
       "reversible": true,
@@ -213,12 +224,12 @@
     },
     {
       "id": "windows-ai-features-removal",
-      "description": "Remove Copilot+ AI features (Copilot app, Edge/Office/inbox AI, app AI-model access). Kept with -KeepCopilot.",
+      "description": "Remove imposed Copilot+ AI surfaces (Copilot app, Notepad AI, web AI APIs, app AI-model access). Kept with -KeepCopilot.",
       "scope": "machine and default user policy registry",
       "risk": "medium",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Remove the non-Recall Copilot+ AI feature surface by default; kept entirely when -KeepCopilot is selected.",
+      "intent": "Remove imposed non-Recall Copilot+ AI surfaces by default while preserving explicit app-local tools; kept entirely when -KeepCopilot is selected.",
       "offline": true,
       "online": true
     },
@@ -257,12 +268,12 @@
     },
     {
       "id": "gamebar-policy",
-      "description": "Disable Xbox Game Bar and GameDVR capture prompts.",
+      "description": "Disable Xbox Game Bar, GameDVR capture prompts, and Game Bar protocol Store prompts.",
       "scope": "machine and default user registry",
       "risk": "low",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Suppress Game Bar capture prompts and GameDVR recording defaults.",
+      "intent": "Suppress Game Bar capture prompts, GameDVR recording defaults, and Store prompts caused by ms-gamebar protocol activations after Game Bar removal.",
       "offline": true,
       "online": true
     },

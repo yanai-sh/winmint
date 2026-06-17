@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [switch]$DryRun,
@@ -44,3 +44,4 @@ if ($DryRun) {
         throw "WinMint CLI dry run failed with exit code $LASTEXITCODE."
     }
 }
+

@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Test-BuildProfileSchema {
     $schema = Get-WinMintPath -Name BuildProfileSchema
@@ -107,6 +107,38 @@ function Test-BuildProfileSchema {
     $badDualBoot.target.diskLayout.mode = 'DualBootReserved'
     $badDualBoot.target.diskLayout.preset = ''
     Test-JsonObjectRejectedBySchema -Value $badDualBoot -SchemaPath $schema -Label 'winmint.buildprofile dual boot preset required'
+}
+
+function Test-TrackedBuildProfileSchemas {
+    $schema = Get-WinMintPath -Name BuildProfileSchema
+    if (-not (Test-Path -LiteralPath $schema)) {
+        Add-ValidationError 'Build profile schema is missing.'
+        return
+    }
+
+    $profileRoot = Get-WinMintPath -Name ConfigRoot -ChildPath 'build-profiles'
+    if (-not (Test-Path -LiteralPath $profileRoot -PathType Container)) {
+        Add-ValidationError "Tracked build profile directory is missing: $profileRoot"
+        return
+    }
+
+    $trackedProfilePaths = @(
+        Get-RepositoryTrackedPath |
+            Where-Object { $_ -match '^config/build-profiles/[^/]+\.json$' } |
+            Sort-Object
+    )
+
+    foreach ($profilePath in $trackedProfilePaths) {
+        $profileFullPath = Join-Path $root $profilePath
+        try {
+            $profileFile = Get-Item -LiteralPath $profileFullPath -ErrorAction Stop
+            $profile = Get-Content -LiteralPath $profileFile.FullName -Raw | ConvertFrom-Json
+            Test-JsonObjectAgainstSchema -Value $profile -SchemaPath $schema -Label "tracked build profile $($profileFile.Name)"
+        }
+        catch {
+            Add-ValidationError "Tracked build profile parse failed: $profileFullPath :: $($_.Exception.Message)"
+        }
+    }
 }
 
 function Test-BuildManifestSchema {
@@ -295,6 +327,10 @@ function Test-BuildManifestSchema {
             wslDistros    = @('ubuntu')
             desktopLayers = @('windhawk')
         }
+        audit                = [ordered]@{
+            buildDeltaCount = 3
+            buildDeltaPath = 'C:\output\WinMint-BuildDelta.json'
+        }
         riskFlags            = @()
     }
     $validPso = $valid | ConvertTo-Json -Depth 10 | ConvertFrom-Json
@@ -312,6 +348,45 @@ function Test-BuildManifestSchema {
     $failedNoOutput.buildResult = 'failed'
     $failedNoOutput.PSObject.Properties.Remove('output')
     Test-JsonObjectAgainstSchema -Value $failedNoOutput -SchemaPath $schemaPath -Label 'winmint.buildmanifest (failed; no output)'
+}
+
+function Test-BuildDeltaSchema {
+    $schemaPath = Get-WinMintPath -Name BuildDeltaSchema
+    if (-not (Test-Path -LiteralPath $schemaPath)) {
+        Add-ValidationError "winmint.builddelta.schema.json not found at $schemaPath"
+        return
+    }
+
+    $valid = [ordered]@{
+        schemaVersion = 1
+        generatedAt = '2026-01-01T00:00:00+00:00'
+        records = @(
+            [ordered]@{
+                id = 'registry:edge-policy-minimal'
+                phase = 'offline-image'
+                kind = 'registry-tweak'
+                title = 'Edge Minimal cleanup'
+                userControlled = $false
+                changes = @('Set HKLM policy value')
+            }
+        )
+    } | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+    Test-JsonObjectAgainstSchema -Value $valid -SchemaPath $schemaPath -Label 'winmint.builddelta (valid)'
+
+    $invalid = [ordered]@{
+        schemaVersion = 1
+        generatedAt = '2026-01-01T00:00:00+00:00'
+        records = @(
+            [ordered]@{
+                id = 'broken'
+                phase = 'offline-image'
+                kind = 'registry-tweak'
+                title = 'Broken'
+                userControlled = $false
+            }
+        )
+    } | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+    Test-JsonObjectRejectedBySchema -Value $invalid -SchemaPath $schemaPath -Label 'winmint.builddelta missing changes'
 }
 
 function Test-AgentStateSchema {
@@ -353,3 +428,4 @@ function Test-AgentStateSchema {
     $badStatus.steps.wsl.status = 'reboot'
     Test-JsonObjectRejectedBySchema -Value $badStatus -SchemaPath $schemaPath -Label 'winmint.agentstate invalid step status'
 }
+

@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [switch]$RunIsoDryRun,
@@ -85,3 +85,4 @@ if ($RunIsoDryRun) {
 if (-not $RunIsoDryRun) {
     Write-Host 'No integration switches selected. Use -RunIsoDryRun.'
 }
+

@@ -1,19 +1,25 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 
 . "$PSScriptRoot\Core.ps1"
+. "$PSScriptRoot\Private\Manifest.ps1"
 . "$PSScriptRoot\Reports.ps1"
+. "$PSScriptRoot\Private\WslSelection.ps1"
+. "$PSScriptRoot\Private\Config\OptionCatalog.ps1"
 . "$PSScriptRoot\Private\Config\Profile.ps1"
+. "$PSScriptRoot\Private\Config\ProfileAuthoring.ps1"
 . "$PSScriptRoot\Engine.ps1"
 . "$PSScriptRoot\Private\Bootstrap.ps1"
 . "$PSScriptRoot\Private\Runtime.ps1"
 . "$PSScriptRoot\Private\PayloadStore.ps1"
+. "$PSScriptRoot\Private\UpdatePayloads.ps1"
 . "$PSScriptRoot\Private\Console\Host.ps1"
 . "$PSScriptRoot\Private\Console\Display.ps1"
 . "$PSScriptRoot\Private\Catalog.ps1"
+. "$PSScriptRoot\Private\Audit.ps1"
 . "$PSScriptRoot\Private\Image\AiRemoval.ps1"
 . "$PSScriptRoot\Private\Image\Staging.ps1"
 . "$PSScriptRoot\Private\IsoStageCache.ps1"
@@ -21,6 +27,7 @@ $PSNativeCommandUseErrorActionPreference = $true
 . "$PSScriptRoot\Private\Image\Drivers.ps1"
 . "$PSScriptRoot\Private\Image\Tweaks\TweakRegistry.ps1"
 . "$PSScriptRoot\Private\Image\Tweaks.ps1"
+. "$PSScriptRoot\Private\Image\SetupPayloadStaging.ps1"
 . "$PSScriptRoot\Private\Image\Unattend.ps1"
 . "$PSScriptRoot\Private\InstallPlan.ps1"
 . "$PSScriptRoot\Private\Image\Assets.ps1"
@@ -45,3 +52,4 @@ function Initialize-WinMintEngine {
     $script:DryRun = [bool]$DryRun
     $script:ExportHostDrivers = [bool]$ExportHostDrivers
 }
+

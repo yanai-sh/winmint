@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline: suppress Dev Home / Outlook / Chat OOBE auto-install rehydration jobs
 # by marking the orchestrator work complete and removing the OOBE scheduler keys.
@@ -21,3 +21,4 @@ Add-WinMintRegistryTweakModule @{
         @{ path = 'zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\ChatAutoInstall' }
     )
 }
+

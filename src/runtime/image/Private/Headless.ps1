@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 $script:WinMintHeadlessBuildId = ''
 $script:WinMintHeadlessStatePath = ''
@@ -266,7 +266,7 @@ function Resolve-WinMintHeadlessDriverIntent {
     param(
         [ValidateSet('ThisPC', 'DifferentPC')][string]$TargetDevice = 'DifferentPC',
         [string]$DriverPack = '',
-        [ValidateSet('None', 'Host', 'Custom')][string]$DriverSource = 'None',
+        [ValidateSet('None', 'Host', 'Custom', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')][string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [switch]$ExportHostDrivers
     )
@@ -279,14 +279,22 @@ function Resolve-WinMintHeadlessDriverIntent {
         if ($item.Extension -notin '.msi', '.zip') {
             throw 'DriverPack must be an OEM .msi or .zip file.'
         }
-        return [pscustomobject]@{ Source = 'Custom'; Path = $item.FullName; ExportHostDrivers = $false }
+        $source = if ($item.Extension -ieq '.msi') { 'OemMsi' } else { 'Custom' }
+        return [pscustomobject]@{ Source = $source; Path = $item.FullName; ExportHostDrivers = $false }
     }
     if ($ExportHostDrivers) { return [pscustomobject]@{ Source = 'Host'; Path = ''; ExportHostDrivers = $true } }
-    if ($DriverSource -eq 'Custom') {
-        if ([string]::IsNullOrWhiteSpace($DriverPath)) { throw 'Custom driver source requires -DriverPath.' }
-        return [pscustomobject]@{ Source = 'Custom'; Path = $DriverPath; ExportHostDrivers = $false }
+    if (Test-WinMintDriverSourceUsesSurfaceCatalog -Source $DriverSource) {
+        if ([string]::IsNullOrWhiteSpace($DriverPath)) { throw 'SurfaceCatalog driver source requires -DriverPath with a Surface catalog device id.' }
+        return [pscustomobject]@{ Source = $DriverSource; Path = $DriverPath; ExportHostDrivers = $false }
     }
-    if ($DriverSource -eq 'Host' -or $TargetDevice -eq 'ThisPC') {
+    if (Test-WinMintDriverSourceUsesPath -Source $DriverSource) {
+        if ([string]::IsNullOrWhiteSpace($DriverPath)) { throw 'Custom driver source requires -DriverPath.' }
+        if ((Test-WinMintDriverSourceRequiresMsi -Source $DriverSource) -and -not ($DriverPath -match '(?i)\.msi$')) {
+            throw "$DriverSource requires an OEM .msi file."
+        }
+        return [pscustomobject]@{ Source = $DriverSource; Path = $DriverPath; ExportHostDrivers = $false }
+    }
+    if ((Test-WinMintDriverSourceUsesHostExport -Source $DriverSource) -or $TargetDevice -eq 'ThisPC') {
         return [pscustomobject]@{ Source = 'Host'; Path = ''; ExportHostDrivers = $true }
     }
     [pscustomobject]@{ Source = 'None'; Path = ''; ExportHostDrivers = $false }
@@ -306,9 +314,10 @@ function New-WinMintHeadlessProfileFromFlags {
         [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
         [string]$ProductKey = '',
-        [ValidateSet('None', 'Host', 'Custom')][string]$DriverSource = 'None',
+        [ValidateSet('None', 'Host', 'Custom', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')][string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [ValidateSet('ThisPC', 'DifferentPC')][string]$TargetDevice = 'DifferentPC',
+        [ValidateSet('Balanced', 'EnergySaver', 'HighPerformance', 'UltimatePerformance')][string]$PowerPlan = 'Balanced',
         [string]$DriverPack = '',
         [switch]$ExportHostDrivers,
         [string]$TimeZoneId = '',
@@ -325,14 +334,14 @@ function New-WinMintHeadlessProfileFromFlags {
         [switch]$KeepGaming,
         [switch]$KeepCopilot,
         [ValidateSet('On', 'Off')][string]$Dma = 'On',
-        [ValidateSet('None', 'FlowEverything', 'Raycast')][string]$Launcher = 'None',
+        [ValidateSet('None', 'Raycast')][string]$Launcher = 'None',
         [switch]$LiveInstallAudit,
         [switch]$PhoneLink,
         [ValidateSet('On', 'Off')][string]$Location = 'On',
-        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'Stable25H2',
+        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'None',
         [string]$UpdatePayloadRoot = '',
         [ValidateSet('On', 'Off')][string]$UpdateProvisionedApps = 'On',
-        [ValidateSet('windhawk', 'yasb', 'komorebi', 'nilesoft')][string[]]$Install = @(),
+        [ValidateSet('windhawk', 'yasb', 'thide', 'komorebi', 'nilesoft')][string[]]$Install = @(),
         [switch]$DryRun,
         [switch]$ValidateOnly,
         [switch]$TemplateMode
@@ -365,27 +374,8 @@ function New-WinMintHeadlessProfileFromFlags {
     }
 
     $selectedEditors = & $normalizeSelection $Editor @('cursor', 'vscode', 'zed', 'antigravity', 'neovim') 'Editor'
-    $selectedBrowsers = & $normalizeSelection $Browser @('zen-browser', 'helium', 'librewolf', 'brave', 'edge') 'Browser'
-    $normalizeWslSelection = {
-        param([string[]]$Values)
-        @(
-            @($Values) |
-                ForEach-Object { ([string]$_) -split ',' } |
-                ForEach-Object {
-                    switch -Regex (([string]$_).Trim()) {
-                        '^(Ubuntu|Ubuntu-\d+\.\d+)$' { 'Ubuntu'; break }
-                        '^(Fedora|FedoraLinux|FedoraLinux-\d+)$' { 'FedoraLinux'; break }
-                        '^(Arch(?: Linux)?|archlinux)$' { 'archlinux'; break }
-                        '^(NixOS-WSL|NixOS|nixos-wsl)$' { 'NixOS-WSL'; break }
-                        '^(Pengwin|pengwin)$' { 'pengwin'; break }
-                        default { ([string]$_).Trim() }
-                    }
-                } |
-                Where-Object { $_ -and $_ -ne 'None' } |
-                Select-Object -Unique
-        )
-    }
-    $selectedWslDistros = & $normalizeWslSelection $Wsl2Distros
+    $selectedBrowsers = & $normalizeSelection $Browser @('zen-browser', 'helium', 'firefox-developer-edition', 'brave', 'edge') 'Browser'
+    $selectedWslDistros = @((ConvertTo-WinMintWslSelection -Values $Wsl2Distros).ProfileTokens)
 
     $drivers = Resolve-WinMintHeadlessDriverIntent `
         -TargetDevice $TargetDevice `
@@ -409,6 +399,7 @@ function New-WinMintHeadlessProfileFromFlags {
         ISOPath = $SourceIso
         Architecture = $Architecture
         TargetDevice = $TargetDevice
+        PowerPlan = $PowerPlan
         ComputerName = $ComputerName
         AccountName = $AccountName
         AccountMode = $AccountMode
@@ -433,6 +424,7 @@ function New-WinMintHeadlessProfileFromFlags {
         DesktopUiDefault = $resolvedDesktopUi
         InstallWindhawk = [bool]('windhawk' -in $Install)
         InstallYasb = [bool]('yasb' -in $Install)
+        InstallThide = [bool]('thide' -in $Install)
         InstallKomorebi = [bool]('komorebi' -in $Install)
         InstallNilesoft = [bool]('nilesoft' -in $Install)
         Launcher = $Launcher
@@ -491,6 +483,28 @@ function Write-WinMintHeadlessHumanResult {
         -not [string]::IsNullOrWhiteSpace([string]$Result.reports.profile)) {
         Write-Host "Profile: $($Result.reports.profile)"
     }
+    $buildDeltaPath = ''
+    if ($Result.reports -and $Result.reports.PSObject.Properties['buildDelta']) {
+        $buildDeltaPath = [string]$Result.reports.buildDelta
+    }
+    if (-not [string]::IsNullOrWhiteSpace($buildDeltaPath) -and
+        (Get-Command Get-WinMintBuildDeltaSummary -ErrorAction SilentlyContinue)) {
+        $deltaSummary = Get-WinMintBuildDeltaSummary -BuildDeltaPath $buildDeltaPath
+        if ($deltaSummary -and $deltaSummary.totalRecords -gt 0) {
+            Write-Host "BuildDelta: $buildDeltaPath"
+            Write-Host "  Records: $($deltaSummary.totalRecords) total, $($deltaSummary.userControlledCount) user-controlled"
+            $phaseSegments = @(
+                @($deltaSummary.phaseCounts.PSObject.Properties) |
+                    ForEach-Object { "$($_.Name)=$($_.Value)" }
+            )
+            if ($phaseSegments.Count -gt 0) {
+                Write-Host "  Phases:  $($phaseSegments -join ', ')"
+            }
+            foreach ($highlight in @($deltaSummary.highlights | Select-Object -First 5)) {
+                Write-Host "  - $($highlight.title) [$($highlight.phase)]"
+            }
+        }
+    }
     foreach ($warning in @($Result.warnings)) { Write-Warning $warning }
     foreach ($failure in @($Result.failures)) { Write-Error $failure -ErrorAction Continue }
 }
@@ -504,13 +518,18 @@ function Invoke-WinMintHeadlessValidateOnly {
 
     Set-WinMintHeadlessJournalPhase -Phase 'Preflight'
     $config = New-WinMintBuildConfig -BuildProfile $BuildProfile
-    $pre = Test-WinMintBuildPrerequisite -Config $config -AllowMissingSourceIso:$DryRun
+    $installPlan = New-WinMintInstallPlanFromBuildConfig -BuildConfig $config
+    $null = New-WinMintBuildDeltaCatalog -BuildConfig $config -InstallPlan $installPlan
+    $buildDeltaPath = Save-WinMintBuildDeltaCatalog -OutputDir (Get-WinMintOutputDirectory)
+    $runMode = if ($DryRun) { 'DryRun' } else { 'ValidateOnly' }
+    $pre = Test-WinMintBuildPrerequisite -Config $config -RunMode $runMode
     $report = New-WinMintBuildReport -Config $config -DetectedArchitecture $config.Architecture -Warnings $pre.Warnings -Failures $pre.Failures
     $paths = Save-WinMintBuildReport -Report $report
     $reports = [pscustomobject]@{
         json = $paths.Json
         markdown = $paths.Markdown
         manifest = ''
+        buildDelta = $buildDeltaPath
         state = Get-WinMintHeadlessStatePath -BuildId $BuildId
     }
     $resultName = if ($pre.Passed) { 'success' } else { 'validation-failed' }
@@ -589,6 +608,7 @@ function Invoke-WinMintProfileRun {
                 json = $build.Paths.Json
                 markdown = $build.Paths.Markdown
                 manifest = Join-Path (Get-WinMintOutputDirectory) 'WinMint-BuildManifest.json'
+                buildDelta = Join-Path (Get-WinMintOutputDirectory) 'WinMint-BuildDelta.json'
                 state = Get-WinMintHeadlessStatePath -BuildId $script:WinMintHeadlessBuildId
             }
             $resultName = if ($DryRun) { 'dry-run' } else { 'success' }
@@ -613,3 +633,4 @@ function Invoke-WinMintProfileRun {
     if ($Json) { Write-WinMintHeadlessJsonResult -Result $result } elseif (-not $Quiet) { Write-WinMintHeadlessHumanResult -Result $result }
     return $result
 }
+

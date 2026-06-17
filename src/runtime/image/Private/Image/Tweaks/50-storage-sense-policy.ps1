@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline laptop-friendly cleanup: enable Storage Sense safe cleanup, but keep
 # Downloads auto-cleanup explicitly disabled.
@@ -17,3 +17,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winmint.yanai.sh/schemas/winmint.builddelta.schema.json",
+  "title": "WinMint Build Delta",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAt", "records"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "generatedAt": {
+      "type": "string"
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "phase",
+          "kind",
+          "title",
+          "userControlled",
+          "changes"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "phase": { "type": "string" },
+          "kind": { "type": "string" },
+          "title": { "type": "string" },
+          "userControlled": { "type": "boolean" },
+          "changes": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

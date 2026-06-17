@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline (every build, unconditional): add "End Task" to the taskbar app
 # right-click menu — the Windows 11 developer setting (Settings > System > For
@@ -16,3 +16,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

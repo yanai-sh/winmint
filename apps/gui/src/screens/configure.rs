@@ -5,26 +5,8 @@
 use gpui::{div, prelude::*, px, Context, Div, FontWeight, SharedString, Window};
 
 use crate::components as ui;
-use crate::state::FormFactor;
+use crate::options::{self, ConfigureToggle, ToggleOption};
 use crate::{theme, WinMintApp};
-
-/// Edition selector tokens (value, label). Resolved engine-side: `Host` detects
-/// this machine's edition, `All` services every edition, the rest pin one.
-const EDITIONS: [(&str, &str); 7] = [
-    ("Host", "Host"),
-    ("Home", "Home"),
-    ("Pro", "Pro"),
-    ("Enterprise", "Enterprise"),
-    ("Education", "Education"),
-    ("SingleLanguage", "Single Language"),
-    ("All", "All"),
-];
-
-const FORM_FACTORS: [(&str, &str, FormFactor); 3] = [
-    ("Auto", "Auto", FormFactor::Auto),
-    ("Laptop", "Laptop", FormFactor::Laptop),
-    ("Desktop", "Desktop", FormFactor::Desktop),
-];
 
 pub fn render(app: &WinMintApp, _window: &mut Window, cx: &mut Context<WinMintApp>) -> Div {
     div()
@@ -72,11 +54,12 @@ fn section_title(title: &'static str, hint: &'static str) -> Div {
 fn edition_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
     let selected = app.intent.edition.clone();
     let mut chips = div().flex().flex_wrap().gap_2();
-    for (value, label) in EDITIONS {
+    for option in options::EDITIONS {
+        let value = option.value;
         let is_selected = selected.as_ref() == value;
         chips = chips.child(ui::select_chip(
             SharedString::from(format!("edition-{value}")),
-            label,
+            option.label,
             is_selected,
             cx.listener(move |this, _, _, cx| this.set_edition(value, cx)),
         ));
@@ -120,6 +103,78 @@ fn keep_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
         ))
 }
 
+fn toggle_rows(
+    app: &WinMintApp,
+    cx: &mut Context<WinMintApp>,
+    options: &'static [ToggleOption],
+) -> Vec<impl IntoElement> {
+    options
+        .iter()
+        .map(|option| {
+            let toggle = option.toggle;
+            ui::toggle_row(
+                option.element_id,
+                option.title,
+                option.description,
+                is_toggle_selected(app, toggle),
+                cx.listener(move |this, _, _, cx| toggle_option(this, toggle, cx)),
+            )
+        })
+        .collect()
+}
+
+fn is_toggle_selected(app: &WinMintApp, toggle: ConfigureToggle) -> bool {
+    match toggle {
+        ConfigureToggle::BrowserZen => app.intent.toolkit.browser_zen,
+        ConfigureToggle::BrowserHelium => app.intent.toolkit.browser_helium,
+        ConfigureToggle::BrowserFirefoxDeveloperEdition => {
+            app.intent.toolkit.browser_firefox_developer_edition
+        }
+        ConfigureToggle::BrowserBrave => app.intent.toolkit.browser_brave,
+        ConfigureToggle::BrowserEdge => app.intent.toolkit.browser_edge,
+        ConfigureToggle::EditorNeovim => app.intent.toolkit.editor_neovim,
+        ConfigureToggle::EditorVSCode => app.intent.toolkit.editor_vscode,
+        ConfigureToggle::EditorCursor => app.intent.toolkit.editor_cursor,
+        ConfigureToggle::EditorZed => app.intent.toolkit.editor_zed,
+        ConfigureToggle::EditorAntigravity => app.intent.toolkit.editor_antigravity,
+        ConfigureToggle::ShellWindhawk => app.intent.desktop_layers.windhawk,
+        ConfigureToggle::ShellYasb => app.intent.desktop_layers.yasb,
+        ConfigureToggle::ShellKomorebi => app.intent.desktop_layers.komorebi,
+        ConfigureToggle::ShellNilesoft => app.intent.desktop_layers.nilesoft,
+        ConfigureToggle::WslUbuntu => app.intent.toolkit.wsl_ubuntu,
+        ConfigureToggle::WslFedora => app.intent.toolkit.wsl_fedora,
+        ConfigureToggle::WslArchlinux => app.intent.toolkit.wsl_archlinux,
+        ConfigureToggle::WslNixosWsl => app.intent.toolkit.wsl_nixos_wsl,
+        ConfigureToggle::WslPengwin => app.intent.toolkit.wsl_pengwin,
+    }
+}
+
+fn toggle_option(app: &mut WinMintApp, toggle: ConfigureToggle, cx: &mut Context<WinMintApp>) {
+    match toggle {
+        ConfigureToggle::BrowserZen => app.toggle_browser_zen(cx),
+        ConfigureToggle::BrowserHelium => app.toggle_browser_helium(cx),
+        ConfigureToggle::BrowserFirefoxDeveloperEdition => {
+            app.toggle_browser_firefox_developer_edition(cx)
+        }
+        ConfigureToggle::BrowserBrave => app.toggle_browser_brave(cx),
+        ConfigureToggle::BrowserEdge => app.toggle_browser_edge(cx),
+        ConfigureToggle::EditorNeovim => app.toggle_editor_neovim(cx),
+        ConfigureToggle::EditorVSCode => app.toggle_editor_vscode(cx),
+        ConfigureToggle::EditorCursor => app.toggle_editor_cursor(cx),
+        ConfigureToggle::EditorZed => app.toggle_editor_zed(cx),
+        ConfigureToggle::EditorAntigravity => app.toggle_editor_antigravity(cx),
+        ConfigureToggle::ShellWindhawk => app.toggle_shell_windhawk(cx),
+        ConfigureToggle::ShellYasb => app.toggle_shell_yasb(cx),
+        ConfigureToggle::ShellKomorebi => app.toggle_shell_komorebi(cx),
+        ConfigureToggle::ShellNilesoft => app.toggle_shell_nilesoft(cx),
+        ConfigureToggle::WslUbuntu => app.toggle_wsl_ubuntu(cx),
+        ConfigureToggle::WslFedora => app.toggle_wsl_fedora(cx),
+        ConfigureToggle::WslArchlinux => app.toggle_wsl_archlinux(cx),
+        ConfigureToggle::WslNixosWsl => app.toggle_wsl_nixos_wsl(cx),
+        ConfigureToggle::WslPengwin => app.toggle_wsl_pengwin(cx),
+    }
+}
+
 fn browser_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
     ui::surface()
         .w_full()
@@ -130,41 +185,7 @@ fn browser_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
             "Browsers",
             "Pick any browsers you want installed. Leave everything off for no browser.",
         ))
-        .child(ui::toggle_row(
-            "browser-zen",
-            "Zen Browser",
-            "Install Zen Browser.",
-            app.intent.toolkit.browser_zen,
-            cx.listener(|this, _, _, cx| this.toggle_browser_zen(cx)),
-        ))
-        .child(ui::toggle_row(
-            "browser-helium",
-            "Helium",
-            "Install Helium.",
-            app.intent.toolkit.browser_helium,
-            cx.listener(|this, _, _, cx| this.toggle_browser_helium(cx)),
-        ))
-        .child(ui::toggle_row(
-            "browser-librewolf",
-            "LibreWolf",
-            "Install LibreWolf.",
-            app.intent.toolkit.browser_librewolf,
-            cx.listener(|this, _, _, cx| this.toggle_browser_librewolf(cx)),
-        ))
-        .child(ui::toggle_row(
-            "browser-brave",
-            "Brave",
-            "Install Brave.",
-            app.intent.toolkit.browser_brave,
-            cx.listener(|this, _, _, cx| this.toggle_browser_brave(cx)),
-        ))
-        .child(ui::toggle_row(
-            "browser-edge",
-            "Microsoft Edge",
-            "Keep Microsoft Edge installed.",
-            app.intent.toolkit.browser_edge,
-            cx.listener(|this, _, _, cx| this.toggle_browser_edge(cx)),
-        ))
+        .children(toggle_rows(app, cx, options::BROWSERS))
 }
 
 fn editor_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
@@ -177,41 +198,7 @@ fn editor_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
             "Editors",
             "Pick any editors you want installed. Leave everything off for none.",
         ))
-        .child(ui::toggle_row(
-            "editor-neovim",
-            "Neovim",
-            "Install Neovim.",
-            app.intent.toolkit.editor_neovim,
-            cx.listener(|this, _, _, cx| this.toggle_editor_neovim(cx)),
-        ))
-        .child(ui::toggle_row(
-            "editor-vscode",
-            "Visual Studio Code",
-            "Install Visual Studio Code.",
-            app.intent.toolkit.editor_vscode,
-            cx.listener(|this, _, _, cx| this.toggle_editor_vscode(cx)),
-        ))
-        .child(ui::toggle_row(
-            "editor-cursor",
-            "Cursor",
-            "Install Cursor.",
-            app.intent.toolkit.editor_cursor,
-            cx.listener(|this, _, _, cx| this.toggle_editor_cursor(cx)),
-        ))
-        .child(ui::toggle_row(
-            "editor-zed",
-            "Zed",
-            "Install Zed.",
-            app.intent.toolkit.editor_zed,
-            cx.listener(|this, _, _, cx| this.toggle_editor_zed(cx)),
-        ))
-        .child(ui::toggle_row(
-            "editor-antigravity",
-            "Antigravity",
-            "Install Antigravity.",
-            app.intent.toolkit.editor_antigravity,
-            cx.listener(|this, _, _, cx| this.toggle_editor_antigravity(cx)),
-        ))
+        .children(toggle_rows(app, cx, options::EDITORS))
 }
 
 fn shell_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
@@ -224,34 +211,7 @@ fn shell_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
             "Shell",
             "Pick any shell layers you want installed. Leave everything off for standard Windows.",
         ))
-        .child(ui::toggle_row(
-            "shell-windhawk",
-            "Windhawk",
-            "Install Windhawk.",
-            app.intent.desktop_layers.windhawk,
-            cx.listener(|this, _, _, cx| this.toggle_shell_windhawk(cx)),
-        ))
-        .child(ui::toggle_row(
-            "shell-yasb",
-            "YASB",
-            "Install YASB.",
-            app.intent.desktop_layers.yasb,
-            cx.listener(|this, _, _, cx| this.toggle_shell_yasb(cx)),
-        ))
-        .child(ui::toggle_row(
-            "shell-komorebi",
-            "Komorebi",
-            "Install Komorebi.",
-            app.intent.desktop_layers.komorebi,
-            cx.listener(|this, _, _, cx| this.toggle_shell_komorebi(cx)),
-        ))
-        .child(ui::toggle_row(
-            "shell-nilesoft",
-            "Nilesoft Shell",
-            "Install Nilesoft Shell.",
-            app.intent.desktop_layers.nilesoft,
-            cx.listener(|this, _, _, cx| this.toggle_shell_nilesoft(cx)),
-        ))
+        .children(toggle_rows(app, cx, options::SHELL_LAYERS))
 }
 
 fn wsl_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
@@ -264,51 +224,19 @@ fn wsl_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
             "WSL",
             "Pick any WSL distros you want installed. WSL2 itself stays enabled either way.",
         ))
-        .child(ui::toggle_row(
-            "wsl-ubuntu",
-            "Ubuntu",
-            "Install Ubuntu.",
-            app.intent.toolkit.wsl_ubuntu,
-            cx.listener(|this, _, _, cx| this.toggle_wsl_ubuntu(cx)),
-        ))
-        .child(ui::toggle_row(
-            "wsl-fedora",
-            "Fedora",
-            "Install the latest Fedora WSL image.",
-            app.intent.toolkit.wsl_fedora,
-            cx.listener(|this, _, _, cx| this.toggle_wsl_fedora(cx)),
-        ))
-        .child(ui::toggle_row(
-            "wsl-archlinux",
-            "Arch Linux",
-            "Install Arch Linux.",
-            app.intent.toolkit.wsl_archlinux,
-            cx.listener(|this, _, _, cx| this.toggle_wsl_archlinux(cx)),
-        ))
-        .child(ui::toggle_row(
-            "wsl-nixos-wsl",
-            "NixOS-WSL",
-            "Install NixOS-WSL from the community release.",
-            app.intent.toolkit.wsl_nixos_wsl,
-            cx.listener(|this, _, _, cx| this.toggle_wsl_nixos_wsl(cx)),
-        ))
-        .child(ui::toggle_row(
-            "wsl-pengwin",
-            "Pengwin",
-            "Install Pengwin.",
-            app.intent.toolkit.wsl_pengwin,
-            cx.listener(|this, _, _, cx| this.toggle_wsl_pengwin(cx)),
-        ))
+        .children(toggle_rows(app, cx, options::WSL_DISTROS))
 }
 
 fn form_factor_card(app: &WinMintApp, cx: &mut Context<WinMintApp>) -> Div {
     let current = app.intent.form_factor.as_wire();
     let mut chips = div().flex().gap_2();
-    for (value, label, form_factor) in FORM_FACTORS {
+    for option in options::FORM_FACTORS {
+        let value = option.value;
+        let form_factor = option.form_factor;
         let is_selected = current == value;
         chips = chips.child(ui::select_chip(
             SharedString::from(format!("formfactor-{value}")),
-            label,
+            option.label,
             is_selected,
             cx.listener(move |this, _, _, cx| this.set_form_factor(form_factor, cx)),
         ));

@@ -1,10 +1,14 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintSetupCompleteText {
     # SetupComplete is now a thin orchestrator plus per-concern modules under
     # src\runtime\setup\SetupComplete\. Content assertions must span both.
     $parts = [System.Collections.Generic.List[string]]::new()
     $parts.Add((Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.ps1') -Raw))
+    $setupCatalogPath = Join-Path $root 'src\runtime\setup\Setup.Actions.ps1'
+    if (Test-Path -LiteralPath $setupCatalogPath -PathType Leaf) {
+        $parts.Add((Get-Content -LiteralPath $setupCatalogPath -Raw))
+    }
     $moduleDir = Join-Path $root 'src\runtime\setup\SetupComplete'
     if (Test-Path -LiteralPath $moduleDir) {
         foreach ($module in @(Get-ChildItem -LiteralPath $moduleDir -Filter '*.ps1' -File | Sort-Object Name)) {
@@ -19,6 +23,7 @@ function Get-WinMintFirstLogonText {
     foreach ($relativePath in @(
         'src\runtime\setup\FirstLogon.ps1',
         'src\runtime\setup\FirstLogon.Support.ps1',
+        'src\runtime\setup\FirstLogon.Transaction.ps1',
         'src\runtime\setup\FirstLogon.Runtime.ps1'
     )) {
         $path = Join-Path $root $relativePath
@@ -29,12 +34,18 @@ function Get-WinMintFirstLogonText {
     return ($parts.ToArray() -join "`n")
 }
 
+function Get-WinMintRepositoryText {
+    param([Parameter(Mandatory)][string]$RelativePath)
+
+    return (Get-Content -LiteralPath (Join-Path $root $RelativePath) -Raw)
+}
+
 function Assert-StaticUiFlowInvariants {
     $guiRoot = Join-Path $root 'apps\gui'
     $intentPath = Join-Path $guiRoot 'src\intent.rs'
     $statePath = Join-Path $guiRoot 'src\state.rs'
     $mainPath = Join-Path $guiRoot 'src\main.rs'
-    $coreProfilePath = Join-Path $root 'crates\winmint-core\src\profile.rs'
+    $coreProfilePath = Join-Path $root 'apps\gui\src\core\profile.rs'
 
     $missingRewriteFiles = @()
     foreach ($path in @($intentPath, $statePath, $mainPath, $coreProfilePath)) {
@@ -58,15 +69,15 @@ function Assert-StaticUiFlowInvariants {
         }
     }
 
-    if ($intentText -notmatch 'winmint_core::profile') {
-        Add-SmokeFailure 'GPUI intent bridge must use winmint-core profile helpers.'
+    if ($intentText -notmatch 'crate::core::profile') {
+        Add-SmokeFailure 'GPUI intent bridge must use core profile helpers.'
     }
     if ($coreProfileText -notmatch 'pub struct KeepFlags') {
-        Add-SmokeFailure 'winmint-core must own the keep-flag GUI intent input contract.'
+        Add-SmokeFailure 'GUI core profile module must own the keep-flag GUI intent input contract.'
     }
     foreach ($requiredKey in @('ISOPath', 'KeepEdge', 'KeepGaming', 'KeepCopilot', 'Edition', 'InstallWindhawk', 'InstallNilesoft', 'Browsers', 'Wsl2Distros')) {
         if ($coreProfileText -notmatch [regex]::Escape($requiredKey)) {
-            Add-SmokeFailure "winmint-core GUI intent builder must emit '$requiredKey'."
+            Add-SmokeFailure "GUI core profile builder must emit '$requiredKey'."
         }
     }
 
@@ -264,12 +275,99 @@ function Assert-HyperVProfileIsProAndUnattended {
     }
 }
 
-function Assert-SurfaceProfileUsesStandardHome {
+function Test-WinMintSmokeStringArrayExactly {
+    param(
+        [Parameter(Mandatory)][object[]]$Actual,
+        [Parameter(Mandatory)][string[]]$Expected
+    )
+
+    $actualValues = @($Actual | ForEach-Object { [string]$_ } | Sort-Object)
+    $expectedValues = @($Expected | Sort-Object)
+    if ($actualValues.Count -ne $expectedValues.Count) {
+        return $false
+    }
+    for ($i = 0; $i -lt $expectedValues.Count; $i++) {
+        if ($actualValues[$i] -ne $expectedValues[$i]) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Assert-TrackedHardwareBuildProfiles {
     $profilePath = Join-Path $root 'config\build-profiles\yanai-sl7-microsoft-oobe.json'
     $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
 
+    if ([string]$profile.source.architecture -ne 'arm64') {
+        Add-SmokeFailure 'Surface Laptop 7 profile must target arm64 source media.'
+    }
     if ([string]$profile.target.editionMode -ne 'Fixed' -or [string]$profile.target.edition -ne 'Windows 11 Home') {
         Add-SmokeFailure 'Surface Laptop 7 profile must target fixed standard Windows 11 Home, not Home Single Language or target-license selection.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.desktop.layers) -Expected @('yasb', 'thide'))) {
+        Add-SmokeFailure 'Surface Laptop 7 profile desktop layers must be exactly yasb and thide.'
+    }
+    if ([string]$profile.features.launcher -ne 'Raycast') {
+        Add-SmokeFailure 'Surface Laptop 7 profile must select the Raycast launcher.'
+    }
+    if ([string]$profile.drivers.source -ne 'SurfaceCatalog' -or [string]$profile.drivers.path -ne 'surface-laptop-7') {
+        Add-SmokeFailure 'Surface Laptop 7 profile must use SurfaceCatalog with the surface-laptop-7 catalog id.'
+    }
+
+    $profilePath = Join-Path $root 'config\build-profiles\yanai-thinkpad-return-amd64.json'
+    $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+
+    if ([string]$profile.source.architecture -ne 'amd64') {
+        Add-SmokeFailure 'ThinkPad return profile must target amd64 source media.'
+    }
+    if ([string]$profile.target.formFactor -ne 'Laptop') {
+        Add-SmokeFailure 'ThinkPad return profile must use Laptop form factor.'
+    }
+    if ([string]$profile.target.diskMode -ne 'AutoWipeDisk0') {
+        Add-SmokeFailure 'ThinkPad return profile must use AutoWipeDisk0 disk mode.'
+    }
+    if (-not [bool]$profile.keep.edge) {
+        Add-SmokeFailure 'ThinkPad return profile must keep Edge.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.desktop.layers) -Expected @('standard'))) {
+        Add-SmokeFailure 'ThinkPad return profile desktop layers must be exactly standard.'
+    }
+    if (@($profile.development.browsers).Count -ne 0 -or @($profile.development.editors).Count -ne 0) {
+        Add-SmokeFailure 'ThinkPad return profile must not select browsers or editors.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.development.wsl.distros) -Expected @('Ubuntu'))) {
+        Add-SmokeFailure 'ThinkPad return profile WSL distros must be exactly Ubuntu.'
+    }
+    if ([string]$profile.features.launcher -ne 'None') {
+        Add-SmokeFailure 'ThinkPad return profile must not select a launcher.'
+    }
+
+    $profilePath = Join-Path $root 'config\build-profiles\yanai-alienware-aurora-amd64.json'
+    $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+
+    if ([string]$profile.source.architecture -ne 'amd64') {
+        Add-SmokeFailure 'Alienware Aurora profile must target amd64 source media.'
+    }
+    if ([string]$profile.target.formFactor -ne 'Desktop') {
+        Add-SmokeFailure 'Alienware Aurora profile must use Desktop form factor.'
+    }
+    if ([string]$profile.target.diskMode -ne 'Manual') {
+        Add-SmokeFailure 'Alienware Aurora profile must use Manual disk mode.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.development.browsers) -Expected @('helium', 'zen-browser'))) {
+        Add-SmokeFailure 'Alienware Aurora profile browsers must be exactly helium and zen-browser.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.development.editors) -Expected @('neovim', 'zed'))) {
+        Add-SmokeFailure 'Alienware Aurora profile editors must be exactly neovim and zed.'
+    }
+    if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.desktop.layers) -Expected @('nilesoft'))) {
+        Add-SmokeFailure 'Alienware Aurora profile desktop layers must be exactly nilesoft.'
+    }
+    if ([string]$profile.features.launcher -ne 'None') {
+        Add-SmokeFailure 'Alienware Aurora profile must not select a launcher.'
+    }
+    if ([bool]$profile.keep.gaming -or -not [bool]$profile.removals.gaming) {
+        Add-SmokeFailure 'Alienware Aurora profile must remove gaming and must not keep gaming.'
     }
 }
 
@@ -608,8 +706,9 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
 
     foreach ($expectedDefaultTweak in @(
             'home-privacy-policy', 'storage-sense-policy', 'modern-standby-policy', 'oobe-rehydration-policy', 'wpbt-policy',
+            'driver-coinstaller-policy',
             # Subtractive baseline: developer QoL is now baseline, and the default
-            # build removes the Copilot+/AI feature surface, Recall, and the Game Bar.
+            # build removes imposed Copilot/AI surfaces, Recall, and the Game Bar.
             'developer-mode', 'gamebar-policy', 'windows-ai-features-removal', 'windows-ai-recall-policy'
         )) {
         if (@($defaultConfig.RegistryTweaks) -notcontains $expectedDefaultTweak) {
@@ -739,26 +838,26 @@ function Assert-LiveInstallAuditUsesSetupProfilePrefixes {
 }
 
 function Assert-LiveInstallAuditIsStaged {
-    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
-    if ($unattendText -notmatch [regex]::Escape('Audit-LiveInstall.ps1')) {
-        Add-SmokeFailure 'Install-Autounattend should stage Audit-LiveInstall.ps1 with setup scripts.'
+    $setupPayloadText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\SetupPayloadStaging.ps1') -Raw
+    if ($setupPayloadText -notmatch [regex]::Escape('Audit-LiveInstall.ps1')) {
+        Add-SmokeFailure 'Setup payload staging should stage Audit-LiveInstall.ps1 with setup scripts.'
     }
-    if ($unattendText -notmatch [regex]::Escape("Join-Path `$ScriptRoot 'src\runtime\setup'")) {
-        Add-SmokeFailure 'Install-Autounattend must stage setup scripts from src\runtime\setup.'
+    if ($setupPayloadText -notmatch [regex]::Escape("Join-Path `$ScriptRoot 'src\runtime\setup'")) {
+        Add-SmokeFailure 'Setup payload staging must stage setup scripts from src\runtime\setup.'
     }
-    if ($unattendText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
-        Add-SmokeFailure 'Install-Autounattend must not rely on the removed top-level scripts directory.'
+    if ($setupPayloadText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
+        Add-SmokeFailure 'Setup payload staging must not rely on the removed top-level scripts directory.'
     }
-    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Runtime.ps1')) {
-        if ($unattendText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "Install-Autounattend should stage '$expected'."
+    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
+        if ($setupPayloadText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Setup payload staging should stage '$expected'."
         }
     }
 }
 
 function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
     $firstLogonText = Get-WinMintFirstLogonText
-    foreach ($expected in @('Restore-WinMintDmaRegionalDefaults', 'FirstLogon_RegionalRestore.json', 'Copy-UserInternationalSettingsToSystem', 'restoreLocationServices')) {
+    foreach ($expected in @('Restore-WinMintDmaRegionalDefaults', 'FirstLogon_RegionalRestore.json', 'Copy-UserInternationalSettingsToSystem', 'restoreLocationServices', 'New-WinMintFirstLogonTransactionPlan', 'FirstLogon.Transaction.ps1')) {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "FirstLogon DMA restore should contain '$expected'."
         }
@@ -769,7 +868,7 @@ function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
     $firstLogonRuntimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Runtime.ps1') -Raw
     $restoreIndex = $firstLogonRuntimeText.IndexOf('Restore-WinMintDmaRegionalDefaults')
     $oneDriveIndex = $firstLogonRuntimeText.IndexOf('Invoke-WinMintFirstLogonOneDriveRemoval')
-    $agentIndex = $firstLogonRuntimeText.IndexOf('Launching WinMintAgent')
+    $agentIndex = $firstLogonRuntimeText.IndexOf('Invoke-WinMintFirstLogonAgentLaunch')
     if ($restoreIndex -lt 0 -or $oneDriveIndex -lt 0 -or $agentIndex -lt 0 -or -not ($restoreIndex -lt $oneDriveIndex -and $restoreIndex -lt $agentIndex)) {
         Add-SmokeFailure 'FirstLogon must restore DMA regional defaults before OneDrive cleanup and agent launch.'
     }
@@ -810,6 +909,84 @@ function Assert-FirstLogonDefaultsToVisibleConsole {
     }
     if ($firstLogonText -notmatch [regex]::Escape('Default to a visible progress console')) {
         Add-SmokeFailure 'FirstLogon default mode should be a visible progress console.'
+    }
+}
+
+function Assert-FirstLogonDemoHarnessIsNonMutating {
+    $demoPath = Join-Path $root 'tools\firstlogon\Show-WinMintFirstLogonDemo.ps1'
+    if (-not (Test-Path -LiteralPath $demoPath -PathType Leaf)) {
+        Add-SmokeFailure 'Expected tools\firstlogon\Show-WinMintFirstLogonDemo.ps1 to exist.'
+        return
+    }
+
+    $demoText = Get-Content -LiteralPath $demoPath -Raw
+    $consoleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Console.ps1') -Raw
+    $agentStartText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Start-WinMintAgent.ps1') -Raw
+    $setupPayloadText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\SetupPayloadStaging.ps1') -Raw
+    foreach ($expected in @(
+        "[ValidateSet('Success', 'Warnings', 'Failure', 'LongRun')]",
+        'WinMintFirstLogonDemo-',
+        'Agent.Console.ps1',
+        'Show-AgentPlan',
+        'Show-AgentFinalSummary',
+        'Show-DemoRunOverview',
+        'Show-DemoArtifacts',
+        'Initialize-DemoUtf8Console',
+        'wt.exe',
+        'UseWindowsTerminal',
+        'ForceSixel',
+        'NoPause'
+    )) {
+        if ($demoText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon demo harness should contain '$expected'."
+        }
+    }
+    foreach ($expected in @(
+        'Get-SpectreImage',
+        'AgentConsoleSplashImagePath',
+        'AgentConsoleForceSixel',
+        'AgentConsoleSplashMaxWidth',
+        'Show-AgentSplashImage',
+        'Format-SpectreAligned',
+        "Format = 'Sixel'",
+        'Force = $true',
+        '$env:WT_SESSION',
+        'Out-SpectreHost'
+    )) {
+        if ($consoleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon console should support image splash rendering with '$expected'."
+        }
+    }
+    if ($agentStartText -notmatch [regex]::Escape('Assets\Brand\winmint_logo_wordmark.png')) {
+        Add-SmokeFailure 'FirstLogon agent should point the console splash at the staged WinMint logo wordmark PNG.'
+    }
+    foreach ($expected in @('assets\brand\winmint_hero.png', 'Assets\Brand', 'winmint_logo_wordmark.png', 'Staged WinMint logo wordmark PNG')) {
+        if ($setupPayloadText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "ISO staging should include the FirstLogon splash asset with '$expected'."
+        }
+    }
+
+    foreach ($forbidden in @(
+        'Start-WinMintAgent.ps1',
+        'Agent.Runtime.ps1',
+        'Set-WinMintFirstLogonAutoLogonPersistent',
+        'Clear-WinMintFirstLogonRetry',
+        'Invoke-WinMintFirstLogonAppxCleanup',
+        'Invoke-WinMintFirstLogonOneDriveRemoval',
+        '$env:LOCALAPPDATA\WinMint'
+    )) {
+        if ($demoText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "FirstLogon demo harness must not call or target mutating setup path '$forbidden'."
+        }
+    }
+
+    foreach ($forbiddenPattern in @(
+        '(?m)^\s*&\s*(winget|wsl|schtasks|reg)(\.exe)?\b',
+        '(?m)^\s*Start-Process\s+.*\b(winget|wsl|schtasks|reg)(\.exe)?\b'
+    )) {
+        if ($demoText -match $forbiddenPattern) {
+            Add-SmokeFailure "FirstLogon demo harness must not execute installer or setup commands matching '$forbiddenPattern'."
+        }
     }
 }
 
@@ -878,7 +1055,7 @@ function Assert-AgentLiveInstallFailuresAreWarnings {
     $consoleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Console.ps1') -Raw
     foreach ($expected in @(
         '$blockingSteps',
-        'module:profiles',
+        'FailurePolicy',
         'warningSteps',
         'completed with warnings',
         'failed (non-blocking)',
@@ -916,7 +1093,7 @@ function Assert-SetupCompleteRegistersFirstLogonFallback {
         'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce',
         'WinMintFirstLogon',
         'FirstLogon.ps1',
-        'Registered HKLM RunOnce fallback for FirstLogon.ps1.'
+        'Registered HKLM RunOnce fallback for FirstLogon.ps1 under PowerShell 7.'
     )) {
         if ($setupCompleteText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "SetupComplete should register FirstLogon fallback with '$expected'."
@@ -1027,6 +1204,21 @@ function Assert-BuildProfileSchemaOwnsBrowserContract {
     $schemaPath = Join-Path $root 'schemas\winmint.buildprofile.schema.json'
     $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
     $development = $schema.properties.development
+
+    function Assert-BuildProfileSchemaEnum {
+        param(
+            [Parameter(Mandatory)][object[]]$Actual,
+            [Parameter(Mandatory)][object[]]$Expected,
+            [Parameter(Mandatory)][string]$Name
+        )
+
+        $actualText = @($Actual | ForEach-Object { [string]$_ })
+        $expectedText = @($Expected | ForEach-Object { [string]$_ })
+        if (($actualText -join "`n") -ne ($expectedText -join "`n")) {
+            Add-SmokeFailure "BuildProfile schema enum '$Name' must match the backend option catalog. Actual: [$($actualText -join ', ')] Expected: [$($expectedText -join ', ')]"
+        }
+    }
+
     if (@($development.required) -notcontains 'browsers') {
         Add-SmokeFailure 'BuildProfile schema must require profile.development.browsers as a first-class contract field.'
     }
@@ -1035,11 +1227,31 @@ function Assert-BuildProfileSchemaOwnsBrowserContract {
     if (-not [bool]$browserSchema.uniqueItems) {
         Add-SmokeFailure 'BuildProfile schema must require profile.development.browsers to be unique.'
     }
-    foreach ($browserId in @('zen-browser', 'helium', 'librewolf', 'brave', 'edge')) {
+    foreach ($browserId in @('zen-browser', 'helium', 'firefox-developer-edition', 'brave', 'edge')) {
         if (@($browserSchema.items.enum) -notcontains $browserId) {
             Add-SmokeFailure "BuildProfile schema must allow canonical browser id '$browserId'."
         }
     }
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.source.properties.architecture.enum -Expected (Get-WinMintOptionValues -Name ProfileArchitecture) -Name 'profile.source.architecture'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.device.enum -Expected (Get-WinMintOptionValues -Name TargetDevice) -Name 'profile.target.device'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.formFactor.enum -Expected (Get-WinMintOptionValues -Name FormFactor) -Name 'profile.target.formFactor'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.powerPlan.enum -Expected (Get-WinMintOptionValues -Name PowerPlan) -Name 'profile.target.powerPlan'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.editionMode.enum -Expected (Get-WinMintOptionValues -Name EditionMode) -Name 'profile.target.editionMode'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.diskMode.enum -Expected (Get-WinMintOptionValues -Name DiskMode) -Name 'profile.target.diskMode'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.diskLayout.properties.mode.enum -Expected (Get-WinMintOptionValues -Name DiskMode) -Name 'profile.target.diskLayout.mode'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.target.properties.diskLayout.properties.preset.enum -Expected (Get-WinMintOptionValues -Name DiskLayoutPreset) -Name 'profile.target.diskLayout.preset'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.identity.properties.accountMode.enum -Expected (Get-WinMintOptionValues -Name AccountMode) -Name 'profile.identity.accountMode'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.drivers.properties.source.enum -Expected (Get-WinMintOptionValues -Name DriverSource) -Name 'profile.drivers.source'
+    Assert-BuildProfileSchemaEnum -Actual @($schema.properties.desktop.properties.cursorPack.const) -Expected (Get-WinMintOptionValues -Name DesktopCursorPack) -Name 'profile.desktop.cursorPack'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.desktop.properties.layers.items.enum -Expected (Get-WinMintOptionValues -Name DesktopLayer) -Name 'profile.desktop.layers[]'
+    Assert-BuildProfileSchemaEnum -Actual $development.properties.editors.items.enum -Expected (Get-WinMintOptionValues -Name Editor) -Name 'profile.development.editors[]'
+    Assert-BuildProfileSchemaEnum -Actual $development.properties.browsers.items.enum -Expected (Get-WinMintOptionValues -Name Browser) -Name 'profile.development.browsers[]'
+    Assert-BuildProfileSchemaEnum -Actual $development.properties.wsl.properties.distros.items.enum -Expected (Get-WinMintOptionValues -Name WslDistro) -Name 'profile.development.wsl.distros[]'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.features.properties.launcher.enum -Expected (Get-WinMintOptionValues -Name Launcher) -Name 'profile.features.launcher'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.updates.properties.mode.enum -Expected (Get-WinMintOptionValues -Name UpdateMode) -Name 'profile.updates.mode'
+    Assert-BuildProfileSchemaEnum -Actual @($schema.properties.updates.properties.targetFeatureVersion.const) -Expected (Get-WinMintOptionValues -Name UpdateTargetFeatureVersion) -Name 'profile.updates.targetFeatureVersion'
+    Assert-BuildProfileSchemaEnum -Actual @($schema.properties.updates.properties.releaseCadence.const) -Expected (Get-WinMintOptionValues -Name UpdateReleaseCadence) -Name 'profile.updates.releaseCadence'
+    Assert-BuildProfileSchemaEnum -Actual $schema.properties.removals.properties.aiPolicy.enum -Expected (Get-WinMintOptionValues -Name AiPolicy) -Name 'profile.removals.aiPolicy'
 
     $wslEnabledSchema = $development.properties.wsl.properties.enabled
     if ($wslEnabledSchema.const -ne $true) {
@@ -1082,13 +1294,16 @@ function Assert-AiRemovalCatalogAndGuardrails {
             'MicrosoftWindows.Client.CoreAI',
             'Microsoft.Windows.Ai.Copilot.Provider',
             'Microsoft.Edge.GameAssist',
-            'Microsoft.Office.ActionsServer',
-            'Microsoft.WritingAssistant',
             'Microsoft.Windows.AIHub',
-            'Office Actions Server'
+            'WindowsAI'
         )) {
         if ($catalogText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "AI removal catalog should include '$expected'."
+        }
+    }
+    foreach ($forbidden in @('Microsoft.Office.ActionsServer', 'Microsoft.WritingAssistant', 'Office Actions Server')) {
+        if ($catalogText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "AI removal catalog should not touch Office-dependent AI surface '$forbidden'."
         }
     }
 
@@ -1108,7 +1323,7 @@ function Assert-AiRemovalCatalogAndGuardrails {
 }
 
 function Assert-RecoveryBundleIsOutputOnly {
-    $reportsText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Reports.ps1') -Raw
+    $manifestText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Manifest.ps1') -Raw
     foreach ($expected in @(
             'Save-WinMintRecoveryBundle',
             "Join-Path `$OutputDir 'recovery'",
@@ -1116,12 +1331,15 @@ function Assert-RecoveryBundleIsOutputOnly {
             'Recover-WinMintDmaRegion.ps1',
             'WinMint-Recovery.json'
         )) {
-        if ($reportsText -notmatch [regex]::Escape($expected)) {
+        if ($manifestText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Recovery bundle output should include '$expected'."
         }
     }
 
-    $setupStagingText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+    $setupStagingText = @(
+        Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+        Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\SetupPayloadStaging.ps1') -Raw
+    ) -join [Environment]::NewLine
     foreach ($forbidden in @('Recover-WinMintAiPolicy.ps1', 'Recover-WinMintDmaRegion.ps1', 'WinMint-Recovery.json')) {
         if ($setupStagingText -match [regex]::Escape($forbidden)) {
             Add-SmokeFailure "Recovery bundle file '$forbidden' must not be staged into the installed OS."
@@ -1158,10 +1376,22 @@ function Assert-AgentRunsLiveInstallAudit {
         }
     }
     $agentEntryText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
-    $profilesIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'profiles'")
-    $packageManagersIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'package-managers'")
-    $editorsIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'editors'")
-    $auditIndex = $agentEntryText.IndexOf("Invoke-AgentProfileModule -StepName 'liveInstallAudit'")
+    foreach ($expected in @(
+        'New-WinMintAgentRuntimeStepPlan',
+        'FailurePolicy',
+        '''blocking''',
+        '''advisory''',
+        'finalValidation',
+        '$blockingSteps = @($runtimePlan'
+    )) {
+        if ($agentEntryText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Agent runtime should expose plan-driven ordering and failure policy with '$expected'."
+        }
+    }
+    $profilesIndex = $agentEntryText.IndexOf("RuntimeStepName = 'profiles'")
+    $packageManagersIndex = $agentEntryText.IndexOf("RuntimeStepName = 'package-managers'")
+    $editorsIndex = $agentEntryText.IndexOf("RuntimeStepName = 'editors'")
+    $auditIndex = $agentEntryText.IndexOf("RuntimeStepName = 'liveInstallAudit'")
     $failedIndex = $agentEntryText.IndexOf('$failed = @')
     if ($profilesIndex -lt 0 -or $packageManagersIndex -lt 0 -or $editorsIndex -lt 0 -or $auditIndex -lt 0 -or $failedIndex -lt 0 -or
         -not ($profilesIndex -lt $packageManagersIndex -and $packageManagersIndex -lt $editorsIndex -and $editorsIndex -lt $auditIndex -and $auditIndex -lt $failedIndex)) {
@@ -1232,15 +1462,46 @@ function Assert-StarshipPromptUsesNerdFontTerminalDefaults {
 
 function Assert-AgentWingetUsesDefaultInstallerSelection {
     $runtimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
+    $packageManagerText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1') -Raw
     $packagesText = Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw
 
     foreach ($expected in @(
         'Start-Process -FilePath $FilePath',
         'winget.exe',
-        '--architecture'
+        '--architecture',
+        'Save-AgentDirectToolInstaller',
+        'Get-FileHash -LiteralPath $installerPath -Algorithm SHA256',
+        'Invoke-WebRequest -Uri $url -OutFile $installerPath',
+        '''direct'''
     )) {
         if ($runtimeText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "Agent runtime should invoke winget directly with '$expected'."
+            Add-SmokeFailure "Agent runtime should carry package install primitive '$expected'."
+        }
+    }
+    foreach ($expected in @(
+        '"everything-arm64-beta"',
+        '"source": "direct"',
+        '"version": "1.5.0.1415b"',
+        '"architectures": ["arm64"]',
+        '"sha256": "2D511A33A3494147F921DCB488772125E6CC654E677196AACB0235967A27D2DA"'
+    )) {
+        if ($packagesText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Package catalog should declare the pinned ARM64 Everything payload with '$expected'."
+        }
+    }
+    if ($packagesText -match [regex]::Escape('"everything-cli"')) {
+        Add-SmokeFailure 'Package catalog should not include ES CLI as a Raycast backend dependency.'
+    }
+    foreach ($expected in @(
+        'Invoke-WinMintAgentWingetUpgradeAll',
+        '''upgrade''',
+        '''--all''',
+        '''--accept-source-agreements''',
+        '''--accept-package-agreements''',
+        'package-manager:winget-upgrade-all'
+    )) {
+        if ($packageManagerText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Package manager bootstrap should run and track winget upgrade --all with '$expected'."
         }
     }
 
@@ -1265,6 +1526,34 @@ function Assert-AgentWingetUsesDefaultInstallerSelection {
     }
 }
 
+function Assert-OfficialUpdatePayloadAcquisition {
+    $moduleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\UpdatePayloads.ps1') -Raw
+    $engineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Engine.ps1') -Raw
+    $entryText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\WinMint.ps1') -Raw
+    foreach ($expected in @(
+        'catalog.update.microsoft.com/Search.aspx',
+        'catalog.update.microsoft.com/DownloadDialog.aspx',
+        'ConvertFrom-WinMintCatalogBase64Sha256',
+        'Save-WinMintVerifiedDownload',
+        'Invoke-WinMintUpdatePayloadDownload',
+        'Start-BitsTransfer',
+        'definitionupdates.microsoft.com/packages?package=dismpackage',
+        'Get-AuthenticodeSignature',
+        'UpdatePayloadManifest.json',
+        'Optional preview update acquisition is not allowed'
+    )) {
+        if ($moduleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Official update payload acquisition should contain '$expected'."
+        }
+    }
+    if ($engineText -notmatch 'Invoke-WinMintStable25H2UpdatePayloadAcquisition') {
+        Add-SmokeFailure 'Engine must acquire official Stable25H2 payloads before enforcing update payload preflight.'
+    }
+    if ($entryText -notmatch 'Private\\UpdatePayloads\.ps1') {
+        Add-SmokeFailure 'WinMint.ps1 must dot-source the update payload acquisition module.'
+    }
+}
+
 function Assert-ElevationChecksUseInstanceMarshalSize {
     foreach ($relativePath in @(
         'src\runtime\setup\FirstLogon.Support.ps1',
@@ -1284,7 +1573,7 @@ function Assert-NoMaintenancePayloadOrRegistration {
     $setupCompleteText = Get-WinMintSetupCompleteText
     $firstLogonText = Get-WinMintFirstLogonText
     $engineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Engine.ps1') -Raw
-    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+    $setupPayloadText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\SetupPayloadStaging.ps1') -Raw
     $maintenancePayload = Join-Path $root 'src\runtime\setup\Maintain.ps1'
 
     if (Test-Path -LiteralPath $maintenancePayload) {
@@ -1300,7 +1589,7 @@ function Assert-NoMaintenancePayloadOrRegistration {
         Add-SmokeFailure 'FirstLogon cleanup must not preserve Maintain.ps1 on the installed system.'
     }
     if ($engineText -match [regex]::Escape("'Maintain.ps1'") -or
-        $unattendText -match [regex]::Escape("'Maintain.ps1'")) {
+        $setupPayloadText -match [regex]::Escape("'Maintain.ps1'")) {
         Add-SmokeFailure 'Maintain.ps1 must not be staged as a default setup artifact.'
     }
 }
@@ -1604,13 +1893,18 @@ function Assert-WinPEDriverInjectionDefaultsToSetupOnly {
     if ($stagingText -notmatch 'Setup-only') {
         Add-SmokeFailure 'Expected staging log to make setup-only WinPE driver mode visible.'
     }
+    if ($stagingText -match "@\('/English',\s*`"/Image:\$ImageMountPath`",\s*'/Add-Driver',\s*`"/Driver:\$DriverSource`",\s*'/Recurse',\s*'/ForceUnsigned'\)") {
+        Add-SmokeFailure 'Driver injection must not force unsigned drivers by default.'
+    }
 }
 
 function Assert-CopilotPlusUsesFullAiRemovalPolicy {
-    # Subtractive model: the default build removes the Edge noise surface
-    # (edge-policy-minimal, always on), the Copilot+/Windows AI feature surface
+    # Subtractive model: the default build removes Edge noise
+    # (edge-policy-minimal, always on), imposed Copilot/Windows AI surfaces
     # (windows-ai-features-removal, kept only with -KeepCopilot), and Recall
-    # (windows-ai-recall-policy, always on as a security baseline).
+    # (windows-ai-recall-policy, always on as a security baseline), while
+    # preserving explicit app-local tools such as Edge Copilot page-context chat,
+    # Paint AI, Click to Do, and the local Settings agent.
     $edge = $script:RegistryTweaks | Where-Object id -eq 'edge-policy-minimal' | Select-Object -First 1
     $aiFeatures = $script:RegistryTweaks | Where-Object id -eq 'windows-ai-features-removal' | Select-Object -First 1
     $recall = $script:RegistryTweaks | Where-Object id -eq 'windows-ai-recall-policy' | Select-Object -First 1
@@ -1618,33 +1912,50 @@ function Assert-CopilotPlusUsesFullAiRemovalPolicy {
         Add-SmokeFailure 'Expected edge-policy-minimal, windows-ai-features-removal, and windows-ai-recall-policy registry tweaks to exist.'
         return
     }
-    foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'WebWidgetAllowed', 'CryptoWalletEnabled', 'HideFirstRunExperience', 'EdgeEnhanceImagesEnabled', 'BackgroundModeEnabled', 'StartupBoostEnabled', 'NewTabPageContentEnabled')) {
+    foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'WebWidgetAllowed', 'CryptoWalletEnabled', 'HideFirstRunExperience', 'EdgeEnhanceImagesEnabled', 'BackgroundModeEnabled', 'StartupBoostEnabled', 'NewTabPageContentEnabled', 'ComposeInlineEnabled')) {
         if (@($edge.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected Edge noise policy to set $expected."
         }
     }
     foreach ($expected in @(
-            'HubsSidebarEnabled',
-            'StandaloneHubsSidebarEnabled',
-            'DisableSettingsAgent',
             'TurnOffWindowsCopilot',
-            'CopilotPageContext',
-            'EdgeEntraCopilotPageContext',
             'GenAILocalFoundationalModelSettings',
-            'NewTabPageBingChatEnabled',
             'BuiltInAIAPIsEnabled',
             'DisableAIFeatures',
             'LetAppsAccessSystemAIModels',
-            'LetAppsAccessGenerativeAI',
-            'EnableCopilot'
+            'LetAppsAccessGenerativeAI'
         )) {
         if (@($aiFeatures.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected default AI feature removal policy to set $expected."
         }
     }
-    foreach ($expected in @('DisableAIDataAnalysis', 'DisableClickToDo', 'AllowRecallEnablement', 'AllowRecallExport', 'TurnOffSavingSnapshots')) {
+    foreach ($expected in @('DisableAIDataAnalysis', 'AllowRecallEnablement', 'AllowRecallExport', 'TurnOffSavingSnapshots')) {
         if (@($recall.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected Recall removal policy to set $expected."
+        }
+    }
+    $allAiPolicySets = @($edge.set) + @($aiFeatures.set) + @($recall.set)
+    foreach ($forbidden in @(
+            'HubsSidebarEnabled',
+            'StandaloneHubsSidebarEnabled',
+            'CopilotPageContext',
+            'CopilotCDPPageContext',
+            'EdgeEntraCopilotPageContext',
+            'NewTabPageBingChatEnabled',
+            'DisableSettingsAgent',
+            'DisableClickToDo',
+            'DisableCocreator',
+            'DisableImageCreator',
+            'DisableGenerativeFill',
+            'DisableGenerativeErase',
+            'DisableRemoveBackground',
+            'EnableCopilot',
+            'DisableAgentConnectors',
+            'DisableAgentWorkspaces',
+            'DisableRemoteAgentConnectors'
+        )) {
+        if (@($allAiPolicySets | Where-Object name -eq $forbidden).Count -ne 0) {
+            Add-SmokeFailure "WinMint should preserve explicit/local AI or Office-dependent policy '$forbidden'."
         }
     }
     # Curation: by default the AI feature removal applies; -KeepCopilot suppresses
@@ -1696,8 +2007,8 @@ function Assert-OneDriveRemovalPolicyIsComplete {
     $firstLogonText = Get-WinMintFirstLogonText
     $setupCompleteText = Get-WinMintSetupCompleteText
     $stagingText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Staging.ps1') -Raw
-    $offlineOneDriveReportText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Reports.ps1') -Raw
-    $offlineOneDriveText = $stagingText + "`n" + $offlineOneDriveReportText
+    $offlineOneDriveManifestText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Manifest.ps1') -Raw
+    $offlineOneDriveText = $stagingText + "`n" + $offlineOneDriveManifestText
     $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Pipeline.ps1') -Raw
     foreach ($expected in @(
             'FirstLogon_OneDriveAudit.json',
@@ -1807,6 +2118,22 @@ function Assert-RegistryTweakMetadataAndRollback {
     $publicIds = @($publicTweaks | ForEach-Object { [string]$_.id })
     $executableIds = @($script:RegistryTweaks | ForEach-Object { [string]$_.id })
 
+    foreach ($expectedFunction in @(
+            'Assert-WinMintRegistryTweakCatalog',
+            'Invoke-WinMintRegistryOperation',
+            'Assert-WinMintRegistryDeleteTarget'
+        )) {
+        if (-not (Get-Command $expectedFunction -ErrorAction SilentlyContinue)) {
+            Add-SmokeFailure "Registry tweak backend should expose '$expectedFunction'."
+        }
+    }
+    try {
+        Assert-WinMintRegistryTweakCatalog
+    }
+    catch {
+        Add-SmokeFailure "Registry tweak catalog static safety validation failed: $($_.Exception.Message)"
+    }
+
     foreach ($group in @($script:RegistryTweaks)) {
         $id = [string]$group.id
         if ($publicIds -notcontains $id) {
@@ -1829,6 +2156,21 @@ function Assert-RegistryTweakMetadataAndRollback {
             )
             if ($rollbackOps.Count -eq 0) {
                 Add-SmokeFailure "Reversible registry tweak '$id' must include at least partial rollback metadata."
+            }
+        }
+        $registryOperations = @((Get-WinMintProfileSetting (Get-WinMintProfileSetting $group 'operations' @{}) 'registry' @()))
+        if ($registryOperations.Count -ne (@($group.set).Count + @($group.remove).Count)) {
+            Add-SmokeFailure "Registry tweak '$id' must expose a typed operations.registry DOM matching set/remove entries."
+        }
+        foreach ($operation in $registryOperations) {
+            foreach ($field in @('kind', 'phase', 'hive', 'subPath', 'path')) {
+                $value = Get-WinMintProfileSetting $operation $field $null
+                if ($null -eq $value -or ($value -is [string] -and [string]::IsNullOrWhiteSpace($value))) {
+                    Add-SmokeFailure "Registry tweak '$id' operation must define '$field'."
+                }
+            }
+            if ([string](Get-WinMintProfileSetting $operation 'phase' '') -ne 'offline-image') {
+                Add-SmokeFailure "Registry tweak '$id' operation phase must currently be offline-image."
             }
         }
     }
@@ -1894,6 +2236,48 @@ function Assert-RegistryTweakMetadataAndRollback {
         }
         if (@($defaultConfig.RegistryTweaks) -notcontains 'cloud-content-policy') {
             Add-SmokeFailure 'cloud-content-policy must apply by default.'
+        }
+    }
+
+    $driverCoInstaller = $script:RegistryTweaks | Where-Object id -eq 'driver-coinstaller-policy' | Select-Object -First 1
+    if (-not $driverCoInstaller) {
+        Add-SmokeFailure 'Expected driver-coinstaller-policy registry tweak to exist.'
+    }
+    else {
+        $match = @($driverCoInstaller.set | Where-Object {
+                [string]$_.path -eq 'zSOFTWARE\Microsoft\Windows\CurrentVersion\Device Installer' -and
+                [string]$_.name -eq 'DisableCoInstallers' -and
+                [string]$_.value -eq '1'
+            })
+        if ($match.Count -eq 0) {
+            Add-SmokeFailure 'driver-coinstaller-policy must stamp DisableCoInstallers=1 under Device Installer.'
+        }
+        if (@($defaultConfig.RegistryTweaks) -notcontains 'driver-coinstaller-policy') {
+            Add-SmokeFailure 'driver-coinstaller-policy must apply by default.'
+        }
+    }
+
+    $gamebar = $script:RegistryTweaks | Where-Object id -eq 'gamebar-policy' | Select-Object -First 1
+    if (-not $gamebar) {
+        Add-SmokeFailure 'Expected gamebar-policy registry tweak to exist.'
+    }
+    else {
+        foreach ($protocol in @('ms-gamebar', 'ms-gamebarservices')) {
+            $rootPath = "zSOFTWARE\Classes\$protocol"
+            $commandPath = "$rootPath\shell\open\command"
+            foreach ($expected in @(
+                    @{ path = $rootPath; name = 'URL Protocol' },
+                    @{ path = $rootPath; name = 'NoOpenWith' },
+                    @{ path = $commandPath; name = '' }
+                )) {
+                $match = @($gamebar.set | Where-Object {
+                        [string]$_.path -eq [string]$expected.path -and
+                        [string]$_.name -eq [string]$expected.name
+                    })
+                if ($match.Count -eq 0) {
+                    Add-SmokeFailure "gamebar-policy must stamp '$($expected.name)' under $($expected.path)."
+                }
+            }
         }
     }
 
@@ -2121,6 +2505,158 @@ function Assert-WindowsTerminalDefaultsPwsh7NoLogo {
     }
 }
 
+function Assert-StaticTextContainsAll {
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][string[]]$Expected,
+        [Parameter(Mandatory)][string]$FailurePrefix
+    )
+
+    foreach ($expected in @(
+        $Expected
+    )) {
+        if ($Text -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "$FailurePrefix '$expected'."
+        }
+    }
+}
+
+function Assert-OfflinePowerShell7StagingContract {
+    param([Parameter(Mandatory)][string]$PackagesText)
+
+    Assert-StaticTextContainsAll -Text $PackagesText -FailurePrefix 'Offline PowerShell 7 staging should contain' -Expected @(
+        'function Assert-OfflinePowerShell7Staged',
+        'Resolve-WinMintGitHubReleasePayload',
+        'PowerShell/PowerShell',
+        'PowerShell-\d+\.\d+\.\d+-',
+        'PowerShell 7 staged in the offline image',
+        'PowerShell 7 is missing from the offline image',
+        'PowerShell 7 staging failed; build cannot continue'
+    )
+    if ($PackagesText -match 'fall back to Windows PowerShell') {
+        Add-SmokeFailure 'PowerShell 7 staging must fail the build instead of falling back to Windows PowerShell.'
+    }
+}
+
+function Assert-ServiceWimRequiresBundledPowerShell7 {
+    $pipelineText = Get-WinMintRepositoryText 'src\runtime\image\Private\Pipeline.ps1'
+    if ($pipelineText -notmatch 'Assert-OfflinePowerShell7Staged\s+-MountDir\s+\$mountDir') {
+        Add-SmokeFailure 'Service WIM pipeline must assert bundled PowerShell 7 after servicing or serviced-WIM cache restore.'
+    }
+
+    $cacheText = Get-WinMintRepositoryText 'src\runtime\image\Private\IntermediatesCache.ps1'
+    if ($cacheText -notmatch '\$script:WinMintServicedWimCacheSchemaVersion\s*=\s*9') {
+        Add-SmokeFailure 'Serviced-WIM cache schema should be bumped after adding the bundled PowerShell 7 image invariant.'
+    }
+}
+
+function Assert-SetupCompleteCmdRequiresBundledPowerShell7 {
+    param([Parameter(Mandatory)][string]$SetupCompleteCmd)
+
+    Assert-StaticTextContainsAll -Text $SetupCompleteCmd -FailurePrefix 'SetupComplete.cmd should require staged PowerShell 7 with' -Expected @(
+        '%ProgramFiles%\PowerShell\7\pwsh.exe',
+        'PowerShell 7 is required',
+        'exit /b 1'
+    )
+    if ($SetupCompleteCmd -match 'powershell\.exe[\s\S]{0,160}SetupComplete\.ps1') {
+        Add-SmokeFailure 'SetupComplete.cmd must not run SetupComplete.ps1 under Windows PowerShell when PowerShell 7 is missing.'
+    }
+}
+
+function Assert-SetupCompleteRegistersFirstLogonUnderPowerShell7 {
+    param([Parameter(Mandatory)][string]$SetupCompleteText)
+
+    Assert-StaticTextContainsAll -Text $SetupCompleteText -FailurePrefix 'SetupComplete.ps1 should register FirstLogon under PowerShell 7 with' -Expected @(
+        "Join-Path `$env:ProgramFiles 'PowerShell\7\pwsh.exe'",
+        'PowerShell 7 is required for FirstLogon',
+        '-NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File',
+        'under PowerShell 7'
+    )
+    if ($SetupCompleteText -match 'runOnceCommand\s*=\s*"powershell\.exe') {
+        Add-SmokeFailure 'SetupComplete.ps1 must not register FirstLogon RunOnce under Windows PowerShell.'
+    }
+}
+
+function Assert-SetupCompleteToolchainDoesNotInstallPowerShell7Fallback {
+    param([Parameter(Mandatory)][string]$ToolchainText)
+
+    if ($ToolchainText -match 'Microsoft\.PowerShell') {
+        Add-SmokeFailure 'SetupComplete toolchain must not install PowerShell 7 via winget; PowerShell 7 is bundled offline and required before SetupComplete.ps1 runs.'
+    }
+}
+
+function Assert-FirstLogonRuntimeRequiresPowerShell7 {
+    param([Parameter(Mandatory)][string]$FirstLogonRuntimeText)
+
+    Assert-StaticTextContainsAll -Text $FirstLogonRuntimeText -FailurePrefix 'FirstLogon runtime should fail closed around PowerShell 7 with' -Expected @(
+        'PowerShell 7 is bundled into the image and is required',
+        'PowerShell 7 is required for FirstLogon',
+        'PowerShell 7 re-launch failed',
+        'return 1'
+    )
+    if ($FirstLogonRuntimeText -match 'continuing under Windows PowerShell') {
+        Add-SmokeFailure 'FirstLogon runtime must not continue under Windows PowerShell after PowerShell 7 handoff fails.'
+    }
+}
+
+function Assert-FirstLogonSupportRequiresPowerShell7 {
+    param([Parameter(Mandatory)][string]$FirstLogonSupportText)
+
+    Assert-StaticTextContainsAll -Text $FirstLogonSupportText -FailurePrefix 'FirstLogon host resolution should require PowerShell 7 with' -Expected @(
+        'function Resolve-WinMintPowerShellHost',
+        'PowerShell 7 is required for WinMint FirstLogon'
+    )
+}
+
+function Assert-AgentRuntimeRequiresPowerShell7 {
+    param([Parameter(Mandatory)][string]$AgentRuntimeText)
+
+    Assert-StaticTextContainsAll -Text $AgentRuntimeText -FailurePrefix 'Agent host resolution should require PowerShell 7 with' -Expected @(
+        'function Resolve-AgentPowerShellHost',
+        'PowerShell 7 is required for WinMint Agent'
+    )
+}
+
+function Assert-SetupAndFirstLogonCatalogsAreExplicit {
+    $setupActionsText = Get-WinMintRepositoryText 'src\runtime\setup\Setup.Actions.ps1'
+    $setupCompleteText = Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete.ps1'
+    $agentRuntimeText = Get-WinMintRepositoryText 'src\runtime\firstlogon\Agent.Runtime.ps1'
+
+    Assert-StaticTextContainsAll -Text $setupActionsText -FailurePrefix 'Setup action catalog should contain' -Expected @(
+        'function Get-WinMintSetupActionCatalog',
+        'Import-WinMintSetupActionModules',
+        'edge-removal',
+        'inline-secret-cleanup',
+        'first-logon-runonce'
+    )
+    Assert-StaticTextContainsAll -Text $setupCompleteText -FailurePrefix 'SetupComplete orchestrator should use the explicit setup action catalog with' -Expected @(
+        'Import-WinMintSetupActionModules',
+        'Get-WinMintSetupActionCatalog'
+    )
+    if ($setupCompleteText -match 'Get-ChildItem\s+-LiteralPath\s+\(Join-Path \$payloadDir ''SetupComplete''\)') {
+        Add-SmokeFailure 'SetupComplete.ps1 must not discover action modules by folder globbing.'
+    }
+
+    Assert-StaticTextContainsAll -Text $agentRuntimeText -FailurePrefix 'FirstLogon runtime should use the explicit module catalog with' -Expected @(
+        'function Get-WinMintAgentModuleCatalog',
+        'function Get-WinMintAgentModuleRuntimeState',
+        'RuntimeStepName',
+        'FailurePolicy',
+        'PostStepHook'
+    )
+}
+
+function Assert-PowerShell7IsBundledAndRequired {
+    Assert-OfflinePowerShell7StagingContract -PackagesText (Get-WinMintRepositoryText 'src\runtime\image\Private\Image\Packages.ps1')
+    Assert-ServiceWimRequiresBundledPowerShell7
+    Assert-SetupCompleteCmdRequiresBundledPowerShell7 -SetupCompleteCmd (Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete.cmd')
+    Assert-SetupCompleteRegistersFirstLogonUnderPowerShell7 -SetupCompleteText (Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete.ps1')
+    Assert-SetupCompleteToolchainDoesNotInstallPowerShell7Fallback -ToolchainText (Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete\Toolchain.ps1')
+    Assert-FirstLogonRuntimeRequiresPowerShell7 -FirstLogonRuntimeText (Get-WinMintRepositoryText 'src\runtime\setup\FirstLogon.Runtime.ps1')
+    Assert-FirstLogonSupportRequiresPowerShell7 -FirstLogonSupportText (Get-WinMintRepositoryText 'src\runtime\setup\FirstLogon.Support.ps1')
+    Assert-AgentRuntimeRequiresPowerShell7 -AgentRuntimeText (Get-WinMintRepositoryText 'src\runtime\firstlogon\Agent.Runtime.ps1')
+}
+
 function Assert-PSScriptAnalyzerHonorsProjectSettings {
     $validationCoreText = Get-Content -LiteralPath (Join-Path $root 'tools\validation\Modules\Core.ps1') -Raw
     foreach ($expected in @(
@@ -2184,3 +2720,4 @@ function Assert-XdgDefaultsAreStaged {
         Add-SmokeFailure 'XDG_RUNTIME_DIR must not leave a WinMint-named temp folder behind.'
     }
 }
+

@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Read-AgentJson {
     param([string]$Path, [object]$Fallback)
@@ -74,11 +74,7 @@ function Update-AgentProcessPath {
 function Resolve-AgentPowerShellHost {
     $pwsh = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
     if (Test-Path -LiteralPath $pwsh) { return $pwsh }
-    $sysnative = Join-Path $env:WINDIR 'Sysnative\WindowsPowerShell\v1.0\powershell.exe'
-    if (Test-Path -LiteralPath $sysnative) { return $sysnative }
-    $system32 = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    if (Test-Path -LiteralPath $system32) { return $system32 }
-    return 'powershell.exe'
+    throw "PowerShell 7 is required for WinMint Agent but was not found: $pwsh"
 }
 
 function Get-AgentStepAttempts {
@@ -381,6 +377,58 @@ function Get-AgentToolWingetArchitecture {
     return $null
 }
 
+function Get-AgentDirectToolCachePath {
+    param([Parameter(Mandatory)]$Tool)
+
+    $cacheRoot = Join-Path $env:LOCALAPPDATA 'WinMint\Cache\Packages'
+    $null = New-Item -ItemType Directory -Path $cacheRoot -Force -ErrorAction Stop
+    $fileName = [IO.Path]::GetFileName(([Uri][string]$Tool.url).AbsolutePath)
+    if ([string]::IsNullOrWhiteSpace($fileName)) {
+        $fileName = ([string]$Tool.id -replace '[^A-Za-z0-9_.-]', '_') + '.exe'
+    }
+    return (Join-Path $cacheRoot $fileName)
+}
+
+function Save-AgentDirectToolInstaller {
+    param([Parameter(Mandatory)]$Tool)
+
+    $url = [string]$Tool.url
+    $expectedHash = ([string]$Tool.sha256).ToUpperInvariant()
+    if ([string]::IsNullOrWhiteSpace($url) -or [string]::IsNullOrWhiteSpace($expectedHash)) {
+        throw "Direct package '$($Tool.id)' is missing url or sha256 metadata."
+    }
+
+    $installerPath = Get-AgentDirectToolCachePath -Tool $Tool
+    $needsDownload = $true
+    if (Test-Path -LiteralPath $installerPath -PathType Leaf) {
+        $existingHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToUpperInvariant()
+        if ($existingHash -eq $expectedHash) {
+            $needsDownload = $false
+        }
+        else {
+            Remove-Item -LiteralPath $installerPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if ($needsDownload) {
+        Write-AgentConsoleLine -Level Info -Message "Downloading $($Tool.id)."
+        Invoke-WebRequest -Uri $url -OutFile $installerPath -UseBasicParsing -ErrorAction Stop
+    }
+
+    $actualHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($actualHash -ne $expectedHash) {
+        Remove-Item -LiteralPath $installerPath -Force -ErrorAction SilentlyContinue
+        throw "Direct package '$($Tool.id)' SHA256 mismatch. Expected $expectedHash; got $actualHash."
+    }
+
+    return [pscustomobject]@{
+        Path = $installerPath
+        Url = $url
+        Version = [string]$Tool.version
+        Sha256 = $expectedHash
+    }
+}
+
 function Invoke-AgentScoop {
     param([Parameter(Mandatory)][string[]]$ArgumentList)
 
@@ -431,6 +479,7 @@ function Install-AgentTool {
     $key = "tool:$($Tool.id)"
     $hostArch = Get-AgentProcessorArchitecture
     $targetArch = Get-AgentTargetArchitecture
+    $directPayload = $null
     if (-not $Force -and $State.steps.ContainsKey($key) -and $State.steps[$key].status -eq 'ok') {
         Write-AgentLog "SKIP $key already ok"
         Write-AgentConsoleLine -Level OK -Message "$($Tool.id) already installed."
@@ -503,13 +552,35 @@ function Install-AgentTool {
                 Invoke-AgentScoop -ArgumentList $installArgs
                 Update-AgentProcessPath
             }
+            'direct' {
+                $directPayload = Save-AgentDirectToolInstaller -Tool $Tool
+                $installArgs = @()
+                if ($Tool.PSObject.Properties['silentArgs']) {
+                    $installArgs = @($Tool.silentArgs | ForEach-Object { [string]$_ })
+                }
+                Invoke-AgentNative -FilePath ([string]$directPayload.Path) -ArgumentList $installArgs
+                Update-AgentProcessPath
+            }
             default {
                 # WinMint installs tools through explicit package-manager owners:
-                # winget/msstore for GUI/system apps and Scoop for developer CLIs.
-                throw "Unsupported install source '$($Tool.source)' for tool '$($Tool.id)'. WinMint only supports the 'winget', 'store', and 'scoop' install sources."
+                # winget/msstore for GUI/system apps, Scoop for developer CLIs,
+                # and a narrow hash-pinned direct installer exception.
+                throw "Unsupported install source '$($Tool.source)' for tool '$($Tool.id)'. WinMint only supports the 'winget', 'store', 'scoop', and approved 'direct' install sources."
             }
         }
-        $State.steps[$key] = @{ status = 'ok'; updatedAt = (Get-Date -Format o); architecture = $targetArch }
+        $record = @{
+            status = 'ok'
+            updatedAt = (Get-Date -Format o)
+            architecture = $targetArch
+        }
+        if ($null -ne $directPayload) {
+            $record.source = 'direct'
+            $record.url = [string]$directPayload.Url
+            $record.version = [string]$directPayload.Version
+            $record.sha256 = [string]$directPayload.Sha256
+            $record.path = [string]$directPayload.Path
+        }
+        $State.steps[$key] = $record
         Save-AgentState -State $State
         Write-AgentEvent -Type 'step' -Status 'ok' -Step $key -Message "$($Tool.id) installed." -Data @{
             architecture = $targetArch
@@ -551,6 +622,15 @@ function Get-AgentManifestTool {
     return $property.Value
 }
 
+function Get-AgentManifestToolStateKey {
+    param(
+        [Parameter(Mandatory)][string]$ToolId
+    )
+
+    $tool = Get-AgentManifestTool -ToolId $ToolId
+    return "tool:$([string]$tool.id)"
+}
+
 function Install-AgentManifestTool {
     param(
         [Parameter(Mandatory)][string]$ToolId,
@@ -559,7 +639,7 @@ function Install-AgentManifestTool {
 
     $tool = Get-AgentManifestTool -ToolId $ToolId
     Install-AgentTool -Tool $tool -State $State
-    $key = "tool:$($tool.id)"
+    $key = Get-AgentManifestToolStateKey -ToolId $ToolId
     if (-not $State.steps.ContainsKey($key)) {
         throw "Tool '$ToolId' did not record install state."
     }
@@ -586,6 +666,278 @@ function Get-AgentModuleConfig {
     return $null
 }
 
+function Get-WinMintAgentModuleCatalog {
+    return @(
+        [pscustomobject]@{
+            Id = 'profiles'
+            RelativePath = 'Modules\Profiles.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentProfileBootstrap'
+            RuntimeStepName = 'profiles'
+            Enablement = 'always'
+            Title = 'Compose and normalize the live-user agent profile'
+            Kind = 'first-logon-module'
+            Default = $true
+            Requires = @()
+            SuppressedBy = @()
+            UserControlled = $false
+            Changes = @('Prepare normalized FirstLogon state and module intent before live installs begin')
+            Artifacts = @('state.json', 'WinMintAgentProfile.json')
+            Reversible = $false
+            FailurePolicy = 'blocking'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'packageManagers'
+            RelativePath = 'Modules\PackageManagers.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentPackageManagerBootstrap'
+            RuntimeStepName = 'package-managers'
+            Enablement = 'modules.packageManagers.enabled'
+            Title = 'Bootstrap package managers for live-user installs'
+            Kind = 'first-logon-module'
+            Default = $true
+            Requires = @('modules.packageManagers.enabled')
+            SuppressedBy = @()
+            UserControlled = $false
+            Changes = @('Ensure winget and Scoop ownership paths are ready for live-user package installation')
+            Artifacts = @('state.json', 'packages.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'wsl'
+            RelativePath = 'Modules\Wsl.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentWslBootstrap'
+            RuntimeStepName = 'wsl'
+            Enablement = 'modules.wsl.enabled'
+            Title = 'Enable WSL baseline and install selected distros'
+            Kind = 'first-logon-module'
+            Default = $true
+            Requires = @('modules.wsl.enabled')
+            SuppressedBy = @()
+            UserControlled = $false
+            Changes = @('Configure WSL defaults and install selected distros when requested')
+            Artifacts = @('state.json', 'WinMintAgentProfile.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'git'
+            RelativePath = 'Modules\Git.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentGitBootstrap'
+            RuntimeStepName = 'git'
+            Enablement = 'modules.git.enabled'
+            Title = 'Apply optional Git configuration'
+            Kind = 'first-logon-module'
+            Default = $false
+            Requires = @('modules.git.enabled')
+            SuppressedBy = @()
+            UserControlled = $true
+            Changes = @('Configure Git defaults for the live user')
+            Artifacts = @('state.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'dotfiles'
+            RelativePath = 'Modules\Dotfiles.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentDotfileBootstrap'
+            RuntimeStepName = 'dotfiles'
+            Enablement = 'modules.dotfiles.enabled'
+            Title = 'Apply optional dotfiles bootstrap'
+            Kind = 'first-logon-module'
+            Default = $false
+            Requires = @('modules.dotfiles.enabled')
+            SuppressedBy = @()
+            UserControlled = $true
+            Changes = @('Clone and apply configured dotfiles for the live user')
+            Artifacts = @('state.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'raycast'
+            RelativePath = 'Modules\Raycast.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentRaycastBootstrap'
+            RuntimeStepName = 'raycast'
+            Enablement = 'modules.raycast.enabled'
+            Title = 'Install and configure the optional Raycast launcher'
+            Kind = 'first-logon-module'
+            Default = $false
+            Requires = @('modules.raycast.enabled')
+            SuppressedBy = @()
+            UserControlled = $true
+            Changes = @('Install Raycast and its curated extension/backend set')
+            Artifacts = @('state.json', 'WinMintAgentProfile.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'launcherKey'
+            RelativePath = 'Modules\LauncherKey.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentLauncherKeyBootstrap'
+            RuntimeStepName = 'launcher-key'
+            Enablement = 'modules.launcherKey.enabled'
+            Title = 'Bind the Copilot hardware-key chord to the selected launcher target'
+            Kind = 'first-logon-module'
+            Default = $true
+            Requires = @('modules.launcherKey.enabled')
+            SuppressedBy = @()
+            UserControlled = $false
+            Changes = @('Bind Win+Shift+F23 to Search or Raycast according to the selected launcher path')
+            Artifacts = @('state.json', 'WinMintAgentProfile.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'phoneLink'
+            RelativePath = 'Modules\PhoneLink.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentPhoneLinkBootstrap'
+            RuntimeStepName = 'phone-link'
+            Enablement = 'modules.phoneLink.enabled'
+            Title = 'Prepare optional Phone Link live-user posture'
+            Kind = 'first-logon-module'
+            Default = $false
+            Requires = @('modules.phoneLink.enabled')
+            SuppressedBy = @()
+            UserControlled = $true
+            Changes = @('Prepare Phone Link-related user settings without forcing device pairing')
+            Artifacts = @('state.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'shell'
+            RelativePath = 'Modules\TilingDesktop.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentDesktopEnvironmentBootstrap'
+            RuntimeStepName = 'desktop-environment'
+            Enablement = 'modules.shell.enabled'
+            Title = 'Install and configure selected shell layers'
+            Kind = 'first-logon-module'
+            Default = $false
+            Requires = @('modules.shell.enabled')
+            SuppressedBy = @()
+            UserControlled = $true
+            Changes = @('Configure selected shell layers such as YASB, thide, Komorebi, and Nilesoft Shell')
+            Artifacts = @('state.json', 'WinMintAgentProfile.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'windhawk'
+            RelativePath = 'Modules\Windhawk.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentWindhawkBootstrap'
+            RuntimeStepName = 'windhawk'
+            Enablement = 'modules.windhawk.enabled'
+            Title = 'Install the optional Windhawk desktop layer'
+            Kind = 'first-logon-module'
+            Default = $false
+            Requires = @('modules.windhawk.enabled')
+            SuppressedBy = @()
+            UserControlled = $true
+            Changes = @('Install Windhawk and apply the staged preset')
+            Artifacts = @('state.json', 'WinMintAgentProfile.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'browsers'
+            RelativePath = 'Modules\Browsers.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentBrowsersBootstrap'
+            RuntimeStepName = 'browsers'
+            Enablement = 'browsers.count > 0'
+            Title = 'Install selected browsers'
+            Kind = 'first-logon-module'
+            Default = $false
+            Requires = @('browsers.count > 0')
+            SuppressedBy = @()
+            UserControlled = $true
+            Changes = @('Install the selected browser set for the live user')
+            Artifacts = @('state.json', 'packages.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = ''
+        }
+        [pscustomobject]@{
+            Id = 'editors'
+            RelativePath = 'Modules\Editors.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentEditorBootstrap'
+            RuntimeStepName = 'editors'
+            Enablement = 'editors.count > 0'
+            Title = 'Install selected editors'
+            Kind = 'first-logon-module'
+            Default = $false
+            Requires = @('editors.count > 0')
+            SuppressedBy = @()
+            UserControlled = $true
+            Changes = @('Install the selected editor set for the live user')
+            Artifacts = @('state.json', 'packages.json')
+            Reversible = $true
+            FailurePolicy = 'advisory'
+            Phase = 'main'
+            PostStepHook = 'Set-WinMintAgentNeovimEnvironment'
+        }
+        [pscustomobject]@{
+            Id = 'liveInstallAudit'
+            RelativePath = 'Modules\LiveInstallAudit.ps1'
+            BootstrapFunction = 'Invoke-WinMintAgentLiveInstallAuditBootstrap'
+            RuntimeStepName = 'liveInstallAudit'
+            Enablement = 'modules.liveInstallAudit.enabled'
+            Title = 'Run optional live install audit reporting'
+            Kind = 'first-logon-module'
+            Default = $false
+            Requires = @('modules.liveInstallAudit.enabled')
+            SuppressedBy = @()
+            UserControlled = $true
+            Changes = @('Generate a non-blocking live install audit report after agent execution')
+            Artifacts = @('state.json', 'LiveInstallAudit.json')
+            Reversible = $false
+            FailurePolicy = 'advisory'
+            Phase = 'finalValidation'
+            PostStepHook = ''
+        }
+    )
+}
+
+function Import-WinMintAgentRegisteredModules {
+    param(
+        [Parameter(Mandatory)][string]$AgentRoot
+    )
+
+    foreach ($moduleDefinition in @(Get-WinMintAgentModuleCatalog)) {
+        $modulePath = Join-Path $AgentRoot $moduleDefinition.RelativePath
+        if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
+            throw "FirstLogon module '$($moduleDefinition.Id)' is missing: $modulePath"
+        }
+
+        . $modulePath
+
+        $bootstrapFunction = [string]$moduleDefinition.BootstrapFunction
+        if (-not (Get-Command $bootstrapFunction -ErrorAction SilentlyContinue)) {
+            throw "FirstLogon module '$($moduleDefinition.Id)' did not register required function '$bootstrapFunction'."
+        }
+    }
+}
+
 function Test-AgentModuleEnabled {
     param([Parameter(Mandatory)][string]$Name)
     $cfg = Get-AgentModuleConfig -Name $Name
@@ -598,11 +950,160 @@ function Test-AgentModuleEnabled {
     return $false
 }
 
+function Get-WinMintAgentModuleRuntimeState {
+    param(
+        [Parameter(Mandatory)]$ModuleDefinition
+    )
+
+    $moduleId = [string]$ModuleDefinition.Id
+    $enablement = [string]$ModuleDefinition.Enablement
+    switch ($enablement) {
+        'always' { return $true }
+        'modules.packageManagers.enabled' { return (Test-AgentModuleEnabled -Name 'packageManagers') }
+        'modules.wsl.enabled' { return (Test-AgentModuleEnabled -Name 'wsl') }
+        'modules.git.enabled' { return (Test-AgentModuleEnabled -Name 'git') }
+        'modules.dotfiles.enabled' { return (Test-AgentModuleEnabled -Name 'dotfiles') }
+        'modules.raycast.enabled' { return (Test-AgentModuleEnabled -Name 'raycast') }
+        'modules.launcherKey.enabled' { return (Test-AgentModuleEnabled -Name 'launcherKey') }
+        'modules.phoneLink.enabled' { return (Test-AgentModuleEnabled -Name 'phoneLink') }
+        'modules.shell.enabled' { return (Test-AgentModuleEnabled -Name 'shell') }
+        'modules.windhawk.enabled' { return (Test-AgentModuleEnabled -Name 'windhawk') }
+        'modules.liveInstallAudit.enabled' { return (Test-AgentModuleEnabled -Name 'liveInstallAudit') }
+        'browsers.count > 0' { return (@($agentProfile.browsers).Count -gt 0) }
+        'editors.count > 0' { return (@($agentProfile.editors).Count -gt 0) }
+        default { throw "Unsupported agent module enablement expression '$enablement' for '$moduleId'." }
+    }
+}
+
+function Test-WinMintAgentStateStepOk {
+    param(
+        [Parameter(Mandatory)][hashtable]$State,
+        [Parameter(Mandatory)][string]$Key
+    )
+
+    if (-not $State.steps.ContainsKey($Key)) { return $false }
+    return ([string]$State.steps[$Key].status -eq 'ok')
+}
+
+function Assert-WinMintAgentStateStepsOk {
+    param(
+        [Parameter(Mandatory)][hashtable]$State,
+        [Parameter(Mandatory)][string[]]$Keys,
+        [Parameter(Mandatory)][string]$Context
+    )
+
+    $missing = [System.Collections.Generic.List[string]]::new()
+    $notOk = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($key in @($Keys)) {
+        if ([string]::IsNullOrWhiteSpace($key)) { continue }
+        if (-not $State.steps.ContainsKey($key)) {
+            $missing.Add($key) | Out-Null
+            continue
+        }
+
+        $step = $State.steps[$key]
+        $status = [string]$step.status
+        if ($status -eq 'ok') { continue }
+
+        $reason = if ($step -is [hashtable] -and $step.ContainsKey('error') -and -not [string]::IsNullOrWhiteSpace([string]$step.error)) {
+            [string]$step.error
+        }
+        elseif ($step -is [hashtable] -and $step.ContainsKey('reason') -and -not [string]::IsNullOrWhiteSpace([string]$step.reason)) {
+            [string]$step.reason
+        }
+        elseif ($step.PSObject.Properties['error'] -and -not [string]::IsNullOrWhiteSpace([string]$step.error)) {
+            [string]$step.error
+        }
+        elseif ($step.PSObject.Properties['reason'] -and -not [string]::IsNullOrWhiteSpace([string]$step.reason)) {
+            [string]$step.reason
+        }
+        else {
+            $status
+        }
+        $notOk.Add("$key=$reason") | Out-Null
+    }
+
+    if (($missing.Count -eq 0) -and ($notOk.Count -eq 0)) { return }
+
+    $parts = [System.Collections.Generic.List[string]]::new()
+    if ($missing.Count -gt 0) { $parts.Add("missing: $($missing -join ', ')") | Out-Null }
+    if ($notOk.Count -gt 0) { $parts.Add("not ok: $($notOk -join ', ')") | Out-Null }
+    throw "$Context did not complete required state step(s): $($parts -join '; ')"
+}
+
+function New-WinMintAgentRuntimeStepPlan {
+    $steps = [System.Collections.Generic.List[object]]::new()
+    foreach ($moduleDefinition in @(Get-WinMintAgentModuleCatalog)) {
+        $steps.Add([pscustomobject]@{
+                Id = "module:$([string]$moduleDefinition.RuntimeStepName)"
+                Order = ($steps.Count + 1)
+                Phase = [string]$moduleDefinition.Phase
+                StepName = [string]$moduleDefinition.RuntimeStepName
+                FunctionName = [string]$moduleDefinition.BootstrapFunction
+                Enabled = (Get-WinMintAgentModuleRuntimeState -ModuleDefinition $moduleDefinition)
+                Enablement = [string]$moduleDefinition.Enablement
+                FailurePolicy = [string]$moduleDefinition.FailurePolicy
+                PostStepHook = [string]$moduleDefinition.PostStepHook
+            }) | Out-Null
+    }
+
+    return @($steps)
+}
+
+function Set-WinMintAgentNeovimEnvironment {
+    param(
+        [Parameter(Mandatory)][object]$AgentProfile,
+        [Parameter(Mandatory)][hashtable]$State
+    )
+
+    if (@($AgentProfile.editors) -notcontains 'neovim') { return }
+
+    $stateKey = 'tool:neovim'
+    try {
+        $nvTool = Get-AgentManifestTool -ToolId 'neovim'
+        $stateKey = "tool:$([string]$nvTool.id)"
+    }
+    catch {
+        Write-AgentLog "Neovim manifest lookup for EDITOR/VISUAL: $($_.Exception.Message)"
+    }
+
+    if ((Test-WinMintAgentStateStepOk -State $State -Key $stateKey) -or
+        (Test-WinMintAgentStateStepOk -State $State -Key 'tool:neovim')) {
+        [Environment]::SetEnvironmentVariable('EDITOR', 'nvim', 'User')
+        [Environment]::SetEnvironmentVariable('VISUAL', 'nvim', 'User')
+    }
+}
+
+function Invoke-WinMintAgentPostStepHook {
+    param(
+        [string]$HookName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($HookName)) { return }
+
+    $cmd = Get-Command $HookName -ErrorAction SilentlyContinue
+    if (-not $cmd) {
+        Write-AgentLog "Post-step hook not found: $HookName"
+        Write-AgentConsoleLine -Level Warn -Message "Post-step hook not found: $HookName"
+        return
+    }
+
+    try {
+        & $HookName -AgentProfile $agentProfile -State $State
+    }
+    catch {
+        Write-AgentLog "Post-step hook '$HookName' failed: $($_.Exception.Message)"
+        Write-AgentConsoleLine -Level Warn -Message "Post-step hook '$HookName' failed: $($_.Exception.Message)"
+    }
+}
+
 function Invoke-AgentProfileModule {
     param(
         [Parameter(Mandatory)][string]$StepName,
         [Parameter(Mandatory)][string]$FunctionName,
-        [bool]$Enabled
+        [bool]$Enabled,
+        [string]$PostStepHook = ''
     )
 
     $key = "module:$StepName"
@@ -616,6 +1117,7 @@ function Invoke-AgentProfileModule {
         Write-AgentLog "SKIP $key already ok"
         Write-AgentEvent -Type 'step' -Status 'ok' -Step $key -Message "$StepName already completed."
         Write-AgentConsoleLine -Level OK -Message "$StepName already completed."
+        Invoke-WinMintAgentPostStepHook -HookName $PostStepHook
         return
     }
     $cmd = Get-Command $FunctionName -ErrorAction SilentlyContinue
@@ -644,6 +1146,9 @@ function Invoke-AgentProfileModule {
         Write-AgentConsoleLine -Level Section -Message "Starting $StepName."
         $result = & $FunctionName -AgentProfile $agentProfile -State $State
         $status = if ($result -and $result.PSObject.Properties['Status']) { [string]$result.Status } else { 'ok' }
+        if ($status -eq 'ok' -and $result -and $result.PSObject.Properties['RequiredStateSteps']) {
+            Assert-WinMintAgentStateStepsOk -State $State -Keys @($result.RequiredStateSteps) -Context "$StepName bootstrap"
+        }
         $State.steps[$key] = @{
             status = $status
             updatedAt = (Get-Date -Format o)
@@ -672,51 +1177,24 @@ function Invoke-AgentProfileModule {
         Write-AgentConsoleLine -Level Error -Message "$StepName failed: $($_.Exception.Message)"
     }
     Save-AgentState -State $State
+    Invoke-WinMintAgentPostStepHook -HookName $PostStepHook
 }
 
 function Invoke-WinMintAgentStepRuntime {
-    Invoke-AgentProfileModule -StepName 'profiles' -FunctionName 'Invoke-WinMintAgentProfileBootstrap' -Enabled $true
-    Invoke-AgentProfileModule -StepName 'package-managers' -FunctionName 'Invoke-WinMintAgentPackageManagerBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'packageManagers')
-    Invoke-AgentProfileModule -StepName 'wsl' -FunctionName 'Invoke-WinMintAgentWslBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'wsl')
-    Invoke-AgentProfileModule -StepName 'git' -FunctionName 'Invoke-WinMintAgentGitBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'git')
-    Invoke-AgentProfileModule -StepName 'dotfiles' -FunctionName 'Invoke-WinMintAgentDotfileBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'dotfiles')
-    Invoke-AgentProfileModule -StepName 'flow-everything' -FunctionName 'Invoke-WinMintAgentFlowEverythingBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'flowEverything')
-    Invoke-AgentProfileModule -StepName 'raycast' -FunctionName 'Invoke-WinMintAgentRaycastBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'raycast')
-    Invoke-AgentProfileModule -StepName 'phone-link' -FunctionName 'Invoke-WinMintAgentPhoneLinkBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'phoneLink')
-    Invoke-AgentProfileModule -StepName 'tiling-desktop' -FunctionName 'Invoke-WinMintAgentTilingDesktopBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'shell')
-    Invoke-AgentProfileModule -StepName 'windhawk' -FunctionName 'Invoke-WinMintAgentWindhawkBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'windhawk')
-    Invoke-AgentProfileModule -StepName 'browsers' -FunctionName 'Invoke-WinMintAgentBrowsersBootstrap' -Enabled (@($agentProfile.browsers).Count -gt 0)
-    Invoke-AgentProfileModule -StepName 'editors' -FunctionName 'Invoke-WinMintAgentEditorBootstrap' -Enabled (@($agentProfile.editors).Count -gt 0)
+    $runtimePlan = @(New-WinMintAgentRuntimeStepPlan)
+    foreach ($step in @($runtimePlan | Where-Object { $_.Phase -eq 'main' } | Sort-Object Order)) {
+        Invoke-AgentProfileModule -StepName $step.StepName -FunctionName $step.FunctionName -Enabled ([bool]$step.Enabled) -PostStepHook ([string]$step.PostStepHook)
+    }
     Remove-AgentDesktopShortcuts
 
-    if (@($agentProfile.editors) -contains 'neovim') {
-        $neovimStepOk = $false
-        try {
-            $nvTool = Get-AgentManifestTool -ToolId 'neovim'
-            $nvKey = "tool:$([string]$nvTool.id)"
-            if ($state.steps.ContainsKey($nvKey) -and [string]$state.steps[$nvKey].status -eq 'ok') {
-                $neovimStepOk = $true
-            }
-        }
-        catch {
-            Write-AgentLog "Neovim manifest lookup for EDITOR/VISUAL: $($_.Exception.Message)"
-        }
-        if (-not $neovimStepOk -and $state.steps.ContainsKey('tool:neovim') -and
-            [string]$state.steps['tool:neovim'].status -eq 'ok') {
-            $neovimStepOk = $true
-        }
-        if ($neovimStepOk) {
-            [Environment]::SetEnvironmentVariable('EDITOR', 'nvim', 'User')
-            [Environment]::SetEnvironmentVariable('VISUAL', 'nvim', 'User')
-        }
+    foreach ($step in @($runtimePlan | Where-Object { $_.Phase -eq 'finalValidation' } | Sort-Object Order)) {
+        Invoke-AgentProfileModule -StepName $step.StepName -FunctionName $step.FunctionName -Enabled ([bool]$step.Enabled) -PostStepHook ([string]$step.PostStepHook)
     }
-
-    Invoke-AgentProfileModule -StepName 'liveInstallAudit' -FunctionName 'Invoke-WinMintAgentLiveInstallAuditBootstrap' -Enabled (Test-AgentModuleEnabled -Name 'liveInstallAudit')
 
     # Live-user modules are best-effort. A failed app/tool install must not keep
     # autologon credentials resident or block final desktop personalization; the
     # summary and state file carry the retry/manual-repair details.
-    $blockingSteps = @('module:profiles')
+    $blockingSteps = @($runtimePlan | Where-Object { $_.FailurePolicy -eq 'blocking' } | ForEach-Object { [string]$_.Id })
     $allFailed = @($state.steps.GetEnumerator() | Where-Object { $_.Value.status -eq 'failed' })
     $advisoryFailed = @($allFailed | Where-Object { [string]$_.Key -notin $blockingSteps })
     $failed = @($allFailed | Where-Object { [string]$_.Key -in $blockingSteps })
@@ -769,8 +1247,8 @@ function Invoke-WinMintAgentStepRuntime {
     return 0
 }
 
-# NOTE: agent modules are dot-sourced at SCRIPT scope in Start-WinMintAgent.ps1.
-# A former Import-AgentModule helper dot-sourced them inside a function via
-# ForEach-Object, which defined the functions in a child scope that was discarded on
-# return - so every enabled module came back "<function> not found". Do not reintroduce
-# a function-scoped module loader.
+# NOTE: FirstLogon modules are registered through Get-WinMintAgentModuleCatalog and
+# loaded by Import-WinMintAgentRegisteredModules. Keep this explicit catalog aligned
+# with the runtime step plan; do not fall back to folder globbing or function-scoped
+# loaders that lose the exported bootstrap functions.
+

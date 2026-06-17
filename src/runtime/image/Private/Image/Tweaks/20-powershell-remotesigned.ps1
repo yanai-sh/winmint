@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Developer group: relax execution policy to RemoteSigned for Windows PowerShell
 # and PowerShell 7 (locally authored scripts run; downloaded scripts stay gated).
@@ -15,3 +15,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

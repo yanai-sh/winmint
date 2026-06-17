@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Set-WinMintRegistryDword {
     param(
@@ -58,3 +58,4 @@ function Invoke-WinMintAgentPhoneLinkBootstrap {
 
     return [pscustomobject]$result
 }
+

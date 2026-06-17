@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Convert-WinMintInstallEsdToWim {
     param(
@@ -287,6 +287,10 @@ function Invoke-WinMintIsoPipeline {
         }
         Assert-WinMintDismCanServiceImages -ImagePath $installWim -Images $installImages
         $expectedWimMetadata = @(Get-WinMintSelectedWimMetadata -ImagePath $installWim -Images $installImages)
+        $sourceWindowsBuild = 0
+        foreach ($meta in $expectedWimMetadata) {
+            if ([int]$meta.Build -gt $sourceWindowsBuild) { $sourceWindowsBuild = [int]$meta.Build }
+        }
         if ($editionMode -eq 'TargetLicense') {
             Log "Edition mode: target license. Servicing $($installImages.Count) install image(s) so Windows Setup can choose the target device edition."
             if ($installImages.Count -gt 1) {
@@ -395,10 +399,16 @@ function Invoke-WinMintIsoPipeline {
 
         $driverSources = [System.Collections.Generic.List[object]]::new()
         if ($null -eq $servicedWimCacheHit) {
-            if ($BuildConfig.Drivers.Source -eq 'Custom') {
-                $customDrivers = Resolve-Win11IsoCustomDriverSource -Path $BuildConfig.Drivers.Path -WorkDir $workDir
+            if (Test-WinMintDriverSourceUsesPath -Source ([string]$BuildConfig.Drivers.Source)) {
+                $customDrivers = Resolve-Win11IsoCustomDriverSource `
+                    -Path $BuildConfig.Drivers.Path `
+                    -WorkDir $workDir `
+                    -DriverSource ([string]$BuildConfig.Drivers.Source) `
+                    -TargetDevice ([string]$BuildConfig.TargetDevice) `
+                    -TargetArchitecture $imageArch `
+                    -WindowsBuild $sourceWindowsBuild
                 if ($customDrivers -and $customDrivers.Ready) {
-                    $driverSources.Add([pscustomobject]@{ Source = $customDrivers.Source; Label = $customDrivers.Label })
+                    $driverSources.Add($customDrivers)
                 }
             }
             if ($ExportHostDrivers) {
@@ -505,6 +515,7 @@ function Invoke-WinMintIsoPipeline {
             else {
                 Log "Serviced WIM cache hit: skipping appx removal, package install, and driver injection for image $imgName."
             }
+            Assert-OfflinePowerShell7Staged -MountDir $mountDir
 
             Save-ImageWithCleanup -MountDir $mountDir
             $mountedImage = $false
@@ -525,7 +536,11 @@ function Invoke-WinMintIsoPipeline {
                 }
             }
         )
-        Set-WinMintManifestDriverFacts -InfNames $infNames
+        $driverInventories = @($driverSources | ForEach-Object {
+                if ($_.PSObject.Properties['Inventory']) { $_.Inventory }
+            } | Where-Object { $null -ne $_ })
+        $driverInventoryPath = Save-WinMintDriverInventory -Inventories $driverInventories -OutputDir (Get-WinMintOutputDirectory)
+        Set-WinMintManifestDriverFacts -InfNames $infNames -Inventories $driverInventories -InventoryPath $driverInventoryPath
 
         Install-WinPEUtility -IsoContents $isoContents -AutoWipeDisk:$BuildConfig.AutoWipeDisk
         if ($editionMode -eq 'Fixed') {
@@ -572,3 +587,4 @@ function Invoke-WinMintIsoPipeline {
         Invoke-Cleanup -MountDir $mountDir -SourceIso $BuildConfig.SourceIso -WorkDir $workDir
     }
 }
+

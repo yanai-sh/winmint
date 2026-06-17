@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Invoke-WinMintAgentBrowsersBootstrap {
     [CmdletBinding()]
@@ -36,31 +36,8 @@ function Invoke-WinMintAgentBrowsersBootstrap {
         }
     }
 
-    $failedBrowsers = [System.Collections.Generic.List[string]]::new()
-    foreach ($browserId in $installBrowsers) {
-        $property = $manifest.tools.PSObject.Properties[$browserId]
-        $tool = if ($property) { $property.Value } else { $null }
-        if (-not $tool) {
-            $State.steps["browser:$browserId"] = @{
-                status = 'failed'
-                updatedAt = (Get-Date -Format o)
-                error = "Unknown browser id: $browserId"
-            }
-            Write-AgentLog "Unknown browser id in profile: $browserId"
-            Save-AgentState -State $State
-            $failedBrowsers.Add($browserId) | Out-Null
-            continue
-        }
-
-        Install-AgentTool -Tool $tool -State $State
-        Save-AgentState -State $State
-
-        $key = "tool:$([string]$tool.id)"
-        $status = if ($State.steps.ContainsKey($key)) { [string]$State.steps[$key].status } else { '' }
-        if ($status -ne 'ok' -and $status -ne 'skipped') {
-            $failedBrowsers.Add($browserId) | Out-Null
-        }
-    }
+    $selection = Invoke-WinMintAgentManifestToolSelection -SelectionId 'browsers' -SelectedIds $browsers -State $State -StateKeyPrefix 'browser' -ExcludedIds @('edge')
+    $failedBrowsers = @($selection.FailedIds)
 
     if ($failedBrowsers.Count -gt 0) {
         return [pscustomobject]@{
@@ -83,3 +60,4 @@ function Invoke-WinMintAgentBrowsersBootstrap {
         Message = $message
     }
 }
+

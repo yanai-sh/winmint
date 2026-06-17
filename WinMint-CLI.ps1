@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 5.1
 
 # WinMint command-line entry point. This is a thin dispatcher: the first
 # positional token selects a verb, and everything after it is forwarded to that
@@ -21,8 +21,13 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 Set-StrictMode -Version 2.0
 
-. "$PSScriptRoot\src\runtime\image\WinMint.ps1"
+Import-Module (Join-Path $PSScriptRoot 'src\runtime\modules\WinMint.Bootstrap\WinMint.Bootstrap.psd1') -Force
+$bootstrap = Invoke-WinMintRuntimeBootstrap -Entrypoint $PSCommandPath -Arguments (@($Command) + @($Rest))
+if ($bootstrap.Relaunched) {
+    exit $bootstrap.ExitCode
+}
 
+Import-Module (Join-Path $PSScriptRoot 'src\runtime\modules\WinMint.Engine\WinMint.Engine.psd1') -Force
 Initialize-WinMintEngine -RepositoryRoot $PSScriptRoot
 
 # Remember the verbatim invocation so build/validate can self-elevate by

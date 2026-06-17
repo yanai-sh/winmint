@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Invoke-WinMintAgentGitBootstrap {
     [CmdletBinding()]
@@ -15,3 +15,4 @@ function Invoke-WinMintAgentGitBootstrap {
         Message = 'Reserved for explicit user Git setup. If FirstLogon ever requires Git, use MinGit only; do not install full Git for Windows/Git Bash by default.'
     }
 }
+

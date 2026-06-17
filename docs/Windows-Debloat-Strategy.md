@@ -51,7 +51,7 @@ Bad debloat:
 | WSL platform | WSL, Virtual Machine Platform, and OpenSSH are enabled in the image. | Keep. These are core workstation features. |
 | Edge | `-KeepEdge` keeps Edge installed and debloated. Without `-KeepEdge`, removal intent is serviced through the normal supported Edge app uninstaller exposed by DMA setup. | Treat Edge like a normal removable browser app on DMA builds. If the supported uninstaller leaves Edge present, report that as incomplete rather than patching policy files or applying hidden switches. Never patch `IntegratedServicesRegionPolicySet.json`. **Never** remove WebView2 / Edge *runtime* infrastructure. |
 | OneDrive | Fully removed during setup/first logon; sync policies stay blocked and known folders are forced back to local profile paths. | Keep. Users who want OneDrive can reinstall it after setup. |
-| Game Bar / Xbox | Xbox packages and GameDVR are removed/disabled. | Keep. This is low-value background noise for this image. |
+| Game Bar / Xbox | Xbox packages and GameDVR are removed/disabled; Game Bar protocols are redirected to a no-op handler to avoid Store prompts after removal. | Keep. This is low-value background noise for this image. |
 | Recall / Copilot | Recall is removed when detected; Copilot and WebExperience are removed/deprovisioned. | Keep, but preserve the list as an AI-removal policy surface because Microsoft keeps moving these components. |
 | WPBT | WPBT execution disabled. | Keep. This prevents OEM firmware payload injection. |
 | BitLocker auto-encryption | Auto-encryption is prevented; active BitLocker protection is logged and preserved. | Keep. Prevent surprise encryption, but do not fight a deliberate user/admin encryption choice. |
@@ -91,16 +91,16 @@ These should be part of WinMint Core because they remove noise without compromis
 | Category | Default action |
 |----------|----------------|
 | Consumer AppX | Remove Clipchamp, News, Weather, Whiteboard, 3D Viewer, Mixed Reality Portal, Xbox apps, Solitaire, Feedback Hub, Get Help, Teams consumer, Outlook new, Dev Home, Power Automate, Microsoft Family, People, Office Hub, Calculator, Quick Assist, Sound Recorder, Sticky Notes, Maps, Microsoft To Do, **Zune** media apps (`Microsoft.ZuneMusic` / `Microsoft.ZuneVideo`), **OneNote** (`Microsoft.Office.OneNote`), **Remote Desktop** Store client (`Microsoft.RemoteDesktop*`), and **best-effort trial/OEM provisioned** prefixes (McAfee, Norton, ExpressVPN, Surfshark, AVG, Avast, KasperskyLab, Dolby trials, CCleaner). These are reinstallable Store/inbox apps, not platform dependencies. Preserve **Phone Link** / **Cross Device**, plus **Camera**, **Clock/Alarms**, **Notepad**, Store infrastructure, Desktop App Installer, and WebView2. |
-| AI surfaces | Disable/remove Copilot, Recall, Windows AI data analysis, AI-first search/sidebar hooks, and AI provisioned packages where serviceable. |
+| AI surfaces | Remove Recall and imposed Copilot app/shell surfaces; disable Notepad AI, web AI APIs, and app access to system/generative AI models. Keep explicit app-local tools such as Edge Copilot page-context chat, Paint AI, Click to Do, and the local Settings agent. |
 | Advertising/content | Disable Windows consumer features, soft landing, suggested apps, cloud optimized content, advertising ID, tailored experiences, tips, Start recommendations, backup/setup pressure prompts, and Spotlight promotional surfaces. |
 | Search noise | Disable Start menu Bing/web search and search highlights; keep local search/indexing functional. |
 | Edge noise | Hide first-run, disable startup boost/background mode, disable recommendations/promos/personalization reporting. |
 | OneDrive pressure | Uninstall OneDrive, remove setup binaries/residue, disable personal sync and autostart, hide Explorer integration, and keep known folders local. |
-| Xbox/GameDVR | Remove Xbox packages and disable Game Bar/GameDVR overlays. |
+| Xbox/GameDVR | Remove Xbox packages, disable Game Bar/GameDVR overlays, and no-op Game Bar protocols to avoid Store prompts after removal. |
 | Developer package managers | Keep winget/msstore for GUI/system apps and install Scoop as the user-local owner for developer CLI tools. MinGit is installed through Scoop as baseline Windows-host Git plumbing; Starship is installed through Scoop with the `nerd-font-symbols` preset; selected Neovim is Scoop-owned. ARM64 builds prefer native ARM64/aarch64 package assets where package-manager metadata supports them; amd64 builds use default package-manager architecture selection. |
 | Explorer/dev QoL | Show file extensions, show hidden files, keep Explorer Home as the launch page, hide Gallery, enable long paths (`longpaths-policy`), enable End Task on the taskbar right-click menu (`taskbar-endtask`, always on), hide noisy taskbar/tray affordances, keep local clipboard history on with cloud upload off, and set sane context/menu defaults. |
 | Setup privacy | Keep `ProtectYourPC=3`. Fully unattended local-account installs hide OOBE network/account friction and use the profile computer name directly; Microsoft OOBE account installs leave the normal network/account pages visible. |
-| OEM payloads | Disable WPBT, Razer-style auto-installers, and known vendor app injection paths where policy exists. |
+| OEM payloads | Disable WPBT, Razer-style auto-installers, driver companion co-installers, and known vendor app injection paths where policy exists. Windows Update driver delivery remains enabled. |
 | Setup cleanup | Remove copied unattend credentials and setup residue after install. |
 | Final restore point | After successful FirstLogon cleanup, enable System Restore for the system drive and create a `WinMint post-install complete` restore point. |
 
@@ -112,9 +112,9 @@ These may be good, but need measurement or a clear hardware/workflow condition.
 |-----------|--------------------|------------------|
 | Disable DiagTrack / telemetry services | Reduces telemetry process activity. | Test Windows Update, Store, Defender, reliability monitor, and Settings. Prefer policy before service disabling. |
 | Disable background apps globally | Can reduce idle noise. | Can break notifications and Store app behavior. Consider only after AppX cleanup leaves few apps. |
-| Windows Search tuning | SearchIndexer can be noisy. | Do not disable local search or the Search service. **Flow Launcher + Everything** and **Raycast** are opt-in launcher choices; they complement Start/Settings search rather than replacing the platform indexer. |
+| Windows Search tuning | SearchIndexer can be noisy. | Do not disable local search or the Search service. Raycast is an opt-in launcher choice; it complements Start/Settings search rather than replacing the platform indexer. |
 | Storage Sense defaults | Can keep the system clean. | Do not auto-delete Downloads or developer artifacts. |
-| Hibernation / Fast Startup / power plan | Fast Startup can cause dual-boot/WSL/driver edge cases; desktops have no battery to protect. | **Form-factor-aware**, resolved at first boot via `Win32_SystemEnclosure.ChassisTypes` in `src/runtime/setup/SetupComplete/Power.ps1`. **Laptops: untouched** — keep Windows/OEM battery defaults. **Desktops: `powercfg -h off` + High Performance plan** (deliberately conservative; *not* the Tier-3 "Ultimate Performance"). **Dual-boot** builds additionally disable Fast Startup offline (`dual-boot-windows-policy`). Never apply hibernate-off or High Performance to laptops. |
+| Hibernation / Fast Startup / power plan | Fast Startup can cause dual-boot/WSL/driver edge cases; desktops have no battery to protect. | **Form-factor-aware hibernation**, resolved at first boot via `Win32_SystemEnclosure.ChassisTypes` in `src/runtime/setup/SetupComplete/Power.ps1`. **Power plan defaults to Balanced** and may be explicitly set to Energy Saver, High Performance, or Ultimate Performance; WinMint activates the selected plan without deleting other schemes. **Desktop hibernation only:** `powercfg -h off` is limited to desktops. **Dual-boot** builds additionally disable Fast Startup offline (`dual-boot-windows-policy`). |
 | Delivery Optimization | Peer download/upload can be unwanted. | Keep Windows Update enabled, but set Delivery Optimization policy so the PC is not used as a peer update source for other devices. |
 | Print stack | Core printing and Print to PDF stay. | **WinMint Core** removes optional **Windows Fax and Scan** (`Print.Fax.Scan` capability only). Do not disable Print Spooler or remove drivers by default. XPS *Viewer* remains a separate optional removal (viewing XPS files; unrelated to physical printers). |
 | Location / Maps / Sensors | Privacy win. | Time zone, hardware sensors, and app permissions can behave strangely. Disable app access first, not services. |
@@ -141,7 +141,7 @@ These are common in debloat/optimizer circles but should not be WinMint defaults
 | Hosts-file blocks for Microsoft endpoints | Hard to audit; breaks Store, updates, activation, certificates, Defender, or sign-in paths. |
 | Disable all scheduled tasks | Breaks maintenance, updates, servicing, certificates, and diagnostics. |
 | Disable crash reporting entirely | Developers need local dump generation. Disable upload prompts if needed, not the local mechanism. |
-| Ultimate Performance by default | Bad laptop/thermal default; not a universal performance improvement. |
+| Ultimate Performance by default | Bad laptop/thermal default; not a universal performance improvement. Keep it as an explicit `target.powerPlan = UltimatePerformance` selection only. |
 | Disable dynamic ticking or apply timer folklore tweaks | Gaming-only tradeoff with battery/sleep/latency risks; requires measurement per hardware class. |
 | Disable CPU security mitigations | Not acceptable for a general workstation baseline. |
 | Visual effects "best performance" | Makes Windows feel dated for negligible benefit on modern machines. |
@@ -213,13 +213,14 @@ Do not blanket-disable servicing, certificate, Defender, update, disk health, or
 
 ### 5. AI Removal Surface
 
-Windows AI components are moving targets. WinMint should maintain a small AI removal policy layer:
+Windows AI components are moving targets. WinMint should maintain a small AI policy layer:
 
-- Disable WindowsAI policy values.
+- Disable Recall snapshot, export, and data-analysis policy values.
 - Remove provisioned Copilot/Recall/WebExperience packages where safe.
 - Disable Recall optional feature when present.
-- Disable Edge Copilot/sidebar/promo policies.
-- Disable AI additions in inbox apps only when package identity is clear and reinstall path is known.
+- Disable Edge inline compose/rewrite, web AI APIs, and promo policies while preserving explicit Edge Copilot page-context chat.
+- Disable AI additions in inbox apps only when they are imposed or low-value. Notepad AI is disabled by default; Paint AI is preserved.
+- Do not touch Office AI policy, agent connectors, workspaces, or remote connectors.
 
 Avoid deleting servicing packages unless tests prove updates and repair still work.
 

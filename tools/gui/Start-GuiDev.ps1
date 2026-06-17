@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding(PositionalBinding = $false)]
 param(
     [switch]$Release,
@@ -318,3 +318,4 @@ If Build Tools is already installed, modify it in Visual Studio Installer and ad
 finally {
     Pop-Location
 }
+

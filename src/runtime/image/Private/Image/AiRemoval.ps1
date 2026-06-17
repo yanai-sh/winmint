@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintAiRemovalCatalog {
     $path = Get-WinMintPath -Name ConfigRoot -ChildPath 'ai-removal.json'
@@ -115,3 +115,4 @@ function Invoke-WinMintOfflineAiFeatureRemoval {
 
     Add-WinMintManifestAiOptionalFeatureRemovalFacts -RemovedFeatures $removed.ToArray() -Failed $failed.ToArray()
 }
+

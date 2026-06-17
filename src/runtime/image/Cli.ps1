@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # WinMint CLI verb layer. WinMint-CLI.ps1 is a thin dispatcher that routes the
 # first positional token to one of these commands. Each verb owns a small,
@@ -162,10 +162,11 @@ function Invoke-WinMintNewProfileCommand {
         # install skips the Setup product-key page. Auto injects only when the
         # build host has no firmware/OEM key. Only meaningful for a fixed edition.
         [ValidateSet('Auto', 'On', 'Off')][string]$GenericKey = 'Auto',
-        [ValidateSet('None', 'Host', 'Custom')][string]$DriverSource = 'None',
+        [ValidateSet('None', 'Host', 'Custom', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')][string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [string]$DriverPack = '',
         [ValidateSet('ThisPC', 'DifferentPC')][string]$TargetDevice = 'DifferentPC',
+        [ValidateSet('Balanced', 'EnergySaver', 'HighPerformance', 'UltimatePerformance')][string]$PowerPlan = 'Balanced',
         [switch]$ExportHostDrivers,
         [string]$TimeZoneId = '',
         [string]$InputLocale = '',
@@ -184,12 +185,12 @@ function Invoke-WinMintNewProfileCommand {
         # binds the same whether invoked interactively (-Install a,b splits into an
         # array) or via `pwsh -File` (which passes a,b as one literal token).
         [string[]]$Install = @(),
-        [ValidateSet('None', 'FlowEverything', 'Raycast')][string]$Launcher = 'None',
+        [ValidateSet('None', 'Raycast')][string]$Launcher = 'None',
         [switch]$PhoneLink,
         [switch]$LiveInstallAudit,
         [ValidateSet('On', 'Off')][string]$Dma = 'On',
         [ValidateSet('On', 'Off')][string]$Location = 'On',
-        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'Stable25H2',
+        [ValidateSet('None', 'Stable25H2')][string]$UpdateImage = 'None',
         [string]$UpdatePayloadRoot = '',
         [ValidateSet('On', 'Off')][string]$UpdateProvisionedApps = 'On',
         [switch]$Json,
@@ -204,7 +205,7 @@ function Invoke-WinMintNewProfileCommand {
         throw 'Use only one driver source style: -DriverPack or -DriverSource/-DriverPath/-ExportHostDrivers.'
     }
 
-    $allowedTools = @('windhawk', 'yasb', 'komorebi', 'nilesoft')
+    $allowedTools = @('windhawk', 'yasb', 'thide', 'komorebi', 'nilesoft')
     $installTools = @($Install | ForEach-Object { $_ -split '[,\s]+' } | Where-Object { $_ } | ForEach-Object { $_.ToLowerInvariant() })
     $badTools = @($installTools | Where-Object { $_ -notin $allowedTools })
     if ($badTools.Count -gt 0) {
@@ -236,6 +237,7 @@ function Invoke-WinMintNewProfileCommand {
         -DriverSource $DriverSource `
         -DriverPath $DriverPath `
         -TargetDevice $TargetDevice `
+        -PowerPlan $PowerPlan `
         -DriverPack $DriverPack `
         -ExportHostDrivers:$ExportHostDrivers `
         -TimeZoneId $TimeZoneId `
@@ -332,14 +334,15 @@ new options (configuration lives here):
   -GenericKey Auto|On|Off          Bake a generic (non-activating) edition key.
   -KeepEdge -KeepGaming -KeepCopilot   Keep/restore intent for those domains.
   -DesktopUI                       Add the alternate desktop shell layer.
-  -Install windhawk,yasb,komorebi,nilesoft  Shell tooling to install.
-  -Launcher None|FlowEverything|Raycast
+  -Install windhawk,yasb,thide,komorebi,nilesoft  Shell tooling to install.
+  -Launcher None|Raycast
   -Dma On|Off                      DMA interop tweak (default On).
   -Location On|Off                 Location services (default On).
-  -UpdateImage Stable25H2|None     Pre-service explicit stable 25H2 update payloads; None opts out.
+  -UpdateImage None|Stable25H2     Pre-service explicit stable 25H2 update payloads; Stable25H2 opts in.
   -UpdatePayloadRoot <dir>          Root containing packages\, appx\, and dependency payloads.
   -UpdateProvisionedApps On|Off     Include Store/MSIX app provisioning payloads.
   -Wsl2Distros Ubuntu,Fedora,archlinux,NixOS-WSL,pengwin
+  -PowerPlan Balanced|EnergySaver|HighPerformance|UltimatePerformance
   -PhoneLink -LiveInstallAudit
   Identity/locale/driver flags: -ComputerName -AccountName -AccountMode
   -Password/-PasswordPath/-PasswordEnvVar -AutoLogon -AutoWipeDisk -Architecture
@@ -347,7 +350,9 @@ new options (configuration lives here):
      OOBE "Create a password" page; use -AccountMode MicrosoftOobe for interactive
      account setup instead)
   -TimeZoneId -InputLocale -SystemLocale -UILanguage -UILanguageFallback -UserLocale
-  -DriverSource None|Host|Custom -DriverPath -DriverPack -TargetDevice -ExportHostDrivers
+  -DriverSource None|Host|Custom|HostExport|CustomInfFolder|OemMsi|SurfaceMsiSafe|SurfaceCatalog
+  -DriverPath -DriverPack -TargetDevice -ExportHostDrivers
 '@
     Write-Host $text
 }
+

@@ -130,6 +130,7 @@
       "properties": {
         "device": { "type": "string", "enum": ["ThisPC", "DifferentPC"] },
         "formFactor": { "type": "string", "enum": ["Auto", "Laptop", "Desktop"] },
+        "powerPlan": { "type": "string", "enum": ["Balanced", "EnergySaver", "HighPerformance", "UltimatePerformance"] },
         "editionMode": { "type": "string", "enum": ["TargetLicense", "Fixed"] },
         "edition": { "type": "string" },
         "productKey": { "type": "string" },
@@ -208,7 +209,7 @@
           "if": {
             "required": ["source"],
             "properties": {
-              "source": { "const": "Host" }
+              "source": { "enum": ["Host", "HostExport"] }
             }
           },
           "then": {
@@ -221,7 +222,7 @@
           "if": {
             "required": ["source"],
             "properties": {
-              "source": { "enum": ["None", "Custom"] }
+              "source": { "enum": ["None", "Custom", "CustomInfFolder", "OemMsi", "SurfaceMsiSafe", "SurfaceCatalog"] }
             }
           },
           "then": {
@@ -232,7 +233,7 @@
         }
       ],
       "properties": {
-        "source": { "type": "string", "enum": ["None", "Host", "Custom"] },
+        "source": { "type": "string", "enum": ["None", "Host", "Custom", "HostExport", "CustomInfFolder", "OemMsi", "SurfaceMsiSafe", "SurfaceCatalog"] },
         "path": { "type": "string" },
         "exportHostDrivers": { "type": "boolean" }
       },
@@ -245,7 +246,7 @@
         "cursorPack": { "type": "string", "const": "Windows11Modern" },
         "layers": {
           "type": "array",
-          "items": { "type": "string", "enum": ["standard", "windhawk", "yasb", "komorebi"] },
+          "items": { "type": "string", "enum": ["standard", "windhawk", "yasb", "thide", "komorebi", "nilesoft"] },
           "uniqueItems": true
         }
       },
@@ -257,12 +258,12 @@
       "properties": {
         "editors": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": { "type": "string", "enum": ["cursor", "vscode", "zed", "antigravity", "neovim"] },
           "uniqueItems": true
         },
         "browsers": {
           "type": "array",
-          "items": { "type": "string", "enum": ["zen-browser", "helium", "librewolf", "brave", "edge"] },
+          "items": { "type": "string", "enum": ["zen-browser", "helium", "firefox-developer-edition", "brave", "edge"] },
           "uniqueItems": true
         },
         "wsl": {
@@ -272,7 +273,7 @@
             "enabled": { "type": "boolean", "const": true },
             "distros": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": { "type": "string", "enum": ["Ubuntu", "FedoraLinux", "archlinux", "NixOS-WSL", "pengwin"] },
               "uniqueItems": true
             }
           },
@@ -285,10 +286,9 @@
       "type": "object",
       "required": ["launcher"],
       "properties": {
-        "launcher": { "type": "string", "enum": ["None", "FlowEverything", "Raycast"] },
+        "launcher": { "type": "string", "enum": ["None", "Raycast"] },
         "liveInstallAudit": { "type": "boolean" },
-        "phoneLink": { "type": "boolean" },
-        "flowEverything": { "type": "boolean" }
+        "phoneLink": { "type": "boolean" }
       },
       "additionalProperties": false
     },

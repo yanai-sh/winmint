@@ -15,6 +15,7 @@ $ErrorActionPreference = 'Continue'
 $logDir = Join-Path $env:ProgramData 'WinMint\Logs'
 $null = New-Item -ItemType Directory -Path $logDir -Force -ErrorAction SilentlyContinue
 $payloadDir = 'C:\Windows\Setup\Scripts'
+. (Join-Path $payloadDir 'Setup.Actions.ps1')
 
 function Set-ScPowerShellConsoleEncoding {
     try {
@@ -152,7 +153,8 @@ $disableTelemetryTasks = [bool](Get-ScSetupProfileValue -Section 'privacy' -Name
 $telemetryTaskPatternsToDisable = @(ConvertTo-ScStringArray (Get-ScSetupProfileValue -Section 'privacy' -Name 'telemetryTaskPatternsToDisable' -Default @()))
 $powerFormFactor = [string](Get-ScSetupProfileValue -Section 'power' -Name 'formFactor' -Default 'Auto')
 $powerDisableHibernationOnDesktop = [bool](Get-ScSetupProfileValue -Section 'power' -Name 'disableHibernationOnDesktop' -Default $true)
-$powerDesktopPlan = [string](Get-ScSetupProfileValue -Section 'power' -Name 'desktopPowerPlan' -Default 'HighPerformance')
+$powerPlan = [string](Get-ScSetupProfileValue -Section 'power' -Name 'selectedPlan' -Default (Get-ScSetupProfileValue -Section 'power' -Name 'desktopPowerPlan' -Default 'Balanced'))
+$powerDesktopPlan = $powerPlan
 $edgeRemove = Get-ScSetupProfileBool -Section 'edge' -Name 'removeEdge' -Default $false
 $edgeKeep = Get-ScSetupProfileBool -Section 'edge' -Name 'keepEdge' -Default $false
 $edgeDmaEnabled = Get-ScSetupProfileBool -Section 'edge' -Name 'dmaInteropEnabled' -Default $false
@@ -175,14 +177,11 @@ $null = @(
     $edgeDmaEnabled
 )
 
-# Load the per-concern modules (each defines one or more Invoke-Sc* functions).
-foreach ($module in @(Get-ChildItem -LiteralPath (Join-Path $payloadDir 'SetupComplete') -Filter '*.ps1' -ErrorAction SilentlyContinue | Sort-Object Name)) {
-    try {
-        . $module.FullName
-    }
-    catch {
-        "SetupComplete module load failed for $($module.Name): $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-    }
+try {
+    Import-WinMintSetupActionModules -PayloadRoot $payloadDir
+}
+catch {
+    "SetupComplete action module load failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
 }
 
 Write-ScLog 'SetupComplete.ps1 start'
@@ -190,55 +189,45 @@ Write-ScLog 'SetupComplete.ps1 start'
 try {
     $firstLogonPath = Join-Path $payloadDir 'FirstLogon.ps1'
     if (Test-Path -LiteralPath $firstLogonPath) {
-        $runOnceCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$firstLogonPath`""
+        $pwsh = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
+        if (-not (Test-Path -LiteralPath $pwsh -PathType Leaf)) {
+            throw "PowerShell 7 is required for FirstLogon but was not found: $pwsh"
+        }
+        $runOnceCommand = "`"$pwsh`" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$firstLogonPath`""
         $null = & reg.exe add 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' /v 'WinMintFirstLogon' /t REG_SZ /d $runOnceCommand /f
-        Write-ScLog 'Registered HKLM RunOnce fallback for FirstLogon.ps1.'
+        Write-ScLog 'Registered HKLM RunOnce fallback for FirstLogon.ps1 under PowerShell 7.'
     }
 }
 catch {
     "SetupComplete FirstLogon RunOnce registration failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
 }
 
-$scripts = @(
-    { Invoke-ScTimeSync }
-    { Invoke-ScOneDriveRemoval }
-    { Invoke-ScOobeRehydrationSuppression }
-    {
-        # Wildcard sweep — Setup keeps multiple phase copies of the answer file
-        # under Panther (unattend.xml, unattend-original.xml, sometimes per-pass
-        # copies). All of them embed the base64 password and must go. Kept inline
-        # so this security step never depends on a module loading successfully.
-        Remove-Item -Path @(
-            'C:\Windows\Panther\unattend*.xml'
-            'C:\Windows\Panther\unattend\*.xml'
-        ) -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath @(
-            'C:\Windows\Setup\Scripts\Wifi.xml'
-        ) -Recurse -Force -ErrorAction SilentlyContinue
-    }
-    { Invoke-ScDesktopShortcutCleanup }
-    { Invoke-ScWindowsUpdateRestore }
-    { Invoke-ScAppxRemoval }
-    { Invoke-ScEdgeRemoval }
-    { Invoke-ScAiServiceableCleanup }
-    { Invoke-ScTelemetryTaskHardening }
-    { Invoke-ScPowerProfile }
-    { Invoke-ScViveToolOverrides }
-    { Invoke-ScBitLockerNote }
-    { Invoke-ScBootTimeout }
-    { Invoke-ScToolchainInstall }
-    { Invoke-ScActivationCheck }
-    { Invoke-ScNpuDetection }
-    { Invoke-ScSvcHostSplit }
-)
-
 $errors = @()
-foreach ($s in $scripts) {
-    try { & $s } catch {
+foreach ($action in @(Get-WinMintSetupActionCatalog)) {
+    try {
+        & ([string]$action.FunctionName)
+    }
+    catch {
         $inv = $_.InvocationInfo
         $where = if ($inv) { " [$([IO.Path]::GetFileName([string]$inv.ScriptName)):$($inv.ScriptLineNumber)]" } else { '' }
-        $errors += "SetupComplete: $($_.Exception.Message)$where"
+        $errors += "SetupComplete action '$([string]$action.Id)': $($_.Exception.Message)$where"
     }
+}
+try {
+    # Wildcard sweep — Setup keeps multiple phase copies of the answer file
+    # under Panther (unattend.xml, unattend-original.xml, sometimes per-pass
+    # copies). All of them embed the base64 password and must go. Kept inline
+    # so this security step never depends on a module loading successfully.
+    Remove-Item -Path @(
+        'C:\Windows\Panther\unattend*.xml'
+        'C:\Windows\Panther\unattend\*.xml'
+    ) -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath @(
+        'C:\Windows\Setup\Scripts\Wifi.xml'
+    ) -Recurse -Force -ErrorAction SilentlyContinue
+}
+catch {
+    $errors += "SetupComplete inline cleanup: $($_.Exception.Message)"
 }
 if ($errors.Count -gt 0) {
     ($errors -join "`n") | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Force

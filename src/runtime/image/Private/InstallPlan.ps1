@@ -1,38 +1,36 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function New-WinMintInstallPlanAgentProfile {
     param([Parameter(Mandatory)]$BuildConfig)
 
-    $normalizeWslDistro = {
-        param([string]$Distro)
-        switch -Regex ($Distro) {
-            '^Ubuntu-\d+\.\d+$'     { 'Ubuntu'; break }
-            '^Fedora(?:Linux)?-\d+$' { 'FedoraLinux'; break }
-            '^(Fedora|FedoraLinux)$' { 'FedoraLinux'; break }
-            '^(Arch(?: Linux)?|archlinux)$' { 'archlinux'; break }
-            '^(NixOS-WSL|NixOS|nixos-wsl)$' { 'NixOS'; break }
-            '^(Pengwin|pengwin)$' { 'pengwin'; break }
-            default                 { $Distro }
-        }
-    }
-    $wslDistros = @(
-        @($BuildConfig.Wsl2Distros) |
-            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) -and [string]$_ -ne 'None' } |
-            ForEach-Object { ([string]$_) -split ',' } |
-            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) -and [string]$_ -ne 'None' } |
-            ForEach-Object { & $normalizeWslDistro ([string]$_).Trim() } |
-            Select-Object -Unique
-    )
-    if ($wslDistros.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($BuildConfig.Wsl2Distro) -and $BuildConfig.Wsl2Distro -ne 'None') {
-        $wslDistros = @([string]$BuildConfig.Wsl2Distro -split ',' | ForEach-Object { & $normalizeWslDistro ([string]$_).Trim() } | Where-Object { $_ -and $_ -ne 'None' } | Select-Object -Unique)
-    }
-    $wslDistro = if ($wslDistros.Count -eq 0) { 'None' } elseif ($wslDistros.Count -eq 1) { $wslDistros[0] } else { $wslDistros -join ',' }
+    $wslSelection = ConvertTo-WinMintWslSelection `
+        -Values @($BuildConfig.Wsl2Distros) `
+        -FallbackValues @($BuildConfig.Wsl2Distro)
+    $wslDistros = @($wslSelection.AgentTokens)
+    $wslDistro = [string]$wslSelection.AgentToken
     # Package-manager bootstrap is baseline: Scoop + MinGit are developer
     # plumbing, and winget remains the owner for selected GUI/system tools.
     $needsPackageManagers = $true
-    $needsFlowEverything = [bool]$BuildConfig.InstallFlowEverything
     $needsRaycast = [bool]$BuildConfig.InstallRaycast
-    if ($needsFlowEverything -or $needsRaycast) { $needsPackageManagers = $true }
+    $launcherKeyTarget = if ($needsRaycast) { 'Raycast' } else { 'Search' }
+    $everythingPackage = if ([string]$BuildConfig.Architecture -eq 'arm64') { 'everything-arm64-beta' } else { 'everything-beta' }
+    $raycastExtensions = [System.Collections.Generic.List[object]]::new()
+    if ($needsRaycast) {
+        $raycastExtensions.Add([ordered]@{ id = 'everything-search'; owner = 'anastasiy_safari'; source = 'Raycast Store'; requires = @($everythingPackage) }) | Out-Null
+        $raycastExtensions.Add([ordered]@{ id = 'windows-terminal'; owner = 'lunaris'; source = 'Raycast Store'; requires = @() }) | Out-Null
+        if ([bool]$BuildConfig.InstallThide) {
+            $raycastExtensions.Add([ordered]@{ id = 'window-walker'; owner = 'nazzy_wazzy_lu'; source = 'Raycast Store'; requires = @() }) | Out-Null
+        }
+        if (@($BuildConfig.Editors) -contains 'vscode') {
+            $raycastExtensions.Add([ordered]@{ id = 'visual-studio-code'; owner = 'thomas'; source = 'Raycast Store'; requires = @() }) | Out-Null
+        }
+        if (@($BuildConfig.Editors) -contains 'zed') {
+            $raycastExtensions.Add([ordered]@{ id = 'zed-recent-projects'; owner = 'ewgenius'; source = 'Raycast Store'; requires = @() }) | Out-Null
+        }
+        if (@($BuildConfig.Browsers) -contains 'zen-browser') {
+            $raycastExtensions.Add([ordered]@{ id = 'zen-browser'; owner = 'Keyruu'; source = 'Raycast Store'; requires = @() }) | Out-Null
+        }
+    }
     [ordered]@{
         profile = [string]$BuildConfig.Profile
         targetArchitecture = [string]$BuildConfig.Architecture
@@ -58,9 +56,24 @@ function New-WinMintInstallPlanAgentProfile {
                 distro = $wslDistro
                 distros = @($wslDistros)
             }
-            # Optional launcher + instant file search.
-            flowEverything = [ordered]@{ enabled = $needsFlowEverything }
-            raycast = [ordered]@{ enabled = $needsRaycast }
+            # Optional command launcher.
+            raycast = [ordered]@{
+                enabled = $needsRaycast
+                extensions = @($raycastExtensions.ToArray())
+                everythingBackend = [ordered]@{
+                    enabled = $needsRaycast
+                    package = $everythingPackage
+                    localFilesystemOnly = $true
+                    trayIcon = 'hidden'
+                    serverSearch = 'disabled'
+                    sdkSearch = 'disabled'
+                }
+            }
+            launcherKey = [ordered]@{
+                enabled = $true
+                target = $launcherKeyTarget
+                chord = 'Win+Shift+F23'
+            }
             browsers = [ordered]@{ enabled = (@($BuildConfig.Browsers).Count -gt 0) }
             liveInstallAudit = [ordered]@{ enabled = [bool]$BuildConfig.LiveInstallAudit }
             phoneLink = [ordered]@{
@@ -72,6 +85,7 @@ function New-WinMintInstallPlanAgentProfile {
             shell = [ordered]@{
                 komorebi = [bool]$BuildConfig.InstallKomorebi
                 yasb = [bool]$BuildConfig.InstallYasb
+                thide = [bool]$BuildConfig.InstallThide
                 whkd = [bool]$BuildConfig.InstallKomorebi
                 nilesoft = [bool]$BuildConfig.InstallNilesoft
             }
@@ -108,7 +122,7 @@ function New-WinMintInstallPlanSetupProfile {
         }
         setupComplete = [ordered]@{
             preserveWindowsUpdate = ([string]$BuildConfig.Tweaks.UpdatePolicy -eq 'All')
-            disableVirtualDesktopFlyout = [bool]$BuildConfig.InstallWindhawk
+            disableVirtualDesktopFlyout = ([bool]$BuildConfig.InstallWindhawk -or ([bool]$BuildConfig.InstallYasb -and [bool]$BuildConfig.InstallThide))
             removeRecall = $true
         }
         aiRemoval = [ordered]@{
@@ -159,7 +173,8 @@ function New-WinMintInstallPlanSetupProfile {
             formFactor = [string]$BuildConfig.FormFactor
             dualBoot = ([string]$BuildConfig.DiskMode -eq 'DualBootReserved')
             disableHibernationOnDesktop = $true
-            desktopPowerPlan = 'HighPerformance'
+            desktopPowerPlan = [string]$BuildConfig.PowerPlan
+            selectedPlan = [string]$BuildConfig.PowerPlan
         }
         edge = [ordered]@{
             # Edge removal intent is serviced by SetupComplete through the normal
@@ -182,17 +197,36 @@ function New-WinMintInstallPlanSetupPlan {
     $diskMode = [string]$BuildConfig.DiskMode
     $accountMode = [string]$BuildConfig.AccountMode
     $firstLogonModules = [System.Collections.Generic.List[string]]::new()
-    foreach ($module in @($AgentProfile.modules.PSObject.Properties.Name)) {
-        $value = $AgentProfile.modules.$module
+    $moduleNames = if ($AgentProfile.modules -is [System.Collections.IDictionary]) {
+        @($AgentProfile.modules.Keys | ForEach-Object { [string]$_ })
+    }
+    else {
+        @($AgentProfile.modules.PSObject.Properties.Name | ForEach-Object { [string]$_ })
+    }
+    foreach ($module in $moduleNames) {
+        $value = if ($AgentProfile.modules -is [System.Collections.IDictionary]) {
+            $AgentProfile.modules[$module]
+        }
+        else {
+            $AgentProfile.modules.$module
+        }
         $enabled = $false
         if ($value -is [bool]) {
             $enabled = [bool]$value
+        }
+        elseif ($value -is [System.Collections.IDictionary] -and $value.Contains('enabled')) {
+            $enabled = [bool]$value['enabled']
         }
         elseif ($value -and $value.PSObject.Properties['enabled']) {
             $enabled = [bool]$value.enabled
         }
         elseif ($module -eq 'shell' -and $value) {
-            $enabled = [bool]$value.komorebi -or [bool]$value.yasb -or [bool]$value.whkd
+            if ($value -is [System.Collections.IDictionary]) {
+                $enabled = [bool]$value['komorebi'] -or [bool]$value['yasb'] -or [bool]$value['thide'] -or [bool]$value['whkd'] -or [bool]$value['nilesoft']
+            }
+            else {
+                $enabled = [bool]$value.komorebi -or [bool]$value.yasb -or [bool]$value.thide -or [bool]$value.whkd -or [bool]$value.nilesoft
+            }
         }
         if ($enabled) { $firstLogonModules.Add($module) | Out-Null }
     }
@@ -259,14 +293,8 @@ function New-WinMintInstallPlanSetupPlan {
             }
         )
         stagedArtifacts = @(
-            'autounattend.xml',
-            'C:\Windows\Setup\Scripts\WinMintSetupProfile.json',
-            'C:\Windows\Setup\Scripts\Specialize.ps1',
-            'C:\Windows\Setup\Scripts\DefaultUser.ps1',
-            'C:\Windows\Setup\Scripts\SetupComplete.cmd',
-            'C:\Windows\Setup\Scripts\SetupComplete.ps1',
-            'C:\Windows\Setup\Scripts\FirstLogon.ps1',
-            'C:\Windows\Setup\Scripts\WinMintAgent\BuildProfile.json'
+            'autounattend.xml'
+            Get-WinMintSetupPayloadRequiredArtifacts
         )
         generatedProfiles = [ordered]@{
             setupProfile = $SetupProfile
@@ -297,6 +325,9 @@ function New-WinMintInstallPlanFromBuildConfig {
 
     $setupProfile = New-WinMintInstallPlanSetupProfile -BuildConfig $BuildConfig
     $agentProfile = New-WinMintInstallPlanAgentProfile -BuildConfig $BuildConfig
+    $wslSelection = ConvertTo-WinMintWslSelection `
+        -Values @($BuildConfig.Wsl2Distros) `
+        -FallbackValues @($BuildConfig.Wsl2Distro)
     $setupPlan = New-WinMintInstallPlanSetupPlan `
         -BuildConfig $BuildConfig `
         -SetupProfile $setupProfile `
@@ -316,18 +347,34 @@ function New-WinMintInstallPlanFromBuildConfig {
             }
             regional = [ordered]@{
                 dmaInterop = [bool]$BuildConfig.DmaInterop.Enabled
+                setupCountry = [string]$BuildConfig.DmaInterop.SetupCountry
                 setupUserLocale = [string]$BuildConfig.SetupUserLocale
                 setupHomeLocationGeoId = [int]$BuildConfig.SetupHomeLocationGeoId
+                restoreTimeZoneId = [string]$BuildConfig.TimeZoneId
                 restoreUserLocale = [string]$BuildConfig.UserLocale
                 restoreHomeLocationGeoId = [int]$BuildConfig.HomeLocationGeoId
                 restoreLocationServices = [bool]$BuildConfig.DmaInterop.RestoreLocationServices
+                locationServicesPolicy = if ([bool]$BuildConfig.Privacy.Location) { 'enabled' } else { 'disabled' }
             }
             removals = [ordered]@{
                 appxPrefixes = @($BuildConfig.AppxPackages)
+                appxCatalogVersion = [int]$BuildConfig.AppxCatalogVersion
+                featuresEnabled = @($BuildConfig.Features)
                 aiPolicy = [string]$BuildConfig.AiRemoval.Policy
+                aiCatalogVersion = [int]$BuildConfig.AiRemoval.CatalogVersion
                 aiAppxPrefixes = @($BuildConfig.AiRemoval.AppxPrefixes)
                 aiOptionalFeatures = @($BuildConfig.AiRemoval.OptionalFeatures)
+                aiRegistryPolicies = @(
+                    @($BuildConfig.RegistryTweaks) |
+                        Where-Object { $_ -in @('windows-ai-core-policy', 'windows-ai-full-policy') }
+                )
+                aiAggressiveActions = @(
+                    if ([bool]$BuildConfig.AiRemoval.AggressiveExperimental) {
+                        @($BuildConfig.AiRemoval.AggressiveExperimentalPatterns)
+                    }
+                )
                 removeEdge = [bool]$setupProfile.edge.removeEdge
+                keepEdge = [bool]$setupProfile.edge.keepEdge
             }
             setup = [ordered]@{
                 accountMode = [string]$BuildConfig.AccountMode
@@ -341,11 +388,14 @@ function New-WinMintInstallPlanFromBuildConfig {
                 modules = @($setupPlan.firstLogon.modules)
                 editors = @($BuildConfig.Editors)
                 browsers = @($BuildConfig.Browsers)
-                wslDistros = @($BuildConfig.Wsl2Distros)
+                wslDistros = @($wslSelection.ProfileTokens)
+                wslAgentDistros = @($wslSelection.AgentTokens)
+                wslSelections = @($wslSelection.Items)
                 launcher = [string]$BuildConfig.Launcher
                 shellLayers = @(
                     if ([bool]$BuildConfig.InstallWindhawk) { 'windhawk' }
                     if ([bool]$BuildConfig.InstallYasb) { 'yasb' }
+                    if ([bool]$BuildConfig.InstallThide) { 'thide' }
                     if ([bool]$BuildConfig.InstallKomorebi) { 'komorebi' }
                     if ([bool]$BuildConfig.InstallNilesoft) { 'nilesoft' }
                 )

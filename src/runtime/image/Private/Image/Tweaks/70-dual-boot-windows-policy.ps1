@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # DualBootReserved disk mode only: disable Fast Startup (HiberbootEnabled) and
 # prevent automatic BitLocker device encryption, both of which cause dual-boot
@@ -16,3 +16,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

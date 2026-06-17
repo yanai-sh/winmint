@@ -9,6 +9,7 @@ set "PS7=%ProgramFiles%\PowerShell\7\pwsh.exe"
 if exist "%PS7%" (
   "%PS7%" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%SystemRoot%\Setup\Scripts\SetupComplete.ps1"
 ) else (
-  powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%SystemRoot%\Setup\Scripts\SetupComplete.ps1"
+  echo PowerShell 7 is required but was not found at "%PS7%">> "%ProgramData%\WinMint\Logs\SetupComplete_errors.log"
+  exit /b 1
 )
 exit /b %ERRORLEVEL%

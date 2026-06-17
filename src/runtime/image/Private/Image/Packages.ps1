@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Copy-WinMintPayloadDirectoryChildren {
     param(
@@ -13,6 +13,15 @@ function Copy-WinMintPayloadDirectoryChildren {
     $null = New-Item -ItemType Directory -Path $DestinationDir -Force -ErrorAction Stop
     foreach ($item in @(Get-ChildItem -LiteralPath $SourceDir -Force -ErrorAction Stop)) {
         Copy-Item -LiteralPath $item.FullName -Destination $DestinationDir -Recurse -Force -ErrorAction Stop
+    }
+}
+
+function Assert-OfflinePowerShell7Staged {
+    param([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$MountDir)
+
+    $pwshExe = Join-Path $MountDir 'Program Files\PowerShell\7\pwsh.exe'
+    if (-not (Test-Path -LiteralPath $pwshExe -PathType Leaf)) {
+        throw "PowerShell 7 is missing from the offline image: $pwshExe. SetupComplete and FirstLogon require bundled PowerShell 7; rebuild without the serviced-WIM cache or refresh the payload cache."
     }
 }
 
@@ -70,11 +79,12 @@ function Install-OfflinePowerShell7 {
 
             $pwshExe = Join-Path $dest 'pwsh.exe'
             if (-not (Test-Path -LiteralPath $pwshExe)) { throw "pwsh.exe missing after staging: $pwshExe" }
+            Assert-OfflinePowerShell7Staged -MountDir $MountDir
             LogOK "PowerShell 7 staged in the offline image (release: $($payload.Version))."
             LogVerbose "$pwshExe (release asset: $($payload.AssetName))"
         }
         catch {
-            LogWarn "PowerShell 7 staging failed; setup scripts will fall back to Windows PowerShell. $($_.Exception.Message)"
+            throw "PowerShell 7 staging failed; build cannot continue because setup and FirstLogon require bundled PowerShell 7. $($_.Exception.Message)"
         }
         finally {
             Remove-WinMintPayloadResult -Payload $payload
@@ -319,6 +329,50 @@ function Get-WinMintOfflineUpdateAppxDependencyFiles {
     ) | Select-Object -Unique
 }
 
+function Select-WinMintQualitySecurityTargetPackage {
+    param(
+        [Parameter(Mandatory)][string]$PayloadRoot,
+        [Parameter(Mandatory)][string[]]$Packages
+    )
+
+    if ($Packages.Count -eq 1) { return $Packages[0] }
+
+    $manifestPath = Join-Path $PayloadRoot 'UpdatePayloadManifest.json'
+    if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+        try {
+            $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $qualityPayloads = @(
+                @($manifest.payloads) |
+                    Where-Object { [string]$_.category -eq 'packages' -and [string]$_.kind -eq 'QualitySecurity' }
+            )
+            $targetKb = ''
+            foreach ($payload in $qualityPayloads) {
+                if ([string]$payload.title -match '(?i)\(KB(?<kb>\d+)\)') {
+                    $targetKb = [string]$Matches['kb']
+                    break
+                }
+            }
+            if (-not [string]::IsNullOrWhiteSpace($targetKb)) {
+                $target = @($qualityPayloads | Where-Object { [string]$_.fileName -match "kb$targetKb" } | Select-Object -First 1)
+                if ($target.Count -gt 0 -and (Test-Path -LiteralPath ([string]$target[0].path) -PathType Leaf)) {
+                    return [string]$target[0].path
+                }
+            }
+        }
+        catch {
+            LogVerbose "Quality update target selection manifest probe failed: $($_.Exception.Message)"
+        }
+    }
+
+    return @(
+        $Packages |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+            Sort-Object @{ Expression = { (Get-Item -LiteralPath $_).Length }; Descending = $true },
+            @{ Expression = { [IO.Path]::GetFileName($_) }; Descending = $true } |
+            Select-Object -First 1
+    )[0]
+}
+
 function Invoke-WinMintOfflineUpdatePackages {
     param(
         [Parameter(Mandatory)][string]$MountDir,
@@ -328,12 +382,35 @@ function Invoke-WinMintOfflineUpdatePackages {
     $payloadRoot = [string]$Updates.PayloadRoot
     $categories = @(
         [pscustomobject]@{ Id = 'packages'; Enabled = [bool]$Updates.QualitySecurity; Label = 'quality/security packages' }
-        [pscustomobject]@{ Id = 'dynamic-update'; Enabled = [bool]$Updates.DynamicUpdate; Label = 'dynamic update packages' }
-        [pscustomobject]@{ Id = 'defender'; Enabled = [bool]$Updates.Defender; Label = 'Defender packages' }
         [pscustomobject]@{ Id = 'dotnet'; Enabled = [bool]$Updates.DotNet; Label = '.NET packages' }
     )
 
     $appliedCount = 0
+    if ([bool]$Updates.DynamicUpdate) {
+        $dynamicPackages = @(Get-WinMintOfflineUpdatePackageFiles -PayloadRoot $payloadRoot -Category 'dynamic-update')
+        if ($dynamicPackages.Count -gt 0) {
+            Add-WinMintManifestUpdateSkippedFact -Message 'dynamic-update: acquired for setup media servicing; not applicable to install.wim Add-Package'
+        }
+        else {
+            Add-WinMintManifestUpdateSkippedFact -Message 'dynamic-update: no .msu/.cab payloads found'
+        }
+    }
+    else {
+        Add-WinMintManifestUpdateSkippedFact -Message 'dynamic-update: disabled'
+    }
+    if ([bool]$Updates.Defender) {
+        $defenderPackages = @(Get-WinMintOfflineUpdatePackageFiles -PayloadRoot $payloadRoot -Category 'defender')
+        if ($defenderPackages.Count -gt 0) {
+            Add-WinMintManifestUpdateSkippedFact -Message 'defender: acquired for Microsoft DefenderUpdateWinImage.ps1 flow; not applicable to install.wim Add-Package'
+        }
+        else {
+            Add-WinMintManifestUpdateSkippedFact -Message 'defender: no .msu/.cab payloads found'
+        }
+    }
+    else {
+        Add-WinMintManifestUpdateSkippedFact -Message 'defender: disabled'
+    }
+
     foreach ($category in $categories) {
         if (-not [bool]$category.Enabled) {
             Add-WinMintManifestUpdateSkippedFact -Message "$($category.Id): disabled"
@@ -344,10 +421,29 @@ function Invoke-WinMintOfflineUpdatePackages {
             Add-WinMintManifestUpdateSkippedFact -Message "$($category.Id): no .msu/.cab payloads found"
             continue
         }
+        if ([string]$category.Id -eq 'packages') {
+            $targetPackage = Select-WinMintQualitySecurityTargetPackage -PayloadRoot $payloadRoot -Packages $packages
+            try {
+                Log "Applying $($category.Label): $(Split-Path -Leaf $targetPackage)"
+                if ($packages.Count -gt 1) {
+                    LogVerbose 'Checkpoint cumulative update chain detected; DISM is pointed at the latest target MSU so it can discover checkpoint MSUs in the same folder.'
+                }
+                Invoke-WinMintDismAddUpdatePackage -MountDir $MountDir -PackagePath $targetPackage
+                foreach ($package in $packages) {
+                    Add-WinMintManifestUpdatePackageFact -Category ([string]$category.Id) -Path $package
+                }
+                $appliedCount += $packages.Count
+            }
+            catch {
+                Add-WinMintManifestUpdateFailureFact -Category ([string]$category.Id) -Path $targetPackage -ErrorMessage $_.Exception.Message
+                throw
+            }
+            continue
+        }
         foreach ($package in $packages) {
             try {
                 Log "Applying $($category.Label): $(Split-Path -Leaf $package)"
-                Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Add-Package', "/PackagePath:$package", '/Quiet', '/NoRestart') | Out-Null
+                Invoke-WinMintDismAddUpdatePackage -MountDir $MountDir -PackagePath $package
                 Add-WinMintManifestUpdatePackageFact -Category ([string]$category.Id) -Path $package
                 $appliedCount++
             }
@@ -359,6 +455,35 @@ function Invoke-WinMintOfflineUpdatePackages {
     }
 
     return $appliedCount
+}
+
+function Invoke-WinMintDismAddUpdatePackage {
+    param(
+        [Parameter(Mandatory)][string]$MountDir,
+        [Parameter(Mandatory)][string]$PackagePath
+    )
+
+    $arguments = @('/English', "/Image:$MountDir", '/Add-Package', "/PackagePath:$PackagePath", '/Quiet', '/NoRestart')
+    $attempt = 0
+    while ($attempt -lt 2) {
+        $attempt++
+        try {
+            Invoke-DismExe -Arguments $arguments | Out-Null
+            return
+        }
+        catch {
+            $message = [string]$_.Exception.Message
+            $retryableServicingTransition = (
+                $message -match '(?i)(exit\s+552|Error:\s*552|pending updates to servicing components|Try the command again)'
+            )
+            if ($attempt -lt 2 -and $retryableServicingTransition) {
+                LogWarn "DISM reported servicing-component transition while adding $(Split-Path -Leaf $PackagePath); retrying once."
+                Start-Sleep -Seconds 5
+                continue
+            }
+            throw
+        }
+    }
 }
 
 function Invoke-WinMintOfflineUpdateAppx {
@@ -452,7 +577,7 @@ function Export-SingleEdition {
     Invoke-Action "Exporting a single-edition install.wim ($SelectedEdition)" {
         LogVerbose "Source WIM: $LocalWim | index $SelectedWimIndex"
         $exportWim = Join-Path (Split-Path $LocalWim -Parent) 'install_export.wim'
-        $null = Export-WindowsImage -SourceImagePath $LocalWim -SourceIndex $SelectedWimIndex -DestinationImagePath $exportWim -ErrorAction Stop
+        $null = Export-WindowsImage -SourceImagePath $LocalWim -SourceIndex $SelectedWimIndex -DestinationImagePath $exportWim -CompressionType Max -ErrorAction Stop
         Remove-Item -LiteralPath $LocalWim -Force -ErrorAction Stop
         Rename-Item -LiteralPath $exportWim -NewName 'install.wim' -Force -ErrorAction Stop
     }
@@ -589,3 +714,4 @@ function Resolve-OscdimgPath {
     }
     return $oscdimg
 }
+

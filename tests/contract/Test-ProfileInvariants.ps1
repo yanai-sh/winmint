@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -7,19 +7,24 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:WinMintRepositoryRoot = $root
 
 . (Join-Path $root 'src\runtime\image\Core.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Config\OptionCatalog.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Config\Profile.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Catalog.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Tweaks\TweakRegistry.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\AiRemoval.ps1')
 . (Join-Path $root 'src\runtime\image\Private\IntermediatesCache.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Manifest.ps1')
 . (Join-Path $root 'src\runtime\image\Engine.ps1')
 . (Join-Path $root 'src\runtime\image\Reports.ps1')
+. (Join-Path $root 'src\runtime\image\Private\WslSelection.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Runtime.ps1')
 . (Join-Path $root 'src\runtime\image\Private\PayloadStore.ps1')
+. (Join-Path $root 'src\runtime\image\Private\UpdatePayloads.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Drivers.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Packages.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Media.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Tweaks.ps1')
+. (Join-Path $root 'src\runtime\image\Private\Image\SetupPayloadStaging.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1')
 . (Join-Path $root 'src\runtime\image\Private\InstallPlan.ps1')
 . (Join-Path $root 'src\runtime\image\Private\Pipeline.Console.ps1')
@@ -77,12 +82,14 @@ Assert-XdgDefaultsAreStaged
 Assert-CachedDownloadResolver
 Assert-OfflinePayloadCacheStatus
 Assert-ImageUpdateProfileContract
+Assert-UpdatePayloadHashHelpers
+Assert-OfficialUpdatePayloadAcquisition
 Assert-StaticUiFlowInvariants
 Assert-HardwareBypassIsExplicit
 Assert-ElevationRequiredForAllRuns
 Assert-HardwareBypassUnattendGeneration
 Assert-HyperVProfileIsProAndUnattended
-Assert-SurfaceProfileUsesStandardHome
+Assert-TrackedHardwareBuildProfiles
 Assert-FixedEditionSelectionIsUnambiguous
 Assert-MicrosoftOobeUnattendGeneration
 Assert-LocalAccountUnattendGeneration
@@ -119,8 +126,12 @@ Assert-WinPEDriverInjectionDefaultsToSetupOnly
 Assert-CopilotPlusUsesFullAiRemovalPolicy
 Assert-OneDriveRemovalPolicyIsComplete
 Assert-DefaultUserTaskbarPinsIncludeTerminal
+Assert-WindowsTerminalDefaultsPwsh7NoLogo
+Assert-PowerShell7IsBundledAndRequired
+Assert-SetupAndFirstLogonCatalogsAreExplicit
 Assert-WinMintBloomWallpaperCoversDesktopAndLockScreen
 Assert-FirstLogonDefaultsToVisibleConsole
+Assert-FirstLogonDemoHarnessIsNonMutating
 Assert-FirstLogonPinsSelectedAppsToStart
 Assert-FirstLogonFinalizesTerminalProfiles
 Assert-AgentLiveInstallFailuresAreWarnings
@@ -166,9 +177,9 @@ if ($setupProfile.edge.Contains('aggressiveExperimental')) {
     Add-SmokeFailure 'Edge removal must not be controlled by an environment-variable experimental gate.'
 }
 
-# Subtractive model: -KeepCopilot suppresses the Copilot+ AI feature surface so a
-# Copilot+ PC keeps the Copilot app + AppX and the AI feature policy, but Recall
-# stays removed on every build as a security baseline.
+# Subtractive model: -KeepCopilot suppresses the non-Recall AI feature policy so
+# a Copilot+ PC keeps app-local AI and the Copilot app surface, but Recall stays
+# removed on every build as a security baseline.
 $settings = New-SmokeBuildProfileSettings
 $settings.KeepCopilot = $true
 $profile = New-WinMintBuildProfile -Settings $settings
@@ -199,7 +210,7 @@ $profile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
 $config = New-WinMintBuildConfig -BuildProfile $profile
 if ($config.CursorPackKind -ne 'Windows11Modern') { Add-SmokeFailure 'Expected Windows11Modern cursor pack in build config.' }
 if ($config.Tweaks.UpdatePolicy -ne 'All') { Add-SmokeFailure 'Expected All update policy in build config.' }
-if ([string]$config.Updates.Mode -ne 'Stable25H2') { Add-SmokeFailure 'Expected offline image updates to be enabled by default.' }
+if ([string]$config.Updates.Mode -ne 'None') { Add-SmokeFailure 'Expected offline image updates to be disabled by default.' }
 if ($config.ExportHostDrivers) { Add-SmokeFailure 'Expected host driver export to be disabled for drivers.source None.' }
 if ($config.RegistryTweaks -contains 'hardware-bypass') { Add-SmokeFailure 'hardware-bypass must not be in the default registry tweaks for a standard build.' }
 if ($config.RegistryTweaks -notcontains 'edge-policy-minimal') { Add-SmokeFailure 'Expected Minimal builds to use the strict Edge policy.' }
@@ -294,7 +305,7 @@ if (@($profile.development.editors).Count -ne 0) {
 $settings = New-SmokeBuildProfileSettings
 $settings.BrowserZen = $false
 $settings.BrowserHelium = $false
-$settings.BrowserLibreWolf = $false
+$settings.BrowserFirefoxDeveloperEdition = $false
 $settings.BrowserBrave = $false
 $settings.BrowserEdge = $false
 $profile = New-WinMintBuildProfile -Settings $settings
@@ -328,6 +339,10 @@ if (@($agentProfile.modules.wsl.distros) -notcontains 'NixOS' -or @($agentProfil
     Add-SmokeFailure 'Expected NixOS-WSL to normalize to NixOS for first-logon installation.'
 }
 
+$profile = New-SmokeBuildProfile
+$profile.development.wsl.distros = @('Fedora')
+Assert-ProfileFailsWith -Profile $profile -Expected 'profile.development.wsl.distros[] must be one of: Ubuntu, FedoraLinux, archlinux, NixOS-WSL, pengwin.'
+
 $settings = New-SmokeBuildProfileSettings
 $profile = New-WinMintBuildProfile -Settings $settings
 if (@($profile.development.editors).Count -ne 0) {
@@ -337,11 +352,11 @@ if (@($profile.development.editors).Count -ne 0) {
 $profile = New-SmokeBuildProfile
 $profile.drivers.source = 'Host'
 $profile.drivers.exportHostDrivers = $false
-Assert-ProfileFailsWith -Profile $profile -Expected 'profile.drivers.exportHostDrivers must be true when profile.drivers.source is Host.'
+Assert-ProfileFailsWith -Profile $profile -Expected 'profile.drivers.exportHostDrivers must be true when profile.drivers.source is Host or HostExport.'
 
 $profile = New-SmokeBuildProfile
 $profile.drivers.exportHostDrivers = $true
-Assert-ProfileFailsWith -Profile $profile -Expected 'profile.drivers.exportHostDrivers must be false unless profile.drivers.source is Host.'
+Assert-ProfileFailsWith -Profile $profile -Expected 'profile.drivers.exportHostDrivers must be false unless profile.drivers.source is Host or HostExport.'
 
 $profile = New-SmokeBuildProfile
 $profile.drivers.source = 'Host'
@@ -356,7 +371,7 @@ Assert-ProfileFailsWith -Profile $profile -Expected 'profile.desktop.cursorPack 
 $profile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($agentProfile.modules.flowEverything.enabled -or $agentProfile.modules.raycast.enabled -or $config.Launcher -ne 'None') {
+if ($agentProfile.modules.raycast.enabled -or $config.Launcher -ne 'None') {
     Add-SmokeFailure 'Expected launcher modules to stay disabled by default for the Developer group.'
 }
 if ($agentProfile.modules.phoneLink.enabled -or $agentProfile.modules.liveInstallAudit.enabled) {
@@ -364,23 +379,11 @@ if ($agentProfile.modules.phoneLink.enabled -or $agentProfile.modules.liveInstal
 }
 
 $settings = New-SmokeBuildProfileSettings
-$settings.Launcher = 'FlowEverything'
-$profile = New-WinMintBuildProfile -Settings $settings
-$config = New-WinMintBuildConfig -BuildProfile $profile
-$agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($config.Launcher -ne 'FlowEverything' -or -not $config.InstallFlowEverything -or -not $agentProfile.modules.flowEverything.enabled -or $agentProfile.modules.raycast.enabled) {
-    Add-SmokeFailure 'Expected FlowEverything launcher choice to enable only the Flow/Everything agent module.'
-}
-if (-not $agentProfile.modules.packageManagers.enabled) {
-    Add-SmokeFailure 'Expected launcher opt-in to require package managers.'
-}
-
-$settings = New-SmokeBuildProfileSettings
 $settings.Launcher = 'Raycast'
 $profile = New-WinMintBuildProfile -Settings $settings
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($config.Launcher -ne 'Raycast' -or -not $config.InstallRaycast -or -not $agentProfile.modules.raycast.enabled -or $agentProfile.modules.flowEverything.enabled) {
+if ($config.Launcher -ne 'Raycast' -or -not $config.InstallRaycast -or -not $agentProfile.modules.raycast.enabled) {
     Add-SmokeFailure 'Expected Raycast launcher choice to enable only the Raycast agent module.'
 }
 if (-not $agentProfile.modules.packageManagers.enabled) {
@@ -399,7 +402,7 @@ $profile = New-WinMintBuildProfile -Settings @{
 }
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($agentProfile.modules.flowEverything.enabled -or $agentProfile.modules.raycast.enabled) {
+if ($agentProfile.modules.raycast.enabled) {
     Add-SmokeFailure 'Expected launcher modules to stay disabled for the Minimal group.'
 }
 if ($agentProfile.modules.phoneLink.enabled -or $agentProfile.modules.liveInstallAudit.enabled) {
@@ -419,7 +422,7 @@ $profile = New-WinMintBuildProfile -Settings @{
 }
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintAgentProfile -BuildConfig $config
-if ($agentProfile.modules.flowEverything.enabled -or $agentProfile.modules.raycast.enabled -or $config.Launcher -ne 'None') {
+if ($agentProfile.modules.raycast.enabled -or $config.Launcher -ne 'None') {
     Add-SmokeFailure 'Expected launcher modules to stay disabled by default for the DesktopUI group.'
 }
 
@@ -443,13 +446,19 @@ $profile = New-SmokeBuildProfile
 $profile.source.isoPath = ''
 $profile.source.architecture = ''
 $config = New-WinMintBuildConfig -BuildProfile $profile
-$pre = Test-WinMintBuildPrerequisite -Config $config -AllowMissingSourceIso
+$pre = Test-WinMintBuildPrerequisite -Config $config -RunMode DryRun
 if (-not $pre.Passed) {
     Add-SmokeFailure "Expected profile-only dry run prerequisite check to allow missing ISO and architecture. Failures: $($pre.Failures -join '; ')"
+}
+if (@($pre.Findings | Where-Object Code -eq 'source.iso.missing.profileOnlyDryRun').Count -ne 1) {
+    Add-SmokeFailure 'Expected profile-only dry run preflight to emit source.iso.missing.profileOnlyDryRun.'
 }
 $pre = Test-WinMintBuildPrerequisite -Config $config
 if ($pre.Passed) {
     Add-SmokeFailure 'Expected normal build prerequisite check to reject a missing ISO.'
+}
+if (@($pre.Findings | Where-Object Code -eq 'source.iso.missing').Count -ne 1) {
+    Add-SmokeFailure 'Expected normal build preflight to emit source.iso.missing.'
 }
 
 if ($failures.Count -gt 0) {
@@ -457,3 +466,4 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host 'Profile invariant smoke passed.'
+

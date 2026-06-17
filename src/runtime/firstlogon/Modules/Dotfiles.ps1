@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Invoke-WinMintAgentDotfileBootstrap {
     [CmdletBinding()]
@@ -15,3 +15,4 @@ function Invoke-WinMintAgentDotfileBootstrap {
         Message = 'Reserved for cloning a dotfiles repository and running its installer.'
     }
 }
+

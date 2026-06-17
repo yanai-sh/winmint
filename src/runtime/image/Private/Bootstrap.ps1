@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Test-WinMintAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -32,3 +32,4 @@ function Invoke-SelfElevate {
     Start-Process -FilePath $pwsh -ArgumentList $argumentList.ToArray() -Verb RunAs | Out-Null
     exit
 }
+

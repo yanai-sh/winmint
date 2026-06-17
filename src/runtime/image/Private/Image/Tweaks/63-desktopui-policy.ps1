@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # DesktopUI group only: single-click activation and snap-assist behavior, without
 # affecting Minimal or Gaming builds.
@@ -17,3 +17,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

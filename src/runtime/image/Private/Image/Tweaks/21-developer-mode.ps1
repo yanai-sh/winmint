@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Developer group: enable Windows Developer Mode (symlinks without UAC elevation,
 # app sideloading) expected by developer workstations.
@@ -15,3 +15,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

@@ -10,4 +10,4 @@ gui-rel   = "run --release -p winmint-gui"             # release build + launch
 checkw    = "check --workspace --all-targets"          # fast type-check the whole workspace
 lint      = "clippy --workspace --all-targets"         # clippy across the workspace
 testw     = "test --workspace"                         # all Rust tests
-core      = "test -p winmint-core"                     # core intent/bridge-contract tests only
+core      = "test -p winmint-gui core::"               # GUI core intent/bridge-contract tests

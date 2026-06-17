@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function New-WinMintPayloadResult {
     [CmdletBinding()]
@@ -376,3 +376,4 @@ function Resolve-WinMintGitHubReleasePayload {
         throw "$Name payload resolution failed. Release error: $($releaseError.Exception.Message) Cache error: $($_.Exception.Message)"
     }
 }
+

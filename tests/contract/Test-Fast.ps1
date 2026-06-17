@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -10,6 +10,7 @@ foreach ($testScript in @(
         'Test-InstallPlanContract.ps1',
         'Test-PayloadStoreContract.ps1',
         'Test-CliMatrix.ps1',
+        'Test-FirstLogonTransactionPlan.ps1',
         'Test-AgentStateTransitions.ps1',
         'Test-BootstrapContract.ps1',
         'Test-CloudflareWorkerContract.ps1',
@@ -20,3 +21,4 @@ foreach ($testScript in @(
 }
 
 Write-Host 'Fast test suite passed.'
+

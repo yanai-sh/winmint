@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-RemovableUsbVolumeCandidate {
     <# <summary>Volumes Windows reports as Removable with an assigned drive letter (typical USB flash drives).</summary> #>
@@ -185,3 +185,4 @@ function Show-BuildConfigurationSummaryAndConfirm {
     $go = if ($boolResults.Count -ge 1) { [bool]$boolResults[-1] } else { $false }
     return [pscustomobject]@{ Proceed = $go; PostBuildUsbDriveLetter = $postUsbLetter }
 }
+

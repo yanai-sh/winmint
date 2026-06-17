@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline Explorer quality-of-life: show file extensions and hidden files,
 # keep Explorer Home as the launch page, and remove Gallery namespace noise.
@@ -19,3 +19,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

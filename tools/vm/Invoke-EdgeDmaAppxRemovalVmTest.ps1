@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 <#
 .SYNOPSIS
     Run the Edge DMA AppX removal reboot test inside a Hyper-V WinMint VM.
@@ -142,3 +142,4 @@ try {
 finally {
     if ($session) { Remove-PSSession $session -ErrorAction SilentlyContinue }
 }
+

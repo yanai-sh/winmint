@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Gaming group only: Game Mode, hardware-accelerated GPU scheduling (HAGS), and
 # windowed-game (swapchain) optimizations.
@@ -17,3 +17,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

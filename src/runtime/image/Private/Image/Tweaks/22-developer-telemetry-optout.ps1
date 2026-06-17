@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Developer group: opt out of developer-toolchain telemetry via machine
 # environment variables (.NET, PowerShell, and the cross-tool DO_NOT_TRACK).
@@ -18,3 +18,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

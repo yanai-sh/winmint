@@ -1,6 +1,7 @@
 use gpui::SharedString;
 use serde::Deserialize;
 
+use crate::bridge::BuildDeltaSummary;
 use crate::intent::{DesktopLayersIntent, KeepFlags, ToolkitIntent};
 
 pub const SPLASH_STATUS_PICK: &str = "Select a Windows ISO to begin.";
@@ -197,6 +198,13 @@ impl SourceProbeState {
 pub struct BuildRunState {
     pub status: SharedString,
     pub spinner_phase: usize,
+    pub running: bool,
+    pub profile_path: SharedString,
+    pub output_path: SharedString,
+    pub build_delta_path: SharedString,
+    pub build_delta_summary: BuildDeltaSummary,
+    pub report_path: SharedString,
+    pub last_progress: SharedString,
 }
 
 impl Default for BuildRunState {
@@ -204,6 +212,13 @@ impl Default for BuildRunState {
         Self {
             status: SPLASH_STATUS_PICK.into(),
             spinner_phase: 0,
+            running: false,
+            profile_path: "".into(),
+            output_path: "".into(),
+            build_delta_path: "".into(),
+            build_delta_summary: BuildDeltaSummary::default(),
+            report_path: "".into(),
+            last_progress: "".into(),
         }
     }
 }

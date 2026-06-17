@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 <#
 .SYNOPSIS
@@ -53,8 +53,10 @@ function Remove-WinMintIntermediatesCacheTree {
     }
 }
 
-function Invoke-WinMintDriverMsiBundleCacheMaintenance {
-    $root = Join-Path (Get-WinMintBuildCacheRoot) 'driver-msi-bundle'
+function Invoke-WinMintKeyedJsonMarkerCacheMaintenance {
+    param([Parameter(Mandatory)][string]$CacheSubdir)
+
+    $root = Join-Path (Get-WinMintBuildCacheRoot) $CacheSubdir
     if (-not (Test-Path -LiteralPath $root)) { return }
     foreach ($json in @(Get-ChildItem -LiteralPath $root -Filter '*.json' -File -ErrorAction SilentlyContinue)) {
         if (-not (Test-WinMintIntermediatesCacheMarkerFileFresh -MarkerJsonPath $json.FullName)) {
@@ -69,42 +71,18 @@ function Invoke-WinMintDriverMsiBundleCacheMaintenance {
             Remove-WinMintIntermediatesCacheTree -Path $dir.FullName
         }
     }
+}
+
+function Invoke-WinMintDriverMsiBundleCacheMaintenance {
+    Invoke-WinMintKeyedJsonMarkerCacheMaintenance -CacheSubdir 'driver-msi-bundle'
 }
 
 function Invoke-WinMintDriverMsiSingleCacheMaintenance {
-    $root = Join-Path (Get-WinMintBuildCacheRoot) 'driver-msi-single'
-    if (-not (Test-Path -LiteralPath $root)) { return }
-    foreach ($json in @(Get-ChildItem -LiteralPath $root -Filter '*.json' -File -ErrorAction SilentlyContinue)) {
-        if (-not (Test-WinMintIntermediatesCacheMarkerFileFresh -MarkerJsonPath $json.FullName)) {
-            $key = [IO.Path]::GetFileNameWithoutExtension($json.Name)
-            Remove-WinMintIntermediatesCacheTree -Path (Join-Path $root $key)
-            Remove-Item -LiteralPath $json.FullName -Force -ErrorAction SilentlyContinue
-        }
-    }
-    foreach ($dir in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
-        $marker = Join-Path $root ($dir.Name + '.json')
-        if (-not (Test-Path -LiteralPath $marker)) {
-            Remove-WinMintIntermediatesCacheTree -Path $dir.FullName
-        }
-    }
+    Invoke-WinMintKeyedJsonMarkerCacheMaintenance -CacheSubdir 'driver-msi-single'
 }
 
 function Invoke-WinMintHostDriverExportCacheMaintenance {
-    $root = Join-Path (Get-WinMintBuildCacheRoot) 'host-drivers'
-    if (-not (Test-Path -LiteralPath $root)) { return }
-    foreach ($json in @(Get-ChildItem -LiteralPath $root -Filter '*.json' -File -ErrorAction SilentlyContinue)) {
-        if (-not (Test-WinMintIntermediatesCacheMarkerFileFresh -MarkerJsonPath $json.FullName)) {
-            $key = [IO.Path]::GetFileNameWithoutExtension($json.Name)
-            Remove-WinMintIntermediatesCacheTree -Path (Join-Path $root $key)
-            Remove-Item -LiteralPath $json.FullName -Force -ErrorAction SilentlyContinue
-        }
-    }
-    foreach ($dir in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
-        $marker = Join-Path $root ($dir.Name + '.json')
-        if (-not (Test-Path -LiteralPath $marker)) {
-            Remove-WinMintIntermediatesCacheTree -Path $dir.FullName
-        }
-    }
+    Invoke-WinMintKeyedJsonMarkerCacheMaintenance -CacheSubdir 'host-drivers'
 }
 
 function Invoke-WinMintAllBuildCachesMaintenance {
@@ -129,7 +107,7 @@ function Invoke-WinMintAllBuildCachesMaintenance {
 
 # Bump when the serviced-image pipeline changes in a way that can leave cached
 # WIMs semantically stale even if the broad inputs look unchanged.
-$script:WinMintServicedWimCacheSchemaVersion = 8
+$script:WinMintServicedWimCacheSchemaVersion = 9
 
 function Get-WinMintServicedWimCacheRoot {
     return (Join-Path (Get-WinMintBuildCacheRoot) 'serviced-wim')
@@ -215,11 +193,11 @@ function Get-WinMintServicedWimFingerprint {
     try {
         $src = [string]$BuildConfig.Drivers.Source
         $path = [string]$BuildConfig.Drivers.Path
-        if ($src -eq 'Host') {
+        if (Test-WinMintDriverSourceUsesHostExport -Source $src) {
             $driversFp = "Host|$((Get-WinMintHostDriverExportFingerprint))"
         }
-        elseif ($src -eq 'Custom' -and -not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
-            $driversFp = "Custom|$(Get-WinMintDriverPayloadFingerprint -Path $path)"
+        elseif ((Test-WinMintDriverSourceUsesPath -Source $src) -and -not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
+            $driversFp = "$src|$(Get-WinMintDriverPayloadFingerprint -Path $path)"
         }
         else {
             $driversFp = "$src|"
@@ -773,3 +751,4 @@ function Publish-WinMintMonaspaceNerdFontCache {
         if (Test-Path -LiteralPath $dir) { Remove-WinMintIntermediatesCacheTree -Path $dir }
     }
 }
+

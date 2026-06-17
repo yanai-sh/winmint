@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function New-SmokeBuildProfile {
     New-WinMintBuildProfile -Settings @{
@@ -30,7 +30,10 @@ function Assert-FormFactorAndPowerProfile {
     if ([string]$defaultConfig.FormFactor -ne 'Auto') {
         Add-SmokeFailure "Default build config FormFactor should be 'Auto', got '$($defaultConfig.FormFactor)'."
     }
-    foreach ($expected in @('filesystem-performance-policy', 'developer-telemetry-optout', 'telemetry-tracing-policy', 'terminal-admin-context')) {
+    if ([string]$defaultConfig.PowerPlan -ne 'Balanced') {
+        Add-SmokeFailure "Default build config PowerPlan should be 'Balanced', got '$($defaultConfig.PowerPlan)'."
+    }
+    foreach ($expected in @('filesystem-performance-policy', 'developer-telemetry-optout', 'telemetry-tracing-policy', 'terminal-admin-context', 'driver-coinstaller-policy')) {
         if (@($defaultConfig.RegistryTweaks) -notcontains $expected) {
             Add-SmokeFailure "Default Developer build should select registry tweak '$expected'."
         }
@@ -39,8 +42,8 @@ function Assert-FormFactorAndPowerProfile {
     if ([string]$defaultProfile.power.formFactor -ne 'Auto') {
         Add-SmokeFailure 'Setup profile power.formFactor should default to Auto.'
     }
-    if ([string]$defaultProfile.power.desktopPowerPlan -ne 'HighPerformance') {
-        Add-SmokeFailure 'Setup profile power.desktopPowerPlan should be HighPerformance.'
+    if ([string]$defaultProfile.power.desktopPowerPlan -ne 'Balanced' -or [string]$defaultProfile.power.selectedPlan -ne 'Balanced') {
+        Add-SmokeFailure 'Setup profile power plan should default to Balanced.'
     }
     if (-not [bool]$defaultProfile.privacy.disableTelemetryTasks) {
         Add-SmokeFailure 'Telemetry-on default should set privacy.disableTelemetryTasks.'
@@ -62,6 +65,21 @@ function Assert-FormFactorAndPowerProfile {
     $desktopConfig = New-WinMintBuildConfig -BuildProfile $desktopProfile
     if ([string]$desktopConfig.FormFactor -ne 'Desktop') {
         Add-SmokeFailure "FormFactor=Desktop should flow to build config, got '$($desktopConfig.FormFactor)'."
+    }
+    $ultimateProfile = New-WinMintBuildProfile -Settings @{
+        Profile = 'WinMint'
+        ISOPath = (Get-WinMintTestIsoFixturePath)
+        Architecture = 'arm64'
+        ComputerName = 'WinMint'
+        AccountName = 'dev'
+        DriverSource = 'None'
+        DriverPath = ''
+        PowerPlan = 'UltimatePerformance'
+    }
+    $ultimateConfig = New-WinMintBuildConfig -BuildProfile $ultimateProfile
+    $ultimateSetup = New-WinMintSetupProfile -BuildConfig $ultimateConfig
+    if ([string]$ultimateSetup.power.selectedPlan -ne 'UltimatePerformance') {
+        Add-SmokeFailure 'Explicit PowerPlan=UltimatePerformance should flow to the setup profile.'
     }
 }
 
@@ -246,7 +264,7 @@ function Assert-ManifestPayloadsAreDeduplicated {
         if (Test-Path -LiteralPath $tempRoot) {
             Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
-        $script:WinMintBuildManifest = $null
+        Clear-WinMintBuildManifest
     }
 }
 
@@ -268,7 +286,8 @@ function Assert-TweakAuditArtifactsAreWritten {
         $auditPath = Join-Path $tempRoot 'WinMint-TweakAudit.json'
         $mdPath = Join-Path $tempRoot 'WinMint-TweakAudit.md'
         $regPath = Join-Path $tempRoot 'WinMint-TweakRollback.reg'
-        foreach ($path in @($manifestPath, $auditPath, $mdPath, $regPath)) {
+        $buildDeltaPath = Join-Path $tempRoot 'WinMint-BuildDelta.json'
+        foreach ($path in @($manifestPath, $auditPath, $mdPath, $regPath, $buildDeltaPath)) {
             if (-not (Test-Path -LiteralPath $path)) {
                 Add-SmokeFailure "Expected tweak audit artifact to exist: $path"
             }
@@ -281,9 +300,16 @@ function Assert-TweakAuditArtifactsAreWritten {
         if (@($manifest.tweaks.registryGroups).Count -eq 0) {
             Add-SmokeFailure 'Expected manifest to include detailed tweaks.registryGroups.'
         }
+        if (-not $manifest.audit -or [string]::IsNullOrWhiteSpace([string]$manifest.audit.buildDeltaPath)) {
+            Add-SmokeFailure 'Expected manifest audit metadata to include the BuildDelta artifact path.'
+        }
         $audit = Get-Content -LiteralPath $auditPath -Raw | ConvertFrom-Json
         if ([int]$audit.summary.applied -lt 1 -or [int]$audit.summary.failed -lt 1) {
             Add-SmokeFailure 'Expected tweak audit JSON to summarize applied and failed events.'
+        }
+        $buildDelta = Get-Content -LiteralPath $buildDeltaPath -Raw | ConvertFrom-Json
+        if (@($buildDelta.records).Count -eq 0) {
+            Add-SmokeFailure 'Expected BuildDelta to contain at least one selected backend change record.'
         }
         $regText = Get-Content -LiteralPath $regPath -Raw
         foreach ($expected in @('Windows Registry Editor Version 5.00', 'HideFileExt', 'dword:00000001')) {
@@ -296,7 +322,7 @@ function Assert-TweakAuditArtifactsAreWritten {
         if (Test-Path -LiteralPath $tempRoot) {
             Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
-        $script:WinMintBuildManifest = $null
+        Clear-WinMintBuildManifest
     }
 }
 
@@ -359,33 +385,60 @@ function Assert-OfflinePayloadCacheStatus {
 
 function Assert-ImageUpdateProfileContract {
     $defaultProfile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
-    if ([string]$defaultProfile.updates.mode -ne 'Stable25H2') {
-        Add-SmokeFailure "Expected image updates to default to Stable25H2, got '$($defaultProfile.updates.mode)'."
+    if ([string]$defaultProfile.updates.mode -ne 'None') {
+        Add-SmokeFailure "Expected image updates to default to None, got '$($defaultProfile.updates.mode)'."
     }
-    if ([string]::IsNullOrWhiteSpace([string]$defaultProfile.updates.payloadRoot)) {
-        Add-SmokeFailure 'Expected default image updates to carry a default payload root.'
+    if (-not [string]::IsNullOrWhiteSpace([string]$defaultProfile.updates.payloadRoot)) {
+        Add-SmokeFailure 'Expected default image updates to leave payload root empty.'
     }
     $defaultConfig = New-WinMintBuildConfig -BuildProfile $defaultProfile
-    if ([string]$defaultConfig.Updates.Mode -ne 'Stable25H2') {
-        Add-SmokeFailure "Expected build config updates to default to Stable25H2, got '$($defaultConfig.Updates.Mode)'."
+    if ([string]$defaultConfig.Updates.Mode -ne 'None') {
+        Add-SmokeFailure "Expected build config updates to default to None, got '$($defaultConfig.Updates.Mode)'."
     }
 
-    $optOutSettings = New-SmokeBuildProfileSettings
-    $optOutSettings.UpdateImage = 'None'
-    $optOutProfile = New-WinMintBuildProfile -Settings $optOutSettings
-    $optOutConfig = New-WinMintBuildConfig -BuildProfile $optOutProfile
-    if ([string]$optOutProfile.updates.mode -ne 'None' -or [string]$optOutConfig.Updates.Mode -ne 'None') {
-        Add-SmokeFailure 'Expected UpdateImage None to opt out of offline image updates.'
+    $optInSettings = New-SmokeBuildProfileSettings
+    $optInSettings.UpdateImage = 'Stable25H2'
+    $optInProfile = New-WinMintBuildProfile -Settings $optInSettings
+    $optInConfig = New-WinMintBuildConfig -BuildProfile $optInProfile
+    if ([string]$optInProfile.updates.mode -ne 'Stable25H2' -or [string]$optInConfig.Updates.Mode -ne 'Stable25H2') {
+        Add-SmokeFailure 'Expected UpdateImage Stable25H2 to opt in to offline image updates.'
     }
 
     $missingSettings = New-SmokeBuildProfileSettings
+    $missingSettings.UpdateImage = 'Stable25H2'
     $missingSettings.UpdatePayloadRoot = Join-Path ([IO.Path]::GetTempPath().TrimEnd('\', '/')) ('winmint-missing-update-root-' + [Guid]::NewGuid().ToString('n'))
     $missingSettings.ISOPath = Get-WinMintTestOfficialIsoFixturePath
     $missingProfile = New-WinMintBuildProfile -Settings $missingSettings
     $missingConfig = New-WinMintBuildConfig -BuildProfile $missingProfile
-    $missingPreflight = Test-WinMintBuildPrerequisite -Config $missingConfig -AllowMissingSourceIso
+    $missingPreflight = Test-WinMintBuildPrerequisite -Config $missingConfig -RunMode DryRun
     if ($missingPreflight.Passed -or ($missingPreflight.Failures -join '; ') -notmatch 'Update payload root not found') {
         Add-SmokeFailure 'Expected Stable25H2 preflight to require an explicit update payload root.'
+    }
+    if (@($missingPreflight.Findings | Where-Object Code -eq 'updates.payloadRoot.notFound').Count -ne 1) {
+        Add-SmokeFailure 'Expected missing Stable25H2 payload root to emit updates.payloadRoot.notFound.'
+    }
+    $buildPreflightContext = New-WinMintBuildPreflightContext -RunMode Build
+    $dryRunPreflightContext = New-WinMintBuildPreflightContext -RunMode DryRun
+    if (-not [bool]$buildPreflightContext.RequireOnlinePayloadCache -or [bool]$dryRunPreflightContext.RequireOnlinePayloadCache) {
+        Add-SmokeFailure 'Expected preflight context to require online/cache payload readiness only for real builds.'
+    }
+    if ([string]$buildPreflightContext.SourceIsoPolicy -ne 'Required' -or [string]$dryRunPreflightContext.SourceIsoPolicy -ne 'ProfileOnlyOptional') {
+        Add-SmokeFailure 'Expected preflight context to expose run-mode-specific source ISO policy.'
+    }
+    if ($buildPreflightContext.PSObject.Properties['AllowMissingSourceIso'] -or $dryRunPreflightContext.PSObject.Properties['AllowMissingSourceIso']) {
+        Add-SmokeFailure 'Expected generated preflight contexts to avoid legacy AllowMissingSourceIso flags.'
+    }
+
+    $unsupportedPackageSettings = New-SmokeBuildProfileSettings
+    $unsupportedPackageSettings.InstallWindhawk = $true
+    $unsupportedPackageProfile = New-WinMintBuildProfile -Settings $unsupportedPackageSettings
+    $unsupportedPackageConfig = New-WinMintBuildConfig -BuildProfile $unsupportedPackageProfile
+    $unsupportedPackagePreflight = Test-WinMintBuildPrerequisite -Config $unsupportedPackageConfig -RunMode DryRun
+    if (-not $unsupportedPackagePreflight.Passed) {
+        Add-SmokeFailure "Expected unsupported optional package architecture to warn, not fail: $($unsupportedPackagePreflight.Failures -join '; ')"
+    }
+    if (@($unsupportedPackagePreflight.Findings | Where-Object { $_.Code -eq 'packages.tool.architectureUnsupported' -and $_.Severity -eq 'warning' }).Count -lt 1) {
+        Add-SmokeFailure 'Expected ARM64 Windhawk selection to emit packages.tool.architectureUnsupported warning.'
     }
 
     $tempRoot = Join-Path ([IO.Path]::GetTempPath().TrimEnd('\', '/')) ('winmint_update_payload_test_' + [Guid]::NewGuid().ToString('n'))
@@ -413,9 +466,12 @@ function Assert-ImageUpdateProfileContract {
         if ([string]$config.Updates.Mode -ne 'Stable25H2' -or [string]$config.Updates.ReleaseCadence -ne 'BRelease' -or [bool]$config.Updates.IncludeOptionalPreviews) {
             Add-SmokeFailure 'Expected Stable25H2 update settings to flow to build config with B-release previews disabled.'
         }
-        $preflight = Test-WinMintBuildPrerequisite -Config $config -AllowMissingSourceIso
+        $preflight = Test-WinMintBuildPrerequisite -Config $config -RunMode DryRun
         if (-not $preflight.Passed) {
             Add-SmokeFailure "Expected Stable25H2 preflight to pass with a payload root. Failures: $($preflight.Failures -join '; ')"
+        }
+        if (@($preflight.Findings | Where-Object Severity -eq 'failure').Count -ne 0) {
+            Add-SmokeFailure 'Expected Stable25H2 preflight with a payload root to have no failure findings.'
         }
         $resolvedPackages = @(Get-WinMintOfflineUpdatePackageFiles -PayloadRoot $tempRoot -Category 'packages')
         if ($resolvedPackages -ne $lcu) {
@@ -434,6 +490,22 @@ function Assert-ImageUpdateProfileContract {
         if (Test-Path -LiteralPath $tempRoot) {
             Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
+    }
+}
+
+function Assert-UpdatePayloadHashHelpers {
+    $catalogSha256 = 'TT00I9uVmDM8VR+eMEpWxho251EODaPXr2NpI/Q7hBI='
+    $expectedHex = '4D3D3423DB9598333C551F9E304A56C61A36E7510E0DA3D7AF636923F43B8412'
+    $actualHex = ConvertFrom-WinMintCatalogBase64Sha256 -Sha256Base64 $catalogSha256
+    if ($actualHex -ne $expectedHex) {
+        Add-SmokeFailure "Expected Catalog Base64 SHA256 to convert to $expectedHex, got $actualHex."
+    }
+
+    try {
+        $null = ConvertFrom-WinMintCatalogBase64Sha256 -Sha256Base64 'not-a-valid-hash'
+        Add-SmokeFailure 'Expected invalid Catalog Base64 SHA256 metadata to fail closed.'
+    }
+    catch {
     }
 }
 
@@ -635,7 +707,7 @@ function Assert-HeadlessCliContracts {
         Add-SmokeFailure 'Expected setup profile to keep DMA setup values separate from user restore values.'
     }
     Initialize-WinMintBuildManifest -Config $dmaConfig
-    $manifestDma = $script:WinMintBuildManifest.regional.dmaInterop
+    $manifestDma = (Get-WinMintBuildManifest).regional.dmaInterop
     if ($manifestDma.setupLatchedCountry -ne 'Ireland' -or
         [int]$manifestDma.setupLatchedGeoId -ne 68 -or
         $manifestDma.restoredUserLocale -ne 'he-IL' -or
@@ -758,22 +830,8 @@ function Assert-HeadlessCliContracts {
     if (-not ($groupConfig.InstallWindhawk -and $groupConfig.InstallYasb -and $groupConfig.InstallKomorebi)) {
         Add-SmokeFailure 'Expected -DesktopUI to select the opinionated WinMint shell stack.'
     }
-    if ($groupConfig.Launcher -ne 'None' -or $groupConfig.InstallFlowEverything -or $groupConfig.InstallRaycast) {
+    if ($groupConfig.Launcher -ne 'None' -or $groupConfig.InstallRaycast) {
         Add-SmokeFailure 'Expected launcher modules to stay opt-in even when Developer/DesktopUI groups are selected.'
-    }
-
-    $flowProfile = New-WinMintHeadlessProfileFromFlags `
-        -SourceIso '' `
-        -Architecture 'arm64' `
-        -Launcher FlowEverything `
-        -DryRun
-    $flowConfig = New-WinMintBuildConfig -BuildProfile $flowProfile
-    $flowAgentProfile = New-WinMintAgentProfile -BuildConfig $flowConfig
-    if ($flowConfig.Launcher -ne 'FlowEverything' -or -not $flowConfig.InstallFlowEverything -or -not $flowAgentProfile.modules.flowEverything.enabled -or $flowAgentProfile.modules.raycast.enabled) {
-        Add-SmokeFailure 'Expected -Launcher FlowEverything to enable only Flow Launcher and Everything in the FirstLogon agent profile.'
-    }
-    if (-not $flowAgentProfile.modules.packageManagers.enabled) {
-        Add-SmokeFailure 'Expected -Launcher FlowEverything to enable package managers for first-logon installation.'
     }
 
     $raycastProfile = New-WinMintHeadlessProfileFromFlags `
@@ -783,11 +841,28 @@ function Assert-HeadlessCliContracts {
         -DryRun
     $raycastConfig = New-WinMintBuildConfig -BuildProfile $raycastProfile
     $raycastAgentProfile = New-WinMintAgentProfile -BuildConfig $raycastConfig
-    if ($raycastConfig.Launcher -ne 'Raycast' -or -not $raycastConfig.InstallRaycast -or -not $raycastAgentProfile.modules.raycast.enabled -or $raycastAgentProfile.modules.flowEverything.enabled) {
+    if ($raycastConfig.Launcher -ne 'Raycast' -or -not $raycastConfig.InstallRaycast -or -not $raycastAgentProfile.modules.raycast.enabled) {
         Add-SmokeFailure 'Expected -Launcher Raycast to enable only Raycast in the FirstLogon agent profile.'
+    }
+    if (-not $raycastAgentProfile.modules.launcherKey.enabled -or $raycastAgentProfile.modules.launcherKey.target -ne 'Raycast' -or $raycastAgentProfile.modules.launcherKey.chord -ne 'Win+Shift+F23') {
+        Add-SmokeFailure 'Expected Raycast builds to bind the launcher key to Raycast on the common Copilot hardware-key chord.'
     }
     if (-not $raycastAgentProfile.modules.packageManagers.enabled) {
         Add-SmokeFailure 'Expected -Launcher Raycast to enable package managers for first-logon installation.'
+    }
+    if ([string]$raycastAgentProfile.modules.raycast.everythingBackend.package -ne 'everything-arm64-beta') {
+        Add-SmokeFailure 'Expected ARM64 Raycast builds to use the pinned native Everything ARM64 backend.'
+    }
+
+    $raycastAmd64Profile = New-WinMintHeadlessProfileFromFlags `
+        -SourceIso '' `
+        -Architecture 'amd64' `
+        -Launcher Raycast `
+        -DryRun
+    $raycastAmd64Config = New-WinMintBuildConfig -BuildProfile $raycastAmd64Profile
+    $raycastAmd64AgentProfile = New-WinMintAgentProfile -BuildConfig $raycastAmd64Config
+    if ([string]$raycastAmd64AgentProfile.modules.raycast.everythingBackend.package -ne 'everything-beta') {
+        Add-SmokeFailure 'Expected amd64 Raycast builds to use the package-manager Everything Beta backend.'
     }
 
     $thisPcProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -TargetDevice ThisPC -DryRun
@@ -801,7 +876,7 @@ function Assert-HeadlessCliContracts {
         Set-Content -LiteralPath $fakePack -Value 'not a real msi; normalization only' -Encoding ASCII
         $packProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -TargetDevice ThisPC -DriverPack $fakePack -DryRun
         $packConfig = New-WinMintBuildConfig -BuildProfile $packProfile
-        if ($packConfig.Drivers.Source -ne 'Custom' -or $packConfig.ExportHostDrivers) {
+        if ($packConfig.Drivers.Source -ne 'OemMsi' -or $packConfig.ExportHostDrivers) {
             Add-SmokeFailure 'Expected explicit DriverPack to override ThisPC host driver export.'
         }
     }
@@ -855,7 +930,7 @@ function Assert-HeadlessSourceAndDriverInputContracts {
             -UpdateImage None `
             -ValidateOnly
         $sourceConfig = New-WinMintBuildConfig -BuildProfile $sourceProfile
-        $sourcePreflight = Test-WinMintBuildPrerequisite -Config $sourceConfig -AllowMissingSourceIso
+        $sourcePreflight = Test-WinMintBuildPrerequisite -Config $sourceConfig -RunMode ValidateOnly
         if (-not $sourcePreflight.Passed) {
             Add-SmokeFailure "Expected official ISO fixture path to pass source preflight, got: $($sourcePreflight.Failures -join '; ')"
         }
@@ -869,7 +944,7 @@ function Assert-HeadlessSourceAndDriverInputContracts {
             -UpdateImage None `
             -ValidateOnly
         $isoConfig = New-WinMintBuildConfig -BuildProfile $isoProfile
-        $isoPreflight = Test-WinMintBuildPrerequisite -Config $isoConfig -AllowMissingSourceIso
+        $isoPreflight = Test-WinMintBuildPrerequisite -Config $isoConfig -RunMode ValidateOnly
         if (-not $isoPreflight.Passed) {
             Add-SmokeFailure "Expected existing ISO fixture path to pass source preflight, got: $($isoPreflight.Failures -join '; ')"
         }
@@ -911,9 +986,236 @@ function Assert-HeadlessSourceAndDriverInputContracts {
                 -DriverPath $validDriverPath `
                 -DryRun
             $driverConfig = New-WinMintBuildConfig -BuildProfile $driverProfile
-            $driverPreflight = Test-WinMintBuildPrerequisite -Config $driverConfig -AllowMissingSourceIso
+            $driverPreflight = Test-WinMintBuildPrerequisite -Config $driverConfig -RunMode DryRun
             if (-not $driverPreflight.Passed) {
                 Add-SmokeFailure "Expected custom driver fixture to pass preflight: $validDriverPath; failures: $($driverPreflight.Failures -join '; ')"
+            }
+        }
+        $surfaceCatalog = Import-WinMintSurfaceDriverCatalog
+        if ([int]$surfaceCatalog.schemaVersion -ne 1 -or @($surfaceCatalog.devices).Count -lt 5) {
+            Add-SmokeFailure 'Expected Surface driver catalog to use schemaVersion 1 and include multiple supported Surface devices.'
+        }
+        $surfaceIds = @($surfaceCatalog.devices | ForEach-Object { [string]$_.id })
+        if ($surfaceIds.Count -ne @($surfaceIds | Select-Object -Unique).Count) {
+            Add-SmokeFailure 'Surface driver catalog device ids must be unique.'
+        }
+        foreach ($surfaceDevice in @($surfaceCatalog.devices)) {
+            foreach ($requiredProperty in @('id', 'name', 'family', 'architecture', 'downloadCenterId', 'detailsUrl', 'expectedFileNameRegex', 'minimumWindowsBuild')) {
+                if (-not $surfaceDevice.PSObject.Properties[$requiredProperty] -or [string]::IsNullOrWhiteSpace([string]$surfaceDevice.$requiredProperty)) {
+                    Add-SmokeFailure "Surface driver catalog entry is missing required property '$requiredProperty'."
+                }
+            }
+            if (-not (Test-WinMintMicrosoftDownloadUri -Uri ([string]$surfaceDevice.detailsUrl))) {
+                Add-SmokeFailure "Surface driver catalog entry '$($surfaceDevice.id)' must use a Microsoft details URL."
+            }
+            if ([string]$surfaceDevice.detailsUrl -match '(?i)surfacetip|github|raw\.githubusercontent') {
+                Add-SmokeFailure "Surface driver catalog entry '$($surfaceDevice.id)' must not use third-party catalog URLs."
+            }
+        }
+        $sl7Match = Resolve-WinMintSurfaceDriverDevice -Query '7th gen surface laptop' -Top 1 | Select-Object -First 1
+        if ($null -eq $sl7Match -or [string]$sl7Match.id -ne 'surface-laptop-7' -or [string]$sl7Match.downloadCenterId -ne '106120') {
+            Add-SmokeFailure 'Expected fuzzy Surface resolver to match "7th gen surface laptop" to Surface Laptop (7th Edition).'
+        }
+        $sl7FileMatch = Resolve-WinMintSurfaceDriverDevice -Query 'SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi' -Top 1 | Select-Object -First 1
+        if ($null -eq $sl7FileMatch -or [string]$sl7FileMatch.id -ne 'surface-laptop-7') {
+            Add-SmokeFailure 'Expected fuzzy Surface resolver to match the SurfaceLaptop7 MSI filename to Surface Laptop (7th Edition).'
+        }
+        $businessMatch = Resolve-WinMintSurfaceDriverDevice -Query 'surface laptop 7 for business' -Top 1 | Select-Object -First 1
+        if ($null -eq $businessMatch -or [string]$businessMatch.id -ne 'surface-laptop-business-7') {
+            Add-SmokeFailure 'Expected fuzzy Surface resolver to prefer the Business Surface Laptop 7 entry for business queries.'
+        }
+        $fakeSl7Identity = [pscustomobject]@{
+            manufacturer = 'Microsoft Corporation'
+            model = 'Microsoft Surface Laptop, 7th Edition'
+            productName = 'Microsoft Surface Laptop, 7th Edition'
+            baseBoardProduct = 'Microsoft Surface Laptop, 7th Edition'
+        }
+        $hostDeviceMatch = Resolve-WinMintSurfaceDriverDeviceForInput `
+            -MsiName 'SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi' `
+            -TargetDevice ThisPC `
+            -HostIdentity $fakeSl7Identity
+        if ($null -eq $hostDeviceMatch -or [string]$hostDeviceMatch.id -ne 'surface-laptop-7' -or [string]$hostDeviceMatch.matchSource -ne 'host-system-info') {
+            Add-SmokeFailure 'Expected ThisPC Surface matching to prefer dynamically retrieved host system info.'
+        }
+        $differentPcMatch = Resolve-WinMintSurfaceDriverDeviceForInput `
+            -MsiName 'SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi' `
+            -TargetDevice DifferentPC `
+            -HostIdentity $fakeSl7Identity
+        if ($null -eq $differentPcMatch -or [string]$differentPcMatch.id -ne 'surface-laptop-7' -or [string]$differentPcMatch.matchSource -ne 'driver-msi-name') {
+            Add-SmokeFailure 'Expected DifferentPC Surface matching to ignore host system info and use the provided MSI identity.'
+        }
+        $catalogProfile = New-WinMintHeadlessProfileFromFlags `
+            -SourceIso '' `
+            -Architecture 'arm64' `
+            -DriverSource SurfaceCatalog `
+            -DriverPath 'surface-laptop-7' `
+            -DryRun
+        $catalogConfig = New-WinMintBuildConfig -BuildProfile $catalogProfile
+        $catalogPreflight = Test-WinMintBuildPrerequisite -Config $catalogConfig -RunMode DryRun
+        if (-not $catalogPreflight.Passed) {
+            Add-SmokeFailure "Expected SurfaceCatalog preflight to pass for Surface Laptop 7 ARM64, got: $($catalogPreflight.Failures -join '; ')"
+        }
+        $catalogDryRun = Resolve-Win11IsoCustomDriverSource `
+            -Path 'surface-laptop-7' `
+            -WorkDir (Join-Path $tempRoot 'surface-catalog-dryrun') `
+            -DriverSource SurfaceCatalog `
+            -TargetArchitecture 'arm64' `
+            -WindowsBuild 26100 `
+            -DryRun
+        if ($null -eq $catalogDryRun -or [string]$catalogDryRun.Strategy -ne 'SurfaceCatalog' -or [string]$catalogDryRun.DeviceMatch.id -ne 'surface-laptop-7') {
+            Add-SmokeFailure 'Expected SurfaceCatalog dry-run resolver to attach the exact catalog device without downloading.'
+        }
+        try {
+            $null = Resolve-Win11IsoCustomDriverSource `
+                -Path 'surface-laptop-7' `
+                -WorkDir (Join-Path $tempRoot 'surface-catalog-bad-arch') `
+                -DriverSource SurfaceCatalog `
+                -TargetArchitecture 'amd64' `
+                -WindowsBuild 26100 `
+                -DryRun
+            Add-SmokeFailure 'Expected SurfaceCatalog to reject architecture mismatches.'
+        }
+        catch {
+            if ($_.Exception.Message -notmatch 'targets arm64') {
+                Add-SmokeFailure "Expected SurfaceCatalog architecture mismatch error, got: $($_.Exception.Message)"
+            }
+        }
+        try {
+            $null = Resolve-Win11IsoCustomDriverSource `
+                -Path 'surface-laptop-8-snapdragon' `
+                -WorkDir (Join-Path $tempRoot 'surface-catalog-bad-build') `
+                -DriverSource SurfaceCatalog `
+                -TargetArchitecture 'arm64' `
+                -WindowsBuild 26100 `
+                -DryRun
+            Add-SmokeFailure 'Expected SurfaceCatalog to reject source images below the device package minimum build.'
+        }
+        catch {
+            if ($_.Exception.Message -notmatch 'requires Windows build 28000') {
+                Add-SmokeFailure "Expected SurfaceCatalog minimum-build error, got: $($_.Exception.Message)"
+            }
+        }
+        $surfacePageFixture = @'
+<html>
+<h1>Surface Laptop 7th Edition</h1>
+<a href="https://download.microsoft.com/download/b7ca2c3f-d320-4795-be0f-529a0117abb4/SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi">Download</a>
+<h3>Date Published:</h3><p>5/1/2026</p>
+</html>
+'@
+        $catalogDevice = Resolve-WinMintSurfaceCatalogDevice -DeviceId 'surface-laptop-7'
+        $asset = Resolve-WinMintSurfaceDriverDownloadAsset -Device $catalogDevice -PageContent $surfacePageFixture
+        if ([string]$asset.fileName -ne 'SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi' -or [string]$asset.deviceId -ne 'surface-laptop-7') {
+            Add-SmokeFailure 'Expected Surface Download Center fixture parsing to resolve the exact Surface Laptop 7 MSI asset.'
+        }
+        try {
+            $badSurfacePageFixture = '<a href="https://download.surfacetip.com/SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi">Download</a>'
+            $null = Resolve-WinMintSurfaceDriverDownloadAsset -Device $catalogDevice -PageContent $badSurfacePageFixture
+            Add-SmokeFailure 'Expected Surface Download Center parser to reject third-party driver URLs.'
+        }
+        catch {
+            if ($_.Exception.Message -notmatch 'No direct Microsoft MSI download URL|non-Microsoft') {
+                Add-SmokeFailure "Expected Microsoft-only Surface download URL error, got: $($_.Exception.Message)"
+            }
+        }
+        $nonSurfaceOemIdentities = @(
+            [pscustomobject]@{
+                manufacturer = 'Dell Inc.'
+                model = 'Alienware Aurora R16'
+                productName = 'Alienware Aurora R16'
+                baseBoardProduct = '0F5N4V'
+            }
+            [pscustomobject]@{
+                manufacturer = 'Dell Inc.'
+                model = 'XPS 13 9345'
+                productName = 'XPS 13 9345'
+                baseBoardProduct = '0XPS9345'
+            }
+            [pscustomobject]@{
+                manufacturer = 'HP'
+                model = 'HP Spectre x360 14'
+                productName = 'HP Spectre x360 14-eu0000'
+                baseBoardProduct = '8C32'
+            }
+            [pscustomobject]@{
+                manufacturer = 'LENOVO'
+                model = '21KC ThinkPad X1 Carbon Gen 12'
+                productName = 'ThinkPad X1 Carbon Gen 12'
+                baseBoardProduct = '21KC'
+            }
+            [pscustomobject]@{
+                manufacturer = 'ASUSTeK COMPUTER INC.'
+                model = 'ROG Zephyrus G14 GA403'
+                productName = 'ROG Zephyrus G14 GA403'
+                baseBoardProduct = 'GA403'
+            }
+            [pscustomobject]@{
+                manufacturer = 'Acer'
+                model = 'Swift 14 AI'
+                productName = 'Swift 14 AI SF14-11'
+                baseBoardProduct = 'Swift14'
+            }
+            [pscustomobject]@{
+                manufacturer = 'Micro-Star International Co., Ltd.'
+                model = 'MSI Stealth A16 AI+'
+                productName = 'Stealth A16 AI+'
+                baseBoardProduct = 'MS-15M1'
+            }
+        )
+        foreach ($oemIdentity in $nonSurfaceOemIdentities) {
+            $oemMatch = Resolve-WinMintSurfaceDriverDeviceForInput `
+                -MsiName '' `
+                -TargetDevice ThisPC `
+                -HostIdentity $oemIdentity
+            if ($null -ne $oemMatch) {
+                Add-SmokeFailure "Expected non-Surface OEM '$($oemIdentity.manufacturer) $($oemIdentity.model)' not to match the Surface driver catalog."
+            }
+        }
+        foreach ($nonSurfaceMsiName in @(
+            'Dell-Alienware-Aurora-R16-Win11-x64-Driver-Pack.msi',
+            'HP-Spectre-x360-14-Win11-Driver-Pack.msi',
+            'Lenovo-ThinkPad-X1-Carbon-Gen-12-SCCM-Package.msi',
+            'ASUS-ROG-Zephyrus-G14-GA403-Driver-Package.msi'
+        )) {
+            $oemMsiMatch = Resolve-WinMintSurfaceDriverDeviceForInput `
+                -MsiName $nonSurfaceMsiName `
+                -TargetDevice DifferentPC
+            if ($null -ne $oemMsiMatch) {
+                Add-SmokeFailure "Expected non-Surface OEM MSI '$nonSurfaceMsiName' not to match the Surface driver catalog."
+            }
+        }
+        $surfaceMsi = Join-Path $root 'tests\fixtures\drivers\SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi'
+        if (Test-Path -LiteralPath $surfaceMsi -PathType Leaf) {
+            if (-not (Test-WinMintSurfaceDriverPackageSignature -Path $surfaceMsi)) {
+                Add-SmokeFailure 'Expected local Surface Laptop 7 MSI fixture to have a valid Microsoft Authenticode signature.'
+            }
+            $surfaceProfile = New-WinMintHeadlessProfileFromFlags `
+                -SourceIso '' `
+                -Architecture 'arm64' `
+                -DriverSource SurfaceMsiSafe `
+                -DriverPath $surfaceMsi `
+                -DryRun
+            $surfaceConfig = New-WinMintBuildConfig -BuildProfile $surfaceProfile
+            $surfacePreflight = Test-WinMintBuildPrerequisite -Config $surfaceConfig -RunMode DryRun
+            if (-not $surfacePreflight.Passed) {
+                Add-SmokeFailure "Expected SurfaceMsiSafe fixture to pass dry-run preflight, got: $($surfacePreflight.Failures -join '; ')"
+            }
+            $surfaceWork = Join-Path $tempRoot 'surface-safe'
+            $null = New-Item -ItemType Directory -Path $surfaceWork -Force
+            $preparedSurface = Resolve-Win11IsoCustomDriverSource -Path $surfaceMsi -WorkDir $surfaceWork -DriverSource SurfaceMsiSafe
+            if (-not $preparedSurface.Ready -or [string]$preparedSurface.Strategy -ne 'SurfaceMsiSafe') {
+                Add-SmokeFailure 'Expected SurfaceMsiSafe resolver to return a ready classified driver source.'
+            }
+            if ([int]$preparedSurface.Inventory.includedOfflineCount -lt 1) {
+                Add-SmokeFailure 'Expected SurfaceMsiSafe resolver to include at least one offline-safe INF.'
+            }
+            if (@($preparedSurface.Inventory.includedClasses) -contains 'firmware') {
+                Add-SmokeFailure 'SurfaceMsiSafe must not include firmware-class drivers in the offline subset.'
+            }
+            if (@($preparedSurface.Inventory.excludedClasses) -notcontains 'firmware') {
+                Add-SmokeFailure 'Expected SurfaceMsiSafe inventory to report firmware-class drivers as excluded/deferred.'
+            }
+            if ($null -eq $preparedSurface.DeviceMatch -or [string]$preparedSurface.DeviceMatch.id -ne 'surface-laptop-7') {
+                Add-SmokeFailure 'Expected SurfaceMsiSafe resolver to attach the matched Surface Laptop 7 device metadata.'
             }
         }
         if (Test-Win11IsoDriverPath -Path $bad) {
@@ -935,7 +1237,7 @@ function Assert-HeadlessSourceAndDriverInputContracts {
             -TargetDevice ThisPC `
             -DryRun
         $hostDriverConfig = New-WinMintBuildConfig -BuildProfile $hostDriverProfile
-        $hostDriverPreflight = Test-WinMintBuildPrerequisite -Config $hostDriverConfig -AllowMissingSourceIso
+        $hostDriverPreflight = Test-WinMintBuildPrerequisite -Config $hostDriverConfig -RunMode DryRun
         if (
             (Get-Command Export-WindowsDriver -ErrorAction SilentlyContinue) -or
             (Get-Command pnputil.exe -CommandType Application -ErrorAction SilentlyContinue)
@@ -978,6 +1280,7 @@ function Assert-UiBridgeBuildProfileContract {
             AccountName = 'dev'
             AccountMode = 'Local'
             TargetDevice = 'DifferentPC'
+            FormFactor = 'Auto'
             Edition = 'Pro'
             DriverSource = 'None'
             DriverPath = ''
@@ -990,6 +1293,7 @@ function Assert-UiBridgeBuildProfileContract {
             Wsl2Distros = @('Ubuntu', 'NixOS-WSL')
             PrivLocation = $false
             TweakHardwareBypass = $false
+            TweakDmaInterop = $true
         }
         $settings | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
 
@@ -1045,3 +1349,4 @@ function Assert-UiBridgeBuildProfileContract {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+

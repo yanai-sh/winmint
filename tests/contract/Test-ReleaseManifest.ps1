@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -61,3 +61,4 @@ if ($failures.Count -gt 0) {
     throw "Release manifest contract failed with $($failures.Count) error(s)."
 }
 Write-Host 'Release manifest contract passed.'
+

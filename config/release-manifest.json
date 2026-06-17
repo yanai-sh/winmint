@@ -18,6 +18,8 @@
   ],
   "exclude": [
     "cloudflare",
+    "docs/codebase",
+    "docs/superpowers",
     "tests",
     "tools",
     "node_modules",
@@ -31,6 +33,7 @@
     "assets/runtime/cursors/_extract",
     "assets/runtime/cursors/*.zip",
     "assets/runtime/cursors/*/png",
+    "assets/ui/desktop/presets",
     "**/*.iso",
     "**/*.log"
   ]

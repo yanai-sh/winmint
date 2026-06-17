@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Baseline: skip the interactive Windows 11 OOBE "Choose privacy settings for your
 # device" page. WinMint already configures telemetry, advertising ID, location,
@@ -23,3 +23,4 @@ Add-WinMintRegistryTweakModule @{
         @{ path = 'zSOFTWARE\Policies\Microsoft\Windows\OOBE'; name = 'DisablePrivacyExperience'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } }
     )
 }
+

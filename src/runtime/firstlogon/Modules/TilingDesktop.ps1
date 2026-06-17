@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintShellLayerConfig {
     param([Parameter(Mandatory)][object]$AgentProfile)
@@ -7,6 +7,69 @@ function Get-WinMintShellLayerConfig {
     $prop = $AgentProfile.modules.PSObject.Properties['shell']
     if ($prop) { return $prop.Value }
     return $null
+}
+
+function Get-WinMintDesktopEnvironmentLayerDefinitions {
+    @(
+        [pscustomobject]@{
+            Key = 'yasb'
+            DisplayName = 'YASB'
+            ProfileProperty = 'yasb'
+            InstallFunction = 'Install-WinMintYasbLayer'
+            RequiredStateResolver = { @(Get-AgentManifestToolStateKey -ToolId 'yasb') }
+        },
+        [pscustomobject]@{
+            Key = 'thide'
+            DisplayName = 'thide'
+            ProfileProperty = 'thide'
+            InstallFunction = 'Install-WinMintThideLayer'
+            RequiredStateResolver = { @('shell:thide') }
+        },
+        [pscustomobject]@{
+            Key = 'nilesoft'
+            DisplayName = 'Nilesoft Shell'
+            ProfileProperty = 'nilesoft'
+            InstallFunction = 'Install-WinMintNilesoftLayer'
+            RequiredStateResolver = { @(Get-AgentManifestToolStateKey -ToolId 'nilesoft') }
+        },
+        [pscustomobject]@{
+            Key = 'komorebi'
+            DisplayName = 'Komorebi'
+            ProfileProperty = 'komorebi'
+            InstallFunction = 'Install-WinMintKomorebiLayer'
+            RequiredStateResolver = { @((Get-AgentManifestToolStateKey -ToolId 'komorebi'), (Get-AgentManifestToolStateKey -ToolId 'whkd')) }
+        }
+    )
+}
+
+function Get-WinMintSelectedDesktopEnvironmentLayers {
+    param([Parameter(Mandatory)]$Shell)
+
+    $selected = [System.Collections.Generic.List[object]]::new()
+    foreach ($definition in @(Get-WinMintDesktopEnvironmentLayerDefinitions)) {
+        $property = $Shell.PSObject.Properties[[string]$definition.ProfileProperty]
+        if ($property -and [bool]$property.Value) {
+            $selected.Add($definition) | Out-Null
+        }
+    }
+
+    return @($selected)
+}
+
+function Get-WinMintShellLayerRequiredStateSteps {
+    param([Parameter(Mandatory)]$Shell)
+
+    $steps = [System.Collections.Generic.List[string]]::new()
+    foreach ($layer in @(Get-WinMintSelectedDesktopEnvironmentLayers -Shell $Shell)) {
+        $resolved = & $layer.RequiredStateResolver
+        foreach ($step in @($resolved)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$step)) {
+                $steps.Add([string]$step) | Out-Null
+            }
+        }
+    }
+
+    return @($steps)
 }
 
 function Resolve-WinMintYasbCli {
@@ -39,6 +102,22 @@ function Resolve-WinMintKomorebiCli {
     )
     foreach ($candidate in $candidates) {
         if ($candidate -and (Test-Path -LiteralPath $candidate)) { return $candidate }
+    }
+
+    return $null
+}
+
+function Resolve-WinMintThideCli {
+    $cmd = Get-Command -Name @('thide.exe', 'thide') -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($cmd) { return $cmd.Source }
+
+    foreach ($candidate in @(
+            (Join-Path $env:ProgramFiles 'thide\bin\thide.exe'),
+            (Join-Path $env:ProgramFiles 'thide\thide.exe'),
+            (Join-Path $env:LOCALAPPDATA 'Programs\thide\thide.exe')
+        )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
     }
 
     return $null
@@ -78,6 +157,51 @@ function Invoke-WinMintKomorebiCli {
         if (-not $AllowFailure) { throw }
         Write-AgentLog "Komorebi command ignored failure: komorebic $($ArgumentList -join ' ') :: $($_.Exception.Message)"
     }
+}
+
+function Invoke-WinMintThideCli {
+    param(
+        [Parameter(Mandatory)][string[]]$ArgumentList,
+        [switch]$AllowFailure
+    )
+
+    $thide = Resolve-WinMintThideCli
+    if (-not $thide) { throw 'thide.exe was not found after installation.' }
+
+    try {
+        Invoke-AgentNative -FilePath $thide -ArgumentList $ArgumentList
+    }
+    catch {
+        if (-not $AllowFailure) { throw }
+        Write-AgentLog "thide command ignored failure: thide $($ArgumentList -join ' ') :: $($_.Exception.Message)"
+    }
+}
+
+function Get-WinMintThideReleaseAssetUrl {
+    $arch = Get-AgentTargetArchitecture
+    $assetPattern = switch ($arch) {
+        'arm64' { 'arm64.msi$' }
+        'amd64' { 'x64.msi$' }
+        default { throw "thide does not publish a WinMint-supported installer for target architecture '$arch'." }
+    }
+
+    $release = Invoke-RestMethod -UseBasicParsing -Uri 'https://api.github.com/repos/amnweb/thide/releases/latest' -Headers @{
+        'User-Agent' = 'WinMint'
+        'Accept' = 'application/vnd.github+json'
+    } -ErrorAction Stop
+
+    foreach ($asset in @($release.assets)) {
+        $name = [string]$asset.name
+        if ($name -match $assetPattern -and -not ($name -match 'portable')) {
+            return [pscustomobject]@{
+                Name = $name
+                Url = [string]$asset.browser_download_url
+                Version = [string]$release.tag_name
+            }
+        }
+    }
+
+    throw "No thide MSI asset matched target architecture '$arch'."
 }
 
 function Backup-WinMintYasbConfig {
@@ -231,7 +355,61 @@ function Install-WinMintNilesoftLayer {
     Install-AgentManifestTool -ToolId 'nilesoft' -State $State
 }
 
-function Invoke-WinMintAgentTilingDesktopBootstrap {
+function Install-WinMintThideLayer {
+    param([Parameter(Mandatory)][hashtable]$State)
+
+    $key = 'shell:thide'
+    if (-not $Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
+        Write-AgentConsoleLine -Level OK -Message 'thide already configured.'
+        return
+    }
+
+    $State.steps[$key] = @{
+        status = 'running'
+        startedAt = (Get-Date -Format o)
+        updatedAt = (Get-Date -Format o)
+    }
+    Save-AgentState -State $State
+
+    try {
+        $thide = Resolve-WinMintThideCli
+        $releaseAsset = $null
+        if (-not $thide) {
+            $releaseAsset = Get-WinMintThideReleaseAssetUrl
+            $downloadDir = Join-Path $env:TEMP 'WinMint-thide'
+            $null = New-Item -ItemType Directory -Path $downloadDir -Force
+            $msiPath = Join-Path $downloadDir ([string]$releaseAsset.Name)
+            Invoke-WebRequest -UseBasicParsing -Uri ([string]$releaseAsset.Url) -OutFile $msiPath -ErrorAction Stop
+            $msiexec = Join-Path $env:SystemRoot 'System32\msiexec.exe'
+            Invoke-AgentNative -FilePath $msiexec -ArgumentList @('/i', $msiPath, '/qn', '/norestart')
+            Update-AgentProcessPath
+            $thide = Resolve-WinMintThideCli
+        }
+
+        if (-not $thide) { throw 'thide installer completed, but thide.exe was not found.' }
+        Invoke-WinMintThideCli -ArgumentList @('enable-autostart') -AllowFailure
+        Invoke-WinMintThideCli -ArgumentList @('start') -AllowFailure
+
+        $State.steps[$key] = @{
+            status = 'ok'
+            updatedAt = (Get-Date -Format o)
+            command = $thide
+            release = if ($releaseAsset) { [string]$releaseAsset.Version } else { 'existing' }
+        }
+        Save-AgentState -State $State
+    }
+    catch {
+        $State.steps[$key] = @{
+            status = 'failed'
+            updatedAt = (Get-Date -Format o)
+            error = $_.Exception.Message
+        }
+        Save-AgentState -State $State
+        throw
+    }
+}
+
+function Invoke-WinMintAgentDesktopEnvironmentBootstrap {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][object]$AgentProfile,
@@ -241,39 +419,37 @@ function Invoke-WinMintAgentTilingDesktopBootstrap {
     $shell = Get-WinMintShellLayerConfig -AgentProfile $AgentProfile
     if (-not $shell) {
         return [pscustomobject]@{
-            Id      = 'tiling-desktop'
+            Id      = 'desktop-environment'
             Status  = 'skipped'
             Message = 'No desktop shell layers selected.'
         }
     }
 
     $completed = [System.Collections.Generic.List[string]]::new()
-
-    if ([bool]$shell.yasb) {
-        Install-WinMintYasbLayer -State $State
-        $completed.Add('YASB') | Out-Null
-    }
-    if ([bool]$shell.nilesoft) {
-        Install-WinMintNilesoftLayer -State $State
-        $completed.Add('Nilesoft Shell') | Out-Null
-    }
-    if ([bool]$shell.komorebi) {
-        Install-WinMintKomorebiLayer -State $State
-        $completed.Add('Komorebi') | Out-Null
-        if ([bool]$shell.whkd) { $completed.Add('whkd') | Out-Null }
+    $selectedLayers = @(Get-WinMintSelectedDesktopEnvironmentLayers -Shell $shell)
+    foreach ($layer in $selectedLayers) {
+        & ([string]$layer.InstallFunction) -State $State
+        $completed.Add([string]$layer.DisplayName) | Out-Null
+        if ([string]$layer.Key -eq 'komorebi' -and [bool]$shell.whkd) {
+            $completed.Add('whkd') | Out-Null
+        }
     }
 
     if ($completed.Count -eq 0) {
         return [pscustomobject]@{
-            Id      = 'tiling-desktop'
+            Id      = 'desktop-environment'
             Status  = 'skipped'
             Message = 'Standard Windows desktop selected.'
         }
     }
 
+    $requiredStateSteps = @(Get-WinMintShellLayerRequiredStateSteps -Shell $shell)
+
     [pscustomobject]@{
-        Id      = 'tiling-desktop'
-        Status  = 'ok'
-        Message = "Configured: $($completed -join ', ')."
+        Id                 = 'desktop-environment'
+        Status             = 'ok'
+        Message            = "Configured: $($completed -join ', ')."
+        RequiredStateSteps = $requiredStateSteps
     }
 }
+

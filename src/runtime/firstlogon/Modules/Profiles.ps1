@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Invoke-WinMintAgentProfileBootstrap {
     [CmdletBinding()]
@@ -57,7 +57,7 @@ function Invoke-WinMintAgentProfileBootstrap {
 
     if ($propertyNames -contains 'modules') {
         $moduleNames = @($AgentProfile.modules.PSObject.Properties.Name)
-        foreach ($requiredModule in @('packageManagers', 'wsl', 'browsers', 'flowEverything', 'raycast', 'liveInstallAudit', 'shell', 'windhawk')) {
+        foreach ($requiredModule in @('packageManagers', 'wsl', 'browsers', 'raycast', 'launcherKey', 'liveInstallAudit', 'shell', 'windhawk')) {
             if ($moduleNames -notcontains $requiredModule) {
                 $problems.Add("'modules.$requiredModule' is missing")
             }
@@ -84,3 +84,4 @@ function Invoke-WinMintAgentProfileBootstrap {
         Message = "Profile validated: $($AgentProfile.profile); editors=$editorCount; browsers=$browserCount; distros=$distroCount"
     }
 }
+

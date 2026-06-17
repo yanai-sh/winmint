@@ -56,8 +56,8 @@ fixture.
 |-- schemas/
 |-- apps/
 |   `-- gui/
-|-- crates/
-|   `-- winmint-core/
+|       `-- src/core/          # UI intent/options helpers (formerly crates/winmint-core)
+|-- assets/runtime/desktop/    # windhawk/yasb preset.manifest.json + curated config payloads
 |-- src/
 |   `-- runtime/
 |       |-- image/
@@ -122,6 +122,8 @@ casing.
 Current non-runtime exclusions:
 
 - `cloudflare/`: service deployment source for `winmint.yanai.sh`.
+- `docs/codebase/`: current-development snapshot docs for agents and maintainers;
+  not continuous authoritative product or release documentation.
 - `tools/`: developer-only validation, release, bridge, GUI launcher, and
   utility tools.
 - `tests/`: contract tests and local fixture roots.
@@ -130,8 +132,10 @@ Current non-runtime exclusions:
 
 ## Modularity Pressure
 
-Keep future product logic in Rust when it is not tied to Windows setup APIs.
-PowerShell remains the servicing bridge for DISM, registry hives, Windows Setup,
-and elevation handoff. New PowerShell files should have a clear runtime reason to
-exist and should be grouped under `src/runtime/image`, `src/runtime/setup`, `src/runtime/firstlogon`, or a
-developer-only `tools/` owner.
+Keep real product logic in the headless PowerShell backend unless there is a
+clear reason to keep a typed helper in Rust. GPUI/Rust remains a frontend layer
+for intent, previews, and small contract helpers; PowerShell owns DISM, registry
+hives, Windows Setup, FirstLogon work, release tooling, validation, and elevation
+handoff. New PowerShell files should have a clear runtime reason to exist and
+should be grouped under `src/runtime/image`, `src/runtime/setup`,
+`src/runtime/firstlogon`, or a developer-only `tools/` owner.

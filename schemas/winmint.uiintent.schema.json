@@ -14,41 +14,58 @@
     "AccountName",
     "AccountMode",
     "TargetDevice",
+    "FormFactor",
     "Edition",
     "DriverSource",
+    "DriverPath",
     "InstallWindhawk",
     "InstallYasb",
     "InstallKomorebi",
     "InstallNilesoft",
     "Editors",
     "Browsers",
-    "Wsl2Distros"
+    "Wsl2Distros",
+    "PrivLocation",
+    "TweakHardwareBypass",
+    "TweakDmaInterop"
   ],
   "properties": {
-    "Profile": { "type": "string" },
+    "Profile": { "type": "string", "const": "WinMint" },
     "KeepEdge": { "type": "boolean" },
     "KeepGaming": { "type": "boolean" },
     "KeepCopilot": { "type": "boolean" },
     "ISOPath": { "type": "string" },
-    "Architecture": { "type": "string" },
+    "Architecture": { "type": "string", "enum": ["arm64", "amd64", "x86", "Unknown"] },
     "ComputerName": { "type": "string" },
     "AccountName": { "type": "string" },
-    "AccountMode": { "type": "string" },
-    "TargetDevice": { "type": "string" },
-    "FormFactor": { "type": "string" },
-    "Edition": { "type": "string" },
-    "DriverSource": { "type": "string" },
+    "AccountMode": { "type": "string", "enum": ["Local", "MicrosoftOobe"] },
+    "TargetDevice": { "type": "string", "enum": ["ThisPC", "DifferentPC"] },
+    "FormFactor": { "type": "string", "enum": ["Auto", "Laptop", "Desktop"] },
+    "Edition": { "type": "string", "enum": ["Host", "Home", "Pro", "Enterprise", "Education", "SingleLanguage", "All"] },
+    "DriverSource": { "type": "string", "enum": ["None", "Host", "Custom", "HostExport", "CustomInfFolder", "OemMsi", "SurfaceMsiSafe", "SurfaceCatalog"] },
     "DriverPath": { "type": "string" },
     "InstallWindhawk": { "type": "boolean" },
     "InstallYasb": { "type": "boolean" },
     "InstallKomorebi": { "type": "boolean" },
     "InstallNilesoft": { "type": "boolean" },
-    "Editors": { "type": "array", "items": { "type": "string" } },
-    "Browsers": { "type": "array", "items": { "type": "string" } },
-    "Wsl2Distros": { "type": "array", "items": { "type": "string" } },
+    "Editors": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "enum": ["cursor", "vscode", "zed", "antigravity", "neovim"] }
+    },
+    "Browsers": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "enum": ["zen-browser", "helium", "firefox-developer-edition", "brave", "edge"] }
+    },
+    "Wsl2Distros": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "enum": ["Ubuntu", "FedoraLinux", "archlinux", "NixOS-WSL", "pengwin"] }
+    },
     "PrivLocation": { "type": "boolean" },
     "TweakHardwareBypass": { "type": "boolean" },
     "TweakDmaInterop": { "type": "boolean" }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

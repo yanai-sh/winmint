@@ -1,10 +1,11 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [switch]$SkipAnalyzer,
     [switch]$RunAnalyzer,
     [switch]$RunIntegration,
-    [switch]$IncludeGuiBuild
+    [switch]$IncludeGuiBuild,
+    [switch]$RunReleaseSmoke
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,6 +42,7 @@ $validationSteps = [ordered]@{
         Test-WslTerminalIconQuality
     }
     'Preset payloads' = {
+        Test-DesktopPresetManifestContracts
         Test-WindhawkPresetPayload
         Test-YasbPresetPayload
         Test-KomorebiPresetPayload
@@ -48,8 +50,10 @@ $validationSteps = [ordered]@{
     'Package manifest' = { Test-PackageManifestArchitecture }
     'JSON schemas' = {
         Test-BuildProfileSchema
+        Test-TrackedBuildProfileSchemas
         Test-BuildManifestSchema
         Test-AgentStateSchema
+        Test-BuildDeltaSchema
     }
     'Static source guards' = {
         Test-DismArgumentQuoting
@@ -60,6 +64,23 @@ $validationSteps = [ordered]@{
     }
     'Optional GUI build' = {
         Test-GuiBuild -IncludeBuild:$IncludeGuiBuild
+    }
+    'Optional release smoke' = {
+        if ($RunReleaseSmoke) {
+            $version = 'v0.0.0-validation'
+            & (Get-WinMintPath -Name ReleaseToolsRoot -ChildPath 'New-WinMintReleaseBundle.ps1') -Version $version -SkipGuiBuild
+            if ($LASTEXITCODE -ne 0) {
+                throw "Release bundle build failed with exit code $LASTEXITCODE."
+            }
+            $bundle = Join-Path (Get-WinMintPath -Name DistRoot) "WinMint-$version.zip"
+            & (Get-WinMintPath -Name ReleaseToolsRoot -ChildPath 'Test-WinMintReleaseLaunch.ps1') -BundlePath $bundle -Version $version
+            if ($LASTEXITCODE -ne 0) {
+                throw "Release smoke failed with exit code $LASTEXITCODE."
+            }
+        }
+        else {
+            Write-Host 'Skipping release smoke. Use -RunReleaseSmoke after building the packaged GUI.'
+        }
     }
     'Rust crates' = {
         Test-RustCrates
@@ -76,7 +97,6 @@ $validationSteps = [ordered]@{
             ForEach-Object { Test-JsonFile -Path $_.FullName }
         Get-ChildItem -LiteralPath (Get-WinMintPath -Name SchemasRoot) -Filter '*.json' -ErrorAction SilentlyContinue |
             ForEach-Object { Test-JsonFile -Path $_.FullName }
-        Test-JsonFile -Path (Get-WinMintPath -Name RuntimeFirstLogonRoot -ChildPath 'BuildProfile.json')
     }
     'PSScriptAnalyzer' = { Invoke-AnalyzerIfAvailable }
     'Optional integration' = {
@@ -97,3 +117,4 @@ if ($errors.Count -gt 0) {
     throw "Validation failed with $($errors.Count) error(s)."
 }
 Write-Host 'Validation passed.'
+

@@ -13,12 +13,24 @@
 use serde::Serialize;
 use serde_json::Value;
 
+use super::options;
+
 /// Clamp an arbitrary form-factor string to the supported set, defaulting to `Auto`.
 pub fn normalized_form_factor(value: &str) -> &'static str {
     match value {
-        "Laptop" => "Laptop",
-        "Desktop" => "Desktop",
-        _ => "Auto",
+        options::FORM_FACTOR_LAPTOP => options::FORM_FACTOR_LAPTOP,
+        options::FORM_FACTOR_DESKTOP => options::FORM_FACTOR_DESKTOP,
+        _ => options::FORM_FACTOR_AUTO,
+    }
+}
+
+/// Normalize UI architecture labels to the engine/profile tokens.
+pub fn normalized_architecture(value: &str) -> &'static str {
+    match value.trim() {
+        "ARM64" | options::ARCH_ARM64 | "aarch64" => options::ARCH_ARM64,
+        "x64" | options::ARCH_AMD64 | "AMD64" => options::ARCH_AMD64,
+        options::ARCH_X86 => options::ARCH_X86,
+        _ => options::ARCH_UNKNOWN,
     }
 }
 
@@ -31,7 +43,7 @@ pub struct ToolkitIntent {
     pub editor_neovim: bool,
     pub browser_zen: bool,
     pub browser_helium: bool,
-    pub browser_librewolf: bool,
+    pub browser_firefox_developer_edition: bool,
     pub browser_brave: bool,
     pub browser_edge: bool,
     pub wsl_ubuntu: bool,
@@ -51,7 +63,7 @@ impl Default for ToolkitIntent {
             editor_neovim: false,
             browser_zen: false,
             browser_helium: false,
-            browser_librewolf: false,
+            browser_firefox_developer_edition: false,
             browser_brave: false,
             browser_edge: false,
             wsl_ubuntu: false,
@@ -94,19 +106,19 @@ pub struct KeepFlags {
 pub fn editors_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
     let mut editors = Vec::new();
     if toolkit.editor_cursor {
-        editors.push("cursor");
+        editors.push(options::EDITOR_CURSOR);
     }
     if toolkit.editor_vscode {
-        editors.push("vscode");
+        editors.push(options::EDITOR_VSCODE);
     }
     if toolkit.editor_zed {
-        editors.push("zed");
+        editors.push(options::EDITOR_ZED);
     }
     if toolkit.editor_antigravity {
-        editors.push("antigravity");
+        editors.push(options::EDITOR_ANTIGRAVITY);
     }
     if toolkit.editor_neovim {
-        editors.push("neovim");
+        editors.push(options::EDITOR_NEOVIM);
     }
     editors
 }
@@ -114,19 +126,19 @@ pub fn editors_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
 pub fn browsers_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
     let mut browsers = Vec::new();
     if toolkit.browser_zen {
-        browsers.push("zen-browser");
+        browsers.push(options::BROWSER_ZEN);
     }
     if toolkit.browser_helium {
-        browsers.push("helium");
+        browsers.push(options::BROWSER_HELIUM);
     }
-    if toolkit.browser_librewolf {
-        browsers.push("librewolf");
+    if toolkit.browser_firefox_developer_edition {
+        browsers.push(options::BROWSER_FIREFOX_DEVELOPER_EDITION);
     }
     if toolkit.browser_brave {
-        browsers.push("brave");
+        browsers.push(options::BROWSER_BRAVE);
     }
     if toolkit.browser_edge {
-        browsers.push("edge");
+        browsers.push(options::BROWSER_EDGE);
     }
     browsers
 }
@@ -134,19 +146,19 @@ pub fn browsers_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
 pub fn wsl_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
     let mut distros = Vec::new();
     if toolkit.wsl_ubuntu {
-        distros.push("Ubuntu");
+        distros.push(options::WSL_UBUNTU);
     }
     if toolkit.wsl_fedora {
-        distros.push("FedoraLinux");
+        distros.push(options::WSL_FEDORA);
     }
     if toolkit.wsl_archlinux {
-        distros.push("archlinux");
+        distros.push(options::WSL_ARCHLINUX);
     }
     if toolkit.wsl_nixos_wsl {
-        distros.push("NixOS-WSL");
+        distros.push(options::WSL_NIXOS);
     }
     if toolkit.wsl_pengwin {
-        distros.push("pengwin");
+        distros.push(options::WSL_PENGWIN);
     }
     distros
 }
@@ -158,7 +170,7 @@ pub fn wsl_from_toolkit(toolkit: ToolkitIntent) -> Vec<&'static str> {
 pub fn normalized_edition(value: &str) -> String {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        return "Host".to_string();
+        return options::EDITION_HOST.to_string();
     }
     trimmed.to_string()
 }
@@ -216,19 +228,19 @@ pub fn build_ui_intent(
     form_factor: &str,
 ) -> UiIntent {
     UiIntent {
-        profile: "WinMint",
+        profile: options::PROFILE_NAME,
         keep_edge: keep.edge,
         keep_gaming: keep.gaming,
         keep_copilot: keep.copilot,
         iso_path: iso_path.to_string(),
-        architecture: architecture.to_string(),
+        architecture: normalized_architecture(architecture).to_string(),
         computer_name: computer_name.to_string(),
         account_name: account_name.to_string(),
-        account_mode: "Local",
-        target_device: "DifferentPC",
+        account_mode: options::ACCOUNT_MODE_LOCAL,
+        target_device: options::TARGET_DEVICE_DIFFERENT_PC,
         form_factor: normalized_form_factor(form_factor),
         edition: normalized_edition(edition),
-        driver_source: "None",
+        driver_source: options::DRIVER_SOURCE_NONE,
         driver_path: "",
         install_windhawk: desktop_layers.windhawk,
         install_yasb: desktop_layers.yasb,
@@ -312,18 +324,38 @@ mod tests {
     ];
 
     fn ui_intent_schema_property_keys() -> Vec<String> {
-        let schema_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../schemas/winmint.uiintent.schema.json");
-        let schema_text = std::fs::read_to_string(&schema_path)
-            .unwrap_or_else(|err| panic!("read {}: {err}", schema_path.display()));
-        let schema: Value = serde_json::from_str(&schema_text)
-            .unwrap_or_else(|err| panic!("parse {}: {err}", schema_path.display()));
+        let schema = ui_intent_schema();
         let properties = schema["properties"]
             .as_object()
             .expect("ui intent schema properties object");
         let mut keys = properties.keys().cloned().collect::<Vec<_>>();
         keys.sort();
         keys
+    }
+
+    fn ui_intent_schema() -> Value {
+        let schema_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../schemas/winmint.uiintent.schema.json");
+        let schema_text = std::fs::read_to_string(&schema_path)
+            .unwrap_or_else(|err| panic!("read {}: {err}", schema_path.display()));
+        serde_json::from_str(&schema_text)
+            .unwrap_or_else(|err| panic!("parse {}: {err}", schema_path.display()))
+    }
+
+    fn schema_enum_values(schema: &Value, property: &str) -> Vec<String> {
+        let property_schema = &schema["properties"][property];
+        let enum_values = property_schema["enum"]
+            .as_array()
+            .or_else(|| property_schema["items"]["enum"].as_array())
+            .unwrap_or_else(|| panic!("{property} should define enum values"));
+        enum_values
+            .iter()
+            .map(|value| value.as_str().expect("string enum").to_string())
+            .collect()
+    }
+
+    fn option_tokens(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| value.to_string()).collect()
     }
 
     fn sorted_expected_intent_keys() -> Vec<String> {
@@ -378,6 +410,36 @@ mod tests {
             ui_intent_schema_property_keys(),
             sorted_expected_intent_keys(),
             "UI intent schema properties must match UiIntent serialization"
+        );
+    }
+
+    #[test]
+    fn ui_intent_schema_enums_match_option_tokens() {
+        let schema = ui_intent_schema();
+
+        assert_eq!(
+            schema_enum_values(&schema, "Edition"),
+            option_tokens(options::EDITION_OPTIONS)
+        );
+        assert_eq!(
+            schema_enum_values(&schema, "FormFactor"),
+            option_tokens(options::FORM_FACTOR_OPTIONS)
+        );
+        assert_eq!(
+            schema_enum_values(&schema, "Architecture"),
+            option_tokens(options::ARCH_OPTIONS)
+        );
+        assert_eq!(
+            schema_enum_values(&schema, "Editors"),
+            option_tokens(options::EDITOR_OPTIONS)
+        );
+        assert_eq!(
+            schema_enum_values(&schema, "Browsers"),
+            option_tokens(options::BROWSER_OPTIONS)
+        );
+        assert_eq!(
+            schema_enum_values(&schema, "Wsl2Distros"),
+            option_tokens(options::WSL_OPTIONS)
         );
     }
 
@@ -466,7 +528,10 @@ mod tests {
         );
         assert_eq!(str_vec(&intent2["Editors"]), vec!["zed", "neovim"]);
         assert_eq!(str_vec(&intent2["Browsers"]), vec!["brave", "edge"]);
-        assert_eq!(str_vec(&intent2["Wsl2Distros"]), vec!["FedoraLinux", "NixOS-WSL"]);
+        assert_eq!(
+            str_vec(&intent2["Wsl2Distros"]),
+            vec!["FedoraLinux", "NixOS-WSL"]
+        );
     }
 
     #[test]
@@ -498,5 +563,13 @@ mod tests {
     fn form_factor_is_clamped() {
         assert_eq!(normalized_form_factor("Laptop"), "Laptop");
         assert_eq!(normalized_form_factor("nonsense"), "Auto");
+    }
+
+    #[test]
+    fn architecture_is_normalized_to_profile_tokens() {
+        assert_eq!(normalized_architecture("ARM64"), "arm64");
+        assert_eq!(normalized_architecture("x64"), "amd64");
+        assert_eq!(normalized_architecture("amd64"), "amd64");
+        assert_eq!(normalized_architecture("not-yet-known"), "Unknown");
     }
 }

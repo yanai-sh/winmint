@@ -2,7 +2,9 @@ mod actions;
 mod assets;
 mod bridge;
 mod components;
+mod core;
 mod intent;
+mod options;
 mod screens;
 mod state;
 mod theme;
@@ -299,35 +301,165 @@ impl WinMintApp {
     }
 
     fn write_intent(&mut self, cx: &mut Context<Self>) {
-        let intent_payload = intent::build_gui_intent(
-            self.source.iso_path.as_ref(),
-            self.intent.architecture.as_ref(),
-            self.intent.computer_name.as_ref(),
-            self.intent.account_name.as_ref(),
-            self.intent.keep,
-            self.intent.edition.as_ref(),
-            self.intent.toolkit,
-            self.intent.desktop_layers,
-            self.intent.form_factor.as_wire(),
-        );
-
-        let output_path = intent::intent_relative_path();
-
-        self.build_run.status = match serde_json::to_string_pretty(&intent_payload) {
-            Ok(json) => {
-                let written = output_path
-                    .parent()
-                    .map(fs::create_dir_all)
-                    .unwrap_or(Ok(()))
-                    .and_then(|()| fs::write(&output_path, json));
-                match written {
-                    Ok(()) => format!("Wrote {}", output_path.display()).into(),
-                    Err(error) => format!("Could not write intent: {error}").into(),
-                }
-            }
-            Err(error) => format!("Could not serialize intent: {error}").into(),
+        let repo_root = bridge::repo_root();
+        self.build_run.status = match bridge::write_ui_intent(
+            &repo_root,
+            bridge::UiIntentInput {
+                source_iso: self.source.iso_path.as_ref(),
+                architecture: self.intent.architecture.as_ref(),
+                computer_name: self.intent.computer_name.as_ref(),
+                account_name: self.intent.account_name.as_ref(),
+                keep: self.intent.keep,
+                edition: self.intent.edition.as_ref(),
+                toolkit: self.intent.toolkit,
+                desktop_layers: self.intent.desktop_layers,
+                form_factor: self.intent.form_factor.as_wire(),
+            },
+        ) {
+            Ok(output_path) => format!("Wrote {}", output_path.display()).into(),
+            Err(error) => error.into(),
         };
         cx.notify();
+    }
+
+    fn generate_build_profile(&mut self, cx: &mut Context<Self>) {
+        if self.build_run.running {
+            return;
+        }
+
+        self.write_intent(cx);
+        self.build_run.running = true;
+        self.build_run.status = "Generating BuildProfile.json.".into();
+        cx.notify();
+
+        let repo_root = bridge::repo_root();
+        cx.spawn(async move |entity, async_cx| {
+            let result = async_cx
+                .background_executor()
+                .spawn(async move { bridge::generate_build_profile(repo_root) })
+                .await;
+
+            let _ = entity.update(async_cx, |this, cx| {
+                this.build_run.running = false;
+                match result {
+                    Ok(profile_path) => {
+                        this.build_run.profile_path = profile_path.display().to_string().into();
+                        this.build_run.status =
+                            format!("Generated {}.", profile_path.display()).into();
+                    }
+                    Err(error) => {
+                        this.build_run.status =
+                            format!("Profile generation failed: {error}").into();
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn apply_build_result(
+        &mut self,
+        result: bridge::BridgeBuildResult,
+        profile_path: &std::path::Path,
+    ) {
+        self.build_run.profile_path = profile_path.display().to_string().into();
+        self.build_run.output_path = result.output_path.into();
+        self.build_run.build_delta_path = result.build_delta_path.into();
+        self.build_run.build_delta_summary = result.build_delta;
+        self.build_run.report_path = result.report_path.into();
+        self.manifest.manifest_path = result.manifest_path.into();
+        self.build_run.last_progress = result
+            .progress
+            .last()
+            .map(|event| {
+                if event.stage.is_empty() {
+                    event.message.clone()
+                } else {
+                    format!("{}: {}", event.stage, event.message)
+                }
+            })
+            .unwrap_or_default()
+            .into();
+
+        if result.ok {
+            self.build_run.status = if result.dry_run {
+                "Dry build completed.".into()
+            } else {
+                "Build completed.".into()
+            };
+        } else if result.error.is_empty() {
+            self.build_run.status = "Build failed.".into();
+        } else {
+            self.build_run.status = format!("Build failed: {}", result.error).into();
+        }
+    }
+
+    fn run_dry_build(&mut self, cx: &mut Context<Self>) {
+        if self.build_run.running {
+            return;
+        }
+
+        self.write_intent(cx);
+        self.build_run.running = true;
+        self.build_run.status = "Generating BuildProfile.json.".into();
+        cx.notify();
+
+        let repo_root = bridge::repo_root();
+        cx.spawn(async move |entity, async_cx| {
+            let generated = async_cx
+                .background_executor()
+                .spawn({
+                    let repo_root = repo_root.clone();
+                    async move { bridge::generate_build_profile(repo_root) }
+                })
+                .await;
+
+            let profile_path = match generated {
+                Ok(profile_path) => profile_path,
+                Err(error) => {
+                    let _ = entity.update(async_cx, |this, cx| {
+                        this.build_run.running = false;
+                        this.build_run.status =
+                            format!("Profile generation failed: {error}").into();
+                        cx.notify();
+                    });
+                    return;
+                }
+            };
+
+            let _ = entity.update(async_cx, |this, cx| {
+                this.build_run.profile_path = profile_path.display().to_string().into();
+                this.build_run.status = "Running dry build.".into();
+                cx.notify();
+            });
+
+            let result = async_cx
+                .background_executor()
+                .spawn({
+                    let repo_root = repo_root.clone();
+                    let profile_path = profile_path.clone();
+                    async move {
+                        bridge::start_build_from_profile(repo_root, profile_path.clone(), true)
+                            .map(|build| (profile_path, build))
+                    }
+                })
+                .await;
+
+            let _ = entity.update(async_cx, |this, cx| {
+                this.build_run.running = false;
+                match result {
+                    Ok((profile_path, build)) => {
+                        this.apply_build_result(build, &profile_path);
+                    }
+                    Err(error) => {
+                        this.build_run.status = format!("Dry build failed: {error}").into();
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     fn footer_status(&self) -> SharedString {
@@ -341,11 +473,14 @@ impl WinMintApp {
         if self.manifest.manifest_path.is_empty() {
             return self.build_run.status.clone();
         }
-        format!(
-            "{} · Manifest {}",
-            self.build_run.status, self.manifest.manifest_path
-        )
-        .into()
+        let mut segments = vec![
+            self.build_run.status.to_string(),
+            format!("Manifest {}", self.manifest.manifest_path),
+        ];
+        if !self.build_run.build_delta_path.is_empty() {
+            segments.push(format!("Delta {}", self.build_run.build_delta_path));
+        }
+        segments.join(" · ").into()
     }
 
     // Each choice re-emits ui-intent.json so the on-disk intent tracks the wizard.
@@ -411,8 +546,8 @@ impl WinMintApp {
         self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_helium);
     }
 
-    fn toggle_browser_librewolf(&mut self, cx: &mut Context<Self>) {
-        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_librewolf);
+    fn toggle_browser_firefox_developer_edition(&mut self, cx: &mut Context<Self>) {
+        self.toggle_toolkit_flag(cx, |toolkit| &mut toolkit.browser_firefox_developer_edition);
     }
 
     fn toggle_browser_brave(&mut self, cx: &mut Context<Self>) {

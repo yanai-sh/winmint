@@ -9,9 +9,7 @@
     "MicrosoftWindows.Client.CoreAI",
     "Microsoft.Windows.Ai.Copilot.Provider",
     "Microsoft.Windows.AIHub",
-    "Microsoft.Edge.GameAssist",
-    "Microsoft.Office.ActionsServer",
-    "Microsoft.WritingAssistant"
+    "Microsoft.Edge.GameAssist"
   ],
   "optionalFeatures": [
     "Recall"
@@ -22,8 +20,7 @@
   "scheduledTaskPatternsToDisable": [
     "Recall",
     "WindowsAI",
-    "Copilot",
-    "Office Actions Server"
+    "Copilot"
   ],
   "aggressiveExperimentalPatterns": [
     "WindowsWorkload.Data.Analysis.Stx.*",

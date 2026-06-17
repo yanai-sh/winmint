@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Developer group: add an elevated "Open Terminal Here as Administrator" entry to
 # directory and directory-background context menus. Moved off the Minimal baseline
@@ -26,3 +26,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

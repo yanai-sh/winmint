@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Start menu cleanup (apply-by-default). Hides the "Recommended" section - the seeded
 # "Get Started"/tips/recent entries a stock Windows 11 Start menu shows - and ships a
@@ -26,3 +26,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

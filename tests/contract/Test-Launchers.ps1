@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -34,8 +34,15 @@ foreach ($pathName in @('WinMint-GUI.ps1')) {
 }
 
 $guiLauncher = Get-Content -LiteralPath (Get-WinMintPath -Name RepoRoot -ChildPath 'WinMint-GUI.ps1') -Raw
+if ($guiLauncher -notmatch 'WinMint\.Bootstrap\\WinMint\.Bootstrap\.psd1') {
+    Add-LauncherFailure 'WinMint-GUI.ps1 must import the WinMint.Bootstrap module manifest.'
+}
 if ($guiLauncher -notmatch 'Get-WinMintPath -Name GuiBinary') {
     Add-LauncherFailure 'WinMint-GUI.ps1 must resolve the packaged GUI binary through Get-WinMintPath.'
+}
+$cliLauncher = Get-Content -LiteralPath (Get-WinMintPath -Name RepoRoot -ChildPath 'WinMint-CLI.ps1') -Raw
+if ($cliLauncher -notmatch 'WinMint\.Bootstrap\\WinMint\.Bootstrap\.psd1') {
+    Add-LauncherFailure 'WinMint-CLI.ps1 must import the WinMint.Bootstrap module manifest.'
 }
 
 $removedLauncherPattern = ('Legacy' + 'Ui|Find-WinMintLegacy' + 'UiScript|WinMint-Legacy' + 'UI')
@@ -47,3 +54,4 @@ if ($failures.Count -gt 0) {
     throw "Launcher contract failed with $($failures.Count) error(s)."
 }
 Write-Host 'Launcher contract passed.'
+

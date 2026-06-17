@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Resolve-WinMintConsoleIsoPath {
     param([string]$DefaultPath)
@@ -103,7 +103,7 @@ function New-WinMintConsoleHeadlessProfile {
         [ValidateSet('TargetLicense', 'Fixed')]
         [string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
-        [ValidateSet('None', 'Host', 'Custom')]
+        [ValidateSet('None', 'Host', 'Custom', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')]
         [string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [string]$TimeZoneId,
@@ -122,7 +122,7 @@ function New-WinMintConsoleHeadlessProfile {
     )
 
     if ($ExportHostDrivers) { $DriverSource = 'Host' }
-    if ($DriverSource -eq 'Host') { $DriverPath = '' }
+    if (Test-WinMintDriverSourceUsesHostExport -Source $DriverSource) { $DriverPath = '' }
 
     $resolvedIso = ''
     if (-not [string]::IsNullOrWhiteSpace($SourceIso)) {
@@ -143,9 +143,17 @@ function New-WinMintConsoleHeadlessProfile {
         if (-not $Architecture) { $Architecture = 'amd64' }
     }
 
-    if ($DriverSource -eq 'Custom') {
+    if (Test-WinMintDriverSourceUsesSurfaceCatalog -Source $DriverSource) {
+        if ([string]::IsNullOrWhiteSpace($DriverPath)) {
+            throw 'SurfaceCatalog requires a Surface catalog device id in DriverPath.'
+        }
+    }
+    elseif (Test-WinMintDriverSourceUsesPath -Source $DriverSource) {
         if ([string]::IsNullOrWhiteSpace($DriverPath)) {
             throw 'Custom driver source requires -DriverPath.'
+        }
+        if ((Test-WinMintDriverSourceRequiresMsi -Source $DriverSource) -and -not ($DriverPath -match '(?i)\.msi$')) {
+            throw "$DriverSource requires an OEM .msi file."
         }
         if (-not (Test-Win11IsoDriverPath -Path $DriverPath)) {
             throw 'Driver path must be a .inf file, .msi file, or folder containing driver payloads.'
@@ -191,7 +199,7 @@ function New-WinMintConsoleHeadlessProfile {
         HomeLocationGeoId = $regional.HomeLocationGeoId
         DriverSource = $DriverSource
         DriverPath = $DriverPath
-        ExportHostDrivers = ($DriverSource -eq 'Host')
+        ExportHostDrivers = (Test-WinMintDriverSourceUsesHostExport -Source $DriverSource)
         InstallWindhawk = [bool]$InstallWindhawk
         InstallYasb = [bool]$InstallYasb
         InstallKomorebi = [bool]$InstallKomorebi
@@ -324,7 +332,7 @@ function New-WinMintConsoleBuildConfig {
         HomeLocationGeoId = $regional.HomeLocationGeoId
         DriverSource = $drivers.Source
         DriverPath = $drivers.Path
-        ExportHostDrivers = ($drivers.Source -eq 'Host')
+        ExportHostDrivers = (Test-WinMintDriverSourceUsesHostExport -Source ([string]$drivers.Source))
         InstallWindhawk = [bool]$InstallWindhawk
         InstallYasb = [bool]$InstallYasb
         InstallKomorebi = [bool]$InstallKomorebi
@@ -377,7 +385,7 @@ function Invoke-WinMintConsoleBuild {
         [ValidateSet('TargetLicense', 'Fixed')]
         [string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
-        [ValidateSet('None', 'Host', 'Custom')]
+        [ValidateSet('None', 'Host', 'Custom', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')]
         [string]$DriverSource = 'None',
         [string]$DriverPath = '',
         [string]$TimeZoneId,
@@ -533,3 +541,4 @@ function Invoke-WinMintConsoleBuild {
         Start-WinMintBuild -BuildProfile $selection.Profile -DryRun:$DryRun
     }
 }
+

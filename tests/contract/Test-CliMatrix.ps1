@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -8,7 +8,8 @@ Set-StrictMode -Version 2.0
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:root = $root
 . (Join-Path $root 'tests\contract\TestFixtures.ps1')
-. (Join-Path $root 'src\runtime\image\WinMint.ps1')
+Import-Module (Join-Path $root 'src\runtime\modules\WinMint.Engine\WinMint.Engine.psd1') -Force
+Import-Module (Join-Path $root 'src\runtime\modules\WinMint.Profile\WinMint.Profile.psd1') -Force
 Initialize-WinMintEngine -RepositoryRoot $root -DryRun
 
 $cli = Join-Path $root 'WinMint-CLI.ps1'
@@ -110,7 +111,8 @@ Invoke-CliProfileCase -Name 'minimal-default' -Assert {
     if ($Profile.regional.userLocale -ne 'en-US' -or [int]$Profile.regional.homeLocationGeoId -ne 244) { Add-CliMatrixFailure 'minimal-default should restore visible en-US/244 by default.' }
     if (-not [bool]$Profile.privacy.location -or -not [bool]$Config.Privacy.Location) { Add-CliMatrixFailure 'minimal-default should enable location services by default.' }
 if ($Config.Launcher -ne 'None' -or -not $AgentProfile.modules.packageManagers.enabled -or
-        $AgentProfile.modules.flowEverything.enabled -or $AgentProfile.modules.raycast.enabled -or
+        $AgentProfile.modules.raycast.enabled -or
+        -not $AgentProfile.modules.launcherKey.enabled -or $AgentProfile.modules.launcherKey.target -ne 'Search' -or
         $AgentProfile.modules.phoneLink.enabled -or $AgentProfile.modules.liveInstallAudit.enabled) {
         Add-CliMatrixFailure 'minimal-default should enable only baseline package managers plus WSL, not optional residual first-logon modules.'
     }
@@ -192,24 +194,35 @@ Invoke-CliProfileCase -Name 'desktop-ui-only' -Arguments @('-Install', 'windhawk
     if (-not $Config.InstallWindhawk -or -not $Config.InstallYasb -or -not $Config.InstallKomorebi) {
         Add-CliMatrixFailure 'desktop-ui-only should preserve the selected Windhawk/YASB/Komorebi shell layers.'
     }
-    if ($Config.Launcher -ne 'None' -or $AgentProfile.modules.flowEverything.enabled -or $AgentProfile.modules.raycast.enabled) {
+    if ($Config.Launcher -ne 'None' -or $AgentProfile.modules.raycast.enabled) {
         Add-CliMatrixFailure 'desktop-ui-only should not imply a launcher.'
-    }
-}
-
-Invoke-CliProfileCase -Name 'flow-launcher' -Arguments @('-Launcher', 'FlowEverything') -Assert {
-    param($Profile, $Config, $AgentProfile)
-    if ($Config.Launcher -ne 'FlowEverything' -or -not $AgentProfile.modules.flowEverything.enabled -or
-        $AgentProfile.modules.raycast.enabled -or -not $AgentProfile.modules.packageManagers.enabled) {
-        Add-CliMatrixFailure 'developer-flow-launcher should enable only Flow/Everything launcher path.'
     }
 }
 
 Invoke-CliProfileCase -Name 'raycast-launcher' -Arguments @('-Launcher', 'Raycast') -Assert {
     param($Profile, $Config, $AgentProfile)
     if ($Config.Launcher -ne 'Raycast' -or -not $AgentProfile.modules.raycast.enabled -or
-        $AgentProfile.modules.flowEverything.enabled -or -not $AgentProfile.modules.packageManagers.enabled) {
+        -not $AgentProfile.modules.packageManagers.enabled) {
         Add-CliMatrixFailure 'raycast-launcher should enable only Raycast launcher path.'
+    }
+    if (-not $AgentProfile.modules.launcherKey.enabled -or $AgentProfile.modules.launcherKey.target -ne 'Raycast' -or $AgentProfile.modules.launcherKey.chord -ne 'Win+Shift+F23') {
+        Add-CliMatrixFailure 'raycast-launcher should bind the launcher key to Raycast on the common Copilot hardware-key chord.'
+    }
+}
+
+Invoke-CliProfileCase -Name 'thide-implies-raycast' -Arguments @('-Install', 'yasb,thide') -Assert {
+    param($Profile, $Config, $AgentProfile)
+    if (@($Profile.desktop.layers) -notcontains 'thide' -or -not $Config.InstallThide) {
+        Add-CliMatrixFailure 'thide-implies-raycast should record thide as a selected shell layer.'
+    }
+    if ($Config.Launcher -ne 'Raycast' -or -not $AgentProfile.modules.raycast.enabled) {
+        Add-CliMatrixFailure 'thide-implies-raycast should default the launcher to Raycast.'
+    }
+    $extensionIds = @($AgentProfile.modules.raycast.extensions | ForEach-Object { [string]$_.id })
+    foreach ($expected in @('everything-search', 'windows-terminal', 'window-walker')) {
+        if ($extensionIds -notcontains $expected) {
+            Add-CliMatrixFailure "thide-implies-raycast should request Raycast extension '$expected'."
+        }
     }
 }
 
@@ -236,3 +249,4 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host 'CLI matrix smoke passed.'
+

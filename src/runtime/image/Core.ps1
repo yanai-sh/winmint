@@ -1,12 +1,15 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintRepositoryRoot {
     $rootVariable = Get-Variable -Name WinMintRepositoryRoot -Scope Script -ErrorAction SilentlyContinue
     if ($rootVariable -and $rootVariable.Value) { return $rootVariable.Value }
     $current = $PSScriptRoot
     while ($current) {
-        if ((Test-Path -LiteralPath (Join-Path $current 'AGENTS.md')) -or
-            (Test-Path -LiteralPath (Join-Path $current '.git'))) {
+        $hasSourceRootMarker = (Test-Path -LiteralPath (Join-Path $current 'AGENTS.md')) -or
+            (Test-Path -LiteralPath (Join-Path $current '.git'))
+        $hasReleaseRootMarker = (Test-Path -LiteralPath (Join-Path $current 'WinMint-CLI.ps1') -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $current 'src\runtime\modules') -PathType Container)
+        if ($hasSourceRootMarker -or $hasReleaseRootMarker) {
             return (Resolve-Path -LiteralPath $current).Path
         }
         $parent = Split-Path -Parent $current
@@ -38,6 +41,8 @@ function Get-WinMintPathTable {
         BuildProfileSchema = (Join-Path $root 'schemas\winmint.buildprofile.schema.json')
         BuildManifestSchema = (Join-Path $root 'schemas\winmint.buildmanifest.schema.json')
         AgentStateSchema = (Join-Path $root 'schemas\winmint.agentstate.schema.json')
+        BuildDeltaSchema = (Join-Path $root 'schemas\winmint.builddelta.schema.json')
+        RuntimeModulesRoot = (Join-Path $root 'src\runtime\modules')
 
         ToolsRoot = (Join-Path $root 'tools')
         ValidationToolsRoot = (Join-Path $root 'tools\validation')
@@ -79,6 +84,8 @@ function Get-WinMintPath {
             'BuildProfileSchema',
             'BuildManifestSchema',
             'AgentStateSchema',
+            'BuildDeltaSchema',
+            'RuntimeModulesRoot',
             'ToolsRoot',
             'ValidationToolsRoot',
             'ReleaseToolsRoot',
@@ -118,6 +125,8 @@ function Get-WinMintPath {
         'BuildProfileSchema'  { $paths.BuildProfileSchema }
         'BuildManifestSchema' { $paths.BuildManifestSchema }
         'AgentStateSchema'    { $paths.AgentStateSchema }
+        'BuildDeltaSchema'    { $paths.BuildDeltaSchema }
+        'RuntimeModulesRoot'  { $paths.RuntimeModulesRoot }
         'ToolsRoot'      { $paths.ToolsRoot }
         'ValidationToolsRoot' { $paths.ValidationToolsRoot }
         'ReleaseToolsRoot' { $paths.ReleaseToolsRoot }
@@ -172,3 +181,4 @@ function Get-WinMintIsoArchitectureHint {
     if ($name -match '(?i)(x86)') { return 'x86' }
     return $null
 }
+

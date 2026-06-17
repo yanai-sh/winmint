@@ -30,17 +30,20 @@ function Invoke-ScViveToolOverrides {
         Write-ScLog 'Skipping ViVeTool feature overrides; ViVeTool.exe was not staged.'
         return
     }
-    "$(Get-Date -Format 'o') Disable virtual desktop switch flyout: .\ViVeTool.exe /disable /id:34508225" |
-        Out-File $viveLog -Append
-    $out = & $vive /disable /id:34508225 2>&1
-    $code = $LASTEXITCODE
-    $out | Out-File $viveLog -Append
-    if ($code -ne 0) {
-        "ViVeTool virtual desktop flyout override failed with exit code $code." |
-            Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-    }
-    else {
-        Write-ScLog 'ViVeTool disabled virtual desktop switch flyout feature id 34508225 before first logon.'
+    $featureIds = @('42105254', '42316343', '34508225', '40459297')
+    foreach ($featureId in $featureIds) {
+        "$(Get-Date -Format 'o') Disable virtual desktop switch flyout: .\ViVeTool.exe /disable /id:$featureId" |
+            Out-File $viveLog -Append
+        $out = & $vive /disable "/id:$featureId" 2>&1
+        $code = $LASTEXITCODE
+        $out | Out-File $viveLog -Append
+        if ($code -ne 0) {
+            "ViVeTool virtual desktop flyout override for feature id $featureId failed with exit code $code." |
+                Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+        }
+        else {
+            Write-ScLog "ViVeTool disabled virtual desktop switch flyout feature id $featureId before first logon."
+        }
     }
 }
 

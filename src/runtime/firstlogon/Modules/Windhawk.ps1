@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Resolve-AgentWindhawkInstallRoot {
     $candidates = [System.Collections.Generic.List[string]]::new()
@@ -36,6 +36,48 @@ function Resolve-AgentWindhawkInstallRoot {
     return $null
 }
 
+function Get-WinMintWindhawkPresetEvidencePath {
+    param([Parameter(Mandatory)][string]$WindhawkRoot)
+
+    return (Join-Path $WindhawkRoot 'WinMint\preset-application.json')
+}
+
+function Read-WinMintWindhawkPresetEvidence {
+    param(
+        [Parameter(Mandatory)][string]$EvidencePath,
+        [Parameter(Mandatory)][string]$PresetFile,
+        [Parameter(Mandatory)][string]$InstallRoot
+    )
+
+    if (-not (Test-Path -LiteralPath $EvidencePath -PathType Leaf)) {
+        throw "Windhawk preset evidence marker was not written: $EvidencePath"
+    }
+
+    $evidence = Get-Content -LiteralPath $EvidencePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $evidence -or [string]$evidence.status -ne 'ok') {
+        throw "Windhawk preset evidence marker is not ok: $EvidencePath"
+    }
+
+    $expectedPreset = [System.IO.Path]::GetFullPath($PresetFile)
+    $actualPreset = [System.IO.Path]::GetFullPath([string]$evidence.presetPath)
+    if (-not [string]::Equals($actualPreset, $expectedPreset, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Windhawk preset evidence points at an unexpected preset: $actualPreset"
+    }
+
+    $expectedInstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
+    $actualInstallRoot = [System.IO.Path]::GetFullPath([string]$evidence.installRoot)
+    if (-not [string]::Equals($actualInstallRoot, $expectedInstallRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Windhawk preset evidence points at an unexpected install root: $actualInstallRoot"
+    }
+
+    if ([string]::IsNullOrWhiteSpace([string]$evidence.timestamp)) {
+        throw "Windhawk preset evidence marker has no timestamp: $EvidencePath"
+    }
+    [void][DateTimeOffset]::Parse([string]$evidence.timestamp)
+
+    return $evidence
+}
+
 function Invoke-WinMintAgentWindhawkBootstrap {
     [CmdletBinding()]
     param(
@@ -43,7 +85,6 @@ function Invoke-WinMintAgentWindhawkBootstrap {
         [Parameter(Mandatory)][hashtable]$State
     )
 
-    [void]$State
     $cfg = if ($AgentProfile.modules -and $AgentProfile.modules.PSObject.Properties['windhawk']) {
         $AgentProfile.modules.windhawk
     } else {
@@ -89,23 +130,41 @@ function Invoke-WinMintAgentWindhawkBootstrap {
     if (-not $windhawkInstallRoot) { throw 'Windhawk install path could not be resolved.' }
 
     $exe = Resolve-AgentPowerShellHost
+    $evidencePath = Get-WinMintWindhawkPresetEvidencePath -WindhawkRoot $windhawkRoot
+    Remove-Item -LiteralPath $evidencePath -Force -ErrorAction SilentlyContinue
     Invoke-AgentNative -FilePath $exe -ArgumentList @(
         '-NoProfile',
         '-ExecutionPolicy', 'Bypass',
         '-File', $restoreScript,
         '-PresetFile', $presetFile,
         '-WindhawkRoot', $windhawkRoot,
-        '-WindhawkInstallRoot', $windhawkInstallRoot
+        '-WindhawkInstallRoot', $windhawkInstallRoot,
+        '-EvidencePath', $evidencePath
     )
+    $evidence = Read-WinMintWindhawkPresetEvidence -EvidencePath $evidencePath -PresetFile $presetFile -InstallRoot $windhawkInstallRoot
     Invoke-AgentNative -FilePath $exe -ArgumentList @(
         '-NoProfile',
         '-ExecutionPolicy', 'Bypass',
         '-File', $virtualDesktopScript
     )
 
+    $requiredStateSteps = @('shell:windhawk-preset')
+    $State.steps['shell:windhawk-preset'] = @{
+        status = 'ok'
+        updatedAt = (Get-Date -Format o)
+        installRoot = $windhawkInstallRoot
+        windhawkRoot = $windhawkRoot
+        presetFile = $presetFile
+        evidencePath = $evidencePath
+        evidenceTimestamp = [string]$evidence.timestamp
+    }
+    Save-AgentState -State $State
+
     [pscustomobject]@{
-        Id      = 'windhawk'
-        Status  = 'ok'
-        Message = 'Windhawk installed with the WinMint preset.'
+        Id                 = 'windhawk'
+        Status             = 'ok'
+        Message            = 'Windhawk installed with the WinMint preset.'
+        RequiredStateSteps = $requiredStateSteps
     }
 }
+

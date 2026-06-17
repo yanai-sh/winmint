@@ -1,4 +1,7 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
+if (-not (Get-Command New-WinMintBuildDeltaCatalog -ErrorAction SilentlyContinue)) {
+    . (Join-Path $PSScriptRoot 'Private\Audit.ps1')
+}
 
 function New-WinMintBuildConfig {
     [CmdletBinding()]
@@ -18,11 +21,11 @@ function New-WinMintBuildConfig {
     $development = Get-WinMintProfileSetting $BuildProfile 'development' @{}
     $featureToggles = Get-WinMintProfileSetting $BuildProfile 'features' @{}
     $updates = Get-WinMintProfileSetting $BuildProfile 'updates' @{
-        mode = 'Stable25H2'
+        mode = 'None'
         targetFeatureVersion = '25H2'
         releaseCadence = 'BRelease'
         includeOptionalPreviews = $false
-        payloadRoot = Get-WinMintDefaultUpdatePayloadRoot
+        payloadRoot = ''
         qualitySecurity = $true
         dynamicUpdate = $true
         defender = $true
@@ -45,17 +48,19 @@ function New-WinMintBuildConfig {
     $selectedBrowsers = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $development 'browsers' @()))
     $driverSource = [string](Get-WinMintProfileSetting $drivers 'source' 'None')
     $driverPath = [string](Get-WinMintProfileSetting $drivers 'path' '')
-    $exportHostDrivers = ($driverSource -eq 'Host')
+    $exportHostDrivers = (Test-WinMintDriverSourceUsesHostExport -Source $driverSource)
     $wsl2Distros = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $wsl 'distros' @()))
     $wsl2Distro = if ($wsl2Distros.Count -eq 0) { 'None' } elseif ($wsl2Distros.Count -eq 1) { $wsl2Distros[0] } else { $wsl2Distros -join ',' }
     $layers = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $desktop 'layers' @()))
     $desktopUi = @($layers | Where-Object { $_ -and $_ -ne 'standard' }).Count -gt 0
     $launcher = [string](Get-WinMintProfileSetting $featureToggles 'launcher' '')
     if ([string]::IsNullOrWhiteSpace($launcher)) {
-        $launcher = if ([bool](Get-WinMintProfileSetting $featureToggles 'flowEverything' $false)) { 'FlowEverything' } else { 'None' }
+        $launcher = 'None'
     }
-    if ($launcher -notin @('None', 'FlowEverything', 'Raycast')) { $launcher = 'None' }
-    $installFlowEverything = ($launcher -eq 'FlowEverything')
+    if ($launcher -eq 'None' -and $layers -contains 'thide') {
+        $launcher = 'Raycast'
+    }
+    if ($launcher -notin @('None', 'Raycast')) { $launcher = 'None' }
     $installRaycast = ($launcher -eq 'Raycast')
     $enableLiveInstallAudit = [bool](Get-WinMintProfileSetting $featureToggles 'liveInstallAudit' $false)
     $enablePhoneLink = [bool](Get-WinMintProfileSetting $featureToggles 'phoneLink' $false)
@@ -72,6 +77,8 @@ function New-WinMintBuildConfig {
     if ($diskMode -notin @('Manual', 'AutoWipeDisk0', 'DualBootReserved')) { $diskMode = 'Manual' }
     $formFactor = [string](Get-WinMintProfileSetting $target 'formFactor' 'Auto')
     if ($formFactor -notin @('Auto', 'Laptop', 'Desktop')) { $formFactor = 'Auto' }
+    $powerPlan = [string](Get-WinMintProfileSetting $target 'powerPlan' 'Balanced')
+    if ($powerPlan -notin @('Balanced', 'EnergySaver', 'HighPerformance', 'UltimatePerformance')) { $powerPlan = 'Balanced' }
     $diskLayout = Get-WinMintProfileSetting $target 'diskLayout' $null
     if ($null -eq $diskLayout) {
         $diskLayout = [ordered]@{
@@ -158,6 +165,7 @@ function New-WinMintBuildConfig {
         ProductKey = $productKey
         TargetDevice = [string](Get-WinMintProfileSetting $target 'device' 'DifferentPC')
         FormFactor = $formFactor
+        PowerPlan = $powerPlan
         ComputerName = [string](Get-WinMintProfileSetting $identity 'computerName' '')
         AccountName = [string](Get-WinMintProfileSetting $identity 'accountName' '')
         AccountMode = $accountMode
@@ -203,10 +211,10 @@ function New-WinMintBuildConfig {
         Browsers = @($selectedBrowsers)
         InstallWindhawk = ($layers -contains 'windhawk')
         InstallYasb = ($layers -contains 'yasb')
+        InstallThide = ($layers -contains 'thide')
         InstallKomorebi = ($layers -contains 'komorebi')
         InstallNilesoft = ($layers -contains 'nilesoft')
         Launcher = $launcher
-        InstallFlowEverything = $installFlowEverything
         InstallRaycast = $installRaycast
         LiveInstallAudit = $enableLiveInstallAudit
         PhoneLink = $enablePhoneLink
@@ -257,7 +265,7 @@ function New-WinMintBuildConfig {
         SetupScripts = @(
             'SetupComplete.cmd', 'SetupComplete.ps1', 'SetupComplete\*.ps1', 'Specialize.ps1',
             'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1',
-            'FirstLogon.Runtime.ps1', 'WinMintAgent', 'ViVeTool'
+            'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1', 'WinMintAgent', 'ViVeTool'
         )
         Assets = @('fonts', 'cursors', 'PowerShell 7', 'windows-terminal', 'winget')
         PackagesManifest = $packages
@@ -337,75 +345,236 @@ function Get-WinMintOfflinePayloadCacheStatus {
     }
 }
 
+function New-WinMintBuildPreflightContext {
+    [CmdletBinding()]
+    param(
+        [ValidateSet('Build', 'DryRun', 'ValidateOnly')][string]$RunMode = 'Build'
+    )
+
+    $sourceIsoPolicy = if ($RunMode -eq 'Build') { 'Required' } else { 'ProfileOnlyOptional' }
+
+    [pscustomobject]@{
+        RunMode = $RunMode
+        SourceIsoPolicy = $sourceIsoPolicy
+        EnforceLocalAccountPassword = ($RunMode -eq 'Build')
+        RequireOnlinePayloadCache = ($RunMode -eq 'Build')
+    }
+}
+
+function Test-WinMintPreflightAllowsProfileOnlySource {
+    param(
+        [AllowNull()]$PreflightContext
+    )
+
+    if ($null -eq $PreflightContext) { return $false }
+
+    $sourceIsoPolicy = $PreflightContext.PSObject.Properties['SourceIsoPolicy']
+    if ($sourceIsoPolicy) {
+        return ([string]$sourceIsoPolicy.Value -eq 'ProfileOnlyOptional')
+    }
+
+    $legacyAllowMissingSourceIso = $PreflightContext.PSObject.Properties['AllowMissingSourceIso']
+    if ($legacyAllowMissingSourceIso) {
+        return [bool]$legacyAllowMissingSourceIso.Value
+    }
+
+    return $false
+}
+
 function Test-WinMintBuildPrerequisite {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]$Config,
+        [ValidateSet('Build', 'DryRun', 'ValidateOnly')][string]$RunMode = 'Build',
+        [AllowNull()]$PreflightContext = $null,
         [switch]$AllowMissingSourceIso
     )
 
+    if ($null -eq $PreflightContext) {
+        if ($AllowMissingSourceIso -and $RunMode -eq 'Build') {
+            $RunMode = 'DryRun'
+        }
+        $PreflightContext = New-WinMintBuildPreflightContext -RunMode $RunMode
+    }
+
     $warnings = [System.Collections.Generic.List[string]]::new()
     $failures = [System.Collections.Generic.List[string]]::new()
+    $findings = [System.Collections.Generic.List[object]]::new()
+    function Add-WinMintBuildPreflightFinding {
+        param(
+            [Parameter(Mandatory)][ValidateSet('warning', 'failure')][string]$Severity,
+            [Parameter(Mandatory)][string]$Code,
+            [Parameter(Mandatory)][string]$Message
+        )
+
+        $findings.Add([pscustomobject]@{
+            Severity = $Severity
+            Code = $Code
+            Message = $Message
+        }) | Out-Null
+        if ($Severity -eq 'warning') {
+            $warnings.Add($Message) | Out-Null
+        }
+        else {
+            $failures.Add($Message) | Out-Null
+        }
+    }
+    function Test-WinMintDesktopPresetAssets {
+        param(
+            [Parameter(Mandatory)][string]$ToolId,
+            [Parameter(Mandatory)][string]$FailureCode
+        )
+
+        $repositoryRoot = Get-WinMintRepositoryRoot
+        $sourceDir = Join-Path $repositoryRoot "assets\runtime\desktop\$ToolId"
+        $manifestPath = Join-Path $sourceDir 'preset.manifest.json'
+        if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+            Add-WinMintBuildPreflightFinding -Severity failure -Code $FailureCode -Message "WinMint desktop preset manifest is missing: $manifestPath"
+            return
+        }
+
+        try {
+            $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ([int]$manifest.schemaVersion -ne 1) { throw "Unsupported schema version '$($manifest.schemaVersion)'." }
+            if ([string]$manifest.tool -ne $ToolId) { throw "Manifest tool id '$($manifest.tool)' does not match '$ToolId'." }
+            if (-not $manifest.files -or @($manifest.files).Count -eq 0) { throw 'Manifest does not declare any files.' }
+            foreach ($file in @($manifest.files)) {
+                $sourceName = [string]$file.source
+                if ([string]::IsNullOrWhiteSpace($sourceName)) { throw 'Manifest has a file entry without source.' }
+                $path = Join-Path $sourceDir $sourceName
+                if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                    Add-WinMintBuildPreflightFinding -Severity failure -Code $FailureCode -Message "WinMint desktop preset asset is missing: $path"
+                }
+            }
+        }
+        catch {
+            Add-WinMintBuildPreflightFinding -Severity failure -Code $FailureCode -Message "WinMint desktop preset manifest is invalid: $manifestPath :: $($_.Exception.Message)"
+        }
+    }
+
     $sourceIsoMissing = [string]::IsNullOrWhiteSpace($Config.SourceIso)
     if ($sourceIsoMissing) {
-        if ($AllowMissingSourceIso) {
-            $warnings.Add('Dry run profile-only mode: no source ISO was provided, so WIM metadata and setup artifacts are skipped.')
+        if (Test-WinMintPreflightAllowsProfileOnlySource -PreflightContext $PreflightContext) {
+            Add-WinMintBuildPreflightFinding `
+                -Severity warning `
+                -Code 'source.iso.missing.profileOnlyDryRun' `
+                -Message 'Dry run profile-only mode: no source ISO was provided, so WIM metadata and setup artifacts are skipped.'
         }
         else {
-            $failures.Add('Source ISO is not set.')
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'source.iso.missing' -Message 'Source ISO is not set.'
         }
     }
-    elseif (-not (Test-Path -LiteralPath $Config.SourceIso)) { $failures.Add("Source ISO not found: $($Config.SourceIso)") }
-    $profileOnlyDryRun = $AllowMissingSourceIso -and $sourceIsoMissing
+    elseif (-not (Test-Path -LiteralPath $Config.SourceIso)) {
+        Add-WinMintBuildPreflightFinding -Severity failure -Code 'source.iso.notFound' -Message "Source ISO not found: $($Config.SourceIso)"
+    }
+    $profileOnlyDryRun = (Test-WinMintPreflightAllowsProfileOnlySource -PreflightContext $PreflightContext) -and $sourceIsoMissing
     if (-not $profileOnlyDryRun -and [string]::IsNullOrWhiteSpace([string]$Config.Architecture)) {
-        $failures.Add('Architecture is not set; oscdimg cannot pick a boot layout without it.')
+        Add-WinMintBuildPreflightFinding -Severity failure -Code 'source.architecture.missing' -Message 'Architecture is not set; oscdimg cannot pick a boot layout without it.'
     }
-    if (-not (Test-Path -LiteralPath $Config.PackagesManifest)) { $warnings.Add("Package manifest missing: $($Config.PackagesManifest)") }
-    if (-not ($AllowMissingSourceIso -and $sourceIsoMissing) -and -not (Test-WinMintGitHubApiReachable -TimeoutSec 5)) {
-            $cache = Get-WinMintOfflinePayloadCacheStatus -Architecture ([string]$Config.Architecture)
-            if ($cache.Complete) {
-                $warnings.Add('No internet connectivity to api.github.com; cached PowerShell 7, ViVeTool, winget, Cascadia, and Monaspace payloads are present, so the build can continue offline.')
+    if (-not (Test-Path -LiteralPath $Config.PackagesManifest)) {
+        Add-WinMintBuildPreflightFinding -Severity warning -Code 'packages.manifest.missing' -Message "Package manifest missing: $($Config.PackagesManifest)"
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace([string]$Config.Architecture)) {
+        try {
+            $manifest = Get-Content -LiteralPath $Config.PackagesManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($toolId in @(Get-WinMintWingetHandoffToolIds -Config $Config)) {
+                $property = if ($manifest.tools) { $manifest.tools.PSObject.Properties[$toolId] } else { $null }
+                if (-not $property) { continue }
+                $tool = $property.Value
+                $unsupported = @()
+                if ($tool.PSObject.Properties['unsupportedArchitectures']) {
+                    if ($tool.unsupportedArchitectures -is [array]) {
+                        $unsupported = @($tool.unsupportedArchitectures | ForEach-Object { ([string]$_).ToLowerInvariant() })
+                    }
+                    else {
+                        $unsupported = @($tool.unsupportedArchitectures.PSObject.Properties.Name | ForEach-Object { ([string]$_).ToLowerInvariant() })
+                    }
+                }
+                if ($unsupported -contains ([string]$Config.Architecture).ToLowerInvariant()) {
+                    $displayName = if ($tool.PSObject.Properties['displayName']) { [string]$tool.displayName } else { [string]$toolId }
+                    $message = @(
+                        "$displayName is selected, but packages.json marks $($Config.Architecture)"
+                        'as unsupported for its package source. FirstLogon will skip that package'
+                        'on this architecture.'
+                    ) -join ' '
+                    Add-WinMintBuildPreflightFinding -Severity warning `
+                        -Code 'packages.tool.architectureUnsupported' `
+                        -Message $message
+                }
             }
+        }
+        catch {
+            $message = "Package manifest could not be inspected for architecture support: $($_.Exception.Message)"
+            Add-WinMintBuildPreflightFinding -Severity warning `
+                -Code 'packages.manifest.readFailed' `
+                -Message $message
+        }
+    }
+    if (-not $profileOnlyDryRun -and [bool]$PreflightContext.RequireOnlinePayloadCache -and -not (Test-WinMintGitHubApiReachable -TimeoutSec 5)) {
+        $cache = Get-WinMintOfflinePayloadCacheStatus -Architecture ([string]$Config.Architecture)
+        if ($cache.Complete) {
+            $message = @(
+                'No internet connectivity to api.github.com; cached PowerShell 7,'
+                'ViVeTool, winget, Cascadia, and Monaspace payloads are present,'
+                'so the build can continue offline.'
+            ) -join ' '
+            Add-WinMintBuildPreflightFinding -Severity warning `
+                -Code 'network.github.offline.cacheComplete' `
+                -Message $message
+        }
         else {
-            $failures.Add("No internet connectivity to api.github.com and offline payload cache is incomplete. Missing: $($cache.Missing -join ', '). Connect and retry once to refresh the cache.")
+            $message = @(
+                'No internet connectivity to api.github.com and offline payload cache is incomplete.'
+                "Missing: $($cache.Missing -join ', ')."
+                'Connect and retry once to refresh the cache.'
+            ) -join ' '
+            Add-WinMintBuildPreflightFinding -Severity failure `
+                -Code 'network.github.offline.cacheIncomplete' `
+                -Message $message
         }
     }
     if ($Config.PasswordSet -and -not $Config.PasswordIncluded) {
-        $failures.Add('The build profile says a password was set, but the password secret is not included. Re-enter the password in the UI before building.')
+        $message = @(
+            'The build profile says a password was set, but the password secret is not included.'
+            'Re-enter the password in the UI before building.'
+        ) -join ' '
+        Add-WinMintBuildPreflightFinding -Severity failure `
+            -Code 'identity.password.secretMissing' `
+            -Message $message
     }
     if ($Config.Updates -and [string]$Config.Updates.Mode -ne 'None') {
         if ([string]$Config.Updates.Mode -ne 'Stable25H2') {
-            $failures.Add("Unsupported image update mode: $($Config.Updates.Mode)")
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'updates.mode.unsupported' -Message "Unsupported image update mode: $($Config.Updates.Mode)"
         }
         if ([string]$Config.Updates.TargetFeatureVersion -ne '25H2') {
-            $failures.Add('Stable image updates are limited to Windows 11 25H2 broad-release media.')
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'updates.featureVersion.unsupported' -Message 'Stable image updates are limited to Windows 11 25H2 broad-release media.'
         }
         if ([string]$Config.Updates.ReleaseCadence -ne 'BRelease' -or [bool]$Config.Updates.IncludeOptionalPreviews) {
-            $failures.Add('Stable image updates must use Patch Tuesday B-release payloads; optional C/D previews are not accepted.')
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'updates.releaseCadence.unsupported' -Message 'Stable image updates must use Patch Tuesday B-release payloads; optional C/D previews are not accepted.'
         }
         $payloadRoot = [string]$Config.Updates.PayloadRoot
         if ($profileOnlyDryRun) {
-            $warnings.Add("Profile-only dry run: Stable25H2 update payload root was not checked: $payloadRoot")
+            Add-WinMintBuildPreflightFinding -Severity warning -Code 'updates.payloadRoot.skippedProfileOnlyDryRun' -Message "Profile-only dry run: Stable25H2 update payload root was not checked: $payloadRoot"
         }
         elseif ([string]::IsNullOrWhiteSpace($payloadRoot)) {
-            $failures.Add('Stable25H2 image updates require updates.payloadRoot with explicit Microsoft update/MSIX payloads.')
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'updates.payloadRoot.missing' -Message 'Stable25H2 image updates require updates.payloadRoot with explicit Microsoft update/MSIX payloads.'
         }
         elseif (-not (Test-Path -LiteralPath $payloadRoot -PathType Container)) {
-            $failures.Add("Update payload root not found: $payloadRoot")
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'updates.payloadRoot.notFound' -Message "Update payload root not found: $payloadRoot"
         }
     }
     if ($Config.AutoLogon -and [string]::IsNullOrWhiteSpace([string]$Config.Password)) {
-        $failures.Add('Autologon requires an included account password.')
+        Add-WinMintBuildPreflightFinding -Severity failure -Code 'identity.autologon.passwordMissing' -Message 'Autologon requires an included account password.'
     }
     # A pre-created passwordless local account still triggers the Windows 11 OOBE
     # "Create a password" page (Microsoft hardened this in 24H2/25H2; omitting the
     # password element does not suppress it), which stops the otherwise-unattended
     # install. Require a password for real Local-account builds. Dry runs skip this
     # because they generate artifacts without installing.
-    if (-not $AllowMissingSourceIso -and
+    if ([bool]$PreflightContext.EnforceLocalAccountPassword -and
         [string]$Config.AccountMode -eq 'Local' -and
         [string]::IsNullOrWhiteSpace([string]$Config.Password)) {
-        $failures.Add(@(
+        Add-WinMintBuildPreflightFinding -Severity failure -Code 'identity.localAccount.passwordRequired' -Message (@(
                 'Local-account builds require a password, otherwise the unattended install stops'
                 'at the Windows 11 OOBE "Create a password" page. Re-author the profile with'
                 '-Password, -PasswordPath, or -PasswordEnvVar, or use -AccountMode MicrosoftOobe'
@@ -415,73 +584,118 @@ function Test-WinMintBuildPrerequisite {
     if ($Config.Architecture -and $Config.SourceIso) {
         $hint = Get-WinMintIsoArchitectureHint -Path $Config.SourceIso
         if ($hint -and $hint -ne $Config.Architecture) {
-            $warnings.Add("ISO filename suggests $hint, but config selected $($Config.Architecture).")
+            Add-WinMintBuildPreflightFinding -Severity warning -Code 'source.architecture.filenameMismatch' -Message "ISO filename suggests $hint, but config selected $($Config.Architecture)."
         }
     }
     if ($Config.TargetDevice -eq 'ThisPC' -and $Config.Architecture) {
         $hostArch = Get-BuildHostProcessorArchitecture
         if ($hostArch -ne $Config.Architecture) {
-            $failures.Add("This PC target requires the ISO architecture ($($Config.Architecture)) to match this PC ($hostArch). Choose Different PC for cross-machine builds.")
+            $message = @(
+                "This PC target requires the ISO architecture ($($Config.Architecture))"
+                "to match this PC ($hostArch)."
+                'Choose Different PC for cross-machine builds.'
+            ) -join ' '
+            Add-WinMintBuildPreflightFinding -Severity failure `
+                -Code 'target.thisPc.architectureMismatch' `
+                -Message $message
         }
     }
-    if ($Config.Drivers.Source -eq 'Host' -and $Config.Architecture) {
+    if ((Test-WinMintDriverSourceUsesHostExport -Source ([string]$Config.Drivers.Source)) -and $Config.Architecture) {
         $hostArch = Get-BuildHostProcessorArchitecture
         if ($hostArch -ne $Config.Architecture) {
-            $failures.Add("Mirror PC drivers require the build PC architecture ($hostArch) to match the target ISO architecture ($($Config.Architecture)).")
+            $message = @(
+                "Mirror PC drivers require the build PC architecture ($hostArch)"
+                "to match the target ISO architecture ($($Config.Architecture))."
+            ) -join ' '
+            Add-WinMintBuildPreflightFinding -Severity failure `
+                -Code 'drivers.host.architectureMismatch' `
+                -Message $message
         }
         if (
             -not (Get-Command Export-WindowsDriver -ErrorAction SilentlyContinue) -and
             -not (Get-Command pnputil.exe -CommandType Application -ErrorAction SilentlyContinue)
         ) {
-            $failures.Add('Mirror PC drivers were requested, but neither Export-WindowsDriver nor pnputil.exe is available. Install/configure Windows driver export tooling or choose a custom driver pack.')
+            $message = @(
+                'Mirror PC drivers were requested, but neither Export-WindowsDriver nor'
+                'pnputil.exe is available. Install/configure Windows driver export tooling'
+                'or choose a custom driver pack.'
+            ) -join ' '
+            Add-WinMintBuildPreflightFinding -Severity failure `
+                -Code 'drivers.host.exportToolMissing' `
+                -Message $message
         }
     }
     if ($Config.InstallWindhawk) {
         $windhawkBootstrap = Get-WinMintPath -Name RuntimeSetupRoot -ChildPath 'WindhawkBootstrap.ps1'
         $virtualDesktopFlyouts = Get-WinMintPath -Name RuntimeSetupRoot -ChildPath 'DisableVirtualDesktopFlyouts.ps1'
-        $windhawkPreset = Join-Path (Get-WinMintRepositoryRoot) 'assets\runtime\desktop\windhawk\preset.json'
         if (-not (Test-Path -LiteralPath $windhawkBootstrap)) {
-            $failures.Add("WinMint Windhawk bootstrap script is missing from the repository: $windhawkBootstrap")
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'assets.windhawk.bootstrapMissing' -Message "WinMint Windhawk bootstrap script is missing from the repository: $windhawkBootstrap"
         }
         if (-not (Test-Path -LiteralPath $virtualDesktopFlyouts)) {
-            $failures.Add("WinMint virtual desktop flyout script is missing from the repository: $virtualDesktopFlyouts")
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'assets.windhawk.flyoutScriptMissing' -Message "WinMint virtual desktop flyout script is missing from the repository: $virtualDesktopFlyouts"
         }
-        if (-not (Test-Path -LiteralPath $windhawkPreset)) {
-            $failures.Add("WinMint Windhawk preset is missing from the repository: $windhawkPreset")
-        }
+        Test-WinMintDesktopPresetAssets -ToolId 'windhawk' -FailureCode 'assets.windhawk.presetMissing'
     }
     if ($Config.InstallYasb) {
-        foreach ($asset in @('assets\runtime\desktop\yasb\config.yaml', 'assets\runtime\desktop\yasb\styles.css')) {
-            $path = Join-Path (Get-WinMintRepositoryRoot) $asset
-            if (-not (Test-Path -LiteralPath $path)) {
-                $failures.Add("WinMint YASB preset asset is missing from the repository: $path")
-            }
-        }
+        Test-WinMintDesktopPresetAssets -ToolId 'yasb' -FailureCode 'assets.yasb.presetMissing'
     }
     if ($Config.InstallKomorebi) {
         foreach ($asset in @('assets\runtime\desktop\komorebi\komorebi.json', 'assets\runtime\desktop\komorebi\applications.json', 'assets\runtime\desktop\komorebi\whkdrc')) {
             $path = Join-Path (Get-WinMintRepositoryRoot) $asset
             if (-not (Test-Path -LiteralPath $path)) {
-                $failures.Add("WinMint Komorebi preset asset is missing from the repository: $path")
+                Add-WinMintBuildPreflightFinding -Severity failure -Code 'assets.komorebi.presetMissing' -Message "WinMint Komorebi preset asset is missing from the repository: $path"
             }
         }
     }
-    if ($Config.Drivers.Source -eq 'Custom') {
+    if (Test-WinMintDriverSourceUsesSurfaceCatalog -Source ([string]$Config.Drivers.Source)) {
+        $deviceId = [string]$Config.Drivers.Path
+        if ([string]::IsNullOrWhiteSpace($deviceId)) {
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.surfaceCatalog.idMissing' -Message 'SurfaceCatalog driver source requires profile.drivers.path to contain a Surface catalog device id.'
+        }
+        else {
+            try {
+                $surfaceDevice = Resolve-WinMintSurfaceCatalogDevice -DeviceId $deviceId
+                Assert-WinMintSurfaceCatalogDeviceCompatible -Device $surfaceDevice -TargetArchitecture ([string]$Config.Architecture)
+            }
+            catch {
+                Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.surfaceCatalog.invalid' -Message $_.Exception.Message
+            }
+        }
+    }
+    elseif (Test-WinMintDriverSourceUsesPath -Source ([string]$Config.Drivers.Source)) {
         $driverPath = [string]$Config.Drivers.Path
         if ([string]::IsNullOrWhiteSpace($driverPath)) {
-            $failures.Add('Custom driver source was selected, but no driver path was provided.')
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.pathMissing' -Message "Driver source '$($Config.Drivers.Source)' was selected, but no driver path was provided."
         }
         elseif (-not (Test-Path -LiteralPath $driverPath)) {
-            $failures.Add("Custom driver path not found: $driverPath")
+            Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.pathNotFound' -Message "Custom driver path not found: $driverPath"
         }
         else {
             $item = Get-Item -LiteralPath $driverPath
-            if (-not $item.PSIsContainer -and $item.Extension -notin '.inf', '.msi', '.zip') {
-                $failures.Add("Custom driver path must be a .inf file, .msi file, .zip file, or folder: $driverPath")
+            if ((Test-WinMintDriverSourceRequiresMsi -Source ([string]$Config.Drivers.Source)) -and ($item.PSIsContainer -or $item.Extension -ine '.msi')) {
+                Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.msiRequired' -Message "Driver source '$($Config.Drivers.Source)' requires an OEM .msi file: $driverPath"
+            }
+            elseif ([string]$Config.Drivers.Source -eq 'CustomInfFolder' -and -not ($item.PSIsContainer -or $item.Extension -ieq '.inf')) {
+                Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.infFolderRequired' -Message "Driver source 'CustomInfFolder' requires a .inf file or folder containing INF drivers: $driverPath"
+            }
+            elseif ([string]$Config.Drivers.Source -eq 'CustomInfFolder' -and $item.PSIsContainer) {
+                $infCount = (Get-ChildItem -LiteralPath $item.FullName -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue | Measure-Object).Count
+                if ($infCount -lt 1) {
+                    Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.infFolderEmpty' -Message "Driver source 'CustomInfFolder' requires a folder containing .inf drivers: $driverPath"
+                }
+            }
+            elseif (-not $item.PSIsContainer -and $item.Extension -notin '.inf', '.msi', '.zip') {
+                Add-WinMintBuildPreflightFinding -Severity failure -Code 'drivers.custom.pathUnsupported' -Message "Custom driver path must be a .inf file, .msi file, .zip file, or folder: $driverPath"
             }
         }
     }
-    [pscustomobject]@{ Passed = ($failures.Count -eq 0); Warnings = $warnings.ToArray(); Failures = $failures.ToArray() }
+    [pscustomobject]@{
+        Passed = ($failures.Count -eq 0)
+        Warnings = $warnings.ToArray()
+        Failures = $failures.ToArray()
+        Findings = $findings.ToArray()
+        Context = $PreflightContext
+    }
 }
 
 function Get-WinMintBuildOutputPathFromPipelineResult {
@@ -529,7 +743,36 @@ function Invoke-WinMintIsoBuild {
         throw 'Not running elevated; WinMint requires Administrator.'
     }
 
-    $pre = Test-WinMintBuildPrerequisite -Config $Config -AllowMissingSourceIso:$DryRun
+    if (-not $DryRun -and $Config.Updates -and [string]$Config.Updates.Mode -ne 'None') {
+        Write-WinMintProgress `
+            -Stage 'Updates' `
+            -Level Section `
+            -Message 'Resolving official Microsoft update payloads' `
+            -ProgressHandler $ProgressHandler
+        try {
+            $acquired = Invoke-WinMintStable25H2UpdatePayloadAcquisition `
+                -Updates $Config.Updates `
+                -Architecture ([string]$Config.Architecture)
+            if ($acquired) {
+                Write-WinMintProgress `
+                    -Stage 'Updates' `
+                    -Level OK `
+                    -Message "Resolved $($acquired.PayloadCount) update payload file(s): $($acquired.ManifestPath)" `
+                    -ProgressHandler $ProgressHandler
+            }
+        }
+        catch {
+            Write-WinMintProgress `
+                -Stage 'Updates' `
+                -Level Error `
+                -Message "Official update payload acquisition failed: $($_.Exception.Message)" `
+                -ProgressHandler $ProgressHandler
+            throw
+        }
+    }
+
+    $preflightRunMode = if ($DryRun) { 'DryRun' } else { 'Build' }
+    $pre = Test-WinMintBuildPrerequisite -Config $Config -RunMode $preflightRunMode
     foreach ($w in $pre.Warnings) { Write-WinMintProgress -Stage 'Validate' -Level Warn -Message $w -ProgressHandler $ProgressHandler }
     foreach ($f in $pre.Failures) { Write-WinMintProgress -Stage 'Validate' -Level Error -Message $f -ProgressHandler $ProgressHandler }
     if (-not $pre.Passed) {
@@ -558,6 +801,7 @@ function Invoke-WinMintIsoBuild {
         -Message $sourceMessage `
         -ProgressHandler $ProgressHandler
     $installPlan = New-WinMintInstallPlanFromBuildConfig -BuildConfig $Config
+    $buildDelta = New-WinMintBuildDeltaCatalog -BuildConfig $Config -InstallPlan $installPlan
     $kept = @()
     if ($Config.Keep.Edge) { $kept += 'Edge' }
     if ($Config.Keep.Gaming) { $kept += 'Gaming' }
@@ -575,7 +819,7 @@ function Invoke-WinMintIsoBuild {
     $report = New-WinMintBuildReport -Config $Config -DetectedArchitecture $detected -Warnings $pre.Warnings
     $paths = Save-WinMintBuildReport -Report $report
     Write-WinMintProgress -Stage 'Report' -Level OK -Message "Wrote $($paths.Json)" -ProgressHandler $ProgressHandler
-    Initialize-WinMintBuildManifest -Config $Config -InstallPlan $installPlan
+    Initialize-WinMintBuildManifest -Config $Config -InstallPlan $installPlan -BuildDelta $buildDelta
     if ($DryRun -and -not $sourceIsoAvailable) {
         Write-WinMintProgress `
             -Stage 'DryRun' `
@@ -712,3 +956,4 @@ function Start-WinMintBuild {
         -AllowFixedUsbDisk:$AllowFixedUsbDisk `
         -ProgressHandler $ProgressHandler
 }
+

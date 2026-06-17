@@ -19,7 +19,7 @@
         # Empty catch blocks are reserved for optional-feature graceful degradation.
         'PSAvoidUsingEmptyCatchBlock',
 
-        # Project targets PS 7.3+ exclusively; UTF-8 without BOM is correct and preferred
+        # Project targets PS 7.6+; UTF-8 without BOM is correct and preferred
         'PSUseBOMForUnicodeEncodedFile',
 
         # Plural nouns are semantically correct for functions that return or operate on collections
@@ -40,6 +40,6 @@
 
     Rules               = @{
         PSAvoidLongLines    = @{ Enable = $true; MaximumLineLength = 220 }
-        PSUseCompatibleSyntax = @{ Enable = $true; TargetVersions = @('7.3') }
+        PSUseCompatibleSyntax = @{ Enable = $true; TargetVersions = @('7.6') }
     }
 }

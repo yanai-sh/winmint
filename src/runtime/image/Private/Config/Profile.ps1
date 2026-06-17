@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 function Get-WinMintProfileSetting {
     param(
@@ -215,7 +215,7 @@ function Get-WinMintProfileBrowserIds {
                     switch -Regex (([string]$_).Trim()) {
                         '^(Zen|Zen Browser|Zen-Browser|ZenBrowser)$' { 'zen-browser'; break }
                         '^(Helium)$' { 'helium'; break }
-                        '^(LibreWolf|Librewolf|Libre Wolf)$' { 'librewolf'; break }
+                        '^(Firefox Developer Edition|Firefox Dev|FirefoxDeveloperEdition|FirefoxDev|FDE)$' { 'firefox-developer-edition'; break }
                         '^(Brave)$' { 'brave'; break }
                         '^(Edge|Microsoft Edge)$' { 'edge'; break }
                         default { ([string]$_).Trim().ToLowerInvariant() }
@@ -229,7 +229,7 @@ function Get-WinMintProfileBrowserIds {
     $browserFlags = @(
         @('BrowserZen', 'zen-browser'),
         @('BrowserHelium', 'helium'),
-        @('BrowserLibreWolf', 'librewolf'),
+        @('BrowserFirefoxDeveloperEdition', 'firefox-developer-edition'),
         @('BrowserBrave', 'brave'),
         @('BrowserEdge', 'edge')
     )
@@ -250,37 +250,14 @@ function Get-WinMintProfileBrowserIds {
 function Get-WinMintProfileWslDistroIds {
     param([object]$Settings)
 
-    function Convert-WinMintWslDistroSelection {
-        param([string]$Value)
-
-        switch -Regex (([string]$Value).Trim()) {
-            '^(Ubuntu|Ubuntu-\d+\.\d+)$' { 'Ubuntu'; break }
-            '^(Fedora|FedoraLinux|FedoraLinux-\d+)$' { 'FedoraLinux'; break }
-            '^(Arch(?: Linux)?|archlinux)$' { 'archlinux'; break }
-            '^(NixOS-WSL|NixOS|nixos-wsl)$' { 'NixOS-WSL'; break }
-            '^(Pengwin|pengwin)$' { 'pengwin'; break }
-            default { ([string]$Value).Trim() }
-        }
-    }
-
     $wslDistros = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $Settings 'Wsl2Distros' @()))
     if ($wslDistros.Count -gt 0 -or (Test-WinMintProfileSettingExists -Settings $Settings -Name 'Wsl2Distros')) {
-        return @(
-            $wslDistros |
-                ForEach-Object { Convert-WinMintWslDistroSelection ([string]$_) } |
-                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                Select-Object -Unique
-        )
+        return @((ConvertTo-WinMintWslSelection -Values $wslDistros).ProfileTokens)
     }
 
     $legacyWslDistro = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $Settings 'Wsl2Distro' 'None'))
     if ($legacyWslDistro.Count -gt 0 -or (Test-WinMintProfileSettingExists -Settings $Settings -Name 'Wsl2Distro')) {
-        return @(
-            $legacyWslDistro |
-                ForEach-Object { Convert-WinMintWslDistroSelection ([string]$_) } |
-                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                Select-Object -Unique
-        )
+        return @((ConvertTo-WinMintWslSelection -Values $legacyWslDistro).ProfileTokens)
     }
 
     @()
@@ -297,6 +274,7 @@ function Get-WinMintProfileDesktopLayers {
     }
     if ([bool](Get-WinMintProfileSetting $Settings 'InstallWindhawk' $false)) { $layers.Add('windhawk') }
     if ([bool](Get-WinMintProfileSetting $Settings 'InstallYasb' $false)) { $layers.Add('yasb') }
+    if ([bool](Get-WinMintProfileSetting $Settings 'InstallThide' $false)) { $layers.Add('thide') }
     if ([bool](Get-WinMintProfileSetting $Settings 'InstallKomorebi' $false)) { $layers.Add('komorebi') }
     if ([bool](Get-WinMintProfileSetting $Settings 'InstallNilesoft' $false)) { $layers.Add('nilesoft') }
     if ($layers.Count -eq 0) { $layers.Add('standard') }
@@ -513,7 +491,7 @@ function Get-WinMintDefaultUpdatePayloadRoot {
 function Resolve-WinMintProfileUpdateConfig {
     param([object]$Settings)
 
-    $mode = [string](Get-WinMintProfileSetting $Settings 'UpdateImage' (Get-WinMintProfileSetting $Settings 'UpdateMode' 'Stable25H2'))
+    $mode = [string](Get-WinMintProfileSetting $Settings 'UpdateImage' (Get-WinMintProfileSetting $Settings 'UpdateMode' 'None'))
     switch -Regex ($mode) {
         '^(None|Off|Disabled)$' { $mode = 'None'; break }
         '^(Stable25H2|LatestStable25H2|25H2)$' { $mode = 'Stable25H2'; break }
@@ -524,7 +502,7 @@ function Resolve-WinMintProfileUpdateConfig {
     if ($provisionedApps -notin @('On', 'Off')) {
         throw "UpdateProvisionedApps must be On or Off."
     }
-    $payloadRoot = [string](Get-WinMintProfileSetting $Settings 'UpdatePayloadRoot' (Get-WinMintDefaultUpdatePayloadRoot))
+    $payloadRoot = [string](Get-WinMintProfileSetting $Settings 'UpdatePayloadRoot' '')
     if ($mode -eq 'Stable25H2' -and [string]::IsNullOrWhiteSpace($payloadRoot)) {
         $payloadRoot = Get-WinMintDefaultUpdatePayloadRoot
     }
@@ -616,6 +594,7 @@ function New-WinMintBuildProfile {
         target = [ordered]@{
             device = [string](Get-WinMintProfileSetting $Settings 'TargetDevice' 'DifferentPC')
             formFactor = [string](Get-WinMintProfileSetting $Settings 'FormFactor' 'Auto')
+            powerPlan = [string](Get-WinMintProfileSetting $Settings 'PowerPlan' 'Balanced')
             editionMode = $editionMode
             edition = $edition
             productKey = $productKey
@@ -646,8 +625,8 @@ function New-WinMintBuildProfile {
         }
         drivers = [ordered]@{
             source = $driverSource
-            path = if ($driverSource -eq 'Custom') { $driverPath } else { '' }
-            exportHostDrivers = ($driverSource -eq 'Host')
+            path = if ((Test-WinMintDriverSourceUsesPath -Source $driverSource) -or (Test-WinMintDriverSourceUsesSurfaceCatalog -Source $driverSource)) { $driverPath } else { '' }
+            exportHostDrivers = (Test-WinMintDriverSourceUsesHostExport -Source $driverSource)
         }
         desktop = [ordered]@{
             cursorPack = 'Windows11Modern'
@@ -664,7 +643,7 @@ function New-WinMintBuildProfile {
             }
         }
         features = [ordered]@{
-            launcher = [string](Get-WinMintProfileSetting $Settings 'Launcher' $(if ([bool](Get-WinMintProfileSetting $Settings 'InstallFlowEverything' $false)) { 'FlowEverything' } else { 'None' }))
+            launcher = [string](Get-WinMintProfileSetting $Settings 'Launcher' 'None')
             liveInstallAudit = [bool](Get-WinMintProfileSetting $Settings 'LiveInstallAudit' $false)
             phoneLink = [bool](Get-WinMintProfileSetting $Settings 'PhoneLink' $false)
         }
@@ -762,6 +741,7 @@ function Test-WinMintBuildProfile {
         $Value = Get-WinMintProfileSetting $Object $Name
         if ($Value -isnot [bool]) { & $add "$Path must be a boolean." }
     }
+    $options = Get-WinMintOptionCatalog
 
     & $require $BuildProfile 'profile' @(
         'schemaVersion', 'createdAt', 'profileName', 'source', 'target', 'identity',
@@ -784,23 +764,26 @@ function Test-WinMintBuildProfile {
     $tweaks = Get-WinMintProfileSetting $BuildProfile 'tweaks' @{}
 
     & $require $source 'profile.source' @('isoPath', 'architecture')
-    & $enum ([string](Get-WinMintProfileSetting $source 'architecture' '')) 'profile.source.architecture' @('amd64', 'arm64', 'x86', '')
+    & $enum ([string](Get-WinMintProfileSetting $source 'architecture' '')) 'profile.source.architecture' @($options['ProfileArchitecture'])
     & $require $target 'profile.target' @('device', 'editionMode', 'edition', 'diskMode')
-    & $enum ([string](Get-WinMintProfileSetting $target 'device' '')) 'profile.target.device' @('ThisPC', 'DifferentPC')
+    & $enum ([string](Get-WinMintProfileSetting $target 'device' '')) 'profile.target.device' @($options['TargetDevice'])
     if (Test-WinMintProfileProperty -Object $target -Name 'formFactor') {
-        & $enum ([string](Get-WinMintProfileSetting $target 'formFactor' '')) 'profile.target.formFactor' @('Auto', 'Laptop', 'Desktop')
+        & $enum ([string](Get-WinMintProfileSetting $target 'formFactor' '')) 'profile.target.formFactor' @($options['FormFactor'])
     }
-    & $enum ([string](Get-WinMintProfileSetting $target 'editionMode' '')) 'profile.target.editionMode' @('TargetLicense', 'Fixed')
+    if (Test-WinMintProfileProperty -Object $target -Name 'powerPlan') {
+        & $enum ([string](Get-WinMintProfileSetting $target 'powerPlan' '')) 'profile.target.powerPlan' @($options['PowerPlan'])
+    }
+    & $enum ([string](Get-WinMintProfileSetting $target 'editionMode' '')) 'profile.target.editionMode' @($options['EditionMode'])
     $diskMode = [string](Get-WinMintProfileSetting $target 'diskMode' '')
-    & $enum $diskMode 'profile.target.diskMode' @('Manual', 'AutoWipeDisk0', 'DualBootReserved')
+    & $enum $diskMode 'profile.target.diskMode' @($options['DiskMode'])
     if (Test-WinMintProfileProperty -Object $target -Name 'diskLayout') {
         $diskLayout = Get-WinMintProfileSetting $target 'diskLayout' @{}
         & $require $diskLayout 'profile.target.diskLayout' @(
             'mode', 'preset', 'roundingGb', 'windowsMinimumGb', 'windowsRecommendedGb',
             'linuxMinimumGb', 'linuxRecommendedGb', 'efiMb', 'msrMb', 'recoveryMb'
         )
-        & $enum ([string](Get-WinMintProfileSetting $diskLayout 'mode' '')) 'profile.target.diskLayout.mode' @('Manual', 'AutoWipeDisk0', 'DualBootReserved')
-        & $enum ([string](Get-WinMintProfileSetting $diskLayout 'preset' '')) 'profile.target.diskLayout.preset' @('', 'WindowsHeavy', 'Balanced', 'EvenSplit', 'LinuxHeavy')
+        & $enum ([string](Get-WinMintProfileSetting $diskLayout 'mode' '')) 'profile.target.diskLayout.mode' @($options['DiskMode'])
+        & $enum ([string](Get-WinMintProfileSetting $diskLayout 'preset' '')) 'profile.target.diskLayout.preset' @($options['DiskLayoutPreset'])
         if ([string](Get-WinMintProfileSetting $diskLayout 'mode' '') -ne $diskMode) {
             & $add 'profile.target.diskLayout.mode must match profile.target.diskMode.'
         }
@@ -819,7 +802,7 @@ function Test-WinMintBuildProfile {
 
     & $require $identity 'profile.identity' @('computerName', 'accountName', 'autoLogon', 'passwordSet', 'passwordIncluded')
     if (Test-WinMintProfileProperty -Object $identity -Name 'accountMode') {
-        & $enum ([string](Get-WinMintProfileSetting $identity 'accountMode' 'Local')) 'profile.identity.accountMode' @('Local', 'MicrosoftOobe')
+        & $enum ([string](Get-WinMintProfileSetting $identity 'accountMode' 'Local')) 'profile.identity.accountMode' @($options['AccountMode'])
     }
     & $bool $identity 'autoLogon' 'profile.identity.autoLogon'
     & $bool $identity 'passwordSet' 'profile.identity.passwordSet'
@@ -836,35 +819,41 @@ function Test-WinMintBuildProfile {
     }
     & $require $drivers 'profile.drivers' @('source', 'path', 'exportHostDrivers')
     $driverSource = [string](Get-WinMintProfileSetting $drivers 'source' '')
-    & $enum $driverSource 'profile.drivers.source' @('None', 'Host', 'Custom')
+    & $enum $driverSource 'profile.drivers.source' @($options['DriverSource'])
     & $bool $drivers 'exportHostDrivers' 'profile.drivers.exportHostDrivers'
     $exportHostDrivers = Get-WinMintProfileSetting $drivers 'exportHostDrivers' $null
     if ($exportHostDrivers -is [bool]) {
-        if ($driverSource -eq 'Host' -and -not $exportHostDrivers) {
-            & $add 'profile.drivers.exportHostDrivers must be true when profile.drivers.source is Host.'
+        if ((Test-WinMintDriverSourceUsesHostExport -Source $driverSource) -and -not $exportHostDrivers) {
+            & $add 'profile.drivers.exportHostDrivers must be true when profile.drivers.source is Host or HostExport.'
         }
-        elseif ($driverSource -ne 'Host' -and $exportHostDrivers) {
-            & $add 'profile.drivers.exportHostDrivers must be false unless profile.drivers.source is Host.'
+        elseif (-not (Test-WinMintDriverSourceUsesHostExport -Source $driverSource) -and $exportHostDrivers) {
+            & $add 'profile.drivers.exportHostDrivers must be false unless profile.drivers.source is Host or HostExport.'
         }
+    }
+    if ((Test-WinMintDriverSourceUsesPath -Source $driverSource) -and [string]::IsNullOrWhiteSpace([string](Get-WinMintProfileSetting $drivers 'path' ''))) {
+        & $add "profile.drivers.path is required when profile.drivers.source is $driverSource."
+    }
+    if ((Test-WinMintDriverSourceUsesSurfaceCatalog -Source $driverSource) -and [string]::IsNullOrWhiteSpace([string](Get-WinMintProfileSetting $drivers 'path' ''))) {
+        & $add 'profile.drivers.path is required when profile.drivers.source is SurfaceCatalog and must contain a Surface catalog device id.'
     }
 
     & $require $desktop 'profile.desktop' @('cursorPack', 'layers')
-    & $enum ([string](Get-WinMintProfileSetting $desktop 'cursorPack' '')) 'profile.desktop.cursorPack' @('Windows11Modern')
+    & $enum ([string](Get-WinMintProfileSetting $desktop 'cursorPack' '')) 'profile.desktop.cursorPack' @($options['DesktopCursorPack'])
     $layers = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $desktop 'layers' @()))
-    foreach ($layer in $layers) { & $enum $layer 'profile.desktop.layers[]' @('standard', 'windhawk', 'yasb', 'komorebi', 'nilesoft') }
+    foreach ($layer in $layers) { & $enum $layer 'profile.desktop.layers[]' @($options['DesktopLayer']) }
     if ($layers.Count -ne @($layers | Select-Object -Unique).Count) { & $add 'profile.desktop.layers must be unique.' }
 
     & $require $development 'profile.development' @('editors', 'browsers', 'wsl')
     $editors = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $development 'editors' @()))
     foreach ($editor in $editors) {
-        & $enum ([string]$editor) 'profile.development.editors[]' @('cursor', 'vscode', 'zed', 'antigravity', 'neovim')
+        & $enum ([string]$editor) 'profile.development.editors[]' @($options['Editor'])
     }
     if ($editors.Count -ne @($editors | Select-Object -Unique).Count) {
         & $add 'profile.development.editors must be unique.'
     }
     $browserValues = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $development 'browsers' @()))
     foreach ($browser in $browserValues) {
-        & $enum ([string]$browser) 'profile.development.browsers[]' @('zen-browser', 'helium', 'librewolf', 'brave', 'edge')
+        & $enum ([string]$browser) 'profile.development.browsers[]' @($options['Browser'])
     }
     if ($browserValues.Count -ne @($browserValues | Select-Object -Unique).Count) {
         & $add 'profile.development.browsers must be unique.'
@@ -875,18 +864,22 @@ function Test-WinMintBuildProfile {
     if (-not [bool](Get-WinMintProfileSetting $wsl 'enabled' $false)) {
         & $add 'profile.development.wsl.enabled must be true; WSL is baseline on every build.'
     }
+    $wslDistros = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $wsl 'distros' @()))
+    foreach ($distro in $wslDistros) {
+        & $enum ([string]$distro) 'profile.development.wsl.distros[]' @($options['WslDistro'])
+    }
+    if ($wslDistros.Count -ne @($wslDistros | Select-Object -Unique).Count) {
+        & $add 'profile.development.wsl.distros must be unique.'
+    }
 
     if (Test-WinMintProfileProperty -Object $BuildProfile -Name 'features') {
         & $require $features 'profile.features' @('launcher')
-        & $enum ([string](Get-WinMintProfileSetting $features 'launcher' '')) 'profile.features.launcher' @('None', 'FlowEverything', 'Raycast')
+        & $enum ([string](Get-WinMintProfileSetting $features 'launcher' '')) 'profile.features.launcher' @($options['Launcher'])
         if (Test-WinMintProfileProperty -Object $features -Name 'liveInstallAudit') {
             & $bool $features 'liveInstallAudit' 'profile.features.liveInstallAudit'
         }
         if (Test-WinMintProfileProperty -Object $features -Name 'phoneLink') {
             & $bool $features 'phoneLink' 'profile.features.phoneLink'
-        }
-        if (Test-WinMintProfileProperty -Object $features -Name 'flowEverything') {
-            & $bool $features 'flowEverything' 'profile.features.flowEverything'
         }
     }
 
@@ -896,9 +889,9 @@ function Test-WinMintBuildProfile {
             'payloadRoot', 'qualitySecurity', 'dynamicUpdate', 'defender', 'dotnet',
             'provisionedApps'
         )
-        & $enum ([string](Get-WinMintProfileSetting $updates 'mode' 'None')) 'profile.updates.mode' @('None', 'Stable25H2')
-        & $enum ([string](Get-WinMintProfileSetting $updates 'targetFeatureVersion' '25H2')) 'profile.updates.targetFeatureVersion' @('25H2')
-        & $enum ([string](Get-WinMintProfileSetting $updates 'releaseCadence' 'BRelease')) 'profile.updates.releaseCadence' @('BRelease')
+        & $enum ([string](Get-WinMintProfileSetting $updates 'mode' 'None')) 'profile.updates.mode' @($options['UpdateMode'])
+        & $enum ([string](Get-WinMintProfileSetting $updates 'targetFeatureVersion' '25H2')) 'profile.updates.targetFeatureVersion' @($options['UpdateTargetFeatureVersion'])
+        & $enum ([string](Get-WinMintProfileSetting $updates 'releaseCadence' 'BRelease')) 'profile.updates.releaseCadence' @($options['UpdateReleaseCadence'])
         foreach ($name in @('includeOptionalPreviews', 'qualitySecurity', 'dynamicUpdate', 'defender', 'dotnet', 'provisionedApps')) {
             & $bool $updates $name "profile.updates.$name"
         }
@@ -912,7 +905,7 @@ function Test-WinMintBuildProfile {
         & $bool $removals $name "profile.removals.$name"
     }
     if (Test-WinMintProfileProperty -Object $removals -Name 'aiPolicy') {
-        & $enum ([string](Get-WinMintProfileSetting $removals 'aiPolicy' 'Core')) 'profile.removals.aiPolicy' @('Core', 'ServiceableFull', 'AggressiveExperimental')
+        & $enum ([string](Get-WinMintProfileSetting $removals 'aiPolicy' 'Core')) 'profile.removals.aiPolicy' @($options['AiPolicy'])
         if ([string](Get-WinMintProfileSetting $removals 'aiPolicy' 'Core') -eq 'AggressiveExperimental' -and
             [string]$env:WINMINT_ENABLE_EXPERIMENTAL_AI_REMOVAL -ne '1') {
             & $add 'profile.removals.aiPolicy AggressiveExperimental requires WINMINT_ENABLE_EXPERIMENTAL_AI_REMOVAL=1.'
@@ -948,3 +941,4 @@ function Assert-WinMintBuildProfile {
         throw "Build profile validation failed:`n - $($result.Failures -join "`n - ")"
     }
 }
+

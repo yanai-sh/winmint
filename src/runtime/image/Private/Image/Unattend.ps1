@@ -1,21 +1,4 @@
-#Requires -Version 7.3
-
-function Assert-WinMintAgentToolSources {
-    # WinMint installs first-logon tools through explicit package-manager owners:
-    # winget/msstore for GUI/system apps, Scoop for developer CLI tools. Validate
-    # the catalog at build time so an unsupported source fails the build here, with a
-    # clear message, rather than silently failing per-tool on the user's first logon.
-    param([Parameter(Mandatory)][string]$ManifestPath)
-
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if (-not $manifest.PSObject.Properties['tools']) { return }
-    foreach ($toolProp in $manifest.tools.PSObject.Properties) {
-        $toolSource = [string]$toolProp.Value.source
-        if (-not [string]::IsNullOrWhiteSpace($toolSource) -and $toolSource -notin @('winget', 'store', 'scoop')) {
-            throw "Unsupported install source '$toolSource' for tool '$($toolProp.Name)' in packages.json. WinMint only supports the 'winget', 'store', and 'scoop' install sources."
-        }
-    }
-}
+#Requires -Version 7.6
 
 function New-WinMintAgentProfile {
     [CmdletBinding()]
@@ -504,136 +487,12 @@ function Install-Autounattend {
                 }
                 LogOK 'Staged WinMint account picture into the offline image.'
             }
-            $utf8Bom = [System.Text.UTF8Encoding]::new($true)
-            foreach ($n in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Runtime.ps1')) {
-                $src = Join-Path $bundleDir $n
-                if (-not (Test-Path -LiteralPath $src)) { continue }
-                $destPath = Join-Path $destScripts $n
-                if ($n -like '*.cmd') {
-                    # Batch files must be ASCII with no BOM — a UTF-8 BOM makes cmd.exe
-                    # fail on the first line.
-                    [System.IO.File]::WriteAllBytes($destPath, [System.Text.Encoding]::ASCII.GetBytes((Get-Content -LiteralPath $src -Raw)))
-                }
-                else {
-                    [System.IO.File]::WriteAllText($destPath, (Get-Content -LiteralPath $src -Raw), $utf8Bom)
-                }
-            }
-            # Loud build-time guard: the install boots to a vanilla desktop (no
-            # personalization, no debloat, no agent) if these never make it into the
-            # image. Fail the build here rather than ship a silently broken ISO.
-            foreach ($must in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Runtime.ps1')) {
-                if (-not (Test-Path -LiteralPath (Join-Path $bundleDir $must))) {
-                    throw "WinMint setup payload missing from the repository: $(Join-Path $bundleDir $must). Cannot guarantee FirstLogon/SetupComplete will run."
-                }
-                if (-not (Test-Path -LiteralPath (Join-Path $destScripts $must))) {
-                    throw "Failed to stage '$must' into the offline image at $destScripts. SetupComplete/FirstLogon would not run on the installed system; aborting before producing a broken ISO."
-                }
-            }
-            LogOK 'Verified SetupComplete / FirstLogon / specialize scripts are staged into the offline image.'
-            $setupCompleteModuleSrc = Join-Path $bundleDir 'SetupComplete'
-            if (Test-Path -LiteralPath $setupCompleteModuleSrc) {
-                $setupCompleteModuleDest = Join-Path $destScripts 'SetupComplete'
-                $null = New-Item -ItemType Directory -Path $setupCompleteModuleDest -Force -ErrorAction SilentlyContinue
-                foreach ($moduleFile in @(Get-ChildItem -LiteralPath $setupCompleteModuleSrc -Filter '*.ps1' -File)) {
-                    [System.IO.File]::WriteAllText((Join-Path $setupCompleteModuleDest $moduleFile.Name), (Get-Content -LiteralPath $moduleFile.FullName -Raw), $utf8Bom)
-                }
-            }
-            $auditSrc = Join-Path $ScriptRoot 'tools\audit\Audit-LiveInstall.ps1'
-            if (Test-Path -LiteralPath $auditSrc) {
-                [System.IO.File]::WriteAllText((Join-Path $destScripts 'Audit-LiveInstall.ps1'), (Get-Content -LiteralPath $auditSrc -Raw), $utf8Bom)
-            }
-            if ($SetupProfile) {
-                $setupProfileJson = $SetupProfile | ConvertTo-Json -Depth 12
-                Set-Content -LiteralPath (Join-Path $destScripts 'WinMintSetupProfile.json') -Value $setupProfileJson -Encoding UTF8
-                LogOK 'Generated setup profile for specialize, SetupComplete, and FirstLogon scripts.'
-            }
-            if ($SetupPlan) {
-                $setupPlanJson = $SetupPlan | ConvertTo-Json -Depth 16
-                Set-Content -LiteralPath (Join-Path $destScripts 'WinMintSetupPlan.json') -Value $setupPlanJson -Encoding UTF8
-                LogOK 'Generated setup plan for CLI/UI inspection and install-phase audit.'
-            }
-            $agentSrc = Join-Path $ScriptRoot 'src\runtime\firstlogon'
-            if (Test-Path -LiteralPath $agentSrc) {
-                $agentDest = Join-Path $destScripts 'WinMintAgent'
-                # Copy-Item of a directory onto an EXISTING directory nests it
-                # (creates WinMintAgent\agent\...) instead of overwriting. When the
-                # serviced WIM is restored from cache, WinMintAgent already exists, so
-                # the nest left a STALE Start-WinMintAgent.ps1 at the root - which is the
-                # file FirstLogon launches - while the current agent landed unused under
-                # WinMintAgent\agent\. Remove the destination first so every build stages
-                # the current agent cleanly at the WinMintAgent root.
-                if (Test-Path -LiteralPath $agentDest) {
-                    Remove-Item -LiteralPath $agentDest -Recurse -Force
-                }
-                Copy-Item -LiteralPath $agentSrc -Destination $agentDest -Recurse -Force
-                # Loud guard: the agent is what makes FirstLogon do anything. If the root
-                # entrypoint is missing or a nested copy exists, fail the build rather
-                # than ship an ISO whose FirstLogon agent silently no-ops.
-                $agentEntry = Join-Path $agentDest 'Start-WinMintAgent.ps1'
-                if (-not (Test-Path -LiteralPath $agentEntry)) {
-                    throw "WinMintAgent entrypoint missing after staging: $agentEntry. FirstLogon would have no agent to run; aborting before producing a broken ISO."
-                }
-                if (Test-Path -LiteralPath (Join-Path $agentDest 'agent')) {
-                    throw "WinMintAgent was staged nested (WinMintAgent\agent\). FirstLogon would launch the wrong (stale) entrypoint; aborting before producing a broken ISO."
-                }
-                $pkgManifest = Get-WinMintPath -Name ConfigRoot -ChildPath 'packages.json'
-                if (Test-Path -LiteralPath $pkgManifest) {
-                    Assert-WinMintAgentToolSources -ManifestPath $pkgManifest
-                    Copy-Item -LiteralPath $pkgManifest -Destination (Join-Path $agentDest 'packages.json') -Force
-                }
-                if ($AgentProfile) {
-                    $profileJson = $AgentProfile | ConvertTo-Json -Depth 12
-                    Set-Content -LiteralPath (Join-Path $agentDest 'BuildProfile.json') -Value $profileJson -Encoding UTF8
-                    LogOK 'Generated WinMintAgent profile from the selected wizard options.'
-                }
-                $terminalIconSourceDir = Join-Path $ScriptRoot 'assets\ui\wsl'
-                if (Test-Path -LiteralPath $terminalIconSourceDir -PathType Container) {
-                    $terminalIconAssetDir = Join-Path $agentDest 'Assets\WindowsTerminal\Icons'
-                    $null = New-Item -ItemType Directory -Path $terminalIconAssetDir -Force
-                    Get-ChildItem -LiteralPath $terminalIconSourceDir -Filter '*.png' -File -ErrorAction SilentlyContinue |
-                        Copy-Item -Destination $terminalIconAssetDir -Force
-                    LogOK 'Staged Windows Terminal PNG profile icons for first-logon setup.'
-                }
-                $windhawkSelected = $false
-                try { $windhawkSelected = [bool]$AgentProfile.modules.windhawk.enabled } catch { $windhawkSelected = $false }
-                if ($windhawkSelected) {
-                    $windhawkAssetDir = Join-Path $agentDest 'Assets\Windhawk'
-                    $null = New-Item -ItemType Directory -Path $windhawkAssetDir -Force
-                    Copy-Item -LiteralPath (Get-WinMintPath -Name RuntimeSetupRoot -ChildPath 'WindhawkBootstrap.ps1') -Destination (Join-Path $windhawkAssetDir 'WindhawkBootstrap.ps1') -Force
-                    Copy-Item -LiteralPath (Get-WinMintPath -Name RuntimeSetupRoot -ChildPath 'WindhawkBootstrap.Helpers.ps1') -Destination (Join-Path $windhawkAssetDir 'WindhawkBootstrap.Helpers.ps1') -Force
-                    Copy-Item -LiteralPath (Get-WinMintPath -Name RuntimeSetupRoot -ChildPath 'DisableVirtualDesktopFlyouts.ps1') -Destination (Join-Path $windhawkAssetDir 'DisableVirtualDesktopFlyouts.ps1') -Force
-                    Copy-Item -LiteralPath (Join-Path $ScriptRoot 'assets\runtime\desktop\windhawk\preset.json') -Destination (Join-Path $windhawkAssetDir 'preset.json') -Force
-                    LogOK 'Staged Windhawk preset for first-logon setup.'
-                }
-                $yasbSelected = $false
-                try { $yasbSelected = [bool]$AgentProfile.modules.shell.yasb } catch { $yasbSelected = $false }
-                if ($yasbSelected) {
-                    $yasbSourceDir = Join-Path $ScriptRoot 'assets\runtime\desktop\yasb'
-                    $yasbAssetDir = Join-Path $agentDest 'Assets\Yasb'
-                    if (-not (Test-Path -LiteralPath $yasbSourceDir)) {
-                        throw "YASB preset assets are missing: $yasbSourceDir"
-                    }
-                    $null = New-Item -ItemType Directory -Path $yasbAssetDir -Force
-                    Copy-Item -LiteralPath (Join-Path $yasbSourceDir 'config.yaml') -Destination (Join-Path $yasbAssetDir 'config.yaml') -Force
-                    Copy-Item -LiteralPath (Join-Path $yasbSourceDir 'styles.css') -Destination (Join-Path $yasbAssetDir 'styles.css') -Force
-                    LogOK 'Staged YASB preset for first-logon setup.'
-                }
-                $komorebiSelected = $false
-                try { $komorebiSelected = [bool]$AgentProfile.modules.shell.komorebi } catch { $komorebiSelected = $false }
-                if ($komorebiSelected) {
-                    $komorebiSourceDir = Join-Path $ScriptRoot 'assets\runtime\desktop\komorebi'
-                    $komorebiAssetDir = Join-Path $agentDest 'Assets\Komorebi'
-                    if (-not (Test-Path -LiteralPath $komorebiSourceDir)) {
-                        throw "Komorebi preset assets are missing: $komorebiSourceDir"
-                    }
-                    $null = New-Item -ItemType Directory -Path $komorebiAssetDir -Force
-                    foreach ($name in @('komorebi.json', 'applications.json', 'whkdrc')) {
-                        Copy-Item -LiteralPath (Join-Path $komorebiSourceDir $name) -Destination (Join-Path $komorebiAssetDir $name) -Force
-                    }
-                    LogOK 'Staged Komorebi preset for first-logon setup.'
-                }
-            }
-            LogOK 'Copied setup scripts into the offline image (matching files only).'
+            Invoke-WinMintSetupPayloadStaging `
+                -MountDir $MountDir `
+                -ScriptRoot $ScriptRoot `
+                -AgentProfile $AgentProfile `
+                -SetupProfile $SetupProfile `
+                -SetupPlan $SetupPlan | Out-Null
         }
         else {
             throw "WinMint setup script directory is missing: $bundleDir"

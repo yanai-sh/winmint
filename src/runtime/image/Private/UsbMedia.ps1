@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 $script:WinMintUefiNtfsVersion = 'rufus-master-2026-05-23'
 $script:WinMintUefiNtfsImageUrl = 'https://raw.githubusercontent.com/pbatard/rufus/master/res/uefi/uefi-ntfs.img'
@@ -338,3 +338,4 @@ function Invoke-FlashWindowsInstallMediaToUsb {
         }
     }
 }
+

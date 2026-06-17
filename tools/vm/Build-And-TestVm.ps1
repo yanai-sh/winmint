@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 <#
 .SYNOPSIS
     Build a WinMint ISO from a profile and boot it in a fresh Hyper-V test VM, in
@@ -118,3 +118,4 @@ if ($delayNetworkUntilFirstLogon) {
     $vmArgs['GuestPassword'] = $guestPassword
 }
 & (Join-Path $PSScriptRoot 'New-WinMintTestVm.ps1') @vmArgs
+

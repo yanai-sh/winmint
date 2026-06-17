@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 7.6
 
 # Applied when the telemetry privacy default is on: stop the DiagTrack and
 # SQM/CEIP ETW autologger sessions from auto-starting. Does not touch diagnostics
@@ -17,3 +17,4 @@ Add-WinMintRegistryTweakModule @{
     )
     remove = @()
 }
+

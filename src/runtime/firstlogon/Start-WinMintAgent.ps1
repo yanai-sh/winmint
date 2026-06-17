@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 5.1
 [CmdletBinding()]
 param(
     [switch]$Force,
@@ -7,6 +7,17 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
+
+$repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCommandPath)))
+Import-Module (Join-Path $repoRoot 'src\runtime\modules\WinMint.Bootstrap\WinMint.Bootstrap.psd1') -Force
+$bootstrapArgs = @()
+if ($Force) { $bootstrapArgs += '-Force' }
+if ($InteractiveFirstLogon) { $bootstrapArgs += '-InteractiveFirstLogon' }
+if ($EmitProgressJson) { $bootstrapArgs += '-EmitProgressJson' }
+$bootstrap = Invoke-WinMintRuntimeBootstrap -Entrypoint $PSCommandPath -Arguments $bootstrapArgs
+if ($bootstrap.Relaunched) {
+    exit $bootstrap.ExitCode
+}
 
 function Initialize-WinMintAgentConsoleEncoding {
     try {
@@ -44,6 +55,7 @@ $commandLogDir = Join-Path $logDir 'Commands'
 $null = New-Item -ItemType Directory -Path $commandLogDir -Force -ErrorAction SilentlyContinue
 $script:AgentConsoleReady = $false
 $script:AgentCommandCounter = 0
+$script:AgentConsoleSplashImagePath = Join-Path $agentRoot 'Assets\Brand\winmint_logo_wordmark.png'
 
 . (Join-Path $agentRoot 'Agent.Console.ps1')
 . (Join-Path $agentRoot 'Agent.Runtime.ps1')
@@ -53,15 +65,7 @@ Write-AgentEvent -Type 'run' -Status 'starting' -Message 'WinMintAgent start'
 Initialize-AgentConsole
 Show-AgentConsoleHeader
 Update-AgentProcessPath
-# Dot-source agent modules at SCRIPT scope so their Invoke-WinMintAgent* functions are
-# visible to the step runner below. Dot-sourcing inside a helper function (or inside a
-# ForEach-Object block) defines the functions in a child scope that is discarded on
-# return, so every enabled module failed with "<function> not found".
-if (Test-Path -LiteralPath $script:AgentModuleRoot) {
-    foreach ($agentModuleFile in (Get-ChildItem -LiteralPath $script:AgentModuleRoot -Filter '*.ps1' -File | Sort-Object -Property Name)) {
-        . $agentModuleFile.FullName
-    }
-}
+Import-WinMintAgentRegisteredModules -AgentRoot $agentRoot
 $state = Read-AgentJson -Path $statePath -Fallback ([pscustomobject]@{ version = 1; steps = @{} })
 # Read-AgentJson returns a PSCustomObject whenever state.json already exists (a prior
 # failed run, or a reboot mid-run). Every agent module function takes [hashtable]$State,

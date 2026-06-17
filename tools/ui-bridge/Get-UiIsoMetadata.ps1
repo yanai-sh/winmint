@@ -1,4 +1,4 @@
-#Requires -Version 7.3
+#Requires -Version 5.1
 <#
 .SYNOPSIS
   Reads Windows 11 ISO install image metadata for UI bridge callers (JSON on stdout).
@@ -17,6 +17,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
+
+$repositoryRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+Import-Module (Join-Path $repositoryRoot 'src\runtime\modules\WinMint.Bootstrap\WinMint.Bootstrap.psd1') -Force
+$bootstrap = Invoke-WinMintRuntimeBootstrap -Entrypoint $PSCommandPath -Arguments @('-Path', $Path, '-ResultPath', $ResultPath)
+if ($bootstrap.Relaunched) {
+    exit $bootstrap.ExitCode
+}
 
 $result = [ordered]@{
     Ok           = $false
