@@ -23,8 +23,17 @@ invariant): PowerShell Direct must be able to sign in, so the profile needs
 host, so run on the same architecture as the ISO.
 
 Output: an evidence folder under `output\vm-acceptance\<VMName>-<stamp>\` containing
-the pulled guest logs, the agent `state.json`, the host build artifacts, and a
-single `acceptance-result.json` verdict (`pass`/`fail`). A failed pass exits 1.
+`run.log` (the full transcript, written from the first line), the pulled guest
+logs, the agent `state.json`, the host build artifacts, and a single
+`acceptance-result.json` verdict (`pass`/`fail`). A failed pass exits 1.
+
+Every line is written to `run.log` as it prints (orchestrator lines via the
+`Say` helper, the noisy build teed through `Tee-Object`), so the run is always
+tailable regardless of how it was launched — including detached:
+
+```powershell
+Get-Content output\vm-acceptance\<vm>-<stamp>\run.log -Wait -Tail 20
+```
 
 ## Steps and ownership
 

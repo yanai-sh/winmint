@@ -227,8 +227,28 @@ function Get-Win11IsoLogTimestampPrefix {
 # go straight to plain stdout. Detected once, not retried per call.
 $script:UseSpectre = $true
 
+# Persistent build-log sink state. Declared at module scope so reads are
+# StrictMode-safe (reading an unset variable throws under Set-StrictMode).
+$script:WinMintBuildLogInit = $false
+$script:WinMintBuildLogPath = $null
+
 function Write-WinMintConsoleLine {
     param([string]$Markup, [string]$Plain)
+    # Persistent build log: mirror every line to output\WinMint-Build.log in real
+    # time, before any console/handler branching, so the build is always tailable
+    # (Get-Content -Wait) regardless of headless vs interactive. Lazy-init per
+    # process truncates it once at the first log line = a fresh log per build.
+    if (-not $script:WinMintBuildLogInit) {
+        $script:WinMintBuildLogInit = $true
+        try {
+            $script:WinMintBuildLogPath = Join-Path (Get-WinMintOutputDirectory) 'WinMint-Build.log'
+            Set-Content -LiteralPath $script:WinMintBuildLogPath -Value "WinMint build log $(Get-Date -Format o)" -ErrorAction Stop
+        }
+        catch { $script:WinMintBuildLogPath = $null }
+    }
+    if ($script:WinMintBuildLogPath) {
+        try { Add-Content -LiteralPath $script:WinMintBuildLogPath -Value $Plain -ErrorAction Stop } catch { }
+    }
     # When a progress handler is active (headless/GUI/JSON-driven builds), that
     # handler owns console presentation and re-emits every forwarded Log line, so
     # writing here too would print each line twice. Interactive console builds set

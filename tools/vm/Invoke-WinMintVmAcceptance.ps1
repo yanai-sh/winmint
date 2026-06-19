@@ -20,6 +20,10 @@
       4. Evidence       -> pull guest logs + state, copy the host build artifacts,
                            write acceptance-result.json, print the verdict.
 
+    All output goes to BOTH the terminal and output\vm-acceptance\<vm>-<stamp>\run.log
+    (the noisy build is teed; orchestrator lines via Say), so a run is always
+    watchable live and fully captured, foreground or detached.
+
     Requires an elevated PowerShell (WIM servicing + Hyper-V PowerShell Direct).
     The profile must be a Hyper-V-valid Local-account profile (Windows 11 Pro,
     explicit password) so the install is unattended and PowerShell Direct can sign
@@ -77,14 +81,30 @@ $result = [ordered]@{
     reachable = $false; firstLogon = $null; inspect = $null; verdict = 'unknown'; reasons = @()
 }
 
+# Create the evidence dir up front and tee everything into run.log so the run is
+# always watchable live (terminal) and fully captured (file), foreground or
+# detached. Start-Transcript is not used: it misses child-process (build) output.
+if (-not $EvidenceRoot) { $EvidenceRoot = Join-Path $repoRoot 'output\vm-acceptance' }
+$evidenceDir = Join-Path $EvidenceRoot ("$VMName-" + $startedAt.ToString('yyyyMMdd-HHmmss'))
+$null = New-Item -ItemType Directory -Path $evidenceDir -Force
+$result.evidenceDir = $evidenceDir
+$runLog = Join-Path $evidenceDir 'run.log'
+function Say {
+    param([string]$Message, [string]$Color)
+    if ($Color) { Write-Host $Message -ForegroundColor $Color } else { Write-Host $Message }
+    Add-Content -LiteralPath $runLog -Value $Message
+}
+Say "Run log: $runLog  (watch live: Get-Content '$runLog' -Wait -Tail 20)"
+
 # --- 1. Build + boot ------------------------------------------------------------
 if (-not $SkipBuild) {
-    Write-Host "`n=== Build ===" -ForegroundColor Cyan
+    Say "`n=== Build ===" 'Cyan'
     $buildArgs = @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'Build-And-TestVm.ps1'),
         '-ProfilePath', $resolvedProfile, '-VMName', $VMName,
         '-MemoryGB', $MemoryGB, '-DiskGB', $DiskGB, '-CpuCount', $CpuCount, '-NoConnect')
     if ($SwitchName) { $buildArgs += @('-SwitchName', $SwitchName) }
-    & $pwsh @buildArgs
+    # Tee the delegated build to terminal + run.log; $LASTEXITCODE stays the child's.
+    & $pwsh @buildArgs 2>&1 | Tee-Object -FilePath $runLog -Append
     if ($LASTEXITCODE -ne 0) { throw "Build/boot phase failed with exit code $LASTEXITCODE." }
 }
 else {
@@ -96,7 +116,7 @@ else {
 # --- 2. Wait for FirstLogon ----------------------------------------------------
 # One loop: a successful PowerShell Direct call means install + autologon are done
 # (that sets reachable); then we read state.json until run.status is terminal.
-Write-Host "`n=== Wait for FirstLogon ===" -ForegroundColor Cyan
+Say "`n=== Wait for FirstLogon ===" 'Cyan'
 $deadline = $startedAt.AddMinutes($TimeoutMinutes)
 $finalState = $null
 while ((Get-Date) -lt $deadline) {
@@ -110,7 +130,7 @@ while ((Get-Date) -lt $deadline) {
             $stateObj = $stateText | ConvertFrom-Json
             $runStatus = [string]$stateObj.run.status
             if ($runStatus -in @('ok', 'failed')) { $finalState = $stateObj; break }
-            Write-Host "  ...FirstLogon in progress (run.status = '$runStatus')."
+            Say "  ...FirstLogon in progress (run.status = '$runStatus')."
         }
     }
     catch { }  # guest not reachable yet
@@ -126,33 +146,29 @@ $result.firstLogon = [ordered]@{
     rebootPending = [bool]$finalState.run.rebootPending
 }
 if ($result.firstLogon.status -eq 'ok') {
-    Write-Host "FirstLogon completed (exitCode $($result.firstLogon.exitCode))." -ForegroundColor Green
+    Say "FirstLogon completed (exitCode $($result.firstLogon.exitCode))." 'Green'
     if ($result.firstLogon.warningSteps.Count -gt 0) { $result.reasons += "FirstLogon warnings: $($result.firstLogon.warningSteps -join ', ')." }
 }
 else {
     $result.reasons += "FirstLogon failed: $($result.firstLogon.failedSteps -join ', ')."
-    Write-Host "FirstLogon failed: $($result.firstLogon.failedSteps -join ', ')." -ForegroundColor Red
+    Say "FirstLogon failed: $($result.firstLogon.failedSteps -join ', ')." 'Red'
 }
 
 # --- 3. Inspect live desktop signals (best-effort) -----------------------------
-Write-Host "`n=== Inspect ===" -ForegroundColor Cyan
+Say "`n=== Inspect ===" 'Cyan'
 try {
     $inspectJson = & $pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Invoke-WinMintGuestAcceptance.ps1') -VMName $VMName -GuestUser $guestUser -GuestPassword $guestPassword
     if ($LASTEXITCODE -ne 0) { throw "inspector exited $LASTEXITCODE" }
     $result.inspect = ($inspectJson -join "`n") | ConvertFrom-Json
+    Add-Content -LiteralPath $runLog -Value ($inspectJson -join "`n")
 }
 catch {
     $result.reasons += "Inspect could not gather guest signals: $($_.Exception.Message)"
-    Write-Warning "Inspect failed (non-fatal): $($_.Exception.Message)"
+    Say "Inspect failed (non-fatal): $($_.Exception.Message)" 'Yellow'
 }
 
 # --- 4. Evidence + verdict -----------------------------------------------------
-Write-Host "`n=== Evidence ===" -ForegroundColor Cyan
-if (-not $EvidenceRoot) { $EvidenceRoot = Join-Path $repoRoot 'output\vm-acceptance' }
-$evidenceDir = Join-Path $EvidenceRoot ("$VMName-" + (Get-Date).ToString('yyyyMMdd-HHmmss'))
-$null = New-Item -ItemType Directory -Path $evidenceDir -Force
-$result.evidenceDir = $evidenceDir
-
+Say "`n=== Evidence ===" 'Cyan'
 try {
     $session = New-PSSession -VMName $VMName -Credential $cred -ErrorAction Stop
     try {
@@ -171,7 +187,7 @@ try {
 }
 catch {
     $result.reasons += "Could not pull guest logs: $($_.Exception.Message)"
-    Write-Warning "Guest log pull failed (non-fatal): $($_.Exception.Message)"
+    Say "Guest log pull failed (non-fatal): $($_.Exception.Message)" 'Yellow'
 }
 
 # Copy the host build artifacts from the newest build that has a manifest.
@@ -189,10 +205,9 @@ if ($manifest) {
 $passed = $result.reachable -and $result.firstLogon -and $result.firstLogon.status -eq 'ok'
 $result.verdict = if ($passed) { 'pass' } else { 'fail' }
 $result.finishedAt = (Get-Date).ToString('o')
-$resultPath = Join-Path $evidenceDir 'acceptance-result.json'
-($result | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $resultPath -Encoding UTF8
+($result | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $evidenceDir 'acceptance-result.json') -Encoding UTF8
 
-Write-Host "`n=== Acceptance verdict: $($result.verdict.ToUpper()) ===" -ForegroundColor ($passed ? 'Green' : 'Red')
-foreach ($r in $result.reasons) { Write-Host "  - $r" }
-Write-Host "Evidence: $evidenceDir"
+Say "`n=== Acceptance verdict: $($result.verdict.ToUpper()) ===" ($passed ? 'Green' : 'Red')
+foreach ($r in $result.reasons) { Say "  - $r" }
+Say "Evidence: $evidenceDir"
 if (-not $passed) { exit 1 }
