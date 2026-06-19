@@ -8,15 +8,25 @@ param(
 
 $ErrorActionPreference = 'Continue'
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCommandPath)))
-Import-Module (Join-Path $repoRoot 'src\runtime\modules\WinMint.Bootstrap\WinMint.Bootstrap.psd1') -Force
-$bootstrapArgs = @()
-if ($Force) { $bootstrapArgs += '-Force' }
-if ($InteractiveFirstLogon) { $bootstrapArgs += '-InteractiveFirstLogon' }
-if ($EmitProgressJson) { $bootstrapArgs += '-EmitProgressJson' }
-$bootstrap = Invoke-WinMintRuntimeBootstrap -Entrypoint $PSCommandPath -Arguments $bootstrapArgs
-if ($bootstrap.Relaunched) {
-    exit $bootstrap.ExitCode
+# WinMint setup work needs PowerShell 7+. In the installed image FirstLogon already
+# relaunches the whole chain under the bundled pwsh 7 before reaching here, so this is
+# normally a no-op; it only matters when the agent is started directly (e.g. dev testing)
+# under Windows PowerShell 5.1. Relaunch in place and exit with the child's code.
+# ponytail: self-contained on purpose - the staged guest agent has no repo tree to import
+# WinMint.Bootstrap from. No winget-install fallback like the host module: the image always
+# bundles pwsh 7, so a missing pwsh 7 here is a hard error, not something to repair at logon.
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    $pwsh7 = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
+    if (-not (Test-Path -LiteralPath $pwsh7 -PathType Leaf)) {
+        Write-Error "PowerShell 7 is required for WinMintAgent but was not found: $pwsh7"
+        exit 1
+    }
+    $relaunchArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    if ($Force) { $relaunchArgs += '-Force' }
+    if ($InteractiveFirstLogon) { $relaunchArgs += '-InteractiveFirstLogon' }
+    if ($EmitProgressJson) { $relaunchArgs += '-EmitProgressJson' }
+    & $pwsh7 @relaunchArgs
+    exit $LASTEXITCODE
 }
 
 function Initialize-WinMintAgentConsoleEncoding {
