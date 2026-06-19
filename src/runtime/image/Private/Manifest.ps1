@@ -46,7 +46,8 @@ function Get-WinMintRegistryTweakGroupValue {
     )
 
     if ($Group -is [System.Collections.IDictionary]) {
-        if ($Group.ContainsKey($Name)) { return $Group[$Name] }
+        # .Contains, not .ContainsKey: OrderedDictionary (the [ordered] DOM) lacks ContainsKey.
+        if ($Group.Contains($Name)) { return $Group[$Name] }
         return $Default
     }
 

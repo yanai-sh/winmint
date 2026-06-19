@@ -3,17 +3,19 @@
 function Get-RegistryTweakGroupValue {
     param(
         [Parameter(Mandatory)]$Group,
-        [Parameter(Mandatory)][string]$Name
+        [Parameter(Mandatory)][string]$Name,
+        $Default = $null
     )
 
     if ($Group -is [System.Collections.IDictionary]) {
-        if ($Group.ContainsKey($Name)) { return $Group[$Name] }
-        return $null
+        # .Contains, not .ContainsKey: OrderedDictionary (the [ordered] DOM) lacks ContainsKey.
+        if ($Group.Contains($Name)) { return $Group[$Name] }
+        return $Default
     }
 
     $property = $Group.PSObject.Properties[$Name]
     if ($property) { return $property.Value }
-    return $null
+    return $Default
 }
 
 function Invoke-WinMintRegAdd {
