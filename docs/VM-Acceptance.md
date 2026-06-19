@@ -42,6 +42,24 @@ delegating to the existing single-purpose scripts. Pass `-SkipBuild` to attach t
 an already-running VM (wait/score/collect evidence without rebuilding); the wait
 step is idempotent and returns fast when FirstLogon has already completed.
 
+### Build reuse (skip / tweak / full rebuild)
+
+The build step is fingerprint-gated, so re-running acceptance only does as much
+work as the change warrants:
+
+- **No change** → the build is skipped entirely and the existing ISO is booted.
+  The fingerprint (in `output\.vm-build-fingerprint.json`) covers the profile,
+  the whole build engine + staged payload (`src\runtime`), and the base ISO's
+  identity; if it matches and that ISO is still on disk, nothing is rebuilt.
+- **Minor change (e.g. a FirstLogon edit)** → a fast rebuild. The engine's
+  serviced-`install.wim` cache key excludes FirstLogon/payload, so the 5 GB
+  serviced WIM is restored from cache (skipping the 30-60 min DISM loop) and only
+  the changed payload is re-staged + the ISO reassembled.
+- **Servicing change (drivers, appx, features, locale, edition)** → a full
+  rebuild, because those *are* in the serviced-WIM cache key.
+
+Pass `-ForceBuild` to ignore the fingerprint and always rebuild from scratch.
+
 | Step | Owns | Delegates to |
 |------|------|--------------|
 | Build + boot | Validate the profile, free host RAM, build the ISO, create + boot a Gen 2 (UEFI + Secure Boot + vTPM) VM | `Build-And-TestVm.ps1` → `Test-WinMintHyperVProfile.ps1`, `WinMint-CLI.ps1 build`, `New-WinMintTestVm.ps1` |

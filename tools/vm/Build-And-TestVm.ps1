@@ -33,11 +33,45 @@ param(
     [int]$DiskGB = 100,
     [int]$CpuCount = 4,
     [string]$SwitchName,
-    [switch]$NoConnect
+    [switch]$NoConnect,
+    [switch]$ForceBuild
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+
+# Fingerprint of everything that determines the produced ISO: the profile, the
+# whole build engine + staged payload (src\runtime), and the base ISO's identity
+# (path|size|mtime - never hash the multi-GB file). If this matches the last
+# build's, the existing ISO is byte-identical and we can boot it without
+# rebuilding. ponytail: hashing src\runtime wholesale is conservative - any
+# engine edit forces a rebuild, but the engine's serviced-wim cache keeps that
+# rebuild fast (and a stale-ISO false-skip in a TEST harness is worse than a
+# wasted rebuild). The "minor change -> tweak not full rebuild" tier is already
+# the engine's: its serviced-wim cache key excludes FirstLogon/payload, so a
+# FirstLogon-only change restores the 5 GB wim from cache and just re-stages.
+function Get-WinMintVmBuildFingerprint {
+    param([Parameter(Mandatory)][string]$ProfilePath, [Parameter(Mandatory)]$ProfileJson, [Parameter(Mandatory)][string]$RepoRoot)
+    $profileHash = (Get-FileHash -LiteralPath $ProfilePath -Algorithm SHA256).Hash
+    $runtimeRoot = Join-Path $RepoRoot 'src\runtime'
+    $runtimeParts = Get-ChildItem -LiteralPath $runtimeRoot -Recurse -File -ErrorAction Stop |
+        Sort-Object FullName |
+        ForEach-Object {
+            $rel = $_.FullName.Substring($runtimeRoot.Length).TrimStart('\', '/').ToLowerInvariant()
+            "$rel|$($_.Length)|$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)"
+        }
+    $srcIso = [string]$ProfileJson.source.isoPath
+    $srcIdentity = 'none'
+    if ($srcIso) {
+        $resolvedSrc = if ([IO.Path]::IsPathRooted($srcIso)) { $srcIso } else { Join-Path $RepoRoot $srcIso }
+        if (Test-Path -LiteralPath $resolvedSrc) {
+            $it = Get-Item -LiteralPath $resolvedSrc
+            $srcIdentity = "$($it.FullName)|$($it.Length)|$($it.LastWriteTimeUtc.Ticks)"
+        }
+    }
+    $blob = "schema=1`nprofile=$profileHash`nsrc=$srcIdentity`nruntime=$($runtimeParts -join ';')"
+    return ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($blob))) -replace '-', '').ToLowerInvariant()
+}
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
@@ -84,21 +118,44 @@ if ($existing) {
     Write-Host "Removed prior '$VMName' so the build runs with no VM competing for resources."
 }
 
-# 2. Build the ISO from the profile (verb CLI).
+# 2. Build the ISO from the profile (verb CLI) - unless nothing that affects the
+#    ISO changed since the last build and that ISO is still on disk, in which case
+#    boot it as-is and skip the multi-minute rebuild.
 $cli = Join-Path $repoRoot 'WinMint-CLI.ps1'
-$buildStartedAt = (Get-Date).AddSeconds(-5)
-Write-Host "Building ISO from profile: $resolvedProfile"
-& $cli build $resolvedProfile -Yes
-if ($LASTEXITCODE -ne 0) {
-    throw "Build failed (exit code $LASTEXITCODE). See the WinMint build report in .\output."
-}
 $outputDir = Join-Path $repoRoot 'output'
-$builtIso = Get-ChildItem -LiteralPath $outputDir -Filter 'WinMint-*.iso' -File -ErrorAction SilentlyContinue |
-    Where-Object { $_.LastWriteTime -ge $buildStartedAt } |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
+$fingerprintPath = Join-Path $outputDir '.vm-build-fingerprint.json'
+$currentFp = Get-WinMintVmBuildFingerprint -ProfilePath $resolvedProfile -ProfileJson $profileJson -RepoRoot $repoRoot
+
+$builtIso = $null
+if (-not $ForceBuild -and (Test-Path -LiteralPath $fingerprintPath)) {
+    try {
+        $prev = Get-Content -LiteralPath $fingerprintPath -Raw | ConvertFrom-Json
+        if ([string]$prev.fingerprint -eq $currentFp -and $prev.isoPath -and (Test-Path -LiteralPath ([string]$prev.isoPath))) {
+            $builtIso = Get-Item -LiteralPath ([string]$prev.isoPath)
+            Write-Host "No build-affecting changes since the last run - reusing existing ISO (skipping build):"
+            Write-Host "  $($builtIso.FullName)"
+        }
+    }
+    catch { }  # unreadable sidecar -> fall through to a normal build
+}
+
 if (-not $builtIso) {
-    throw "Build completed but no WinMint-*.iso newer than $($buildStartedAt.ToString('o')) was found in $outputDir."
+    $buildStartedAt = (Get-Date).AddSeconds(-5)
+    Write-Host "Building ISO from profile: $resolvedProfile"
+    & $cli build $resolvedProfile -Yes
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build failed (exit code $LASTEXITCODE). See the WinMint build report in .\output."
+    }
+    $builtIso = Get-ChildItem -LiteralPath $outputDir -Filter 'WinMint-*.iso' -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTime -ge $buildStartedAt } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if (-not $builtIso) {
+        throw "Build completed but no WinMint-*.iso newer than $($buildStartedAt.ToString('o')) was found in $outputDir."
+    }
+    # Record what we just built so an unchanged next run can skip straight to boot.
+    ([ordered]@{ fingerprint = $currentFp; isoPath = $builtIso.FullName; builtUtc = [datetime]::UtcNow.ToString('o') } |
+        ConvertTo-Json) | Set-Content -LiteralPath $fingerprintPath -Encoding UTF8
 }
 
 # 3. Create + boot the VM from the ISO produced by this build.

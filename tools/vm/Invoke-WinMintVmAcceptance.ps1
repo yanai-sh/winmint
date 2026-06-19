@@ -45,6 +45,7 @@ param(
     [int]$CpuCount = 4,
     [string]$SwitchName,
     [switch]$SkipBuild,
+    [switch]$ForceBuild,
     [int]$TimeoutMinutes = 60,
     [string]$EvidenceRoot
 )
@@ -103,6 +104,7 @@ if (-not $SkipBuild) {
         '-ProfilePath', $resolvedProfile, '-VMName', $VMName,
         '-MemoryGB', $MemoryGB, '-DiskGB', $DiskGB, '-CpuCount', $CpuCount, '-NoConnect')
     if ($SwitchName) { $buildArgs += @('-SwitchName', $SwitchName) }
+    if ($ForceBuild) { $buildArgs += '-ForceBuild' }
     # Tee the delegated build to terminal + run.log; $LASTEXITCODE stays the child's.
     & $pwsh @buildArgs 2>&1 | Tee-Object -FilePath $runLog -Append
     if ($LASTEXITCODE -ne 0) { throw "Build/boot phase failed with exit code $LASTEXITCODE." }
