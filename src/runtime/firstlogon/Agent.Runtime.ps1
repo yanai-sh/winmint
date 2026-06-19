@@ -918,25 +918,9 @@ function Get-WinMintAgentModuleCatalog {
     )
 }
 
-function Import-WinMintAgentRegisteredModules {
-    param(
-        [Parameter(Mandatory)][string]$AgentRoot
-    )
-
-    foreach ($moduleDefinition in @(Get-WinMintAgentModuleCatalog)) {
-        $modulePath = Join-Path $AgentRoot $moduleDefinition.RelativePath
-        if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
-            throw "FirstLogon module '$($moduleDefinition.Id)' is missing: $modulePath"
-        }
-
-        . $modulePath
-
-        $bootstrapFunction = [string]$moduleDefinition.BootstrapFunction
-        if (-not (Get-Command $bootstrapFunction -ErrorAction SilentlyContinue)) {
-            throw "FirstLogon module '$($moduleDefinition.Id)' did not register required function '$bootstrapFunction'."
-        }
-    }
-}
+# NOTE: agent module files are dot-sourced at SCRIPT scope by Start-WinMintAgent.ps1, not
+# from a function here - dot-sourcing inside a function would scope the bootstrap functions
+# to that function and the step runtime could not see them.
 
 function Test-AgentModuleEnabled {
     param([Parameter(Mandatory)][string]$Name)

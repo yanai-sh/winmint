@@ -75,7 +75,21 @@ Write-AgentEvent -Type 'run' -Status 'starting' -Message 'WinMintAgent start'
 Initialize-AgentConsole
 Show-AgentConsoleHeader
 Update-AgentProcessPath
-Import-WinMintAgentRegisteredModules -AgentRoot $agentRoot
+# Dot-source each agent module HERE, at script scope, so its bootstrap function is visible
+# to the step runtime later. Doing this inside a function would scope the functions to that
+# function; they would vanish on return and every module step would fail "<fn> not found".
+# (foreach does not create a scope, so the dot-source lands in script scope.)
+foreach ($moduleDefinition in @(Get-WinMintAgentModuleCatalog)) {
+    $modulePath = Join-Path $agentRoot $moduleDefinition.RelativePath
+    if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
+        throw "FirstLogon module '$($moduleDefinition.Id)' is missing: $modulePath"
+    }
+    . $modulePath
+    $bootstrapFunction = [string]$moduleDefinition.BootstrapFunction
+    if (-not (Get-Command $bootstrapFunction -ErrorAction SilentlyContinue)) {
+        throw "FirstLogon module '$($moduleDefinition.Id)' did not register required function '$bootstrapFunction'."
+    }
+}
 $state = Read-AgentJson -Path $statePath -Fallback ([pscustomobject]@{ version = 1; steps = @{} })
 # Read-AgentJson returns a PSCustomObject whenever state.json already exists (a prior
 # failed run, or a reboot mid-run). Every agent module function takes [hashtable]$State,
