@@ -169,6 +169,13 @@ are used for destructive ISO testing.
 
 Goal: turn the current collection of scripts into an explicit test system.
 
+Status: the explicit model now exists. `tools/vm/Invoke-WinMintVmAcceptance.ps1`
+is a single orchestrator (build + boot → wait for FirstLogon → inspect → evidence)
+delegating to the existing single-purpose scripts, and `docs/VM-Acceptance.md`
+documents what each script owns and the Pro/unattended invariant. Remaining D1
+work is mostly proving the model by running a real green pass and folding the Edge
+experiment / future test classes into it deliberately.
+
 Work:
 
 - define VM test classes: install smoke, unattended install, first-logon completion, shell/app acceptance, audit runs, diagnostics
@@ -177,12 +184,18 @@ Work:
 
 Exit criteria:
 
-- VM testing has named layers and responsibilities
-- maintainers can explain what each script owns
+- VM testing has named layers and responsibilities — **met** (`docs/VM-Acceptance.md`)
+- maintainers can explain what each script owns — **met** (phase/ownership table)
 
 ### Phase D2 — Harness Restructure
 
 Goal: make VM testing composable and repeatable.
+
+Status: partially met. The orchestrator supports attaching to a running VM
+(`-SkipBuild`) and writes a standardized evidence directory
+(`output/vm-acceptance/<vm>-<stamp>/` with `acceptance-result.json`). Remaining
+work is reducing ad hoc coupling between the underlying build/VM/guest/rerun/log
+helpers rather than adding more orchestration surface.
 
 Work:
 
