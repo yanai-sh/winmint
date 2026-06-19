@@ -197,16 +197,18 @@ Broad third-party and OEM AppX prefixes should stay candidate-only by default. D
 
 See `docs/Windows-Debloat-Strategy.md` for the full audit and Tier 2 candidates.
 
-## Architecture Phase (current branch)
+## Architecture Invariants
 
-Branch `codex/architecture-refactor-backend-seams` is converging toward:
+The backend architecture refactor is complete and merged. These four properties
+are now established invariants — preserve them, do not regress them:
 
 1. UI saves a complete `BuildProfile.json` before starting
 2. Engine builds from a profile without GUI code loaded
 3. Manifest explains the build without scraping logs
 4. FirstLogon resumes after interruption via `%LOCALAPPDATA%\WinMint\state.json`
 
-Migration is incremental — the app must stay runnable after every step. Do not rewrite; use `docs/Project-Structure.md` as the repository layout contract.
+`docs/Project-Structure.md` is the repository layout contract. Keep the app
+runnable after every change; do not rewrite working subsystems wholesale.
 
 ## PSScriptAnalyzer
 
