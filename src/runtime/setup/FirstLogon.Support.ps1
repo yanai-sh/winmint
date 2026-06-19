@@ -578,12 +578,17 @@ function Set-WinMintFirstLogonStartPins {
         "$(Get-Date -Format 'o') Start pins skipped because no Start Menu shortcut or app executable was found: $($skipped -join ', ')" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
     }
 
+    # Reload the shell so the new Start pin layout takes effect. Killing explorer is
+    # enough: Winlogon's AutoRestartShell (on by default; WinMint never disables it, and
+    # explorer.exe stays the registered shell) respawns it as the shell with no window.
+    # ponytail: do NOT also Start-Process explorer.exe - by the time it runs the shell is
+    # usually already back, so the extra invocation opens a stray File Explorer ("This PC")
+    # window at first logon. We want only the FirstLogon terminal visible, nothing else.
     try {
         Get-Process -Name explorer -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-        Start-Process explorer.exe
     }
     catch {
-        Write-WinMintFirstLogonError "Explorer restart for Start pins failed: $_"
+        Write-WinMintFirstLogonError "Explorer reload for Start pins failed: $_"
     }
 }
 
