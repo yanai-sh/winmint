@@ -1,54 +1,61 @@
 # Coding Conventions
 
-Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-17. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: updated 2026-06-20. Onboarding/audit snapshot — not a continuous authoritative source.
 
 ## Core Sections (Required)
 
-### 1) Naming Rules
+### 1) File Naming
 
-| Item | Rule | Example | Evidence |
-|------|------|---------|----------|
-| Files | Public PowerShell launchers use `WinMint-*`; runtime PowerShell files use PascalCase or concern IDs; registry tweak modules use numeric kebab IDs; Rust source files use snake_case modules. | `WinMint-CLI.ps1`, `src/runtime/image/Private/Image/Tweaks/33-edge-policy-minimal.ps1`, `apps/gui/src/bridge.rs` | `rg --files`, `docs/Project-Structure.md` |
-| Functions/methods | PowerShell functions use approved verb-style names with `WinMint`, `Agent`, or phase prefixes; Rust functions use snake_case. | `Invoke-WinMintBuildCommand`, `New-WinMintBuildProfile`, `Invoke-WinMintAgentStepRuntime`, `build_ui_intent` | `src/runtime/image/Cli.ps1`, `src/runtime/image/Private/Config/Profile.ps1`, `src/runtime/firstlogon/Agent.Runtime.ps1`, `apps/gui/src/core/src/profile.rs` |
-| Types/interfaces | Rust structs/enums use PascalCase. PowerShell structured values are `pscustomobject` / ordered hashtables rather than named classes. | `UiIntent`, `ToolkitIntent`, `DesktopLayersIntent`, `BuildIntent` | `apps/gui/src/core/src/profile.rs`, `apps/gui/src/state.rs` |
-| Constants/env vars | Environment variables and JSON schema IDs use uppercase or explicit contract names; Rust constants use `SCREAMING_SNAKE_CASE`. | `WINMINT_ENABLE_EXPERIMENTAL_AI_REMOVAL`, `LOCALAPPDATA`, `SPLASH_STATUS_PICK` | `src/runtime/image/Private/Config/Profile.ps1`, `winmint.ps1`, `apps/gui/src/state.rs` |
+- **PowerShell entry points:** `PascalCase` verb-noun (`WinMint-CLI.ps1`, `WinMint-GUI.ps1`, `Test-ProfileInvariants.ps1`)
+- **PowerShell bridge scripts:** `Verb-NounNoun.ps1` (`Get-UiIsoMetadata.ps1`, `New-UiBuildProfile.ps1`, `Start-UiBuildFromProfile.ps1`)
+- **PowerShell private modules:** `PascalCase.ps1` (`Profile.ps1`, `TweakRegistry.ps1`, `InstallPlan.ps1`)
+- **Tweak modules:** `NN-kebab-id.ps1` with two-digit numeric prefix establishing execution order (`00-hardware-bypass.ps1`, `10-explorer-qol.ps1`)
+- **Rust modules:** `snake_case.rs` (`bridge.rs`, `state.rs`, `components.rs`, `intent.rs`)
 
-### 2) Formatting and Linting
+### 2) Function and Variable Naming
 
-- Formatter: `.editorconfig` specifies UTF-8, final newline, 4-space indentation, LF for most source/config files, CRLF for `.cmd`; no Rust formatter config is checked in.
-- Linter: PSScriptAnalyzer is configured in `PSScriptAnalyzerSettings.psd1`, and `tools/validation/Validate.ps1` can run it with `-RunAnalyzer`.
-- Most relevant enforced rules: severity `Error`/`Warning`, `PSAvoidLongLines` max 220, `PSUseCompatibleSyntax` target `7.3`; multiple rules are intentionally excluded in `PSScriptAnalyzerSettings.psd1`. Note the lint compat target (`7.3`) lags the actual runtime requirement: module `.psm1` files declare `#Requires -Version 7.6` and `config/release-readiness.json` states `7.6.2+`.
-- Run commands: `pwsh -NoProfile -File tools\validation\Validate.ps1 -RunAnalyzer`, `cargo check --manifest-path apps/gui/Cargo.toml`, `cargo test --manifest-path apps/gui/src/core/Cargo.toml`.
+- **PowerShell functions:** `Verb-Noun` (`Get-WinMintSelectedRegistryTweaks`, `Initialize-WinMintEngine`, `Add-SmokeFailure`)
+- **PowerShell variables:** `$PascalCase` for script-scope state (`$WinMintRepositoryRoot`, `$DryRun`); `$camelCase` acceptable in local scope
+- **Rust types/structs:** `PascalCase` (`WinMintApp`, `BridgeBuildResult`, `SourceProbeState`)
+- **Rust functions/methods:** `snake_case` (`probe_source`, `write_intent`, `architecture_hint`)
+- **Rust fields:** `snake_case` (`iso_path`, `build_run`, `spinner_phase`)
+- **JSON contract keys:** PascalCase — enforced by `serde(rename_all = "PascalCase")` in all bridge deserializer structs
 
-### 3) Import and Module Conventions
+### 3) Linting and Formatting
 
-- Import grouping/order: entrypoints `Import-Module` the `src/runtime/modules/WinMint.<Area>` packages; each `.psm1` dot-sources its ordered area file list from `WinMint.ModuleLoader.ps1` (`Get-WinMintRuntimeModuleFileList`). `src/runtime/image/WinMint.ps1` remains the canonical full ordered dot-source list and a compatibility adapter; tests that need internals dot-source the same runtime families directly.
-- Alias vs relative import policy: PowerShell uses repo-root path helpers such as `Get-WinMintPath` after `Core.ps1` is loaded; module loaders resolve the repo root via `Get-WinMintModuleRepositoryRoot`. Rust uses module declarations and direct `use` statements, with `components as ui` in the GPUI app.
-- Public exports/barrel policy: PowerShell module packages now carry `.psd1` manifests and `Export-ModuleMember` curated function lists in their `.psm1` bodies (e.g. `WinMint.Engine.psm1`); internal `src/runtime/image` files are still composed by dot-sourcing. Rust `apps/gui/src/core/src/lib.rs` exposes `profile` and `options`.
+- **PowerShell:** PSScriptAnalyzer with `PSScriptAnalyzerSettings.psd1`; run via `Validate.ps1 -RunAnalyzer` or CI
+- **Intentional PSScriptAnalyzer exclusions** (do not "fix" these):
+  - `PSUseShouldProcessForStateChangingFunctions` — UI/build helpers don't need `-WhatIf`
+  - `PSReviewUnusedParameter` — `DryRun` param used indirectly via `CmdletBinding`
+  - `PSAvoidUsingInvokeExpression` — dot-sourcing internal blocks is the load pattern
+  - `PSAvoidUsingWriteHost` — entry points and validation helpers report directly to console
+- **Rust:** standard `cargo fmt` / `cargo clippy` (not explicitly configured beyond workspace lints); `unsafe_op_in_unsafe_fn = "warn"` enforced workspace-wide
+- **EditorConfig:** `.editorconfig` present for cross-editor whitespace consistency
 
-### 4) Error and Logging Conventions
+### 4) Error Handling
 
-- Error strategy by layer: entry points commonly set `$ErrorActionPreference = 'Stop'`; validation and tests collect failures into lists and throw at the end; FirstLogon runtime steps carry `FailurePolicy` in `New-WinMintAgentRuntimeStepPlan`, with `profiles` blocking and normal live-user modules advisory.
-- Logging style and required context fields: engine console logging flows through `Log`, `LogOK`, `LogWarn`, and manifest facts; FirstLogon writes text logs, JSONL events, command stdout/stderr logs, and `state.json`.
-- Sensitive-data redaction rules: local-account passwords can come from `-Password`, `-PasswordPath`, or `-PasswordEnvVar`; direct password use is allowed by project lint exclusions, but explicit redaction/lifecycle rules beyond setup cleanup are `[ASK USER]`.
+- **PowerShell:** `$ErrorActionPreference = 'Stop'` and `$PSNativeCommandUseErrorActionPreference = $true` at the top of every entry point; errors propagate as terminating exceptions
+- **Rust bridge:** bridge functions return `Result<T, String>` (error as plain string); GUI maps errors to `build_run.status` SharedString for display — no panics in the bridge path
+- **FirstLogon modules:** each module must be idempotent; a failed optional module must not abort the entire FirstLogon; `state.json` is written before and after each step
+- **Bootstrap failures:** `winmint.ps1` uses a typed failure envelope with `operation`, `failureKind`, `reason`, `recoveryGuidance`, `retrySafe` fields
 
-### 5) Testing Conventions
+### 5) Imports and Module Loading
 
-- Test file naming/location rule: PowerShell contract tests live under `tests/contract/Test-*.ps1`; shared assertions live under `tests/contract/ProfileInvariantTests/*.ps1`; Rust tests are in `#[cfg(test)]` modules.
-- Mocking strategy norm: tests use generated fixture profiles, temp directories, string/static assertions, and gitignored fixture roots rather than a separate mocking framework.
-- Coverage expectation: no numeric threshold is configured. Keep testing important but pragmatic: contract/static checks for profile and release invariants, Rust unit tests for typed helpers, and targeted VM or dry-run acceptance for risky image/setup behavior.
+- **PowerShell:** dot-source only via `src/runtime/image/WinMint.ps1`; never call sub-files directly from external callers
+- **Rust:** `mod` declarations in `main.rs`; `use components as ui;` alias for call-site brevity; no barrel re-export pattern
+- **No external PowerShell module deps** beyond what ships with PowerShell 7 and the Windows ADK
 
-### 6) Evidence
+### 6) Comments
 
-- `.editorconfig`
-- `PSScriptAnalyzerSettings.psd1`
-- `src/runtime/modules/WinMint.ModuleLoader.ps1`
-- `src/runtime/modules/WinMint.Engine/WinMint.Engine.psm1`
-- `src/runtime/image/WinMint.ps1`
-- `src/runtime/image/Core.ps1`
-- `src/runtime/image/Cli.ps1`
-- `apps/gui/src/core/src/options.rs`
-- `src/runtime/firstlogon/Agent.Runtime.ps1`
-- `tests/contract/Test-ProfileInvariants.ps1`
-- `tests/contract/Test-UiContractSpine.ps1`
-- `apps/gui/src/core/src/profile.rs`
+- Code is primarily self-documenting through naming; inline comments explain non-obvious invariants or platform workarounds
+- Intentional PSScriptAnalyzer suppressions documented in `AGENTS.md` rather than inline suppression comments
+- Rust: doc comments (`///`) on public-facing items; module-level `//!` on `bridge.rs` explains its purpose
+
+### 7) Evidence
+
+- `PSScriptAnalyzerSettings.psd1` — linter settings
+- `.editorconfig` — formatting rules
+- `apps/gui/src/main.rs` — naming conventions in Rust
+- `apps/gui/src/bridge.rs` — error handling and JSON conventions
+- `AGENTS.md` — PSScriptAnalyzer exclusions, dot-source rule
+- `src/runtime/image/WinMint.ps1` — `$ErrorActionPreference = 'Stop'` pattern

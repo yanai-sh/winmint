@@ -1,64 +1,60 @@
 # Testing Patterns
 
-Snapshot note: this document reflects the current development state of the repo as scanned on 2026-06-18. It is an onboarding/audit snapshot, not a continuous authoritative source of truth.
+Snapshot note: updated 2026-06-20. Onboarding/audit snapshot — not a continuous authoritative source.
 
 ## Core Sections (Required)
 
-### 1) Test Stack and Commands
+### 1) Test Runner
 
-- Primary test framework: custom PowerShell contract/smoke scripts plus Rust `cargo test` for the GUI crate (including `apps/gui/src/core/` contract tests).
-- Assertion/mocking tools: PowerShell helper functions that collect failures and throw; JSON schema checks in validation modules; Rust built-in `#[test]`. No Pester dependency was found.
-- Commands:
+- **PowerShell tests:** run directly with `pwsh -NoProfile -File tests/contract/Test-*.ps1`; no external test framework — tests use custom `Add-SmokeFailure` / failure collection helpers
+- **Rust tests:** `cargo test --manifest-path apps/gui/Cargo.toml` (standard Rust built-in test runner)
+- **CI triggers both:** `.github/workflows/ci.yml` runs `Test-ProfileInvariants.ps1` + `Validate.ps1 -RunAnalyzer` + `cargo check` + `cargo test` on every push to `main`/`architecture/**`/`codex/**`
 
-```powershell
-pwsh -NoProfile -File tests\contract\Test-ProfileInvariants.ps1
-pwsh -NoProfile -File tests\contract\Test-Fast.ps1
-pwsh -NoProfile -File tools\validation\Validate.ps1
-pwsh -NoProfile -File tools\validation\Validate.ps1 -RunAnalyzer
-cargo test --manifest-path apps\gui\Cargo.toml
-pwsh -NoProfile -File tools\vm\Build-And-TestVm.ps1 -ProfilePath .\tests\profiles\hyper-v-install-arm64.json
-```
+### 2) Test File Location
 
-### 2) Test Layout
+| Test suite | Location | What it covers |
+|------------|---------|----------------|
+| Profile invariants | `tests/contract/Test-ProfileInvariants.ps1` | Profile schema, tweak parity, option catalog shapes |
+| Static assertions | `tests/contract/ProfileInvariantTests/StaticAssertions.ps1` | `config/tweaks.json` ↔ tweak module parity (highest churn file) |
+| Profile assertions | `tests/contract/ProfileInvariantTests/ProfileAssertions.ps1` | Profile field values and normalization |
+| Agent state transitions | `tests/contract/Test-AgentStateTransitions.ps1` | `state.json` step status lifecycle |
+| Bootstrap contract | `tests/contract/Test-BootstrapContract.ps1` | `winmint.ps1` failure envelope structure |
+| CLI matrix | `tests/contract/Test-CliMatrix.ps1` | CLI verb + flag combinations produce expected profiles |
+| Cloudflare worker | `tests/contract/Test-CloudflareWorkerContract.ps1` | Worker response shape |
+| Fast subset | `tests/contract/Test-Fast.ps1` | Quick subset for local iteration |
+| FirstLogon transaction plan | `tests/contract/Test-FirstLogonTransactionPlan.ps1` | Agent module step ordering |
+| Install plan | `tests/contract/Test-InstallPlanContract.ps1` | `BuildInstallPlan` output shape |
+| Integration | `tests/contract/Test-Integration.ps1` | Cross-layer integration checks |
+| Launchers | `tests/contract/Test-Launchers.ps1` | Entry-point launcher contracts |
+| Payload store | `tests/contract/Test-PayloadStoreContract.ps1` | Payload cache behavior |
+| Release manifest | `tests/contract/Test-ReleaseManifest.ps1` | `config/release-manifest.json` structural validity |
+| Serviced WIM cache | `tests/contract/Test-ServicedWimCache.ps1` | Intermediates cache contract |
+| UI contract spine | `tests/contract/Test-UiContractSpine.ps1` | UI intent → profile shape invariants |
 
-- Test file placement pattern: PowerShell contract tests live under `tests/contract/`; shared assertion libraries live under `tests/contract/ProfileInvariantTests/`; profile fixtures live under `tests/profiles/`; local large fixture roots live under `tests/fixtures/iso` and `tests/fixtures/drivers`.
-- Naming convention: `Test-*.ps1` for executable test scripts; `Assert-*` functions inside shared assertion files.
-- Setup files and where they run: `tests/contract/Test-ProfileInvariants.ps1` dot-sources runtime internals and assertion files; `tests/contract/Test-CliMatrix.ps1` exercises the verb dispatch through the module-imported entrypoint; `tools/validation/Validate.ps1` dot-sources validation modules from `tools/validation/Modules/`.
+### 3) Fixtures and Mocking
 
-### 3) Test Scope Matrix
+- **ISO fixture:** `tests/fixtures/iso/official-win11-25h2-english-arm64-v2.iso` — real ISO locally, stub empty file in CI (created by the CI `Prepare contract test fixtures` step); profile/invariant tests run without needing a real ISO
+- **Driver fixture:** `tests/fixtures/drivers/SurfaceLaptop7_ARM_Win11_26100_26.033.32430.0.msi` — local only, gitignored
+- **No mock framework:** tests stub missing console helpers (e.g. `Write-SectionHeader`, `Log`) with no-op functions inline before calling engine code
+- **No dependency injection:** PowerShell tests dot-source engine internals directly and exercise public functions with representative input values
 
-| Scope | Covered? | Typical target | Notes |
-|-------|----------|----------------|-------|
-| Unit | Yes | Rust UI intent helpers and small PowerShell helpers. | `apps/gui/src/core//src/profile.rs` has `#[cfg(test)]` tests; PowerShell contract scripts call helper assertions directly. |
-| Contract/static | Yes | Profile invariants, option-catalog/schema parity, schemas, release manifest, install plan, setup payload staging, executable FirstLogon transaction plan, agent state/runtime plan, CLI matrix, payload store, bootstrap, Cloudflare Worker, UI contract spine. | `tests/contract/Test-Fast.ps1` composes the fast suite. |
-| Integration | Partial | Optional ISO dry-run, payload/source checks, VM helpers. | `tools/validation/Validate.ps1 -RunIntegration` invokes `Test-Integration.ps1`; VM scripts require Hyper-V/Admin and local fixtures. |
-| E2E installer | Manual/fixture-based | Generated ISO boot/install in Hyper-V. | `tools/vm/Build-And-TestVm.ps1` and `tests/profiles/hyper-v-install-arm64.json` exist; CI does not run Hyper-V E2E. |
-| CI | Yes | Validation and GUI crate checks/tests. | `.github/workflows/ci.yml` runs profile invariants, validation, `cargo check`, and `cargo test` for `apps/gui`. |
+### 4) Coverage Posture
 
-### 4) Mocking and Isolation Strategy
+- No enforced coverage threshold.
+- Focus is on contract/schema invariants and CLI matrix coverage rather than unit-level coverage.
+- Real ISO/DISM builds are validated through the VM acceptance harness (`tools/vm/Build-And-TestVm.ps1`) — not in CI (requires a Windows host with Hyper-V and a real ISO).
+- Rust tests are `cargo test` unit tests; no integration test suite for the GUI today.
 
-- Main mocking approach: temp directories, fixture profiles, ignored fixture roots for large ISO/driver payloads, string/static source assertions, option-catalog/schema comparisons, fake FirstLogon transaction adapters, setup payload staging into temp mounted-tree shapes, and local JSON round trips.
-- Isolation guarantees: tests create temp files/directories for generated profiles and remove them in `finally` blocks where implemented; fixture roots are gitignored except `.gitkeep`/`.gitignore`.
-- Common failure mode in tests: host-dependent tooling such as DISM, ADK/oscdimg, Hyper-V, cargo, PSScriptAnalyzer, and local ISO/driver fixtures can be absent; validation modules skip some optional tooling but contract/VM tests can fail hard.
+### 5) VM Acceptance
 
-### 5) Coverage and Quality Signals
-
-- Coverage tool + threshold: no numeric threshold is configured. The intended bar is pragmatic rather than exhaustive: protect profile/schema/release invariants with fast tests, use Rust unit tests for typed helpers, and add targeted dry-run or VM acceptance checks for risky image/setup behavior.
-- Current reported coverage: `[TODO]`.
-- Known gaps/flaky areas: no automated full Windows install E2E in CI; live package-manager and network paths are only indirectly covered by contract/static checks; production TODO/FIXME/HACK markers were not found by the 2026-06-17 scan outside excluded artifacts.
+- `tools/vm/Build-And-TestVm.ps1` orchestrates an end-to-end Hyper-V install test.
+- Always targets **Windows 11 Pro** with the Pro generic key (Enhanced Session testing requires Pro).
+- Results written to `output/vm-acceptance/` with live-teed `run.log` and `acceptance-result.json`.
 
 ### 6) Evidence
 
-- `tests/README.md`
-- `tests/contract/Test-Fast.ps1`
-- `tests/contract/Test-ProfileInvariants.ps1`
-- `tests/contract/Test-UiContractSpine.ps1`
-- `tests/contract/Test-InstallPlanContract.ps1`
-- `tests/contract/Test-FirstLogonTransactionPlan.ps1`
-- `tests/contract/Test-AgentStateTransitions.ps1`
-- `tests/contract/ProfileInvariantTests/StaticAssertions.ps1`
-- `tests/contract/ProfileInvariantTests/ProfileAssertions.ps1`
-- `tools/validation/Validate.ps1`
-- `tools/validation/Modules/Core.ps1`
-- `.github/workflows/ci.yml`
-- `apps/gui/src/core//src/profile.rs`
+- `tests/contract/` — all contract test files
+- `.github/workflows/ci.yml` — CI test commands
+- `AGENTS.md` — test commands reference
+- `tests/contract/TestFixtures.ps1` — shared fixture helpers
+- `output/vm-acceptance/` — local VM acceptance run outputs
