@@ -1823,12 +1823,15 @@ function Assert-WslFirstDefaultsAndGuards {
     if ($vmHarnessText -notmatch 'ExposeVirtualizationExtensions\s+\$true') {
         Add-SmokeFailure 'Hyper-V test VM harness must expose virtualization extensions for nested WSL2.'
     }
+    if ($vmHarnessText -match [regex]::Escape("if (`$NoConnect) { `$SwitchName = '' }")) {
+        Add-SmokeFailure 'Hyper-V test VM harness must not let -NoConnect null the VM network switch; automated acceptance needs host network so the live FirstLogon payload installs.'
+    }
     foreach ($expected in @(
-        'if ($NoConnect) { $SwitchName = '''' }',
-        'if ($SwitchName -and -not $DelayNetworkUntilFirstLogon)'
+        'if ($SwitchName -and -not $DelayNetworkUntilFirstLogon)',
+        'if (-not $NoConnect)'
     )) {
         if ($vmHarnessText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "Hyper-V test VM harness should keep -NoConnect from attaching a VM network switch with '$expected'."
+            Add-SmokeFailure "Hyper-V test VM harness should attach the host network and gate only the vmconnect GUI on -NoConnect with '$expected'."
         }
     }
     $buildAndTestText = Get-Content -LiteralPath (Join-Path $root 'tools\vm\Build-And-TestVm.ps1') -Raw

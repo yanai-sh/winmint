@@ -75,14 +75,17 @@ New-Item -ItemType Directory -Force -Path $vhdDir | Out-Null
 $vhd = Join-Path $vhdDir "$VMName.vhdx"
 if (Test-Path -LiteralPath $vhd) { Remove-Item -LiteralPath $vhd -Force }
 
-# Attach the NAT "Default Switch" for internet unless the caller suppresses the
-# VM network path. When DelayNetworkUntilFirstLogon is selected, keep the adapter
+# Attach the NAT "Default Switch" so the guest reaches the internet through the
+# host. When DelayNetworkUntilFirstLogon is selected, keep the adapter
 # disconnected until the first sign-in breadcrumb appears so OOBE does not see a
 # live network and trigger ZDP while the guest is still in setup.
+# ponytail: NoConnect suppresses the vmconnect GUI only (see end of script) - it
+# must NOT null the switch. Automated acceptance always passes -NoConnect, so
+# nulling here meant the test ran offline and the live FirstLogon payload (WSL,
+# editors, browsers, shell) could never install. Keep network and GUI separate.
 if (-not $SwitchName) {
     if (Get-VMSwitch -Name 'Default Switch' -ErrorAction SilentlyContinue) { $SwitchName = 'Default Switch' }
 }
-if ($NoConnect) { $SwitchName = '' }
 
 Write-Host "Creating $VMName from $IsoPath"
 $null = New-VM -Name $VMName -Generation 2 -MemoryStartupBytes ($MemoryGB * 1GB) -NewVHDPath $vhd -NewVHDSizeBytes ($DiskGB * 1GB)
