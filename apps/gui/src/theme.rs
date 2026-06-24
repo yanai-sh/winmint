@@ -133,6 +133,6 @@ pub mod color {
 
     /// "Mint" portion of the brand wordmark.
     pub fn brand_mint() -> Rgba {
-        rgb(0x70C050)
+        rgb(0x4CD08C)
     }
 }

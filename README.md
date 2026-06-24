@@ -1,6 +1,10 @@
 <div align="center">
 
-<img src="assets/brand/winmint_hero.png" alt="WinMint" width="540">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/readme/winmint_hero_dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/brand/readme/winmint_hero_light.svg">
+  <img src="assets/brand/readme/winmint_hero_light.svg" alt="WinMint" width="540">
+</picture>
 
 Windows 11 ISO builder for clean developer workstation installs.
 

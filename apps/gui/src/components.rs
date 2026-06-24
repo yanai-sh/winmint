@@ -69,7 +69,7 @@ pub fn landing_hero_image(hero: Arc<Image>, fallback_logo: Arc<Image>) -> Div {
         img(hero)
             .id("winmint-landing-hero")
             .w(px(640.0))
-            .h(px(274.0))
+            .h(px(160.0))
             .with_fallback(move || splash_brand_lockup(fallback_logo.clone()).into_any_element()),
     )
 }
