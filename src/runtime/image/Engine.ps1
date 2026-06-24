@@ -724,6 +724,7 @@ function Invoke-WinMintIsoBuild {
         [int]$UsbDiskNumber = -1,
         [int]$ConfirmUsbDiskNumber = -1,
         [switch]$AllowFixedUsbDisk,
+        [ValidateSet('Max', 'Fast', 'None')][string]$ImageCompression = 'Max',
         [scriptblock]$ProgressHandler
     )
 
@@ -866,7 +867,8 @@ function Invoke-WinMintIsoBuild {
                 -WriteUsb:$WriteUsb `
                 -UsbDiskNumber $UsbDiskNumber `
                 -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `
-                -AllowFixedUsbDisk:$AllowFixedUsbDisk
+                -AllowFixedUsbDisk:$AllowFixedUsbDisk `
+                -ImageCompression $ImageCompression
             $pipelineOutputIso = Get-WinMintBuildOutputPathFromPipelineResult -PipelineResult $pipeline -FallbackPath ''
             try {
                 $manifestPath = Save-WinMintBuildManifest `
@@ -923,6 +925,7 @@ function Start-WinMintBuild {
         [int]$UsbDiskNumber = -1,
         [int]$ConfirmUsbDiskNumber = -1,
         [switch]$AllowFixedUsbDisk,
+        [ValidateSet('Max', 'Fast', 'None')][string]$ImageCompression = 'Max',
         [scriptblock]$ProgressHandler
     )
 
@@ -954,6 +957,7 @@ function Start-WinMintBuild {
         -UsbDiskNumber $UsbDiskNumber `
         -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `
         -AllowFixedUsbDisk:$AllowFixedUsbDisk `
+        -ImageCompression $ImageCompression `
         -ProgressHandler $ProgressHandler
 }
 

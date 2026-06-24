@@ -259,6 +259,7 @@ function Test-BuildManifestSchema {
         }
         servicing            = [ordered]@{
             componentCleanup = 'StartComponentCleanup'
+            exportCompression = 'Max'
             resetBase = $false
             serviceabilityPolicy = 'Preserve component-store uninstall/repair metadata; do not run ResetBase by default.'
             updates = [ordered]@{

@@ -336,10 +336,11 @@
     },
     "servicing": {
       "type": "object",
-      "required": ["componentCleanup", "resetBase", "serviceabilityPolicy", "updates"],
+      "required": ["componentCleanup", "exportCompression", "resetBase", "serviceabilityPolicy", "updates"],
       "additionalProperties": false,
       "properties": {
         "componentCleanup": { "type": "string" },
+        "exportCompression": { "type": "string", "enum": ["Max", "Fast", "None"] },
         "resetBase": { "type": "boolean" },
         "serviceabilityPolicy": { "type": "string" },
         "updates": {

@@ -209,7 +209,8 @@ function Invoke-WinMintIsoPipeline {
         [switch]$WriteUsb,
         [int]$UsbDiskNumber = -1,
         [int]$ConfirmUsbDiskNumber = -1,
-        [switch]$AllowFixedUsbDisk
+        [switch]$AllowFixedUsbDisk,
+        [ValidateSet('Max', 'Fast', 'None')][string]$ImageCompression = 'Max'
     )
 
     $script:DryRun = [bool]$DryRun
@@ -517,7 +518,7 @@ function Invoke-WinMintIsoPipeline {
             }
             Assert-OfflinePowerShell7Staged -MountDir $mountDir
 
-            Save-ImageWithCleanup -MountDir $mountDir
+            Save-ImageWithCleanup -MountDir $mountDir -ImageCompression $ImageCompression
             $mountedImage = $false
             $firstServicedImage = $false
         }
@@ -545,7 +546,7 @@ function Invoke-WinMintIsoPipeline {
         Install-WinPEUtility -IsoContents $isoContents -AutoWipeDisk:$BuildConfig.AutoWipeDisk
         if ($editionMode -eq 'Fixed') {
             $selectedImage = $installImages | Select-Object -First 1
-            Export-SingleEdition -LocalWim $installWim -SelectedWimIndex $selectedImage.ImageIndex -SelectedEdition $selectedImage.ImageName
+            Export-SingleEdition -LocalWim $installWim -SelectedWimIndex $selectedImage.ImageIndex -SelectedEdition $selectedImage.ImageName -ImageCompression $ImageCompression
             Assert-WinMintWimMetadataHealthy -ImagePath $installWim -ExpectedMetadata $expectedWimMetadata -ExpectedArchitecture $imageArch -AllowIndexRenumber
         }
         Set-WinMintManifestSizeDeltaFromPath -Name 'installWimAfterExportBytes' -Path $installWim

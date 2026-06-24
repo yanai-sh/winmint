@@ -556,13 +556,24 @@ function Invoke-WinMintOfflineImageUpdates {
 }
 
 function Save-ImageWithCleanup {
-    param([ValidateNotNullOrEmpty()][string]$MountDir)
+    param(
+        [ValidateNotNullOrEmpty()][string]$MountDir,
+        [ValidateSet('Max', 'Fast', 'None')][string]$ImageCompression = 'Max'
+    )
     Write-SectionHeader 'Image: cleanup and save' -Accent Yellow -RuleColor Grey -DimLine 'Component cleanup and save can take several minutes; the bar below is normal.'
-    Invoke-Action 'Running DISM component cleanup on the mounted Windows image' -SpectreProgressIndeterminate {
-        LogVerbose "Mount: $MountDir"
-        Set-WinMintManifestComponentCleanupFact
-        Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Cleanup-Image', '/StartComponentCleanup') | Out-Null
-        LogOK 'DISM component cleanup finished.'
+    # WinSxS component cleanup only pays off when we then recompress hard for a lean
+    # release ISO. Fast/None are test-quality builds: skip the multi-minute cleanup.
+    if ($ImageCompression -eq 'Max') {
+        Invoke-Action 'Running DISM component cleanup on the mounted Windows image' -SpectreProgressIndeterminate {
+            LogVerbose "Mount: $MountDir"
+            Set-WinMintManifestComponentCleanupFact
+            Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Cleanup-Image', '/StartComponentCleanup') | Out-Null
+            LogOK 'DISM component cleanup finished.'
+        }
+    }
+    else {
+        Set-WinMintManifestComponentCleanupFact -ComponentCleanup 'Skipped'
+        LogOK "Skipping DISM component cleanup (test-quality image; $ImageCompression compression)."
     }
     Invoke-Action 'Saving and dismounting the Windows image (commit can take several minutes)' -SpectreProgressIndeterminate {
         LogVerbose "Mount: $MountDir"
@@ -572,12 +583,18 @@ function Save-ImageWithCleanup {
 }
 
 function Export-SingleEdition {
-    param([ValidateNotNullOrEmpty()][string]$LocalWim, [int]$SelectedWimIndex, [ValidateNotNullOrEmpty()][string]$SelectedEdition)
+    param(
+        [ValidateNotNullOrEmpty()][string]$LocalWim,
+        [int]$SelectedWimIndex,
+        [ValidateNotNullOrEmpty()][string]$SelectedEdition,
+        [ValidateSet('Max', 'Fast', 'None')][string]$ImageCompression = 'Max'
+    )
     Write-SectionHeader "Image: export $SelectedEdition"
-    Invoke-Action "Exporting a single-edition install.wim ($SelectedEdition)" {
-        LogVerbose "Source WIM: $LocalWim | index $SelectedWimIndex"
+    Invoke-Action "Exporting a single-edition install.wim ($SelectedEdition, $ImageCompression compression)" {
+        LogVerbose "Source WIM: $LocalWim | index $SelectedWimIndex | compression $ImageCompression"
+        Set-WinMintManifestExportCompressionFact -Compression $ImageCompression
         $exportWim = Join-Path (Split-Path $LocalWim -Parent) 'install_export.wim'
-        $null = Export-WindowsImage -SourceImagePath $LocalWim -SourceIndex $SelectedWimIndex -DestinationImagePath $exportWim -CompressionType Max -ErrorAction Stop
+        $null = Export-WindowsImage -SourceImagePath $LocalWim -SourceIndex $SelectedWimIndex -DestinationImagePath $exportWim -CompressionType $ImageCompression -ErrorAction Stop
         Remove-Item -LiteralPath $LocalWim -Force -ErrorAction Stop
         Rename-Item -LiteralPath $exportWim -NewName 'install.wim' -Force -ErrorAction Stop
     }

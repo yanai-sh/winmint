@@ -554,6 +554,7 @@ function Invoke-WinMintProfileRun {
         [int]$UsbDiskNumber = -1,
         [int]$ConfirmUsbDiskNumber = -1,
         [switch]$AllowFixedUsbDisk,
+        [ValidateSet('Max', 'Fast', 'None')][string]$ImageCompression = 'Max',
         [switch]$AllowElevate,
         [switch]$Yes,
         [switch]$Json,
@@ -603,6 +604,7 @@ function Invoke-WinMintProfileRun {
                 -UsbDiskNumber $UsbDiskNumber `
                 -ConfirmUsbDiskNumber $ConfirmUsbDiskNumber `
                 -AllowFixedUsbDisk:$AllowFixedUsbDisk `
+                -ImageCompression $ImageCompression `
                 -ProgressHandler $progress
             $reports = [pscustomobject]@{
                 json = $build.Paths.Json

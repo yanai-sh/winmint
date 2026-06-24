@@ -11,6 +11,10 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 function Log { param([string]$m) }
 function LogVerbose { param([string]$m) }
 
+# OptionCatalog.ps1 supplies the driver-source predicates (Test-WinMintDriverSource*)
+# that the serviced-WIM fingerprint calls; without it the driver branch throws and
+# falls back to "<unresolved>", masking the driver-payload sensitivity check.
+. (Join-Path $root 'src\runtime\image\Private\Config\OptionCatalog.ps1')
 . (Join-Path $root 'src\runtime\image\Private\IntermediatesCache.ps1')
 
 # Redirect the build cache root to a sandbox so we never touch the real

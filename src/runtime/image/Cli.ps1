@@ -86,6 +86,8 @@ function Invoke-WinMintBuildCommand {
         [int]$Disk = -1,
         [int]$ConfirmDisk = -1,
         [switch]$AllowFixedUsbDisk,
+        [ValidateSet('Max', 'Fast', 'None')][string]$Compression = 'Max',
+        [switch]$FastImage,
         [switch]$Yes,
         [switch]$Json,
         [switch]$Quiet,
@@ -99,6 +101,11 @@ function Invoke-WinMintBuildCommand {
         throw 'USB target flags (-Disk, -ConfirmDisk, -AllowFixedUsbDisk) require -WriteUsb.'
     }
 
+    # -FastImage is the test-quality preset: no recompression + skip the WinSxS
+    # component cleanup. It wins over -Compression so a single switch always
+    # produces the fastest build. Otherwise honor the explicit compression.
+    $imageCompression = if ($FastImage) { 'None' } else { $Compression }
+
     Invoke-WinMintProfileRun `
         -ProfilePath $ProfilePath `
         -SourceIsoOverride $SourceIso `
@@ -107,6 +114,7 @@ function Invoke-WinMintBuildCommand {
         -UsbDiskNumber $Disk `
         -ConfirmUsbDiskNumber $ConfirmDisk `
         -AllowFixedUsbDisk:$AllowFixedUsbDisk `
+        -ImageCompression $imageCompression `
         -AllowElevate:$AllowElevate `
         -Yes:$Yes `
         -Json:$Json `

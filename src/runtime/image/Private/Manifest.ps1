@@ -295,6 +295,7 @@ function Initialize-WinMintBuildManifest {
         }
         servicing           = [ordered]@{
             componentCleanup = 'StartComponentCleanup'
+            exportCompression = 'Max'
             resetBase = $false
             serviceabilityPolicy = 'Preserve component-store uninstall/repair metadata; do not run ResetBase by default.'
             updates = [ordered]@{
@@ -535,6 +536,12 @@ function Set-WinMintManifestComponentCleanupFact {
     $script:WinMintBuildManifest.servicing.componentCleanup = $ComponentCleanup
     $script:WinMintBuildManifest.servicing.resetBase = $ResetBase
     $script:WinMintBuildManifest.servicing.serviceabilityPolicy = $ServiceabilityPolicy
+}
+
+function Set-WinMintManifestExportCompressionFact {
+    param([ValidateSet('Max', 'Fast', 'None')][string]$Compression = 'Max')
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    $script:WinMintBuildManifest.servicing.exportCompression = $Compression
 }
 
 function Add-WinMintManifestUpdatePackageFact {
