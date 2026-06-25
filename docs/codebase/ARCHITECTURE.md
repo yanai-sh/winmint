@@ -1,6 +1,6 @@
 # Architecture
 
-Snapshot note: updated 2026-06-20. Onboarding/audit snapshot — not a continuous authoritative source.
+Snapshot note: updated 2026-06-26. Onboarding/audit snapshot — not a continuous authoritative source.
 
 ## Core Sections (Required)
 
@@ -24,10 +24,13 @@ User
           → DISM mounts install.wim
           → Tweaks (registry), AppX removal, AI removal, drivers, packages
           → autounattend.xml + setup/firstlogon payloads staged
+          → install.wim exported per image-quality override
+            (-Compression Max default recompresses + runs WinSxS StartComponentCleanup;
+             Fast/None and -FastImage skip cleanup for fast test builds)
           → oscdimg.exe assembles bootable ISO
   → Windows Setup consumes ISO → installs Windows
   → SetupComplete.ps1 (machine-phase cleanup: power, toolchain, hygiene)
-  → FirstLogon.ps1 bootstraps Agent.Runtime.ps1
+  → FirstLogon.ps1 (setup loader) bootstraps Start-WinMintAgent.ps1 (agent stack)
       → Modules/* run in order (PackageManagers, Editors, WSL, TilingDesktop…)
       → state.json updated before/after each step
   → System Restore point "WinMint post-install complete"

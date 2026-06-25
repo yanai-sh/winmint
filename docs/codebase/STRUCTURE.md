@@ -1,6 +1,6 @@
 # Codebase Structure
 
-Snapshot note: updated 2026-06-20. Onboarding/audit snapshot — not a continuous authoritative source.
+Snapshot note: updated 2026-06-26. Onboarding/audit snapshot — not a continuous authoritative source.
 
 ## Core Sections (Required)
 
@@ -35,7 +35,8 @@ Snapshot note: updated 2026-06-20. Onboarding/audit snapshot — not a continuou
 - **CLI:** `WinMint-CLI.ps1` — dot-sources `src/runtime/image/WinMint.ps1` (which loads the full engine), then dispatches verbs. Verb implementations live in `src/runtime/image/Cli.ps1`.
 - **GUI:** `WinMint-GUI.ps1` — launches compiled Rust binary `apps/gui/bin/WinMint-GUI.exe`; binary calls `tools/ui-bridge/*.ps1` via child process for all backend work.
 - **Bootstrap:** `winmint.ps1` — ephemeral download/verify/run via `irm https://winmint.yanai.sh | iex`.
-- **FirstLogon:** `src/runtime/firstlogon/Agent.Runtime.ps1` — started by Windows at first logon; loads all `Modules/*.ps1` at script scope before running steps.
+- **FirstLogon agent:** `src/runtime/firstlogon/Start-WinMintAgent.ps1` — loads `Agent.Console` → `Agent.State` → `Agent.Host` → `Agent.Install` → `Agent.Plan` → `Agent.Runtime`, then runs `Modules/*.ps1` steps from `agent-module-catalog.json`.
+- **FirstLogon setup:** `src/runtime/setup/FirstLogon.ps1` — dot-sources `FirstLogon.Support.ps1` (loader for `FirstLogon.State/Host/Desktop/Terminal/Region/Cleanup.ps1` + `WindowsTerminal.Profiles.ps1`).
 - **Engine load order:** `src/runtime/image/WinMint.ps1` dot-sources ~35 private modules in a fixed declared order. Never call sub-files directly.
 
 ### 3) Module Boundaries

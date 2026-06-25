@@ -9,6 +9,13 @@ function Get-WinMintSetupPayloadRequiredScriptNames {
         'DefaultUser.ps1'
         'FirstLogon.ps1'
         'FirstLogon.Support.ps1'
+        'FirstLogon.State.ps1'
+        'FirstLogon.Host.ps1'
+        'FirstLogon.Desktop.ps1'
+        'FirstLogon.Terminal.ps1'
+        'FirstLogon.Region.ps1'
+        'FirstLogon.Cleanup.ps1'
+        'WindowsTerminal.Profiles.ps1'
         'FirstLogon.Transaction.ps1'
         'FirstLogon.Runtime.ps1'
     )
@@ -224,22 +231,6 @@ function Copy-WinMintAgentBrandAssets {
     }
 }
 
-function Copy-WinMintAgentTerminalIconAssets {
-    param(
-        [Parameter(Mandatory)][string]$RepositoryRoot,
-        [Parameter(Mandatory)][string]$AgentDestination
-    )
-
-    $terminalIconSourceDir = Join-Path $RepositoryRoot 'assets\ui\wsl'
-    if (Test-Path -LiteralPath $terminalIconSourceDir -PathType Container) {
-        $terminalIconAssetDir = Join-Path $AgentDestination 'Assets\WindowsTerminal\Icons'
-        $null = New-Item -ItemType Directory -Path $terminalIconAssetDir -Force
-        Get-ChildItem -LiteralPath $terminalIconSourceDir -Filter '*.png' -File -ErrorAction SilentlyContinue |
-            Copy-Item -Destination $terminalIconAssetDir -Force
-        LogOK 'Staged Windows Terminal PNG profile icons for first-logon setup.'
-    }
-}
-
 function Get-WinMintDesktopPresetManifest {
     param(
         [Parameter(Mandatory)][string]$RepositoryRoot,
@@ -390,7 +381,6 @@ function Copy-WinMintAgentAssetPayloads {
     )
 
     Copy-WinMintAgentBrandAssets -RepositoryRoot $RepositoryRoot -AgentDestination $AgentDestination
-    Copy-WinMintAgentTerminalIconAssets -RepositoryRoot $RepositoryRoot -AgentDestination $AgentDestination
     Copy-WinMintAgentWindhawkAssets -RepositoryRoot $RepositoryRoot -AgentDestination $AgentDestination -AgentProfile $AgentProfile
     Copy-WinMintAgentYasbAssets -RepositoryRoot $RepositoryRoot -AgentDestination $AgentDestination -AgentProfile $AgentProfile
     Copy-WinMintAgentKomorebiAssets -RepositoryRoot $RepositoryRoot -AgentDestination $AgentDestination -AgentProfile $AgentProfile

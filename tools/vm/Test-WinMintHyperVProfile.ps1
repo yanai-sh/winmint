@@ -82,7 +82,7 @@ foreach ($expectedDistro in @('Ubuntu', 'NixOS-WSL')) {
     }
 }
 if ($wslDistros.Count -ne 2) {
-    Add-Failure 'Hyper-V test profiles should select exactly Ubuntu and NixOS-WSL so official and community WSL paths plus Terminal icons are easy to verify.'
+    Add-Failure 'Hyper-V test profiles should select exactly Ubuntu and NixOS-WSL so official and community WSL install paths are easy to verify.'
 }
 if (@($profile.desktop.layers) -notcontains 'nilesoft') {
     Add-Failure 'Hyper-V test profiles must select the Nilesoft shell layer.'

@@ -1,35 +1,123 @@
 {
   "$schema": "https://aka.ms/terminal-profiles-schema",
-  "centerOnLaunch": true,
+
   "defaultProfile": "{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}",
-  "disabledProfileSources": [
-    "Windows.Terminal.WindowsPowerShell",
-    "Windows.Terminal.PowershellCore",
-    "Windows.Terminal.Azure",
-    "Windows.Terminal.SSH",
-    "Windows.Terminal.Wsl"
+
+  "centerOnLaunch": true,
+  "launchMode": "maximized",
+  "firstWindowPreference": "persistedWindowLayout",
+  "tabWidthMode": "compact",
+  "useAcrylicInTabRow": false,
+
+  "actions": [
+    {
+      "command": {
+        "action": "toggleQuakeMode"
+      },
+      "keys": "ctrl+`"
+    },
+    {
+      "command": {
+        "action": "splitPane",
+        "split": "vertical"
+      },
+      "keys": "alt+shift+|"
+    },
+    {
+      "command": {
+        "action": "splitPane",
+        "split": "horizontal"
+      },
+      "keys": "alt+shift+-"
+    },
+    {
+      "command": "duplicateTab",
+      "keys": "ctrl+shift+d"
+    },
+    {
+      "command": "closePane",
+      "keys": "ctrl+shift+w"
+    },
+    {
+      "command": "find",
+      "keys": "ctrl+shift+f"
+    },
+    {
+      "command": "toggleFullscreen",
+      "keys": "alt+enter"
+    },
+    {
+      "command": "toggleFocusMode",
+      "keys": "f11"
+    }
   ],
+
+  "profiles": {
+    "defaults": {
+      "bellStyle": "none",
+      "colorScheme": "One Half Dark",
+
+      "font": {
+        "face": "Cascadia Code NF",
+        "size": 12,
+        "features": {
+          "liga": 1,
+          "calt": 1,
+          "clig": 1,
+          "kern": 1,
+          "ss01": 1,
+          "ss02": 1
+        }
+      },
+
+      "background": "#0b0c10",
+      "opacity": 96,
+
+      "padding": "10",
+
+      "cursorShape": "bar",
+      "cursorHeight": 40,
+
+      "historySize": 32767,
+
+      "antialiasingMode": "grayscale",
+
+      "scrollbarState": "hidden",
+
+      "copyOnSelect": false,
+
+      "autoMarkPrompts": true,
+
+      "closeOnExit": "automatic",
+
+      "suppressApplicationTitle": true,
+      "tabTitle": "${profileName}"
+    },
+
+    "list": [
+      {
+        "guid": "{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}",
+        "name": "PowerShell",
+        "commandline": "pwsh.exe -NoLogo",
+        "startingDirectory": "%USERPROFILE%",
+        "icon": "ms-appx:///ProfileIcons/pwsh.png",
+        "tabTitle": "pwsh"
+      }
+    ]
+  },
+
   "newTabMenu": [
     {
       "type": "remainingProfiles"
     }
   ],
-  "profiles": {
-    "defaults": {
-      "bellStyle": "none",
-      "colorScheme": "One Half Dark",
-      "font": {
-        "face": "Cascadia Code NF"
-      }
-    },
-    "list": [
-      {
-        "commandline": "\"%ProgramFiles%\\PowerShell\\7\\pwsh.exe\" -NoLogo",
-        "guid": "{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}",
-        "icon": "%ProgramFiles%\\PowerShell\\7\\pwsh.exe",
-        "name": "PowerShell",
-        "startingDirectory": "%USERPROFILE%"
-      }
-    ]
-  }
+
+  "disabledProfileSources": [
+    "Windows.Terminal.WindowsPowerShell",
+    "Windows.Terminal.PowershellCore",
+    "Windows.Terminal.Azure",
+    "Windows.Terminal.VisualStudio"
+  ],
+
+  "schemes": []
 }

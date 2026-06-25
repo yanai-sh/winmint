@@ -16,6 +16,50 @@ function Copy-WinMintPayloadDirectoryChildren {
     }
 }
 
+function Add-OfflineMachinePathEntry {
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$MountDir,
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Entry
+    )
+
+    $hiveKey = 'WinMintOfflineSYSTEM'
+    $systemHive = Join-Path $MountDir 'Windows\System32\config\SYSTEM'
+    $envKey = "HKLM\$hiveKey\ControlSet001\Control\Session Manager\Environment"
+    $null = & reg.exe load "HKLM\$hiveKey" $systemHive
+    try {
+        $current = ''
+        $query = @(& reg.exe query $envKey /v Path 2>$null)
+        foreach ($line in $query) {
+            if ($line -match 'REG_(?:EXPAND_)?SZ\s+(.+)$') {
+                $current = $matches[1].Trim()
+                break
+            }
+        }
+        $parts = [System.Collections.Generic.List[string]]::new()
+        foreach ($part in ($current -split ';')) {
+            if (-not [string]::IsNullOrWhiteSpace($part)) { $parts.Add($part.Trim()) | Out-Null }
+        }
+        $alreadyPresent = @(
+            $parts |
+                Where-Object {
+                    $_ -ieq $Entry -or
+                    $_ -ieq ($Entry -replace '%ProgramFiles%', 'C:\Program Files') -or
+                    $_ -ieq (Join-Path $MountDir ($Entry -replace '%ProgramFiles%\\', 'Program Files\'))
+                }
+        ).Count -gt 0
+        if (-not $alreadyPresent) {
+            $parts.Add($Entry) | Out-Null
+            $null = & reg.exe add $envKey /v Path /t REG_EXPAND_SZ /d ($parts -join ';') /f
+        }
+    }
+    finally {
+        [GC]::Collect()
+        [GC]::WaitForPendingFinalizers()
+        Start-Sleep -Milliseconds 200
+        $null = & reg.exe unload "HKLM\$hiveKey"
+    }
+}
+
 function Assert-OfflinePowerShell7Staged {
     param([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$MountDir)
 
@@ -79,6 +123,7 @@ function Install-OfflinePowerShell7 {
 
             $pwshExe = Join-Path $dest 'pwsh.exe'
             if (-not (Test-Path -LiteralPath $pwshExe)) { throw "pwsh.exe missing after staging: $pwshExe" }
+            Add-OfflineMachinePathEntry -MountDir $MountDir -Entry '%ProgramFiles%\PowerShell\7'
             Assert-OfflinePowerShell7Staged -MountDir $MountDir
             LogOK "PowerShell 7 staged in the offline image (release: $($payload.Version))."
             LogVerbose "$pwshExe (release asset: $($payload.AssetName))"

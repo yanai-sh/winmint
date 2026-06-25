@@ -1,6 +1,6 @@
 # Coding Conventions
 
-Snapshot note: updated 2026-06-20. Onboarding/audit snapshot — not a continuous authoritative source.
+Snapshot note: updated 2026-06-25. Onboarding/audit snapshot — not a continuous authoritative source.
 
 ## Core Sections (Required)
 

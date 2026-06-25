@@ -96,8 +96,10 @@ function Write-AgentEvent {
     [void]$Data
 }
 function Write-AgentConsoleLine { param([string]$Level, [string]$Message) [void]$Level; [void]$Message }
+function Write-AgentUserNotice { param([string]$Level, [string]$Message) [void]$Level; [void]$Message }
 
-. (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1')
+$script:agentRoot = Join-Path $root 'src\runtime\firstlogon'
+. (Join-Path $agentRoot 'Agent.Load.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\LauncherKey.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\Raycast.ps1')
@@ -548,7 +550,10 @@ try {
     Assert-Equal $State.steps['module:liveInstallAudit'].status 'ok' 'Live audit findings should not fail the FirstLogon agent state.'
     Assert-Equal $State.steps['module:liveInstallAudit'].result.Summary.error 2 'Live audit result should preserve error count for diagnostics.'
 
-    $runtimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
+    $runtimeText = @(
+            (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw),
+            (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Plan.ps1') -Raw)
+        ) -join "`n"
     Assert-True ($runtimeText -notmatch 'Invoke-WinMintAgentTilingDesktopBootstrap') 'Runtime should not reference the retired tiling desktop bootstrap name.'
     Assert-True ($runtimeText -notmatch "'tiling-desktop'") 'Runtime should not use tiling-desktop as a state step.'
 

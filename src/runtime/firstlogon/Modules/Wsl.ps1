@@ -1,5 +1,12 @@
 #Requires -Version 7.6
 
+$setupScriptsRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$terminalProfilesScript = Join-Path $setupScriptsRoot 'WindowsTerminal.Profiles.ps1'
+if (-not (Test-Path -LiteralPath $terminalProfilesScript)) {
+    $terminalProfilesScript = Join-Path (Split-Path -Parent $setupScriptsRoot) 'setup\WindowsTerminal.Profiles.ps1'
+}
+. $terminalProfilesScript
+
 function Convert-WinMintWslDistroAlias {
     param([string]$Distro)
 
@@ -199,136 +206,10 @@ function Install-WinMintWslConfig {
     return 'written'
 }
 
-function Get-WinMintWslTerminalIconPath {
-    param([Parameter(Mandatory)][string]$Distro)
-
-    $terminalLocalState = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState'
-    $iconRoot = Join-Path $terminalLocalState 'Icons'
-    switch ($Distro) {
-        'Ubuntu' { return (Join-Path $iconRoot 'ubuntu.png') }
-        'FedoraLinux' { return (Join-Path $iconRoot 'fedora.png') }
-        'archlinux' { return (Join-Path $iconRoot 'archlinux.png') }
-        'NixOS' { return (Join-Path $iconRoot 'nixos.png') }
-        'pengwin' { return (Join-Path $iconRoot 'pengwin.png') }
-        default { throw "Unsupported WSL distro icon mapping: $Distro" }
-    }
-}
-
-function New-WinMintWslTerminalProfile {
-    param([Parameter(Mandatory)][string]$Distro)
-
-    $commandDistro = switch ($Distro) {
-        'Ubuntu' { 'Ubuntu' }
-        'FedoraLinux' { 'FedoraLinux' }
-        'archlinux' { 'archlinux' }
-        'NixOS' { 'NixOS' }
-        'pengwin' { 'pengwin' }
-        default { throw "Unsupported WSL distro profile mapping: $Distro" }
-    }
-
-    $displayName = switch ($Distro) {
-        'Ubuntu' { 'Ubuntu' }
-        'FedoraLinux' { 'Fedora' }
-        'archlinux' { 'Arch Linux' }
-        'NixOS' { 'NixOS' }
-        'pengwin' { 'Pengwin' }
-        default { $Distro }
-    }
-
-    $guid = switch ($Distro) {
-        'Ubuntu' { '{9f23b5e0-8f73-4a90-9d8d-11e8b43d0001}' }
-        'FedoraLinux' { '{9f23b5e0-8f73-4a90-9d8d-11e8b43d0002}' }
-        'archlinux' { '{9f23b5e0-8f73-4a90-9d8d-11e8b43d0003}' }
-        'NixOS' { '{9f23b5e0-8f73-4a90-9d8d-11e8b43d0004}' }
-        'pengwin' { '{9f23b5e0-8f73-4a90-9d8d-11e8b43d0005}' }
-        default { throw "Unsupported WSL distro profile GUID mapping: $Distro" }
-    }
-
-    $iconPath = Get-WinMintWslTerminalIconPath -Distro $Distro
-    $terminalProfile = [ordered]@{
-        guid = $guid
-        name = $displayName
-        commandline = "wsl.exe -d $commandDistro"
-        startingDirectory = '%USERPROFILE%'
-    }
-    if (Test-Path -LiteralPath $iconPath) {
-        $terminalProfile.icon = $iconPath
-    }
-    else {
-        Write-AgentLog "WSL terminal icon missing; profile will fall back to the terminal default icon: $iconPath"
-    }
-
-    return $terminalProfile
-}
-
-function New-WinMintWindowsTerminalPowerShellProfile {
-    [ordered]@{
-        guid = '{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}'
-        name = 'PowerShell'
-        commandline = '"%ProgramFiles%\PowerShell\7\pwsh.exe" -NoLogo'
-        icon = '%ProgramFiles%\PowerShell\7\pwsh.exe'
-        startingDirectory = '%USERPROFILE%'
-    }
-}
-
-function Install-WinMintWindowsTerminalWslProfiles {
-    param([Parameter(Mandatory)][string[]]$Distros)
-
-    $distros = @($Distros | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique)
-
-    $settingsPath = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
-    if (-not (Test-Path -LiteralPath $settingsPath)) {
-        Write-AgentLog "Windows Terminal settings file not found; skipping WSL profile wiring: $settingsPath"
-        return 'missing-terminal-settings'
-    }
-
-    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json -AsHashtable
-    if (-not $settings.ContainsKey('profiles')) {
-        $settings.profiles = [ordered]@{}
-    }
-    if (-not $settings.profiles.ContainsKey('defaults')) {
-        $settings.profiles.defaults = [ordered]@{}
-    }
-    if (-not $settings.profiles.defaults.ContainsKey('font')) {
-        $settings.profiles.defaults.font = [ordered]@{}
-    }
-    $settings.profiles.defaults.font.face = 'Cascadia Code NF'
-    $settings.profiles.defaults.colorScheme = 'One Half Dark'
-    $settings.profiles.defaults.bellStyle = 'none'
-    $settings.centerOnLaunch = $true
-    if (-not $settings.profiles.ContainsKey('list')) {
-        $settings.profiles.list = @()
-    }
-    $settings.defaultProfile = '{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}'
-    $settings.disabledProfileSources = @(
-        'Windows.Terminal.WindowsPowerShell',
-        'Windows.Terminal.PowershellCore',
-        'Windows.Terminal.Azure',
-        'Windows.Terminal.SSH',
-        'Windows.Terminal.Wsl'
-    )
-    $settings.newTabMenu = @(
-        [ordered]@{ type = 'remainingProfiles' }
-    )
-
-    $terminalProfiles = [System.Collections.Generic.List[object]]::new()
-    $terminalProfiles.Add((New-WinMintWindowsTerminalPowerShellProfile))
-
-    foreach ($distro in $distros) {
-        $terminalProfiles.Add((New-WinMintWslTerminalProfile -Distro $distro))
-    }
-
-    $settings.profiles.list = @($terminalProfiles)
-    $settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
-    Write-AgentLog "Updated Windows Terminal WSL profiles: $($distros -join ', ')"
-    if ($distros.Count -eq 0) { return 'updated-base-only' }
-    return 'updated'
-}
-
 function Update-WinMintWslRuntime {
     param([Parameter(Mandatory)][string]$WslPath)
 
-    Write-AgentConsoleLine -Level Info -Message 'Updating the WSL runtime.'
+    Write-AgentUserNotice -Level Info -Message 'Updating the WSL runtime.'
     Invoke-AgentNative -FilePath $WslPath -ArgumentList @('--update', '--web-download')
 }
 
@@ -372,12 +253,12 @@ function Invoke-WinMintAgentWslBootstrap {
         Write-AgentLog $nestedMessage
         $messages.Add($nestedMessage)
         try {
-            $terminalStatus = Install-WinMintWindowsTerminalWslProfiles -Distros $distros
-            if ($terminalStatus) { $messages.Add("Windows Terminal WSL profiles: $terminalStatus") }
+            $terminalStatus = Set-WinMintWindowsTerminalProfiles -WslDistros @($distros)
+            if ($terminalStatus) { $messages.Add("Windows Terminal defaults: $terminalStatus") }
         }
         catch {
-            Write-AgentLog "Windows Terminal WSL profile update warning: $($_.Exception.Message)"
-            $messages.Add('Windows Terminal WSL profiles not updated.')
+            Write-AgentLog "Windows Terminal defaults update warning: $($_.Exception.Message)"
+            $messages.Add('Windows Terminal defaults not updated.')
         }
         [pscustomobject]@{
             Id      = 'wsl'
@@ -400,7 +281,7 @@ function Invoke-WinMintAgentWslBootstrap {
     }
 
     try {
-        Write-AgentConsoleLine -Level Info -Message 'Setting WSL 2 as the default version.'
+        Write-AgentUserNotice -Level Info -Message 'Setting WSL 2 as the default version.'
         Invoke-AgentNative -FilePath $wsl.Source -ArgumentList @('--set-default-version', '2')
     }
     catch {
@@ -464,12 +345,12 @@ function Invoke-WinMintAgentWslBootstrap {
     if ($requestedDistros.Count -eq 0) { $messages.Add('WSL2 configured; no distro selected.') }
 
     try {
-        $terminalStatus = Install-WinMintWindowsTerminalWslProfiles -Distros $distros
-        if ($terminalStatus) { $messages.Add("Windows Terminal WSL profiles: $terminalStatus") }
+        $terminalStatus = Set-WinMintWindowsTerminalProfiles -WslDistros @($distros)
+        if ($terminalStatus) { $messages.Add("Windows Terminal defaults: $terminalStatus") }
     }
     catch {
-        Write-AgentLog "Windows Terminal WSL profile update warning: $($_.Exception.Message)"
-        $messages.Add('Windows Terminal WSL profiles not updated.')
+        Write-AgentLog "Windows Terminal defaults update warning: $($_.Exception.Message)"
+        $messages.Add('Windows Terminal defaults not updated.')
     }
 
     [pscustomobject]@{

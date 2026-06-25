@@ -34,7 +34,8 @@ param(
     [int]$CpuCount = 4,
     [string]$SwitchName,
     [switch]$NoConnect,
-    [switch]$ForceBuild
+    [switch]$ForceBuild,
+    [switch]$FullImage
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,7 +52,7 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 # the engine's: its serviced-wim cache key excludes FirstLogon/payload, so a
 # FirstLogon-only change restores the 5 GB wim from cache and just re-stages.
 function Get-WinMintVmBuildFingerprint {
-    param([Parameter(Mandatory)][string]$ProfilePath, [Parameter(Mandatory)]$ProfileJson, [Parameter(Mandatory)][string]$RepoRoot)
+    param([Parameter(Mandatory)][string]$ProfilePath, [Parameter(Mandatory)]$ProfileJson, [Parameter(Mandatory)][string]$RepoRoot, [string]$Quality = 'fast')
     $profileHash = (Get-FileHash -LiteralPath $ProfilePath -Algorithm SHA256).Hash
     $runtimeRoot = Join-Path $RepoRoot 'src\runtime'
     $runtimeParts = Get-ChildItem -LiteralPath $runtimeRoot -Recurse -File -ErrorAction Stop |
@@ -69,7 +70,7 @@ function Get-WinMintVmBuildFingerprint {
             $srcIdentity = "$($it.FullName)|$($it.Length)|$($it.LastWriteTimeUtc.Ticks)"
         }
     }
-    $blob = "schema=1`nprofile=$profileHash`nsrc=$srcIdentity`nruntime=$($runtimeParts -join ';')"
+    $blob = "schema=2`nquality=$Quality`nprofile=$profileHash`nsrc=$srcIdentity`nruntime=$($runtimeParts -join ';')"
     return ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($blob))) -replace '-', '').ToLowerInvariant()
 }
 
@@ -124,7 +125,8 @@ if ($existing) {
 $cli = Join-Path $repoRoot 'WinMint-CLI.ps1'
 $outputDir = Join-Path $repoRoot 'output'
 $fingerprintPath = Join-Path $outputDir '.vm-build-fingerprint.json'
-$currentFp = Get-WinMintVmBuildFingerprint -ProfilePath $resolvedProfile -ProfileJson $profileJson -RepoRoot $repoRoot
+$imageQuality = if ($FullImage) { 'max' } else { 'fast' }
+$currentFp = Get-WinMintVmBuildFingerprint -ProfilePath $resolvedProfile -ProfileJson $profileJson -RepoRoot $repoRoot -Quality $imageQuality
 
 $builtIso = $null
 if (-not $ForceBuild -and (Test-Path -LiteralPath $fingerprintPath)) {
@@ -141,8 +143,12 @@ if (-not $ForceBuild -and (Test-Path -LiteralPath $fingerprintPath)) {
 
 if (-not $builtIso) {
     $buildStartedAt = (Get-Date).AddSeconds(-5)
-    Write-Host "Building ISO from profile: $resolvedProfile"
-    & $cli build $resolvedProfile -Yes
+    # Default to -FastImage (skip recompression + WinSxS cleanup): WinMint is alpha
+    # and the VM loop runs many times - install/FirstLogon behavior is identical, only
+    # the final image size differs. Pass -FullImage for a production-quality ISO.
+    Write-Host "Building ISO from profile ($imageQuality image): $resolvedProfile"
+    if ($FullImage) { & $cli build $resolvedProfile -Yes }
+    else { & $cli build $resolvedProfile -Yes -FastImage }
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed (exit code $LASTEXITCODE). See the WinMint build report in .\output."
     }

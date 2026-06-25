@@ -6,8 +6,9 @@
 
 .DESCRIPTION
     Uses PowerShell Direct to inspect the guest after first logon. This is a read-only
-    check intended to confirm the exact Windows Terminal profile names, the Ubuntu/NixOS icon
-    path, cursor state, account picture, installed apps, and Start pins.
+    check intended to confirm Windows Terminal profile names, cursor state, account picture,
+    installed apps, and Start pins. WSL distro profiles are expected from Windows Terminal
+    auto-discovery, not WinMint-managed profile entries.
 
 .EXAMPLE
     pwsh -NoProfile -File .\tools\vm\Invoke-WinMintGuestAcceptance.ps1 -VMName WinMint-ARM-Test

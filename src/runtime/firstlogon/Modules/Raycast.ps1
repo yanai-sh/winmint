@@ -90,7 +90,7 @@ function Set-WinMintAgentEverythingConfiguration {
 
     $key = 'config:everything-search-backend'
     if (-not $Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
-        Write-AgentConsoleLine -Level OK -Message 'Everything search backend already configured.'
+        Write-AgentUserNotice -Level OK -Message 'Everything search backend already configured.'
         return
     }
 

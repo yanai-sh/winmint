@@ -23,6 +23,13 @@ function Get-WinMintFirstLogonText {
     foreach ($relativePath in @(
         'src\runtime\setup\FirstLogon.ps1',
         'src\runtime\setup\FirstLogon.Support.ps1',
+        'src\runtime\setup\FirstLogon.State.ps1',
+        'src\runtime\setup\FirstLogon.Host.ps1',
+        'src\runtime\setup\FirstLogon.Desktop.ps1',
+        'src\runtime\setup\FirstLogon.Terminal.ps1',
+        'src\runtime\setup\FirstLogon.Region.ps1',
+        'src\runtime\setup\FirstLogon.Cleanup.ps1',
+        'src\runtime\setup\WindowsTerminal.Profiles.ps1',
         'src\runtime\setup\FirstLogon.Transaction.ps1',
         'src\runtime\setup\FirstLogon.Runtime.ps1'
     )) {
@@ -848,7 +855,7 @@ function Assert-LiveInstallAuditIsStaged {
     if ($setupPayloadText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
         Add-SmokeFailure 'Setup payload staging must not rely on the removed top-level scripts directory.'
     }
-    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
+    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.State.ps1', 'FirstLogon.Host.ps1', 'FirstLogon.Desktop.ps1', 'FirstLogon.Terminal.ps1', 'FirstLogon.Region.ps1', 'FirstLogon.Cleanup.ps1', 'WindowsTerminal.Profiles.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
         if ($setupPayloadText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Setup payload staging should stage '$expected'."
         }
@@ -1022,28 +1029,33 @@ function Assert-FirstLogonFinalizesTerminalProfiles {
     $firstLogonText = Get-WinMintFirstLogonText
     foreach ($expected in @(
         'Set-WinMintFirstLogonTerminalProfiles',
-        'New-WinMintFirstLogonTerminalPowerShellProfile',
-        'New-WinMintFirstLogonTerminalWslProfile',
-        'Repair-WinMintFirstLogonTerminalIcons',
+        'Set-WinMintWindowsTerminalProfiles',
+        'Get-WinMintDisabledTerminalProfileSources',
+        'New-WinMintWslTerminalProfile',
+        'Get-WinMintProfileWslDistros',
         'Windows.Terminal.WindowsPowerShell',
-        'Windows Terminal profiles finalized',
-        'NixOS',
-        'ubuntu.png',
-        'fedora.png',
-        'archlinux.png',
-        'nixos.png'
+        'Windows Terminal defaults applied',
+        'WindowsTerminal.Profiles.ps1'
     )) {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "FirstLogon should finalize Terminal profiles after generated stock profiles appear with '$expected'."
-        }
-    }
-    foreach ($forbiddenIcon in @('ubuntu.svg', 'fedora.svg', 'archlinux.svg', 'nixos.svg')) {
-        if ($firstLogonText -match [regex]::Escape($forbiddenIcon)) {
-            Add-SmokeFailure "FirstLogon Windows Terminal profiles must use staged PNG icons, not '$forbiddenIcon'."
+            Add-SmokeFailure "FirstLogon should finalize Terminal defaults with '$expected'."
         }
     }
     if ($firstLogonText -match '\$agentExitCode\s+-eq\s+0[\s\S]{0,240}Set-WinMintFirstLogonTerminalProfiles') {
         Add-SmokeFailure 'FirstLogon Terminal profile finalization must not be gated on a fully successful agent exit code.'
+    }
+    $terminalProfilesText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\WindowsTerminal.Profiles.ps1') -Raw
+    if ($terminalProfilesText -match '(?s)function Get-WinMintDisabledTerminalProfileSources\s*\{.*?@\s*\((.*?)\)\s*\}') {
+        $disabledSourcesBlock = $matches[1]
+        if ($disabledSourcesBlock -match 'Windows\.Terminal\.Wsl') {
+            Add-SmokeFailure 'Windows Terminal disabled profile sources must not include WSL auto-profile discovery.'
+        }
+        if ($disabledSourcesBlock -match 'Windows\.Terminal\.SSH') {
+            Add-SmokeFailure 'Windows Terminal disabled profile sources must not include SSH auto-profile discovery.'
+        }
+    }
+    else {
+        Add-SmokeFailure 'Windows Terminal disabled profile sources helper is missing.'
     }
     if ($firstLogonText -match '\$agentExitCode\s+-eq\s+0[\s\S]{0,320}Set-WinMintFirstLogonStartPins') {
         Add-SmokeFailure 'FirstLogon Start pin finalization must not be gated on a fully successful agent exit code.'
@@ -1051,7 +1063,10 @@ function Assert-FirstLogonFinalizesTerminalProfiles {
 }
 
 function Assert-AgentLiveInstallFailuresAreWarnings {
-    $agentText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
+    $agentText = @(
+            (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw),
+            (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Host.ps1') -Raw)
+        ) -join "`n"
     $consoleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Console.ps1') -Raw
     foreach ($expected in @(
         '$blockingSteps',
@@ -1375,27 +1390,37 @@ function Assert-AgentRunsLiveInstallAudit {
             Add-SmokeFailure "Live install audit should expose debug inventory through the opt-in report with '$expected'."
         }
     }
-    $agentEntryText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
+    $agentRuntimeText = @(
+            (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw),
+            (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Plan.ps1') -Raw),
+            (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\agent-module-catalog.json') -Raw)
+        ) -join "`n"
+    $agentCatalogText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\agent-module-catalog.json') -Raw
     foreach ($expected in @(
         'New-WinMintAgentRuntimeStepPlan',
         'FailurePolicy',
-        '''blocking''',
-        '''advisory''',
+        'blocking',
+        'advisory',
         'finalValidation',
         '$blockingSteps = @($runtimePlan'
     )) {
-        if ($agentEntryText -notmatch [regex]::Escape($expected)) {
+        if ($agentRuntimeText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Agent runtime should expose plan-driven ordering and failure policy with '$expected'."
         }
     }
-    $profilesIndex = $agentEntryText.IndexOf("RuntimeStepName = 'profiles'")
-    $packageManagersIndex = $agentEntryText.IndexOf("RuntimeStepName = 'package-managers'")
-    $editorsIndex = $agentEntryText.IndexOf("RuntimeStepName = 'editors'")
-    $auditIndex = $agentEntryText.IndexOf("RuntimeStepName = 'liveInstallAudit'")
-    $failedIndex = $agentEntryText.IndexOf('$failed = @')
+    $catalog = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\agent-module-catalog.json') -Raw | ConvertFrom-Json
+    $stepNames = @($catalog | ForEach-Object { [string]$_.RuntimeStepName })
+    $profilesIndex = [array]::IndexOf($stepNames, 'profiles')
+    $packageManagersIndex = [array]::IndexOf($stepNames, 'package-managers')
+    $editorsIndex = [array]::IndexOf($stepNames, 'editors')
+    $auditIndex = [array]::IndexOf($stepNames, 'liveInstallAudit')
+    $failedIndex = $agentRuntimeText.IndexOf('$failed = @')
     if ($profilesIndex -lt 0 -or $packageManagersIndex -lt 0 -or $editorsIndex -lt 0 -or $auditIndex -lt 0 -or $failedIndex -lt 0 -or
-        -not ($profilesIndex -lt $packageManagersIndex -and $packageManagersIndex -lt $editorsIndex -and $editorsIndex -lt $auditIndex -and $auditIndex -lt $failedIndex)) {
+        -not ($profilesIndex -lt $packageManagersIndex -and $packageManagersIndex -lt $editorsIndex -and $editorsIndex -lt $auditIndex)) {
         Add-SmokeFailure 'Agent step runtime should run liveInstallAudit during final validation before failed-step evaluation.'
+    }
+    if ($agentCatalogText -notmatch '"RuntimeStepName": "liveInstallAudit"') {
+        Add-SmokeFailure 'Agent module catalog should declare the liveInstallAudit runtime step.'
     }
 }
 
@@ -1443,7 +1468,7 @@ function Assert-StarshipPromptUsesNerdFontTerminalDefaults {
     }
 
     $firstLogonText = Get-WinMintFirstLogonText
-    $wslText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\Wsl.ps1') -Raw
+    $terminalProfilesText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\WindowsTerminal.Profiles.ps1') -Raw
     foreach ($expected in @(
             'profiles.defaults.font.face',
             'profiles.defaults.colorScheme',
@@ -1454,14 +1479,17 @@ function Assert-StarshipPromptUsesNerdFontTerminalDefaults {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "FirstLogon terminal finalizer should enforce '$expected'."
         }
-        if ($wslText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "WSL terminal profile updater should preserve '$expected'."
+        if ($terminalProfilesText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Windows Terminal defaults helper should preserve '$expected'."
         }
     }
 }
 
 function Assert-AgentWingetUsesDefaultInstallerSelection {
-    $runtimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Runtime.ps1') -Raw
+    $runtimeText = @(
+            (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Install.ps1') -Raw),
+            (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Host.ps1') -Raw)
+        ) -join "`n"
     $packageManagerText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1') -Raw
     $packagesText = Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw
 
@@ -1556,8 +1584,8 @@ function Assert-OfficialUpdatePayloadAcquisition {
 
 function Assert-ElevationChecksUseInstanceMarshalSize {
     foreach ($relativePath in @(
-        'src\runtime\setup\FirstLogon.Support.ps1',
-        'src\runtime\firstlogon\Agent.Runtime.ps1'
+        'src\runtime\setup\FirstLogon.Host.ps1',
+        'src\runtime\firstlogon\Agent.Host.ps1'
     )) {
         $text = Get-Content -LiteralPath (Join-Path $root $relativePath) -Raw
         if ($text -match 'Marshal\]::SizeOf\(\[WinMint\.TokenElevation\+TOKEN_ELEVATION\]\)') {
@@ -1761,22 +1789,21 @@ function Assert-WslFirstDefaultsAndGuards {
         'firewall=true',
         'autoMemoryReclaim=gradual',
         'sparseVhd=true',
-        'Install-WinMintWindowsTerminalWslProfiles',
-        'Get-WinMintWslTerminalIconPath',
-        'New-WinMintWslTerminalProfile',
-        'New-WinMintWindowsTerminalPowerShellProfile',
-        'Windows.Terminal.WindowsPowerShell',
-        'LocalState',
-        'Icons',
-        'ubuntu.png',
-        'fedora.png',
-        'archlinux.png',
-        'nixos.png',
-        'pengwin.png'
+        'Set-WinMintWindowsTerminalProfiles',
+        'WindowsTerminal.Profiles.ps1',
+        '-WslDistros'
     )) {
         if ($wslModuleText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "WSL module should generate .wslconfig setting '$expected'."
         }
+    }
+    $terminalProfilesPath = Join-Path $root 'src\runtime\setup\WindowsTerminal.Profiles.ps1'
+    $terminalProfilesText = Get-Content -LiteralPath $terminalProfilesPath -Raw
+    if ($terminalProfilesText -notmatch 'New-WinMintWslTerminalProfile') {
+        Add-SmokeFailure 'WindowsTerminal.Profiles.ps1 should define New-WinMintWslTerminalProfile for curated WSL distros.'
+    }
+    if ($wslModuleText -notmatch 'Set-WinMintWindowsTerminalProfiles -WslDistros') {
+        Add-SmokeFailure 'WSL module should pass selected distros into Windows Terminal profile finalization.'
     }
     foreach ($expected in @('--update', '--web-download', 'Updating the WSL runtime.', 'Setting WSL 2 as the default version.')) {
         if ($wslModuleText -notmatch [regex]::Escape($expected)) {
@@ -1785,7 +1812,7 @@ function Assert-WslFirstDefaultsAndGuards {
     }
     foreach ($expected in @(
         'Test-WinMintHyperVGuestWithoutNestedVirtualization',
-        'Install-WinMintWindowsTerminalWslProfiles -Distros $distros',
+        'Set-WinMintWindowsTerminalProfiles',
         'ExposeVirtualizationExtensions $true',
         'WSL2 distro installation skipped',
         'nested virtualization is not exposed'
@@ -2474,13 +2501,18 @@ function Assert-WindowsTerminalDefaultsPwsh7NoLogo {
         'disabledProfileSources',
         'Windows.Terminal.PowershellCore',
         'Windows.Terminal.Azure',
-        'Windows.Terminal.SSH',
-        'Windows.Terminal.Wsl',
-        'Windows.Terminal.WindowsPowerShell'
+        'Windows.Terminal.WindowsPowerShell',
+        'Windows.Terminal.VisualStudio'
     )) {
         if ($settingsText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Windows Terminal settings should contain '$expected'."
         }
+    }
+    if ($settingsText -match 'Windows\.Terminal\.Wsl') {
+        Add-SmokeFailure 'Windows Terminal settings must not disable WSL auto-profile discovery.'
+    }
+    if ($settingsText -match 'Windows\.Terminal\.SSH') {
+        Add-SmokeFailure 'Windows Terminal settings must not disable SSH auto-profile discovery.'
     }
     foreach ($forbidden in @('"hidden": true', 'Command Prompt', 'Windows PowerShell', 'Azure Cloud Shell')) {
         if ($settingsText -match [regex]::Escape($forbidden)) {
@@ -2529,6 +2561,8 @@ function Assert-OfflinePowerShell7StagingContract {
 
     Assert-StaticTextContainsAll -Text $PackagesText -FailurePrefix 'Offline PowerShell 7 staging should contain' -Expected @(
         'function Assert-OfflinePowerShell7Staged',
+        'function Add-OfflineMachinePathEntry',
+        '%ProgramFiles%\PowerShell\7',
         'Resolve-WinMintGitHubReleasePayload',
         'PowerShell/PowerShell',
         'PowerShell-\d+\.\d+\.\d+-',
@@ -2620,10 +2654,50 @@ function Assert-AgentRuntimeRequiresPowerShell7 {
     )
 }
 
+function Assert-AgentModuleCatalogParity {
+    $catalogPath = Join-Path $root 'src\runtime\firstlogon\agent-module-catalog.json'
+    if (-not (Test-Path -LiteralPath $catalogPath -PathType Leaf)) {
+        Add-SmokeFailure 'Agent module catalog JSON is missing.'
+        return
+    }
+
+    $catalog = @(Get-Content -LiteralPath $catalogPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+    $modulesDir = Join-Path $root 'src\runtime\firstlogon\Modules'
+    foreach ($entry in $catalog) {
+        $modulePath = Join-Path $root ('src\runtime\firstlogon\' + ([string]$entry.RelativePath -replace '\\', '\'))
+        if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
+            Add-SmokeFailure "Agent catalog module '$($entry.Id)' points to missing file '$($entry.RelativePath)'."
+        }
+        $bootstrap = [string]$entry.BootstrapFunction
+        if ([string]::IsNullOrWhiteSpace($bootstrap)) {
+            Add-SmokeFailure "Agent catalog module '$($entry.Id)' is missing BootstrapFunction."
+        }
+        else {
+            $moduleText = Get-Content -LiteralPath $modulePath -Raw
+            if ($moduleText -notmatch [regex]::Escape("function $bootstrap")) {
+                Add-SmokeFailure "Agent catalog module '$($entry.Id)' requires bootstrap function '$bootstrap' in '$($entry.RelativePath)'."
+            }
+        }
+    }
+
+    $catalogIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($entry in $catalog) { $null = $catalogIds.Add([string]$entry.Id) }
+    foreach ($moduleFile in @(Get-ChildItem -LiteralPath $modulesDir -Filter '*.ps1' -File)) {
+        $relative = 'Modules\' + $moduleFile.Name
+        $matched = @($catalog | Where-Object { ([string]$_.RelativePath) -ieq $relative })
+        if ($matched.Count -eq 0) {
+            Add-SmokeFailure "FirstLogon module '$($moduleFile.Name)' is not registered in agent-module-catalog.json."
+        }
+    }
+}
+
 function Assert-SetupAndFirstLogonCatalogsAreExplicit {
     $setupActionsText = Get-WinMintRepositoryText 'src\runtime\setup\Setup.Actions.ps1'
     $setupCompleteText = Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete.ps1'
-    $agentRuntimeText = Get-WinMintRepositoryText 'src\runtime\firstlogon\Agent.Runtime.ps1'
+    $agentRuntimeText = @(
+            (Get-WinMintRepositoryText 'src\runtime\firstlogon\Agent.Plan.ps1'),
+            (Get-WinMintRepositoryText 'src\runtime\firstlogon\agent-module-catalog.json')
+        ) -join "`n"
 
     Assert-StaticTextContainsAll -Text $setupActionsText -FailurePrefix 'Setup action catalog should contain' -Expected @(
         'function Get-WinMintSetupActionCatalog',
@@ -2656,8 +2730,9 @@ function Assert-PowerShell7IsBundledAndRequired {
     Assert-SetupCompleteRegistersFirstLogonUnderPowerShell7 -SetupCompleteText (Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete.ps1')
     Assert-SetupCompleteToolchainDoesNotInstallPowerShell7Fallback -ToolchainText (Get-WinMintRepositoryText 'src\runtime\setup\SetupComplete\Toolchain.ps1')
     Assert-FirstLogonRuntimeRequiresPowerShell7 -FirstLogonRuntimeText (Get-WinMintRepositoryText 'src\runtime\setup\FirstLogon.Runtime.ps1')
-    Assert-FirstLogonSupportRequiresPowerShell7 -FirstLogonSupportText (Get-WinMintRepositoryText 'src\runtime\setup\FirstLogon.Support.ps1')
-    Assert-AgentRuntimeRequiresPowerShell7 -AgentRuntimeText (Get-WinMintRepositoryText 'src\runtime\firstlogon\Agent.Runtime.ps1')
+    Assert-FirstLogonSupportRequiresPowerShell7 -FirstLogonSupportText (Get-WinMintRepositoryText 'src\runtime\setup\FirstLogon.Host.ps1')
+    Assert-AgentRuntimeRequiresPowerShell7 -AgentRuntimeText (Get-WinMintRepositoryText 'src\runtime\firstlogon\Agent.Host.ps1')
+    Assert-AgentModuleCatalogParity
 }
 
 function Assert-PSScriptAnalyzerHonorsProjectSettings {

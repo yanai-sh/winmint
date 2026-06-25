@@ -1,6 +1,6 @@
 # Technology Stack
 
-Snapshot note: updated 2026-06-20. Onboarding/audit snapshot — not a continuous authoritative source.
+Snapshot note: updated 2026-06-25. Onboarding/audit snapshot — not a continuous authoritative source.
 
 ## Core Sections (Required)
 
@@ -48,6 +48,9 @@ pwsh -NoProfile -File tests\contract\Test-ProfileInvariants.ps1
 # Author a profile and dry-run a build
 pwsh -NoProfile -File WinMint-CLI.ps1 new BuildProfile.json
 pwsh -NoProfile -File WinMint-CLI.ps1 build BuildProfile.json -DryRun
+
+# Fast test build (skip recompression + WinSxS cleanup)
+pwsh -NoProfile -File WinMint-CLI.ps1 build BuildProfile.json -FastImage
 
 # Launch GUI
 pwsh -NoProfile -File WinMint-GUI.ps1

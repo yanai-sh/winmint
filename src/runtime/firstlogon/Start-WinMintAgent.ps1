@@ -68,6 +68,10 @@ $script:AgentCommandCounter = 0
 $script:AgentConsoleSplashImagePath = Join-Path $agentRoot 'Assets\Brand\winmint_logo_wordmark.png'
 
 . (Join-Path $agentRoot 'Agent.Console.ps1')
+. (Join-Path $agentRoot 'Agent.State.ps1')
+. (Join-Path $agentRoot 'Agent.Host.ps1')
+. (Join-Path $agentRoot 'Agent.Install.ps1')
+. (Join-Path $agentRoot 'Agent.Plan.ps1')
 . (Join-Path $agentRoot 'Agent.Runtime.ps1')
 
 Write-AgentLog 'WinMintAgent start'
@@ -139,8 +143,7 @@ if (-not $manifest) {
         reason = 'packages.json missing'
     }
     Save-AgentState -State $state
-    Write-AgentEvent -Type 'run' -Status 'failed' -Step 'manifest' -Message 'Package manifest missing.'
-    Write-AgentConsoleLine -Level Error -Message "Package manifest missing: $manifestPath"
+    Write-AgentEvent -Type 'run' -Status 'failed' -Step 'manifest' -Message "Package manifest missing: $manifestPath"
     Wait-AgentConsoleBeforeClose -Failed $true
     exit 1
 }

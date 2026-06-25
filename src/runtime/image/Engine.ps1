@@ -264,7 +264,9 @@ function New-WinMintBuildConfig {
         NoServicedWimCache = [bool](Get-WinMintProfileSetting $BuildProfile 'noServicedWimCache' $false)
         SetupScripts = @(
             'SetupComplete.cmd', 'SetupComplete.ps1', 'SetupComplete\*.ps1', 'Specialize.ps1',
-            'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1',
+            'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.State.ps1',
+            'FirstLogon.Host.ps1', 'FirstLogon.Desktop.ps1', 'FirstLogon.Terminal.ps1',
+            'FirstLogon.Region.ps1', 'FirstLogon.Cleanup.ps1', 'WindowsTerminal.Profiles.ps1',
             'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1', 'WinMintAgent', 'ViVeTool'
         )
         Assets = @('fonts', 'cursors', 'PowerShell 7', 'windows-terminal', 'winget')

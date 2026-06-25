@@ -267,7 +267,7 @@ function Copy-WinMintYasbPreset {
     }
 
     Write-AgentLog "YASB preset copied to $configDir"
-    if ($backupDir) { Write-AgentConsoleLine -Level Info -Message "Existing YASB config backed up." }
+    if ($backupDir) { Write-AgentUserNotice -Level Info -Message 'Existing YASB config backed up.' }
 }
 
 function Copy-WinMintKomorebiPreset {
@@ -300,7 +300,7 @@ function Copy-WinMintKomorebiPreset {
     $env:WHKD_CONFIG_HOME = $whkdDir
 
     Write-AgentLog "Komorebi preset copied to $configDir and $whkdDir"
-    if ($backupDir) { Write-AgentConsoleLine -Level Info -Message "Existing Komorebi config backed up." }
+    if ($backupDir) { Write-AgentUserNotice -Level Info -Message 'Existing Komorebi config backed up.' }
 }
 
 function Enable-WinMintYasbAutostart {
@@ -360,7 +360,7 @@ function Install-WinMintThideLayer {
 
     $key = 'shell:thide'
     if (-not $Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
-        Write-AgentConsoleLine -Level OK -Message 'thide already configured.'
+        Write-AgentUserNotice -Level OK -Message 'thide already configured.'
         return
     }
 

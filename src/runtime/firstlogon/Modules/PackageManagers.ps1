@@ -147,7 +147,7 @@ function Install-WinMintAgentStarshipPrompt {
 
     $key = 'shell:starship'
     if (-not $Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
-        Write-AgentConsoleLine -Level OK -Message 'Starship prompt already configured.'
+        Write-AgentUserNotice -Level OK -Message 'Starship prompt already configured.'
         return
     }
 
@@ -181,7 +181,7 @@ function Install-WinMintAgentStarshipPrompt {
             terminalFont = 'Cascadia Code NF'
         }
         Save-AgentState -State $State
-        Write-AgentConsoleLine -Level OK -Message 'Starship prompt configured.'
+        Write-AgentUserNotice -Level OK -Message 'Starship prompt configured.'
     }
     catch {
         $State.steps[$key] = @{
@@ -200,7 +200,7 @@ function Invoke-WinMintAgentWingetUpgradeAll {
 
     $key = 'package-manager:winget-upgrade-all'
     if (-not $Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
-        Write-AgentConsoleLine -Level OK -Message 'winget upgrades already completed.'
+        Write-AgentUserNotice -Level OK -Message 'winget upgrades already completed.'
         return
     }
 
@@ -232,7 +232,6 @@ function Invoke-WinMintAgentWingetUpgradeAll {
         }
         Save-AgentState -State $State
         Write-AgentEvent -Type 'step' -Status 'ok' -Step $key -Message 'winget upgrade --all completed.'
-        Write-AgentConsoleLine -Level OK -Message 'winget upgrades completed.'
     }
     catch {
         $State.steps[$key] = @{
@@ -242,11 +241,10 @@ function Invoke-WinMintAgentWingetUpgradeAll {
             error = $_.Exception.Message
         }
         Save-AgentState -State $State
-        Write-AgentEvent -Type 'step' -Status 'failed' -Step $key -Message 'winget upgrade --all failed.' -Data @{
+        Write-AgentEvent -Type 'step' -Status 'failed' -Step $key -Message "winget upgrade --all failed: $($_.Exception.Message)" -Data @{
             error = $_.Exception.Message
         }
         Write-AgentLog "winget upgrade --all failed (non-blocking): $($_.Exception.Message)"
-        Write-AgentConsoleLine -Level Warn -Message "winget upgrade --all failed: $($_.Exception.Message)"
     }
 }
 

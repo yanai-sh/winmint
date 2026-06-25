@@ -46,6 +46,7 @@ param(
     [string]$SwitchName,
     [switch]$SkipBuild,
     [switch]$ForceBuild,
+    [switch]$FullImage,
     [int]$TimeoutMinutes = 60,
     [string]$EvidenceRoot
 )
@@ -105,6 +106,7 @@ if (-not $SkipBuild) {
         '-MemoryGB', $MemoryGB, '-DiskGB', $DiskGB, '-CpuCount', $CpuCount, '-NoConnect')
     if ($SwitchName) { $buildArgs += @('-SwitchName', $SwitchName) }
     if ($ForceBuild) { $buildArgs += '-ForceBuild' }
+    if ($FullImage) { $buildArgs += '-FullImage' }
     # Tee the delegated build to terminal + run.log; $LASTEXITCODE stays the child's.
     & $pwsh @buildArgs 2>&1 | Tee-Object -FilePath $runLog -Append
     if ($LASTEXITCODE -ne 0) { throw "Build/boot phase failed with exit code $LASTEXITCODE." }
@@ -149,24 +151,27 @@ $result.firstLogon = [ordered]@{
 }
 if ($result.firstLogon.status -eq 'ok') {
     Say "FirstLogon completed (exitCode $($result.firstLogon.exitCode))." 'Green'
-    if ($result.firstLogon.warningSteps.Count -gt 0) { $result.reasons += "FirstLogon warnings: $($result.firstLogon.warningSteps -join ', ')." }
 }
 else {
     $result.reasons += "FirstLogon failed: $($result.firstLogon.failedSteps -join ', ')."
     Say "FirstLogon failed: $($result.firstLogon.failedSteps -join ', ')." 'Red'
 }
 
-# --- 3. Inspect live desktop signals (best-effort) -----------------------------
+# --- 3. Inspect live desktop signals -------------------------------------------
+# These are correctness signals, not best-effort: if we cannot gather them we cannot
+# prove the desktop is right, so an inspect failure fails the verdict (no silent pass).
 Say "`n=== Inspect ===" 'Cyan'
+$inspectOk = $false
 try {
     $inspectJson = & $pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Invoke-WinMintGuestAcceptance.ps1') -VMName $VMName -GuestUser $guestUser -GuestPassword $guestPassword
     if ($LASTEXITCODE -ne 0) { throw "inspector exited $LASTEXITCODE" }
     $result.inspect = ($inspectJson -join "`n") | ConvertFrom-Json
     Add-Content -LiteralPath $runLog -Value ($inspectJson -join "`n")
+    $inspectOk = $true
 }
 catch {
     $result.reasons += "Inspect could not gather guest signals: $($_.Exception.Message)"
-    Say "Inspect failed (non-fatal): $($_.Exception.Message)" 'Yellow'
+    Say "Inspect failed: $($_.Exception.Message)" 'Red'
 }
 
 # --- 4. Evidence + verdict -----------------------------------------------------
@@ -204,7 +209,38 @@ if ($manifest) {
     }
 }
 
-$passed = $result.reachable -and $result.firstLogon -and $result.firstLogon.status -eq 'ok'
+# A test PASS requires EVERY step to succeed - no silent failures. The agent marks
+# live-user installs 'advisory' so a failure does not brick a real user's desktop
+# (run.status stays 'ok' with the failures listed in warningSteps). That leniency is
+# correct in production but wrong for acceptance: here an advisory failure is still a
+# failure and must fail the verdict, not pass with a buried warning line.
+# Filter nulls: @($null).Count is 1, and a failed run carries no warningSteps property.
+$warnSteps = @($result.firstLogon.warningSteps | Where-Object { $_ })
+$warned = $warnSteps.Count -gt 0
+if ($warned) { $result.reasons += "Advisory step(s) failed (strict test verdict): $($warnSteps -join ', ')." }
+
+# Desktop signal assertions (derived from the profile). The agent can report run.status
+# 'ok' yet leave the desktop wrong - missing account picture, etc.
+# Those gathered signals were diagnostic only; assert them so they cannot pass silently.
+$signalFail = [System.Collections.Generic.List[string]]::new()
+if (-not $inspectOk) {
+    $signalFail.Add('guest inspection failed; desktop signals unverified') | Out-Null
+}
+else {
+    $insp = $result.inspect
+    $wslDistros = @($profileJson.development.wsl.distros)
+    if ($wslDistros -contains 'Ubuntu') {
+        if (-not $insp.UbuntuProfileExists) { $signalFail.Add('Windows Terminal Ubuntu profile missing') | Out-Null }
+    }
+    if ($wslDistros -contains 'NixOS-WSL') {
+        if (-not $insp.NixProfileExists) { $signalFail.Add('Windows Terminal NixOS profile missing') | Out-Null }
+    }
+    if (-not $insp.AccountPictureBmpExists) { $signalFail.Add('Account picture bitmap missing') | Out-Null }
+}
+foreach ($s in $signalFail) { $result.reasons += "Signal check failed: $s." }
+$result.signalChecks = [ordered]@{ ok = ($signalFail.Count -eq 0); failures = @($signalFail) }
+
+$passed = $result.reachable -and $result.firstLogon -and $result.firstLogon.status -eq 'ok' -and -not $warned -and ($signalFail.Count -eq 0)
 $result.verdict = if ($passed) { 'pass' } else { 'fail' }
 $result.finishedAt = (Get-Date).ToString('o')
 ($result | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $evidenceDir 'acceptance-result.json') -Encoding UTF8

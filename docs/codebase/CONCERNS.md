@@ -1,6 +1,6 @@
 # Codebase Concerns
 
-Snapshot note: updated 2026-06-20. Onboarding/audit snapshot — not a continuous authoritative source.
+Snapshot note: updated 2026-06-25. Onboarding/audit snapshot — not a continuous authoritative source.
 
 ## Core Sections (Required)
 
@@ -13,12 +13,12 @@ Snapshot note: updated 2026-06-20. Onboarding/audit snapshot — not a continuou
 
 | File | Commits | Risk signal |
 |------|---------|-------------|
-| `tests/contract/ProfileInvariantTests/StaticAssertions.ps1` | 28 | Parity tests between `config/tweaks.json` and tweak modules — highest churn; schema changes ripple here |
-| `AGENTS.md` | 20 | Living architecture contract — expected high churn as product evolves |
-| `README.md` | 20 | User-facing — expected |
+| `tests/contract/ProfileInvariantTests/StaticAssertions.ps1` | 29 | Parity tests between `config/tweaks.json` and tweak modules — highest churn; schema changes ripple here |
+| `AGENTS.md` | 21 | Living architecture contract — expected high churn as product evolves |
+| `README.md` | 21 | User-facing — expected |
 | `tests/contract/Test-ProfileInvariants.ps1` | 18 | Profile schema tests — tracks profile schema changes |
 | `tests/contract/ProfileInvariantTests/ProfileAssertions.ps1` | 16 | Profile field assertions |
-| `src/runtime/image/Engine.ps1` | 13 | Core engine pipeline — active development area |
+| `src/runtime/image/Engine.ps1` | 14 | Core engine pipeline — active development area |
 | `tools/validation/Modules/Assets.ps1` | 13 | Repo asset validation |
 | `WinMint-CLI.ps1` | 13 | CLI entry point |
 | `apps/gui/src/main.rs` | 12 | Wizard root — active GUI development |

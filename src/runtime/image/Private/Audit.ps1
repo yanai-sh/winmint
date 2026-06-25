@@ -6,7 +6,8 @@ if (-not (Get-Command Get-WinMintSetupActionCatalog -ErrorAction SilentlyContinu
     . (Get-WinMintPath -Name RepoRoot -ChildPath 'src\runtime\setup\Setup.Actions.ps1')
 }
 if (-not (Get-Command Get-WinMintAgentModuleCatalog -ErrorAction SilentlyContinue)) {
-    . (Get-WinMintPath -Name RepoRoot -ChildPath 'src\runtime\firstlogon\Agent.Runtime.ps1')
+    $script:agentRoot = (Get-WinMintPath -Name RepoRoot -ChildPath 'src\runtime\firstlogon')
+    . (Join-Path $script:agentRoot 'Agent.Plan.ps1')
 }
 
 function Clear-WinMintBuildDeltaCatalog {

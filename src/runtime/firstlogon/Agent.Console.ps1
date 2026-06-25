@@ -5,6 +5,118 @@ function Write-AgentLog {
     "$(Get-Date -Format o) $Message" | Out-File (Join-Path $logDir 'WinMintAgent.log') -Append -Encoding utf8
 }
 
+function Show-AgentEventInConsole {
+    param(
+        [Parameter(Mandatory)][string]$Type,
+        [string]$Status,
+        [string]$Step,
+        [string]$Message,
+        [hashtable]$Data = @{}
+    )
+
+    if (-not $InteractiveFirstLogon) { return }
+
+    switch ($Type) {
+        'command' {
+            if ($Status -eq 'running') {
+                $filePath = if ($Data.ContainsKey('filePath')) { [string]$Data.filePath } else { '' }
+                $displayArgs = if ($Data.ContainsKey('displayArgs')) { [string]$Data.displayArgs } else { '' }
+                $name = if ($filePath) { [IO.Path]::GetFileName($filePath) } else { 'command' }
+                Write-AgentConsoleLine -Level Info -Message "Running $name $displayArgs".TrimEnd()
+            }
+            return
+        }
+        'step' {
+            $stepLabel = if ($Step -match '^module:(.+)$') { $Matches[1] } elseif ($Step -match '^tool:(.+)$') { $Matches[1] } else { $Step }
+            switch ($Status) {
+                'running' { Write-AgentConsoleLine -Level Section -Message "Starting $stepLabel." }
+                'ok' {
+                    if ($Message -match 'already completed') {
+                        Write-AgentConsoleLine -Level OK -Message "$stepLabel already completed."
+                    }
+                    elseif ($Message -match 'installed|completed') {
+                        Write-AgentConsoleLine -Level OK -Message $Message
+                    }
+                    else {
+                        Write-AgentConsoleLine -Level OK -Message "$stepLabel finished: ok."
+                    }
+                }
+                'skipped' {
+                    if ($Data.ContainsKey('error') -or $Message -match 'not available') {
+                        Write-AgentConsoleLine -Level Warn -Message $Message
+                    }
+                }
+                'failed' {
+                    $errorText = if ($Data.ContainsKey('error')) { [string]$Data.error } else { $Message }
+                    if ($Message -match 'could not start') {
+                        Write-AgentConsoleLine -Level Error -Message "$stepLabel could not start."
+                    }
+                    else {
+                        Write-AgentConsoleLine -Level Error -Message "$stepLabel failed: $errorText"
+                    }
+                }
+                default {
+                    if ($Message -match 'finished:') {
+                        $level = if ($Status -eq 'ok') { 'OK' } else { 'Warn' }
+                        Write-AgentConsoleLine -Level $level -Message $Message
+                    }
+                }
+            }
+            return
+        }
+        'install' {
+            if ($Status -eq 'running') {
+                Write-AgentConsoleLine -Level Section -Message $Message
+            }
+            return
+        }
+        'download' {
+            if ($Status -eq 'running') {
+                Write-AgentConsoleLine -Level Info -Message $Message
+            }
+            return
+        }
+        'notice' {
+            Write-AgentConsoleLine -Level OK -Message $Message
+            return
+        }
+        'hook' {
+            Write-AgentConsoleLine -Level Warn -Message $Message
+            return
+        }
+        'user' {
+            $level = switch ($Status) {
+                'ok' { 'OK' }
+                'warn' { 'Warn' }
+                'error' { 'Error' }
+                'section' { 'Section' }
+                default { 'Info' }
+            }
+            Write-AgentConsoleLine -Level $level -Message $Message
+            return
+        }
+        'run' {
+            if ($Status -eq 'failed' -and $Message -match 'Package manifest missing') {
+                Write-AgentConsoleLine -Level Error -Message $Message
+            }
+            return
+        }
+        default {
+            if ($Type -eq 'info') {
+                Write-AgentConsoleLine -Level Info -Message $Message
+            }
+        }
+    }
+}
+
+function Write-AgentUserNotice {
+    param(
+        [ValidateSet('Info','OK','Warn','Error','Section')][string]$Level = 'Info',
+        [Parameter(Mandatory)][string]$Message
+    )
+    Write-AgentEvent -Type 'user' -Status $Level.ToLowerInvariant() -Message $Message
+}
+
 function Write-AgentEvent {
     param(
         [Parameter(Mandatory)][string]$Type,
@@ -28,6 +140,7 @@ function Write-AgentEvent {
         $json = $agentEvent | ConvertTo-Json -Depth 10 -Compress
         $json | Out-File -LiteralPath $eventLogPath -Append -Encoding utf8
         if ($EmitProgressJson) { [Console]::Out.WriteLine($json) }
+        Show-AgentEventInConsole -Type $Type -Status $Status -Step $Step -Message $Message -Data $Data
     }
     catch {
         Write-AgentLog "Progress event write failed: $($_.Exception.Message)"
