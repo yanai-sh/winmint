@@ -50,7 +50,6 @@ function Write-AgentLog {
     param([string]$Message)
     $logDir = $null
     try { $logDir = (Get-WinMintAgentContext).LogDir } catch { }
-    if ([string]::IsNullOrWhiteSpace($logDir) -and $script:logDir) { $logDir = [string]$script:logDir }
     if ([string]::IsNullOrWhiteSpace($logDir)) { return }
     "$(Get-Date -Format o) $Message" | Out-File (Join-Path $logDir 'WinMintAgent.log') -Append -Encoding utf8
 }

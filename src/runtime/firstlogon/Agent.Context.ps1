@@ -36,32 +36,10 @@ function New-WinMintAgentContext {
     }
 }
 
-function Sync-AgentLegacyContext {
-    param([Parameter(Mandatory)][hashtable]$Context)
-
-    $script:agentRoot = [string]$Context.AgentRoot
-    $script:state = $Context.State
-    $script:State = $Context.State
-    $script:agentProfile = $Context.AgentProfile
-    $script:manifest = $Context.Manifest
-    $script:Force = [bool]$Context.Force
-    $script:logDir = [string]$Context.LogDir
-    $script:statePath = [string]$Context.StatePath
-    $script:eventLogPath = [string]$Context.EventLogPath
-    $script:commandLogDir = [string]$Context.CommandLogDir
-    $script:stateDir = [string]$Context.StateDir
-    $script:InteractiveFirstLogon = [bool]$Context.Interactive
-    $script:EmitProgressJson = [bool]$Context.EmitProgressJson
-    if (-not [string]::IsNullOrWhiteSpace([string]$Context.TargetArchitecture)) {
-        $script:AgentTargetArchitecture = [string]$Context.TargetArchitecture
-    }
-}
-
 function Set-WinMintAgentContext {
     param([Parameter(Mandatory)][hashtable]$Context)
 
     $script:AgentContext = $Context
-    Sync-AgentLegacyContext -Context $Context
 }
 
 function Get-WinMintAgentContext {

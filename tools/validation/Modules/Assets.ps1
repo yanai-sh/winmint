@@ -93,6 +93,7 @@ function Test-RequiredAssets {
         'src\runtime\setup\WindhawkBootstrap.Helpers.ps1',
         'src\runtime\image\Private\Pipeline.Console.ps1',
         'src\runtime\setup\WinMint.Runtime.Common.ps1',
+        'src\runtime\setup\FirstLogon.Context.ps1',
         'src\runtime\firstlogon\WinMint.Runtime.Common.ps1',
         'src\runtime\firstlogon\Agent.Context.ps1',
         'src\runtime\firstlogon\Agent.Console.ps1',

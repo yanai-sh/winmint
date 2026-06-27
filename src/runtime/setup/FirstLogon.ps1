@@ -12,8 +12,20 @@ $logDir = Join-Path $env:ProgramData 'WinMint\Logs'
 $null = New-Item -ItemType Directory -Path $logDir -Force -ErrorAction SilentlyContinue
 $payloadDir = 'C:\Windows\Setup\Scripts'  # where the staged agent + state file live
 
-$script:WinMintFirstLogonMaxAttempts = 3
-$script:WinMintFirstLogonEntryPath = $PSCommandPath
+$contextPath = Join-Path $payloadDir 'FirstLogon.Context.ps1'
+if (-not (Test-Path -LiteralPath $contextPath -PathType Leaf)) {
+    "$(Get-Date -Format 'o') FirstLogon context module is missing: $contextPath" | Out-File (Join-Path $logDir 'FirstLogon_errors.log') -Append
+    exit 1
+}
+. $contextPath
+Set-WinMintFirstLogonContext -Context (New-WinMintFirstLogonContext @{
+        LogDir = $logDir
+        PayloadDir = $payloadDir
+        EntryPath = $PSCommandPath
+        MaxAttempts = 3
+        SetupScriptRoot = $payloadDir
+    })
+
 $supportPath = Join-Path $payloadDir 'FirstLogon.Support.ps1'
 if (-not (Test-Path -LiteralPath $supportPath -PathType Leaf)) {
     "$(Get-Date -Format 'o') FirstLogon support module is missing: $supportPath" | Out-File (Join-Path $logDir 'FirstLogon_errors.log') -Append

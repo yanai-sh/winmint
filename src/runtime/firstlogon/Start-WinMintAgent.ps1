@@ -46,7 +46,6 @@ if (-not (Get-Command Initialize-WinMintConsoleEncoding -ErrorAction SilentlyCon
 Initialize-WinMintConsoleEncoding
 $stateDir = Join-Path $env:LOCALAPPDATA 'WinMint'
 $logDir = Join-Path $stateDir 'Logs'
-$script:logDir = $logDir
 $statePath = Join-Path $stateDir 'state.json'
 $eventLogPath = Join-Path $logDir 'WinMintAgent-events.jsonl'
 $manifestPath = Join-Path $agentRoot 'packages.json'
@@ -98,7 +97,6 @@ $targetArchitecture = if ($agentProfile.PSObject.Properties['targetArchitecture'
 } else {
     Get-AgentProcessorArchitecture
 }
-$script:AgentTargetArchitecture = $targetArchitecture
 Set-WinMintAgentContext -Context (New-WinMintAgentContext @{
         AgentRoot = $agentRoot
         State = $state
@@ -140,7 +138,7 @@ Set-AgentStateValue -State $state -Name 'run' -Value @{
     status = 'running'
     startedAt = (Get-Date -Format o)
     hostArchitecture = Get-AgentProcessorArchitecture
-    targetArchitecture = $script:AgentTargetArchitecture
+    targetArchitecture = (Get-WinMintAgentContext).TargetArchitecture
     interactiveFirstLogon = [bool]$InteractiveFirstLogon
     progressEventLog = $eventLogPath
 }

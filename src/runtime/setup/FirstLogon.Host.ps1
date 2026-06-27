@@ -148,7 +148,7 @@ function Stop-WinMintFirstLogonUnelevated {
         Save-WinMintFirstLogonState -State $state
     }
     catch { Write-WinMintFirstLogonError "FirstLogon state write failed: $_" }
-    if ([int]$state.attempts -ge $script:WinMintFirstLogonMaxAttempts) {
+    if ([int]$state.attempts -ge (Get-WinMintFirstLogonContext).MaxAttempts) {
         Write-WinMintFirstLogonError "FirstLogon retry cap reached ($($state.attempts)); clearing autologon recovery state."
         Clear-WinMintFirstLogonRecovery
     }
@@ -167,13 +167,14 @@ function Stop-WinMintFirstLogonUnelevated {
 # fail with access-denied. If this instance is not elevated, re-launch it elevated via a
 # Highest-privilege scheduled task (runs with the full admin token, no UAC prompt) and let
 # that instance do the work. Harmless when already elevated.
-$script:WinMintElevated = $false
+$elevated = $false
 try {
-    $script:WinMintElevated = Test-WinMintTokenElevated
+    $elevated = Test-WinMintTokenElevated
 }
-catch { $script:WinMintElevated = $false }
-"$(Get-Date -Format 'o') FirstLogon running elevated: $script:WinMintElevated" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
-if (-not $script:WinMintElevated) {
+catch { $elevated = $false }
+Set-WinMintFirstLogonContextElevated -Elevated $elevated
+"$(Get-Date -Format 'o') FirstLogon running elevated: $elevated" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+if (-not $elevated) {
     $elevFlag = Join-Path $logDir 'FirstLogon_self-elevation.flag'
     if (Test-Path -LiteralPath $elevFlag) {
         Stop-WinMintFirstLogonUnelevated -Reason 'FirstLogon is NOT elevated and self-elevation was already attempted; aborting before machine-wide setup so RunOnce can retry.'
@@ -183,7 +184,8 @@ if (-not $script:WinMintElevated) {
             Set-Content -LiteralPath $elevFlag -Value (Get-Date -Format o) -Encoding ASCII
             $exe = Resolve-WinMintPowerShellHost
             $taskName = 'WinMintFirstLogonElevated'
-            $tr = "`"$exe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script:WinMintFirstLogonEntryPath`""
+            $entryPath = (Get-WinMintFirstLogonContext).EntryPath
+            $tr = "`"$exe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$entryPath`""
             & schtasks.exe /Create /TN $taskName /TR $tr /SC ONCE /ST 23:59 /RL HIGHEST /F 2>&1 | Out-Null
             $elevOk = ($LASTEXITCODE -eq 0)
             if ($elevOk) { & schtasks.exe /Run /TN $taskName 2>&1 | Out-Null; $elevOk = ($LASTEXITCODE -eq 0) }

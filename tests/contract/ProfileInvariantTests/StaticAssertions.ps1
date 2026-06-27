@@ -24,6 +24,7 @@ function Get-WinMintFirstLogonText {
         'src\runtime\setup\FirstLogon.ps1',
         'src\runtime\setup\FirstLogon.Support.ps1',
         'src\runtime\setup\WinMint.Runtime.Common.ps1',
+        'src\runtime\setup\FirstLogon.Context.ps1',
         'src\runtime\setup\FirstLogon.State.ps1',
         'src\runtime\setup\FirstLogon.Host.ps1',
         'src\runtime\setup\FirstLogon.Desktop.ps1',
@@ -856,7 +857,7 @@ function Assert-LiveInstallAuditIsStaged {
     if ($setupPayloadText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
         Add-SmokeFailure 'Setup payload staging must not rely on the removed top-level scripts directory.'
     }
-    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'WinMint.Runtime.Common.ps1', 'FirstLogon.State.ps1', 'FirstLogon.Host.ps1', 'FirstLogon.Desktop.ps1', 'FirstLogon.Terminal.ps1', 'FirstLogon.Region.ps1', 'FirstLogon.Cleanup.ps1', 'WindowsTerminal.Profiles.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
+    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'WinMint.Runtime.Common.ps1', 'FirstLogon.Context.ps1', 'FirstLogon.State.ps1', 'FirstLogon.Host.ps1', 'FirstLogon.Desktop.ps1', 'FirstLogon.Terminal.ps1', 'FirstLogon.Region.ps1', 'FirstLogon.Cleanup.ps1', 'WindowsTerminal.Profiles.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
         if ($setupPayloadText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Setup payload staging should stage '$expected'."
         }
@@ -1686,6 +1687,24 @@ function Assert-WinMintRuntimeCommonContracts {
     if (-not (Test-Path -LiteralPath $contextPath -PathType Leaf)) {
         Add-SmokeFailure 'Agent.Context.ps1 must exist for explicit agent runtime context.'
     }
+    else {
+        $agentContextText = Get-Content -LiteralPath $contextPath -Raw
+        if ($agentContextText -match 'Sync-AgentLegacyContext') {
+            Add-SmokeFailure 'Agent.Context.ps1 must not keep Sync-AgentLegacyContext after agent context migration.'
+        }
+    }
+
+    $setupContextPath = Join-Path $root 'src\runtime\setup\FirstLogon.Context.ps1'
+    if (-not (Test-Path -LiteralPath $setupContextPath -PathType Leaf)) {
+        Add-SmokeFailure 'FirstLogon.Context.ps1 must exist for explicit setup runtime context.'
+    }
+    $firstLogonEntryText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    if ($firstLogonEntryText -notmatch 'Set-WinMintFirstLogonContext') {
+        Add-SmokeFailure 'FirstLogon.ps1 should initialize setup context via Set-WinMintFirstLogonContext.'
+    }
+    if ($setupStateText -notmatch 'Get-WinMintFirstLogonContext') {
+        Add-SmokeFailure 'FirstLogon.State.ps1 should read paths from Get-WinMintFirstLogonContext.'
+    }
 }
 
 function Assert-NoMaintenancePayloadOrRegistration {
@@ -1749,7 +1768,7 @@ function Assert-FirstLogonElevationGuaranteeIsSingleton {
 function Assert-FirstLogonRecoveryIsBounded {
     $firstLogonText = Get-WinMintFirstLogonText
     foreach ($expected in @(
-        '$script:WinMintFirstLogonMaxAttempts = 3',
+        'MaxAttempts = 3',
         'New-WinMintFirstLogonRunState',
         'Clear-WinMintFirstLogonRecovery',
         "recovery'] = 'exhausted'",

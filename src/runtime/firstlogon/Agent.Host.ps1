@@ -119,9 +119,6 @@ function Get-AgentTargetArchitecture {
     if (-not [string]::IsNullOrWhiteSpace([string]$ctx.TargetArchitecture)) {
         return ([string]$ctx.TargetArchitecture).ToLowerInvariant()
     }
-    if (-not [string]::IsNullOrWhiteSpace([string]$script:AgentTargetArchitecture)) {
-        return ([string]$script:AgentTargetArchitecture).ToLowerInvariant()
-    }
     return Get-AgentProcessorArchitecture
 }
 

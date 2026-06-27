@@ -285,7 +285,7 @@ try {
         Assert-WinMintAgentStateStepsOk -State $State -Keys @('required:failed') -Context 'test required steps'
     } -ExpectedText 'not ok: required:failed=fixture failure' -Message 'Required state validation should reject failed state keys.'
 
-    $raycastKeyPlan = Get-WinMintAgentLauncherKeyPlan -AgentProfile $script:agentProfile
+    $raycastKeyPlan = Get-WinMintAgentLauncherKeyPlan -AgentProfile (Get-WinMintAgentContext).AgentProfile
     Assert-Equal $raycastKeyPlan.Target 'Raycast' 'Launcher key plan should prefer explicit launcherKey target.'
     Assert-Equal $raycastKeyPlan.Chord 'Win+Shift+F23' 'Launcher key plan should preserve the common Copilot hardware-key chord.'
 
@@ -325,7 +325,7 @@ try {
             }
         }
     }
-    Sync-AgentLegacyContext -Context $testContext
+    Set-WinMintAgentContext -Context $testContext
 
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'mingit') 'tool:mingit' 'MinGit state keys should resolve from the package manifest.'
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'raycast') 'tool:9PFXXSHC64H3' 'Raycast state keys should resolve from the package manifest.'
@@ -357,7 +357,7 @@ try {
         Set-TestAgentStep -State $State -Key 'shell:starship'
     }
     $packageBootstrapState = New-TestAgentState
-    $packageBootstrapResult = Invoke-WinMintAgentPackageManagerBootstrap -AgentProfile $script:agentProfile -State $packageBootstrapState
+    $packageBootstrapResult = Invoke-WinMintAgentPackageManagerBootstrap -AgentProfile (Get-WinMintAgentContext).AgentProfile -State $packageBootstrapState
     Assert-Equal $packageBootstrapResult.Status 'ok' 'Package manager bootstrap should pass when package-manager and shell-prompt state keys are ok.'
     Assert-Equal (@($packageBootstrapResult.PackageManagerStateSteps) -join ',') 'package-manager:scoop,tool:mingit' 'Package manager readiness should require only Scoop and MinGit.'
     Assert-Equal (@($packageBootstrapResult.ShellPromptStateSteps) -join ',') 'shell:starship' 'Starship prompt setup should be reported as required shell-prompt state.'
@@ -368,7 +368,7 @@ try {
         Set-TestAgentStep -State $State -Key 'shell:starship' -Status 'failed' -ErrorText 'visual prompt failed'
     }
     $failedPromptState = New-TestAgentState
-    $failedPromptResult = Invoke-WinMintAgentPackageManagerBootstrap -AgentProfile $script:agentProfile -State $failedPromptState
+    $failedPromptResult = Invoke-WinMintAgentPackageManagerBootstrap -AgentProfile (Get-WinMintAgentContext).AgentProfile -State $failedPromptState
     Assert-Equal $failedPromptResult.Status 'ok' 'Package manager module should return its result contract and leave readiness enforcement to the runtime.'
     Assert-Equal (@($failedPromptResult.PackageManagerStateSteps) -join ',') 'package-manager:scoop,tool:mingit' 'Starship failure should not move Starship into package-manager readiness.'
 
@@ -466,13 +466,13 @@ try {
     $previousProfile = $testContext.AgentProfile
     $testContext.State = $missingShellState
     $testContext.AgentProfile = $nilesoftOnlyProfile
-    Sync-AgentLegacyContext -Context $testContext
+    Set-WinMintAgentContext -Context $testContext
     Invoke-AgentProfileModule -StepName 'desktop-environment' -FunctionName 'Invoke-WinMintAgentDesktopEnvironmentBootstrap' -Enabled $true
     Assert-Equal $testContext.State.steps['module:desktop-environment'].status 'failed' 'Missing selected desktop layer state should fail through runtime enforcement.'
     Assert-True ([string]$testContext.State.steps['module:desktop-environment'].error -like '*missing: tool:Nilesoft.Shell*') 'Runtime desktop environment failure should include the missing layer state key.'
     $testContext.State = $previousState
     $testContext.AgentProfile = $previousProfile
-    Sync-AgentLegacyContext -Context $testContext
+    Set-WinMintAgentContext -Context $testContext
 
     $script:windhawkWriteEvidence = $true
     $windhawkAssetDir = Join-Path $tempRoot 'AgentRoot\Assets\Windhawk'
@@ -484,7 +484,7 @@ try {
     Set-Content -LiteralPath (Join-Path $windhawkAssetDir 'preset.json') -Value '{}' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $windhawkInstallRoot 'windhawk.exe') -Value '' -Encoding UTF8
     $testContext.AgentRoot = Join-Path $tempRoot 'AgentRoot'
-    Sync-AgentLegacyContext -Context $testContext
+    Set-WinMintAgentContext -Context $testContext
     $script:WinMintWindhawkInstallRootOverride = $windhawkInstallRoot
     $script:windhawkNativeCalls = 0
     $script:WinMintAgentNativeHandler = {
@@ -558,11 +558,11 @@ try {
     Assert-Equal $State.steps['module:ok-step'].attempts 1 'Completed modules should not increment attempts without Force.'
 
     $testContext.Force = $true
-    Sync-AgentLegacyContext -Context $testContext
+    Set-WinMintAgentContext -Context $testContext
     Invoke-AgentProfileModule -StepName 'ok-step' -FunctionName 'Invoke-TestAgentOkModule' -Enabled $true
     Assert-Equal $State.steps['module:ok-step'].attempts 2 'Force should re-run completed modules and increment attempts.'
     $testContext.Force = $false
-    Sync-AgentLegacyContext -Context $testContext
+    Set-WinMintAgentContext -Context $testContext
 
     Invoke-AgentProfileModule -StepName 'reboot-step' -FunctionName 'Invoke-TestAgentNeedsRebootModule' -Enabled $true
     Assert-Equal $State.steps['module:reboot-step'].status 'needsReboot' 'Modules should persist needsReboot status for retry after reboot.'

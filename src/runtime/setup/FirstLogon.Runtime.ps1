@@ -24,8 +24,8 @@ function Invoke-WinMintFirstLogonSetupPhase {
     # PowerShell 7 is bundled into the image and is required for WinMint setup work. If this
     # elevated instance is still under Windows PowerShell 5.1, re-launch in-place under pwsh 7;
     # Start-Process inherits the current elevated token. A flag prevents a re-launch loop.
-    if ($script:WinMintElevated -and $PSVersionTable.PSVersion.Major -lt 7) {
-        $pwsh7 = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
+    if ((Get-WinMintFirstLogonContext).Elevated -and $PSVersionTable.PSVersion.Major -lt 7) {
+        $pwsh7 = Resolve-WinMintPowerShellHost
         $p7Flag = Join-Path $logDir 'FirstLogon_pwsh7.flag'
         if (-not (Test-Path -LiteralPath $pwsh7 -PathType Leaf)) {
             Write-WinMintFirstLogonError "PowerShell 7 is required for FirstLogon but was not found: $pwsh7"
@@ -36,7 +36,8 @@ function Invoke-WinMintFirstLogonSetupPhase {
                 Set-Content -LiteralPath $p7Flag -Value (Get-Date -Format o) -Encoding ASCII
                 "$(Get-Date -Format 'o') Re-launching FirstLogon under PowerShell 7 ($pwsh7); the 5.1 instance waits for it." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
                 try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
-                $p7 = Start-Process -FilePath $pwsh7 -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$script:WinMintFirstLogonEntryPath`"") -Wait -PassThru
+                $entryPath = (Get-WinMintFirstLogonContext).EntryPath
+                $p7 = Start-Process -FilePath $pwsh7 -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$entryPath`"") -Wait -PassThru
                 return ([int]$p7.ExitCode)
             }
             catch {
@@ -48,7 +49,8 @@ function Invoke-WinMintFirstLogonSetupPhase {
     }
     "$(Get-Date -Format 'o') FirstLogon host: PowerShell $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
 
-    $agentRoot = Join-Path $payloadDir 'WinMintAgent'
+    $ctx = Get-WinMintFirstLogonContext
+    $agentRoot = Join-Path $ctx.PayloadDir 'WinMintAgent'
     $agent = Join-Path $agentRoot 'Start-WinMintAgent.ps1'
     $context = @{
         AgentMode = $AgentMode
@@ -167,7 +169,7 @@ function Invoke-WinMintFirstLogonSetupPhase {
             param([hashtable]$Context, $Step)
             [void]$Step
             $Context.State['status'] = 'failed'
-            if ([int]$Context.State.attempts -ge $script:WinMintFirstLogonMaxAttempts) {
+            if ([int]$Context.State.attempts -ge (Get-WinMintFirstLogonContext).MaxAttempts) {
                 $Context.State['recovery'] = 'exhausted'
                 Write-WinMintFirstLogonError "Agent run incomplete after $($Context.State.attempts) attempt(s); clearing autologon recovery state."
                 Clear-WinMintFirstLogonRecovery

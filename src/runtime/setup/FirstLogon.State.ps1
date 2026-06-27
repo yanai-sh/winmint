@@ -2,12 +2,14 @@
 
 function Save-WinMintFirstLogonState {
     param([hashtable]$State)
-    Save-WinMintAtomicJson -Path (Join-Path $logDir 'FirstLogonState.json') -Data $State -Depth 6
+    $ctx = Get-WinMintFirstLogonContext
+    Save-WinMintAtomicJson -Path (Join-Path $ctx.LogDir 'FirstLogonState.json') -Data $State -Depth 6
 }
 
 
 function Read-WinMintFirstLogonState {
-    Read-WinMintJsonFile -Path (Join-Path $logDir 'FirstLogonState.json') -OnError {
+    $ctx = Get-WinMintFirstLogonContext
+    Read-WinMintJsonFile -Path (Join-Path $ctx.LogDir 'FirstLogonState.json') -OnError {
         param($ErrorRecord)
         Write-WinMintFirstLogonError "FirstLogon state read failed: $($ErrorRecord.Exception.Message)"
     }
@@ -28,13 +30,14 @@ function New-WinMintFirstLogonRunState {
         agentExitCode = $null
         status = 'running'
         attempts = ($previousAttempts + 1)
-        maxAttempts = $script:WinMintFirstLogonMaxAttempts
+        maxAttempts = (Get-WinMintFirstLogonContext).MaxAttempts
     }
 }
 
 
 function Read-WinMintFirstLogonSetupProfile {
-    $setupProfilePath = Join-Path $payloadDir 'WinMintSetupProfile.json'
+    $ctx = Get-WinMintFirstLogonContext
+    $setupProfilePath = Join-Path $ctx.PayloadDir 'WinMintSetupProfile.json'
     try {
         if (Test-Path -LiteralPath $setupProfilePath) {
             return Get-Content -LiteralPath $setupProfilePath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -85,7 +88,8 @@ function Set-WinMintFirstLogonRetry {
     # native registry provider, which stores the string verbatim.
     $runOnce = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
     $exe = Resolve-WinMintPowerShellHost
-    $command = "`"$exe`" -NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$script:WinMintFirstLogonEntryPath`""
+    $entryPath = (Get-WinMintFirstLogonContext).EntryPath
+    $command = "`"$exe`" -NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$entryPath`""
     if (-not (Test-Path -LiteralPath $runOnce)) { New-Item -Path $runOnce -Force | Out-Null }
     Set-ItemProperty -LiteralPath $runOnce -Name 'WinMintFirstLogonRetry' -Value $command -Type String -Force
 }

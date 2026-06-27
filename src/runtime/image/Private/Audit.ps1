@@ -7,6 +7,7 @@ if (-not (Get-Command Get-WinMintSetupActionCatalog -ErrorAction SilentlyContinu
 }
 if (-not (Get-Command Get-WinMintAgentModuleCatalog -ErrorAction SilentlyContinue)) {
     $script:agentRoot = (Get-WinMintPath -Name RepoRoot -ChildPath 'src\runtime\firstlogon')
+    . (Join-Path $script:agentRoot 'Agent.Context.ps1')
     . (Join-Path $script:agentRoot 'Agent.Plan.ps1')
 }
 
