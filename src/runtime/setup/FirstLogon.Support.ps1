@@ -2,8 +2,7 @@
 
 function Write-WinMintFirstLogonError {
     param([string]$Message)
-    $logDir = (Get-WinMintFirstLogonContext).LogDir
-    "$(Get-Date -Format 'o') $Message" | Out-File (Join-Path $logDir 'FirstLogon_errors.log') -Append
+    "$(Get-Date -Format 'o') $Message" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_errors.log') -Append
 }
 
 $setupScriptRoot = $PSScriptRoot

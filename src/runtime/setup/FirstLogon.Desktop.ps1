@@ -58,7 +58,7 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
         foreach ($payload in 'ImmersiveColorSet', 'WindowsThemeElement', 'Policy') {
             [void][WinMint.Native.Shell]::SendMessageTimeout($hwndBroadcast, $wmSettingChange, [IntPtr]::Zero, $payload, $smtoAbortIfHung, 1000, [ref]$res)
         }
-        "$(Get-Date -Format 'o') Broadcast theme-change (ImmersiveColorSet) so the shell applies dark mode." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        "$(Get-Date -Format 'o') Broadcast theme-change (ImmersiveColorSet) so the shell applies dark mode." | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
     }
     catch { Write-WinMintFirstLogonError "Theme-change broadcast failed: $_" }
 }
@@ -121,7 +121,7 @@ public static extern bool SystemParametersInfo(int uiAction, int uiParam, System
         $spifUpdateIniFile = 0x01
         $spifSendChange = 0x02
         [void][WinMint.Native.Cursor]::SystemParametersInfo($spiSetCursors, 0, [IntPtr]::Zero, ($spifUpdateIniFile -bor $spifSendChange))
-        "$(Get-Date -Format 'o') Live user cursor scheme applied: $schemeName" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        "$(Get-Date -Format 'o') Live user cursor scheme applied: $schemeName" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
     }
     catch {
         Write-WinMintFirstLogonError "Cursor refresh failed: $_"
@@ -317,9 +317,12 @@ function Set-WinMintFirstLogonStartPins {
     Invoke-WinMintFirstLogonReg -Arguments @('add', 'HKCU\Software\Policies\Microsoft\Windows\Explorer', '/v', 'ConfigureStartPins', '/t', 'REG_SZ', '/d', $layoutJson, '/f') -AllowFailure
     Invoke-WinMintFirstLogonReg -Arguments @('add', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer', '/v', 'ConfigureStartPins', '/t', 'REG_SZ', '/d', $layoutJson, '/f') -AllowFailure
 
-    "$(Get-Date -Format 'o') Start pins applied: $layoutJson" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+    "$(Get-Date -Format 'o') Start pins applied: $layoutJson" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
     if ($skipped.Count -gt 0) {
-        "$(Get-Date -Format 'o') Start pins skipped because no Start Menu shortcut or app executable was found: $($skipped -join ', ')" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        $logPath = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log'
+        $skippedText = $skipped -join ', '
+        "$(Get-Date -Format 'o') Start pins skipped because no Start Menu shortcut or app executable was found: $skippedText" |
+            Out-File -LiteralPath $logPath -Append
     }
 
     # Reload the shell so the new Start pin layout takes effect. Killing explorer is
@@ -351,7 +354,7 @@ function Set-WinMintFirstLogonXdgDefaults {
     Add-WinMintFirstLogonUserPath -Path (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps')
     Add-WinMintFirstLogonUserPath -Path (Join-Path $env:USERPROFILE 'bin')
     Add-WinMintFirstLogonUserPath -Path (Join-Path $env:USERPROFILE '.local\bin')
-    "$(Get-Date -Format 'o') Set XDG defaults: config/data/state/cache + runtime dir; preserved WindowsApps and added user bin paths." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+    "$(Get-Date -Format 'o') Set XDG defaults: config/data/state/cache + runtime dir; preserved WindowsApps and added user bin paths." | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
 }
 
 
@@ -376,7 +379,7 @@ function Set-WinMintFirstLogonClipboardDefaults {
     $clipboardKey = 'HKCU\Software\Microsoft\Clipboard'
     Invoke-WinMintFirstLogonReg -Arguments @('add', $clipboardKey, '/v', 'EnableClipboardHistory', '/t', 'REG_DWORD', '/d', '1', '/f') -AllowFailure
     Invoke-WinMintFirstLogonReg -Arguments @('add', $clipboardKey, '/v', 'CloudClipboardAutomaticUpload', '/t', 'REG_DWORD', '/d', '0', '/f') -AllowFailure
-    "$(Get-Date -Format 'o') Clipboard defaults applied: local history on, cloud upload off." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+    "$(Get-Date -Format 'o') Clipboard defaults applied: local history on, cloud upload off." | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
 }
 
 
@@ -420,7 +423,7 @@ function Set-WinMintFirstLogonQuietUxDefaults {
     }
     Invoke-WinMintFirstLogonReg -Arguments @('add', 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer', '/v', 'EnableAutoTray', '/t', 'REG_DWORD', '/d', '1', '/f') -AllowFailure
     "$(Get-Date -Format 'o') Quiet UX defaults applied: setup prompts, Spotlight, taskbar affordances, and noisy system toasts disabled." |
-        Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
 }
 
 

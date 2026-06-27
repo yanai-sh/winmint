@@ -51,8 +51,10 @@ function Start-WinMintFirstLogonAgentInTerminal {
         [Parameter(Mandatory)][string]$AgentPath
     )
 
-    $exitCodePath = Join-Path $logDir 'WinMintAgent.exitcode'
-    $launcherPath = Join-Path $logDir 'Start-WinMintAgent.TerminalLauncher.ps1'
+    $ctx = Get-WinMintFirstLogonContext
+    $exitCodePath = Join-Path $ctx.LogDir 'WinMintAgent.exitcode'
+    $launcherPath = Join-Path $ctx.LogDir 'Start-WinMintAgent.TerminalLauncher.ps1'
+    $errorLogPath = Join-Path $ctx.LogDir 'FirstLogon_errors.log'
     Remove-Item -LiteralPath $exitCodePath -Force -ErrorAction SilentlyContinue
 
     $launcher = @"
@@ -69,7 +71,7 @@ try {
 }
 catch {
     try {
-        "WinMintAgent terminal launcher failed: `$(`$_.Exception.Message)" | Out-File -LiteralPath '$logDir\FirstLogon_errors.log' -Append -Encoding utf8
+        "WinMintAgent terminal launcher failed: `$(`$_.Exception.Message)" | Out-File -LiteralPath '$errorLogPath' -Append -Encoding utf8
     }
     catch { }
     `$exitCode = 1
@@ -90,7 +92,7 @@ exit `$exitCode
     ) -join ' '
 
     "$(Get-Date -Format 'o') Launching WinMintAgent in Windows Terminal: $TerminalPath $wtArguments" |
-        Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
 
     $null = Start-Process -FilePath $TerminalPath -ArgumentList $wtArguments -PassThru
     $deadline = (Get-Date).AddHours(8)
@@ -139,7 +141,7 @@ function Stop-WinMintFirstLogonUnelevated {
     param([Parameter(Mandatory)][string]$Reason)
 
     Write-WinMintFirstLogonError $Reason
-    Remove-Item -LiteralPath (Join-Path $logDir 'FirstLogon_self-elevation.flag') -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_self-elevation.flag') -Force -ErrorAction SilentlyContinue
     $state = New-WinMintFirstLogonRunState
     $state['status'] = 'failed'
     $state['failure'] = 'notElevated'
@@ -173,9 +175,9 @@ try {
 }
 catch { $elevated = $false }
 Set-WinMintFirstLogonContextElevated -Elevated $elevated
-"$(Get-Date -Format 'o') FirstLogon running elevated: $elevated" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+"$(Get-Date -Format 'o') FirstLogon running elevated: $elevated" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
 if (-not $elevated) {
-    $elevFlag = Join-Path $logDir 'FirstLogon_self-elevation.flag'
+    $elevFlag = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_self-elevation.flag'
     if (Test-Path -LiteralPath $elevFlag) {
         Stop-WinMintFirstLogonUnelevated -Reason 'FirstLogon is NOT elevated and self-elevation was already attempted; aborting before machine-wide setup so RunOnce can retry.'
     }
@@ -190,7 +192,9 @@ if (-not $elevated) {
             $elevOk = ($LASTEXITCODE -eq 0)
             if ($elevOk) { & schtasks.exe /Run /TN $taskName 2>&1 | Out-Null; $elevOk = ($LASTEXITCODE -eq 0) }
             if ($elevOk) {
-                "$(Get-Date -Format 'o') FirstLogon re-launched elevated via scheduled task '$taskName'; standard-token instance exiting." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+                $logPath = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log'
+                "$(Get-Date -Format 'o') FirstLogon re-launched elevated via scheduled task '$taskName'; standard-token instance exiting." |
+                    Out-File -LiteralPath $logPath -Append
                 try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
                 exit 0
             }

@@ -163,9 +163,9 @@ function Invoke-WinMintFirstLogonAgentLaunch {
         # The agent is the source of truth and does all first-logon work. Default is a
         # visible console so the user can see progress while the automation runs.
         $mode = Resolve-WinMintFirstLogonAgentMode -RequestedMode $AgentMode
-        "$(Get-Date -Format 'o') Launching WinMintAgent in $mode mode" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        "$(Get-Date -Format 'o') Launching WinMintAgent in $mode mode" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         if ($mode -eq 'Console') {
-            "$(Get-Date -Format 'o') Waiting for Windows Terminal before launching WinMintAgent." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+            "$(Get-Date -Format 'o') Waiting for Windows Terminal before launching WinMintAgent." | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
             $terminal = Wait-WinMintWindowsTerminalHost -TimeoutSeconds 120
             if (-not [string]::IsNullOrWhiteSpace($terminal)) {
                 $agentExitCode = Start-WinMintFirstLogonAgentInTerminal `

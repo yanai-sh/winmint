@@ -26,7 +26,7 @@ function Invoke-WinMintFirstLogonSetupPhase {
     # Start-Process inherits the current elevated token. A flag prevents a re-launch loop.
     if ((Get-WinMintFirstLogonContext).Elevated -and $PSVersionTable.PSVersion.Major -lt 7) {
         $pwsh7 = Resolve-WinMintPowerShellHost
-        $p7Flag = Join-Path $logDir 'FirstLogon_pwsh7.flag'
+        $p7Flag = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_pwsh7.flag'
         if (-not (Test-Path -LiteralPath $pwsh7 -PathType Leaf)) {
             Write-WinMintFirstLogonError "PowerShell 7 is required for FirstLogon but was not found: $pwsh7"
             return 1
@@ -34,7 +34,7 @@ function Invoke-WinMintFirstLogonSetupPhase {
         if (-not (Test-Path -LiteralPath $p7Flag)) {
             try {
                 Set-Content -LiteralPath $p7Flag -Value (Get-Date -Format o) -Encoding ASCII
-                "$(Get-Date -Format 'o') Re-launching FirstLogon under PowerShell 7 ($pwsh7); the 5.1 instance waits for it." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+                "$(Get-Date -Format 'o') Re-launching FirstLogon under PowerShell 7 ($pwsh7); the 5.1 instance waits for it." | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
                 try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
                 $entryPath = (Get-WinMintFirstLogonContext).EntryPath
                 $p7 = Start-Process -FilePath $pwsh7 -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$entryPath`"") -Wait -PassThru
@@ -42,12 +42,12 @@ function Invoke-WinMintFirstLogonSetupPhase {
             }
             catch {
                 Write-WinMintFirstLogonError "PowerShell 7 re-launch failed: $_"
-                try { Start-Transcript -Path (Join-Path $logDir 'FirstLogon_transcript.log') -Append -ErrorAction SilentlyContinue | Out-Null } catch { }
+                try { Start-Transcript -Path (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_transcript.log') -Append -ErrorAction SilentlyContinue | Out-Null } catch { }
                 return 1
             }
         }
     }
-    "$(Get-Date -Format 'o') FirstLogon host: PowerShell $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+    "$(Get-Date -Format 'o') FirstLogon host: PowerShell $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
 
     $ctx = Get-WinMintFirstLogonContext
     $agentRoot = Join-Path $ctx.PayloadDir 'WinMintAgent'
@@ -160,8 +160,8 @@ function Invoke-WinMintFirstLogonSetupPhase {
                 Clear-WinMintAutoLogonPassword
                 # Remove the self-elevation / pwsh7 re-launch scaffolding now that setup is complete.
                 & schtasks.exe /Delete /TN 'WinMintFirstLogonElevated' /F 2>&1 | Out-Null
-                Remove-Item -LiteralPath (Join-Path $logDir 'FirstLogon_self-elevation.flag') -Force -ErrorAction SilentlyContinue
-                Remove-Item -LiteralPath (Join-Path $logDir 'FirstLogon_pwsh7.flag') -Force -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_self-elevation.flag') -Force -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_pwsh7.flag') -Force -ErrorAction SilentlyContinue
             }
             Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'Residual cleanup failed' -ScriptBlock { Remove-WinMintResidualPayload }
         }
@@ -184,7 +184,7 @@ function Invoke-WinMintFirstLogonSetupPhase {
     $state = $context.State
     $agentExitCode = [int]$context.AgentExitCode
     Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'FirstLogon state write failed' -ScriptBlock { Save-WinMintFirstLogonState -State $state }
-    "$(Get-Date -Format 'o') FirstLogon.ps1 end" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+    "$(Get-Date -Format 'o') FirstLogon.ps1 end" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
     try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
     if ($agentExitCode -ne 0) { return $agentExitCode }
     return 0

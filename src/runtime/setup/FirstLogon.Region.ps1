@@ -25,7 +25,7 @@ function Set-WinMintFirstLogonInputLanguages {
     # display language (the user requirement: type Hebrew, but the system stays English).
     try { Set-WinUILanguageOverride -Language $DisplayLanguage -ErrorAction SilentlyContinue } catch { }
     "$(Get-Date -Format 'o') Set user language list to: $(@($list) -join ', ') (display pinned to $DisplayLanguage)." |
-        Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+        Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
 }
 
 
@@ -63,7 +63,7 @@ function Set-WinMintFirstLogonLocationServicesPolicy {
 function Restore-WinMintDmaRegionalDefaults {
     $setupProfile = Read-WinMintFirstLogonSetupProfile
     $dmaInterop = [bool](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'enabled' -Default $false)
-    $reportPath = Join-Path $logDir 'FirstLogon_RegionalRestore.json'
+    $reportPath = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_RegionalRestore.json'
     if (-not $dmaInterop) {
         $report = [ordered]@{
             enabled = $false
@@ -90,7 +90,7 @@ function Restore-WinMintDmaRegionalDefaults {
         try {
             Set-TimeZone -Id $restoreTimeZoneId -ErrorAction Stop
             "$(Get-Date -Format 'o') Restored Windows time zone to $restoreTimeZoneId after DMA setup." |
-                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+                Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         }
         catch {
             $errors.Add("Time zone restore failed for ${restoreTimeZoneId}: $_") | Out-Null
@@ -100,7 +100,7 @@ function Restore-WinMintDmaRegionalDefaults {
     try {
         Set-WinHomeLocation -GeoId $restoreGeoId -ErrorAction Stop
         "$(Get-Date -Format 'o') Restored Windows home location GeoID to $restoreGeoId after DMA setup." |
-            Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+            Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
     }
     catch {
         $errors.Add("Home location restore failed for GeoID ${restoreGeoId}: $_") | Out-Null
@@ -110,7 +110,7 @@ function Restore-WinMintDmaRegionalDefaults {
         try {
             Set-Culture -CultureInfo $restoreUserLocale -ErrorAction Stop
             "$(Get-Date -Format 'o') Restored user culture to $restoreUserLocale after DMA setup." |
-                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+                Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         }
         catch {
             $errors.Add("User culture restore failed for ${restoreUserLocale}: $_") | Out-Null
@@ -137,7 +137,7 @@ function Restore-WinMintDmaRegionalDefaults {
         if (Get-Command Copy-UserInternationalSettingsToSystem -ErrorAction SilentlyContinue) {
             Copy-UserInternationalSettingsToSystem -WelcomeScreen $true -NewUser $true -ErrorAction Stop
             "$(Get-Date -Format 'o') Copied restored international settings to system and new-user defaults." |
-                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+                Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         }
     }
     catch {
@@ -155,7 +155,7 @@ function Restore-WinMintDmaRegionalDefaults {
             Stop-Service -Name tzautoupdate -ErrorAction SilentlyContinue
             Set-Service -Name tzautoupdate -StartupType Disabled -ErrorAction Stop
             "$(Get-Date -Format 'o') Disabled Auto Time Zone Updater because location services are off." |
-                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+                Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         }
         catch {
             $errors.Add("Auto Time Zone Updater disable failed after DMA setup: $_") | Out-Null
@@ -172,7 +172,7 @@ function Restore-WinMintDmaRegionalDefaults {
             Write-WinMintFirstLogonError "Auto Time Zone Updater enable failed after DMA setup: $_"
         }
         "$(Get-Date -Format 'o') Enabled Auto Time Zone Updater because location services are on." |
-            Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+            Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
     }
 
     $observedTimeZone = $null
@@ -270,9 +270,9 @@ function Repair-WinMintFirstLogonKnownFolders {
         compliant = ($errors.Count -eq 0)
         errors = $errors.ToArray()
     }
-    $path = Join-Path $logDir 'FirstLogon_KnownFolders.json'
+    $path = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_KnownFolders.json'
     $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $path -Encoding UTF8
-    "$(Get-Date -Format 'o') Known folder verification written to $path" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+    "$(Get-Date -Format 'o') Known folder verification written to $path" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
 }
 
 

@@ -21,23 +21,10 @@ function New-WinMintFirstLogonContext {
     }
 }
 
-function Sync-FirstLogonLegacyContext {
-    param([Parameter(Mandatory)][hashtable]$Context)
-
-    $logDir = [string]$Context.LogDir
-    $payloadDir = [string]$Context.PayloadDir
-    Set-Variable -Name logDir -Value $logDir -Scope Script -Force
-    Set-Variable -Name payloadDir -Value $payloadDir -Scope Script -Force
-    $script:WinMintFirstLogonMaxAttempts = [int]$Context.MaxAttempts
-    $script:WinMintFirstLogonEntryPath = [string]$Context.EntryPath
-    $script:WinMintElevated = [bool]$Context.Elevated
-}
-
 function Set-WinMintFirstLogonContext {
     param([Parameter(Mandatory)][hashtable]$Context)
 
     $script:FirstLogonContext = $Context
-    Sync-FirstLogonLegacyContext -Context $Context
 }
 
 function Get-WinMintFirstLogonContext {
@@ -50,5 +37,5 @@ function Set-WinMintFirstLogonContextElevated {
 
     $context = Get-WinMintFirstLogonContext
     $context.Elevated = [bool]$Elevated
-    Set-WinMintFirstLogonContext -Context $context
+    $script:FirstLogonContext = $context
 }

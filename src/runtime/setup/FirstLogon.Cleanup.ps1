@@ -37,7 +37,7 @@ function Set-WinMintFirstLogonAutoLogonPersistent {
 
 
 function Invoke-WinMintFirstLogonOneDriveRemoval {
-    "$(Get-Date -Format 'o') Removing OneDrive user integration" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+    "$(Get-Date -Format 'o') Removing OneDrive user integration" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
     foreach ($name in @('OneDrive', 'OneDriveSetup')) {
         Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     }
@@ -281,9 +281,9 @@ function Invoke-WinMintFirstLogonOneDriveRemoval {
         @($oneDriveAudit.runResidue).Count -eq 0 -and
         @($oneDriveAudit.registryResidue).Count -eq 0
     )
-    $oneDriveAuditPath = Join-Path $logDir 'FirstLogon_OneDriveAudit.json'
+    $oneDriveAuditPath = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_OneDriveAudit.json'
     $oneDriveAudit | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $oneDriveAuditPath -Encoding UTF8
-    "$(Get-Date -Format 'o') OneDrive audit written to $oneDriveAuditPath" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+    "$(Get-Date -Format 'o') OneDrive audit written to $oneDriveAuditPath" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
 }
 
 
@@ -322,10 +322,11 @@ function Remove-WinMintResidualPayload {
     if ([string]::IsNullOrWhiteSpace($programDataRoot)) { $programDataRoot = $env:ProgramData }
     $localAppDataRoot = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
     if ([string]::IsNullOrWhiteSpace($localAppDataRoot)) { $localAppDataRoot = $env:LOCALAPPDATA }
+    $ctx = Get-WinMintFirstLogonContext
     $payloadDirectoryNames = @('SetupComplete', 'WinMintAgent')
-    $fileTargets = $fileNames | ForEach-Object { Join-Path $payloadDir $_ }
+    $fileTargets = $fileNames | ForEach-Object { Join-Path $ctx.PayloadDir $_ }
     $retainDiagnosticState = Test-WinMintFirstLogonRetainDiagnosticState
-    $directoryTargets = @($payloadDirectoryNames | ForEach-Object { Join-Path $payloadDir $_ })
+    $directoryTargets = @($payloadDirectoryNames | ForEach-Object { Join-Path $ctx.PayloadDir $_ })
     if (-not $retainDiagnosticState) {
         $directoryTargets += @(
             (Join-Path $programDataRoot 'WinMint'),
@@ -333,7 +334,7 @@ function Remove-WinMintResidualPayload {
         )
     }
     $cleanupSpec = [ordered]@{
-        payloadRoot = $payloadDir
+        payloadRoot = $ctx.PayloadDir
         fileNames = @($fileNames)
         payloadDirectoryNames = @($payloadDirectoryNames)
         stateRoots = @($programDataRoot, $localAppDataRoot)
@@ -420,11 +421,11 @@ try {
         ) -WindowStyle Hidden | Out-Null
         if ($retainDiagnosticState) {
             "$(Get-Date -Format 'o') Scheduled payload purge and final post-install restore point; Hyper-V test diagnostic state retained." |
-                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+                Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         }
         else {
             "$(Get-Date -Format 'o') Scheduled no-trace purge and final post-install restore point." |
-                Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+                Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         }
     }
     catch { Write-WinMintFirstLogonError "No-trace purge schedule failed: $_" }
@@ -447,7 +448,7 @@ function Invoke-WinMintFirstLogonAppxCleanup {
         return
     }
 
-    $reportPath = Join-Path $logDir 'FirstLogon_AppxCleanup.json'
+    $reportPath = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_AppxCleanup.json'
     $result = [ordered]@{
         generatedAt = Get-Date -Format o
         prefixes = @($prefixes)
@@ -467,7 +468,7 @@ function Invoke-WinMintFirstLogonAppxCleanup {
                 displayName = $name
                 packageName = $packageName
             }
-            "$(Get-Date -Format 'o') Removed provisioned AppX package: $name ($packageName)" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+            "$(Get-Date -Format 'o') Removed provisioned AppX package: $name ($packageName)" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         }
         catch {
             $result.failed += [ordered]@{
@@ -491,7 +492,7 @@ function Invoke-WinMintFirstLogonAppxCleanup {
                 name = $name
                 packageFullName = $packageFullName
             }
-            "$(Get-Date -Format 'o') Removed installed AppX package: $name ($packageFullName)" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
+            "$(Get-Date -Format 'o') Removed installed AppX package: $name ($packageFullName)" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         }
         catch {
             $result.failed += [ordered]@{

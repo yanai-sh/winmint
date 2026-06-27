@@ -936,6 +936,11 @@ function Assert-FirstLogonDemoHarnessIsNonMutating {
         "[ValidateSet('Success', 'Warnings', 'Failure', 'LongRun')]",
         'WinMintFirstLogonDemo-',
         'Agent.Console.ps1',
+        'Agent.Context.ps1',
+        'Agent.Plan.ps1',
+        'New-WinMintAgentContext',
+        'Set-WinMintAgentContext',
+        'Get-WinMintAgentContext',
         'Show-AgentPlan',
         'Show-AgentFinalSummary',
         'Show-DemoRunOverview',
@@ -1698,12 +1703,35 @@ function Assert-WinMintRuntimeCommonContracts {
     if (-not (Test-Path -LiteralPath $setupContextPath -PathType Leaf)) {
         Add-SmokeFailure 'FirstLogon.Context.ps1 must exist for explicit setup runtime context.'
     }
+    else {
+        $setupContextText = Get-Content -LiteralPath $setupContextPath -Raw
+        if ($setupContextText -match 'Sync-FirstLogonLegacyContext') {
+            Add-SmokeFailure 'FirstLogon.Context.ps1 must not keep Sync-FirstLogonLegacyContext after setup context migration.'
+        }
+    }
     $firstLogonEntryText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
     if ($firstLogonEntryText -notmatch 'Set-WinMintFirstLogonContext') {
         Add-SmokeFailure 'FirstLogon.ps1 should initialize setup context via Set-WinMintFirstLogonContext.'
     }
     if ($setupStateText -notmatch 'Get-WinMintFirstLogonContext') {
         Add-SmokeFailure 'FirstLogon.State.ps1 should read paths from Get-WinMintFirstLogonContext.'
+    }
+    foreach ($relativePath in @(
+        'src\runtime\setup\FirstLogon.Desktop.ps1',
+        'src\runtime\setup\FirstLogon.Region.ps1',
+        'src\runtime\setup\FirstLogon.Cleanup.ps1',
+        'src\runtime\setup\FirstLogon.Terminal.ps1',
+        'src\runtime\setup\FirstLogon.Transaction.ps1',
+        'src\runtime\setup\FirstLogon.Host.ps1',
+        'src\runtime\setup\FirstLogon.Runtime.ps1'
+    )) {
+        $moduleText = Get-Content -LiteralPath (Join-Path $root $relativePath) -Raw
+        if ($moduleText -match '(?<![.\w])\$logDir\b') {
+            Add-SmokeFailure "$relativePath must not reference ambient `$logDir`; use Get-WinMintFirstLogonContext."
+        }
+        if ($moduleText -match '(?<![.\w])\$payloadDir\b') {
+            Add-SmokeFailure "$relativePath must not reference ambient `$payloadDir`; use Get-WinMintFirstLogonContext."
+        }
     }
 }
 
@@ -1739,7 +1767,7 @@ function Assert-FirstLogonFailsClosedWhenElevationIsUnavailable {
         "failure'] = 'notElevated'",
         'Set-WinMintFirstLogonRetry',
         'Set-WinMintFirstLogonAutoLogonPersistent',
-        "Remove-Item -LiteralPath (Join-Path `$logDir 'FirstLogon_self-elevation.flag')",
+        "Remove-Item -LiteralPath (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_self-elevation.flag')",
         'exit 1',
         'aborting before machine-wide setup so RunOnce can retry'
     )) {
