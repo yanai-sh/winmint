@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winmint.yanai.sh/schemas/winmint.agentevents.schema.json",
+  "title": "WinMint Agent Progress Event (JSONL line)",
+  "description": "One JSON object per line appended to WinMintAgent-events.jsonl by Write-AgentEvent during FirstLogon agent runs. Diagnostic-only; not a build contract like BuildProfile or state.json.",
+  "type": "object",
+  "required": ["time", "type"],
+  "properties": {
+    "time": {
+      "type": "string",
+      "description": "ISO 8601 timestamp from Get-Date -Format o"
+    },
+    "type": {
+      "type": "string",
+      "description": "Event category, e.g. step, user, demo, run"
+    },
+    "status": {
+      "type": "string",
+      "description": "Step or notice status (pending, running, ok, failed, skipped, retryable, needsReboot, info, warn, error, etc.)"
+    },
+    "step": {
+      "type": "string",
+      "description": "Agent runtime step id when type is step"
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable event text"
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,4 @@
+{"time":"2026-06-26T12:00:00.0000000+00:00","type":"step","status":"running","step":"package-managers","message":"checking package sources"}
+{"time":"2026-06-26T12:00:01.0000000+00:00","type":"step","status":"ok","step":"package-managers","message":"ready"}
+{"time":"2026-06-26T12:00:02.0000000+00:00","type":"user","status":"info","message":"Applying the selected first-logon preset."}
+{"time":"2026-06-26T12:00:03.0000000+00:00","type":"demo","status":"ok","message":"WinMint FirstLogon visual demo completed.","scenario":"Success"}
