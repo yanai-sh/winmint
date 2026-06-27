@@ -169,25 +169,6 @@ function New-DemoAgentProfile {
     }
 }
 
-function Test-AgentModuleEnabled {
-    param([Parameter(Mandatory)][string]$Name)
-
-    switch ($Name) {
-        'packageManagers' { return [bool]$script:agentProfile.modules.packageManagers.enabled }
-        'wsl' { return [bool]$script:agentProfile.modules.wsl.enabled }
-        'shell' { return [bool]$script:agentProfile.modules.shell.enabled }
-        'windhawk' { return [bool]$script:agentProfile.modules.windhawk.enabled }
-        'raycast' { return [bool]$script:agentProfile.modules.raycast.enabled }
-        default {
-            $module = $script:agentProfile.modules.PSObject.Properties[$Name]
-            if ($null -eq $module) { return $false }
-            $enabled = $module.Value.PSObject.Properties['enabled']
-            if ($null -eq $enabled) { return $false }
-            return [bool]$enabled.Value
-        }
-    }
-}
-
 function Write-DemoState {
     $script:demoState | ConvertTo-Json -Depth 10 | Out-File -LiteralPath $script:statePath -Encoding utf8
 }
@@ -358,7 +339,7 @@ function Invoke-DemoScenario {
     Write-DemoStep -Name 'browsers' -Status 'running' -Message 'installing selected browsers'
     $null = New-DemoCommandLog -Name '02-browser-installs' -Lines @(
         'DEMO ONLY - installers not executed',
-        'Selected browsers: ' + (@($script:agentProfile.browsers) -join ', '),
+        'Selected browsers: ' + (@((Get-WinMintAgentContext).AgentProfile.browsers) -join ', '),
         'Desktop shortcuts: cleanup would remove installer-created .lnk files.'
     )
     if ($Scenario -eq 'Failure') {
@@ -446,8 +427,8 @@ if (-not (Test-Path -LiteralPath $resolvedProfilePath -PathType Leaf)) {
 
 $script:profileDisplayPath = $resolvedProfilePath
 $script:buildProfile = Get-Content -LiteralPath $resolvedProfilePath -Raw | ConvertFrom-Json
-$script:agentProfile = New-DemoAgentProfile -BuildProfile $script:buildProfile
-$script:AgentTargetArchitecture = [string]$script:agentProfile.targetArchitecture
+$agentProfile = New-DemoAgentProfile -BuildProfile $script:buildProfile
+$agentRoot = Join-Path $repoRoot 'src\runtime\firstlogon'
 
 $tempRoot = [System.IO.Path]::GetTempPath().TrimEnd('\', '/')
 $demoRunId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + ([guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -456,8 +437,6 @@ $script:logDir = Join-Path $script:stateDir 'Logs'
 $script:commandLogDir = Join-Path $script:logDir 'Commands'
 $script:statePath = Join-Path $script:stateDir 'state.json'
 $script:eventLogPath = Join-Path $script:logDir 'WinMintAgent-events.jsonl'
-$script:InteractiveFirstLogon = $true
-$script:EmitProgressJson = $false
 $script:AgentConsoleReady = $false
 $script:AgentConsoleLogLabel = 'demo sandbox in %TEMP% (details below)'
 $script:AgentConsoleSplashImagePath = Join-Path $repoRoot 'assets\brand\winmint_hero.png'
@@ -479,7 +458,22 @@ $script:demoState = [ordered]@{
 }
 Write-DemoState
 
-. (Join-Path $repoRoot 'src\runtime\firstlogon\Agent.Console.ps1')
+. (Join-Path $agentRoot 'Agent.Context.ps1')
+Set-WinMintAgentContext -Context (New-WinMintAgentContext @{
+        AgentRoot = $agentRoot
+        State = $script:demoState
+        StatePath = $script:statePath
+        AgentProfile = $agentProfile
+        LogDir = $script:logDir
+        EventLogPath = $script:eventLogPath
+        CommandLogDir = $script:commandLogDir
+        StateDir = $script:stateDir
+        TargetArchitecture = [string]$agentProfile.targetArchitecture
+        Interactive = $true
+        EmitProgressJson = $false
+    })
+. (Join-Path $agentRoot 'Agent.Plan.ps1')
+. (Join-Path $agentRoot 'Agent.Console.ps1')
 
 Initialize-AgentConsole
 Invoke-DemoScenario
