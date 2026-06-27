@@ -28,6 +28,7 @@ function Invoke-WinMintAgentBrowsersBootstrap {
         }
     }
 
+    $manifest = (Get-WinMintAgentContext).Manifest
     if (-not $manifest -or -not $manifest.PSObject.Properties['tools']) {
         return [pscustomobject]@{
             Id      = 'browsers'

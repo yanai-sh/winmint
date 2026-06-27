@@ -100,11 +100,20 @@ function Write-AgentUserNotice { param([string]$Level, [string]$Message) [void]$
 
 $script:agentRoot = Join-Path $root 'src\runtime\firstlogon'
 . (Join-Path $agentRoot 'Agent.Load.ps1')
+$script:WinMintAgentFastWaits = $true
+$script:WinMintWingetPathOverride = 'winget.exe'
+$script:WinMintScoopPathOverride = 'scoop.ps1'
+function Install-AgentManifestTool {
+    param([Parameter(Mandatory)][string]$ToolId, [Parameter(Mandatory)][hashtable]$State)
+    $key = Get-AgentManifestToolStateKey -ToolId $ToolId
+    Set-TestAgentStep -State $State -Key $key
+}
 . (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\LauncherKey.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\Raycast.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\TilingDesktop.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\Windhawk.ps1')
+function Get-WinMintAgentEverythingExePath { 'C:\WinMint\Test\Everything.exe' }
 
 function Install-AgentTool {
     param($Tool, [hashtable]$State)
@@ -198,7 +207,8 @@ $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-agent-state-test-' + 
 try {
     $null = New-Item -ItemType Directory -Path $tempRoot -Force
     $script:statePath = Join-Path $tempRoot 'state.json'
-    $script:agentProfile = [pscustomobject]@{
+    $testState = New-TestAgentState
+    $testProfile = [pscustomobject]@{
         targetArchitecture = 'arm64'
         browsers = @('firefox')
         editors = @('neovim')
@@ -215,9 +225,23 @@ try {
             liveInstallAudit = [pscustomobject]@{ enabled = $true }
         }
     }
-    $script:AgentTargetArchitecture = 'arm64'
-    $script:Force = $false
-    $script:State = New-TestAgentState
+    $testContext = New-WinMintAgentContext @{
+        AgentRoot = $agentRoot
+        State = $testState
+        StatePath = $script:statePath
+        AgentProfile = $testProfile
+        Manifest = $null
+        Force = $false
+        LogDir = $tempRoot
+        EventLogPath = Join-Path $tempRoot 'events.jsonl'
+        CommandLogDir = Join-Path $tempRoot 'commands'
+        StateDir = $tempRoot
+        TargetArchitecture = 'arm64'
+        Interactive = $false
+        EmitProgressJson = $false
+    }
+    Initialize-TestAgentContext -Context $testContext
+    $script:State = $testState
 
     $runtimePlan = @(New-WinMintAgentRuntimeStepPlan)
     $moduleCatalog = @(Get-WinMintAgentModuleCatalog)
@@ -265,7 +289,7 @@ try {
     Assert-Equal $raycastKeyPlan.Target 'Raycast' 'Launcher key plan should prefer explicit launcherKey target.'
     Assert-Equal $raycastKeyPlan.Chord 'Win+Shift+F23' 'Launcher key plan should preserve the common Copilot hardware-key chord.'
 
-    $script:manifest = [pscustomobject]@{
+    $testContext.Manifest = [pscustomobject]@{
         tools = [pscustomobject]@{
             firefox = [pscustomobject]@{
                 id = 'Mozilla.Firefox'
@@ -301,6 +325,8 @@ try {
             }
         }
     }
+    Sync-AgentLegacyContext -Context $testContext
+
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'mingit') 'tool:mingit' 'MinGit state keys should resolve from the package manifest.'
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'raycast') 'tool:9PFXXSHC64H3' 'Raycast state keys should resolve from the package manifest.'
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'yasb') 'tool:AmN.yasb' 'YASB state keys should resolve from the package manifest.'
@@ -436,17 +462,18 @@ try {
     }
     $missingShellResult = Invoke-WinMintAgentDesktopEnvironmentBootstrap -AgentProfile $nilesoftOnlyProfile -State $missingShellState
     Assert-Equal $missingShellResult.Status 'ok' 'Desktop environment module should return required state and leave enforcement to the runtime.'
-    $previousState = $script:State
-    $previousProfile = $script:agentProfile
-    $script:State = $missingShellState
-    $script:agentProfile = $nilesoftOnlyProfile
+    $previousState = $testContext.State
+    $previousProfile = $testContext.AgentProfile
+    $testContext.State = $missingShellState
+    $testContext.AgentProfile = $nilesoftOnlyProfile
+    Sync-AgentLegacyContext -Context $testContext
     Invoke-AgentProfileModule -StepName 'desktop-environment' -FunctionName 'Invoke-WinMintAgentDesktopEnvironmentBootstrap' -Enabled $true
-    Assert-Equal $script:State.steps['module:desktop-environment'].status 'failed' 'Missing selected desktop layer state should fail through runtime enforcement.'
-    Assert-True ([string]$script:State.steps['module:desktop-environment'].error -like '*missing: tool:Nilesoft.Shell*') 'Runtime desktop environment failure should include the missing layer state key.'
-    $script:State = $previousState
-    $script:agentProfile = $previousProfile
+    Assert-Equal $testContext.State.steps['module:desktop-environment'].status 'failed' 'Missing selected desktop layer state should fail through runtime enforcement.'
+    Assert-True ([string]$testContext.State.steps['module:desktop-environment'].error -like '*missing: tool:Nilesoft.Shell*') 'Runtime desktop environment failure should include the missing layer state key.'
+    $testContext.State = $previousState
+    $testContext.AgentProfile = $previousProfile
+    Sync-AgentLegacyContext -Context $testContext
 
-    $script:windhawkNativeCalls = 0
     $script:windhawkWriteEvidence = $true
     $windhawkAssetDir = Join-Path $tempRoot 'AgentRoot\Assets\Windhawk'
     $windhawkInstallRoot = Join-Path $tempRoot 'WindhawkInstall'
@@ -456,10 +483,11 @@ try {
     Set-Content -LiteralPath (Join-Path $windhawkAssetDir 'DisableVirtualDesktopFlyouts.ps1') -Value '# fixture' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $windhawkAssetDir 'preset.json') -Value '{}' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $windhawkInstallRoot 'windhawk.exe') -Value '' -Encoding UTF8
-    $script:agentRoot = Join-Path $tempRoot 'AgentRoot'
-    function Resolve-AgentWindhawkInstallRoot { $windhawkInstallRoot }
-    function Resolve-AgentPowerShellHost { 'pwsh.exe' }
-    function Invoke-AgentNative {
+    $testContext.AgentRoot = Join-Path $tempRoot 'AgentRoot'
+    Sync-AgentLegacyContext -Context $testContext
+    $script:WinMintWindhawkInstallRootOverride = $windhawkInstallRoot
+    $script:windhawkNativeCalls = 0
+    $script:WinMintAgentNativeHandler = {
         param([string]$FilePath, [string[]]$ArgumentList)
         [void]$FilePath
         $script:windhawkNativeCalls++
@@ -529,10 +557,12 @@ try {
     Assert-Equal $State.steps['module:ok-step'].status 'ok' 'Completed modules should be idempotently skipped without Force.'
     Assert-Equal $State.steps['module:ok-step'].attempts 1 'Completed modules should not increment attempts without Force.'
 
-    $script:Force = $true
+    $testContext.Force = $true
+    Sync-AgentLegacyContext -Context $testContext
     Invoke-AgentProfileModule -StepName 'ok-step' -FunctionName 'Invoke-TestAgentOkModule' -Enabled $true
     Assert-Equal $State.steps['module:ok-step'].attempts 2 'Force should re-run completed modules and increment attempts.'
-    $script:Force = $false
+    $testContext.Force = $false
+    Sync-AgentLegacyContext -Context $testContext
 
     Invoke-AgentProfileModule -StepName 'reboot-step' -FunctionName 'Invoke-TestAgentNeedsRebootModule' -Enabled $true
     Assert-Equal $State.steps['module:reboot-step'].status 'needsReboot' 'Modules should persist needsReboot status for retry after reboot.'

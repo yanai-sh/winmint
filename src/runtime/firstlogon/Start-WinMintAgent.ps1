@@ -29,28 +29,24 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
     exit $LASTEXITCODE
 }
 
-function Initialize-WinMintAgentConsoleEncoding {
-    try {
-        $utf8 = [System.Text.UTF8Encoding]::new($false)
-        [Console]::InputEncoding = $utf8
-        [Console]::OutputEncoding = $utf8
-        $global:OutputEncoding = $utf8
-        $global:PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
-        $global:PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
-        $global:PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
-    }
-    catch { }
-    try {
-        $chcpExe = Join-Path $env:SystemRoot 'System32\chcp.com'
-        $null = & $chcpExe 65001 2>$null
-    }
-    catch { }
-}
-
-Initialize-WinMintAgentConsoleEncoding
 $agentRoot = Split-Path -Parent $PSCommandPath
+foreach ($candidate in @(
+        Join-Path $agentRoot 'WinMint.Runtime.Common.ps1'
+        Join-Path (Split-Path -Parent $agentRoot) 'WinMint.Runtime.Common.ps1'
+    )) {
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        . $candidate
+        break
+    }
+}
+if (-not (Get-Command Initialize-WinMintConsoleEncoding -ErrorAction SilentlyContinue)) {
+    Write-Error "WinMint.Runtime.Common.ps1 is missing for WinMintAgent at '$agentRoot'."
+    exit 1
+}
+Initialize-WinMintConsoleEncoding
 $stateDir = Join-Path $env:LOCALAPPDATA 'WinMint'
 $logDir = Join-Path $stateDir 'Logs'
+$script:logDir = $logDir
 $statePath = Join-Path $stateDir 'state.json'
 $eventLogPath = Join-Path $logDir 'WinMintAgent-events.jsonl'
 $manifestPath = Join-Path $agentRoot 'packages.json'
@@ -67,6 +63,7 @@ $script:AgentConsoleReady = $false
 $script:AgentCommandCounter = 0
 $script:AgentConsoleSplashImagePath = Join-Path $agentRoot 'Assets\Brand\winmint_logo_wordmark.png'
 
+. (Join-Path $agentRoot 'Agent.Context.ps1')
 . (Join-Path $agentRoot 'Agent.Console.ps1')
 . (Join-Path $agentRoot 'Agent.State.ps1')
 . (Join-Path $agentRoot 'Agent.Host.ps1')
@@ -74,26 +71,6 @@ $script:AgentConsoleSplashImagePath = Join-Path $agentRoot 'Assets\Brand\winmint
 . (Join-Path $agentRoot 'Agent.Plan.ps1')
 . (Join-Path $agentRoot 'Agent.Runtime.ps1')
 
-Write-AgentLog 'WinMintAgent start'
-Write-AgentEvent -Type 'run' -Status 'starting' -Message 'WinMintAgent start'
-Initialize-AgentConsole
-Show-AgentConsoleHeader
-Update-AgentProcessPath
-# Dot-source each agent module HERE, at script scope, so its bootstrap function is visible
-# to the step runtime later. Doing this inside a function would scope the functions to that
-# function; they would vanish on return and every module step would fail "<fn> not found".
-# (foreach does not create a scope, so the dot-source lands in script scope.)
-foreach ($moduleDefinition in @(Get-WinMintAgentModuleCatalog)) {
-    $modulePath = Join-Path $agentRoot $moduleDefinition.RelativePath
-    if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
-        throw "FirstLogon module '$($moduleDefinition.Id)' is missing: $modulePath"
-    }
-    . $modulePath
-    $bootstrapFunction = [string]$moduleDefinition.BootstrapFunction
-    if (-not (Get-Command $bootstrapFunction -ErrorAction SilentlyContinue)) {
-        throw "FirstLogon module '$($moduleDefinition.Id)' did not register required function '$bootstrapFunction'."
-    }
-}
 $state = Read-AgentJson -Path $statePath -Fallback ([pscustomobject]@{ version = 1; steps = @{} })
 # Read-AgentJson returns a PSCustomObject whenever state.json already exists (a prior
 # failed run, or a reboot mid-run). Every agent module function takes [hashtable]$State,
@@ -116,10 +93,48 @@ if (-not $state.ContainsKey('steps') -or $state['steps'] -isnot [hashtable]) {
 }
 $manifest = Read-AgentJson -Path $manifestPath -Fallback $null
 $agentProfile = Read-AgentJson -Path $profilePath -Fallback ([pscustomobject]@{ editors = @(); browsers = @() })
-$script:AgentTargetArchitecture = if ($agentProfile.PSObject.Properties['targetArchitecture'] -and -not [string]::IsNullOrWhiteSpace([string]$agentProfile.targetArchitecture)) {
+$targetArchitecture = if ($agentProfile.PSObject.Properties['targetArchitecture'] -and -not [string]::IsNullOrWhiteSpace([string]$agentProfile.targetArchitecture)) {
     [string]$agentProfile.targetArchitecture
 } else {
     Get-AgentProcessorArchitecture
+}
+$script:AgentTargetArchitecture = $targetArchitecture
+Set-WinMintAgentContext -Context (New-WinMintAgentContext @{
+        AgentRoot = $agentRoot
+        State = $state
+        StatePath = $statePath
+        AgentProfile = $agentProfile
+        Manifest = $manifest
+        Force = [bool]$Force
+        LogDir = $logDir
+        EventLogPath = $eventLogPath
+        CommandLogDir = $commandLogDir
+        StateDir = $stateDir
+        ManifestPath = $manifestPath
+        TargetArchitecture = $targetArchitecture
+        Interactive = [bool]$InteractiveFirstLogon
+        EmitProgressJson = [bool]$EmitProgressJson
+    })
+
+Write-AgentLog 'WinMintAgent start'
+Write-AgentEvent -Type 'run' -Status 'starting' -Message 'WinMintAgent start'
+Initialize-AgentConsole
+Show-AgentConsoleHeader
+Update-AgentProcessPath
+# Dot-source each agent module HERE, at script scope, so its bootstrap function is visible
+# to the step runtime later. Doing this inside a function would scope the functions to that
+# function; they would vanish on return and every module step would fail "<fn> not found".
+# (foreach does not create a scope, so the dot-source lands in script scope.)
+foreach ($moduleDefinition in @(Get-WinMintAgentModuleCatalog)) {
+    $modulePath = Join-Path $agentRoot $moduleDefinition.RelativePath
+    if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
+        throw "FirstLogon module '$($moduleDefinition.Id)' is missing: $modulePath"
+    }
+    . $modulePath
+    $bootstrapFunction = [string]$moduleDefinition.BootstrapFunction
+    if (-not (Get-Command $bootstrapFunction -ErrorAction SilentlyContinue)) {
+        throw "FirstLogon module '$($moduleDefinition.Id)' did not register required function '$bootstrapFunction'."
+    }
 }
 Set-AgentStateValue -State $state -Name 'run' -Value @{
     status = 'running'

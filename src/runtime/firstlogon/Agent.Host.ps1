@@ -33,9 +33,7 @@ function Update-AgentProcessPath {
 }
 
 function Resolve-AgentPowerShellHost {
-    $pwsh = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
-    if (Test-Path -LiteralPath $pwsh) { return $pwsh }
-    throw "PowerShell 7 is required for WinMint Agent but was not found: $pwsh"
+    Resolve-WinMintPowerShell7Host
 }
 
 function Test-AgentRebootPending {
@@ -98,42 +96,7 @@ function Remove-AgentDesktopShortcuts {
 
 function Test-AgentProcessElevated {
     try {
-        if (-not ('WinMint.TokenElevation' -as [type])) {
-            Add-Type -Namespace WinMint -Name TokenElevation -MemberDefinition @'
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-public struct TOKEN_ELEVATION {
-    public int TokenIsElevated;
-}
-[System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
-public static extern bool OpenProcessToken(System.IntPtr ProcessHandle, uint DesiredAccess, out System.IntPtr TokenHandle);
-[System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
-public static extern bool GetTokenInformation(System.IntPtr TokenHandle, int TokenInformationClass, out TOKEN_ELEVATION TokenInformation, int TokenInformationLength, out int ReturnLength);
-[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-public static extern bool CloseHandle(System.IntPtr hObject);
-[System.Runtime.InteropServices.DllImport("kernel32.dll")]
-public static extern System.IntPtr GetCurrentProcess();
-'@
-        }
-        $TOKEN_QUERY = 0x0008
-        $TokenElevation = 20
-        $tokenHandle = [IntPtr]::Zero
-        if (-not [WinMint.TokenElevation]::OpenProcessToken([WinMint.TokenElevation]::GetCurrentProcess(), [uint32]$TOKEN_QUERY, [ref]$tokenHandle)) {
-            return $false
-        }
-        try {
-            $elevation = New-Object WinMint.TokenElevation+TOKEN_ELEVATION
-            $returnLength = 0
-            $size = [System.Runtime.InteropServices.Marshal]::SizeOf($elevation)
-            if ([WinMint.TokenElevation]::GetTokenInformation($tokenHandle, $TokenElevation, [ref]$elevation, $size, [ref]$returnLength)) {
-                return ($elevation.TokenIsElevated -ne 0)
-            }
-            return $false
-        }
-        finally {
-            if ($tokenHandle -ne [IntPtr]::Zero) {
-                [WinMint.TokenElevation]::CloseHandle($tokenHandle) | Out-Null
-            }
-        }
+        return Test-WinMintProcessElevated
     }
     catch {
         Write-AgentLog "Elevation check warning: $($_.Exception.Message)"
@@ -152,6 +115,10 @@ function Get-AgentProcessorArchitecture {
 }
 
 function Get-AgentTargetArchitecture {
+    $ctx = Get-WinMintAgentContext
+    if (-not [string]::IsNullOrWhiteSpace([string]$ctx.TargetArchitecture)) {
+        return ([string]$ctx.TargetArchitecture).ToLowerInvariant()
+    }
     if (-not [string]::IsNullOrWhiteSpace([string]$script:AgentTargetArchitecture)) {
         return ([string]$script:AgentTargetArchitecture).ToLowerInvariant()
     }

@@ -6,6 +6,7 @@ function Write-WinMintFirstLogonError {
 }
 
 $setupScriptRoot = $PSScriptRoot
+. (Join-Path $setupScriptRoot 'WinMint.Runtime.Common.ps1')
 . (Join-Path $setupScriptRoot 'WindowsTerminal.Profiles.ps1')
 . (Join-Path $setupScriptRoot 'FirstLogon.State.ps1')
 . (Join-Path $setupScriptRoot 'FirstLogon.Host.ps1')

@@ -42,6 +42,7 @@ function Invoke-WinMintAgentManifestToolSelection {
     }
     $installIds = @($selected | Where-Object { -not $excluded.Contains([string]$_) })
 
+    $manifest = (Get-WinMintAgentContext).Manifest
     if (-not $manifest -or -not $manifest.PSObject.Properties['tools']) {
         return [pscustomobject]@{
             Id          = $SelectionId
@@ -146,7 +147,7 @@ function Install-WinMintAgentStarshipPrompt {
     param([Parameter(Mandatory)][hashtable]$State)
 
     $key = 'shell:starship'
-    if (-not $Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
+    if (-not (Get-WinMintAgentContext).Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
         Write-AgentUserNotice -Level OK -Message 'Starship prompt already configured.'
         return
     }
@@ -163,7 +164,7 @@ function Install-WinMintAgentStarshipPrompt {
             $null = New-Item -ItemType Directory -Path $configDir -Force
         }
 
-        if ($Force -or -not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        if ((Get-WinMintAgentContext).Force -or -not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
             Invoke-AgentNative -FilePath $starship.Source -ArgumentList @('preset', 'nerd-font-symbols', '-o', $configPath)
         }
         else {
@@ -199,7 +200,7 @@ function Invoke-WinMintAgentWingetUpgradeAll {
     param([Parameter(Mandatory)][hashtable]$State)
 
     $key = 'package-manager:winget-upgrade-all'
-    if (-not $Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
+    if (-not (Get-WinMintAgentContext).Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
         Write-AgentUserNotice -Level OK -Message 'winget upgrades already completed.'
         return
     }

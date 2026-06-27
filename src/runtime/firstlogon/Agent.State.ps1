@@ -2,27 +2,15 @@
 
 function Read-AgentJson {
     param([string]$Path, [object]$Fallback)
-    try {
-        if (Test-Path -LiteralPath $Path) {
-            return Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-        }
-    } catch {
+    Read-WinMintJsonFile -Path $Path -Fallback $Fallback -OnError {
         Write-AgentLog "JSON read failed: $Path :: $($_.Exception.Message)"
     }
-    return $Fallback
 }
 
 function Save-AgentState {
     param([object]$State)
-    $json = $State | ConvertTo-Json -Depth 12
-    $tmp = "$statePath.tmp"
-    $json | Set-Content -LiteralPath $tmp -Encoding UTF8
-    $null = Get-Content -LiteralPath $tmp -Raw -Encoding UTF8 | ConvertFrom-Json
-    # Move-Item -Force does NOT reliably replace an existing file on Windows - it throws
-    # "Cannot create a file when that file already exists", so every state update after the
-    # first froze state.json. Remove the destination first so Move never hits the overwrite path.
-    if (Test-Path -LiteralPath $statePath) { Remove-Item -LiteralPath $statePath -Force }
-    Move-Item -LiteralPath $tmp -Destination $statePath -Force
+    $ctx = Get-WinMintAgentContext
+    Save-WinMintAtomicJson -Path $ctx.StatePath -Data $State -Depth 12 -RemoveDestinationFirst
 }
 
 function Set-AgentStateValue {

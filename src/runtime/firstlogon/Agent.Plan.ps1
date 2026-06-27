@@ -2,14 +2,25 @@
 
 function Get-AgentModuleConfig {
     param([Parameter(Mandatory)][string]$Name)
+    $agentProfile = (Get-WinMintAgentContext).AgentProfile
     if (-not $agentProfile.modules) { return $null }
     $prop = $agentProfile.modules.PSObject.Properties[$Name]
     if ($prop) { return $prop.Value }
     return $null
 }
 
+function Resolve-WinMintAgentRoot {
+    try {
+        $resolved = [string](Get-WinMintAgentContext).AgentRoot
+        if (-not [string]::IsNullOrWhiteSpace($resolved)) { return $resolved }
+    }
+    catch { }
+    if ($script:agentRoot) { return [string]$script:agentRoot }
+    throw 'WinMint agent root is not initialized.'
+}
+
 function Get-WinMintAgentModuleCatalog {
-    $catalogPath = Join-Path $agentRoot 'agent-module-catalog.json'
+    $catalogPath = Join-Path (Resolve-WinMintAgentRoot) 'agent-module-catalog.json'
     if (-not (Test-Path -LiteralPath $catalogPath -PathType Leaf)) {
         throw "Agent module catalog is missing: $catalogPath"
     }
@@ -84,8 +95,8 @@ function Get-WinMintAgentModuleRuntimeState {
         'modules.shell.enabled' { return (Test-AgentModuleEnabled -Name 'shell') }
         'modules.windhawk.enabled' { return (Test-AgentModuleEnabled -Name 'windhawk') }
         'modules.liveInstallAudit.enabled' { return (Test-AgentModuleEnabled -Name 'liveInstallAudit') }
-        'browsers.count > 0' { return (@($agentProfile.browsers).Count -gt 0) }
-        'editors.count > 0' { return (@($agentProfile.editors).Count -gt 0) }
+        'browsers.count > 0' { return (@((Get-WinMintAgentContext).AgentProfile.browsers).Count -gt 0) }
+        'editors.count > 0' { return (@((Get-WinMintAgentContext).AgentProfile.editors).Count -gt 0) }
         default { throw "Unsupported agent module enablement expression '$enablement' for '$moduleId'." }
     }
 }
@@ -148,7 +159,7 @@ function Invoke-WinMintAgentPostStepHook {
     }
 
     try {
-        & $HookName -AgentProfile $agentProfile -State $State
+        & $HookName -AgentProfile (Get-WinMintAgentContext).AgentProfile -State (Get-WinMintAgentContext).State
     }
     catch {
         Write-AgentLog "Post-step hook '$HookName' failed: $($_.Exception.Message)"
@@ -166,6 +177,10 @@ function Invoke-AgentProfileModule {
         [string]$PostStepHook = ''
     )
 
+    $ctx = Get-WinMintAgentContext
+    $State = $ctx.State
+    $agentProfile = $ctx.AgentProfile
+    $Force = [bool]$ctx.Force
     $key = "module:$StepName"
     if (-not $Enabled) {
         $State.steps[$key] = @{ status = 'skipped'; updatedAt = (Get-Date -Format o) }

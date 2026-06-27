@@ -18,6 +18,7 @@ function Invoke-WinMintAgentEditorBootstrap {
         }
     }
 
+    $manifest = (Get-WinMintAgentContext).Manifest
     if (-not $manifest -or -not $manifest.PSObject.Properties['tools']) {
         return [pscustomobject]@{
             Id      = 'editors'

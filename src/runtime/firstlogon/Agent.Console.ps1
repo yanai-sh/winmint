@@ -1,7 +1,57 @@
 #Requires -Version 7.6
 
+$script:AgentStepPlanTotal = 0
+$script:AgentStepCompleted = 0
+
+function Get-AgentConsoleStepLabel {
+    param([Parameter(Mandatory)][string]$StepKey)
+
+    if ($StepKey -match '^module:(.+)$') {
+        $stepName = $Matches[1]
+        try {
+            $module = @(
+                Get-WinMintAgentModuleCatalog |
+                    Where-Object { [string]$_.RuntimeStepName -eq $stepName } |
+                    Select-Object -First 1
+            )
+            if ($module) { return [string]$module.Title }
+        }
+        catch { }
+        return $stepName
+    }
+    if ($StepKey -match '^tool:(.+)$') {
+        $toolId = $Matches[1]
+        try {
+            $tool = Get-AgentManifestTool -Id $toolId
+            if ($tool -and $tool.PSObject.Properties['name'] -and -not [string]::IsNullOrWhiteSpace([string]$tool.name)) {
+                return [string]$tool.name
+            }
+        }
+        catch { }
+        return $toolId
+    }
+    return $StepKey
+}
+
+function Initialize-AgentConsoleProgress {
+    if (-not (Get-WinMintAgentContext).Interactive) { return }
+    try {
+        $plan = @(New-WinMintAgentRuntimeStepPlan)
+        $script:AgentStepPlanTotal = @($plan | Where-Object { $_.Enabled }).Count
+        $script:AgentStepCompleted = 0
+    }
+    catch {
+        $script:AgentStepPlanTotal = 0
+        $script:AgentStepCompleted = 0
+    }
+}
+
 function Write-AgentLog {
     param([string]$Message)
+    $logDir = $null
+    try { $logDir = (Get-WinMintAgentContext).LogDir } catch { }
+    if ([string]::IsNullOrWhiteSpace($logDir) -and $script:logDir) { $logDir = [string]$script:logDir }
+    if ([string]::IsNullOrWhiteSpace($logDir)) { return }
     "$(Get-Date -Format o) $Message" | Out-File (Join-Path $logDir 'WinMintAgent.log') -Append -Encoding utf8
 }
 
@@ -14,7 +64,7 @@ function Show-AgentEventInConsole {
         [hashtable]$Data = @{}
     )
 
-    if (-not $InteractiveFirstLogon) { return }
+    if (-not (Get-WinMintAgentContext).Interactive) { return }
 
     switch ($Type) {
         'command' {
@@ -24,12 +74,31 @@ function Show-AgentEventInConsole {
                 $name = if ($filePath) { [IO.Path]::GetFileName($filePath) } else { 'command' }
                 Write-AgentConsoleLine -Level Info -Message "Running $name $displayArgs".TrimEnd()
             }
+            elseif ($Status -eq 'failed') {
+                $exitCode = if ($Data.ContainsKey('exitCode')) { [string]$Data.exitCode } else { '?' }
+                Write-AgentConsoleLine -Level Error -Message "$Message (exit $exitCode)"
+                $stderr = if ($Data.ContainsKey('stderr')) { [string]$Data.stderr } else { '' }
+                if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+                    Write-AgentConsoleLine -Level Info -Message "stderr log: $stderr"
+                }
+            }
             return
         }
         'step' {
-            $stepLabel = if ($Step -match '^module:(.+)$') { $Matches[1] } elseif ($Step -match '^tool:(.+)$') { $Matches[1] } else { $Step }
+            $stepLabel = Get-AgentConsoleStepLabel -StepKey $(if ($Step) { $Step } else { '' })
+            if ([string]::IsNullOrWhiteSpace($stepLabel) -and $Step) {
+                $stepLabel = if ($Step -match '^module:(.+)$') { $Matches[1] } elseif ($Step -match '^tool:(.+)$') { $Matches[1] } else { $Step }
+            }
             switch ($Status) {
-                'running' { Write-AgentConsoleLine -Level Section -Message "Starting $stepLabel." }
+                'running' {
+                    if ($script:AgentStepPlanTotal -gt 0) {
+                        $current = [Math]::Min($script:AgentStepCompleted + 1, $script:AgentStepPlanTotal)
+                        Write-AgentConsoleLine -Level Info -Message "Step $current of $($script:AgentStepPlanTotal): $stepLabel"
+                    }
+                    else {
+                        Write-AgentConsoleLine -Level Section -Message "Starting $stepLabel."
+                    }
+                }
                 'ok' {
                     if ($Message -match 'already completed') {
                         Write-AgentConsoleLine -Level OK -Message "$stepLabel already completed."
@@ -42,7 +111,10 @@ function Show-AgentEventInConsole {
                     }
                 }
                 'skipped' {
-                    if ($Data.ContainsKey('error') -or $Message -match 'not available') {
+                    if ($Message -match 'is not selected') {
+                        Write-AgentConsoleLine -Level Info -Message "$stepLabel not selected."
+                    }
+                    elseif ($Data.ContainsKey('error') -or $Message -match 'not available') {
                         Write-AgentConsoleLine -Level Warn -Message $Message
                     }
                 }
@@ -55,6 +127,12 @@ function Show-AgentEventInConsole {
                         Write-AgentConsoleLine -Level Error -Message "$stepLabel failed: $errorText"
                     }
                 }
+                'needsReboot' {
+                    Write-AgentConsoleLine -Level Warn -Message "$stepLabel finished; reboot may be required before everything is available."
+                }
+                'retryable' {
+                    Write-AgentConsoleLine -Level Warn -Message "$stepLabel finished with retryable failures; see logs for details."
+                }
                 default {
                     if ($Message -match 'finished:') {
                         $level = if ($Status -eq 'ok') { 'OK' } else { 'Warn' }
@@ -62,17 +140,30 @@ function Show-AgentEventInConsole {
                     }
                 }
             }
+            if ($Status -in @('ok', 'failed', 'skipped', 'needsReboot', 'retryable')) {
+                $script:AgentStepCompleted++
+            }
             return
         }
         'install' {
             if ($Status -eq 'running') {
                 Write-AgentConsoleLine -Level Section -Message $Message
             }
+            elseif ($Status -eq 'failed') {
+                $errorText = if ($Data.ContainsKey('error')) { [string]$Data.error } else { $Message }
+                Write-AgentConsoleLine -Level Error -Message $errorText
+            }
             return
         }
         'download' {
             if ($Status -eq 'running') {
                 Write-AgentConsoleLine -Level Info -Message $Message
+            }
+            elseif ($Status -eq 'ok') {
+                Write-AgentConsoleLine -Level OK -Message $Message
+            }
+            elseif ($Status -eq 'failed') {
+                Write-AgentConsoleLine -Level Error -Message $Message
             }
             return
         }
@@ -96,8 +187,39 @@ function Show-AgentEventInConsole {
             return
         }
         'run' {
-            if ($Status -eq 'failed' -and $Message -match 'Package manifest missing') {
-                Write-AgentConsoleLine -Level Error -Message $Message
+            switch ($Status) {
+                'failed' {
+                    Write-AgentConsoleLine -Level Error -Message $Message
+                    if ($Data.ContainsKey('failedSteps') -and @($Data.failedSteps).Count -gt 0) {
+                        $labels = @($Data.failedSteps | ForEach-Object { Get-AgentConsoleStepLabel -StepKey ([string]$_) })
+                        Write-AgentConsoleLine -Level Error -Message "Failed steps: $($labels -join ', ')"
+                    }
+                    if ($Data.ContainsKey('rebootPending') -and [bool]$Data.rebootPending) {
+                        Write-AgentConsoleLine -Level Warn -Message 'A reboot may be required before retrying.'
+                    }
+                }
+                'ok' {
+                    $level = if ($Data.ContainsKey('warningSteps') -and @($Data.warningSteps).Count -gt 0) { 'Warn' } else { 'OK' }
+                    Write-AgentConsoleLine -Level $level -Message $Message
+                    if ($Data.ContainsKey('warningSteps') -and @($Data.warningSteps).Count -gt 0) {
+                        $labels = @($Data.warningSteps | ForEach-Object { Get-AgentConsoleStepLabel -StepKey ([string]$_) })
+                        Write-AgentConsoleLine -Level Warn -Message "Warnings: $($labels -join ', ')"
+                    }
+                    if ($Data.ContainsKey('rebootPending') -and [bool]$Data.rebootPending) {
+                        Write-AgentConsoleLine -Level Warn -Message 'Windows reports a pending reboot.'
+                    }
+                }
+                default {
+                    if ($Message -match 'Package manifest missing') {
+                        Write-AgentConsoleLine -Level Error -Message $Message
+                    }
+                }
+            }
+            return
+        }
+        'cleanup' {
+            if ($Status -eq 'ok') {
+                Write-AgentConsoleLine -Level OK -Message $Message
             }
             return
         }
@@ -127,6 +249,7 @@ function Write-AgentEvent {
     )
 
     try {
+        $ctx = Get-WinMintAgentContext
         $agentEvent = [ordered]@{
             time = Get-Date -Format o
             type = $Type
@@ -138,8 +261,8 @@ function Write-AgentEvent {
             if (-not $agentEvent.Contains($key)) { $agentEvent[$key] = $Data[$key] }
         }
         $json = $agentEvent | ConvertTo-Json -Depth 10 -Compress
-        $json | Out-File -LiteralPath $eventLogPath -Append -Encoding utf8
-        if ($EmitProgressJson) { [Console]::Out.WriteLine($json) }
+        $json | Out-File -LiteralPath $ctx.EventLogPath -Append -Encoding utf8
+        if ($ctx.EmitProgressJson) { [Console]::Out.WriteLine($json) }
         Show-AgentEventInConsole -Type $Type -Status $Status -Step $Step -Message $Message -Data $Data
     }
     catch {
@@ -148,10 +271,10 @@ function Write-AgentEvent {
 }
 
 function Initialize-AgentConsole {
-    if (-not $InteractiveFirstLogon) { return }
+    if (-not (Get-WinMintAgentContext).Interactive) { return }
     try {
         if (-not (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue)) {
-            $galleryCache = Join-Path $stateDir 'PSGallery'
+            $galleryCache = Join-Path (Get-WinMintAgentContext).StateDir 'PSGallery'
             $null = New-Item -ItemType Directory -Path $galleryCache -Force -ErrorAction SilentlyContinue
             $manifest = @(Get-ChildItem -LiteralPath $galleryCache -Recurse -Filter 'PwshSpectreConsole.psd1' -File -ErrorAction SilentlyContinue |
                     Sort-Object FullName -Descending |
@@ -245,7 +368,7 @@ function New-AgentSpectrePanel {
 }
 
 function Show-AgentSplashImage {
-    if (-not $InteractiveFirstLogon) { return }
+    if (-not (Get-WinMintAgentContext).Interactive) { return }
     if (-not $script:AgentConsoleReady) { return }
     try {
         if ([string]::IsNullOrWhiteSpace($script:AgentConsoleSplashImagePath)) { return }
@@ -305,7 +428,7 @@ function Write-AgentConsoleLine {
         [ValidateSet('Info','OK','Warn','Error','Section')][string]$Level,
         [string]$Message
     )
-    if (-not $InteractiveFirstLogon) { return }
+    if (-not (Get-WinMintAgentContext).Interactive) { return }
     $safe = Get-AgentEscapedText -Text $Message
     if ($script:AgentConsoleReady) {
         $prefix = switch ($Level) {
@@ -329,7 +452,7 @@ function Write-AgentConsoleLine {
 }
 
 function Show-AgentConsoleHeader {
-    if (-not $InteractiveFirstLogon) { return }
+    if (-not (Get-WinMintAgentContext).Interactive) { return }
     $logLabel = '%LOCALAPPDATA%\WinMint\Logs'
     try {
         if (-not [string]::IsNullOrWhiteSpace($script:AgentConsoleLogLabel)) {
@@ -358,7 +481,9 @@ function Show-AgentConsoleHeader {
 }
 
 function Show-AgentPlan {
-    if (-not $InteractiveFirstLogon) { return }
+    if (-not (Get-WinMintAgentContext).Interactive) { return }
+    Initialize-AgentConsoleProgress
+    $agentProfile = (Get-WinMintAgentContext).AgentProfile
     $shellLayers = @()
     if ($agentProfile.modules.shell.nilesoft) { $shellLayers += 'Nilesoft' }
     if ($agentProfile.modules.shell.yasb) { $shellLayers += 'YASB' }
@@ -382,20 +507,29 @@ function Show-AgentPlan {
 
 function Show-AgentFinalSummary {
     param([hashtable]$State)
-    if (-not $InteractiveFirstLogon) { return }
+    if (-not (Get-WinMintAgentContext).Interactive) { return }
     $rows = @(
         $State.steps.GetEnumerator() |
             Sort-Object Name |
             ForEach-Object {
+                $stepValue = $_.Value
+                $notes = ''
+                if ($stepValue -and $stepValue.PSObject.Properties['error'] -and -not [string]::IsNullOrWhiteSpace([string]$stepValue.error)) {
+                    $notes = [string]$stepValue.error
+                }
+                elseif ([string]$stepValue.status -eq 'needsReboot') {
+                    $notes = 'Reboot may be required'
+                }
                 [pscustomobject]@{
-                    Step = $_.Key
-                    Status = [string]$_.Value.status
+                    Step = Get-AgentConsoleStepLabel -StepKey ([string]$_.Key)
+                    Status = [string]$stepValue.status
+                    Notes = $notes
                 }
             }
     )
     if ($script:AgentConsoleReady) {
         Write-SpectreHost ''
-        $table = Format-SpectreTable -Data $rows -Property Step, Status -Border Minimal -Color Grey -HeaderColor Grey -TextColor White
+        $table = Format-SpectreTable -Data $rows -Property Step, Status, Notes -Border Minimal -Color Grey -HeaderColor Grey -TextColor White
         New-AgentSpectrePanel -Data $table -Header '[bold white]FirstLogon result[/]' -Color Grey -Width (Get-AgentPanelWidth -Preferred 68 -Minimum 56) |
             Out-AgentSpectreRenderable
         return
@@ -405,14 +539,17 @@ function Show-AgentFinalSummary {
 
 function Wait-AgentConsoleBeforeClose {
     param([bool]$Failed, [bool]$Warnings)
-    if (-not $InteractiveFirstLogon) { return }
+    if (-not (Get-WinMintAgentContext).Interactive) { return }
+    if ((Get-Command Test-AgentRebootPending -ErrorAction SilentlyContinue) -and (Test-AgentRebootPending)) {
+        Write-AgentConsoleLine -Level Warn -Message 'Windows reports a pending reboot. Restart when convenient; sign in again if setup did not finish.'
+    }
     if ($Failed) {
-        Write-AgentConsoleLine -Level Error -Message "One or more selected steps failed. Review $logDir before closing this window."
+        Write-AgentConsoleLine -Level Error -Message "One or more selected steps failed. Review $((Get-WinMintAgentContext).LogDir) before closing this window."
         Read-Host 'Press Enter to close'
         return
     }
     if ($Warnings) {
-        Write-AgentConsoleLine -Level Warn -Message "First-logon automation finished with warnings. Review $logDir for failed optional installs."
+        Write-AgentConsoleLine -Level Warn -Message "First-logon automation finished with warnings. Review $((Get-WinMintAgentContext).LogDir) for failed optional installs."
         Start-Sleep -Seconds 10
         return
     }

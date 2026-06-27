@@ -250,7 +250,7 @@ function Backup-WinMintKomorebiConfig {
 }
 
 function Copy-WinMintYasbPreset {
-    $assetDir = Join-Path $agentRoot 'Assets\Yasb'
+    $assetDir = Join-Path (Get-WinMintAgentContext).AgentRoot 'Assets\Yasb'
     if (-not (Test-Path -LiteralPath $assetDir)) {
         throw "YASB preset assets were not staged: $assetDir"
     }
@@ -271,7 +271,7 @@ function Copy-WinMintYasbPreset {
 }
 
 function Copy-WinMintKomorebiPreset {
-    $assetDir = Join-Path $agentRoot 'Assets\Komorebi'
+    $assetDir = Join-Path (Get-WinMintAgentContext).AgentRoot 'Assets\Komorebi'
     if (-not (Test-Path -LiteralPath $assetDir)) {
         throw "Komorebi preset assets were not staged: $assetDir"
     }
@@ -359,7 +359,7 @@ function Install-WinMintThideLayer {
     param([Parameter(Mandatory)][hashtable]$State)
 
     $key = 'shell:thide'
-    if (-not $Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
+    if (-not (Get-WinMintAgentContext).Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
         Write-AgentUserNotice -Level OK -Message 'thide already configured.'
         return
     }

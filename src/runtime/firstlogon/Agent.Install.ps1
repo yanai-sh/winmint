@@ -2,13 +2,17 @@
 
 function Invoke-AgentNative {
     param([string]$FilePath, [string[]]$ArgumentList)
+    if ($script:WinMintAgentNativeHandler) {
+        return & $script:WinMintAgentNativeHandler @PSBoundParameters
+    }
+    $ctx = Get-WinMintAgentContext
     $script:AgentCommandCounter++
     $safeName = ([IO.Path]::GetFileNameWithoutExtension($FilePath) -replace '[^A-Za-z0-9_.-]', '_')
     if ([string]::IsNullOrWhiteSpace($safeName)) { $safeName = 'command' }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $baseName = '{0:000}-{1}-{2}' -f $script:AgentCommandCounter, $stamp, $safeName
-    $stdoutPath = Join-Path $commandLogDir "$baseName.out.log"
-    $stderrPath = Join-Path $commandLogDir "$baseName.err.log"
+    $stdoutPath = Join-Path $ctx.CommandLogDir "$baseName.out.log"
+    $stderrPath = Join-Path $ctx.CommandLogDir "$baseName.err.log"
     Write-AgentLog "RUN $FilePath $($ArgumentList -join ' ')"
     Write-AgentLog "RUNLOG stdout=$stdoutPath stderr=$stderrPath"
     $displayArgs = $ArgumentList -join ' '
@@ -62,6 +66,8 @@ function Invoke-AgentNative {
 }
 
 function Get-WingetPath {
+    if ($script:WinMintWingetPathOverride) { return [string]$script:WinMintWingetPathOverride }
+
     $cmd = Get-Command winget.exe -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($cmd) { return $cmd.Source }
 
@@ -71,6 +77,8 @@ function Get-WingetPath {
         )) {
         if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
     }
+
+    if ($script:WinMintAgentFastWaits) { return $null }
 
     $pkg = Get-AppxPackage -Name Microsoft.DesktopAppInstaller -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($pkg -and $pkg.InstallLocation) {
@@ -92,15 +100,18 @@ function Get-WingetPath {
 }
 
 function Wait-WingetPath {
-    for ($i = 0; $i -lt 24; $i++) {
+    $attempts = if ($script:WinMintAgentFastWaits) { 1 } else { 24 }
+    for ($i = 0; $i -lt $attempts; $i++) {
         $p = Get-WingetPath
         if ($p) { return $p }
-        Start-Sleep -Seconds 5
+        if (-not $script:WinMintAgentFastWaits) { Start-Sleep -Seconds 5 }
     }
     return $null
 }
 
 function Get-ScoopPath {
+    if ($script:WinMintScoopPathOverride) { return [string]$script:WinMintScoopPathOverride }
+
     $cmd = Get-Command scoop -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($cmd) { return $cmd.Source }
 
@@ -114,11 +125,12 @@ function Get-ScoopPath {
 }
 
 function Wait-ScoopPath {
-    for ($i = 0; $i -lt 12; $i++) {
+    $attempts = if ($script:WinMintAgentFastWaits) { 1 } else { 12 }
+    for ($i = 0; $i -lt $attempts; $i++) {
         Update-AgentProcessPath
         $p = Get-ScoopPath
         if ($p) { return $p }
-        Start-Sleep -Seconds 5
+        if (-not $script:WinMintAgentFastWaits) { Start-Sleep -Seconds 5 }
     }
     return $null
 }
@@ -197,7 +209,7 @@ function Install-AgentScoop {
     param([hashtable]$State)
 
     $key = 'package-manager:scoop'
-    if (-not $Force -and $State.ContainsKey('steps') -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
+    if (-not (Get-WinMintAgentContext).Force -and $State.ContainsKey('steps') -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
         Write-AgentEvent -Type 'notice' -Status 'ok' -Message 'Scoop already installed.'
         return
     }
@@ -230,7 +242,7 @@ function Install-AgentTool {
     $hostArch = Get-AgentProcessorArchitecture
     $targetArch = Get-AgentTargetArchitecture
     $directPayload = $null
-    if (-not $Force -and $State.steps.ContainsKey($key) -and $State.steps[$key].status -eq 'ok') {
+    if (-not (Get-WinMintAgentContext).Force -and $State.steps.ContainsKey($key) -and $State.steps[$key].status -eq 'ok') {
         Write-AgentLog "SKIP $key already ok"
         Write-AgentEvent -Type 'notice' -Status 'ok' -Message "$($Tool.id) already installed."
         return
@@ -361,6 +373,7 @@ function Get-AgentManifestTool {
         [Parameter(Mandatory)][string]$ToolId
     )
 
+    $manifest = (Get-WinMintAgentContext).Manifest
     if (-not $manifest -or -not $manifest.PSObject.Properties['tools']) {
         throw 'packages.json does not contain a tools manifest.'
     }

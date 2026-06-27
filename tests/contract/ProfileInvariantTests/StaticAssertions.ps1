@@ -23,6 +23,7 @@ function Get-WinMintFirstLogonText {
     foreach ($relativePath in @(
         'src\runtime\setup\FirstLogon.ps1',
         'src\runtime\setup\FirstLogon.Support.ps1',
+        'src\runtime\setup\WinMint.Runtime.Common.ps1',
         'src\runtime\setup\FirstLogon.State.ps1',
         'src\runtime\setup\FirstLogon.Host.ps1',
         'src\runtime\setup\FirstLogon.Desktop.ps1',
@@ -855,7 +856,7 @@ function Assert-LiveInstallAuditIsStaged {
     if ($setupPayloadText -match [regex]::Escape("Join-Path `$ScriptRoot 'scripts'")) {
         Add-SmokeFailure 'Setup payload staging must not rely on the removed top-level scripts directory.'
     }
-    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'FirstLogon.State.ps1', 'FirstLogon.Host.ps1', 'FirstLogon.Desktop.ps1', 'FirstLogon.Terminal.ps1', 'FirstLogon.Region.ps1', 'FirstLogon.Cleanup.ps1', 'WindowsTerminal.Profiles.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
+    foreach ($expected in @('SetupComplete.cmd', 'SetupComplete.ps1', 'Specialize.ps1', 'DefaultUser.ps1', 'FirstLogon.ps1', 'FirstLogon.Support.ps1', 'WinMint.Runtime.Common.ps1', 'FirstLogon.State.ps1', 'FirstLogon.Host.ps1', 'FirstLogon.Desktop.ps1', 'FirstLogon.Terminal.ps1', 'FirstLogon.Region.ps1', 'FirstLogon.Cleanup.ps1', 'WindowsTerminal.Profiles.ps1', 'FirstLogon.Transaction.ps1', 'FirstLogon.Runtime.ps1')) {
         if ($setupPayloadText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Setup payload staging should stage '$expected'."
         }
@@ -1096,6 +1097,33 @@ function Assert-AgentLiveInstallFailuresAreWarnings {
     )) {
         if ($agentText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Agent should remove live installer-created desktop shortcuts with '$expected'."
+        }
+    }
+}
+
+function Assert-AgentConsolePresentationSeam {
+    $consoleText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Console.ps1') -Raw
+    foreach ($expected in @(
+        'Show-AgentEventInConsole',
+        'Get-AgentConsoleStepLabel',
+        'Initialize-AgentConsoleProgress',
+        "'cleanup'",
+        "'needsReboot'",
+        "'retryable'",
+        'Get-WinMintAgentModuleCatalog'
+    )) {
+        if ($consoleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Agent console presentation seam should include '$expected'."
+        }
+    }
+    foreach ($relativePath in @(
+        'src\runtime\firstlogon\Agent.Runtime.ps1',
+        'src\runtime\firstlogon\Agent.Plan.ps1',
+        'src\runtime\firstlogon\Agent.Install.ps1'
+    )) {
+        $text = Get-Content -LiteralPath (Join-Path $root $relativePath) -Raw
+        if ($text -match 'Write-AgentConsoleLine') {
+            Add-SmokeFailure "$relativePath must emit Write-AgentEvent only; human output belongs in Agent.Console.ps1."
         }
     }
 }
@@ -1583,17 +1611,80 @@ function Assert-OfficialUpdatePayloadAcquisition {
 }
 
 function Assert-ElevationChecksUseInstanceMarshalSize {
+    $text = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\WinMint.Runtime.Common.ps1') -Raw
+    if ($text -match 'Marshal\]::SizeOf\(\[WinMint\.TokenElevation\+TOKEN_ELEVATION\]\)') {
+        Add-SmokeFailure 'WinMint.Runtime.Common.ps1 should marshal the TOKEN_ELEVATION instance, not the RuntimeType.'
+    }
+    if ($text -notmatch [regex]::Escape('$size = [System.Runtime.InteropServices.Marshal]::SizeOf($elevation)')) {
+        Add-SmokeFailure 'WinMint.Runtime.Common.ps1 should compute TOKEN_ELEVATION size from the struct instance.'
+    }
+}
+
+function Assert-WinMintRuntimeCommonContracts {
+    $setupCommon = Join-Path $root 'src\runtime\setup\WinMint.Runtime.Common.ps1'
+    $agentCommon = Join-Path $root 'src\runtime\firstlogon\WinMint.Runtime.Common.ps1'
+    if (-not (Test-Path -LiteralPath $setupCommon -PathType Leaf) -or -not (Test-Path -LiteralPath $agentCommon -PathType Leaf)) {
+        Add-SmokeFailure 'WinMint.Runtime.Common.ps1 must exist under setup and firstlogon.'
+        return
+    }
+    $setupHash = (Get-FileHash -LiteralPath $setupCommon -Algorithm SHA256).Hash
+    $agentHash = (Get-FileHash -LiteralPath $agentCommon -Algorithm SHA256).Hash
+    if ($setupHash -ne $agentHash) {
+        Add-SmokeFailure 'WinMint.Runtime.Common.ps1 must be byte-identical in setup and firstlogon.'
+    }
+
+    $commonText = Get-Content -LiteralPath $setupCommon -Raw
+    foreach ($expected in @(
+        'function Initialize-WinMintConsoleEncoding',
+        'function Resolve-WinMintPowerShell7Host',
+        'function Test-WinMintProcessElevated',
+        'function Save-WinMintAtomicJson',
+        'function Read-WinMintJsonFile',
+        'function Import-WinMintRuntimeCommon'
+    )) {
+        if ($commonText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "WinMint.Runtime.Common.ps1 should define '$expected'."
+        }
+    }
+
     foreach ($relativePath in @(
         'src\runtime\setup\FirstLogon.Host.ps1',
-        'src\runtime\firstlogon\Agent.Host.ps1'
+        'src\runtime\firstlogon\Agent.Host.ps1',
+        'src\runtime\setup\FirstLogon.ps1',
+        'src\runtime\firstlogon\Start-WinMintAgent.ps1'
     )) {
         $text = Get-Content -LiteralPath (Join-Path $root $relativePath) -Raw
-        if ($text -match 'Marshal\]::SizeOf\(\[WinMint\.TokenElevation\+TOKEN_ELEVATION\]\)') {
-            Add-SmokeFailure "$relativePath should marshal the TOKEN_ELEVATION instance, not the RuntimeType."
+        if ($text -match 'Add-Type\s+-Namespace\s+WinMint\s+-Name\s+TokenElevation') {
+            Add-SmokeFailure "$relativePath must not define WinMint.TokenElevation; use WinMint.Runtime.Common.ps1."
         }
-        if ($text -notmatch [regex]::Escape('$size = [System.Runtime.InteropServices.Marshal]::SizeOf($elevation)')) {
-            Add-SmokeFailure "$relativePath should compute TOKEN_ELEVATION size from the struct instance."
-        }
+    }
+
+    $firstLogonPs = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.ps1') -Raw
+    $startAgent = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Start-WinMintAgent.ps1') -Raw
+    if ($firstLogonPs -notmatch 'Initialize-WinMintConsoleEncoding') {
+        Add-SmokeFailure 'FirstLogon.ps1 should call Initialize-WinMintConsoleEncoding from WinMint.Runtime.Common.ps1.'
+    }
+    if ($startAgent -notmatch 'Initialize-WinMintConsoleEncoding') {
+        Add-SmokeFailure 'Start-WinMintAgent.ps1 should call Initialize-WinMintConsoleEncoding from WinMint.Runtime.Common.ps1.'
+    }
+
+    $stateText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.State.ps1') -Raw
+    $setupStateText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.State.ps1') -Raw
+    if ($stateText -notmatch 'Save-WinMintAtomicJson') {
+        Add-SmokeFailure 'Save-AgentState should delegate to Save-WinMintAtomicJson.'
+    }
+    if ($setupStateText -notmatch 'Save-WinMintAtomicJson') {
+        Add-SmokeFailure 'Save-WinMintFirstLogonState should delegate to Save-WinMintAtomicJson.'
+    }
+
+    $supportText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Support.ps1') -Raw
+    if ($supportText -notmatch 'WinMint\.Runtime\.Common\.ps1') {
+        Add-SmokeFailure 'FirstLogon.Support.ps1 should dot-source WinMint.Runtime.Common.ps1.'
+    }
+
+    $contextPath = Join-Path $root 'src\runtime\firstlogon\Agent.Context.ps1'
+    if (-not (Test-Path -LiteralPath $contextPath -PathType Leaf)) {
+        Add-SmokeFailure 'Agent.Context.ps1 must exist for explicit agent runtime context.'
     }
 }
 
@@ -1644,6 +1735,14 @@ function Assert-FirstLogonFailsClosedWhenElevationIsUnavailable {
         if ($firstLogonText -match [regex]::Escape($forbidden)) {
             Add-SmokeFailure "FirstLogon must not continue unelevated after self-elevation failure: '$forbidden'."
         }
+    }
+}
+
+function Assert-FirstLogonElevationGuaranteeIsSingleton {
+    $hostText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Host.ps1') -Raw
+    $taskCreates = @([regex]::Matches($hostText, "taskName\s*=\s*'WinMintFirstLogonElevated'")).Count
+    if ($taskCreates -ne 1) {
+        Add-SmokeFailure "FirstLogon.Host.ps1 must define exactly one self-elevation scheduled-task block (found $taskCreates)."
     }
 }
 
@@ -2639,18 +2738,18 @@ function Assert-FirstLogonRuntimeRequiresPowerShell7 {
 function Assert-FirstLogonSupportRequiresPowerShell7 {
     param([Parameter(Mandatory)][string]$FirstLogonSupportText)
 
-    Assert-StaticTextContainsAll -Text $FirstLogonSupportText -FailurePrefix 'FirstLogon host resolution should require PowerShell 7 with' -Expected @(
+    Assert-StaticTextContainsAll -Text $FirstLogonSupportText -FailurePrefix 'FirstLogon host resolution should delegate PowerShell 7 with' -Expected @(
         'function Resolve-WinMintPowerShellHost',
-        'PowerShell 7 is required for WinMint FirstLogon'
+        'Resolve-WinMintPowerShell7Host'
     )
 }
 
 function Assert-AgentRuntimeRequiresPowerShell7 {
     param([Parameter(Mandatory)][string]$AgentRuntimeText)
 
-    Assert-StaticTextContainsAll -Text $AgentRuntimeText -FailurePrefix 'Agent host resolution should require PowerShell 7 with' -Expected @(
+    Assert-StaticTextContainsAll -Text $AgentRuntimeText -FailurePrefix 'Agent host resolution should delegate PowerShell 7 with' -Expected @(
         'function Resolve-AgentPowerShellHost',
-        'PowerShell 7 is required for WinMint Agent'
+        'Resolve-WinMintPowerShell7Host'
     )
 }
 

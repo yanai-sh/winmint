@@ -1,31 +1,37 @@
 #Requires -Version 7.6
 
 function Resolve-AgentWindhawkInstallRoot {
+    if ($script:WinMintWindhawkInstallRootOverride) {
+        return [string]$script:WinMintWindhawkInstallRootOverride
+    }
+
     $candidates = [System.Collections.Generic.List[string]]::new()
     if ($env:ProgramFiles) { $candidates.Add((Join-Path $env:ProgramFiles 'Windhawk')) }
     if (${env:ProgramFiles(x86)}) { $candidates.Add((Join-Path ${env:ProgramFiles(x86)} 'Windhawk')) }
 
-    $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='Windhawk'" -ErrorAction SilentlyContinue
-    if ($svc -and $svc.PathName) {
-        $pathName = [string]$svc.PathName
-        $exePath = if ($pathName -match '^\s*"([^"]+)"') { $matches[1] } else { ($pathName -split '\s+', 2)[0] }
-        if ($exePath -and (Split-Path -Parent $exePath)) {
-            $candidates.Add((Split-Path -Parent $exePath))
+    if (-not $script:WinMintAgentFastWaits) {
+        $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='Windhawk'" -ErrorAction SilentlyContinue
+        if ($svc -and $svc.PathName) {
+            $pathName = [string]$svc.PathName
+            $exePath = if ($pathName -match '^\s*"([^"]+)"') { $matches[1] } else { ($pathName -split '\s+', 2)[0] }
+            if ($exePath -and (Split-Path -Parent $exePath)) {
+                $candidates.Add((Split-Path -Parent $exePath))
+            }
         }
-    }
 
-    foreach ($root in @(
-            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
-        )) {
-        Get-ItemProperty -Path $root -ErrorAction SilentlyContinue |
-            Where-Object {
-                $_.PSObject.Properties['DisplayName'] -and
-                $_.PSObject.Properties['InstallLocation'] -and
-                $_.DisplayName -eq 'Windhawk' -and
-                $_.InstallLocation
-            } |
-            ForEach-Object { $candidates.Add([string]$_.InstallLocation) }
+        foreach ($root in @(
+                'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+            )) {
+            Get-ItemProperty -Path $root -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.PSObject.Properties['DisplayName'] -and
+                    $_.PSObject.Properties['InstallLocation'] -and
+                    $_.DisplayName -eq 'Windhawk' -and
+                    $_.InstallLocation
+                } |
+                ForEach-Object { $candidates.Add([string]$_.InstallLocation) }
+        }
     }
 
     foreach ($candidate in ($candidates.ToArray() | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)) {
@@ -34,6 +40,15 @@ function Resolve-AgentWindhawkInstallRoot {
         }
     }
     return $null
+}
+
+function Test-AgentWindhawkInstalled {
+    param([string]$InstallRoot)
+
+    $programWindhawk = if ($InstallRoot) { Join-Path $InstallRoot 'windhawk.exe' } else { $null }
+    if ($programWindhawk -and (Test-Path -LiteralPath $programWindhawk)) { return $true }
+    if ($script:WinMintAgentFastWaits -or $script:WinMintWindhawkInstallRootOverride) { return $false }
+    return [bool](Get-Service -Name 'Windhawk' -ErrorAction SilentlyContinue)
 }
 
 function Get-WinMintWindhawkPresetEvidencePath {
@@ -98,7 +113,7 @@ function Invoke-WinMintAgentWindhawkBootstrap {
         }
     }
 
-    $payloadDir = Join-Path $agentRoot 'Assets\Windhawk'
+    $payloadDir = Join-Path (Get-WinMintAgentContext).AgentRoot 'Assets\Windhawk'
     $restoreScript = Join-Path $payloadDir 'WindhawkBootstrap.ps1'
     $virtualDesktopScript = Join-Path $payloadDir 'DisableVirtualDesktopFlyouts.ps1'
     $presetFile = Join-Path $payloadDir 'preset.json'
@@ -108,23 +123,20 @@ function Invoke-WinMintAgentWindhawkBootstrap {
 
     $windhawkRoot = Join-Path $env:PROGRAMDATA 'Windhawk'
     $windhawkInstallRoot = Resolve-AgentWindhawkInstallRoot
-    $programWindhawk = if ($windhawkInstallRoot) { Join-Path $windhawkInstallRoot 'windhawk.exe' } else { $null }
-    $installed = (Get-Service -Name 'Windhawk' -ErrorAction SilentlyContinue) -or
-        ($programWindhawk -and (Test-Path -LiteralPath $programWindhawk))
+    $installed = Test-AgentWindhawkInstalled -InstallRoot $windhawkInstallRoot
     if (-not $installed) {
         Install-AgentManifestTool -ToolId 'windhawk' -State $State
     }
 
     $ready = $false
-    for ($i = 0; $i -lt 30; $i++) {
+    $waitAttempts = if ($script:WinMintAgentFastWaits) { 1 } else { 30 }
+    for ($i = 0; $i -lt $waitAttempts; $i++) {
         $windhawkInstallRoot = Resolve-AgentWindhawkInstallRoot
-        $programWindhawk = if ($windhawkInstallRoot) { Join-Path $windhawkInstallRoot 'windhawk.exe' } else { $null }
-        if ((Get-Service -Name 'Windhawk' -ErrorAction SilentlyContinue) -or
-            ($programWindhawk -and (Test-Path -LiteralPath $programWindhawk))) {
+        if (Test-AgentWindhawkInstalled -InstallRoot $windhawkInstallRoot) {
             $ready = $true
             break
         }
-        Start-Sleep -Seconds 2
+        if (-not $script:WinMintAgentFastWaits) { Start-Sleep -Seconds 2 }
     }
     if (-not $ready) { throw 'Windhawk did not appear to install within the expected wait window.' }
     if (-not $windhawkInstallRoot) { throw 'Windhawk install path could not be resolved.' }

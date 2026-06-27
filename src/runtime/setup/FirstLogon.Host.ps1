@@ -1,9 +1,12 @@
 #Requires -Version 5.1
 
 function Resolve-WinMintPowerShellHost {
-    $pwsh = "$env:ProgramFiles\PowerShell\7\pwsh.exe"
-    if (Test-Path -LiteralPath $pwsh) { return $pwsh }
-    throw "PowerShell 7 is required for WinMint FirstLogon but was not found: $pwsh"
+    Resolve-WinMintPowerShell7Host
+}
+
+
+function Test-WinMintTokenElevated {
+    Test-WinMintProcessElevated
 }
 
 
@@ -108,48 +111,6 @@ exit `$exitCode
 }
 
 
-function Test-WinMintTokenElevated {
-    if (-not ('WinMint.TokenElevation' -as [type])) {
-        Add-Type -Namespace WinMint -Name TokenElevation -MemberDefinition @'
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-public struct TOKEN_ELEVATION {
-    public int TokenIsElevated;
-}
-[System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
-public static extern bool OpenProcessToken(System.IntPtr ProcessHandle, uint DesiredAccess, out System.IntPtr TokenHandle);
-[System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
-public static extern bool GetTokenInformation(System.IntPtr TokenHandle, int TokenInformationClass, out TOKEN_ELEVATION TokenInformation, int TokenInformationLength, out int ReturnLength);
-[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-public static extern bool CloseHandle(System.IntPtr hObject);
-[System.Runtime.InteropServices.DllImport("kernel32.dll")]
-public static extern System.IntPtr GetCurrentProcess();
-'@
-    }
-
-    $TOKEN_QUERY = 0x0008
-    $TokenElevation = 20
-    $tokenHandle = [IntPtr]::Zero
-    if (-not [WinMint.TokenElevation]::OpenProcessToken([WinMint.TokenElevation]::GetCurrentProcess(), [uint32]$TOKEN_QUERY, [ref]$tokenHandle)) {
-        return $false
-    }
-
-    try {
-        $elevation = New-Object WinMint.TokenElevation+TOKEN_ELEVATION
-        $returnLength = 0
-        $size = [System.Runtime.InteropServices.Marshal]::SizeOf($elevation)
-        if ([WinMint.TokenElevation]::GetTokenInformation($tokenHandle, $TokenElevation, [ref]$elevation, $size, [ref]$returnLength)) {
-            return ($elevation.TokenIsElevated -ne 0)
-        }
-        return $false
-    }
-        finally {
-            if ($tokenHandle -ne [IntPtr]::Zero) {
-                [WinMint.TokenElevation]::CloseHandle($tokenHandle) | Out-Null
-            }
-        }
-    }
-
-
 function Resolve-WinMintFirstLogonAgentMode {
     param(
         [Parameter(Mandatory)][string]$RequestedMode
@@ -236,44 +197,3 @@ if (-not $script:WinMintElevated) {
         catch { Stop-WinMintFirstLogonUnelevated -Reason "Self-elevation failed: $_; aborting before machine-wide setup so RunOnce can retry." }
     }
 }
-
-
-# ΓöÇΓöÇ Elevation guarantee ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-# FirstLogon does machine-wide work (HKLM writes, service changes, autologon teardown).
-# FirstLogonCommands usually hand an elevated token, but for a CUSTOM split-token admin
-# account that is not guaranteed - a filtered (standard) token would make those operations
-# fail with access-denied. If this instance is not elevated, re-launch it elevated via a
-# Highest-privilege scheduled task (runs with the full admin token, no UAC prompt) and let
-# that instance do the work. Harmless when already elevated.
-$script:WinMintElevated = $false
-try {
-    $script:WinMintElevated = Test-WinMintTokenElevated
-}
-catch { $script:WinMintElevated = $false }
-"$(Get-Date -Format 'o') FirstLogon running elevated: $script:WinMintElevated" | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
-if (-not $script:WinMintElevated) {
-    $elevFlag = Join-Path $logDir 'FirstLogon_self-elevation.flag'
-    if (Test-Path -LiteralPath $elevFlag) {
-        Stop-WinMintFirstLogonUnelevated -Reason 'FirstLogon is NOT elevated and self-elevation was already attempted; aborting before machine-wide setup so RunOnce can retry.'
-    }
-    else {
-        try {
-            Set-Content -LiteralPath $elevFlag -Value (Get-Date -Format o) -Encoding ASCII
-            $exe = Resolve-WinMintPowerShellHost
-            $taskName = 'WinMintFirstLogonElevated'
-            $tr = "`"$exe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script:WinMintFirstLogonEntryPath`""
-            & schtasks.exe /Create /TN $taskName /TR $tr /SC ONCE /ST 23:59 /RL HIGHEST /F 2>&1 | Out-Null
-            $elevOk = ($LASTEXITCODE -eq 0)
-            if ($elevOk) { & schtasks.exe /Run /TN $taskName 2>&1 | Out-Null; $elevOk = ($LASTEXITCODE -eq 0) }
-            if ($elevOk) {
-                "$(Get-Date -Format 'o') FirstLogon re-launched elevated via scheduled task '$taskName'; standard-token instance exiting." | Out-File (Join-Path $logDir 'FirstLogon.log') -Append
-                try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
-                exit 0
-            }
-            Stop-WinMintFirstLogonUnelevated -Reason 'Self-elevation scheduled task could not be created/started; aborting before machine-wide setup so RunOnce can retry.'
-        }
-        catch { Stop-WinMintFirstLogonUnelevated -Reason "Self-elevation failed: $_; aborting before machine-wide setup so RunOnce can retry." }
-    }
-}
-
-

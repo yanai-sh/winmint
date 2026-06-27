@@ -89,7 +89,7 @@ function Set-WinMintAgentEverythingConfiguration {
     )
 
     $key = 'config:everything-search-backend'
-    if (-not $Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
+    if (-not (Get-WinMintAgentContext).Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
         Write-AgentUserNotice -Level OK -Message 'Everything search backend already configured.'
         return
     }
@@ -223,7 +223,7 @@ function Request-WinMintRaycastExtensionInstall {
     if ([string]::IsNullOrWhiteSpace($id) -or [string]::IsNullOrWhiteSpace($owner)) { return $false }
 
     $key = "raycast-extension:$id"
-    if (-not $Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
+    if (-not (Get-WinMintAgentContext).Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
         return $true
     }
 

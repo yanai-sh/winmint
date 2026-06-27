@@ -2,25 +2,15 @@
 
 function Save-WinMintFirstLogonState {
     param([hashtable]$State)
-    $path = Join-Path $logDir 'FirstLogonState.json'
-    $tmp = "$path.tmp"
-    $State | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $tmp -Encoding UTF8
-    $null = Get-Content -LiteralPath $tmp -Raw -Encoding UTF8 | ConvertFrom-Json
-    Move-Item -LiteralPath $tmp -Destination $path -Force
+    Save-WinMintAtomicJson -Path (Join-Path $logDir 'FirstLogonState.json') -Data $State -Depth 6
 }
 
 
 function Read-WinMintFirstLogonState {
-    $path = Join-Path $logDir 'FirstLogonState.json'
-    try {
-        if (Test-Path -LiteralPath $path) {
-            return Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
-        }
+    Read-WinMintJsonFile -Path (Join-Path $logDir 'FirstLogonState.json') -OnError {
+        param($ErrorRecord)
+        Write-WinMintFirstLogonError "FirstLogon state read failed: $($ErrorRecord.Exception.Message)"
     }
-    catch {
-        Write-WinMintFirstLogonError "FirstLogon state read failed: $_"
-    }
-    return $null
 }
 
 

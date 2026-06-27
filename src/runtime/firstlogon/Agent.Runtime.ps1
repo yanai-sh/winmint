@@ -1,6 +1,8 @@
 #Requires -Version 7.6
 
 function Invoke-WinMintAgentStepRuntime {
+    $ctx = Get-WinMintAgentContext
+    $state = $ctx.State
     $runtimePlan = @(New-WinMintAgentRuntimeStepPlan)
     foreach ($step in @($runtimePlan | Where-Object { $_.Phase -eq 'main' } | Sort-Object Order)) {
         Invoke-AgentProfileModule -StepName $step.StepName -FunctionName $step.FunctionName -Enabled ([bool]$step.Enabled) -PostStepHook ([string]$step.PostStepHook)
