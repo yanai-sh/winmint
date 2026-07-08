@@ -53,11 +53,21 @@ jobs:
         shell: pwsh
         run: ./tools/release/Build-WinMintSetupShell.ps1 -AllArch
 
+      - name: Prepare contract test fixtures
+        shell: pwsh
+        run: |
+          $isoDir = 'tests/fixtures/iso'
+          $isoPath = Join-Path $isoDir 'official-win11-25h2-english-arm64-v2.iso'
+          New-Item -ItemType Directory -Force -Path $isoDir | Out-Null
+          if (-not (Test-Path -LiteralPath $isoPath)) {
+            New-Item -ItemType File -Force -Path $isoPath | Out-Null
+          }
+
       - name: Validate
         shell: pwsh
         run: |
-          ./tests/contract/Test-ProfileInvariants.ps1
-          ./tools/validation/Validate.ps1
+          ./tools/dev/Invoke-WinMintPesterContract.ps1
+          ./tools/validation/Validate.ps1 -RunAnalyzer
 
       - name: Build bundle
         shell: pwsh
