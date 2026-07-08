@@ -1,0 +1,111 @@
+[Version]
+Signature="$CHICAGO$"
+AdvancedINF=2.5
+
+[DefaultInstall]
+CopyFiles = Scheme.Cur, Scheme.Ani
+AddReg = Scheme.Reg, Arrow.Reg, Help.Reg, Work.Reg, Busy.Reg, Cross.Reg, IBeam.Reg, NWSE.Reg, NESW.Reg, WE.Reg, NS.Reg, Move.Reg, Link.Reg, Alternate.Reg, Unavailable.Reg, Pin.Reg, Person.Reg, Grabbing.Reg, Handwriting.Reg, Pan.Reg, ZoomIn.Reg, ZoomOut.Reg
+
+[Strings]
+SchemeName="BreezeXLight"
+
+[DestinationDirs]
+Scheme.Cur = 10,Cursors
+Scheme.Ani = 10,Cursors
+
+[SourceDisksNames]
+1="BreezeXLight Cursors",,1
+
+[SourceDisksFiles]
+Alternate.cur = 1
+Arrow.cur = 1
+Busy.ani = 1
+Cross.cur = 1
+Grabbing.cur = 1
+Handwriting.cur = 1
+Help.cur = 1
+IBeam.cur = 1
+Link.cur = 1
+Move.cur = 1
+Pan.cur = 1
+Person.cur = 1
+Pin.cur = 1
+SizeNESW.cur = 1
+SizeNS.cur = 1
+SizeNWSE.cur = 1
+SizeWE.cur = 1
+Unavailable.cur = 1
+Work.ani = 1
+ZoomIn.cur = 1
+ZoomOut.cur = 1
+
+[Scheme.Cur]
+Alternate.cur
+Arrow.cur
+Cross.cur
+Grabbing.cur
+Handwriting.cur
+Help.cur
+IBeam.cur
+Link.cur
+Move.cur
+Pan.cur
+Person.cur
+Pin.cur
+SizeNESW.cur
+SizeNS.cur
+SizeNWSE.cur
+SizeWE.cur
+Unavailable.cur
+ZoomIn.cur
+ZoomOut.cur
+
+[Scheme.Ani]
+Busy.ani
+Work.ani
+
+[Scheme.Reg]
+HKCU,"Control Panel\Cursors\Schemes","%SchemeName%",,"%10%\Cursors\Arrow.cur,%10%\Cursors\Help.cur,%10%\Cursors\Work.ani,%10%\Cursors\Busy.ani,%10%\Cursors\Cross.cur,%10%\Cursors\IBeam.cur,%10%\Cursors\SizeNWSE.cur,%10%\Cursors\SizeNESW.cur,%10%\Cursors\SizeWE.cur,%10%\Cursors\SizeNS.cur,%10%\Cursors\Move.cur,%10%\Cursors\Link.cur,%10%\Cursors\Alternate.cur,%10%\Cursors\Unavailable.cur,%10%\Cursors\Pin.cur,%10%\Cursors\Person.cur"
+
+[Arrow.Reg]
+HKCU,"Control Panel\Cursors","Arrow",,"%10%\Cursors\Arrow.cur"
+[Help.Reg]
+HKCU,"Control Panel\Cursors","Help",,"%10%\Cursors\Help.cur"
+[Work.Reg]
+HKCU,"Control Panel\Cursors","AppStarting",,"%10%\Cursors\Work.ani"
+[Busy.Reg]
+HKCU,"Control Panel\Cursors","Wait",,"%10%\Cursors\Busy.ani"
+[Cross.Reg]
+HKCU,"Control Panel\Cursors","Crosshair",,"%10%\Cursors\Cross.cur"
+[IBeam.Reg]
+HKCU,"Control Panel\Cursors","IBeam",,"%10%\Cursors\IBeam.cur"
+[NWSE.Reg]
+HKCU,"Control Panel\Cursors","SizeNWSE",,"%10%\Cursors\SizeNWSE.cur"
+[NESW.Reg]
+HKCU,"Control Panel\Cursors","SizeNESW",,"%10%\Cursors\SizeNESW.cur"
+[WE.Reg]
+HKCU,"Control Panel\Cursors","SizeWE",,"%10%\Cursors\SizeWE.cur"
+[NS.Reg]
+HKCU,"Control Panel\Cursors","SizeNS",,"%10%\Cursors\SizeNS.cur"
+[Move.Reg]
+HKCU,"Control Panel\Cursors","SizeAll",,"%10%\Cursors\Move.cur"
+[Link.Reg]
+HKCU,"Control Panel\Cursors","Hand",,"%10%\Cursors\Link.cur"
+[Alternate.Reg]
+HKCU,"Control Panel\Cursors","UpArrow",,"%10%\Cursors\Alternate.cur"
+[Unavailable.Reg]
+HKCU,"Control Panel\Cursors","No",,"%10%\Cursors\Unavailable.cur"
+[Pin.Reg]
+HKCU,"Control Panel\Cursors","Pin",,"%10%\Cursors\Pin.cur"
+[Person.Reg]
+HKCU,"Control Panel\Cursors","Person",,"%10%\Cursors\Person.cur"
+[Grabbing.Reg]
+HKCU,"Control Panel\Cursors","Grabbing",,"%10%\Cursors\Grabbing.cur"
+[Handwriting.Reg]
+HKCU,"Control Panel\Cursors","Handwriting",,"%10%\Cursors\Handwriting.cur"
+[Pan.Reg]
+HKCU,"Control Panel\Cursors","PanEW",,"%10%\Cursors\Pan.cur"
+[ZoomIn.Reg]
+HKCU,"Control Panel\Cursors","ZoomIn",,"%10%\Cursors\ZoomIn.cur"
+[ZoomOut.Reg]
+HKCU,"Control Panel\Cursors","ZoomOut",,"%10%\Cursors\ZoomOut.cur"

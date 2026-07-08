@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag, for example v0.2.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release bundle
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PowerShell 7.6
+        uses: PSModule/install-powershell@v1
+        with:
+          Version: '7.6.2'
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            '${{ inputs.version }}'
+          } else {
+            $env:GITHUB_REF_NAME
+          }
+
+          if ($version -notmatch '^v\d+\.\d+\.\d+(?:[-+][A-Za-z0-9._-]+)?$') {
+            throw "Release version must look like v0.2.0; got '$version'."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish WinMintSetupShell (x64 + arm64)
+        shell: pwsh
+        run: ./tools/release/Build-WinMintSetupShell.ps1 -AllArch
+
+      - name: Validate
+        shell: pwsh
+        run: |
+          ./tests/contract/Test-ProfileInvariants.ps1
+          ./tools/validation/Validate.ps1
+
+      - name: Build bundle
+        shell: pwsh
+        run: ./tools/release/New-WinMintReleaseBundle.ps1 -Version '${{ steps.version.outputs.version }}'
+
+      - name: Smoke release bundle
+        shell: pwsh
+        run: ./tools/release/Test-WinMintReleaseLaunch.ps1 -BundlePath "dist/WinMint-${{ steps.version.outputs.version }}.zip" -Version '${{ steps.version.outputs.version }}'
+
+      - name: Create or update GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $title = "WinMint $env:VERSION"
+          gh release view $env:VERSION *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:VERSION --title $title --notes "Release $env:VERSION"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+          gh release upload $env:VERSION "dist/WinMint-$env:VERSION.zip" "dist/WinMint-$env:VERSION.zip.sha256" --clobber

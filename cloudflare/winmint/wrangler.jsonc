@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "winmint-bootstrap",
+  "main": "src/index.js",
+  "compatibility_date": "2026-04-28",
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "winmint.yanai.sh",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "BOOTSTRAP_URL": "https://raw.githubusercontent.com/yanai-sh/winmint/main/winmint.ps1"
+  }
+}

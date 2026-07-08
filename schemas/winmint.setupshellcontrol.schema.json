@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winmint.yanai.sh/schemas/winmint.setupshellcontrol.schema.json",
+  "title": "WinMint Setup Shell Control",
+  "description": "Lifecycle control written by FirstLogon to %LOCALAPPDATA%\\WinMint\\setup-shell-control.json. Consumed by WinMintSetupShell.exe only.",
+  "type": "object",
+  "required": ["phase", "startedAt", "updatedAt", "profileName", "message", "preAgentStage"],
+  "properties": {
+    "phase": {
+      "type": "string",
+      "enum": ["running", "finishing", "complete", "failed", "reboot"]
+    },
+    "startedAt": { "type": "string" },
+    "updatedAt": { "type": "string" },
+    "profileName": { "type": "string" },
+    "message": { "type": "string" },
+    "preAgentStage": {
+      "type": "string",
+      "enum": ["", "locked", "region", "defaults", "agent"]
+    }
+  },
+  "additionalProperties": false
+}

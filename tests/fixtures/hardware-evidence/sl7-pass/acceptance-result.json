@@ -1,0 +1,91 @@
+{
+  "acceptanceMode": "hardware",
+  "machineId": "surface-laptop-7-arm64",
+  "acceptanceTier": "Hardware",
+  "startedAt": "2026-07-07T21:38:41.0323821+03:00",
+  "evidenceDir": "tests/fixtures/hardware-evidence/sl7-pass",
+  "reachable": true,
+  "firstLogon": {
+    "status": "ok"
+  },
+  "schemaVersion": 1,
+  "plumbingVerdict": "pass",
+  "evidenceVerdict": "pass",
+  "signalChecks": {
+    "plumbingOk": true,
+    "evidenceOk": true,
+    "signals": [
+      {
+        "id": "firstLogon.ok",
+        "ok": true,
+        "severity": "plumbing",
+        "message": ""
+      },
+      {
+        "id": "drivers.surfaceCatalog",
+        "ok": true,
+        "severity": "plumbing",
+        "message": ""
+      },
+      {
+        "id": "drivers.firmwareExcluded",
+        "ok": true,
+        "severity": "evidence",
+        "message": ""
+      },
+      {
+        "id": "keep.edge",
+        "ok": true,
+        "severity": "evidence",
+        "message": ""
+      },
+      {
+        "id": "agents.zenBrowser",
+        "ok": true,
+        "severity": "evidence",
+        "message": ""
+      },
+      {
+        "id": "agents.cursor",
+        "ok": true,
+        "severity": "evidence",
+        "message": ""
+      },
+      {
+        "id": "wsl.fedora",
+        "ok": true,
+        "severity": "evidence",
+        "message": ""
+      },
+      {
+        "id": "audit.zeroErrors",
+        "ok": true,
+        "severity": "plumbing",
+        "message": ""
+      },
+      {
+        "id": "desktop.noShellLayers",
+        "ok": true,
+        "severity": "evidence",
+        "message": ""
+      },
+      {
+        "id": "registry.gamingPerformanceBaseline",
+        "ok": true,
+        "severity": "evidence",
+        "message": ""
+      },
+      {
+        "id": "launcher.searchFallback",
+        "ok": true,
+        "severity": "evidence",
+        "message": ""
+      }
+    ],
+    "plumbingFailures": [],
+    "evidenceFailures": [],
+    "failures": []
+  },
+  "verdict": "pass",
+  "finishedAt": "2026-07-07T21:38:41.0418925+03:00"
+}

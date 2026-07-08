@@ -1,0 +1,164 @@
+{
+  "sourcePolicy": {
+    "winget": "GUI apps, Microsoft apps, signed installers, shell integrations, desktop services, and packages where the upstream installer is canonical.",
+    "scoop": "User-local developer CLI tools and toolchain plumbing. Installed during FirstLogon through the official Scoop installer and the main bucket.",
+    "github": "Reserved for specific upstream assets, stale package metadata, or architecture-specific layouts. Not yet implemented — the engine's build-time catalog validator rejects tools using this source.",
+    "store": "Microsoft Store-backed packages. Used only when the upstream app is Store-distributed and winget surfaces it through the msstore source.",
+    "direct": "Narrow exception for a pinned, hash-verified upstream installer when package-manager metadata cannot provide the required native architecture."
+  },
+  "tools": {
+    "mingit": {
+      "displayName": "MinGit",
+      "source": "scoop",
+      "id": "mingit",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "starship": {
+      "displayName": "Starship",
+      "source": "scoop",
+      "id": "starship",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "cursor": {
+      "displayName": "Cursor",
+      "source": "winget",
+      "id": "Anysphere.Cursor",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "antigravity": {
+      "displayName": "Antigravity",
+      "source": "winget",
+      "id": "Google.Antigravity",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "zen-browser": {
+      "displayName": "Zen Browser",
+      "source": "winget",
+      "id": "Zen-Team.Zen-Browser",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "helium": {
+      "displayName": "Helium",
+      "source": "winget",
+      "id": "ImputNet.Helium",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "firefox-developer-edition": {
+      "displayName": "Firefox Developer Edition",
+      "source": "winget",
+      "id": "Mozilla.Firefox.DeveloperEdition",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "brave": {
+      "displayName": "Brave",
+      "source": "winget",
+      "id": "Brave.Brave",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "vscode": {
+      "displayName": "Visual Studio Code",
+      "source": "winget",
+      "id": "Microsoft.VisualStudioCode",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "zed": {
+      "displayName": "Zed",
+      "source": "winget",
+      "id": "ZedIndustries.Zed",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "windhawk": {
+      "displayName": "Windhawk",
+      "source": "winget",
+      "id": "RamenSoftware.Windhawk",
+      "versionPolicy": "latest",
+      "architectures": ["amd64"],
+      "unsupportedArchitectures": {
+        "arm64": "winget has no native ARM64 installer for Windhawk"
+      }
+    },
+    "yasb": {
+      "displayName": "YASB",
+      "source": "winget",
+      "id": "AmN.yasb",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "komorebi": {
+      "displayName": "Komorebi",
+      "source": "winget",
+      "id": "LGUG2Z.komorebi",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "whkd": {
+      "displayName": "whkd",
+      "source": "winget",
+      "id": "LGUG2Z.whkd",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "neovim": {
+      "displayName": "Neovim",
+      "source": "scoop",
+      "id": "neovim",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "nilesoft": {
+      "displayName": "Nilesoft Shell",
+      "source": "winget",
+      "id": "Nilesoft.Shell",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "everything": {
+      "displayName": "Everything",
+      "source": "winget",
+      "id": "voidtools.Everything",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "everything-beta": {
+      "displayName": "Everything 1.5 Beta",
+      "source": "winget",
+      "id": "voidtools.Everything.Beta",
+      "versionPolicy": "latest",
+      "architectures": ["amd64"],
+      "unsupportedArchitectures": {
+        "arm64": "winget beta package currently has no native ARM64 installer"
+      }
+    },
+    "everything-arm64-beta": {
+      "displayName": "Everything 1.5 Beta ARM64",
+      "source": "direct",
+      "id": "Everything-1.5.0.1415b.ARM64",
+      "version": "1.5.0.1415b",
+      "versionPolicy": "pinned",
+      "url": "https://www.voidtools.com/Everything-1.5.0.1415b.ARM64.en-US-Setup.exe",
+      "sha256": "2D511A33A3494147F921DCB488772125E6CC654E677196AACB0235967A27D2DA",
+      "silentArgs": ["/S"],
+      "architectures": ["arm64"],
+      "unsupportedArchitectures": {
+        "amd64": "ARM64-specific pinned Everything beta installer"
+      }
+    },
+    "raycast": {
+      "displayName": "Raycast",
+      "source": "store",
+      "id": "9PFXXSHC64H3",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    }
+  }
+}

@@ -1,0 +1,146 @@
+#Requires -Version 5.1
+
+function Save-WinMintFirstLogonState {
+    param([hashtable]$State)
+    $ctx = Get-WinMintFirstLogonContext
+    Save-WinMintAtomicJson -Path (Join-Path $ctx.LogDir 'FirstLogonState.json') -Data $State -Depth 6
+}
+
+
+function Read-WinMintFirstLogonState {
+    $ctx = Get-WinMintFirstLogonContext
+    Read-WinMintJsonFile -Path (Join-Path $ctx.LogDir 'FirstLogonState.json') -OnError {
+        param($ErrorRecord)
+        Write-WinMintFirstLogonError "FirstLogon state read failed: $($ErrorRecord.Exception.Message)"
+    }
+}
+
+
+function New-WinMintFirstLogonRunState {
+    $previous = Read-WinMintFirstLogonState
+    $previousAttempts = 0
+    try {
+        if ($previous -and $previous.PSObject.Properties['attempts']) {
+            $previousAttempts = [int]$previous.attempts
+        }
+    }
+    catch { $previousAttempts = 0 }
+    @{
+        startedAt = Get-Date -Format o
+        agentExitCode = $null
+        status = 'running'
+        attempts = ($previousAttempts + 1)
+        maxAttempts = (Get-WinMintFirstLogonContext).MaxAttempts
+    }
+}
+
+
+function Read-WinMintFirstLogonSetupProfile {
+    $ctx = Get-WinMintFirstLogonContext
+    $setupProfilePath = Join-Path $ctx.PayloadDir 'WinMintSetupProfile.json'
+    try {
+        if (Test-Path -LiteralPath $setupProfilePath) {
+            return Get-Content -LiteralPath $setupProfilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+    }
+    catch {
+        Write-WinMintFirstLogonError "Setup profile read failed: $_"
+    }
+    return $null
+}
+
+
+function Get-WinMintFirstLogonNestedProfileValue {
+    param(
+        [object]$BuildProfile,
+        [string]$Section,
+        [string]$Nested,
+        [string]$Name,
+        $Default = $null
+    )
+
+    if (-not $BuildProfile) { return $Default }
+    $sectionProp = $BuildProfile.PSObject.Properties[$Section]
+    if (-not $sectionProp) { return $Default }
+    $nestedProp = $sectionProp.Value.PSObject.Properties[$Nested]
+    if (-not $nestedProp) { return $Default }
+    $valueProp = $nestedProp.Value.PSObject.Properties[$Name]
+    if (-not $valueProp) { return $Default }
+    return $valueProp.Value
+}
+
+
+function Invoke-WinMintFirstLogonReg {
+    param(
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [switch]$AllowFailure
+    )
+    $out = & reg.exe @Arguments 2>&1
+    if ($LASTEXITCODE -ne 0 -and -not $AllowFailure) {
+        Write-WinMintFirstLogonError "reg.exe $($Arguments -join ' ') exited $LASTEXITCODE`n$($out | Out-String)"
+    }
+}
+
+
+function Set-WinMintFirstLogonRetry {
+    # The RunOnce command embeds quoted paths with spaces. reg.exe mangles embedded
+    # quotes in a /d value ("ERROR: Invalid syntax"), so write the value with the
+    # native registry provider, which stores the string verbatim.
+    $runOnce = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+    $exe = Resolve-WinMintPowerShellHost
+    $entryPath = (Get-WinMintFirstLogonContext).EntryPath
+    $command = "`"$exe`" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$entryPath`""
+    if (-not (Test-Path -LiteralPath $runOnce)) { New-Item -Path $runOnce -Force | Out-Null }
+    Set-ItemProperty -LiteralPath $runOnce -Name 'WinMintFirstLogonRetry' -Value $command -Type String -Force
+}
+
+
+function Clear-WinMintFirstLogonRetry {
+    $runOnce = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+    Remove-ItemProperty -LiteralPath $runOnce -Name 'WinMintFirstLogonRetry' -Force -ErrorAction SilentlyContinue
+}
+
+
+function Clear-WinMintAutoLogonPassword {
+    # Removes the plaintext DefaultPassword and AutoLogonCount from the registry.
+    # Called ONLY once the agent run fully succeeds. Until then the password must stay
+    # resident so auto sign-in survives every install reboot without ever prompting.
+    $winlogon = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+    foreach ($name in @('DefaultPassword', 'AutoLogonCount')) {
+        Invoke-WinMintFirstLogonReg -Arguments @('delete', $winlogon, '/v', $name, '/f') -AllowFailure
+    }
+}
+
+
+function Get-WinMintFirstLogonServiceSnapshot {
+    param([string]$Name)
+    try {
+        $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        $start = (Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$Name" -Name Start -ErrorAction SilentlyContinue).Start
+        if (-not $svc) { return [ordered]@{ name = $Name; present = $false; status = ''; start = $start } }
+        return [ordered]@{ name = $Name; present = $true; status = [string]$svc.Status; startType = [string]$svc.StartType; start = $start }
+    }
+    catch {
+        return [ordered]@{ name = $Name; present = $false; status = ''; startType = ''; start = $null; error = $_.Exception.Message }
+    }
+}
+
+
+function Test-WinMintFirstLogonAgentNeedsReboot {
+    $statePath = Join-Path $env:LOCALAPPDATA 'WinMint\state.json'
+    if (-not (Test-Path -LiteralPath $statePath)) { return $false }
+    try {
+        $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not $state -or -not $state.steps) { return $false }
+        foreach ($prop in $state.steps.PSObject.Properties) {
+            $status = if ($prop.Value -and $prop.Value.PSObject.Properties['status']) {
+                [string]$prop.Value.status
+            } else { '' }
+            if ($status -eq 'needsReboot') { return $true }
+        }
+    }
+    catch {
+        Write-WinMintFirstLogonError "Agent needsReboot probe failed: $_"
+    }
+    return $false
+}

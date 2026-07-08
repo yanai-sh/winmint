@@ -1,0 +1,8 @@
+{
+  "records": [
+    {
+      "phase": "offline-image",
+      "changes": ["gaming-performance-policy enabled"]
+    }
+  ]
+}

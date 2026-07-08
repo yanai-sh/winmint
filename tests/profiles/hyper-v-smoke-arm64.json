@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "05/18/2026 00:00:00",
+  "profileName": "Hyper-V Smoke",
+  "keep": {
+    "edge": false,
+    "gaming": false,
+    "copilot": false
+  },
+  "source": {
+    "isoPath": "tests/fixtures/iso/official-win11-25h2-english-arm64-v2.iso",
+    "architecture": "arm64"
+  },
+  "target": {
+    "device": "DifferentPC",
+    "editionMode": "Fixed",
+    "edition": "Windows 11 Pro",
+    "diskMode": "AutoWipeDisk0",
+    "diskLayout": {
+      "preset": "",
+      "roundingGb": 64,
+      "windowsMinimumGb": 256,
+      "windowsRecommendedGb": 384,
+      "linuxMinimumGb": 128,
+      "linuxRecommendedGb": 256,
+      "efiMb": 1024,
+      "msrMb": 16,
+      "recoveryMb": 1024
+    },
+    "productKey": "VK7JG-NPHTM-C97JM-9MPGT-3V66T"
+  },
+  "identity": {
+    "computerName": "WinMintVM",
+    "accountName": "dev",
+    "accountMode": "Local",
+    "autoLogon": true,
+    "passwordSet": true,
+    "passwordIncluded": true,
+    "password": "winmint"
+  },
+  "regional": {
+    "timeZoneId": "",
+    "uiLanguage": "en-US",
+    "systemLocale": "en-US",
+    "uiLanguageFallback": "en-US",
+    "userLocale": "en-US",
+    "inputLocale": "en-US",
+    "homeLocationGeoId": 244
+  },
+  "drivers": {
+    "source": "None",
+    "path": "",
+    "exportHostDrivers": false
+  },
+  "desktop": {
+    "cursorPack": "Windows11Modern",
+    "layers": [
+      "standard"
+    ]
+  },
+  "development": {
+    "editors": [],
+    "browsers": [],
+    "wsl": {
+      "distros": []
+    }
+  },
+  "features": {
+    "launcher": "None"
+  },
+  "updates": {
+    "mode": "None"
+  },
+  "removals": {
+    "aiPolicy": "ServiceableFull"
+  },
+  "posture": {
+    "appearance": {
+      "theme": "dark"
+    },
+    "explorer": {
+      "showFileExtensions": true,
+      "showHiddenFiles": true
+    },
+    "accessibility": {
+      "stickyKeys": "disabled"
+    },
+    "setup": {
+      "dmaInterop": true,
+      "hardwareBypass": false
+    }
+  },
+  "privacy": {
+    "locationServices": "enabled",
+    "telemetryTracing": "disabled",
+    "advertisingId": "disabled",
+    "activityHistory": "disabled"
+  },
+  "diagnostics": {
+    "retainFirstLogonArtifacts": true,
+    "provisioningShellDwellMs": 10000,
+    "wslRuntimeValidation": "skip",
+    "vmGuestBasicConsole": true
+  }
+}
+

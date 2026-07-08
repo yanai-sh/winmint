@@ -1,0 +1,23 @@
+{
+  "phase": "finishing",
+  "groupLabel": "Finishing setup",
+  "taskLabel": "Apply shell pins and release desktop lock",
+  "stepIndex": 6,
+  "stepTotal": 6,
+  "progressPct": 97.5,
+  "progressMode": "determinate",
+  "profileName": "Hyper-V Smoke",
+  "elapsedMs": 540000,
+  "steps": [
+    { "id": "prepare", "label": "Preparing system", "status": "done" },
+    { "id": "region", "label": "Restoring your region", "status": "done" },
+    { "id": "tools", "label": "Installing tools", "status": "done" },
+    { "id": "dev", "label": "Development environment", "status": "done" },
+    { "id": "desktop", "label": "Desktop and shell", "status": "done" },
+    { "id": "finish", "label": "Finishing setup", "status": "current" }
+  ],
+  "banner": "",
+  "bannerKind": "",
+  "logDir": "C:\\ProgramData\\WinMint\\Logs",
+  "updatedAt": "2026-06-28T12:05:00.0000000+00:00"
+}

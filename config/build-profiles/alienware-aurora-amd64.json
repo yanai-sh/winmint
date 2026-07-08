@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "06/16/2026 05:51:28",
+  "profileName": "Alienware Aurora Gaming",
+  "keep": {
+    "edge": false,
+    "gaming": false,
+    "copilot": false
+  },
+  "source": {
+    "isoPath": "",
+    "architecture": "amd64"
+  },
+  "target": {
+    "device": "ThisPC",
+    "editionMode": "TargetLicense",
+    "edition": "",
+    "diskMode": "Manual",
+    "diskLayout": {
+      "preset": "",
+      "roundingGb": 64,
+      "windowsMinimumGb": 256,
+      "windowsRecommendedGb": 384,
+      "linuxMinimumGb": 128,
+      "linuxRecommendedGb": 256,
+      "efiMb": 1024,
+      "msrMb": 16,
+      "recoveryMb": 1024
+    },
+    "formFactor": "Desktop",
+    "productKey": ""
+  },
+  "identity": {
+    "computerName": "AURORA",
+    "accountName": "dev",
+    "accountMode": "MicrosoftOobe",
+    "autoLogon": false,
+    "passwordSet": false,
+    "passwordIncluded": false
+  },
+  "regional": {
+    "timeZoneId": "Israel Standard Time",
+    "uiLanguage": "en-US",
+    "systemLocale": "he-IL",
+    "uiLanguageFallback": "en-US",
+    "userLocale": "he-IL",
+    "inputLocale": "en-US;he-IL",
+    "homeLocationGeoId": 117,
+    "secondaryInputLanguages": "Auto"
+  },
+  "drivers": {
+    "source": "None",
+    "path": "",
+    "exportHostDrivers": false
+  },
+  "desktop": {
+    "cursorPack": "Windows11Modern",
+    "layers": [
+      "nilesoft"
+    ]
+  },
+  "development": {
+    "editors": [
+      "neovim",
+      "zed"
+    ],
+    "browsers": [
+      "helium",
+      "zen-browser"
+    ],
+    "wsl": {
+      "distros": []
+    }
+  },
+  "features": {
+    "launcher": "None",
+    "liveInstallAudit": false,
+    "phoneLink": false
+  },
+  "updates": {
+    "mode": "None",
+    "targetFeatureVersion": "25H2",
+    "releaseCadence": "BRelease",
+    "includeOptionalPreviews": false,
+    "payloadRoot": "",
+    "qualitySecurity": true,
+    "dynamicUpdate": true,
+    "defender": true,
+    "dotnet": true,
+    "provisionedApps": true
+  },
+  "removals": {
+    "aiPolicy": "ServiceableFull"
+  },
+  "posture": {
+    "appearance": {
+      "theme": "dark"
+    },
+    "explorer": {
+      "showFileExtensions": true,
+      "showHiddenFiles": true
+    },
+    "accessibility": {
+      "stickyKeys": "disabled"
+    },
+    "setup": {
+      "dmaInterop": true,
+      "hardwareBypass": false
+    }
+  },
+  "privacy": {
+    "locationServices": "enabled",
+    "telemetryTracing": "disabled",
+    "advertisingId": "disabled",
+    "activityHistory": "disabled"
+  }
+}
+

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# WinMint — pre-commit hook
+#
+# Runs tools/validation/Validate.ps1 (PowerShell parser, schema validators, asset presence,
+# JSON/XML parse checks). Blocks the commit if validation fails.
+#
+# Skipped: PSScriptAnalyzer (run manually via -RunAnalyzer before tagging a release).
+# The validator does HEAD-probe a few GitHub URLs (Windhawk preset) — if you commit
+# offline, those probes will fail and the hook blocks. Bypass with: git commit --no-verify
+#
+# Enable once per clone:    git config core.hooksPath .githooks
+set -euo pipefail
+
+# Resolve a usable pwsh.exe. On Windows this normally just works via PATH.
+# On WSL we shouldn't typically reach this hook (git's hooks run in the OS where
+# `git commit` was invoked); guard anyway.
+if ! command -v pwsh >/dev/null 2>&1; then
+    echo "pre-commit: pwsh.exe not found on PATH; install PowerShell 7 or skip via 'git commit --no-verify'." >&2
+    exit 1
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+script="$repo_root/tools/validation/Validate.ps1"
+
+if [ ! -f "$script" ]; then
+    echo "pre-commit: $script not found; skipping validation." >&2
+    exit 0
+fi
+
+echo "pre-commit: running tools/validation/Validate.ps1 -SkipAnalyzer"
+pwsh -NoProfile -ExecutionPolicy Bypass -File "$script" -SkipAnalyzer

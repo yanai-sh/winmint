@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "06/16/2026 05:51:28",
+  "profileName": "ThinkPad Return",
+  "keep": {
+    "edge": true,
+    "gaming": false,
+    "copilot": false
+  },
+  "source": {
+    "isoPath": "",
+    "architecture": "amd64"
+  },
+  "target": {
+    "device": "DifferentPC",
+    "editionMode": "TargetLicense",
+    "edition": "",
+    "diskMode": "AutoWipeDisk0",
+    "diskLayout": {
+      "preset": "",
+      "roundingGb": 64,
+      "windowsMinimumGb": 256,
+      "windowsRecommendedGb": 384,
+      "linuxMinimumGb": 128,
+      "linuxRecommendedGb": 256,
+      "efiMb": 1024,
+      "msrMb": 16,
+      "recoveryMb": 1024
+    },
+    "formFactor": "Laptop",
+    "productKey": ""
+  },
+  "identity": {
+    "computerName": "THINKPAD",
+    "accountName": "dev",
+    "accountMode": "MicrosoftOobe",
+    "autoLogon": false,
+    "passwordSet": false,
+    "passwordIncluded": false
+  },
+  "regional": {
+    "timeZoneId": "",
+    "uiLanguage": "en-US",
+    "systemLocale": "en-US",
+    "uiLanguageFallback": "en-US",
+    "userLocale": "en-US",
+    "inputLocale": "en-US",
+    "homeLocationGeoId": 244,
+    "secondaryInputLanguages": "Auto"
+  },
+  "drivers": {
+    "source": "None",
+    "path": "",
+    "exportHostDrivers": false
+  },
+  "desktop": {
+    "cursorPack": "Windows11Modern",
+    "layers": [
+      "standard"
+    ]
+  },
+  "development": {
+    "editors": [],
+    "browsers": [],
+    "wsl": {
+      "distros": [
+        "Ubuntu"
+      ]
+    }
+  },
+  "features": {
+    "launcher": "None",
+    "liveInstallAudit": false,
+    "phoneLink": false
+  },
+  "updates": {
+    "mode": "None",
+    "targetFeatureVersion": "25H2",
+    "releaseCadence": "BRelease",
+    "includeOptionalPreviews": false,
+    "payloadRoot": "",
+    "qualitySecurity": true,
+    "dynamicUpdate": true,
+    "defender": true,
+    "dotnet": true,
+    "provisionedApps": true
+  },
+  "removals": {
+    "aiPolicy": "ServiceableFull"
+  },
+  "posture": {
+    "appearance": {
+      "theme": "dark"
+    },
+    "explorer": {
+      "showFileExtensions": true,
+      "showHiddenFiles": true
+    },
+    "accessibility": {
+      "stickyKeys": "disabled"
+    },
+    "setup": {
+      "dmaInterop": true,
+      "hardwareBypass": false
+    }
+  },
+  "privacy": {
+    "locationServices": "enabled",
+    "telemetryTracing": "disabled",
+    "advertisingId": "disabled",
+    "activityHistory": "disabled"
+  }
+}
+

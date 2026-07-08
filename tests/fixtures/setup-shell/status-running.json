@@ -1,0 +1,23 @@
+{
+  "phase": "running",
+  "groupLabel": "Installing tools",
+  "taskLabel": "Validate agent profile",
+  "stepIndex": 3,
+  "stepTotal": 6,
+  "progressPct": 28.33,
+  "progressMode": "determinate",
+  "profileName": "Hyper-V Smoke",
+  "elapsedMs": 125000,
+  "steps": [
+    { "id": "prepare", "label": "Preparing system", "status": "done" },
+    { "id": "region", "label": "Restoring your region", "status": "done" },
+    { "id": "tools", "label": "Installing tools", "status": "current" },
+    { "id": "dev", "label": "Development environment", "status": "pending" },
+    { "id": "desktop", "label": "Desktop and shell", "status": "pending" },
+    { "id": "finish", "label": "Finishing setup", "status": "pending" }
+  ],
+  "banner": "",
+  "bannerKind": "",
+  "logDir": "C:\\ProgramData\\WinMint\\Logs",
+  "updatedAt": "2026-06-28T12:00:00.0000000+00:00"
+}

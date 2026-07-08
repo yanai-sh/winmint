@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WinMint Setup</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <div class="shell-brand">
+      <img
+        class="hero"
+        id="hero"
+        src="winmint_hero_ui.png"
+        alt="WinMint"
+      />
+    </div>
+
+    <div class="shell-dock">
+      <div class="shell-status">
+        <p class="group-label" id="group-label" aria-live="polite">Setting up</p>
+        <p class="task-label" id="task-label">Working…</p>
+      </div>
+      <div class="step-panel" id="step-panel">
+        <ul class="step-list" id="step-list" aria-label="Remaining setup steps"></ul>
+      </div>
+      <p class="shell-meta" id="shell-meta" aria-live="polite"></p>
+    </div>
+
+    <p class="banner hidden" id="banner"></p>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

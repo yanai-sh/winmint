@@ -1,0 +1,40 @@
+{
+  "catalogVersion": 2,
+  "serviceableAppxPrefixes": [
+    "Microsoft.Windows.Copilot",
+    "Microsoft.Copilot",
+    "MicrosoftWindows.Client.WebExperience",
+    "MicrosoftWindows.Client.AIX",
+    "MicrosoftWindows.Client.CoPilot",
+    "MicrosoftWindows.Client.CoreAI",
+    "Microsoft.Windows.Ai.Copilot.Provider",
+    "Microsoft.Windows.AIHub",
+    "Microsoft.Edge.GameAssist"
+  ],
+  "optionalFeatures": [
+    "Recall"
+  ],
+  "servicesToDisable": [
+    "WSAIFabricSvc"
+  ],
+  "scheduledTaskPatternsToDisable": [
+    "Recall",
+    "WindowsAI",
+    "Copilot"
+  ],
+  "aggressiveExperimentalPatterns": [
+    "WindowsWorkload.Data.Analysis.Stx.*",
+    "WindowsWorkload.Manager.*",
+    "WindowsWorkload.PSOnnxRuntime.Stx.*",
+    "WindowsWorkload.PSTokenizer.Stx.*",
+    "WindowsWorkload.QueryBlockList.*",
+    "WindowsWorkload.QueryProcessor.*",
+    "WindowsWorkload.SemanticText.*",
+    "WindowsWorkload.Data.ContentExtraction.Stx.*",
+    "WindowsWorkload.ScrRegDetection.*",
+    "WindowsWorkload.TextRecognition.Stx.*",
+    "WindowsWorkload.ImageSearch.*",
+    "WindowsWorkload.ImageTextSearch.*",
+    "WindowsWorkload.ImageContentModeration.*"
+  ]
+}

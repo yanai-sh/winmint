@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winmint.yanai.sh/schemas/winmint.runtimestate.schema.json",
+  "title": "WinMint Runtime State",
+  "description": "Unified live runtime state at %LOCALAPPDATA%\\WinMint\\runtime-state.json. Dual-written during Track 3 strangler migration; replaces setup-shell-control.json + setup-shell-status.json for readers. Agent resume remains in state.json.",
+  "type": "object",
+  "required": ["schemaVersion", "updatedAt", "control", "display", "agent"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updatedAt": { "type": "string" },
+    "control": {
+      "type": "object",
+      "required": ["phase", "startedAt", "updatedAt", "profileName", "message", "preAgentStage"],
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": ["running", "finishing", "complete", "failed", "reboot"]
+        },
+        "startedAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "profileName": { "type": "string" },
+        "message": { "type": "string" },
+        "preAgentStage": {
+          "type": "string",
+          "enum": ["", "locked", "region", "defaults", "agent"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "display": {
+      "type": "object",
+      "required": [
+        "phase",
+        "groupLabel",
+        "taskLabel",
+        "stepIndex",
+        "stepTotal",
+        "progressPct",
+        "progressMode",
+        "profileName",
+        "elapsedMs",
+        "steps",
+        "banner",
+        "bannerKind",
+        "logDir",
+        "updatedAt"
+      ],
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": ["running", "finishing", "complete", "failed", "reboot"]
+        },
+        "groupLabel": { "type": "string" },
+        "taskLabel": { "type": "string" },
+        "stepIndex": { "type": "integer", "minimum": 0 },
+        "stepTotal": { "type": "integer", "minimum": 1 },
+        "progressPct": { "type": "number", "minimum": 0, "maximum": 100 },
+        "progressMode": { "type": "string", "enum": ["determinate", "indeterminate"] },
+        "profileName": { "type": "string" },
+        "elapsedMs": { "type": "integer", "minimum": 0 },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "label", "status"],
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" },
+              "status": { "type": "string", "enum": ["pending", "current", "done"] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "banner": { "type": "string" },
+        "bannerKind": { "type": "string", "enum": ["", "warn", "fail"] },
+        "logDir": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "agent": {
+      "type": "object",
+      "required": ["runStatus", "currentStep", "runningSteps", "completedSteps", "totalSteps", "updatedAt"],
+      "properties": {
+        "runStatus": { "type": "string" },
+        "currentStep": { "type": "string" },
+        "runningSteps": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "completedSteps": { "type": "integer", "minimum": 0 },
+        "totalSteps": { "type": "integer", "minimum": 0 },
+        "updatedAt": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

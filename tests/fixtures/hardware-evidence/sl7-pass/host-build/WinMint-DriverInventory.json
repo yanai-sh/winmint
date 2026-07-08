@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "inventories": [
+    {
+      "strategy": "SurfaceMsiSafe",
+      "excluded": [
+        { "class": "firmware", "reason": "firmware drivers are never injected offline by default" }
+      ]
+    }
+  ]
+}

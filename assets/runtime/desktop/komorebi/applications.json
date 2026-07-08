@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LGUG2Z/komorebi/master/schema.asc.json",
+  "Windows": {
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "Taskmgr.exe",
+        "matching_strategy": "Equals"
+      },
+      {
+        "kind": "Exe",
+        "id": "ScreenClippingHost.exe",
+        "matching_strategy": "Equals"
+      },
+      {
+        "kind": "Class",
+        "id": "Windows.UI.Core.CoreWindow",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "Settings": {
+    "tray_and_multi_window": [
+      {
+        "kind": "Exe",
+        "id": "SystemSettings.exe",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "Shell": {
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "ShellExperienceHost.exe",
+        "matching_strategy": "Equals"
+      },
+      {
+        "kind": "Exe",
+        "id": "StartMenuExperienceHost.exe",
+        "matching_strategy": "Equals"
+      }
+    ]
+  }
+}

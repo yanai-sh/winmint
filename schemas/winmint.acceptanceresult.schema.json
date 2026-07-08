@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winmint.yanai.sh/schemas/winmint.acceptanceresult.schema.json",
+  "title": "WinMint Acceptance Result",
+  "description": "Verdict record written to acceptance-result.json (VM or hardware evidence).",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "verdict",
+    "plumbingVerdict",
+    "evidenceVerdict",
+    "evidenceDir",
+    "startedAt",
+    "signalChecks"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "acceptanceMode": { "type": "string", "enum": ["vm", "hardware"] },
+    "machineId": { "type": "string" },
+    "machineLabel": { "type": "string" },
+    "vmName": { "type": "string" },
+    "profile": { "type": "string" },
+    "acceptanceTier": { "type": "string", "enum": ["Full", "Smoke", "Auto", "Hardware"] },
+    "phase": { "type": "string" },
+    "startedAt": { "type": "string" },
+    "finishedAt": { "type": "string" },
+    "reachable": { "type": "boolean" },
+    "verdict": { "type": "string", "enum": ["pass", "fail", "unknown"] },
+    "plumbingVerdict": { "type": "string", "enum": ["pass", "fail", "unknown"] },
+    "evidenceVerdict": { "type": "string", "enum": ["pass", "fail", "unknown"] },
+    "evidenceDir": { "type": "string" },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "reasons": { "type": "array", "items": { "type": "string" } },
+    "copiedArtifacts": { "type": "array", "items": { "type": "string" } },
+    "missingArtifacts": { "type": "array", "items": { "type": "string" } },
+    "checks": { "type": "array", "items": { "type": "string" } },
+    "firstLogon": { "$ref": "#/$defs/firstLogon" },
+    "inspect": { "type": ["object", "null"], "additionalProperties": true },
+    "setupShell": { "$ref": "#/$defs/setupShell" },
+    "removalDrift": { "type": ["object", "null"], "additionalProperties": true },
+    "liveInstallAudit": { "$ref": "#/$defs/liveInstallAudit" },
+    "signalChecks": { "$ref": "#/$defs/signalChecks" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "acceptanceMode": { "const": "hardware" } } },
+      "then": { "required": ["machineId", "acceptanceTier"] }
+    },
+    {
+      "if": { "properties": { "acceptanceMode": { "const": "vm" } } },
+      "then": { "required": ["vmName"] }
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "signal": {
+      "type": "object",
+      "required": ["id", "ok", "severity"],
+      "properties": {
+        "id": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "severity": { "type": "string", "enum": ["plumbing", "evidence"] },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "signalChecks": {
+      "type": "object",
+      "required": ["plumbingOk", "evidenceOk", "signals", "plumbingFailures", "evidenceFailures"],
+      "properties": {
+        "plumbingOk": { "type": "boolean" },
+        "evidenceOk": { "type": "boolean" },
+        "signals": { "type": "array", "items": { "$ref": "#/$defs/signal" } },
+        "plumbingFailures": { "type": "array", "items": { "type": "string" } },
+        "evidenceFailures": { "type": "array", "items": { "type": "string" } },
+        "failures": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "firstLogon": {
+      "type": ["object", "null"],
+      "properties": {
+        "status": { "type": "string" },
+        "warningSteps": { "type": "array", "items": { "type": "string" } },
+        "error": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "liveInstallAudit": {
+      "type": ["object", "null"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "path": { "type": "string" },
+        "errorCount": { "type": "integer", "minimum": 0 },
+        "warningCount": { "type": "integer", "minimum": 0 },
+        "error": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "setupShell": {
+      "type": "object",
+      "properties": {
+        "plumbingOk": { "type": "boolean" },
+        "evidenceOk": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winmint.yanai.sh/schemas/winmint.diagnosticsoverlay.schema.json",
+  "title": "WinMint Diagnostics Overlay",
+  "description": "Harness-only diagnostics injected at VM acceptance time; not part of user-authored BuildProfile intent.",
+  "type": "object",
+  "required": [
+    "retainFirstLogonArtifacts",
+    "provisioningShellDwellMs",
+    "wslRuntimeValidation",
+    "vmGuestBasicConsole"
+  ],
+  "properties": {
+    "retainFirstLogonArtifacts": { "type": "boolean" },
+    "provisioningShellDwellMs": { "type": "integer", "minimum": 0 },
+    "wslRuntimeValidation": { "type": "string", "enum": ["full", "skip"] },
+    "vmGuestBasicConsole": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

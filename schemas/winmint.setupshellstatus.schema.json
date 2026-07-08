@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winmint.yanai.sh/schemas/winmint.setupshellstatus.schema.json",
+  "title": "WinMint Setup Shell Status",
+  "description": "Display state written by WinMintSetupShell.Status.ps1 to %LOCALAPPDATA%\\WinMint\\setup-shell-status.json. Consumed by WinMintSetupShell.exe only.",
+  "type": "object",
+  "required": [
+    "phase",
+    "groupLabel",
+    "taskLabel",
+    "stepIndex",
+    "stepTotal",
+    "progressPct",
+    "progressMode",
+    "profileName",
+    "elapsedMs",
+    "steps",
+    "banner",
+    "bannerKind",
+    "logDir",
+    "updatedAt"
+  ],
+  "properties": {
+    "phase": {
+      "type": "string",
+      "enum": ["running", "finishing", "complete", "failed", "reboot"]
+    },
+    "groupLabel": { "type": "string" },
+    "taskLabel": { "type": "string" },
+    "stepIndex": { "type": "integer", "minimum": 0 },
+    "stepTotal": { "type": "integer", "minimum": 1 },
+    "progressPct": { "type": "number", "minimum": 0, "maximum": 100 },
+    "progressMode": { "type": "string", "enum": ["determinate", "indeterminate"] },
+    "profileName": { "type": "string" },
+    "elapsedMs": { "type": "integer", "minimum": 0 },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "current", "done"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "banner": { "type": "string" },
+    "bannerKind": { "type": "string", "enum": ["", "warn", "fail"] },
+    "logDir": { "type": "string" },
+    "updatedAt": { "type": "string" }
+  },
+  "additionalProperties": false
+}

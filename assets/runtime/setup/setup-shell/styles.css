@@ -1,0 +1,171 @@
+:root {
+  color-scheme: dark;
+  --mica: #11161d;
+  --ink: #f4f7fb;
+  --muted: #b7c0cc;
+  --dim: #8792a1;
+  --accent: #0067c0;
+  --ok: #3dd68c;
+  --warn: #f0c05f;
+  --fail: #ff5f57;
+  --radius: 8px;
+  --font: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --page-bg:
+    radial-gradient(ellipse 80% 50% at 50% 38%, rgba(0, 103, 192, 0.12), transparent 70%),
+    radial-gradient(circle at 50% 100%, rgba(16, 24, 32, 0.9), transparent 55%),
+    linear-gradient(180deg, #080a0e 0%, var(--mica) 100%);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--mica);
+  color: var(--ink);
+  font-family: var(--font);
+}
+
+.shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--page-bg);
+}
+
+.shell-brand {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(24px, 6vh, 48px) clamp(24px, 5vw, 48px) clamp(16px, 3vh, 32px);
+}
+
+.hero {
+  width: min(640px, 92vw);
+  height: auto;
+  max-height: min(160px, 28vh);
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  opacity: 0.96;
+}
+
+.shell-dock {
+  flex: 0 0 auto;
+  padding: 0 clamp(32px, 8vw, 96px) clamp(48px, 10vh, 88px);
+  text-align: left;
+  max-width: min(540px, 92vw);
+}
+
+.shell-status {
+  margin-bottom: 14px;
+}
+
+.group-label {
+  margin: 0 0 6px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--dim) 88%, transparent);
+  line-height: 1.3;
+}
+
+.task-label {
+  margin: 0;
+  font-size: clamp(1rem, 1.55vw, 1.125rem);
+  font-weight: 400;
+  color: var(--ink);
+  line-height: 1.45;
+  max-width: 32ch;
+  text-wrap: balance;
+}
+
+.task-label.is-dim { color: var(--muted); font-weight: 400; }
+.task-label.is-done { color: var(--ok); }
+.task-label.is-warn { color: var(--warn); }
+.task-label.is-fail { color: var(--fail); }
+
+.step-panel {
+  margin: 0 0 10px;
+}
+
+.step-panel.is-hidden {
+  display: none;
+}
+
+.step-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.step {
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  padding: 1px 0 1px 10px;
+  border-left: 2px solid transparent;
+  color: color-mix(in srgb, var(--dim) 38%, transparent);
+}
+
+.step--current {
+  border-left-color: color-mix(in srgb, var(--accent) 48%, transparent);
+  color: var(--muted);
+}
+
+.step--pending {
+  padding-left: 0;
+  border-left-color: transparent;
+}
+
+.shell-meta {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--dim) 72%, transparent);
+  letter-spacing: 0.01em;
+}
+
+.banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: clamp(48px, 8vh, 72px);
+  margin: 0 auto;
+  width: fit-content;
+  max-width: min(420px, 90vw);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-size: 0.86rem;
+  text-align: center;
+  border: 1px solid transparent;
+}
+
+.banner.warn {
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 22%, transparent);
+}
+
+.banner.fail {
+  background: color-mix(in srgb, var(--fail) 10%, transparent);
+  color: var(--fail);
+  border-color: color-mix(in srgb, var(--fail) 20%, transparent);
+}
+
+.hidden { display: none; }
+
+@media (max-height: 720px) {
+  .hero {
+    max-height: min(120px, 22vh);
+    width: min(520px, 88vw);
+  }
+
+  .shell-dock {
+    padding-bottom: clamp(32px, 8vh, 56px);
+  }
+}

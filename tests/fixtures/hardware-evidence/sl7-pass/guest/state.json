@@ -1,0 +1,9 @@
+{
+  "status": "ok",
+  "version": 1,
+  "steps": {
+    "module:editors": { "status": "ok" },
+    "module:browsers": { "status": "ok" },
+    "module:wsl": { "status": "ok" }
+  }
+}
