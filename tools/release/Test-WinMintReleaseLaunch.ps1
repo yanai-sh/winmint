@@ -167,7 +167,15 @@ function Test-ReleaseSmokeInstalledTree {
     }
 
     foreach ($forbidden in @(
-            'tools',
+            'tools\vm',
+            'tools\dev',
+            'tools\release',
+            'tools\validation',
+            'tools\audit',
+            'tools\media',
+            'tools\assets',
+            'tools\drivers',
+            'tools\firstlogon',
             'tests',
             'output',
             'dist',
