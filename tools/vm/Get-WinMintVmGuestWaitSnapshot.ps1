@@ -7,6 +7,27 @@
     Dot-sourced by WinMint-VmConsole.ps1 and executed on the guest via PowerShell
     Direct (staged + guest pwsh 7). Emits JSON when run as a script.
 #>
+function Read-WinMintGuestJsonSafe {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    for ($i = 0; $i -lt 3; $i++) {
+        try {
+            $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+            $reader = New-Object System.IO.StreamReader($stream)
+            $content = $reader.ReadToEnd()
+            $reader.Close()
+            $stream.Close()
+            if (-not [string]::IsNullOrWhiteSpace($content)) {
+                return $content | ConvertFrom-Json
+            }
+        }
+        catch {
+            Start-Sleep -Milliseconds 100
+        }
+    }
+    return $null
+}
+
 function Get-WinMintVmGuestWaitSnapshot {
     $snapshot = [ordered]@{
         stateExists = $false
@@ -25,19 +46,13 @@ function Get-WinMintVmGuestWaitSnapshot {
 
     $winMintDir = Join-Path $env:LOCALAPPDATA 'WinMint'
     $runtimeStatePath = Join-Path $winMintDir 'runtime-state.json'
-    $runtimeState = $null
-    if (Test-Path -LiteralPath $runtimeStatePath) {
-        try {
-            $runtimeState = Get-Content -LiteralPath $runtimeStatePath -Raw | ConvertFrom-Json
-        }
-        catch { }
-    }
+    $runtimeState = Read-WinMintGuestJsonSafe -Path $runtimeStatePath
 
     $statePath = Join-Path $winMintDir 'state.json'
-    if (Test-Path -LiteralPath $statePath) {
+    $state = Read-WinMintGuestJsonSafe -Path $statePath
+    if ($state) {
         $snapshot.stateExists = $true
         try {
-            $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
             if ($state.run -and $state.run.PSObject.Properties['status']) {
                 $snapshot.runStatus = [string]$state.run.status
             }
@@ -90,9 +105,9 @@ function Get-WinMintVmGuestWaitSnapshot {
 
     if ([string]::IsNullOrWhiteSpace($snapshot.setupPhase)) {
         $controlPath = Join-Path $winMintDir 'setup-shell-control.json'
-        if (Test-Path -LiteralPath $controlPath) {
+        $control = Read-WinMintGuestJsonSafe -Path $controlPath
+        if ($control) {
             try {
-                $control = Get-Content -LiteralPath $controlPath -Raw | ConvertFrom-Json
                 if ($control -and $control.PSObject.Properties['phase']) {
                     $snapshot.setupPhase = [string]$control.phase
                 }
@@ -103,9 +118,9 @@ function Get-WinMintVmGuestWaitSnapshot {
 
     if ($snapshot.setupShellProgressPct -eq 0 -and [string]::IsNullOrWhiteSpace($snapshot.setupShellTaskLabel)) {
         $statusPath = Join-Path $winMintDir 'setup-shell-status.json'
-        if (Test-Path -LiteralPath $statusPath) {
+        $status = Read-WinMintGuestJsonSafe -Path $statusPath
+        if ($status) {
             try {
-                $status = Get-Content -LiteralPath $statusPath -Raw | ConvertFrom-Json
                 if ($status -and $status.PSObject.Properties['progressPct']) {
                     $snapshot.setupShellProgressPct = [int]$status.progressPct
                 }

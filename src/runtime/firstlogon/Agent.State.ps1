@@ -1,5 +1,10 @@
 #Requires -Version 7.6
 
+$runtimeStateScript = Join-Path (Split-Path -Parent $PSScriptRoot) 'WinMint.RuntimeState.ps1'
+if (Test-Path -LiteralPath $runtimeStateScript -PathType Leaf) {
+    . $runtimeStateScript
+}
+
 function Read-AgentJson {
     param([string]$Path, [object]$Fallback)
     Read-WinMintJsonFile -Path $Path -Fallback $Fallback -OnError {
@@ -11,7 +16,16 @@ function Save-AgentState {
     param([object]$State)
     $ctx = Get-WinMintAgentContext
     Save-WinMintAtomicJson -Path $ctx.StatePath -Data $State -Depth 12 -RemoveDestinationFirst
-    Import-WinMintRuntimeStateModule
+    # Splash status projection is best-effort: never fail agent modules if RuntimeState is missing.
+    if (-not (Get-Command Import-WinMintRuntimeStateModule -ErrorAction SilentlyContinue)) {
+        $runtimeStateScript = Join-Path (Split-Path -Parent $PSScriptRoot) 'WinMint.RuntimeState.ps1'
+        if (Test-Path -LiteralPath $runtimeStateScript -PathType Leaf) {
+            . $runtimeStateScript
+        }
+    }
+    if (Get-Command Import-WinMintRuntimeStateModule -ErrorAction SilentlyContinue) {
+        Import-WinMintRuntimeStateModule
+    }
     if (Get-Command Write-WinMintRuntimeState -ErrorAction SilentlyContinue) {
         Write-WinMintRuntimeState -Agent (New-WinMintRuntimeStateAgentDisplay -AgentState $State)
     }

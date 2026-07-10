@@ -18,6 +18,9 @@ $r = Invoke-WinMintVmGuestCommand -VMName 'WinMint-ARM-Test' -Credential $cred -
             $i = $_ | Get-ScheduledTaskInfo
             '{0}|state={1}|last={2}|result={3}' -f $_.TaskName, $_.State, $i.LastRunTime, $i.LastTaskResult
         })
+        setupShell = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq 'WinMintSetupShell.exe' } |
+            ForEach-Object { '{0}|{1}|{2}' -f $_.Name, $_.ProcessId, $_.CommandLine })
         procs = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -match '^(pwsh|powershell|WinMintSetupShell)\.exe$' -and ($_.CommandLine -match 'FirstLogon|WinMintAgent|WinMintSetupShell') } |
             ForEach-Object { '{0}|{1}|{2}' -f $_.Name, $_.ProcessId, $_.CommandLine })
