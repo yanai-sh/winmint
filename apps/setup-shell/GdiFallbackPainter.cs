@@ -14,7 +14,7 @@ internal static class GdiFallbackPainter
             return;
         }
 
-        var canvas = ParseColor(tokens.Canvas, 0x001D1611);
+        var canvas = ParseColor("#000000", 0x00000000);
         var ink = ParseColor(tokens.Ink, 0x00FBF7F4);
         var muted = ParseColor(tokens.Muted, 0x00CCC0B7);
         var dim = ParseColor(tokens.Dim, 0x00A19287);
@@ -27,60 +27,11 @@ internal static class GdiFallbackPainter
         NativeMethods.FillRect(hdc, ref full, bg);
         NativeMethods.DeleteObject(bg);
 
-        var visibleCount = CountVisibleSteps(status);
-        var metrics = SplashLayout.Resolve(width, height, tokens.Layout, visibleCount);
-        var dockLeft = (int)metrics.DockLeft;
-        var dockWidth = (int)metrics.DockWidth;
-        var groupTop = (int)metrics.DockTop;
-        var taskTop = groupTop + (int)(metrics.GroupLineHeight + metrics.GroupToTaskGap);
-        var stepsTop = taskTop + (int)(metrics.TaskLineHeight * 2f + metrics.TaskToStepsGap);
-
         NativeMethods.SetBkMode(hdc, NativeMethods.TRANSPARENT);
-        DrawLine(hdc, status.GroupLabel, dockLeft, groupTop, dockWidth, BlendColor(dim, canvas, 0.88f), 11, true);
-        DrawLine(hdc, status.TaskLabel, dockLeft, taskTop, dockWidth, ink, 15, false);
-
-        if (status.Steps is not null)
-        {
-            var y = stepsTop;
-            foreach (var step in status.Steps)
-            {
-                if (string.Equals(step.Status, "done", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var labelLeft = dockLeft;
-                var labelWidth = dockWidth;
-                var isCurrent = string.Equals(step.Status, "current", StringComparison.OrdinalIgnoreCase);
-                if (isCurrent)
-                {
-                    var bar = new NativeMethods.RECT
-                    {
-                        Left = dockLeft,
-                        Top = y + 2,
-                        Right = dockLeft + 2,
-                        Bottom = y + Math.Max(6, (int)metrics.StepLineHeight - 2)
-                    };
-                    var barBrush = NativeMethods.CreateSolidBrush(BlendColor(accent, canvas, 0.48f));
-                    NativeMethods.FillRect(hdc, ref bar, barBrush);
-                    NativeMethods.DeleteObject(barBrush);
-                    labelLeft = dockLeft + 10;
-                    labelWidth = dockWidth - 10;
-                }
-
-                var textColor = isCurrent ? muted : BlendColor(dim, canvas, 0.38f);
-                var label = string.IsNullOrWhiteSpace(step.Label) ? step.Id : step.Label;
-                DrawLine(hdc, label, labelLeft, y, labelWidth, textColor, 11, false);
-                y += (int)metrics.StepLineHeight;
-            }
-        }
-
-        var metaText = SplashPainter.FormatShellMeta(status);
-        if (!string.IsNullOrWhiteSpace(metaText))
-        {
-            var metaTop = stepsTop + (int)(metrics.StepCount * metrics.StepLineHeight + metrics.StepsToMetaGap);
-            DrawLine(hdc, metaText, dockLeft, metaTop, dockWidth, BlendColor(dim, canvas, 0.72f), 11, false);
-        }
+        var text = "WinMint";
+        var fontSize = 24;
+        var textY = (int)(height * 0.45f - fontSize);
+        DrawLine(hdc, text, 0, textY, width, muted, fontSize, true);
 
         if (!string.IsNullOrWhiteSpace(status.Banner))
         {
@@ -90,8 +41,9 @@ internal static class GdiFallbackPainter
                 "warn" => warn,
                 _ => muted
             };
-            var bannerTop = Math.Max(24, height - (int)metrics.BannerOffsetBottom);
-            DrawLine(hdc, status.Banner, dockLeft, bannerTop, dockWidth, bannerColor, 13, false);
+            var bannerOffsetBottom = (int)Math.Max(48, height * 0.08f);
+            var bannerTop = Math.Max(24, height - bannerOffsetBottom);
+            DrawLine(hdc, status.Banner, 0, bannerTop, width, bannerColor, 13, false);
         }
     }
 
@@ -149,7 +101,7 @@ internal static class GdiFallbackPainter
             "Segoe UI");
         var old = NativeMethods.SelectObject(hdc, font);
         var rect = new NativeMethods.RECT { Left = x, Top = y, Right = x + maxWidth, Bottom = y + heightPx * 4 };
-        NativeMethods.DrawTextW(hdc, text, text.Length, ref rect, NativeMethods.DT_LEFT | NativeMethods.DT_TOP | NativeMethods.DT_WORDBREAK | NativeMethods.DT_NOPREFIX);
+        NativeMethods.DrawTextW(hdc, text, text.Length, ref rect, NativeMethods.DT_CENTER | NativeMethods.DT_TOP | NativeMethods.DT_WORDBREAK | NativeMethods.DT_NOPREFIX);
         NativeMethods.SelectObject(hdc, old);
         NativeMethods.DeleteObject(font);
     }

@@ -9,6 +9,8 @@
     already-elevated shell (no UAC relaunch). Reuses cached ISO/checkpoint when
     fingerprints match (SmartBuild on by default). Use -PushOnly for fast
     FirstLogon iteration (~2-8 min). Pass -ForceBuild only when image staging changed.
+    Managed runs default to headless (-NoObserve): PS Direct polling does not need
+    VMConnect; pass -Observe to open VMConnect Basic for manual splash watching.
 
 .EXAMPLE
     pwsh -NoProfile -File .\tools\vm\Start-WinMintVmAcceptanceManaged.ps1 `
@@ -32,13 +34,20 @@ param(
     [string]$Tier = 'Auto',
     [int]$TimeoutMinutes = 0,
     [int]$TimeBudgetMinutes = 0,
+    [string]$SourceIso = '',
     [switch]$NoObserve,
+    [switch]$Observe,
     [switch]$NoLogViewer,
     [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'WinMint-VmConsole.ps1')
+
+if ($Observe) { $NoObserve = $false }
+elseif (-not $PSBoundParameters.ContainsKey('NoObserve')) {
+    $NoObserve = $true
+}
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -133,6 +142,7 @@ if ($UseCheckpoint) { $childArgs += '-UseCheckpoint' }
 if ($PushOnly) { $childArgs += '-PushOnly' }
 if ($SmartBuild) { $childArgs += '-SmartBuild' }
 if ($FullImage) { $childArgs += '-FullImage' }
+if (-not [string]::IsNullOrWhiteSpace($SourceIso)) { $childArgs += @('-SourceIso', $SourceIso) }
 if ($NoObserve) { $childArgs += '-NoObserve' }
 
 $proc = Start-Process -FilePath $pwsh -ArgumentList $childArgs -WorkingDirectory $repoRoot -PassThru -WindowStyle Hidden
@@ -163,6 +173,7 @@ $handle = [ordered]@{
     currentPhase = 'starting'
     timeBudgetMinutes = $timeBudget
     logViewerOpened = [bool]$logViewerOpened
+    observeMode = if ($NoObserve) { 'headless' } else { 'basic' }
     pollCommand = "pwsh -NoProfile -File .\tools\vm\Get-WinMintVmAcceptanceStatus.ps1"
     tailCommand = "Get-Content -LiteralPath '$runLog' -Wait -Tail 30"
 }

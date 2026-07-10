@@ -18,6 +18,24 @@ function New-WinMintAcceptanceSignalResult {
     }
 }
 
+function Test-WinMintAcceptanceResultHasProperty {
+    param($Object, [string]$Name)
+
+    if ($Object -is [System.Collections.IDictionary]) { return $Object.Contains($Name) }
+    return [bool]$Object.PSObject.Properties[$Name]
+}
+
+function Get-WinMintAcceptanceResultProperty {
+    param($Object, [string]$Name)
+
+    if ($Object -is [System.Collections.IDictionary]) {
+        if ($Object.Contains($Name)) { return $Object[$Name] }
+        return $null
+    }
+    if ($Object.PSObject.Properties[$Name]) { return $Object.$Name }
+    return $null
+}
+
 function Complete-WinMintAcceptanceResult {
     [CmdletBinding()]
     param(
@@ -36,8 +54,8 @@ function Complete-WinMintAcceptanceResult {
         else { $evidenceFails.Add($label) | Out-Null }
     }
 
-    if ($Result.PSObject.Properties['signalChecks']) {
-        $existing = $Result.signalChecks
+    if (Test-WinMintAcceptanceResultHasProperty -Object $Result -Name 'signalChecks') {
+        $existing = Get-WinMintAcceptanceResultProperty -Object $Result -Name 'signalChecks'
         foreach ($f in @($existing.plumbingFailures)) {
             if ($plumbingFails -notcontains $f) { $plumbingFails.Add([string]$f) | Out-Null }
         }
@@ -47,11 +65,13 @@ function Complete-WinMintAcceptanceResult {
     }
 
     $plumbingPass = ($plumbingFails.Count -eq 0)
-    if ($Result.PSObject.Properties['reachable']) {
-        $plumbingPass = $plumbingPass -and [bool]$Result.reachable
+    if (Test-WinMintAcceptanceResultHasProperty -Object $Result -Name 'reachable') {
+        $plumbingPass = $plumbingPass -and [bool](Get-WinMintAcceptanceResultProperty -Object $Result -Name 'reachable')
     }
-    if ($Result.firstLogon) {
-        $plumbingPass = $plumbingPass -and ([string]$Result.firstLogon.status -eq 'ok')
+    $firstLogon = Get-WinMintAcceptanceResultProperty -Object $Result -Name 'firstLogon'
+    if ($firstLogon) {
+        $firstLogonStatus = if ($firstLogon -is [System.Collections.IDictionary]) { [string]$firstLogon['status'] } else { [string]$firstLogon.status }
+        $plumbingPass = $plumbingPass -and ($firstLogonStatus -eq 'ok')
     }
 
     $evidencePass = ($evidenceFails.Count -eq 0)
@@ -59,8 +79,14 @@ function Complete-WinMintAcceptanceResult {
     $passed = if ($tier -eq 'Smoke') { $plumbingPass } elseif ($tier -eq 'Hardware') { $plumbingPass -and $evidencePass } else { ($plumbingPass -and $evidencePass) }
 
     $Result.schemaVersion = 1
-    if (-not $Result.PSObject.Properties['acceptanceMode']) {
-        $Result.acceptanceMode = if ($Result.machineId) { 'hardware' } else { 'vm' }
+    if (-not (Test-WinMintAcceptanceResultHasProperty -Object $Result -Name 'acceptanceMode')) {
+        $machineId = Get-WinMintAcceptanceResultProperty -Object $Result -Name 'machineId'
+        if ($Result -is [System.Collections.IDictionary]) {
+            $Result['acceptanceMode'] = if ($machineId) { 'hardware' } else { 'vm' }
+        }
+        else {
+            $Result | Add-Member -NotePropertyName acceptanceMode -NotePropertyValue $(if ($machineId) { 'hardware' } else { 'vm' }) -Force
+        }
     }
     $Result.acceptanceTier = $tier
     $Result.plumbingVerdict = if ($plumbingPass) { 'pass' } else { 'fail' }
@@ -74,8 +100,10 @@ function Complete-WinMintAcceptanceResult {
         failures = @($plumbingFails + $evidenceFails)
     }
     $Result.verdict = if ($passed) { 'pass' } else { 'fail' }
-    if (-not $Result.PSObject.Properties['finishedAt'] -or [string]::IsNullOrWhiteSpace([string]$Result.finishedAt)) {
-        $Result.finishedAt = (Get-Date).ToString('o')
+    $finishedAt = Get-WinMintAcceptanceResultProperty -Object $Result -Name 'finishedAt'
+    if ([string]::IsNullOrWhiteSpace([string]$finishedAt)) {
+        if ($Result -is [System.Collections.IDictionary]) { $Result['finishedAt'] = (Get-Date).ToString('o') }
+        else { $Result.finishedAt = (Get-Date).ToString('o') }
     }
     return $Result
 }

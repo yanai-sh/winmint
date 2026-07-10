@@ -431,6 +431,21 @@ try {
     catch { Write-WinMintFirstLogonError "No-trace purge schedule failed: $_" }
 }
 
+function Get-WinMintFirstLogonAppxSystemExemptPrefixes {
+    $setupProfile = Read-WinMintFirstLogonSetupProfile
+    if ($setupProfile -and $setupProfile.PSObject.Properties['appxSystemExemptPrefixes']) {
+        return @($setupProfile.appxSystemExemptPrefixes | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    }
+    # ponytail: fallback ceiling — matches config/appx-removal.json systemExemptPrefixes for push-only ISOs without restage.
+    return @(
+        'Microsoft.Windows.PeopleExperienceHost'
+        'Windows.CBSPreview'
+        'Microsoft.XboxGameCallableUI'
+        'Microsoft.Windows.ParentalControls'
+        'MicrosoftWindows.Client.CBS'
+    )
+}
+
 function Invoke-WinMintFirstLogonAppxCleanup {
     $setupProfile = Read-WinMintFirstLogonSetupProfile
     $prefixes = @()
@@ -444,6 +459,11 @@ function Invoke-WinMintFirstLogonAppxCleanup {
     if ($aiPrefixes.Count -gt 0) {
         $prefixes = @($prefixes | Where-Object { $_ -notin $aiPrefixes })
     }
+    $systemExempt = @(Get-WinMintFirstLogonAppxSystemExemptPrefixes)
+    $skippedSystemExempt = @($prefixes | Where-Object { $_ -in $systemExempt })
+    if ($systemExempt.Count -gt 0) {
+        $prefixes = @($prefixes | Where-Object { $_ -notin $systemExempt })
+    }
     if ($prefixes.Count -eq 0) {
         return
     }
@@ -452,6 +472,7 @@ function Invoke-WinMintFirstLogonAppxCleanup {
     $result = [ordered]@{
         generatedAt = Get-Date -Format o
         prefixes = @($prefixes)
+        skippedSystemExempt = @($skippedSystemExempt)
         removedProvisioned = @()
         removedInstalled = @()
         failed = @()

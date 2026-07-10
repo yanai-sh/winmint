@@ -160,6 +160,7 @@ function New-WinMintBuildConfig {
         -AiPrefixes @($aiRemoval.AppxPrefixes) `
         -KeepCopilot:$keepCopilot `
         -PhoneLink:$enablePhoneLink)
+    $appxSystemExemptPrefixes = @(Get-WinMintAppxSystemExemptPrefixes)
 
     $editionMode = Get-WinMintProfileEditionMode -Settings $target
     $edition = [string](Get-WinMintProfileSetting $target 'edition' '')
@@ -255,6 +256,7 @@ function New-WinMintBuildConfig {
             Enabled = -not [string]::IsNullOrWhiteSpace($dotfilesRepository)
         }
         AppxPackages = @($appxRemovalPrefixes)
+        AppxSystemExemptPrefixes = @($appxSystemExemptPrefixes)
         AppxCatalogVersion = [int](Get-WinMintProfileSetting $appxCatalog 'catalogVersion' 1)
         PrimaryAssumption = 'Windows11HomeSingleLanguageEnUS'
         AiRemoval = $aiRemoval

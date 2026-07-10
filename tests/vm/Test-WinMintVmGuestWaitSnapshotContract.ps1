@@ -37,6 +37,14 @@ if ($body -notmatch 'setupShellProgressPct') {
     throw 'Get-WinMintVmGuestWaitSnapshot must expose setupShellProgressPct.'
 }
 
+if ($body -notmatch 'IsNullOrWhiteSpace\(\$runtimeRunStatus\)') {
+    throw 'Get-WinMintVmGuestWaitSnapshot must not override state.json runStatus with empty runtime agent runStatus.'
+}
+
+if ($body -notmatch '\$runtimeTotalSteps -gt 0') {
+    throw 'Get-WinMintVmGuestWaitSnapshot must only override step counts when runtime agent totalSteps is populated.'
+}
+
 $consoleText = Get-Content -LiteralPath (Join-Path $repoRoot 'tools\vm\WinMint-VmConsole.ps1') -Raw
 if ($consoleText -notmatch 'Get-WinMintVmGuestWaitSnapshot\.ps1') {
     throw 'WinMint-VmConsole.ps1 must dot-source tools/vm/Get-WinMintVmGuestWaitSnapshot.ps1.'

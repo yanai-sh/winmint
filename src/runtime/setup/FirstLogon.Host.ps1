@@ -188,17 +188,27 @@ function Invoke-WinMintFirstLogonBootstrapSession {
             $exe = Resolve-WinMintPowerShellHost
             $taskName = 'WinMintFirstLogonElevated'
             $entryPath = $ctx.EntryPath
-            $tr = "`"$exe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$entryPath`""
-            & schtasks.exe /Create /TN $taskName /TR $tr /SC ONCE /ST 23:59 /RL HIGHEST /F 2>&1 | Out-Null
-            $elevOk = ($LASTEXITCODE -eq 0)
-            if ($elevOk) { & schtasks.exe /Run /TN $taskName 2>&1 | Out-Null; $elevOk = ($LASTEXITCODE -eq 0) }
-            if ($elevOk) {
-                "$(Get-Date -Format 'o') FirstLogon re-launched elevated via scheduled task '$taskName'; standard-token instance exiting." |
-                    Out-File -LiteralPath $logPath -Append
-                try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
-                return @{ ShouldExit = $true; ExitCode = 0 }
+            $modeVal = if ($ctx.ContainsKey('AgentMode') -and -not [string]::IsNullOrWhiteSpace([string]$ctx.AgentMode)) {
+                [string]$ctx.AgentMode
+            } else {
+                'Auto'
             }
-            Stop-WinMintFirstLogonUnelevated -Reason 'Self-elevation scheduled task could not be created/started; aborting before machine-wide setup so RunOnce can retry.'
+            $psArg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$entryPath`" -AgentMode $modeVal"
+            # schtasks needs \"...\" around Program Files paths; Register-ScheduledTask Interactive alone stays filtered/UAC.
+            & schtasks.exe /Delete /TN $taskName /F 2>$null | Out-Null
+            $tr = '\"' + $exe + '\" ' + ($psArg -replace '"', '\"')
+            $createOut = & schtasks.exe /Create /TN $taskName /TR $tr /SC ONCE /ST 23:59 /RL HIGHEST /F 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "schtasks /Create failed ($LASTEXITCODE): $createOut"
+            }
+            $runOut = & schtasks.exe /Run /TN $taskName 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "schtasks /Run failed ($LASTEXITCODE): $runOut"
+            }
+            "$(Get-Date -Format 'o') FirstLogon re-launched elevated via scheduled task '$taskName'; standard-token instance exiting." |
+                Out-File -LiteralPath $logPath -Append
+            try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
+            return @{ ShouldExit = $true; ExitCode = 0 }
         }
         catch { Stop-WinMintFirstLogonUnelevated -Reason "Self-elevation failed: $_; aborting before machine-wide setup so RunOnce can retry." }
     }

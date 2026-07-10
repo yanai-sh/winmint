@@ -53,12 +53,14 @@ if (-not (Test-Path -LiteralPath $testPath)) { throw "Guest acceptance tests not
 
 Import-Module Pester -MinimumVersion 5.5.0 -ErrorAction Stop
 $pesterConfig = New-PesterConfiguration
-$pesterConfig.Run.Path = $testPath
 $pesterConfig.Run.PassThru = $true
-$pesterConfig.Data.Data = @{
-    GuestSignals = $guestSignals
-    Tier = $AcceptanceTier
-    WslDistros = $WslDistros
+$pesterConfig.Output.Verbosity = 'None'
+$pesterConfig.Run.Container = New-PesterContainer -Path $testPath -Data @{
+    TestData = @{
+        GuestSignals = $guestSignals
+        Tier = $AcceptanceTier
+        WslDistros = $WslDistros
+    }
 }
 $pesterResult = Invoke-Pester -Configuration $pesterConfig
 

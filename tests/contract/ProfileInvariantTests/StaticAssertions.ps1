@@ -900,6 +900,31 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
             Add-SmokeFailure "AppX systemExemptPrefixes catalog must include '$expectedExempt'."
         }
     }
+    $profileText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Config\Profile.ps1') -Raw
+    $cleanupText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Cleanup.ps1') -Raw
+    foreach ($expected in @('Get-WinMintAppxSystemExemptPrefixes', 'systemExempt')) {
+        if ($profileText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "AppX build resolver should filter '$expected' prefixes."
+        }
+    }
+    foreach ($expected in @('Get-WinMintFirstLogonAppxSystemExemptPrefixes', 'skippedSystemExempt')) {
+        if ($cleanupText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon live AppX cleanup should skip '$expected'."
+        }
+    }
+    $desktopText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Desktop.ps1') -Raw
+    if ($desktopText -notmatch 'Invoke-WinMintProvisioningDismissStartMenu') {
+        Add-SmokeFailure 'FirstLogon desktop reload should dismiss Start via Invoke-WinMintProvisioningDismissStartMenu.'
+    }
+    if ($desktopText -match 'Invoke-WinMintSetupShellDismissStartMenu') {
+        Add-SmokeFailure 'FirstLogon desktop reload must not call missing Invoke-WinMintSetupShellDismissStartMenu.'
+    }
+    $runtimeStateText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\WinMint.RuntimeState.ps1') -Raw
+    foreach ($expected in @('Get-WinMintAgentStateNodeValue', 'Get-WinMintAgentStateStepEntries')) {
+        if ($runtimeStateText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Runtime state projection should use '$expected' for hashtable-safe agent reads."
+        }
+    }
     $driftScript = Join-Path $root 'tools\vm\Test-WinMintGuestRemovalDrift.ps1'
     if (-not (Test-Path -LiteralPath $driftScript)) {
         Add-SmokeFailure 'Expected tools\vm\Test-WinMintGuestRemovalDrift.ps1 to exist.'
@@ -1004,10 +1029,19 @@ function Assert-LiveInstallAuditIsStaged {
 
 function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
     $firstLogonText = Get-WinMintFirstLogonText
+    $regionText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Region.ps1') -Raw
     foreach ($expected in @('Restore-WinMintDmaRegionalDefaults', 'FirstLogon_RegionalRestore.json', 'Copy-UserInternationalSettingsToSystem', 'restoreLocationServices', 'New-WinMintFirstLogonTransactionPlan', 'FirstLogon.Transaction.ps1')) {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "FirstLogon DMA restore should contain '$expected'."
         }
+    }
+    foreach ($expected in @('Get-WinUserLanguageList', 'primaryLanguageTag', 'uiLanguageOverride')) {
+        if ($regionText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon DMA regional restore should verify configured language via '$expected'."
+        }
+    }
+    if ($regionText -match "Current culture '\`$observedCultureText' does not match restore culture") {
+        Add-SmokeFailure 'FirstLogon DMA regional restore must not gate compliance on immediate Get-Culture alone.'
     }
     if ($firstLogonText -match [regex]::Escape('Get-WinMintFirstLogonNestedProfileValue -Profile')) {
         Add-SmokeFailure 'FirstLogon DMA restore must not call Get-WinMintFirstLogonNestedProfileValue with the old -Profile parameter.'
@@ -2097,6 +2131,10 @@ function Assert-AgentWingetUsesDefaultInstallerSelection {
         'package-manager:winget-bootstrap',
         'package-manager:winget-upgrade-all',
         '0x8A15002C',
+        '0x8A15002D',
+        '-1978335189',
+        'Test-WinMintAgentWingetNoUpgradeAvailable',
+        'No available upgrade found',
         'phase = ''post-main'''
     )) {
         if ($packageManagerText -notmatch [regex]::Escape($expected)) {

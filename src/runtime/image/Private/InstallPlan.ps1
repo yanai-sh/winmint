@@ -122,6 +122,10 @@ function New-WinMintInstallPlanSetupProfile {
     param([Parameter(Mandatory)]$BuildConfig)
 
     $removeEdgeBrowser = (-not [bool]$BuildConfig.Keep.Edge)
+    $appxSystemExemptPrefixes = @()
+    if ($BuildConfig.PSObject.Properties['AppxSystemExemptPrefixes']) {
+        $appxSystemExemptPrefixes = @($BuildConfig.AppxSystemExemptPrefixes)
+    }
 
     [ordered]@{
         schemaVersion = 2
@@ -138,6 +142,7 @@ function New-WinMintInstallPlanSetupProfile {
             password = [string]$BuildConfig.Password
         }
         appxRemovalPrefixes = @($BuildConfig.AppxPackages)
+        appxSystemExemptPrefixes = @($appxSystemExemptPrefixes)
         appxCatalogVersion = [int]$BuildConfig.AppxCatalogVersion
         registryTweaks = @($BuildConfig.RegistryTweaks)
         windowsFeatures = @($BuildConfig.Features)

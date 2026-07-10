@@ -88,6 +88,7 @@ internal sealed class SetupShellHost : IDisposable
 
         MonitorUtil.ApplyFullscreenBounds(_hwnd, bounds);
         NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_SHOW);
+        NativeMethods.ShowCursor(false);
 
         _secondaryCovers = new SecondaryMonitorCover();
         _secondaryCovers.Sync();
@@ -98,6 +99,7 @@ internal sealed class SetupShellHost : IDisposable
 
         PollJson(forceLog: true);
         NativeMethods.SetTimer(_hwnd, NativeMethods.TIMER_ID, (uint)_options.PollMs, nint.Zero);
+        NativeMethods.SetTimer(_hwnd, NativeMethods.ANIM_TIMER_ID, 33, nint.Zero);
     }
 
     public int Run()
@@ -120,7 +122,14 @@ internal sealed class SetupShellHost : IDisposable
         switch (msg)
         {
             case NativeMethods.WM_TIMER:
-                OnTimer();
+                if (wParam == NativeMethods.ANIM_TIMER_ID)
+                {
+                    NativeMethods.InvalidateRect(hWnd, nint.Zero, false);
+                }
+                else if (wParam == NativeMethods.TIMER_ID)
+                {
+                    OnTimer();
+                }
                 return 0;
             case NativeMethods.WM_PAINT:
                 NativeMethods.BeginPaint(hWnd, out var paint);
@@ -150,7 +159,9 @@ internal sealed class SetupShellHost : IDisposable
                 NativeMethods.DestroyWindow(hWnd);
                 return 0;
             case NativeMethods.WM_DESTROY:
+                NativeMethods.ShowCursor(true);
                 NativeMethods.KillTimer(hWnd, NativeMethods.TIMER_ID);
+                NativeMethods.KillTimer(hWnd, NativeMethods.ANIM_TIMER_ID);
                 NativeMethods.PostQuitMessage(0);
                 return 0;
         }
@@ -404,7 +415,7 @@ internal sealed class SetupShellHost : IDisposable
             FontStyle.Normal,
             FontStretch.Normal,
             metrics.GroupFontSize);
-        _groupFormat.TextAlignment = TextAlignment.Leading;
+        _groupFormat.TextAlignment = TextAlignment.Center;
         _groupFormat.ParagraphAlignment = ParagraphAlignment.Near;
 
         _taskFormat = _dwFactory.CreateTextFormat(
@@ -414,7 +425,7 @@ internal sealed class SetupShellHost : IDisposable
             FontStyle.Normal,
             FontStretch.Normal,
             metrics.TaskFontSize);
-        _taskFormat.TextAlignment = TextAlignment.Leading;
+        _taskFormat.TextAlignment = TextAlignment.Center;
         _taskFormat.ParagraphAlignment = ParagraphAlignment.Near;
         _taskFormat.WordWrapping = WordWrapping.Wrap;
 
@@ -425,7 +436,7 @@ internal sealed class SetupShellHost : IDisposable
             FontStyle.Normal,
             FontStretch.Normal,
             metrics.StepFontSize);
-        _stepFormat.TextAlignment = TextAlignment.Leading;
+        _stepFormat.TextAlignment = TextAlignment.Center;
         _stepFormat.ParagraphAlignment = ParagraphAlignment.Near;
 
         _bannerFormat = _dwFactory.CreateTextFormat(
@@ -524,8 +535,8 @@ internal sealed class SetupShellHost : IDisposable
 
         SplashPainter.Paint(
             _renderTarget,
-            width,
-            height,
+            (int)_renderTarget.Size.Width,
+            (int)_renderTarget.Size.Height,
             _tokens,
             _status,
             _heroAsset,

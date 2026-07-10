@@ -119,6 +119,32 @@ function ConvertTo-WinMintVmGuestWaitSnapshot {
     return $Raw
 }
 
+function Get-WinMintVmAgentRunSnapshot {
+    param($Run)
+
+    $snapshot = [ordered]@{
+        status = ''
+        exitCode = 0
+        completedAt = ''
+        failedSteps = @()
+        warningSteps = @()
+        rebootPending = $false
+    }
+    if (-not $Run) { return $snapshot }
+
+    if ($Run.PSObject.Properties['status']) { $snapshot.status = [string]$Run.status }
+    if ($Run.PSObject.Properties['exitCode']) { $snapshot.exitCode = [int]$Run.exitCode }
+    if ($Run.PSObject.Properties['completedAt']) { $snapshot.completedAt = [string]$Run.completedAt }
+    if ($Run.PSObject.Properties['failedSteps'] -and $null -ne $Run.failedSteps) {
+        $snapshot.failedSteps = @($Run.failedSteps)
+    }
+    if ($Run.PSObject.Properties['warningSteps'] -and $null -ne $Run.warningSteps) {
+        $snapshot.warningSteps = @($Run.warningSteps)
+    }
+    if ($Run.PSObject.Properties['rebootPending']) { $snapshot.rebootPending = [bool]$Run.rebootPending }
+    return $snapshot
+}
+
 function Format-WinMintVmWaitProgressLine {
     param(
         $Snapshot,

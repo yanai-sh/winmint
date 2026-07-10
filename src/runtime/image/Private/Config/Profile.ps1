@@ -330,6 +330,14 @@ function Get-WinMintProfileAppxRemovalPrefix {
     Get-WinMintEffectiveAppxRemovalPrefix -Settings $settings
 }
 
+function Get-WinMintAppxSystemExemptPrefixes {
+    $catalog = Get-WinMintAppxRemovalCatalog
+    if ($catalog.PSObject.Properties['systemExemptPrefixes']) {
+        return @($catalog.systemExemptPrefixes | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    }
+    return @()
+}
+
 function Resolve-WinMintBuildAppxRemovalPrefixes {
     param(
         [Parameter(Mandatory)][string[]]$BasePrefixes,
@@ -339,6 +347,10 @@ function Resolve-WinMintBuildAppxRemovalPrefixes {
     )
 
     $prefixes = @($BasePrefixes + @($AiPrefixes) | Where-Object { $_ } | Sort-Object -Unique)
+    $systemExempt = @(Get-WinMintAppxSystemExemptPrefixes)
+    if ($systemExempt.Count -gt 0) {
+        $prefixes = @($prefixes | Where-Object { $_ -notin $systemExempt })
+    }
     if ($KeepCopilot) {
         $prefixes = @($prefixes | Where-Object {
                 $_ -notin @('Microsoft.Copilot', 'Microsoft.Windows.Copilot', 'Microsoft.Windows.AIHub')

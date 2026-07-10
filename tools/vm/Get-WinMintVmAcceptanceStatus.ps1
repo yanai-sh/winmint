@@ -121,10 +121,17 @@ if ($running -and $pidValue -gt 0 -and -not (Test-WinMintVmProcessAlive -Process
 }
 
 if ($running -and $vmMissing) {
-    $running = $false
-    $status = 'failed'
-    $complete = $true
-    if (-not $errorMessage) { $errorMessage = "VM '$vmName' not found (deleted or never created)." }
+    $buildPhase = ([string]$state.currentPhase -match '(?i)^Build') -or
+        (@($significantTail) -match '(?i)=== Build ===|Stopping running test VM|Removed prior|Reusing cached ISO')
+    if ($buildPhase) {
+        $vmState = 'pending-recreate'
+    }
+    else {
+        $running = $false
+        $status = 'failed'
+        $complete = $true
+        if (-not $errorMessage) { $errorMessage = "VM '$vmName' not found (deleted or never created)." }
+    }
 }
 
 $complete = ($status -in @('passed', 'failed'))

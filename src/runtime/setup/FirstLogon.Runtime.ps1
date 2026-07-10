@@ -41,6 +41,7 @@ function Invoke-WinMintFirstLogonSetupPhase {
         'bootstrap-session' = {
             param([hashtable]$Context, $Step)
             [void]$Step
+            Set-WinMintFirstLogonContextAgentMode -AgentMode ([string]$Context.AgentMode)
             $boot = Invoke-WinMintFirstLogonBootstrapSession
             if ($boot.ShouldExit) {
                 $Context.EarlyExit = [int]$boot.ExitCode
@@ -177,7 +178,6 @@ function Invoke-WinMintFirstLogonSetupPhase {
                 Invoke-WinMintFirstLogonReg -Arguments @('delete', 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce', '/v', 'WinMintFirstLogon', '/f') -AllowFailure
                 Disable-WinMintAutoAdminLogon
                 Clear-WinMintAutoLogonPassword
-                & schtasks.exe /Delete /TN 'WinMintFirstLogonElevated' /F 2>&1 | Out-Null
                 Remove-Item -LiteralPath (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_self-elevation.flag') -Force -ErrorAction SilentlyContinue
                 Remove-Item -LiteralPath (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_pwsh7.flag') -Force -ErrorAction SilentlyContinue
             }
@@ -199,18 +199,26 @@ function Invoke-WinMintFirstLogonSetupPhase {
         }
     }
 
-    Invoke-WinMintFirstLogonTransactionPlan -Plan $transactionPlan -Context $context -StepAdapters $transactionAdapters | Out-Null
+    try {
+        Invoke-WinMintFirstLogonTransactionPlan -Plan $transactionPlan -Context $context -StepAdapters $transactionAdapters | Out-Null
 
-    if ($null -ne $context.EarlyExit) {
+        if ($null -ne $context.EarlyExit) {
+            try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
+            return [int]$context.EarlyExit
+        }
+
+        $state = $context.State
+        $agentExitCode = [int]$context.AgentExitCode
+        Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'FirstLogon state write failed' -ScriptBlock { Save-WinMintFirstLogonState -State $state }
+        "$(Get-Date -Format 'o') FirstLogon.ps1 end" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
-        return [int]$context.EarlyExit
+        if ($agentExitCode -ne 0) { return $agentExitCode }
+        return 0
     }
-
-    $state = $context.State
-    $agentExitCode = [int]$context.AgentExitCode
-    Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'FirstLogon state write failed' -ScriptBlock { Save-WinMintFirstLogonState -State $state }
-    "$(Get-Date -Format 'o') FirstLogon.ps1 end" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
-    try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
-    if ($agentExitCode -ne 0) { return $agentExitCode }
-    return 0
+    finally {
+        $ctxObj = Get-WinMintFirstLogonContext
+        if ($ctxObj -and $ctxObj.PSObject.Properties['Elevated'] -and $ctxObj.Elevated) {
+            & schtasks.exe /Delete /TN 'WinMintFirstLogonElevated' /F 2>&1 | Out-Null
+        }
+    }
 }

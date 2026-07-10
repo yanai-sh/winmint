@@ -41,6 +41,7 @@ param(
     [string]$Tier = 'Auto',
     [int]$TimeoutMinutes = 0,
     [int]$TimeBudgetMinutes = 0,
+    [string]$SourceIso = '',
     [string]$EvidenceRoot,
     [string]$EvidenceDir,
     [switch]$WindowsTerminal,
@@ -302,6 +303,7 @@ elseif ($runBuildBoot) {
     $buildArgs += '-AcceptanceRun'
     if ($FullImage) { $buildArgs += '-FullImage' }
     if ($Tier -ne 'Auto') { $buildArgs += @('-Tier', $Tier) }
+    if (-not [string]::IsNullOrWhiteSpace($SourceIso)) { $buildArgs += @('-SourceIso', $SourceIso) }
     $buildArgs += @('-AgentMode', $agentMode)
     $buildExit = Invoke-WinMintVmLoggedCommand -LogPath $runLog -FilePath $pwsh -ArgumentList $buildArgs
     if ($buildExit -ne 0) { throw "Build/boot phase failed with exit code $buildExit." }
@@ -489,14 +491,7 @@ if ($runWait) {
 
     Save-WinMintVmSetupShellWatch -Watch $script:setupShellWatch -Path $setupShellWatchPath
 
-    $result.firstLogon = [ordered]@{
-        status = [string]$finalState.run.status
-        exitCode = $finalState.run.exitCode
-        completedAt = [string]$finalState.run.completedAt
-        failedSteps = @($finalState.run.failedSteps)
-        warningSteps = @($finalState.run.warningSteps)
-        rebootPending = [bool]$finalState.run.rebootPending
-    }
+    $result.firstLogon = Get-WinMintVmAgentRunSnapshot -Run $finalState.run
     if ($result.firstLogon.status -eq 'ok') {
         Say "FirstLogon completed (exitCode $($result.firstLogon.exitCode))." 'Green'
         Write-WinMintVmRunEvent -Kind 'milestone' -Payload @{ label = 'firstlogon-complete'; status = 'ok' }
@@ -526,14 +521,7 @@ elseif ($runInspect -or $runEvidence) {
         $result.reachable = $true
         if (-not [string]::IsNullOrWhiteSpace($stateText)) {
             $stateObj = $stateText | ConvertFrom-Json
-            $result.firstLogon = [ordered]@{
-                status = [string]$stateObj.run.status
-                exitCode = $stateObj.run.exitCode
-                completedAt = [string]$stateObj.run.completedAt
-                failedSteps = @($stateObj.run.failedSteps)
-                warningSteps = @($stateObj.run.warningSteps)
-                rebootPending = [bool]$stateObj.run.rebootPending
-            }
+            $result.firstLogon = Get-WinMintVmAgentRunSnapshot -Run $stateObj.run
         }
     }
     catch {
@@ -562,7 +550,15 @@ if ($runInspect) {
                 }
         }
         if ($inspectExit -ne 0) { throw "inspector exited $inspectExit" }
-        $inspectPayload = ($inspectLines -join "`n") | ConvertFrom-Json
+        $jsonStart = -1
+        for ($i = 0; $i -lt $inspectLines.Count; $i++) {
+            if ([string]$inspectLines[$i] -match '^\s*\{') {
+                $jsonStart = $i
+                break
+            }
+        }
+        if ($jsonStart -lt 0) { throw 'inspector did not emit JSON payload' }
+        $inspectPayload = (($inspectLines[$jsonStart..($inspectLines.Count - 1)] -join "`n") | ConvertFrom-Json)
         $result.inspect = if ($inspectPayload.inspect) { $inspectPayload.inspect } else { $inspectPayload }
         $inspectOk = [bool]$inspectPayload.pester.passed
         if (-not $inspectOk -and $inspectPayload.pester) {
@@ -662,8 +658,11 @@ if ($runEvidence) {
         $result.reasons += 'Evidence phase ran without FirstLogon state; run -Phase Wait first.'
     }
 
-    $warnSteps = @($result.firstLogon.warningSteps | Where-Object { $_ })
-    $warned = $warnSteps.Count -gt 0
+    $warnSteps = @()
+    if ($result.firstLogon) {
+        $warnSteps = @((Get-WinMintVmAgentRunSnapshot -Run $result.firstLogon).warningSteps) | Where-Object { $_ }
+    }
+    $warned = @($warnSteps).Count -gt 0
     if ($warned) {
         $result.warnings += "Advisory FirstLogon step(s): $($warnSteps -join ', ')."
     }

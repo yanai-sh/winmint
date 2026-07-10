@@ -13,6 +13,36 @@ function Read-WinMintRuntimeState {
     catch { return $null }
 }
 
+function Get-WinMintAgentStateNodeValue {
+    param(
+        $Node,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    if ($null -eq $Node) { return $null }
+    if ($Node -is [System.Collections.IDictionary]) {
+        if (-not $Node.Contains($Name)) { return $null }
+        return $Node[$Name]
+    }
+    $prop = $Node.PSObject.Properties[$Name]
+    if (-not $prop) { return $null }
+    return $prop.Value
+}
+
+function Get-WinMintAgentStateStepEntries {
+    param($Steps)
+
+    if (-not $Steps) { return @() }
+    if ($Steps -is [System.Collections.IDictionary]) {
+        return @($Steps.GetEnumerator() | ForEach-Object {
+                [pscustomobject]@{ Name = [string]$_.Key; Value = $_.Value }
+            })
+    }
+    return @($Steps.PSObject.Properties | ForEach-Object {
+            [pscustomobject]@{ Name = [string]$_.Name; Value = $_.Value }
+        })
+}
+
 function New-WinMintRuntimeStateAgentDisplay {
     param([object]$AgentState)
 
@@ -27,20 +57,18 @@ function New-WinMintRuntimeStateAgentDisplay {
 
     if (-not $AgentState) { return $display }
 
-    if ($AgentState.run -and $AgentState.run.PSObject.Properties['status']) {
-        $display.runStatus = [string]$AgentState.run.status
+    $runStatus = Get-WinMintAgentStateNodeValue -Node $AgentState.run -Name 'status'
+    if (-not [string]::IsNullOrWhiteSpace([string]$runStatus)) {
+        $display.runStatus = [string]$runStatus
     }
 
-    if ($AgentState.steps) {
-        foreach ($prop in $AgentState.steps.PSObject.Properties) {
-            $display.totalSteps++
-            $status = if ($prop.Value -and $prop.Value.PSObject.Properties['status']) {
-                [string]$prop.Value.status
-            }
-            else { 'pending' }
-            if ($status -in @('ok', 'skipped')) { $display.completedSteps++ }
-            if ($status -eq 'running') { $display.runningSteps += [string]$prop.Name }
-        }
+    foreach ($entry in @(Get-WinMintAgentStateStepEntries -Steps $AgentState.steps)) {
+        $display.totalSteps++
+        $status = Get-WinMintAgentStateNodeValue -Node $entry.Value -Name 'status'
+        if ([string]::IsNullOrWhiteSpace([string]$status)) { $status = 'pending' }
+        else { $status = [string]$status }
+        if ($status -in @('ok', 'skipped')) { $display.completedSteps++ }
+        if ($status -eq 'running') { $display.runningSteps += [string]$entry.Name }
     }
 
     if (@($display.runningSteps).Count -gt 0) {

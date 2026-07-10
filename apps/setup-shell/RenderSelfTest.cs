@@ -59,7 +59,7 @@ internal static class RenderSelfTest
                 FontStyle.Normal,
                 FontStretch.Normal,
                 metrics.GroupFontSize);
-            groupFormat.TextAlignment = TextAlignment.Leading;
+            groupFormat.TextAlignment = TextAlignment.Center;
             groupFormat.ParagraphAlignment = ParagraphAlignment.Near;
 
             using var taskFormat = dwFactory.CreateTextFormat(
@@ -69,7 +69,7 @@ internal static class RenderSelfTest
                 FontStyle.Normal,
                 FontStretch.Normal,
                 metrics.TaskFontSize);
-            taskFormat.TextAlignment = TextAlignment.Leading;
+            taskFormat.TextAlignment = TextAlignment.Center;
             taskFormat.ParagraphAlignment = ParagraphAlignment.Near;
             taskFormat.WordWrapping = WordWrapping.Wrap;
 
@@ -80,7 +80,7 @@ internal static class RenderSelfTest
                 FontStyle.Normal,
                 FontStretch.Normal,
                 metrics.StepFontSize);
-            stepFormat.TextAlignment = TextAlignment.Leading;
+            stepFormat.TextAlignment = TextAlignment.Center;
             stepFormat.ParagraphAlignment = ParagraphAlignment.Near;
 
             using var bannerFormat = dwFactory.CreateTextFormat(

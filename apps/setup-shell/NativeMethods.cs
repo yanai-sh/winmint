@@ -26,6 +26,7 @@ internal static partial class NativeMethods
     public const int WM_DPICHANGED = 0x02E0;
     public const int PM_REMOVE = 0x0001;
     public const uint TIMER_ID = 1;
+    public const uint ANIM_TIMER_ID = 2;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct MSG
@@ -52,6 +53,9 @@ internal static partial class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(nint hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern int ShowCursor(bool bShow);
 
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(nint hWnd);
@@ -159,6 +163,7 @@ internal static partial class NativeMethods
     public const byte CLEARTYPE_QUALITY = 5;
     public const byte DEFAULT_PITCH = 0;
     public const uint DT_LEFT = 0x0000;
+    public const uint DT_CENTER = 0x0001;
     public const uint DT_TOP = 0x0000;
     public const uint DT_WORDBREAK = 0x0010;
     public const uint DT_NOPREFIX = 0x0800;

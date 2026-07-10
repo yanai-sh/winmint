@@ -41,6 +41,13 @@ Describe 'Setup shell status pump wiring' {
     }
 }
 
+Describe 'Runtime state projection' {
+    It 'Test-WinMintRuntimeStateAgentDisplay.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-WinMintRuntimeStateAgentDisplay.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+}
+
 Describe 'VM acceptance harness contracts' {
     It 'guest wait snapshot avoids Win32_Process enumeration' {
         & (Join-Path $script:Root 'tests\vm\Test-WinMintVmGuestWaitSnapshotContract.ps1')

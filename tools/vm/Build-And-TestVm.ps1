@@ -43,6 +43,7 @@ param(
     [string]$AgentMode = 'Auto',
     [ValidateSet('Auto', 'Full', 'Smoke')]
     [string]$Tier = 'Auto',
+    [string]$SourceIso = '',
     [switch]$SkipOfflineVerify
 )
 
@@ -169,8 +170,20 @@ if (-not $builtIso) {
     # and the VM loop runs many times - install/FirstLogon behavior is identical, only
     # the final image size differs. Pass -FullImage for a production-quality ISO.
     Write-Host "Building ISO from profile ($imageQuality image): $resolvedProfile"
-    if ($FullImage) { & $cli build $resolvedProfile -Yes }
-    else { & $cli build $resolvedProfile -Yes -FastImage }
+    $buildCliArgs = @($resolvedProfile, '-Yes')
+    if (-not $FullImage) { $buildCliArgs += '-FastImage' }
+    if (-not [string]::IsNullOrWhiteSpace($SourceIso)) {
+        $resolvedSourceIso = if ([IO.Path]::IsPathRooted($SourceIso)) { $SourceIso } else { Join-Path $repoRoot $SourceIso }
+        if (-not (Test-Path -LiteralPath $resolvedSourceIso -PathType Leaf)) {
+            throw "Source ISO not found: $resolvedSourceIso"
+        }
+        if ((Get-Item -LiteralPath $resolvedSourceIso).Length -lt 1MB) {
+            throw "Source ISO appears invalid (too small): $resolvedSourceIso"
+        }
+        $buildCliArgs += @('-SourceIso', $resolvedSourceIso)
+        Write-Host "Using source ISO override: $resolvedSourceIso"
+    }
+    & $cli build @buildCliArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed (exit code $LASTEXITCODE). See the WinMint build report in .\output."
     }

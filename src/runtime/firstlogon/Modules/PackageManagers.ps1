@@ -198,6 +198,7 @@ function Install-WinMintAgentStarshipPrompt {
 
 # ponytail: partial --all failure ceiling — only APPINSTALLER_CLI_ERROR_UPDATE_ALL_HAS_FAILURE is softened.
 $script:WinMintWingetPartialUpgradeExitCode = -1978335188
+$script:WinMintWingetNoUpgradeExitCode = -1978335189
 $script:WinMintWingetBootstrapPackageIds = @(
     'Microsoft.AppInstaller'
     'Microsoft.WindowsTerminal'
@@ -229,6 +230,12 @@ function Test-WinMintAgentWingetPartialUpgradeFailure {
     param([Parameter(Mandatory)][string]$ErrorText)
 
     return ($ErrorText -match 'exited\s+-1978335188\b' -or $ErrorText -match '0x8A15002C')
+}
+
+function Test-WinMintAgentWingetNoUpgradeAvailable {
+    param([Parameter(Mandatory)][string]$ErrorText)
+
+    return ($ErrorText -match 'exited\s+-1978335189\b' -or $ErrorText -match '0x8A15002D' -or $ErrorText -match 'No available upgrade found')
 }
 
 function Invoke-WinMintAgentWingetBootstrapUpgrades {
@@ -266,6 +273,19 @@ function Invoke-WinMintAgentWingetBootstrapUpgrades {
             Write-AgentEvent -Type 'step' -Status 'ok' -Step $key -Message "$command completed."
         }
         catch {
+            if (Test-WinMintAgentWingetNoUpgradeAvailable -ErrorText $_.Exception.Message) {
+                $State.steps[$key] = @{
+                    status = 'ok'
+                    updatedAt = (Get-Date -Format o)
+                    command = $command
+                    packageId = $packageId
+                    reason = 'already-current'
+                }
+                Save-AgentState -State $State
+                Write-AgentEvent -Type 'step' -Status 'ok' -Step $key -Message "$command already current."
+                Write-AgentLog "$command already current (non-blocking): $($_.Exception.Message)"
+                continue
+            }
             $State.steps[$key] = @{
                 status = 'failed'
                 updatedAt = (Get-Date -Format o)

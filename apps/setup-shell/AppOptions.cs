@@ -7,8 +7,8 @@ public sealed class AppOptions
     public string ControlPath { get; set; } = "";
     public string RuntimeStatePath { get; set; } = "";
     public int PollMs { get; set; } = 1500;
-    public int MinStartDwellMs { get; set; } = 2500;
-    public int MinCompleteDwellMs { get; set; } = 2500;
+    public int MinStartDwellMs { get; set; } = 5000;
+    public int MinCompleteDwellMs { get; set; } = 5000;
     public bool EnableLog { get; set; }
     public bool RenderTest { get; set; }
     public bool Preview { get; set; }

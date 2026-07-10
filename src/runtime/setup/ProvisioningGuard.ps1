@@ -133,9 +133,9 @@ function Start-WinMintProvisioningHost {
     Stop-WinMintSetupShellHostProcesses
     Start-Sleep -Milliseconds 750
 
-    if ($MinStartDwellMs -le 0) { $MinStartDwellMs = 2500 }
-    if ($MinCompleteDwellMs -le 0) { $MinCompleteDwellMs = 2500 }
-    if ($MinStartDwellMs -eq 2500) {
+    if ($MinStartDwellMs -le 0) { $MinStartDwellMs = 5000 }
+    if ($MinCompleteDwellMs -le 0) { $MinCompleteDwellMs = 5000 }
+    if ($MinStartDwellMs -eq 5000) {
         $dwellOverride = Get-WinMintSetupProvisioningShellDwellOverrideMs
         if ($dwellOverride) {
             $MinStartDwellMs = $dwellOverride

@@ -39,3 +39,11 @@ function Set-WinMintFirstLogonContextElevated {
     $context.Elevated = [bool]$Elevated
     $script:FirstLogonContext = $context
 }
+
+function Set-WinMintFirstLogonContextAgentMode {
+    param([string]$AgentMode)
+
+    $context = Get-WinMintFirstLogonContext
+    $context.AgentMode = [string]$AgentMode
+    $script:FirstLogonContext = $context
+}

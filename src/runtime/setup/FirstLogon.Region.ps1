@@ -178,9 +178,31 @@ function Restore-WinMintDmaRegionalDefaults {
     $observedTimeZone = $null
     $observedHomeLocation = $null
     $observedCulture = $null
+    $observedPrimaryLanguageTag = ''
+    $observedUiLanguageOverride = ''
     try { $observedTimeZone = Get-TimeZone } catch { $errors.Add("Time zone verification failed: $_") | Out-Null }
     try { $observedHomeLocation = Get-WinHomeLocation } catch { $errors.Add("Home location verification failed: $_") | Out-Null }
     try { $observedCulture = Get-Culture } catch { $errors.Add("Culture verification failed: $_") | Out-Null }
+    try {
+        if (Get-Command Get-WinUserLanguageList -ErrorAction SilentlyContinue) {
+            $languageList = @(Get-WinUserLanguageList -ErrorAction Stop)
+            if ($languageList.Count -gt 0) {
+                $observedPrimaryLanguageTag = [string]$languageList[0].LanguageTag
+            }
+        }
+    }
+    catch {
+        $errors.Add("Primary language list verification failed: $_") | Out-Null
+    }
+    try {
+        if (Get-Command Get-WinUILanguageOverride -ErrorAction SilentlyContinue) {
+            $uiOverride = Get-WinUILanguageOverride -ErrorAction Stop
+            if ($uiOverride) { $observedUiLanguageOverride = [string]$uiOverride }
+        }
+    }
+    catch {
+        $errors.Add("UI language override verification failed: $_") | Out-Null
+    }
 
     $observedGeoIdText = if ($observedHomeLocation) { [string]([int]$observedHomeLocation.GeoId) } else { '0' }
     $observedTimeZoneText = if ($observedTimeZone) { [string]$observedTimeZone.Id } else { '' }
@@ -191,8 +213,12 @@ function Restore-WinMintDmaRegionalDefaults {
     if (-not [string]::IsNullOrWhiteSpace($restoreTimeZoneId) -and (-not $observedTimeZone -or [string]$observedTimeZone.Id -ne $restoreTimeZoneId)) {
         $errors.Add("Current time zone '$observedTimeZoneText' does not match restore time zone '$restoreTimeZoneId'.") | Out-Null
     }
-    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale) -and (-not $observedCulture -or [string]$observedCulture.Name -ne $restoreUserLocale)) {
-        $errors.Add("Current culture '$observedCultureText' does not match restore culture '$restoreUserLocale'.") | Out-Null
+    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale)) {
+        $languageConfigured = (-not [string]::IsNullOrWhiteSpace($observedPrimaryLanguageTag) -and $observedPrimaryLanguageTag -eq $restoreUserLocale)
+        $overrideConfigured = (-not [string]::IsNullOrWhiteSpace($observedUiLanguageOverride) -and $observedUiLanguageOverride -eq $restoreUserLocale)
+        if (-not $languageConfigured -and -not $overrideConfigured) {
+            $errors.Add("Configured display language '$observedPrimaryLanguageTag' / UI override '$observedUiLanguageOverride' does not match restore culture '$restoreUserLocale'.") | Out-Null
+        }
     }
 
     $report = [ordered]@{
@@ -209,6 +235,8 @@ function Restore-WinMintDmaRegionalDefaults {
         observed = [ordered]@{
             timeZoneId = if ($observedTimeZone) { [string]$observedTimeZone.Id } else { '' }
             culture = if ($observedCulture) { [string]$observedCulture.Name } else { '' }
+            primaryLanguageTag = $observedPrimaryLanguageTag
+            uiLanguageOverride = $observedUiLanguageOverride
             homeLocationGeoId = if ($observedHomeLocation) { [int]$observedHomeLocation.GeoId } else { 0 }
             homeLocation = if ($observedHomeLocation) { [string]$observedHomeLocation.HomeLocation } else { '' }
             tzautoupdate = Get-WinMintFirstLogonServiceSnapshot -Name 'tzautoupdate'

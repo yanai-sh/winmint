@@ -74,20 +74,38 @@ function Get-WinMintVmGuestWaitSnapshot {
     }
 
     if ($runtimeState -and $runtimeState.agent) {
-        if ($runtimeState.agent.PSObject.Properties['runStatus']) {
-            $snapshot.runStatus = [string]$runtimeState.agent.runStatus
+        $runtimeRunStatus = if ($runtimeState.agent.PSObject.Properties['runStatus']) {
+            [string]$runtimeState.agent.runStatus
+        } else { '' }
+        if (-not [string]::IsNullOrWhiteSpace($runtimeRunStatus)) {
+            $snapshot.runStatus = $runtimeRunStatus
         }
-        if ($runtimeState.agent.PSObject.Properties['currentStep']) {
-            $snapshot.currentStep = [string]$runtimeState.agent.currentStep
+
+        $runtimeCurrentStep = if ($runtimeState.agent.PSObject.Properties['currentStep']) {
+            [string]$runtimeState.agent.currentStep
+        } else { '' }
+        if (-not [string]::IsNullOrWhiteSpace($runtimeCurrentStep)) {
+            $snapshot.currentStep = $runtimeCurrentStep
         }
-        if ($runtimeState.agent.PSObject.Properties['completedSteps']) {
-            $snapshot.completedSteps = [int]$runtimeState.agent.completedSteps
+
+        $runtimeTotalSteps = if ($runtimeState.agent.PSObject.Properties['totalSteps']) {
+            [int]$runtimeState.agent.totalSteps
+        } else { 0 }
+        if ($runtimeTotalSteps -gt 0) {
+            $snapshot.totalSteps = $runtimeTotalSteps
+            if ($runtimeState.agent.PSObject.Properties['completedSteps']) {
+                $snapshot.completedSteps = [int]$runtimeState.agent.completedSteps
+            }
         }
-        if ($runtimeState.agent.PSObject.Properties['totalSteps']) {
-            $snapshot.totalSteps = [int]$runtimeState.agent.totalSteps
-        }
+
         if ($runtimeState.agent.PSObject.Properties['runningSteps']) {
-            $snapshot.runningSteps = @($runtimeState.agent.runningSteps)
+            $runtimeRunningSteps = @($runtimeState.agent.runningSteps | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            if ($runtimeRunningSteps.Count -gt 0) {
+                $snapshot.runningSteps = $runtimeRunningSteps
+                if ([string]::IsNullOrWhiteSpace($snapshot.currentStep)) {
+                    $snapshot.currentStep = [string]$runtimeRunningSteps[0]
+                }
+            }
         }
     }
 

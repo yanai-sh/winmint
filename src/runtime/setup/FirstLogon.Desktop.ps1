@@ -342,7 +342,7 @@ function Invoke-WinMintFirstLogonReloadExplorerShell {
             Start-Sleep -Milliseconds 200
         }
         Start-Sleep -Milliseconds 750
-        Invoke-WinMintSetupShellDismissStartMenu
+        Invoke-WinMintProvisioningDismissStartMenu
     }
     catch {
         Write-WinMintFirstLogonError "Explorer reload for Start pins failed: $_"
