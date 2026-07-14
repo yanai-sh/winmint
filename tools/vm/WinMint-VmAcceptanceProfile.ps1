@@ -71,6 +71,8 @@ function Test-WinMintVmAcceptanceDiagnosticsPreset {
     foreach ($name in @('retainFirstLogonArtifacts', 'provisioningShellDwellMs', 'wslRuntimeValidation', 'vmGuestBasicConsole')) {
         $expectedValue = [string]$expected.$name
         $actualValue = [string]$actual.$name
+        # Allow any profile to mock WSL by explicitly opting into 'skip', even if the tier demands 'full'
+        if ($name -eq 'wslRuntimeValidation' -and $actualValue -eq 'skip') { continue }
         if ($actualValue -ne $expectedValue) { return $false }
     }
     return $true

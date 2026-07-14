@@ -364,6 +364,28 @@
       "intent": "Stop the Connected User Experiences/DiagTrack and SQM/CEIP kernel trace sessions from auto-starting, without touching diagnostics needed for crash analysis.",
       "offline": true,
       "online": true
+    },
+    {
+      "id": "sudo-inline-policy",
+      "description": "Enable Windows Sudo in Inline mode.",
+      "scope": "machine registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Enable Windows Sudo in Inline mode for developer workstations.",
+      "offline": true,
+      "online": true
+    },
+    {
+      "id": "ssh-agent-policy",
+      "description": "Set OpenSSH Authentication Agent service to Automatic startup.",
+      "scope": "offline registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Ensure the native Windows ssh-agent service starts automatically for developer environments.",
+      "offline": true,
+      "online": true
     }
   ]
 }

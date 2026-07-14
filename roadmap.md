@@ -45,7 +45,7 @@ These are the current top priorities for continued development.
    Shell layers, launcher behavior, package installs, and live-user setup need stronger end-state validation and refinement. VM acceptance should prove the common live-user path before hardware installs begin.
 
 2. **Live hardware acceptance**
-   VM testing is necessary but not sufficient, but it is the current safety gate. The hardware inventory exists and the evidence loop is intentionally lightweight; real Surface Laptop 7 and x64 installs should wait until VM acceptance is green.
+   VM testing is necessary but not sufficient, and it has now passed the acceptance gate for ARM64. The hardware inventory exists and the evidence loop is intentionally lightweight; we are now ready to begin real Surface Laptop 7 and x64 hardware installs.
 
 3. **WebView2 wizard completion**
    The GUI is real, but it is not yet the fully finished primary surface for users.
@@ -59,7 +59,7 @@ These are the current top priorities for continued development.
 The order above is deliberate:
 
 - **FirstLogon and desktop maturity is first** because the installed system is the product outcome; if this is unreliable or visually unfinished, the ISO builder has not succeeded
-- **live hardware acceptance is second** because WinMint must ultimately prove itself on real Surface and x64 machines, even though physical installs remain blocked until the VM gate is credible
+- **live hardware acceptance is second** because WinMint must ultimately prove itself on real Surface and x64 machines, and VM acceptance has now unblocked physical testing
 - **WebView2 wizard completion follows the product proof tracks** because a polished frontend is valuable, but it should not outrun install confidence or live-user experience quality
 - **release/bootstrap remains visible** because regressions in the public launch path can still block adoption even though A1-A3 are complete
 - **Hyper-V architecture is fifth in product priority but still gates physical installs** because it is a safety mechanism and regression loop, not the product outcome itself
@@ -84,11 +84,11 @@ Phase B1, **Acceptance Inventory**, is complete and no longer active roadmap wor
 
 Goal: make live installs produce reusable evidence.
 
-Status: deferred behind Track D. The runbook now defines a manual evidence folder, required copied artifacts, and `notes.md` contents, but physical installs should not begin until VM acceptance is credible. Do not add a collector or evidence-package schema until real Surface and x64 runs show repeated manual collection pain.
+Status: active. The runbook now defines a manual evidence folder, required copied artifacts, and `notes.md` contents. VM acceptance has proven credible on ARM64, and physical installs are unblocked. Do not add a collector or evidence-package schema until real Surface and x64 runs show repeated manual collection pain.
 
 Work:
 
-- complete the VM acceptance path in Track D before the first real-machine install
+- ~~complete the VM acceptance path in Track D before the first real-machine install~~ (Done)
 - collect the first Surface Laptop 7 evidence folder after a real install
 - collect at least one x64 evidence folder after a real install
 - use live install audit output as structured feedback rather than incidental diagnostics

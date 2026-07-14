@@ -186,6 +186,7 @@ function New-WinMintInstallPlanSetupProfile {
                 setupUserLocale = [string]$BuildConfig.SetupUserLocale
                 setupHomeLocationGeoId = [int]$BuildConfig.SetupHomeLocationGeoId
                 restoreTimeZoneId = [string]$BuildConfig.TimeZoneId
+                restoreUiLanguage = [string]$BuildConfig.UiLanguage
                 restoreUserLocale = [string]$BuildConfig.UserLocale
                 restoreHomeLocationGeoId = [int]$BuildConfig.HomeLocationGeoId
                 restoreLocationServices = [bool]$BuildConfig.DmaInterop.RestoreLocationServices
@@ -381,6 +382,7 @@ function New-WinMintInstallPlanFromBuildConfig {
                 setupUserLocale = [string]$BuildConfig.SetupUserLocale
                 setupHomeLocationGeoId = [int]$BuildConfig.SetupHomeLocationGeoId
                 restoreTimeZoneId = [string]$BuildConfig.TimeZoneId
+                restoreUiLanguage = [string]$BuildConfig.UiLanguage
                 restoreUserLocale = [string]$BuildConfig.UserLocale
                 restoreHomeLocationGeoId = [int]$BuildConfig.HomeLocationGeoId
                 restoreLocationServices = [bool]$BuildConfig.DmaInterop.RestoreLocationServices

@@ -109,9 +109,10 @@ internal static class SplashPainter
         IDWriteTextFormat stepFormat,
         IDWriteTextFormat bannerFormat)
     {
-        renderTarget.Clear(ColorUtil.ParseHex("#000000"));
-
         var elapsedS = _animationStopwatch.ElapsedMilliseconds / 1000f;
+        var metrics = SplashLayout.Resolve(width, height, tokens.Layout, status.Steps?.Count ?? 0);
+
+        renderTarget.Clear(ColorUtil.ParseHex(tokens.Canvas));
 
         if (heroAsset is not null)
         {
@@ -129,31 +130,77 @@ internal static class SplashPainter
             var logoH = src.Height * scale;
 
             var logoX = (width - logoW) * 0.5f;
-            var logoY = (height - logoH) * 0.45f;
+            var logoY = (height - logoH) * 0.38f;
 
             var dest = new Rect(logoX, logoY, logoW, logoH);
             renderTarget.DrawBitmap(heroAsset.Bitmap, dest, 1f, Vortice.Direct2D1.BitmapInterpolationMode.Linear, src);
         }
 
-        // Indeterminate loading bar
+        // Progress bar
         {
             var barW = 160f;
-            var barH = 3f;
+            var barH = tokens.Layout.ProgressHeight > 0 ? tokens.Layout.ProgressHeight : 3f;
             var barX = (width - barW) * 0.5f;
-            var barY = height * 0.60f;
+            var barY = height * 0.55f;
 
-            using (var trackBrush = new SolidColorBrush(renderTarget, ColorUtil.ParseHex("#222222")))
+            using (var trackBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.ProgressTrack)))
             {
                 renderTarget.FillRectangle(new Rect(barX, barY, barW, barH), trackBrush);
             }
 
-            using (var accentBrush = new SolidColorBrush(renderTarget, ColorUtil.ParseHex(tokens.Accent)))
+            using (var accentBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Accent)))
             {
-                var cycle = (elapsedS * 0.6f) % 1.0f;
-                var segW = barW * 0.25f;
-                var segX = barX + (barW - segW) * cycle;
-                renderTarget.FillRectangle(new Rect(segX, barY, segW, barH), accentBrush);
+                if (string.Equals(status.ProgressMode, "determinate", StringComparison.OrdinalIgnoreCase))
+                {
+                    var pct = (float)Clamp((float)status.ProgressPct, 0f, 100f);
+                    var fillW = barW * (pct / 100f);
+                    renderTarget.FillRectangle(new Rect(barX, barY, fillW, barH), accentBrush);
+                }
+                else
+                {
+                    var cycle = (elapsedS * 0.6f) % 1.0f;
+                    var segW = barW * 0.25f;
+                    var segX = barX + (barW - segW) * cycle;
+                    renderTarget.FillRectangle(new Rect(segX, barY, segW, barH), accentBrush);
+                }
             }
+        }
+
+        // Info stack
+        var groupY = height * 0.59f;
+        var groupText = !string.IsNullOrWhiteSpace(status.GroupLabel) ? status.GroupLabel.ToUpperInvariant() : "SETTING UP";
+        var groupRect = new Rect((width - metrics.DockWidth) * 0.5f, groupY, metrics.DockWidth, metrics.GroupLineHeight * 2f);
+        using (var groupBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Muted)))
+        {
+            renderTarget.DrawText(groupText, groupFormat, groupRect, groupBrush);
+        }
+
+        var taskY = groupY + metrics.GroupLineHeight + metrics.GroupToTaskGap;
+        var taskText = !string.IsNullOrWhiteSpace(status.TaskLabel) ? status.TaskLabel : "Working…";
+        var taskRect = new Rect((width - metrics.DockWidth) * 0.5f, taskY, metrics.DockWidth, metrics.TaskLineHeight * 3f);
+        using (var taskBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Ink)))
+        {
+            renderTarget.DrawText(taskText, taskFormat, taskRect, taskBrush);
+        }
+
+        var stepsY = taskY + (metrics.TaskLineHeight * 1.5f) + metrics.TaskToStepsGap;
+        DrawStepList(
+            renderTarget,
+            tokens,
+            status,
+            stepFormat,
+            (width - metrics.DockWidth) * 0.5f,
+            stepsY,
+            metrics.DockWidth,
+            metrics.StepLineHeight);
+
+        // Heartbeat footer
+        var metaText = FormatShellMeta(status);
+        var metaY = height - tokens.Layout.DockPaddingBottom;
+        var metaRect = new Rect((width - metrics.DockWidth) * 0.5f, metaY, metrics.DockWidth, metrics.MetaLineHeight * 2f);
+        using (var metaBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Dim, 0.72f)))
+        {
+            renderTarget.DrawText(metaText, bannerFormat, metaRect, metaBrush);
         }
 
         if (!string.IsNullOrWhiteSpace(status.Banner))
@@ -269,7 +316,7 @@ internal static class SplashPainter
 
             var isCurrent = string.Equals(step.Status, "current", StringComparison.OrdinalIgnoreCase);
             var alpha = isCurrent ? 1f : 0.38f;
-            var textColor = isCurrent ? tokens.Muted : tokens.Dim;
+            var textColor = isCurrent ? tokens.Ink : tokens.Dim;
             var labelRect = new Rect(left, y, width, lineHeight);
             using (var textBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(textColor, alpha)))
             {

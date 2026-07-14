@@ -50,7 +50,7 @@ $logDir = Join-Path $env:LOCALAPPDATA 'WinMint\Logs'
 $null = New-Item -ItemType Directory -Path $logDir -Force -ErrorAction SilentlyContinue
 
 $proc = Start-WinMintSetupShellTestHost `
-    -ExePath $nativeExe `
+    -ExePath $hostExe `
     -WorkDir $lifecycleWorkspace.WorkDir `
     -StatusPath $lifecycleWorkspace.StatusPath `
     -ControlPath $lifecycleWorkspace.ControlPath `

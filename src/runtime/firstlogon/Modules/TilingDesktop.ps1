@@ -328,6 +328,11 @@ function Enable-WinMintKomorebiAutostart {
 function Install-WinMintYasbLayer {
     param([Parameter(Mandatory)][hashtable]$State)
 
+    $ctx = Get-WinMintAgentContext
+    if ($ctx.TargetArchitecture) {
+        Install-AgentManifestTool -ToolId "vcredist-$($ctx.TargetArchitecture)" -State $State -AllowFailure
+    }
+
     Install-AgentManifestTool -ToolId 'yasb' -State $State
     Copy-WinMintYasbPreset
     Invoke-WinMintYasbCli -ArgumentList @('stop') -AllowFailure

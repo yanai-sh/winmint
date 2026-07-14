@@ -87,6 +87,20 @@
         "arm64": "winget has no native ARM64 installer for Windhawk"
       }
     },
+    "vcredist-amd64": {
+      "displayName": "Microsoft Visual C++ Redistributable (x64)",
+      "source": "winget",
+      "id": "Microsoft.VCRedist.2015+.x64",
+      "versionPolicy": "latest",
+      "architectures": ["amd64"]
+    },
+    "vcredist-arm64": {
+      "displayName": "Microsoft Visual C++ Redistributable (ARM64)",
+      "source": "winget",
+      "id": "Microsoft.VCRedist.2015+.arm64",
+      "versionPolicy": "latest",
+      "architectures": ["arm64"]
+    },
     "yasb": {
       "displayName": "YASB",
       "source": "winget",
@@ -96,15 +110,15 @@
     },
     "komorebi": {
       "displayName": "Komorebi",
-      "source": "winget",
-      "id": "LGUG2Z.komorebi",
+      "source": "scoop",
+      "id": "komorebi",
       "versionPolicy": "latest",
       "architectures": ["amd64", "arm64"]
     },
     "whkd": {
       "displayName": "whkd",
-      "source": "winget",
-      "id": "LGUG2Z.whkd",
+      "source": "scoop",
+      "id": "whkd",
       "versionPolicy": "latest",
       "architectures": ["amd64", "arm64"]
     },

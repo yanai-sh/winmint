@@ -145,19 +145,7 @@ if ($FullImage) { $childArgs += '-FullImage' }
 if (-not [string]::IsNullOrWhiteSpace($SourceIso)) { $childArgs += @('-SourceIso', $SourceIso) }
 if ($NoObserve) { $childArgs += '-NoObserve' }
 
-$proc = Start-Process -FilePath $pwsh -ArgumentList $childArgs -WorkingDirectory $repoRoot -PassThru -WindowStyle Hidden
-
-Start-Sleep -Seconds 2
-if ($proc.HasExited) {
-    $bootError = "Acceptance process exited immediately (exit code $($proc.ExitCode))."
-    Write-WinMintVmLogLine -Message $bootError -LogPath $runLog -Level 'ERROR'
-    Write-WinMintVmRunEvent -Kind 'verdict' -Payload @{ verdict = 'fail'; reason = 'boot-failed'; exitCode = $proc.ExitCode }
-    Write-WinMintVmManagedRunState -Path $managedPath -State ([ordered]@{
-            status = 'failed'; pid = $proc.Id; error = $bootError; runLog = $runLog
-            evidenceDir = $evidenceDir; startedAt = $startedAt.ToString('o'); currentPhase = 'boot-failed'
-        })
-    throw $bootError
-}
+$proc = Start-Process -FilePath $pwsh -ArgumentList $childArgs -WorkingDirectory $repoRoot -PassThru -WindowStyle Hidden -RedirectStandardOutput $runLog -RedirectStandardError $runLog
 
 $handle = [ordered]@{
     status = 'starting'
@@ -184,4 +172,23 @@ if ($buildPlan) {
     $handle.checkpointUsable = [bool]$buildPlan.CheckpointUsable
 }
 Write-WinMintVmManagedRunState -Path $managedPath -State $handle
+
+Start-Sleep -Seconds 2
+if ($proc.HasExited) {
+    $currentState = Get-Content -LiteralPath $managedPath | ConvertFrom-Json
+    if ($currentState.status -ne 'failed') {
+        $bootError = "Acceptance process exited immediately (exit code $($proc.ExitCode))."
+        Write-WinMintVmLogLine -Message $bootError -LogPath $runLog -Level 'ERROR'
+        Write-WinMintVmRunEvent -Kind 'verdict' -Payload @{ verdict = 'fail'; reason = 'boot-failed'; exitCode = $proc.ExitCode }
+        $currentState.status = 'failed'
+        $currentState.currentPhase = 'boot-failed'
+        $currentState | Add-Member -MemberType NoteProperty -Name 'error' -Value $bootError -Force
+        Write-WinMintVmManagedRunState -Path $managedPath -State $currentState
+        throw $bootError
+    }
+    else {
+        throw "Acceptance process exited immediately (exit code $($proc.ExitCode)). Reason: $($currentState.error)"
+    }
+}
+
 $handle | ConvertTo-Json -Depth 6

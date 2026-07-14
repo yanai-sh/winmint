@@ -80,6 +80,7 @@ function Restore-WinMintDmaRegionalDefaults {
     $setupGeoId = [int](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'setupHomeLocationGeoId' -Default 68)
     $restoreTimeZoneId = [string](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreTimeZoneId' -Default '')
     $restoreGeoId = [int](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreHomeLocationGeoId' -Default 244)
+    $restoreUiLanguage = [string](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreUiLanguage' -Default '')
     $restoreUserLocale = [string](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreUserLocale' -Default '')
     $restoreLocationServices = [bool](Get-WinMintFirstLogonNestedProfileValue -BuildProfile $setupProfile -Section 'regional' -Nested 'dmaInterop' -Name 'restoreLocationServices' -Default $true)
     if ([string]::IsNullOrWhiteSpace($restoreTimeZoneId) -and $setupProfile -and $setupProfile.PSObject.Properties['regional']) {
@@ -96,6 +97,17 @@ function Restore-WinMintDmaRegionalDefaults {
             $errors.Add("Time zone restore failed for ${restoreTimeZoneId}: $_") | Out-Null
             Write-WinMintFirstLogonError "Time zone restore failed for ${restoreTimeZoneId}: $_"
         }
+        
+        try {
+            Start-Service w32time -ErrorAction SilentlyContinue
+            w32tm /resync /force | Out-Null
+            "$(Get-Date -Format 'o') Resynced hardware clock to $restoreTimeZoneId local time." |
+                Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
+        }
+        catch {
+            "$(Get-Date -Format 'o') Warning: Clock resync failed: $_" |
+                Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
+        }
     }
     try {
         Set-WinHomeLocation -GeoId $restoreGeoId -ErrorAction Stop
@@ -106,16 +118,7 @@ function Restore-WinMintDmaRegionalDefaults {
         $errors.Add("Home location restore failed for GeoID ${restoreGeoId}: $_") | Out-Null
         Write-WinMintFirstLogonError "Home location restore failed for GeoID ${restoreGeoId}: $_"
     }
-    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale)) {
-        try {
-            Set-Culture -CultureInfo $restoreUserLocale -ErrorAction Stop
-            "$(Get-Date -Format 'o') Restored user culture to $restoreUserLocale after DMA setup." |
-                Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
-        }
-        catch {
-            $errors.Add("User culture restore failed for ${restoreUserLocale}: $_") | Out-Null
-            Write-WinMintFirstLogonError "User culture restore failed for ${restoreUserLocale}: $_"
-        }
+    if (-not [string]::IsNullOrWhiteSpace($restoreUiLanguage)) {
         # Rebuild the user language list as [display language] + [secondary input languages].
         # This drops the DMA en-IE entry AND adds any configured secondary keyboards (e.g.
         # he-IL), with the display language pinned so it can never switch. Done BEFORE the
@@ -126,11 +129,23 @@ function Restore-WinMintDmaRegionalDefaults {
             $secondaryInputLanguages = @($setupProfile.regional.secondaryInputLanguages)
         }
         try {
-            Set-WinMintFirstLogonInputLanguages -DisplayLanguage $restoreUserLocale -SecondaryInputLanguages $secondaryInputLanguages
+            Set-WinMintFirstLogonInputLanguages -DisplayLanguage $restoreUiLanguage -SecondaryInputLanguages $secondaryInputLanguages
         }
         catch {
             $errors.Add("Language list rebuild failed: $_") | Out-Null
             Write-WinMintFirstLogonError "Language list rebuild failed: $_"
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale)) {
+        try {
+            Set-Culture -CultureInfo $restoreUserLocale -ErrorAction Stop
+            "$(Get-Date -Format 'o') Restored user culture to $restoreUserLocale after DMA setup." |
+                Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
+        }
+        catch {
+            $errors.Add("User culture restore failed for ${restoreUserLocale}: $_") | Out-Null
+            Write-WinMintFirstLogonError "User culture restore failed for ${restoreUserLocale}: $_"
         }
     }
     try {
@@ -213,12 +228,15 @@ function Restore-WinMintDmaRegionalDefaults {
     if (-not [string]::IsNullOrWhiteSpace($restoreTimeZoneId) -and (-not $observedTimeZone -or [string]$observedTimeZone.Id -ne $restoreTimeZoneId)) {
         $errors.Add("Current time zone '$observedTimeZoneText' does not match restore time zone '$restoreTimeZoneId'.") | Out-Null
     }
-    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale)) {
-        $languageConfigured = (-not [string]::IsNullOrWhiteSpace($observedPrimaryLanguageTag) -and $observedPrimaryLanguageTag -eq $restoreUserLocale)
-        $overrideConfigured = (-not [string]::IsNullOrWhiteSpace($observedUiLanguageOverride) -and $observedUiLanguageOverride -eq $restoreUserLocale)
+    if (-not [string]::IsNullOrWhiteSpace($restoreUiLanguage)) {
+        $languageConfigured = (-not [string]::IsNullOrWhiteSpace($observedPrimaryLanguageTag) -and $observedPrimaryLanguageTag -eq $restoreUiLanguage)
+        $overrideConfigured = (-not [string]::IsNullOrWhiteSpace($observedUiLanguageOverride) -and $observedUiLanguageOverride -eq $restoreUiLanguage)
         if (-not $languageConfigured -and -not $overrideConfigured) {
-            $errors.Add("Configured display language '$observedPrimaryLanguageTag' / UI override '$observedUiLanguageOverride' does not match restore culture '$restoreUserLocale'.") | Out-Null
+            $errors.Add("Configured display language '$observedPrimaryLanguageTag' / UI override '$observedUiLanguageOverride' does not match restore culture '$restoreUiLanguage'.") | Out-Null
         }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale) -and (-not $observedCultureText -or $observedCultureText -ne $restoreUserLocale)) {
+        $errors.Add("Current culture '$observedCultureText' does not match configured restore culture '$restoreUserLocale'.") | Out-Null
     }
 
     $report = [ordered]@{
@@ -228,6 +246,7 @@ function Restore-WinMintDmaRegionalDefaults {
             setupUserLocale = $setupUserLocale
             setupHomeLocationGeoId = $setupGeoId
             restoreTimeZoneId = $restoreTimeZoneId
+            restoreUiLanguage = $restoreUiLanguage
             restoreUserLocale = $restoreUserLocale
             restoreHomeLocationGeoId = $restoreGeoId
             restoreLocationServices = $restoreLocationServices

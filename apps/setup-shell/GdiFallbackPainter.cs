@@ -14,7 +14,7 @@ internal static class GdiFallbackPainter
             return;
         }
 
-        var canvas = ParseColor("#000000", 0x00000000);
+        var canvas = ParseColor(tokens.Canvas, 0x001D1611);
         var ink = ParseColor(tokens.Ink, 0x00FBF7F4);
         var muted = ParseColor(tokens.Muted, 0x00CCC0B7);
         var dim = ParseColor(tokens.Dim, 0x00A19287);
@@ -28,10 +28,84 @@ internal static class GdiFallbackPainter
         NativeMethods.DeleteObject(bg);
 
         NativeMethods.SetBkMode(hdc, NativeMethods.TRANSPARENT);
+
+        // Logo text in the upper region
         var text = "WinMint";
         var fontSize = 24;
-        var textY = (int)(height * 0.45f - fontSize);
+        var textY = (int)(height * 0.38f - fontSize);
         DrawLine(hdc, text, 0, textY, width, muted, fontSize, true);
+
+        // Progress bar
+        {
+            var barW = 160;
+            var barH = tokens.Layout.ProgressHeight > 0 ? (int)tokens.Layout.ProgressHeight : 3;
+            var barX = (width - barW) / 2;
+            var barY = (int)(height * 0.55f);
+
+            var trackBg = NativeMethods.CreateSolidBrush(ParseColor(tokens.ProgressTrack, 0x0036302E));
+            var trackRect = new NativeMethods.RECT { Left = barX, Top = barY, Right = barX + barW, Bottom = barY + barH };
+            NativeMethods.FillRect(hdc, ref trackRect, trackBg);
+            NativeMethods.DeleteObject(trackBg);
+
+            var accentBrush = NativeMethods.CreateSolidBrush(accent);
+            if (string.Equals(status.ProgressMode, "determinate", StringComparison.OrdinalIgnoreCase))
+            {
+                var pct = status.ProgressPct;
+                if (pct < 0) pct = 0;
+                if (pct > 100) pct = 100;
+                var fillW = (int)(barW * (pct / 100.0));
+                var fillRect = new NativeMethods.RECT { Left = barX, Top = barY, Right = barX + fillW, Bottom = barY + barH };
+                NativeMethods.FillRect(hdc, ref fillRect, accentBrush);
+            }
+            else
+            {
+                var elapsedS = (float)(DateTime.Now.TimeOfDay.TotalSeconds);
+                var cycle = (elapsedS * 0.6f) % 1.0f;
+                var segW = (int)(barW * 0.25f);
+                var segX = barX + (int)((barW - segW) * cycle);
+                var fillRect = new NativeMethods.RECT { Left = segX, Top = barY, Right = segX + segW, Bottom = barY + barH };
+                NativeMethods.FillRect(hdc, ref fillRect, accentBrush);
+            }
+            NativeMethods.DeleteObject(accentBrush);
+        }
+
+        // Info stack
+        var groupText = !string.IsNullOrWhiteSpace(status.GroupLabel) ? status.GroupLabel.ToUpperInvariant() : "SETTING UP";
+        var groupY = (int)(height * 0.59f);
+        DrawLine(hdc, groupText, 0, groupY, width, muted, 11, true);
+
+        var taskText = !string.IsNullOrWhiteSpace(status.TaskLabel) ? status.TaskLabel : "Working…";
+        var taskY = groupY + 20;
+        DrawLine(hdc, taskText, 0, taskY, width, ink, 14, false);
+
+        // Steps list (centered below task)
+        var stepsY = taskY + 28;
+        if (status.Steps is not null && status.Steps.Count > 0)
+        {
+            foreach (var step in status.Steps)
+            {
+                if (string.Equals(step.Status, "done", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var label = step.Label;
+                if (string.IsNullOrWhiteSpace(label))
+                {
+                    label = step.Id;
+                }
+
+                var isCurrent = string.Equals(step.Status, "current", StringComparison.OrdinalIgnoreCase);
+                var stepColor = isCurrent ? ink : BlendColor(dim, canvas, 0.38f);
+                DrawLine(hdc, label, 0, stepsY, width, stepColor, 11, false);
+                stepsY += 16;
+            }
+        }
+
+        // Heartbeat footer
+        var metaText = SplashPainter.FormatShellMeta(status);
+        var metaY = height - (tokens.Layout.DockPaddingBottom > 0 ? tokens.Layout.DockPaddingBottom : 88);
+        DrawLine(hdc, metaText, 0, metaY, width, BlendColor(dim, canvas, 0.72f), 11, false);
 
         if (!string.IsNullOrWhiteSpace(status.Banner))
         {

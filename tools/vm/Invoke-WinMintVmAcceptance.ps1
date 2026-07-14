@@ -60,6 +60,21 @@ $repoRoot = Set-WinMintVmRepoRoot -ToolsVmRoot $PSScriptRoot
 $script:managedRun = $ManagedRun.IsPresent -or $env:WINMINT_VM_MANAGED -eq '1'
 $script:managedRunPath = Get-WinMintVmManagedRunPath -RepoRoot $repoRoot
 
+trap {
+    $err = $_
+    if ($EvidenceDir) {
+        $rLog = Join-Path $EvidenceDir 'run.log'
+        Add-Content -Path $rLog -Value "[$((Get-Date).ToString('o'))] [ERROR] FATAL: $($err.Exception.Message)"
+    }
+    if ($script:managedRunPath -and (Test-Path -LiteralPath $script:managedRunPath)) {
+        $st = Get-Content -LiteralPath $script:managedRunPath | ConvertFrom-Json
+        $st.status = 'failed'
+        $st.currentPhase = 'boot-failed'
+        $st | Add-Member -MemberType NoteProperty -Name 'error' -Value $err.Exception.Message -Force
+        $st | ConvertTo-Json -Depth 6 | Out-File -LiteralPath $script:managedRunPath -Encoding utf8
+    }
+    throw $err
+}
 if ($script:managedRun) {
     $WindowsTerminal = $false
     $NoWindowsTerminal = $true
@@ -452,14 +467,19 @@ if ($runWait) {
                 $guestPollError = if ($pollResult.TimedOut) { 'timed out' } elseif ($pollResult.Error) { $pollResult.Error } else { 'unknown poll failure' }
                 if ($guestPollFailures -eq 1 -or ($guestPollFailures % $guestPollFailureWarnEvery) -eq 0) {
                     $reason = $guestPollError
-                    $warn = "Guest poll failed ($reason, ${guestPollMs}ms, attempt $guestPollFailures)"
-                    Say $warn 'Yellow'
-                    Write-WinMintVmRunEvent -Kind 'warning' -Payload @{
-                        label = 'guest-poll-failed'
-                        reason = $reason
-                        durationMs = $guestPollMs
-                        attempt = $guestPollFailures
-                        timedOut = [bool]$pollResult.TimedOut
+                    if (-not $seenAgentActivity -and $reason -match 'credential is invalid') {
+                        Say "Waiting for FirstLogon (account not yet ready)..." 'DarkGray'
+                    }
+                    else {
+                        $warn = "Guest poll failed ($reason, ${guestPollMs}ms, attempt $guestPollFailures)"
+                        Say $warn 'Yellow'
+                        Write-WinMintVmRunEvent -Kind 'warning' -Payload @{
+                            label = 'guest-poll-failed'
+                            reason = $reason
+                            durationMs = $guestPollMs
+                            attempt = $guestPollFailures
+                            timedOut = [bool]$pollResult.TimedOut
+                        }
                     }
                 }
             }
@@ -540,7 +560,7 @@ if ($runInspect) {
                 GuestUser        = $guestUser
                 GuestPassword    = $guestPassword
                 AcceptanceTier   = $acceptanceTier
-                WslDistros       = @($profileJson.development.wsl.distros)
+                WslDistros       = ($profileJson.development.wsl.distros -join ',')
             }
             & $pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Invoke-WinMintGuestPesterAcceptance.ps1') @inspectParams |
                 ForEach-Object {

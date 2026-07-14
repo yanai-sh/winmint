@@ -249,6 +249,9 @@ function Get-WinMintWingetHandoffToolIds {
     }
     if ([bool]$Config.InstallWindhawk) { $ids.Add('windhawk') | Out-Null }
     if ([bool]$Config.InstallYasb) { $ids.Add('yasb') | Out-Null }
+    if ([bool]$Config.InstallYasb -or [bool]$Config.InstallWindhawk) {
+        $ids.Add("vcredist-$([string]$Config.Architecture)") | Out-Null
+    }
     if ([bool]$Config.InstallRaycast) {
         if ([string]$Config.Architecture -eq 'arm64') {
             $ids.Add('everything-arm64-beta') | Out-Null
