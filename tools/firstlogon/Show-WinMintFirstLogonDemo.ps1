@@ -159,10 +159,9 @@ function New-DemoAgentProfile {
                 whkd = $usesKomorebi
             }
             windhawk = [pscustomobject]@{ enabled = $usesWindhawk }
-            raycast = [pscustomobject]@{ enabled = ($launcher -eq 'Raycast') }
             launcherKey = [pscustomobject]@{
                 enabled = $true
-                target = $(if ($launcher -eq 'Raycast') { 'Raycast' } else { 'Search' })
+                target = 'Search'
                 chord = 'Win+Shift+F23'
             }
         }

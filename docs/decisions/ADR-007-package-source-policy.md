@@ -9,7 +9,7 @@ FirstLogon installs editors, shell layers, WSL distros, and CLI tooling. Users c
 
 ### Decision
 
-WinMint decides sources: **winget** for GUI/signed installers, **Scoop** for user-local CLI plumbing (MinGit, Starship, Neovim), **Store** where upstream distributes via Microsoft Store, **pinned direct download** only for documented exceptions (e.g. ARM64 Everything for Raycast).
+WinMint decides sources: **winget** for GUI/signed installers, **Scoop** for user-local CLI plumbing (MinGit, Starship, Neovim), **Store** where upstream distributes via Microsoft Store, **pinned direct download** only for documented exceptions (none currently approved).
 
 Users choose *what* to install via profile; not *how* packages are fetched.
 

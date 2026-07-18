@@ -308,7 +308,6 @@ function Test-WinMintSetupShellModuleEnabled {
         'modules.wsl.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'wsl' }
         'modules.git.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'git' }
         'modules.dotfiles.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'dotfiles' }
-        'modules.raycast.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'raycast' }
         'modules.launcherKey.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'launcherKey' }
         'modules.phoneLink.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'phoneLink' }
         'modules.shell.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'shell' }
@@ -610,7 +609,6 @@ function Get-WinMintSetupShellStepEstimateMs {
         browsers = 18000
         windhawk = 12000
         'desktop-environment' = 9000
-        raycast = 14000
     }
     if ($RuntimeStepName -and $estimates.ContainsKey($RuntimeStepName)) {
         return [int]$estimates[$RuntimeStepName]
@@ -630,11 +628,6 @@ function Get-WinMintSetupShellStepSegments {
         windhawk = @(
             @{ at = 0.0; task = 'Windhawk install' }
             @{ at = 0.45; task = 'Windhawk preset apply' }
-        )
-        raycast = @(
-            @{ at = 0.0; task = 'Raycast (Store)' }
-            @{ at = 0.4; task = 'Everything search backend' }
-            @{ at = 0.72; task = 'Raycast extensions (curated)' }
         )
         browsers = @(
             @{ at = 0.0; task = 'Browser install (winget)' }

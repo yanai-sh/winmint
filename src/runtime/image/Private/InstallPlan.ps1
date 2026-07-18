@@ -33,26 +33,6 @@ function New-WinMintInstallPlanAgentProfile {
     # Package-manager bootstrap is baseline: Scoop + MinGit are developer
     # plumbing, and winget remains the owner for selected GUI/system tools.
     $needsPackageManagers = $true
-    $needsRaycast = [bool]$BuildConfig.InstallRaycast
-    $launcherKeyTarget = if ($needsRaycast) { 'Raycast' } else { 'Search' }
-    $everythingPackage = if ([string]$BuildConfig.Architecture -eq 'arm64') { 'everything-arm64-beta' } else { 'everything-beta' }
-    $raycastExtensions = [System.Collections.Generic.List[object]]::new()
-    if ($needsRaycast) {
-        $raycastExtensions.Add([ordered]@{ id = 'everything-search'; owner = 'anastasiy_safari'; source = 'Raycast Store'; requires = @($everythingPackage) }) | Out-Null
-        $raycastExtensions.Add([ordered]@{ id = 'windows-terminal'; owner = 'lunaris'; source = 'Raycast Store'; requires = @() }) | Out-Null
-        if ([bool]$BuildConfig.InstallThide) {
-            $raycastExtensions.Add([ordered]@{ id = 'window-walker'; owner = 'nazzy_wazzy_lu'; source = 'Raycast Store'; requires = @() }) | Out-Null
-        }
-        if (@($BuildConfig.Editors) -contains 'vscode') {
-            $raycastExtensions.Add([ordered]@{ id = 'visual-studio-code'; owner = 'thomas'; source = 'Raycast Store'; requires = @() }) | Out-Null
-        }
-        if (@($BuildConfig.Editors) -contains 'zed') {
-            $raycastExtensions.Add([ordered]@{ id = 'zed-recent-projects'; owner = 'ewgenius'; source = 'Raycast Store'; requires = @() }) | Out-Null
-        }
-        if (@($BuildConfig.Browsers) -contains 'zen-browser') {
-            $raycastExtensions.Add([ordered]@{ id = 'zen-browser'; owner = 'Keyruu'; source = 'Raycast Store'; requires = @() }) | Out-Null
-        }
-    }
     [ordered]@{
         profile = [string]$BuildConfig.Profile
         diagnostics = New-WinMintInstallPlanDiagnosticsBlock -BuildConfig $BuildConfig
@@ -80,22 +60,9 @@ function New-WinMintInstallPlanAgentProfile {
                 distro = $wslDistro
                 distros = @($wslDistros)
             }
-            # Optional command launcher.
-            raycast = [ordered]@{
-                enabled = $needsRaycast
-                extensions = @($raycastExtensions.ToArray())
-                everythingBackend = [ordered]@{
-                    enabled = $needsRaycast
-                    package = $everythingPackage
-                    localFilesystemOnly = $true
-                    trayIcon = 'hidden'
-                    serverSearch = 'disabled'
-                    sdkSearch = 'disabled'
-                }
-            }
             launcherKey = [ordered]@{
                 enabled = $true
-                target = $launcherKeyTarget
+                target = 'Search'
                 chord = 'Win+Shift+F23'
             }
             browsers = [ordered]@{ enabled = (@($BuildConfig.Browsers).Count -gt 0) }

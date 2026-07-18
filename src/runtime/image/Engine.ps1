@@ -76,7 +76,6 @@ function New-WinMintBuildConfig {
         $launcher = 'None'
     }
     if ($launcher -notin @('None')) { $launcher = 'None' }
-    $installRaycast = $false
     $enableLiveInstallAudit = [bool](Get-WinMintProfileSetting $featureToggles 'liveInstallAudit' $false)
     $enablePhoneLink = [bool](Get-WinMintProfileSetting $featureToggles 'phoneLink' $false)
     $password = if ([bool](Get-WinMintProfileSetting $identity 'passwordIncluded' $false)) {
@@ -229,7 +228,6 @@ function New-WinMintBuildConfig {
         InstallKomorebi = ($layers -contains 'komorebi')
         InstallNilesoft = ($layers -contains 'nilesoft')
         Launcher = $launcher
-        InstallRaycast = $installRaycast
         LiveInstallAudit = $enableLiveInstallAudit
         PhoneLink = $enablePhoneLink
         Updates = [pscustomobject]@{

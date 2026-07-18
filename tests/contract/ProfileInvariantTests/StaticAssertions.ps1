@@ -2712,7 +2712,7 @@ function Assert-LogNoiseInvariants {
     $pipelineText = Get-Content -LiteralPath $pipelinePath -Raw
     $targetLicenseSummaryCount = ([regex]::Matches(
         $pipelineText,
-        [regex]::Escape("Edition mode: target license. Servicing")
+        [regex]::Escape('edition image(s) (target license)')
     )).Count
     if ($targetLicenseSummaryCount -ne 1) {
         Add-SmokeFailure "Expected one target-license service summary log, found $targetLicenseSummaryCount."
@@ -3388,7 +3388,7 @@ function Assert-OfflinePowerShell7StagingContract {
         'Resolve-WinMintGitHubReleasePayload',
         'PowerShell/PowerShell',
         'PowerShell-\d+\.\d+\.\d+-',
-        'PowerShell 7 staged in the offline image',
+        'PowerShell 7 staged',
         'PowerShell 7 is missing from the offline image',
         'PowerShell 7 staging failed; build cannot continue'
     )

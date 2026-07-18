@@ -16,8 +16,8 @@ Snapshot note: updated 2026-06-29. Onboarding/audit snapshot — not a continuou
 | Microsoft Download Center | HTTP (`SurfaceCatalog` driver source) | Official Surface driver MSI packages | `config/surface-drivers.json`, `AGENTS.md` |
 | GitHub Releases | HTTP (bootstrap) | Release `.zip` + `.sha256` verification | `winmint.ps1`, `AGENTS.md` |
 | Cloudflare Workers | HTTP handler | `winmint.yanai.sh` bootstrap alias | `cloudflare/winmint/src/index.js` |
-| Microsoft Store / msstore winget | winget CLI | Raycast, PowerShell 7, etc. | `config/packages.json` |
-| GitHub Direct Download | HTTP (narrow exception) | SHA256-verified Everything 1.5 ARM64 for Raycast backend | `AGENTS.md` |
+| Microsoft Store / msstore winget | winget CLI | PowerShell 7 and other Store-backed apps | `config/packages.json` |
+| Direct download | HTTP (narrow exception) | Reserved; no approved pinned payloads currently | `AGENTS.md` |
 | Hyper-V | PowerShell cmdlets (`Get-VM`, checkpoints) | VM acceptance harness | `tools/vm/Invoke-WinMintVmAcceptance.ps1` |
 | Hyper-V PowerShell Direct | `Invoke-Command` to guest | Poll `state.json`, pull logs, OOBE screenshot | `tools/vm/lib/VmGuest.ps1` |
 | Direct2D (Vortice.Direct2D1) | .NET AOT in `apps/setup-shell/` | Fullscreen setup-shell splash during FirstLogon | `apps/setup-shell/WinMintSetupShell.csproj` |

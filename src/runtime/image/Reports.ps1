@@ -110,7 +110,6 @@ function New-WinMintBuildReport {
         }
         features = @{
             launcher = [string]$Config.Launcher
-            raycast = [bool]$Config.InstallRaycast
             liveInstallAudit = [bool]$Config.LiveInstallAudit
             phoneLink = [bool]$Config.PhoneLink
         }
@@ -423,7 +422,6 @@ function Save-WinMintDryRunArtifacts {
         }
         features = [ordered]@{
             launcher = [string]$Config.Launcher
-            raycast = [bool]$Config.InstallRaycast
             liveInstallAudit = [bool]$Config.LiveInstallAudit
             phoneLink = [bool]$Config.PhoneLink
         }

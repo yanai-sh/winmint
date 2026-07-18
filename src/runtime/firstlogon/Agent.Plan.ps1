@@ -91,7 +91,6 @@ function Get-WinMintAgentModuleRuntimeState {
         'modules.wsl.enabled' { return (Test-AgentModuleEnabled -Name 'wsl') }
         'modules.git.enabled' { return (Test-AgentModuleEnabled -Name 'git') }
         'modules.dotfiles.enabled' { return (Test-AgentModuleEnabled -Name 'dotfiles') }
-        'modules.raycast.enabled' { return (Test-AgentModuleEnabled -Name 'raycast') }
         'modules.launcherKey.enabled' { return (Test-AgentModuleEnabled -Name 'launcherKey') }
         'modules.phoneLink.enabled' { return (Test-AgentModuleEnabled -Name 'phoneLink') }
         'modules.shell.enabled' { return (Test-AgentModuleEnabled -Name 'shell') }

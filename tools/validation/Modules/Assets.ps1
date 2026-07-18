@@ -426,24 +426,8 @@ function Test-PackageManifestArchitecture {
                 }
             }
             if ([string]$tool.source -eq 'direct') {
-                foreach ($requiredField in @('url', 'sha256', 'version')) {
-                    $fieldProperty = $tool.PSObject.Properties[$requiredField]
-                    if (-not $fieldProperty -or [string]::IsNullOrWhiteSpace([string]$fieldProperty.Value)) {
-                        Add-ValidationError "Direct tool '$id' must declare $requiredField."
-                    }
-                }
-                if ([string]$id -ne 'everything-arm64-beta' -or
-                    [string]$tool.id -ne 'Everything-1.5.0.1415b.ARM64' -or
-                    [string]$tool.version -ne '1.5.0.1415b' -or
-                    [string]$tool.url -ne 'https://www.voidtools.com/Everything-1.5.0.1415b.ARM64.en-US-Setup.exe' -or
-                    [string]$tool.sha256 -ne '2D511A33A3494147F921DCB488772125E6CC654E677196AACB0235967A27D2DA' -or
-                    $architectures.Count -ne 1 -or
-                    $architectures[0] -ne 'arm64') {
-                    Add-ValidationError "Direct tool '$id' must be the approved pinned Everything 1.5.0.1415b ARM64 payload."
-                }
-                if (-not $tool.PSObject.Properties['silentArgs'] -or @($tool.silentArgs).Count -eq 0) {
-                    Add-ValidationError "Direct tool '$id' must declare silentArgs."
-                }
+                # Reserved for future pinned exceptions; none currently approved.
+                Add-ValidationError "Direct tool '$id' is not currently approved. Remove it or document a pinned exception."
             }
         }
         Write-Host 'OK package manifest architecture declarations'

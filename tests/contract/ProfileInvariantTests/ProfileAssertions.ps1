@@ -849,7 +849,7 @@ function Assert-HeadlessCliContracts {
     if (-not ($groupConfig.InstallWindhawk -and $groupConfig.InstallYasb -and $groupConfig.InstallKomorebi)) {
         Add-SmokeFailure 'Expected -DesktopUI to select the opinionated WinMint shell stack.'
     }
-    if ($groupConfig.Launcher -ne 'None' -or $groupConfig.InstallRaycast) {
+    if ($groupConfig.Launcher -ne 'None') {
         Add-SmokeFailure 'Expected launcher modules to stay opt-in even when Developer/DesktopUI groups are selected.'
     }
 

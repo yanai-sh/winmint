@@ -75,7 +75,7 @@ Confirm:
 - Debloated Edge is present (`keep.edge`), Zen Browser and Cursor install at FirstLogon.
 - Fedora WSL distro selection completes.
 - Live install audit reports zero errors.
-- Standard Windows desktop starts (no YASB, Raycast, or other shell layers).
+- Standard Windows desktop starts (no YASB or other shell layers).
 - Game Mode and HAGS baseline registry stamps are present.
 - Physical Copilot key opens Windows Search (no launcher installed).
 

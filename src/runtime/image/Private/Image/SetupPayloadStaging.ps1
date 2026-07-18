@@ -68,22 +68,8 @@ function Assert-WinMintAgentToolSources {
             throw "Unsupported install source '$toolSource' for tool '$($toolProp.Name)' in packages.json. WinMint only supports the 'winget', 'store', 'scoop', and approved 'direct' install sources."
         }
         if ($toolSource -eq 'direct') {
-            $architectures = @($tool.architectures | ForEach-Object { ([string]$_).ToLowerInvariant() })
-            $toolVersion = if ($tool.PSObject.Properties['version']) { [string]$tool.version } else { '' }
-            $toolUrl = if ($tool.PSObject.Properties['url']) { [string]$tool.url } else { '' }
-            $toolSha256 = if ($tool.PSObject.Properties['sha256']) { [string]$tool.sha256 } else { '' }
-            if ([string]$toolProp.Name -ne 'everything-arm64-beta' -or
-                [string]$tool.id -ne 'Everything-1.5.0.1415b.ARM64' -or
-                $toolVersion -ne '1.5.0.1415b' -or
-                $toolUrl -ne 'https://www.voidtools.com/Everything-1.5.0.1415b.ARM64.en-US-Setup.exe' -or
-                $toolSha256 -ne '2D511A33A3494147F921DCB488772125E6CC654E677196AACB0235967A27D2DA' -or
-                $architectures.Count -ne 1 -or
-                $architectures[0] -ne 'arm64') {
-                throw "Direct install source is restricted to the pinned Everything 1.5.0.1415b ARM64 payload. Invalid tool '$($toolProp.Name)' in packages.json."
-            }
-            if (-not $tool.PSObject.Properties['silentArgs'] -or @($tool.silentArgs).Count -eq 0) {
-                throw "Direct install tool '$($toolProp.Name)' must declare silentArgs."
-            }
+            # Reserved for future pinned exceptions; none currently approved.
+            throw "Direct install source is not currently approved for any tool. Invalid tool '$($toolProp.Name)' in packages.json."
         }
     }
 }

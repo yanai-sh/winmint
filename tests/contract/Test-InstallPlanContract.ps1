@@ -351,31 +351,6 @@ function Assert-DirectPackageValidationContract {
     $tempRoot = Join-Path ([IO.Path]::GetTempPath().TrimEnd('\', '/')) ('winmint_direct_package_test_' + [Guid]::NewGuid().ToString('n'))
     try {
         $null = New-Item -ItemType Directory -Path $tempRoot -Force
-        $missingHashPath = Join-Path $tempRoot 'packages-missing-hash.json'
-        [ordered]@{
-            tools = [ordered]@{
-                'everything-arm64-beta' = [ordered]@{
-                    displayName = 'Everything 1.5 Beta ARM64'
-                    source = 'direct'
-                    id = 'Everything-1.5.0.1415b.ARM64'
-                    version = '1.5.0.1415b'
-                    url = 'https://www.voidtools.com/Everything-1.5.0.1415b.ARM64.en-US-Setup.exe'
-                    architectures = @('arm64')
-                    silentArgs = @('/S')
-                }
-            }
-        } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $missingHashPath -Encoding UTF8
-
-        try {
-            Assert-WinMintAgentToolSources -ManifestPath $missingHashPath
-            Add-InstallPlanFailure 'Expected direct package validation to reject a missing SHA256 hash.'
-        }
-        catch {
-            if ($_.Exception.Message -notmatch 'pinned Everything 1\.5\.0\.1415b ARM64') {
-                Add-InstallPlanFailure "Direct package missing-hash validation failed with the wrong message: $($_.Exception.Message)"
-            }
-        }
-
         $unexpectedDirectPath = Join-Path $tempRoot 'packages-unexpected-direct.json'
         [ordered]@{
             tools = [ordered]@{
@@ -394,10 +369,10 @@ function Assert-DirectPackageValidationContract {
 
         try {
             Assert-WinMintAgentToolSources -ManifestPath $unexpectedDirectPath
-            Add-InstallPlanFailure 'Expected direct package validation to reject non-Everything direct tools.'
+            Add-InstallPlanFailure 'Expected direct package validation to reject all direct tools while none are approved.'
         }
         catch {
-            if ($_.Exception.Message -notmatch 'restricted to the pinned Everything') {
+            if ($_.Exception.Message -notmatch 'not currently approved') {
                 Add-InstallPlanFailure "Unexpected direct package validation failed with the wrong message: $($_.Exception.Message)"
             }
         }

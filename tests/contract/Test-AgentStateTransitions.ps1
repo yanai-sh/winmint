@@ -112,7 +112,6 @@ function Install-AgentManifestTool {
 . (Join-Path $root 'src\runtime\firstlogon\Modules\LauncherKey.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\TilingDesktop.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\Windhawk.ps1')
-function Get-WinMintAgentEverythingExePath { 'C:\WinMint\Test\Everything.exe' }
 
 function Install-AgentTool {
     param($Tool, [hashtable]$State)
@@ -282,9 +281,9 @@ try {
         Assert-WinMintAgentStateStepsOk -State $State -Keys @('required:failed') -Context 'test required steps'
     } -ExpectedText 'not ok: required:failed=fixture failure' -Message 'Required state validation should reject failed state keys.'
 
-    $raycastKeyPlan = Get-WinMintAgentLauncherKeyPlan -AgentProfile (Get-WinMintAgentContext).AgentProfile
-    Assert-Equal $raycastKeyPlan.Target 'Search' 'Launcher key plan should prefer explicit launcherKey target.'
-    Assert-Equal $raycastKeyPlan.Chord 'Win+Shift+F23' 'Launcher key plan should preserve the common Copilot hardware-key chord.'
+    $launcherKeyPlan = Get-WinMintAgentLauncherKeyPlan -AgentProfile (Get-WinMintAgentContext).AgentProfile
+    Assert-Equal $launcherKeyPlan.Target 'Search' 'Launcher key plan should prefer explicit launcherKey target.'
+    Assert-Equal $launcherKeyPlan.Chord 'Win+Shift+F23' 'Launcher key plan should preserve the common Copilot hardware-key chord.'
 
     $testContext.Manifest = [pscustomobject]@{
         tools = [pscustomobject]@{
@@ -299,10 +298,6 @@ try {
             mingit = [pscustomobject]@{
                 id = 'mingit'
                 source = 'scoop'
-            }
-            raycast = [pscustomobject]@{
-                id = '9PFXXSHC64H3'
-                source = 'store'
             }
             yasb = [pscustomobject]@{
                 id = 'AmN.yasb'
@@ -325,7 +320,6 @@ try {
     Set-WinMintAgentContext -Context $testContext
 
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'mingit') 'tool:mingit' 'MinGit state keys should resolve from the package manifest.'
-    Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'raycast') 'tool:9PFXXSHC64H3' 'Raycast state keys should resolve from the package manifest.'
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'yasb') 'tool:AmN.yasb' 'YASB state keys should resolve from the package manifest.'
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'nilesoft') 'tool:Nilesoft.Shell' 'Nilesoft state keys should resolve from the package manifest.'
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'komorebi') 'tool:LGUG2Z.komorebi' 'Komorebi state keys should resolve from the package manifest.'
@@ -369,36 +363,9 @@ try {
     Assert-Equal $failedPromptResult.Status 'ok' 'Package manager module should return its result contract and leave readiness enforcement to the runtime.'
     Assert-Equal (@($failedPromptResult.PackageManagerStateSteps) -join ',') 'package-manager:scoop,tool:mingit' 'Starship failure should not move Starship into package-manager readiness.'
 
-    function Start-WinMintRaycastApp {
-        param([hashtable]$State)
-        Set-TestAgentStep -State $State -Key 'config:raycast-start'
-    }
-    function Install-WinMintRaycastEverythingBackend {
-        param(
-            [object]$RaycastConfig,
-            [hashtable]$State
-        )
-        [void]$RaycastConfig
-        [void]$State
-        return $false
-    }
-    $raycastProfile = [pscustomobject]@{
-        modules = [pscustomobject]@{
-            raycast = [pscustomobject]@{
-                enabled = $true
-                extensions = @()
-            }
-        }
-    }
-    $raycastState = New-TestAgentState
-    $raycastResult = Invoke-WinMintAgentRaycastBootstrap -AgentProfile $raycastProfile -State $raycastState
-    Assert-Equal $raycastResult.Status 'ok' 'Raycast bootstrap should pass when Raycast package state is ok.'
-    Assert-Equal (@($raycastResult.RequiredStateSteps) -join ',') 'tool:9PFXXSHC64H3' 'Raycast readiness should require the Store package install state.'
-
     $launcherKeySearchProfile = [pscustomobject]@{
         modules = [pscustomobject]@{
             launcherKey = [pscustomobject]@{ enabled = $true; target = 'Search'; chord = 'Win+Shift+F23' }
-            raycast = [pscustomobject]@{ enabled = $false }
         }
     }
     $launcherKeyState = New-TestAgentState
@@ -588,7 +555,7 @@ try {
         Assert-True ($moduleText -notmatch 'Assert-WinMintAgentStateStepsOk') "FirstLogon module '$($moduleFile.Name)' should return RequiredStateSteps and leave enforcement to the runtime."
         Assert-True ($moduleText -notmatch 'Invoke-WinMintAgentTilingDesktopBootstrap') "FirstLogon module '$($moduleFile.Name)' should not reference the retired tiling desktop bootstrap name."
         Assert-True ($moduleText -notmatch "'tiling-desktop'") "FirstLogon module '$($moduleFile.Name)' should not use tiling-desktop as a state step."
-        Assert-True ($moduleText -notmatch 'tool:(mingit|9PFXXSHC64H3|AmN\.yasb|Nilesoft\.Shell|LGUG2Z\.komorebi|LGUG2Z\.whkd)') "FirstLogon module '$($moduleFile.Name)' should resolve manifest-backed tool state keys through Get-AgentManifestToolStateKey."
+        Assert-True ($moduleText -notmatch 'tool:(mingit|AmN\.yasb|Nilesoft\.Shell|LGUG2Z\.komorebi|LGUG2Z\.whkd)') "FirstLogon module '$($moduleFile.Name)' should resolve manifest-backed tool state keys through Get-AgentManifestToolStateKey."
     }
 
     $saved = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json

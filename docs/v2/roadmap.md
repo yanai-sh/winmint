@@ -156,18 +156,17 @@ Exit criteria:
 
 ### Phase C3 — Launcher and Desktop Integration
 
-Goal: finish the user-facing experience around Raycast, Search fallback, tray behavior, and shell coexistence.
+Goal: finish the user-facing experience around Search key binding, tray behavior, and shell coexistence.
 
 Work:
 
-- verify launcher key behavior across launcher/no-launcher paths
-- confirm Raycast extension curation remains intentional
+- verify Copilot hardware-key → Search binding with no third-party launcher
 - refine status icons and startup behavior
-- ensure desktop layers and launcher behavior coexist predictably
+- ensure desktop layers coexist predictably without a separate launcher product
 
 Exit criteria:
 
-- launcher and shell behavior feels like one product, not separate features stitched together
+- shell behavior feels like one product, not separate features stitched together
 
 ## Track D — Hyper-V VM Test Architecture
 

@@ -110,8 +110,8 @@ Invoke-CliProfileCase -Name 'minimal-default' -Assert {
     if ($Config.SetupUserLocale -ne 'en-IE' -or $Config.SetupHomeLocationGeoId -ne 68) { Add-CliMatrixFailure 'minimal-default should use Ireland/en-IE/68 for setup.' }
     if ($Profile.regional.userLocale -ne 'en-US' -or [int]$Profile.regional.homeLocationGeoId -ne 244) { Add-CliMatrixFailure 'minimal-default should restore visible en-US/244 by default.' }
     if ([string]$Profile.privacy.locationServices -ne 'enabled' -or -not [bool]$Config.Privacy.Location) { Add-CliMatrixFailure 'minimal-default should enable location services by default.' }
-if ($Config.Launcher -ne 'None' -or -not $AgentProfile.modules.packageManagers.enabled -or
-        $AgentProfile.modules.raycast.enabled -or
+    if ($Config.Launcher -ne 'None' -or -not $AgentProfile.modules.packageManagers.enabled -or
+        ($null -ne $AgentProfile.modules.PSObject.Properties['raycast']) -or
         -not $AgentProfile.modules.launcherKey.enabled -or $AgentProfile.modules.launcherKey.target -ne 'Search' -or
         $AgentProfile.modules.phoneLink.enabled -or $AgentProfile.modules.liveInstallAudit.enabled) {
         Add-CliMatrixFailure 'minimal-default should enable only baseline package managers plus WSL, not optional residual first-logon modules.'
@@ -194,7 +194,7 @@ Invoke-CliProfileCase -Name 'desktop-ui-only' -Arguments @('-Install', 'windhawk
     if (-not $Config.InstallWindhawk -or -not $Config.InstallYasb -or -not $Config.InstallKomorebi) {
         Add-CliMatrixFailure 'desktop-ui-only should preserve the selected Windhawk/YASB/Komorebi shell layers.'
     }
-    if ($Config.Launcher -ne 'None' -or $AgentProfile.modules.raycast.enabled) {
+    if ($Config.Launcher -ne 'None' -or ($null -ne $AgentProfile.modules.PSObject.Properties['raycast'])) {
         Add-CliMatrixFailure 'desktop-ui-only should not imply a launcher.'
     }
 }

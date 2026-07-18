@@ -91,7 +91,7 @@ if ($prepareStatus -ne 'current') {
 
 $eventLog = Join-Path $logDir 'WinMintAgent-events.jsonl'
 @(
-    '{"time":"2026-01-01T00:00:00+00:00","type":"install","status":"running","message":"Installing voidtools.Everything.Beta for amd64."}'
+    '{"time":"2026-01-01T00:00:00+00:00","type":"install","status":"running","message":"Installing mingit via Scoop for arm64."}'
 ) | Set-Content -LiteralPath $eventLog -Encoding utf8
 $agentWithEvents = @{
     run = @{ progressEventLog = $eventLog }
@@ -104,7 +104,7 @@ $agentWithEvents = @{
 } | ConvertTo-Json -Depth 6 | ConvertFrom-Json
 
 $liveHint = Get-WinMintSetupShellLiveTaskHint -AgentState $agentWithEvents
-if ($liveHint -notmatch 'Everything') {
+if ($liveHint -notmatch 'mingit') {
     Add-Failure "event log hint should surface install message, got '$liveHint'."
 }
 $liveLabel = Resolve-WinMintSetupShellRunningTaskLabel `
@@ -113,7 +113,7 @@ $liveLabel = Resolve-WinMintSetupShellRunningTaskLabel `
     -FallbackLabel 'Bootstrap winget and Scoop' `
     -ProfileDisplayName 'Projection Test' `
     -AgentState $agentWithEvents
-if ($liveLabel -notmatch 'Everything') {
+if ($liveLabel -notmatch 'mingit') {
     Add-Failure "running task label should surface live install hints, got '$liveLabel'."
 }
 
