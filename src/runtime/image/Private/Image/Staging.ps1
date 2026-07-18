@@ -336,15 +336,15 @@ function Invoke-RobocopyChecked {
         [ValidateNotNullOrEmpty()][string]$Dest,
         [string]$UserFacingMessage
     )
-    $msgDry = if ($UserFacingMessage) { $UserFacingMessage } else { 'Copying the mounted ISO into the working folder for dry-run validation…' }
-    $msgFull = if ($UserFacingMessage) { $UserFacingMessage } else { 'Copying the mounted ISO into the working folder (~5 GB, 1-3 minutes; robocopy runs silently)…' }
+    $msgDry = if ($UserFacingMessage) { $UserFacingMessage } else { 'Copying mounted ISO (dry-run)...' }
+    $msgFull = if ($UserFacingMessage) { $UserFacingMessage } else { 'Copying mounted ISO...' }
     if ($DryRun) {
         Log $msgDry
-        LogVerbose "robocopy `"$Source`" `"$Dest`""
+        LogVerbose "Dry-run ISO copy into work folder: robocopy `"$Source`" `"$Dest`""
     }
     else {
         Log $msgFull
-        LogVerbose "robocopy `"$Source`" `"$Dest`""
+        LogVerbose "ISO copy (~5 GB, 1-3 min; robocopy silent): `"$Source`" -> `"$Dest`""
     }
     if ($Source -like '\\?\Volume{*') {
         foreach ($item in (Get-ChildItem -LiteralPath $Source -Force -ErrorAction Stop)) {
@@ -437,7 +437,7 @@ function Test-OfflineStagingReadiness {
         throw "install.wim CPU architecture is '$detected' but the ISO file name or your selection indicated '$ExpectedArchHint'."
     }
     Assert-WinMintDismCanServiceWim -ImagePath $LocalInstallWim -Index $useIndex
-    LogOK "Staged install.wim looks valid ($detected, $($installMetas.Count) edition(s))."
+    LogOK "install.wim OK ($detected, $($installMetas.Count) edition(s))."
     LogVerbose "install.wim image index in use: $($archInst.ImageIndex)."
 
     $bootWim = Join-Path $IsoContentsRoot 'sources\boot.wim'
@@ -449,7 +449,7 @@ function Test-OfflineStagingReadiness {
         if ($forDrivers.Count -eq 0) { throw 'boot.wim reported no images.' }
         $script:BootWimDriverMountIndexes = $forDrivers
         $script:BootWimWinPEUtilityMountIndex = if ($indexes -contains 2) { 2 } else { $indexes[-1] }
-        LogOK "boot.wim present ($($indexes.Count) image(s)); Setup-only WinPE driver pass and utilities are wired."
+        LogVerbose "boot.wim present ($($indexes.Count) image(s)); Setup-only WinPE driver pass and utilities are wired."
         LogVerbose "boot.wim driver indexes: $($script:BootWimDriverMountIndexes -join ', '); WinPE utility index: $($script:BootWimWinPEUtilityMountIndex)."
     }
     else {
@@ -457,11 +457,10 @@ function Test-OfflineStagingReadiness {
         $script:BootWimDriverMountIndexes = @()
     }
 
-    LogOK "Output folder: $ScriptDirForChecks"
+    LogVerbose "Output folder: $ScriptDirForChecks"
 
     $oscd = Resolve-OscdimgPath
-    LogOK "oscdimg resolved for the ISO step."
-    LogVerbose $oscd
+    LogVerbose "oscdimg resolved for the ISO step: $oscd"
 
     # Enumerate every driver source this build will actually use, then report each one
     # honestly. A "source" contributes to injection if it ends up holding .inf files (either
@@ -475,7 +474,8 @@ function Test-OfflineStagingReadiness {
     if (Test-WinMintDriverSourceUsesSurfaceCatalog -Source $DriverSource) {
         try {
             $surfaceDevice = Resolve-WinMintSurfaceCatalogDevice -DeviceId $CustomDriverPath
-            LogOK "Surface catalog driver package: $($surfaceDevice.name) ($($surfaceDevice.architecture)); downloaded during full build."
+            Log "Surface drivers: $($surfaceDevice.name) ($($surfaceDevice.architecture))"
+            LogVerbose 'Surface catalog package is downloaded during the full build.'
         }
         catch {
             LogWarn $_.Exception.Message
@@ -498,11 +498,13 @@ function Test-OfflineStagingReadiness {
                 $infs = @(Get-ChildItem -LiteralPath $item.FullName -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue)
                 $msis = @(Get-ChildItem -LiteralPath $item.FullName -Recurse -Filter '*.msi' -File -ErrorAction SilentlyContinue)
                 if ($infs.Count -ge 1) {
-                    LogOK "Custom folder ($($item.FullName)): $($infs.Count) .inf file(s) ready for injection."
+                    Log "Custom drivers: $($infs.Count) .inf file(s)"
+                    LogVerbose "Custom folder $($item.FullName): $($infs.Count) .inf file(s) ready for injection."
                     $contributing = $true
                 }
                 elseif ($msis.Count -ge 1) {
-                    LogOK "Custom folder ($($item.FullName)): $($msis.Count) MSI(s) will be administrative-installed before DISM."
+                    Log "Custom drivers: $($msis.Count) MSI(s)"
+                    LogVerbose "Custom folder $($item.FullName): $($msis.Count) MSI(s) administrative-installed before DISM."
                     $contributing = $true
                 }
                 else {
@@ -510,15 +512,18 @@ function Test-OfflineStagingReadiness {
                 }
             }
             elseif ($item.Extension -ieq '.inf') {
-                LogOK "Custom INF: $($item.Name) (folder $($item.DirectoryName))."
+                Log "Custom drivers: $($item.Name)"
+                LogVerbose "Custom INF folder: $($item.DirectoryName)"
                 $contributing = $true
             }
             elseif ($item.Extension -ieq '.msi') {
-                LogOK "Custom MSI: $($item.Name) — administrative-installed before DISM."
+                Log "Custom drivers: $($item.Name)"
+                LogVerbose 'Custom MSI administrative-installed before DISM.'
                 $contributing = $true
             }
             elseif ($item.Extension -ieq '.zip') {
-                LogOK "Custom driver ZIP: $($item.Name) — extracted before DISM."
+                Log "Custom drivers: $($item.Name)"
+                LogVerbose 'Custom driver ZIP extracted before DISM.'
                 $contributing = $true
             }
             else {
@@ -530,13 +535,15 @@ function Test-OfflineStagingReadiness {
     # 2. Host driver export — runs Export-WindowsDriver -Online at build time.
     if ($ExportHostDrivers) {
         $sourcesReported++
-        LogOK 'Host driver export: Export-WindowsDriver -Online will run during the build, with pnputil fallback if needed.'
+        Log 'Host driver export enabled'
+        LogVerbose 'Export-WindowsDriver -Online will run during the build, with pnputil fallback if needed.'
         $contributing = $true
     }
 
     if (-not $contributing) {
         if ($DriverSource -eq 'None') {
-            Log 'Driver injection: none configured (target ships with default Windows drivers).'
+            Log 'Drivers: none (default Windows)'
+            LogVerbose 'Driver injection: none configured (target ships with default Windows drivers).'
         }
         else {
             LogWarn "Driver source is '$DriverSource' but no usable driver files were found across any source. The build will produce an ISO with default Windows drivers only."
@@ -559,7 +566,7 @@ function Test-RemoteBuildPrerequisite {
     $gh['X-GitHub-Api-Version'] = '2022-11-28'
 
     Write-SectionHeader 'Dry run: web checks and ISO layout'
-    Log 'Checking boot files required for the ISO…'
+    Log 'Checking ISO boot files...'
     $efisysRel = if (Test-Path -LiteralPath (Join-Path $IsoContentsRoot 'efi\microsoft\boot\efisys_noprompt.bin')) {
         'efi\microsoft\boot\efisys_noprompt.bin'
     }
@@ -581,15 +588,16 @@ function Test-RemoteBuildPrerequisite {
         if (-not (Test-Path -LiteralPath $bf)) { throw "Staged ISO is missing '$relBoot' (needed for ISO build). Path: $bf" }
         LogVerbose "Boot file OK: $relBoot -> $bf"
     }
-    LogOK 'Boot files for oscdimg are present on the staged tree.'
+    LogOK 'ISO boot files OK'
+    LogVerbose 'Boot files for oscdimg are present on the staged tree.'
 
     if ($AutounattendPath -and (Test-Path -LiteralPath $AutounattendPath)) {
         try {
             $raw = Get-Content -LiteralPath $AutounattendPath -Raw -ErrorAction Stop
             $xd = [xml]::new()
             $xd.LoadXml($raw)
-            LogOK 'autounattend.xml is valid XML and loads cleanly.'
-            LogVerbose $AutounattendPath
+            LogOK 'autounattend.xml OK'
+            LogVerbose "autounattend.xml valid: $AutounattendPath"
         }
         catch {
             throw "autounattend.xml exists but is not valid XML: $AutounattendPath — $_"
@@ -631,7 +639,7 @@ function Test-RemoteBuildPrerequisite {
         }
     }
 
-    Log 'Checking GitHub releases used by the build (names only; no large downloads)…'
+    Log 'Checking GitHub release names...'
     Start-Sleep -Milliseconds 150
     if (-not (Test-WinMintGitHubApiReachable -TimeoutSec 5)) {
         LogWarn 'GitHub API is not reachable; skipping release freshness checks and using cached payloads where available.'
@@ -650,7 +658,8 @@ function Test-RemoteBuildPrerequisite {
         if (-not $wgAsset) { throw 'Dry-run: winget-cli latest release has no .msixbundle asset.' }
         & $probeHead $wgAsset.browser_download_url 'Winget msixbundle'
 
-        LogOK 'GitHub assets resolved and download URLs respond (where reachable).'
+        LogOK 'GitHub release checks OK'
+        LogVerbose 'GitHub assets resolved and download URLs respond (where reachable).'
     }
     catch {
         $cache = Get-WinMintOfflinePayloadCacheStatus -Architecture $TargetArch
@@ -776,11 +785,12 @@ function Remove-WinMintCapabilities {
         foreach ($cap in $capabilities) {
             try {
                 Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Remove-Capability', "/CapabilityName:$cap") | Out-Null
-                LogOK "Removed: $cap"
+                LogVerbose "Removed capability: $cap"
                 $removed.Add($cap)
             }
             catch { LogWarn "Capability not present or already removed: $cap" }
         }
+        LogOK "Removed $($removed.Count) capability(ies)."
     }
     Set-WinMintManifestCapabilityRemovalFacts -CapabilityNames $removed.ToArray()
 
@@ -802,7 +812,7 @@ function Remove-WinMintCapabilities {
                 if ($packageName -like "*$pattern*") {
                     try {
                         Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Remove-Package', "/PackageName:$packageName") | Out-Null
-                        LogOK "Removed package: $packageName"
+                        LogVerbose "Removed package: $packageName"
                         $removedPackages.Add($packageName)
                     }
                     catch {
@@ -812,17 +822,21 @@ function Remove-WinMintCapabilities {
                 }
             }
         }
+        LogOK "Removed $($removedPackages.Count) optional package(s)."
     }
     Set-WinMintManifestWindowsPackageRemovalFacts -PackageNames $removedPackages.ToArray()
 
+    $disabledFeatures = [System.Collections.Generic.List[string]]::new()
     Invoke-Action 'Disabling PowerShell 2.0 (pre-AMSI engine; no legitimate use on modern hardware)' {
         foreach ($feature in $features) {
             try {
                 Invoke-DismExe -Arguments @('/English', "/Image:$MountDir", '/Disable-Feature', "/FeatureName:$feature", '/Remove') | Out-Null
-                LogOK "Disabled: $feature"
+                LogVerbose "Disabled feature: $feature"
+                $disabledFeatures.Add($feature)
             }
             catch { LogWarn "Feature not present or already disabled: $feature" }
         }
+        LogOK "Disabled $($disabledFeatures.Count) feature(s)."
     }
 }
 
@@ -856,7 +870,7 @@ function Remove-WinMintOneDriveSetupStub {
                 $null = & icacls.exe $setupFile /grant 'Administrators:F' /C 2>$null
                 Remove-Item -LiteralPath $setupFile -Force -ErrorAction Stop
                 $removed.Add($relativePath) | Out-Null
-                LogOK "Removed OneDrive setup stub: $relativePath"
+                LogVerbose "Removed OneDrive setup stub: $relativePath"
             }
             catch {
                 $failed.Add([ordered]@{
@@ -866,6 +880,7 @@ function Remove-WinMintOneDriveSetupStub {
                 LogWarn "Could not remove OneDrive setup stub ${relativePath}: $($_.Exception.Message)"
             }
         }
+        LogOK "Removed $($removed.Count) OneDrive setup stub(s)."
     }
 
     Set-WinMintManifestOneDriveSetupStubRemovalFacts `

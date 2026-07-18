@@ -34,6 +34,10 @@ $progressHandler = {
     param($ProgressEvent)
     $progress.Add($ProgressEvent) | Out-Null
 }
+# Mute Spectre/human console so JSON on stdout stays clean; verbose file still fills.
+if (Get-Command Set-WinMintHumanConsoleMuted -ErrorAction SilentlyContinue) {
+    Set-WinMintHumanConsoleMuted -Muted $true
+}
 
 try {
     $build = Start-WinMintBuild -BuildProfile $buildProfile -DryRun:$DryRun -ProgressHandler $progressHandler

@@ -130,7 +130,8 @@ function Install-Autounattend {
     $nsMgr = [System.Xml.XmlNamespaceManager]::new($xmlDoc.NameTable)
     $nsMgr.AddNamespace('u', 'urn:schemas-microsoft-com:unattend')
 
-    Log 'Updating autounattend (PC name, account, edition mode, locales, disk behavior)...'
+    Log 'Configuring autounattend...'
+    LogVerbose 'Updating PC name, account, edition mode, locales, and disk behavior in autounattend.xml.'
 
     Set-WinMintManifestSetupPlanFact -SetupPlan $SetupPlan
 
@@ -191,7 +192,7 @@ function Install-Autounattend {
                 $null = $pkNode.PrependChild($keyNode)
             }
             $keyNode.InnerText = $ProductKey
-            Log "Product key: injected generic key for '$EditionName' (skips the setup key page; does not activate)."
+            LogVerbose "Product key: injected generic key for '$EditionName' (skips the setup key page; does not activate)."
         }
     }
     else {
@@ -200,11 +201,12 @@ function Install-Autounattend {
         foreach ($productKeyNode in @($xmlDoc.SelectNodes('//u:ProductKey', $nsMgr))) {
             $null = $productKeyNode.ParentNode.RemoveChild($productKeyNode)
         }
+        LogVerbose 'Product key omitted; target device firmware/digital license selects the edition.'
     }
     if ($EditionMode -eq 'Fixed') {
         $editionNode = $xmlDoc.SelectSingleNode('//u:MetaData[u:Key="/IMAGE/NAME"]/u:Value', $nsMgr)
         if ($editionNode) { $editionNode.InnerText = $EditionName }
-        Log "Edition mode: fixed image selection ($EditionName) via ImageInstall metadata; activation remains the target device license."
+        LogVerbose "Edition mode Fixed: ImageInstall metadata selects '$EditionName'; activation remains the target device license."
     }
     elseif ($InstallImageCount -eq 1) {
         $xmlNs = 'urn:schemas-microsoft-com:unattend'
@@ -226,11 +228,11 @@ function Install-Autounattend {
             $null = $metadataNode.AppendChild($valueNode)
             $null = $installFromNode.AppendChild($metadataNode)
         }
-        Log 'Edition mode: target license on single-image media - selecting install.wim index 1 without a product key.'
+        LogVerbose 'Edition mode TargetLicense (single image): install.wim index 1, no product key.'
     }
     else {
         if ($installFromNode) { $null = $installFromNode.ParentNode.RemoveChild($installFromNode) }
-        Log 'Edition mode: target license - Windows Setup will use the target device firmware key when available; no product key is written.'
+        LogVerbose 'Edition mode TargetLicense: firmware key when available; no product key written.'
     }
 
     foreach ($pcNode in @($xmlDoc.SelectNodes('//u:ComputerName', $nsMgr))) {
@@ -242,10 +244,10 @@ function Install-Autounattend {
         $hideWirelessNode.InnerText = if ($AccountMode -eq 'Local') { 'true' } else { 'false' }
     }
     if ($AccountMode -eq 'Local') {
-        Log 'OOBE network page is hidden for fully unattended local-account installs.'
+        LogVerbose 'OOBE network page hidden for fully unattended local-account installs.'
     }
     else {
-        Log 'OOBE network page remains visible for Microsoft OOBE account setup.'
+        LogVerbose 'OOBE network page remains visible for Microsoft OOBE account setup.'
     }
 
     if ($AccountMode -eq 'MicrosoftOobe') {
@@ -262,7 +264,8 @@ function Install-Autounattend {
         if ($AutoLogon) {
             LogWarn 'Autologon ignored because Microsoft account OOBE lets the user create/sign in to the account interactively.'
         }
-        Log 'Account mode: official OOBE — Microsoft account/local-account choice is handled by Windows Setup.'
+        Log 'Account mode: Microsoft OOBE'
+        LogVerbose 'Official OOBE - Microsoft account/local-account choice is handled by Windows Setup.'
     }
     else {
         $bypassNroNode = $xmlDoc.SelectSingleNode('//u:RunSynchronousCommand[contains(u:Path, "BypassNRO")]', $nsMgr)
@@ -282,8 +285,9 @@ function Install-Autounattend {
         }
         elseif ($accountPasswordNode) {
             $null = $accountPasswordNode.ParentNode.RemoveChild($accountPasswordNode)
-            Log 'Local account password omitted; Windows will create a passwordless local administrator.'
+            LogVerbose 'Local account password omitted; Windows will create a passwordless local administrator.'
         }
+        Log "Account mode: local ($TargetUser)"
     }
 
     if ($AccountMode -eq 'Local' -and $AutoLogon -and $TargetPass) {
@@ -335,21 +339,25 @@ function Install-Autounattend {
 
     $diskConfigNode = $xmlDoc.SelectSingleNode('//u:DiskConfiguration', $nsMgr)
     if (-not $AutoWipeDisk) {
-        Log 'Disk layout: manual — standard Setup disk UI; autounattend does not clear the primary disk.'
+        Log 'Disk layout: manual'
+        LogVerbose 'Manual disk UI; autounattend does not clear the primary disk.'
         if ($diskConfigNode) { $null = $diskConfigNode.ParentNode.RemoveChild($diskConfigNode) }
         $installToNode = $xmlDoc.SelectSingleNode('//u:InstallTo', $nsMgr)
         if ($installToNode) { $null = $installToNode.ParentNode.RemoveChild($installToNode) }
     }
     elseif ($diskLayoutMode -eq 'AutoWipeDisk0') {
-        Log 'Disk layout: native unattend wipe — EFI (1 GB) + MSR (16 MB) + Windows on the primary disk.'
+        Log 'Disk layout: wipe disk 0'
+        LogVerbose 'Native unattend wipe - EFI (1 GB) + MSR (16 MB) + Windows on the primary disk.'
     }
     else {
         if ($diskLayoutMode -eq 'DualBootReserved') {
             $preset = [string](Get-WinMintProfileSetting $DiskLayout 'preset' 'Balanced')
-            Log "Disk layout: dual boot reserved ($preset) — EFI (1 GB) + MSR (16 MB) + rounded Windows + WinRE (1 GB), Linux space left unallocated."
+            Log "Disk layout: dual-boot ($preset)"
+            LogVerbose "Dual boot reserved ($preset) - EFI (1 GB) + MSR (16 MB) + rounded Windows + WinRE (1 GB), Linux space left unallocated."
         }
         else {
-            Log 'Disk layout: automated diskpart — EFI (1 GB) + MSR (16 MB) + Windows + WinRE (1 GB) on the primary disk.'
+            Log 'Disk layout: automated diskpart'
+            LogVerbose 'Automated diskpart - EFI (1 GB) + MSR (16 MB) + Windows + WinRE (1 GB) on the primary disk.'
         }
         if ($diskConfigNode) { $null = $diskConfigNode.ParentNode.RemoveChild($diskConfigNode) }
         # InstallTo (disk 0, partition 3) is retained: EFI=1, MSR=2, Windows=3, Recovery=4
@@ -381,7 +389,7 @@ function Install-Autounattend {
                 $null    = $wpSetupComp.AppendChild($cmdEl)
                 $nextOrder++
             }
-            LogOK 'Diskpart script (EFI + MSR + Windows + WinRE) injected into windowsPE RunSynchronous.'
+            LogVerbose 'Diskpart script (EFI + MSR + Windows + WinRE) injected into windowsPE RunSynchronous.'
         }
     }
 
@@ -393,25 +401,26 @@ function Install-Autounattend {
         $xmlWriter = [System.Xml.XmlWriter]::Create($stringWriter, $xmlWriterSettings)
         try { $xmlDoc.Save($xmlWriter) } finally { $xmlWriter.Close() }
         $autounattendXml = $stringWriter.ToString()
-        LogOK 'Validated autounattend.xml generation in memory.'
+        LogOK 'Validated autounattend.xml in memory.'
+        LogVerbose 'Dry-run autounattend.xml generation validated (in memory only).'
 
         $setupProfileJson = ''
         if ($SetupProfile) {
             $setupProfileJson = $SetupProfile | ConvertTo-Json -Depth 12
             $null = $setupProfileJson | ConvertFrom-Json -ErrorAction Stop
-            LogOK 'Validated setup profile JSON generation in memory.'
+            LogVerbose 'Validated setup profile JSON generation in memory.'
         }
         $agentProfileJson = ''
         if ($AgentProfile) {
             $agentProfileJson = $AgentProfile | ConvertTo-Json -Depth 12
             $null = $agentProfileJson | ConvertFrom-Json -ErrorAction Stop
-            LogOK 'Validated WinMintAgent profile JSON generation in memory.'
+            LogVerbose 'Validated WinMintAgent profile JSON generation in memory.'
         }
         $setupPlanJson = ''
         if ($SetupPlan) {
             $setupPlanJson = $SetupPlan | ConvertTo-Json -Depth 16
             $null = $setupPlanJson | ConvertFrom-Json -ErrorAction Stop
-            LogOK 'Validated setup plan JSON generation in memory.'
+            LogVerbose 'Validated setup plan JSON generation in memory.'
         }
 
         Write-SectionHeader 'Autounattend summary (dry run)' -Accent Yellow -RuleColor Grey
@@ -460,7 +469,7 @@ function Install-Autounattend {
             $null = New-Item -ItemType Directory -Path $lockScreenDestDir -Force -ErrorAction Stop
             Copy-Item -LiteralPath $wallpaperSrc -Destination (Join-Path $wallpaperDestDir 'WinMint-Bloom.jpg') -Force
             Copy-Item -LiteralPath $lockScreenSrc -Destination (Join-Path $lockScreenDestDir 'WinMint-Lock.jpg') -Force
-            LogOK 'Staged desktop and lock-screen images into stock Windows image slots.'
+            LogVerbose 'Staged desktop and lock-screen images into stock Windows image slots.'
 
             # Default account picture = the WinMint mark. Overwrite the stock blank-silhouette
             # defaults at ProgramData\Microsoft\User Account Pictures so any local account
@@ -475,7 +484,7 @@ function Install-Autounattend {
                         Copy-Item -LiteralPath $picSrc -Destination (Join-Path $accountPicDest $pic) -Force
                     }
                 }
-                LogOK 'Staged WinMint account picture into the offline image.'
+                LogVerbose 'Staged WinMint account picture into the offline image.'
             }
             Invoke-WinMintSetupPayloadStaging `
                 -MountDir $MountDir `
@@ -496,7 +505,8 @@ function Install-Autounattend {
         $xmlWriterSettings.Encoding = [System.Text.UTF8Encoding]::new($false)
         $xmlWriter = [System.Xml.XmlWriter]::Create($outputPath, $xmlWriterSettings)
         try { $xmlDoc.Save($xmlWriter) } finally { $xmlWriter.Close() }
-        LogOK 'autounattend.xml written next to the staged ISO (ready for oscdimg).'
+        LogOK 'Wrote autounattend.xml'
+        LogVerbose 'autounattend.xml written next to the staged ISO (ready for oscdimg).'
     }
 }
 
@@ -505,7 +515,7 @@ function Install-WinPEUtility {
     Write-SectionHeader 'WinPE: optional disk tools'
 
     if ($AutoWipeDisk) {
-        Log 'Skipping WinPE FormatDisk helper (automated disk layout is already enabled).'
+        LogVerbose 'Skipping WinPE FormatDisk helper (automated disk layout is already enabled).'
         return
     }
 
@@ -520,7 +530,7 @@ function Install-WinPEUtility {
 
         try {
             Mount-WinMintImage -ImagePath $bootWim -Index $script:BootWimWinPEUtilityMountIndex -MountDir $bootMount
-            Log 'Applying dark theme and FormatDisk.cmd to WinPE…'
+            LogVerbose 'Applying dark theme and FormatDisk.cmd to WinPE...'
             $peSystem = Join-Path $bootMount 'Windows\System32\config\SYSTEM'
             $peSoftware = Join-Path $bootMount 'Windows\System32\config\SOFTWARE'
             $null = & reg.exe load 'HKLM\peSYSTEM' $peSystem

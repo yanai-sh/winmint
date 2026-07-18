@@ -457,6 +457,33 @@ function Test-RepositoryFixtureLayout {
         }
     }
 
+    # Source ISO check: verify a real (non-zero-byte) Windows ISO is resolvable.
+    # A 0-byte placeholder in tests/fixtures/iso/ satisfies Test-Path for contract tests
+    # but will fail any real build or dry-run. This check warns early.
+    $localIsoDir = Join-Path $env:LOCALAPPDATA 'WinMint\source-iso'
+    $localIso = if (Test-Path -LiteralPath $localIsoDir) {
+        Get-ChildItem -LiteralPath $localIsoDir -Filter '*.iso' -File |
+            Where-Object { $_.Length -gt 0 } |
+            Select-Object -First 1
+    }
+    if (-not $localIso) {
+        $fixtureIsoDir = Join-Path $root 'tests\fixtures\iso'
+        $fixtureIso = Get-ChildItem -LiteralPath $fixtureIsoDir -Filter '*.iso' -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Length -gt 0 } |
+            Select-Object -First 1
+        if (-not $fixtureIso) {
+            $zeroByteStub = Get-ChildItem -LiteralPath $fixtureIsoDir -Filter '*.iso' -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Length -eq 0 } |
+                Select-Object -First 1
+            if ($zeroByteStub) {
+                Write-Warning "Source ISO placeholder '$($zeroByteStub.Name)' is 0 bytes and cannot be used for builds. Place the real Windows 11 ARM64 ISO in: $localIsoDir"
+            }
+            else {
+                Write-Warning "No source ISO found. Place the official Windows 11 ARM64 ISO in: $localIsoDir"
+            }
+        }
+    }
+
     Write-Host 'OK repository test fixture layout'
 }
 

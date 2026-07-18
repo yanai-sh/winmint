@@ -203,6 +203,26 @@ function Write-WinMintProgress {
         Level   = $Level
         Message = $Message
     }
+    $scriptHandler = Get-Variable -Name WinMintProgressHandler -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+    # Route through Log* for verbose file + human Spectre. Log* also emits to
+    # script:WinMintProgressHandler when installed; invoke an explicit
+    # -ProgressHandler only when the script handler is not yet set (early engine).
+    if (Get-Command Log -ErrorAction SilentlyContinue) {
+        switch ($Level) {
+            'OK'      { LogOK $Message }
+            'Warn'    { LogWarn $Message }
+            'Error'   { LogErr $Message }
+            'Section' {
+                if (Get-Command LogSection -ErrorAction SilentlyContinue) { LogSection $Message }
+                else { Log $Message }
+            }
+            default   { Log $Message }
+        }
+        if ($ProgressHandler -and $null -eq $scriptHandler) {
+            & $ProgressHandler $progressEvent
+        }
+        return
+    }
     if ($ProgressHandler) { & $ProgressHandler $progressEvent }
     else { Write-Information "[$Level] $Stage $Message" -InformationAction Continue }
 }

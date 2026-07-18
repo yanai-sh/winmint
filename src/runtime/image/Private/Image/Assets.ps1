@@ -21,15 +21,16 @@ function Sync-NerdFont {
             Add-Type -AssemblyName System.IO.Compression.FileSystem
             try {
                 if (Get-ChildItem -LiteralPath $FontDir -Filter '*CascadiaCodeNF-Regular.ttf' -File -ErrorAction SilentlyContinue | Select-Object -First 1) {
-                    LogOK 'Cascadia Code Nerd Font is already present.'
+                    LogVerbose 'Cascadia Code Nerd Font is already present.'
                     return
                 }
 
                 $cachedRoot = & $GetCacheHit
                 if ($null -ne $cachedRoot) {
-                    Log "Restoring $DisplayName Nerd Font from temp cache (skipping GitHub + zip extract)…"
+                    Log "Restoring $DisplayName Nerd Font from cache..."
+                    LogVerbose 'Skipping GitHub download and zip extract (temp font cache hit).'
                     & $RestoreFromCache -FontDir $FontDir -CacheRootDir $cachedRoot
-                    LogOK "$DisplayName Nerd Font restored from temp cache."
+                    LogOK "$DisplayName Nerd Font restored from cache."
                     return
                 }
                 $payload = Resolve-WinMintGitHubReleasePayload `
@@ -114,7 +115,7 @@ function Sync-Cursor {
         if ($missingRequired.Count -gt 0) {
             throw "Bundled cursor pack '$PackKind' is missing required role file(s): $($missingRequired -join ', ')"
         }
-        LogOK "Bundled Windows 11 Modern cursor pack is present."
+        LogVerbose 'Bundled Windows 11 Modern cursor pack is present.'
     }
 }
 
@@ -248,7 +249,8 @@ function Install-OfflineWindowsTerminalSettings {
         $settingsDir = Join-Path $MountDir 'Users\Default\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState'
         $null = New-Item -ItemType Directory -Path $settingsDir -Force -ErrorAction Stop
         Copy-Item -LiteralPath $settingsSrc -Destination (Join-Path $settingsDir 'settings.json') -Force
-        LogOK 'Staged default Windows Terminal settings for PowerShell 7.'
+        LogOK 'Terminal settings staged'
+        LogVerbose 'Staged default Windows Terminal settings for PowerShell 7.'
     }
 }
 

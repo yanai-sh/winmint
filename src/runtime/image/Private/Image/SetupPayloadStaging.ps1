@@ -156,7 +156,7 @@ function Copy-WinMintSetupScriptPayloads {
 
     Copy-WinMintRuntimeCommonPayload -RepositoryRoot $RepositoryRoot -Destination $Destination
 
-    LogOK 'Verified SetupComplete / FirstLogon / specialize scripts are staged into the offline image.'
+    LogVerbose 'Verified SetupComplete / FirstLogon / specialize scripts are staged into the offline image.'
 }
 
 function Copy-WinMintSetupCompleteModulePayloads {
@@ -259,7 +259,7 @@ function Copy-WinMintAgentRuntimePayload {
     }
 
     Save-WinMintSetupPayloadJson -Value $AgentProfile -Path (Join-Path $Destination 'WinMintAgentProfile.json') -Depth 12
-    LogOK 'Generated WinMintAgent profile from the selected wizard options.'
+    LogVerbose 'Generated WinMintAgent profile from the selected wizard options.'
 }
 
 function Resolve-WinMintSetupShellPublishFolder {
@@ -311,7 +311,7 @@ function Copy-WinMintSetupShellPayload {
         Copy-Item -LiteralPath $assetSource -Destination (Join-Path $destDir $assetName) -Force
     }
 
-    LogOK 'Staged WinMintSetupShell.exe (native Direct2D), tokens, and hero brand assets.'
+    LogVerbose 'Staged WinMintSetupShell.exe (native Direct2D), tokens, and hero brand assets.'
 }
 
 function Copy-WinMintAgentBrandAssets {
@@ -325,7 +325,7 @@ function Copy-WinMintAgentBrandAssets {
         $brandAssetDir = Join-Path $AgentDestination 'Assets\Brand'
         $null = New-Item -ItemType Directory -Path $brandAssetDir -Force
         Copy-Item -LiteralPath $brandImageSource -Destination (Join-Path $brandAssetDir 'winmint_logo_wordmark.png') -Force
-        LogOK 'Staged WinMint logo wordmark PNG for the first-logon console splash.'
+        LogVerbose 'Staged WinMint logo wordmark PNG for the first-logon console splash.'
     }
 }
 
@@ -411,7 +411,7 @@ function Copy-WinMintAgentDesktopPresetAssets {
         Copy-Item -LiteralPath $file.Source -Destination $destination -Force
     }
 
-    LogOK "Staged $($manifest.DisplayName) curated preset for first-logon setup."
+    LogVerbose "Staged $($manifest.DisplayName) curated preset for first-logon setup."
 }
 
 function Copy-WinMintAgentWindhawkAssets {
@@ -467,7 +467,7 @@ function Copy-WinMintAgentKomorebiAssets {
     foreach ($name in @('komorebi.json', 'applications.json', 'whkdrc')) {
         Copy-Item -LiteralPath (Join-Path $komorebiSourceDir $name) -Destination (Join-Path $komorebiAssetDir $name) -Force
     }
-    LogOK 'Staged Komorebi preset for first-logon setup.'
+    LogVerbose 'Staged Komorebi preset for first-logon setup.'
 }
 
 function Copy-WinMintAgentAssetPayloads {
@@ -527,18 +527,19 @@ function Invoke-WinMintSetupPayloadStaging {
 
     if ($null -ne $SetupProfile) {
         Save-WinMintSetupPayloadJson -Value $SetupProfile -Path (Join-Path $destScripts 'WinMintSetupProfile.json') -Depth 12
-        LogOK 'Generated setup profile for specialize, SetupComplete, and FirstLogon scripts.'
+        LogVerbose 'Generated setup profile for specialize, SetupComplete, and FirstLogon scripts.'
     }
 
     if ($null -ne $SetupPlan) {
-        LogOK 'Setup plan retained for host output artifacts only (not staged on the guest image).'
+        LogVerbose 'Setup plan retained for host output artifacts only (not staged on the guest image).'
     }
 
     $agentDest = Join-Path $destScripts 'WinMintAgent'
     Copy-WinMintAgentRuntimePayload -RepositoryRoot $ScriptRoot -Destination $agentDest -AgentProfile $AgentProfile
     Copy-WinMintAgentAssetPayloads -RepositoryRoot $ScriptRoot -AgentDestination $agentDest -AgentProfile $AgentProfile
 
-    LogOK 'Copied setup scripts into the offline image (matching files only).'
+    LogOK 'Staged setup scripts and FirstLogon payload into the offline image.'
+    LogVerbose 'Copied setup scripts into the offline image (matching files only).'
     [pscustomobject]@{
         Destination = $destScripts
         AgentDestination = $agentDest

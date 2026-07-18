@@ -18,7 +18,8 @@ function Convert-WinMintInstallEsdToWim {
         throw "Neither install.wim nor install.esd was found under $sources."
     }
 
-    Log 'Converting install.esd to install.wim in the staged copy for DISM servicing.'
+    Log 'Converting install.esd -> install.wim...'
+    LogVerbose 'ESD->WIM export in the staged ISO copy for DISM servicing.'
     if ($DryRun) { LogVerbose 'Dry run still converts the temporary staged ESD so WIM metadata validation is complete.' }
     $images = @(Get-WindowsImage -ImagePath $esd -ErrorAction Stop | Sort-Object ImageIndex)
     Assert-WinMintDismCanServiceImages -ImagePath $esd -Images $images
@@ -48,7 +49,8 @@ function Mount-WinMintIsoToWorkTree {
     $resolvedSourceIso = (Resolve-Path -LiteralPath $SourceIso -ErrorAction Stop).Path
     [object[]]$autoPlayState = @(Push-Win11IsoAutoPlaySuppression)
     try {
-        if ($DryRun) { Log 'Mounting source ISO for dry-run staging.' } else { Log 'Mounting source ISO.' }
+        Log 'Mounting source ISO...'
+        if ($DryRun) { LogVerbose 'Dry-run staging mount (ISO is copied into the work tree).' }
         # Use a drive letter for build staging so Invoke-RobocopyChecked can use
         # robocopy. Copy-Item from a no-drive-letter volume GUID is much slower
         # and can appear hung on large UUP-generated ISOs.
@@ -186,10 +188,29 @@ function New-WinMintIsoImage {
         $oldPref = $PSNativeCommandUseErrorActionPreference
         $PSNativeCommandUseErrorActionPreference = $false
         try {
-            Log 'oscdimg assembling final ISO (3-5 minutes for a 5 GB ISO; output is suppressed and the bar will appear stuck)…'
-            $out = & $oscdimg @arguments 2>&1
-            $code = $LASTEXITCODE
-            if ($code -ne 0) { throw "oscdimg failed with exit code $code.`n$($out | Out-String)" }
+            Log 'Assembling bootable ISO...'
+            LogVerbose "oscdimg: $oscdimg $($arguments -join ' ')"
+            $runOscdimg = {
+                $invoke = {
+                    $out = & $oscdimg @arguments 2>&1
+                    $code = $LASTEXITCODE
+                    if ($code -ne 0) { throw "oscdimg failed with exit code $code.`n$($out | Out-String)" }
+                }
+                if (Get-Command Invoke-WinMintSpectreQuiet -ErrorAction SilentlyContinue) {
+                    Invoke-WinMintSpectreQuiet -ScriptBlock $invoke
+                }
+                else {
+                    & $invoke
+                }
+            }
+            if ((Get-Command Test-WinMintSpectreLiveUiAllowed -ErrorAction SilentlyContinue) -and
+                (Test-WinMintSpectreLiveUiAllowed) -and
+                (Get-Command Invoke-SpectreCommandWithStatus -ErrorAction SilentlyContinue)) {
+                $null = Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title 'Assembling bootable ISO' -ScriptBlock $runOscdimg
+            }
+            else {
+                & $runOscdimg
+            }
         }
         finally {
             $PSNativeCommandUseErrorActionPreference = $oldPref
@@ -242,13 +263,14 @@ function Invoke-WinMintIsoPipeline {
         $stageCacheDir = Get-WinMintIsoStageCacheHit -SourceIsoPath $BuildConfig.SourceIso
         if ($null -ne $stageCacheDir) {
             $usedStageCache = $true
+            Log 'Restoring staged ISO from cache...'
             if ($DryRun) {
-                Log 'Restoring staged ISO from temp cache for dry-run validation…'
+                LogVerbose 'Dry-run validation restore from temp ISO stage cache (skips ISO mount).'
             }
             else {
-                Log 'Restoring staged ISO from temp cache (skipping ISO mount and ESD→WIM conversion)…'
+                LogVerbose 'Skipping ISO mount and ESD->WIM conversion (temp ISO stage cache hit).'
             }
-            Invoke-RobocopyChecked -Source $stageCacheDir -Dest $isoContents -UserFacingMessage 'Copying cached staged ISO into the working folder (~5 GB; robocopy runs silently)…'
+            Invoke-RobocopyChecked -Source $stageCacheDir -Dest $isoContents -UserFacingMessage 'Copying cached staged ISO...'
             if (-not $DryRun) { Clear-WinMintReadOnlyAttribute -Path $isoContents }
         }
         else {
@@ -293,14 +315,16 @@ function Invoke-WinMintIsoPipeline {
             if ([int]$meta.Build -gt $sourceWindowsBuild) { $sourceWindowsBuild = [int]$meta.Build }
         }
         if ($editionMode -eq 'TargetLicense') {
-            Log "Edition mode: target license. Servicing $($installImages.Count) install image(s) so Windows Setup can choose the target device edition."
+            Log "Servicing $($installImages.Count) edition image(s) (target license)."
+            LogVerbose 'Edition mode TargetLicense: Windows Setup chooses the SKU on the target device.'
             if ($installImages.Count -gt 1) {
-                Log "Build-time note: selecting a fixed Home/Pro edition services one image and skips the other edition passes."
+                LogVerbose 'Fixed Home/Pro edition mode would service one image and skip the other edition passes.'
             }
         } else {
             $fixedEdition = [string]$BuildConfig.Edition
             if ([string]::IsNullOrWhiteSpace($fixedEdition)) { $fixedEdition = 'selected edition' }
-            Log "Edition mode: fixed. Servicing only '$fixedEdition'."
+            Log "Servicing fixed edition: $fixedEdition"
+            LogVerbose "Edition mode Fixed: servicing only '$fixedEdition'."
         }
 
         # Defensive: Get-WindowsImage in some PS7+DISM compat-session combos returns
@@ -376,7 +400,8 @@ function Invoke-WinMintIsoPipeline {
         $servicedWimFingerprint = $null
         $updatesRequested = ($BuildConfig.Updates -and [string]$BuildConfig.Updates.Mode -ne 'None')
         if ($updatesRequested) {
-            Log 'Stable image updates selected; serviced WIM cache is disabled so update payload application remains auditable.'
+            Log 'Stable image updates selected; serviced WIM cache disabled.'
+            LogVerbose 'Serviced WIM cache is disabled so update payload application remains auditable.'
         }
         if (-not $NoServicedWimCache -and -not $updatesRequested) {
             try {
@@ -390,7 +415,8 @@ function Invoke-WinMintIsoPipeline {
             }
         }
         if ($null -ne $servicedWimCacheHit) {
-            Log "Restoring serviced install.wim from temp cache (skipping driver injection, appx removal, and package install)…"
+            Log 'Restoring serviced install.wim from cache...'
+            LogVerbose 'Skipping driver injection, appx removal, and package install (serviced WIM cache hit).'
             Copy-Item -LiteralPath $servicedWimCacheHit -Destination $installWim -Force -ErrorAction Stop
             Assert-WinMintWimMetadataHealthy -ImagePath $installWim -ExpectedMetadata $expectedWimMetadata -ExpectedArchitecture $imageArch
             Set-WinMintManifestServicedWimCacheFact -Restored $true
@@ -417,7 +443,8 @@ function Invoke-WinMintIsoPipeline {
                 $hostDriverDir = Join-Path $workDir 'host_drivers'
                 $hostDriverCache = Get-WinMintHostDriverExportCacheHit
                 if ($null -ne $hostDriverCache) {
-                    Log 'Restoring exported host drivers from temp cache (skipping Export-WindowsDriver)…'
+                    Log 'Restoring host drivers from cache...'
+                    LogVerbose 'Skipping Export-WindowsDriver (temp host-driver cache hit).'
                     $null = New-Item -ItemType Directory -Path $hostDriverDir -Force
                     Invoke-RobocopyChecked -Source $hostDriverCache -Dest $hostDriverDir -UserFacingMessage 'Copying cached host driver export into the work folder…'
                     Clear-WinMintReadOnlyAttribute -Path $hostDriverDir
@@ -462,11 +489,13 @@ function Invoke-WinMintIsoPipeline {
             $imgName = Get-WimImageName -img $image
             if ([string]::IsNullOrWhiteSpace($imgName)) { $imgName = "index $($image.ImageIndex)" }
             Write-SectionHeader "Image ${imageOrdinal}/${imageTotal}: service $imgName"
-            Log "Mounting install.wim index $($image.ImageIndex) ($imgName)… image $imageOrdinal of $imageTotal."
+            Log "Mounting $imgName ($imageOrdinal/$imageTotal)..."
+            LogVerbose "Mounting install.wim index $($image.ImageIndex) ($imgName) into $mountDir"
             $mountTimer = [System.Diagnostics.Stopwatch]::StartNew()
             Mount-WinMintImage -ImagePath $installWim -Index $image.ImageIndex -MountDir $mountDir
             $mountTimer.Stop()
-            LogOK "install.wim index $($image.ImageIndex) mounted in $(Format-WinMintDuration -Duration $mountTimer.Elapsed); proceeding to servicing."
+            LogOK "Mounted $imgName in $(Format-WinMintDuration -Duration $mountTimer.Elapsed)."
+            LogVerbose "install.wim index $($image.ImageIndex) mounted; proceeding to servicing."
             $mountedImage = $true
             $null = Save-WinMintWingetConfigurationHandoff -Config $BuildConfig -OutputDir (Get-WinMintOutputDirectory)
             Install-Autounattend `
@@ -533,7 +562,8 @@ function Invoke-WinMintIsoPipeline {
                 }
             }
             else {
-                Log "Serviced WIM cache hit: skipping appx removal, package install, and driver injection for image $imgName."
+                Log "Using cached serviced image for $imgName."
+                LogVerbose "Serviced WIM cache hit: skipping appx removal, package install, and driver injection for $imgName."
             }
             Assert-OfflinePowerShell7Staged -MountDir $mountDir
 
@@ -578,9 +608,9 @@ function Invoke-WinMintIsoPipeline {
             $isoItem = Get-Item -LiteralPath $outputIso
             $isoHash = (Get-FileHash -LiteralPath $outputIso -Algorithm SHA256).Hash
             Set-WinMintManifestOutputIsoSizeFact -SizeBytes ([long]$isoItem.Length)
-            LogOK "Final ISO: $outputIso"
-            LogOK "Final ISO size: $(Format-WinMintByteSize -Bytes $isoItem.Length) ($($isoItem.Length) bytes)."
-            LogOK "Final ISO SHA256: $isoHash"
+            LogOK "Final ISO: $outputIso ($(Format-WinMintByteSize -Bytes $isoItem.Length))"
+            LogVerbose "Final ISO size: $($isoItem.Length) bytes"
+            LogVerbose "Final ISO SHA256: $isoHash"
         }
         Complete-PipelinePhase 'Assemble ISO'
         if ($WriteUsb) {

@@ -315,13 +315,56 @@ function Format-WinMintByteSize {
 # where the variable was assigned. The Spectre console path sets the variable;
 # non-console callers may not, and that's fine — these two functions
 # become no-ops there.
+function Test-WinMintSpectreLiveUiAllowed {
+    <# <summary>Gates live Status/Progress: unmuted TTY, Spectre present, not -Verbose scrollback mode.</summary> #>
+    if (Test-WinMintHumanConsoleMuted) { return $false }
+    if (Test-Win11IsoVerboseLogging) { return $false }
+    if ([Console]::IsOutputRedirected) { return $false }
+    return $true
+}
+
+function Invoke-WinMintSpectreQuiet {
+    <#
+    <summary>
+    Runs a scriptblock under Invoke-SpectreScriptBlockQuietly when available so
+    child Write-Output/Write-Error does not shred a live Status/Progress UI.
+    Falls back to a direct invoke when Quietly or live UI is unavailable.
+    </summary>
+    #>
+    param([Parameter(Mandatory)][scriptblock]$ScriptBlock)
+    if ((Get-Command Invoke-SpectreScriptBlockQuietly -ErrorAction SilentlyContinue) -and
+        (Test-WinMintSpectreLiveUiAllowed)) {
+        return Invoke-SpectreScriptBlockQuietly -Level Quiet -Command $ScriptBlock
+    }
+    return & $ScriptBlock
+}
+
+function Get-WinMintHumanPhaseTitle {
+    param([Parameter(Mandatory)][string]$Name)
+    switch -Regex ($Name) {
+        '^(?i)stage\s*iso|prepare' { return 'Prepare media' }
+        '^(?i)service' { return 'Service' }
+        '^(?i)assemble|package|iso' { return 'Package ISO' }
+        '^(?i)mount' { return 'Mount' }
+        '^(?i)export' { return 'Export' }
+        '^(?i)preflight|validate' { return 'Preflight' }
+        default { return $Name }
+    }
+}
+
 function Start-PipelinePhase {
     param([string]$Name)
     if ($null -eq $script:PipelinePhaseStartedAt) { $script:PipelinePhaseStartedAt = @{} }
     $script:PipelinePhaseStartedAt[$Name] = [System.Diagnostics.Stopwatch]::StartNew()
-    $handler = Get-Variable -Name WinMintProgressHandler -Scope Script -ValueOnly -ErrorAction SilentlyContinue
-    if ($null -ne $handler) {
-        Write-WinMintProgress -Stage $Name -Level Section -Message "Starting $Name" -ProgressHandler $handler
+    $title = Get-WinMintHumanPhaseTitle -Name $Name
+    if (Get-Command LogSection -ErrorAction SilentlyContinue) {
+        LogSection $title
+    }
+    else {
+        $handler = Get-Variable -Name WinMintProgressHandler -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+        if ($null -ne $handler) {
+            Write-WinMintProgress -Stage $Name -Level Section -Message $title -ProgressHandler $handler
+        }
     }
     $tasks = Get-Variable -Name PipelineTasks -Scope Script -ValueOnly -ErrorAction SilentlyContinue
     if ($null -eq $tasks) { return }
@@ -333,16 +376,22 @@ function Start-PipelinePhase {
 
 function Complete-PipelinePhase {
     param([string]$Name)
-    $message = "Completed $Name"
+    $title = Get-WinMintHumanPhaseTitle -Name $Name
+    $message = "Completed $title"
     if ($null -ne $script:PipelinePhaseStartedAt -and $script:PipelinePhaseStartedAt.ContainsKey($Name)) {
         $timer = $script:PipelinePhaseStartedAt[$Name]
         $timer.Stop()
         $message = "$message in $(Format-WinMintDuration -Duration $timer.Elapsed)"
         $script:PipelinePhaseStartedAt.Remove($Name)
     }
-    $handler = Get-Variable -Name WinMintProgressHandler -Scope Script -ValueOnly -ErrorAction SilentlyContinue
-    if ($null -ne $handler) {
-        Write-WinMintProgress -Stage $Name -Level OK -Message $message -ProgressHandler $handler
+    if (Get-Command LogOK -ErrorAction SilentlyContinue) {
+        LogOK $message
+    }
+    else {
+        $handler = Get-Variable -Name WinMintProgressHandler -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+        if ($null -ne $handler) {
+            Write-WinMintProgress -Stage $Name -Level OK -Message $message -ProgressHandler $handler
+        }
     }
     $tasks = Get-Variable -Name PipelineTasks -Scope Script -ValueOnly -ErrorAction SilentlyContinue
     if ($null -eq $tasks) { return }
@@ -357,7 +406,7 @@ function Invoke-Action {
     <#
     <summary>
     Full build: log a clear step then run. Dry run: log the same step without
-    side effects.
+    side effects. Prefers Spectre Progress, then Status spinner, then scrollback.
     </summary>
     #>
     param(
@@ -370,15 +419,11 @@ function Invoke-Action {
         Log $Description
         $timer = [System.Diagnostics.Stopwatch]::StartNew()
         $completed = $false
-        # Skip the live Spectre progress bar when a progress handler is active
-        # (headless/GUI/JSON builds). The handler owns the console surface and the
-        # in-place bar redraws render as repeated, out-of-order lines there — the
-        # interactive console build sets no handler and keeps the bar.
-        $useLiveProgress = $SpectreProgressIndeterminate -and
-            -not (Test-Win11IsoVerboseLogging) -and
-            -not [Console]::IsOutputRedirected -and
-            ($null -eq (Get-Variable -Name WinMintProgressHandler -Scope Script -ValueOnly -ErrorAction SilentlyContinue)) -and
+        $liveOk = Test-WinMintSpectreLiveUiAllowed
+        $useLiveProgress = $liveOk -and $SpectreProgressIndeterminate -and
             (Get-Command Invoke-SpectreCommandWithProgress -ErrorAction SilentlyContinue)
+        $useLiveStatus = $liveOk -and -not $useLiveProgress -and
+            (Get-Command Invoke-SpectreCommandWithStatus -ErrorAction SilentlyContinue)
         try {
             if ($useLiveProgress) {
                 Invoke-SpectreCommandWithProgress -ScriptBlock {
@@ -391,12 +436,17 @@ function Invoke-Action {
                         $task.Value = $Pct
                     }.GetNewClosure()
                     try {
-                        & $ScriptBlock
+                        Invoke-WinMintSpectreQuiet -ScriptBlock $ScriptBlock
                     }
                     finally {
                         $task.Value = 100
                         $script:DismProgressCallback = $null
                     }
+                }
+            }
+            elseif ($useLiveStatus) {
+                $null = Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title $Description -ScriptBlock {
+                    Invoke-WinMintSpectreQuiet -ScriptBlock $ScriptBlock
                 }
             }
             else {

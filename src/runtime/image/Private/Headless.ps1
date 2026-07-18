@@ -334,7 +334,7 @@ function New-WinMintHeadlessProfileFromFlags {
         [switch]$KeepGaming,
         [switch]$KeepCopilot,
         [ValidateSet('On', 'Off')][string]$Dma = 'On',
-        [ValidateSet('None', 'Raycast')][string]$Launcher = 'None',
+        [ValidateSet('None')][string]$Launcher = 'None',
         [switch]$LiveInstallAudit,
         [switch]$PhoneLink,
         [ValidateSet('On', 'Off')][string]$Location = 'On',
@@ -476,12 +476,16 @@ function Write-WinMintHeadlessJsonResult {
 function Write-WinMintHeadlessHumanResult {
     param([Parameter(Mandatory)][object]$Result)
     $status = [string]$Result.result
-    Write-Host "WinMint headless result: $status"
-    if (-not [string]::IsNullOrWhiteSpace([string]$Result.buildId)) { Write-Host "Build ID: $($Result.buildId)" }
-    if (-not [string]::IsNullOrWhiteSpace([string]$Result.outputIso)) { Write-Host "Output ISO: $($Result.outputIso)" }
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add("Result: $status")
+    if (-not [string]::IsNullOrWhiteSpace([string]$Result.buildId)) { $lines.Add("Build ID: $($Result.buildId)") }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Result.outputIso)) { $lines.Add("Output ISO: $($Result.outputIso)") }
     if ($Result.reports -and $Result.reports.PSObject.Properties['profile'] -and
         -not [string]::IsNullOrWhiteSpace([string]$Result.reports.profile)) {
-        Write-Host "Profile: $($Result.reports.profile)"
+        $lines.Add("Profile: $($Result.reports.profile)")
+    }
+    if (Get-Command Get-WinMintBuildVerboseLogPath -ErrorAction SilentlyContinue) {
+        $lines.Add("Verbose log: $(Get-WinMintBuildVerboseLogPath)")
     }
     $buildDeltaPath = ''
     if ($Result.reports -and $Result.reports.PSObject.Properties['buildDelta']) {
@@ -491,19 +495,41 @@ function Write-WinMintHeadlessHumanResult {
         (Get-Command Get-WinMintBuildDeltaSummary -ErrorAction SilentlyContinue)) {
         $deltaSummary = Get-WinMintBuildDeltaSummary -BuildDeltaPath $buildDeltaPath
         if ($deltaSummary -and $deltaSummary.totalRecords -gt 0) {
-            Write-Host "BuildDelta: $buildDeltaPath"
-            Write-Host "  Records: $($deltaSummary.totalRecords) total, $($deltaSummary.userControlledCount) user-controlled"
+            $lines.Add("BuildDelta: $buildDeltaPath")
+            $lines.Add("  Records: $($deltaSummary.totalRecords) total, $($deltaSummary.userControlledCount) user-controlled")
             $phaseSegments = @(
                 @($deltaSummary.phaseCounts.PSObject.Properties) |
                     ForEach-Object { "$($_.Name)=$($_.Value)" }
             )
             if ($phaseSegments.Count -gt 0) {
-                Write-Host "  Phases:  $($phaseSegments -join ', ')"
+                $lines.Add("  Phases:  $($phaseSegments -join ', ')")
             }
             foreach ($highlight in @($deltaSummary.highlights | Select-Object -First 5)) {
-                Write-Host "  - $($highlight.title) [$($highlight.phase)]"
+                $lines.Add("  - $($highlight.title) [$($highlight.phase)]")
             }
         }
+    }
+
+    $bodyPlain = ($lines -join [Environment]::NewLine)
+    $failed = $status -match '(?i)fail'
+    $useSpectre = (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue) -and
+        (Get-Command Out-SpectreHost -ErrorAction SilentlyContinue) -and
+        -not [Console]::IsOutputRedirected
+    if ($useSpectre) {
+        try {
+            $escaped = [Spectre.Console.Markup]::Escape($bodyPlain)
+            $header = if ($failed) { '[bold red]WinMint build[/]' } else { '[bold green]WinMint build[/]' }
+            $color = if ($failed) { 'Red' } else { 'Green' }
+            $border = if ($failed) { 'Double' } else { 'Rounded' }
+            $null = Format-SpectrePanel -Data $escaped -Header $header -Border $border -Color $color -Expand |
+                Out-SpectreHost | Out-Host
+        }
+        catch {
+            Write-Host $bodyPlain
+        }
+    }
+    else {
+        Write-Host $bodyPlain
     }
     foreach ($warning in @($Result.warnings)) { Write-Warning $warning }
     foreach ($failure in @($Result.failures)) { Write-Error $failure -ErrorAction Continue }
@@ -573,6 +599,24 @@ function Invoke-WinMintProfileRun {
 
         Set-WinMintHeadlessJournalPhase -Phase 'Profile'
         $resolvedSourceOverride = $SourceIsoOverride
+        if ([string]::IsNullOrWhiteSpace($resolvedSourceOverride)) {
+            # Also check the profile's own isoPath before falling back to the local store.
+            $profileIsoPath = [string](Get-WinMintProfileSetting (Get-WinMintProfileSetting (Get-Content -LiteralPath $ProfilePath -Raw | ConvertFrom-Json) 'source' @{}) 'isoPath' '')
+            if ([string]::IsNullOrWhiteSpace($profileIsoPath) -or -not (Test-Path -LiteralPath $profileIsoPath -ErrorAction SilentlyContinue) -or (Get-Item -LiteralPath $profileIsoPath -ErrorAction SilentlyContinue).Length -eq 0) {
+                # Neither the CLI nor the profile provided an ISO. Try the canonical local store
+                # (%LOCALAPPDATA%\WinMint\source-iso\) which is outside the repo and survives git clean.
+                $localIsoDir = Join-Path $env:LOCALAPPDATA 'WinMint\source-iso'
+                if (Test-Path -LiteralPath $localIsoDir) {
+                    $localIso = Get-ChildItem -LiteralPath $localIsoDir -Filter '*.iso' -File |
+                        Where-Object { $_.Length -gt 0 } |
+                        Sort-Object Name |
+                        Select-Object -First 1
+                    if ($localIso) {
+                        $resolvedSourceOverride = $localIso.FullName
+                    }
+                }
+            }
+        }
         $buildProfile = Import-WinMintHeadlessBuildProfile -ProfilePath $ProfilePath -SourceIsoOverride $resolvedSourceOverride
 
         $sourceForState = [string](Get-WinMintProfileSetting (Get-WinMintProfileSetting $buildProfile 'source' @{}) 'isoPath' '')
@@ -580,28 +624,18 @@ function Invoke-WinMintProfileRun {
         $state = New-WinMintHeadlessState -BuildId $script:WinMintHeadlessBuildId -ProfilePath $ProfilePath -SourceIso $sourceForState
         $script:WinMintHeadlessStatePath = Save-WinMintHeadlessState -State $state
 
+        if (Get-Command Set-WinMintHumanConsoleMuted -ErrorAction SilentlyContinue) {
+            Set-WinMintHumanConsoleMuted -Muted:($Quiet -or $Json)
+        }
+
         if ($ValidateOnly) {
             $result = Invoke-WinMintHeadlessValidateOnly -BuildProfile $buildProfile -BuildId $script:WinMintHeadlessBuildId -DryRun:$DryRun
             $result.warnings = @($warnings.ToArray() + @($result.warnings))
             Complete-WinMintHeadlessJournal -Result $result.result -Reports $result.reports -Warnings $result.warnings -Failures $result.failures
         } else {
             Set-WinMintHeadlessJournalPhase -Phase 'Preflight'
-            $progress = {
-                param($ProgressEvent)
-                if ($Quiet -or $Json) { return }
-                $level = [string]$ProgressEvent.Level
-                $message = [string]$ProgressEvent.Message
-                # This handler is the sole console sink for headless builds (the
-                # engine's Log functions suppress their direct write while a handler
-                # is active), so render the same glyph cues the engine uses.
-                switch ($level) {
-                    'Error'   { Write-Error $message -ErrorAction Continue }
-                    'Warn'    { Write-Warning $message }
-                    'OK'      { Write-Host "+ $message" }
-                    'Section' { Write-Host $message }
-                    default   { Write-Host "> $message" }
-                }
-            }
+            # Events-only: Log* owns Spectre human console + verbose file.
+            $progress = { param($ProgressEvent) }
             $build = Start-WinMintBuild `
                 -BuildProfile $buildProfile `
                 -DryRun:$DryRun `

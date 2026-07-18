@@ -171,7 +171,7 @@ function Publish-WinMintIsoStageCache {
         if (Test-Path -LiteralPath $dest) { Remove-WinMintIsoStageCacheDirectory -Path $dest }
         $null = New-Item -ItemType Directory -Path $dest -Force -ErrorAction Stop
 
-        Invoke-RobocopyChecked -Source $IsoContentsPath -Dest $dest -UserFacingMessage 'Saving temp cache of staged ISO for faster rebuilds (~5 GB; robocopy runs silently)…'
+        Invoke-RobocopyChecked -Source $IsoContentsPath -Dest $dest -UserFacingMessage 'Saving staged ISO cache...'
 
         $item = Get-Item -LiteralPath $SourceIsoPath -ErrorAction Stop
         $hash = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant()

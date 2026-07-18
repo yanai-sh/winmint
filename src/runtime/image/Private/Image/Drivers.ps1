@@ -885,12 +885,12 @@ function Invoke-DriverInjection {
             return
         }
 
-        Log "Driver source contains $infCount .inf file(s)."
-        Log "Adding drivers to the mounted Windows image from '$SourceLabel'…"
+        Log "Injecting $infCount driver(s) from $SourceLabel..."
+        LogVerbose "Driver source $SourceLabel contains $infCount .inf file(s) under $DriverSource"
         $windowsTimer = [System.Diagnostics.Stopwatch]::StartNew()
         Invoke-DismAddDriverToImage -ImageMountPath $MountDir -DriverSource $DriverSource
         $windowsTimer.Stop()
-        LogOK "Windows image driver injection finished in $(Format-WinMintDuration -Duration $windowsTimer.Elapsed)."
+        LogOK "Drivers injected into Windows image in $(Format-WinMintDuration -Duration $windowsTimer.Elapsed)."
 
         $bootWim = Join-Path $IsoContents 'sources\boot.wim'
         if (-not $InjectWinPE) {
@@ -906,19 +906,20 @@ function Invoke-DriverInjection {
                     return
                 }
                 $bootIndexes = @($script:BootWimDriverMountIndexes)
-                Log "Adding drivers to WinPE boot.wim index(es): $($bootIndexes -join ', ')…"
+                Log "Injecting WinPE drivers (boot.wim indexes $($bootIndexes -join ', '))..."
+                LogVerbose "WinPE setup-critical INF count: $bootInfCount"
                 $null = Set-ItemProperty -Path $bootWim -Name IsReadOnly -Value $false -ErrorAction SilentlyContinue
                 foreach ($idx in $bootIndexes) {
                     $bootTimer = [System.Diagnostics.Stopwatch]::StartNew()
                     $bootMount = Join-Path (Get-Win11IsoProcessTempPath) "Win11ISO_BootMount_$(Get-Random)"
                     $null = New-Item -Path $bootMount -ItemType Directory -Force
                     try {
-                        Log "Mounting boot.wim index $idx for WinPE driver injection."
+                        LogVerbose "Mounting boot.wim index $idx for WinPE driver injection."
                         Mount-WinMintImage -ImagePath $bootWim -Index $idx -MountDir $bootMount
                         Invoke-DismAddDriverToImage -ImageMountPath $bootMount -DriverSource $bootDriverSource
                         Save-WinMintImageMount -MountDir $bootMount
                         $bootTimer.Stop()
-                        LogOK "boot.wim index $idx driver injection saved in $(Format-WinMintDuration -Duration $bootTimer.Elapsed)."
+                        LogVerbose "boot.wim index $idx driver injection saved in $(Format-WinMintDuration -Duration $bootTimer.Elapsed)."
                     }
                     catch {
                         $bootTimer.Stop()

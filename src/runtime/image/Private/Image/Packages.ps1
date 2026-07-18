@@ -125,7 +125,7 @@ function Install-OfflinePowerShell7 {
             if (-not (Test-Path -LiteralPath $pwshExe)) { throw "pwsh.exe missing after staging: $pwshExe" }
             Add-OfflineMachinePathEntry -MountDir $MountDir -Entry '%ProgramFiles%\PowerShell\7'
             Assert-OfflinePowerShell7Staged -MountDir $MountDir
-            LogOK "PowerShell 7 staged in the offline image (release: $($payload.Version))."
+            LogOK "PowerShell 7 staged ($($payload.Version))"
             LogVerbose "$pwshExe (release asset: $($payload.AssetName))"
         }
         catch {
@@ -371,7 +371,8 @@ function Invoke-WinMintOfflineUpdatePackages {
         if ([string]$category.Id -eq 'packages') {
             $targetPackage = Select-WinMintQualitySecurityTargetPackage -PayloadRoot $payloadRoot -Packages $packages
             try {
-                Log "Applying $($category.Label): $(Split-Path -Leaf $targetPackage)"
+                Log "Applying $($category.Label)..."
+                LogVerbose "Applying $($category.Label): $(Split-Path -Leaf $targetPackage)"
                 if ($packages.Count -gt 1) {
                     LogVerbose 'Checkpoint cumulative update chain detected; DISM is pointed at the latest target MSU so it can discover checkpoint MSUs in the same folder.'
                 }
@@ -387,9 +388,10 @@ function Invoke-WinMintOfflineUpdatePackages {
             }
             continue
         }
+        Log "Applying $($category.Label)..."
         foreach ($package in $packages) {
             try {
-                Log "Applying $($category.Label): $(Split-Path -Leaf $package)"
+                LogVerbose "Applying $($category.Label): $(Split-Path -Leaf $package)"
                 Invoke-WinMintDismAddUpdatePackage -MountDir $MountDir -PackagePath $package
                 Add-WinMintManifestUpdatePackageFact -Category ([string]$category.Id) -Path $package
                 $appliedCount++
@@ -456,7 +458,7 @@ function Invoke-WinMintOfflineUpdateAppx {
     $provisionedCount = 0
     foreach ($bundle in $bundles) {
         try {
-            Log "Provisioning app package: $(Split-Path -Leaf $bundle)"
+            LogVerbose "Provisioning app package: $(Split-Path -Leaf $bundle)"
             $dismArgs = @('/English', "/Image:$MountDir", '/Add-ProvisionedAppxPackage', "/PackagePath:$bundle")
             foreach ($dependency in $dependencies) {
                 $dismArgs += "/DependencyPackagePath:$dependency"
@@ -520,7 +522,7 @@ function Save-ImageWithCleanup {
     }
     else {
         Set-WinMintManifestComponentCleanupFact -ComponentCleanup 'Skipped'
-        LogOK "Skipping DISM component cleanup (test-quality image; $ImageCompression compression)."
+        LogVerbose "Skipping DISM component cleanup (test-quality image; $ImageCompression compression)."
     }
     Invoke-Action 'Saving and dismounting the Windows image (commit can take several minutes)' -SpectreProgressIndeterminate {
         LogVerbose "Mount: $MountDir"
@@ -622,7 +624,7 @@ function Get-OscdimgBootDataValue {
     if (-not (Test-Path -LiteralPath $efisys)) { throw "Missing UEFI boot file for oscdimg: $efisys" }
     $efiBootName = Split-Path -Leaf $efisys
     if ($ImageArch -eq 'arm64') {
-        LogOK 'ISO boot layout: UEFI only (expected for ARM64 media).'
+        LogVerbose 'ISO boot layout: UEFI only (expected for ARM64 media).'
         LogVerbose "oscdimg -bootdata: $efiBootName only (no legacy BIOS sector on ARM64)."
         $efiTok = Resolve-OscdimgBootdataFilePath -LiteralPath $efisys
         return ('1#pEF,e,b{0}' -f $efiTok)
@@ -630,7 +632,7 @@ function Get-OscdimgBootDataValue {
     $etfs = Join-Path $IsoContentsRoot 'boot\etfsboot.com'
     $efiTok = Resolve-OscdimgBootdataFilePath -LiteralPath $efisys
     if (Test-Path -LiteralPath $etfs) {
-        LogOK 'ISO boot layout: legacy BIOS + UEFI (El Torito + EFI boot).'
+        LogVerbose 'ISO boot layout: legacy BIOS + UEFI (El Torito + EFI boot).'
         LogVerbose "oscdimg -bootdata: etfsboot.com + $efiBootName."
         $etfsTok = Resolve-OscdimgBootdataFilePath -LiteralPath $etfs
         return ('2#p0,e,b{0}#pEF,e,b{1}' -f $etfsTok, $efiTok)
