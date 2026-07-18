@@ -1,0 +1,8 @@
+﻿<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <PropertyGroup>
+    <IsAotCompatible>false</IsAotCompatible>
+    <!-- Scaffold/tests: XML docs optional; xUnit method names may use underscores -->
+    <NoWarn>$(NoWarn);CS1591;CA1707</NoWarn>
+  </PropertyGroup>
+</Project>

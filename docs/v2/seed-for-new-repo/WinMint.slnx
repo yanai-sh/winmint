@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WinMint.Cli/WinMint.Cli.csproj" />
+    <Project Path="src/WinMint.Orchestrator/WinMint.Orchestrator.csproj" />
+    <Project Path="src/WinMint.Splash/WinMint.Splash.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WinMint.Cli.Tests/WinMint.Cli.Tests.csproj" />
+    <Project Path="tests/WinMint.Orchestrator.Tests/WinMint.Orchestrator.Tests.csproj" />
+  </Folder>
+</Solution>

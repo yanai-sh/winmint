@@ -1,0 +1,42 @@
+# Day-one tooling
+
+Use these from the first scaffold commit. Do **not** add Avalonia previewer/headless, Roslynator stacks, or Appium until those layers exist.
+
+## Required
+
+| Tool | Role |
+|------|------|
+| **`global.json`** | Pin .NET 11 preview SDK |
+| **`Directory.Build.props`** | Shared TFM, nullable, SDK analyzers, `IsAotCompatible` |
+| **`Directory.Packages.props`** | Central Package Management |
+| **`.editorconfig`** | Format + analyzer severities |
+| **`dotnet format`** | CI: `dotnet format --verify-no-changes` |
+| **xUnit v3** | Orchestrator / CLI tests (when projects exist) |
+| **PSScriptAnalyzer** | `servicing/` + `payload/` (`PSScriptAnalyzerSettings.psd1`) |
+| **AOT / trim warnings as errors** | On Cli + Splash publish projects |
+| **GitHub Actions (Windows)** | `just check` (or the raw commands below) |
+| **Just** | Task runner — [`Justfile`](../Justfile) at repo root |
+
+Install Just once: `winget install Casey.Just` (or Scoop `just`).
+
+## Commands
+
+```powershell
+just              # list recipes
+just build
+just test
+just format
+just format-check
+just analyze-ps
+just check        # format-check + build + test + analyze-ps (CI)
+```
+
+Without Just, run the same `dotnet` / `pwsh` lines from the Justfile by hand.
+
+Day-one seed already has `WinMint.slnx` and empty projects — `just build` / `just test` / `just check` should succeed on a machine with the pinned SDK.
+
+**Why Just (not Nuke/Cake):** one file, no extra .NET host project, recipes are plain `dotnet`/`pwsh`. Nuke/Cake are overkill for this repo.
+
+## Explicitly later
+
+Avalonia XAML previewer / Developer Tools / Headless, Meziantou/Roslynator (unless a concrete rule gap appears), coverlet, Appium, Sonar.

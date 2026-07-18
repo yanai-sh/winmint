@@ -1,0 +1,6 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>WinMint.Orchestrator</RootNamespace>
+    <AssemblyName>WinMint.Orchestrator</AssemblyName>
+  </PropertyGroup>
+</Project>

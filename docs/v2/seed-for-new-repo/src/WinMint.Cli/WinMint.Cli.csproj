@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>WinMint.Cli</RootNamespace>
+    <AssemblyName>WinMint.Cli</AssemblyName>
+    <!-- Day-one: AOT on publish only; build uses IsAotCompatible from Directory.Build.props -->
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinMint.Orchestrator\WinMint.Orchestrator.csproj" />
+  </ItemGroup>
+</Project>

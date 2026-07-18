@@ -1,0 +1,9 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>WinMint.Splash</RootNamespace>
+    <AssemblyName>WinMint.Splash</AssemblyName>
+    <!-- Day-one: AOT on publish only; build uses IsAotCompatible from Directory.Build.props -->
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+  </PropertyGroup>
+</Project>

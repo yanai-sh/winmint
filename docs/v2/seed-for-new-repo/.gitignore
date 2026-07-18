@@ -1,0 +1,33 @@
+# Build / publish
+**/bin/
+**/obj/
+output/
+dist/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+.cursor/
+
+# ISOs and images (user-supplied only — never commit)
+*.iso
+*.wim
+*.esd
+*.swm
+*.vhd
+*.vhdx
+
+# Secrets / local
+.env
+.env.*
+*.log
+*.tmp
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Test / coverage
+TestResults/
+coverage/
+*.received.*

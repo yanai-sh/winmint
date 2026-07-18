@@ -1,0 +1,44 @@
+﻿# WinMint v2 — day-one task runner
+# Install: winget install Casey.Just
+# Docs: docs/TOOLING.md
+
+set windows-shell := ["pwsh.exe", "-NoProfile", "-Command"]
+
+default:
+    @just --list
+
+sdk:
+    dotnet --info
+    Get-Content global.json
+
+restore:
+    dotnet restore
+
+build: restore
+    dotnet build --no-restore
+
+test: build
+    dotnet test --no-build
+
+test-quick:
+    dotnet test --no-build
+
+format:
+    dotnet format
+
+format-check:
+    dotnet format --verify-no-changes
+
+analyze-ps:
+    pwsh -NoProfile -File tools/analyze-ps.ps1
+
+# CI / pre-push gate (scaffold: format-check + build + test + analyze-ps)
+check: format-check build
+    dotnet test --no-build
+    just analyze-ps
+
+publish-cli:
+    dotnet publish src/WinMint.Cli/WinMint.Cli.csproj -c Release -r win-arm64 --self-contained
+
+publish-splash:
+    dotnet publish src/WinMint.Splash/WinMint.Splash.csproj -c Release -r win-arm64 --self-contained

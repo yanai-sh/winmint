@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Install Just
+        uses: extractions/setup-just@v3
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
+
+      - name: Analyze PowerShell
+        shell: pwsh
+        run: ./tools/analyze-ps.ps1
+
+      - name: Dotnet gate
+        shell: pwsh
+        run: |
+          just format-check
+          just build
+          just test-quick
