@@ -330,7 +330,7 @@ function Install-WinMintYasbLayer {
 
     $ctx = Get-WinMintAgentContext
     if ($ctx.TargetArchitecture) {
-        Install-AgentManifestTool -ToolId "vcredist-$($ctx.TargetArchitecture)" -State $State -AllowFailure
+        Install-AgentManifestTool -ToolId "vcredist-$($ctx.TargetArchitecture)" -State $State
     }
 
     Install-AgentManifestTool -ToolId 'yasb' -State $State
@@ -346,9 +346,9 @@ function Install-WinMintKomorebiLayer {
     Install-AgentManifestTool -ToolId 'komorebi' -State $State
     Install-AgentManifestTool -ToolId 'whkd' -State $State
     Copy-WinMintKomorebiPreset
-    Invoke-WinMintKomorebiCli -ArgumentList @('stop') -AllowFailure
+    Invoke-WinMintKomorebiCli -ArgumentList @('stop')
     Get-Process -Name 'whkd' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Invoke-WinMintKomorebiCli -ArgumentList @('fetch-app-specific-configuration') -AllowFailure
+    Invoke-WinMintKomorebiCli -ArgumentList @('fetch-app-specific-configuration')
     Enable-WinMintKomorebiAutostart
     $configPath = Join-Path $env:KOMOREBI_CONFIG_HOME 'komorebi.json'
     Invoke-WinMintKomorebiCli -ArgumentList @('start', '--whkd', '--config', $configPath, '--clean-state')
@@ -392,8 +392,8 @@ function Install-WinMintThideLayer {
         }
 
         if (-not $thide) { throw 'thide installer completed, but thide.exe was not found.' }
-        Invoke-WinMintThideCli -ArgumentList @('enable-autostart') -AllowFailure
-        Invoke-WinMintThideCli -ArgumentList @('start') -AllowFailure
+        Invoke-WinMintThideCli -ArgumentList @('enable-autostart')
+        Invoke-WinMintThideCli -ArgumentList @('start')
 
         $State.steps[$key] = @{
             status = 'ok'

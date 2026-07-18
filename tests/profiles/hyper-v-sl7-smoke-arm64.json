@@ -1,20 +1,22 @@
 {
   "schemaVersion": 4,
-  "createdAt": "2026-05-16T00:00:00+03:00",
-  "profileName": "Surface Laptop 7 Microsoft OOBE",
+  "createdAt": "2026-07-18T23:47:00+03:00",
+  "profileName": "Hyper-V SL7 Smoke",
   "keep": {
     "edge": false,
     "gaming": false,
     "copilot": false
   },
   "source": {
-    "isoPath": "tests\\fixtures\\iso\\official-win11-25h2-english-arm64-v2.iso",
+    "isoPath": "tests/fixtures/iso/official-win11-25h2-english-arm64-v2.iso",
     "architecture": "arm64"
   },
   "target": {
     "device": "DifferentPC",
+    "formFactor": "Laptop",
+    "powerPlan": "Balanced",
     "editionMode": "Fixed",
-    "edition": "Windows 11 Home",
+    "edition": "Windows 11 Pro",
     "diskMode": "AutoWipeDisk0",
     "diskLayout": {
       "preset": "",
@@ -26,15 +28,17 @@
       "efiMb": 1024,
       "msrMb": 16,
       "recoveryMb": 1024
-    }
+    },
+    "productKey": "VK7JG-NPHTM-C97JM-9MPGT-3V66T"
   },
   "identity": {
-    "computerName": "WINMINT-SL7",
+    "computerName": "WinMintVM",
     "accountName": "dev",
-    "accountMode": "MicrosoftOobe",
-    "autoLogon": false,
-    "passwordSet": false,
-    "passwordIncluded": false
+    "accountMode": "Local",
+    "autoLogon": true,
+    "passwordSet": true,
+    "passwordIncluded": true,
+    "password": "winmint"
   },
   "regional": {
     "timeZoneId": "Israel Standard Time",
@@ -43,43 +47,32 @@
     "uiLanguageFallback": "en-US",
     "userLocale": "he-IL",
     "inputLocale": "en-US;he-IL",
-    "homeLocationGeoId": 117
+    "homeLocationGeoId": 117,
+    "secondaryInputLanguages": ["he-IL"]
   },
   "drivers": {
-    "source": "SurfaceCatalog",
-    "path": "surface-laptop-7",
+    "source": "None",
+    "path": "",
     "exportHostDrivers": false
   },
   "desktop": {
     "cursorPack": "Windows11Modern",
-    "layers": [
-      "yasb",
-      "thide"
-    ]
+    "layers": ["standard"]
   },
   "development": {
-    "editors": [],
-    "browsers": [],
+    "editors": ["cursor"],
+    "browsers": ["zen-browser"],
     "wsl": {
-      "distros": []
+      "distros": ["FedoraLinux"]
     }
   },
   "features": {
     "launcher": "None",
-    "liveInstallAudit": false,
-    "phoneLink": false
+    "liveInstallAudit": true,
+    "phoneLink": true
   },
   "updates": {
-    "mode": "None",
-    "targetFeatureVersion": "25H2",
-    "releaseCadence": "BRelease",
-    "includeOptionalPreviews": false,
-    "payloadRoot": "",
-    "qualitySecurity": true,
-    "dynamicUpdate": true,
-    "defender": true,
-    "dotnet": true,
-    "provisionedApps": false
+    "mode": "None"
   },
   "removals": {
     "aiPolicy": "ServiceableFull"
@@ -105,6 +98,11 @@
     "telemetryTracing": "disabled",
     "advertisingId": "disabled",
     "activityHistory": "disabled"
+  },
+  "diagnostics": {
+    "retainFirstLogonArtifacts": true,
+    "provisioningShellDwellMs": 10000,
+    "wslRuntimeValidation": "skip",
+    "vmGuestBasicConsole": true
   }
 }
-

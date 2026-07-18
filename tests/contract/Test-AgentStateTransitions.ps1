@@ -110,7 +110,6 @@ function Install-AgentManifestTool {
 }
 . (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\LauncherKey.ps1')
-. (Join-Path $root 'src\runtime\firstlogon\Modules\Raycast.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\TilingDesktop.ps1')
 . (Join-Path $root 'src\runtime\firstlogon\Modules\Windhawk.ps1')
 function Get-WinMintAgentEverythingExePath { 'C:\WinMint\Test\Everything.exe' }
@@ -217,8 +216,7 @@ try {
             wsl = [pscustomobject]@{ enabled = $true }
             git = [pscustomobject]@{ enabled = $true }
             dotfiles = [pscustomobject]@{ enabled = $true }
-            raycast = [pscustomobject]@{ enabled = $true }
-            launcherKey = [pscustomobject]@{ enabled = $true; target = 'Raycast'; chord = 'Win+Shift+F23' }
+            launcherKey = [pscustomobject]@{ enabled = $true; target = 'Search'; chord = 'Win+Shift+F23' }
             phoneLink = [pscustomobject]@{ enabled = $true }
             shell = [pscustomobject]@{ enabled = $true }
             windhawk = [pscustomobject]@{ enabled = $true }
@@ -251,7 +249,6 @@ try {
         'wsl',
         'git',
         'dotfiles',
-        'raycast',
         'launcher-key',
         'phone-link',
         'desktop-environment',
@@ -260,8 +257,8 @@ try {
         'editors',
         'liveInstallAudit'
     )
-    Assert-Equal (@($moduleCatalog | ForEach-Object { $_.Id }) -join ',') 'profiles,packageManagers,wsl,git,dotfiles,raycast,launcherKey,phoneLink,shell,windhawk,browsers,editors,liveInstallAudit' 'Agent module catalog should declare the explicit FirstLogon registration order.'
-    Assert-Equal (@($moduleCatalog | ForEach-Object { $_.BootstrapFunction }) -join ',') 'Invoke-WinMintAgentProfileBootstrap,Invoke-WinMintAgentPackageManagerBootstrap,Invoke-WinMintAgentWslBootstrap,Invoke-WinMintAgentGitBootstrap,Invoke-WinMintAgentDotfileBootstrap,Invoke-WinMintAgentRaycastBootstrap,Invoke-WinMintAgentLauncherKeyBootstrap,Invoke-WinMintAgentPhoneLinkBootstrap,Invoke-WinMintAgentDesktopEnvironmentBootstrap,Invoke-WinMintAgentWindhawkBootstrap,Invoke-WinMintAgentBrowsersBootstrap,Invoke-WinMintAgentEditorBootstrap,Invoke-WinMintAgentLiveInstallAuditBootstrap' 'Agent module catalog should declare the required bootstrap functions explicitly.'
+    Assert-Equal (@($moduleCatalog | ForEach-Object { $_.Id }) -join ',') 'profiles,packageManagers,wsl,git,dotfiles,launcherKey,phoneLink,shell,windhawk,browsers,editors,liveInstallAudit' 'Agent module catalog should declare the explicit FirstLogon registration order.'
+    Assert-Equal (@($moduleCatalog | ForEach-Object { $_.BootstrapFunction }) -join ',') 'Invoke-WinMintAgentProfileBootstrap,Invoke-WinMintAgentPackageManagerBootstrap,Invoke-WinMintAgentWslBootstrap,Invoke-WinMintAgentGitBootstrap,Invoke-WinMintAgentDotfileBootstrap,Invoke-WinMintAgentLauncherKeyBootstrap,Invoke-WinMintAgentPhoneLinkBootstrap,Invoke-WinMintAgentDesktopEnvironmentBootstrap,Invoke-WinMintAgentWindhawkBootstrap,Invoke-WinMintAgentBrowsersBootstrap,Invoke-WinMintAgentEditorBootstrap,Invoke-WinMintAgentLiveInstallAuditBootstrap' 'Agent module catalog should declare the required bootstrap functions explicitly.'
     Assert-Equal (@($runtimePlan | Sort-Object Order | ForEach-Object { $_.StepName }) -join ',') ($expectedStepOrder -join ',') 'Agent runtime step plan should preserve module order.'
     $profilesStep = $runtimePlan | Where-Object { $_.StepName -eq 'profiles' } | Select-Object -First 1
     $editorsStep = $runtimePlan | Where-Object { $_.StepName -eq 'editors' } | Select-Object -First 1
@@ -286,7 +283,7 @@ try {
     } -ExpectedText 'not ok: required:failed=fixture failure' -Message 'Required state validation should reject failed state keys.'
 
     $raycastKeyPlan = Get-WinMintAgentLauncherKeyPlan -AgentProfile (Get-WinMintAgentContext).AgentProfile
-    Assert-Equal $raycastKeyPlan.Target 'Raycast' 'Launcher key plan should prefer explicit launcherKey target.'
+    Assert-Equal $raycastKeyPlan.Target 'Search' 'Launcher key plan should prefer explicit launcherKey target.'
     Assert-Equal $raycastKeyPlan.Chord 'Win+Shift+F23' 'Launcher key plan should preserve the common Copilot hardware-key chord.'
 
     $testContext.Manifest = [pscustomobject]@{

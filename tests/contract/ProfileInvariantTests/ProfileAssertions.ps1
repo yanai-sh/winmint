@@ -433,11 +433,26 @@ function Assert-ImageUpdateProfileContract {
         Add-SmokeFailure 'Expected generated preflight contexts to avoid legacy AllowMissingSourceIso flags.'
     }
 
+    $packagesPath = Get-WinMintPath -Name ConfigRoot -ChildPath 'packages.json'
+    $originalPackagesContent = Get-Content -LiteralPath $packagesPath -Raw -Encoding UTF8
     $unsupportedPackageSettings = New-SmokeBuildProfileSettings
     $unsupportedPackageSettings.InstallWindhawk = $true
     $unsupportedPackageProfile = New-WinMintBuildProfile -Settings $unsupportedPackageSettings
     $unsupportedPackageConfig = New-WinMintBuildConfig -BuildProfile $unsupportedPackageProfile
-    $unsupportedPackagePreflight = Test-WinMintBuildPrerequisite -Config $unsupportedPackageConfig -RunMode DryRun
+    $unsupportedPackagePreflight = $null
+    try {
+        $packagesObj = $originalPackagesContent | ConvertFrom-Json
+        $packagesObj.tools.windhawk.architectures = @('amd64')
+        $packagesObj.tools.windhawk | Add-Member -MemberType NoteProperty -Name 'unsupportedArchitectures' -Value @{ arm64 = 'Unsupported' } -Force
+        $packagesObj | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $packagesPath -Encoding UTF8
+
+        $unsupportedPackagePreflight = Test-WinMintBuildPrerequisite -Config $unsupportedPackageConfig -RunMode DryRun
+    }
+    finally {
+        if ($originalPackagesContent) {
+            Set-Content -LiteralPath $packagesPath -Value $originalPackagesContent -Encoding UTF8
+        }
+    }
     if (-not $unsupportedPackagePreflight.Passed) {
         Add-SmokeFailure "Expected unsupported optional package architecture to warn, not fail: $($unsupportedPackagePreflight.Failures -join '; ')"
     }
@@ -838,36 +853,6 @@ function Assert-HeadlessCliContracts {
         Add-SmokeFailure 'Expected launcher modules to stay opt-in even when Developer/DesktopUI groups are selected.'
     }
 
-    $raycastProfile = New-WinMintHeadlessProfileFromFlags `
-        -SourceIso '' `
-        -Architecture 'arm64' `
-        -Launcher Raycast `
-        -DryRun
-    $raycastConfig = New-WinMintBuildConfig -BuildProfile $raycastProfile
-    $raycastAgentProfile = New-WinMintInstallPlanAgentProfile -BuildConfig $raycastConfig
-    if ($raycastConfig.Launcher -ne 'Raycast' -or -not $raycastConfig.InstallRaycast -or -not $raycastAgentProfile.modules.raycast.enabled) {
-        Add-SmokeFailure 'Expected -Launcher Raycast to enable only Raycast in the FirstLogon agent profile.'
-    }
-    if (-not $raycastAgentProfile.modules.launcherKey.enabled -or $raycastAgentProfile.modules.launcherKey.target -ne 'Raycast' -or $raycastAgentProfile.modules.launcherKey.chord -ne 'Win+Shift+F23') {
-        Add-SmokeFailure 'Expected Raycast builds to bind the launcher key to Raycast on the common Copilot hardware-key chord.'
-    }
-    if (-not $raycastAgentProfile.modules.packageManagers.enabled) {
-        Add-SmokeFailure 'Expected -Launcher Raycast to enable package managers for first-logon installation.'
-    }
-    if ([string]$raycastAgentProfile.modules.raycast.everythingBackend.package -ne 'everything-arm64-beta') {
-        Add-SmokeFailure 'Expected ARM64 Raycast builds to use the pinned native Everything ARM64 backend.'
-    }
-
-    $raycastAmd64Profile = New-WinMintHeadlessProfileFromFlags `
-        -SourceIso '' `
-        -Architecture 'amd64' `
-        -Launcher Raycast `
-        -DryRun
-    $raycastAmd64Config = New-WinMintBuildConfig -BuildProfile $raycastAmd64Profile
-    $raycastAmd64AgentProfile = New-WinMintInstallPlanAgentProfile -BuildConfig $raycastAmd64Config
-    if ([string]$raycastAmd64AgentProfile.modules.raycast.everythingBackend.package -ne 'everything-beta') {
-        Add-SmokeFailure 'Expected amd64 Raycast builds to use the package-manager Everything Beta backend.'
-    }
 
     $thisPcProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -TargetDevice ThisPC -DryRun
     $thisPcConfig = New-WinMintBuildConfig -BuildProfile $thisPcProfile

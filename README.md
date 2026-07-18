@@ -65,7 +65,7 @@ Configure intent when you **author** a profile (`new` or GUI). `build <profile>`
 | Edge | Removal requested; debloat policies always on | `-KeepEdge` |
 | Xbox / Game Bar | Removed | `-KeepGaming` |
 | Shell layers | Off | `-DesktopUI` or `-Install windhawk,yasb,thide,komorebi,nilesoft` |
-| Launcher | Off (`thide` defaults to Raycast) | `-Launcher Raycast` |
+| Launcher | Off (`None` only) | `-Launcher None` |
 | Browsers | None | `-Browser zen-browser,helium,firefox-developer-edition,brave,edge` |
 | Power plan | Balanced | `-PowerPlan EnergySaver`, `HighPerformance`, `UltimatePerformance` |
 | Offline image updates | Off | `-UpdateImage Stable25H2` (+ optional `-UpdatePayloadRoot`) |
@@ -143,7 +143,9 @@ Schemas: [`schemas/`](schemas).
 <details>
 <summary>Project docs</summary>
 
-- [Roadmap](roadmap.md)
+- [WinMint v2 Roadmap](docs/v2/roadmap.md)
+- [WinMint v2 Migration Plan](docs/v2/migration-guide.md)
+- [WinMint v2 Coding Contract](docs/v2/coding-contract.md)
 - [Project structure](docs/Project-Structure.md)
 - [VM acceptance](docs/VM-Acceptance.md)
 - [Release readiness](docs/Release-Readiness.md)

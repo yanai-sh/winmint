@@ -295,7 +295,7 @@
       "type": "object",
       "required": ["launcher"],
       "properties": {
-        "launcher": { "type": "string", "enum": ["None", "Raycast"] },
+        "launcher": { "type": "string", "enum": ["None"] },
         "liveInstallAudit": { "type": "boolean" },
         "phoneLink": { "type": "boolean" }
       },

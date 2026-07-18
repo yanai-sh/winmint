@@ -67,7 +67,7 @@
   "features": {
     "launcher": "None",
     "liveInstallAudit": true,
-    "phoneLink": false
+    "phoneLink": true
   },
   "updates": {
     "mode": "None",

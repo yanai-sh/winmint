@@ -230,7 +230,8 @@ function Assert-HyperVProfilePassesTierValidator {
     $validator = Join-Path $root 'tools\vm\Test-WinMintHyperVProfile.ps1'
     foreach ($pair in @(
         @{ Path = 'tests\profiles\hyper-v-install-arm64.json'; Tier = 'Full' },
-        @{ Path = 'tests\profiles\hyper-v-smoke-arm64.json'; Tier = 'Smoke' }
+        @{ Path = 'tests\profiles\hyper-v-smoke-arm64.json'; Tier = 'Smoke' },
+        @{ Path = 'tests\profiles\hyper-v-sl7-smoke-arm64.json'; Tier = 'Smoke' }
     )) {
         $profilePath = Join-Path $root $pair.Path
         try {
@@ -349,6 +350,47 @@ function Assert-HyperVSmokeProfileContract {
     if ($profile.features.PSObject.Properties['liveInstallAudit'] -and [bool]$profile.features.liveInstallAudit) {
         Add-SmokeFailure 'Hyper-V smoke profile must not enable features.liveInstallAudit.'
     }
+
+    Assert-HyperVSl7SmokeProfileContract
+}
+
+function Assert-HyperVSl7SmokeProfileContract {
+    $profilePath = Join-Path $root 'tests\profiles\hyper-v-sl7-smoke-arm64.json'
+    if (-not (Test-Path -LiteralPath $profilePath -PathType Leaf)) {
+        Add-SmokeFailure 'Hyper-V SL7 smoke acceptance profile must exist at tests\profiles\hyper-v-sl7-smoke-arm64.json.'
+        return
+    }
+    $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+    if ([string]$profile.profileName -ne 'Hyper-V SL7 Smoke') {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must use profileName Hyper-V SL7 Smoke for harness labeling.'
+    }
+    if (-not (Test-WinMintVmAcceptanceDiagnosticsPreset -Profile $profile -Tier 'Smoke')) {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must include the VM acceptance diagnostics preset.'
+    }
+    if ([string]$profile.diagnostics.wslRuntimeValidation -ne 'skip') {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must mock WSL via diagnostics.wslRuntimeValidation=skip.'
+    }
+    if (@($profile.development.editors) -notcontains 'cursor' -or @($profile.development.browsers) -notcontains 'zen-browser') {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must select Cursor and zen-browser.'
+    }
+    if (@($profile.development.wsl.distros) -notcontains 'FedoraLinux' -or @($profile.development.wsl.distros).Count -ne 1) {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must select exactly FedoraLinux.'
+    }
+    if ([bool]$profile.keep.edge) {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must keep.edge=false to exercise Edge removal.'
+    }
+    if (-not [bool]$profile.features.phoneLink) {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must enable features.phoneLink.'
+    }
+    if (-not [bool]$profile.features.liveInstallAudit) {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must enable features.liveInstallAudit.'
+    }
+    if ([string]$profile.regional.uiLanguage -ne 'en-US' -or [string]$profile.regional.userLocale -ne 'he-IL' -or [int]$profile.regional.homeLocationGeoId -ne 117) {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must use en-US UI with Israel locale/GeoID restore.'
+    }
+    if (@($profile.regional.secondaryInputLanguages) -notcontains 'he-IL') {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must add he-IL as a secondary input language.'
+    }
 }
 
 function Test-WinMintSmokeStringArrayExactly {
@@ -383,8 +425,8 @@ function Assert-TrackedHardwareBuildProfiles {
     if (-not (Test-WinMintSmokeStringArrayExactly -Actual @($profile.desktop.layers) -Expected @('yasb', 'thide'))) {
         Add-SmokeFailure 'Surface Laptop 7 profile desktop layers must be exactly yasb and thide.'
     }
-    if ([string]$profile.features.launcher -ne 'Raycast') {
-        Add-SmokeFailure 'Surface Laptop 7 profile must select the Raycast launcher.'
+    if ([string]$profile.features.launcher -ne 'None') {
+        Add-SmokeFailure 'Surface Laptop 7 profile must not select a launcher.'
     }
     if ([string]$profile.drivers.source -ne 'SurfaceCatalog' -or [string]$profile.drivers.path -ne 'surface-laptop-7') {
         Add-SmokeFailure 'Surface Laptop 7 profile must use SurfaceCatalog with the surface-laptop-7 catalog id.'
@@ -1035,18 +1077,29 @@ function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
             Add-SmokeFailure "FirstLogon DMA restore should contain '$expected'."
         }
     }
-    foreach ($expected in @('Get-WinUserLanguageList', 'primaryLanguageTag', 'uiLanguageOverride')) {
+    foreach ($expected in @('Get-WinUserLanguageList', 'primaryLanguageTag', 'uiLanguageOverride', 'Get-WinMintFirstLogonUserLocaleName', 'LocaleName', 'New-WinUserLanguageList')) {
         if ($regionText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "FirstLogon DMA regional restore should verify configured language via '$expected'."
         }
     }
-    if ($regionText -match "Current culture '\`$observedCultureText' does not match restore culture") {
+    if ($regionText -match "Current culture '\`$observedCultureText' does not match") {
         Add-SmokeFailure 'FirstLogon DMA regional restore must not gate compliance on immediate Get-Culture alone.'
+    }
+    if ($regionText -notmatch 'LocaleName') {
+        Add-SmokeFailure 'FirstLogon DMA regional restore must gate culture compliance on HKCU LocaleName.'
+    }
+    $firstLogonRuntimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Runtime.ps1') -Raw
+    if ($firstLogonRuntimeText -match 'continuing with personalization and agent') {
+        Add-SmokeFailure 'DMA regional restore non-compliance must fail FirstLogon hard, not soft-continue.'
+    }
+    foreach ($expected in @('DmaRestoreFailed', 'hard requirement', 'Skipping WinMintAgent because DMA regional restore failed')) {
+        if ($firstLogonRuntimeText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon DMA hard-fail path should contain '$expected'."
+        }
     }
     if ($firstLogonText -match [regex]::Escape('Get-WinMintFirstLogonNestedProfileValue -Profile')) {
         Add-SmokeFailure 'FirstLogon DMA restore must not call Get-WinMintFirstLogonNestedProfileValue with the old -Profile parameter.'
     }
-    $firstLogonRuntimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Runtime.ps1') -Raw
     $restoreIndex = $firstLogonRuntimeText.IndexOf('Restore-WinMintDmaRegionalDefaults')
     $oneDriveIndex = $firstLogonRuntimeText.IndexOf('Invoke-WinMintFirstLogonOneDriveRemoval')
     $agentIndex = $firstLogonRuntimeText.IndexOf('Invoke-WinMintFirstLogonAgentLaunch')
@@ -2092,7 +2145,7 @@ function Assert-AgentWingetUsesDefaultInstallerSelection {
     $packagesText = Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw
 
     foreach ($expected in @(
-        'Start-Process -FilePath $FilePath',
+        'Start-Process @startArgs',
         'winget.exe',
         '--architecture',
         'Save-AgentDirectToolInstaller',
@@ -2103,20 +2156,6 @@ function Assert-AgentWingetUsesDefaultInstallerSelection {
         if ($runtimeText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Agent runtime should carry package install primitive '$expected'."
         }
-    }
-    foreach ($expected in @(
-        '"everything-arm64-beta"',
-        '"source": "direct"',
-        '"version": "1.5.0.1415b"',
-        '"architectures": ["arm64"]',
-        '"sha256": "2D511A33A3494147F921DCB488772125E6CC654E677196AACB0235967A27D2DA"'
-    )) {
-        if ($packagesText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "Package catalog should declare the pinned ARM64 Everything payload with '$expected'."
-        }
-    }
-    if ($packagesText -match [regex]::Escape('"everything-cli"')) {
-        Add-SmokeFailure 'Package catalog should not include ES CLI as a Raycast backend dependency.'
     }
     foreach ($expected in @(
         'Invoke-WinMintAgentWingetBootstrapUpgrades',

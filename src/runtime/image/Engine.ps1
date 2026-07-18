@@ -75,11 +75,8 @@ function New-WinMintBuildConfig {
     if ([string]::IsNullOrWhiteSpace($launcher)) {
         $launcher = 'None'
     }
-    if ($launcher -eq 'None' -and $layers -contains 'thide') {
-        $launcher = 'Raycast'
-    }
-    if ($launcher -notin @('None', 'Raycast')) { $launcher = 'None' }
-    $installRaycast = ($launcher -eq 'Raycast')
+    if ($launcher -notin @('None')) { $launcher = 'None' }
+    $installRaycast = $false
     $enableLiveInstallAudit = [bool](Get-WinMintProfileSetting $featureToggles 'liveInstallAudit' $false)
     $enablePhoneLink = [bool](Get-WinMintProfileSetting $featureToggles 'phoneLink' $false)
     $password = if ([bool](Get-WinMintProfileSetting $identity 'passwordIncluded' $false)) {
@@ -767,8 +764,11 @@ function Invoke-WinMintIsoBuild {
     Write-WinMintProgress `
         -Stage 'Start' `
         -Level Section `
-        -Message 'WinMint shared build engine starting' `
+        -Message 'Preflight' `
         -ProgressHandler $ProgressHandler
+    if (Get-Command LogVerbose -ErrorAction SilentlyContinue) {
+        LogVerbose 'WinMint shared build engine starting'
+    }
 
     # Fail fast on non-elevated runs. Dry-run still inspects/mounts ISO content,
     # validates DISM/driver paths, and may follow source-prep output produced by
@@ -794,8 +794,11 @@ function Invoke-WinMintIsoBuild {
                 Write-WinMintProgress `
                     -Stage 'Updates' `
                     -Level OK `
-                    -Message "Resolved $($acquired.PayloadCount) update payload file(s): $($acquired.ManifestPath)" `
+                    -Message "Resolved $($acquired.PayloadCount) update payload file(s)" `
                     -ProgressHandler $ProgressHandler
+                if (Get-Command LogVerbose -ErrorAction SilentlyContinue) {
+                    LogVerbose "Update payload manifest: $($acquired.ManifestPath)"
+                }
             }
         }
         catch {
@@ -855,7 +858,9 @@ function Invoke-WinMintIsoBuild {
 
     $report = New-WinMintBuildReport -Config $Config -DetectedArchitecture $detected -Warnings $pre.Warnings
     $paths = Save-WinMintBuildReport -Report $report
-    Write-WinMintProgress -Stage 'Report' -Level OK -Message "Wrote $($paths.Json)" -ProgressHandler $ProgressHandler
+    if (Get-Command LogVerbose -ErrorAction SilentlyContinue) {
+        LogVerbose "Wrote build report: $($paths.Json)"
+    }
     Initialize-WinMintBuildManifest -Config $Config -InstallPlan $installPlan -BuildDelta $buildDelta
     if ($DryRun -and -not $sourceIsoAvailable) {
         Write-WinMintProgress `
@@ -864,18 +869,15 @@ function Invoke-WinMintIsoBuild {
             -Message 'Profile-only dry run completed. Provide an ISO to generate autounattend and setup artifacts.' `
             -ProgressHandler $ProgressHandler
         $manifestPath = Save-WinMintBuildManifest -OutputDir (Get-WinMintOutputDirectory) -DryRun
-        if ($manifestPath) {
-            Write-WinMintProgress -Stage 'Report' -Level OK -Message "Wrote $manifestPath" -ProgressHandler $ProgressHandler
+        if ($manifestPath -and (Get-Command LogVerbose -ErrorAction SilentlyContinue)) {
+            LogVerbose "Wrote build manifest: $manifestPath"
         }
         return [pscustomobject]@{ Report = $report; Paths = $paths; OutputPath = (Get-WinMintOutputDirectory) }
     }
     if (Get-Command Invoke-WinMintIsoPipeline -ErrorAction SilentlyContinue) {
-        $stage = if ($DryRun) { 'DryRun' } else { 'Build' }
-        Write-WinMintProgress `
-            -Stage $stage `
-            -Level Section `
-            -Message 'Invoking ISO pipeline' `
-            -ProgressHandler $ProgressHandler
+        if (Get-Command LogVerbose -ErrorAction SilentlyContinue) {
+            LogVerbose $(if ($DryRun) { 'Invoking ISO pipeline (dry run)' } else { 'Invoking ISO pipeline' })
+        }
         if (Get-Command Initialize-ConsoleUtf8ForSpectre -ErrorAction SilentlyContinue) {
             Initialize-ConsoleUtf8ForSpectre
         }
@@ -911,8 +913,8 @@ function Invoke-WinMintIsoBuild {
                     -OutputDir (Get-WinMintOutputDirectory) `
                     -OutputIsoPath $pipelineOutputIso `
                     -DryRun:$DryRun
-                if ($manifestPath) {
-                    Write-WinMintProgress -Stage 'Report' -Level OK -Message "Wrote $manifestPath" -ProgressHandler $ProgressHandler
+                if ($manifestPath -and (Get-Command LogVerbose -ErrorAction SilentlyContinue)) {
+                    LogVerbose "Wrote build manifest: $manifestPath"
                 }
             }
             catch {

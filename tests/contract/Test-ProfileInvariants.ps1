@@ -434,23 +434,11 @@ Assert-ProfileFailsWith -Profile $profile -Expected 'profile.desktop.cursorPack 
 $profile = New-WinMintBuildProfile -Settings (New-SmokeBuildProfileSettings)
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintInstallPlanAgentProfile -BuildConfig $config
-if ($agentProfile.modules.raycast.enabled -or $config.Launcher -ne 'None') {
+if ($config.Launcher -ne 'None') {
     Add-SmokeFailure 'Expected launcher modules to stay disabled by default for the Developer group.'
 }
 if ($agentProfile.modules.phoneLink.enabled -or $agentProfile.modules.liveInstallAudit.enabled) {
     Add-SmokeFailure 'Expected residual live-user modules to stay disabled by default for the Developer group.'
-}
-
-$settings = New-SmokeBuildProfileSettings
-$settings.Launcher = 'Raycast'
-$profile = New-WinMintBuildProfile -Settings $settings
-$config = New-WinMintBuildConfig -BuildProfile $profile
-$agentProfile = New-WinMintInstallPlanAgentProfile -BuildConfig $config
-if ($config.Launcher -ne 'Raycast' -or -not $config.InstallRaycast -or -not $agentProfile.modules.raycast.enabled) {
-    Add-SmokeFailure 'Expected Raycast launcher choice to enable only the Raycast agent module.'
-}
-if (-not $agentProfile.modules.packageManagers.enabled) {
-    Add-SmokeFailure 'Expected Raycast launcher choice to require package managers.'
 }
 
 $profile = New-WinMintBuildProfile -Settings @{
@@ -465,9 +453,6 @@ $profile = New-WinMintBuildProfile -Settings @{
 }
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintInstallPlanAgentProfile -BuildConfig $config
-if ($agentProfile.modules.raycast.enabled) {
-    Add-SmokeFailure 'Expected launcher modules to stay disabled for the Minimal group.'
-}
 if ($agentProfile.modules.phoneLink.enabled -or $agentProfile.modules.liveInstallAudit.enabled) {
     Add-SmokeFailure 'Expected Phone Link and live install audit to stay disabled for the Minimal group.'
 }
@@ -485,7 +470,7 @@ $profile = New-WinMintBuildProfile -Settings @{
 }
 $config = New-WinMintBuildConfig -BuildProfile $profile
 $agentProfile = New-WinMintInstallPlanAgentProfile -BuildConfig $config
-if ($agentProfile.modules.raycast.enabled -or $config.Launcher -ne 'None') {
+if ($config.Launcher -ne 'None') {
     Add-SmokeFailure 'Expected launcher modules to stay disabled by default for the DesktopUI group.'
 }
 

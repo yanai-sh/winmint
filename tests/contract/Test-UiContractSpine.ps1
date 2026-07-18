@@ -166,9 +166,7 @@ if ($failures.Count -eq 0) {
     Assert-Text $pipelineConsole 'Wsl2Distros' 'Interactive console build path must carry WSL distro selections.'
     Assert-Text $reviewConsole 'InstallNilesoft' 'Build summary must surface Nilesoft.'
     Assert-Text $reviewConsole 'WSL distros' 'Build summary must surface the selected WSL distros.'
-    Assert-Text (Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw) '(?s)"displayName"\s*:\s*"Raycast".*"source"\s*:\s*"store"' 'Raycast catalog entry must use the Store source.'
-    Assert-Text (Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw) '(?s)"everything-arm64-beta".*"source"\s*:\s*"direct".*"sha256"\s*:\s*"2D511A33A3494147F921DCB488772125E6CC654E677196AACB0235967A27D2DA"' 'ARM64 Everything beta must be a hash-pinned direct package.'
-    Assert-Text (Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\InstallPlan.ps1') -Raw) 'everything-arm64-beta' 'Install plan must route ARM64 Raycast file search to the pinned native Everything package.'
+
     Assert-Text (Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw) '(?s)"displayName"\s*:\s*"MinGit".*"source"\s*:\s*"scoop"' 'MinGit must be Scoop-owned.'
     Assert-Text (Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw) '(?s)"displayName"\s*:\s*"Starship".*"source"\s*:\s*"scoop"' 'Starship must be Scoop-owned.'
     Assert-Text (Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw) '(?s)"displayName"\s*:\s*"Neovim".*"source"\s*:\s*"scoop"' 'Neovim must be Scoop-owned.'

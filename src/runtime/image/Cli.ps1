@@ -193,7 +193,7 @@ function Invoke-WinMintNewProfileCommand {
         # binds the same whether invoked interactively (-Install a,b splits into an
         # array) or via `pwsh -File` (which passes a,b as one literal token).
         [string[]]$Install = @(),
-        [ValidateSet('None', 'Raycast')][string]$Launcher = 'None',
+        [ValidateSet('None')][string]$Launcher = 'None',
         [switch]$PhoneLink,
         [switch]$LiveInstallAudit,
         [ValidateSet('On', 'Off')][string]$Dma = 'On',
@@ -336,6 +336,8 @@ build options:
   -WriteUsb -Disk <n> Write the result to USB disk <n> (-ConfirmDisk, -AllowFixedUsbDisk).
   -Yes                Assume yes for prompts. -Json machine output. -Quiet no progress.
   -AllowElevate       Self-elevate with a UAC prompt when not already elevated.
+                      Progress is Spectre on the console; full detail always lands in
+                      output\WinMint-Build.verbose.log (mirrored to WinMint-Build.log).
 
 new options (configuration lives here):
   -Edition Host|Home|Pro|Enterprise|Education|SingleLanguage|All|<exact name>
@@ -343,7 +345,7 @@ new options (configuration lives here):
   -KeepEdge -KeepGaming -KeepCopilot   Keep/restore intent for those domains.
   -DesktopUI                       Add the alternate desktop shell layer.
   -Install windhawk,yasb,thide,komorebi,nilesoft  Shell tooling to install.
-  -Launcher None|Raycast
+  -Launcher None
   -Dma On|Off                      DMA interop tweak (default On).
   -Location On|Off                 Location services (default On).
   -UpdateImage None|Stable25H2     Pre-service explicit stable 25H2 update payloads; Stable25H2 opts in.

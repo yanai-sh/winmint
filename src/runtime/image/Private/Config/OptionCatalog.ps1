@@ -18,7 +18,7 @@ function Get-WinMintOptionCatalog {
         Editor = @('cursor', 'vscode', 'zed', 'antigravity', 'neovim')
         Browser = @('zen-browser', 'helium', 'firefox-developer-edition', 'brave', 'edge')
         WslDistro = @('Ubuntu', 'FedoraLinux', 'archlinux', 'NixOS-WSL', 'pengwin')
-        Launcher = @('None', 'Raycast')
+        Launcher = @('None')
         UpdateMode = @('None', 'Stable25H2')
         UpdateTargetFeatureVersion = @('25H2')
         UpdateReleaseCadence = @('BRelease')

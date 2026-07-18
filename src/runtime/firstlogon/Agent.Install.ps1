@@ -1,7 +1,7 @@
 #Requires -Version 7.6
 
 function Invoke-AgentNative {
-    param([string]$FilePath, [string[]]$ArgumentList)
+    param([string]$FilePath, [string[]]$ArgumentList, [switch]$NoRedirect)
     if ($script:WinMintAgentNativeHandler) {
         return & $script:WinMintAgentNativeHandler @PSBoundParameters
     }
@@ -27,8 +27,19 @@ function Invoke-AgentNative {
     # installs should execute under that full admin token rather than being
     # bounced through a second limited-user task. That extra hop was brittle and
     # produced "Access is denied" failures on winget-backed installs.
-    $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -PassThru -WindowStyle Hidden `
-        -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -ErrorAction Stop
+    $startArgs = @{
+        FilePath = $FilePath
+        ArgumentList = $ArgumentList
+        Wait = $true
+        PassThru = $true
+        WindowStyle = 'Hidden'
+        ErrorAction = 'Stop'
+    }
+    if (-not $NoRedirect) {
+        $startArgs['RedirectStandardOutput'] = $stdoutPath
+        $startArgs['RedirectStandardError'] = $stderrPath
+    }
+    $p = Start-Process @startArgs
     $exitCode = [int]$p.ExitCode
     if ($exitCode -ne 0) {
         $stdoutTail = @()
@@ -322,7 +333,7 @@ function Install-AgentTool {
                 if ($Tool.PSObject.Properties['silentArgs']) {
                     $installArgs = @($Tool.silentArgs | ForEach-Object { [string]$_ })
                 }
-                Invoke-AgentNative -FilePath ([string]$directPayload.Path) -ArgumentList $installArgs
+                Invoke-AgentNative -FilePath $directPayload.Path -ArgumentList $installArgs -NoRedirect
                 Update-AgentProcessPath
             }
             default {

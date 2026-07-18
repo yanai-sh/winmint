@@ -252,20 +252,11 @@ function Get-WinMintWingetHandoffToolIds {
     if ([bool]$Config.InstallYasb -or [bool]$Config.InstallWindhawk) {
         $ids.Add("vcredist-$([string]$Config.Architecture)") | Out-Null
     }
-    if ([bool]$Config.InstallRaycast) {
-        if ([string]$Config.Architecture -eq 'arm64') {
-            $ids.Add('everything-arm64-beta') | Out-Null
-        }
-        else {
-            $ids.Add('everything-beta') | Out-Null
-        }
-    }
     if ([bool]$Config.InstallKomorebi) {
         $ids.Add('komorebi') | Out-Null
         $ids.Add('whkd') | Out-Null
     }
     if ([bool]$Config.InstallNilesoft) { $ids.Add('nilesoft') | Out-Null }
-    if ([bool]$Config.InstallRaycast) { $ids.Add('raycast') | Out-Null }
 
     return @($ids.ToArray() | Select-Object -Unique)
 }

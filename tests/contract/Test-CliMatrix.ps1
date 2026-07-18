@@ -199,32 +199,6 @@ Invoke-CliProfileCase -Name 'desktop-ui-only' -Arguments @('-Install', 'windhawk
     }
 }
 
-Invoke-CliProfileCase -Name 'raycast-launcher' -Arguments @('-Launcher', 'Raycast') -Assert {
-    param($Profile, $Config, $AgentProfile)
-    if ($Config.Launcher -ne 'Raycast' -or -not $AgentProfile.modules.raycast.enabled -or
-        -not $AgentProfile.modules.packageManagers.enabled) {
-        Add-CliMatrixFailure 'raycast-launcher should enable only Raycast launcher path.'
-    }
-    if (-not $AgentProfile.modules.launcherKey.enabled -or $AgentProfile.modules.launcherKey.target -ne 'Raycast' -or $AgentProfile.modules.launcherKey.chord -ne 'Win+Shift+F23') {
-        Add-CliMatrixFailure 'raycast-launcher should bind the launcher key to Raycast on the common Copilot hardware-key chord.'
-    }
-}
-
-Invoke-CliProfileCase -Name 'thide-implies-raycast' -Arguments @('-Install', 'yasb,thide') -Assert {
-    param($Profile, $Config, $AgentProfile)
-    if (@($Profile.desktop.layers) -notcontains 'thide' -or -not $Config.InstallThide) {
-        Add-CliMatrixFailure 'thide-implies-raycast should record thide as a selected shell layer.'
-    }
-    if ($Config.Launcher -ne 'Raycast' -or -not $AgentProfile.modules.raycast.enabled) {
-        Add-CliMatrixFailure 'thide-implies-raycast should default the launcher to Raycast.'
-    }
-    $extensionIds = @($AgentProfile.modules.raycast.extensions | ForEach-Object { [string]$_.id })
-    foreach ($expected in @('everything-search', 'windows-terminal', 'window-walker')) {
-        if ($extensionIds -notcontains $expected) {
-            Add-CliMatrixFailure "thide-implies-raycast should request Raycast extension '$expected'."
-        }
-    }
-}
 
 $profileOverrideBase = Join-Path $matrixRoot 'profile-override-base.json'
 & pwsh.exe -NoProfile -File $cli new $profileOverrideBase -SourceIso $sourceIso -Architecture arm64 -Json | Out-Null

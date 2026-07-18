@@ -34,6 +34,10 @@ Backend composition uses thin PowerShell modules under `src/runtime/modules/`. P
 pwsh -NoProfile -File tools\validation\Validate.ps1
 pwsh -NoProfile -File tools\validation\Validate.ps1 -RunAnalyzer
 
+# Dual-channel build logs: console is sparse Spectre; full detail is always written to
+# output\WinMint-Build.verbose.log (mirrored to output\WinMint-Build.log for tail habits).
+# pwsh -NoProfile -File tools\dev\Assert-WinMintBuildLogChannels.ps1
+
 # Smoke-test profile invariants (no ISO or Windows required)
 pwsh -NoProfile -File tools\dev\Invoke-WinMintPesterContract.ps1
 # Legacy entry (same coverage minus Pester report):
@@ -83,12 +87,20 @@ Home. If a pre-updated VM ISO is needed, build a separate pre-updated **Pro** IS
 from Pro-capable source media.
 
 **Smoke vs full:** `tests/profiles/hyper-v-smoke-arm64.json` is the lean plumbing
-gate (ISO → Setup → FirstLogon, minimal agent work). `hyper-v-install-arm64.json`
-remains the pre-release release gate (browsers, editors, WSL distros, Nilesoft).
-Both use `profileName` values for harness labeling (`Hyper-V Smoke` /
-`Hyper-V Test`) and explicit `diagnostics` presets authored by `tools/vm/WinMint-VmAcceptanceProfile.ps1`. See `docs/VM-Acceptance.md` for the iteration decision tree.
+gate (ISO → Setup → FirstLogon, minimal agent work). `tests/profiles/hyper-v-sl7-smoke-arm64.json`
+is the SL7-shaped smoke gate (Israel regional, Cursor + Zen, mocked Fedora WSL,
+Phone Link on, Edge removal). `hyper-v-install-arm64.json` remains the pre-release
+release gate (browsers, editors, WSL distros, Nilesoft). Smoke/full use `profileName`
+values for harness labeling (`Hyper-V Smoke` / `Hyper-V SL7 Smoke` / `Hyper-V Test`)
+and explicit `diagnostics` presets authored by `tools/vm/WinMint-VmAcceptanceProfile.ps1`.
+See `docs/VM-Acceptance.md` for the iteration decision tree.
 
-**Smoke WSL is mocked:** Hyper-V smoke profiles set `diagnostics.wslRuntimeValidation = skip` so FirstLogon skips real WSL runtime update/distro work (nested virt is usually unavailable in Hyper-V guests). Contract tests assert the gate; full `hyper-v-install-arm64.json` still exercises WSL when nested virt is available.
+**Smoke WSL is mocked:** Hyper-V smoke profiles (`Hyper-V Smoke` and `Hyper-V SL7 Smoke`)
+set `diagnostics.wslRuntimeValidation = skip` so FirstLogon skips real WSL runtime
+update/distro work (nested virt is usually unavailable in Hyper-V guests). Contract
+tests assert the gate; full `hyper-v-install-arm64.json` still exercises WSL when
+nested virt is available. For production-quality ISO size on SL7 smoke, pass
+`-FullImage` to the managed/acceptance harness (Max compression + component cleanup).
 
 **Agent/Cursor runs:** follow `.agents/skills/vm-acceptance-orchestration/SKILL.md`
 (subagent roster: Run operator → poll → Evidence collector → Root-cause debugger →
@@ -210,13 +222,12 @@ Standard Windows means zero added layers. Windhawk, YASB, thide, Komorebi, and N
 | Git config | `src/runtime/firstlogon/Modules/Git.ps1` | **Deferred:** no `development.git` profile block yet; MinGit via PackageManagers is the baseline Git provider. Module stays disabled (`modules.git.enabled = false`). |
 | Dotfiles | `src/runtime/firstlogon/Modules/Dotfiles.ps1` | Opt-in via `development.dotfiles` (`repository`, optional `ref`, `installScript`). HTTPS public repos only in v1; clones with MinGit and runs install script when set. |
 | WSL2 bootstrap | `src/runtime/firstlogon/Modules/Wsl.ps1` |
-| Raycast | `src/runtime/firstlogon/Modules/Raycast.ps1` |
 | Launcher key binding | `src/runtime/firstlogon/Modules/LauncherKey.ps1` |
 | Shell layers (yasb/thide/komorebi/nilesoft) | `src/runtime/firstlogon/Modules/TilingDesktop.ps1` |
 | Windhawk | `src/runtime/firstlogon/Modules/Windhawk.ps1` |
 | Profile composition | `src/runtime/firstlogon/Modules/Profiles.ps1` |
 
-Launcher install is opt-in. CLI users choose `-Launcher Raycast` for Raycast or omit the flag for no launcher; selecting `thide` without an explicit launcher defaults the launcher to Raycast. Profile-backed builds set `features.launcher` to `None` or `Raycast`, which becomes `modules.raycast.enabled` in `New-WinMintInstallPlanAgentProfile`. Raycast installs through the Store source, requests only curated no-API-key extensions, and uses Everything as a quiet local filesystem backend: ARM64 targets use the pinned, SHA256-verified upstream `Everything-1.5.0.1415b.ARM64.en-US-Setup.exe`; amd64/x86-64 targets use package-manager `voidtools.Everything.Beta`. Do not add alternate launcher tokens or the ES CLI package unless a runtime requirement proves it is needed. The launcher key module always records the common Copilot hardware-key chord, `Win+Shift+F23`: Store-backed launchers use native Copilot-key app policy when their AUMID is available, and no-launcher builds clear Copilot app key policy so Windows can use the native Search target/fallback. Windows Search and indexing stay on for Start/Settings integrations. Keep optional tray icons hidden unless the icon exposes a real, user-facing status or control surface.
+Launcher selection is currently `None` only (`features.launcher`). The launcher key module always records the common Copilot hardware-key chord, `Win+Shift+F23`, and clears Copilot app key policy so Windows can use the native Search target/fallback. Windows Search and indexing stay on for Start/Settings integrations. Keep optional tray icons hidden unless the icon exposes a real, user-facing status or control surface.
 
 Phone Link policy and live install audit are also opt-in live-user modules. They must stay disabled unless `features.phoneLink` / `features.liveInstallAudit` or the matching CLI flags are explicitly selected. When Phone Link is off, the release image also removes `Microsoft.YourPhone` and `MicrosoftWindows.CrossDevice` provisioned AppX; opt-in keeps them on the WIM. Live install audit is diagnostic and non-blocking: it must write a report and return warning/error counts without failing FirstLogon.
 
@@ -232,7 +243,7 @@ The user does not choose package sources. WinMint decides.
 | Scoop | User-local developer CLI tools and toolchain plumbing. Scoop is installed during FirstLogon with the official installer; MinGit is the baseline Windows-host Git provider; Starship is the baseline Windows-host prompt with the `nerd-font-symbols` preset; selected Neovim is Scoop-owned. |
 | GitHub release | Reserved for future upstream-asset-backed tools when winget metadata lags or a specific release asset/architecture is needed |
 | Store source | Store-backed packages where the upstream app is distributed through Microsoft Store and winget surfaces them via `msstore` |
-| Direct download | Narrow pinned exception only: the SHA256-verified native Everything 1.5 ARM64 installer used as Raycast's ARM64 file-search backend |
+| Direct download | Reserved for narrow pinned exceptions when winget/Scoop cannot supply a required native asset |
 
 For an ARM64/aarch64 source ISO, FirstLogon must aggressively prefer native ARM64 package assets in both winget and Scoop where the package-manager metadata supports them. For an amd64/x64 ISO, do not force architecture flags; use the package manager's default selection.
 

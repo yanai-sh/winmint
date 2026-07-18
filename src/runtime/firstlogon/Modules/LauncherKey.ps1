@@ -15,9 +15,7 @@ function Get-WinMintAgentLauncherKeyPlan {
     $module = Get-WinMintAgentLauncherKeyModule -AgentProfile $AgentProfile
     $target = if ($module -and $module.PSObject.Properties['target']) { [string]$module.target } else { '' }
     if ([string]::IsNullOrWhiteSpace($target)) {
-        $raycast = $AgentProfile.modules.PSObject.Properties['raycast']
-        if ($raycast -and [bool]$raycast.Value.enabled) { $target = 'Raycast' }
-        else { $target = 'Search' }
+        $target = 'Search'
     }
 
     $chord = if ($module -and $module.PSObject.Properties['chord'] -and -not [string]::IsNullOrWhiteSpace([string]$module.chord)) {
@@ -94,18 +92,6 @@ function Invoke-WinMintAgentLauncherKeyBootstrap {
     }
 
     switch ([string]$plan.Target) {
-        'Raycast' {
-            $aumid = Resolve-WinMintAgentStartAppAumid -Name 'Raycast'
-            if ([string]::IsNullOrWhiteSpace($aumid)) {
-                $result['notes'] = @('Raycast selected, but no Raycast Start app AUMID was found after install. Raycast keeps its in-app default hotkey.')
-            }
-            else {
-                $policyPath = Set-WinMintAgentCopilotHardwareKeyAppPolicy -Aumid $aumid
-                $result['raycastAumid'] = $aumid
-                $result['policyPath'] = $policyPath
-                $result['notes'] = @('Raycast selected. Copilot hardware-key policy set to the Raycast app AUMID.')
-            }
-        }
         'Search' {
             $cleared = Clear-WinMintAgentCopilotHardwareKeyAppPolicy
             $result['nativeSearchFallback'] = $true

@@ -98,7 +98,7 @@ function Invoke-WinMintAgentProfileBootstrap {
     $modules = Get-WinMintAgentProfilePropertyValue -AgentProfile $AgentProfile -Name 'modules'
     if ($null -ne $modules) {
         $moduleNames = @(Get-WinMintAgentProfilePropertyNames -AgentProfile $modules)
-        foreach ($requiredModule in @('packageManagers', 'wsl', 'browsers', 'raycast', 'launcherKey', 'liveInstallAudit', 'shell', 'windhawk')) {
+        foreach ($requiredModule in @('packageManagers', 'wsl', 'browsers', 'launcherKey', 'liveInstallAudit', 'shell', 'windhawk')) {
             if ($moduleNames -notcontains $requiredModule) {
                 $problems.Add("'modules.$requiredModule' is missing")
             }

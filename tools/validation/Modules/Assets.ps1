@@ -110,7 +110,6 @@ function Test-RequiredAssets {
         'src\runtime\firstlogon\Modules\Git.ps1',
         'src\runtime\firstlogon\Modules\Dotfiles.ps1',
         'src\runtime\firstlogon\Modules\Wsl.ps1',
-        'src\runtime\firstlogon\Modules\Raycast.ps1',
         'src\runtime\firstlogon\Modules\LauncherKey.ps1',
         'src\runtime\firstlogon\Modules\LiveInstallAudit.ps1',
         'src\runtime\firstlogon\Modules\TilingDesktop.ps1',
