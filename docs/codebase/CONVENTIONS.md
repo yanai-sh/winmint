@@ -11,7 +11,7 @@ Snapshot note: updated 2026-07-07. Onboarding/audit snapshot — not a continuou
 - **PowerShell private modules:** `PascalCase.ps1` (`Profile.ps1`, `TweakRegistry.ps1`, `InstallPlan.ps1`)
 - **Tweak modules:** `NN-kebab-id.ps1` with two-digit numeric prefix (`00-hardware-bypass.ps1`, `10-explorer-qol.ps1`)
 - **C# setup-shell hosts:** `PascalCase.cs` (`WizardBridge.cs`, `JsonContracts.cs`, `SetupShellHost.cs`)
-- **Product docs:** lowercase kebab at repo root for roadmap (`roadmap.md`); PascalCase for runbooks under `docs/` (`VM-Acceptance.md`)
+- **Product docs:** lowercase kebab under `docs/v2/` for roadmap (`roadmap.md`); PascalCase for runbooks under `docs/` (`VM-Acceptance.md`)
 
 ### 2) Function and Variable Naming
 

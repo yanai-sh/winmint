@@ -23,6 +23,8 @@ Numbered, durable records of significant WinMint decisions. Each ADR captures **
 | [007](ADR-007-package-source-policy.md) | Fixed package source policy | Accepted |
 | [008](ADR-008-profile-schema-v4.md) | BuildProfile schema v4 breaking migration | Accepted |
 | [009](ADR-009-acceptance-strategy.md) | Contract tests in CI; VM smoke manual | Accepted |
+| [010](ADR-010-source-iso-legal.md) | Source ISO legally user-supplied | Accepted (extends 005) |
+| [011](ADR-011-winmint-v2-greenfield.md) | WinMint v2 greenfield rewrite | Accepted (v2 project; v1 repo until cutover) |
 
 ## Related documents
 
