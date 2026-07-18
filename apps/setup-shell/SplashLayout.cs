@@ -27,10 +27,10 @@ internal static class SplashLayout
         var dockWidth = Math.Min(tokens.DockMaxWidth, width * 0.92f);
         var dockLeft = (width - dockWidth) * 0.5f;
 
-        var groupFontSize = tokens.GroupFontSize;
-        var taskFontSize = Clamp(width * 0.0135f, tokens.TaskFontSize * 0.88f, tokens.TaskFontSize * 0.98f);
-        var stepFontSize = shortHeight ? 10.5f : 11f;
-        var gapScale = shortHeight ? 0.85f : 1f;
+        var groupFontSize = tokens.GroupFontSize > 0 ? tokens.GroupFontSize + 1f : 12f;
+        var taskFontSize = Clamp(width * 0.016f, 16f, 20f);
+        var stepFontSize = shortHeight ? 11f : 12f;
+        var gapScale = shortHeight ? 0.9f : 1.1f;
         var groupLineHeight = groupFontSize * 1.3f;
         var taskLineHeight = taskFontSize * 1.4f;
         var stepLineHeight = stepFontSize * 1.4f;

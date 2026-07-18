@@ -32,16 +32,24 @@ internal static class GdiFallbackPainter
         // Logo text in the upper region
         var text = "WinMint";
         var fontSize = 24;
-        var textY = (int)(height * 0.38f - fontSize);
+        var textY = (int)(height * 0.35f - fontSize);
         DrawLine(hdc, text, 0, textY, width, muted, fontSize, true);
 
-        // Progress bar
-        {
-            var barW = 160;
-            var barH = tokens.Layout.ProgressHeight > 0 ? (int)tokens.Layout.ProgressHeight : 3;
-            var barX = (width - barW) / 2;
-            var barY = (int)(height * 0.55f);
+        // Info stack (placed above progress bar)
+        var groupText = !string.IsNullOrWhiteSpace(status.GroupLabel) ? status.GroupLabel.ToUpperInvariant() : "SETTING UP";
+        var groupY = (int)(height * 0.52f);
+        DrawLine(hdc, groupText, 0, groupY, width, muted, 12, true);
 
+        var taskText = !string.IsNullOrWhiteSpace(status.TaskLabel) ? status.TaskLabel : "Working…";
+        var taskY = groupY + 20;
+        DrawLine(hdc, taskText, 0, taskY, width, ink, 18, false);
+
+        // Progress bar (positioned at 0.63 * height, below the task labels)
+        var barW = (int)Math.Clamp(width * 0.28f, 280f, 380f);
+        var barH = tokens.Layout.ProgressHeight > 0 ? (int)tokens.Layout.ProgressHeight : 4;
+        var barX = (width - barW) / 2;
+        var barY = (int)(height * 0.63f);
+        {
             var trackBg = NativeMethods.CreateSolidBrush(ParseColor(tokens.ProgressTrack, 0x0036302E));
             var trackRect = new NativeMethods.RECT { Left = barX, Top = barY, Right = barX + barW, Bottom = barY + barH };
             NativeMethods.FillRect(hdc, ref trackRect, trackBg);
@@ -69,38 +77,7 @@ internal static class GdiFallbackPainter
             NativeMethods.DeleteObject(accentBrush);
         }
 
-        // Info stack
-        var groupText = !string.IsNullOrWhiteSpace(status.GroupLabel) ? status.GroupLabel.ToUpperInvariant() : "SETTING UP";
-        var groupY = (int)(height * 0.59f);
-        DrawLine(hdc, groupText, 0, groupY, width, muted, 11, true);
 
-        var taskText = !string.IsNullOrWhiteSpace(status.TaskLabel) ? status.TaskLabel : "Working…";
-        var taskY = groupY + 20;
-        DrawLine(hdc, taskText, 0, taskY, width, ink, 14, false);
-
-        // Steps list (centered below task)
-        var stepsY = taskY + 28;
-        if (status.Steps is not null && status.Steps.Count > 0)
-        {
-            foreach (var step in status.Steps)
-            {
-                if (string.Equals(step.Status, "done", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var label = step.Label;
-                if (string.IsNullOrWhiteSpace(label))
-                {
-                    label = step.Id;
-                }
-
-                var isCurrent = string.Equals(step.Status, "current", StringComparison.OrdinalIgnoreCase);
-                var stepColor = isCurrent ? ink : BlendColor(dim, canvas, 0.38f);
-                DrawLine(hdc, label, 0, stepsY, width, stepColor, 11, false);
-                stepsY += 16;
-            }
-        }
 
         // Heartbeat footer
         var metaText = SplashPainter.FormatShellMeta(status);

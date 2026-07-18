@@ -407,9 +407,10 @@ internal sealed class SetupShellHost : IDisposable
             Math.Max(1, client.Height),
             _tokens.Layout);
         var fontCollection = _dwFactory.GetSystemFontCollection(false);
+        var fontFamily = ResolveFontFamily(fontCollection, _tokens.FontFamily);
 
         _groupFormat = _dwFactory.CreateTextFormat(
-            _tokens.FontFamily,
+            fontFamily,
             fontCollection,
             FontWeight.SemiBold,
             FontStyle.Normal,
@@ -419,7 +420,7 @@ internal sealed class SetupShellHost : IDisposable
         _groupFormat.ParagraphAlignment = ParagraphAlignment.Near;
 
         _taskFormat = _dwFactory.CreateTextFormat(
-            _tokens.FontFamily,
+            fontFamily,
             fontCollection,
             FontWeight.Medium,
             FontStyle.Normal,
@@ -430,7 +431,7 @@ internal sealed class SetupShellHost : IDisposable
         _taskFormat.WordWrapping = WordWrapping.Wrap;
 
         _stepFormat = _dwFactory.CreateTextFormat(
-            _tokens.FontFamily,
+            fontFamily,
             fontCollection,
             FontWeight.Normal,
             FontStyle.Normal,
@@ -440,7 +441,7 @@ internal sealed class SetupShellHost : IDisposable
         _stepFormat.ParagraphAlignment = ParagraphAlignment.Near;
 
         _bannerFormat = _dwFactory.CreateTextFormat(
-            _tokens.FontFamily,
+            fontFamily,
             fontCollection,
             FontWeight.Normal,
             FontStyle.Normal,
@@ -641,6 +642,23 @@ internal sealed class SetupShellHost : IDisposable
         {
             _selfHandle.Free();
         }
+    }
+
+    private static string ResolveFontFamily(IDWriteFontCollection collection, string preferredFamily)
+    {
+        var candidates = new[] { "Segoe UI Variable Text", "Segoe UI Variable", preferredFamily, "Segoe UI" };
+        foreach (var name in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+            if (collection.FindFamilyName(name, out var index))
+            {
+                return name;
+            }
+        }
+        return "Segoe UI";
     }
 }
 

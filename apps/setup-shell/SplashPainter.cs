@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using Vortice.DCommon;
 using Vortice.Direct2D1;
@@ -112,7 +113,41 @@ internal static class SplashPainter
         var elapsedS = _animationStopwatch.ElapsedMilliseconds / 1000f;
         var metrics = SplashLayout.Resolve(width, height, tokens.Layout, status.Steps?.Count ?? 0);
 
-        renderTarget.Clear(ColorUtil.ParseHex(tokens.Canvas));
+        // 1. Base linear gradient background
+        var linearProps = new LinearGradientBrushProperties
+        {
+            StartPoint = new Vector2(0, 0),
+            EndPoint = new Vector2(0, height)
+        };
+        var linearStops = new[]
+        {
+            new GradientStop(0.0f, ColorUtil.ParseHex("#080a0e")),
+            new GradientStop(1.0f, ColorUtil.ParseHex(tokens.Canvas))
+        };
+        using (var linearStopCollection = renderTarget.CreateGradientStopCollection(linearStops))
+        using (var linearBrush = renderTarget.CreateLinearGradientBrush(linearProps, linearStopCollection))
+        {
+            renderTarget.FillRectangle(new Rect(0, 0, width, height), linearBrush);
+        }
+
+        // 2. Radial accent gradient flare behind the pulsing logo
+        var radialProps = new RadialGradientBrushProperties
+        {
+            Center = new Vector2(width * 0.5f, height * 0.35f),
+            GradientOriginOffset = Vector2.Zero,
+            RadiusX = width * 0.8f,
+            RadiusY = height * 0.5f
+        };
+        var radialStops = new[]
+        {
+            new GradientStop(0.0f, ColorUtil.ParseHex(tokens.Accent, 0.12f)),
+            new GradientStop(0.75f, ColorUtil.ParseHex("#000000", 0.0f))
+        };
+        using (var radialStopCollection = renderTarget.CreateGradientStopCollection(radialStops))
+        using (var radialBrush = renderTarget.CreateRadialGradientBrush(radialProps, radialStopCollection))
+        {
+            renderTarget.FillRectangle(new Rect(0, 0, width, height), radialBrush);
+        }
 
         if (heroAsset is not null)
         {
@@ -130,44 +165,14 @@ internal static class SplashPainter
             var logoH = src.Height * scale;
 
             var logoX = (width - logoW) * 0.5f;
-            var logoY = (height - logoH) * 0.38f;
+            var logoY = (height - logoH) * 0.35f;
 
             var dest = new Rect(logoX, logoY, logoW, logoH);
             renderTarget.DrawBitmap(heroAsset.Bitmap, dest, 1f, Vortice.Direct2D1.BitmapInterpolationMode.Linear, src);
         }
 
-        // Progress bar
-        {
-            var barW = 160f;
-            var barH = tokens.Layout.ProgressHeight > 0 ? tokens.Layout.ProgressHeight : 3f;
-            var barX = (width - barW) * 0.5f;
-            var barY = height * 0.55f;
-
-            using (var trackBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.ProgressTrack)))
-            {
-                renderTarget.FillRectangle(new Rect(barX, barY, barW, barH), trackBrush);
-            }
-
-            using (var accentBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Accent)))
-            {
-                if (string.Equals(status.ProgressMode, "determinate", StringComparison.OrdinalIgnoreCase))
-                {
-                    var pct = (float)Clamp((float)status.ProgressPct, 0f, 100f);
-                    var fillW = barW * (pct / 100f);
-                    renderTarget.FillRectangle(new Rect(barX, barY, fillW, barH), accentBrush);
-                }
-                else
-                {
-                    var cycle = (elapsedS * 0.6f) % 1.0f;
-                    var segW = barW * 0.25f;
-                    var segX = barX + (barW - segW) * cycle;
-                    renderTarget.FillRectangle(new Rect(segX, barY, segW, barH), accentBrush);
-                }
-            }
-        }
-
-        // Info stack
-        var groupY = height * 0.59f;
+        // Info stack (placed above progress bar)
+        var groupY = height * 0.52f;
         var groupText = !string.IsNullOrWhiteSpace(status.GroupLabel) ? status.GroupLabel.ToUpperInvariant() : "SETTING UP";
         var groupRect = new Rect((width - metrics.DockWidth) * 0.5f, groupY, metrics.DockWidth, metrics.GroupLineHeight * 2f);
         using (var groupBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Muted)))
@@ -183,16 +188,39 @@ internal static class SplashPainter
             renderTarget.DrawText(taskText, taskFormat, taskRect, taskBrush);
         }
 
-        var stepsY = taskY + (metrics.TaskLineHeight * 1.5f) + metrics.TaskToStepsGap;
-        DrawStepList(
-            renderTarget,
-            tokens,
-            status,
-            stepFormat,
-            (width - metrics.DockWidth) * 0.5f,
-            stepsY,
-            metrics.DockWidth,
-            metrics.StepLineHeight);
+        // Progress bar (positioned below active task description)
+        var barW = Clamp(width * 0.28f, 280f, 380f);
+        var barH = tokens.Layout.ProgressHeight > 0 ? tokens.Layout.ProgressHeight : 4f;
+        var barX = (width - barW) * 0.5f;
+        var barY = height * 0.63f;
+
+        using (var trackBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.ProgressTrack)))
+        {
+            var trackRect = new RoundedRectangle { Rect = new Rect(barX, barY, barW, barH), RadiusX = 1.5f, RadiusY = 1.5f };
+            renderTarget.FillRoundedRectangle(trackRect, trackBrush);
+        }
+
+        using (var accentBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Accent)))
+        {
+            if (string.Equals(status.ProgressMode, "determinate", StringComparison.OrdinalIgnoreCase))
+            {
+                var pct = (float)Clamp((float)status.ProgressPct, 0f, 100f);
+                var fillW = barW * (pct / 100f);
+                if (fillW > 0.1f)
+                {
+                    var fillRect = new RoundedRectangle { Rect = new Rect(barX, barY, fillW, barH), RadiusX = 1.5f, RadiusY = 1.5f };
+                    renderTarget.FillRoundedRectangle(fillRect, accentBrush);
+                }
+            }
+            else
+            {
+                var cycle = (elapsedS * 0.6f) % 1.0f;
+                var segW = barW * 0.25f;
+                var segX = barX + (barW - segW) * cycle;
+                var fillRect = new RoundedRectangle { Rect = new Rect(segX, barY, segW, barH), RadiusX = 1.5f, RadiusY = 1.5f };
+                renderTarget.FillRoundedRectangle(fillRect, accentBrush);
+            }
+        }
 
         // Heartbeat footer
         var metaText = FormatShellMeta(status);
@@ -266,66 +294,6 @@ internal static class SplashPainter
         GuestScreenCapture.WritePngBgra32(outputPath, pixels, (int)width, (int)height, stride);
     }
 
-    private static int CountVisibleSteps(SetupShellStatus status)
-    {
-        if (status.Steps is null || status.Steps.Count == 0)
-        {
-            return 0;
-        }
-
-        var count = 0;
-        foreach (var step in status.Steps)
-        {
-            if (!string.Equals(step.Status, "done", StringComparison.OrdinalIgnoreCase))
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
-    private static void DrawStepList(
-        ID2D1RenderTarget renderTarget,
-        DesignTokens tokens,
-        SetupShellStatus status,
-        IDWriteTextFormat stepFormat,
-        float left,
-        float top,
-        float width,
-        float lineHeight)
-    {
-        if (status.Steps is null || status.Steps.Count == 0)
-        {
-            return;
-        }
-
-        var y = top;
-        foreach (var step in status.Steps)
-        {
-            if (string.Equals(step.Status, "done", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var label = step.Label;
-            if (string.IsNullOrWhiteSpace(label))
-            {
-                label = step.Id;
-            }
-
-            var isCurrent = string.Equals(step.Status, "current", StringComparison.OrdinalIgnoreCase);
-            var alpha = isCurrent ? 1f : 0.38f;
-            var textColor = isCurrent ? tokens.Ink : tokens.Dim;
-            var labelRect = new Rect(left, y, width, lineHeight);
-            using (var textBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(textColor, alpha)))
-            {
-                renderTarget.DrawText(label, stepFormat, labelRect, textBrush);
-            }
-
-            y += lineHeight;
-        }
-    }
 
     internal static string FormatShellMeta(SetupShellStatus status)
     {
