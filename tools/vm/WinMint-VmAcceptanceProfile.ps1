@@ -90,7 +90,7 @@ function Resolve-WinMintVmAcceptanceTierFromProfile {
     }
 
     $profileName = [string]$ProfileJson.profileName
-    if ($profileName -eq 'Hyper-V Smoke') { return 'Smoke' }
+    if ($profileName -in @('Hyper-V Smoke', 'Hyper-V SL7 Smoke')) { return 'Smoke' }
     if ($profileName -eq 'Hyper-V Test') { return 'Full' }
     return 'Auto'
 }

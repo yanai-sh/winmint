@@ -18,6 +18,7 @@ $machine = [pscustomobject]@{
     requiredDriverPath = 'surface-laptop-7'
     signals = @(
         'firstLogon.ok', 'drivers.surfaceCatalog', 'drivers.firmwareExcluded', 'keep.edge',
+        'features.phoneLink',
         'agents.zenBrowser', 'agents.cursor', 'wsl.fedora', 'audit.zeroErrors',
         'desktop.noShellLayers', 'registry.gamingPerformanceBaseline', 'launcher.searchFallback'
     )

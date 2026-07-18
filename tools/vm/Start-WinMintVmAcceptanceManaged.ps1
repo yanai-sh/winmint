@@ -145,7 +145,8 @@ if ($FullImage) { $childArgs += '-FullImage' }
 if (-not [string]::IsNullOrWhiteSpace($SourceIso)) { $childArgs += @('-SourceIso', $SourceIso) }
 if ($NoObserve) { $childArgs += '-NoObserve' }
 
-$proc = Start-Process -FilePath $pwsh -ArgumentList $childArgs -WorkingDirectory $repoRoot -PassThru -WindowStyle Hidden -RedirectStandardOutput $runLog -RedirectStandardError $runLog
+$errLog = Join-Path $evidenceDir 'run.err.log'
+$proc = Start-Process -FilePath $pwsh -ArgumentList $childArgs -WorkingDirectory $repoRoot -PassThru -WindowStyle Hidden -RedirectStandardOutput $runLog -RedirectStandardError $errLog
 
 $handle = [ordered]@{
     status = 'starting'

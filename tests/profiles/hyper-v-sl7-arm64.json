@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "2026-07-13T21:46:00.0000000+03:00",
+  "profileName": "Hyper-V Test",
+  "keep": {
+    "edge": true,
+    "gaming": false,
+    "copilot": false
+  },
+  "source": {
+    "isoPath": "C:\\Users\\yanai\\Projects\\winmint\\output\\WinMint-20260707-210250.iso",
+    "architecture": "arm64"
+  },
+  "target": {
+    "device": "DifferentPC",
+    "formFactor": "Laptop",
+    "powerPlan": "Balanced",
+    "editionMode": "Fixed",
+    "edition": "Windows 11 Pro",
+    "productKey": "VK7JG-NPHTM-C97JM-9MPGT-3V66T",
+    "diskMode": "AutoWipeDisk0",
+    "diskLayout": {
+      "preset": "",
+      "roundingGb": 64,
+      "windowsMinimumGb": 256,
+      "windowsRecommendedGb": 384,
+      "linuxMinimumGb": 128,
+      "linuxRecommendedGb": 256,
+      "efiMb": 1024,
+      "msrMb": 16,
+      "recoveryMb": 1024
+    }
+  },
+  "identity": {
+    "computerName": "WinMintVM",
+    "accountName": "dev",
+    "accountMode": "Local",
+    "autoLogon": true,
+    "passwordSet": true,
+    "passwordIncluded": true,
+    "password": "winmint"
+  },
+  "regional": {
+    "timeZoneId": "Israel Standard Time",
+    "uiLanguage": "en-US",
+    "systemLocale": "he-IL",
+    "uiLanguageFallback": "en-US",
+    "userLocale": "he-IL",
+    "inputLocale": "en-US;he-IL",
+    "homeLocationGeoId": 117,
+    "secondaryInputLanguages": ["he-IL"]
+  },
+  "drivers": {
+    "source": "None",
+    "path": "",
+    "exportHostDrivers": false
+  },
+  "desktop": {
+    "cursorPack": "Windows11Modern",
+    "layers": [
+      "standard",
+      "windhawk",
+      "yasb",
+      "thide"
+    ]
+  },
+  "development": {
+    "editors": [
+      "zed",
+      "cursor",
+      "neovim"
+    ],
+    "browsers": [
+      "zen-browser"
+    ],
+    "wsl": {
+      "distros": [
+        "Ubuntu",
+        "NixOS-WSL"
+      ]
+    }
+  },
+  "features": {
+    "launcher": "None",
+    "liveInstallAudit": true,
+    "phoneLink": false
+  },
+  "updates": {
+    "mode": "None",
+    "targetFeatureVersion": "25H2",
+    "releaseCadence": "BRelease",
+    "includeOptionalPreviews": false,
+    "payloadRoot": "",
+    "qualitySecurity": true,
+    "dynamicUpdate": true,
+    "defender": true,
+    "dotnet": true,
+    "provisionedApps": true
+  },
+  "removals": {
+    "aiPolicy": "ServiceableFull"
+  },
+  "posture": {
+    "appearance": {
+      "theme": "dark"
+    },
+    "explorer": {
+      "showFileExtensions": true,
+      "showHiddenFiles": true
+    },
+    "accessibility": {
+      "stickyKeys": "disabled"
+    },
+    "setup": {
+      "dmaInterop": true,
+      "hardwareBypass": false
+    }
+  },
+  "privacy": {
+    "locationServices": "enabled",
+    "telemetryTracing": "disabled",
+    "advertisingId": "disabled",
+    "activityHistory": "disabled"
+  },
+  "diagnostics": {
+    "retainFirstLogonArtifacts": true,
+    "provisioningShellDwellMs": 10000,
+    "vmGuestBasicConsole": true,
+    "wslRuntimeValidation": "skip"
+  }
+}

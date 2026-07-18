@@ -165,7 +165,7 @@ if (-not $builtIso) {
         & (Join-Path $repoRoot 'tools\release\Build-WinMintSetupShell.ps1') -AllArch
     }
 
-    $buildStartedAt = (Get-Date).AddSeconds(-5)
+    $buildStartedAtUtc = [datetime]::UtcNow.AddSeconds(-15)
     # Default to -FastImage (skip recompression + WinSxS cleanup): WinMint is alpha
     # and the VM loop runs many times - install/FirstLogon behavior is identical, only
     # the final image size differs. Pass -FullImage for a production-quality ISO.
@@ -188,11 +188,11 @@ if (-not $builtIso) {
         throw "Build failed (exit code $LASTEXITCODE). See the WinMint build report in .\output."
     }
     $builtIso = Get-ChildItem -LiteralPath $outputDir -Filter 'WinMint-*.iso' -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.LastWriteTime -ge $buildStartedAt } |
-        Sort-Object LastWriteTime -Descending |
+        Where-Object { $_.LastWriteTimeUtc -ge $buildStartedAtUtc } |
+        Sort-Object LastWriteTimeUtc -Descending |
         Select-Object -First 1
     if (-not $builtIso) {
-        throw "Build completed but no WinMint-*.iso newer than $($buildStartedAt.ToString('o')) was found in $outputDir."
+        throw "Build completed but no WinMint-*.iso newer than $($buildStartedAtUtc.ToString('o')) (UTC) was found in $outputDir."
     }
     # Record what we just built so an unchanged next run can skip straight to boot.
     ([ordered]@{

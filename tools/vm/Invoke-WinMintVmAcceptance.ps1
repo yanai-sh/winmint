@@ -721,6 +721,32 @@ if ($runEvidence) {
         }
     }
 
+    $dmaRestoreReportPath = Join-Path $EvidenceDir 'ProgramData-Logs\FirstLogon_RegionalRestore.json'
+    if (Test-Path -LiteralPath $dmaRestoreReportPath) {
+        try {
+            $dmaRestoreReport = Get-Content -LiteralPath $dmaRestoreReportPath -Raw | ConvertFrom-Json
+            $result.dmaRegionalRestore = [ordered]@{
+                enabled = [bool]$dmaRestoreReport.enabled
+                compliant = [bool]$dmaRestoreReport.compliant
+                errors = @($dmaRestoreReport.errors)
+                localeName = if ($dmaRestoreReport.observed) { [string]$dmaRestoreReport.observed.localeName } else { '' }
+                culture = if ($dmaRestoreReport.observed) { [string]$dmaRestoreReport.observed.culture } else { '' }
+                reportPath = $dmaRestoreReportPath
+            }
+            if ([bool]$dmaRestoreReport.enabled -and -not [bool]$dmaRestoreReport.compliant) {
+                $dmaErr = (@($dmaRestoreReport.errors) -join ' | ')
+                if ([string]::IsNullOrWhiteSpace($dmaErr)) { $dmaErr = 'see FirstLogon_RegionalRestore.json' }
+                $signalPlumbingFail.Add("DMA regional restore non-compliant: $dmaErr") | Out-Null
+            }
+        }
+        catch {
+            $signalPlumbingFail.Add("DMA regional restore report unreadable: $($_.Exception.Message)") | Out-Null
+        }
+    }
+    elseif ($result.reachable -and $result.firstLogon) {
+        $signalPlumbingFail.Add('DMA regional restore report missing (FirstLogon_RegionalRestore.json)') | Out-Null
+    }
+
     foreach ($s in $signalPlumbingFail) { $result.reasons += "Plumbing check failed: $s." }
     foreach ($s in $signalEvidenceFail) { $result.warnings += "Evidence check failed: $s." }
 

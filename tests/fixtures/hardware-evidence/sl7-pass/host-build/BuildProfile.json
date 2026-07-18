@@ -4,7 +4,7 @@
   "keep": { "edge": true, "gaming": false, "copilot": false },
   "drivers": { "source": "SurfaceCatalog", "path": "surface-laptop-7", "exportHostDrivers": false },
   "desktop": { "layers": [] },
-  "features": { "launcher": "None" },
+  "features": { "launcher": "None", "phoneLink": true },
   "development": {
     "editors": ["cursor"],
     "browsers": ["zen-browser"],

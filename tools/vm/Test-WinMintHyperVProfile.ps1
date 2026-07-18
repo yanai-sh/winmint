@@ -11,13 +11,17 @@
     the VM harness.
 
     -Tier Full validates the release-gate profile (browsers, editors, WSL distros, Nilesoft).
-    -Tier Smoke validates the lean plumbing profile (standard desktop, WSL baseline only).
+    -Tier Smoke validates either the lean plumbing profile (Hyper-V Smoke) or the
+      SL7-shaped smoke profile (Hyper-V SL7 Smoke: Cursor/Zen/mocked Fedora, Edge removal).
 
 .EXAMPLE
     pwsh -NoProfile -File .\tools\vm\Test-WinMintHyperVProfile.ps1 -ProfilePath .\tests\profiles\hyper-v-install-arm64.json
 
 .EXAMPLE
     pwsh -NoProfile -File .\tools\vm\Test-WinMintHyperVProfile.ps1 -ProfilePath .\tests\profiles\hyper-v-smoke-arm64.json -Tier Smoke
+
+.EXAMPLE
+    pwsh -NoProfile -File .\tools\vm\Test-WinMintHyperVProfile.ps1 -ProfilePath .\tests\profiles\hyper-v-sl7-smoke-arm64.json -Tier Smoke
 #>
 [CmdletBinding()]
 param(
@@ -47,9 +51,15 @@ function Add-Failure {
 }
 
 $profileName = [string]$profile.profileName
-$expectedProfileName = if ($Tier -eq 'Smoke') { 'Hyper-V Smoke' } else { 'Hyper-V Test' }
-if ($profileName -ne $expectedProfileName) {
-    Add-Failure "Hyper-V $Tier profiles must set profileName to '$expectedProfileName'; got '$profileName'."
+$isSl7Smoke = ($profileName -eq 'Hyper-V SL7 Smoke')
+$expectedSmokeNames = @('Hyper-V Smoke', 'Hyper-V SL7 Smoke')
+if ($Tier -eq 'Smoke') {
+    if ($profileName -notin $expectedSmokeNames) {
+        Add-Failure "Hyper-V Smoke profiles must set profileName to 'Hyper-V Smoke' or 'Hyper-V SL7 Smoke'; got '$profileName'."
+    }
+}
+elseif ($profileName -ne 'Hyper-V Test') {
+    Add-Failure "Hyper-V Full profiles must set profileName to 'Hyper-V Test'; got '$profileName'."
 }
 if (-not (Test-WinMintVmAcceptanceDiagnosticsPreset -Profile $profile -Tier $Tier)) {
     Add-Failure "Hyper-V $Tier profiles must include the VM acceptance diagnostics preset (retainFirstLogonArtifacts, provisioningShellDwellMs, wslRuntimeValidation)."
@@ -97,18 +107,49 @@ if ([string]$profile.features.launcher -ne 'None') {
 }
 
 if ($Tier -eq 'Smoke') {
-    if (@($profile.development.wsl.distros).Count -gt 0) {
-        Add-Failure 'Hyper-V Smoke profiles must not select WSL distros.'
-    }
-    if (@($profile.development.browsers).Count -gt 0) {
-        Write-Warning 'Hyper-V Smoke profiles must not select browsers.'
-    }
-    if (@($profile.development.editors).Count -gt 0) {
-        Write-Warning 'Hyper-V Smoke profiles must not select editors.'
-    }
     $layers = @($profile.desktop.layers)
     if ($layers.Count -ne 1 -or $layers[0] -ne 'standard') {
-        Write-Warning 'Hyper-V Smoke profiles must use the standard desktop layer only.'
+        Add-Failure 'Hyper-V Smoke profiles must use the standard desktop layer only.'
+    }
+    if ($isSl7Smoke) {
+        if (@($profile.development.editors) -notcontains 'cursor' -or @($profile.development.editors).Count -ne 1) {
+            Add-Failure 'Hyper-V SL7 Smoke must select exactly the Cursor editor.'
+        }
+        if (@($profile.development.browsers) -notcontains 'zen-browser' -or @($profile.development.browsers).Count -ne 1) {
+            Add-Failure 'Hyper-V SL7 Smoke must select exactly zen-browser.'
+        }
+        if (@($profile.development.wsl.distros) -notcontains 'FedoraLinux' -or @($profile.development.wsl.distros).Count -ne 1) {
+            Add-Failure 'Hyper-V SL7 Smoke must select exactly FedoraLinux (mocked via wslRuntimeValidation=skip).'
+        }
+        if ([string]$profile.diagnostics.wslRuntimeValidation -ne 'skip') {
+            Add-Failure 'Hyper-V SL7 Smoke must set diagnostics.wslRuntimeValidation=skip.'
+        }
+        if ([bool]$profile.keep.edge) {
+            Add-Failure 'Hyper-V SL7 Smoke must keep.edge=false to exercise Edge removal.'
+        }
+        if (-not [bool]$profile.features.phoneLink) {
+            Add-Failure 'Hyper-V SL7 Smoke must enable features.phoneLink.'
+        }
+        if (-not [bool]$profile.features.liveInstallAudit) {
+            Add-Failure 'Hyper-V SL7 Smoke must enable features.liveInstallAudit.'
+        }
+        if ([string]$profile.regional.userLocale -ne 'he-IL' -or [int]$profile.regional.homeLocationGeoId -ne 117) {
+            Add-Failure 'Hyper-V SL7 Smoke must use Israel regional restore (userLocale he-IL, GeoID 117).'
+        }
+        if ([string]$profile.regional.uiLanguage -ne 'en-US') {
+            Add-Failure 'Hyper-V SL7 Smoke must keep UI language en-US.'
+        }
+    }
+    else {
+        if (@($profile.development.wsl.distros).Count -gt 0) {
+            Add-Failure 'Hyper-V Smoke (lean) profiles must not select WSL distros.'
+        }
+        if (@($profile.development.browsers).Count -gt 0) {
+            Add-Failure 'Hyper-V Smoke (lean) profiles must not select browsers.'
+        }
+        if (@($profile.development.editors).Count -gt 0) {
+            Add-Failure 'Hyper-V Smoke (lean) profiles must not select editors.'
+        }
     }
 }
 else {

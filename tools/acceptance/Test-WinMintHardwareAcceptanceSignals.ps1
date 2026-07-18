@@ -109,6 +109,13 @@ function Test-WinMintHardwareAcceptanceSignals {
                     $message = 'keep.edge is false'
                 }
             }
+            'features.phoneLink' {
+                $severity = 'evidence'
+                $phoneLink = $false
+                if ($buildProfile -and $buildProfile.features) { $phoneLink = [bool]$buildProfile.features.phoneLink }
+                $ok = $phoneLink
+                if (-not $ok) { $message = 'features.phoneLink is false' }
+            }
             'agents.zenBrowser' {
                 $severity = 'evidence'
                 $ok = Test-WinMintAgentModuleStepOk -State $state -StepName 'browsers'
