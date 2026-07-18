@@ -1,4 +1,4 @@
-#Requires -Version 7.6
+﻿#Requires -Version 7.6
 [CmdletBinding()]
 param()
 
@@ -110,6 +110,7 @@ Assert-True ($release.Order -lt $success.Order) 'Provisioning lock release shoul
 Assert-Equal $engage.Condition 'provisioningHost' 'Engage step should be gated on provisioning host mode.'
 Assert-Equal $release.Condition 'provisioningHost' 'Release step should be gated on provisioning host mode.'
 Assert-Equal $plan[1].FailurePolicy 'blocking' 'FirstLogon state initialization should be a blocking transaction step.'
+Assert-Equal $restore.FailurePolicy 'bestEffort' 'DMA visible-posture restore stays bestEffort so provisioning-lock release can still run; Runtime marks hard failure via DmaRestoreFailed.'
 Assert-Equal $agent.FailurePolicy 'blocking' 'Agent run should be a blocking transaction step.'
 Assert-Equal $success.Condition 'agentExitCode == 0 && !agentNeedsReboot' 'Success cleanup should be gated on successful agent exit without needsReboot.'
 Assert-Equal $rebootResume.Condition 'agentExitCode == 0 && agentNeedsReboot' 'Reboot resume should run when the agent exits 0 with needsReboot steps.'

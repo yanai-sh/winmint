@@ -1,5 +1,27 @@
 #Requires -Version 5.1
 
+function Get-WinMintFirstLogonUserLocaleName {
+    # Persistable user locale (formats). Prefer the International hive over in-process Get-Culture:
+    # Set-Culture updates the hive immediately but leaves the FirstLogon process culture on the
+    # DMA setup value (en-IE) until thread defaults are repinned.
+    try {
+        $name = [string](Get-ItemProperty -LiteralPath 'HKCU:\Control Panel\International' -Name LocaleName -ErrorAction Stop).LocaleName
+        if (-not [string]::IsNullOrWhiteSpace($name)) { return $name.Trim() }
+    }
+    catch { }
+    return ''
+}
+
+function Set-WinMintFirstLogonUserCulture {
+    param([Parameter(Mandatory)][string]$CultureName)
+
+    Set-Culture -CultureInfo $CultureName -ErrorAction Stop
+    # ponytail: pin process/thread culture so same-session Copy/verify see the restore; hive is source of truth.
+    $ci = [cultureinfo]::GetCultureInfo($CultureName)
+    [cultureinfo]::CurrentCulture = $ci
+    [cultureinfo]::DefaultThreadCurrentCulture = $ci
+}
+
 function Set-WinMintFirstLogonInputLanguages {
     # Set the user language list to [display language] + [secondary input languages], with the
     # display language ALWAYS first (primary) and explicitly pinned as the UI language. This is
@@ -10,21 +32,25 @@ function Set-WinMintFirstLogonInputLanguages {
         [string[]]$SecondaryInputLanguages = @()
     )
     if (-not (Get-Command Set-WinUserLanguageList -ErrorAction SilentlyContinue)) { return }
+    if (-not (Get-Command New-WinUserLanguageList -ErrorAction SilentlyContinue)) { return }
     if ([string]::IsNullOrWhiteSpace($DisplayLanguage)) { $DisplayLanguage = 'en-US' }
     $displayPrimary = (($DisplayLanguage -split '-')[0]).ToLowerInvariant()
-    $list = [System.Collections.Generic.List[string]]::new()
-    $list.Add($DisplayLanguage)
+    $list = New-WinUserLanguageList -Language $DisplayLanguage
+    $applied = [System.Collections.Generic.List[string]]::new()
+    $applied.Add($DisplayLanguage)
     foreach ($lang in @($SecondaryInputLanguages)) {
         $tag = [string]$lang
         if ([string]::IsNullOrWhiteSpace($tag)) { continue }
         if ((($tag -split '-')[0]).ToLowerInvariant() -eq $displayPrimary) { continue }  # never displace the display language
-        if ($list -notcontains $tag) { $list.Add($tag) }
+        if ($applied -contains $tag) { continue }
+        $list.Add($tag)
+        $applied.Add($tag)
     }
-    Set-WinUserLanguageList -LanguageList @($list) -Force -ErrorAction Stop
+    Set-WinUserLanguageList -LanguageList $list -Force -ErrorAction Stop
     # Hard-pin the UI/display language so a secondary input language can never become the
     # display language (the user requirement: type Hebrew, but the system stays English).
     try { Set-WinUILanguageOverride -Language $DisplayLanguage -ErrorAction SilentlyContinue } catch { }
-    "$(Get-Date -Format 'o') Set user language list to: $(@($list) -join ', ') (display pinned to $DisplayLanguage)." |
+    "$(Get-Date -Format 'o') Set user language list to: $(@($applied) -join ', ') (display pinned to $DisplayLanguage)." |
         Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
 }
 
@@ -139,8 +165,17 @@ function Restore-WinMintDmaRegionalDefaults {
 
     if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale)) {
         try {
-            Set-Culture -CultureInfo $restoreUserLocale -ErrorAction Stop
-            "$(Get-Date -Format 'o') Restored user culture to $restoreUserLocale after DMA setup." |
+            Set-WinMintFirstLogonUserCulture -CultureName $restoreUserLocale
+            $localeAfterSet = Get-WinMintFirstLogonUserLocaleName
+            if ($localeAfterSet -ne $restoreUserLocale) {
+                # Language-list normalization can race the first Set-Culture write; one retry is enough.
+                Set-WinMintFirstLogonUserCulture -CultureName $restoreUserLocale
+                $localeAfterSet = Get-WinMintFirstLogonUserLocaleName
+            }
+            if ($localeAfterSet -ne $restoreUserLocale) {
+                throw "LocaleName '$localeAfterSet' after Set-Culture (expected '$restoreUserLocale')."
+            }
+            "$(Get-Date -Format 'o') Restored user culture to $restoreUserLocale after DMA setup (LocaleName=$localeAfterSet)." |
                 Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         }
         catch {
@@ -158,6 +193,24 @@ function Restore-WinMintDmaRegionalDefaults {
     catch {
         $errors.Add("International settings copy failed: $_") | Out-Null
         Write-WinMintFirstLogonError "International settings copy failed: $_"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale)) {
+        # Final pin after system copy — Copy can re-normalize formats from the language list.
+        try {
+            $localeAfterCopy = Get-WinMintFirstLogonUserLocaleName
+            if ($localeAfterCopy -ne $restoreUserLocale) {
+                Set-WinMintFirstLogonUserCulture -CultureName $restoreUserLocale
+                if (Get-Command Copy-UserInternationalSettingsToSystem -ErrorAction SilentlyContinue) {
+                    Copy-UserInternationalSettingsToSystem -WelcomeScreen $true -NewUser $true -ErrorAction Stop
+                }
+                "$(Get-Date -Format 'o') Re-applied user culture $restoreUserLocale after international settings copy." |
+                    Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
+            }
+        }
+        catch {
+            $errors.Add("User culture re-pin after international copy failed for ${restoreUserLocale}: $_") | Out-Null
+            Write-WinMintFirstLogonError "User culture re-pin after international copy failed for ${restoreUserLocale}: $_"
+        }
     }
     try { Set-WinMintFirstLogonLocationServicesPolicy -Enabled $restoreLocationServices }
     catch {
@@ -192,17 +245,18 @@ function Restore-WinMintDmaRegionalDefaults {
 
     $observedTimeZone = $null
     $observedHomeLocation = $null
-    $observedCulture = $null
+    $observedLocaleName = Get-WinMintFirstLogonUserLocaleName
+    $observedProcessCulture = ''
     $observedPrimaryLanguageTag = ''
     $observedUiLanguageOverride = ''
     try { $observedTimeZone = Get-TimeZone } catch { $errors.Add("Time zone verification failed: $_") | Out-Null }
     try { $observedHomeLocation = Get-WinHomeLocation } catch { $errors.Add("Home location verification failed: $_") | Out-Null }
-    try { $observedCulture = Get-Culture } catch { $errors.Add("Culture verification failed: $_") | Out-Null }
+    try { $observedProcessCulture = [string](Get-Culture).Name } catch { }
     try {
         if (Get-Command Get-WinUserLanguageList -ErrorAction SilentlyContinue) {
-            $languageList = @(Get-WinUserLanguageList -ErrorAction Stop)
-            if ($languageList.Count -gt 0) {
-                $observedPrimaryLanguageTag = [string]$languageList[0].LanguageTag
+            $primaryLanguage = Get-WinUserLanguageList -ErrorAction Stop | Select-Object -First 1
+            if ($null -ne $primaryLanguage) {
+                $observedPrimaryLanguageTag = [string]$primaryLanguage.LanguageTag
             }
         }
     }
@@ -221,7 +275,6 @@ function Restore-WinMintDmaRegionalDefaults {
 
     $observedGeoIdText = if ($observedHomeLocation) { [string]([int]$observedHomeLocation.GeoId) } else { '0' }
     $observedTimeZoneText = if ($observedTimeZone) { [string]$observedTimeZone.Id } else { '' }
-    $observedCultureText = if ($observedCulture) { [string]$observedCulture.Name } else { '' }
     if ($restoreGeoId -gt 0 -and (-not $observedHomeLocation -or [int]$observedHomeLocation.GeoId -ne $restoreGeoId)) {
         $errors.Add("Current home location GeoID '$observedGeoIdText' does not match restore GeoID '$restoreGeoId'.") | Out-Null
     }
@@ -232,11 +285,11 @@ function Restore-WinMintDmaRegionalDefaults {
         $languageConfigured = (-not [string]::IsNullOrWhiteSpace($observedPrimaryLanguageTag) -and $observedPrimaryLanguageTag -eq $restoreUiLanguage)
         $overrideConfigured = (-not [string]::IsNullOrWhiteSpace($observedUiLanguageOverride) -and $observedUiLanguageOverride -eq $restoreUiLanguage)
         if (-not $languageConfigured -and -not $overrideConfigured) {
-            $errors.Add("Configured display language '$observedPrimaryLanguageTag' / UI override '$observedUiLanguageOverride' does not match restore culture '$restoreUiLanguage'.") | Out-Null
+            $errors.Add("Configured display language '$observedPrimaryLanguageTag' / UI override '$observedUiLanguageOverride' does not match restore UI language '$restoreUiLanguage'.") | Out-Null
         }
     }
-    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale) -and (-not $observedCultureText -or $observedCultureText -ne $restoreUserLocale)) {
-        $errors.Add("Current culture '$observedCultureText' does not match configured restore culture '$restoreUserLocale'.") | Out-Null
+    if (-not [string]::IsNullOrWhiteSpace($restoreUserLocale) -and ($observedLocaleName -ne $restoreUserLocale)) {
+        $errors.Add("Current LocaleName '$observedLocaleName' (process culture '$observedProcessCulture') does not match configured restore culture '$restoreUserLocale'.") | Out-Null
     }
 
     $report = [ordered]@{
@@ -253,7 +306,9 @@ function Restore-WinMintDmaRegionalDefaults {
         }
         observed = [ordered]@{
             timeZoneId = if ($observedTimeZone) { [string]$observedTimeZone.Id } else { '' }
-            culture = if ($observedCulture) { [string]$observedCulture.Name } else { '' }
+            localeName = $observedLocaleName
+            culture = $observedLocaleName
+            processCulture = $observedProcessCulture
             primaryLanguageTag = $observedPrimaryLanguageTag
             uiLanguageOverride = $observedUiLanguageOverride
             homeLocationGeoId = if ($observedHomeLocation) { [int]$observedHomeLocation.GeoId } else { 0 }

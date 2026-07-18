@@ -31,6 +31,7 @@ function Invoke-WinMintFirstLogonSetupPhase {
         AgentScriptStaged = (Test-Path -LiteralPath $agent)
         AgentExitCode = 1
         AgentNeedsReboot = $false
+        DmaRestoreFailed = $false
         State = $null
         SetupShellProcess = $null
         EarlyExit = $null
@@ -79,11 +80,16 @@ function Invoke-WinMintFirstLogonSetupPhase {
             }
             $dmaRestore = Restore-WinMintDmaRegionalDefaults
             if ($dmaRestore.Enabled -and -not $dmaRestore.Compliant) {
+                # Hard requirement, but do not throw: this step runs under the provisioning lock.
+                # Mark failure, skip the agent, still allow release-provisioning-lock to run.
+                $Context.DmaRestoreFailed = $true
                 $Context.State['dmaRestore'] = 'noncompliant'
                 $Context.State['dmaRestoreReport'] = $dmaRestore.Report
                 $Context.State['dmaRestoreErrors'] = @($dmaRestore.Errors)
+                $Context.State['status'] = 'failed'
                 Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'FirstLogon state write failed' -ScriptBlock { Save-WinMintFirstLogonState -State $Context.State }
-                Write-WinMintFirstLogonError "DMA regional restore reported non-compliant; continuing with personalization and agent. Report: $($dmaRestore.Report); Errors: $(@($dmaRestore.Errors) -join ' | ')"
+                $dmaErrors = (@($dmaRestore.Errors) -join ' | ')
+                Write-WinMintFirstLogonError "DMA regional restore non-compliant (hard requirement). Report: $($dmaRestore.Report); Errors: $dmaErrors"
             }
 
             if (-not $dmaRestore.Enabled) {
@@ -117,6 +123,14 @@ function Invoke-WinMintFirstLogonSetupPhase {
         'run-agent' = {
             param([hashtable]$Context, $Step)
             [void]$Step
+            if ([bool]$Context.DmaRestoreFailed) {
+                Write-WinMintFirstLogonError 'Skipping WinMintAgent because DMA regional restore failed (hard requirement).'
+                $Context.AgentExitCode = 1
+                $Context.AgentNeedsReboot = $false
+                $Context.State['agentExitCode'] = 1
+                $Context.State['completedAt'] = Get-Date -Format o
+                return
+            }
             if ($Context.SetupShellProcess) {
                 Update-WinMintSetupShellStatus -PreAgentStage 'agent' | Out-Null
             }
@@ -212,6 +226,7 @@ function Invoke-WinMintFirstLogonSetupPhase {
         Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'FirstLogon state write failed' -ScriptBlock { Save-WinMintFirstLogonState -State $state }
         "$(Get-Date -Format 'o') FirstLogon.ps1 end" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
         try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
+        if ([bool]$context.DmaRestoreFailed) { return 1 }
         if ($agentExitCode -ne 0) { return $agentExitCode }
         return 0
     }
