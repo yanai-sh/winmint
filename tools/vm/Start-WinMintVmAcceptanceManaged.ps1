@@ -111,14 +111,14 @@ if ($buildPlan) {
     }
 }
 
-$logViewerOpened = $false
-if (-not $NoLogViewer) {
-    $logViewerOpened = Start-WinMintVmRunLogViewerInWindowsTerminal `
-        -RunLog $runLog `
-        -StartingDirectory $repoRoot `
-        -TabTitle "WinMint VM $VMName" `
-        -Tail 30
-}
+$verboseLog = Get-WinMintVmBuildVerboseLogPath -RepoRoot $repoRoot
+$logViewers = Start-WinMintVmBuildLogViewersInWindowsTerminal `
+    -RepoRoot $repoRoot `
+    -RunLog $runLog `
+    -StartingDirectory $repoRoot `
+    -NoLogViewer:$NoLogViewer
+$logViewerOpened = [bool]$logViewers.verboseOpened -or [bool]$logViewers.runLogOpened
+
 
 $pwsh = Resolve-WinMintPwshHostPath
 $childArgs = @(
@@ -146,7 +146,10 @@ if (-not [string]::IsNullOrWhiteSpace($SourceIso)) { $childArgs += @('-SourceIso
 if ($NoObserve) { $childArgs += '-NoObserve' }
 
 $errLog = Join-Path $evidenceDir 'run.err.log'
-$proc = Start-Process -FilePath $pwsh -ArgumentList $childArgs -WorkingDirectory $repoRoot -PassThru -WindowStyle Hidden -RedirectStandardOutput $runLog -RedirectStandardError $errLog
+# Visible console so PwshSpectreConsole sparse build UI works (777a722). Harness
+# lines still Append to run.log via Write-WinMintVmLogLine; do not RedirectStandardOutput
+# (that flattens Spectre into a dead pipe / [SUB] dump).
+$proc = Start-Process -FilePath $pwsh -ArgumentList $childArgs -WorkingDirectory $repoRoot -PassThru -WindowStyle Normal -RedirectStandardError $errLog
 
 $handle = [ordered]@{
     status = 'starting'
@@ -155,6 +158,7 @@ $handle = [ordered]@{
     vmName = $VMName
     evidenceDir = $evidenceDir
     runLog = $runLog
+    verboseLog = $verboseLog
     runEvents = $runEvents
     managedRunPath = $managedPath
     acceptanceResult = Join-Path $evidenceDir 'acceptance-result.json'
@@ -164,7 +168,8 @@ $handle = [ordered]@{
     logViewerOpened = [bool]$logViewerOpened
     observeMode = if ($NoObserve) { 'headless' } else { 'basic' }
     pollCommand = "pwsh -NoProfile -File .\tools\vm\Get-WinMintVmAcceptanceStatus.ps1"
-    tailCommand = "Get-Content -LiteralPath '$runLog' -Wait -Tail 30"
+    tailCommand = "Get-Content -LiteralPath '$verboseLog' -Wait -Tail 40"
+    runLogTailCommand = "Get-Content -LiteralPath '$runLog' -Wait -Tail 30"
 }
 if ($buildPlan) {
     $handle.buildStrategy = [string]$buildPlan.Strategy

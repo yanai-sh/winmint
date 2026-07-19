@@ -196,6 +196,40 @@ function Invoke-WinMintVmLoggedCommand {
     return 0
 }
 
+function Get-WinMintVmBuildVerboseLogPath {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+    return (Join-Path $RepoRoot 'output\WinMint-Build.verbose.log')
+}
+
+function Invoke-WinMintVmSpectreBuildCommand {
+    <#
+    .SYNOPSIS
+        Run the ISO build/boot child with dual-channel engine logging (777a722).
+
+    .DESCRIPTION
+        Does NOT pipe stdout through [SUB] — that strips PwshSpectreConsole progress
+        and duplicates the verbose file. Human Spectre stays on the inherited
+        console; full detail always lands in output\WinMint-Build.verbose.log.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$LogPath,
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$ArgumentList = @()
+    )
+
+    $verboseLog = Get-WinMintVmBuildVerboseLogPath -RepoRoot $RepoRoot
+    Write-WinMintVmLogLine -Message "Build uses dual-channel Spectre console + verbose log: $verboseLog" -LogPath $LogPath -Level 'META'
+    Write-WinMintVmLogLine -Message 'Tail verbose: Get-Content -LiteralPath .\output\WinMint-Build.verbose.log -Wait -Tail 40' -LogPath $LogPath -Level 'META'
+    Write-WinMintVmRunEvent -Kind 'milestone' -Payload @{ label = 'build-spectre-channels'; verboseLog = $verboseLog }
+
+    & $FilePath @ArgumentList
+    $code = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
+    Write-WinMintVmLogLine -Message "Build/boot child exited $code (detail: $verboseLog)" -LogPath $LogPath -Level $(if ($code -eq 0) { 'DONE' } else { 'ERROR' })
+    return $code
+}
+
 function Get-WinMintVmRunEventsTail {
     param(
         [string]$EventsPath,

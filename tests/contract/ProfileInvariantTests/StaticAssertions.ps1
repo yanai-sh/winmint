@@ -1442,8 +1442,11 @@ function Assert-WinMintVmManagedAcceptanceContract {
     if ($managedText -notmatch 'NoObserve') {
         Add-SmokeFailure 'Start-WinMintVmAcceptanceManaged.ps1 should forward -NoObserve to the acceptance child.'
     }
-    if ($managedText -notmatch 'Start-WinMintVmRunLogViewerInWindowsTerminal') {
-        Add-SmokeFailure 'Start-WinMintVmAcceptanceManaged.ps1 should open a Windows Terminal tab tailing run.log.'
+    if ($managedText -notmatch 'Start-WinMintVmBuildLogViewersInWindowsTerminal') {
+        Add-SmokeFailure 'Start-WinMintVmAcceptanceManaged.ps1 should open dual-channel build log viewers (verbose + run.log).'
+    }
+    if ($managedText -notmatch 'Get-WinMintVmBuildVerboseLogPath' -and $managedText -notmatch 'WinMint-Build\.verbose\.log') {
+        Add-SmokeFailure 'Start-WinMintVmAcceptanceManaged.ps1 should surface WinMint-Build.verbose.log for Spectre dual-channel builds.'
     }
     $statusText = Get-WinMintRepositoryText -RelativePath 'tools\vm\Get-WinMintVmAcceptanceStatus.ps1'
     if ($statusText -notmatch 'complete = ') {

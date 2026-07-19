@@ -362,8 +362,48 @@ function Start-WinMintVmRunLogViewerInWindowsTerminal {
     $pwshArgs = @('-NoLogo', '-NoProfile', '-Command', $tailScript)
     $commandLine = ConvertTo-WinMintWtCommandLine -TabTitle $TabTitle -StartingDirectory $StartingDirectory -PwshPath $pwshPath -PwshArguments $pwshArgs
     Start-Process -FilePath $terminalPath -ArgumentList $commandLine -WindowStyle Normal | Out-Null
-    Write-Host "Opened Windows Terminal tab '$TabTitle' tailing run.log."
+    Write-Host "Opened Windows Terminal tab '$TabTitle' tailing $RunLog."
     return $true
+}
+
+function Start-WinMintVmBuildLogViewersInWindowsTerminal {
+    <#
+    .SYNOPSIS
+        Open dual-channel build observation tabs: Spectre lives in the worker
+        console; full detail is tailed from WinMint-Build.verbose.log (777a722).
+    #>
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$RunLog,
+        [Parameter(Mandatory)][string]$StartingDirectory,
+        [switch]$NoLogViewer
+    )
+
+    if ($NoLogViewer) { return [ordered]@{ verboseOpened = $false; runLogOpened = $false; verboseLog = (Get-WinMintVmBuildVerboseLogPath -RepoRoot $RepoRoot) } }
+
+    $verboseLog = Get-WinMintVmBuildVerboseLogPath -RepoRoot $RepoRoot
+    $outDir = Split-Path -Parent $verboseLog
+    if (-not (Test-Path -LiteralPath $outDir)) { $null = New-Item -ItemType Directory -Path $outDir -Force }
+    if (-not (Test-Path -LiteralPath $verboseLog -PathType Leaf)) {
+        Set-Content -LiteralPath $verboseLog -Value "WinMint verbose build log (waiting for build) $(Get-Date -Format o)" -Encoding utf8
+    }
+
+    $verboseOpened = Start-WinMintVmRunLogViewerInWindowsTerminal `
+        -RunLog $verboseLog `
+        -StartingDirectory $StartingDirectory `
+        -TabTitle 'WinMint Build verbose' `
+        -Tail 40
+    # Harness phases (Wait/Inspect/Evidence) still land in run.log.
+    $runLogOpened = Start-WinMintVmRunLogViewerInWindowsTerminal `
+        -RunLog $RunLog `
+        -StartingDirectory $StartingDirectory `
+        -TabTitle 'WinMint VM run.log' `
+        -Tail 30
+    return [ordered]@{
+        verboseOpened = [bool]$verboseOpened
+        runLogOpened  = [bool]$runLogOpened
+        verboseLog    = $verboseLog
+    }
 }
 
 function Get-WinMintVmManagedRunPath {

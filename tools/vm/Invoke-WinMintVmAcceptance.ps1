@@ -320,7 +320,8 @@ elseif ($runBuildBoot) {
     if ($Tier -ne 'Auto') { $buildArgs += @('-Tier', $Tier) }
     if (-not [string]::IsNullOrWhiteSpace($SourceIso)) { $buildArgs += @('-SourceIso', $SourceIso) }
     $buildArgs += @('-AgentMode', $agentMode)
-    $buildExit = Invoke-WinMintVmLoggedCommand -LogPath $runLog -FilePath $pwsh -ArgumentList $buildArgs
+    # Dual-channel Spectre build (777a722): do not wrap through [SUB] pipe capture.
+    $buildExit = Invoke-WinMintVmSpectreBuildCommand -LogPath $runLog -RepoRoot $repoRoot -FilePath $pwsh -ArgumentList $buildArgs
     if ($buildExit -ne 0) { throw "Build/boot phase failed with exit code $buildExit." }
     Write-WinMintVmRunEvent -Kind 'milestone' -Payload @{ label = 'build-complete' }
     Ensure-WinMintVmObserve
