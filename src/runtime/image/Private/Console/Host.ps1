@@ -93,6 +93,9 @@ function Initialize-Spectre {
         $ProgressPreference = $savedProgress
     }
     Sync-Win11IsoSpectreConsoleDimension
+    if (Get-Command Apply-WinMintSpectreLogTheme -ErrorAction SilentlyContinue) {
+        Apply-WinMintSpectreLogTheme
+    }
 }
 
 function Invoke-SpectreConsoleTextPrompt {
@@ -257,10 +260,13 @@ function Initialize-WinMintBuildLogSinks {
         # ponytail: mirror for Get-Content -Wait muscle memory; drop when callers move to .verbose.log
         Set-Content -LiteralPath $script:WinMintBuildLogPath -Value $header -Encoding utf8 -ErrorAction Stop
         if (-not (Test-WinMintHumanConsoleMuted)) {
-            $hint = "Verbose log: $($script:WinMintBuildVerboseLogPath)"
-            $hintMarkup = $hint
-            try { $hintMarkup = "[dim]$([Spectre.Console.Markup]::Escape($hint))[/]" } catch { }
-            Write-WinMintHumanConsoleLine -Markup $hintMarkup -Plain $hint
+            if (Get-Command Write-WinMintLogSessionChrome -ErrorAction SilentlyContinue) {
+                Write-WinMintLogSessionChrome -VerboseLogPath $script:WinMintBuildVerboseLogPath
+            }
+            else {
+                $hint = "Verbose log: $($script:WinMintBuildVerboseLogPath)"
+                Write-WinMintHumanConsoleLine -Markup "[dim]$hint[/]" -Plain $hint
+            }
         }
     }
     catch {
@@ -333,137 +339,7 @@ function Send-WinMintConsoleLogToProgressHandler {
         })
 }
 
-function Escape-WinMintSpectreMarkup {
-    param([Parameter(Mandatory)][string]$Text)
-    try { return [Spectre.Console.Markup]::Escape($Text) }
-    catch { return ($Text -replace '\[', '[[') }
-}
-
-function Format-WinMintLogMarkup {
-    param(
-        [Parameter(Mandatory)][string]$GlyphMarkup,
-        [Parameter(Mandatory)][string]$Message,
-        [string]$MessageColor = 'white'
-    )
-    $safe = Escape-WinMintSpectreMarkup $Message
-    $ts = ''
-    if (Test-Win11IsoVerboseLogging) {
-        $ts = "[grey]$((Get-Date).ToString('HH:mm:ss'))[/] "
-    }
-    return "${ts}${GlyphMarkup} [${MessageColor}]$safe[/]"
-}
-
-function Log {
-    param([Parameter(Mandatory, Position = 0)][string]$Message)
-    $plain = "> $Message"
-    Write-WinMintBuildLog -Level INFO -Message $Message -Human `
-        -Markup (Format-WinMintLogMarkup -GlyphMarkup '[cyan1]>[/]' -Message $Message) `
-        -PlainGlyph $plain
-    Send-WinMintConsoleLogToProgressHandler -Level Info -Message $Message
-    Invoke-Win11IsoLogStreamFlushUnlessVerbose
-}
-
-function LogOK {
-    param([Parameter(Mandatory, Position = 0)][string]$Message)
-    $plain = "+ $Message"
-    Write-WinMintBuildLog -Level OK -Message $Message -Human `
-        -Markup (Format-WinMintLogMarkup -GlyphMarkup '[green]+[/]' -Message $Message -MessageColor 'silver') `
-        -PlainGlyph $plain
-    Send-WinMintConsoleLogToProgressHandler -Level OK -Message $Message
-    Invoke-Win11IsoLogStreamFlushUnlessVerbose
-}
-
-function LogWarn {
-    param([Parameter(Mandatory, Position = 0)][string]$Message)
-    $plain = "! $Message"
-    Write-WinMintBuildLog -Level WARN -Message $Message -Human `
-        -Markup (Format-WinMintLogMarkup -GlyphMarkup '[yellow]![/]' -Message $Message) `
-        -PlainGlyph $plain
-    Send-WinMintConsoleLogToProgressHandler -Level Warn -Message $Message
-    Invoke-Win11IsoLogStreamFlushUnlessVerbose
-}
-
-function LogErr {
-    <# <summary>Fatal or caught failure line; stack detail always goes to the verbose file.</summary> #>
-    param([Parameter(Mandatory, Position = 0)]$Message)
-    if ($Message -is [System.Management.Automation.ErrorRecord]) {
-        $ex = $Message.Exception
-        $line = if ($null -ne $ex -and -not [string]::IsNullOrEmpty($ex.Message)) { $ex.Message } else { $Message.ToString() }
-        $plain = "x $line"
-        Write-WinMintBuildLog -Level ERROR -Message $line -Human `
-            -Markup (Format-WinMintLogMarkup -GlyphMarkup '[red]x[/]' -Message $line) `
-            -PlainGlyph $plain
-        Send-WinMintConsoleLogToProgressHandler -Level Error -Message $line
-        if ($Message.InvocationInfo.PositionMessage) {
-            Write-WinMintBuildLog -Level VERBOSE -Message $Message.InvocationInfo.PositionMessage
-            if (Test-Win11IsoVerboseLogging) {
-                Write-WinMintHumanConsoleLine -Markup "[dim]$(Escape-WinMintSpectreMarkup $Message.InvocationInfo.PositionMessage)[/]" -Plain $Message.InvocationInfo.PositionMessage
-            }
-        }
-        if ($Message.ScriptStackTrace) {
-            Write-WinMintBuildLog -Level VERBOSE -Message $Message.ScriptStackTrace
-            if (Test-Win11IsoVerboseLogging) {
-                Write-WinMintHumanConsoleLine -Markup "[dim]$(Escape-WinMintSpectreMarkup $Message.ScriptStackTrace)[/]" -Plain $Message.ScriptStackTrace
-            }
-        }
-        Microsoft.PowerShell.Utility\Write-Verbose -Message ($Message | Format-List * -Force | Out-String)
-    }
-    else {
-        $plainMsg = "$Message"
-        Write-WinMintBuildLog -Level ERROR -Message $plainMsg -Human `
-            -Markup (Format-WinMintLogMarkup -GlyphMarkup '[red]x[/]' -Message $plainMsg) `
-            -PlainGlyph "x $plainMsg"
-        Send-WinMintConsoleLogToProgressHandler -Level Error -Message $plainMsg
-        if (Test-Win11IsoVerboseLogging) {
-            Microsoft.PowerShell.Utility\Write-Verbose -Message $plainMsg
-        }
-    }
-    Invoke-Win11IsoLogStreamFlushUnlessVerbose
-}
-
-function LogDry {
-    param([Parameter(Mandatory, Position = 0)][string]$Message)
-    $plain = "dry $Message"
-    Write-WinMintBuildLog -Level DRY -Message $Message -Human `
-        -Markup (Format-WinMintLogMarkup -GlyphMarkup '[darkorange3]dry[/]' -Message $Message -MessageColor 'silver') `
-        -PlainGlyph $plain
-    Send-WinMintConsoleLogToProgressHandler -Level Info -Message "Dry run: $Message"
-    Invoke-Win11IsoLogStreamFlushUnlessVerbose
-}
-
-function LogSection {
-    <# <summary>Human phase rule + verbose SECTION line + Section progress event.</summary> #>
-    param([Parameter(Mandatory, Position = 0)][string]$Title)
-    Write-WinMintBuildLog -Level SECTION -Message $Title
-    if (-not (Test-WinMintHumanConsoleMuted)) {
-        if ($script:UseSpectre -and (Get-Command Write-SpectreRule -ErrorAction SilentlyContinue)) {
-            try {
-                $null = Write-SpectreRule -Title $Title -Color Cyan1 -LineColor Grey
-            }
-            catch {
-                $script:UseSpectre = $false
-                Write-Host ("--- $Title ---")
-            }
-        }
-        else {
-            Write-Host ("--- $Title ---")
-        }
-    }
-    Send-WinMintConsoleLogToProgressHandler -Level Section -Message $Title -Stage $Title
-    Invoke-Win11IsoLogStreamFlushUnlessVerbose
-}
-
-function LogVerbose {
-    <# <summary>Always writes the verbose file; mirrors to dim Spectre console only with -Verbose.</summary> #>
-    param([Parameter(Mandatory, Position = 0)][string]$Message)
-    Write-WinMintBuildLog -Level VERBOSE -Message $Message
-    if (Test-Win11IsoVerboseLogging -and -not (Test-WinMintHumanConsoleMuted)) {
-        $safe = Escape-WinMintSpectreMarkup $Message
-        Write-WinMintHumanConsoleLine -Markup "[grey]$((Get-Date).ToString('HH:mm:ss'))[/] [dim]$safe[/]" -Plain $Message
-    }
-}
-
-# Compat shim for any residual callers.
+# Compat shim for any residual callers. Formatters / Log* live in Logging.ps1.
 function Write-WinMintConsoleLine {
     param([string]$Markup, [string]$Plain)
     Write-WinMintVerboseLogLine $Plain

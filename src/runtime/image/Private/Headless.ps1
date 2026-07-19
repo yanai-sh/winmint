@@ -511,28 +511,15 @@ function Write-WinMintHeadlessHumanResult {
     }
 
     $bodyPlain = ($lines -join [Environment]::NewLine)
-    $failed = $status -match '(?i)fail'
-    $useSpectre = (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue) -and
-        (Get-Command Out-SpectreHost -ErrorAction SilentlyContinue) -and
-        -not [Console]::IsOutputRedirected
-    if ($useSpectre) {
-        try {
-            $escaped = [Spectre.Console.Markup]::Escape($bodyPlain)
-            $header = if ($failed) { '[bold red]WinMint build[/]' } else { '[bold green]WinMint build[/]' }
-            $color = if ($failed) { 'Red' } else { 'Green' }
-            $border = if ($failed) { 'Double' } else { 'Rounded' }
-            $null = Format-SpectrePanel -Data $escaped -Header $header -Border $border -Color $color -Expand |
-                Out-SpectreHost | Out-Host
-        }
-        catch {
-            Write-Host $bodyPlain
-        }
+    # Plain host only — Spectre panel here raced with ErrorActionPreference=Stop and
+    # masked the real build failure (oscdimg) behind an Out-SpectreHost Start exception.
+    Write-Host $bodyPlain
+    foreach ($warning in @($Result.warnings)) {
+        try { Write-Warning $warning } catch { Write-Host "WARNING: $warning" }
     }
-    else {
-        Write-Host $bodyPlain
+    foreach ($failure in @($Result.failures)) {
+        Write-Host "ERROR: $failure"
     }
-    foreach ($warning in @($Result.warnings)) { Write-Warning $warning }
-    foreach ($failure in @($Result.failures)) { Write-Error $failure -ErrorAction Continue }
 }
 
 function Invoke-WinMintHeadlessValidateOnly {

@@ -1,4 +1,4 @@
-﻿#Requires -Version 7.6
+#Requires -Version 7.6
 # Dot-sourced by WinMint-VmConsole.ps1 — not a standalone entrypoint.
 $script:WinMintVmRunLogContext = @{
     LogPath = ''
@@ -224,8 +224,12 @@ function Invoke-WinMintVmSpectreBuildCommand {
     Write-WinMintVmLogLine -Message 'Tail verbose: Get-Content -LiteralPath .\output\WinMint-Build.verbose.log -Wait -Tail 40' -LogPath $LogPath -Level 'META'
     Write-WinMintVmRunEvent -Kind 'milestone' -Payload @{ label = 'build-spectre-channels'; verboseLog = $verboseLog }
 
-    & $FilePath @ArgumentList
-    $code = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
+    # Start-Process keeps Spectre on the inherited console and returns only ExitCode.
+    # A bare `& $FilePath` also streams success output into this function's return value,
+    # so callers saw a giant string as $buildExit and false-failed after exit 0.
+    $proc = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $RepoRoot `
+        -Wait -PassThru -NoNewWindow
+    $code = if ($null -ne $proc.ExitCode) { [int]$proc.ExitCode } else { 0 }
     Write-WinMintVmLogLine -Message "Build/boot child exited $code (detail: $verboseLog)" -LogPath $LogPath -Level $(if ($code -eq 0) { 'DONE' } else { 'ERROR' })
     return $code
 }

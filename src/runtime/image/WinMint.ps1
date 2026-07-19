@@ -17,6 +17,8 @@ $PSNativeCommandUseErrorActionPreference = $true
 . "$PSScriptRoot\Private\PayloadStore.ps1"
 . "$PSScriptRoot\Private\UpdatePayloads.ps1"
 . "$PSScriptRoot\Private\Console\Host.ps1"
+. "$PSScriptRoot\..\WinMint.ConsoleTheme.ps1"
+. "$PSScriptRoot\Private\Console\Logging.ps1"
 . "$PSScriptRoot\Private\Console\Display.ps1"
 . "$PSScriptRoot\Private\Catalog.ps1"
 . "$PSScriptRoot\Private\Audit.ps1"

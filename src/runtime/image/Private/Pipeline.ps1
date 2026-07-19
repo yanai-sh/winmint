@@ -185,35 +185,18 @@ function New-WinMintIsoImage {
             $IsoContents,
             $OutputIso
         )
-        $oldPref = $PSNativeCommandUseErrorActionPreference
-        $PSNativeCommandUseErrorActionPreference = $false
-        try {
-            Log 'Assembling bootable ISO...'
-            LogVerbose "oscdimg: $oscdimg $($arguments -join ' ')"
-            $runOscdimg = {
-                $invoke = {
-                    $out = & $oscdimg @arguments 2>&1
-                    $code = $LASTEXITCODE
-                    if ($code -ne 0) { throw "oscdimg failed with exit code $code.`n$($out | Out-String)" }
-                }
-                if (Get-Command Invoke-WinMintSpectreQuiet -ErrorAction SilentlyContinue) {
-                    Invoke-WinMintSpectreQuiet -ScriptBlock $invoke
-                }
-                else {
-                    & $invoke
-                }
-            }
-            if ((Get-Command Test-WinMintSpectreLiveUiAllowed -ErrorAction SilentlyContinue) -and
-                (Test-WinMintSpectreLiveUiAllowed) -and
-                (Get-Command Invoke-SpectreCommandWithStatus -ErrorAction SilentlyContinue)) {
-                $null = Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title 'Assembling bootable ISO' -ScriptBlock $runOscdimg
-            }
-            else {
-                & $runOscdimg
-            }
+        Log 'Assembling bootable ISO...'
+        LogVerbose "oscdimg: $oscdimg $($arguments -join ' ')"
+        # Start-Process — do not `& $oscdimg` inside Spectre Status/Quiet scopes.
+        # Those wrappers rebind scriptblock scope so `$oscdimg` becomes invalid and
+        # PowerShell throws: "expression after '&' ... was not valid" (exit in ~100ms).
+        $oscdProc = Start-Process -FilePath $oscdimg -ArgumentList $arguments -Wait -PassThru -NoNewWindow
+        $code = if ($null -ne $oscdProc.ExitCode) { [int]$oscdProc.ExitCode } else { -1 }
+        if ($code -ne 0) {
+            throw "oscdimg failed with exit code $code."
         }
-        finally {
-            $PSNativeCommandUseErrorActionPreference = $oldPref
+        if (-not (Test-Path -LiteralPath $OutputIso -PathType Leaf)) {
+            throw "oscdimg exited 0 but output ISO is missing: $OutputIso"
         }
         LogOK "ISO written: $OutputIso"
     }

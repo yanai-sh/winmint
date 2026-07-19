@@ -3,6 +3,13 @@
 $script:AgentStepPlanTotal = 0
 $script:AgentStepCompleted = 0
 
+# Shared One Half Dark theme (same file as engine Logging).
+$script:WinMintConsoleThemePath = Join-Path $PSScriptRoot '..\WinMint.ConsoleTheme.ps1'
+if ((Test-Path -LiteralPath $script:WinMintConsoleThemePath) -and
+    -not (Get-Command Get-WinMintConsoleTheme -ErrorAction SilentlyContinue)) {
+    . $script:WinMintConsoleThemePath
+}
+
 function Get-AgentConsoleStepLabel {
     param([Parameter(Mandatory)][string]$StepKey)
 
@@ -430,14 +437,18 @@ function Write-AgentConsoleLine {
     if (-not (Get-WinMintAgentContext).Interactive) { return }
     $safe = Get-AgentEscapedText -Text $Message
     if ($script:AgentConsoleReady) {
-        $prefix = switch ($Level) {
-            'OK' { '[green]done[/]' }
-            'Warn' { '[yellow]warn[/]' }
-            'Error' { '[red]fail[/]' }
-            'Section' { '[dodgerblue1]step[/]' }
-            default { '[grey]run [/]' }
+        $logLevel = switch ($Level) {
+            'OK' { 'OK' }
+            'Warn' { 'WARN' }
+            'Error' { 'ERROR' }
+            'Section' { 'SECTION' }
+            default { 'INFO' }
         }
-        $null = Write-SpectreHost "$prefix  [white]$safe[/]"
+        if (Get-Command Format-WinMintConsoleLineMarkup -ErrorAction SilentlyContinue) {
+            $null = Write-SpectreHost (Format-WinMintConsoleLineMarkup -Level $logLevel -Message $Message -SafeMessage $safe)
+            return
+        }
+        $null = Write-SpectreHost "[#61afef]│[/] [#5c6370]$((Get-Date).ToString('HH:mm:ss'))[/]  [bold #282c34 on #61afef] RUN [/]  [#dcdfe4]$safe[/]"
         return
     }
     $color = switch ($Level) {
@@ -468,7 +479,10 @@ function Show-AgentConsoleHeader {
             ''
             "[grey]Logs[/]  [silver]$safeLogLabel[/]"
         ) -join "`n"
-        New-AgentSpectrePanel -Data $body -Header '[bold dodgerblue1]Setup[/]' -Color DodgerBlue1 -Width (Get-AgentPanelWidth -Preferred 96 -Minimum 64) |
+        $setupAccent = if (Get-Command Get-WinMintConsoleAccentColor -ErrorAction SilentlyContinue) {
+            Get-WinMintConsoleAccentColor
+        } else { '#61afef' }
+        New-AgentSpectrePanel -Data $body -Header "[bold $setupAccent]Setup[/]" -Color $setupAccent -Width (Get-AgentPanelWidth -Preferred 96 -Minimum 64) |
             Out-AgentSpectreRenderable
         Write-Host ''
         return

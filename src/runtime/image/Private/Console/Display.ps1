@@ -13,50 +13,63 @@ function Write-SpectreSpacing {
 function Write-SectionHeader {
     <#
     <summary>
-    Standard section break: one blank line, rule title, optional dim cue line,
-    spacing, then flush.
+    Standard section break: Fluent logging rule chrome, optional dim cue, flush.
+    Non-default Accent/RuleColor keep a direct Write-SpectreRule path.
     </summary>
     #>
     param(
         [ValidateNotNullOrEmpty()][string]$Title,
-        [ValidateSet('Cyan', 'Yellow', 'Green', 'Red', 'Grey')][string]$Accent = 'Cyan',
-        [ValidateSet('Grey', 'Green', 'Red', 'Yellow', 'Cyan1')][string]$RuleColor = 'Grey',
+        [ValidateSet('Cyan', 'Yellow', 'Green', 'Red', 'Grey', 'DodgerBlue1', 'OneHalf')][string]$Accent = 'OneHalf',
+        [ValidateSet('Grey', 'Green', 'Red', 'Yellow', 'Cyan1', 'Grey23', 'Gutter')][string]$RuleColor = 'Gutter',
         [string]$DimLine = '',
         [switch]$OmitLeadingBlank,
         [switch]$Compact
     )
-    $titleColor = switch ($Accent) {
-        'Yellow' { [Spectre.Console.Color]::Yellow }
-        'Green' { [Spectre.Console.Color]::Green }
-        'Red' { [Spectre.Console.Color]::Red }
-        'Grey' { [Spectre.Console.Color]::Grey }
-        default { [Spectre.Console.Color]::Cyan3 }
-    }
-    $lineSpectreColor = switch ($RuleColor) {
-        'Green' { [Spectre.Console.Color]::Green }
-        'Red' { [Spectre.Console.Color]::Red }
-        'Yellow' { [Spectre.Console.Color]::Yellow }
-        'Cyan1' { [Spectre.Console.Color]::Cyan1 }
-        default { [Spectre.Console.Color]::Grey }
-    }
     if (-not $script:UseSpectre) {
-        Write-Host ''
-        Write-Host ('--- ' + $Title + ' ---')
+        if (-not $OmitLeadingBlank) { Write-Host '' }
+        Write-Host ('◆ ' + $Title)
         if (-not [string]::IsNullOrWhiteSpace($DimLine)) { Write-Host $DimLine }
         return
     }
     try {
-        if (-not $OmitLeadingBlank) { Write-SpectreSpacing }
-        $null = Write-SpectreRule -Title $Title -Color $titleColor -LineColor $lineSpectreColor
+        $useDefaultChrome = ($Accent -eq 'OneHalf' -or $Accent -eq 'DodgerBlue1' -or $Accent -eq 'Cyan') -and
+            ($RuleColor -eq 'Gutter' -or $RuleColor -eq 'Grey23' -or $RuleColor -eq 'Grey')
+        if ($useDefaultChrome -and (Get-Command Write-WinMintLogSectionRule -ErrorAction SilentlyContinue)) {
+            if ($OmitLeadingBlank) {
+                $null = Write-SpectreRule -Title ("◆ $Title") -Color (Get-WinMintConsoleAccentColor) -LineColor (Get-WinMintConsoleRuleLineColor)
+            }
+            else {
+                Write-WinMintLogSectionRule -Title $Title
+            }
+        }
+        else {
+            if (-not $OmitLeadingBlank) { Write-SpectreSpacing }
+            $titleColor = switch ($Accent) {
+                'Yellow' { (Get-WinMintConsoleTheme Yellow) }
+                'Green' { (Get-WinMintConsoleTheme Green) }
+                'Red' { (Get-WinMintConsoleTheme Red) }
+                'Grey' { (Get-WinMintConsoleTheme FgDim) }
+                default { (Get-WinMintConsoleAccentColor) }
+            }
+            $lineSpectreColor = switch ($RuleColor) {
+                'Green' { (Get-WinMintConsoleTheme Green) }
+                'Red' { (Get-WinMintConsoleTheme Red) }
+                'Yellow' { (Get-WinMintConsoleTheme Yellow) }
+                'Cyan1' { (Get-WinMintConsoleTheme Cyan) }
+                default { (Get-WinMintConsoleRuleLineColor) }
+            }
+            $null = Write-SpectreRule -Title ("◆ $Title") -Color $titleColor -LineColor $lineSpectreColor
+        }
         if (-not $Compact) { Write-SpectreSpacing }
         if (-not [string]::IsNullOrWhiteSpace($DimLine)) {
-            $null = Write-SpectreHost "[dim]$DimLine[/]"
+            $dim = if (Get-Command Get-WinMintConsoleTheme -ErrorAction SilentlyContinue) { Get-WinMintConsoleTheme FgDim } else { 'grey70' }
+            $null = Write-SpectreHost "[$dim]$DimLine[/]"
             if (-not $Compact) { Write-SpectreSpacing }
         }
     } catch {
         $script:UseSpectre = $false
         Write-Host ''
-        Write-Host ('--- ' + $Title + ' ---')
+        Write-Host ('◆ ' + $Title)
         if (-not [string]::IsNullOrWhiteSpace($DimLine)) { Write-Host $DimLine }
     }
     Invoke-Win11IsoLogStreamFlushUnlessVerbose
@@ -416,7 +429,6 @@ function Invoke-Action {
     )
     if ($script:DryRun) { LogDry $Description }
     else {
-        Log $Description
         $timer = [System.Diagnostics.Stopwatch]::StartNew()
         $completed = $false
         $liveOk = Test-WinMintSpectreLiveUiAllowed
@@ -424,8 +436,18 @@ function Invoke-Action {
             (Get-Command Invoke-SpectreCommandWithProgress -ErrorAction SilentlyContinue)
         $useLiveStatus = $liveOk -and -not $useLiveProgress -and
             (Get-Command Invoke-SpectreCommandWithStatus -ErrorAction SilentlyContinue)
+        # Live status/progress already shows the step — avoid duplicate RUN badge line.
+        if ($useLiveProgress -or $useLiveStatus) {
+            LogVerbose $Description
+        }
+        else {
+            Log $Description
+        }
         try {
-            if ($useLiveProgress) {
+            if ($useLiveProgress -and (Get-Command Invoke-WinMintSpectreProgress -ErrorAction SilentlyContinue)) {
+                Invoke-WinMintSpectreProgress -Title $Description -ScriptBlock $ScriptBlock
+            }
+            elseif ($useLiveProgress) {
                 Invoke-SpectreCommandWithProgress -ScriptBlock {
                     param([Spectre.Console.ProgressContext]$Context)
                     $task = $Context.AddTask($Description)
@@ -445,9 +467,7 @@ function Invoke-Action {
                 }
             }
             elseif ($useLiveStatus) {
-                $null = Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title $Description -ScriptBlock {
-                    Invoke-WinMintSpectreQuiet -ScriptBlock $ScriptBlock
-                }
+                Invoke-WinMintSpectreStatus -Title $Description -ScriptBlock $ScriptBlock
             }
             else {
                 & $ScriptBlock
