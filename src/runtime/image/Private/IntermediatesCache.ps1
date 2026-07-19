@@ -107,7 +107,7 @@ function Invoke-WinMintAllBuildCachesMaintenance {
 
 # Bump when the serviced-image pipeline changes in a way that can leave cached
 # WIMs semantically stale even if the broad inputs look unchanged.
-$script:WinMintServicedWimCacheSchemaVersion = 17
+$script:WinMintServicedWimCacheSchemaVersion = 18
 
 function Get-WinMintServicedWimCacheRoot {
     return (Join-Path (Get-WinMintBuildCacheRoot) 'serviced-wim')
@@ -180,7 +180,8 @@ function Get-WinMintUpdatePayloadFingerprint {
 function Get-WinMintServicedWimFingerprint {
     param(
         [Parameter(Mandatory)]$BuildConfig,
-        [Parameter(Mandatory)][string]$IsoStageKey
+        [Parameter(Mandatory)][string]$IsoStageKey,
+        [ValidateSet('Max', 'Fast', 'None')][string]$ImageCompression = 'Max'
     )
 
     $sortedOrEmpty = {
@@ -208,6 +209,9 @@ function Get-WinMintServicedWimFingerprint {
     }
 
     $updatesConfig = if ($BuildConfig.PSObject.Properties['Updates']) { $BuildConfig.Updates } else { $null }
+    # Max implies StartComponentCleanup; Fast/None skip it. Include the lane so a
+    # Max-published WIM is never reused for a Fast assemble (or the reverse).
+    $componentCleanup = if ($ImageCompression -eq 'Max') { 'StartComponentCleanup' } else { 'Skipped' }
     $payload = [ordered]@{
         Schema             = $script:WinMintServicedWimCacheSchemaVersion
         Toolchain          = Get-WinMintServicingToolchainIdentity
@@ -232,6 +236,8 @@ function Get-WinMintServicedWimFingerprint {
         SetupUserLocale    = [string]$BuildConfig.SetupUserLocale
         Drivers            = $driversFp
         Updates            = Get-WinMintUpdatePayloadFingerprint -Updates $updatesConfig
+        ImageCompression   = $ImageCompression
+        ComponentCleanup   = $componentCleanup
     }
     return ($payload | ConvertTo-Json -Compress -Depth 4)
 }

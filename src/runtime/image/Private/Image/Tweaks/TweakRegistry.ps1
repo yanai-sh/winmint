@@ -100,6 +100,27 @@ function Assert-WinMintRegistryTweakSetOperation {
         throw "Registry tweak '$TweakId' set operation '$path\\$name' must use remove/undo for deletion; value cannot be null."
     }
 
+    $irreversible = [bool](Get-WinMintRegistryTweakValue -Object $Entry -Name 'irreversible' -Default $false)
+    $irreversibleReason = [string](Get-WinMintRegistryTweakValue -Object $Entry -Name 'irreversibleReason' -Default '')
+    if ($irreversible) {
+        if ([string]::IsNullOrWhiteSpace($irreversibleReason)) {
+            throw "Registry tweak '$TweakId' set operation '$path\\$name' marks irreversible without irreversibleReason."
+        }
+    }
+    else {
+        $undo = Get-WinMintRegistryTweakValue -Object $Entry -Name 'undo' -Default $null
+        if ($null -eq $undo) {
+            throw "Registry tweak '$TweakId' set operation '$path\\$name' must define undo (or irreversible + irreversibleReason)."
+        }
+        $undoAction = [string](Get-WinMintRegistryTweakValue -Object $undo -Name 'action' -Default '')
+        $undoType = [string](Get-WinMintRegistryTweakValue -Object $undo -Name 'type' -Default '')
+        $hasDelete = $undoAction -eq 'delete'
+        $hasRestoreValue = -not [string]::IsNullOrWhiteSpace($undoType) -and ($null -ne (Get-WinMintRegistryTweakValue -Object $undo -Name 'value' -Default $null))
+        if ($hasDelete -eq $hasRestoreValue) {
+            throw "Registry tweak '$TweakId' set operation '$path\\$name' undo must be action=delete XOR type+value."
+        }
+    }
+
     if ($type -in @('REG_DWORD', 'REG_QWORD')) {
         $text = [string]$value
         $parseStyle = [System.Globalization.NumberStyles]::Integer
@@ -140,6 +161,18 @@ function Assert-WinMintRegistryTweakRemoveOperation {
     if ($protectedRoots -contains $parsed.Normalized) {
         throw "Registry tweak '$TweakId' remove path '$path' targets a protected root."
     }
+
+    $irreversible = [bool](Get-WinMintRegistryTweakValue -Object $Entry -Name 'irreversible' -Default $false)
+    $irreversibleReason = [string](Get-WinMintRegistryTweakValue -Object $Entry -Name 'irreversibleReason' -Default '')
+    $restore = Get-WinMintRegistryTweakValue -Object $Entry -Name 'restore' -Default $null
+    if ($irreversible) {
+        if ([string]::IsNullOrWhiteSpace($irreversibleReason)) {
+            throw "Registry tweak '$TweakId' remove path '$path' marks irreversible without irreversibleReason."
+        }
+    }
+    elseif ($null -eq $restore) {
+        throw "Registry tweak '$TweakId' remove path '$path' must define restore (or irreversible + irreversibleReason)."
+    }
 }
 
 function ConvertTo-WinMintRegistryOperation {
@@ -166,6 +199,11 @@ function ConvertTo-WinMintRegistryOperation {
     }
     else {
         $operation.restore = Get-WinMintRegistryTweakValue -Object $Entry -Name 'restore' -Default $null
+    }
+    $irreversible = Get-WinMintRegistryTweakValue -Object $Entry -Name 'irreversible' -Default $null
+    if ($null -ne $irreversible) {
+        $operation.irreversible = [bool]$irreversible
+        $operation.irreversibleReason = [string](Get-WinMintRegistryTweakValue -Object $Entry -Name 'irreversibleReason' -Default '')
     }
     return $operation
 }

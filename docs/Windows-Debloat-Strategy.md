@@ -2,7 +2,7 @@
 
 Status: design reference (not the spec — `AGENTS.md` + contract tests + code are authoritative)  
 Last researched: 2026-04-30  
-Last reconciled to shipped behavior: 2026-06-13
+Last reconciled to shipped behavior: 2026-07-19
 
 This document is the working strategy for the WinMint Windows baseline. The goal is not to create the smallest possible Windows image. The goal is to turn official Windows media into a fast, quiet, serviceable, Linux-style developer workstation with WSL as a first-class runtime. WinMint is WSL2-first: Windows hosts the hardware, UI, security, package bootstrap, and desktop shell; Linux is the default development runtime.
 
@@ -32,7 +32,7 @@ Bad debloat:
 | Tool | Useful lesson | Do not copy |
 |------|---------------|-------------|
 | Tiny11Builder | Offline AppX removal, single-edition export, unattended setup, serviceable/default path. | Tiny11 Core-style removal of WinSxS, Windows Update, WinRE, or other serviceability foundations. |
-| CTT WinUtil | Good catalog of common tweaks and a useful split between essential and cautionary tweaks. | Presenting a huge choice matrix, disabling hibernation/services by default, IPv6/Teredo removal, Edge removal, and visual "best performance" defaults. |
+| CTT WinUtil | Essential/Caution taxonomy for audit; per-op undo metadata; Setup `boot.wim` PE drivers; resume expensive Max builds via durable cache. See [WinUtil adoption](#winutil-adoption). | Presenting a huge choice matrix, disabling hibernation/services by default, IPv6/Teredo removal, Edge removal, and visual "best performance" defaults. |
 | BAREbONE1 / barebones11-style scripts | Useful as an aggressive removal inventory for review. | Removing Edge/WebView-adjacent pieces, Phone Link / Cross Device, language/speech/OCR, and using Compact OS as a default. Small reinstallable inbox apps are not platform dependencies. |
 | Windows X-Lite / Optimum11 | Clear edition split and resource-use goal. | Prebuilt opaque ISO trust model, optional security/update platform, and "lowest resources" as the top product goal. |
 | Win11Debloat | Lightweight PowerShell, Audit Mode support, admin/user targeting, and focused bloat/privacy categories. | Running every privacy/cleanup toggle as a default ISO policy. |
@@ -41,6 +41,75 @@ Bad debloat:
 | O&O ShutUp10++ | Recommendation tiers are useful: some privacy settings are low-risk, others are convenience/security tradeoffs. | "Apply everything" privacy posture. Windows cannot be made truly private without breaking useful Windows behavior. |
 | AtlasOS / ReviOS | Performance-focused custom Windows projects prove there is demand for a cleaner OS personality. | Removing or disabling security, restore/reset, updates, or feature updates as a normal workstation default. |
 | Sophia Script / SophiApp / privacy.sexy | Script transparency, documented methods, reversibility, and current-state detection are valuable references. | Exposing hundreds of switches to the user. WinMint should decide, test, and document. |
+
+## WinUtil adoption
+
+CTT [WinUtil](https://winutil.christitus.com/dev/architecture/) is a live repair toolkit with an optional ISO path. WinMint is an opinionated ISO → Setup → FirstLogon product. Steal **contracts and cache correctness**; do not steal toolkit UX.
+
+### What WinMint adopts (not as UI)
+
+| Lesson | WinMint shape |
+|--------|---------------|
+| Essential vs Caution | Docs/audit lens mapped onto Tier 0–3 only — **not** wizard checkboxes or presets |
+| Undo / OriginalValue | Every reversible registry op carries `undo` / `restore` (or explicit `irreversible`) |
+| Setup PE drivers | Setup-only `boot.wim` index 2 injection (setup-critical INF subset); must survive serviced-WIM cache hits |
+| Resume export without re-modify | Durable serviced-WIM cache: skip AppX/drivers **and** Max `StartComponentCleanup` on hit — not TEMP work-dir resurrection |
+
+### Explicit rejects
+
+Checkbox farm / preset soup; Chocolatey as a peer package source; `/ResetBase` as default cleanup; blanket hibernation-off; location-off as Essential; BitLocker force-off; services-to-Manual; IPv6/Teredo disable; Edge remove; visual “best performance”; hosts/URL blocklists; O&O ShutUp10++ as a build step.
+
+### Catalog audit habit
+
+Re-diff WinUtil’s [tweaks](https://winutil.christitus.com/dev/tweaks/) and [features](https://winutil.christitus.com/dev/features/) lists when bumping the Windows baseline (e.g. new 25H2+ media) or after major AppX/policy churn. Classify each item into Tier 1 / Tier 2 / Reject / Covered. File GitHub issues **only** for Tier-1 gaps — do not expand the product choice matrix.
+
+### First-pass catalog map (2026-07-19)
+
+Disposition against WinUtil Essential + Advanced (Caution). “Covered” means WinMint already applies an equivalent or stricter posture without exposing the WinUtil toggle.
+
+| WinUtil item | Disposition | Notes |
+|--------------|-------------|-------|
+| Activity History - Disable | Covered | `activity-history-disabled-policy` |
+| BitLocker - Disable | Covered (narrower) | Prevent auto-encrypt; do not fight intentional BitLocker |
+| ConsumerFeatures - Disable | Covered | `cloud-content-policy` / home privacy |
+| Delivery Optimization - Disable | Covered (narrower) | Peer-off; Windows Update preserved |
+| Disk Cleanup - Run | Reject | Live toolkit; not image identity |
+| End Task With Right Click - Enable | Covered | `taskbar-endtask` |
+| File Explorer Automatic Folder Discovery - Disable | Tier 1 gap | No equivalent offline/default-user stamp yet — file follow-up if still missing after next baseline bump |
+| Hibernation - Disable | Reject as Essential | Form-factor-aware only (desktop / dual-boot) |
+| Location Tracking - Disable | Reject as Essential | Location defaults **on** for laptops; `-Location Off` opt-out |
+| Microsoft Store Recommended Search Results - Disable | Covered (partial) | `DisableSearchBoxSuggestions` + Start recommended cleanup; confirm Store-specific keys on next audit |
+| Prevent Device Companion Apps | Covered | `driver-coinstaller-policy` |
+| Restore Point - Create | Covered | Post-FirstLogon restore point |
+| Services - Set to Manual | Reject | Tier 3 |
+| Start Menu Previous Layout - Enable | Reject / taste | Not Core; classic Start is product opinion |
+| Telemetry - Disable | Covered | Policy path; keep WU/Store healthy |
+| Temporary Files - Remove | Reject | Live cleanup, not image posture |
+| Widgets - Remove | Covered | Taskbar Widgets hidden (`TaskbarDa`); WebExperience removed with AI/AppX policy |
+| WPBT - Disable | Covered | `wpbt-policy` |
+| Adobe URL Block List | Reject | Hosts-style; Tier 3 |
+| Background Apps - Disable | Tier 2 | Measure after AppX cleanup |
+| Brave Browser - Debloat | Reject | Not a WinMint browser policy surface |
+| Date & Time - Set Time to UTC | Covered (conditional) | Dual-boot clock policy only |
+| Disable Reserved Storage | Reject | Update/servicing risk |
+| DNS - Set to… | Reject | User/network choice, not image default |
+| File Explorer Home and Gallery - Disable | Covered (partial) | Home kept; Gallery hidden (`explorer-qol`) |
+| Fullscreen Optimizations - Disable | Reject | Gaming folklore as workstation default |
+| IPv6 - Disable / IPv4 preferred | Reject | Tier 0 preserve IPv6 |
+| Microsoft Edge - Debloat | Covered | `edge-policy-minimal`; Edge stays installed |
+| Microsoft Edge - Remove | Reject | Tier 0 / product stance |
+| Microsoft OneDrive - Remove | Covered | Offline + FirstLogon |
+| O&O ShutUp10++ - Run | Reject | External live tool |
+| Razer Software Auto-Install - Disable | Covered | Vendor co-installer / companion policy |
+| RDP Unsigned File Warnings - Disable | Reject | Security regression |
+| Right-Click Menu Previous Layout - Enable | Reject / taste | Not Core |
+| Storage Sense - Disable | Reject as Caution default | WinMint uses safe Storage Sense defaults |
+| System Tray Notifications & Calendar - Disable | Tier 2 / taste | Quiet tray is partial via explorer/taskbar QoL |
+| Teredo - Disable | Reject | Networking edge cases |
+| Visual Effects - Best Performance | Reject | Tier 3 |
+| Windows AI - Disable And Remove | Covered | Recall always; Copilot/AI policy unless `-KeepCopilot` |
+
+Tier-1 gap from this pass (filed, not implemented here): **Explorer Automatic Folder Discovery** — https://github.com/yanai-sh/winmint/issues/14.
 
 ## Current WinMint Audit
 

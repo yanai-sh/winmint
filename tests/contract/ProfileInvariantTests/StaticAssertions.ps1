@@ -2814,8 +2814,12 @@ function Assert-LogNoiseInvariants {
 function Assert-WinPEDriverInjectionDefaultsToSetupOnly {
     $catalogPath = Join-Path $root 'src\runtime\image\Private\Catalog.ps1'
     $stagingPath = Join-Path $root 'src\runtime\image\Private\Image\Staging.ps1'
+    $driversPath = Join-Path $root 'src\runtime\image\Private\Image\Drivers.ps1'
+    $pipelinePath = Join-Path $root 'src\runtime\image\Private\Pipeline.ps1'
     $catalogText = Get-Content -LiteralPath $catalogPath -Raw
     $stagingText = Get-Content -LiteralPath $stagingPath -Raw
+    $driversText = Get-Content -LiteralPath $driversPath -Raw
+    $pipelineText = Get-Content -LiteralPath $pipelinePath -Raw
 
     if ($catalogText -notmatch '\$script:BootWimDriverMountIndexes\s*=\s*@\(2\)') {
         Add-SmokeFailure 'Expected default WinPE driver injection to target boot.wim index 2 only.'
@@ -2831,6 +2835,15 @@ function Assert-WinPEDriverInjectionDefaultsToSetupOnly {
     }
     if ($stagingText -match "@\('/English',\s*`"/Image:\$ImageMountPath`",\s*'/Add-Driver',\s*`"/Driver:\$DriverSource`",\s*'/Recurse',\s*'/ForceUnsigned'\)") {
         Add-SmokeFailure 'Driver injection must not force unsigned drivers by default.'
+    }
+    if ($driversText -notmatch '\[switch\]\$WinPEOnly') {
+        Add-SmokeFailure 'Expected Invoke-DriverInjection to expose -WinPEOnly for serviced-WIM cache hits.'
+    }
+    if ($pipelineText -notmatch '-WinPEOnly') {
+        Add-SmokeFailure 'Expected Pipeline cache-hit path to invoke driver injection with -WinPEOnly so boot.wim still receives Setup PE drivers.'
+    }
+    if ($pipelineText -match '(?s)\$driverSources\s*=\s*\[System\.Collections\.Generic\.List\[object\]\]::new\(\)\s*\r?\n\s*if\s*\(\s*\$null\s*-eq\s*\$servicedWimCacheHit\s*\)') {
+        Add-SmokeFailure 'Driver source resolution must not be gated solely on serviced-WIM cache miss; PE injection needs sources on cache hits.'
     }
 }
 
@@ -3106,16 +3119,45 @@ function Assert-RegistryTweakMetadataAndRollback {
             }
         }
         if ([bool](Get-WinMintProfileSetting $group 'reversible' $false)) {
-            $rollbackOps = @(
-                foreach ($entry in @(Get-WinMintProfileSetting $group 'set' @())) {
-                    if ($null -ne (Get-WinMintProfileSetting $entry 'undo' $null)) { $entry }
+            foreach ($entry in @(Get-WinMintProfileSetting $group 'set' @())) {
+                $setPath = [string](Get-WinMintProfileSetting $entry 'path' '')
+                $setName = [string](Get-WinMintProfileSetting $entry 'name' '')
+                $opLabel = if ([string]::IsNullOrWhiteSpace($setName)) { $setPath } else { "$setPath\$setName" }
+                $irreversible = [bool](Get-WinMintProfileSetting $entry 'irreversible' $false)
+                $irreversibleReason = [string](Get-WinMintProfileSetting $entry 'irreversibleReason' '')
+                $undo = Get-WinMintProfileSetting $entry 'undo' $null
+                if ($irreversible) {
+                    if ([string]::IsNullOrWhiteSpace($irreversibleReason)) {
+                        Add-SmokeFailure "Reversible registry tweak '$id' set op '$opLabel' marks irreversible without irreversibleReason."
+                    }
+                    continue
                 }
-                foreach ($entry in @(Get-WinMintProfileSetting $group 'remove' @())) {
-                    if ($null -ne (Get-WinMintProfileSetting $entry 'restore' $null)) { $entry }
+                if ($null -eq $undo) {
+                    Add-SmokeFailure "Reversible registry tweak '$id' set op '$opLabel' must define undo (or irreversible + irreversibleReason)."
+                    continue
                 }
-            )
-            if ($rollbackOps.Count -eq 0) {
-                Add-SmokeFailure "Reversible registry tweak '$id' must include at least partial rollback metadata."
+                $undoAction = [string](Get-WinMintProfileSetting $undo 'action' '')
+                $undoType = [string](Get-WinMintProfileSetting $undo 'type' '')
+                $hasDelete = $undoAction -eq 'delete'
+                $hasRestoreValue = -not [string]::IsNullOrWhiteSpace($undoType) -and ($null -ne (Get-WinMintProfileSetting $undo 'value' $null))
+                if ($hasDelete -eq $hasRestoreValue) {
+                    Add-SmokeFailure "Reversible registry tweak '$id' set op '$opLabel' undo must be action=delete XOR type+value."
+                }
+            }
+            foreach ($entry in @(Get-WinMintProfileSetting $group 'remove' @())) {
+                $removePath = [string](Get-WinMintProfileSetting $entry 'path' '')
+                $irreversible = [bool](Get-WinMintProfileSetting $entry 'irreversible' $false)
+                $irreversibleReason = [string](Get-WinMintProfileSetting $entry 'irreversibleReason' '')
+                $restore = Get-WinMintProfileSetting $entry 'restore' $null
+                if ($irreversible) {
+                    if ([string]::IsNullOrWhiteSpace($irreversibleReason)) {
+                        Add-SmokeFailure "Reversible registry tweak '$id' remove op '$removePath' marks irreversible without irreversibleReason."
+                    }
+                    continue
+                }
+                if ($null -eq $restore) {
+                    Add-SmokeFailure "Reversible registry tweak '$id' remove op '$removePath' must define restore (or irreversible + irreversibleReason)."
+                }
             }
         }
         $registryOperations = @((Get-WinMintProfileSetting (Get-WinMintProfileSetting $group 'operations' @{}) 'registry' @()))
@@ -3553,8 +3595,19 @@ function Assert-ServiceWimRequiresBundledPowerShell7 {
     }
 
     $cacheText = Get-WinMintRepositoryText 'src\runtime\image\Private\IntermediatesCache.ps1'
-    if ($cacheText -notmatch '\$script:WinMintServicedWimCacheSchemaVersion\s*=\s*17') {
-        Add-SmokeFailure 'Serviced-WIM cache schema should be bumped after setup profile diagnostics staging changes.'
+    if ($cacheText -notmatch '\$script:WinMintServicedWimCacheSchemaVersion\s*=\s*18') {
+        Add-SmokeFailure 'Serviced-WIM cache schema should be 18 (ImageCompression/cleanup lane in fingerprint).'
+    }
+    if ($cacheText -notmatch 'ImageCompression') {
+        Add-SmokeFailure 'Serviced-WIM fingerprint must include ImageCompression so Max cleanup is not reused across quality lanes.'
+    }
+    $packagesText = Get-WinMintRepositoryText 'src\runtime\image\Private\Image\Packages.ps1'
+    if ($packagesText -notmatch '\[switch\]\$SkipComponentCleanup') {
+        Add-SmokeFailure 'Save-ImageWithCleanup must support -SkipComponentCleanup for serviced-WIM cache hits.'
+    }
+    $pipelineTextForCache = Get-WinMintRepositoryText 'src\runtime\image\Private\Pipeline.ps1'
+    if ($pipelineTextForCache -notmatch 'SkipComponentCleanup:\(\$null\s*-ne\s*\$servicedWimCacheHit\)') {
+        Add-SmokeFailure 'Pipeline must skip Max component cleanup on serviced-WIM cache hits.'
     }
 }
 

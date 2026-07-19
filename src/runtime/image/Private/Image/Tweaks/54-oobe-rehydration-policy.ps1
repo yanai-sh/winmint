@@ -16,9 +16,9 @@ Add-WinMintRegistryTweakModule @{
         @{ path = 'zSOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\ChatAutoInstall'; name = 'workCompleted'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } }
     )
     remove = @(
-        @{ path = 'zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\DevHomeUpdate' },
-        @{ path = 'zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\OutlookUpdate' },
-        @{ path = 'zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\ChatAutoInstall' }
+        @{ path = 'zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\DevHomeUpdate'; irreversible = $true; irreversibleReason = 'OOBE UScheduler job keys are setup residue; stock trees are not rehydrated by WinMint undo metadata.' },
+        @{ path = 'zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\OutlookUpdate'; irreversible = $true; irreversibleReason = 'OOBE UScheduler job keys are setup residue; stock trees are not rehydrated by WinMint undo metadata.' },
+        @{ path = 'zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\ChatAutoInstall'; irreversible = $true; irreversibleReason = 'OOBE UScheduler job keys are setup residue; stock trees are not rehydrated by WinMint undo metadata.' }
     )
 }
 

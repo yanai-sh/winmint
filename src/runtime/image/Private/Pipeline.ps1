@@ -389,8 +389,16 @@ function Invoke-WinMintIsoPipeline {
         if (-not $NoServicedWimCache -and -not $updatesRequested) {
             try {
                 $isoStageKey = Get-WinMintIsoStageCacheKeyHex -Fingerprint (Get-WinMintIsoStageCacheFingerprint -SourceIsoPath $BuildConfig.SourceIso)
-                $servicedWimFingerprint = Get-WinMintServicedWimFingerprint -BuildConfig $BuildConfig -IsoStageKey $isoStageKey
+                $servicedWimFingerprint = Get-WinMintServicedWimFingerprint -BuildConfig $BuildConfig -IsoStageKey $isoStageKey -ImageCompression $ImageCompression
                 $servicedWimCacheHit = Get-WinMintServicedWimCacheHit -Fingerprint $servicedWimFingerprint -ExpectedMetadata $expectedWimMetadata
+                if (Get-Command Set-WinMintHeadlessJournalCacheFacts -ErrorAction SilentlyContinue) {
+                    $cacheKey = if (-not [string]::IsNullOrWhiteSpace($servicedWimFingerprint)) {
+                        Get-WinMintCacheKeyHex -Fingerprint $servicedWimFingerprint
+                    } else { '' }
+                    Set-WinMintHeadlessJournalCacheFacts `
+                        -ServicedWimCacheKey $cacheKey `
+                        -ReadyForAssemble:($null -ne $servicedWimCacheHit)
+                }
             }
             catch {
                 LogVerbose "Serviced WIM cache probe skipped: $($_.Exception.Message)"
@@ -408,55 +416,55 @@ function Invoke-WinMintIsoPipeline {
         Sync-NerdFont -FontDir (Join-Path $root 'assets\runtime\fonts')
         Sync-Cursor -CursorsDir (Join-Path $root 'assets\runtime\cursors') -PackKind $BuildConfig.CursorPackKind
 
+        # Resolve drivers even on serviced-WIM cache hits so Setup boot.wim (PE)
+        # still receives setup-critical INFs; install.wim injection stays cache-skipped.
         $driverSources = [System.Collections.Generic.List[object]]::new()
-        if ($null -eq $servicedWimCacheHit) {
-            if (Test-WinMintDriverSourceUsesPath -Source ([string]$BuildConfig.Drivers.Source)) {
-                $customDrivers = Resolve-Win11IsoCustomDriverSource `
-                    -Path $BuildConfig.Drivers.Path `
-                    -WorkDir $workDir `
-                    -DriverSource ([string]$BuildConfig.Drivers.Source) `
-                    -TargetDevice ([string]$BuildConfig.TargetDevice) `
-                    -TargetArchitecture $imageArch `
-                    -WindowsBuild $sourceWindowsBuild
-                if ($customDrivers -and $customDrivers.Ready) {
-                    $driverSources.Add($customDrivers)
-                }
+        if (Test-WinMintDriverSourceUsesPath -Source ([string]$BuildConfig.Drivers.Source)) {
+            $customDrivers = Resolve-Win11IsoCustomDriverSource `
+                -Path $BuildConfig.Drivers.Path `
+                -WorkDir $workDir `
+                -DriverSource ([string]$BuildConfig.Drivers.Source) `
+                -TargetDevice ([string]$BuildConfig.TargetDevice) `
+                -TargetArchitecture $imageArch `
+                -WindowsBuild $sourceWindowsBuild
+            if ($customDrivers -and $customDrivers.Ready) {
+                $driverSources.Add($customDrivers)
             }
-            if ($ExportHostDrivers) {
-                $hostDriverDir = Join-Path $workDir 'host_drivers'
-                $hostDriverCache = Get-WinMintHostDriverExportCacheHit
-                if ($null -ne $hostDriverCache) {
-                    Log 'Restoring host drivers from cache...'
-                    LogVerbose 'Skipping Export-WindowsDriver (temp host-driver cache hit).'
-                    $null = New-Item -ItemType Directory -Path $hostDriverDir -Force
-                    Invoke-RobocopyChecked -Source $hostDriverCache -Dest $hostDriverDir -UserFacingMessage 'Copying cached host driver export into the work folder…'
-                    Clear-WinMintReadOnlyAttribute -Path $hostDriverDir
+        }
+        if ($ExportHostDrivers) {
+            $hostDriverDir = Join-Path $workDir 'host_drivers'
+            $hostDriverCache = Get-WinMintHostDriverExportCacheHit
+            if ($null -ne $hostDriverCache) {
+                Log 'Restoring host drivers from cache...'
+                LogVerbose 'Skipping Export-WindowsDriver (temp host-driver cache hit).'
+                $null = New-Item -ItemType Directory -Path $hostDriverDir -Force
+                Invoke-RobocopyChecked -Source $hostDriverCache -Dest $hostDriverDir -UserFacingMessage 'Copying cached host driver export into the work folder…'
+                Clear-WinMintReadOnlyAttribute -Path $hostDriverDir
+            }
+            else {
+                Invoke-Action 'Exporting host drivers for injection' {
+                    Export-WinMintHostDrivers -Destination $hostDriverDir | Out-Null
+                }
+                Publish-WinMintHostDriverExportCache -SourceDir $hostDriverDir
+            }
+            $hostMirrorFilter = [string]$BuildConfig.HostMirrorFilter
+            if ([string]::IsNullOrWhiteSpace($hostMirrorFilter)) { $hostMirrorFilter = 'setup-critical' }
+            $hostSource = $hostDriverDir
+            $hostLabel = 'Host export'
+            if ($hostMirrorFilter -eq 'setup-critical') {
+                $filteredHostDir = Join-Path $workDir 'host_drivers_filtered'
+                $filteredCount = Export-WinMintFilteredHostDrivers -Source $hostDriverDir -Destination $filteredHostDir -Filter setup-critical
+                if ($filteredCount -lt 1) {
+                    LogWarn 'Host driver mirror filter produced no setup-critical INFs; skipping host mirror injection.'
                 }
                 else {
-                    Invoke-Action 'Exporting host drivers for injection' {
-                        Export-WinMintHostDrivers -Destination $hostDriverDir | Out-Null
-                    }
-                    Publish-WinMintHostDriverExportCache -SourceDir $hostDriverDir
+                    $hostSource = $filteredHostDir
+                    $hostLabel = "Host export ($hostMirrorFilter, $filteredCount .inf)"
+                    LogOK "Host driver mirror filtered to $filteredCount setup-critical .inf file(s)."
                 }
-                $hostMirrorFilter = [string]$BuildConfig.HostMirrorFilter
-                if ([string]::IsNullOrWhiteSpace($hostMirrorFilter)) { $hostMirrorFilter = 'setup-critical' }
-                $hostSource = $hostDriverDir
-                $hostLabel = 'Host export'
-                if ($hostMirrorFilter -eq 'setup-critical') {
-                    $filteredHostDir = Join-Path $workDir 'host_drivers_filtered'
-                    $filteredCount = Export-WinMintFilteredHostDrivers -Source $hostDriverDir -Destination $filteredHostDir -Filter setup-critical
-                    if ($filteredCount -lt 1) {
-                        LogWarn 'Host driver mirror filter produced no setup-critical INFs; skipping host mirror injection.'
-                    }
-                    else {
-                        $hostSource = $filteredHostDir
-                        $hostLabel = "Host export ($hostMirrorFilter, $filteredCount .inf)"
-                        LogOK "Host driver mirror filtered to $filteredCount setup-critical .inf file(s)."
-                    }
-                }
-                if ($hostSource -eq $hostDriverDir -or (Get-ChildItem -LiteralPath $hostSource -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
-                    $driverSources.Add([pscustomobject]@{ Source = $hostSource; Label = $hostLabel })
-                }
+            }
+            if ($hostSource -eq $hostDriverDir -or (Get-ChildItem -LiteralPath $hostSource -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
+                $driverSources.Add([pscustomobject]@{ Source = $hostSource; Label = $hostLabel })
             }
         }
 
@@ -546,11 +554,29 @@ function Invoke-WinMintIsoPipeline {
             }
             else {
                 Log "Using cached serviced image for $imgName."
-                LogVerbose "Serviced WIM cache hit: skipping appx removal, package install, and driver injection for $imgName."
+                LogVerbose "Serviced WIM cache hit: skipping appx removal, package install, and install.wim driver injection for $imgName."
+                if ($firstServicedImage -and $driverSources.Count -gt 0) {
+                    Log 'Serviced WIM cache hit: injecting setup-critical drivers into boot.wim (WinPE) only.'
+                    foreach ($driverSource in $driverSources) {
+                        Invoke-DriverInjection `
+                            -MountDir $mountDir `
+                            -IsoContents $isoContents `
+                            -DriverSource $driverSource.Source `
+                            -SourceLabel $driverSource.Label `
+                            -InjectWinPE `
+                            -WinPEOnly
+                    }
+                }
+                elseif ($firstServicedImage -and (Get-Command Set-WinMintManifestWinPeDriverFact -ErrorAction SilentlyContinue)) {
+                    Set-WinMintManifestWinPeDriverFact -Attempted:$false -Injected:$false -Reason 'no-driver-sources' -Indexes @() -InfCount 0
+                }
             }
             Assert-OfflinePowerShell7Staged -MountDir $mountDir
 
-            Save-ImageWithCleanup -MountDir $mountDir -ImageCompression $ImageCompression
+            Save-ImageWithCleanup `
+                -MountDir $mountDir `
+                -ImageCompression $ImageCompression `
+                -SkipComponentCleanup:($null -ne $servicedWimCacheHit)
             $mountedImage = $false
             $firstServicedImage = $false
         }
@@ -559,6 +585,11 @@ function Invoke-WinMintIsoPipeline {
         Assert-WinMintWimMetadataHealthy -ImagePath $installWim -ExpectedMetadata $expectedWimMetadata -ExpectedArchitecture $imageArch
         if (-not $NoServicedWimCache -and -not $updatesRequested -and $null -eq $servicedWimCacheHit -and -not [string]::IsNullOrWhiteSpace($servicedWimFingerprint) -and (Test-Path -LiteralPath $installWim)) {
             Publish-WinMintServicedWimCache -Fingerprint $servicedWimFingerprint -ServicedWimPath $installWim -ExpectedMetadata $expectedWimMetadata
+            if (Get-Command Set-WinMintHeadlessJournalCacheFacts -ErrorAction SilentlyContinue) {
+                Set-WinMintHeadlessJournalCacheFacts `
+                    -ServicedWimCacheKey (Get-WinMintCacheKeyHex -Fingerprint $servicedWimFingerprint) `
+                    -ReadyForAssemble
+            }
         }
 
         $infNames = @(

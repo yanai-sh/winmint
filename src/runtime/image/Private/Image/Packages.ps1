@@ -507,12 +507,18 @@ function Invoke-WinMintOfflineImageUpdates {
 function Save-ImageWithCleanup {
     param(
         [ValidateNotNullOrEmpty()][string]$MountDir,
-        [ValidateSet('Max', 'Fast', 'None')][string]$ImageCompression = 'Max'
+        [ValidateSet('Max', 'Fast', 'None')][string]$ImageCompression = 'Max',
+        [switch]$SkipComponentCleanup
     )
     Write-SectionHeader 'Image: cleanup and save' -Accent Yellow -RuleColor Grey -DimLine 'Component cleanup and save can take several minutes; the bar below is normal.'
     # WinSxS component cleanup only pays off when we then recompress hard for a lean
     # release ISO. Fast/None are test-quality builds: skip the multi-minute cleanup.
-    if ($ImageCompression -eq 'Max') {
+    # Serviced-WIM cache hits already ran Max cleanup when the entry was published.
+    if ($SkipComponentCleanup) {
+        Set-WinMintManifestComponentCleanupFact -ComponentCleanup 'SkippedCacheHit'
+        LogVerbose "Skipping DISM component cleanup (serviced-WIM cache hit; prior $ImageCompression publish already cleaned)."
+    }
+    elseif ($ImageCompression -eq 'Max') {
         Invoke-Action 'Running DISM component cleanup on the mounted Windows image' -SpectreProgressIndeterminate {
             LogVerbose "Mount: $MountDir"
             Set-WinMintManifestComponentCleanupFact

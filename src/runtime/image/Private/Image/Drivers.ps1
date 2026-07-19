@@ -872,9 +872,11 @@ function Invoke-DriverInjection {
         [ValidateNotNullOrEmpty()][string]$IsoContents,
         [ValidateNotNullOrEmpty()][string]$DriverSource,
         [string]$SourceLabel,
-        [bool]$InjectWinPE = $true
+        [bool]$InjectWinPE = $true,
+        [switch]$WinPEOnly
     )
-    Write-SectionHeader "Drivers: $SourceLabel"
+    $header = if ($WinPEOnly) { "Drivers (WinPE only): $SourceLabel" } else { "Drivers: $SourceLabel" }
+    Write-SectionHeader $header
 
     Invoke-Action 'Injecting drivers into Windows and WinPE (when boot.wim is present)' {
         LogVerbose "Driver folder: $DriverSource"
@@ -882,58 +884,77 @@ function Invoke-DriverInjection {
         if ($infCount -lt 1) {
             LogWarn "No .inf files under the driver folder; skipping injection for this source."
             LogVerbose $DriverSource
+            if (Get-Command Set-WinMintManifestWinPeDriverFact -ErrorAction SilentlyContinue) {
+                Set-WinMintManifestWinPeDriverFact -Attempted:$InjectWinPE -Injected:$false -Reason 'no-inf' -Indexes @() -InfCount 0
+            }
             return
         }
 
-        Log "Injecting $infCount driver(s) from $SourceLabel..."
-        LogVerbose "Driver source $SourceLabel contains $infCount .inf file(s) under $DriverSource"
-        $windowsTimer = [System.Diagnostics.Stopwatch]::StartNew()
-        Invoke-DismAddDriverToImage -ImageMountPath $MountDir -DriverSource $DriverSource
-        $windowsTimer.Stop()
-        LogOK "Drivers injected into Windows image in $(Format-WinMintDuration -Duration $windowsTimer.Elapsed)."
+        if (-not $WinPEOnly) {
+            Log "Injecting $infCount driver(s) from $SourceLabel..."
+            LogVerbose "Driver source $SourceLabel contains $infCount .inf file(s) under $DriverSource"
+            $windowsTimer = [System.Diagnostics.Stopwatch]::StartNew()
+            Invoke-DismAddDriverToImage -ImageMountPath $MountDir -DriverSource $DriverSource
+            $windowsTimer.Stop()
+            LogOK "Drivers injected into Windows image in $(Format-WinMintDuration -Duration $windowsTimer.Elapsed)."
+        }
+        else {
+            LogVerbose "WinPE-only injection for $SourceLabel ($infCount .inf under $DriverSource); skipping install.wim Add-Driver."
+        }
 
         $bootWim = Join-Path $IsoContents 'sources\boot.wim'
         if (-not $InjectWinPE) {
             LogVerbose 'WinPE driver injection already completed for this source; skipping boot.wim.'
             return
         }
-        if (Test-Path $bootWim) {
-            $bootDriverSource = Join-Path (Get-Win11IsoProcessTempPath) "Win11ISO_BootDrivers_$(Get-Random)"
-            try {
-                $bootInfCount = Copy-WinMintSetupCriticalDrivers -DriverSource $DriverSource -Destination $bootDriverSource
-                if ($bootInfCount -lt 1) {
-                    LogWarn 'No setup-critical drivers were detected for WinPE; skipping boot.wim driver injection for this source.'
-                    return
+        if (-not (Test-Path -LiteralPath $bootWim)) {
+            if (Get-Command Set-WinMintManifestWinPeDriverFact -ErrorAction SilentlyContinue) {
+                Set-WinMintManifestWinPeDriverFact -Attempted:$true -Injected:$false -Reason 'boot-wim-missing' -Indexes @() -InfCount 0
+            }
+            return
+        }
+
+        $bootDriverSource = Join-Path (Get-Win11IsoProcessTempPath) "Win11ISO_BootDrivers_$(Get-Random)"
+        try {
+            $bootInfCount = Copy-WinMintSetupCriticalDrivers -DriverSource $DriverSource -Destination $bootDriverSource
+            if ($bootInfCount -lt 1) {
+                LogWarn 'No setup-critical drivers were detected for WinPE; skipping boot.wim driver injection for this source.'
+                if (Get-Command Set-WinMintManifestWinPeDriverFact -ErrorAction SilentlyContinue) {
+                    Set-WinMintManifestWinPeDriverFact -Attempted:$true -Injected:$false -Reason 'no-setup-critical-inf' -Indexes @() -InfCount 0
                 }
-                $bootIndexes = @($script:BootWimDriverMountIndexes)
-                Log "Injecting WinPE drivers (boot.wim indexes $($bootIndexes -join ', '))..."
-                LogVerbose "WinPE setup-critical INF count: $bootInfCount"
-                $null = Set-ItemProperty -Path $bootWim -Name IsReadOnly -Value $false -ErrorAction SilentlyContinue
-                foreach ($idx in $bootIndexes) {
-                    $bootTimer = [System.Diagnostics.Stopwatch]::StartNew()
-                    $bootMount = Join-Path (Get-Win11IsoProcessTempPath) "Win11ISO_BootMount_$(Get-Random)"
-                    $null = New-Item -Path $bootMount -ItemType Directory -Force
-                    try {
-                        LogVerbose "Mounting boot.wim index $idx for WinPE driver injection."
-                        Mount-WinMintImage -ImagePath $bootWim -Index $idx -MountDir $bootMount
-                        Invoke-DismAddDriverToImage -ImageMountPath $bootMount -DriverSource $bootDriverSource
-                        Save-WinMintImageMount -MountDir $bootMount
-                        $bootTimer.Stop()
-                        LogVerbose "boot.wim index $idx driver injection saved in $(Format-WinMintDuration -Duration $bootTimer.Elapsed)."
-                    }
-                    catch {
-                        $bootTimer.Stop()
-                        Dismount-WinMintImageMount -MountDir $bootMount
-                        throw
-                    }
-                    finally {
-                        $null = Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
-                    }
+                return
+            }
+            $bootIndexes = @($script:BootWimDriverMountIndexes)
+            Log "Injecting WinPE drivers (boot.wim indexes $($bootIndexes -join ', '))..."
+            LogVerbose "WinPE setup-critical INF count: $bootInfCount"
+            $null = Set-ItemProperty -Path $bootWim -Name IsReadOnly -Value $false -ErrorAction SilentlyContinue
+            foreach ($idx in $bootIndexes) {
+                $bootTimer = [System.Diagnostics.Stopwatch]::StartNew()
+                $bootMount = Join-Path (Get-Win11IsoProcessTempPath) "Win11ISO_BootMount_$(Get-Random)"
+                $null = New-Item -Path $bootMount -ItemType Directory -Force
+                try {
+                    LogVerbose "Mounting boot.wim index $idx for WinPE driver injection."
+                    Mount-WinMintImage -ImagePath $bootWim -Index $idx -MountDir $bootMount
+                    Invoke-DismAddDriverToImage -ImageMountPath $bootMount -DriverSource $bootDriverSource
+                    Save-WinMintImageMount -MountDir $bootMount
+                    $bootTimer.Stop()
+                    LogVerbose "boot.wim index $idx driver injection saved in $(Format-WinMintDuration -Duration $bootTimer.Elapsed)."
+                }
+                catch {
+                    $bootTimer.Stop()
+                    Dismount-WinMintImageMount -MountDir $bootMount
+                    throw
+                }
+                finally {
+                    $null = Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
                 }
             }
-            finally {
-                $null = Remove-Item -LiteralPath $bootDriverSource -Recurse -Force -ErrorAction SilentlyContinue
+            if (Get-Command Set-WinMintManifestWinPeDriverFact -ErrorAction SilentlyContinue) {
+                Set-WinMintManifestWinPeDriverFact -Attempted:$true -Injected:$true -Reason 'ok' -Indexes $bootIndexes -InfCount $bootInfCount
             }
+        }
+        finally {
+            $null = Remove-Item -LiteralPath $bootDriverSource -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 }

@@ -318,6 +318,13 @@ function Initialize-WinMintBuildManifest {
             excludedCount = 0
             inventoryPath = ''
             warnings = @()
+            winPe = [ordered]@{
+                attempted = $false
+                injected = $false
+                reason = ''
+                indexes = @()
+                infCount = 0
+            }
             surface = [ordered]@{
                 deviceId = ''
                 deviceName = ''
@@ -422,6 +429,26 @@ function Set-WinMintManifestServicedWimCacheFact {
 
     if ($null -eq $script:WinMintBuildManifest) { return }
     $script:WinMintBuildManifest | Add-Member -NotePropertyName servicedWimCacheRestored -NotePropertyValue $Restored -Force
+}
+
+function Set-WinMintManifestWinPeDriverFact {
+    param(
+        [bool]$Attempted,
+        [bool]$Injected,
+        [string]$Reason = '',
+        [AllowEmptyCollection()][int[]]$Indexes = @(),
+        [int]$InfCount = 0
+    )
+
+    if ($null -eq $script:WinMintBuildManifest) { return }
+    if (-not $script:WinMintBuildManifest.drivers.PSObject.Properties['winPe']) {
+        $script:WinMintBuildManifest.drivers | Add-Member -NotePropertyName winPe -NotePropertyValue ([ordered]@{}) -Force
+    }
+    $script:WinMintBuildManifest.drivers.winPe.attempted = $Attempted
+    $script:WinMintBuildManifest.drivers.winPe.injected = $Injected
+    $script:WinMintBuildManifest.drivers.winPe.reason = [string]$Reason
+    $script:WinMintBuildManifest.drivers.winPe.indexes = @($Indexes)
+    $script:WinMintBuildManifest.drivers.winPe.infCount = [int]$InfCount
 }
 
 function Set-WinMintManifestDriverFacts {

@@ -612,6 +612,23 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "winPe": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "attempted": { "type": "boolean" },
+            "injected": { "type": "boolean" },
+            "reason": { "type": "string" },
+            "indexes": {
+              "type": "array",
+              "items": { "type": "integer" }
+            },
+            "infCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
         "surface": {
           "type": "object",
           "required": ["deviceId", "deviceName", "architecture", "downloadCenterId", "detailsUrl", "packageFileName", "packageUrl", "sha256"],

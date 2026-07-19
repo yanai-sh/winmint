@@ -21,18 +21,18 @@ Add-WinMintRegistryTweakModule @{
         @{ path = 'zSOFTWARE\Wow6432Node\Policies\Microsoft\Windows\OneDrive'; name = 'DisableLibrariesDefaultSaveToOneDrive'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Classes\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}'; name = 'System.IsPinnedToNameSpaceTree'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
         @{ path = 'zSOFTWARE\Classes\WOW6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}'; name = 'System.IsPinnedToNameSpaceTree'; type = 'REG_DWORD'; value = '0'; undo = @{ action = 'delete' } },
-        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'Desktop'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Desktop' },
-        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'Personal'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Documents' },
-        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'My Pictures'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Pictures' },
-        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'My Music'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Music' },
-        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'My Video'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Videos' },
-        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = '{374DE290-123F-4565-9164-39C4925E467B}'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Downloads' }
+        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'Desktop'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Desktop'; undo = @{ type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Desktop' } },
+        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'Personal'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Documents'; undo = @{ type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Documents' } },
+        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'My Pictures'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Pictures'; undo = @{ type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Pictures' } },
+        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'My Music'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Music'; undo = @{ type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Music' } },
+        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = 'My Video'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Videos'; undo = @{ type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Videos' } },
+        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'; name = '{374DE290-123F-4565-9164-39C4925E467B}'; type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Downloads'; undo = @{ type = 'REG_EXPAND_SZ'; value = '%USERPROFILE%\Downloads' } }
     )
     remove = @(
-        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDrive' },
-        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDriveSetup' },
-        @{ path = 'zDEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDrive' },
-        @{ path = 'zDEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDriveSetup' }
+        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDrive'; irreversible = $true; irreversibleReason = 'OneDrive Run residue has no stock restore payload on a clean image.' },
+        @{ path = 'zNTUSER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDriveSetup'; irreversible = $true; irreversibleReason = 'OneDriveSetup Run residue has no stock restore payload on a clean image.' },
+        @{ path = 'zDEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDrive'; irreversible = $true; irreversibleReason = 'OneDrive Run residue has no stock restore payload on a clean image.' },
+        @{ path = 'zDEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\OneDriveSetup'; irreversible = $true; irreversibleReason = 'OneDriveSetup Run residue has no stock restore payload on a clean image.' }
     )
 }
 

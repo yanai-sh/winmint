@@ -60,6 +60,8 @@ function New-WinMintHeadlessState {
         processId = $PID
         result = 'running'
         cleanupEligible = $true
+        servicedWimCacheKey = ''
+        readyForAssemble = $false
         reports = [pscustomobject]@{}
         warnings = @()
         failures = @()
@@ -82,6 +84,23 @@ function Set-WinMintHeadlessJournalPhase {
     if (-not [string]::IsNullOrWhiteSpace($WorkDir)) { $state.workDir = $WorkDir }
     if (-not [string]::IsNullOrWhiteSpace($MountDir)) { $state.mountDir = $MountDir }
     if (-not [string]::IsNullOrWhiteSpace($IsoContents)) { $state.isoContents = $IsoContents }
+    [void](Save-WinMintHeadlessState -State $state)
+}
+
+function Set-WinMintHeadlessJournalCacheFacts {
+    [CmdletBinding()]
+    param(
+        [string]$ServicedWimCacheKey = '',
+        [switch]$ReadyForAssemble
+    )
+
+    if ([string]::IsNullOrWhiteSpace([string]$script:WinMintHeadlessStatePath)) { return }
+    $state = Read-WinMintHeadlessState -Path $script:WinMintHeadlessStatePath
+    if ($null -eq $state) { return }
+    if (-not [string]::IsNullOrWhiteSpace($ServicedWimCacheKey)) {
+        $state | Add-Member -NotePropertyName servicedWimCacheKey -NotePropertyValue $ServicedWimCacheKey -Force
+    }
+    $state | Add-Member -NotePropertyName readyForAssemble -NotePropertyValue ([bool]$ReadyForAssemble) -Force
     [void](Save-WinMintHeadlessState -State $state)
 }
 

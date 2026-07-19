@@ -54,9 +54,12 @@ try {
     }
 
     # Stability: the fingerprint must be deterministic across calls.
-    $fp1 = Get-WinMintServicedWimFingerprint -BuildConfig $buildConfig -IsoStageKey 'abc123'
-    $fp2 = Get-WinMintServicedWimFingerprint -BuildConfig $buildConfig -IsoStageKey 'abc123'
+    $fp1 = Get-WinMintServicedWimFingerprint -BuildConfig $buildConfig -IsoStageKey 'abc123' -ImageCompression Max
+    $fp2 = Get-WinMintServicedWimFingerprint -BuildConfig $buildConfig -IsoStageKey 'abc123' -ImageCompression Max
     Assert-True ($fp1 -eq $fp2) 'Fingerprint must be deterministic'
+
+    $fpFast = Get-WinMintServicedWimFingerprint -BuildConfig $buildConfig -IsoStageKey 'abc123' -ImageCompression Fast
+    Assert-True ($fp1 -ne $fpFast) 'Fingerprint must change when ImageCompression / cleanup lane changes'
 
     # Order-independence: appx/tweaks/features sort stable so input order does not matter.
     $shuffled = $buildConfig.PSObject.Copy()
