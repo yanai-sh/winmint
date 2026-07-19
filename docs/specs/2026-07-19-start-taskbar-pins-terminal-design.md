@@ -18,7 +18,7 @@
 
 - Always pin **File Explorer** and **Windows Terminal** to Start and taskbar.
 - Pin every profile-selected GUI **browser** and **editor** to Start and taskbar (skip CLI-only ids such as `neovim`).
-- When Edge is included (`keep.edge` / Edge kept on the image): pin Edge on **Start**; pin Edge on **taskbar** only if it is the **sole** browser (no other ids in `development.browsers`).
+- When Edge is included (`development.browsers` contains `edge`): pin Edge on **Start**; pin Edge on **taskbar** only if it is the **sole** browser (no other ids in `development.browsers`). Edge always remains installed on the image; pinning is not driven by `keep.edge`.
 - Hard-replace Terminal `profiles.list` to pwsh + selected WSL distros only.
 - Always emit curated WSL Terminal profiles for profile-selected distros; on VM/`skip`, emit the same mock profile (icon + `wsl.exe -d …`) and log that it is mock.
 - Terminal window defaults: centered, windowed (`launchMode=default`), One Half Dark, **80% opacity**, Cascadia Code NF, silent bell.
@@ -45,7 +45,7 @@ Rejected alternatives: build-time-only LayoutModification for profile apps (apps
 ### Selection inputs
 
 - `development.browsers` + `development.editors` from agent/setup profile.
-- Edge included when `keep.edge` is true (or equivalent setup profile edge-keep flag used today for Start exclusion of `'edge'`).
+- Edge included when `development.browsers` contains `edge`.
 - Exclude CLI-only: `neovim` (and any future explicit CLI-only allowlist).
 
 ### Start (`ConfigureStartPins`)
