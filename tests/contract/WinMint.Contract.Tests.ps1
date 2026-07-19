@@ -115,6 +115,25 @@ Describe 'Provisioning guard contract' {
     }
 }
 
+Describe 'SetupComplete action dispatch contract' {
+    It 'Test-SetupCompleteActionDispatch.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-SetupCompleteActionDispatch.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+}
+
+Describe 'Shell pins and Terminal profiles contract' {
+    It 'Test-ShellPinsAndTerminalProfiles.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-ShellPinsAndTerminalProfiles.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'Test-VmShellDesktopEvidence.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-VmShellDesktopEvidence.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+}
+
 Describe 'Acceptance result contract' {
     It 'Test-WinMintAcceptanceResultSchema.ps1 exits 0' {
         & (Join-Path $script:Root 'tests\contract\Test-WinMintAcceptanceResultSchema.ps1')

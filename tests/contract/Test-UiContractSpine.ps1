@@ -180,6 +180,8 @@ if ($failures.Count -eq 0) {
     Assert-Text $terminalSettings '"colorScheme"\s*:\s*"One Half Dark"' 'Windows Terminal should default to One Half Dark.'
     Assert-Text $terminalSettings '"bellStyle"\s*:\s*"none"' 'Windows Terminal audible bell should be disabled by default.'
     Assert-Text $terminalSettings '"centerOnLaunch"\s*:\s*true' 'Windows Terminal should be centered on launch by default.'
+    Assert-Text $terminalSettings '"launchMode"\s*:\s*"default"' 'Windows Terminal should launch windowed (default), not maximized.'
+    Assert-Text $terminalSettings '"opacity"\s*:\s*80' 'Windows Terminal default opacity should be 80.'
     $editorsModule = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\Editors.ps1') -Raw
     Assert-Text $packageManagerModule 'Install-AgentTool -Tool \$tool -State \$State' 'Editor/browser selections should install through their package-manager owner from packages.json.'
     Assert-Text $editorsModule 'Invoke-WinMintAgentManifestToolSelection' 'Editors should delegate package selection to the package manager module.'

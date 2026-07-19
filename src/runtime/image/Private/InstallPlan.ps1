@@ -37,6 +37,11 @@ function New-WinMintInstallPlanAgentProfile {
         profile = [string]$BuildConfig.Profile
         diagnostics = New-WinMintInstallPlanDiagnosticsBlock -BuildConfig $BuildConfig
         targetArchitecture = [string]$BuildConfig.Architecture
+        keep = [ordered]@{
+            edge = [bool]$BuildConfig.Keep.Edge
+            gaming = [bool]$BuildConfig.Keep.Gaming
+            copilot = [bool]$BuildConfig.Keep.Copilot
+        }
         editors = @($BuildConfig.Editors)
         browsers = @($BuildConfig.Browsers)
         modules = [ordered]@{

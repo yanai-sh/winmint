@@ -305,22 +305,42 @@ function Get-WinMintSetupActionCatalog {
     )
 }
 
-function Import-WinMintSetupActionModules {
+function Get-WinMintSetupActionModulePaths {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$PayloadRoot
     )
 
+    $paths = [System.Collections.Generic.List[string]]::new()
     foreach ($action in @(
             Get-WinMintSetupActionCatalog |
                 Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.FunctionName) } |
                 Select-Object -Property RelativePath -Unique
         )) {
-        $modulePath = Join-Path $PayloadRoot $action.RelativePath
+        $modulePath = Join-Path $PayloadRoot ([string]$action.RelativePath)
         if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
             throw "Setup action module is missing: $modulePath"
         }
+        $paths.Add($modulePath) | Out-Null
+    }
+    return @($paths)
+}
 
+function Import-WinMintSetupActionModules {
+    # Dot-sourcing inside this function binds Invoke-Sc* to the function-local scope.
+    # Promote them to script: so SetupComplete's action loop (and contract tests) can
+    # still call them after Import returns. Without this, every action fails as
+    # "The term 'Invoke-Sc…' is not recognized".
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PayloadRoot
+    )
+
+    foreach ($modulePath in @(Get-WinMintSetupActionModulePaths -PayloadRoot $PayloadRoot)) {
         . $modulePath
+    }
+
+    foreach ($fn in @(Get-ChildItem -Path 'Function:\Invoke-Sc*' -ErrorAction SilentlyContinue)) {
+        Set-Item -LiteralPath "Function:script:$($fn.Name)" -Value $fn.ScriptBlock
     }
 }

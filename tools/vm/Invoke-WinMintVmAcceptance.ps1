@@ -612,6 +612,19 @@ if ($runEvidence) {
                 if (Test-Path -LiteralPath "$env:LOCALAPPDATA\WinMint") {
                     Copy-Item -LiteralPath "$env:LOCALAPPDATA\WinMint" -Destination (Join-Path $dst 'LocalAppData-WinMint') -Recurse -Force -ErrorAction SilentlyContinue
                 }
+                # Durable Terminal + taskbar layout evidence (not under LocalAppData\WinMint).
+                $termSrc = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
+                if (Test-Path -LiteralPath $termSrc -PathType Leaf) {
+                    $termDst = Join-Path $dst 'LocalAppData-Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState'
+                    $null = New-Item -ItemType Directory -Path $termDst -Force
+                    Copy-Item -LiteralPath $termSrc -Destination (Join-Path $termDst 'settings.json') -Force
+                }
+                $shellSrc = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Shell\LayoutModification.xml'
+                if (Test-Path -LiteralPath $shellSrc -PathType Leaf) {
+                    $shellDst = Join-Path $dst 'LocalAppData-Shell'
+                    $null = New-Item -ItemType Directory -Path $shellDst -Force
+                    Copy-Item -LiteralPath $shellSrc -Destination (Join-Path $shellDst 'LayoutModification.xml') -Force
+                }
                 $pantherDir = Join-Path $dst 'Panther'
                 $null = New-Item -ItemType Directory -Path $pantherDir -Force
                 foreach ($name in @('setupact.log', 'setupcomplete.log', 'setuperr.log', 'unattend.xml')) {
@@ -704,6 +717,61 @@ if ($runEvidence) {
         $signalEvidenceFail.Add("Setup shell: $f") | Out-Null
     }
 
+    $setupCompleteErrorsPath = Join-Path $EvidenceDir 'ProgramData-Logs\SetupComplete_errors.log'
+    if (Test-Path -LiteralPath $setupCompleteErrorsPath -PathType Leaf) {
+        $scErrorLines = @(
+            Get-Content -LiteralPath $setupCompleteErrorsPath -ErrorAction SilentlyContinue |
+                ForEach-Object { ([string]$_).Trim() } |
+                Where-Object { $_ }
+        )
+        if ($scErrorLines.Count -gt 0) {
+            $preview = ($scErrorLines | Select-Object -First 3) -join ' | '
+            if ($scErrorLines.Count -gt 3) { $preview = "$preview | …($($scErrorLines.Count) lines)" }
+            $signalPlumbingFail.Add("SetupComplete_errors.log is non-empty: $preview") | Out-Null
+        }
+    }
+    elseif ($result.reachable -and $result.firstLogon) {
+        # Healthy runs may leave no errors file. Prefer positive SetupComplete.log proof
+        # over requiring the errors file to exist.
+        $setupCompleteLogPath = Join-Path $EvidenceDir 'ProgramData-Logs\SetupComplete.log'
+        if (-not (Test-Path -LiteralPath $setupCompleteLogPath -PathType Leaf)) {
+            $signalPlumbingFail.Add('SetupComplete.log missing after FirstLogon (SetupComplete may not have run)') | Out-Null
+        }
+    }
+
+    $keepEdge = $false
+    try {
+        if ($null -ne $profileJson.keep -and $null -ne $profileJson.keep.PSObject.Properties['edge']) {
+            $keepEdge = [bool]$profileJson.keep.edge
+        }
+    }
+    catch { $keepEdge = $false }
+    if (-not $keepEdge -and $result.reachable -and $result.firstLogon) {
+        $edgeReportPath = Join-Path $EvidenceDir 'ProgramData-Logs\SetupComplete_Edge.json'
+        if (-not (Test-Path -LiteralPath $edgeReportPath -PathType Leaf)) {
+            $signalPlumbingFail.Add('SetupComplete_Edge.json missing while keep.edge=false (Edge removal never reported)') | Out-Null
+        }
+        else {
+            try {
+                $edgeReport = Get-Content -LiteralPath $edgeReportPath -Raw | ConvertFrom-Json
+                $edgeStillPresent = $false
+                if ($edgeReport.after -and $edgeReport.after.edgeApplicationPaths) {
+                    $edgeStillPresent = [bool](@($edgeReport.after.edgeApplicationPaths | Where-Object { $_.exists }).Count -gt 0)
+                }
+                $actionText = [string]$edgeReport.action
+                if ($edgeStillPresent -or ($actionText -match 'left installed')) {
+                    $signalPlumbingFail.Add("Edge still installed after keep.edge=false ($actionText)") | Out-Null
+                }
+                elseif (-not [bool]$edgeReport.removeRequested -and $actionText -match 'not requested|skipped') {
+                    $signalPlumbingFail.Add("Edge removal was skipped while keep.edge=false ($actionText)") | Out-Null
+                }
+            }
+            catch {
+                $signalPlumbingFail.Add("SetupComplete_Edge.json unreadable: $($_.Exception.Message)") | Out-Null
+            }
+        }
+    }
+
     if (-not $inspectOk -and $runInspect) {
         $signalEvidenceFail.Add('guest inspection failed; desktop signals unverified') | Out-Null
     }
@@ -718,6 +786,22 @@ if ($runEvidence) {
         }
         if (-not $insp.AccountPictureBmpExists) {
             $signalEvidenceFail.Add('Account picture bitmap missing') | Out-Null
+        }
+    }
+
+    # Terminal hard-replace + Start/taskbar pins are Smoke plumbing (evidence-only
+    # would still green-light Smoke). Prefer pulled evidence; inspect is fallback.
+    if ($result.reachable -and $result.firstLogon) {
+        $shellDesktop = Test-WinMintVmShellDesktopEvidence -BuildProfile $profileJson -EvidenceDir $EvidenceDir -Inspect $result.inspect
+        $result.shellDesktop = [ordered]@{
+            plumbingOk = [bool]$shellDesktop.plumbingOk
+            expectedTerminalProfiles = @($shellDesktop.meta.expectedTerminalProfiles)
+            observedTerminalProfiles = @($shellDesktop.meta.observedTerminalProfiles)
+            wslSkip = [bool]$shellDesktop.meta.wslSkip
+            shellPinsPresent = [bool]$shellDesktop.meta.shellPinsPresent
+        }
+        foreach ($f in @($shellDesktop.plumbingFailures)) {
+            $signalPlumbingFail.Add([string]$f) | Out-Null
         }
     }
 
@@ -746,9 +830,6 @@ if ($runEvidence) {
     elseif ($result.reachable -and $result.firstLogon) {
         $signalPlumbingFail.Add('DMA regional restore report missing (FirstLogon_RegionalRestore.json)') | Out-Null
     }
-
-    foreach ($s in $signalPlumbingFail) { $result.reasons += "Plumbing check failed: $s." }
-    foreach ($s in $signalEvidenceFail) { $result.warnings += "Evidence check failed: $s." }
 
     $removalDrift = $null
     if ($result.reachable) {
@@ -830,6 +911,11 @@ if ($runEvidence) {
             }
         }
     }
+
+    # Freeze reasons/warnings only after every plumbing/evidence collector has run
+    # (drift + live audit used to append failures after reasons were already written).
+    foreach ($s in $signalPlumbingFail) { $result.reasons += "Plumbing check failed: $s." }
+    foreach ($s in $signalEvidenceFail) { $result.warnings += "Evidence check failed: $s." }
 
     $vmSignals = [System.Collections.Generic.List[object]]::new()
     foreach ($f in $signalPlumbingFail) {

@@ -187,7 +187,9 @@ function Complete-WinMintAgentWslAdvisorySkip {
     $selectedDistros = @($Distros | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
     if ($selectedDistros.Count -gt 0) {
         try {
-            $terminalStatus = Set-WinMintWindowsTerminalProfiles -WslDistros @($selectedDistros)
+            # Advisory skip means distros were not installed — still stage curated
+            # Terminal profiles (mock) so VM smoke shows Fedora/etc. in the dropdown.
+            $terminalStatus = Set-WinMintWindowsTerminalProfiles -WslDistros @($selectedDistros) -MockWslProfiles
             if ($terminalStatus) { $messages.Add("Windows Terminal defaults: $terminalStatus") }
         }
         catch {
@@ -287,16 +289,6 @@ function Invoke-WinMintAgentWslBootstrap {
     )
 
     [void]$State
-    if (Test-WinMintAgentWslRuntimeValidationSkipped -AgentProfile $AgentProfile) {
-        $reason = 'WSL runtime validation skipped by profile diagnostics (wslRuntimeValidation=skip).'
-        Write-AgentLog $reason
-        return [pscustomobject]@{
-            Id      = 'wsl'
-            Status  = 'skipped'
-            Message = $reason
-        }
-    }
-
     $cfg = if ($AgentProfile.modules -and $AgentProfile.modules.PSObject.Properties['wsl']) {
         $AgentProfile.modules.wsl
     } else {
@@ -316,6 +308,12 @@ function Invoke-WinMintAgentWslBootstrap {
             ForEach-Object { Convert-WinMintWslDistroAlias -Distro ([string]$_) } |
             Select-Object -Unique
     )
+    if (Test-WinMintAgentWslRuntimeValidationSkipped -AgentProfile $AgentProfile) {
+        $reason = 'WSL runtime validation skipped by profile diagnostics (wslRuntimeValidation=skip).'
+        return (Complete-WinMintAgentWslAdvisorySkip -Distros @($distros) -Reason $reason -Messages @(
+                if (@($distros).Count -gt 0) { 'terminalProfile=mock (WSL install skipped; Terminal profiles still staged)' }
+            ))
+    }
     $requestedDistros = @($distros | Select-Object -Unique)
     $wsl = Get-Command wsl.exe -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $wsl) { throw 'wsl.exe was not found after WSL feature enablement.' }

@@ -53,16 +53,6 @@ function Get-WinMintProfileWslDistros {
     }
 }
 
-function Get-WinMintWslTerminalProfileDistroName {
-    param($TerminalProfileEntry)
-
-    $commandline = [string]$TerminalProfileEntry.commandline
-    if ($commandline -match 'wsl\.exe\s+-d\s+"?([^"\s]+)"?') {
-        return $matches[1]
-    }
-    return $null
-}
-
 function New-WinMintWindowsTerminalPowerShellProfile {
     [ordered]@{
         guid = '{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}'
@@ -117,53 +107,21 @@ function New-WinMintWslTerminalProfile {
 }
 
 function Update-WinMintWindowsTerminalProfileList {
+    # Hard-replace: only WinMint pwsh + curated WSL profiles. Stock leftovers (cmd,
+    # duplicate PowerShell, auto-WSL clones) must not linger in profiles.list.
     param(
         [Parameter(Mandatory)][hashtable]$Settings,
         [string[]]$WslDistros = @()
     )
 
-    $pwshProfile = New-WinMintWindowsTerminalPowerShellProfile
-    $pwshGuid = '{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}'
-    $disabledSources = Get-WinMintDisabledTerminalProfileSources
+    $list = [System.Collections.Generic.List[object]]::new()
+    $list.Add((New-WinMintWindowsTerminalPowerShellProfile)) | Out-Null
     $curatedDistros = @(
         $WslDistros |
             Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
             ForEach-Object { Convert-WinMintWslTerminalDistroName -Distro ([string]$_) } |
             Select-Object -Unique
     )
-    $curatedGuids = @(
-        foreach ($distro in $curatedDistros) {
-            [string](New-WinMintWslTerminalProfile -Distro $distro).guid
-        }
-    ) | Select-Object -Unique
-    $list = [System.Collections.Generic.List[object]]::new()
-    $pwshAdded = $false
-
-    foreach ($terminalProfile in @($Settings.profiles.list)) {
-        $source = if ($terminalProfile.ContainsKey('source')) { [string]$terminalProfile.source } else { '' }
-        if (-not [string]::IsNullOrWhiteSpace($source) -and ($disabledSources -contains $source)) {
-            continue
-        }
-        $profileGuid = if ($terminalProfile.ContainsKey('guid')) { [string]$terminalProfile.guid } else { '' }
-        if ($curatedGuids -contains $profileGuid) {
-            continue
-        }
-        if ($source -eq 'Windows.Terminal.Wsl') {
-            $autoDistro = Get-WinMintWslTerminalProfileDistroName -TerminalProfileEntry $terminalProfile
-            if ($autoDistro -and ($curatedDistros -contains $autoDistro)) {
-                continue
-            }
-        }
-        if ($profileGuid -eq $pwshGuid) {
-            $list.Add($pwshProfile) | Out-Null
-            $pwshAdded = $true
-            continue
-        }
-        $list.Add($terminalProfile) | Out-Null
-    }
-    if (-not $pwshAdded) {
-        $list.Insert(0, $pwshProfile) | Out-Null
-    }
     foreach ($distro in $curatedDistros) {
         $list.Add((New-WinMintWslTerminalProfile -Distro $distro)) | Out-Null
     }
@@ -171,7 +129,10 @@ function Update-WinMintWindowsTerminalProfileList {
 }
 
 function Set-WinMintWindowsTerminalProfiles {
-    param([string[]]$WslDistros = @())
+    param(
+        [string[]]$WslDistros = @(),
+        [switch]$MockWslProfiles
+    )
 
     $settingsPath = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
     if (-not (Test-Path -LiteralPath $settingsPath)) { return 'missing-terminal-settings' }
@@ -185,7 +146,10 @@ function Set-WinMintWindowsTerminalProfiles {
     $settings.profiles.defaults.font.face = 'Cascadia Code NF'
     $settings.profiles.defaults.colorScheme = 'One Half Dark'
     $settings.profiles.defaults.bellStyle = 'none'
+    $settings.profiles.defaults.opacity = 80
     $settings.centerOnLaunch = $true
+    $settings.launchMode = 'default'
+    $settings.firstWindowPreference = 'defaultNewWindow'
     $settings.defaultProfile = '{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}'
     $settings.disabledProfileSources = @(Get-WinMintDisabledTerminalProfileSources)
     $settings.newTabMenu = @([ordered]@{ type = 'remainingProfiles' })
@@ -193,8 +157,8 @@ function Set-WinMintWindowsTerminalProfiles {
     Update-WinMintWindowsTerminalProfileList -Settings $settings -WslDistros $WslDistros
 
     $settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
-    if (@($WslDistros | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }).Count -eq 0) {
-        return 'updated'
-    }
+    $distroCount = @($WslDistros | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }).Count
+    if ($distroCount -eq 0) { return 'updated' }
+    if ($MockWslProfiles) { return 'updated-with-wsl-mock' }
     return 'updated-with-wsl'
 }

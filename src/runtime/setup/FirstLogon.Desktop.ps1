@@ -178,6 +178,28 @@ function Resolve-WinMintFirstLogonAppExecutable {
             )
             break
         }
+        'edge' {
+            @(
+                (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
+                (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe')
+            )
+            break
+        }
+        'brave' {
+            @(
+                (Join-Path $env:ProgramFiles 'BraveSoftware\Brave-Browser\Application\brave.exe'),
+                (Join-Path ${env:ProgramFiles(x86)} 'BraveSoftware\Brave-Browser\Application\brave.exe'),
+                (Join-Path $env:LOCALAPPDATA 'BraveSoftware\Brave-Browser\Application\brave.exe')
+            )
+            break
+        }
+        'firefox-developer-edition' {
+            @(
+                (Join-Path $env:ProgramFiles 'Firefox Developer Edition\firefox.exe'),
+                (Join-Path ${env:ProgramFiles(x86)} 'Firefox Developer Edition\firefox.exe')
+            )
+            break
+        }
         default { @() }
     }
 
@@ -201,6 +223,7 @@ function Get-WinMintFirstLogonAppDisplayName {
         'helium' { 'Helium' }
         'firefox-developer-edition' { 'Firefox Developer Edition' }
         'brave' { 'Brave' }
+        'edge' { 'Microsoft Edge' }
         'cursor' { 'Cursor' }
         'vscode' { 'Visual Studio Code' }
         'zed' { 'Zed' }
@@ -274,20 +297,129 @@ function New-WinMintFirstLogonStartShortcut {
 }
 
 
+function Get-WinMintFirstLogonCliOnlyPinAppIds {
+    @('neovim')
+}
+
+function Get-WinMintFirstLogonPinSelection {
+    <#
+    .SYNOPSIS
+        Pure pin-policy selection for Start + taskbar from profile arrays.
+    #>
+    param(
+        [string[]]$Browsers = @(),
+        [string[]]$Editors = @(),
+        [bool]$KeepEdge = $false
+    )
+
+    $cliOnly = @(Get-WinMintFirstLogonCliOnlyPinAppIds)
+    $browserIds = @(
+        @($Browsers) |
+            ForEach-Object { [string]$_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and $_ -ne 'edge' -and $cliOnly -notcontains $_ } |
+            Select-Object -Unique
+    )
+    $editorIds = @(
+        @($Editors) |
+            ForEach-Object { [string]$_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and $cliOnly -notcontains $_ } |
+            Select-Object -Unique
+    )
+    $pinEdgeToStart = [bool]$KeepEdge
+    $pinEdgeToTaskbar = [bool]$KeepEdge -and ($browserIds.Count -eq 0)
+    $startAppIds = [System.Collections.Generic.List[string]]::new()
+    foreach ($id in $browserIds) { $startAppIds.Add($id) | Out-Null }
+    if ($pinEdgeToStart) { $startAppIds.Add('edge') | Out-Null }
+    foreach ($id in $editorIds) { $startAppIds.Add($id) | Out-Null }
+    $taskbarAppIds = [System.Collections.Generic.List[string]]::new()
+    foreach ($id in $browserIds) { $taskbarAppIds.Add($id) | Out-Null }
+    if ($pinEdgeToTaskbar) { $taskbarAppIds.Add('edge') | Out-Null }
+    foreach ($id in $editorIds) { $taskbarAppIds.Add($id) | Out-Null }
+
+    [pscustomobject]@{
+        BrowserIds         = @($browserIds)
+        EditorIds          = @($editorIds)
+        StartAppIds        = @($startAppIds)
+        TaskbarAppIds      = @($taskbarAppIds)
+        PinEdgeToStart     = $pinEdgeToStart
+        PinEdgeToTaskbar   = $pinEdgeToTaskbar
+    }
+}
+
+function Resolve-WinMintFirstLogonKeepEdge {
+    param([Parameter(Mandatory)]$AgentProfile)
+
+    try {
+        if ($AgentProfile.PSObject.Properties['keep'] -and $AgentProfile.keep.PSObject.Properties['edge']) {
+            return [bool]$AgentProfile.keep.edge
+        }
+    }
+    catch { }
+    return $false
+}
+
+function Resolve-WinMintFirstLogonAppShortcut {
+    param(
+        [Parameter(Mandatory)][string]$AppId,
+        [hashtable]$DisplayNames = @{}
+    )
+
+    $displayName = Get-WinMintFirstLogonAppDisplayName -Id $AppId -DisplayNames $DisplayNames
+    $shortcutPath = Resolve-WinMintFirstLogonStartShortcut -DisplayName $displayName
+    if (-not $shortcutPath) {
+        $exe = Resolve-WinMintFirstLogonAppExecutable -Id $AppId
+        if ($exe) {
+            $shortcutPath = New-WinMintFirstLogonStartShortcut -Name $displayName -TargetPath $exe
+        }
+    }
+    return $shortcutPath
+}
+
+function Set-WinMintFirstLogonTaskbarPins {
+    param(
+        [Parameter(Mandatory)][string[]]$AppShortcutPaths
+    )
+
+    # Live-user LayoutModification.xml with PinListPlacement=Replace. Explorer reload
+    # (finalize-success) picks this up after provisioning lock release.
+    $shellDir = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Shell'
+    $null = New-Item -ItemType Directory -Path $shellDir -Force -ErrorAction Stop
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add('<?xml version="1.0" encoding="utf-8"?>') | Out-Null
+    $lines.Add('<LayoutModificationTemplate') | Out-Null
+    $lines.Add(' xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification"') | Out-Null
+    $lines.Add(' xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout"') | Out-Null
+    $lines.Add(' xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout"') | Out-Null
+    $lines.Add(' xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout"') | Out-Null
+    $lines.Add(' Version="1">') | Out-Null
+    $lines.Add('  <CustomTaskbarLayoutCollection PinListPlacement="Replace">') | Out-Null
+    $lines.Add('    <defaultlayout:TaskbarLayout>') | Out-Null
+    $lines.Add('      <taskbar:TaskbarPinList>') | Out-Null
+    $lines.Add('        <taskbar:DesktopApp DesktopApplicationID="Microsoft.Windows.Explorer" />') | Out-Null
+    $lines.Add('        <taskbar:UWA AppUserModelID="Microsoft.WindowsTerminal_8wekyb3d8bbwe!App" />') | Out-Null
+    foreach ($shortcutPath in @($AppShortcutPaths)) {
+        if ([string]::IsNullOrWhiteSpace([string]$shortcutPath)) { continue }
+        $escaped = ([string]$shortcutPath).Replace('&', '&amp;').Replace('"', '&quot;')
+        $lines.Add("        <taskbar:DesktopApp DesktopApplicationLinkPath=`"$escaped`" />") | Out-Null
+    }
+    $lines.Add('      </taskbar:TaskbarPinList>') | Out-Null
+    $lines.Add('    </defaultlayout:TaskbarLayout>') | Out-Null
+    $lines.Add('  </CustomTaskbarLayoutCollection>') | Out-Null
+    $lines.Add('</LayoutModificationTemplate>') | Out-Null
+    $layoutPath = Join-Path $shellDir 'LayoutModification.xml'
+    Set-Content -LiteralPath $layoutPath -Value ($lines -join "`r`n") -Encoding UTF8
+    return $layoutPath
+}
+
 function Set-WinMintFirstLogonStartPins {
     param([Parameter(Mandatory)][string]$AgentProfilePath)
 
     if (-not (Test-Path -LiteralPath $AgentProfilePath)) { return }
     $agentProfile = Get-Content -LiteralPath $AgentProfilePath -Raw -Encoding UTF8 | ConvertFrom-Json
-    $cliOnlyAppIds = @('neovim')
-    $selected = @(
-        @($agentProfile.browsers) +
-        @($agentProfile.editors)
-    ) | Where-Object {
-        -not [string]::IsNullOrWhiteSpace([string]$_) -and
-        [string]$_ -ne 'edge' -and
-        $cliOnlyAppIds -notcontains [string]$_
-    } | Select-Object -Unique
+    $selection = Get-WinMintFirstLogonPinSelection `
+        -Browsers @($agentProfile.browsers) `
+        -Editors @($agentProfile.editors) `
+        -KeepEdge (Resolve-WinMintFirstLogonKeepEdge -AgentProfile $agentProfile)
 
     $pinnedList = [System.Collections.Generic.List[object]]::new()
     $pinnedList.Add([ordered]@{ desktopAppId = 'Microsoft.Windows.Explorer' }) | Out-Null
@@ -295,35 +427,66 @@ function Set-WinMintFirstLogonStartPins {
     $pinnedList.Add([ordered]@{ packagedAppId = 'Microsoft.WindowsTerminal_8wekyb3d8bbwe!App' }) | Out-Null
 
     $skipped = [System.Collections.Generic.List[string]]::new()
+    $taskbarShortcuts = [System.Collections.Generic.List[string]]::new()
     $displayNames = Get-WinMintFirstLogonPackageDisplayNames -AgentProfilePath $AgentProfilePath
-    foreach ($id in $selected) {
+    $resolvedShortcuts = @{}
+    foreach ($id in @($selection.StartAppIds)) {
         $appId = [string]$id
-        $displayName = Get-WinMintFirstLogonAppDisplayName -Id $appId -DisplayNames $displayNames
-        $shortcutPath = Resolve-WinMintFirstLogonStartShortcut -DisplayName $displayName
-        if (-not $shortcutPath) {
-            $exe = Resolve-WinMintFirstLogonAppExecutable -Id $appId
-            if ($exe) {
-                $shortcutPath = New-WinMintFirstLogonStartShortcut -Name $displayName -TargetPath $exe
-            }
-        }
+        $shortcutPath = Resolve-WinMintFirstLogonAppShortcut -AppId $appId -DisplayNames $displayNames
         if (-not $shortcutPath) {
             $skipped.Add($appId) | Out-Null
             continue
         }
+        $resolvedShortcuts[$appId] = $shortcutPath
         $pinnedList.Add([ordered]@{ desktopAppLink = $shortcutPath }) | Out-Null
+    }
+    foreach ($id in @($selection.TaskbarAppIds)) {
+        if ($resolvedShortcuts.ContainsKey([string]$id)) {
+            $taskbarShortcuts.Add([string]$resolvedShortcuts[[string]$id]) | Out-Null
+        }
     }
 
     $layoutJson = ([ordered]@{ pinnedList = @($pinnedList) } | ConvertTo-Json -Compress -Depth 8)
     Invoke-WinMintFirstLogonReg -Arguments @('add', 'HKCU\Software\Policies\Microsoft\Windows\Explorer', '/v', 'ConfigureStartPins', '/t', 'REG_SZ', '/d', $layoutJson, '/f') -AllowFailure
     Invoke-WinMintFirstLogonReg -Arguments @('add', 'HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer', '/v', 'ConfigureStartPins', '/t', 'REG_SZ', '/d', $layoutJson, '/f') -AllowFailure
 
-    "$(Get-Date -Format 'o') Start pins applied: $layoutJson" | Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
-    if ($skipped.Count -gt 0) {
-        $logPath = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log'
-        $skippedText = $skipped -join ', '
-        "$(Get-Date -Format 'o') Start pins skipped because no Start Menu shortcut or app executable was found: $skippedText" |
-            Out-File -LiteralPath $logPath -Append
+    $taskbarLayoutPath = $null
+    try {
+        $taskbarLayoutPath = Set-WinMintFirstLogonTaskbarPins -AppShortcutPaths @($taskbarShortcuts)
     }
+    catch {
+        Write-WinMintFirstLogonError "Taskbar pin layout write failed: $_"
+    }
+
+    $firstLogonLog = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log'
+    "$(Get-Date -Format 'o') Start pins applied: $layoutJson" | Out-File -LiteralPath $firstLogonLog -Append
+    if ($taskbarLayoutPath) {
+        "$(Get-Date -Format 'o') Taskbar pins applied ($($taskbarShortcuts.Count) app link(s); EdgeTaskbar=$($selection.PinEdgeToTaskbar)): $taskbarLayoutPath" |
+            Out-File -LiteralPath $firstLogonLog -Append
+    }
+    if ($skipped.Count -gt 0) {
+        $skippedText = $skipped -join ', '
+        "$(Get-Date -Format 'o') Start/taskbar pins skipped because no Start Menu shortcut or app executable was found: $skippedText" |
+            Out-File -LiteralPath $firstLogonLog -Append
+    }
+
+    # Durable report for VM acceptance — LayoutModification.xml may be consumed by
+    # explorer after reload, so do not rely on that file alone.
+    $shellPinsReport = [ordered]@{
+        generatedAt        = Get-Date -Format o
+        startAppIds        = @($selection.StartAppIds)
+        taskbarAppIds      = @($selection.TaskbarAppIds)
+        pinEdgeToStart     = [bool]$selection.PinEdgeToStart
+        pinEdgeToTaskbar   = [bool]$selection.PinEdgeToTaskbar
+        startPinsJson      = $layoutJson
+        taskbarLayoutPath  = [string]$taskbarLayoutPath
+        taskbarShortcutCount = @($taskbarShortcuts).Count
+        skipped            = @($skipped)
+        baselineStart      = @('Explorer', 'Settings', 'WindowsTerminal')
+        baselineTaskbar    = @('Explorer', 'WindowsTerminal')
+    }
+    $shellPinsReport | ConvertTo-Json -Depth 6 |
+        Set-Content -LiteralPath (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon_ShellPins.json') -Encoding UTF8
 }
 
 
@@ -458,7 +621,20 @@ function Set-WinMintFirstLogonTerminalProfiles {
     param([Parameter()][string]$AgentProfilePath)
 
     $distros = Get-WinMintProfileWslDistros -AgentProfilePath $AgentProfilePath
-    $status = Set-WinMintWindowsTerminalProfiles -WslDistros $distros
+    $mockWsl = $false
+    if (-not [string]::IsNullOrWhiteSpace($AgentProfilePath) -and (Test-Path -LiteralPath $AgentProfilePath)) {
+        try {
+            $agentProfile = Get-Content -LiteralPath $AgentProfilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $mockWsl = Test-WinMintAgentWslRuntimeValidationSkipped -AgentProfile $agentProfile
+        }
+        catch { $mockWsl = $false }
+    }
+    $status = if ($mockWsl) {
+        Set-WinMintWindowsTerminalProfiles -WslDistros $distros -MockWslProfiles
+    }
+    else {
+        Set-WinMintWindowsTerminalProfiles -WslDistros $distros
+    }
     if ($status -eq 'missing-terminal-settings') { return }
 
     $settingsPath = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
@@ -469,7 +645,12 @@ function Set-WinMintFirstLogonTerminalProfiles {
     catch {
         'PowerShell'
     }
+    $firstLogonLog = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log'
     "$(Get-Date -Format 'o') Windows Terminal defaults applied; profiles present: $profileNames" |
-        Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
+        Out-File -LiteralPath $firstLogonLog -Append
+    if ($status -eq 'updated-with-wsl-mock') {
+        "$(Get-Date -Format 'o') terminalProfile=mock WSL Terminal profile(s) staged for diagnostics.wslRuntimeValidation=skip: $($distros -join ', ')" |
+            Out-File -LiteralPath $firstLogonLog -Append
+    }
 }
 

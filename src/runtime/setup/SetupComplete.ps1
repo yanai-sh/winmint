@@ -201,7 +201,10 @@ catch {
 }
 
 $errors = @()
-foreach ($action in @(Get-WinMintSetupActionCatalog)) {
+foreach ($action in @(
+        Get-WinMintSetupActionCatalog |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.FunctionName) }
+    )) {
     try {
         & ([string]$action.FunctionName)
     }
@@ -228,7 +231,9 @@ catch {
     $errors += "SetupComplete inline cleanup: $($_.Exception.Message)"
 }
 if ($errors.Count -gt 0) {
-    ($errors -join "`n") | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Force
+    # Append — never -Force overwrite. Module-load failures are written earlier with
+    # -Append; clobbering that file hid the real root cause behind action dispatch noise.
+    ($errors -join "`n") | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
 }
 
 Write-ScLog 'SetupComplete.ps1 end'

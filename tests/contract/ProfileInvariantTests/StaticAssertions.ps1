@@ -1623,6 +1623,8 @@ function Assert-FirstLogonPinsSelectedAppsToStart {
     $firstLogonText = Get-WinMintFirstLogonText
     foreach ($expected in @(
         'Set-WinMintFirstLogonStartPins',
+        'Get-WinMintFirstLogonPinSelection',
+        'Set-WinMintFirstLogonTaskbarPins',
         'Resolve-WinMintFirstLogonAppExecutable',
         'Resolve-WinMintFirstLogonStartShortcut',
         'Get-WinMintFirstLogonPackageDisplayNames',
@@ -1630,13 +1632,16 @@ function Assert-FirstLogonPinsSelectedAppsToStart {
         'desktopAppLink',
         'ConfigureStartPins',
         'Start pins applied',
+        'Taskbar pins applied',
+        'PinEdgeToTaskbar',
+        'FirstLogon_ShellPins.json',
         'Zen Browser',
         'Helium',
         'Cursor',
-        '$cliOnlyAppIds'
+        'Get-WinMintFirstLogonCliOnlyPinAppIds'
     )) {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "FirstLogon should pin selected browsers/editors to Start with '$expected'."
+            Add-SmokeFailure "FirstLogon should pin selected browsers/editors to Start/taskbar with '$expected'."
         }
     }
     if ($firstLogonText -match [regex]::Escape('Microsoft\Windows\Start Menu\Programs\WinMint')) {
@@ -2124,7 +2129,9 @@ function Assert-StarshipPromptUsesNerdFontTerminalDefaults {
             'profiles.defaults.font.face',
             'profiles.defaults.colorScheme',
             'profiles.defaults.bellStyle',
+            'profiles.defaults.opacity',
             'centerOnLaunch',
+            'launchMode',
             'Cascadia Code NF'
         )) {
         if ($firstLogonText -notmatch [regex]::Escape($expected)) {
@@ -3319,6 +3326,8 @@ function Assert-WindowsTerminalDefaultsPwsh7NoLogo {
         'One Half Dark',
         'bellStyle',
         'centerOnLaunch',
+        '"launchMode": "default"',
+        '"opacity": 80',
         '"font"',
         'disabledProfileSources',
         'Windows.Terminal.PowershellCore',
@@ -3351,6 +3360,12 @@ function Assert-WindowsTerminalDefaultsPwsh7NoLogo {
         }
         if (-not [bool]$settings.centerOnLaunch) {
             Add-SmokeFailure 'Windows Terminal should be centered on launch by default.'
+        }
+        if ([string]$settings.launchMode -ne 'default') {
+            Add-SmokeFailure 'Windows Terminal launchMode should be default (windowed), not maximized/fullscreen.'
+        }
+        if ([int]$settings.profiles.defaults.opacity -ne 80) {
+            Add-SmokeFailure 'Windows Terminal default opacity should be 80.'
         }
         $profiles = @($settings.profiles.list)
         if ($profiles.Count -ne 1 -or [string]$profiles[0].name -ne 'PowerShell') {

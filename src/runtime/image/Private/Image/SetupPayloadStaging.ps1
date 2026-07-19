@@ -152,11 +152,18 @@ function Copy-WinMintSetupCompleteModulePayloads {
     )
 
     $sourceDir = Join-Path $BundleDir 'SetupComplete'
-    if (-not (Test-Path -LiteralPath $sourceDir -PathType Container)) { return }
+    if (-not (Test-Path -LiteralPath $sourceDir -PathType Container)) {
+        throw "SetupComplete module directory is missing: $sourceDir"
+    }
+
+    $moduleFiles = @(Get-ChildItem -LiteralPath $sourceDir -Filter '*.ps1' -File)
+    if ($moduleFiles.Count -lt 1) {
+        throw "SetupComplete module directory has no .ps1 modules: $sourceDir"
+    }
 
     $destinationDir = Join-Path $Destination 'SetupComplete'
     $null = New-Item -ItemType Directory -Path $destinationDir -Force -ErrorAction SilentlyContinue
-    foreach ($moduleFile in @(Get-ChildItem -LiteralPath $sourceDir -Filter '*.ps1' -File)) {
+    foreach ($moduleFile in $moduleFiles) {
         Copy-WinMintSetupPayloadTextFile -Source $moduleFile.FullName -Destination (Join-Path $destinationDir $moduleFile.Name)
     }
 }
