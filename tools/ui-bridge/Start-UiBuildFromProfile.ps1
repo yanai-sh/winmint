@@ -25,6 +25,7 @@ if ($bootstrap.Relaunched) {
 }
 
 $script:WinMintRepositoryRoot = $RepositoryRoot
+. (Join-Path $PSScriptRoot 'WinMint.UiBridgeProtocol.ps1')
 Import-Module (Join-Path $RepositoryRoot 'src\runtime\modules\WinMint.Engine\WinMint.Engine.psd1') -Force
 Initialize-WinMintEngine -RepositoryRoot $RepositoryRoot -DryRun:$DryRun
 
@@ -55,7 +56,7 @@ try {
         Progress     = @($progress)
         Error        = ''
     }
-    [pscustomobject]$result | ConvertTo-Json -Depth 12 -Compress
+    Write-WinMintUiBridgeResult -Result $result
 }
 catch {
     $outputDir = Get-WinMintOutputDirectory
@@ -71,7 +72,7 @@ catch {
         Progress     = @($progress)
         Error        = $_.Exception.Message
     }
-    [pscustomobject]$result | ConvertTo-Json -Depth 12 -Compress
+    Write-WinMintUiBridgeResult -Result $result
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1
 }

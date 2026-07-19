@@ -158,9 +158,9 @@ $scripts = @(
     { Set-SpecializeRegistryValue -Path 'HKLM\SYSTEM\Setup\MoSetup' -Name AllowUpgradesWithUnsupportedTPMOrCPU -Type REG_DWORD -Data 1 }
     { net.exe accounts /maxpwage:UNLIMITED }
     {
+        # CloudContent quiet stamps live in offline cloud-content-policy only (Enterprise-
+        # skewed). Home quiet UX is ContentDeliveryManager via DefaultUser + FirstLogon.
         Invoke-SpecializeRegistrySet -Entries @(
-            @{ Path = 'HKLM\Software\Policies\Microsoft\Windows\CloudContent'; Name = 'DisableCloudOptimizedContent'; Type = 'REG_DWORD'; Data = '1' },
-            @{ Path = 'HKLM\Software\Policies\Microsoft\Windows\CloudContent'; Name = 'DisableSoftLanding'; Type = 'REG_DWORD'; Data = '1' },
             @{ Path = 'HKLM\SOFTWARE\Policies\Microsoft\SQMClient\Windows'; Name = 'CEIPEnable'; Type = 'REG_DWORD'; Data = '0' },
             @{ Path = 'HKLM\SOFTWARE\Policies\Microsoft\Windows\AppCompat'; Name = 'AITEnable'; Type = 'REG_DWORD'; Data = '0' },
             @{ Path = 'HKLM\SOFTWARE\Policies\Microsoft\Windows\AppCompat'; Name = 'DisableInventory'; Type = 'REG_DWORD'; Data = '1' },

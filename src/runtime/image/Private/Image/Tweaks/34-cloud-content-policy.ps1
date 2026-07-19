@@ -1,10 +1,10 @@
 #Requires -Version 7.6
 
-# Best-effort Cloud Content / Experience policy layer. Several of these policies
-# are formally scoped to Enterprise/Education, but stamping the documented policy
-# values is harmless on Home and useful on SKUs/OEM images where Windows honors
-# them. Default-user ContentDeliveryManager values are still stamped separately
-# during setup as the Home-visible fallback.
+# Enterprise/Education CloudContent policies (best-effort). On Windows 11 Home the
+# Home-effective quiet UX source of truth is ContentDeliveryManager + FirstLogon
+# Set-WinMintFirstLogonQuietUxDefaults (DefaultUser hive + live HKCU), not these
+# CloudContent stamps. Keep this tweak for Pro/Enterprise/OEM images that honor
+# the policy path; do not treat CloudContent alone as Home quiet UX.
 
 Add-WinMintRegistryTweakModule @{
     id = 'cloud-content-policy'

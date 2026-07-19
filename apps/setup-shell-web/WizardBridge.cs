@@ -107,7 +107,7 @@ internal static class WizardBridge
                 : detail);
         }
 
-        return ParseLastJson(stdout) ?? JsonNode.Parse("{}")!;
+        return ParseBridgeResult(stdout) ?? JsonNode.Parse("{}")!;
     }
 
     public static JsonNode SummarizeBuildDelta(string path)
@@ -184,7 +184,11 @@ internal static class WizardBridge
         throw new InvalidOperationException("PowerShell 7 (pwsh) was not found on PATH.");
     }
 
-    private static JsonNode? ParseLastJson(string stdout)
+    /// <summary>
+    /// ui-bridge protocol: last single-line JSON object with schemaVersion + type=result.
+    /// Non-JSON / log lines are ignored. Mirrors ConvertFrom-WinMintUiBridgeStdout.
+    /// </summary>
+    internal static JsonNode? ParseBridgeResult(string stdout)
     {
         foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Reverse())
         {
@@ -195,11 +199,22 @@ internal static class WizardBridge
 
             try
             {
-                return JsonNode.Parse(line);
+                var node = JsonNode.Parse(line) as JsonObject;
+                if (node is null)
+                {
+                    continue;
+                }
+
+                var schema = node["schemaVersion"];
+                var type = node["type"]?.GetValue<string>();
+                if (schema is not null && string.Equals(type, "result", StringComparison.Ordinal))
+                {
+                    return node;
+                }
             }
             catch (JsonException)
             {
-                // ponytail: last-line JSON heuristic; multi-line JSON would need a different parser
+                // ignore non-protocol JSON noise
             }
         }
 

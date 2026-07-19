@@ -2854,6 +2854,8 @@ function Assert-CopilotPlusUsesFullAiRemovalPolicy {
             'WebWidgetAllowed',
             'CryptoWalletEnabled',
             'HideFirstRunExperience',
+            'AutoImportAtFirstRun',
+            'GuidedSwitchEnabled',
             'EdgeEnhanceImagesEnabled',
             'BackgroundModeEnabled',
             'StartupBoostEnabled',
@@ -2870,6 +2872,10 @@ function Assert-CopilotPlusUsesFullAiRemovalPolicy {
         if (@($edge.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected Edge noise policy to set $expected."
         }
+    }
+    $autoImport = @($edge.set | Where-Object name -eq 'AutoImportAtFirstRun' | Select-Object -First 1)
+    if ($autoImport.Count -gt 0 -and [string]$autoImport[0].value -ne '4') {
+        Add-SmokeFailure 'AutoImportAtFirstRun must be 4 (DisabledAutoImport) per Edge ADMX docs.'
     }
     foreach ($expected in @(
             'TurnOffWindowsCopilot',
@@ -3193,6 +3199,22 @@ function Assert-RegistryTweakMetadataAndRollback {
         }
     }
 
+    $quietUxText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Desktop.ps1') -Raw
+    $defaultUserText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\DefaultUser.ps1') -Raw
+    $specializeTextForQuiet = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\Specialize.ps1') -Raw
+    $cloudTweakText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Tweaks\34-cloud-content-policy.ps1') -Raw
+    foreach ($expected in @('Home-effective quiet UX', 'ContentDeliveryManager', 'Set-WinMintFirstLogonQuietUxDefaults')) {
+        if ($quietUxText -notmatch [regex]::Escape($expected) -and $cloudTweakText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Home quiet UX source of truth should document '$expected'."
+        }
+    }
+    if ($defaultUserText -notmatch 'ContentDeliveryManager') {
+        Add-SmokeFailure 'DefaultUser must stamp ContentDeliveryManager as the Home quiet UX path.'
+    }
+    if ($specializeTextForQuiet -match 'DisableCloudOptimizedContent' -or $specializeTextForQuiet -match 'DisableSoftLanding') {
+        Add-SmokeFailure 'Specialize must not duplicate CloudContent quiet stamps; Home quiet UX is ContentDeliveryManager.'
+    }
+
     $driverCoInstaller = $script:RegistryTweaks | Where-Object id -eq 'driver-coinstaller-policy' | Select-Object -First 1
     if (-not $driverCoInstaller) {
         Add-SmokeFailure 'Expected driver-coinstaller-policy registry tweak to exist.'
@@ -3296,7 +3318,6 @@ function Assert-SetupRegistryStampsAreIdempotent {
     foreach ($expected in @(
             'function Set-SpecializeRegistryValue',
             'function Invoke-SpecializeRegistrySet',
-            'DisableSoftLanding',
             'CEIPEnable',
             'AITEnable',
             'DisableInventory',

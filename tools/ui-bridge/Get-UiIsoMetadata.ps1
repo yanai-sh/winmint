@@ -19,6 +19,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
 $repositoryRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $PSScriptRoot 'WinMint.UiBridgeProtocol.ps1')
 Import-Module (Join-Path $repositoryRoot 'src\runtime\modules\WinMint.Bootstrap\WinMint.Bootstrap.psd1') -Force
 $bootstrap = Invoke-WinMintRuntimeBootstrap -Entrypoint $PSCommandPath -Arguments @('-Path', $Path, '-ResultPath', $ResultPath)
 if ($bootstrap.Relaunched) {
@@ -40,17 +41,12 @@ function Test-WinMintUiAdministrator {
 
 function Write-WinMintUiProbeResult {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Result, [string]$ResultPath)
-    $json = [pscustomobject]@{
-        Ok           = [bool]$Result.Ok
-        Architecture = [string]$Result.Architecture
-        Editions     = @($Result.Editions)
-        Error        = [string]$Result.Error
-    } | ConvertTo-Json -Compress -Depth 8
-    if ([string]::IsNullOrEmpty($ResultPath)) {
-        Write-Output $json
-    } else {
-        Set-Content -LiteralPath $ResultPath -Value $json -Encoding UTF8
-    }
+    Write-WinMintUiBridgeResult -Result ([ordered]@{
+            Ok           = [bool]$Result.Ok
+            Architecture = [string]$Result.Architecture
+            Editions     = @($Result.Editions)
+            Error        = [string]$Result.Error
+        }) -ResultPath $ResultPath
 }
 
 # ── UAC handoff: relaunch elevated and capture the child's result via a temp file ──

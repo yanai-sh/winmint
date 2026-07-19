@@ -580,6 +580,8 @@ function Set-WinMintFirstLogonClipboardDefaults {
 
 
 function Set-WinMintFirstLogonQuietUxDefaults {
+    # Home-effective quiet UX source of truth (with DefaultUser ContentDeliveryManager).
+    # Do not rely on Enterprise CloudContent policies for Home tips/suggestions silence.
     $contentDeliveryKey = 'HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
     foreach ($name in @(
             'SubscribedContent-310093Enabled',

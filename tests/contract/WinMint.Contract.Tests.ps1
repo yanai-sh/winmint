@@ -160,6 +160,13 @@ Describe 'Setup-shell presenter acceptance signal contract' {
     }
 }
 
+Describe 'Wizard ui-bridge protocol contract' {
+    It 'Test-WizardBridgeProtocol.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-WizardBridgeProtocol.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+}
+
 Describe 'Acceptance result contract' {
     It 'Test-WinMintAcceptanceResultSchema.ps1 exits 0' {
         & (Join-Path $script:Root 'tests\contract\Test-WinMintAcceptanceResultSchema.ps1')
