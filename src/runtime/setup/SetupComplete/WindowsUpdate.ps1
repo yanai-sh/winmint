@@ -20,9 +20,17 @@ function Invoke-ScWindowsUpdateRestore {
         @('reg.exe', 'add', 'HKLM\SYSTEM\CurrentControlSet\Services\UsoSvc', '/v', 'Start', '/t', 'REG_DWORD', '/d', '2', '/f')
         @('reg.exe', 'add', 'HKLM\SYSTEM\CurrentControlSet\Services\WaaSMedicSvc', '/v', 'Start', '/t', 'REG_DWORD', '/d', '3', '/f')
     )
-    foreach ($command in $regs) {
-        $filePath = $command[0]
-        $arguments = if ($command.Count -gt 1) { $command[1..($command.Count - 1)] } else { @() }
-        & $filePath @arguments 2>$null
+    $prevNative = $PSNativeCommandUseErrorActionPreference
+    try {
+        # reg delete of missing values exits non-zero; do not surface as action failures.
+        $PSNativeCommandUseErrorActionPreference = $false
+        foreach ($command in $regs) {
+            $filePath = [string]$command[0]
+            $arguments = if ($command.Count -gt 1) { @($command[1..($command.Count - 1)]) } else { @() }
+            & $filePath @arguments 2>$null | Out-Null
+        }
+    }
+    finally {
+        $PSNativeCommandUseErrorActionPreference = $prevNative
     }
 }
