@@ -212,6 +212,17 @@
       "online": true
     },
     {
+      "id": "device-metadata-policy",
+      "description": "Prevent device metadata retrieval from the network.",
+      "scope": "machine policy registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Block network device-metadata and companion-app prompts when plugging in hardware while preserving Windows Update driver delivery.",
+      "offline": true,
+      "online": true
+    },
+    {
       "id": "edge-policy-minimal",
       "description": "Reduce Edge recommendations, shopping/rewards/wallet noise, first-run prompts, web widgets, image enhancement, inline compose, startup/background, new-tab content, workspaces, Spotlight suggestions, import nags, address-bar trending, feedback, and telemetry.",
       "scope": "machine policy registry",

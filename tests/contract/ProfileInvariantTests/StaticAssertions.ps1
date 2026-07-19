@@ -861,7 +861,7 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
 
     foreach ($expectedDefaultTweak in @(
             'home-privacy-policy', 'advertising-id-disabled-policy', 'activity-history-disabled-policy', 'storage-sense-policy', 'modern-standby-policy', 'oobe-rehydration-policy', 'wpbt-policy',
-            'driver-coinstaller-policy',
+            'driver-coinstaller-policy', 'device-metadata-policy',
             # Subtractive baseline: developer QoL is now baseline, and the default
             # build removes imposed Copilot/AI surfaces, Recall, and the Game Bar.
             'developer-mode', 'gamebar-policy', 'gaming-performance-policy', 'windows-ai-features-removal', 'windows-ai-recall-policy'
@@ -3230,6 +3230,24 @@ function Assert-RegistryTweakMetadataAndRollback {
         }
         if (@($defaultConfig.RegistryTweaks) -notcontains 'driver-coinstaller-policy') {
             Add-SmokeFailure 'driver-coinstaller-policy must apply by default.'
+        }
+    }
+
+    $deviceMetadata = $script:RegistryTweaks | Where-Object id -eq 'device-metadata-policy' | Select-Object -First 1
+    if (-not $deviceMetadata) {
+        Add-SmokeFailure 'Expected device-metadata-policy registry tweak to exist.'
+    }
+    else {
+        $match = @($deviceMetadata.set | Where-Object {
+                [string]$_.path -eq 'zSOFTWARE\Policies\Microsoft\Windows\Device Metadata' -and
+                [string]$_.name -eq 'PreventDeviceMetadataFromNetwork' -and
+                [string]$_.value -eq '1'
+            })
+        if ($match.Count -eq 0) {
+            Add-SmokeFailure 'device-metadata-policy must stamp PreventDeviceMetadataFromNetwork=1 under Device Metadata policy.'
+        }
+        if (@($defaultConfig.RegistryTweaks) -notcontains 'device-metadata-policy') {
+            Add-SmokeFailure 'device-metadata-policy must apply by default.'
         }
     }
 

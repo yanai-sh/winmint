@@ -33,7 +33,7 @@ function Assert-FormFactorAndPowerProfile {
     if ([string]$defaultConfig.PowerPlan -ne 'Balanced') {
         Add-SmokeFailure "Default build config PowerPlan should be 'Balanced', got '$($defaultConfig.PowerPlan)'."
     }
-    foreach ($expected in @('filesystem-performance-policy', 'developer-telemetry-optout', 'telemetry-tracing-policy', 'terminal-admin-context', 'driver-coinstaller-policy')) {
+    foreach ($expected in @('filesystem-performance-policy', 'developer-telemetry-optout', 'telemetry-tracing-policy', 'terminal-admin-context', 'driver-coinstaller-policy', 'device-metadata-policy')) {
         if (@($defaultConfig.RegistryTweaks) -notcontains $expected) {
             Add-SmokeFailure "Default Developer build should select registry tweak '$expected'."
         }
