@@ -175,11 +175,28 @@ function Invoke-WinMintFirstLogonSetupPhase {
         'finalize-reboot-resume' = {
             param([hashtable]$Context, $Step)
             [void]$Step
+            # ponytail: reboot-loop ceiling — WSL/virtualization may request multiple reboots; cap at 2 agent reboots.
+            $maxAgentReboots = 2
+            $rebootCount = 0
+            if ($Context.State.ContainsKey('agentRebootCount')) {
+                $rebootCount = [int]$Context.State['agentRebootCount']
+            }
+            if ($rebootCount -ge $maxAgentReboots) {
+                $Context.State['status'] = 'failed'
+                $Context.State['recovery'] = 'rebootLoop'
+                $Context.AgentNeedsReboot = $false
+                Write-WinMintFirstLogonError "Agent needsReboot ignored after $rebootCount reboot(s) (max $maxAgentReboots) to prevent a reboot loop."
+                Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'FirstLogon state write failed' -ScriptBlock { Save-WinMintFirstLogonState -State $Context.State }
+                return
+            }
+            $Context.State['agentRebootCount'] = $rebootCount + 1
             $Context.State['status'] = 'rebootPending'
+            $Context.State['rebootScheduledUnderLock'] = $true
+            Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'FirstLogon state write failed' -ScriptBlock { Save-WinMintFirstLogonState -State $Context.State }
             Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'FirstLogon retry registration failed' -ScriptBlock { Set-WinMintFirstLogonRetry }
             Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'AutoLogon persistence failed' -ScriptBlock { Set-WinMintFirstLogonAutoLogonPersistent }
-            Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'Post-agent reboot schedule failed' -ScriptBlock {
-                Write-WinMintFirstLogonError 'Agent reported needsReboot; scheduling restart to resume first logon.'
+            Invoke-WinMintFirstLogonBestEffort -ErrorMessage 'Under-lock reboot schedule failed' -ScriptBlock {
+                Write-WinMintFirstLogonError "Agent reported needsReboot; scheduling under-lock restart (attempt $($Context.State['agentRebootCount'])/$maxAgentReboots) to resume first logon."
                 & shutdown.exe /r /t 60 /c 'WinMint setup will restart to continue first logon.'
             }
         }

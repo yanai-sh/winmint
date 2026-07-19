@@ -11,9 +11,10 @@ function Get-WinMintFirstLogonTransactionStepCatalog {
         @{ Order = 6; Id = 'apply-live-user-defaults'; FailurePolicy = 'bestEffort'; Condition = 'always' }
         @{ Order = 7; Id = 'run-agent'; FailurePolicy = 'blocking'; Condition = 'always' }
         @{ Order = 8; Id = 'finalize-desktop-under-lock'; FailurePolicy = 'bestEffort'; Condition = 'agent-script-staged' }
-        @{ Order = 9; Id = 'release-provisioning-lock'; FailurePolicy = 'blocking'; Condition = 'provisioningHost' }
-        @{ Order = 10; Id = 'finalize-success'; FailurePolicy = 'conditional'; Condition = 'agentExitCode == 0 && !agentNeedsReboot' }
-        @{ Order = 11; Id = 'finalize-reboot-resume'; FailurePolicy = 'bestEffort'; Condition = 'agentExitCode == 0 && agentNeedsReboot' }
+        # Schedule reboot while the provisioning lock/presenter still owns the desktop.
+        @{ Order = 9; Id = 'finalize-reboot-resume'; FailurePolicy = 'bestEffort'; Condition = 'agentExitCode == 0 && agentNeedsReboot' }
+        @{ Order = 10; Id = 'release-provisioning-lock'; FailurePolicy = 'blocking'; Condition = 'provisioningHost' }
+        @{ Order = 11; Id = 'finalize-success'; FailurePolicy = 'conditional'; Condition = 'agentExitCode == 0 && !agentNeedsReboot' }
         @{ Order = 12; Id = 'finalize-recovery'; FailurePolicy = 'conditional'; Condition = 'agentExitCode != 0' }
     ) | ForEach-Object { [pscustomobject]$_ }
 }

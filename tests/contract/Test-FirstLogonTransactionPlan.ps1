@@ -82,9 +82,9 @@ $expectedOrder = @(
     'apply-live-user-defaults',
     'run-agent',
     'finalize-desktop-under-lock',
+    'finalize-reboot-resume',
     'release-provisioning-lock',
     'finalize-success',
-    'finalize-reboot-resume',
     'finalize-recovery'
 )
 
@@ -105,7 +105,8 @@ Assert-True ($engage.Order -lt $prepare.Order) 'Provisioning lock should engage 
 Assert-True ($engage.Order -lt $restore.Order) 'Provisioning lock should engage before regional restore.'
 Assert-True ($restore.Order -lt $defaults.Order) 'DMA visible-posture restore should run before live-user defaults and cleanup.'
 Assert-True ($agent.Order -lt $shell.Order) 'Agent run should complete before desktop finalization under lock.'
-Assert-True ($shell.Order -lt $release.Order) 'Desktop finalization should run before provisioning lock release.'
+Assert-True ($shell.Order -lt $rebootResume.Order) 'Desktop finalization should run before under-lock reboot scheduling.'
+Assert-True ($rebootResume.Order -lt $release.Order) 'needsReboot reboot scheduling must run under the provisioning lock (before release).'
 Assert-True ($release.Order -lt $success.Order) 'Provisioning lock release should happen before success cleanup.'
 Assert-Equal $engage.Condition 'provisioningHost' 'Engage step should be gated on provisioning host mode.'
 Assert-Equal $release.Condition 'provisioningHost' 'Release step should be gated on provisioning host mode.'
@@ -233,6 +234,34 @@ Invoke-WinMintFirstLogonTransactionPlan `
     -StepAdapters (New-TestTransactionAdapters -AgentExitCode 0) | Out-Null
 Assert-True (@($hostContext.Calls) -contains 'engage-provisioning-lock') 'Auto mode should engage provisioning lock.'
 Assert-True (@($hostContext.Calls) -contains 'release-provisioning-lock') 'Auto mode should release provisioning lock.'
+
+$hostRebootContext = @{
+    AgentMode = 'Auto'
+    AgentScriptStaged = $true
+    AgentExitCode = 0
+    AgentNeedsReboot = $true
+    Calls = [System.Collections.Generic.List[string]]::new()
+}
+Invoke-WinMintFirstLogonTransactionPlan `
+    -Plan $hostPlan `
+    -Context $hostRebootContext `
+    -StepAdapters (New-TestTransactionAdapters -AgentExitCode 0) | Out-Null
+$rebootIdx = @($hostRebootContext.Calls).IndexOf('finalize-reboot-resume')
+$releaseIdx = @($hostRebootContext.Calls).IndexOf('release-provisioning-lock')
+Assert-True ($rebootIdx -ge 0 -and $releaseIdx -ge 0 -and $rebootIdx -lt $releaseIdx) 'Auto needsReboot must schedule reboot under lock before release.'
+
+$runtimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Runtime.ps1') -Raw
+foreach ($expected in @('agentRebootCount', 'rebootLoop', 'rebootScheduledUnderLock', 'maxAgentReboots')) {
+    if ($runtimeText -notmatch [regex]::Escape($expected)) {
+        Add-Failure "FirstLogon reboot-resume should persist/guard '$expected'."
+    }
+}
+
+$smokeProfile = Get-Content -LiteralPath (Join-Path $root 'tests\profiles\hyper-v-smoke-arm64.json') -Raw | ConvertFrom-Json
+$sl7Profile = Get-Content -LiteralPath (Join-Path $root 'tests\profiles\hyper-v-sl7-smoke-arm64.json') -Raw | ConvertFrom-Json
+if ([string]$smokeProfile.diagnostics.wslRuntimeValidation -ne 'skip' -or [string]$sl7Profile.diagnostics.wslRuntimeValidation -ne 'skip') {
+    Add-Failure 'Hyper-V smoke profiles must keep diagnostics.wslRuntimeValidation=skip.'
+}
 
 if ($failures.Count -gt 0) {
     throw "FirstLogon transaction plan tests failed with $($failures.Count) failure(s)."
