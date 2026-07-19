@@ -65,9 +65,22 @@ if (-not (Get-Command Resolve-ScWingetExePath -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command Invoke-ScOobeRehydrationSuppression -ErrorAction SilentlyContinue)) {
     Add-ScDispatchFailure 'Import-WinMintSetupActionModules must expose Invoke-ScOobeRehydrationSuppression.'
 }
-$autoLogonAction = Get-WinMintSetupActionCatalog | Where-Object { [string]$_.Id -eq 'autologon-stamp' } | Select-Object -First 1
-if (-not $autoLogonAction) {
-    Add-ScDispatchFailure 'Catalog must include autologon-stamp after hyperv-guest-basic-console.'
+$catalogIds = @(Get-WinMintSetupActionCatalog | ForEach-Object { [string]$_.Id })
+$autoLogonIdx = $catalogIds.IndexOf('autologon-stamp')
+$toolchainIdx = $catalogIds.IndexOf('toolchain-install')
+$runOnceIdx = $catalogIds.IndexOf('first-logon-runonce')
+if ($autoLogonIdx -lt 0) {
+    Add-ScDispatchFailure 'Catalog must include autologon-stamp.'
+}
+elseif ($toolchainIdx -ge 0 -and $autoLogonIdx -gt $toolchainIdx) {
+    Add-ScDispatchFailure 'autologon-stamp must run before toolchain-install so defaultuser0 cannot hang FirstLogonAnim while winget blocks.'
+}
+elseif ($runOnceIdx -ge 0 -and $autoLogonIdx -lt $runOnceIdx) {
+    Add-ScDispatchFailure 'autologon-stamp should run after first-logon-runonce registration.'
+}
+$toolchainText = Get-Content -LiteralPath (Join-Path $setupRoot 'SetupComplete\Toolchain.ps1') -Raw
+if ($toolchainText -notmatch 'WaitForExit') {
+    Add-ScDispatchFailure 'Toolchain winget install must use a bounded WaitForExit timeout.'
 }
 
 $dispatchText = Get-Content -LiteralPath (Join-Path $setupRoot 'SetupComplete.ps1') -Raw

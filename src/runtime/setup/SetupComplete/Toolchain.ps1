@@ -44,8 +44,19 @@ function Invoke-ScToolchainInstall {
         $userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')
         $env:PATH = "$machinePath;$userPath"
         $terminalArgs = New-ScWingetInstallArgs -Id 'Microsoft.WindowsTerminal'
-        $p = Start-Process -FilePath $winget -ArgumentList $terminalArgs -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop
-        Write-ScLog "winget Windows Terminal finished (exit=$([int]$p.ExitCode)) via $winget"
+        # Bounded wait — unbounded winget was blocking SetupComplete past autologon
+        # stamp (when stamp was late in the catalog) and stranding FirstLogonAnim.
+        $timeoutMs = 10 * 60 * 1000
+        $p = Start-Process -FilePath $winget -ArgumentList $terminalArgs -PassThru -WindowStyle Hidden -ErrorAction Stop
+        if (-not $p.WaitForExit($timeoutMs)) {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            Write-ScLog "winget Windows Terminal timed out after $($timeoutMs / 60000) min via $winget; continuing SetupComplete."
+            "Toolchain install timed out: Windows Terminal via $winget" |
+                Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+        }
+        else {
+            Write-ScLog "winget Windows Terminal finished (exit=$([int]$p.ExitCode)) via $winget"
+        }
     }
     catch {
         "Toolchain install failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append

@@ -50,6 +50,57 @@ function Get-WinMintSetupActionCatalog {
             Artifacts = @('SetupComplete.log')
             Reversible = $true
         }
+        # Must run before long/blocking work (toolchain winget). OOBE leaves
+        # DefaultUserName=defaultuser0; FirstLogonAnim "Just a moment" hangs until
+        # Winlogon is restamped to the profile Local account.
+        [pscustomobject]@{
+            Id = 'autologon-stamp'
+            Phase = 'setupComplete'
+            RelativePath = 'SetupComplete\AutoLogon.ps1'
+            FunctionName = 'Invoke-ScAutoLogonStamp'
+            Title = 'Stamp Winlogon Autologon for the profile local account'
+            Kind = 'setup-action'
+            Default = $true
+            Requires = @('account.autoLogon')
+            SuppressedBy = @()
+            UserControlled = $false
+            Changes = @(
+                'Replace OOBE defaultuser0 Winlogon Autologon with the Local profile account',
+                'Clear AutoLogonCount so FirstLogon can persist Autologon across agent reboots'
+            )
+            Artifacts = @('SetupComplete_AutoLogon.json')
+            Reversible = $true
+        }
+        [pscustomobject]@{
+            Id = 'hyperv-guest-basic-console'
+            Phase = 'setupComplete'
+            RelativePath = 'SetupComplete\HyperVGuestConsole.ps1'
+            FunctionName = 'Invoke-ScHyperVGuestBasicConsole'
+            Title = 'Disable Hyper-V Enhanced Session console connections'
+            Kind = 'setup-action'
+            Default = $true
+            Requires = @()
+            SuppressedBy = @('diagnostics.vmGuestBasicConsole=false')
+            UserControlled = $false
+            Changes = @('Set guest DisableEnhancedSessionConsoleConnection so VMConnect never prompts for a password')
+            Artifacts = @('SetupComplete.log')
+            Reversible = $true
+        }
+        [pscustomobject]@{
+            Id = 'oobe-rehydration-suppression'
+            Phase = 'setupComplete'
+            RelativePath = 'SetupComplete\OobeRehydration.ps1'
+            FunctionName = 'Invoke-ScOobeRehydrationSuppression'
+            Title = 'Block OOBE app rehydration jobs'
+            Kind = 'setup-action'
+            Default = $true
+            Requires = @()
+            SuppressedBy = @()
+            UserControlled = $false
+            Changes = @('Disable setup-driven app rehydration tasks that reinstall removed inbox apps')
+            Artifacts = @('SetupComplete_OobeRehydration.json')
+            Reversible = $true
+        }
         [pscustomobject]@{
             Id = 'windows-update-restore'
             Phase = 'setupComplete'
@@ -237,54 +288,6 @@ function Get-WinMintSetupActionCatalog {
             UserControlled = $false
             Changes = @('Uninstall and clean machine-scoped OneDrive integration before first user logon')
             Artifacts = @('SetupComplete.log')
-            Reversible = $true
-        }
-        [pscustomobject]@{
-            Id = 'oobe-rehydration-suppression'
-            Phase = 'setupComplete'
-            RelativePath = 'SetupComplete\OobeRehydration.ps1'
-            FunctionName = 'Invoke-ScOobeRehydrationSuppression'
-            Title = 'Block OOBE app rehydration jobs'
-            Kind = 'setup-action'
-            Default = $true
-            Requires = @()
-            SuppressedBy = @()
-            UserControlled = $false
-            Changes = @('Disable setup-driven app rehydration tasks that reinstall removed inbox apps')
-            Artifacts = @('SetupComplete_OobeRehydration.json')
-            Reversible = $true
-        }
-        [pscustomobject]@{
-            Id = 'hyperv-guest-basic-console'
-            Phase = 'setupComplete'
-            RelativePath = 'SetupComplete\HyperVGuestConsole.ps1'
-            FunctionName = 'Invoke-ScHyperVGuestBasicConsole'
-            Title = 'Disable Hyper-V Enhanced Session console connections'
-            Kind = 'setup-action'
-            Default = $true
-            Requires = @()
-            SuppressedBy = @('diagnostics.vmGuestBasicConsole=false')
-            UserControlled = $false
-            Changes = @('Set guest DisableEnhancedSessionConsoleConnection so VMConnect never prompts for a password')
-            Artifacts = @('SetupComplete.log')
-            Reversible = $true
-        }
-        [pscustomobject]@{
-            Id = 'autologon-stamp'
-            Phase = 'setupComplete'
-            RelativePath = 'SetupComplete\AutoLogon.ps1'
-            FunctionName = 'Invoke-ScAutoLogonStamp'
-            Title = 'Stamp Winlogon Autologon for the profile local account'
-            Kind = 'setup-action'
-            Default = $true
-            Requires = @('account.autoLogon')
-            SuppressedBy = @()
-            UserControlled = $false
-            Changes = @(
-                'Replace OOBE defaultuser0 Winlogon Autologon with the Local profile account',
-                'Clear AutoLogonCount so FirstLogon can persist Autologon across agent reboots'
-            )
-            Artifacts = @('SetupComplete_AutoLogon.json')
             Reversible = $true
         }
         [pscustomobject]@{
