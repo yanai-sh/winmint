@@ -110,7 +110,7 @@
       "type": "object",
       "required": ["edge", "gaming", "copilot"],
       "properties": {
-        "edge": { "type": "boolean" },
+        "edge": { "const": true },
         "gaming": { "type": "boolean" },
         "copilot": { "type": "boolean" }
       },

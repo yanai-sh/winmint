@@ -608,10 +608,12 @@ function Assert-HeadlessCliContracts {
         if (-not $templateValidation.Passed) {
             Add-SmokeFailure "Expected -NewProfile output to validate, got: $($templateValidation.Failures -join '; ')"
         }
-        # Subtractive model: the default template keeps nothing and preselects no
-        # editors or WSL distros; developer tooling is baseline.
-        if ([bool]$template.keep.edge -or [bool]$template.keep.gaming -or [bool]$template.keep.copilot -or @($template.development.editors).Count -ne 0 -or @($template.development.wsl.distros).Count -ne 0) {
-            Add-SmokeFailure 'Expected default template to keep nothing without preselecting editors or WSL distros.'
+        # Edge is always kept; gaming/copilot default off; no editors/WSL distros preselected.
+        if (-not [bool]$template.keep.edge) {
+            Add-SmokeFailure 'Expected default template to keep.edge=true.'
+        }
+        if ([bool]$template.keep.gaming -or [bool]$template.keep.copilot -or @($template.development.editors).Count -ne 0 -or @($template.development.wsl.distros).Count -ne 0) {
+            Add-SmokeFailure 'Expected default template to keep gaming/copilot off without preselecting editors or WSL distros.'
         }
         if ([int]$template.schemaVersion -ne 4) {
             Add-SmokeFailure 'Expected generated profile templates to use schemaVersion 4.'
@@ -743,8 +745,11 @@ function Assert-HeadlessCliContracts {
 
     $minimalProfile = New-WinMintHeadlessProfileFromFlags -SourceIso '' -Architecture 'arm64' -DryRun
     $minimalConfig = New-WinMintBuildConfig -BuildProfile $minimalProfile
-    if ([bool]$minimalProfile.keep.edge -or [bool]$minimalProfile.keep.gaming -or [bool]$minimalProfile.keep.copilot) {
-        Add-SmokeFailure 'Expected omitted headless keep flags to default to keeping nothing.'
+    if (-not [bool]$minimalProfile.keep.edge) {
+        Add-SmokeFailure 'Expected omitted headless KeepEdge to still keep.edge=true.'
+    }
+    if ([bool]$minimalProfile.keep.gaming -or [bool]$minimalProfile.keep.copilot) {
+        Add-SmokeFailure 'Expected omitted headless keep flags to default gaming/copilot off.'
     }
     # Subtractive model: developer QoL (OpenSSH client, Developer Mode) is now
     # baseline on every build; WSL2 is also baseline even when no distro is

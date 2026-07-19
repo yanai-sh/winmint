@@ -3,7 +3,7 @@
   "createdAt": "06/16/2026 05:51:28",
   "profileName": "Alienware Aurora Gaming",
   "keep": {
-    "edge": false,
+    "edge": true,
     "gaming": false,
     "copilot": false
   },

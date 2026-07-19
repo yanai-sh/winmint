@@ -237,7 +237,6 @@ function Assert-SetupPayloadStagingContract {
             'setup-shell\tokens.json',
             'setup-shell\winmint_hero_ui.png',
             'setup-shell\winmint_hero.png',
-            'SetupComplete\Edge.ps1',
             'WinMintSetupProfile.json',
             'WinMintAgent\Start-WinMintAgent.ps1',
             'WinMintAgent\WinMint.Runtime.Common.ps1',
@@ -322,7 +321,6 @@ function Assert-BuildDeltaContributorCoverage {
 
         foreach ($expected in @(
                 'setup-action:windows-update-restore',
-                'setup-action:edge-removal',
                 'setup-action:ai-cleanup',
                 'setup-action:inline-secret-cleanup',
                 'setup-action:first-logon-runonce',

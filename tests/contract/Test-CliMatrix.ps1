@@ -104,7 +104,8 @@ function Invoke-CliFailureCase {
 
 Invoke-CliProfileCase -Name 'minimal-default' -Assert {
     param($Profile, $Config, $AgentProfile)
-    if ([bool]$Profile.keep.edge -or [bool]$Profile.keep.gaming -or [bool]$Profile.keep.copilot) { Add-CliMatrixFailure 'minimal-default should keep nothing (full subtractive default).' }
+    if (-not [bool]$Profile.keep.edge) { Add-CliMatrixFailure 'minimal-default must keep.edge=true (Edge always kept).' }
+    if ([bool]$Profile.keep.gaming -or [bool]$Profile.keep.copilot) { Add-CliMatrixFailure 'minimal-default should not keep gaming/copilot by default.' }
     if ([int]$Profile.schemaVersion -ne 4) { Add-CliMatrixFailure 'minimal-default should emit schemaVersion 4.' }
     if (-not [bool]$Profile.posture.setup.dmaInterop -or -not [bool]$Config.DmaInterop.Enabled) { Add-CliMatrixFailure 'minimal-default should enable DMA interop.' }
     if ($Config.SetupUserLocale -ne 'en-IE' -or $Config.SetupHomeLocationGeoId -ne 68) { Add-CliMatrixFailure 'minimal-default should use Ireland/en-IE/68 for setup.' }
@@ -139,7 +140,8 @@ Invoke-CliProfileCase -Name 'minimal-no-dma-no-location' -Arguments @('-Dma', 'O
 # preselected.
 Invoke-CliProfileCase -Name 'baseline-developer-tooling' -Assert {
     param($Profile, $Config, $AgentProfile)
-    if ([bool]$Profile.keep.edge -or [bool]$Profile.keep.gaming -or [bool]$Profile.keep.copilot) { Add-CliMatrixFailure 'baseline-developer-tooling should keep nothing by default.' }
+    if (-not [bool]$Profile.keep.edge) { Add-CliMatrixFailure 'baseline-developer-tooling must keep.edge=true (Edge always kept).' }
+    if ([bool]$Profile.keep.gaming -or [bool]$Profile.keep.copilot) { Add-CliMatrixFailure 'baseline-developer-tooling should not keep gaming/copilot by default.' }
     if ($Config.Features -notcontains 'OpenSSH.Client' -or
         $Config.RegistryTweaks -notcontains 'developer-mode' -or
         $Config.RegistryTweaks -notcontains 'powershell-remotesigned') {

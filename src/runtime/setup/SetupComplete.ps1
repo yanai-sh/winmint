@@ -154,9 +154,6 @@ $powerFormFactor = [string](Get-ScSetupProfileValue -Section 'power' -Name 'form
 $powerDisableHibernationOnDesktop = [bool](Get-ScSetupProfileValue -Section 'power' -Name 'disableHibernationOnDesktop' -Default $true)
 $powerPlan = [string](Get-ScSetupProfileValue -Section 'power' -Name 'selectedPlan' -Default (Get-ScSetupProfileValue -Section 'power' -Name 'desktopPowerPlan' -Default 'Balanced'))
 $powerDesktopPlan = $powerPlan
-$edgeRemove = Get-ScSetupProfileBool -Section 'edge' -Name 'removeEdge' -Default $false
-$edgeKeep = Get-ScSetupProfileBool -Section 'edge' -Name 'keepEdge' -Default $false
-$edgeDmaEnabled = Get-ScSetupProfileBool -Section 'edge' -Name 'dmaInteropEnabled' -Default $false
 $null = @(
     $preserveWindowsUpdate,
     $aiPolicy,
@@ -169,10 +166,7 @@ $null = @(
     $telemetryTaskPatternsToDisable,
     $powerFormFactor,
     $powerDisableHibernationOnDesktop,
-    $powerDesktopPlan,
-    $edgeRemove,
-    $edgeKeep,
-    $edgeDmaEnabled
+    $powerDesktopPlan
 )
 
 try {

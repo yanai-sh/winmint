@@ -84,21 +84,6 @@ function Get-WinMintSetupActionCatalog {
             Reversible = $false
         }
         [pscustomobject]@{
-            Id = 'edge-removal'
-            Phase = 'setupComplete'
-            RelativePath = 'SetupComplete\Edge.ps1'
-            FunctionName = 'Invoke-ScEdgeRemoval'
-            Title = 'Remove Edge through the supported uninstaller when selected'
-            Kind = 'setup-action'
-            Default = $true
-            Requires = @('edge.removeEdge')
-            SuppressedBy = @('KeepEdge')
-            UserControlled = $true
-            Changes = @('Attempt supported Edge browser uninstall while preserving WebView2 runtime')
-            Artifacts = @('SetupComplete_Edge.json')
-            Reversible = $true
-        }
-        [pscustomobject]@{
             Id = 'ai-cleanup'
             Phase = 'setupComplete'
             RelativePath = 'SetupComplete\AiCleanup.ps1'
@@ -285,6 +270,24 @@ function Get-WinMintSetupActionCatalog {
             Reversible = $true
         }
         [pscustomobject]@{
+            Id = 'autologon-stamp'
+            Phase = 'setupComplete'
+            RelativePath = 'SetupComplete\AutoLogon.ps1'
+            FunctionName = 'Invoke-ScAutoLogonStamp'
+            Title = 'Stamp Winlogon Autologon for the profile local account'
+            Kind = 'setup-action'
+            Default = $true
+            Requires = @('account.autoLogon')
+            SuppressedBy = @()
+            UserControlled = $false
+            Changes = @(
+                'Replace OOBE defaultuser0 Winlogon Autologon with the Local profile account',
+                'Clear AutoLogonCount so FirstLogon can persist Autologon across agent reboots'
+            )
+            Artifacts = @('SetupComplete_AutoLogon.json')
+            Reversible = $true
+        }
+        [pscustomobject]@{
             Id = 'inline-secret-cleanup'
             Phase = 'setupComplete'
             RelativePath = 'SetupComplete.ps1'
@@ -327,20 +330,27 @@ function Get-WinMintSetupActionModulePaths {
 }
 
 function Import-WinMintSetupActionModules {
-    # Dot-sourcing inside this function binds Invoke-Sc* to the function-local scope.
-    # Promote them to script: so SetupComplete's action loop (and contract tests) can
-    # still call them after Import returns. Without this, every action fails as
-    # "The term 'Invoke-Sc…' is not recognized".
+    # Dot-sourcing inside this function binds module functions to function-local scope.
+    # Promote every *new* function to script: so SetupComplete's action loop can call
+    # Invoke-Sc* and their helpers (Resolve-Sc*, Get-Sc*, Find-Sc*, Test-Sc*, …).
+    # Promoting only Invoke-Sc* left helpers stranded — Invoke-ScPowerProfile then failed
+    # with "The term 'Resolve-ScPowerPlanActivation' is not recognized".
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$PayloadRoot
     )
 
+    $before = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($name in @(Get-ChildItem -Path 'Function:' -ErrorAction SilentlyContinue | ForEach-Object Name)) {
+        [void]$before.Add([string]$name)
+    }
+
     foreach ($modulePath in @(Get-WinMintSetupActionModulePaths -PayloadRoot $PayloadRoot)) {
         . $modulePath
     }
 
-    foreach ($fn in @(Get-ChildItem -Path 'Function:\Invoke-Sc*' -ErrorAction SilentlyContinue)) {
+    foreach ($fn in @(Get-ChildItem -Path 'Function:' -ErrorAction SilentlyContinue)) {
+        if ($before.Contains([string]$fn.Name)) { continue }
         Set-Item -LiteralPath "Function:script:$($fn.Name)" -Value $fn.ScriptBlock
     }
 }

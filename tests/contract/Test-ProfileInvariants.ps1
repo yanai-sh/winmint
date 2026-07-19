@@ -147,7 +147,7 @@ Assert-AgentLiveInstallFailuresAreWarnings
 Assert-AgentConsolePresentationSeam
 Assert-SetupCompleteRegistersFirstLogonFallback
 Assert-SetupCompleteDoesNotDeleteWindowsOld
-Assert-EdgeRemovalIntentDoesNotDependOnDma
+Assert-EdgeDebloatOnlyNoUninstallProductPath
 Assert-AutoTimeZoneUpdaterFollowsLocationServices
 Assert-PSScriptAnalyzerHonorsProjectSettings
 Assert-CursorInstallUsesModernRegistryContract
@@ -180,11 +180,14 @@ if ($setupProfile.setupComplete.Contains('preserveMicrosoftCopilot')) {
 if (-not $setupProfile.setupComplete.removeRecall) {
     Add-SmokeFailure 'Expected Minimal setup option to remove Recall.'
 }
-if (-not [bool]$setupProfile.edge.removeEdge -or [bool]$setupProfile.edge.keepEdge) {
-    Add-SmokeFailure 'Expected default setup profile to request Edge removal intent unless KeepEdge is selected.'
+if ([bool]$setupProfile.edge.removeEdge -or -not [bool]$setupProfile.edge.keepEdge) {
+    Add-SmokeFailure 'Expected default setup profile to keep Edge (removeEdge=false); uninstall is not automated.'
 }
 if ($setupProfile.edge.Contains('aggressiveExperimental')) {
-    Add-SmokeFailure 'Edge removal must not be controlled by an environment-variable experimental gate.'
+    Add-SmokeFailure 'Edge handling must not be controlled by an environment-variable experimental gate.'
+}
+if ($config.RegistryTweaks -notcontains 'edge-policy-minimal') {
+    Add-SmokeFailure 'Expected default build to apply edge-policy-minimal debloat.'
 }
 
 # Subtractive model: -KeepCopilot suppresses the non-Recall AI feature policy so

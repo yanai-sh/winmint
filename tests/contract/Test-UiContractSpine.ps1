@@ -122,7 +122,7 @@ if ($failures.Count -eq 0) {
     . $profileAuthoringPath
     $validWizardSettings = [ordered]@{
         Profile              = 'WinMint'
-        KeepEdge             = $false
+        KeepEdge             = $true
         KeepGaming           = $false
         KeepCopilot          = $false
         ISOPath              = 'C:\iso\win.iso'

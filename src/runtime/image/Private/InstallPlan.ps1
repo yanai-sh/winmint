@@ -93,7 +93,8 @@ function New-WinMintInstallPlanAgentProfile {
 function New-WinMintInstallPlanSetupProfile {
     param([Parameter(Mandatory)]$BuildConfig)
 
-    $removeEdgeBrowser = (-not [bool]$BuildConfig.Keep.Edge)
+    # Edge stays on the image; WinMint never automates uninstall. Debloat policies
+    # apply offline regardless. Manual Settings uninstall (DMA) is a user OS action.
     $appxSystemExemptPrefixes = @()
     if ($BuildConfig.PSObject.Properties['AppxSystemExemptPrefixes']) {
         $appxSystemExemptPrefixes = @($BuildConfig.AppxSystemExemptPrefixes)
@@ -180,11 +181,9 @@ function New-WinMintInstallPlanSetupProfile {
             selectedPlan = [string]$BuildConfig.PowerPlan
         }
         edge = [ordered]@{
-            # Edge removal intent is serviced by SetupComplete through the normal
-            # supported app uninstaller. WebView2 / Edge runtime infrastructure is
-            # preserved.
-            removeEdge = $removeEdgeBrowser
-            keepEdge = [bool]$BuildConfig.Keep.Edge
+            # Debloat-only: Edge browser remains installed. Uninstall is not automated.
+            removeEdge = $false
+            keepEdge = $true
             dmaInteropEnabled = [bool]$BuildConfig.DmaInterop.Enabled
         }
     }

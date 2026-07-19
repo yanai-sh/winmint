@@ -62,7 +62,7 @@ Configure intent when you **author** a profile (`new` or GUI). `build <profile>`
 | Domain | Default | Opt-in (`new`) |
 | --- | --- | --- |
 | AI / Copilot / Recall | Recall removed; imposed Copilot/Notepad/web AI disabled | `-KeepCopilot` (Recall still removed) |
-| Edge | Removal requested; debloat policies always on | `-KeepEdge` |
+| Edge | Always kept; debloat policies always on | (manual uninstall via Settings when DMA allows; `-KeepEdge` is a no-op) |
 | Xbox / Game Bar | Removed | `-KeepGaming` |
 | Shell layers | Off | `-DesktopUI` or `-Install windhawk,yasb,thide,komorebi,nilesoft` |
 | Launcher | Off (`None` only) | `-Launcher None` |
@@ -74,7 +74,7 @@ Configure intent when you **author** a profile (`new` or GUI). `build <profile>`
 > **Surface drivers:** prefer `-DriverSource SurfaceCatalog -DriverPath <device-id>` (official Microsoft Download Center path, verified, safe MSI subset) or `-DriverSource SurfaceMsiSafe` for a manual MSI. Generic `Custom` injection remains for non-Surface packs.
 
 > [!NOTE]
-> **DMA / Edge:** on DMA SKUs, Edge uninstall goes through the supported app uninstaller; WebView2, Store, winget, and Windows Update are never removed.
+> **DMA / Edge:** WinMint does not automate Edge uninstall. When DMA unlocks Settings uninstall, users may remove Edge there themselves. WebView2, Store, winget, and Windows Update are never removed.
 
 > [!NOTE]
 > **Optional pre-update servicing:** `-UpdateImage Stable25H2` can apply Patch Tuesday / .NET payloads to the offline image before first boot (large downloads, longer builds). See [`docs/Windows-Debloat-Strategy.md`](docs/Windows-Debloat-Strategy.md) for policy detail.

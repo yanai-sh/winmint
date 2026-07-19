@@ -3,7 +3,7 @@
   "createdAt": "2026-05-16T00:00:00+03:00",
   "profileName": "Surface Laptop 7 Microsoft OOBE",
   "keep": {
-    "edge": false,
+    "edge": true,
     "gaming": false,
     "copilot": false
   },

@@ -165,7 +165,7 @@
   function buildWizardSettings() {
     return {
       Profile: "WinMint",
-      KeepEdge: false,
+      KeepEdge: true,
       KeepGaming: state.keepGaming,
       KeepCopilot: state.keepCopilot,
       ISOPath: state.isoPath,

@@ -3,7 +3,7 @@
   "createdAt": "05/18/2026 00:00:00",
   "profileName": "Hyper-V Smoke",
   "keep": {
-    "edge": false,
+    "edge": true,
     "gaming": false,
     "copilot": false
   },

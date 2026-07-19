@@ -84,7 +84,6 @@ function Test-WinMintVmShellDesktopEvidence {
     $browsers = @()
     $editors = @()
     $wslDistros = @()
-    $keepEdge = $false
     $wslSkip = $false
     try {
         if ($BuildProfile.development) {
@@ -93,9 +92,6 @@ function Test-WinMintVmShellDesktopEvidence {
             if ($BuildProfile.development.wsl -and $BuildProfile.development.wsl.PSObject.Properties['distros']) {
                 $wslDistros = @($BuildProfile.development.wsl.distros)
             }
-        }
-        if ($BuildProfile.keep -and $BuildProfile.keep.PSObject.Properties['edge']) {
-            $keepEdge = [bool]$BuildProfile.keep.edge
         }
         if ($BuildProfile.diagnostics -and $BuildProfile.diagnostics.PSObject.Properties['wslRuntimeValidation']) {
             $wslSkip = ([string]$BuildProfile.diagnostics.wslRuntimeValidation -eq 'skip')
@@ -182,14 +178,15 @@ function Test-WinMintVmShellDesktopEvidence {
         # Selection helper lives in FirstLogon.Desktop; when unavailable (pure unit test of
         # this file alone), reconstruct the same Edge/taskbar rules inline.
         if (Get-Command Get-WinMintFirstLogonPinSelection -ErrorAction SilentlyContinue) {
-            $selection = Get-WinMintFirstLogonPinSelection -Browsers $browsers -Editors $editors -KeepEdge $keepEdge
+            $selection = Get-WinMintFirstLogonPinSelection -Browsers $browsers -Editors $editors
         }
         else {
             $cliOnly = @('neovim')
+            $includeEdge = @($browsers | ForEach-Object { [string]$_ }) -contains 'edge'
             $browserIds = @($browsers | ForEach-Object { [string]$_ } | Where-Object { $_ -and $_ -ne 'edge' -and $cliOnly -notcontains $_ } | Select-Object -Unique)
             $editorIds = @($editors | ForEach-Object { [string]$_ } | Where-Object { $_ -and $cliOnly -notcontains $_ } | Select-Object -Unique)
-            $pinEdgeStart = [bool]$keepEdge
-            $pinEdgeTaskbar = [bool]$keepEdge -and ($browserIds.Count -eq 0)
+            $pinEdgeStart = [bool]$includeEdge
+            $pinEdgeTaskbar = [bool]$includeEdge -and ($browserIds.Count -eq 0)
             $startIds = @($browserIds + $(if ($pinEdgeStart) { @('edge') } else { @() }) + $editorIds)
             $taskIds = @($browserIds + $(if ($pinEdgeTaskbar) { @('edge') } else { @() }) + $editorIds)
             $selection = [pscustomobject]@{

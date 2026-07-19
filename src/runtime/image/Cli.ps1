@@ -342,7 +342,8 @@ build options:
 new options (configuration lives here):
   -Edition Host|Home|Pro|Enterprise|Education|SingleLanguage|All|<exact name>
   -GenericKey Auto|On|Off          Bake a generic (non-activating) edition key.
-  -KeepEdge -KeepGaming -KeepCopilot   Keep/restore intent for those domains.
+  -KeepGaming -KeepCopilot   Keep/restore gaming or Copilot domains.
+  -KeepEdge                  Accepted no-op; Edge is always kept (debloat policies apply).
   -DesktopUI                       Add the alternate desktop shell layer.
   -Install windhawk,yasb,thide,komorebi,nilesoft  Shell tooling to install.
   -Launcher None

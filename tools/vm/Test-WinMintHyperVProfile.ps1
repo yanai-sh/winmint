@@ -12,7 +12,7 @@
 
     -Tier Full validates the release-gate profile (browsers, editors, WSL distros, Nilesoft).
     -Tier Smoke validates either the lean plumbing profile (Hyper-V Smoke) or the
-      SL7-shaped smoke profile (Hyper-V SL7 Smoke: Cursor/Zen/mocked Fedora, Edge removal).
+      SL7-shaped smoke profile (Hyper-V SL7 Smoke: Cursor/Zen/mocked Fedora; Edge kept + debloated).
 
 .EXAMPLE
     pwsh -NoProfile -File .\tools\vm\Test-WinMintHyperVProfile.ps1 -ProfilePath .\tests\profiles\hyper-v-install-arm64.json
@@ -124,8 +124,8 @@ if ($Tier -eq 'Smoke') {
         if ([string]$profile.diagnostics.wslRuntimeValidation -ne 'skip') {
             Add-Failure 'Hyper-V SL7 Smoke must set diagnostics.wslRuntimeValidation=skip.'
         }
-        if ([bool]$profile.keep.edge) {
-            Add-Failure 'Hyper-V SL7 Smoke must keep.edge=false to exercise Edge removal.'
+        if (-not [bool]$profile.keep.edge) {
+            Add-Failure 'Hyper-V SL7 Smoke must keep.edge=true (Edge stays installed; debloat-only).'
         }
         if (-not [bool]$profile.features.phoneLink) {
             Add-Failure 'Hyper-V SL7 Smoke must enable features.phoneLink.'

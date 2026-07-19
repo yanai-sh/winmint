@@ -595,9 +595,9 @@ function New-WinMintBuildProfile {
     )
 
     $profileName = [string](Get-WinMintProfileSetting $Settings 'Profile' 'WinMint')
-    # Subtractive model: the default build removes everything; opt-in keep flags
-    # suppress a domain's removal.
-    $keepEdge = [bool](Get-WinMintProfileSetting $Settings 'KeepEdge' $false)
+    # Subtractive model for gaming/copilot; Edge is always kept (debloat-only).
+    # -KeepEdge is accepted but ignored — not a user product choice.
+    $keepEdge = $true
     $keepGaming = [bool](Get-WinMintProfileSetting $Settings 'KeepGaming' $false)
     $keepCopilot = [bool](Get-WinMintProfileSetting $Settings 'KeepCopilot' $false)
     $editionMode = Get-WinMintProfileEditionMode -Settings $Settings
@@ -616,9 +616,6 @@ function New-WinMintBuildProfile {
     $driverSource = [string](Get-WinMintProfileSetting $Settings 'DriverSource' 'None')
     $driverPath = [string](Get-WinMintProfileSetting $Settings 'DriverPath' '')
     $selectedBrowsers = @(Get-WinMintProfileBrowserIds -Settings $Settings)
-    if ($selectedBrowsers -contains 'edge') {
-        $keepEdge = $true
-    }
     $wslDistros = @(Get-WinMintProfileWslDistroIds -Settings $Settings)
 
     $password = [string](Get-WinMintProfileSetting $Settings 'Password' '')
@@ -1058,7 +1055,7 @@ function Assert-WinMintBuildProfile {
 function Get-WinMintProfileV4Defaults {
     [ordered]@{
         keep = [ordered]@{
-            edge    = $false
+            edge    = $true
             gaming  = $false
             copilot = $false
         }
@@ -1106,7 +1103,7 @@ function Get-WinMintProfileKeepBlock {
     $defaults = (Get-WinMintProfileV4Defaults).keep
     $keep = Get-WinMintProfileSetting $BuildProfile 'keep' @{}
     [pscustomobject]@{
-        Edge    = [bool](Get-WinMintProfileSetting $keep 'edge' $defaults.edge)
+        Edge    = $true
         Gaming  = [bool](Get-WinMintProfileSetting $keep 'gaming' $defaults.gaming)
         Copilot = [bool](Get-WinMintProfileSetting $keep 'copilot' $defaults.copilot)
     }
@@ -1181,7 +1178,7 @@ function Convert-WinMintBuildProfileV3ToV4 {
     $tweaks = Get-WinMintProfileSetting $BuildProfile 'tweaks' @{}
     $privacy = Get-WinMintProfileSetting $BuildProfile 'privacy' @{}
 
-    $keepEdge = [bool](Get-WinMintProfileSetting $keep 'edge' $false)
+    $keepEdge = $true
     $keepGaming = [bool](Get-WinMintProfileSetting $keep 'gaming' $false)
     $keepCopilot = [bool](Get-WinMintProfileSetting $keep 'copilot' $false)
     if (Test-WinMintProfileProperty -Object $removals -Name 'gaming') {
@@ -1197,7 +1194,6 @@ function Convert-WinMintBuildProfileV3ToV4 {
 
     $development = Get-WinMintProfileSetting $BuildProfile 'development' @{}
     $browsers = @(ConvertTo-WinMintProfileStringArray (Get-WinMintProfileSetting $development 'browsers' @()))
-    if ($browsers -contains 'edge') { $keepEdge = $true }
 
     $stickyKeys = if ([bool](Get-WinMintProfileSetting $tweaks 'stickyKeys' $true)) { 'disabled' } else { 'enabled' }
     $theme = if ([bool](Get-WinMintProfileSetting $tweaks 'darkMode' $true)) { 'dark' } else { 'light' }
