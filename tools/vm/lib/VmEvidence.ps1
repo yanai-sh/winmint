@@ -87,6 +87,10 @@ function Test-WinMintSetupShellAcceptanceEvidence {
         liveUi = [bool]$Watch.liveUi
         desktopGuard = [bool]$Watch.desktopGuard
         screenshotPath = [string]$Watch.screenshotPath
+        host = ''
+        presenter = ''
+        presenterPath = ''
+        warnings = @()
     }
 
     $firstLogonLog = Get-ChildItem -LiteralPath $EvidenceDir -Recurse -File -Filter 'FirstLogon.log' -ErrorAction SilentlyContinue |
@@ -98,16 +102,16 @@ function Test-WinMintSetupShellAcceptanceEvidence {
 
     $nativeLogOk = $false
     $controlPhaseComplete = $false
+    $warnings = [System.Collections.Generic.List[string]]::new()
 
     if (-not $firstLogonLog) {
         $plumbingFailures.Add('FirstLogon.log was not pulled into evidence.') | Out-Null
     }
     else {
         $firstLogonText = Get-Content -LiteralPath $firstLogonLog.FullName -Raw
-        if ($firstLogonText -notmatch '(?i)host-start presenter=native|Started WinMint setup shell') {
-            if (-not $nativeLogOk) {
-                $plumbingFailures.Add('FirstLogon.log does not show the setup shell host starting.') | Out-Null
-            }
+        # host-start presenter=native means ProvisioningGuard chose the native host exe — not SetupShell's D2D/GDI presenter.
+        if ($firstLogonText -notmatch '(?i)host-start\s+presenter=|Started WinMint setup shell') {
+            $plumbingFailures.Add('FirstLogon.log does not show the setup shell host starting.') | Out-Null
         }
         if ($firstLogonText -match '(?i)AgentMode\s*=\s*Headless|WINMINT_FIRSTLOGON_MODE=headless') {
             $plumbingFailures.Add('FirstLogon ran headless; OOBE splash path was bypassed.') | Out-Null
@@ -118,22 +122,39 @@ function Test-WinMintSetupShellAcceptanceEvidence {
     }
     else {
         $setupShellText = Get-Content -LiteralPath $setupShellLog.FullName -Raw
-        if ($setupShellText -match 'host=native') {
-            $nativeLogOk = $true
+        if ($setupShellText -match '(?im)\bhost=(\S+)') {
+            $meta.host = [string]$Matches[1]
+        }
+        if ($setupShellText -match '(?im)\bpresenter=(\S+)') {
+            $meta.presenter = [string]$Matches[1]
+        }
+        elseif ($setupShellText -match '(?i)render ready') {
+            $meta.presenter = 'd2d'
+        }
+
+        # Policy: blank/missing host is always a plumbing fail. Missing presenter is Smoke-warn / Full evidence fail.
+        if ([string]::IsNullOrWhiteSpace([string]$meta.host)) {
+            $plumbingFailures.Add('Setup shell host field blank/missing in SetupShell.log (expected host=native).') | Out-Null
+        }
+        elseif ($meta.host -ne 'native') {
+            $plumbingFailures.Add("Setup shell host='$($meta.host)' is not native.") | Out-Null
         }
         else {
-            $plumbingFailures.Add('SetupShell.log does not contain host=native marker from WinMintSetupShell host.') | Out-Null
+            $nativeLogOk = $true
         }
-        if ($setupShellText -match 'presenter=gdi-fallback') {
-            $meta.presenterPath = 'gdi-fallback'
+
+        if ($nativeLogOk -and [string]::IsNullOrWhiteSpace([string]$meta.presenter)) {
+            $msg = 'Setup shell presenter field blank/missing in SetupShell.log (expected presenter=gdi-fallback or d2d/native marker).'
+            if ($AcceptanceTier -eq 'Smoke') {
+                $warnings.Add($msg) | Out-Null
+            }
+            else {
+                $evidenceFailures.Add($msg) | Out-Null
+            }
         }
-        elseif ($setupShellText -match 'render ready') {
-            $meta.presenterPath = 'd2d'
-        }
-        elseif ($setupShellText -match 'host=native') {
-            $meta.presenterPath = 'native'
-        }
+        $meta.presenterPath = [string]$meta.presenter
     }
+    $meta.warnings = @($warnings)
     if ($shellControl) {
         try {
             $control = Get-Content -LiteralPath $shellControl.FullName -Raw | ConvertFrom-Json

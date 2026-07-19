@@ -153,6 +153,13 @@ Describe 'OOBE rehydration suppression contract' {
     }
 }
 
+Describe 'Setup-shell presenter acceptance signal contract' {
+    It 'Test-SetupShellPresenterSignal.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-SetupShellPresenterSignal.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+}
+
 Describe 'Acceptance result contract' {
     It 'Test-WinMintAcceptanceResultSchema.ps1 exits 0' {
         & (Join-Path $script:Root 'tests\contract\Test-WinMintAcceptanceResultSchema.ps1')
