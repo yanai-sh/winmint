@@ -139,6 +139,20 @@ Describe 'Shell pins and Terminal profiles contract' {
     }
 }
 
+Describe 'DMA location compliance contract' {
+    It 'Test-DmaLocationCompliance.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-DmaLocationCompliance.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+}
+
+Describe 'OOBE rehydration suppression contract' {
+    It 'Test-OobeRehydrationSuppression.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-OobeRehydrationSuppression.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+}
+
 Describe 'Acceptance result contract' {
     It 'Test-WinMintAcceptanceResultSchema.ps1 exits 0' {
         & (Join-Path $script:Root 'tests\contract\Test-WinMintAcceptanceResultSchema.ps1')

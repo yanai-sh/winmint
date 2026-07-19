@@ -376,8 +376,8 @@ function Assert-HyperVSl7SmokeProfileContract {
     if (@($profile.development.wsl.distros) -notcontains 'FedoraLinux' -or @($profile.development.wsl.distros).Count -ne 1) {
         Add-SmokeFailure 'Hyper-V SL7 smoke profile must select exactly FedoraLinux.'
     }
-    if ([bool]$profile.keep.edge) {
-        Add-SmokeFailure 'Hyper-V SL7 smoke profile must keep.edge=false to exercise Edge removal.'
+    if (-not [bool]$profile.keep.edge) {
+        Add-SmokeFailure 'Hyper-V SL7 smoke profile must keep.edge=true (Edge stays installed; debloat-only).'
     }
     if (-not [bool]$profile.features.phoneLink) {
         Add-SmokeFailure 'Hyper-V SL7 smoke profile must enable features.phoneLink.'
@@ -651,6 +651,10 @@ function Assert-ServiceabilityGuardrails {
     }
     if (-not $oobeShell.SelectSingleNode('u:AutoLogon', $autounattendNs)) {
         Add-SmokeFailure 'AutoLogon must be appended to the oobeSystem Microsoft-Windows-Shell-Setup component.'
+    }
+    $autoLogonDomain = $oobeShell.SelectSingleNode('u:AutoLogon/u:Domain', $autounattendNs)
+    if (-not $autoLogonDomain -or [string]$autoLogonDomain.InnerText -ne 'WinMint') {
+        Add-SmokeFailure 'Generated autounattend AutoLogon should set Domain to the target computer name (WinMint).'
     }
     if (-not $oobeShell.SelectSingleNode('u:FirstLogonCommands', $autounattendNs)) {
         Add-SmokeFailure 'FirstLogonCommands must remain in the oobeSystem Microsoft-Windows-Shell-Setup component.'
@@ -949,10 +953,25 @@ function Assert-HomeFirstDefaultsAndPolicySurface {
             Add-SmokeFailure "AppX build resolver should filter '$expected' prefixes."
         }
     }
-    foreach ($expected in @('Get-WinMintFirstLogonAppxSystemExemptPrefixes', 'skippedSystemExempt')) {
+    foreach ($expected in @(
+            'Get-WinMintFirstLogonAppxSystemExemptPrefixes',
+            'Get-WinMintFirstLogonAppxSystemExemptResolution',
+            'skippedSystemExempt',
+            'systemExemptSource',
+            'leftoverMatching',
+            'setup-profile',
+            'missing appxSystemExemptPrefixes',
+            'missing-system-exempt-prefixes'
+        )) {
         if ($cleanupText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "FirstLogon live AppX cleanup should skip '$expected'."
+            Add-SmokeFailure "FirstLogon live AppX cleanup should cover '$expected'."
         }
+    }
+    if ($cleanupText -match 'ponytail: fallback ceiling') {
+        Add-SmokeFailure 'FirstLogon live AppX cleanup must not keep a hardcoded systemExempt fallback that drifts from the catalog.'
+    }
+    if ($cleanupText -notmatch "Source -eq 'missing'") {
+        Add-SmokeFailure 'FirstLogon live AppX cleanup must fail closed when system exempt prefixes are missing from the setup profile.'
     }
     $desktopText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Desktop.ps1') -Raw
     if ($desktopText -notmatch 'Invoke-WinMintProvisioningDismissStartMenu') {
@@ -1072,9 +1091,24 @@ function Assert-LiveInstallAuditIsStaged {
 function Assert-DmaRestoreRunsBeforeOptionalFirstLogonWork {
     $firstLogonText = Get-WinMintFirstLogonText
     $regionText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Region.ps1') -Raw
-    foreach ($expected in @('Restore-WinMintDmaRegionalDefaults', 'FirstLogon_RegionalRestore.json', 'Copy-UserInternationalSettingsToSystem', 'restoreLocationServices', 'New-WinMintFirstLogonTransactionPlan', 'FirstLogon.Transaction.ps1')) {
-        if ($firstLogonText -notmatch [regex]::Escape($expected)) {
+    foreach ($expected in @(
+            'Restore-WinMintDmaRegionalDefaults',
+            'FirstLogon_RegionalRestore.json',
+            'Copy-UserInternationalSettingsToSystem',
+            'restoreLocationServices',
+            'Get-WinMintFirstLogonLocationPostureSnapshot',
+            'Test-WinMintFirstLogonLocationRestoreCompliant',
+            'locationPosture',
+            'New-WinMintFirstLogonTransactionPlan',
+            'FirstLogon.Transaction.ps1'
+        )) {
+        if ($firstLogonText -notmatch [regex]::Escape($expected) -and $regionText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "FirstLogon DMA restore should contain '$expected'."
+        }
+    }
+    foreach ($expected in @('machineConsent', 'userConsent', 'lfsvc', 'DisableLocation')) {
+        if ($regionText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "FirstLogon DMA location compliance should reference '$expected'."
         }
     }
     foreach ($expected in @('Get-WinUserLanguageList', 'primaryLanguageTag', 'uiLanguageOverride', 'Get-WinMintFirstLogonUserLocaleName', 'LocaleName', 'New-WinUserLanguageList')) {
@@ -1790,35 +1824,65 @@ function Assert-SetupCompleteDoesNotDeleteWindowsOld {
     }
 }
 
-function Assert-EdgeRemovalIntentDoesNotDependOnDma {
+function Assert-EdgeDebloatOnlyNoUninstallProductPath {
+    # Edge stays on the image. WinMint never automates uninstall and never
+    # presents a remove/keep Edge choice. Debloat policies always apply.
     $settings = New-SmokeBuildProfileSettings
     $settings.DmaInterop = $false
     $settings.KeepEdge = $false
-    $config = New-WinMintBuildConfig -BuildProfile (New-WinMintBuildProfile -Settings $settings)
+    $profile = New-WinMintBuildProfile -Settings $settings
+    if (-not [bool]$profile.keep.edge) {
+        Add-SmokeFailure 'Authored profiles must always keep.edge=true (-KeepEdge is a no-op).'
+    }
+    $config = New-WinMintBuildConfig -BuildProfile $profile
+    if (-not [bool]$config.Keep.Edge) {
+        Add-SmokeFailure 'Build config Keep.Edge must always be true.'
+    }
     $setupProfile = New-WinMintInstallPlanSetupProfile -BuildConfig $config
-    if (-not [bool]$setupProfile.edge.removeEdge) {
-        Add-SmokeFailure 'Edge removal intent should be recorded whenever KeepEdge is false, even when DMA interop is off.'
+    if ([bool]$setupProfile.edge.removeEdge -or -not [bool]$setupProfile.edge.keepEdge) {
+        Add-SmokeFailure 'Setup profile must never request Edge removal (removeEdge=false, keepEdge=true).'
     }
-    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
-    if ($unattendText -match [regex]::Escape('$removeEdgeBrowser = ((-not [bool]$BuildConfig.Keep.Edge) -and [bool]$BuildConfig.DmaInterop.Enabled)')) {
-        Add-SmokeFailure 'New-WinMintInstallPlanSetupProfile must not couple Edge removal intent to DMA interop.'
+    if (@($config.RegistryTweaks) -notcontains 'edge-policy-minimal') {
+        Add-SmokeFailure 'Edge debloat (edge-policy-minimal) must always apply.'
     }
-    $edgeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete\Edge.ps1') -Raw
-    foreach ($expected in @(
-        'Invoke-ScEdgeNormalUninstall',
-        '--uninstall',
-        '--system-level',
-        '--force-uninstall',
-        'supported app uninstaller'
-    )) {
-        if ($edgeText -notmatch [regex]::Escape($expected)) {
-            Add-SmokeFailure "SetupComplete Edge removal should use the normal supported uninstaller with '$expected'."
+
+    $setupActionsText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\Setup.Actions.ps1') -Raw
+    if ($setupActionsText -match [regex]::Escape("'edge-removal'") -or $setupActionsText -match 'Invoke-ScEdgeRemoval') {
+        Add-SmokeFailure 'Setup action catalog must not include edge-removal / Invoke-ScEdgeRemoval.'
+    }
+    $edgeModulePath = Join-Path $root 'src\runtime\setup\SetupComplete\Edge.ps1'
+    if (Test-Path -LiteralPath $edgeModulePath -PathType Leaf) {
+        Add-SmokeFailure 'SetupComplete\Edge.ps1 must not exist; Edge uninstall is not a product path.'
+    }
+    $setupCompleteText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\SetupComplete.ps1') -Raw
+    foreach ($forbidden in @('--uninstall', 'Invoke-ScEdgeRemoval', 'AllowUninstall', 'msedge')) {
+        if ($setupCompleteText -match [regex]::Escape($forbidden)) {
+            Add-SmokeFailure "SetupComplete.ps1 must not automate Edge uninstall ('$forbidden')."
         }
     }
-    foreach ($forbidden in @('WINMINT_ENABLE_EXPERIMENTAL_EDGE_REMOVAL', 'Remove-ScRegistryTree')) {
-        if ($edgeText -match [regex]::Escape($forbidden)) {
-            Add-SmokeFailure "SetupComplete Edge removal must not use hidden env gates or policy/file cleanup hooks: '$forbidden'."
+
+    $cliHelp = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Cli.ps1') -Raw
+    if ($cliHelp -match 'Keep/restore intent for those domains' -or $cliHelp -match 'removal intent') {
+        Add-SmokeFailure 'CLI help must not advertise Edge removal as a KeepEdge product choice.'
+    }
+    if ($cliHelp -notmatch 'Accepted no-op' -or $cliHelp -notmatch 'Edge is always kept') {
+        Add-SmokeFailure 'CLI help must document -KeepEdge as an accepted no-op (Edge always kept).'
+    }
+
+    $wizardText = Get-Content -LiteralPath (Join-Path $root 'assets\runtime\setup\setup-shell\wizard.js') -Raw
+    if ($wizardText -notmatch 'KeepEdge:\s*true') {
+        Add-SmokeFailure 'Wizard profile payload must set KeepEdge: true.'
+    }
+    foreach ($forbiddenUi in @('keepEdge', 'Keep Edge', 'Remove Edge', 'removeEdge')) {
+        # KeepEdge: true in the payload is required; do not treat that as UI copy.
+        if ($forbiddenUi -eq 'keepEdge') { continue }
+        if ($wizardText -match [regex]::Escape($forbiddenUi)) {
+            Add-SmokeFailure "Wizard must not present Edge keep/remove UI copy: '$forbiddenUi'."
         }
+    }
+    # Gaming/copilot remain the only keep toggles in wizard state UI.
+    if ($wizardText -notmatch 'keepGaming' -or $wizardText -notmatch 'keepCopilot') {
+        Add-SmokeFailure 'Wizard should still expose keepGaming/keepCopilot toggles.'
     }
 }
 
@@ -2170,25 +2234,35 @@ function Assert-AgentWingetUsesDefaultInstallerSelection {
     foreach ($expected in @(
         'Invoke-WinMintAgentWingetBootstrapUpgrades',
         'Invoke-WinMintAgentWingetCatchUpAll',
+        'Invoke-WinMintAgentWingetRepairAndSourceUpdate',
+        'Repair-WinGetPackageManager',
+        '''source'', ''update''',
         'Microsoft.AppInstaller',
+        'Microsoft.EdgeWebView2Runtime',
         'Microsoft.WindowsTerminal',
         '''upgrade''',
         '''--all''',
         '''--id''',
+        '''--scope'', ''machine''',
         '''--accept-source-agreements''',
         '''--accept-package-agreements''',
         'package-manager:winget-bootstrap',
         'package-manager:winget-upgrade-all',
+        'package-manager:winget-repair',
         '0x8A15002C',
         '0x8A15002D',
         '-1978335189',
         'Test-WinMintAgentWingetNoUpgradeAvailable',
         'No available upgrade found',
+        'incomplete = $partial',
         'phase = ''post-main'''
     )) {
         if ($packageManagerText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Package manager winget hardening should contain '$expected'."
         }
+    }
+    if ($packageManagerText -match "if \(\`$partial\) \{ 'ok' \}") {
+        Add-SmokeFailure 'winget upgrade --all partial failure must not be recorded as clean ok.'
     }
     if ($packageManagerText -like "*'pin', 'add'*") {
         Add-SmokeFailure 'Package manager bootstrap should not pin Edge/WebView2 before upgrades.'
@@ -2774,7 +2848,25 @@ function Assert-CopilotPlusUsesFullAiRemovalPolicy {
         Add-SmokeFailure 'Expected edge-policy-minimal, windows-ai-features-removal, and windows-ai-recall-policy registry tweaks to exist.'
         return
     }
-    foreach ($expected in @('EdgeShoppingAssistantEnabled', 'ShowMicrosoftRewards', 'WebWidgetAllowed', 'CryptoWalletEnabled', 'HideFirstRunExperience', 'EdgeEnhanceImagesEnabled', 'BackgroundModeEnabled', 'StartupBoostEnabled', 'NewTabPageContentEnabled', 'ComposeInlineEnabled')) {
+    foreach ($expected in @(
+            'EdgeShoppingAssistantEnabled',
+            'ShowMicrosoftRewards',
+            'WebWidgetAllowed',
+            'CryptoWalletEnabled',
+            'HideFirstRunExperience',
+            'EdgeEnhanceImagesEnabled',
+            'BackgroundModeEnabled',
+            'StartupBoostEnabled',
+            'NewTabPageContentEnabled',
+            'NewTabPageAppLauncherEnabled',
+            'ComposeInlineEnabled',
+            'EdgeWorkspacesEnabled',
+            'SpotlightExperiencesAndRecommendationsEnabled',
+            'ImportOnEachLaunch',
+            'AddressBarTrendingSuggestEnabled',
+            'PromotionalTabsEnabled',
+            'BingAdsSuppression'
+        )) {
         if (@($edge.set | Where-Object name -eq $expected).Count -eq 0) {
             Add-SmokeFailure "Expected Edge noise policy to set $expected."
         }
@@ -3549,11 +3641,15 @@ function Assert-SetupAndFirstLogonCatalogsAreExplicit {
     Assert-StaticTextContainsAll -Text $setupActionsText -FailurePrefix 'Setup action catalog should contain' -Expected @(
         'function Get-WinMintSetupActionCatalog',
         'Import-WinMintSetupActionModules',
-        'edge-removal',
         'hyperv-guest-basic-console',
+        'autologon-stamp',
+        'Invoke-ScAutoLogonStamp',
         'inline-secret-cleanup',
         'first-logon-runonce'
     )
+    if ($setupActionsText -match 'edge-removal') {
+        Add-SmokeFailure 'Setup action catalog must not list edge-removal (Edge uninstall is not a product path).'
+    }
     Assert-StaticTextContainsAll -Text $setupCompleteText -FailurePrefix 'SetupComplete orchestrator should use the explicit setup action catalog with' -Expected @(
         'Import-WinMintSetupActionModules',
         'Get-WinMintSetupActionCatalog'

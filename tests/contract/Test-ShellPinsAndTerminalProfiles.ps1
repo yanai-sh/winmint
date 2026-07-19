@@ -18,25 +18,42 @@ function Add-PinTerminalFailure {
 . (Join-Path $root 'src\runtime\setup\FirstLogon.Desktop.ps1')
 . (Join-Path $root 'src\runtime\setup\WindowsTerminal.Profiles.ps1')
 
-# --- Pin selection ---
-$withZen = Get-WinMintFirstLogonPinSelection -Browsers @('zen-browser') -Editors @('cursor', 'neovim') -KeepEdge $true
-if ($withZen.PinEdgeToStart -ne $true) { Add-PinTerminalFailure 'KeepEdge must pin Edge to Start.' }
-if ($withZen.PinEdgeToTaskbar -ne $false) { Add-PinTerminalFailure 'KeepEdge + other browsers must NOT pin Edge to taskbar.' }
-if ($withZen.StartAppIds -notcontains 'edge') { Add-PinTerminalFailure 'StartAppIds must include edge when KeepEdge.' }
+# --- Pin selection (Edge pins only when development.browsers contains edge) ---
+$withZen = Get-WinMintFirstLogonPinSelection -Browsers @('zen-browser') -Editors @('cursor', 'neovim')
+if ($withZen.PinEdgeToStart -or $withZen.PinEdgeToTaskbar) { Add-PinTerminalFailure 'zen-only browsers must not pin Edge.' }
+if ($withZen.StartAppIds -contains 'edge') { Add-PinTerminalFailure 'StartAppIds must exclude edge when browsers omit edge.' }
 if ($withZen.StartAppIds -notcontains 'zen-browser') { Add-PinTerminalFailure 'StartAppIds must include zen-browser.' }
 if ($withZen.StartAppIds -notcontains 'cursor') { Add-PinTerminalFailure 'StartAppIds must include cursor.' }
 if ($withZen.StartAppIds -contains 'neovim') { Add-PinTerminalFailure 'neovim is CLI-only and must not be pinned.' }
-if ($withZen.TaskbarAppIds -contains 'edge') { Add-PinTerminalFailure 'TaskbarAppIds must exclude edge when another browser is selected.' }
 if ($withZen.TaskbarAppIds -notcontains 'zen-browser' -or $withZen.TaskbarAppIds -notcontains 'cursor') {
     Add-PinTerminalFailure 'TaskbarAppIds must include selected browser and editor.'
 }
 
-$edgeOnly = Get-WinMintFirstLogonPinSelection -Browsers @() -Editors @('vscode') -KeepEdge $true
-if ($edgeOnly.PinEdgeToTaskbar -ne $true) { Add-PinTerminalFailure 'KeepEdge with no other browsers must pin Edge to taskbar.' }
+$edgeOnly = Get-WinMintFirstLogonPinSelection -Browsers @('edge') -Editors @('vscode')
+if ($edgeOnly.PinEdgeToStart -ne $true) { Add-PinTerminalFailure 'browsers=edge must pin Edge to Start.' }
+if ($edgeOnly.PinEdgeToTaskbar -ne $true) { Add-PinTerminalFailure 'sole browser edge must pin Edge to taskbar.' }
 if ($edgeOnly.TaskbarAppIds -notcontains 'edge') { Add-PinTerminalFailure 'Sole-browser Edge must appear in TaskbarAppIds.' }
 
-$noEdge = Get-WinMintFirstLogonPinSelection -Browsers @('brave') -Editors @() -KeepEdge $false
-if ($noEdge.PinEdgeToStart -or $noEdge.PinEdgeToTaskbar) { Add-PinTerminalFailure 'keep.edge=false must not pin Edge.' }
+$edgeWithBrave = Get-WinMintFirstLogonPinSelection -Browsers @('brave', 'edge') -Editors @()
+if ($edgeWithBrave.PinEdgeToStart -ne $true) { Add-PinTerminalFailure 'browsers including edge must pin Edge to Start.' }
+if ($edgeWithBrave.PinEdgeToTaskbar) { Add-PinTerminalFailure 'edge + another browser must NOT pin Edge to taskbar.' }
+
+$noEdge = Get-WinMintFirstLogonPinSelection -Browsers @('brave') -Editors @()
+if ($noEdge.PinEdgeToStart -or $noEdge.PinEdgeToTaskbar) { Add-PinTerminalFailure 'browsers without edge must not pin Edge.' }
+
+$desktopText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Desktop.ps1') -Raw
+foreach ($expected in @('applied', 'skipped', 'appliedAfterAgent', 'underProvisioningLock', 'FirstLogon_ShellPins.json')) {
+    if ($desktopText -notmatch [regex]::Escape($expected)) {
+        Add-PinTerminalFailure "Set-WinMintFirstLogonStartPins report must include '$expected'."
+    }
+}
+$runtimeText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\FirstLogon.Runtime.ps1') -Raw
+if ($runtimeText -notmatch "finalize-desktop-under-lock[\s\S]*Set-WinMintFirstLogonStartPins") {
+    Add-PinTerminalFailure 'Pins must apply in finalize-desktop-under-lock (after agent, under lock).'
+}
+if ($runtimeText -notmatch "finalize-success[\s\S]*Invoke-WinMintFirstLogonReloadExplorerShell") {
+    Add-PinTerminalFailure 'Explorer reload for pins must run on finalize-success (after lock release path).'
+}
 
 # --- Terminal hard-replace ---
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("winmint-term-" + [guid]::NewGuid().ToString('n'))

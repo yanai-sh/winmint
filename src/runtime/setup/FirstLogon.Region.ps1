@@ -55,6 +55,66 @@ function Set-WinMintFirstLogonInputLanguages {
 }
 
 
+function Get-WinMintFirstLogonRegistryValueText {
+    param(
+        [Parameter(Mandatory)][string]$LiteralPath,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    try {
+        if (-not (Test-Path -LiteralPath $LiteralPath)) { return $null }
+        $item = Get-ItemProperty -LiteralPath $LiteralPath -Name $Name -ErrorAction Stop
+        return [string]$item.$Name
+    }
+    catch {
+        return $null
+    }
+}
+
+function Get-WinMintFirstLogonLocationPostureSnapshot {
+    $machineConsent = Get-WinMintFirstLogonRegistryValueText -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location' -Name 'Value'
+    $userConsent = Get-WinMintFirstLogonRegistryValueText -LiteralPath 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location' -Name 'Value'
+    $disableLocation = Get-WinMintFirstLogonRegistryValueText -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors' -Name 'DisableLocation'
+    $sensorPermission = Get-WinMintFirstLogonRegistryValueText -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}' -Name 'SensorPermissionState'
+    $lfsvc = Get-WinMintFirstLogonServiceSnapshot -Name 'lfsvc'
+    return [ordered]@{
+        machineConsent        = if ($null -eq $machineConsent) { '' } else { $machineConsent }
+        userConsent           = if ($null -eq $userConsent) { '' } else { $userConsent }
+        disableLocationPolicy = if ($null -eq $disableLocation) { $null } else { try { [int]$disableLocation } catch { $disableLocation } }
+        sensorPermissionState = if ($null -eq $sensorPermission) { $null } else { try { [int]$sensorPermission } catch { $sensorPermission } }
+        locationService       = $lfsvc
+    }
+}
+
+function Test-WinMintFirstLogonLocationRestoreCompliant {
+    param(
+        [Parameter(Mandatory)][bool]$RestoreLocationServices,
+        [Parameter(Mandatory)]$LocationPosture
+    )
+
+    $errors = [System.Collections.Generic.List[string]]::new()
+    if (-not $RestoreLocationServices) {
+        return @($errors)
+    }
+
+    $machineAllow = [string]$LocationPosture.machineConsent -eq 'Allow'
+    $userAllow = [string]$LocationPosture.userConsent -eq 'Allow'
+    if (-not $machineAllow -and -not $userAllow) {
+        $errors.Add("Location consent is not Allow (machine='$($LocationPosture.machineConsent)', user='$($LocationPosture.userConsent)') while restoreLocationServices is enabled.") | Out-Null
+    }
+    if ($null -ne $LocationPosture.disableLocationPolicy -and [int]$LocationPosture.disableLocationPolicy -eq 1) {
+        $errors.Add('DisableLocation policy is still enabled while restoreLocationServices is enabled.') | Out-Null
+    }
+    $lfsvc = $LocationPosture.locationService
+    if (-not $lfsvc -or -not [bool]$lfsvc.present) {
+        $errors.Add('Location service (lfsvc) is not present while restoreLocationServices is enabled.') | Out-Null
+    }
+    elseif ($null -ne $lfsvc.start -and [int]$lfsvc.start -eq 4) {
+        $errors.Add("Location service (lfsvc) Start=$($lfsvc.start) (disabled) while restoreLocationServices is enabled.") | Out-Null
+    }
+    return @($errors)
+}
+
 function Set-WinMintFirstLogonLocationServicesPolicy {
     param([bool]$Enabled)
 
@@ -292,6 +352,11 @@ function Restore-WinMintDmaRegionalDefaults {
         $errors.Add("Current LocaleName '$observedLocaleName' (process culture '$observedProcessCulture') does not match configured restore culture '$restoreUserLocale'.") | Out-Null
     }
 
+    $locationPosture = Get-WinMintFirstLogonLocationPostureSnapshot
+    foreach ($locationError in @(Test-WinMintFirstLogonLocationRestoreCompliant -RestoreLocationServices $restoreLocationServices -LocationPosture $locationPosture)) {
+        $errors.Add([string]$locationError) | Out-Null
+    }
+
     $report = [ordered]@{
         enabled = $true
         requested = [ordered]@{
@@ -314,7 +379,8 @@ function Restore-WinMintDmaRegionalDefaults {
             homeLocationGeoId = if ($observedHomeLocation) { [int]$observedHomeLocation.GeoId } else { 0 }
             homeLocation = if ($observedHomeLocation) { [string]$observedHomeLocation.HomeLocation } else { '' }
             tzautoupdate = Get-WinMintFirstLogonServiceSnapshot -Name 'tzautoupdate'
-            locationService = Get-WinMintFirstLogonServiceSnapshot -Name 'lfsvc'
+            locationService = $locationPosture.locationService
+            locationPosture = $locationPosture
         }
         compliant = ($errors.Count -eq 0)
         errors = $errors.ToArray()

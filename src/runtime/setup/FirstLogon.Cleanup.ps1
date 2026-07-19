@@ -431,19 +431,26 @@ try {
     catch { Write-WinMintFirstLogonError "No-trace purge schedule failed: $_" }
 }
 
-function Get-WinMintFirstLogonAppxSystemExemptPrefixes {
+function Get-WinMintFirstLogonAppxSystemExemptResolution {
     $setupProfile = Read-WinMintFirstLogonSetupProfile
     if ($setupProfile -and $setupProfile.PSObject.Properties['appxSystemExemptPrefixes']) {
-        return @($setupProfile.appxSystemExemptPrefixes | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+        $prefixes = @($setupProfile.appxSystemExemptPrefixes | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+        return [pscustomobject]@{
+            Prefixes = $prefixes
+            Source   = 'setup-profile'
+            Warning  = $null
+        }
     }
-    # ponytail: fallback ceiling — matches config/appx-removal.json systemExemptPrefixes for push-only ISOs without restage.
-    return @(
-        'Microsoft.Windows.PeopleExperienceHost'
-        'Windows.CBSPreview'
-        'Microsoft.XboxGameCallableUI'
-        'Microsoft.Windows.ParentalControls'
-        'MicrosoftWindows.Client.CBS'
-    )
+    # No hardcoded catalog copy — stale push-only fallbacks drift from config/appx-removal.json.
+    return [pscustomobject]@{
+        Prefixes = @()
+        Source   = 'missing'
+        Warning  = 'setup profile missing appxSystemExemptPrefixes; live AppX cleanup cannot apply Tier-0 exempt filter. Restage ISO or push an updated setup profile.'
+    }
+}
+
+function Get-WinMintFirstLogonAppxSystemExemptPrefixes {
+    return @((Get-WinMintFirstLogonAppxSystemExemptResolution).Prefixes)
 }
 
 function Invoke-WinMintFirstLogonAppxCleanup {
@@ -459,12 +466,13 @@ function Invoke-WinMintFirstLogonAppxCleanup {
     if ($aiPrefixes.Count -gt 0) {
         $prefixes = @($prefixes | Where-Object { $_ -notin $aiPrefixes })
     }
-    $systemExempt = @(Get-WinMintFirstLogonAppxSystemExemptPrefixes)
+    $exemptResolution = Get-WinMintFirstLogonAppxSystemExemptResolution
+    $systemExempt = @($exemptResolution.Prefixes)
     $skippedSystemExempt = @($prefixes | Where-Object { $_ -in $systemExempt })
     if ($systemExempt.Count -gt 0) {
         $prefixes = @($prefixes | Where-Object { $_ -notin $systemExempt })
     }
-    if ($prefixes.Count -eq 0) {
+    if ($prefixes.Count -eq 0 -and [string]::IsNullOrWhiteSpace([string]$exemptResolution.Warning)) {
         return
     }
 
@@ -472,10 +480,29 @@ function Invoke-WinMintFirstLogonAppxCleanup {
     $result = [ordered]@{
         generatedAt = Get-Date -Format o
         prefixes = @($prefixes)
+        systemExemptSource = [string]$exemptResolution.Source
+        systemExemptPrefixes = @($systemExempt)
+        systemExemptWarning = [string]$exemptResolution.Warning
         skippedSystemExempt = @($skippedSystemExempt)
         removedProvisioned = @()
         removedInstalled = @()
+        leftoverMatching = @()
         failed = @()
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$exemptResolution.Warning)) {
+        Write-WinMintFirstLogonError ([string]$exemptResolution.Warning)
+        "$(Get-Date -Format 'o') $($exemptResolution.Warning)" |
+            Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
+    }
+    # Fail closed: without staged exempts, live removal can strip Tier-0 packages from a stale prefix list.
+    if ([string]$exemptResolution.Source -eq 'missing') {
+        $result.skippedBecause = 'missing-system-exempt-prefixes'
+        $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8
+        return
+    }
+    if ($prefixes.Count -eq 0) {
+        $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8
+        return
     }
 
     foreach ($pkg in @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue)) {
@@ -524,6 +551,21 @@ function Invoke-WinMintFirstLogonAppxCleanup {
             }
             Write-WinMintFirstLogonError "Installed AppX removal failed for $name ($packageFullName): $_"
         }
+    }
+
+    foreach ($pkg in @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue)) {
+        $name = [string]$pkg.Name
+        $packageFullName = [string]$pkg.PackageFullName
+        if ([string]::IsNullOrWhiteSpace($name) -and [string]::IsNullOrWhiteSpace($packageFullName)) { continue }
+        if (-not ($prefixes | Where-Object { $name -like "*$_*" -or $packageFullName -like "*$_*" })) { continue }
+        $result.leftoverMatching += [ordered]@{
+            name = $name
+            packageFullName = $packageFullName
+        }
+    }
+    if (@($result.leftoverMatching).Count -gt 0) {
+        "$(Get-Date -Format 'o') Live AppX cleanup leftovers still matching removal prefixes: $(@($result.leftoverMatching.name) -join ', ')" |
+            Out-File (Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log') -Append
     }
 
     $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8

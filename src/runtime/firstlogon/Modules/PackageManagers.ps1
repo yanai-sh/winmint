@@ -196,20 +196,26 @@ function Install-WinMintAgentStarshipPrompt {
     }
 }
 
-# ponytail: partial --all failure ceiling — only APPINSTALLER_CLI_ERROR_UPDATE_ALL_HAS_FAILURE is softened.
+# ponytail: partial --all failure ceiling — UPDATE_ALL_HAS_FAILURE is incomplete (failed+partial), not clean ok.
 $script:WinMintWingetPartialUpgradeExitCode = -1978335188
 $script:WinMintWingetNoUpgradeExitCode = -1978335189
 $script:WinMintWingetBootstrapPackageIds = @(
     'Microsoft.AppInstaller'
+    'Microsoft.EdgeWebView2Runtime'
+    'Microsoft.WindowsTerminal'
+)
+$script:WinMintWingetMachineScopePackageIds = @(
+    'Microsoft.EdgeWebView2Runtime'
     'Microsoft.WindowsTerminal'
 )
 
 function Get-WinMintAgentWingetUpgradeArgumentList {
     param(
-        [Parameter(Mandatory)][string[]]$Tail
+        [Parameter(Mandatory)][string[]]$Tail,
+        [switch]$MachineScope
     )
 
-    return @(
+    $args = @(
         'upgrade'
     ) + $Tail + @(
         '--silent'
@@ -217,6 +223,10 @@ function Get-WinMintAgentWingetUpgradeArgumentList {
         '--accept-source-agreements'
         '--accept-package-agreements'
     )
+    if ($MachineScope) {
+        $args += @('--scope', 'machine')
+    }
+    return $args
 }
 
 function Get-WinMintAgentWingetBootstrapStateKey {
@@ -238,8 +248,83 @@ function Test-WinMintAgentWingetNoUpgradeAvailable {
     return ($ErrorText -match 'exited\s+-1978335189\b' -or $ErrorText -match '0x8A15002D' -or $ErrorText -match 'No available upgrade found')
 }
 
+function Test-WinMintAgentWingetUsesMachineScope {
+    param([Parameter(Mandatory)][string]$PackageId)
+
+    return ($script:WinMintWingetMachineScopePackageIds -contains $PackageId)
+}
+
+function Invoke-WinMintAgentWingetRepairAndSourceUpdate {
+    param([Parameter(Mandatory)][hashtable]$State)
+
+    $key = 'package-manager:winget-repair'
+    if (-not (Get-WinMintAgentContext).Force -and $State.steps.ContainsKey($key) -and [string]$State.steps[$key].status -eq 'ok') {
+        return
+    }
+
+    $State.steps[$key] = @{
+        status    = 'running'
+        startedAt = (Get-Date -Format o)
+        updatedAt = (Get-Date -Format o)
+        command   = 'Repair-WinGetPackageManager + winget source update'
+    }
+    Save-AgentState -State $State
+    Write-AgentEvent -Type 'step' -Status 'running' -Step $key -Message 'Repairing winget package manager and refreshing sources.'
+
+    $repairUsed = $false
+    $repairError = $null
+    try {
+        if (Get-Command Repair-WinGetPackageManager -ErrorAction SilentlyContinue) {
+            Repair-WinGetPackageManager -ErrorAction Stop
+            $repairUsed = $true
+        }
+        else {
+            Write-AgentLog 'Repair-WinGetPackageManager not available; continuing with winget source update.'
+        }
+    }
+    catch {
+        $repairError = $_.Exception.Message
+        Write-AgentLog "Repair-WinGetPackageManager failed (non-blocking): $repairError"
+    }
+
+    $sourceError = $null
+    try {
+        $winget = Wait-WingetPath
+        if (-not $winget) { throw 'winget.exe not available after wait.' }
+        Invoke-AgentNative -FilePath $winget -ArgumentList @(
+            'source', 'update',
+            '--disable-interactivity'
+        )
+    }
+    catch {
+        $sourceError = $_.Exception.Message
+        Write-AgentLog "winget source update failed (non-blocking): $sourceError"
+    }
+
+    $ok = [string]::IsNullOrWhiteSpace($sourceError)
+    $State.steps[$key] = @{
+        status      = if ($ok) { 'ok' } else { 'failed' }
+        updatedAt   = (Get-Date -Format o)
+        command     = 'Repair-WinGetPackageManager + winget source update'
+        repairUsed  = $repairUsed
+        repairError = $repairError
+        sourceError = $sourceError
+    }
+    Save-AgentState -State $State
+    if ($ok) {
+        Write-AgentEvent -Type 'step' -Status 'ok' -Step $key -Message 'Winget repair/source update completed.'
+    }
+    else {
+        Write-AgentEvent -Type 'step' -Status 'failed' -Step $key -Message "Winget source update failed: $sourceError" -Data @{
+            error = $sourceError
+        }
+    }
+}
+
 function Invoke-WinMintAgentWingetBootstrapUpgrades {
     param([Parameter(Mandatory)][hashtable]$State)
+
+    Invoke-WinMintAgentWingetRepairAndSourceUpdate -State $State
 
     $winget = Wait-WingetPath
     if (-not $winget) { throw 'winget.exe not available after wait.' }
@@ -250,24 +335,28 @@ function Invoke-WinMintAgentWingetBootstrapUpgrades {
             continue
         }
 
-        $command = "winget upgrade --id $packageId"
+        $machineScope = Test-WinMintAgentWingetUsesMachineScope -PackageId $packageId
+        $command = if ($machineScope) { "winget upgrade --id $packageId --scope machine" } else { "winget upgrade --id $packageId" }
         $State.steps[$key] = @{
             status = 'running'
             startedAt = (Get-Date -Format o)
             updatedAt = (Get-Date -Format o)
             command = $command
             packageId = $packageId
+            machineScope = $machineScope
         }
         Save-AgentState -State $State
         Write-AgentEvent -Type 'step' -Status 'running' -Step $key -Message "Running $command."
 
         try {
-            Invoke-AgentNative -FilePath $winget -ArgumentList @(Get-WinMintAgentWingetUpgradeArgumentList -Tail @('--id', $packageId))
+            $tail = @('--id', $packageId)
+            Invoke-AgentNative -FilePath $winget -ArgumentList @(Get-WinMintAgentWingetUpgradeArgumentList -Tail $tail -MachineScope:$machineScope)
             $State.steps[$key] = @{
                 status = 'ok'
                 updatedAt = (Get-Date -Format o)
                 command = $command
                 packageId = $packageId
+                machineScope = $machineScope
             }
             Save-AgentState -State $State
             Write-AgentEvent -Type 'step' -Status 'ok' -Step $key -Message "$command completed."
@@ -279,6 +368,7 @@ function Invoke-WinMintAgentWingetBootstrapUpgrades {
                     updatedAt = (Get-Date -Format o)
                     command = $command
                     packageId = $packageId
+                    machineScope = $machineScope
                     reason = 'already-current'
                 }
                 Save-AgentState -State $State
@@ -291,6 +381,7 @@ function Invoke-WinMintAgentWingetBootstrapUpgrades {
                 updatedAt = (Get-Date -Format o)
                 command = $command
                 packageId = $packageId
+                machineScope = $machineScope
                 error = $_.Exception.Message
             }
             Save-AgentState -State $State
@@ -341,29 +432,29 @@ function Invoke-WinMintAgentWingetCatchUpAll {
     catch {
         $errorText = [string]$_.Exception.Message
         $partial = Test-WinMintAgentWingetPartialUpgradeFailure -ErrorText $errorText
+        $warning = if ($partial) {
+            'Incomplete: winget upgrade --all reported UPDATE_ALL_HAS_FAILURE (0x8A15002C); some packages failed. Not clean success — retry later or reboot if WebView2/App Installer remain outdated.'
+        }
+        else { $null }
+        # Partial bulk failure is incomplete/failed, never silent ok.
         $State.steps[$key] = @{
-            status = if ($partial) { 'ok' } else { 'failed' }
+            status = 'failed'
             updatedAt = (Get-Date -Format o)
             command = $command
             phase = 'post-main'
             partialFailure = $partial
-            error = if ($partial) { $null } else { $errorText }
-            warning = if ($partial) { 'Some packages failed during winget upgrade --all (0x8A15002C); retry later or reboot if WebView2 remains outdated.' } else { $null }
+            incomplete = $partial
+            error = $errorText
+            warning = $warning
         }
         Save-AgentState -State $State
-        if ($partial) {
-            Write-AgentEvent -Type 'step' -Status 'ok' -Step $key -Message 'winget upgrade --all completed with partial package failures.' -Data @{
-                partialFailure = $true
-                warning = $State.steps[$key].warning
-            }
-            Write-AgentLog "winget upgrade --all partial failure (non-blocking): $errorText"
+        Write-AgentEvent -Type 'step' -Status 'failed' -Step $key -Message $(if ($partial) { 'winget upgrade --all incomplete (partial package failures).' } else { "winget upgrade --all failed: $errorText" }) -Data @{
+            error = $errorText
+            partialFailure = $partial
+            incomplete = $partial
+            warning = $warning
         }
-        else {
-            Write-AgentEvent -Type 'step' -Status 'failed' -Step $key -Message "winget upgrade --all failed: $errorText" -Data @{
-                error = $errorText
-            }
-            Write-AgentLog "winget upgrade --all failed (non-blocking): $errorText"
-        }
+        Write-AgentLog $(if ($partial) { "winget upgrade --all incomplete (non-blocking): $errorText" } else { "winget upgrade --all failed (non-blocking): $errorText" })
     }
 }
 

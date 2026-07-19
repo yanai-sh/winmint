@@ -30,16 +30,44 @@ foreach ($expectedInline in @('first-logon-runonce', 'inline-secret-cleanup')) {
     }
 }
 
-# Historical bug: Import ran `. $modulePath` inside a helper function, so Invoke-Sc*
-# landed in that function's local scope and vanished before the action loop.
-Remove-Item function:Invoke-ScEdgeRemoval -ErrorAction SilentlyContinue
-Remove-Item function:Invoke-ScTimeSync -ErrorAction SilentlyContinue
+# Historical bug: Import ran `. $modulePath` inside a helper function, so module
+# functions landed in that function's local scope and vanished before the action loop.
+# Promoting only Invoke-Sc* still stranded helpers (Resolve-ScPowerPlanActivation).
+foreach ($name in @(
+        'Invoke-ScTimeSync',
+        'Invoke-ScPowerProfile',
+        'Invoke-ScAutoLogonStamp',
+        'Resolve-ScPowerPlanActivation',
+        'Get-ScPowerPlanCatalog',
+        'Resolve-ScWingetExePath'
+    )) {
+    Remove-Item -LiteralPath "Function:$name" -ErrorAction SilentlyContinue
+}
 Import-WinMintSetupActionModules -PayloadRoot $setupRoot
-if (-not (Get-Command Invoke-ScEdgeRemoval -ErrorAction SilentlyContinue)) {
-    Add-ScDispatchFailure 'Import-WinMintSetupActionModules must expose Invoke-ScEdgeRemoval after return (script scope, not function-local).'
+if (Get-Command Invoke-ScEdgeRemoval -ErrorAction SilentlyContinue) {
+    Add-ScDispatchFailure 'Invoke-ScEdgeRemoval must not exist; Edge uninstall is not a SetupComplete product path.'
+}
+if (@(Get-WinMintSetupActionCatalog | Where-Object { [string]$_.Id -eq 'edge-removal' }).Count -gt 0) {
+    Add-ScDispatchFailure 'Setup action catalog must not include edge-removal.'
 }
 if (-not (Get-Command Invoke-ScTimeSync -ErrorAction SilentlyContinue)) {
     Add-ScDispatchFailure 'Import-WinMintSetupActionModules must expose Invoke-ScTimeSync after return.'
+}
+if (-not (Get-Command Invoke-ScAutoLogonStamp -ErrorAction SilentlyContinue)) {
+    Add-ScDispatchFailure 'Import-WinMintSetupActionModules must expose Invoke-ScAutoLogonStamp (defaultuser0 Winlogon restamp).'
+}
+if (-not (Get-Command Resolve-ScPowerPlanActivation -ErrorAction SilentlyContinue)) {
+    Add-ScDispatchFailure 'Import-WinMintSetupActionModules must promote helpers (Resolve-ScPowerPlanActivation), not only Invoke-Sc*.'
+}
+if (-not (Get-Command Resolve-ScWingetExePath -ErrorAction SilentlyContinue)) {
+    Add-ScDispatchFailure 'Import-WinMintSetupActionModules must promote Resolve-ScWingetExePath for toolchain installs.'
+}
+if (-not (Get-Command Invoke-ScOobeRehydrationSuppression -ErrorAction SilentlyContinue)) {
+    Add-ScDispatchFailure 'Import-WinMintSetupActionModules must expose Invoke-ScOobeRehydrationSuppression.'
+}
+$autoLogonAction = Get-WinMintSetupActionCatalog | Where-Object { [string]$_.Id -eq 'autologon-stamp' } | Select-Object -First 1
+if (-not $autoLogonAction) {
+    Add-ScDispatchFailure 'Catalog must include autologon-stamp after hyperv-guest-basic-console.'
 }
 
 $dispatchText = Get-Content -LiteralPath (Join-Path $setupRoot 'SetupComplete.ps1') -Raw
