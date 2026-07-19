@@ -306,13 +306,17 @@ function Install-Autounattend {
             $null = $autoLogonEl.AppendChild($enabledEl)
             # Auto sign-in must survive EVERY install reboot until the FirstLogon agent
             # completes (the agent can reboot mid-run). A generous count keeps the
-            # password resident so the first runs do not prompt; FirstLogon.ps1 then
-            # makes autologon persistent and only disables it + wipes the password once
-            # the agent run succeeds.
-            $countEl = $xmlDoc.CreateElement('LogonCount', $xmlNs); $countEl.InnerText = '5'
+            # password resident so the first runs do not prompt; SetupComplete restamps
+            # Winlogon if OOBE left defaultuser0, then FirstLogon.ps1 makes autologon
+            # persistent and only disables it + wipes the password once the agent succeeds.
+            $countEl = $xmlDoc.CreateElement('LogonCount', $xmlNs); $countEl.InnerText = '10'
             $null = $autoLogonEl.AppendChild($countEl)
             $userEl = $xmlDoc.CreateElement('Username', $xmlNs); $userEl.InnerText = $TargetUser
             $null = $autoLogonEl.AppendChild($userEl)
+            if (-not [string]::IsNullOrWhiteSpace($TargetPCName)) {
+                $domainEl = $xmlDoc.CreateElement('Domain', $xmlNs); $domainEl.InnerText = $TargetPCName
+                $null = $autoLogonEl.AppendChild($domainEl)
+            }
             $null = $shellNode.AppendChild($autoLogonEl)
             LogOK "Autologon configured for $TargetUser."
         }
