@@ -140,7 +140,11 @@ if ($SkipBuild) { $childArgs += '-SkipBuild' }
 if ($ForceBuild) { $childArgs += '-ForceBuild' }
 if ($UseCheckpoint) { $childArgs += '-UseCheckpoint' }
 if ($PushOnly) { $childArgs += '-PushOnly' }
+# Always forward SmartBuild so -SmartBuild:$false survives into the worker.
+# Omitting the switch made Invoke default managed runs back to SmartBuild=on,
+# which then ignored -ForceBuild and reused a stale ISO.
 if ($SmartBuild) { $childArgs += '-SmartBuild' }
+else { $childArgs += '-SmartBuild:$false' }
 if ($FullImage) { $childArgs += '-FullImage' }
 if (-not [string]::IsNullOrWhiteSpace($SourceIso)) { $childArgs += @('-SourceIso', $SourceIso) }
 if ($NoObserve) { $childArgs += '-NoObserve' }

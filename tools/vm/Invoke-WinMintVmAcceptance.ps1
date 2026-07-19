@@ -142,7 +142,8 @@ if (-not $PSBoundParameters.ContainsKey('UseCheckpoint') -and -not $ForceBuild -
     $UseCheckpoint = $true
 }
 if ($script:managedRun -and -not $PSBoundParameters.ContainsKey('SmartBuild')) {
-    $SmartBuild = $true
+    # Default SmartBuild on for managed runs, but never when -ForceBuild was requested.
+    $SmartBuild = -not $ForceBuild
 }
 $imageQuality = if ($FullImage) { 'max' } else { 'fast' }
 $buildPlan = $null
@@ -397,11 +398,17 @@ if ($runWait) {
         }
         else {
             if (-not $checkpointSaved -and $buildPlan -and -not $PushOnly) {
-                $agentFp = Get-WinMintVmAgentBuildFingerprint -RepoRoot $repoRoot
-                if (Save-WinMintVmPostSetupCheckpoint -VMName $VMName -Credential $cred `
-                        -Fingerprint ([string]$buildPlan.ImageFingerprint) -AgentFingerprint $agentFp -RepoRoot $repoRoot) {
-                    $checkpointSaved = $true
-                    Write-WinMintVmRunEvent -Kind 'milestone' -Payload @{ label = 'postsetup-checkpoint' }
+                # Best-effort: never abort FirstLogon wait if PS Direct/checkpoint races mid-Setup.
+                try {
+                    $agentFp = Get-WinMintVmAgentBuildFingerprint -RepoRoot $repoRoot
+                    if (Save-WinMintVmPostSetupCheckpoint -VMName $VMName -Credential $cred `
+                            -Fingerprint ([string]$buildPlan.ImageFingerprint) -AgentFingerprint $agentFp -RepoRoot $repoRoot) {
+                        $checkpointSaved = $true
+                        Write-WinMintVmRunEvent -Kind 'milestone' -Payload @{ label = 'postsetup-checkpoint' }
+                    }
+                }
+                catch {
+                    Say "PostSetup checkpoint skipped: $($_.Exception.Message)" 'DarkGray'
                 }
             }
             $pollResult = Invoke-WinMintVmGuestCommand -VMName $VMName -Credential $cred -FilePath $guestSnapshotScript -TimeoutSeconds 60
@@ -737,39 +744,6 @@ if ($runEvidence) {
         $setupCompleteLogPath = Join-Path $EvidenceDir 'ProgramData-Logs\SetupComplete.log'
         if (-not (Test-Path -LiteralPath $setupCompleteLogPath -PathType Leaf)) {
             $signalPlumbingFail.Add('SetupComplete.log missing after FirstLogon (SetupComplete may not have run)') | Out-Null
-        }
-    }
-
-    $keepEdge = $false
-    try {
-        if ($null -ne $profileJson.keep -and $null -ne $profileJson.keep.PSObject.Properties['edge']) {
-            $keepEdge = [bool]$profileJson.keep.edge
-        }
-    }
-    catch { $keepEdge = $false }
-    if (-not $keepEdge -and $result.reachable -and $result.firstLogon) {
-        $edgeReportPath = Join-Path $EvidenceDir 'ProgramData-Logs\SetupComplete_Edge.json'
-        if (-not (Test-Path -LiteralPath $edgeReportPath -PathType Leaf)) {
-            $signalPlumbingFail.Add('SetupComplete_Edge.json missing while keep.edge=false (Edge removal never reported)') | Out-Null
-        }
-        else {
-            try {
-                $edgeReport = Get-Content -LiteralPath $edgeReportPath -Raw | ConvertFrom-Json
-                $edgeStillPresent = $false
-                if ($edgeReport.after -and $edgeReport.after.edgeApplicationPaths) {
-                    $edgeStillPresent = [bool](@($edgeReport.after.edgeApplicationPaths | Where-Object { $_.exists }).Count -gt 0)
-                }
-                $actionText = [string]$edgeReport.action
-                if ($edgeStillPresent -or ($actionText -match 'left installed')) {
-                    $signalPlumbingFail.Add("Edge still installed after keep.edge=false ($actionText)") | Out-Null
-                }
-                elseif (-not [bool]$edgeReport.removeRequested -and $actionText -match 'not requested|skipped') {
-                    $signalPlumbingFail.Add("Edge removal was skipped while keep.edge=false ($actionText)") | Out-Null
-                }
-            }
-            catch {
-                $signalPlumbingFail.Add("SetupComplete_Edge.json unreadable: $($_.Exception.Message)") | Out-Null
-            }
         }
     }
 

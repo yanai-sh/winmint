@@ -1,4 +1,4 @@
-﻿#Requires -Version 7.6
+#Requires -Version 7.6
 # Dot-sourced by WinMint-VmConsole.ps1 — not a standalone entrypoint.
 # Smoke tier: keep polling after agent terminal status until FirstLogon activity is
 # at least this old (~9Ã—5s polls) so setup-shell OOBE evidence is collected.
@@ -16,7 +16,9 @@ function Test-WinMintVmSmokeFirstLogonActivityMinElapsed {
     )
 
     if ($AcceptanceTier -ne 'Smoke') { return $true }
-    if (-not $ActivityStartedAt) { return $false }
+    # Late attach / manual FirstLogon kick: no activity timestamp means we cannot
+    # enforce the splash hold — do not block Inspect forever on a finished run.
+    if (-not $ActivityStartedAt) { return $true }
     return (($Now - $ActivityStartedAt).TotalSeconds -ge (Get-WinMintVmSmokeFirstLogonMinElapsedSeconds))
 }
 
