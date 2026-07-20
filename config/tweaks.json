@@ -13,12 +13,12 @@
     },
     {
       "id": "explorer-qol",
-      "description": "Show file extensions and hidden files, keep File Explorer opening to Home, and hide Gallery.",
+      "description": "Show file extensions and hidden files, keep File Explorer opening to Home, show full path, quiet Quick Access, enable Git FE version-control toggle, and hide Gallery.",
       "scope": "default user registry",
       "risk": "low",
       "reversible": true,
       "phase": "offline-image",
-      "intent": "Make Explorer friendlier by exposing file extensions and hidden files, keeping Home as the launch page, and hiding Gallery on every build.",
+      "intent": "Make Explorer friendlier by exposing file extensions and hidden files, keeping Home as the launch page, showing the full path, quieting Quick Access/cloud tips, enabling the Git version-control Explorer surface, and hiding Gallery on every build.",
       "offline": true,
       "online": true
     },

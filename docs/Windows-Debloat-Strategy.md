@@ -93,7 +93,7 @@ Disposition against WinUtil Essential + Advanced (Caution). “Covered” means 
 | Date & Time - Set Time to UTC | Covered (conditional) | Dual-boot clock policy only |
 | Disable Reserved Storage | Reject | Update/servicing risk |
 | DNS - Set to… | Reject | User/network choice, not image default |
-| File Explorer Home and Gallery - Disable | Covered (partial) | Home kept; Gallery hidden (`explorer-qol`) |
+| File Explorer Home and Gallery - Disable | Covered (partial) | Home kept; Gallery hidden; full path + quiet Quick Access (`explorer-qol`) |
 | Fullscreen Optimizations - Disable | Reject | Gaming folklore as workstation default |
 | IPv6 - Disable / IPv4 preferred | Reject | Tier 0 preserve IPv6 |
 | Microsoft Edge - Debloat | Covered | `edge-policy-minimal`; Edge stays installed |
@@ -165,7 +165,7 @@ These should be part of WinMint Core because they remove noise without compromis
 | OneDrive pressure | Uninstall OneDrive, remove setup binaries/residue, disable personal sync and autostart, hide Explorer integration, and keep known folders local. |
 | Xbox/GameDVR | Remove Xbox packages, disable Game Bar/GameDVR overlays, and no-op Game Bar protocols to avoid Store prompts after removal. |
 | Developer package managers | Keep winget/msstore for GUI/system apps and install Scoop as the user-local owner for developer CLI tools. MinGit is installed through Scoop as baseline Windows-host Git plumbing; Coreutils for Windows (`Microsoft.Coreutils`) is installed through winget as baseline native UNIX-style host CLI; Starship is installed through Scoop with the `nerd-font-symbols` preset; selected Neovim is Scoop-owned. ARM64 builds prefer native ARM64/aarch64 package assets where package-manager metadata supports them; amd64 builds use default package-manager architecture selection. |
-| Explorer/dev QoL | Show file extensions, show hidden files, keep Explorer Home as the launch page, hide Gallery, enable long paths (`longpaths-policy`), enable End Task on the taskbar right-click menu (`taskbar-endtask`, always on), hide noisy taskbar/tray affordances, keep local clipboard history on with cloud upload off, and set sane context/menu defaults. |
+| Explorer/dev QoL | Show file extensions, show hidden files, keep Explorer Home as the launch page, show full path in the title bar, quiet Quick Access (frequent/recent/cloud) and sync-provider tips, enable File Explorer Git version-control toggle (`NavPaneShowVersionControl`; user still registers repo folders in Settings), hide Gallery, enable long paths (`longpaths-policy`), enable End Task on the taskbar right-click menu (`taskbar-endtask`, always on), hide noisy taskbar/tray affordances, keep local clipboard history on with cloud upload off, and set sane context/menu defaults. |
 | Setup privacy | Keep `ProtectYourPC=3`. Fully unattended local-account installs hide OOBE network/account friction and use the profile computer name directly; Microsoft OOBE account installs leave the normal network/account pages visible. |
 | OEM payloads | Disable WPBT, Razer-style auto-installers, driver companion co-installers, network device-metadata / companion-app prompts (`PreventDeviceMetadataFromNetwork`), and known vendor app injection paths where policy exists. Windows Update driver delivery remains enabled. |
 | Setup cleanup | Remove copied unattend credentials and setup residue after install. |

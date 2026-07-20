@@ -12,7 +12,7 @@ Add-WinMintRegistryTweakModule @{
     intent = 'Always expose End Task on the taskbar right-click menu on every build, matching developer/power-user expectations.'
     appliesTo = { param($ctx) $true }
     set = @(
-        @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\TaskbarDeveloperSettings'; name = 'TaskbarEndTask'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } }
+        @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings'; name = 'TaskbarEndTask'; type = 'REG_DWORD'; value = '1'; undo = @{ action = 'delete' } }
     )
     remove = @()
 }

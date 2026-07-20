@@ -3365,6 +3365,12 @@ function Assert-RegistryTweakMetadataAndRollback {
                 @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'HideFileExt'; value = '0' },
                 @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'Hidden'; value = '1' },
                 @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'LaunchTo'; value = '2' },
+                @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'FullPathAddress'; value = '1' },
+                @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'ShowFrequent'; value = '0' },
+                @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'ShowSyncProviderNotifications'; value = '0' },
+                @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; name = 'NavPaneShowVersionControl'; value = '1' },
+                @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer'; name = 'ShowRecent'; value = '0' },
+                @{ path = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer'; name = 'ShowCloudFilesInQuickAccess'; value = '0' },
                 @{ path = 'zNTUSER\Software\Classes\CLSID\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}'; name = 'System.IsPinnedToNameSpaceTree'; value = '0' }
             )) {
             $match = @($explorer.set | Where-Object {
@@ -3378,6 +3384,27 @@ function Assert-RegistryTweakMetadataAndRollback {
         }
         if (@($explorer.set | Where-Object { [string]$_.path -like '*{f874310e-b6b7-47dc-bc84-b9e6b38f5903}*' }).Count -gt 0) {
             Add-SmokeFailure 'Explorer QoL tweak must not hide Home from the navigation pane.'
+        }
+    }
+
+    $taskbarEndTask = $script:RegistryTweaks | Where-Object id -eq 'taskbar-endtask' | Select-Object -First 1
+    if (-not $taskbarEndTask) {
+        Add-SmokeFailure 'Expected taskbar-endtask registry tweak to exist.'
+    }
+    else {
+        $endTaskPath = 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings'
+        $match = @($taskbarEndTask.set | Where-Object {
+                [string]$_.path -eq $endTaskPath -and
+                [string]$_.name -eq 'TaskbarEndTask' -and
+                [string]$_.value -eq '1'
+            })
+        if ($match.Count -eq 0) {
+            Add-SmokeFailure 'taskbar-endtask must stamp TaskbarEndTask=1 under Explorer\Advanced\TaskbarDeveloperSettings.'
+        }
+        if (@($taskbarEndTask.set | Where-Object {
+                    [string]$_.path -eq 'zNTUSER\Software\Microsoft\Windows\CurrentVersion\TaskbarDeveloperSettings'
+                }).Count -gt 0) {
+            Add-SmokeFailure 'taskbar-endtask must not use the stale CurrentVersion\TaskbarDeveloperSettings path.'
         }
     }
 
@@ -3439,6 +3466,12 @@ function Assert-SetupRegistryStampsAreIdempotent {
         if ($defaultUserText -notlike "*$expected*") {
             Add-SmokeFailure "DefaultUser.ps1 should idempotently stamp '$expected'."
         }
+    }
+    if ($defaultUserText -notmatch 'LaunchTo\s+-Type\s+REG_DWORD\s+-Data\s+2') {
+        Add-SmokeFailure 'DefaultUser.ps1 LaunchTo must be Home (Data 2), matching offline explorer-qol.'
+    }
+    if ($defaultUserText -match 'LaunchTo\s+-Type\s+REG_DWORD\s+-Data\s+1') {
+        Add-SmokeFailure 'DefaultUser.ps1 must not stamp LaunchTo=1 (This PC); Home (2) is the product default.'
     }
 
     foreach ($expected in @(

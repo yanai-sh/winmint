@@ -247,8 +247,8 @@ $scripts = @(
     # Explorer: disable date-grouping (Today/Yesterday/Last week).
     { Set-DefaultUserRegistryValue -Path 'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name GroupByDateModified -Type REG_DWORD -Data 0 }
 
-    # Explorer: open Win+E/File Explorer to This PC instead of Home.
-    { Set-DefaultUserRegistryValue -Path 'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name LaunchTo -Type REG_DWORD -Data 1 }
+    # Explorer: open Win+E/File Explorer to Home (matches offline explorer-qol LaunchTo=2).
+    { Set-DefaultUserRegistryValue -Path 'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name LaunchTo -Type REG_DWORD -Data 2 }
 
     # Search: disable search highlights (news/seasonal images in search).
     { Set-DefaultUserRegistryValue -Path 'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\SearchSettings' -Name IsDynamicSearchBoxEnabled -Type REG_DWORD -Data 0 }
