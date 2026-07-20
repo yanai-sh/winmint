@@ -28,12 +28,20 @@ _Avoid_: engine scripts, InstallPlan (v1 staged-profile dump)
 The live-user setup phase after Windows is installed, including provisioning lock, visible-region restore when DMA was used, splash, and agent work.
 _Avoid_: OOBE (unless meaning Microsoft’s own OOBE pages)
 
+**Provisioning lock**:
+Default FirstLogon posture that holds the desktop under a native splash + input guard while pre-agent and agent work runs. Control phases include terminal `complete` / `failed` / `reboot`. Reboot-required work is scheduled **under** the lock.
+_Avoid_: releasing the lock then hoping autologon recovers; treating the splash as optional decoration when lock mode is engaged
+
+**Splash status**:
+JSON the Native AOT presenter reads (clean-sheet schema in v2). Carries OOBE-style stages, current-item detail, and accessibility-aware paint cues — not package-manager names or a step checklist.
+_Avoid_: InstallPlan module catalog as the status surface; Avalonia on the ISO for Smoke
+
 **DMA interop**:
 Default-on setup posture that uses a fixed internal region (Ireland / en-IE) during Windows Setup, then restores the user’s visible region at FirstLogon before further live-user work.
 _Avoid_: EEA country picker, “EU mode” as a user-facing control
 
 **Smoke**:
-The first acceptance vertical: Profile → ISO → unattended Hyper-V install → FirstLogon complete with splash and DMA restore evidence. Plumbing-focused; not full desktop-product parity. Uses the **test image-quality lane** (fast export; skip component cleanup).
+The first acceptance vertical: Profile → ISO → unattended Hyper-V install → FirstLogon complete with splash and DMA restore evidence. Plumbing-focused; not full desktop-product parity. Uses the **test image-quality lane** (fast export; skip component cleanup). Requires Autologon stamp correctness when Local+autoLogon is selected.
 _Avoid_: full install gate, hardware acceptance (those are later verticals)
 
 **Image quality**:

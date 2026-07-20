@@ -24,12 +24,19 @@ The project now has:
 - a headless engine that owns profile normalization, install-plan derivation, ISO/WIM servicing, setup payload staging, FirstLogon orchestration, reporting, and audit generation
 - a WebView2 wizard frontend that can create intent, generate profiles, invoke builds, and render backend-generated review data
 - a stronger contract and validation spine around setup payloads, FirstLogon, profile invariants, bootstrap behavior, and release boundaries
-- a native fullscreen **setup shell** (`WinMintSetupShell.exe`) for default FirstLogon presentation, with JSON IPC, desktop guard, and VM smoke evidence gates
+- a native fullscreen **setup shell** (`WinMintSetupShell.exe`) for default FirstLogon presentation, with JSON IPC, desktop guard, OOBE stage/item progress, accessibility (reduced motion / high contrast / Narrator), and VM smoke evidence gates
+- **SetupComplete Autologon** stamp-before-toolchain (and final restamp) so Local+autoLogon never leaves `defaultuser0` for first interactive logon
+- `needsReboot` scheduled under the provisioning lock; presenter/host surfaced in VM acceptance plumbing
+- Edge stays installed (`keep.edge` always true) with noise/ADMX debloat only — no uninstall product path
+- baseline Microsoft Coreutils host CLI; managed WSL `wsl.conf` + default user per distro; Raycast/Everything product paths purged
+- dual-channel Spectre One Half Dark build logging + verbose file mirror; WinUtil-inspired Max-cache resume / PE drivers / tweak undo lessons
+- network device-metadata prompts blocked by default (`PreventDeviceMetadataFromNetwork`) with WU driver delivery preserved
 - global offline removal of legacy Windows Media Player and Extended Wallpapers capabilities, plus a smoke **removal drift** gate for AppX/capability regressions
 - an ephemeral default bootstrap path: `irm | iex` downloads and verifies a release in a unique temp session, launches from that session, and removes it afterward instead of installing into `%LOCALAPPDATA%\WinMint\versions`
 - bootstrap failure handling that reports the active operation, failure category, reason, recovery guidance, and retry safety instead of surfacing only raw PowerShell errors
 - a release readiness contract in `config/release-readiness.json`, with `docs/Release-Readiness.md` and validation checks keeping the public launch path, host requirements, and release gates aligned
 - a hardware acceptance inventory in `config/hardware-acceptance.json`, with Surface Laptop 7 ARM64 first, tracked amd64 follow-up targets, profile links, driver requirements, destructive-install flags, and required evidence
+- Hyper-V **SL7 smoke** profiles alongside lean plumbing smoke; WSL runtime mocked on smoke profiles
 
 The main project risk has shifted.
 
@@ -123,7 +130,7 @@ Exit criteria:
 
 Goal: strengthen live-user setup as a product surface rather than a best-effort script chain.
 
-Status: setup-shell OOBE path hardened (2026-06-30) — terminal-phase exit (including `reboot`), D2D paint fallback, honest status labels, deferred explorer reload after splash, native `NoWinKeys` cleanup, display-metric resize, and Start-menu dismiss on desktop reveal. VM smoke re-run required to sign off splash plumbing.
+Status (2026-07): Autologon stamp-before-toolchain + final restamp; OOBE splash stages with item-level progress and accessibility; `needsReboot` under lock; presenter/host acceptance plumbing; Track A/B polish must items shipped (pins under lock, winget catch-up honesty, DMA restore completeness, OOBE rehydration / live AppX exempts, Home quiet UX, Edge ADMX refresh). Remaining: keep smoke green and fold durability regressions into contract tests.
 
 Work:
 
@@ -131,7 +138,7 @@ Work:
 - improve optional-module isolation and diagnostics
 - refine retryable and reboot-requiring flows
 - ensure module success means real end-state success, not only command completion
-- confirm setup-shell splash plumbing on managed smoke (`setupShell.plumbingOk`, `control.phase=complete`)
+- keep setup-shell splash plumbing green on managed smoke (`setupShell.plumbingOk`, `control.phase=complete`)
 
 Exit criteria:
 
@@ -157,6 +164,8 @@ Exit criteria:
 ### Phase C3 — Launcher and Desktop Integration
 
 Goal: finish the user-facing experience around Search key binding, tray behavior, and shell coexistence.
+
+Status: third-party launcher product paths (Raycast / Everything) purged in v1 — launcher selection stays `None`; Copilot hardware key → Search.
 
 Work:
 
@@ -250,55 +259,55 @@ Exit criteria:
 
 - VM acceptance outcomes are systematic, not mostly manual interpretation
 
-## Track E — Avalonia UI Wizard & Splash Development
+## Track E — Avalonia Wizard (late; not early after Smoke)
 
-### Phase E1 — Native GUI Foundation
+Avalonia is **not** in v1 and is **not** the next v2 vertical after Smoke. CLI stays the authoring surface. Track E is backlog until product depth and Payload maturity warrant a GUI. ISO splash stays **Native AOT** (`WinMint.Splash`) — never Avalonia on the ISO.
 
-Goal: Establish the base UI framework and style engine for the unified Avalonia desktop application.
+### Phase E1 — Avalonia wizard foundation
 
-Work:
-- Define the main window shell, responsive layouts, navigation routing, and view switcher.
-- Implement the design system (modern dark mode, smooth gradients, and micro-animations) to ensure a premium look and feel.
-- Set up Native AOT compilation targets in the project file and verify compilation footprint.
-
-Exit criteria:
-- The base Avalonia shell compiles cleanly and launches with responsive styling and transitions.
-
-### Phase E2 — Interactive Wizard View
-
-Goal: Complete the profile-authoring view to let developers build profiles visually.
+Goal: profile-authoring UI against Orchestrator ports once Smoke is green.
 
 Work:
-- Implement the Configure screen mapping to all `BuildProfile.json` schema options.
-- Implement the Review screen to render strongly-typed `BuildDelta` change logs.
-- Bind control elements directly to the C# Core Engine's profile authoring models.
+- Main window shell, navigation, design system
+- Native AOT publish targets for the wizard host (separate from splash)
 
 Exit criteria:
-- A complete profile can be configured, reviewed, and saved to disk via the Avalonia interface.
+- Wizard shell launches and talks to Orchestrator ports without owning Servicing
 
-### Phase E3 — FirstLogon Splash View
+### Phase E2 — Interactive wizard view
 
-Goal: Complete the offline progress splash and desktop guard view for the installed ISO environment.
+Goal: author and review a Profile visually.
 
 Work:
-- Implement the fullscreen, borderless `--splash` view designed to read status updates from `setup-shell-status.json`.
-- Integrate the Win32 hooks (`NoWinKeys`, taskbar hiding, and system shortcuts block) directly into the Avalonia shell wrapper.
-- Optimize the fallback graphics path to ensure rendering reliability when Windows graphics drivers are not yet loaded.
+- Configure screen mapped to clean-sheet Profile schema
+- Review screen for build report / delta evidence
+- Save Profile and invoke CLI/Orchestrator build
 
 Exit criteria:
-- The splash view launches fullscreen under lock, blocks system keyboard inputs, and renders progress updates smoothly.
+- A complete Profile can be configured, reviewed, and saved without WebView2
 
-### Phase E4 — Unified Build Execution UX
+### Phase E3 — Splash remains Native AOT
 
-Goal: Deliver a clean progress presentation and elevation experience during long-running builds.
+Goal: keep ISO splash on the Direct2D/GDI host reading status JSON under the provisioning lock.
 
 Work:
-- Implement progress bars and status logs that hook into the in-process PowerShell runspace stream.
-- Handle UAC elevation and relaunch prompting gracefully.
-- Provide clear error screens that surface DISM or registry exceptions with recovery guides.
+- Port splash status model from v1 (stages, a11y, reboot terminal) into `WinMint.Splash`
+- Do **not** move splash into Avalonia for Smoke or the default product path
 
 Exit criteria:
-- Users can run, monitor, and troubleshoot builds cleanly within the app.
+- Splash launches fullscreen under lock and renders status updates; Avalonia is not on the ISO
+
+### Phase E4 — Build execution UX (wizard client)
+
+Goal: clean progress presentation while the unelevated CLI/Orchestrator drives elevated Servicing.
+
+Work:
+- Progress/status from Orchestrator job/report streams (not an in-process DISM runspace)
+- UAC elevation prompting for Servicing only
+- Error screens with recovery guidance
+
+Exit criteria:
+- Users can run, monitor, and troubleshoot builds from the wizard without the wizard mounting WIMs
 
 
 ## Track F — Reporting and Audit Polish
@@ -414,7 +423,7 @@ Goal: Unelevated CLI drives elevated thin `servicing/*.ps1`; stage Payload; Nati
 
 Work:
 - Implement Servicing kernels (mount/stage/hive/export) with quality-lane export/cleanup behaviour harvested from v1
-- Hybrid Payload: DMA restore, lock, thin transaction, Common, splash status schema
+- Hybrid Payload: DMA restore, Autologon stamp-before-toolchain, lock, thin transaction, Common, splash status schema (stages + a11y)
 - Smoke harness: fingerprint/SmartBuild-style ISO reuse, checkpoint, push-only FirstLogon iteration (`tools/vm`)
 
 Exit criteria:

@@ -31,9 +31,11 @@ Unelevated C# owns Profile validation, planning, unattend/job JSON, and the publ
 - **C# CLI only** — tiny download bootstrap script OK; no second product CLI in pwsh.
 - **DMA default-on** for Smoke — Ireland/`en-IE` during Setup; FirstLogon restores visible region before further live-user work ([ADR-003](docs/decisions/ADR-003-dma-interop.md)).
 - **Local accounts require a password** for unattended Smoke.
+- **SetupComplete Autologon** — stamp profile account **before** long network/toolchain work; never leave `defaultuser0` + AutoAdminLogon for first interactive logon ([ARCHITECTURE.md](docs/ARCHITECTURE.md#smoke-autologon-invariant)).
+- **Splash under lock** — Native AOT presenter; OOBE stages + item progress + a11y; `needsReboot` stays under the provisioning lock ([ARCHITECTURE.md](docs/ARCHITECTURE.md#splash-status-model)).
 - **No maintenance payload** on the installed system (no leftover tasks/services/scripts).
 - **Hyper-V Smoke SKU = Pro** (Enhanced Session); product default SKU may stay Home later.
-- **Out of Smoke:** Avalonia wizard, debloat/keep matrix, BitLocker policy, physical hardware acceptance.
+- **Out of Smoke / not early:** Avalonia wizard (not in v1; not next after Smoke — CLI stays the authoring surface), debloat/keep matrix, BitLocker policy, physical hardware acceptance. Post-Smoke harvest (Edge stays, Coreutils, WSL conf, Home quiet UX): [PORT-FROM-V1.md](docs/PORT-FROM-V1.md).
 - **Image quality lanes** — test/Smoke = fast export (skip component cleanup); release = Max + cleanup. Run override, not Profile. Record what ran in the build report. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#image-quality-run-override-not-profile).
 
 ## Delivery workflow

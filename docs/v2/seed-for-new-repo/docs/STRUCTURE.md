@@ -61,7 +61,7 @@ winmint-v2/
 
 **Smoke tickets fill in:** Orchestrator plan/unattend, real servicing kernels, FirstLogon payload, splash host, schemas, VM harness.
 
-**Shelved in companion `future-assets/` zip** (or v1 `docs/v2/future-assets/`): wizard pickers, shell presets, WebView2 reference HTML.
+**Shelved in companion `future-assets/` zip** (or v1 `docs/v2/future-assets/`): shell presets (post-Smoke layers); picker icons as **placeholders only** (Avalonia not early); WebView2 reference HTML.
 
 ## Anti-patterns
 

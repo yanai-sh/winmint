@@ -7,7 +7,7 @@ This file lives in the **v1** repo only (`docs/v2/`). It is **not** part of the 
 | Zip | Role |
 |-----|------|
 | `dist/winmint-v2-seed-*.zip` | **Commit 1** — extract contents as the new repo root |
-| `dist/winmint-v2-future-assets-*.zip` | Deferred shelf — keep outside the new repo until wizard/shell verticals |
+| `dist/winmint-v2-future-assets-*.zip` | Deferred shelf — keep outside the new repo; shell presets when layers land; `ui/` pickers are placeholders only (Avalonia is not early) |
 
 WinMint **v1** stays a separate folder/repo for behaviour reference ([seed `PORT-FROM-V1.md`](seed-for-new-repo/docs/PORT-FROM-V1.md)).
 
@@ -33,4 +33,4 @@ git push -u origin main
 
 Solution scaffold (`WinMint.slnx`, `src/`, `tests/`), docs/ADRs, `assets/brand/`, `payload/media/`, servicing stubs, Justfile, CI, LICENSE — see [`seed-for-new-repo/docs/START.md`](seed-for-new-repo/docs/START.md) and [`STRUCTURE.md`](seed-for-new-repo/docs/STRUCTURE.md).
 
-Deferred WSL/editor/desktop icons and shell presets: [`future-assets/`](future-assets/).
+Deferred shelf: [`future-assets/`](future-assets/) — shell presets for post-Smoke layers; WSL/editor/desktop icons are **placeholders** only (Avalonia is not early v2 work).

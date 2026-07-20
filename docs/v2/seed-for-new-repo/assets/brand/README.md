@@ -23,4 +23,4 @@ Root README hero (paths from **repo root**):
 </picture>
 ```
 
-Wizard picker icons live in the companion `future-assets/ui/` shelf until Avalonia ships — not in this seed.
+Picker icons (if any) are placeholders under `future-assets/ui/` — not in this seed; Avalonia is not early v2 work.

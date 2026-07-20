@@ -6,4 +6,4 @@ Day-one shared brand art only. Not ISO media (see `payload/media/`). Not Avaloni
 |--------|------|
 | [`brand/`](brand/README.md) | Marks, lockups, splash rasters, app icon |
 
-Wizard UI pickers (WSL / editors / desktop) are shelved in the v1 tree at `docs/v2/future-assets/ui/` until those features land.
+Picker icons (WSL / editors / desktop) sit as placeholders under `docs/v2/future-assets/ui/` — Avalonia is not early v2 work; ignore until an authoring UI is scheduled.

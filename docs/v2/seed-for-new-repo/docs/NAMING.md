@@ -58,7 +58,7 @@ payload/
   payload-manifest.json
 ```
 
-Wizard pickers and shell presets are **not** in the day-one seed; they are shelved in the v1 tree at `docs/v2/future-assets/`.
+Shell presets and placeholder picker icons are **not** in the day-one seed; see v1 `docs/v2/future-assets/`. Avalonia / pickers are not early v2 work.
 
 ## Why this and not “all PascalCase”
 

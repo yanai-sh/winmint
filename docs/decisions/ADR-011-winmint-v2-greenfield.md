@@ -20,7 +20,7 @@ v1 works but is constrained by PowerShell monolith orchestration, WebView2 wizar
 6. **Dual hosts:** Avalonia wizard (later vertical) + separate **Native AOT** splash (Direct2D/GDI-class); not Avalonia splash for smoke.
 7. **First vertical = Smoke:** Profile → ISO → Hyper-V unattend install → FirstLogon complete with splash + **DMA** restore evidence; plumbing only (no debloat/keep matrix, no BitLocker policy); password-required local account; Hyper-V smoke SKU = **Pro** (product default SKU may remain Home later).
 8. **CLI-first Smoke** — Avalonia wizard after the ISO→FirstLogon path is green.
-9. **Hybrid Payload:** port-and-reshape DMA restore, provisioning lock, thin transaction, Common, splash host model; clean-sheet staged contracts + thin agent stub; drop InstallPlan module catalog / SetupComplete debloat matrix from the smoke path.
+9. **Hybrid Payload:** port-and-reshape DMA restore, provisioning lock, thin transaction, Common, splash host model (OOBE stages / a11y / Autologon stamp-before-toolchain); clean-sheet staged contracts + thin agent stub; drop InstallPlan module catalog / SetupComplete debloat matrix from the smoke path.
 10. **Image quality lanes** (carry forward v1 semantics): test/Smoke builds optimize for speed (soft/no WIM recompress, skip `StartComponentCleanup`); release builds optimize for smaller ISO (`Max` + cleanup). Run override, not Profile. Manifest/report must record what ran. ISO fingerprint cache, checkpoint, and push-only remain VM harness concerns.
 
 ### Consequences

@@ -18,4 +18,4 @@ payload/{common,setup,agent,splash}/
 src/WinMint.{Orchestrator,Cli,Splash}/   # scaffold in seed; Smoke fills behaviour
 ```
 
-Deferred pickers / shell presets stay on the v1 shelf at `docs/v2/future-assets/` (not copied into the new repo on day one). That shelf uses modernized names (`ui/desktop/windhawk.*`, `zed.svg`); it is not a forever-v1 name freeze.
+Deferred shelf: `docs/v2/future-assets/` (not day-one). Shell presets when layers land; `ui/` pickers are placeholders only (Avalonia not early).

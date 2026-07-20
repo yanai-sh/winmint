@@ -14,7 +14,7 @@ WinMint **v1** is a separate clone/folder for reference only. It is **not** requ
 
 ## Companion shelf (not commit 1)
 
-If you also have `winmint-v2-future-assets-*.zip`, keep it **outside** this repo (e.g. sibling `../future-assets/`) until Avalonia wizard / shell verticals need it. See that zip’s `README.md`. Do not merge it into the initial commit.
+If you also have `winmint-v2-future-assets-*.zip`, keep it **outside** this repo (e.g. sibling `../future-assets/`). Shell presets matter when desktop layers land; `ui/` picker icons are placeholders only — Avalonia is not early v2 work. See that zip’s `README.md`. Do not merge it into the initial commit.
 
 ## Host prerequisites
 

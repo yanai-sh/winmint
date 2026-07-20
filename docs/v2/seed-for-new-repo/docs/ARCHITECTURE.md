@@ -59,6 +59,33 @@ Native AOT splash (ISO)          →  status JSON + provisioning lock (not Avalo
 - User always supplies official Microsoft **Source ISO** ([ADR-001](decisions/ADR-001-source-iso-legal.md))
 - Smoke / test ISO builds use the **fast image-quality lane** (below); do not pay for release compression during iteration
 
+### Smoke Autologon invariant
+
+Proven hard failure in v1: if SetupComplete leaves Winlogon as `DefaultUserName=defaultuser0` with `AutoAdminLogon`, FirstLogonAnim hangs on “Just a moment” and Payload never starts.
+
+For Local + autoLogon Smoke:
+
+1. Stamp Winlogon to the **profile account** before any unbounded/long SetupComplete network install (toolchain / winget).
+2. Keep a **final restamp** before secret cleanup.
+3. Fail closed (verify + throw) when Local+autoLogon is selected; still wipe secrets after action errors.
+
+Harvest: v1 `SetupComplete.ps1` (`autologon-stamp` before `toolchain-install`). See [PORT-FROM-V1.md](PORT-FROM-V1.md).
+
+### Splash status model
+
+Splash stays **Native AOT** (not Avalonia). Port the v1 presenter *behaviour*, not the WebView2 wizard or InstallPlan module catalog:
+
+| Concern | Carry forward |
+|---------|----------------|
+| Host | Direct2D with GDI fallback; PreLock adopt-if-running |
+| Control phases | `running` → `finishing` → `complete` / `failed` / `reboot` |
+| Status JSON | OOBE-style stages (`stageId` / `taskLabel`: ready → apps → wsl → finish), `detailLabel` + `itemIndex`/`itemTotal`, stage-weighted progress, `progressMode` indeterminate for ready/finish and long items |
+| Paint | Main / detail / `i of n` / thin bar — no `%`, no package-manager names, no step checklist |
+| Accessibility | Reduced motion (`SPI_GETCLIENTAREAANIMATION`), high-contrast flat canvas, Narrator via window title + `EVENT_OBJECT_NAMECHANGE` |
+| Reboot | `needsReboot` / `reboot` terminal phase **under** the provisioning lock — do not release the lock then reboot blindly |
+
+Clean-sheet JSON schema in v2; use v1 `WinMintSetupShell.Status.ps1` + `apps/setup-shell/` as behaviour reference only.
+
 ## Image quality (run override, not Profile)
 
 ISO wall-clock is dominated by DISM + WIM export. Orchestrator language does not change that. Keep **two lanes** (same idea as v1 `-Compression` / `-FastImage`):
@@ -74,14 +101,27 @@ ISO wall-clock is dominated by DISM + WIM export. Orchestrator language does not
 
 ## Payload strategy: hybrid
 
-**Port-and-reshape** from v1: DMA restore, provisioning lock, thin transaction, Common, splash host model.
+**Port-and-reshape** from v1: DMA restore, provisioning lock, thin transaction, Common, splash host model (stages + a11y + Autologon stamp).
 
 **Clean-sheet:** staged JSON contracts, thin agent stub, small status schema.
 
 **Do not** wrap v1 `WinMint.ps1` as the elevated subprocess.
+
+## Post-Smoke product stances (harvest, not Smoke scope)
+
+When product depth lands after Smoke, carry these v1 decisions forward unless an ADR revises them:
+
+- **Edge stays installed** — noise/ADMX debloat only; no uninstall automation or keep/remove Edge UI.
+- **Home-first quiet UX** — collapse tips/rehydration paths; DMA restore-first remains.
+- **Baseline host CLI** includes Microsoft Coreutils; WSL uses managed `wsl.conf` + default user per distro when distros are selected.
+- **No Raycast / Everything** product paths.
+- **Network device-metadata prompts blocked** offline (`PreventDeviceMetadataFromNetwork`); Windows Update driver delivery preserved.
+
+Full path map: [PORT-FROM-V1.md](PORT-FROM-V1.md).
 
 ## Stack
 
 - `net11.0` + SDK pin (`global.json`)
 - Avalonia **12.1.x** for wizard later; splash stays native AOT (non-Avalonia)
 - Source-gen JSON; `LibraryImport` for Win32; `PublishAot` on exes only
+- Elevated Servicing / Payload scripts: **pwsh 7.6+** (v1 floor)
