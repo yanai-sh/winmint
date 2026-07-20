@@ -168,8 +168,10 @@ if ($failures.Count -eq 0) {
     Assert-Text $reviewConsole 'WSL distros' 'Build summary must surface the selected WSL distros.'
 
     Assert-Text (Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw) '(?s)"displayName"\s*:\s*"MinGit".*"source"\s*:\s*"scoop"' 'MinGit must be Scoop-owned.'
+    Assert-Text (Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw) '(?s)"displayName"\s*:\s*"Coreutils".*"source"\s*:\s*"winget".*"id"\s*:\s*"Microsoft\.Coreutils"' 'Coreutils must be winget-owned as Microsoft.Coreutils.'
     Assert-Text (Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw) '(?s)"displayName"\s*:\s*"Starship".*"source"\s*:\s*"scoop"' 'Starship must be Scoop-owned.'
     Assert-Text (Get-Content -LiteralPath (Join-Path $root 'config\packages.json') -Raw) '(?s)"displayName"\s*:\s*"Neovim".*"source"\s*:\s*"scoop"' 'Neovim must be Scoop-owned.'
+    Assert-Text (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1') -Raw) "Install-AgentManifestTool -ToolId 'coreutils'" 'Package-manager bootstrap must install Coreutils.'
     Assert-Text (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Install.ps1') -Raw) "--source'.*winget" 'Winget installs must explicitly declare the winget source.'
     Assert-Text (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Install.ps1') -Raw) "--source'.*msstore" 'Store-backed installs must explicitly declare the msstore source.'
     Assert-Text (Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Agent.Install.ps1') -Raw) 'target architecture is arm64' 'Scoop installs should explicitly log ARM64 native-package preference.'

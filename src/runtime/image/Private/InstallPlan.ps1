@@ -30,8 +30,8 @@ function New-WinMintInstallPlanAgentProfile {
         if ([string]::IsNullOrWhiteSpace($dotfilesRef)) { $dotfilesRef = 'main' }
         $dotfilesInstallScript = [string]$BuildConfig.Dotfiles.InstallScript
     }
-    # Package-manager bootstrap is baseline: Scoop + MinGit are developer
-    # plumbing, and winget remains the owner for selected GUI/system tools.
+    # Package-manager bootstrap is baseline: Scoop + MinGit + Coreutils are
+    # developer plumbing, and winget remains the owner for selected GUI/system tools.
     $needsPackageManagers = $true
     [ordered]@{
         profile = [string]$BuildConfig.Profile

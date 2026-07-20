@@ -299,6 +299,10 @@ try {
                 id = 'mingit'
                 source = 'scoop'
             }
+            coreutils = [pscustomobject]@{
+                id = 'Microsoft.Coreutils'
+                source = 'winget'
+            }
             yasb = [pscustomobject]@{
                 id = 'AmN.yasb'
                 source = 'winget'
@@ -320,6 +324,7 @@ try {
     Set-WinMintAgentContext -Context $testContext
 
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'mingit') 'tool:mingit' 'MinGit state keys should resolve from the package manifest.'
+    Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'coreutils') 'tool:Microsoft.Coreutils' 'Coreutils state keys should resolve from the package manifest.'
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'yasb') 'tool:AmN.yasb' 'YASB state keys should resolve from the package manifest.'
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'nilesoft') 'tool:Nilesoft.Shell' 'Nilesoft state keys should resolve from the package manifest.'
     Assert-Equal (Get-AgentManifestToolStateKey -ToolId 'komorebi') 'tool:LGUG2Z.komorebi' 'Komorebi state keys should resolve from the package manifest.'
@@ -350,9 +355,9 @@ try {
     $packageBootstrapState = New-TestAgentState
     $packageBootstrapResult = Invoke-WinMintAgentPackageManagerBootstrap -AgentProfile (Get-WinMintAgentContext).AgentProfile -State $packageBootstrapState
     Assert-Equal $packageBootstrapResult.Status 'ok' 'Package manager bootstrap should pass when package-manager and shell-prompt state keys are ok.'
-    Assert-Equal (@($packageBootstrapResult.PackageManagerStateSteps) -join ',') 'package-manager:scoop,tool:mingit' 'Package manager readiness should require only Scoop and MinGit.'
+    Assert-Equal (@($packageBootstrapResult.PackageManagerStateSteps) -join ',') 'package-manager:scoop,tool:mingit,tool:Microsoft.Coreutils' 'Package manager readiness should require Scoop, MinGit, and Coreutils.'
     Assert-Equal (@($packageBootstrapResult.ShellPromptStateSteps) -join ',') 'shell:starship' 'Starship prompt setup should be reported as required shell-prompt state.'
-    Assert-Equal (@($packageBootstrapResult.RequiredStateSteps) -join ',') 'package-manager:scoop,tool:mingit,shell:starship' 'Package manager bootstrap should report all runtime-enforced required state.'
+    Assert-Equal (@($packageBootstrapResult.RequiredStateSteps) -join ',') 'package-manager:scoop,tool:mingit,tool:Microsoft.Coreutils,shell:starship' 'Package manager bootstrap should report all runtime-enforced required state.'
 
     function Install-WinMintAgentStarshipPrompt {
         param([hashtable]$State)
@@ -361,7 +366,7 @@ try {
     $failedPromptState = New-TestAgentState
     $failedPromptResult = Invoke-WinMintAgentPackageManagerBootstrap -AgentProfile (Get-WinMintAgentContext).AgentProfile -State $failedPromptState
     Assert-Equal $failedPromptResult.Status 'ok' 'Package manager module should return its result contract and leave readiness enforcement to the runtime.'
-    Assert-Equal (@($failedPromptResult.PackageManagerStateSteps) -join ',') 'package-manager:scoop,tool:mingit' 'Starship failure should not move Starship into package-manager readiness.'
+    Assert-Equal (@($failedPromptResult.PackageManagerStateSteps) -join ',') 'package-manager:scoop,tool:mingit,tool:Microsoft.Coreutils' 'Starship failure should not move Starship into package-manager readiness.'
 
     $launcherKeySearchProfile = [pscustomobject]@{
         modules = [pscustomobject]@{

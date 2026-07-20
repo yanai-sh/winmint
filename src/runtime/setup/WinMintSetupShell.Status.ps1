@@ -279,6 +279,7 @@ function Get-WinMintSetupShellDisplayName {
         komorebi = 'Komorebi'
         nilesoft = 'Nilesoft Shell'
         mingit = 'MinGit'
+        coreutils = 'Coreutils'
         starship = 'Starship'
         firefox = 'Firefox'
         chrome = 'Chrome'

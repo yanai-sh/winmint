@@ -12,6 +12,7 @@ Snapshot note: updated 2026-06-29. Onboarding/audit snapshot — not a continuou
 | Windows ADK (`oscdimg.exe`) | CLI invocation | Assemble bootable ISO | `README.md`, `config/release-readiness.json` |
 | winget | CLI at FirstLogon | GUI apps, Microsoft apps, Store-backed packages | `src/runtime/firstlogon/Modules/PackageManagers.ps1`, `config/packages.json` |
 | Scoop | CLI at FirstLogon | User-local developer CLI tools (MinGit, Starship, Neovim) | `src/runtime/firstlogon/Modules/PackageManagers.ps1` |
+| winget Coreutils | CLI at FirstLogon | Baseline native UNIX-style host CLI (`Microsoft.Coreutils`) | `src/runtime/firstlogon/Modules/PackageManagers.ps1` |
 | Microsoft Update Catalog | HTTP (opt-in `-UpdateImage Stable25H2`) | Offline cumulative/checkpoint MSUs | `README.md` |
 | Microsoft Download Center | HTTP (`SurfaceCatalog` driver source) | Official Surface driver MSI packages | `config/surface-drivers.json`, `AGENTS.md` |
 | GitHub Releases | HTTP (bootstrap) | Release `.zip` + `.sha256` verification | `winmint.ps1`, `AGENTS.md` |

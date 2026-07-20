@@ -2206,9 +2206,14 @@ function Assert-StarshipPromptUsesNerdFontTerminalDefaults {
     if ($packagesText -notmatch '(?s)"displayName"\s*:\s*"Starship".*"source"\s*:\s*"scoop"') {
         Add-SmokeFailure 'Starship catalog entry must be Scoop-owned.'
     }
+    if ($packagesText -notmatch '(?s)"displayName"\s*:\s*"Coreutils".*"source"\s*:\s*"winget".*"id"\s*:\s*"Microsoft\.Coreutils"') {
+        Add-SmokeFailure 'Coreutils catalog entry must be winget-owned as Microsoft.Coreutils.'
+    }
 
     $packageManagerText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\PackageManagers.ps1') -Raw
     foreach ($expected in @(
+            'Install-AgentManifestTool -ToolId ''mingit''',
+            'Install-AgentManifestTool -ToolId ''coreutils''',
             'Install-AgentManifestTool -ToolId ''starship''',
             'preset'', ''nerd-font-symbols''',
             'Invoke-Expression (&starship init powershell)',

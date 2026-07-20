@@ -52,7 +52,7 @@ irm https://winmint.yanai.sh | iex
 WinMint uses one subtractive default plus a few **keep** flags — not a debloat dashboard.
 
 - **Cleaner inbox** — serviceable removal of consumer AppX, AI/Copilot surfaces (Recall always removed), Edge noise, Xbox/Game Bar (unless kept), OneDrive, and promotional UX where the SKU allows it.
-- **Developer baseline** — Developer Mode, PS RemoteSigned, telemetry opt-outs, OpenSSH, WSL2/VMP, PowerShell 7 + Windows Terminal defaults (Cascadia Code NF, One Half Dark), Scoop + MinGit + Starship (`nerd-font-symbols`), XDG-style dotfolders, local clipboard history.
+- **Developer baseline** — Developer Mode, PS RemoteSigned, telemetry opt-outs, OpenSSH, WSL2/VMP, PowerShell 7 + Windows Terminal defaults (Cascadia Code NF, One Half Dark), Scoop + MinGit + Coreutils + Starship (`nerd-font-symbols`), XDG-style dotfolders, local clipboard history.
 - **First logon** — fullscreen native setup shell during agent work, then desktop reveal; optional shell layers (Windhawk, YASB, thide, Komorebi, Nilesoft), browsers, editors, and WSL distros from the profile.
 - **Safety preserved** — Defender, Firewall, SmartScreen, Windows Update, Store, WebView2, WSL, IPv6, WinRE, UAC, and WinSxS stay intact. No maintenance task or background service is left behind.
 - **After setup** — WinMint residue removed and a `WinMint post-install complete` restore point created.

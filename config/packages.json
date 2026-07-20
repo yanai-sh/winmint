@@ -1,8 +1,8 @@
 {
   "sourcePolicy": {
-    "winget": "GUI apps, Microsoft apps, signed installers, shell integrations, desktop services, and packages where the upstream installer is canonical.",
+    "winget": "GUI apps, Microsoft apps, signed installers, shell integrations, desktop services, and packages where the upstream installer is canonical. Baseline also installs Coreutils for Windows (Microsoft.Coreutils).",
     "scoop": "User-local developer CLI tools and toolchain plumbing. Installed during FirstLogon through the official Scoop installer and the main bucket.",
-    "github": "Reserved for specific upstream assets, stale package metadata, or architecture-specific layouts. Not yet implemented — the engine's build-time catalog validator rejects tools using this source.",
+    "github": "Reserved for specific upstream assets, stale package metadata, or architecture-specific layouts. Not yet implemented â€” the engine's build-time catalog validator rejects tools using this source.",
     "store": "Microsoft Store-backed packages. Used only when the upstream app is Store-distributed and winget surfaces it through the msstore source.",
     "direct": "Narrow exception for a pinned, hash-verified upstream installer when package-manager metadata cannot provide the required native architecture."
   },
@@ -11,6 +11,13 @@
       "displayName": "MinGit",
       "source": "scoop",
       "id": "mingit",
+      "versionPolicy": "latest",
+      "architectures": ["amd64", "arm64"]
+    },
+    "coreutils": {
+      "displayName": "Coreutils",
+      "source": "winget",
+      "id": "Microsoft.Coreutils",
       "versionPolicy": "latest",
       "architectures": ["amd64", "arm64"]
     },
@@ -141,12 +148,4 @@
     }
   }
 }
-
-
-
-
-
-
-
-
 
