@@ -37,6 +37,10 @@ function New-WinMintInstallPlanAgentProfile {
         profile = [string]$BuildConfig.Profile
         diagnostics = New-WinMintInstallPlanDiagnosticsBlock -BuildConfig $BuildConfig
         targetArchitecture = [string]$BuildConfig.Architecture
+        identity = [ordered]@{
+            accountName  = [string]$BuildConfig.AccountName
+            computerName = [string]$BuildConfig.ComputerName
+        }
         keep = [ordered]@{
             edge = [bool]$BuildConfig.Keep.Edge
             gaming = [bool]$BuildConfig.Keep.Gaming

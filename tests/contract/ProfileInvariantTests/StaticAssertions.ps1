@@ -2694,7 +2694,7 @@ function Assert-WslFirstDefaultsAndGuards {
         'firewall=true',
         'autoMemoryReclaim=gradual',
         'sparseVhd=true',
-        'WinMint does not create this file',
+        'Install-WinMintWslDistroCore',
         'systemd=true',
         'appendWindowsPath=false',
         'useWindowsTimezone=true',
@@ -2704,6 +2704,25 @@ function Assert-WslFirstDefaultsAndGuards {
     )) {
         if ($wslModuleText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "WSL module should generate .wslconfig setting '$expected'."
+        }
+    }
+    $agentProfileSample = New-WinMintInstallPlanAgentProfile -BuildConfig (New-WinMintBuildConfig -BuildProfile (New-SmokeBuildProfile))
+    if (-not $agentProfileSample.identity -or
+        [string]::IsNullOrWhiteSpace([string]$agentProfileSample.identity.accountName) -or
+        [string]::IsNullOrWhiteSpace([string]$agentProfileSample.identity.computerName)) {
+        Add-SmokeFailure 'Agent profile must carry identity.accountName and identity.computerName for WSL core.'
+    }
+    foreach ($expected in @(
+        'function ConvertTo-WinMintLinuxUserName',
+        'function ConvertTo-WinMintWslHostname',
+        'function New-WinMintWslConfContent',
+        'function Install-WinMintWslDistroCore',
+        'function Get-WinMintWslCoreIdentity',
+        'Managed by WinMint. Re-runs replace this file.',
+        'WSL core skipped for NixOS'
+    )) {
+        if ($wslModuleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "WSL module should include WSL core setup '$expected'."
         }
     }
     $terminalProfilesPath = Join-Path $root 'src\runtime\setup\WindowsTerminal.Profiles.ps1'
@@ -2721,6 +2740,12 @@ function Assert-WslFirstDefaultsAndGuards {
     $bootstrapEnd = if ($bootstrapStart -ge 0) { $wslModuleText.IndexOf("`nfunction ", $bootstrapStart + 1) } else { -1 }
     if ($bootstrapEnd -lt 0) { $bootstrapEnd = $wslModuleText.Length }
     $bootstrapText = if ($bootstrapStart -ge 0) { $wslModuleText.Substring($bootstrapStart, $bootstrapEnd - $bootstrapStart) } else { '' }
+    if ($bootstrapText -notmatch 'Install-WinMintWslDistroCore') {
+        Add-SmokeFailure 'WSL bootstrap must invoke Install-WinMintWslDistroCore for registered distros.'
+    }
+    if ($bootstrapText -notmatch '--shutdown') {
+        Add-SmokeFailure 'WSL bootstrap must wsl --shutdown after applying managed /etc/wsl.conf.'
+    }
     $skipCallIndex = $bootstrapText.IndexOf('Test-WinMintAgentWslRuntimeValidationSkipped -AgentProfile')
     $wslConfigInBootstrap = $bootstrapText.IndexOf('Install-WinMintWslConfig')
     if ($skipCallIndex -lt 0 -or $wslConfigInBootstrap -lt 0 -or $skipCallIndex -gt $wslConfigInBootstrap) {
@@ -2748,10 +2773,51 @@ function Assert-WslFirstDefaultsAndGuards {
     if ($wslModuleText -notmatch 'WSL2 configured; no distro selected') {
         Add-SmokeFailure 'WSL module should explicitly handle the no-distro baseline.'
     }
+    foreach ($expected in @(
+        'function Set-WinMintWslOobeComplete',
+        'OOBEComplete',
+        'function Invoke-WinMintWslInstallProcess',
+        'function Get-WinMintWslInstalledDistributions',
+        'function Get-WinMintWslListOutput',
+        'CREATE_NEW_CONSOLE',
+        'WSL_UTF8'
+    )) {
+        if ($wslModuleText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "WSL module should include unattended install hygiene '$expected'."
+        }
+    }
+    $nixosInstallFnStart = $wslModuleText.IndexOf('function Install-WinMintNixOsWslDistribution')
+    $nixosInstallFnEnd = if ($nixosInstallFnStart -ge 0) { $wslModuleText.IndexOf("`nfunction ", $nixosInstallFnStart + 1) } else { -1 }
+    if ($nixosInstallFnEnd -lt 0) { $nixosInstallFnEnd = $wslModuleText.Length }
+    $nixosInstallFnText = if ($nixosInstallFnStart -ge 0) {
+        $wslModuleText.Substring($nixosInstallFnStart, $nixosInstallFnEnd - $nixosInstallFnStart)
+    } else { '' }
+    if ($nixosInstallFnText -notmatch 'Set-WinMintWslOobeComplete' -or
+        $nixosInstallFnText -notmatch 'Invoke-WinMintWslInstallProcess' -or
+        $nixosInstallFnText -notmatch "--from-file") {
+        Add-SmokeFailure 'NixOS WSL install must stamp OOBEComplete and use Invoke-WinMintWslInstallProcess before --from-file.'
+    }
     $updateIndex = $wslModuleText.IndexOf('Update-WinMintWslRuntime -WslPath $wsl.Source')
     $wslConfigIndex = $wslModuleText.IndexOf('Install-WinMintWslConfig')
-    $installIndex = $wslModuleText.IndexOf("Invoke-AgentNative -FilePath `$wsl.Source -ArgumentList @('--install', '--no-launch', '-d', `$distro)")
+    $installIndex = $wslModuleText.IndexOf("Invoke-WinMintWslInstallProcess -WslPath `$wsl.Source -ArgumentList @('--install', '--no-launch', '-d', `$distro)")
+    $oobeBeforeDistroInstall = $bootstrapText.IndexOf('Set-WinMintWslOobeComplete')
     $nixosInstallIndex = $wslModuleText.IndexOf('Install-WinMintNixOsWslDistribution -WslPath $wsl.Source')
+    if ($installIndex -lt 0) {
+        Add-SmokeFailure 'WSL distro install must use Invoke-WinMintWslInstallProcess for wsl --install --no-launch.'
+    }
+    if ($bootstrapText -notmatch 'Get-WinMintWslInstalledDistributions') {
+        Add-SmokeFailure 'WSL bootstrap must list installed distros via Get-WinMintWslInstalledDistributions (isolated Start-Process).'
+    }
+    if ($oobeBeforeDistroInstall -lt 0 -or $installIndex -lt 0) {
+        Add-SmokeFailure 'WSL bootstrap must stamp OOBEComplete before wsl --install --no-launch.'
+    }
+    else {
+        # installIndex is absolute in $wslModuleText; compare OOBE stamp inside bootstrap to the install call relative to bootstrap start.
+        $installInBootstrap = $bootstrapText.IndexOf("Invoke-WinMintWslInstallProcess -WslPath `$wsl.Source -ArgumentList @('--install', '--no-launch', '-d', `$distro)")
+        if ($installInBootstrap -lt 0 -or $oobeBeforeDistroInstall -gt $installInBootstrap) {
+            Add-SmokeFailure 'Set-WinMintWslOobeComplete must run before Invoke-WinMintWslInstallProcess in the bootstrap install loop.'
+        }
+    }
     if ($wslConfigIndex -lt 0 -or $installIndex -lt 0 -or $wslConfigIndex -gt $installIndex) {
         Add-SmokeFailure 'Install-WinMintWslConfig must occur before distro install attempts.'
     }
@@ -2774,8 +2840,8 @@ function Assert-WslFirstDefaultsAndGuards {
             Add-SmokeFailure "WSL module Windows Terminal profiles must use staged PNG icons, not '$forbiddenIcon'."
         }
     }
-    if ($wslModuleText -match '(?m)^[^#\r\n].*/etc/wsl\.conf') {
-        Add-SmokeFailure 'WSL module must not automate /etc/wsl.conf; reference-only comments in .wslconfig.'
+    if ($wslModuleText -notmatch 'New-WinMintWslConfContent' -or $wslModuleText -notmatch '/etc/wsl\.conf') {
+        Add-SmokeFailure 'WSL module must write managed /etc/wsl.conf via New-WinMintWslConfContent / Install-WinMintWslDistroCore.'
     }
     $vmHarnessText = Get-Content -LiteralPath (Join-Path $root 'tools\vm\New-WinMintTestVm.ps1') -Raw
     if ($vmHarnessText -notmatch 'ExposeVirtualizationExtensions\s+\$true') {
@@ -2821,7 +2887,7 @@ function Assert-WslFirstDefaultsAndGuards {
         }
     }
     $strategyText = Get-Content -LiteralPath (Join-Path $root 'docs\Windows-Debloat-Strategy.md') -Raw
-    foreach ($guard in @('WinMint is WSL2-first', 'Ubuntu LTS', '/home/<user>/code', 'networkingMode=mirrored', 'WinMint does not create this file')) {
+    foreach ($guard in @('WinMint is WSL2-first', 'Ubuntu LTS', '/home/<user>/code', 'networkingMode=mirrored', 'managed /etc/wsl.conf')) {
         if ($strategyText -notmatch [regex]::Escape($guard)) {
             Add-SmokeFailure "WSL strategy should document '$guard'."
         }

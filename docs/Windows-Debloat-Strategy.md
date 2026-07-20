@@ -250,13 +250,14 @@ autoMemoryReclaim=gradual
 sparseVhd=true
 ```
 
-WinMint embeds a commented `/etc/wsl.conf` reference appendix in the managed `.wslconfig` template (header: WinMint does not create this file). Distro-side `/etc/wsl.conf` is **user-managed** — WinMint does not automate it.
+Host `.wslconfig` stays global WSL2 VM settings only. After each selected distro registers, FirstLogon **WSL core** writes managed /etc/wsl.conf inside that distro: `systemd=true`, default user from the sanitized Windows `accountName`, hostname `<computerName>-<distroSlug>`, `appendWindowsPath=false`, metadata automount options, and Windows timezone. NixOS is skipped (declarative). No Starship/CLI package bootstrap in this path.
 
 Current decision:
 
 - Use `gradual` for `autoMemoryReclaim`; it returns cache steadily without the sharper behavior of immediate cache drops.
 - Default to `networkingMode=mirrored` for WSL-first dev ergonomics (shared localhost/LAN stack). VPN or firewall issues are possible; users can switch to `networkingMode=nat` and uncomment the NAT-only lines in `.wslconfig`.
 - Container runtimes are intentionally outside the WinMint UI. The baseline should keep WSL healthy and leave distro-level container setup to the user.
+- Keep managed `/etc/wsl.conf` + default user as baseline WSL core; do not expand into in-distro package installs without a separate opt-in.
 
 ### 3. Replace Service Tweaking With A Service Budget
 

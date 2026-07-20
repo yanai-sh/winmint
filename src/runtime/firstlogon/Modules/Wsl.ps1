@@ -22,11 +22,99 @@ function Convert-WinMintWslDistroAlias {
     }
 }
 
+function Set-WinMintWslOobeComplete {
+    # Suppress Welcome-to-WSL first-run UI (Microsoft WindowsDeveloperConfig InstallUbuntu pattern).
+    $lxssPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss'
+    if (-not (Test-Path -LiteralPath $lxssPath)) {
+        New-Item -Path $lxssPath -Force | Out-Null
+    }
+    Set-ItemProperty -Path $lxssPath -Name 'OOBEComplete' -Value 1 -Type DWord -Force
+    Write-AgentLog 'Stamped Lxss OOBEComplete=1 to suppress Welcome-to-WSL UI.'
+}
+
+function Invoke-WinMintWslInstallProcess {
+    param(
+        [Parameter(Mandatory)][string]$WslPath,
+        [Parameter(Mandatory)][string[]]$ArgumentList,
+        [string]$ProgressMessage = ''
+    )
+
+    # Launch without -NoNewWindow and without RedirectStandard* so Start-Process
+    # allocates CREATE_NEW_CONSOLE. Console-less hosts + redirected Start-Process
+    # make wsl --install fail with "The Windows Subsystem for Linux is not installed".
+    $runningMessage = if (-not [string]::IsNullOrWhiteSpace($ProgressMessage)) {
+        $ProgressMessage.Trim()
+    }
+    else {
+        "Running wsl $($ArgumentList -join ' ')."
+    }
+    Write-AgentLog "RUN $WslPath $($ArgumentList -join ' ') (WslInstallProcess, no redirect)"
+    Write-AgentEvent -Type 'command' -Status 'running' -Message $runningMessage -Data @{
+        filePath    = $WslPath
+        displayArgs = ($ArgumentList -join ' ')
+    }
+    $p = Start-Process -FilePath $WslPath -ArgumentList $ArgumentList -Wait -PassThru
+    $exitCode = [int]$p.ExitCode
+    if ($exitCode -ne 0) {
+        Write-AgentEvent -Type 'command' -Status 'failed' -Message "wsl.exe exited $exitCode." -Data @{
+            filePath = $WslPath
+            exitCode = $exitCode
+        }
+        throw "$WslPath $($ArgumentList -join ' ') exited $exitCode."
+    }
+    Write-AgentEvent -Type 'command' -Status 'ok' -Message 'wsl.exe completed.' -Data @{
+        filePath = $WslPath
+        exitCode = $exitCode
+    }
+}
+
+function Get-WinMintWslListOutput {
+    param(
+        [Parameter(Mandatory)][string]$WslPath,
+        [Parameter(Mandatory)][string[]]$ArgumentList
+    )
+
+    # Isolate wsl.exe from the PowerShell host: call-operator leaks non-zero
+    # $LASTEXITCODE / stderr into the session; Start-Process does not.
+    $previousUtf8 = $env:WSL_UTF8
+    $env:WSL_UTF8 = '1'
+    $out = [System.IO.Path]::GetTempFileName()
+    $err = [System.IO.Path]::GetTempFileName()
+    try {
+        $p = Start-Process -FilePath $WslPath -ArgumentList $ArgumentList `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+        if ($p.ExitCode -ne 0) {
+            return @()
+        }
+        return @(
+            Get-Content -LiteralPath $out -Encoding utf8 -ErrorAction SilentlyContinue |
+                ForEach-Object { ([string]$_ -replace "`0", '').Trim() } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+    }
+    finally {
+        Remove-Item -LiteralPath $out, $err -Force -ErrorAction SilentlyContinue
+        if ($null -eq $previousUtf8) {
+            Remove-Item -Path Env:WSL_UTF8 -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:WSL_UTF8 = $previousUtf8
+        }
+    }
+}
+
+function Get-WinMintWslInstalledDistributions {
+    param([Parameter(Mandatory)][string]$WslPath)
+
+    return @(Get-WinMintWslListOutput -WslPath $WslPath -ArgumentList @('--list', '--quiet'))
+}
+
 function Get-WinMintOnlineWslDistributions {
     param([Parameter(Mandatory)][string]$WslPath)
 
     try {
-        $lines = @(& $WslPath --list --online 2>$null)
+        $lines = @(Get-WinMintWslListOutput -WslPath $WslPath -ArgumentList @('--list', '--online'))
     }
     catch {
         Write-AgentLog "WSL online catalog warning: $($_.Exception.Message)"
@@ -35,7 +123,7 @@ function Get-WinMintOnlineWslDistributions {
 
     $names = [System.Collections.Generic.List[string]]::new()
     foreach ($line in $lines) {
-        $clean = ([string]$line -replace "`0", '').Trim()
+        $clean = ([string]$line).Trim()
         if ([string]::IsNullOrWhiteSpace($clean)) { continue }
         if ($clean -match '^(NAME|The following|Install using)') { continue }
         if ($clean -match '^([A-Za-z0-9_.-]+)(\s+|$)') {
@@ -120,7 +208,9 @@ function Install-WinMintNixOsWslDistribution {
         Invoke-WebRequest -Uri $release.uri -OutFile $assetPath -Headers @{ 'User-Agent' = 'WinMint' } -ErrorAction Stop
     }
 
-    Invoke-AgentNative -FilePath $WslPath -ArgumentList @('--install', '--from-file', $assetPath)
+    Set-WinMintWslOobeComplete
+    Invoke-WinMintWslInstallProcess -WslPath $WslPath -ArgumentList @('--install', '--from-file', $assetPath) `
+        -ProgressMessage 'Installing NixOS'
 }
 
 function Test-WinMintWslRetryableVirtualizationError {
@@ -204,6 +294,128 @@ function Complete-WinMintAgentWslAdvisorySkip {
     }
 }
 
+function ConvertTo-WinMintLinuxNameToken {
+    param(
+        [string]$Value,
+        [string]$Fallback = 'winmint',
+        [int]$MaxLength = 32
+    )
+
+    $token = ([string]$Value).Trim().ToLowerInvariant()
+    $token = $token -replace '[^a-z0-9_-]', '-'
+    $token = $token -replace '-+', '-'
+    $token = $token.Trim('-')
+    if ([string]::IsNullOrWhiteSpace($token)) { $token = $Fallback }
+    if ($token -match '^[0-9]') { $token = "u$token" }
+    if ($token -notmatch '^[a-z_]') { $token = "u$token" }
+    if ($token.Length -gt $MaxLength) {
+        $token = $token.Substring(0, $MaxLength).TrimEnd('-')
+    }
+    if ([string]::IsNullOrWhiteSpace($token)) { $token = $Fallback }
+    return $token
+}
+
+function ConvertTo-WinMintLinuxUserName {
+    param([string]$AccountName)
+
+    return (ConvertTo-WinMintLinuxNameToken -Value $AccountName -Fallback 'winmint' -MaxLength 32)
+}
+
+function ConvertTo-WinMintWslDistroHostnameSlug {
+    param([Parameter(Mandatory)][string]$Distro)
+
+    switch -Regex ([string]$Distro) {
+        '^(?i)Ubuntu' { return 'ubuntu' }
+        '^(?i)Fedora' { return 'fedora' }
+        '^(?i)archlinux' { return 'archlinux' }
+        '^(?i)pengwin' { return 'pengwin' }
+        '^(?i)NixOS' { return 'nixos' }
+        default { return (ConvertTo-WinMintLinuxNameToken -Value $Distro -Fallback 'linux' -MaxLength 24) }
+    }
+}
+
+function ConvertTo-WinMintWslHostname {
+    param(
+        [Parameter(Mandatory)][string]$ComputerName,
+        [Parameter(Mandatory)][string]$Distro
+    )
+
+    $hostPart = ConvertTo-WinMintLinuxNameToken -Value $ComputerName -Fallback 'winmint' -MaxLength 32
+    $slug = ConvertTo-WinMintWslDistroHostnameSlug -Distro $Distro
+    $name = "$hostPart-$slug"
+    if ($name.Length -gt 63) {
+        $name = $name.Substring(0, 63).TrimEnd('-')
+    }
+    return $name
+}
+
+function Get-WinMintWslCoreIdentity {
+    param([Parameter(Mandatory)][object]$AgentProfile)
+
+    $identity = $null
+    if ($AgentProfile -is [System.Collections.IDictionary]) {
+        if ($AgentProfile.Contains('identity')) { $identity = $AgentProfile['identity'] }
+    }
+    elseif ($AgentProfile.PSObject.Properties['identity']) {
+        $identity = $AgentProfile.identity
+    }
+
+    $accountName = ''
+    $computerName = ''
+    if ($null -ne $identity) {
+        if ($identity -is [System.Collections.IDictionary]) {
+            if ($identity.Contains('accountName')) { $accountName = [string]$identity['accountName'] }
+            if ($identity.Contains('computerName')) { $computerName = [string]$identity['computerName'] }
+        }
+        else {
+            if ($identity.PSObject.Properties['accountName']) { $accountName = [string]$identity.accountName }
+            if ($identity.PSObject.Properties['computerName']) { $computerName = [string]$identity.computerName }
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($accountName)) { $accountName = [string]$env:USERNAME }
+    if ([string]::IsNullOrWhiteSpace($computerName)) { $computerName = [string]$env:COMPUTERNAME }
+
+    [pscustomobject]@{
+        AccountName  = $accountName
+        ComputerName = $computerName
+        LinuxUser    = (ConvertTo-WinMintLinuxUserName -AccountName $accountName)
+    }
+}
+
+function New-WinMintWslConfContent {
+    param(
+        [Parameter(Mandatory)][string]$LinuxUser,
+        [Parameter(Mandatory)][string]$Hostname
+    )
+
+    @"
+# Managed by WinMint. Re-runs replace this file.
+
+[boot]
+systemd=true
+
+[user]
+default=$LinuxUser
+
+[interop]
+enabled=true
+appendWindowsPath=false
+
+[automount]
+enabled=true
+mountFsTab=true
+options=metadata,umask=22,fmask=11,case=off
+
+[network]
+hostname=$Hostname
+generateHosts=true
+generateResolvConf=true
+
+[time]
+useWindowsTimezone=true
+"@.Trim() + [Environment]::NewLine
+}
+
 function New-WinMintWslConfigContent {
     @'
 # Managed by WinMint. Edit or delete this file if you want different WSL defaults.
@@ -222,35 +434,111 @@ firewall=true
 autoMemoryReclaim=gradual
 sparseVhd=true
 
-# --- Reference: /etc/wsl.conf (per-distro, inside Linux — WinMint does not create this file) ---
-# Copy or adapt into each distro after first launch (e.g. sudo tee /etc/wsl.conf), then wsl --shutdown.
-#
-# [boot]
-# systemd=true
-# # Prefer systemd units for services; use `command=` only for early root one-shots.
-#
-# [user]
-# default=<your-username>
-#
-# [interop]
-# enabled=true                 # still allow launching Windows .exe by full path
-# appendWindowsPath=false      # keep the Windows PATH off the Linux $PATH (faster exec, no pollution)
-#
-# [automount]
-# enabled=true
-# mountFsTab=true              # honor /etc/fstab (SMB / extra mounts)
-# options=metadata,umask=22,fmask=11,case=off   # real Linux perms on /mnt/c; no more 777-everything
-#
-# [network]
-# generateHosts=true
-# generateResolvConf=true      # WSL-managed DNS (pairs with host-side dnsTunneling)
-#
-# [gpu]
-# enabled=true                 # ARM64 GPU para-virtualization (D3D12/Dozen)
-#
-# [time]
-# useWindowsTimezone=true
+# Per-distro /etc/wsl.conf is written by Install-WinMintWslDistroCore after each
+# selected distro registers (default user, hostname=<computerName>-<distroSlug>,
+# systemd, interop, automount). Host .wslconfig stays global WSL2 VM settings only.
 '@.Trim() + [Environment]::NewLine
+}
+
+function Invoke-WinMintWslDistroRoot {
+    param(
+        [Parameter(Mandatory)][string]$WslPath,
+        [Parameter(Mandatory)][string]$Distro,
+        [Parameter(Mandatory)][string[]]$ArgumentList
+    )
+
+    $previousUtf8 = $env:WSL_UTF8
+    $env:WSL_UTF8 = '1'
+    $out = [System.IO.Path]::GetTempFileName()
+    $err = [System.IO.Path]::GetTempFileName()
+    $args = @('-d', $Distro, '-u', 'root', '--') + @($ArgumentList)
+    try {
+        Write-AgentLog "RUN $WslPath $($args -join ' ') (WslDistroRoot)"
+        $p = Start-Process -FilePath $WslPath -ArgumentList $args `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+        $stdout = ''
+        $stderr = ''
+        try { if (Test-Path -LiteralPath $out) { $stdout = (Get-Content -LiteralPath $out -Raw -ErrorAction SilentlyContinue) } } catch {}
+        try { if (Test-Path -LiteralPath $err) { $stderr = (Get-Content -LiteralPath $err -Raw -ErrorAction SilentlyContinue) } } catch {}
+        if ($p.ExitCode -ne 0) {
+            $detail = (@($stdout, $stderr) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join [Environment]::NewLine
+            throw "wsl -d $Distro -u root exited $($p.ExitCode). $detail"
+        }
+        return $stdout
+    }
+    finally {
+        Remove-Item -LiteralPath $out, $err -Force -ErrorAction SilentlyContinue
+        if ($null -eq $previousUtf8) {
+            Remove-Item -Path Env:WSL_UTF8 -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:WSL_UTF8 = $previousUtf8
+        }
+    }
+}
+
+function Install-WinMintWslDistroCore {
+    param(
+        [Parameter(Mandatory)][string]$WslPath,
+        [Parameter(Mandatory)][string]$Distro,
+        [Parameter(Mandatory)][string]$LinuxUser,
+        [Parameter(Mandatory)][string]$Hostname
+    )
+
+    if ($Distro -eq 'NixOS') {
+        Write-AgentLog "WSL core skipped for NixOS ($Distro): declarative distro; no in-distro user/wsl.conf mutation."
+        return 'skipped-nixos'
+    }
+
+    $conf = New-WinMintWslConfContent -LinuxUser $LinuxUser -Hostname $Hostname
+    $confUnix = $conf -replace "`r`n", "`n" -replace "`r", "`n"
+    $confB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($confUnix))
+    $userB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($LinuxUser))
+
+    # Idempotent: create login user (bash), add sudo/wheel, write managed /etc/wsl.conf.
+    # No password sync and no NOPASSWD — set a password later via: wsl -d DISTRO -u root -- passwd USER
+    $script = @"
+set -eu
+USER_NAME=`$(printf '%s' '$userB64' | base64 -d)
+CONF_B64='$confB64'
+if ! id "`$USER_NAME" >/dev/null 2>&1; then
+  if command -v useradd >/dev/null 2>&1; then
+    useradd -m -s /bin/bash "`$USER_NAME"
+  elif command -v adduser >/dev/null 2>&1; then
+    adduser --disabled-password --gecos '' --shell /bin/bash "`$USER_NAME"
+  else
+    echo "WinMint WSL core: neither useradd nor adduser found" >&2
+    exit 1
+  fi
+fi
+ADMIN_GROUP=sudo
+if [ -f /etc/os-release ]; then
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  case "`${ID:-}" in
+    fedora|rhel|centos|rocky|almalinux|arch|manjaro) ADMIN_GROUP=wheel ;;
+  esac
+fi
+if getent group "`$ADMIN_GROUP" >/dev/null 2>&1; then
+  usermod -aG "`$ADMIN_GROUP" "`$USER_NAME"
+elif getent group sudo >/dev/null 2>&1; then
+  usermod -aG sudo "`$USER_NAME"
+elif getent group wheel >/dev/null 2>&1; then
+  usermod -aG wheel "`$USER_NAME"
+fi
+printf '%s' "`$CONF_B64" | base64 -d > /etc/wsl.conf
+chmod 644 /etc/wsl.conf
+"@
+    $scriptUnix = ($script -replace "`r`n", "`n" -replace "`r", "`n").Trim() + "`n"
+    $scriptB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($scriptUnix))
+
+    Invoke-WinMintWslDistroRoot -WslPath $WslPath -Distro $Distro -ArgumentList @(
+        'bash', '-lc', "echo $scriptB64 | base64 -d | bash"
+    ) | Out-Null
+
+    Write-AgentLog "WSL core applied for $Distro (user=$LinuxUser hostname=$Hostname)."
+    return 'applied'
 }
 
 function Install-WinMintWslConfig {
@@ -358,7 +646,7 @@ function Invoke-WinMintAgentWslBootstrap {
         }
         $distros = @($distros | ForEach-Object { $resolvedMap[$_] } | Select-Object -Unique)
 
-        $installed = @(& $wsl.Source --list --quiet 2>$null | ForEach-Object { ([string]$_ -replace "`0", '').Trim() })
+        $installed = @(Get-WinMintWslInstalledDistributions -WslPath $wsl.Source)
         foreach ($distro in $distros) {
             if ($installed -contains $distro) {
                 $alreadyInstalled.Add($distro)
@@ -370,7 +658,8 @@ function Invoke-WinMintAgentWslBootstrap {
                     Install-WinMintNixOsWslDistribution -WslPath $wsl.Source
                 }
                 else {
-                    Invoke-AgentNative -FilePath $wsl.Source -ArgumentList @('--install', '--no-launch', '-d', $distro) `
+                    Set-WinMintWslOobeComplete
+                    Invoke-WinMintWslInstallProcess -WslPath $wsl.Source -ArgumentList @('--install', '--no-launch', '-d', $distro) `
                         -ProgressMessage "Installing $distro"
                 }
                 $installedNow.Add($distro)
@@ -392,8 +681,42 @@ function Invoke-WinMintAgentWslBootstrap {
         # a reboot. If anything we just tried to install is still missing, return
         # needsReboot — Invoke-AgentProfileModule writes that to state.json and the
         # next agent run (after reboot) re-attempts.
-        $postInstall = @(& $wsl.Source --list --quiet 2>$null | ForEach-Object { ([string]$_ -replace "`0", '').Trim() })
+        $postInstall = @(Get-WinMintWslInstalledDistributions -WslPath $wsl.Source)
         $missing = @($installedNow | Where-Object { $postInstall -notcontains $_ })
+
+        # WSL core: managed /etc/wsl.conf + default user for each registered distro.
+        $coreIdentity = Get-WinMintWslCoreIdentity -AgentProfile $AgentProfile
+        $coreApplied = $false
+        foreach ($distro in $distros) {
+            if ($missing -contains $distro) { continue }
+            if ($postInstall -notcontains $distro) { continue }
+            if ($distro -eq 'NixOS') {
+                $messages.Add('WSL core skipped for NixOS (declarative; no in-distro mutation).')
+                continue
+            }
+            try {
+                $hostname = ConvertTo-WinMintWslHostname -ComputerName $coreIdentity.ComputerName -Distro $distro
+                $coreStatus = Install-WinMintWslDistroCore -WslPath $wsl.Source -Distro $distro `
+                    -LinuxUser $coreIdentity.LinuxUser -Hostname $hostname
+                if ($coreStatus -eq 'applied') {
+                    $coreApplied = $true
+                    $messages.Add("WSL core: $distro user=$($coreIdentity.LinuxUser) hostname=$hostname")
+                }
+            }
+            catch {
+                Write-AgentLog "WSL core warning for '$distro': $($_.Exception.Message)"
+                $messages.Add("WSL core warning for ${distro}: $($_.Exception.Message)")
+            }
+        }
+        if ($coreApplied) {
+            try {
+                Write-AgentLog 'Shutting down WSL so managed /etc/wsl.conf takes effect.'
+                Invoke-AgentNative -FilePath $wsl.Source -ArgumentList @('--shutdown') -NoRedirect
+            }
+            catch {
+                Write-AgentLog "WSL shutdown warning after core setup: $($_.Exception.Message)"
+            }
+        }
     }
     elseif ($requestedDistros.Count -gt 0 -and -not $wslRuntimeUpdated) {
         $messages.Add('WSL runtime update pending; distro installs deferred until the next first-logon run.')
