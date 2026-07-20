@@ -24,8 +24,8 @@ runbook, the inventory, and the tracked build profiles in sync.
 | Profile | Intent |
 |---------|--------|
 | `config/build-profiles/surface-laptop-7-arm64.json` | ARM64 Surface bare-metal profile: `SurfaceCatalog` / `surface-laptop-7`, keep Edge, Cursor + Zen, Fedora WSL, live install audit, no shell layers or launcher. |
-| `config/build-profiles/thinkpad-return-amd64.json` | Keep Edge, no extra browsers, editors, launcher, or shell layers; WSL Ubuntu; `AutoWipeDisk0`. |
-| `config/build-profiles/alienware-aurora-amd64.json` | Helium and Zen browsers, Neovim and Zed, Nilesoft, no launcher, Xbox apps removed, manual disk mode. |
+| `config/build-profiles/thinkpad-return-amd64.json` | Keep Edge, no extra browsers, editors, launcher, or shell layers; WSL Ubuntu; `AutoWipeDisk0`; live install audit on. |
+| `config/build-profiles/alienware-aurora-amd64.json` | Helium and Zen browsers, Neovim and Zed, Nilesoft, no launcher, Xbox apps removed, manual disk mode; live install audit on. |
 
 ## Local Preflight
 
@@ -99,9 +99,24 @@ point.
 The release readiness gates live in `docs\Release-Readiness.md` and
 `config\release-readiness.json`.
 
+## Coded signals vs notes
+
+`config/hardware-acceptance.json` lists `signals` evaluated by
+`tools/acceptance/Test-WinMintHardwareAcceptanceSignals.ps1` when
+`Collect-WinMintHardwareEvidence.ps1` writes `acceptance-result.json`.
+
+| Machine | Fail-closed (plumbing/evidence) signals | Notes-only (manual) |
+|---------|------------------------------------------|---------------------|
+| SL7 | `firstLogon.ok`, Surface drivers, `keep.edge`, Phone Link, Zen/Cursor/WSL agent steps, `audit.zeroErrors`, gaming baseline, launcher Search fallback | Copilot key, Wi‑Fi, sleep/resume, scaling |
+| ThinkPad | `firstLogon.ok`, `disk.autoWipe`, desktop baseline, `keep.edge`, `wsl.ubuntu`, launcher, `audit.zeroErrors` | Wi‑Fi, sleep/resume, keyboard/trackpad |
+| Alienware | `firstLogon.ok`, `disk.manual`, browser/editor/Nilesoft agent steps, `keep.gamingRemoved`, launcher, `audit.zeroErrors` | GPU/display quirks, sleep |
+
+Pre-hardware bar: green managed Hyper-V smoke for the same build class. Hardware
+collector green is the physical gate; release packaging does not wait on it (ADR-009).
+
 ## Live Install Audit
 
-Live install audit is enabled on the SL7 bare-metal profile
+Live install audit is enabled on SL7, ThinkPad, and Alienware tracked profiles
 (`features.liveInstallAudit: true`). FirstLogon runs the staged copy at
 `C:\Windows\Setup\Scripts\Audit-LiveInstall.ps1` and writes
 `C:\ProgramData\WinMint\Logs\LiveInstallAudit.json`. For manual reruns from the
@@ -114,8 +129,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\audit\Audit-LiveInstall.ps
   -IncludeInventory
 ```
 
-Treat audit findings as signals, not acceptance blockers by themselves. Convert
-real product issues into contract tests, setup fixes, or FirstLogon fixes.
+`audit.zeroErrors` fails the hardware `acceptance-result` when the report is
+missing or reports errors. Convert remaining findings into contract tests or
+product fixes; do not weaken the signal without an ADR.
 
 ## Evidence Loop
 

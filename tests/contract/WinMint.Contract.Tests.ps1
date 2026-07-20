@@ -215,3 +215,54 @@ Describe 'VM PostSetup checkpoint tooling' {
         $acceptanceText | Should -Match 'Save-WinMintVmPostSetupCheckpoint'
     }
 }
+
+Describe 'Install-plan and agent host contracts' {
+    It 'Test-InstallPlanContract.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-InstallPlanContract.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'Test-AgentStateTransitions.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-AgentStateTransitions.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'Test-CliMatrix.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-CliMatrix.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'Test-AgentEventsSchema.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-AgentEventsSchema.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'Test-BootstrapContract.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-BootstrapContract.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'Test-PayloadStoreContract.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-PayloadStoreContract.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'Test-ServicedWimCache.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-ServicedWimCache.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+}
+
+Describe 'Autounattend generation contract' {
+    It 'Test-AutounattendGeneration.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-AutounattendGeneration.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+}
+
+Describe 'VM post-install evidence contract' {
+    It 'Test-VmPostInstallEvidence.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-VmPostInstallEvidence.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+}

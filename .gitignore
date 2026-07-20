@@ -62,3 +62,7 @@ assets/runtime/cursors/*/png/
 # Local Superpowers design/mockup output
 docs/superpowers/
 assets/ui/desktop/presets/
+
+# Local agent/planning scratch (never ship)
+.scratch/
+

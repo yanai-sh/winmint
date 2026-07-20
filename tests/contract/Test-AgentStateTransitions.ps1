@@ -246,6 +246,7 @@ try {
         'profiles',
         'package-managers',
         'wsl',
+        'dev-drive',
         'git',
         'dotfiles',
         'launcher-key',
@@ -256,8 +257,8 @@ try {
         'editors',
         'liveInstallAudit'
     )
-    Assert-Equal (@($moduleCatalog | ForEach-Object { $_.Id }) -join ',') 'profiles,packageManagers,wsl,git,dotfiles,launcherKey,phoneLink,shell,windhawk,browsers,editors,liveInstallAudit' 'Agent module catalog should declare the explicit FirstLogon registration order.'
-    Assert-Equal (@($moduleCatalog | ForEach-Object { $_.BootstrapFunction }) -join ',') 'Invoke-WinMintAgentProfileBootstrap,Invoke-WinMintAgentPackageManagerBootstrap,Invoke-WinMintAgentWslBootstrap,Invoke-WinMintAgentGitBootstrap,Invoke-WinMintAgentDotfileBootstrap,Invoke-WinMintAgentLauncherKeyBootstrap,Invoke-WinMintAgentPhoneLinkBootstrap,Invoke-WinMintAgentDesktopEnvironmentBootstrap,Invoke-WinMintAgentWindhawkBootstrap,Invoke-WinMintAgentBrowsersBootstrap,Invoke-WinMintAgentEditorBootstrap,Invoke-WinMintAgentLiveInstallAuditBootstrap' 'Agent module catalog should declare the required bootstrap functions explicitly.'
+    Assert-Equal (@($moduleCatalog | ForEach-Object { $_.Id }) -join ',') 'profiles,packageManagers,wsl,devDrive,git,dotfiles,launcherKey,phoneLink,shell,windhawk,browsers,editors,liveInstallAudit' 'Agent module catalog should declare the explicit FirstLogon registration order.'
+    Assert-Equal (@($moduleCatalog | ForEach-Object { $_.BootstrapFunction }) -join ',') 'Invoke-WinMintAgentProfileBootstrap,Invoke-WinMintAgentPackageManagerBootstrap,Invoke-WinMintAgentWslBootstrap,Invoke-WinMintAgentDevDriveBootstrap,Invoke-WinMintAgentGitBootstrap,Invoke-WinMintAgentDotfileBootstrap,Invoke-WinMintAgentLauncherKeyBootstrap,Invoke-WinMintAgentPhoneLinkBootstrap,Invoke-WinMintAgentDesktopEnvironmentBootstrap,Invoke-WinMintAgentWindhawkBootstrap,Invoke-WinMintAgentBrowsersBootstrap,Invoke-WinMintAgentEditorBootstrap,Invoke-WinMintAgentLiveInstallAuditBootstrap' 'Agent module catalog should declare the required bootstrap functions explicitly.'
     Assert-Equal (@($runtimePlan | Sort-Object Order | ForEach-Object { $_.StepName }) -join ',') ($expectedStepOrder -join ',') 'Agent runtime step plan should preserve module order.'
     $profilesStep = $runtimePlan | Where-Object { $_.StepName -eq 'profiles' } | Select-Object -First 1
     $editorsStep = $runtimePlan | Where-Object { $_.StepName -eq 'editors' } | Select-Object -First 1

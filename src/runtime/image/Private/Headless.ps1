@@ -330,6 +330,8 @@ function New-WinMintHeadlessProfileFromFlags {
         [string]$Password = '',
         [switch]$AutoLogon,
         [switch]$AutoWipeDisk,
+        [ValidateSet('Off', 'Partition', 'VhdDynamic')][string]$DevDrive = 'Off',
+        [ValidateSet(64, 128, 256)][int]$DevDriveSizeGb = 128,
         [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense',
         [string]$Edition = '',
         [string]$ProductKey = '',
@@ -425,6 +427,8 @@ function New-WinMintHeadlessProfileFromFlags {
         Password = $Password
         AutoLogon = [bool]$AutoLogon
         AutoWipeDisk = [bool]$AutoWipeDisk
+        DevDriveMode = $DevDrive
+        DevDriveSizeGb = [int]$DevDriveSizeGb
         EditionMode = $EditionMode
         Edition = $Edition
         ProductKey = $ProductKey

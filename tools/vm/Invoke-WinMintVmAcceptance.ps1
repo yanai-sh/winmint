@@ -660,12 +660,18 @@ if ($runInspect) {
     try {
         $inspectLines = [System.Collections.Generic.List[string]]::new()
         $inspectExit = Invoke-WinMintVmLoggedCommand -LogPath $runLog -Command {
+            $expectDevDrive = $false
+            if ($profileJson.target -and $profileJson.target.PSObject.Properties['devDrive'] -and $profileJson.target.devDrive) {
+                $ddMode = [string]$profileJson.target.devDrive.mode
+                $expectDevDrive = ($ddMode -in @('Partition', 'VhdDynamic'))
+            }
             $inspectParams = @{
                 VMName           = $VMName
                 GuestUser        = $guestUser
                 GuestPassword    = $guestPassword
                 AcceptanceTier   = $acceptanceTier
-                WslDistros       = ($profileJson.development.wsl.distros -join ',')
+                WslDistros       = @($profileJson.development.wsl.distros)
+                ExpectDevDrive   = $expectDevDrive
             }
             & $pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Invoke-WinMintGuestPesterAcceptance.ps1') @inspectParams |
                 ForEach-Object {
@@ -900,6 +906,53 @@ if ($runEvidence) {
     }
     elseif ($result.reachable -and $result.firstLogon) {
         $signalPlumbingFail.Add('DMA regional restore report missing (FirstLogon_RegionalRestore.json)') | Out-Null
+    }
+
+    if ($result.reachable -and $result.firstLogon) {
+        $agentState = Get-WinMintVmPulledAgentState -EvidenceDir $EvidenceDir
+        $stepCheck = Test-WinMintVmFirstLogonRequiredSteps -AgentState $agentState
+        $result.firstLogonSteps = [ordered]@{
+            plumbingOk = [bool]$stepCheck.plumbingOk
+            checkedKeys = @($stepCheck.meta.checkedKeys)
+            observed = $stepCheck.meta.observed
+        }
+        foreach ($f in @($stepCheck.plumbingFailures)) {
+            $signalPlumbingFail.Add("FirstLogon steps: $f") | Out-Null
+        }
+
+        $diskMode = if ($profileJson.target) { [string]$profileJson.target.diskMode } else { '' }
+        $devDriveMode = 'Off'
+        if ($profileJson.target -and $profileJson.target.PSObject.Properties['devDrive'] -and $profileJson.target.devDrive) {
+            $devDriveMode = [string]$profileJson.target.devDrive.mode
+            if ([string]::IsNullOrWhiteSpace($devDriveMode)) { $devDriveMode = 'Off' }
+        }
+        $diskProbe = $null
+        try {
+            $probeScript = Get-WinMintVmDiskLayoutProbeScript
+            $probePoll = Invoke-WinMintVmGuestCommand -VMName $VMName -Credential $cred -ScriptBlock ([scriptblock]::Create($probeScript)) -TimeoutSeconds 60
+            if ($probePoll.Ok -and -not [string]::IsNullOrWhiteSpace([string]$probePoll.Result)) {
+                $diskProbe = [string]$probePoll.Result | ConvertFrom-Json
+            }
+            else {
+                $result.warnings += "Disk layout probe skipped: $(if ($probePoll.TimedOut) { 'timed out' } else { $probePoll.Error })"
+            }
+        }
+        catch {
+            $result.warnings += "Disk layout probe failed: $($_.Exception.Message)"
+        }
+        $diskEvidence = Test-WinMintVmDiskLayoutEvidence -Probe $diskProbe -DiskMode $diskMode -DevDriveMode $devDriveMode
+        $result.diskLayout = [ordered]@{
+            plumbingOk   = [bool]$diskEvidence.plumbingOk
+            diskMode     = $diskMode
+            devDriveMode = $devDriveMode
+            probe        = $diskProbe
+        }
+        foreach ($f in @($diskEvidence.plumbingFailures)) {
+            $signalPlumbingFail.Add("Disk layout: $f") | Out-Null
+        }
+        foreach ($w in @($diskEvidence.softWarnings)) {
+            $result.warnings += "Disk layout: $w"
+        }
     }
 
     $removalDrift = $null

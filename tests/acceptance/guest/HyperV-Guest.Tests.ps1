@@ -53,3 +53,11 @@ Describe 'Hyper-V full tier guest signals' {
         $script:Signals.NixProfileExists | Should -Be $true
     }
 }
+
+Describe 'Hyper-V Dev Drive guest signals' {
+    It 'reports Dev Drive volume or VHDX when profile requests it' -Skip:( -not $TestData.ExpectDevDrive ) {
+        $hasLabel = [bool]$script:Signals.DevDriveLabelPresent
+        $hasVhd = [bool]$script:Signals.DevDriveVhdPresent
+        ($hasLabel -or $hasVhd) | Should -Be $true
+    }
+}

@@ -63,6 +63,27 @@
     "PostStepHook": ""
   },
   {
+    "Id": "devDrive",
+    "RelativePath": "Modules\\DevDrive.ps1",
+    "BootstrapFunction": "Invoke-WinMintAgentDevDriveBootstrap",
+    "RuntimeStepName": "dev-drive",
+    "Group": "dev",
+    "ShellLabel": "Create ReFS Dev Drive",
+    "Enablement": "modules.devDrive.enabled",
+    "Title": "Create opt-in ReFS Dev Drive (partition or dynamic VHDX)",
+    "Kind": "first-logon-module",
+    "Default": false,
+    "Requires": ["modules.devDrive.enabled"],
+    "SuppressedBy": [],
+    "UserControlled": true,
+    "Changes": ["Create an opt-in ReFS Dev Drive for Windows-hosted repos and package caches (not WSL Linux trees)"],
+    "Artifacts": ["state.json", "WinMintAgentProfile.json"],
+    "Reversible": false,
+    "FailurePolicy": "advisory",
+    "Phase": "main",
+    "PostStepHook": ""
+  },
+  {
     "Id": "git",
     "RelativePath": "Modules\\Git.ps1",
     "BootstrapFunction": "Invoke-WinMintAgentGitBootstrap",

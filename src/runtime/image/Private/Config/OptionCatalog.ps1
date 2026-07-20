@@ -13,6 +13,8 @@ function Get-WinMintOptionCatalog {
         DriverSource = @('None', 'Host', 'Custom', 'HostExport', 'CustomInfFolder', 'OemMsi', 'SurfaceMsiSafe', 'SurfaceCatalog')
         DiskMode = @('Manual', 'AutoWipeDisk0', 'DualBootReserved')
         DiskLayoutPreset = @('', 'WindowsHeavy', 'Balanced', 'EvenSplit', 'LinuxHeavy')
+        DevDriveMode = @('Off', 'Partition', 'VhdDynamic')
+        DevDriveSizeGb = @(64, 128, 256)
         DesktopCursorPack = @('Windows11Modern')
         DesktopLayer = @('standard', 'windhawk', 'yasb', 'thide', 'komorebi', 'nilesoft')
         Editor = @('cursor', 'vscode', 'zed', 'antigravity', 'neovim')

@@ -1,21 +1,21 @@
 {
   "schemaVersion": 4,
-  "createdAt": "06/16/2026 05:51:28",
-  "profileName": "Alienware Aurora Gaming",
+  "createdAt": "05/18/2026 00:00:00",
+  "profileName": "Hyper-V Smoke Dev Drive",
   "keep": {
     "edge": true,
     "gaming": false,
     "copilot": false
   },
   "source": {
-    "isoPath": "",
-    "architecture": "amd64"
+    "isoPath": "tests/fixtures/iso/official-win11-25h2-english-arm64-v2.iso",
+    "architecture": "arm64"
   },
   "target": {
-    "device": "ThisPC",
-    "editionMode": "TargetLicense",
-    "edition": "",
-    "diskMode": "Manual",
+    "device": "DifferentPC",
+    "editionMode": "Fixed",
+    "edition": "Windows 11 Pro",
+    "diskMode": "AutoWipeDisk0",
     "diskLayout": {
       "preset": "",
       "roundingGb": 64,
@@ -27,26 +27,29 @@
       "msrMb": 16,
       "recoveryMb": 1024
     },
-    "formFactor": "Desktop",
-    "productKey": ""
+    "productKey": "VK7JG-NPHTM-C97JM-9MPGT-3V66T",
+    "devDrive": {
+      "mode": "VhdDynamic",
+      "sizeGb": 64
+    }
   },
   "identity": {
-    "computerName": "AURORA",
+    "computerName": "WinMintVM",
     "accountName": "dev",
-    "accountMode": "MicrosoftOobe",
-    "autoLogon": false,
-    "passwordSet": false,
-    "passwordIncluded": false
+    "accountMode": "Local",
+    "autoLogon": true,
+    "passwordSet": true,
+    "passwordIncluded": true,
+    "password": "winmint"
   },
   "regional": {
-    "timeZoneId": "Israel Standard Time",
+    "timeZoneId": "",
     "uiLanguage": "en-US",
-    "systemLocale": "he-IL",
+    "systemLocale": "en-US",
     "uiLanguageFallback": "en-US",
-    "userLocale": "he-IL",
-    "inputLocale": "en-US;he-IL",
-    "homeLocationGeoId": 117,
-    "secondaryInputLanguages": "Auto"
+    "userLocale": "en-US",
+    "inputLocale": "en-US",
+    "homeLocationGeoId": 244
   },
   "drivers": {
     "source": "None",
@@ -56,38 +59,21 @@
   "desktop": {
     "cursorPack": "Windows11Modern",
     "layers": [
-      "nilesoft"
+      "standard"
     ]
   },
   "development": {
-    "editors": [
-      "neovim",
-      "zed"
-    ],
-    "browsers": [
-      "helium",
-      "zen-browser"
-    ],
+    "editors": [],
+    "browsers": [],
     "wsl": {
       "distros": []
     }
   },
   "features": {
-    "launcher": "None",
-    "liveInstallAudit": true,
-    "phoneLink": false
+    "launcher": "None"
   },
   "updates": {
-    "mode": "None",
-    "targetFeatureVersion": "25H2",
-    "releaseCadence": "BRelease",
-    "includeOptionalPreviews": false,
-    "payloadRoot": "",
-    "qualitySecurity": true,
-    "dynamicUpdate": true,
-    "defender": true,
-    "dotnet": true,
-    "provisionedApps": true
+    "mode": "None"
   },
   "removals": {
     "aiPolicy": "ServiceableFull"
@@ -113,6 +99,11 @@
     "telemetryTracing": "disabled",
     "advertisingId": "disabled",
     "activityHistory": "disabled"
+  },
+  "diagnostics": {
+    "retainFirstLogonArtifacts": true,
+    "provisioningShellDwellMs": 10000,
+    "wslRuntimeValidation": "skip",
+    "vmGuestBasicConsole": true
   }
 }
-

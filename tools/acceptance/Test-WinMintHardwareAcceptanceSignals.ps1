@@ -114,7 +114,18 @@ function Test-WinMintHardwareAcceptanceSignals {
                 $phoneLink = $false
                 if ($buildProfile -and $buildProfile.features) { $phoneLink = [bool]$buildProfile.features.phoneLink }
                 $ok = $phoneLink
-                if (-not $ok) { $message = 'features.phoneLink is false' }
+                if ($ok -and $audit -and $audit.observed -and $audit.observed.installedAppx) {
+                    $phonePresent = @($audit.observed.installedAppx | Where-Object {
+                            [string]$_.name -match 'YourPhone|CrossDevice' -or [string]$_.packageFullName -match 'YourPhone|CrossDevice'
+                        }).Count -gt 0
+                    if (-not $phonePresent) {
+                        $ok = $false
+                        $message = 'Phone Link / Cross Device not reported in live audit inventory'
+                    }
+                }
+                elseif (-not $ok) {
+                    $message = 'features.phoneLink is false'
+                }
             }
             'agents.zenBrowser' {
                 $severity = 'evidence'
@@ -126,10 +137,39 @@ function Test-WinMintHardwareAcceptanceSignals {
                 $ok = Test-WinMintAgentModuleStepOk -State $state -StepName 'editors'
                 if (-not $ok) { $message = 'module:editors not ok' }
             }
+            'agents.nilesoft' {
+                $severity = 'evidence'
+                $ok = Test-WinMintAgentModuleStepOk -State $state -StepName 'desktop-environment'
+                if (-not $ok) { $message = 'module:desktop-environment not ok' }
+            }
             'wsl.fedora' {
                 $severity = 'evidence'
                 $ok = Test-WinMintAgentModuleStepOk -State $state -StepName 'wsl'
                 if (-not $ok) { $message = 'module:wsl not ok' }
+            }
+            'wsl.ubuntu' {
+                $severity = 'evidence'
+                $ok = Test-WinMintAgentModuleStepOk -State $state -StepName 'wsl'
+                if (-not $ok) { $message = 'module:wsl not ok' }
+            }
+            'disk.autoWipe' {
+                $severity = 'evidence'
+                $mode = if ($buildProfile -and $buildProfile.target) { [string]$buildProfile.target.diskMode } else { '' }
+                $ok = ($mode -eq 'AutoWipeDisk0')
+                if (-not $ok) { $message = "diskMode=$mode expected AutoWipeDisk0" }
+            }
+            'disk.manual' {
+                $severity = 'evidence'
+                $mode = if ($buildProfile -and $buildProfile.target) { [string]$buildProfile.target.diskMode } else { '' }
+                $ok = ($mode -eq 'Manual')
+                if (-not $ok) { $message = "diskMode=$mode expected Manual" }
+            }
+            'keep.gamingRemoved' {
+                $severity = 'evidence'
+                $keepGaming = $true
+                if ($buildProfile -and $buildProfile.keep) { $keepGaming = [bool]$buildProfile.keep.gaming }
+                $ok = (-not $keepGaming)
+                if (-not $ok) { $message = 'keep.gaming is true (gaming removal expected)' }
             }
             'audit.zeroErrors' {
                 $severity = 'plumbing'
@@ -151,7 +191,8 @@ function Test-WinMintHardwareAcceptanceSignals {
                     if ($buildProfile.desktop) { $layers = @($buildProfile.desktop.layers | Where-Object { $_ }) }
                     if ($buildProfile.features) { $launcher = [string]$buildProfile.features.launcher }
                 }
-                $ok = ($layers.Count -eq 0 -and $launcher -eq 'None')
+                $extraLayers = @($layers | Where-Object { $_ -and $_ -ne 'standard' })
+                $ok = ($extraLayers.Count -eq 0 -and $launcher -eq 'None')
                 if (-not $ok) { $message = "layers=$($layers -join ',') launcher=$launcher" }
             }
             'registry.gamingPerformanceBaseline' {

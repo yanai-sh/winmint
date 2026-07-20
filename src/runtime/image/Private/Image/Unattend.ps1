@@ -28,43 +28,65 @@ function Get-WinMintDualBootWindowsRatio {
     }
 }
 
-function New-WinMintWindowsOnlyDiskpartPowerShellCommand {
-    param([Parameter(Mandatory)]$DiskLayout)
+function Get-WinMintDiskpartRunSynchronousPath {
+    # RunSynchronous <Path> is capped ~259 chars. Stage WinMintDiskpart.ps1 on the ISO root
+    # and locate it from WinPE by drive letter (never embed a base64 PowerShell payload in Path).
+    'cmd.exe /c "for %d in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do if exist %d:\WinMintDiskpart.ps1 (powershell.exe -NoProfile -ExecutionPolicy Bypass -File %d:\WinMintDiskpart.ps1 & exit /b %ERRORLEVEL%)"'
+}
+
+function New-WinMintWindowsOnlyDiskpartPeScript {
+    param(
+        [Parameter(Mandatory)]$DiskLayout,
+        [int]$DevDriveSizeGb = 0
+    )
 
     $windowsMinimumGb = [int](Get-WinMintProfileSetting $DiskLayout 'windowsMinimumGb' 256)
     $efiMb = [int](Get-WinMintProfileSetting $DiskLayout 'efiMb' 1024)
     $msrMb = [int](Get-WinMintProfileSetting $DiskLayout 'msrMb' 16)
     $recoveryMb = [int](Get-WinMintProfileSetting $DiskLayout 'recoveryMb' 1024)
+    $devDriveMb = if ($DevDriveSizeGb -gt 0) { [int]($DevDriveSizeGb * 1024) } else { 0 }
 
-    $script = @"
-`$ErrorActionPreference='Stop';
-`$disk=Get-Disk -Number 0;
-`$totalMb=[math]::Floor(`$disk.Size/1MB);
-`$usableMb=[int](`$totalMb-$efiMb-$msrMb-$recoveryMb);
-if (`$usableMb -lt ($windowsMinimumGb*1024)) { throw "Windows partition would be `$([math]::Floor(`$usableMb/1024)) GB; minimum is $windowsMinimumGb GB." }
-@(
-'select disk 0',
-'clean',
-'convert gpt',
-'create partition efi size=$efiMb',
-'format quick fs=fat32 label=ESP',
-'create partition msr size=$msrMb',
-'create partition primary',
-'format quick fs=ntfs label=WINMINT',
-'shrink minimum=$recoveryMb desired=$recoveryMb',
-'create partition primary size=$recoveryMb',
-'format quick fs=ntfs label=WinRE',
-'set id=de94bba4-06d1-4d40-a16a-bfd50179d6ac',
-'gpt attributes=0x8000000000000001'
-) | Set-Content -LiteralPath 'X:\winmint_dp.txt' -Encoding ASCII;
-diskpart.exe /s X:\winmint_dp.txt
+    # InstallTo stays partition 3 (Windows). Optional Dev Drive is partition 5 after WinRE.
+    @"
+`$ErrorActionPreference = 'Stop'
+`$disk = Get-Disk -Number 0
+`$totalMb = [math]::Floor(`$disk.Size / 1MB)
+`$reservedMb = [int]($efiMb + $msrMb + $recoveryMb + $devDriveMb)
+`$usableMb = [int](`$totalMb - `$reservedMb)
+if (`$usableMb -lt ($windowsMinimumGb * 1024)) {
+    throw "Windows partition would be `$([math]::Floor(`$usableMb / 1024)) GB; minimum is $windowsMinimumGb GB (after Dev Drive/WinRE reserve)."
+}
+`$lines = @(
+    'select disk 0',
+    'clean',
+    'convert gpt',
+    'create partition efi size=$efiMb',
+    'format quick fs=fat32 label=ESP',
+    'create partition msr size=$msrMb',
+    "create partition primary size=`$usableMb",
+    'format quick fs=ntfs label=WINMINT',
+    'create partition primary size=$recoveryMb',
+    'format quick fs=ntfs label=WinRE',
+    'set id=de94bba4-06d1-4d40-a16a-bfd50179d6ac',
+    'gpt attributes=0x8000000000000001'
+)
+if ($devDriveMb -gt 0) {
+    `$lines += @(
+        'create partition primary size=$devDriveMb',
+        'format quick fs=refs label=DevDrive'
+    )
+}
+`$lines | Set-Content -LiteralPath 'X:\winmint_dp.txt' -Encoding ascii
+`$dp = & diskpart.exe /s X:\winmint_dp.txt 2>&1 | Out-String
+if (`$LASTEXITCODE -ne 0) { throw "diskpart failed (`$LASTEXITCODE): `$dp" }
 "@
-    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($script))
-    "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
 }
 
-function New-WinMintDualBootDiskpartPowerShellCommand {
-    param([Parameter(Mandatory)]$DiskLayout)
+function New-WinMintDualBootDiskpartPeScript {
+    param(
+        [Parameter(Mandatory)]$DiskLayout,
+        [int]$DevDriveSizeGb = 0
+    )
 
     $preset = [string](Get-WinMintProfileSetting $DiskLayout 'preset' '')
     $ratio = Get-WinMintDualBootWindowsRatio -Preset $preset
@@ -74,36 +96,67 @@ function New-WinMintDualBootDiskpartPowerShellCommand {
     $efiMb = [int](Get-WinMintProfileSetting $DiskLayout 'efiMb' 1024)
     $msrMb = [int](Get-WinMintProfileSetting $DiskLayout 'msrMb' 16)
     $recoveryMb = [int](Get-WinMintProfileSetting $DiskLayout 'recoveryMb' 1024)
+    $devDriveGb = if ($DevDriveSizeGb -gt 0) { [int]$DevDriveSizeGb } else { 0 }
+    $devDriveMb = $devDriveGb * 1024
 
-    $script = @"
-`$ErrorActionPreference='Stop';
-`$disk=Get-Disk -Number 0;
-`$totalGb=[math]::Floor(`$disk.Size/1GB);
-`$reservedGb=[math]::Ceiling(($efiMb+$msrMb+$recoveryMb)/1024);
-`$usableGb=`$totalGb-`$reservedGb;
-`$windowsGb=[math]::Round((`$usableGb*$ratio)/$roundingGb,0,[System.MidpointRounding]::AwayFromZero)*$roundingGb;
+    # Dev Drive is carved from the Windows share so Linux unallocated space stays intact.
+    @"
+`$ErrorActionPreference = 'Stop'
+`$disk = Get-Disk -Number 0
+`$totalGb = [math]::Floor(`$disk.Size / 1GB)
+`$reservedGb = [math]::Ceiling(($efiMb + $msrMb + $recoveryMb) / 1024)
+`$usableGb = `$totalGb - `$reservedGb
+`$windowsGb = [math]::Round((`$usableGb * $ratio) / $roundingGb, 0, [System.MidpointRounding]::AwayFromZero) * $roundingGb
 if (`$windowsGb -lt $windowsMinimumGb) { throw "Windows partition would be `$windowsGb GB; minimum is $windowsMinimumGb GB." }
-`$linuxGb=`$usableGb-`$windowsGb;
+`$linuxGb = `$usableGb - `$windowsGb
 if (`$linuxGb -lt $linuxMinimumGb) { throw "Linux reserved space would be `$linuxGb GB; minimum is $linuxMinimumGb GB." }
-`$windowsMb=[int](`$windowsGb*1024);
-@(
-'select disk 0',
-'clean',
-'convert gpt',
-'create partition efi size=$efiMb',
-'format quick fs=fat32 label=ESP',
-'create partition msr size=$msrMb',
-"create partition primary size=`$windowsMb",
-'format quick fs=ntfs label=WINMINT',
-'create partition primary size=$recoveryMb',
-'format quick fs=ntfs label=WinRE',
-'set id=de94bba4-06d1-4d40-a16a-bfd50179d6ac',
-'gpt attributes=0x8000000000000001'
-) | Set-Content -LiteralPath 'X:\winmint_dp.txt' -Encoding ASCII;
-diskpart.exe /s X:\winmint_dp.txt
+`$devDriveGb = $devDriveGb
+`$windowsOnlyGb = `$windowsGb - `$devDriveGb
+if (`$devDriveGb -gt 0 -and `$windowsOnlyGb -lt $windowsMinimumGb) {
+    throw "Windows partition after Dev Drive would be `$windowsOnlyGb GB; minimum is $windowsMinimumGb GB."
+}
+`$windowsMb = [int](`$windowsOnlyGb * 1024)
+`$lines = @(
+    'select disk 0',
+    'clean',
+    'convert gpt',
+    'create partition efi size=$efiMb',
+    'format quick fs=fat32 label=ESP',
+    'create partition msr size=$msrMb',
+    "create partition primary size=`$windowsMb",
+    'format quick fs=ntfs label=WINMINT',
+    'create partition primary size=$recoveryMb',
+    'format quick fs=ntfs label=WinRE',
+    'set id=de94bba4-06d1-4d40-a16a-bfd50179d6ac',
+    'gpt attributes=0x8000000000000001'
+)
+if ($devDriveMb -gt 0) {
+    `$lines += @(
+        'create partition primary size=$devDriveMb',
+        'format quick fs=refs label=DevDrive'
+    )
+}
+`$lines | Set-Content -LiteralPath 'X:\winmint_dp.txt' -Encoding ascii
+`$dp = & diskpart.exe /s X:\winmint_dp.txt 2>&1 | Out-String
+if (`$LASTEXITCODE -ne 0) { throw "diskpart failed (`$LASTEXITCODE): `$dp" }
 "@
-    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($script))
-    "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
+}
+
+# Back-compat aliases used by older contracts / callers.
+function New-WinMintWindowsOnlyDiskpartPowerShellCommand {
+    param(
+        [Parameter(Mandatory)]$DiskLayout,
+        [int]$DevDriveSizeGb = 0
+    )
+    Get-WinMintDiskpartRunSynchronousPath
+}
+
+function New-WinMintDualBootDiskpartPowerShellCommand {
+    param(
+        [Parameter(Mandatory)]$DiskLayout,
+        [int]$DevDriveSizeGb = 0
+    )
+    Get-WinMintDiskpartRunSynchronousPath
 }
 
 function Install-Autounattend {
@@ -113,6 +166,7 @@ function Install-Autounattend {
         [string]$TimeZone, [string]$TargetPCName, [string]$TargetUser, [ValidateSet('Local', 'MicrosoftOobe')][string]$AccountMode = 'Local', [string]$TargetPass,
         [string]$EditionName, [ValidateSet('TargetLicense', 'Fixed')][string]$EditionMode = 'TargetLicense', [string]$ProductKey = '', [int]$InstallImageCount = 0, [bool]$AutoWipeDisk, [bool]$AutoLogon,
         [object]$DiskLayout,
+        [object]$DevDrive,
         [bool]$HardwareBypass = $false,
         [string]$InputLocale, [string]$SystemLocale, [string]$UILanguage, [string]$UILanguageFallback, [string]$UserLocale,
         [ValidateNotNullOrEmpty()][string]$ScriptRoot,
@@ -341,6 +395,16 @@ function Install-Autounattend {
         }
     }
 
+    $devDriveMode = if ($DevDrive) { [string](Get-WinMintProfileSetting $DevDrive 'mode' 'Off') } else { 'Off' }
+    $devDriveSizeGb = if ($DevDrive) { [int](Get-WinMintProfileSetting $DevDrive 'sizeGb' 128) } else { 128 }
+    # Partition Dev Drive is carved at Setup via diskpart (not FirstLogon shrink).
+    $partitionDevDriveGb = if ($devDriveMode -eq 'Partition' -and $devDriveSizeGb -in @(64, 128, 256)) { $devDriveSizeGb } else { 0 }
+    $useDiskpart = $AutoWipeDisk -and (
+        $diskLayoutMode -eq 'DualBootReserved' -or
+        $partitionDevDriveGb -gt 0
+    )
+    $diskpartPeScript = $null
+
     $diskConfigNode = $xmlDoc.SelectSingleNode('//u:DiskConfiguration', $nsMgr)
     if (-not $AutoWipeDisk) {
         Log 'Disk layout: manual'
@@ -349,22 +413,27 @@ function Install-Autounattend {
         $installToNode = $xmlDoc.SelectSingleNode('//u:InstallTo', $nsMgr)
         if ($installToNode) { $null = $installToNode.ParentNode.RemoveChild($installToNode) }
     }
-    elseif ($diskLayoutMode -eq 'AutoWipeDisk0') {
+    elseif (-not $useDiskpart -and $diskLayoutMode -eq 'AutoWipeDisk0') {
         Log 'Disk layout: wipe disk 0'
         LogVerbose 'Native unattend wipe - EFI (1 GB) + MSR (16 MB) + Windows on the primary disk.'
     }
-    else {
+    elseif ($useDiskpart) {
         if ($diskLayoutMode -eq 'DualBootReserved') {
             $preset = [string](Get-WinMintProfileSetting $DiskLayout 'preset' 'Balanced')
-            Log "Disk layout: dual-boot ($preset)"
-            LogVerbose "Dual boot reserved ($preset) - EFI (1 GB) + MSR (16 MB) + rounded Windows + WinRE (1 GB), Linux space left unallocated."
+            $devSuffix = if ($partitionDevDriveGb -gt 0) { " + ${partitionDevDriveGb} GB Dev Drive" } else { '' }
+            Log "Disk layout: dual-boot ($preset)$devSuffix"
+            LogVerbose "Dual boot reserved ($preset) - EFI (1 GB) + MSR (16 MB) + rounded Windows + WinRE (1 GB)$devSuffix, Linux space left unallocated."
+        }
+        elseif ($partitionDevDriveGb -gt 0) {
+            Log "Disk layout: wipe disk 0 + ${partitionDevDriveGb} GB Dev Drive"
+            LogVerbose "Diskpart wipe - EFI + MSR + Windows + WinRE + ${partitionDevDriveGb} GB ReFS DevDrive; InstallTo stays partition 3."
         }
         else {
             Log 'Disk layout: automated diskpart'
             LogVerbose 'Automated diskpart - EFI (1 GB) + MSR (16 MB) + Windows + WinRE (1 GB) on the primary disk.'
         }
         if ($diskConfigNode) { $null = $diskConfigNode.ParentNode.RemoveChild($diskConfigNode) }
-        # InstallTo (disk 0, partition 3) is retained: EFI=1, MSR=2, Windows=3, Recovery=4
+        # InstallTo (disk 0, partition 3) is retained: EFI=1, MSR=2, Windows=3, Recovery=4[, DevDrive=5]
 
         $wpSetupComp = $xmlDoc.SelectSingleNode(
             '//u:settings[@pass="windowsPE"]/u:component[@name="Microsoft-Windows-Setup"]/u:RunSynchronous', $nsMgr)
@@ -376,25 +445,29 @@ function Install-Autounattend {
                 Measure-Object -Maximum).Maximum
             $nextOrder = $maxOrder + 1
 
-            $dpLines = if ($diskLayoutMode -eq 'DualBootReserved') {
-                @(New-WinMintDualBootDiskpartPowerShellCommand -DiskLayout $DiskLayout)
+            $diskpartPeScript = if ($diskLayoutMode -eq 'DualBootReserved') {
+                New-WinMintDualBootDiskpartPeScript -DiskLayout $DiskLayout -DevDriveSizeGb $partitionDevDriveGb
             }
             else {
-                @(New-WinMintWindowsOnlyDiskpartPowerShellCommand -DiskLayout $DiskLayout)
+                New-WinMintWindowsOnlyDiskpartPeScript -DiskLayout $DiskLayout -DevDriveSizeGb $partitionDevDriveGb
+            }
+            $dpPath = Get-WinMintDiskpartRunSynchronousPath
+            if ($dpPath.Length -gt 259) {
+                throw "Diskpart RunSynchronous Path is $($dpPath.Length) chars (> 259 WCM limit)."
             }
 
-            foreach ($line in $dpLines) {
-                $cmdEl   = $xmlDoc.CreateElement('RunSynchronousCommand', $xmlNs)
-                $null    = $cmdEl.SetAttribute('action', $wcmNs, 'add')
-                $orderEl = $xmlDoc.CreateElement('Order', $xmlNs); $orderEl.InnerText = "$nextOrder"
-                $pathEl  = $xmlDoc.CreateElement('Path',  $xmlNs); $pathEl.InnerText  = $line
-                $null    = $cmdEl.AppendChild($orderEl)
-                $null    = $cmdEl.AppendChild($pathEl)
-                $null    = $wpSetupComp.AppendChild($cmdEl)
-                $nextOrder++
-            }
-            LogVerbose 'Diskpart script (EFI + MSR + Windows + WinRE) injected into windowsPE RunSynchronous.'
+            $cmdEl   = $xmlDoc.CreateElement('RunSynchronousCommand', $xmlNs)
+            $null    = $cmdEl.SetAttribute('action', $wcmNs, 'add')
+            $orderEl = $xmlDoc.CreateElement('Order', $xmlNs); $orderEl.InnerText = "$nextOrder"
+            $pathEl  = $xmlDoc.CreateElement('Path',  $xmlNs); $pathEl.InnerText  = $dpPath
+            $null    = $cmdEl.AppendChild($orderEl)
+            $null    = $cmdEl.AppendChild($pathEl)
+            $null    = $wpSetupComp.AppendChild($cmdEl)
+            LogVerbose 'Diskpart launcher (WinMintDiskpart.ps1 on ISO root) injected into windowsPE RunSynchronous.'
         }
+    }
+    else {
+        LogWarn "Unrecognized disk layout mode '$diskLayoutMode'; leaving template DiskConfiguration unchanged."
     }
 
     if ($DryRun) {
@@ -446,15 +519,21 @@ function Install-Autounattend {
             [pscustomobject]@{ Item = 'Hardware bypass'; Value = $hardwareBypassDisplay }
         )
         return [pscustomobject]@{
-            AutounattendXml = $autounattendXml
+            AutounattendXml  = $autounattendXml
             SetupProfileJson = $setupProfileJson
             AgentProfileJson = $agentProfileJson
-            SetupPlanJson = $setupPlanJson
+            SetupPlanJson    = $setupPlanJson
+            DiskpartPeScript = $(if ($null -ne $diskpartPeScript) { [string]$diskpartPeScript } else { '' })
         }
     }
 
     Invoke-Action 'Writing autounattend.xml and setup scripts onto the ISO' {
         LogVerbose "Mount: $MountDir | ISO staging: $IsoContents"
+        if (-not [string]::IsNullOrWhiteSpace([string]$diskpartPeScript)) {
+            $diskpartPath = Join-Path $IsoContents 'WinMintDiskpart.ps1'
+            Set-Content -LiteralPath $diskpartPath -Value $diskpartPeScript -Encoding utf8
+            LogVerbose "Staged WinMintDiskpart.ps1 for windowsPE disk layout ($diskpartPath)."
+        }
 
         $bundleDir = Join-Path $ScriptRoot 'src\runtime\setup'
         if (Test-Path -LiteralPath $bundleDir) {

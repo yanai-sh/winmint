@@ -108,6 +108,24 @@ function New-WinMintBuildConfig {
             recoveryMb = 1024
         }
     }
+    elseif ($diskLayout -is [System.Collections.IDictionary]) {
+        $diskLayout['mode'] = $diskMode
+    }
+    else {
+        # PSCustomObject from JSON — rebuild with mode for unattend branching.
+        $diskLayout = [ordered]@{
+            mode                 = $diskMode
+            preset               = [string](Get-WinMintProfileSetting $diskLayout 'preset' '')
+            roundingGb           = [int](Get-WinMintProfileSetting $diskLayout 'roundingGb' 64)
+            windowsMinimumGb     = [int](Get-WinMintProfileSetting $diskLayout 'windowsMinimumGb' 256)
+            windowsRecommendedGb = [int](Get-WinMintProfileSetting $diskLayout 'windowsRecommendedGb' 384)
+            linuxMinimumGb       = [int](Get-WinMintProfileSetting $diskLayout 'linuxMinimumGb' 128)
+            linuxRecommendedGb   = [int](Get-WinMintProfileSetting $diskLayout 'linuxRecommendedGb' 256)
+            efiMb                = [int](Get-WinMintProfileSetting $diskLayout 'efiMb' 1024)
+            msrMb                = [int](Get-WinMintProfileSetting $diskLayout 'msrMb' 16)
+            recoveryMb           = [int](Get-WinMintProfileSetting $diskLayout 'recoveryMb' 1024)
+        }
+    }
     $features = [System.Collections.Generic.List[string]]::new()
     $features.Add('OpenSSH.Client')
     # Baseline developer runtime: WSL2 and its VM plumbing are always enabled,
@@ -188,6 +206,20 @@ function New-WinMintBuildConfig {
         DiskMode = $diskMode
         DiskLayout = $diskLayout
         AutoWipeDisk = ($diskMode -in @('AutoWipeDisk0', 'DualBootReserved'))
+        DevDrive = $(
+            $rawDev = Get-WinMintProfileSetting $target 'devDrive' $null
+            if ($null -eq $rawDev) {
+                [ordered]@{ mode = 'Off'; sizeGb = 128 }
+            }
+            else {
+                $m = [string](Get-WinMintProfileSetting $rawDev 'mode' 'Off')
+                $s = Get-WinMintProfileSetting $rawDev 'sizeGb' 128
+                if ($m -notin @('Off', 'Partition', 'VhdDynamic')) { $m = 'Off' }
+                $s = [int]$s
+                if ($s -notin @(64, 128, 256)) { $s = 128 }
+                [ordered]@{ mode = $m; sizeGb = $s }
+            }
+        )
         CursorPackKind = [string](Get-WinMintProfileSetting $desktop 'cursorPack' $script:Win11IsoDefaultCursorPackKind)
         TimeZoneId = [string](Get-WinMintProfileSetting $regional 'timeZoneId' '')
         InputLocale = [string](Get-WinMintProfileSetting $regional 'inputLocale' '')

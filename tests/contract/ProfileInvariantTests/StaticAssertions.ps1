@@ -2894,6 +2894,81 @@ function Assert-WslFirstDefaultsAndGuards {
     }
 }
 
+function Assert-DevDriveOptInContract {
+    $schemaText = Get-Content -LiteralPath (Join-Path $root 'schemas\winmint.buildprofile.schema.json') -Raw
+    foreach ($expected in @('"Off"', '"Partition"', '"VhdDynamic"', '64', '128', '256', 'diskpart', 'VhdDynamic')) {
+        if ($schemaText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "BuildProfile schema Dev Drive contract should mention '$expected'."
+        }
+    }
+    if ($schemaText -match 'Partition shrinks the Windows volume at FirstLogon') {
+        Add-SmokeFailure 'Partition Dev Drive must not be documented as FirstLogon shrink; it is Setup diskpart.'
+    }
+
+    $unattendText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Image\Unattend.ps1') -Raw
+    foreach ($expected in @(
+        'function New-WinMintWindowsOnlyDiskpartPeScript',
+        'function New-WinMintDualBootDiskpartPeScript',
+        'function Get-WinMintDiskpartRunSynchronousPath',
+        'WinMintDiskpart.ps1',
+        'DevDriveSizeGb',
+        'format quick fs=refs label=DevDrive',
+        'partitionDevDriveGb',
+        '-DevDrive'
+    )) {
+        if ($unattendText -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "Unattend Dev Drive diskpart path should include '$expected'."
+        }
+    }
+    if ($unattendText -match '-EncodedCommand') {
+        Add-SmokeFailure 'Diskpart must not use -EncodedCommand RunSynchronous paths (WCM 259-char Path limit).'
+    }
+    if ($unattendText -notmatch '\$useDiskpart') {
+        Add-SmokeFailure 'Install-Autounattend must force diskpart when Partition Dev Drive is selected.'
+    }
+
+    $pipelineText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Pipeline.ps1') -Raw
+    if (($pipelineText -split '-DevDrive \$BuildConfig\.DevDrive').Count -lt 3) {
+        Add-SmokeFailure 'Pipeline must pass BuildConfig.DevDrive into both Install-Autounattend call sites.'
+    }
+
+    $devDriveModule = Get-Content -LiteralPath (Join-Path $root 'src\runtime\firstlogon\Modules\DevDrive.ps1') -Raw
+    foreach ($expected in @(
+        'function Enable-WinMintPartitionDevDrive',
+        'function New-WinMintDevDriveVhdDynamic',
+        'Format-Volume -DriveLetter $letter -FileSystem ReFS -DevDrive',
+        'type=expandable',
+        'WinMint.vhdx'
+    )) {
+        if ($devDriveModule -notmatch [regex]::Escape($expected)) {
+            Add-SmokeFailure "DevDrive FirstLogon module should include '$expected'."
+        }
+    }
+    if ($devDriveModule -match 'function New-WinMintDevDrivePartition' -or $devDriveModule -match 'Resize-Partition') {
+        Add-SmokeFailure 'FirstLogon must not shrink C: for Partition Dev Drive (Setup diskpart owns the carve).'
+    }
+
+    $profileText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\image\Private\Config\Profile.ps1') -Raw
+    if ($profileText -notmatch 'Partition requires AutoWipeDisk0 or DualBootReserved') {
+        Add-SmokeFailure 'Profile validation must reject Partition Dev Drive with Manual disk mode.'
+    }
+
+    $setupShellStatus = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\WinMintSetupShell.Status.ps1') -Raw
+    if ($setupShellStatus -notmatch [regex]::Escape("'modules.devDrive.enabled'")) {
+        Add-SmokeFailure 'Setup-shell status projection must understand modules.devDrive.enabled.'
+    }
+
+    $strategyText = Get-Content -LiteralPath (Join-Path $root 'docs\Windows-Debloat-Strategy.md') -Raw
+    foreach ($guard in @('Off by default', 'Partition', 'VhdDynamic', 'diskpart', 'WinMint.vhdx')) {
+        if ($strategyText -notmatch [regex]::Escape($guard)) {
+            Add-SmokeFailure "Dev Drive strategy should document '$guard'."
+        }
+    }
+    if ($strategyText -match 'User-managed only') {
+        Add-SmokeFailure 'Dev Drive is an opt-in profile surface; strategy must not call it user-managed only.'
+    }
+}
+
 function Assert-LogNoiseInvariants {
     $pipelinePath = Join-Path $root 'src\runtime\image\Private\Pipeline.ps1'
     $displayPath = Join-Path $root 'src\runtime\image\Private\Console\Display.ps1'

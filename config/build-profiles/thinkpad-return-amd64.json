@@ -70,7 +70,7 @@
   },
   "features": {
     "launcher": "None",
-    "liveInstallAudit": false,
+    "liveInstallAudit": true,
     "phoneLink": false
   },
   "updates": {

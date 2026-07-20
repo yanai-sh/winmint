@@ -89,6 +89,7 @@ function Get-WinMintAgentModuleRuntimeState {
         'always' { return $true }
         'modules.packageManagers.enabled' { return (Test-AgentModuleEnabled -Name 'packageManagers') }
         'modules.wsl.enabled' { return (Test-AgentModuleEnabled -Name 'wsl') }
+        'modules.devDrive.enabled' { return (Test-AgentModuleEnabled -Name 'devDrive') }
         'modules.git.enabled' { return (Test-AgentModuleEnabled -Name 'git') }
         'modules.dotfiles.enabled' { return (Test-AgentModuleEnabled -Name 'dotfiles') }
         'modules.launcherKey.enabled' { return (Test-AgentModuleEnabled -Name 'launcherKey') }

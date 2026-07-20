@@ -162,6 +162,10 @@ function Invoke-WinMintNewProfileCommand {
         [string]$PasswordEnvVar = '',
         [switch]$AutoLogon,
         [switch]$AutoWipeDisk,
+        # Opt-in ReFS Dev Drive at FirstLogon: Off (default) | Partition | VhdDynamic.
+        # Size presets: 64 | 128 (default when on) | 256 GB.
+        [ValidateSet('Off', 'Partition', 'VhdDynamic')][string]$DevDrive = 'Off',
+        [ValidateSet(64, 128, 256)][int]$DevDriveSizeGb = 128,
         # Host (default) | Home | Pro | Enterprise | Education | SingleLanguage |
         # All, or an exact edition name. The token drives the edition mode; there
         # is no separate -EditionMode.
@@ -239,6 +243,8 @@ function Invoke-WinMintNewProfileCommand {
         -Password $secret.Password `
         -AutoLogon:$AutoLogon `
         -AutoWipeDisk:$AutoWipeDisk `
+        -DevDrive $DevDrive `
+        -DevDriveSizeGb $DevDriveSizeGb `
         -EditionMode $editionSelection.Mode `
         -Edition $editionSelection.Name `
         -ProductKey $productKey `
@@ -353,6 +359,8 @@ new options (configuration lives here):
   -UpdatePayloadRoot <dir>          Root containing packages\, appx\, and dependency payloads.
   -UpdateProvisionedApps On|Off     Include Store/MSIX app provisioning payloads.
   -Wsl2Distros Ubuntu,Fedora,archlinux,NixOS-WSL,pengwin
+  -DevDrive Off|Partition|VhdDynamic   Opt-in ReFS Dev Drive (default Off).
+  -DevDriveSizeGb 64|128|256           Size when Dev Drive is on (default 128).
   -PowerPlan Balanced|EnergySaver|HighPerformance|UltimatePerformance
   -PhoneLink -LiveInstallAudit
   Identity/locale/driver flags: -ComputerName -AccountName -AccountMode

@@ -3,7 +3,9 @@
   "summary": { "error": 0, "warning": 0 },
   "observed": {
     "installedAppx": [
-      { "name": "Microsoft.Edge.Stable", "packageFullName": "Microsoft.MicrosoftEdge.Stable_8wekyb3d8bbwe" }
+      { "name": "Microsoft.Edge.Stable", "packageFullName": "Microsoft.MicrosoftEdge.Stable_8wekyb3d8bbwe" },
+      { "name": "Microsoft.YourPhone", "packageFullName": "Microsoft.YourPhone_8wekyb3d8bbwe" },
+      { "name": "MicrosoftWindows.CrossDevice", "packageFullName": "MicrosoftWindows.CrossDevice_cw5n1h2txyewy" }
     ]
   }
 }

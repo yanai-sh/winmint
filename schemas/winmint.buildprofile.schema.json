@@ -161,6 +161,16 @@
             "recoveryMb": { "type": "integer", "const": 1024 }
           },
           "additionalProperties": false
+        },
+        "devDrive": {
+          "type": "object",
+          "description": "Opt-in ReFS Dev Drive for Windows-hosted repos/caches. Off by default. Partition carves a labeled ReFS volume at Setup via diskpart (requires AutoWipeDisk0 or DualBootReserved); FirstLogon applies Dev Drive trust. VhdDynamic creates an expandable VHDX at FirstLogon under %SystemDrive%\\DevDrives. Not for WSL Linux trees.",
+          "required": ["mode", "sizeGb"],
+          "properties": {
+            "mode": { "type": "string", "enum": ["Off", "Partition", "VhdDynamic"] },
+            "sizeGb": { "type": "integer", "enum": [64, 128, 256] }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

@@ -65,7 +65,17 @@
         "standard Windows desktop starts without extra shell layers",
         "Edge keep path is honored",
         "Ubuntu WSL selection completes",
-        "no launcher is installed"
+        "no launcher is installed",
+        "live install audit runs with zero errors"
+      ],
+      "signals": [
+        "firstLogon.ok",
+        "disk.autoWipe",
+        "desktop.noShellLayers",
+        "keep.edge",
+        "wsl.ubuntu",
+        "launcher.searchFallback",
+        "audit.zeroErrors"
       ]
     },
     {
@@ -86,7 +96,18 @@
         "Neovim and Zed editor selections install",
         "Nilesoft shell integration applies",
         "no launcher is installed",
-        "gaming removal remains selected"
+        "gaming removal remains selected",
+        "live install audit runs with zero errors"
+      ],
+      "signals": [
+        "firstLogon.ok",
+        "disk.manual",
+        "agents.zenBrowser",
+        "agents.cursor",
+        "agents.nilesoft",
+        "launcher.searchFallback",
+        "keep.gamingRemoved",
+        "audit.zeroErrors"
       ]
     }
   ],

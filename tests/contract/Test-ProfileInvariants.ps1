@@ -127,6 +127,7 @@ Assert-FirstLogonCleanupOnlyDeletesWinMintOwnedPayload
 Assert-NoMaintenancePayloadOrRegistration
 Assert-ExternalReferenceAuditDocumentsSparkle
 Assert-WslFirstDefaultsAndGuards
+Assert-DevDriveOptInContract
 Assert-LogNoiseInvariants
 Assert-WinPEDriverInjectionDefaultsToSetupOnly
 Assert-CopilotPlusUsesFullAiRemovalPolicy

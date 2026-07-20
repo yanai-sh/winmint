@@ -13,22 +13,25 @@ until repeated real runs show concrete pain (roadmap Track B2/D4).
 
 | Change type | Command |
 |-------------|---------|
-| Engine/profile/setup code (no guest needed) | `Validate.ps1` + `Test-ProfileInvariants.ps1` + relevant contract tests |
-| FirstLogon/agent/runtime only | Existing VM + `Push-WinMintSetupScripts.ps1` |
-| Staging/autounattend/WIM servicing | Smoke or full VM acceptance (build required) |
-| Pre-release | Full `hyper-v-install-arm64.json` acceptance |
+| Engine/profile/setup/autounattend (no guest) | `Validate.ps1` + `Invoke-WinMintPesterContract.ps1` (includes install-plan, agent state, CLI matrix, autounattend dry-run) |
+| FirstLogon/agent/runtime only | Existing VM + `Push-WinMintSetupScripts.ps1` (does **not** re-validate diskpart/unattend) |
+| Staging/autounattend/WIM servicing | Smoke or full VM acceptance (build required; `-ForceBuild` when image fingerprint changed) |
+| Opt-in Dev Drive (`VhdDynamic`) | `hyper-v-smoke-devdrive-arm64.json` managed run (not the weekly default) |
+| Pre-release | Full `hyper-v-install-arm64.json` acceptance, then hardware collector |
 
 **Release policy (local, not CI):** run smoke weekly or after engine/setup staging
-changes; run full before tagging or hardware acceptance.
+changes; run full before tagging or hardware acceptance. ADR-009 keeps Hyper-V out of GitHub CI.
 
 ### Test pyramid
 
 | Layer | Proves | Does **not** prove |
 |-------|--------|-------------------|
-| Contract suite | Staging, profile shape, agent state machine | Live install, autologon, real winget |
-| Push-to-guest | Setup/agent code on a running Windows guest | Fresh ISO install, SetupComplete path |
-| Smoke VM | ISO → Setup → FirstLogon plumbing, lean agent, **OOBE setup shell** | Full product profile matrix; **WSL runtime validation** (distro install/update) |
-| Full VM | Complete Hyper-V profile + inspect signals | Nothing omitted from the release gate |
+| Contract suite (CI) | Profile/plan, autounattend dry-run (incl. Partition diskpart + 259-char Path), agent state machine, CLI matrix | Live install, autologon, real winget |
+| Push-to-guest | Setup/agent code on a running Windows guest | Fresh ISO install, SetupComplete path, disk layout |
+| Smoke VM | ISO → Setup → FirstLogon plumbing, setup shell, DMA restore report, required agent steps, disk probe, removal drift | Full product matrix; WSL runtime; Dev Drive (default Off) |
+| Smoke Dev Drive | Same as smoke + `VhdDynamic` 64 GB Dev Drive evidence | Partition Dev Drive (needs large disk / Setup diskpart) |
+| Full VM | Complete Hyper-V profile + inspect + live install audit | Physical hardware quirks |
+| Hardware collector | SL7/ThinkPad/Alienware coded signals from guest+host evidence | Copilot key / Wi‑Fi / sleep (notes only) |
 
 Speed comes from **narrower scenarios**, **phase skipping**, and **checkpoints** —
 not from test-only fast-wait hooks in acceptance guests.
@@ -43,6 +46,10 @@ pwsh -NoProfile -File .\tools\vm\Invoke-WinMintVmAcceptance.ps1 `
 # Lean plumbing gate (~10–25 min faster guest time).
 pwsh -NoProfile -File .\tools\vm\Invoke-WinMintVmAcceptance.ps1 `
     -ProfilePath .\tests\profiles\hyper-v-smoke-arm64.json
+
+# Opt-in Dev Drive VhdDynamic smoke (64 GB expandable VHDX at FirstLogon).
+pwsh -NoProfile -File .\tools\vm\Start-WinMintVmAcceptanceManaged.ps1 `
+    -ProfilePath .\tests\profiles\hyper-v-smoke-devdrive-arm64.json
 ```
 
 Smoke lists WSL distros in `development.wsl.distros` but sets `diagnostics.wslRuntimeValidation = skip` so the FirstLogon agent skips WSL runtime

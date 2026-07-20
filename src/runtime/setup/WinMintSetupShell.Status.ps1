@@ -173,6 +173,7 @@ function Test-WinMintSetupShellModuleEnabled {
         'always' { return $true }
         'modules.packageManagers.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'packageManagers' }
         'modules.wsl.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'wsl' }
+        'modules.devDrive.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'devDrive' }
         'modules.git.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'git' }
         'modules.dotfiles.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'dotfiles' }
         'modules.launcherKey.enabled' { return Test-WinMintSetupShellNestedEnabled -Root $AgentProfile.modules -Name 'launcherKey' }

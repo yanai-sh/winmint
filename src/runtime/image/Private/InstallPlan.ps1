@@ -69,6 +69,18 @@ function New-WinMintInstallPlanAgentProfile {
                 distro = $wslDistro
                 distros = @($wslDistros)
             }
+            devDrive = $(
+                $dd = if ($BuildConfig.PSObject.Properties['DevDrive']) { $BuildConfig.DevDrive } else { $null }
+                $ddMode = if ($null -ne $dd) { [string](Get-WinMintProfileSetting $dd 'mode' 'Off') } else { 'Off' }
+                $ddSize = if ($null -ne $dd) { [int](Get-WinMintProfileSetting $dd 'sizeGb' 128) } else { 128 }
+                if ($ddMode -notin @('Off', 'Partition', 'VhdDynamic')) { $ddMode = 'Off' }
+                if ($ddSize -notin @(64, 128, 256)) { $ddSize = 128 }
+                [ordered]@{
+                    enabled = ($ddMode -ne 'Off')
+                    mode    = $ddMode
+                    sizeGb  = $ddSize
+                }
+            )
             launcherKey = [ordered]@{
                 enabled = $true
                 target = 'Search'

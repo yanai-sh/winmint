@@ -506,6 +506,41 @@ function Get-WinMintProfileDiskMode {
     }
 }
 
+function Get-WinMintProfileDevDrive {
+    param([object]$Settings)
+
+    $mode = [string](Get-WinMintProfileSetting $Settings 'DevDriveMode' '')
+    if ([string]::IsNullOrWhiteSpace($mode) -and (Test-WinMintProfileProperty -Object $Settings -Name 'DevDrive')) {
+        $nested = Get-WinMintProfileSetting $Settings 'DevDrive' $null
+        if ($null -ne $nested) {
+            $mode = [string](Get-WinMintProfileSetting $nested 'mode' '')
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($mode)) { $mode = 'Off' }
+    switch -Regex ($mode) {
+        '^(?i)Off|None|False|0$' { $mode = 'Off' }
+        '^(?i)Partition|Physical$' { $mode = 'Partition' }
+        '^(?i)VhdDynamic|VHDX|Vhd$' { $mode = 'VhdDynamic' }
+        default { $mode = 'Off' }
+    }
+
+    $sizeGb = Get-WinMintProfileSetting $Settings 'DevDriveSizeGb' $null
+    if ($null -eq $sizeGb -and (Test-WinMintProfileProperty -Object $Settings -Name 'DevDrive')) {
+        $nested = Get-WinMintProfileSetting $Settings 'DevDrive' $null
+        if ($null -ne $nested) {
+            $sizeGb = Get-WinMintProfileSetting $nested 'sizeGb' $null
+        }
+    }
+    if ($null -eq $sizeGb -or [string]::IsNullOrWhiteSpace([string]$sizeGb)) { $sizeGb = 128 }
+    $sizeGb = [int]$sizeGb
+    if ($sizeGb -notin @(64, 128, 256)) { $sizeGb = 128 }
+
+    [ordered]@{
+        mode   = $mode
+        sizeGb = $sizeGb
+    }
+}
+
 function Get-WinMintProfileDualBootPreset {
     param([object]$Settings)
 
@@ -675,6 +710,7 @@ function New-WinMintBuildProfile {
                 msrMb = 16
                 recoveryMb = 1024
             }
+            devDrive = Get-WinMintProfileDevDrive -Settings $Settings
         }
         identity = $identity
         regional = [ordered]@{
@@ -871,6 +907,22 @@ function Test-WinMintBuildProfile {
         foreach ($name in @('roundingGb', 'windowsMinimumGb', 'windowsRecommendedGb', 'linuxMinimumGb', 'linuxRecommendedGb', 'efiMb', 'msrMb', 'recoveryMb')) {
             $value = Get-WinMintProfileSetting $diskLayout $name $null
             if ($value -isnot [int] -and $value -isnot [long]) { & $add "profile.target.diskLayout.$name must be an integer." }
+        }
+    }
+    if (Test-WinMintProfileProperty -Object $target -Name 'devDrive') {
+        $devDrive = Get-WinMintProfileSetting $target 'devDrive' @{}
+        & $require $devDrive 'profile.target.devDrive' @('mode', 'sizeGb')
+        $devDriveMode = [string](Get-WinMintProfileSetting $devDrive 'mode' '')
+        & $enum $devDriveMode 'profile.target.devDrive.mode' @($options['DevDriveMode'])
+        $devDriveSize = Get-WinMintProfileSetting $devDrive 'sizeGb' $null
+        if ($devDriveSize -isnot [int] -and $devDriveSize -isnot [long]) {
+            & $add 'profile.target.devDrive.sizeGb must be an integer.'
+        }
+        elseif ([int]$devDriveSize -notin @($options['DevDriveSizeGb'])) {
+            & $add "profile.target.devDrive.sizeGb must be one of: $($options['DevDriveSizeGb'] -join ', ')."
+        }
+        if ($devDriveMode -eq 'Partition' -and $diskMode -eq 'Manual') {
+            & $add 'profile.target.devDrive.mode Partition requires AutoWipeDisk0 or DualBootReserved (not Manual).'
         }
     }
 

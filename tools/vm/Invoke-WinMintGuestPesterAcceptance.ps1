@@ -10,7 +10,8 @@ param(
     [string]$GuestPassword = 'winmint',
     [ValidateSet('Smoke', 'Full')]
     [string]$AcceptanceTier = 'Full',
-    [string[]]$WslDistros = @()
+    [string[]]$WslDistros = @(),
+    [switch]$ExpectDevDrive
 )
 
 $ErrorActionPreference = 'Stop'
@@ -74,6 +75,10 @@ $guestSignals = Invoke-Command -VMName $VMName -Credential $cred -ScriptBlock {
         ShellPinsTaskbarAppIds = if ($shellPins) { @($shellPins.taskbarAppIds) } else { @() }
         TerminalProfileMockLogged = [bool]($firstLogonLog -match 'terminalProfile=mock')
         TaskbarLayoutPresent = Test-Path -LiteralPath $taskbarLayoutPath -PathType Leaf
+        DevDriveLabelPresent = [bool]@(Get-Volume -ErrorAction SilentlyContinue | Where-Object {
+                $_.DriveType -eq 'Fixed' -and [string]$_.FileSystemLabel -match '^(?i)DevDrive$'
+            }).Count
+        DevDriveVhdPresent = Test-Path -LiteralPath (Join-Path (Join-Path $env:SystemDrive 'DevDrives') 'WinMint.vhdx')
     }
 }
 
@@ -90,6 +95,7 @@ $pesterConfig.Run.Container = New-PesterContainer -Path $testPath -Data @{
         GuestSignals = $guestSignals
         Tier = $AcceptanceTier
         WslDistros = $WslDistros
+        ExpectDevDrive = [bool]$ExpectDevDrive
     }
 }
 $pesterResult = Invoke-Pester -Configuration $pesterConfig
@@ -117,6 +123,8 @@ $inspect = [ordered]@{
     ShellPinsTaskbarAppIds = @($guestSignals.ShellPinsTaskbarAppIds)
     TerminalProfileMockLogged = [bool]$guestSignals.TerminalProfileMockLogged
     TaskbarLayoutPresent = [bool]$guestSignals.TaskbarLayoutPresent
+    DevDriveLabelPresent = [bool]$guestSignals.DevDriveLabelPresent
+    DevDriveVhdPresent = [bool]$guestSignals.DevDriveVhdPresent
     pesterPassed = ($pesterResult.FailedCount -eq 0)
     pesterFailed = @($pesterResult.Tests | Where-Object { $_.Result -eq 'Failed' } | ForEach-Object { $_.Name })
 }

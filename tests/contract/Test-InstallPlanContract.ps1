@@ -391,12 +391,48 @@ $cases = @(
     @{ Name = 'dma-off'; Profile = (New-InstallPlanCaseProfile -Overrides @{ TweakDmaInterop = $false }) },
     @{ Name = 'location-off'; Profile = (New-InstallPlanCaseProfile -Overrides @{ PrivLocation = $false }) },
     @{ Name = 'dual-boot'; Profile = (New-InstallPlanCaseProfile -Overrides @{ DiskMode = 'DualBootReserved'; DualBootPreset = 'Balanced' }) },
+    @{ Name = 'dev-drive-partition'; Profile = (New-InstallPlanCaseProfile -Overrides @{ DiskMode = 'AutoWipeDisk0'; DevDriveMode = 'Partition'; DevDriveSizeGb = 128 }) },
+    @{ Name = 'dev-drive-vhd'; Profile = (New-InstallPlanCaseProfile -Overrides @{ DevDriveMode = 'VhdDynamic'; DevDriveSizeGb = 64 }) },
     @{ Name = 'fixed-home'; Profile = (New-InstallPlanCaseProfile -Overrides @{ Edition = 'Home' }) }
 )
+
+function Assert-DevDriveInstallPlanContract {
+    try {
+        $off = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile)
+        if ([bool]$off.AgentProfile.modules.devDrive.enabled -ne $false -or [string]$off.AgentProfile.modules.devDrive.mode -ne 'Off') {
+            Add-InstallPlanFailure 'Default install plan must leave modules.devDrive disabled/Off.'
+        }
+
+        $part = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile -Overrides @{
+                DiskMode = 'AutoWipeDisk0'
+                DevDriveMode = 'Partition'
+                DevDriveSizeGb = 256
+            })
+        $dd = $part.AgentProfile.modules.devDrive
+        if (-not [bool]$dd.enabled -or [string]$dd.mode -ne 'Partition' -or [int]$dd.sizeGb -ne 256) {
+            Add-InstallPlanFailure 'Partition Dev Drive must enable modules.devDrive with mode/sizeGb.'
+        }
+        if ([string]$part.BuildConfig.DevDrive.mode -ne 'Partition' -or [int]$part.BuildConfig.DevDrive.sizeGb -ne 256) {
+            Add-InstallPlanFailure 'BuildConfig.DevDrive must carry Partition mode and sizeGb.'
+        }
+
+        $vhd = New-WinMintInstallPlan -BuildProfile (New-InstallPlanCaseProfile -Overrides @{
+                DevDriveMode = 'VhdDynamic'
+                DevDriveSizeGb = 64
+            })
+        if (-not [bool]$vhd.AgentProfile.modules.devDrive.enabled -or [string]$vhd.AgentProfile.modules.devDrive.mode -ne 'VhdDynamic') {
+            Add-InstallPlanFailure 'VhdDynamic Dev Drive must enable modules.devDrive.'
+        }
+    }
+    catch {
+        Add-InstallPlanFailure "Dev Drive install-plan contract failed: $($_.Exception.Message)"
+    }
+}
 
 foreach ($case in $cases) {
     Assert-InstallPlanMatchesWrappers -Name $case.Name -Profile $case.Profile
 }
+Assert-DevDriveInstallPlanContract
 Assert-WslSelectionNormalizationContract
 Assert-ManifestConsumesInstallPlanFacts
 Assert-SetupPayloadStagingContract

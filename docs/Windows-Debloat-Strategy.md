@@ -187,7 +187,7 @@ These may be good, but need measurement or a clear hardware/workflow condition.
 | Location / Maps / Sensors | Privacy win. | Time zone, hardware sensors, and app permissions can behave strangely. Disable app access first, not services. |
 | Optional Features / Capabilities | Can reduce image footprint. | Remove only obvious non-core features and test WU/feature update. Preserve OpenSSH, WSL, .NET, language/input, Windows client basics. |
 | Defender exclusions | Can greatly improve Node/Rust/Python build performance. | Folder exclusions are security holes. Prefer Dev Drive performance mode over broad exclusions. |
-| Dev Drive | Real developer performance feature using ReFS and Defender performance mode for **Windows-hosted** trees. | Not a WinMint default. User-managed only. Not interchangeable with WSL2: the Linux distro stays in its **WSL VHDX**; Dev Drive cannot host that layout. |
+| Dev Drive | Real developer performance feature using ReFS and Defender performance mode for **Windows-hosted** trees. | Off by default. Opt-in via `target.devDrive` (`Partition` at Setup diskpart, or `VhdDynamic` at FirstLogon). Not interchangeable with WSL2: the Linux distro stays in its **WSL VHDX**; Dev Drive cannot host that layout. |
 | WSL `.wslconfig` | `autoMemoryReclaim`, `dnsTunneling`, `sparseVhd`, and networking modes can improve dev ergonomics. | Mirrored networking can interact poorly with VPNs/firewalls. Use conservative defaults and document. |
 
 ### Tier 3: Reject By Default
@@ -216,22 +216,28 @@ These are common in debloat/optimizer circles but should not be WinMint defaults
 
 ## Additional Ideas To Consider
 
-### 1. Dev Drive As A User-Managed Option
+### 1. Dev Drive As An Opt-In Profile Surface
 
-Most debloat tools focus on removing things. For a developer workstation, adding the right storage model may matter more. Windows Dev Drive uses ReFS and Defender performance mode for developer workloads, and Microsoft documents it as a performance feature for code, package caches, and build output. WinMint does not enable it by default; users can set it up separately if they want that storage model.
+Most debloat tools focus on removing things. For a developer workstation, adding the right storage model may matter more. Windows Dev Drive uses ReFS and Defender performance mode for developer workloads, and Microsoft documents it as a performance feature for code, package caches, and build output. WinMint keeps it **Off by default** and exposes an explicit opt-in:
 
-Potential WinMint direction:
+| Mode | When | Behavior |
+|------|------|----------|
+| `Off` | default | No Dev Drive |
+| `Partition` | Setup (diskpart) | Extra ReFS volume labeled `DevDrive` after WinRE; FirstLogon applies Dev Drive trust. Requires `AutoWipeDisk0` or `DualBootReserved` (not Manual). |
+| `VhdDynamic` | FirstLogon | Expandable VHDX under `%SystemDrive%\DevDrives\WinMint.vhdx`, formatted with `Format-Volume -DevDrive`. |
 
-- Do not silently repartition for Dev Drive.
-- Add a future "Developer workspace" step only when disk layout is already being chosen.
-- Route **Windows-native** code, package caches, and build output there when the user opts in.
+Size choices: `64` / `128` (default when on) / `256` GB. Prefer Partition on ≥1 TB machines when dual WSL+native Windows storage is desired. Do not put WSL Linux trees on Dev Drive.
+
+Guards:
+
+- Do not silently enable Dev Drive or shrink `C:` at FirstLogon for Partition mode.
 - Keep WSL Linux files inside the WSL VHD (`\\wsl$\...` / ext4), not on `/mnt/c` on a Dev Drive, unless the user knowingly accepts cross-OS IO tradeoffs.
 
 ### 2. WSL2-First Performance Profile
 
 WinMint should treat WSL as the primary Linux layer, not an optional toy. The Developer profile defaults to Ubuntu LTS, but the user can opt out, choose Debian, Arch, Fedora, or select multiple distributions. A custom distro selection must never force Ubuntu back in.
 
-Linux projects should live under `/home/<user>/code` inside the WSL filesystem. Windows-native projects and package caches can use a user-managed Dev Drive if the user chooses to configure one, but Linux source should not default to `/mnt/c/...`.
+Linux projects should live under `/home/<user>/code` inside the WSL filesystem. Windows-native projects and package caches can use an opt-in Dev Drive (`target.devDrive`), but Linux source should not default to `/mnt/c/...`.
 
 Candidate defaults (host `.wslconfig`, written by FirstLogon before distro install):
 
@@ -365,7 +371,7 @@ No tweak should graduate to Core unless it passes this matrix.
 | P1 | Keep AI removal layer tests current. | Copilot/Recall surfaces keep changing. |
 | P2 | Investigate DiagTrack service state with smoke tests. | Potential idle/noise win, but needs evidence. |
 | P2 | Add optional mirrored-networking control for WSL. | Useful for some VPN/LAN workflows; not safe enough for Core default. |
-| P2 | Document Dev Drive as a user-managed option only. | Keep the product stance explicit without making it a default baseline. |
+| P2 | Keep Dev Drive opt-in (`Off` default; Partition/VhdDynamic). | Explicit profile surface without making it a default baseline. |
 | P3 | Scheduled task inventory and narrow disable list. | Better idle optimization than blind service disabling. |
 | P3 | Optional "tiny image" mode with ResetBase/Compact tradeoffs clearly labeled. | Useful for private forks, not default. |
 

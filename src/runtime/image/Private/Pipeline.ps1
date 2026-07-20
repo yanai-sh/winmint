@@ -350,6 +350,7 @@ function Invoke-WinMintIsoPipeline {
                 -AutoWipeDisk:$BuildConfig.AutoWipeDisk `
                 -AutoLogon:$BuildConfig.AutoLogon `
                 -DiskLayout $BuildConfig.DiskLayout `
+                -DevDrive $BuildConfig.DevDrive `
                 -HardwareBypass:$BuildConfig.Tweaks.HardwareBypass `
                 -InputLocale $BuildConfig.InputLocale `
                 -SystemLocale $BuildConfig.SystemLocale `
@@ -506,6 +507,7 @@ function Invoke-WinMintIsoPipeline {
                 -AutoWipeDisk:$BuildConfig.AutoWipeDisk `
                 -AutoLogon:$BuildConfig.AutoLogon `
                 -DiskLayout $BuildConfig.DiskLayout `
+                -DevDrive $BuildConfig.DevDrive `
                 -HardwareBypass:$BuildConfig.Tweaks.HardwareBypass `
                 -InputLocale $BuildConfig.InputLocale `
                 -SystemLocale $BuildConfig.SystemLocale `
