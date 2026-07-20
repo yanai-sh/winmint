@@ -285,11 +285,11 @@ function Initialize-AgentConsole {
             $manifest = @(Get-ChildItem -LiteralPath $galleryCache -Recurse -Filter 'PwshSpectreConsole.psd1' -File -ErrorAction SilentlyContinue |
                     Sort-Object FullName -Descending |
                     Select-Object -First 1)
-            if (-not $manifest -and (Get-Command Save-Module -ErrorAction SilentlyContinue)) {
+            if (-not $manifest -and (Get-Command Save-PSResource -ErrorAction SilentlyContinue)) {
                 $savedProgress = $ProgressPreference
                 try {
                     $ProgressPreference = 'SilentlyContinue'
-                    Save-Module -Name PwshSpectreConsole -Path $galleryCache -Repository PSGallery -Force -ErrorAction Stop
+                    Save-PSResource -Name PwshSpectreConsole -Path $galleryCache -Repository PSGallery -TrustRepository -Quiet -ErrorAction Stop
                 }
                 finally {
                     $ProgressPreference = $savedProgress

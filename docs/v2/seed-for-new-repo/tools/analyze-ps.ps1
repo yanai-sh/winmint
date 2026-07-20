@@ -4,7 +4,7 @@ $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 
 if (-not (Get-Command Invoke-ScriptAnalyzer -ErrorAction SilentlyContinue)) {
-    Write-Host 'PSScriptAnalyzer not installed — Install-Module PSScriptAnalyzer -Scope CurrentUser'
+    Write-Host 'PSScriptAnalyzer not installed — Install-PSResource PSScriptAnalyzer -Scope CurrentUser -TrustRepository'
     exit 0
 }
 

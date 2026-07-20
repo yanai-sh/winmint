@@ -21,7 +21,7 @@ jobs:
 
       - name: Install PSScriptAnalyzer
         shell: pwsh
-        run: Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
+          run: Install-PSResource PSScriptAnalyzer -Scope CurrentUser -TrustRepository -Quiet
 
       - name: Analyze PowerShell
         shell: pwsh

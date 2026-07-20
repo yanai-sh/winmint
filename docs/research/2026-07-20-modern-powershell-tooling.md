@@ -16,7 +16,7 @@ Which 2026-ecosystem PowerShell 7+ / Windows DevOps tools ought (or ought not) b
 | winget | Heavy use: FirstLogon `Agent.Install.ps1` / `PackageManagers.ps1`; offline `Install-OfflineWinget` in image assets. **No** runtime `winget configure` |
 | DSC / WinGet Configuration | Handoff-only: `Save-WinMintWingetConfigurationHandoff` in `Reports.ps1` (schema 0.2, `Microsoft.WinGet.DSC/WinGetPackage`); comment: not auto-run |
 | Windows Terminal | Offline settings staging + FirstLogon profile finalization |
-| Module install | `Install-Module` Pester (dev harness); `Save-Module` PwshSpectreConsole (host console). **`Install-PSResource` / `Save-PSResource` absent** |
+| Module install | **PSResourceGet:** `Install-PSResource` Pester (dev harness); `Save-PSResource` PwshSpectreConsole (host / interactive agent console) |
 | PS 7 idioms | `ConvertFrom-Json -AsHashtable` rare; `ForEach-Object -Parallel`, `??`, `?.`, `$PSStyle` absent |
 | Externals | DISM, oscdimg, reg, winget, Scoop, Hyper-V — no Sysinternals / jq / yq |
 | Tests / lint | Pester ≥ 5.5.0; PSScriptAnalyzer via `Validate.ps1 -RunAnalyzer` (no version pin in v1 CI) |
@@ -245,17 +245,15 @@ Source (DSC partner framing only): [Microsoft DSC overview — Integrating with 
 - Generates WinGet Configuration YAML as a **handoff** while refusing to become a DSC runner — correct product boundary.
 - Host UX already uses **PwshSpectreConsole**; CI already has **Pester + PSScriptAnalyzer**.
 
-**Behind (small, host-side only)**
+**Behind (intentional / cosmetic)**
 
-- Gallery installs still use **PowerShellGet v2** (`Install-Module` / `Save-Module`) instead of **PSResourceGet**.
-- Modern JSON/null idioms (`-AsHashtable` broadly, `??` / `?.`) are underused — cosmetic, not blocking.
+- Modern null idioms (`??` / `?.`) remain underused — adopt only in touched code.
 - No `ForEach-Object -Parallel` — **intentional gap** for runtime safety, not lag.
 
 ---
 
-## Recommended next actions (if implementing)
+## Implemented (2026-07-20)
 
-1. **ADOPT:** Switch host Spectre cache + Pester bootstrap to `Save-PSResource` / `Install-PSResource` (tools/dev + console host only).
-2. **ADOPT (drive-by):** Prefer `ConvertFrom-Json -AsHashtable` when editing JSON configs in touched files.
-3. **Do not:** Wire `winget configure`, DSC v3 LCM-style enforcement, Sysinternals, Chocolatey, Az/Graph, Ansible, or Containers into runtime.
-4. **Keep:** 7.6.2+ pin, winget+Scoop split, Terminal staging, handoff-only WinGet Configuration artifact.
+1. Host Spectre cache + interactive agent console + Pester bootstrap use `Save-PSResource` / `Install-PSResource`.
+2. `Read-WinMintJsonFile -AsHashtable`; Terminal settings reads prefer `-AsHashtable` where touched.
+3. Still **do not** wire `winget configure`, DSC v3, Sysinternals, Chocolatey, Az/Graph, Ansible, or Containers into runtime.

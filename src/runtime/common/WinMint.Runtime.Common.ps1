@@ -159,12 +159,15 @@ function Read-WinMintJsonFile {
     param(
         [Parameter(Mandatory)][string]$Path,
         $Fallback = $null,
-        [scriptblock]$OnError = $null
+        [scriptblock]$OnError = $null,
+        [switch]$AsHashtable
     )
 
     try {
         if (Test-Path -LiteralPath $Path) {
-            return Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+            $convertParams = @{ ErrorAction = 'Stop' }
+            if ($AsHashtable) { $convertParams['AsHashtable'] = $true }
+            return Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json @convertParams
         }
     }
     catch {

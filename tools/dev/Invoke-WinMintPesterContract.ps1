@@ -23,8 +23,12 @@ $pester = Get-Module -ListAvailable -Name Pester |
     Sort-Object Version -Descending |
     Select-Object -First 1
 if (-not $pester) {
-    Write-Host "Installing Pester $minVersion (CurrentUser scope)."
-    Install-Module -Name Pester -MinimumVersion $minVersion -Force -Scope CurrentUser -AllowClobber -ErrorAction Stop
+    Write-Host "Installing Pester $minVersion (CurrentUser scope via PSResourceGet)."
+    if (-not (Get-Command Install-PSResource -ErrorAction SilentlyContinue)) {
+        throw 'Install-PSResource was not found (Microsoft.PowerShell.PSResourceGet). Use PowerShell 7.4+ (WinMint requires 7.6.2+).'
+    }
+    # NuGet range: minimum inclusive 5.5.0 (PSResourceGet treats bare "5.5.0" as exact, not minimum).
+    Install-PSResource -Name Pester -Version '[5.5.0,)' -Scope CurrentUser -TrustRepository -Quiet -AcceptLicense -ErrorAction Stop
 }
 
 Import-Module Pester -MinimumVersion $minVersion -ErrorAction Stop

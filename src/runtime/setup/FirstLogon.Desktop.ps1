@@ -664,7 +664,7 @@ function Set-WinMintFirstLogonTerminalProfiles {
 
     $settingsPath = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
     $profileNames = try {
-        $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable
         @($settings.profiles.list | ForEach-Object { [string]$_.name }) -join ', '
     }
     catch {

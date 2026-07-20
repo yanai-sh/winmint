@@ -114,7 +114,7 @@ function Invoke-AnalyzerIfAvailable {
     }
     $cmd = Get-Command Invoke-ScriptAnalyzer -ErrorAction SilentlyContinue
     if (-not $cmd) {
-        Write-Warning 'PSScriptAnalyzer not installed; skipping analyzer pass.'
+        Write-Warning 'PSScriptAnalyzer not installed; skipping analyzer pass. Install with: Install-PSResource PSScriptAnalyzer -Scope CurrentUser -TrustRepository'
         return
     }
     $targets = @(

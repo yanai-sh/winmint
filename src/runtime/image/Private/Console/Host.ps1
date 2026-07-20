@@ -47,7 +47,7 @@ function Sync-Win11IsoSpectreConsoleDimension {
 }
 
 function Initialize-Spectre {
-    <# <summary>Import PwshSpectreConsole from %TEMP%\Win11ISO_dependency_cache\PSGallery (Save-Module) or download once; cache is not deleted at exit.</summary> #>
+    <# <summary>Import PwshSpectreConsole from %TEMP%\Win11ISO_dependency_cache\PSGallery (Save-PSResource) or download once; cache is not deleted at exit.</summary> #>
     $savedVerbose = $VerbosePreference
     try {
         $VerbosePreference = 'SilentlyContinue'
@@ -56,8 +56,8 @@ function Initialize-Spectre {
     finally {
         $VerbosePreference = $savedVerbose
     }
-    if (-not (Get-Command Save-Module -ErrorAction SilentlyContinue)) {
-        throw 'Save-Module was not found (PowerShellGet). Install-Module PowerShellGet -Scope CurrentUser once, or use a full PowerShell 7 install that includes package commands.'
+    if (-not (Get-Command Save-PSResource -ErrorAction SilentlyContinue)) {
+        throw 'Save-PSResource was not found (Microsoft.PowerShell.PSResourceGet). Use PowerShell 7.4+ (WinMint requires 7.6.2+), which ships PSResourceGet.'
     }
     $galleryCache = Join-Path (Get-Win11IsoDependencyCacheRoot) 'PSGallery'
     $null = New-Item -ItemType Directory -Path $galleryCache -Force
@@ -82,9 +82,9 @@ function Initialize-Spectre {
             }
         }
         if (-not $manifest) {
-            Save-Module -Name PwshSpectreConsole -Path $galleryCache -Repository PSGallery -Force -ErrorAction Stop
+            Save-PSResource -Name PwshSpectreConsole -Path $galleryCache -Repository PSGallery -TrustRepository -Quiet -ErrorAction Stop
             $manifest = @(Get-ChildItem -LiteralPath $galleryCache -Recurse -Filter 'PwshSpectreConsole.psd1' -File | Sort-Object FullName -Descending)[0]
-            if (-not $manifest) { throw "PwshSpectreConsole.psd1 not found under $galleryCache after Save-Module." }
+            if (-not $manifest) { throw "PwshSpectreConsole.psd1 not found under $galleryCache after Save-PSResource." }
             Import-Module -Name $manifest.FullName -Force -Global -ErrorAction Stop
         }
     }

@@ -28,7 +28,7 @@ function Initialize-ConsoleUtf8ForSpectre {
 }
 
 function Get-Win11IsoDependencyCacheRoot {
-    <# <summary>Stable under %TEMP% so GitHub downloads and Save-Module output survive between script runs.</summary> #>
+    <# <summary>Stable under %TEMP% so GitHub downloads and Save-PSResource output survive between script runs.</summary> #>
     $root = Join-Path (Get-Win11IsoProcessTempPath) 'Win11ISO_dependency_cache'
     if (-not (Test-Path -LiteralPath $root)) {
         $null = New-Item -ItemType Directory -Path $root -Force
