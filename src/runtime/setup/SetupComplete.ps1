@@ -46,48 +46,20 @@ function Write-ScLog {
     "$(Get-Date -Format 'o') $Message" | Out-File (Join-Path $logDir 'SetupComplete.log') -Append
 }
 
-function Test-ScInternet443 {
-    try {
-        $connectivityHost = 'www.microsoft.com'
-        return [bool](Test-NetConnection -ComputerName $connectivityHost -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue -ErrorAction Stop)
-    }
-    catch {
-        return $false
-    }
+# Hard channel — any non-empty SetupComplete_errors.log fails Smoke plumbing.
+function Write-ScError {
+    param([Parameter(Mandatory)][string]$Message)
+    $line = "$(Get-Date -Format 'o') $Message"
+    $line | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+    Write-ScLog "ERROR: $Message"
 }
 
-function Get-ScProcessorArchitecture {
-    $arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
-    switch -Regex ([string]$arch) {
-        '^ARM64$' { return 'arm64' }
-        '^(AMD64|IA64)$' { return 'amd64' }
-        '^x86$' { return 'x86' }
-        default { return ([string]$arch).ToLowerInvariant() }
-    }
-}
-
-function ConvertTo-ScWingetArchitecture {
-    param([Parameter(Mandatory)][string]$Architecture)
-    switch ($Architecture) {
-        'amd64' { return 'x64' }
-        'arm64' { return 'arm64' }
-        'x86' { return 'x86' }
-        default { return $null }
-    }
-}
-
-function New-ScWingetInstallArgs {
-    param([Parameter(Mandatory)][string]$Id)
-
-    $wingetArgs = @(
-        'install', '--exact', '--id', $Id, '--source', 'winget', '--silent',
-        '--accept-source-agreements', '--accept-package-agreements'
-    )
-    $wingetArchitecture = ConvertTo-ScWingetArchitecture -Architecture (Get-ScProcessorArchitecture)
-    if ($wingetArchitecture) {
-        $wingetArgs += @('--architecture', $wingetArchitecture)
-    }
-    return $wingetArgs
+# Soft channel — surfaced as acceptance warnings; does not fail plumbing alone.
+function Write-ScWarn {
+    param([Parameter(Mandatory)][string]$Message)
+    $line = "$(Get-Date -Format 'o') $Message"
+    $line | Out-File (Join-Path $logDir 'SetupComplete_warnings.log') -Append
+    Write-ScLog "WARN: $Message"
 }
 
 $setupProfilePath = Join-Path $payloadDir 'WinMintSetupProfile.json'
@@ -98,7 +70,7 @@ try {
     }
 }
 catch {
-    "SetupComplete profile read failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+    Write-ScError "SetupComplete profile read failed: $_"
 }
 
 function Get-ScSetupProfileBool {
@@ -173,7 +145,7 @@ try {
     Import-WinMintSetupActionModules -PayloadRoot $payloadDir
 }
 catch {
-    "SetupComplete action module load failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+    Write-ScError "SetupComplete action module load failed: $_"
 }
 
 Write-ScLog 'SetupComplete.ps1 start'
@@ -183,15 +155,15 @@ try {
     if (Test-Path -LiteralPath $firstLogonPath) {
         $pwsh = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
         if (-not (Test-Path -LiteralPath $pwsh -PathType Leaf)) {
-            throw "PowerShell 7 is required for FirstLogon but was not found: $pwsh"
+            throw "PowerShell 7.6.0+ is required for FirstLogon but was not found: $pwsh"
         }
         $runOnceCommand = "`"$pwsh`" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$firstLogonPath`""
         $null = & reg.exe add 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' /v 'WinMintFirstLogon' /t REG_SZ /d $runOnceCommand /f
-        Write-ScLog 'Registered HKLM RunOnce fallback for FirstLogon.ps1 under PowerShell 7.'
+        Write-ScLog 'Registered HKLM RunOnce fallback for FirstLogon.ps1 under PowerShell 7.6.0+.'
     }
 }
 catch {
-    "SetupComplete FirstLogon RunOnce registration failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+    Write-ScError "SetupComplete FirstLogon RunOnce registration failed: $_"
 }
 
 $errors = @()
@@ -225,9 +197,10 @@ catch {
     $errors += "SetupComplete inline cleanup: $($_.Exception.Message)"
 }
 if ($errors.Count -gt 0) {
-    # Append — never -Force overwrite. Module-load failures are written earlier with
-    # -Append; clobbering that file hid the real root cause behind action dispatch noise.
-    ($errors -join "`n") | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+    # Append via Write-ScError — never -Force overwrite. Module-load failures stay visible.
+    foreach ($err in $errors) {
+        Write-ScError $err
+    }
 }
 
 Write-ScLog 'SetupComplete.ps1 end'

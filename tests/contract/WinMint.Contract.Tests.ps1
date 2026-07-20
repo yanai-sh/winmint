@@ -137,6 +137,16 @@ Describe 'Shell pins and Terminal profiles contract' {
         & (Join-Path $script:Root 'tests\contract\Test-VmSpectreBuildChannels.ps1')
         $LASTEXITCODE | Should -Be 0
     }
+
+    It 'Test-VmFingerprint.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-VmFingerprint.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'Test-VmSetupCompleteEvidence.ps1 exits 0' {
+        & (Join-Path $script:Root 'tests\contract\Test-VmSetupCompleteEvidence.ps1')
+        $LASTEXITCODE | Should -Be 0
+    }
 }
 
 Describe 'DMA location compliance contract' {

@@ -65,7 +65,28 @@ function Assert-OfflinePowerShell7Staged {
 
     $pwshExe = Join-Path $MountDir 'Program Files\PowerShell\7\pwsh.exe'
     if (-not (Test-Path -LiteralPath $pwshExe -PathType Leaf)) {
-        throw "PowerShell 7 is missing from the offline image: $pwshExe. SetupComplete and FirstLogon require bundled PowerShell 7; rebuild without the serviced-WIM cache or refresh the payload cache."
+        throw "PowerShell 7.6.0+ is missing from the offline image: $pwshExe. SetupComplete and FirstLogon require bundled PowerShell 7.6.0+; rebuild without the serviced-WIM cache or refresh the payload cache."
+    }
+
+    $minimum = [version]'7.6.0'
+    $version = $null
+    try {
+        $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($pwshExe)
+        foreach ($candidate in @($info.ProductVersion, $info.FileVersion)) {
+            if ([string]::IsNullOrWhiteSpace([string]$candidate)) { continue }
+            if ([string]$candidate -match '(?<v>\d+\.\d+\.\d+(?:\.\d+)?)') {
+                $version = [version]$Matches['v']
+                break
+            }
+        }
+    }
+    catch { }
+
+    if ($null -eq $version) {
+        throw "Could not determine staged PowerShell version from '$pwshExe'. SetupComplete and FirstLogon require PowerShell $minimum+."
+    }
+    if ($version -lt $minimum) {
+        throw "Staged PowerShell $version at '$pwshExe' is too old. SetupComplete and FirstLogon require PowerShell $minimum+; refresh the PowerShell payload cache and rebuild."
     }
 }
 
@@ -98,7 +119,17 @@ function Install-OfflinePowerShell7 {
                     param($Asset, $Release)
                     [void]$Release
                     $assetName = [string]$Asset.name
-                    if ($assetName -match ('PowerShell-\d+\.\d+\.\d+-' + [regex]::Escape($suffix) + '\.zip$')) { return 300 }
+                    $floor = [version]'7.6.0'
+                    $assetVersion = $null
+                    if ($assetName -match 'PowerShell-(?<Version>\d+\.\d+\.\d+)-') {
+                        try { $assetVersion = [version]$Matches['Version'] } catch { $assetVersion = $null }
+                    }
+                    if ($null -ne $assetVersion -and $assetVersion -lt $floor) { return 0 }
+                    if ($assetName -match ('PowerShell-\d+\.\d+\.\d+-' + [regex]::Escape($suffix) + '\.zip$')) {
+                        if ($null -eq $assetVersion) { return 300 }
+                        # Prefer newest release at/above the 7.6.0 floor (latest download).
+                        return 300 + ($assetVersion.Major * 100000) + ($assetVersion.Minor * 1000) + $assetVersion.Build
+                    }
                     if ($assetName -like "*-$suffix.zip") { return 200 }
                     if ($suffix -eq 'win-x86' -and $assetName -like '*-win-x64.zip') { return 100 }
                     return 0
@@ -125,11 +156,11 @@ function Install-OfflinePowerShell7 {
             if (-not (Test-Path -LiteralPath $pwshExe)) { throw "pwsh.exe missing after staging: $pwshExe" }
             Add-OfflineMachinePathEntry -MountDir $MountDir -Entry '%ProgramFiles%\PowerShell\7'
             Assert-OfflinePowerShell7Staged -MountDir $MountDir
-            LogOK "PowerShell 7 staged ($($payload.Version))"
+            LogOK "PowerShell 7.6.0+ staged ($($payload.Version))"
             LogVerbose "$pwshExe (release asset: $($payload.AssetName))"
         }
         catch {
-            throw "PowerShell 7 staging failed; build cannot continue because setup and FirstLogon require bundled PowerShell 7. $($_.Exception.Message)"
+            throw "PowerShell 7.6.0+ staging failed; build cannot continue because setup and FirstLogon require bundled PowerShell 7.6.0+. $($_.Exception.Message)"
         }
         finally {
             Remove-WinMintPayloadResult -Payload $payload

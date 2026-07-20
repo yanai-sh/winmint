@@ -18,7 +18,18 @@ function Write-WinMintProvisioningGuardLog {
     param([Parameter(Mandatory)][string]$Marker)
 
     try {
-        $logPath = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log'
+        $logDir = 'C:\ProgramData\WinMint\Logs'
+        if (Get-Command Get-WinMintFirstLogonContext -ErrorAction SilentlyContinue) {
+            try {
+                $ctxLog = [string](Get-WinMintFirstLogonContext).LogDir
+                if (-not [string]::IsNullOrWhiteSpace($ctxLog)) { $logDir = $ctxLog }
+            }
+            catch { }
+        }
+        if (-not (Test-Path -LiteralPath $logDir)) {
+            $null = New-Item -ItemType Directory -Path $logDir -Force
+        }
+        $logPath = Join-Path $logDir 'FirstLogon.log'
         "$(Get-Date -Format 'o') provisioning-lock:$Marker" | Out-File -LiteralPath $logPath -Append
     }
     catch { }
@@ -115,13 +126,148 @@ function Stop-WinMintProvisioningHostResidual {
     Restore-WinMintProvisioningDesktop
 }
 
+function Get-WinMintProvisioningHostProcess {
+    return @(Get-Process -Name 'WinMintSetupShell' -ErrorAction SilentlyContinue | Sort-Object StartTime -Descending)[0]
+}
+
+function Write-WinMintProvisioningHostBootstrapFiles {
+    param(
+        [Parameter(Mandatory)][string]$ShellRoot,
+        [Parameter(Mandatory)][string]$ControlPath,
+        [Parameter(Mandatory)][string]$StatusPath,
+        [string]$ProfileName = 'WinMint',
+        [string]$TaskLabel = 'Starting WinMint setup…'
+    )
+
+    $startedAt = Get-Date -Format o
+    $control = [ordered]@{
+        phase = 'running'
+        startedAt = $startedAt
+        updatedAt = $startedAt
+        profileName = $ProfileName
+        message = ''
+        preAgentStage = 'locked'
+    }
+    $status = [ordered]@{
+        phase = 'running'
+        groupLabel = 'Preparing system'
+        taskLabel = $TaskLabel
+        stepIndex = 1
+        stepTotal = 4
+        progressPct = 0
+        progressMode = 'indeterminate'
+        profileName = $ProfileName
+        elapsedMs = 0
+        steps = @(
+            [ordered]@{ id = 'prepare'; label = 'Preparing system'; status = 'current' }
+            [ordered]@{ id = 'region'; label = 'Restoring your region'; status = 'pending' }
+            [ordered]@{ id = 'tools'; label = 'Installing tools'; status = 'pending' }
+            [ordered]@{ id = 'finish'; label = 'Finishing setup'; status = 'pending' }
+        )
+        banner = ''
+        bannerKind = ''
+        logDir = 'C:\ProgramData\WinMint\Logs'
+        updatedAt = $startedAt
+    }
+
+    foreach ($path in @($ControlPath, $StatusPath)) {
+        $dir = Split-Path -Parent $path
+        if (-not (Test-Path -LiteralPath $dir)) {
+            $null = New-Item -ItemType Directory -Path $dir -Force
+        }
+    }
+    $utf8 = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($ControlPath, ($control | ConvertTo-Json -Depth 8), $utf8)
+    [System.IO.File]::WriteAllText($StatusPath, ($status | ConvertTo-Json -Depth 8), $utf8)
+    $mirror = Join-Path $ShellRoot 'setup-shell-status.json'
+    try { [System.IO.File]::WriteAllText($mirror, ($status | ConvertTo-Json -Depth 8), $utf8) } catch { }
+}
+
+function Start-WinMintProvisioningHostEarly {
+    <#
+    .SYNOPSIS
+        PreLock entry: cover the desktop before FirstLogon.ps1 loads modules.
+    #>
+    param(
+        [string]$PayloadRoot = $PSScriptRoot,
+        [int]$PollIntervalMs = 1500
+    )
+
+    $existing = Get-WinMintProvisioningHostProcess
+    if ($existing) {
+        Write-WinMintProvisioningGuardLog -Marker "host-adopt presenter=native pid=$($existing.Id) early=1"
+        return $existing
+    }
+
+    $shellRoot = Join-Path $PayloadRoot 'setup-shell'
+    $exePath = Join-Path $shellRoot 'WinMintSetupShell.exe'
+    if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
+        Write-WinMintProvisioningGuardLog -Marker "host-early-skip missing=$exePath"
+        return $null
+    }
+
+    $winMintDir = Join-Path $env:LOCALAPPDATA 'WinMint'
+    $controlPath = Join-Path $winMintDir 'setup-shell-control.json'
+    $statusPath = Join-Path $winMintDir 'setup-shell-status.json'
+    $profileName = 'WinMint'
+    try {
+        $setupProfile = Join-Path $PayloadRoot 'WinMintSetupProfile.json'
+        if (Test-Path -LiteralPath $setupProfile) {
+            $sp = Get-Content -LiteralPath $setupProfile -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($sp.PSObject.Properties['profileName'] -and $sp.profileName) {
+                $profileName = [string]$sp.profileName
+            }
+        }
+    }
+    catch { }
+
+    Write-WinMintProvisioningHostBootstrapFiles `
+        -ShellRoot $shellRoot `
+        -ControlPath $controlPath `
+        -StatusPath $statusPath `
+        -ProfileName $profileName `
+        -TaskLabel 'Lock desktop and open setup shell'
+
+    $minStartDwellMs = 5000
+    $minCompleteDwellMs = 5000
+    if (Get-Command Get-WinMintSetupProvisioningShellDwellOverrideMs -ErrorAction SilentlyContinue) {
+        $dwellOverride = Get-WinMintSetupProvisioningShellDwellOverrideMs
+        if ($dwellOverride) {
+            $minStartDwellMs = $dwellOverride
+            $minCompleteDwellMs = $dwellOverride
+        }
+    }
+
+    $hostArgs = @(
+        '--shell-root', "`"$shellRoot`"",
+        '--status', "`"$statusPath`"",
+        '--control', "`"$controlPath`"",
+        '--poll-ms', $PollIntervalMs,
+        '--min-start-dwell-ms', $minStartDwellMs,
+        '--min-complete-dwell-ms', $minCompleteDwellMs,
+        '--log'
+    )
+    $proc = Start-Process -FilePath $exePath -ArgumentList $hostArgs -PassThru
+    Write-WinMintProvisioningGuardLog -Marker "host-start presenter=native pid=$($proc.Id) early=1"
+    return $proc
+}
+
 function Start-WinMintProvisioningHost {
     param(
         [int]$PollIntervalMs = 1500,
         [string]$HostExePath = '',
         [int]$MinStartDwellMs = 0,
-        [int]$MinCompleteDwellMs = 0
+        [int]$MinCompleteDwellMs = 0,
+        [switch]$AdoptIfRunning
     )
+
+    if ($AdoptIfRunning) {
+        $existing = Get-WinMintProvisioningHostProcess
+        if ($existing) {
+            Write-WinMintProvisioningGuardLog -Marker "host-adopt presenter=native pid=$($existing.Id)"
+            return $existing
+        }
+    }
 
     $paths = Get-WinMintSetupShellLocalPaths
     $shellRoot = Get-WinMintSetupShellRoot
@@ -131,7 +277,8 @@ function Start-WinMintProvisioningHost {
     }
 
     Stop-WinMintSetupShellHostProcesses
-    Start-Sleep -Milliseconds 750
+    # Brief yield only when replacing a prior host; PreLock early start skips this path.
+    Start-Sleep -Milliseconds 200
 
     if ($MinStartDwellMs -le 0) { $MinStartDwellMs = 5000 }
     if ($MinCompleteDwellMs -le 0) { $MinCompleteDwellMs = 5000 }

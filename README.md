@@ -13,7 +13,7 @@
 [![License](https://img.shields.io/github/license/yanai-sh/winmint?style=flat-square)](LICENSE)
 [![Website](https://img.shields.io/website?url=https%3A%2F%2Fwinmint.yanai.sh&style=flat-square&label=winmint.yanai.sh)](https://winmint.yanai.sh)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011%2025H2%2B-0078D6?style=flat-square&logo=windows11&logoColor=white)](#requirements)
-[![PowerShell](https://img.shields.io/badge/PowerShell-7.6.2%2B-5391FE?style=flat-square&logo=powershell&logoColor=white)](#requirements)
+[![PowerShell](https://img.shields.io/badge/PowerShell-7.6.0%2B-5391FE?style=flat-square&logo=powershell&logoColor=white)](#requirements)
 [![UI](https://img.shields.io/badge/UI-WebView2-0078D6?style=flat-square&logo=webview2&logoColor=white)](assets/runtime/setup/setup-shell)
 
 </div>
@@ -90,7 +90,7 @@ Local-account builds can be fully unattended: profile computer name, injected pa
 ## Requirements
 
 > [!IMPORTANT]
-> Real builds need an elevated Windows 11 host, PowerShell **7.6.2+**, a **25H2+** source ISO, ~25 GB scratch space, `oscdimg.exe` from the Windows ADK, and host `dism.exe` at least as new as the source image. WinMint fails early with guidance when DISM is too old.
+> Real builds need an elevated Windows 11 host, PowerShell **7.6.0+**, a **25H2+** source ISO, ~25 GB scratch space, `oscdimg.exe` from the Windows ADK, and host `dism.exe` at least as new as the source image. WinMint fails early with guidance when DISM is too old.
 
 ### Building from source
 

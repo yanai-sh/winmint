@@ -20,7 +20,7 @@ function Invoke-ScTelemetryTaskHardening {
         }
         catch {
             $result.failed += [ordered]@{ action = 'DisableScheduledTask'; target = $name; error = [string]$_ }
-            "Telemetry scheduled task disable failed for ${name}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+            Write-ScWarn "Telemetry scheduled task disable failed for ${name}: $_"
         }
     }
     $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $logDir 'SetupComplete_TelemetryTasks.json') -Encoding UTF8

@@ -523,9 +523,9 @@ function Write-WinMintInstallMarker {
 function Get-WinMintPowerShell {
     function Get-WinMintPowerShellCandidate {
         Set-WinMintBootstrapOperation `
-            -Operation 'Locating PowerShell 7.6.2 or newer.' `
+            -Operation 'Locating PowerShell 7.6.0 or newer.' `
             -FailureKind 'Runtime' `
-            -Recovery 'Install or update PowerShell 7.6.2+, then rerun the bootstrap command.'
+            -Recovery 'Install or update PowerShell 7.6.0+, then rerun the bootstrap command.'
         $pwsh = Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue
         if (-not $pwsh) { return $null }
 
@@ -538,21 +538,21 @@ function Get-WinMintPowerShell {
             }
         }
         catch {
-            throw "Could not determine PowerShell version from '$($pwsh.Source)'. Install PowerShell 7.6.2+, then run this launcher again."
+            throw "Could not determine PowerShell version from '$($pwsh.Source)'. Install PowerShell 7.6.0+, then run this launcher again."
         }
     }
 
     function Install-WinMintBootstrapPowerShell {
         Set-WinMintBootstrapOperation `
-            -Operation 'Installing PowerShell 7.6.2+ through WinGet.' `
+            -Operation 'Installing PowerShell 7.6.0+ through WinGet.' `
             -FailureKind 'Runtime' `
-            -Recovery 'Install PowerShell 7.6.2+ manually from Microsoft or fix WinGet availability, then rerun the bootstrap command.'
+            -Recovery 'Install PowerShell 7.6.0+ manually from Microsoft or fix WinGet availability, then rerun the bootstrap command.'
         $winget = Get-Command 'winget.exe' -ErrorAction SilentlyContinue
         if (-not $winget) {
-            throw 'PowerShell 7.6.2+ is required, and WinGet was not available for automatic installation.'
+            throw 'PowerShell 7.6.0+ is required, and WinGet was not available for automatic installation.'
         }
 
-        Write-WinMintBootstrapLog 'Installing PowerShell 7.6.2+ via WinGet.'
+        Write-WinMintBootstrapLog 'Installing PowerShell 7.6.0+ via WinGet.'
         & $winget.Source install `
             --id Microsoft.PowerShell `
             --source winget `
@@ -562,7 +562,7 @@ function Get-WinMintPowerShell {
             --silent | Out-Null
     }
 
-    $minimumVersion = [version]'7.6.2'
+    $minimumVersion = [version]'7.6.0'
     $candidate = Get-WinMintPowerShellCandidate
     if (-not $candidate -or $candidate.Version -lt $minimumVersion) {
         Install-WinMintBootstrapPowerShell
@@ -571,7 +571,7 @@ function Get-WinMintPowerShell {
     if (-not $candidate -or $candidate.Version -lt $minimumVersion) {
         $foundVersion = if ($candidate) { $candidate.Version } else { 'none' }
         $foundPath = if ($candidate) { $candidate.Path } else { 'pwsh.exe not found' }
-        throw "PowerShell 7.6.2+ is required. Found $foundVersion at '$foundPath'. Update PowerShell, then run this launcher again."
+        throw "PowerShell 7.6.0+ is required. Found $foundVersion at '$foundPath'. Update PowerShell, then run this launcher again."
     }
 
     Write-WinMintBootstrapLog "Using PowerShell $($candidate.Version) at '$($candidate.Path)'."

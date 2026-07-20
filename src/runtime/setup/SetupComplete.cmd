@@ -7,9 +7,10 @@ md "%ProgramData%\WinMint\Logs" 2>nul
 echo SetupComplete.cmd fired %DATE% %TIME%> "%ProgramData%\WinMint\Logs\SetupComplete-cmd-fired.txt"
 set "PS7=%ProgramFiles%\PowerShell\7\pwsh.exe"
 if exist "%PS7%" (
+  REM Offline image must stage PowerShell 7.6.0+; SetupComplete refuses Windows PowerShell.
   "%PS7%" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%SystemRoot%\Setup\Scripts\SetupComplete.ps1"
 ) else (
-  echo PowerShell 7 is required but was not found at "%PS7%">> "%ProgramData%\WinMint\Logs\SetupComplete_errors.log"
+  echo PowerShell 7.6.0+ is required but was not found at "%PS7%">> "%ProgramData%\WinMint\Logs\SetupComplete_errors.log"
   exit /b 1
 )
 exit /b %ERRORLEVEL%

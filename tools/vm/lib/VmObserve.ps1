@@ -295,11 +295,13 @@ function ConvertTo-WinMintWtCommandLine {
         [Parameter(Mandatory)][string]$TabTitle,
         [Parameter(Mandatory)][string]$StartingDirectory,
         [Parameter(Mandatory)][string]$PwshPath,
-        [Parameter(Mandatory)][string[]]$PwshArguments
+        [Parameter(Mandatory)][string[]]$PwshArguments,
+        # -1 = new window (managed worker default); 0 = last-used window
+        [int]$WindowId = 0
     )
 
     $parts = @(
-        '-w', '0', 'new-tab',
+        '-w', [string]$WindowId, 'new-tab',
         '--title', (Format-WinMintProcessArgument $TabTitle),
         '-d', (Format-WinMintProcessArgument $StartingDirectory),
         '--',
@@ -309,6 +311,124 @@ function ConvertTo-WinMintWtCommandLine {
         $parts += Format-WinMintProcessArgument $arg
     }
     return ($parts -join ' ')
+}
+
+function Start-WinMintVmAcceptanceWorkerConsole {
+    <#
+    .SYNOPSIS
+        Launch the acceptance worker in one live console (Windows Terminal by default).
+
+    .DESCRIPTION
+        Spectre build UI and harness Wait/Inspect lines share that single session.
+        Pass -NoConsole for a minimized detached pwsh (agents/CI without a watch window).
+        Do not open separate verbose/run.log tail tabs — those race the live console.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$PwshPath,
+        [Parameter(Mandatory)][string[]]$PwshArguments,
+        [string]$ErrLog = '',
+        [string]$TabTitle = 'WinMint VM Acceptance',
+        [switch]$NoConsole
+    )
+
+    if ($NoConsole) {
+        $start = @{
+            FilePath         = $PwshPath
+            ArgumentList     = $PwshArguments
+            WorkingDirectory = $RepoRoot
+            PassThru         = $true
+            WindowStyle      = 'Minimized'
+        }
+        if ($ErrLog) { $start.RedirectStandardError = $ErrLog }
+        $proc = Start-Process @start
+        return [pscustomobject]@{
+            Mode           = 'minimized'
+            Process        = $proc
+            ConsoleOpened  = $false
+            WorkerPidKnown = $true
+        }
+    }
+
+    $terminalPath = Resolve-WinMintWindowsTerminalPath
+    if ($terminalPath) {
+        $commandLine = ConvertTo-WinMintWtCommandLine `
+            -TabTitle $TabTitle `
+            -StartingDirectory $RepoRoot `
+            -PwshPath $PwshPath `
+            -PwshArguments $PwshArguments `
+            -WindowId -1
+        Start-Process -FilePath $terminalPath -ArgumentList $commandLine -WindowStyle Normal | Out-Null
+        Write-Host "Opened Windows Terminal '$TabTitle' (Spectre build + acceptance harness in one session)."
+        return [pscustomobject]@{
+            Mode           = 'windows-terminal'
+            Process        = $null
+            ConsoleOpened  = $true
+            WorkerPidKnown = $false
+        }
+    }
+
+    Write-Warning 'Windows Terminal (wt.exe) was not found; falling back to a visible pwsh window.'
+    $start = @{
+        FilePath         = $PwshPath
+        ArgumentList     = $PwshArguments
+        WorkingDirectory = $RepoRoot
+        PassThru         = $true
+        WindowStyle      = 'Normal'
+    }
+    if ($ErrLog) { $start.RedirectStandardError = $ErrLog }
+    $proc = Start-Process @start
+    return [pscustomobject]@{
+        Mode           = 'pwsh'
+        Process        = $proc
+        ConsoleOpened  = $true
+        WorkerPidKnown = $true
+    }
+}
+
+function Wait-WinMintVmManagedWorkerReady {
+    param(
+        [Parameter(Mandatory)][string]$ManagedPath,
+        [int]$TimeoutSeconds = 45,
+        [System.Diagnostics.Process]$LaunchProcess
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if ($LaunchProcess -and $LaunchProcess.HasExited) {
+            return [pscustomobject]@{
+                Ok = $false
+                Pid = [int]$LaunchProcess.Id
+                ExitCode = [int]$LaunchProcess.ExitCode
+                State = $null
+                Reason = 'launch-process-exited'
+            }
+        }
+        $state = Read-WinMintVmManagedRunState -Path $ManagedPath
+        if ($state -and $state.pid -and [int]$state.pid -gt 0) {
+            $phase = [string]$state.currentPhase
+            if ($phase -and $phase -ne 'starting' -and (Test-WinMintVmProcessAlive -ProcessId ([int]$state.pid))) {
+                return [pscustomobject]@{
+                    Ok = $true
+                    Pid = [int]$state.pid
+                    ExitCode = -1
+                    State = $state
+                    Reason = 'worker-ready'
+                }
+            }
+        }
+        Start-Sleep -Milliseconds 400
+    }
+
+    $state = Read-WinMintVmManagedRunState -Path $ManagedPath
+    $pid = if ($state -and $state.pid) { [int]$state.pid } elseif ($LaunchProcess) { [int]$LaunchProcess.Id } else { 0 }
+    return [pscustomobject]@{
+        Ok = $false
+        Pid = $pid
+        ExitCode = -1
+        State = $state
+        Reason = 'timeout'
+    }
 }
 
 function Start-WinMintVmScriptInWindowsTerminal {
@@ -371,8 +491,8 @@ function Start-WinMintVmRunLogViewerInWindowsTerminal {
 function Start-WinMintVmBuildLogViewersInWindowsTerminal {
     <#
     .SYNOPSIS
-        Open dual-channel build observation tabs: Spectre lives in the worker
-        console; full detail is tailed from WinMint-Build.verbose.log (777a722).
+        Legacy helper: open verbose + run.log tail tabs. Managed acceptance no
+        longer calls this — use Start-WinMintVmAcceptanceWorkerConsole instead.
     #>
     param(
         [Parameter(Mandatory)][string]$RepoRoot,

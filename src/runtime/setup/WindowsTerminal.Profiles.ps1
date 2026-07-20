@@ -1,12 +1,59 @@
-#Requires -Version 5.1
+#Requires -Version 7.6
 
 function Get-WinMintDisabledTerminalProfileSources {
+    # Disable every dynamic generator so profiles.list stays WinMint-curated only.
+    # WSL entries are explicit (commandline + icon); leaving Windows.Terminal.Wsl on
+    # would re-inject auto profiles beside the curated ones.
     @(
         'Windows.Terminal.WindowsPowerShell'
         'Windows.Terminal.PowershellCore'
+        'Windows.Terminal.Wsl'
         'Windows.Terminal.Azure'
+        'Windows.Terminal.SSH'
         'Windows.Terminal.VisualStudio'
     )
+}
+
+function Get-WinMintTerminalIconAssetNames {
+    @('ubuntu.png', 'fedora.png', 'archlinux.png', 'nixos.png', 'pengwin.png')
+}
+
+function Resolve-WinMintTerminalIconSourceDir {
+    $repoAssetDir = Join-Path (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) 'assets\ui\wsl'
+    foreach ($candidate in @(
+            (Join-Path $PSScriptRoot 'TerminalIcons')
+            $repoAssetDir
+        )) {
+        if (Test-Path -LiteralPath (Join-Path $candidate 'fedora.png') -PathType Leaf) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Get-WinMintTerminalIconsDir {
+    Join-Path $env:LOCALAPPDATA 'WinMint\TerminalIcons'
+}
+
+function Get-WinMintTerminalIconSettingsPath {
+    param([Parameter(Mandatory)][string]$FileName)
+    "%LOCALAPPDATA%\WinMint\TerminalIcons\$FileName"
+}
+
+function Install-WinMintTerminalIcons {
+    $sourceDir = Resolve-WinMintTerminalIconSourceDir
+    if (-not $sourceDir) { return $false }
+
+    $destDir = Get-WinMintTerminalIconsDir
+    $null = New-Item -ItemType Directory -Path $destDir -Force
+    $copied = 0
+    foreach ($name in @(Get-WinMintTerminalIconAssetNames)) {
+        $from = Join-Path $sourceDir $name
+        if (-not (Test-Path -LiteralPath $from -PathType Leaf)) { continue }
+        Copy-Item -LiteralPath $from -Destination (Join-Path $destDir $name) -Force
+        $copied++
+    }
+    return ($copied -gt 0)
 }
 
 function Convert-WinMintWslTerminalDistroName {
@@ -64,6 +111,19 @@ function New-WinMintWindowsTerminalPowerShellProfile {
     }
 }
 
+function Get-WinMintWslTerminalIconFileName {
+    param([Parameter(Mandatory)][string]$WslName)
+
+    switch ($WslName) {
+        'Ubuntu' { 'ubuntu.png' }
+        'FedoraLinux' { 'fedora.png' }
+        'archlinux' { 'archlinux.png' }
+        'NixOS' { 'nixos.png' }
+        'pengwin' { 'pengwin.png' }
+        default { $null }
+    }
+}
+
 function New-WinMintWslTerminalProfile {
     param([Parameter(Mandatory)][string]$Distro)
 
@@ -86,14 +146,6 @@ function New-WinMintWslTerminalProfile {
         'pengwin' { '{9f23b5e0-8f73-4a90-9d8d-11e8b43d0005}' }
         default { "{9f23b5e0-8f73-4a90-9d8d-$(([Math]::Abs($wslName.GetHashCode()) % 10000000000).ToString('0000000000'))}" }
     }
-    $icon = switch ($wslName) {
-        'Ubuntu' { 'ms-appx:///ProfileIcons/ubuntu.png' }
-        'FedoraLinux' { 'ms-appx:///ProfileIcons/fedora.png' }
-        'archlinux' { 'ms-appx:///ProfileIcons/archlinux.png' }
-        'NixOS' { 'ms-appx:///ProfileIcons/nixos.png' }
-        'pengwin' { 'ms-appx:///ProfileIcons/pengwin.png' }
-        default { $null }
-    }
 
     $terminalProfile = [ordered]@{
         guid = $guid
@@ -101,8 +153,16 @@ function New-WinMintWslTerminalProfile {
         commandline = "wsl.exe -d $wslName"
         startingDirectory = '~'
         tabTitle = $tabTitle
+        pathTranslationStyle = 'wsl'
     }
-    if ($icon) { $terminalProfile.icon = $icon }
+
+    $iconFile = Get-WinMintWslTerminalIconFileName -WslName $wslName
+    if ($iconFile) {
+        $stagedIcon = Join-Path (Get-WinMintTerminalIconsDir) $iconFile
+        if (Test-Path -LiteralPath $stagedIcon -PathType Leaf) {
+            $terminalProfile.icon = Get-WinMintTerminalIconSettingsPath -FileName $iconFile
+        }
+    }
     return $terminalProfile
 }
 
@@ -137,6 +197,8 @@ function Set-WinMintWindowsTerminalProfiles {
     $settingsPath = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
     if (-not (Test-Path -LiteralPath $settingsPath)) { return 'missing-terminal-settings' }
 
+    $null = Install-WinMintTerminalIcons
+
     $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable
     if (-not $settings.ContainsKey('profiles')) { $settings.profiles = [ordered]@{} }
     if (-not $settings.profiles.ContainsKey('defaults')) { $settings.profiles.defaults = [ordered]@{} }
@@ -147,9 +209,13 @@ function Set-WinMintWindowsTerminalProfiles {
     $settings.profiles.defaults.colorScheme = 'One Half Dark'
     $settings.profiles.defaults.bellStyle = 'none'
     $settings.profiles.defaults.opacity = 80
+    $settings.profiles.defaults.useAcrylic = $false
+    $settings.profiles.defaults.trimPaste = $true
+    $settings.profiles.defaults.snapOnInput = $true
     $settings.centerOnLaunch = $true
     $settings.launchMode = 'default'
-    $settings.firstWindowPreference = 'defaultNewWindow'
+    # Schema enum: defaultProfile | persistedWindowLayout. Prefer fresh default tab.
+    $settings.firstWindowPreference = 'defaultProfile'
     $settings.defaultProfile = '{2c7d8c64-fb18-43d0-9bd0-bf9f6d5c4e22}'
     $settings.disabledProfileSources = @(Get-WinMintDisabledTerminalProfileSources)
     $settings.newTabMenu = @([ordered]@{ type = 'remainingProfiles' })

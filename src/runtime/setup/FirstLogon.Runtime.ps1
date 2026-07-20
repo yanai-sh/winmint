@@ -70,7 +70,8 @@ function Invoke-WinMintFirstLogonSetupPhase {
             Update-WinMintSetupShellStatus -ShellRoot $shellRoot -PreAgentStage 'locked' | Out-Null
             Enable-WinMintProvisioningGuard
             Start-WinMintSetupShellStatusPump | Out-Null
-            $Context.SetupShellProcess = Start-WinMintProvisioningHost
+            # PreLock usually already started the host — adopt it instead of kill/restart flash.
+            $Context.SetupShellProcess = Start-WinMintProvisioningHost -AdoptIfRunning
         }
         'restore-visible-user-posture' = {
             param([hashtable]$Context, $Step)

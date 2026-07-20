@@ -1,4 +1,4 @@
-﻿#Requires -Version 7.6
+#Requires -Version 7.6
 # Dot-sourced by WinMint-VmConsole.ps1 — not a standalone entrypoint.
 function Get-WinMintVmPathFingerprintParts {
     param(
@@ -222,6 +222,8 @@ function Get-WinMintVmImageBuildFingerprint {
 
     $profileHash = (Get-FileHash -LiteralPath $ProfilePath -Algorithm SHA256).Hash
     $runtimeParts = Get-WinMintVmPathFingerprintParts -Root (Join-Path $RepoRoot 'src\runtime\image')
+    # SetupComplete/FirstLogon are staged into the ISO — must bust image cache when they change.
+    $setupRuntimeParts = Get-WinMintVmPathFingerprintParts -Root (Join-Path $RepoRoot 'src\runtime\setup')
     $setupAssetParts = Get-WinMintVmPathFingerprintParts -Root (Join-Path $RepoRoot 'assets\runtime\setup')
     $setupShellSourceParts = @(
         (Get-WinMintVmPathFingerprintParts -Root (Join-Path $RepoRoot 'apps\setup-shell'))
@@ -237,11 +239,12 @@ function Get-WinMintVmImageBuildFingerprint {
         }
     }
     $blob = Get-WinMintVmBuildFingerprintBlob -Parts @(
-        "schema=image-v1"
+        "schema=image-v2"
         "quality=$Quality"
         "profile=$profileHash"
         "src=$srcIdentity"
         "runtime=$($runtimeParts -join ';')"
+        "setupRuntime=$($setupRuntimeParts -join ';')"
         "setupAssets=$($setupAssetParts -join ';')"
         "setupShellSource=$($setupShellSourceParts -join ';')"
     )

@@ -198,8 +198,8 @@ function Test-RepositoryReleaseReadiness {
         }
     }
 
-    if ([string]$contract.hostRequirements.backendPowerShell -ne '7.6.2+') {
-        Add-ValidationError 'Release readiness backend PowerShell requirement must be 7.6.2+.'
+    if ([string]$contract.hostRequirements.backendPowerShell -ne '7.6.0+') {
+        Add-ValidationError 'Release readiness backend PowerShell requirement must be 7.6.0+.'
     }
     if ([string]$contract.hostRequirements.sourceIso -notmatch '25H2\+') {
         Add-ValidationError 'Release readiness source ISO requirement must mention Windows 11 25H2+.'

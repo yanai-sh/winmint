@@ -92,6 +92,7 @@ if ($prepareStatus -ne 'current') {
 $eventLog = Join-Path $logDir 'WinMintAgent-events.jsonl'
 @(
     '{"time":"2026-01-01T00:00:00+00:00","type":"install","status":"running","message":"Installing mingit via Scoop for arm64."}'
+    '{"time":"2026-01-01T00:00:01+00:00","type":"command","status":"running","message":"Running winget.exe."}'
 ) | Set-Content -LiteralPath $eventLog -Encoding utf8
 $agentWithEvents = @{
     run = @{ progressEventLog = $eventLog }
@@ -105,7 +106,10 @@ $agentWithEvents = @{
 
 $liveHint = Get-WinMintSetupShellLiveTaskHint -AgentState $agentWithEvents
 if ($liveHint -notmatch 'mingit') {
-    Add-Failure "event log hint should surface install message, got '$liveHint'."
+    Add-Failure "event log hint should prefer install over generic winget.exe, got '$liveHint'."
+}
+if ($liveHint -match '(?i)Running winget') {
+    Add-Failure "event log hint must not surface generic 'Running winget.exe.', got '$liveHint'."
 }
 $liveLabel = Resolve-WinMintSetupShellRunningTaskLabel `
     -RuntimeStepName 'package-managers' `

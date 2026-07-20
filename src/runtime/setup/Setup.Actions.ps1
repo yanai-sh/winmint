@@ -50,7 +50,7 @@ function Get-WinMintSetupActionCatalog {
             Artifacts = @('SetupComplete.log')
             Reversible = $true
         }
-        # Must run before long/blocking work (toolchain winget). OOBE leaves
+        # Must run before other SetupComplete work. OOBE leaves
         # DefaultUserName=defaultuser0; FirstLogonAnim "Just a moment" hangs until
         # Winlogon is restamped to the profile Local account.
         [pscustomobject]@{
@@ -220,14 +220,17 @@ function Get-WinMintSetupActionCatalog {
             Phase = 'setupComplete'
             RelativePath = 'SetupComplete\Toolchain.ps1'
             FunctionName = 'Invoke-ScToolchainInstall'
-            Title = 'Install machine-phase toolchain packages not bundled offline'
+            Title = 'Confirm inbox Windows Terminal (no SetupComplete winget)'
             Kind = 'setup-action'
             Default = $true
-            Requires = @('network')
-            SuppressedBy = @('network-unavailable')
+            Requires = @()
+            SuppressedBy = @()
             UserControlled = $false
-            Changes = @('Install Windows Terminal through winget when outbound HTTPS is available')
-            Artifacts = @('SetupComplete_errors.log')
+            Changes = @(
+                'Record whether Windows Terminal is present on the image',
+                'Do not winget-install or upgrade Terminal during SetupComplete (inbox on Windows 11 25H2+)'
+            )
+            Artifacts = @('SetupComplete.log')
             Reversible = $true
         }
         [pscustomobject]@{
@@ -290,6 +293,25 @@ function Get-WinMintSetupActionCatalog {
             Artifacts = @('SetupComplete.log')
             Reversible = $true
         }
+        # Catch OOBE/other mid-SetupComplete Winlogon rewrites to defaultuser0 after long work.
+        [pscustomobject]@{
+            Id = 'autologon-stamp-final'
+            Phase = 'setupComplete'
+            RelativePath = 'SetupComplete\AutoLogon.ps1'
+            FunctionName = 'Invoke-ScAutoLogonStampFinal'
+            Title = 'Final Winlogon Autologon restamp before secret cleanup'
+            Kind = 'setup-action'
+            Default = $true
+            Requires = @('account.autoLogon')
+            SuppressedBy = @()
+            UserControlled = $false
+            Changes = @(
+                'Re-stamp Local profile Autologon after toolchain and other machine-phase work',
+                'Prevent defaultuser0 from returning before first interactive logon'
+            )
+            Artifacts = @('SetupComplete_AutoLogon.json', 'SetupComplete_AutoLogon.final.json')
+            Reversible = $true
+        }
         [pscustomobject]@{
             Id = 'inline-secret-cleanup'
             Phase = 'setupComplete'
@@ -305,7 +327,7 @@ function Get-WinMintSetupActionCatalog {
                 'Delete Panther unattend XML copies that contain the staged AutoLogon password',
                 'Delete staged Wi-Fi payload artifacts after setup'
             )
-            Artifacts = @('SetupComplete_errors.log')
+            Artifacts = @('SetupComplete_errors.log', 'SetupComplete_warnings.log')
             Reversible = $false
         }
     )

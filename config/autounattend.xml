@@ -110,7 +110,7 @@
                 </SynchronousCommand>
                 <SynchronousCommand wcm:action="add">
                     <Order>2</Order>
-                    <Description>WinMint pre-lock: block Win key and dismiss Start before provisioning host</Description>
+                    <Description>WinMint pre-lock: dark/bloom chrome, guard, and start provisioning splash before FirstLogon</Description>
                     <CommandLine>"C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\Windows\Setup\Scripts\FirstLogon.PreLock.ps1</CommandLine>
                     <RequiresUserInput>false</RequiresUserInput>
                 </SynchronousCommand>

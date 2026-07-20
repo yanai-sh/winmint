@@ -9,6 +9,29 @@ function Test-WinMintTokenElevated {
     Test-WinMintProcessElevated
 }
 
+function Install-WinMintFirstLogonPowerShellMinimum {
+    # Fallback only: offline WIM staging is the primary source. Used when the
+    # bundled host is missing or older than 7.6.0 before provisioning lock.
+    $logPath = Join-Path (Get-WinMintFirstLogonContext).LogDir 'FirstLogon.log'
+    $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        throw 'PowerShell 7.6.0+ is missing/too old and winget.exe was not available for FirstLogon recovery install.'
+    }
+
+    "$(Get-Date -Format 'o') Installing PowerShell 7.6.0+ via winget (FirstLogon recovery; prefer offline WIM staging)." |
+        Out-File -LiteralPath $logPath -Append
+    & $winget.Source install `
+        --id Microsoft.PowerShell `
+        --source winget `
+        --accept-package-agreements `
+        --accept-source-agreements `
+        --disable-interactivity `
+        --silent | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "winget install Microsoft.PowerShell failed with exit code $LASTEXITCODE."
+    }
+}
+
 
 function Resolve-WinMintWindowsTerminalHost {
     $wtCommand = Get-Command wt.exe -ErrorAction SilentlyContinue
@@ -213,27 +236,76 @@ function Invoke-WinMintFirstLogonBootstrapSession {
         catch { Stop-WinMintFirstLogonUnelevated -Reason "Self-elevation failed: $_; aborting before machine-wide setup so RunOnce can retry." }
     }
 
-    if ($elevated -and $PSVersionTable.PSVersion.Major -lt 7) {
-        $pwsh7 = Resolve-WinMintPowerShellHost
+    $minimum = Get-WinMintMinimumPowerShellVersion
+    $currentMeetsMinimum = (
+        $PSVersionTable.PSEdition -eq 'Core' -and
+        $PSVersionTable.PSVersion -ge $minimum
+    )
+
+    if ($elevated -and -not $currentMeetsMinimum) {
         $p7Flag = Join-Path $ctx.LogDir 'FirstLogon_pwsh7.flag'
-        if (-not (Test-Path -LiteralPath $pwsh7 -PathType Leaf)) {
-            Write-WinMintFirstLogonError "PowerShell 7 is required for FirstLogon but was not found: $pwsh7"
+        $pwsh7 = $null
+        try { $pwsh7 = Resolve-WinMintPowerShellHost } catch { $pwsh7 = $null }
+
+        if ([string]::IsNullOrWhiteSpace([string]$pwsh7) -or -not (Test-WinMintPowerShellHostMeetsMinimum -Path $pwsh7 -Minimum $minimum)) {
+            $installFlag = Join-Path $ctx.LogDir 'FirstLogon_pwsh76_install.flag'
+            if (-not (Test-Path -LiteralPath $installFlag)) {
+                try {
+                    Set-Content -LiteralPath $installFlag -Value (Get-Date -Format o) -Encoding ASCII
+                    Install-WinMintFirstLogonPowerShellMinimum
+                    $pwsh7 = Resolve-WinMintPowerShellHost
+                }
+                catch {
+                    Write-WinMintFirstLogonError "PowerShell $minimum+ is required for FirstLogon and recovery install failed: $_"
+                    return @{ ShouldExit = $true; ExitCode = 1 }
+                }
+            }
+            else {
+                try { $pwsh7 = Resolve-WinMintPowerShellHost } catch { $pwsh7 = $null }
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$pwsh7) -or -not (Test-Path -LiteralPath $pwsh7 -PathType Leaf)) {
+            Write-WinMintFirstLogonError "PowerShell $minimum+ is required for FirstLogon but was not found under Program Files\PowerShell\7."
             return @{ ShouldExit = $true; ExitCode = 1 }
         }
+        if (-not (Test-WinMintPowerShellHostMeetsMinimum -Path $pwsh7 -Minimum $minimum)) {
+            $found = Get-WinMintPowerShellHostVersion -Path $pwsh7
+            Write-WinMintFirstLogonError "PowerShell $minimum+ is required for FirstLogon. Found $found at '$pwsh7'."
+            return @{ ShouldExit = $true; ExitCode = 1 }
+        }
+
         if (-not (Test-Path -LiteralPath $p7Flag)) {
             try {
                 Set-Content -LiteralPath $p7Flag -Value (Get-Date -Format o) -Encoding ASCII
-                "$(Get-Date -Format 'o') Re-launching FirstLogon under PowerShell 7 ($pwsh7); the 5.1 instance waits for it." | Out-File -LiteralPath $logPath -Append
+                "$(Get-Date -Format 'o') Re-launching FirstLogon under PowerShell $minimum+ ($pwsh7); the previous host waits for it." |
+                    Out-File -LiteralPath $logPath -Append
                 try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
-                $p7 = Start-Process -FilePath $pwsh7 -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$($ctx.EntryPath)`"") -Wait -PassThru
+                $modeVal = if ($ctx.ContainsKey('AgentMode') -and -not [string]::IsNullOrWhiteSpace([string]$ctx.AgentMode)) {
+                    [string]$ctx.AgentMode
+                } else {
+                    'Auto'
+                }
+                $p7 = Start-Process -FilePath $pwsh7 -ArgumentList @(
+                    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
+                    '-File', "`"$($ctx.EntryPath)`"", '-AgentMode', $modeVal
+                ) -Wait -PassThru
                 return @{ ShouldExit = $true; ExitCode = ([int]$p7.ExitCode) }
             }
             catch {
-                Write-WinMintFirstLogonError "PowerShell 7 re-launch failed: $_"
+                Write-WinMintFirstLogonError "PowerShell $minimum+ re-launch failed: $_"
                 try { Start-Transcript -Path (Join-Path $ctx.LogDir 'FirstLogon_transcript.log') -Append -ErrorAction SilentlyContinue | Out-Null } catch { }
                 return @{ ShouldExit = $true; ExitCode = 1 }
             }
         }
+
+        Write-WinMintFirstLogonError "PowerShell $minimum+ handoff already attempted but this process is still $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))."
+        return @{ ShouldExit = $true; ExitCode = 1 }
+    }
+
+    if (-not $currentMeetsMinimum) {
+        Write-WinMintFirstLogonError "PowerShell $minimum+ is required for FirstLogon. Current host: $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))."
+        return @{ ShouldExit = $true; ExitCode = 1 }
     }
 
     "$(Get-Date -Format 'o') FirstLogon host: PowerShell $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))" | Out-File -LiteralPath $logPath -Append

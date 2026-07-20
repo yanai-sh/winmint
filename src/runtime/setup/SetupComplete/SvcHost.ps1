@@ -16,6 +16,6 @@ function Invoke-ScSvcHostSplit {
         Write-ScLog "SvcHostSplitThresholdInKB set to $thresholdKB KB (8 GB): split on >=8 GB, group below."
     }
     catch {
-        "SvcHostSplitThreshold failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+        Write-ScError "SvcHostSplitThreshold failed: $_"
     }
 }

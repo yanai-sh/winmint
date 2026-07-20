@@ -6,6 +6,73 @@ $script:WinMintVmRunLogContext = @{
     StartedAt = $null
     LastProgressSignature = ''
 }
+$script:WinMintVmUseSpectre = $false
+$script:WinMintVmSpectreInitTried = $false
+
+function Initialize-WinMintVmHumanConsole {
+    <#
+    .SYNOPSIS
+        Best-effort One Half Dark Spectre chrome for harness lines (Wait/Inspect/Evidence).
+        Build phase still uses the engine's own Spectre stack in the same console.
+    #>
+    if ($script:WinMintVmSpectreInitTried) { return }
+    $script:WinMintVmSpectreInitTried = $true
+
+    $themePath = Join-Path $PSScriptRoot '..\..\..\src\runtime\WinMint.ConsoleTheme.ps1'
+    if ((Test-Path -LiteralPath $themePath) -and -not (Get-Command Format-WinMintConsoleLineMarkup -ErrorAction SilentlyContinue)) {
+        . $themePath
+    }
+    if (-not (Get-Command Format-WinMintConsoleLineMarkup -ErrorAction SilentlyContinue)) { return }
+
+    try {
+        $utf8 = [System.Text.UTF8Encoding]::new($false)
+        $OutputEncoding = $utf8
+        [Console]::InputEncoding = $utf8
+        [Console]::OutputEncoding = $utf8
+    }
+    catch { }
+    # Avoid PwshSpectreConsole's first-import encoding panel in the acceptance console.
+    if ([string]::IsNullOrWhiteSpace($env:IgnoreSpectreEncoding)) {
+        $env:IgnoreSpectreEncoding = 'true'
+    }
+
+    if (-not (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue)) {
+        try {
+            Import-Module PwshSpectreConsole -ErrorAction Stop
+        }
+        catch {
+            $cacheRoot = Join-Path $env:TEMP 'Win11ISO_dependency_cache\PSGallery\PwshSpectreConsole'
+            if (Test-Path -LiteralPath $cacheRoot) {
+                $manifest = @(Get-ChildItem -LiteralPath $cacheRoot -Recurse -Filter 'PwshSpectreConsole.psd1' -File -ErrorAction SilentlyContinue |
+                    Sort-Object FullName -Descending)[0]
+                if ($manifest) {
+                    try { Import-Module -Name $manifest.FullName -Force -ErrorAction Stop } catch { return }
+                }
+                else { return }
+            }
+            else { return }
+        }
+    }
+    if (-not (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue)) { return }
+    $script:WinMintVmUseSpectre = $true
+}
+
+function ConvertTo-WinMintVmSpectreLevel {
+    param(
+        [ValidateSet('INFO', 'PHASE', 'PROG', 'SUB', 'WARN', 'ERROR', 'DONE', 'META')]
+        [string]$Level = 'INFO'
+    )
+    switch ($Level) {
+        'PHASE' { return 'SECTION' }
+        'DONE' { return 'OK' }
+        'WARN' { return 'WARN' }
+        'ERROR' { return 'ERROR' }
+        'PROG' { return 'VERBOSE' }
+        'META' { return 'VERBOSE' }
+        'SUB' { return 'VERBOSE' }
+        default { return 'INFO' }
+    }
+}
 
 function Remove-WinMintVmAnsiEscape {
     param([AllowNull()][string]$Text)
@@ -145,8 +212,23 @@ function Write-WinMintVmLogLine {
     $consoleText = Remove-WinMintVmAnsiEscape $Message
     $fileLine = Format-WinMintVmLogRecord -Message $Message -Level $resolvedLevel
 
-    if ($Color) { Write-Host $consoleText -ForegroundColor $Color }
-    else { Write-Host $consoleText }
+    Initialize-WinMintVmHumanConsole
+    $wroteSpectre = $false
+    if ($script:WinMintVmUseSpectre -and (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) -and (Get-Command Format-WinMintConsoleLineMarkup -ErrorAction SilentlyContinue)) {
+        try {
+            $spectreLevel = ConvertTo-WinMintVmSpectreLevel -Level $resolvedLevel
+            $markup = Format-WinMintConsoleLineMarkup -Level $spectreLevel -Message $consoleText
+            Write-SpectreHost $markup
+            $wroteSpectre = $true
+        }
+        catch {
+            $script:WinMintVmUseSpectre = $false
+        }
+    }
+    if (-not $wroteSpectre) {
+        if ($Color) { Write-Host $consoleText -ForegroundColor $Color }
+        else { Write-Host $consoleText }
+    }
     if ($LogPath) { Add-Content -LiteralPath $LogPath -Value $fileLine -Encoding UTF8 }
     try { [Console]::Out.Flush() } catch {}
 
@@ -220,8 +302,7 @@ function Invoke-WinMintVmSpectreBuildCommand {
     )
 
     $verboseLog = Get-WinMintVmBuildVerboseLogPath -RepoRoot $RepoRoot
-    Write-WinMintVmLogLine -Message "Build uses dual-channel Spectre console + verbose log: $verboseLog" -LogPath $LogPath -Level 'META'
-    Write-WinMintVmLogLine -Message 'Tail verbose: Get-Content -LiteralPath .\output\WinMint-Build.verbose.log -Wait -Tail 40' -LogPath $LogPath -Level 'META'
+    Write-WinMintVmLogLine -Message "Build Spectre on this console; full detail also in $verboseLog" -LogPath $LogPath -Level 'META'
     Write-WinMintVmRunEvent -Kind 'milestone' -Payload @{ label = 'build-spectre-channels'; verboseLog = $verboseLog }
 
     # Start-Process keeps Spectre on the inherited console and returns only ExitCode.

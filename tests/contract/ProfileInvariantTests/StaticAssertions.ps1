@@ -1408,7 +1408,7 @@ function Assert-WinMintVmManagedAcceptanceContract {
         }
     }
     $acceptanceText = Get-WinMintRepositoryText -RelativePath 'tools\vm\Invoke-WinMintVmAcceptance.ps1'
-    foreach ($expected in @('ManagedRun', 'Update-WinMintVmManagedRun', 'Set-WinMintVmRepoRoot', 'Invoke-WinMintVmLoggedCommand', 'Test-WinMintSetupShellAcceptanceEvidence', 'Test-WinMintVmSmokeFirstLogonActivityMinElapsed', 'TimeBudgetMinutes', 'plumbingVerdict', 'evidenceVerdict', 'ConnectBasic', 'NoObserve', 'Ensure-WinMintVmObserve', 'Start-WinMintVmObserve', 'SPLASH LIVE', 'Invoke-WinMintGuestPesterAcceptance', 'liveInstallAudit', 'Test-WinMintGuestRemovalDrift')) {
+    foreach ($expected in @('ManagedRun', 'Update-WinMintVmManagedRun', 'Set-WinMintVmRepoRoot', 'Invoke-WinMintVmLoggedCommand', 'Test-WinMintSetupShellAcceptanceEvidence', 'Test-WinMintVmSetupCompleteLogEvidence', 'Test-WinMintVmSmokeFirstLogonActivityMinElapsed', 'TimeBudgetMinutes', 'plumbingVerdict', 'evidenceVerdict', 'ConnectBasic', 'NoObserve', 'Ensure-WinMintVmObserve', 'Start-WinMintVmObserve', 'SPLASH LIVE', 'Invoke-WinMintGuestPesterAcceptance', 'liveInstallAudit', 'Test-WinMintGuestRemovalDrift')) {
         if ($acceptanceText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Invoke-WinMintVmAcceptance.ps1 should wire managed/logged VM acceptance via '$expected'."
         }
@@ -1476,8 +1476,11 @@ function Assert-WinMintVmManagedAcceptanceContract {
     if ($managedText -notmatch 'NoObserve') {
         Add-SmokeFailure 'Start-WinMintVmAcceptanceManaged.ps1 should forward -NoObserve to the acceptance child.'
     }
-    if ($managedText -notmatch 'Start-WinMintVmBuildLogViewersInWindowsTerminal') {
-        Add-SmokeFailure 'Start-WinMintVmAcceptanceManaged.ps1 should open dual-channel build log viewers (verbose + run.log).'
+    if ($managedText -notmatch 'Start-WinMintVmAcceptanceWorkerConsole') {
+        Add-SmokeFailure 'Start-WinMintVmAcceptanceManaged.ps1 should launch one live worker console (Spectre + harness).'
+    }
+    if ($managedText -match 'Start-WinMintVmBuildLogViewersInWindowsTerminal') {
+        Add-SmokeFailure 'Start-WinMintVmAcceptanceManaged.ps1 must not open separate verbose/run.log tail tabs.'
     }
     if ($managedText -notmatch 'Get-WinMintVmBuildVerboseLogPath' -and $managedText -notmatch 'WinMint-Build\.verbose\.log') {
         Add-SmokeFailure 'Start-WinMintVmAcceptanceManaged.ps1 should surface WinMint-Build.verbose.log for Spectre dual-channel builds.'
@@ -1711,11 +1714,33 @@ function Assert-FirstLogonFinalizesTerminalProfiles {
     $terminalProfilesText = Get-Content -LiteralPath (Join-Path $root 'src\runtime\setup\WindowsTerminal.Profiles.ps1') -Raw
     if ($terminalProfilesText -match '(?s)function Get-WinMintDisabledTerminalProfileSources\s*\{.*?@\s*\((.*?)\)\s*\}') {
         $disabledSourcesBlock = $matches[1]
-        if ($disabledSourcesBlock -match 'Windows\.Terminal\.Wsl') {
-            Add-SmokeFailure 'Windows Terminal disabled profile sources must not include WSL auto-profile discovery.'
+        foreach ($src in @('Windows.Terminal.Wsl', 'Windows.Terminal.SSH', 'Windows.Terminal.PowershellCore')) {
+            if ($disabledSourcesBlock -notmatch [regex]::Escape($src)) {
+                Add-SmokeFailure "Windows Terminal disabled profile sources must include '$src' so curated profiles stay authoritative."
+            }
         }
-        if ($disabledSourcesBlock -match 'Windows\.Terminal\.SSH') {
-            Add-SmokeFailure 'Windows Terminal disabled profile sources must not include SSH auto-profile discovery.'
+        if ($terminalProfilesText -match "firstWindowPreference\s*=\s*'defaultNewWindow'") {
+            Add-SmokeFailure 'WindowsTerminal.Profiles.ps1 must not assign invalid firstWindowPreference defaultNewWindow.'
+        }
+        if ($terminalProfilesText -notmatch "firstWindowPreference\s*=\s*'defaultProfile'") {
+            Add-SmokeFailure 'WindowsTerminal.Profiles.ps1 must set firstWindowPreference to defaultProfile.'
+        }
+        foreach ($expected in @(
+                'Install-WinMintTerminalIcons',
+                'Get-WinMintTerminalIconSettingsPath',
+                'pathTranslationStyle',
+                'WinMint\TerminalIcons',
+                'assets\ui\wsl'
+            )) {
+            if ($terminalProfilesText -notmatch [regex]::Escape($expected)) {
+                Add-SmokeFailure "WindowsTerminal.Profiles.ps1 should stage asset icons with '$expected'."
+            }
+        }
+        if ($terminalProfilesText -match "ms-appx:///ProfileIcons/(ubuntu|fedora|archlinux|nixos|pengwin)\.png") {
+            Add-SmokeFailure 'WSL Terminal profiles must use staged assets/ui/wsl PNG icons, not ms-appx ProfileIcons.'
+        }
+        if ($terminalProfilesText -notmatch "pwsh\.exe -NoLogo") {
+            Add-SmokeFailure 'PowerShell Terminal profile must use pwsh.exe -NoLogo.'
         }
     }
     else {
@@ -2360,11 +2385,15 @@ function Assert-WinMintRuntimeCommonContracts {
     $commonText = Get-Content -LiteralPath $canonicalCommon -Raw
     foreach ($expected in @(
         'function Initialize-WinMintConsoleEncoding',
+        'function Get-WinMintMinimumPowerShellVersion',
+        'function Get-WinMintPowerShellHostVersion',
+        'function Test-WinMintPowerShellHostMeetsMinimum',
         'function Resolve-WinMintPowerShell7Host',
         'function Test-WinMintProcessElevated',
         'function Save-WinMintAtomicJson',
         'function Read-WinMintJsonFile',
-        'function Import-WinMintRuntimeCommon'
+        'function Import-WinMintRuntimeCommon',
+        "[version]'7.6.0'"
     )) {
         if ($commonText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "WinMint.Runtime.Common.ps1 should define '$expected'."
@@ -3504,22 +3533,25 @@ function Assert-WindowsTerminalDefaultsPwsh7NoLogo {
         'centerOnLaunch',
         '"launchMode": "default"',
         '"opacity": 80',
+        '"useAcrylic": false',
+        '"trimPaste": true',
+        '"snapOnInput": true',
         '"font"',
         'disabledProfileSources',
         'Windows.Terminal.PowershellCore',
+        'Windows.Terminal.Wsl',
         'Windows.Terminal.Azure',
+        'Windows.Terminal.SSH',
         'Windows.Terminal.WindowsPowerShell',
-        'Windows.Terminal.VisualStudio'
+        'Windows.Terminal.VisualStudio',
+        '"firstWindowPreference": "defaultProfile"'
     )) {
         if ($settingsText -notmatch [regex]::Escape($expected)) {
             Add-SmokeFailure "Windows Terminal settings should contain '$expected'."
         }
     }
-    if ($settingsText -match 'Windows\.Terminal\.Wsl') {
-        Add-SmokeFailure 'Windows Terminal settings must not disable WSL auto-profile discovery.'
-    }
-    if ($settingsText -match 'Windows\.Terminal\.SSH') {
-        Add-SmokeFailure 'Windows Terminal settings must not disable SSH auto-profile discovery.'
+    if ($settingsText -match 'defaultNewWindow') {
+        Add-SmokeFailure 'Windows Terminal settings must not use invalid firstWindowPreference defaultNewWindow.'
     }
     foreach ($forbidden in @('"hidden": true', 'Command Prompt', 'Windows PowerShell', 'Azure Cloud Shell')) {
         if ($settingsText -match [regex]::Escape($forbidden)) {
@@ -3579,9 +3611,12 @@ function Assert-OfflinePowerShell7StagingContract {
         'Resolve-WinMintGitHubReleasePayload',
         'PowerShell/PowerShell',
         'PowerShell-\d+\.\d+\.\d+-',
-        'PowerShell 7 staged',
-        'PowerShell 7 is missing from the offline image',
-        'PowerShell 7 staging failed; build cannot continue'
+        "[version]'7.6.0'",
+        'PowerShell 7.6.0+ staged',
+        'PowerShell 7.6.0+ is missing from the offline image',
+        'PowerShell 7.6.0+ staging failed; build cannot continue',
+        'Prefer newest release',
+        'Staged PowerShell'
     )
     if ($PackagesText -match 'fall back to Windows PowerShell') {
         Add-SmokeFailure 'PowerShell 7 staging must fail the build instead of falling back to Windows PowerShell.'
@@ -3616,7 +3651,7 @@ function Assert-SetupCompleteCmdRequiresBundledPowerShell7 {
 
     Assert-StaticTextContainsAll -Text $SetupCompleteCmd -FailurePrefix 'SetupComplete.cmd should require staged PowerShell 7 with' -Expected @(
         '%ProgramFiles%\PowerShell\7\pwsh.exe',
-        'PowerShell 7 is required',
+        'PowerShell 7.6.0+ is required',
         'exit /b 1'
     )
     if ($SetupCompleteCmd -match 'powershell\.exe[\s\S]{0,160}SetupComplete\.ps1') {
@@ -3629,9 +3664,9 @@ function Assert-SetupCompleteRegistersFirstLogonUnderPowerShell7 {
 
     Assert-StaticTextContainsAll -Text $SetupCompleteText -FailurePrefix 'SetupComplete.ps1 should register FirstLogon under PowerShell 7 with' -Expected @(
         "Join-Path `$env:ProgramFiles 'PowerShell\7\pwsh.exe'",
-        'PowerShell 7 is required for FirstLogon',
+        'PowerShell 7.6.0+ is required for FirstLogon',
         '-NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File',
-        'under PowerShell 7'
+        'under PowerShell 7.6.0+'
     )
     if ($SetupCompleteText -match 'runOnceCommand\s*=\s*"powershell\.exe') {
         Add-SmokeFailure 'SetupComplete.ps1 must not register FirstLogon RunOnce under Windows PowerShell.'
@@ -3649,13 +3684,19 @@ function Assert-SetupCompleteToolchainDoesNotInstallPowerShell7Fallback {
 function Assert-FirstLogonRuntimeRequiresPowerShell7 {
     param([Parameter(Mandatory)][string]$FirstLogonBootstrapText)
 
-    Assert-StaticTextContainsAll -Text $FirstLogonBootstrapText -FailurePrefix 'FirstLogon bootstrap should fail closed around PowerShell 7 with' -Expected @(
-        'PowerShell 7 is required for FirstLogon',
-        'PowerShell 7 re-launch failed',
+    Assert-StaticTextContainsAll -Text $FirstLogonBootstrapText -FailurePrefix 'FirstLogon bootstrap should fail closed around PowerShell 7.6.0+ with' -Expected @(
+        'Get-WinMintMinimumPowerShellVersion',
+        'Test-WinMintPowerShellHostMeetsMinimum',
+        'Install-WinMintFirstLogonPowerShellMinimum',
+        'PowerShell $minimum+ is required for FirstLogon',
+        're-launch failed',
         'ExitCode = 1'
     )
     if ($FirstLogonBootstrapText -match 'continuing under Windows PowerShell') {
         Add-SmokeFailure 'FirstLogon bootstrap must not continue under Windows PowerShell after PowerShell 7 handoff fails.'
+    }
+    if ($FirstLogonBootstrapText -match 'PSVersion\.Major\s+-lt\s+7') {
+        Add-SmokeFailure 'FirstLogon bootstrap must require PowerShell 7.6.0+, not only Major -lt 7.'
     }
 }
 

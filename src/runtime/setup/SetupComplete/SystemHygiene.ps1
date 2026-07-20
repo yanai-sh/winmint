@@ -8,7 +8,7 @@ function Invoke-ScTimeSync {
         w32tm.exe /resync /force | Out-Null
     }
     catch {
-        "Time sync failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+        Write-ScWarn "Time sync failed: $_"
     }
 }
 

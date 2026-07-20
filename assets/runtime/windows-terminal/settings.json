@@ -5,7 +5,7 @@
 
   "centerOnLaunch": true,
   "launchMode": "default",
-  "firstWindowPreference": "defaultNewWindow",
+  "firstWindowPreference": "defaultProfile",
   "tabWidthMode": "compact",
   "useAcrylicInTabRow": false,
 
@@ -72,6 +72,7 @@
 
       "background": "#0b0c10",
       "opacity": 80,
+      "useAcrylic": false,
 
       "padding": "10",
 
@@ -85,6 +86,8 @@
       "scrollbarState": "hidden",
 
       "copyOnSelect": false,
+      "trimPaste": true,
+      "snapOnInput": true,
 
       "autoMarkPrompts": true,
 
@@ -115,7 +118,9 @@
   "disabledProfileSources": [
     "Windows.Terminal.WindowsPowerShell",
     "Windows.Terminal.PowershellCore",
+    "Windows.Terminal.Wsl",
     "Windows.Terminal.Azure",
+    "Windows.Terminal.SSH",
     "Windows.Terminal.VisualStudio"
   ],
 

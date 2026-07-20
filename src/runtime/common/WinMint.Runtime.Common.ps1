@@ -18,6 +18,52 @@ function Initialize-WinMintConsoleEncoding {
     catch { }
 }
 
+function Get-WinMintMinimumPowerShellVersion {
+    # Floor: 7.6.0. Offline staging / winget still prefer the latest 7.6.x+.
+    [version]'7.6.0'
+}
+
+function Get-WinMintPowerShellHostVersion {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $null
+    }
+
+    try {
+        $text = & $Path -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>$null |
+            Select-Object -First 1
+        if (-not [string]::IsNullOrWhiteSpace([string]$text)) {
+            return [version]([string]$text).Trim()
+        }
+    }
+    catch { }
+
+    try {
+        $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
+        foreach ($candidate in @($info.ProductVersion, $info.FileVersion)) {
+            if ([string]::IsNullOrWhiteSpace([string]$candidate)) { continue }
+            if ([string]$candidate -match '(?<v>\d+\.\d+\.\d+(?:\.\d+)?)') {
+                return [version]$Matches['v']
+            }
+        }
+    }
+    catch { }
+
+    return $null
+}
+
+function Test-WinMintPowerShellHostMeetsMinimum {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [version]$Minimum = $null
+    )
+
+    if ($null -eq $Minimum) { $Minimum = Get-WinMintMinimumPowerShellVersion }
+    $version = Get-WinMintPowerShellHostVersion -Path $Path
+    return ($null -ne $version -and $version -ge $Minimum)
+}
+
 function Resolve-WinMintPowerShell7Host {
     if ($script:WinMintPowerShell7HostOverride) {
         $override = [string]$script:WinMintPowerShell7HostOverride
@@ -47,7 +93,7 @@ function Resolve-WinMintPowerShell7Host {
         return $cmd.Source
     }
 
-    throw "PowerShell 7 is required for WinMint but was not found: $pwsh"
+    throw "PowerShell 7.6.0+ is required for WinMint but was not found: $pwsh"
 }
 
 function Test-WinMintProcessElevated {

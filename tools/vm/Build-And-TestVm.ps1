@@ -187,12 +187,33 @@ if (-not $builtIso) {
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed (exit code $LASTEXITCODE). See the WinMint build report in .\output."
     }
-    $builtIso = Get-ChildItem -LiteralPath $outputDir -Filter 'WinMint-*.iso' -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.LastWriteTimeUtc -ge $buildStartedAtUtc } |
-        Sort-Object LastWriteTimeUtc -Descending |
-        Select-Object -First 1
+    # Resolve the ISO this build just wrote. Do NOT pick "newest LastWriteTime":
+    # Hyper-V / Mount-DiskImage can touch an older ISO's mtime and win the race
+    # (seen: ForceBuild wrote WinMint-…-184334.iso but booted stale …-161242.iso).
+    $builtIso = $null
+    $verboseLog = Get-WinMintVmBuildVerboseLogPath -RepoRoot $repoRoot
+    if (Test-Path -LiteralPath $verboseLog) {
+        $finalMatch = Select-String -LiteralPath $verboseLog -Pattern 'Final ISO:\s+(.+?\.iso)\b' |
+            Select-Object -Last 1
+        if ($finalMatch) {
+            $finalPath = $finalMatch.Matches[0].Groups[1].Value.Trim()
+            if ($finalPath -and (Test-Path -LiteralPath $finalPath -PathType Leaf)) {
+                $candidate = Get-Item -LiteralPath $finalPath
+                if ($candidate.CreationTimeUtc -ge $buildStartedAtUtc.AddMinutes(-5) -or $candidate.LastWriteTimeUtc -ge $buildStartedAtUtc) {
+                    $builtIso = $candidate
+                    Write-Host "Using Final ISO from build log: $($builtIso.FullName)"
+                }
+            }
+        }
+    }
     if (-not $builtIso) {
-        throw "Build completed but no WinMint-*.iso newer than $($buildStartedAtUtc.ToString('o')) (UTC) was found in $outputDir."
+        $builtIso = Get-ChildItem -LiteralPath $outputDir -Filter 'WinMint-*.iso' -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.CreationTimeUtc -ge $buildStartedAtUtc } |
+            Sort-Object CreationTimeUtc -Descending |
+            Select-Object -First 1
+    }
+    if (-not $builtIso) {
+        throw "Build completed but no WinMint-*.iso created after $($buildStartedAtUtc.ToString('o')) (UTC) was found in $outputDir."
     }
     # Record what we just built so an unchanged next run can skip straight to boot.
     ([ordered]@{

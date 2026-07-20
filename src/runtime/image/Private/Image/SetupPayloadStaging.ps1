@@ -49,6 +49,7 @@ function Get-WinMintSetupPayloadRequiredArtifacts {
     $artifacts.Add((Join-Path $scriptRoot 'setup-shell\winmint_hero_ui.png')) | Out-Null
     $artifacts.Add((Join-Path $scriptRoot 'setup-shell\winmint_hero.png')) | Out-Null
     $artifacts.Add((Join-Path $scriptRoot 'WinMintSetupShell.Status.ps1')) | Out-Null
+    $artifacts.Add((Join-Path $scriptRoot 'TerminalIcons\fedora.png')) | Out-Null
     @($artifacts)
 }
 
@@ -115,6 +116,31 @@ function Copy-WinMintRuntimeCommonPayload {
     Copy-WinMintSetupPayloadTextFile -Source $source -Destination $destinationPath
     if (-not (Test-Path -LiteralPath $destinationPath -PathType Leaf)) {
         throw "Failed to stage WinMint.Runtime.Common.ps1 into the offline image at $Destination."
+    }
+}
+
+function Copy-WinMintTerminalIconPayload {
+    param(
+        [Parameter(Mandatory)][string]$RepositoryRoot,
+        [Parameter(Mandatory)][string]$Destination
+    )
+
+    $sourceDir = Join-Path $RepositoryRoot 'assets\ui\wsl'
+    if (-not (Test-Path -LiteralPath $sourceDir -PathType Container)) {
+        throw "WinMint WSL Terminal icon assets are missing: $sourceDir"
+    }
+
+    $destDir = Join-Path $Destination 'TerminalIcons'
+    $null = New-Item -ItemType Directory -Path $destDir -Force
+    $copied = 0
+    foreach ($name in @('ubuntu.png', 'fedora.png', 'archlinux.png', 'nixos.png', 'pengwin.png')) {
+        $from = Join-Path $sourceDir $name
+        if (-not (Test-Path -LiteralPath $from -PathType Leaf)) { continue }
+        Copy-Item -LiteralPath $from -Destination (Join-Path $destDir $name) -Force
+        $copied++
+    }
+    if ($copied -eq 0) {
+        throw "WinMint WSL Terminal icon assets produced no PNG copies from: $sourceDir"
     }
 }
 
@@ -512,6 +538,7 @@ function Invoke-WinMintSetupPayloadStaging {
     }
 
     Copy-WinMintSetupScriptPayloads -BundleDir $bundleDir -Destination $destScripts -RepositoryRoot $ScriptRoot
+    Copy-WinMintTerminalIconPayload -RepositoryRoot $ScriptRoot -Destination $destScripts
     Copy-WinMintSetupShellPayload -RepositoryRoot $ScriptRoot -Destination $destScripts -ImageArch $ImageArch
     Copy-WinMintSetupCompleteModulePayloads -BundleDir $bundleDir -Destination $destScripts
     if ($LiveInstallAudit) {

@@ -1,64 +1,34 @@
-# SetupComplete machine-phase module: install the WinMint toolchain packages that
-# are not already bundled into the offline image.
-# Dot-sourced by SetupComplete.ps1; relies on its script-scope $logDir and the
-# helper functions Test-ScInternet443 / New-ScWingetInstallArgs.
+# SetupComplete machine-phase module: console host sanity check only.
+# Dot-sourced by SetupComplete.ps1; relies on script-scope Write-ScLog.
+#
+# Windows 11 25H2+ (WinMint's supported source) already ships Windows Terminal.
+# winget install/upgrade here was redundant and hung under SYSTEM (often while a
+# Terminal/App Installer related process was already active). Offline settings are
+# staged into the image; FirstLogon finalizes profiles and can fall back to pwsh.
 
-function Resolve-ScWingetExePath {
-    $cmd = Get-Command winget.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cmd -and $cmd.Source -and (Test-Path -LiteralPath $cmd.Source -PathType Leaf)) {
-        return [string]$cmd.Source
+function Test-ScWindowsTerminalPresent {
+    foreach ($name in @('Microsoft.WindowsTerminal', 'Microsoft.WindowsTerminalPreview')) {
+        if (Get-AppxPackage -AllUsers -Name $name -ErrorAction SilentlyContinue) {
+            return $true
+        }
     }
-
-    $pkg = Get-AppxPackage -AllUsers -Name 'Microsoft.DesktopAppInstaller' -ErrorAction SilentlyContinue |
-        Sort-Object { [version]($_.Version) } -Descending |
-        Select-Object -First 1
-    if ($pkg -and $pkg.InstallLocation) {
-        $winget = Join-Path $pkg.InstallLocation 'winget.exe'
-        if (Test-Path -LiteralPath $winget -PathType Leaf) { return $winget }
-    }
-
     foreach ($candidate in @(
-            (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'),
-            (Join-Path $env:SystemRoot 'System32\winget.exe')
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\wt.exe'),
+            (Join-Path $env:ProgramFiles 'Windows Terminal\wt.exe')
         )) {
-        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            return $true
+        }
     }
-
-    return $null
+    return $false
 }
 
 function Invoke-ScToolchainInstall {
-    if (-not (Test-ScInternet443)) {
-        Write-ScLog 'Skipping winget toolchain (no outbound HTTPS to www.microsoft.com:443).'
+    if (Test-ScWindowsTerminalPresent) {
+        Write-ScLog 'Windows Terminal present (inbox); SetupComplete does not winget-install or upgrade it.'
         return
     }
 
-    $winget = Resolve-ScWingetExePath
-    if (-not $winget) {
-        Write-ScLog 'Skipping winget toolchain (winget.exe not found under SYSTEM/App Installer).'
-        return
-    }
-
-    try {
-        $machinePath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
-        $userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')
-        $env:PATH = "$machinePath;$userPath"
-        $terminalArgs = New-ScWingetInstallArgs -Id 'Microsoft.WindowsTerminal'
-        # Bounded wait — unbounded winget was blocking SetupComplete past autologon
-        # stamp (when stamp was late in the catalog) and stranding FirstLogonAnim.
-        $timeoutMs = 10 * 60 * 1000
-        $p = Start-Process -FilePath $winget -ArgumentList $terminalArgs -PassThru -WindowStyle Hidden -ErrorAction Stop
-        if (-not $p.WaitForExit($timeoutMs)) {
-            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-            Write-ScLog "winget Windows Terminal timed out after $($timeoutMs / 60000) min via $winget; continuing SetupComplete."
-            "Toolchain install timed out: Windows Terminal via $winget" |
-                Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-        }
-        else {
-            Write-ScLog "winget Windows Terminal finished (exit=$([int]$p.ExitCode)) via $winget"
-        }
-    }
-    catch {
-        "Toolchain install failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
-    }
+    # Unexpected on supported media — do not winget during SetupComplete (hang risk).
+    Write-ScWarn 'Windows Terminal missing from image; skipping SetupComplete winget (FirstLogon falls back to pwsh console).'
 }

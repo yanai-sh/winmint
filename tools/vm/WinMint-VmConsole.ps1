@@ -11,3 +11,4 @@ $libRoot = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libRoot 'VmFingerprint.ps1')
 . (Join-Path $libRoot 'VmEvidence.ps1')
 . (Join-Path $libRoot 'VmShellDesktopEvidence.ps1')
+. (Join-Path $libRoot 'VmSetupCompleteEvidence.ps1')

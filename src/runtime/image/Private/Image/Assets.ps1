@@ -249,6 +249,20 @@ function Install-OfflineWindowsTerminalSettings {
         $settingsDir = Join-Path $MountDir 'Users\Default\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState'
         $null = New-Item -ItemType Directory -Path $settingsDir -Force -ErrorAction Stop
         Copy-Item -LiteralPath $settingsSrc -Destination (Join-Path $settingsDir 'settings.json') -Force
+
+        $iconSrc = Join-Path $ScriptDir 'assets\ui\wsl'
+        $iconDest = Join-Path $MountDir 'Users\Default\AppData\Local\WinMint\TerminalIcons'
+        if (Test-Path -LiteralPath $iconSrc -PathType Container) {
+            $null = New-Item -ItemType Directory -Path $iconDest -Force -ErrorAction Stop
+            foreach ($name in @('ubuntu.png', 'fedora.png', 'archlinux.png', 'nixos.png', 'pengwin.png')) {
+                $from = Join-Path $iconSrc $name
+                if (Test-Path -LiteralPath $from -PathType Leaf) {
+                    Copy-Item -LiteralPath $from -Destination (Join-Path $iconDest $name) -Force
+                }
+            }
+            LogVerbose "Staged WSL Terminal icons into Default user LocalAppData ($iconDest)."
+        }
+
         LogOK 'Terminal settings staged'
         LogVerbose 'Staged default Windows Terminal settings for PowerShell 7.'
     }

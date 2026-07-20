@@ -130,7 +130,7 @@ function Invoke-ScPowerProfile {
         }
         catch {
             $result.failed += [ordered]@{ action = 'HibernateOff'; error = [string]$_ }
-            "powercfg hibernate off failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+            Write-ScWarn "powercfg hibernate off failed: $_"
         }
     }
 
@@ -148,7 +148,7 @@ function Invoke-ScPowerProfile {
     }
     catch {
         $result.failed += [ordered]@{ action = 'SetActivePlan'; plan = $selectedPlan; error = [string]$_ }
-        "powercfg setactive failed for ${selectedPlan}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+        Write-ScError "powercfg setactive failed for ${selectedPlan}: $_"
     }
 
     $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $logDir 'SetupComplete_Power.json') -Encoding UTF8

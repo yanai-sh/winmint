@@ -76,7 +76,7 @@ $startPinsJson = (@{
         }
         list     = @(
             @{ name = 'PowerShell'; commandline = 'pwsh.exe -NoLogo' }
-            @{ name = 'Fedora'; commandline = 'wsl.exe -d FedoraLinux'; icon = 'ms-appx:///ProfileIcons/fedora.png' }
+            @{ name = 'Fedora'; commandline = 'wsl.exe -d FedoraLinux'; icon = '%LOCALAPPDATA%\WinMint\TerminalIcons\fedora.png'; pathTranslationStyle = 'wsl' }
         )
     }
 } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $termDir 'settings.json') -Encoding UTF8

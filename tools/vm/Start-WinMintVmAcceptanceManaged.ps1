@@ -4,13 +4,15 @@
     Start a VM acceptance run for Cursor/agents — detached, logged, pollable.
 
 .DESCRIPTION
-    Writes output\vm-acceptance\managed-run.json, starts Invoke-WinMintVmAcceptance.ps1
-    in a background pwsh process, and prints a JSON handle on stdout. Requires an
-    already-elevated shell (no UAC relaunch). Reuses cached ISO/checkpoint when
-    fingerprints match (SmartBuild on by default). Use -PushOnly for fast
-    FirstLogon iteration (~2-8 min). Pass -ForceBuild only when image staging changed.
-    Managed runs default to headless (-NoObserve): PS Direct polling does not need
-    VMConnect; pass -Observe to open VMConnect Basic for manual splash watching.
+    Writes output\vm-acceptance\managed-run.json and launches Invoke-WinMintVmAcceptance.ps1
+    in one Windows Terminal window (Spectre build + harness Wait/Inspect/Evidence in the
+    same session). The starter returns a JSON handle immediately; poll with
+    Get-WinMintVmAcceptanceStatus.ps1. Requires an already-elevated shell (no UAC relaunch).
+
+    Reuses cached ISO/checkpoint when fingerprints match (SmartBuild on by default).
+    Use -PushOnly for fast FirstLogon iteration. Pass -ForceBuild when image staging
+    changed and you need to bypass SmartBuild's ISO cache. Pass -NoLogViewer for a
+    minimized headless worker. Pass -Observe for VMConnect Basic; default -NoObserve.
 
 .EXAMPLE
     pwsh -NoProfile -File .\tools\vm\Start-WinMintVmAcceptanceManaged.ps1 `
@@ -112,14 +114,6 @@ if ($buildPlan) {
 }
 
 $verboseLog = Get-WinMintVmBuildVerboseLogPath -RepoRoot $repoRoot
-$logViewers = Start-WinMintVmBuildLogViewersInWindowsTerminal `
-    -RepoRoot $repoRoot `
-    -RunLog $runLog `
-    -StartingDirectory $repoRoot `
-    -NoLogViewer:$NoLogViewer
-$logViewerOpened = [bool]$logViewers.verboseOpened -or [bool]$logViewers.runLogOpened
-
-
 $pwsh = Resolve-WinMintPwshHostPath
 $childArgs = @(
     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
@@ -150,14 +144,18 @@ if (-not [string]::IsNullOrWhiteSpace($SourceIso)) { $childArgs += @('-SourceIso
 if ($NoObserve) { $childArgs += '-NoObserve' }
 
 $errLog = Join-Path $evidenceDir 'run.err.log'
-# Visible console so PwshSpectreConsole sparse build UI works (777a722). Harness
-# lines still Append to run.log via Write-WinMintVmLogLine; do not RedirectStandardOutput
-# (that flattens Spectre into a dead pipe / [SUB] dump).
-$proc = Start-Process -FilePath $pwsh -ArgumentList $childArgs -WorkingDirectory $repoRoot -PassThru -WindowStyle Normal -RedirectStandardError $errLog
+# One live console: Spectre build + harness phases. Do not RedirectStandardOutput
+# (flattens Spectre). Do not open separate verbose/run.log tail tabs.
+$launch = Start-WinMintVmAcceptanceWorkerConsole `
+    -RepoRoot $repoRoot `
+    -PwshPath $pwsh `
+    -PwshArguments $childArgs `
+    -ErrLog $errLog `
+    -NoConsole:$NoLogViewer
 
 $handle = [ordered]@{
     status = 'starting'
-    pid = $proc.Id
+    pid = 0
     profile = $resolvedProfile
     vmName = $VMName
     evidenceDir = $evidenceDir
@@ -169,7 +167,8 @@ $handle = [ordered]@{
     startedAt = $startedAt.ToString('o')
     currentPhase = 'starting'
     timeBudgetMinutes = $timeBudget
-    logViewerOpened = [bool]$logViewerOpened
+    consoleMode = [string]$launch.Mode
+    logViewerOpened = [bool]$launch.ConsoleOpened
     observeMode = if ($NoObserve) { 'headless' } else { 'basic' }
     pollCommand = "pwsh -NoProfile -File .\tools\vm\Get-WinMintVmAcceptanceStatus.ps1"
     tailCommand = "Get-Content -LiteralPath '$verboseLog' -Wait -Tail 40"
@@ -181,23 +180,63 @@ if ($buildPlan) {
     $handle.isoCached = [bool]$buildPlan.IsoCached
     $handle.checkpointUsable = [bool]$buildPlan.CheckpointUsable
 }
+if ($launch.WorkerPidKnown -and $launch.Process) {
+    $handle.pid = [int]$launch.Process.Id
+}
 Write-WinMintVmManagedRunState -Path $managedPath -State $handle
 
-Start-Sleep -Seconds 2
-if ($proc.HasExited) {
-    $currentState = Get-Content -LiteralPath $managedPath | ConvertFrom-Json
-    if ($currentState.status -ne 'failed') {
-        $bootError = "Acceptance process exited immediately (exit code $($proc.ExitCode))."
+$ready = Wait-WinMintVmManagedWorkerReady `
+    -ManagedPath $managedPath `
+    -TimeoutSeconds 45 `
+    -LaunchProcess $launch.Process
+
+if (-not $ready.Ok) {
+    $currentState = Read-WinMintVmManagedRunState -Path $managedPath
+    if ($ready.Reason -eq 'launch-process-exited') {
+        $bootError = "Acceptance process exited immediately (exit code $($ready.ExitCode))."
         Write-WinMintVmLogLine -Message $bootError -LogPath $runLog -Level 'ERROR'
-        Write-WinMintVmRunEvent -Kind 'verdict' -Payload @{ verdict = 'fail'; reason = 'boot-failed'; exitCode = $proc.ExitCode }
-        $currentState.status = 'failed'
-        $currentState.currentPhase = 'boot-failed'
+        Write-WinMintVmRunEvent -Kind 'verdict' -Payload @{ verdict = 'fail'; reason = 'boot-failed'; exitCode = $ready.ExitCode }
+        if (-not $currentState) { $currentState = [pscustomobject]$handle }
+        $currentState | Add-Member -MemberType NoteProperty -Name 'status' -Value 'failed' -Force
+        $currentState | Add-Member -MemberType NoteProperty -Name 'currentPhase' -Value 'boot-failed' -Force
         $currentState | Add-Member -MemberType NoteProperty -Name 'error' -Value $bootError -Force
         Write-WinMintVmManagedRunState -Path $managedPath -State $currentState
         throw $bootError
     }
+    if ($currentState -and [string]$currentState.status -eq 'failed') {
+        throw "Acceptance process failed during start. Reason: $($currentState.error)"
+    }
+    if ($ready.Pid -gt 0) {
+        $handle.pid = $ready.Pid
+        Write-WinMintVmManagedRunState -Path $managedPath -State $handle
+    }
     else {
-        throw "Acceptance process exited immediately (exit code $($proc.ExitCode)). Reason: $($currentState.error)"
+        throw 'Acceptance worker did not publish a managed-run pid within 45s (Windows Terminal / pwsh launch failed?).'
+    }
+}
+else {
+    $handle.pid = $ready.Pid
+    $handle.status = 'running'
+    if ($ready.State -and $ready.State.currentPhase) {
+        $handle.currentPhase = [string]$ready.State.currentPhase
+    }
+    # Preserve starter fields the worker may omit on first Update-WinMintVmManagedRun.
+    $merged = Read-WinMintVmManagedRunState -Path $managedPath
+    if ($merged) {
+        foreach ($key in @('verboseLog', 'consoleMode', 'logViewerOpened', 'buildStrategy', 'buildEstimatedMinutes', 'isoCached', 'checkpointUsable', 'tailCommand', 'runLogTailCommand', 'timeBudgetMinutes')) {
+            if ($handle.Contains($key) -and -not ($merged.PSObject.Properties[$key] -and $null -ne $merged.$key -and "$($merged.$key)" -ne '')) {
+                $merged | Add-Member -MemberType NoteProperty -Name $key -Value $handle[$key] -Force
+            }
+        }
+        if (-not $merged.PSObject.Properties['pid'] -or [int]$merged.pid -le 0) {
+            $merged | Add-Member -MemberType NoteProperty -Name 'pid' -Value $handle.pid -Force
+        }
+        Write-WinMintVmManagedRunState -Path $managedPath -State $merged
+        $handle = [ordered]@{}
+        foreach ($p in $merged.PSObject.Properties) { $handle[$p.Name] = $p.Value }
+    }
+    else {
+        Write-WinMintVmManagedRunState -Path $managedPath -State $handle
     }
 }
 

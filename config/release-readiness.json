@@ -9,7 +9,7 @@
   },
   "hostRequirements": {
     "os": "Windows 11 build host",
-    "backendPowerShell": "7.6.2+",
+    "backendPowerShell": "7.6.0+",
     "bootstrapPowerShell": "Windows PowerShell 5.1+",
     "adminRequiredForRealBuilds": true,
     "sourceIso": "Windows 11 25H2+ official Microsoft ISO",

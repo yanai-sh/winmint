@@ -25,7 +25,7 @@ function Invoke-ScAiServiceableCleanup {
         }
         catch {
             $result.failed += [ordered]@{ action = 'RemoveOptionalFeature'; target = 'Recall'; error = [string]$_ }
-            "Recall removal failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+            Write-ScWarn "Recall removal failed: $_"
         }
     }
 
@@ -43,7 +43,7 @@ function Invoke-ScAiServiceableCleanup {
             }
             catch {
                 $result.failed += [ordered]@{ action = 'DisableService'; target = [string]$svcName; error = [string]$_ }
-                "AI service disable failed for ${svcName}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+                Write-ScWarn "AI service disable failed for ${svcName}: $_"
             }
         }
     }
@@ -60,7 +60,7 @@ function Invoke-ScAiServiceableCleanup {
                 }
                 catch {
                     $result.failed += [ordered]@{ action = 'DisableScheduledTask'; target = $name; error = [string]$_ }
-                    "AI scheduled task disable failed for ${name}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+                    Write-ScWarn "AI scheduled task disable failed for ${name}: $_"
                 }
             }
         }

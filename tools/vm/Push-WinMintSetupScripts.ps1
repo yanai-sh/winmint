@@ -424,7 +424,7 @@ function Sync-WinMintVmPushGuestSetupScripts {
     $session = New-PSSession -VMName $VMName -Credential $Credential -ErrorAction Stop
     try {
         $guestScripts = 'C:\Windows\Setup\Scripts'
-        Ensure-WinMintGuestDirectories -Session $session -Paths @($guestScripts)
+        Ensure-WinMintGuestDirectories -Session $session -Paths @($guestScripts, "$guestScripts\TerminalIcons")
         $setupRoot = Join-Path $repoRoot 'src\runtime\setup'
         foreach ($name in @(
                 'FirstLogon.ps1',
@@ -446,6 +446,12 @@ function Sync-WinMintVmPushGuestSetupScripts {
             $local = Join-Path $setupRoot $name
             if (Test-Path -LiteralPath $local -PathType Leaf) {
                 Send-WinMintGuestFile -Session $session -LocalPath $local -GuestDirectory $guestScripts
+            }
+        }
+        foreach ($iconName in @('ubuntu.png', 'fedora.png', 'archlinux.png', 'nixos.png', 'pengwin.png')) {
+            $iconPath = Join-Path $repoRoot "assets\ui\wsl\$iconName"
+            if (Test-Path -LiteralPath $iconPath -PathType Leaf) {
+                Send-WinMintGuestFile -Session $session -LocalPath $iconPath -GuestDirectory "$guestScripts\TerminalIcons"
             }
         }
         Send-WinMintGuestRuntimeCommon -Session $session -GuestDirectory $guestScripts
@@ -493,6 +499,7 @@ try {
     Ensure-WinMintGuestDirectories -Session $session -Paths @(
         $guestScripts,
         "$guestScripts\SetupComplete",
+        "$guestScripts\TerminalIcons",
         $guestSetupShell,
         $guestAgent,
         "$guestAgent\Modules"
@@ -514,6 +521,13 @@ try {
     Send-WinMintGuestRuntimeCommon -Session $session -GuestDirectory $guestScripts
     Assert-WinMintGuestRuntimeCommon -Session $session -GuestDirectory $guestScripts
     Copy-Item -Path (Join-Path $repoRoot 'src\runtime\setup\SetupComplete\*') -Destination "$guestScripts\SetupComplete" -ToSession $session -Recurse -Force
+    Write-Host 'Pushing WSL Terminal icons ...'
+    foreach ($iconName in @('ubuntu.png', 'fedora.png', 'archlinux.png', 'nixos.png', 'pengwin.png')) {
+        $iconPath = Join-Path $repoRoot "assets\ui\wsl\$iconName"
+        if (Test-Path -LiteralPath $iconPath -PathType Leaf) {
+            Send-WinMintGuestFile -Session $session -LocalPath $iconPath -GuestDirectory "$guestScripts\TerminalIcons"
+        }
+    }
 
     Write-Host 'Pushing setup shell native payload ...'
     $guestBin = if ($profileJson.source -and [string]$profileJson.source.architecture -eq 'arm64') { 'arm64' } else { 'x64' }

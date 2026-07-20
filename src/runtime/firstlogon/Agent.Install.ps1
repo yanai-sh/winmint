@@ -1,7 +1,27 @@
 #Requires -Version 7.6
 
+function Get-AgentToolProgressLabel {
+    param($Tool)
+
+    if ($null -eq $Tool) { return 'package' }
+    foreach ($prop in @('displayName', 'name', 'title')) {
+        if ($Tool.PSObject.Properties[$prop] -and -not [string]::IsNullOrWhiteSpace([string]$Tool.$prop)) {
+            return [string]$Tool.$prop
+        }
+    }
+    $id = [string]$Tool.id
+    if ([string]::IsNullOrWhiteSpace($id)) { return 'package' }
+    if ($id -match '\.([^.]+)$') { return $Matches[1] }
+    return $id
+}
+
 function Invoke-AgentNative {
-    param([string]$FilePath, [string[]]$ArgumentList, [switch]$NoRedirect)
+    param(
+        [string]$FilePath,
+        [string[]]$ArgumentList,
+        [switch]$NoRedirect,
+        [string]$ProgressMessage = ''
+    )
     if ($script:WinMintAgentNativeHandler) {
         return & $script:WinMintAgentNativeHandler @PSBoundParameters
     }
@@ -17,7 +37,13 @@ function Invoke-AgentNative {
     Write-AgentLog "RUNLOG stdout=$stdoutPath stderr=$stderrPath"
     $displayArgs = $ArgumentList -join ' '
     if ($displayArgs.Length -gt 120) { $displayArgs = $displayArgs.Substring(0, 117) + '...' }
-    Write-AgentEvent -Type 'command' -Status 'running' -Message "Running $([IO.Path]::GetFileName($FilePath))." -Data @{
+    $runningMessage = if (-not [string]::IsNullOrWhiteSpace($ProgressMessage)) {
+        $ProgressMessage.Trim()
+    }
+    else {
+        "Running $([IO.Path]::GetFileName($FilePath))."
+    }
+    Write-AgentEvent -Type 'command' -Status 'running' -Message $runningMessage -Data @{
         filePath = $FilePath
         stdout = $stdoutPath
         stderr = $stderrPath
@@ -203,17 +229,22 @@ function Save-AgentDirectToolInstaller {
 }
 
 function Invoke-AgentScoop {
-    param([Parameter(Mandatory)][string[]]$ArgumentList)
+    param(
+        [Parameter(Mandatory)][string[]]$ArgumentList,
+        [string]$ProgressMessage = ''
+    )
 
     $scoop = Wait-ScoopPath
     if (-not $scoop) { throw 'scoop command not available after wait.' }
     $extension = [IO.Path]::GetExtension($scoop)
     if ($extension -ieq '.ps1') {
         $ps = Resolve-AgentPowerShellHost
-        Invoke-AgentNative -FilePath $ps -ArgumentList (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scoop) + $ArgumentList)
+        Invoke-AgentNative -FilePath $ps `
+            -ArgumentList (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scoop) + $ArgumentList) `
+            -ProgressMessage $ProgressMessage
         return
     }
-    Invoke-AgentNative -FilePath $scoop -ArgumentList $ArgumentList
+    Invoke-AgentNative -FilePath $scoop -ArgumentList $ArgumentList -ProgressMessage $ProgressMessage
 }
 
 function Install-AgentScoop {
@@ -232,6 +263,7 @@ function Install-AgentScoop {
     }
 
     $installerPath = Join-Path $env:TEMP 'WinMint-Scoop-Install.ps1'
+    Write-AgentEvent -Type 'install' -Status 'running' -Step $key -Message 'Installing Scoop package manager.'
     Invoke-WebRequest -Uri 'https://get.scoop.sh' -OutFile $installerPath -UseBasicParsing -ErrorAction Stop
     $ps = Resolve-AgentPowerShellHost
     Invoke-AgentNative -FilePath $ps -ArgumentList @(
@@ -239,7 +271,7 @@ function Install-AgentScoop {
         '-ExecutionPolicy', 'Bypass',
         '-File', $installerPath,
         '-RunAsAdmin'
-    )
+    ) -ProgressMessage 'Installing Scoop package manager'
     Remove-Item -LiteralPath $installerPath -Force -ErrorAction SilentlyContinue
     Update-AgentProcessPath
     if (-not (Wait-ScoopPath)) { throw 'Scoop installer completed, but scoop was not found on PATH.' }
@@ -259,9 +291,11 @@ function Install-AgentTool {
         return
     }
     try {
-        Write-AgentEvent -Type 'install' -Status 'running' -Step $key -Message "Installing $($Tool.id) for $targetArch." -Data @{
+        $progressLabel = Get-AgentToolProgressLabel -Tool $Tool
+        Write-AgentEvent -Type 'install' -Status 'running' -Step $key -Message "Installing $progressLabel ($targetArch)." -Data @{
             toolId = [string]$Tool.id
             architecture = $targetArch
+            displayName = $progressLabel
         }
         if ($Tool.PSObject.Properties['architectures']) {
             $supported = @($Tool.architectures | ForEach-Object { ([string]$_).ToLowerInvariant() })
@@ -273,7 +307,7 @@ function Install-AgentTool {
                     reason = "Unsupported architecture: $targetArch"
                 }
                 Save-AgentState -State $State
-                Write-AgentEvent -Type 'step' -Status 'skipped' -Step $key -Message "$($Tool.id) is not available for $targetArch."
+                Write-AgentEvent -Type 'step' -Status 'skipped' -Step $key -Message "$progressLabel is not available for $targetArch."
                 Write-AgentLog "SKIP $key unsupported architecture $targetArch"
                 return
             }
@@ -295,7 +329,8 @@ function Install-AgentTool {
                 if ($versionPolicy -ne 'latest' -and -not [string]::IsNullOrWhiteSpace($requestedVersion)) {
                     $installArgs += @('--version', $requestedVersion)
                 }
-                Invoke-AgentNative -FilePath $winget -ArgumentList $installArgs
+                Invoke-AgentNative -FilePath $winget -ArgumentList $installArgs `
+                    -ProgressMessage "Installing $progressLabel with winget"
                 Update-AgentProcessPath
             }
             'store' {
@@ -312,7 +347,8 @@ function Install-AgentTool {
                 if ($versionPolicy -ne 'latest' -and -not [string]::IsNullOrWhiteSpace($requestedVersion)) {
                     $installArgs += @('--version', $requestedVersion)
                 }
-                Invoke-AgentNative -FilePath $winget -ArgumentList $installArgs
+                Invoke-AgentNative -FilePath $winget -ArgumentList $installArgs `
+                    -ProgressMessage "Installing $progressLabel from Microsoft Store"
                 Update-AgentProcessPath
             }
             'scoop' {
@@ -324,7 +360,7 @@ function Install-AgentTool {
                 if ($targetArch -eq 'arm64') {
                     Write-AgentLog "Scoop install for $($Tool.id): target architecture is arm64; relying on Scoop manifest architecture selection for native ARM64/aarch64 assets where available."
                 }
-                Invoke-AgentScoop -ArgumentList $installArgs
+                Invoke-AgentScoop -ArgumentList $installArgs -ProgressMessage "Installing $progressLabel with Scoop"
                 Update-AgentProcessPath
             }
             'direct' {

@@ -648,6 +648,20 @@ function Get-WinMintSetupShellStepSegments {
     return @()
 }
 
+function Test-WinMintSetupShellGenericCommandMessage {
+    param([string]$Message)
+    if ([string]::IsNullOrWhiteSpace($Message)) { return $true }
+    return [bool]($Message -match '(?i)^Running\s+[\w.-]+\.(exe|cmd|bat|ps1)\.?\s*$')
+}
+
+function Format-WinMintSetupShellTaskLabelText {
+    param([Parameter(Mandatory)][string]$Text, [int]$MaxLength = 72)
+
+    $trimmed = $Text.Trim()
+    if ($trimmed.Length -le $MaxLength) { return $trimmed }
+    return $trimmed.Substring(0, [Math]::Max(1, $MaxLength - 1)) + '…'
+}
+
 function Get-WinMintSetupShellLiveTaskHint {
     param($AgentState)
 
@@ -658,28 +672,28 @@ function Get-WinMintSetupShellLiveTaskHint {
     if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) { return '' }
 
     try {
-        $lines = @(Get-Content -LiteralPath $path -Tail 48 -Encoding UTF8 -ErrorAction Stop)
+        $lines = @(Get-Content -LiteralPath $path -Tail 64 -Encoding UTF8 -ErrorAction Stop)
     }
     catch { return '' }
 
+    $events = [System.Collections.Generic.List[object]]::new()
     for ($i = $lines.Count - 1; $i -ge 0; $i--) {
         if ([string]::IsNullOrWhiteSpace($lines[$i])) { continue }
-        try {
-            $ev = $lines[$i] | ConvertFrom-Json
+        try { $events.Add(($lines[$i] | ConvertFrom-Json)) | Out-Null } catch { }
+    }
+
+    foreach ($preferType in @('install', 'download', 'step', 'user', 'notice', 'command')) {
+        foreach ($ev in $events) {
+            $type = if ($ev.PSObject.Properties['type']) { [string]$ev.type } else { '' }
+            $status = if ($ev.PSObject.Properties['status']) { [string]$ev.status } else { '' }
+            $message = if ($ev.PSObject.Properties['message']) { [string]$ev.message } else { '' }
+            if ($type -ne $preferType) { continue }
+            if ($status -notin @('running', 'info', 'ok')) { continue }
+            if ($status -eq 'ok' -and $type -ne 'user') { continue }
+            if ([string]::IsNullOrWhiteSpace($message)) { continue }
+            if ($type -eq 'command' -and (Test-WinMintSetupShellGenericCommandMessage -Message $message)) { continue }
+            return (Format-WinMintSetupShellTaskLabelText -Text $message)
         }
-        catch { continue }
-
-        $type = if ($ev.PSObject.Properties['type']) { [string]$ev.type } else { '' }
-        $status = if ($ev.PSObject.Properties['status']) { [string]$ev.status } else { '' }
-        $message = if ($ev.PSObject.Properties['message']) { [string]$ev.message } else { '' }
-        if ($type -notin @('install', 'command', 'download', 'step', 'user', 'notice')) { continue }
-        if ($status -notin @('running', 'info', 'ok')) { continue }
-        if ($status -eq 'ok' -and $type -ne 'user') { continue }
-        if ([string]::IsNullOrWhiteSpace($message)) { continue }
-
-        $text = $message.Trim()
-        if ($text.Length -gt 42) { return $text.Substring(0, 39) + '…' }
-        return $text
     }
     return ''
 }

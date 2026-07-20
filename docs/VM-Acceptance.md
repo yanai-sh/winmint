@@ -113,12 +113,14 @@ pwsh -NoProfile -File .\tools\vm\Start-WinMintVmAcceptanceManaged.ps1 `
     -ProfilePath .\tests\profiles\hyper-v-smoke-arm64.json -NoObserve
 ```
 
-By default, acceptance opens **VMConnect Basic session** on the host (passive
-end-user view — Setup, autologon, setup shell — without Enhanced Session password
-prompts) and a **Windows Terminal** tab tailing `run.log` (the invoking shell still
-prints the JSON handle). Pass `-NoLogViewer` to skip the WT tab; `-NoObserve` to
-skip VMConnect. Poll JSON includes `observePid` / `observeMode` and `logViewerOpened`.
-Attach VM manually: `tools\vm\Start-WinMintVmObserve.ps1`.
+By default, managed acceptance opens **one Windows Terminal window** running the
+worker: Spectre build chrome and harness Wait/Inspect/Evidence lines share that
+session (the invoking shell still prints the JSON handle). Full build detail also
+lands in `output/WinMint-Build.verbose.log`. Pass `-NoLogViewer` for a minimized
+headless worker (no live console). Default is `-NoObserve` (no VMConnect); pass
+`-Observe` for VMConnect Basic. Poll JSON includes `consoleMode`,
+`observePid` / `observeMode`, and `logViewerOpened`. Attach VM manually:
+`tools\vm\Start-WinMintVmObserve.ps1`.
 
 **Green:** `complete = true`, `status = passed`, `verdict = pass`, and (smoke/full)
 `acceptance-result.json` → `setupShell` OK. Advisory `warningSteps` (e.g. a failed
@@ -383,6 +385,8 @@ After setup-shell or FirstLogon staging edits, rebuild published binaries with
   desktop-guard observation, `oobe-splash.png` screenshot, and pulled
   `SetupShell.log` / `FirstLogon.log` / `setup-shell-control.json` (`complete`).
   Failures here fail the verdict.
+- `setupComplete` — pulled ProgramData SetupComplete channel counts
+  (`errorLineCount` / `warningLineCount`). See hard/soft channels below.
 - `removalDrift` — post-FirstLogon AppX/capability drift gate (smoke plumbing):
   fails when a profile keep-derived AppX removal prefix matches a removable
   installed or provisioned package, or when `Media.WindowsMediaPlayer` /
@@ -392,6 +396,23 @@ After setup-shell or FirstLogon staging edits, rebuild published binaries with
 - `liveInstallAudit` — **Full tier only:** pulled `LiveInstallAudit.json` from
   the guest; `evidenceVerdict` fails when `summary.error > 0` (warnings are advisory).
 - `reasons` — human-readable notes explaining the verdict.
+
+### SetupComplete hard vs soft channels
+
+| Artifact | Product writer | Smoke plumbing |
+|----------|----------------|----------------|
+| `SetupComplete_errors.log` | `Write-ScError` / action dispatch catch | Non-empty → **plumbing fail** (no harness allowlist) |
+| `SetupComplete_warnings.log` | `Write-ScWarn` | Non-empty → `warnings` only; does not fail plumbing alone |
+
+### Regression nets (do not reintroduce)
+
+| Failure class | Prevention |
+|---------------|------------|
+| SetupComplete winget install/upgrade of Windows Terminal under SYSTEM (timeout / hang) | Toolchain is inbox presence-check only; contract forbids winget/`Start-Process` in `Toolchain.ps1` |
+| WU history / noisy restore → false plumbing fail | `WindowsUpdate.ps1` only restores policy/service Start via `reg.exe` `Start-Process`; no history APIs |
+| Soft SetupComplete noise failing Smoke | Soft issues go to `SetupComplete_warnings.log`; harness classifies via `Test-WinMintVmSetupCompleteLogEvidence` |
+| Local+autoLogon left on `defaultuser0` (FirstLogonAnim hang) | Early + final Autologon stamp fail-closed; Wait probe writes `vm.autologon` plumbing into `acceptance-result.json` |
+| Stale ISO after `src/runtime/setup` edits | Image fingerprint `schema=image-v2` includes `setupRuntime`; `Build-And-TestVm` prefers `Final ISO:` from the verbose build log |
 
 ## When acceptance is "green enough"
 

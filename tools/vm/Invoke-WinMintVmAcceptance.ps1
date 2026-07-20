@@ -514,8 +514,105 @@ if ($runWait) {
         Say $progressLine
         Start-Sleep -Seconds $pollSeconds
     }
-    if (-not $result.reachable) { throw "Guest '$VMName' was not reachable over PowerShell Direct within $TimeoutMinutes min (install/autologon did not complete)." }
-    if (-not $finalState) { throw "FirstLogon did not reach a terminal run.status within $TimeoutMinutes min." }
+
+    # Plumbing signal when FirstLogon never starts: Local+autoLogon left on defaultuser0.
+    $autoLogonHangReason = ''
+    $wantsLocalAutoLogon = [bool]$profileJson.identity.autoLogon
+    if ($wantsLocalAutoLogon -and (-not $finalState -or -not $result.reachable)) {
+        try {
+            $autoLogonProbe = Invoke-WinMintVmGuestCommand -VMName $VMName -Credential $cred -TimeoutSeconds 30 -ScriptBlock {
+                $paths = @(
+                    'C:\ProgramData\WinMint\Logs\SetupComplete_AutoLogon.final.json',
+                    'C:\ProgramData\WinMint\Logs\SetupComplete_AutoLogon.json'
+                )
+                $artifact = $null
+                $pathUsed = ''
+                foreach ($p in $paths) {
+                    if (Test-Path -LiteralPath $p) {
+                        $artifact = Get-Content -LiteralPath $p -Raw -ErrorAction Stop | ConvertFrom-Json
+                        $pathUsed = $p
+                        break
+                    }
+                }
+                $wlUser = ''
+                try {
+                    $wlUser = [string](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -ErrorAction Stop).DefaultUserName
+                }
+                catch { }
+                [pscustomobject]@{
+                    artifactPath = $pathUsed
+                    stamped = if ($null -ne $artifact -and $artifact.PSObject.Properties['stamped']) { [bool]$artifact.stamped } else { $false }
+                    afterUser = if ($null -ne $artifact -and $artifact.after) { [string]$artifact.after.DefaultUserName } else { '' }
+                    winlogonUser = $wlUser
+                }
+            }
+            if ($autoLogonProbe.Ok -and $null -ne $autoLogonProbe.Result) {
+                $probe = $autoLogonProbe.Result
+                if ($probe -is [string]) { $probe = $probe | ConvertFrom-Json }
+                $afterUser = [string]$probe.afterUser
+                $wlUser = [string]$probe.winlogonUser
+                $stamped = [bool]$probe.stamped
+                $missingArtifact = [string]::IsNullOrWhiteSpace([string]$probe.artifactPath)
+                if ($missingArtifact -or -not $stamped -or $afterUser -ieq 'defaultuser0' -or $wlUser -ieq 'defaultuser0') {
+                    $autoLogonHangReason = 'Winlogon Autologon not restamped off defaultuser0 (SetupComplete Autologon stamp missing or failed).'
+                    Say $autoLogonHangReason 'Red'
+                    Write-WinMintVmRunEvent -Kind 'warning' -Payload @{
+                        label = 'autologon-defaultuser0'
+                        artifactPath = [string]$probe.artifactPath
+                        stamped = $stamped
+                        afterUser = $afterUser
+                        winlogonUser = $wlUser
+                    }
+                    if ($EvidenceDir) {
+                        $probePath = Join-Path $EvidenceDir 'SetupComplete_AutoLogon.probe.json'
+                        $probe | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $probePath -Encoding UTF8
+                    }
+                }
+            }
+            elseif ($wantsLocalAutoLogon) {
+                # Guest may still be on FirstLogonAnim as defaultuser0 — profile creds fail PS Direct.
+                $autoLogonHangReason = 'Winlogon Autologon not restamped off defaultuser0 (SetupComplete Autologon stamp missing or failed).'
+                Say "$autoLogonHangReason (guest AutoLogon probe unreachable: $($autoLogonProbe.Error))" 'Yellow'
+            }
+        }
+        catch {
+            Say "AutoLogon hang probe skipped: $($_.Exception.Message)" 'DarkGray'
+        }
+    }
+
+    if (-not $result.reachable -or -not $finalState) {
+        if ($autoLogonHangReason -and $EvidenceDir) {
+            # Persist plumbing signal so managed status / evidence show Autologon, not a bare timeout.
+            try {
+                $hangResult = [ordered]@{
+                    vmName = $VMName
+                    profile = $ProfilePath
+                    acceptanceTier = $acceptanceTier
+                    phase = 'Wait'
+                    startedAt = $result.startedAt
+                    finishedAt = (Get-Date).ToString('o')
+                    reachable = [bool]$result.reachable
+                    firstLogon = $result.firstLogon
+                    reasons = @("Plumbing check failed: $autoLogonHangReason.")
+                    warnings = @()
+                    acceptanceMode = 'vm'
+                }
+                $hangSignals = @(
+                    New-WinMintAcceptanceSignalResult -Id 'vm.autologon' -Ok $false -Severity plumbing -Message $autoLogonHangReason
+                )
+                $hangResult = Complete-WinMintAcceptanceResult -Result $hangResult -Signals $hangSignals -AcceptanceTier $acceptanceTier
+                Write-WinMintAcceptanceResult -Result $hangResult -Path (Join-Path $EvidenceDir 'acceptance-result.json')
+            }
+            catch {
+                Say "Failed to write Autologon hang acceptance-result: $($_.Exception.Message)" 'DarkGray'
+            }
+            throw $autoLogonHangReason
+        }
+        if (-not $result.reachable) {
+            throw "Guest '$VMName' was not reachable over PowerShell Direct within $TimeoutMinutes min (install/autologon did not complete)."
+        }
+        throw "FirstLogon did not reach a terminal run.status within $TimeoutMinutes min."
+    }
 
     Save-WinMintVmSetupShellWatch -Watch $script:setupShellWatch -Path $setupShellWatchPath
 
@@ -725,20 +822,19 @@ if ($runEvidence) {
         $signalEvidenceFail.Add("Setup shell: $f") | Out-Null
     }
 
-    $setupCompleteErrorsPath = Join-Path $EvidenceDir 'ProgramData-Logs\SetupComplete_errors.log'
-    if (Test-Path -LiteralPath $setupCompleteErrorsPath -PathType Leaf) {
-        $scErrorLines = @(
-            Get-Content -LiteralPath $setupCompleteErrorsPath -ErrorAction SilentlyContinue |
-                ForEach-Object { ([string]$_).Trim() } |
-                Where-Object { $_ }
-        )
-        if ($scErrorLines.Count -gt 0) {
-            $preview = ($scErrorLines | Select-Object -First 3) -join ' | '
-            if ($scErrorLines.Count -gt 3) { $preview = "$preview | …($($scErrorLines.Count) lines)" }
-            $signalPlumbingFail.Add("SetupComplete_errors.log is non-empty: $preview") | Out-Null
-        }
+    $setupCompleteLogs = Test-WinMintVmSetupCompleteLogEvidence -EvidenceDir $EvidenceDir
+    $result.setupComplete = [ordered]@{
+        errorLineCount = [int]$setupCompleteLogs.errorLineCount
+        warningLineCount = [int]$setupCompleteLogs.warningLineCount
+        plumbingOk = [bool]$setupCompleteLogs.plumbingOk
     }
-    elseif ($result.reachable -and $result.firstLogon) {
+    foreach ($f in @($setupCompleteLogs.plumbingFailures)) {
+        $signalPlumbingFail.Add([string]$f) | Out-Null
+    }
+    foreach ($w in @($setupCompleteLogs.softWarnings)) {
+        $result.warnings += [string]$w
+    }
+    if ($result.reachable -and $result.firstLogon -and $setupCompleteLogs.errorLineCount -eq 0) {
         # Healthy runs may leave no errors file. Prefer positive SetupComplete.log proof
         # over requiring the errors file to exist.
         $setupCompleteLogPath = Join-Path $EvidenceDir 'ProgramData-Logs\SetupComplete.log'

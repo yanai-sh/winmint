@@ -98,8 +98,41 @@ try {
     if ([string]$settings.profiles.defaults.colorScheme -ne 'One Half Dark') {
         Add-PinTerminalFailure 'colorScheme must be One Half Dark.'
     }
+    if ([string]$settings.firstWindowPreference -ne 'defaultProfile') {
+        Add-PinTerminalFailure "firstWindowPreference must be defaultProfile (schema enum), got '$($settings.firstWindowPreference)'."
+    }
+    $disabled = @($settings.disabledProfileSources)
+    foreach ($src in @('Windows.Terminal.PowershellCore', 'Windows.Terminal.Wsl', 'Windows.Terminal.SSH')) {
+        if ($disabled -notcontains $src) {
+            Add-PinTerminalFailure "disabledProfileSources must include '$src' so curated profiles stay authoritative."
+        }
+    }
     if ($names -contains 'Command Prompt' -or $names -contains 'Windows PowerShell' -or $names -contains 'Ubuntu') {
         Add-PinTerminalFailure 'Hard-replace must strip stock leftover profiles.'
+    }
+    $fedora = @($settings.profiles.list | Where-Object { [string]$_.name -eq 'Fedora' } | Select-Object -First 1)
+    if (-not $fedora) {
+        Add-PinTerminalFailure 'Fedora profile missing after hard-replace.'
+    }
+    else {
+        $icon = [string]$fedora.icon
+        if ($icon -notmatch [regex]::Escape('%LOCALAPPDATA%\WinMint\TerminalIcons\fedora.png')) {
+            Add-PinTerminalFailure "Fedora icon must use staged assets path, got '$icon'."
+        }
+        if ([string]$fedora.pathTranslationStyle -ne 'wsl') {
+            Add-PinTerminalFailure "Fedora pathTranslationStyle must be wsl, got '$($fedora.pathTranslationStyle)'."
+        }
+        if ([string]$fedora.commandline -ne 'wsl.exe -d FedoraLinux') {
+            Add-PinTerminalFailure "Fedora commandline must be wsl.exe -d FedoraLinux, got '$($fedora.commandline)'."
+        }
+    }
+    $pwsh = @($settings.profiles.list | Where-Object { [string]$_.name -eq 'PowerShell' } | Select-Object -First 1)
+    if ($pwsh -and [string]$pwsh.commandline -ne 'pwsh.exe -NoLogo') {
+        Add-PinTerminalFailure "PowerShell commandline must be pwsh.exe -NoLogo, got '$($pwsh.commandline)'."
+    }
+    $stagedIcon = Join-Path $tempRoot 'WinMint\TerminalIcons\fedora.png'
+    if (-not (Test-Path -LiteralPath $stagedIcon -PathType Leaf)) {
+        Add-PinTerminalFailure "Install-WinMintTerminalIcons must stage fedora.png under LOCALAPPDATA ($stagedIcon)."
     }
 }
 finally {
@@ -114,6 +147,9 @@ if ([string]$seed.launchMode -ne 'default') {
 }
 if ([int]$seed.profiles.defaults.opacity -ne 80) {
     Add-PinTerminalFailure "Seed settings.json opacity must be 80 (was '$($seed.profiles.defaults.opacity)')."
+}
+if ([string]$seed.firstWindowPreference -ne 'defaultProfile') {
+    Add-PinTerminalFailure "Seed firstWindowPreference must be defaultProfile (was '$($seed.firstWindowPreference)')."
 }
 
 if ($failures.Count -gt 0) {

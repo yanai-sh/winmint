@@ -17,7 +17,7 @@ function Invoke-ScOneDriveRemoval {
                 Write-ScLog "OneDriveSetup uninstall returned $($p.ExitCode): $setup"
             }
             catch {
-                "OneDrive uninstall failed for ${setup}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+                Write-ScWarn "OneDrive uninstall failed for ${setup}: $_"
             }
         }
     }
@@ -36,7 +36,7 @@ function Invoke-ScOneDriveRemoval {
             Write-ScLog "Removed OneDrive installer file: $setupFile"
         }
         catch {
-            "OneDrive installer file removal failed for ${setupFile}: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+            Write-ScWarn "OneDrive installer file removal failed for ${setupFile}: $_"
         }
     }
 
@@ -94,7 +94,7 @@ function Invoke-ScOneDriveRemoval {
                     Write-ScLog "Removed OneDrive registry residue: $($key.Name)"
                 }
                 catch {
-                    "OneDrive registry residue removal failed for $($key.Name): $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+                    Write-ScWarn "OneDrive registry residue removal failed for $($key.Name): $_"
                 }
             }
         }

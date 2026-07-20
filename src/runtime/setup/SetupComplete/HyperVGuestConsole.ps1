@@ -15,6 +15,6 @@ function Invoke-ScHyperVGuestBasicConsole {
         Write-ScLog 'Set DisableEnhancedSessionConsoleConnection=1 (VMConnect Basic-only; no Enhanced Session login).'
     }
     catch {
-        "Hyper-V guest basic console policy failed: $_" | Out-File (Join-Path $logDir 'SetupComplete_errors.log') -Append
+        Write-ScError "Hyper-V guest basic console policy failed: $_"
     }
 }
