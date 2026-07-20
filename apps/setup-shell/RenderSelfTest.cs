@@ -97,23 +97,34 @@ internal static class RenderSelfTest
                 throw new InvalidOperationException($"Hero bitmap could not be loaded from {shellRoot}.");
             }
 
+            SystemAccessibility.Refresh();
             renderTarget.BeginDraw();
             SplashPainter.Paint(
                 renderTarget,
                 Width,
                 Height,
-                tokens,
+                SystemAccessibility.ResolvePaintTokens(tokens),
                 status,
                 heroAsset,
                 taskFormat,
                 detailFormat,
                 itemFormat,
-                bannerFormat);
+                bannerFormat,
+                stalled: false,
+                reduceMotion: SystemAccessibility.ReduceMotion);
             renderTarget.EndDraw();
         }
         finally
         {
             renderTarget.Dispose();
+        }
+
+        var announcement = SystemAccessibility.BuildAnnouncement(status, stalled: false);
+        if (!announcement.Contains("Installing your apps", StringComparison.Ordinal)
+            || !announcement.Contains("Installing Cursor", StringComparison.Ordinal)
+            || !announcement.Contains("2 of 5", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Accessibility announcement missing expected status text: {announcement}");
         }
 
         if (!string.IsNullOrWhiteSpace(outputPath))

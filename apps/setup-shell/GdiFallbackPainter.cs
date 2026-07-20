@@ -8,7 +8,8 @@ internal static class GdiFallbackPainter
         int height,
         DesignTokens tokens,
         SetupShellStatus status,
-        bool stalled = false)
+        bool stalled = false,
+        bool reduceMotion = false)
     {
         if (hdc == nint.Zero || width <= 0 || height <= 0)
         {
@@ -33,7 +34,10 @@ internal static class GdiFallbackPainter
 
         var paint = SplashPainterOverlay.Resolve(status, stalled);
 
-        DrawLine(hdc, "WinMint", 0, (int)(height * 0.34f), width, muted, 22, true);
+        if (!SystemAccessibility.HighContrast)
+        {
+            DrawLine(hdc, "WinMint", 0, (int)(height * 0.34f), width, muted, 22, true);
+        }
 
         var stackY = (int)(height * 0.52f);
         DrawLine(hdc, paint.TaskLabel, 0, stackY, width, ink, 18, false);
@@ -71,6 +75,13 @@ internal static class GdiFallbackPainter
                     var fillRect = new NativeMethods.RECT { Left = barX, Top = barY, Right = barX + fillW, Bottom = barY + barH };
                     NativeMethods.FillRect(hdc, ref fillRect, fillBrush);
                 }
+            }
+            else if (reduceMotion)
+            {
+                var segW = (int)(barW * 0.34f);
+                var segX = barX + (barW - segW) / 2;
+                var fillRect = new NativeMethods.RECT { Left = segX, Top = barY, Right = segX + segW, Bottom = barY + barH };
+                NativeMethods.FillRect(hdc, ref fillRect, fillBrush);
             }
             else
             {

@@ -35,6 +35,8 @@ internal sealed class SetupShellHost : IDisposable
     private string _lastMeaningfulFingerprint = "";
     private bool _stalled;
     private bool _disposed;
+    private bool _animTimerActive;
+    private string _lastAnnouncement = "";
     private const int StallSeconds = 90;
     private bool _guestCaptureWritten;
     private bool _renderResourcesReady;
@@ -101,9 +103,48 @@ internal sealed class SetupShellHost : IDisposable
             _logger.Info($"secondary monitor blanks={_secondaryCovers.CoverCount}");
         }
 
+        SystemAccessibility.Refresh();
+        _logger.Info(
+            $"a11y reduceMotion={SystemAccessibility.ReduceMotion} highContrast={SystemAccessibility.HighContrast}");
+
         PollJson(forceLog: true);
         NativeMethods.SetTimer(_hwnd, NativeMethods.TIMER_ID, (uint)_options.PollMs, nint.Zero);
-        NativeMethods.SetTimer(_hwnd, NativeMethods.ANIM_TIMER_ID, 33, nint.Zero);
+        SyncAnimTimer();
+    }
+
+    private void SyncAnimTimer()
+    {
+        if (SystemAccessibility.ReduceMotion)
+        {
+            if (_animTimerActive)
+            {
+                NativeMethods.KillTimer(_hwnd, NativeMethods.ANIM_TIMER_ID);
+                _animTimerActive = false;
+            }
+
+            return;
+        }
+
+        if (!_animTimerActive)
+        {
+            NativeMethods.SetTimer(_hwnd, NativeMethods.ANIM_TIMER_ID, 33, nint.Zero);
+            _animTimerActive = true;
+        }
+    }
+
+    private void OnAccessibilitySettingsChanged()
+    {
+        var prevMotion = SystemAccessibility.ReduceMotion;
+        var prevHc = SystemAccessibility.HighContrast;
+        SystemAccessibility.Refresh();
+        if (prevMotion != SystemAccessibility.ReduceMotion || prevHc != SystemAccessibility.HighContrast)
+        {
+            _logger.Info(
+                $"a11y changed reduceMotion={SystemAccessibility.ReduceMotion} highContrast={SystemAccessibility.HighContrast}");
+        }
+
+        SyncAnimTimer();
+        NativeMethods.InvalidateRect(_hwnd, nint.Zero, false);
     }
 
     public int Run()
@@ -159,13 +200,21 @@ internal sealed class SetupShellHost : IDisposable
                 _secondaryCovers.Sync();
                 OnDisplayMetricsChanged(hWnd);
                 return 0;
+            case NativeMethods.WM_SETTINGCHANGE:
+            case NativeMethods.WM_THEMECHANGED:
+                OnAccessibilitySettingsChanged();
+                return 0;
             case NativeMethods.WM_KEYDOWN when _options.Preview && wParam == NativeMethods.VK_ESCAPE:
                 NativeMethods.DestroyWindow(hWnd);
                 return 0;
             case NativeMethods.WM_DESTROY:
                 NativeMethods.ShowCursor(true);
                 NativeMethods.KillTimer(hWnd, NativeMethods.TIMER_ID);
-                NativeMethods.KillTimer(hWnd, NativeMethods.ANIM_TIMER_ID);
+                if (_animTimerActive)
+                {
+                    NativeMethods.KillTimer(hWnd, NativeMethods.ANIM_TIMER_ID);
+                    _animTimerActive = false;
+                }
                 NativeMethods.PostQuitMessage(0);
                 return 0;
         }
@@ -221,6 +270,7 @@ internal sealed class SetupShellHost : IDisposable
         }
 
         UpdateStallState();
+        AnnounceStatusIfChanged();
     }
 
     private void UpdateStallState()
@@ -244,6 +294,18 @@ internal sealed class SetupShellHost : IDisposable
         }
 
         _stalled = (DateTimeOffset.UtcNow - _lastMeaningfulStatusAt).TotalSeconds >= StallSeconds;
+    }
+
+    private void AnnounceStatusIfChanged()
+    {
+        var announcement = SystemAccessibility.BuildAnnouncement(_status, _stalled);
+        if (string.Equals(announcement, _lastAnnouncement, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastAnnouncement = announcement;
+        SystemAccessibility.Announce(_hwnd, announcement);
     }
 
     private bool TryReadRuntimeState()
@@ -519,9 +581,12 @@ internal sealed class SetupShellHost : IDisposable
         var width = client.Width;
         var height = client.Height;
 
+        var paintTokens = SystemAccessibility.ResolvePaintTokens(_tokens);
+        var reduceMotion = SystemAccessibility.ReduceMotion;
+
         if (_useGdiFallback)
         {
-            GdiFallbackPainter.Paint(hdc, width, height, _tokens, _status, _stalled);
+            GdiFallbackPainter.Paint(hdc, width, height, paintTokens, _status, _stalled, reduceMotion);
             MarkFirstPaint();
             if (_firstPaintAt is not null && !_guestCaptureWritten)
             {
@@ -530,7 +595,7 @@ internal sealed class SetupShellHost : IDisposable
             return;
         }
 
-        if (!TryRenderD2D(width, height))
+        if (!TryRenderD2D(width, height, paintTokens, reduceMotion))
         {
             _consecutiveD2dFailures++;
             if (_consecutiveD2dFailures >= D2dFailureThreshold)
@@ -538,14 +603,14 @@ internal sealed class SetupShellHost : IDisposable
                 EngageGdiFallback();
                 if (hdc != nint.Zero)
                 {
-                    GdiFallbackPainter.Paint(hdc, width, height, _tokens, _status, _stalled);
+                    GdiFallbackPainter.Paint(hdc, width, height, paintTokens, _status, _stalled, reduceMotion);
                     MarkFirstPaint();
                 }
             }
         }
     }
 
-    private bool TryRenderD2D(int width, int height)
+    private bool TryRenderD2D(int width, int height, DesignTokens paintTokens, bool reduceMotion)
     {
         if (!EnsureRenderResources() || _renderTarget is null || _taskFormat is null || _detailFormat is null || _itemFormat is null || _bannerFormat is null)
         {
@@ -568,14 +633,15 @@ internal sealed class SetupShellHost : IDisposable
             _renderTarget,
             (int)_renderTarget.Size.Width,
             (int)_renderTarget.Size.Height,
-            _tokens,
+            paintTokens,
             _status,
             _heroAsset,
             _taskFormat,
             _detailFormat,
             _itemFormat,
             _bannerFormat,
-            _stalled);
+            _stalled,
+            reduceMotion);
 
         try
         {
@@ -700,10 +766,36 @@ internal static partial class NativeMethods
     public const int SM_CXSCREEN = 0;
     public const int SM_CYSCREEN = 1;
     public const nint IDC_ARROW = 32512;
+    public const int WM_SETTINGCHANGE = 0x001A;
+    public const int WM_THEMECHANGED = 0x031A;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct HIGHCONTRASTW
+    {
+        public uint Size;
+        public uint Flags;
+        public nint DefaultScheme;
+    }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     public static extern nint GetModuleHandle(string? lpModuleName);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern nint LoadCursor(nint hInstance, nint lpCursorName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SystemParametersInfoW")]
+    public static extern bool SystemParametersInfoW(uint uiAction, uint uiParam, ref int pvParam, uint fWinIni);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SystemParametersInfoW")]
+    public static extern bool SystemParametersInfoHighContrast(
+        uint uiAction, uint uiParam, ref HIGHCONTRASTW pvParam, uint fWinIni);
+
+    [DllImport("user32.dll")]
+    public static extern int GetSysColor(int nIndex);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool SetWindowTextW(nint hWnd, string lpString);
+
+    [DllImport("user32.dll")]
+    public static extern void NotifyWinEvent(uint eventId, nint hwnd, int idObject, int idChild);
 }

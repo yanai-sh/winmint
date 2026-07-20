@@ -109,7 +109,8 @@ internal static class SplashPainter
         IDWriteTextFormat detailFormat,
         IDWriteTextFormat itemFormat,
         IDWriteTextFormat bannerFormat,
-        bool stalled = false)
+        bool stalled = false,
+        bool reduceMotion = false)
     {
         var elapsedS = _animationStopwatch.ElapsedMilliseconds / 1000f;
         var metrics = SplashLayout.Resolve(width, height, tokens.Layout);
@@ -126,45 +127,54 @@ internal static class SplashPainter
             overlay.IsAlert,
             overlay.IsTerminal);
 
-        var linearProps = new LinearGradientBrushProperties
+        var highContrast = SystemAccessibility.HighContrast;
+        if (highContrast)
         {
-            StartPoint = new Vector2(0, 0),
-            EndPoint = new Vector2(0, height)
-        };
-        var linearStops = new[]
-        {
-            new GradientStop(0.0f, ColorUtil.ParseHex("#080a0e")),
-            new GradientStop(1.0f, ColorUtil.ParseHex(tokens.Canvas))
-        };
-        using (var linearStopCollection = renderTarget.CreateGradientStopCollection(linearStops))
-        using (var linearBrush = renderTarget.CreateLinearGradientBrush(linearProps, linearStopCollection))
-        {
-            renderTarget.FillRectangle(new Rect(0, 0, width, height), linearBrush);
+            using var canvasBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Canvas));
+            renderTarget.FillRectangle(new Rect(0, 0, width, height), canvasBrush);
         }
+        else
+        {
+            var linearProps = new LinearGradientBrushProperties
+            {
+                StartPoint = new Vector2(0, 0),
+                EndPoint = new Vector2(0, height)
+            };
+            var linearStops = new[]
+            {
+                new GradientStop(0.0f, ColorUtil.ParseHex("#080a0e")),
+                new GradientStop(1.0f, ColorUtil.ParseHex(tokens.Canvas))
+            };
+            using (var linearStopCollection = renderTarget.CreateGradientStopCollection(linearStops))
+            using (var linearBrush = renderTarget.CreateLinearGradientBrush(linearProps, linearStopCollection))
+            {
+                renderTarget.FillRectangle(new Rect(0, 0, width, height), linearBrush);
+            }
 
-        var accentAlpha = paint.IsAlert ? 0.06f : 0.12f;
-        var radialProps = new RadialGradientBrushProperties
-        {
-            Center = new Vector2(width * 0.5f, height * 0.38f),
-            GradientOriginOffset = Vector2.Zero,
-            RadiusX = width * 0.8f,
-            RadiusY = height * 0.5f
-        };
-        var radialStops = new[]
-        {
-            new GradientStop(0.0f, ColorUtil.ParseHex(tokens.Accent, accentAlpha)),
-            new GradientStop(0.75f, ColorUtil.ParseHex("#000000", 0.0f))
-        };
-        using (var radialStopCollection = renderTarget.CreateGradientStopCollection(radialStops))
-        using (var radialBrush = renderTarget.CreateRadialGradientBrush(radialProps, radialStopCollection))
-        {
-            renderTarget.FillRectangle(new Rect(0, 0, width, height), radialBrush);
+            var accentAlpha = paint.IsAlert ? 0.06f : 0.12f;
+            var radialProps = new RadialGradientBrushProperties
+            {
+                Center = new Vector2(width * 0.5f, height * 0.38f),
+                GradientOriginOffset = Vector2.Zero,
+                RadiusX = width * 0.8f,
+                RadiusY = height * 0.5f
+            };
+            var radialStops = new[]
+            {
+                new GradientStop(0.0f, ColorUtil.ParseHex(tokens.Accent, accentAlpha)),
+                new GradientStop(0.75f, ColorUtil.ParseHex("#000000", 0.0f))
+            };
+            using (var radialStopCollection = renderTarget.CreateGradientStopCollection(radialStops))
+            using (var radialBrush = renderTarget.CreateRadialGradientBrush(radialProps, radialStopCollection))
+            {
+                renderTarget.FillRectangle(new Rect(0, 0, width, height), radialBrush);
+            }
         }
 
         var indeterminate = string.Equals(paint.ProgressMode, "indeterminate", StringComparison.OrdinalIgnoreCase);
-        var allowPulse = indeterminate && !paint.IsAlert && !paint.IsTerminal;
+        var allowPulse = !reduceMotion && indeterminate && !paint.IsAlert && !paint.IsTerminal;
 
-        if (heroAsset is not null)
+        if (heroAsset is not null && !highContrast)
         {
             var heroSize = heroAsset.Bitmap.Size;
             var src = heroAsset.ContentSrc;
@@ -243,6 +253,14 @@ internal static class SplashPainter
                     var fillRect = new RoundedRectangle { Rect = new Rect(barX, barY, fillW, barH), RadiusX = 1.5f, RadiusY = 1.5f };
                     renderTarget.FillRoundedRectangle(fillRect, fillBrush);
                 }
+            }
+            else if (reduceMotion)
+            {
+                // Static mid-bar segment — activity without motion.
+                var segW = barW * 0.34f;
+                var segX = barX + (barW - segW) * 0.5f;
+                var fillRect = new RoundedRectangle { Rect = new Rect(segX, barY, segW, barH), RadiusX = 1.5f, RadiusY = 1.5f };
+                renderTarget.FillRoundedRectangle(fillRect, fillBrush);
             }
             else
             {
