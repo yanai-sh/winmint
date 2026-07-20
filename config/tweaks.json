@@ -23,6 +23,17 @@
       "online": true
     },
     {
+      "id": "explorer-folder-discovery",
+      "description": "Disable Explorer automatic folder type discovery (FolderType=NotSpecified).",
+      "scope": "default user registry",
+      "risk": "low",
+      "reversible": true,
+      "phase": "offline-image",
+      "intent": "Skip per-folder content sniffing so Explorer opens large folders faster and keeps a consistent General items view; undo deletes FolderType so stock discovery returns.",
+      "offline": true,
+      "online": true
+    },
+    {
       "id": "longpaths-policy",
       "description": "Enable Win32 long path support (LongPathsEnabled).",
       "scope": "offline registry",

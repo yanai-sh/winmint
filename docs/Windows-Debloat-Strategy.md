@@ -75,7 +75,7 @@ Disposition against WinUtil Essential + Advanced (Caution). “Covered” means 
 | Delivery Optimization - Disable | Covered (narrower) | Peer-off; Windows Update preserved |
 | Disk Cleanup - Run | Reject | Live toolkit; not image identity |
 | End Task With Right Click - Enable | Covered | `taskbar-endtask` |
-| File Explorer Automatic Folder Discovery - Disable | Tier 1 gap | No equivalent offline/default-user stamp yet — file follow-up if still missing after next baseline bump |
+| File Explorer Automatic Folder Discovery - Disable | Covered | `explorer-folder-discovery` (`FolderType=NotSpecified` under Bags\\AllFolders\\Shell) |
 | Hibernation - Disable | Reject as Essential | Form-factor-aware only (desktop / dual-boot) |
 | Location Tracking - Disable | Reject as Essential | Location defaults **on** for laptops; `-Location Off` opt-out |
 | Microsoft Store Recommended Search Results - Disable | Covered (partial) | `DisableSearchBoxSuggestions` + Start recommended cleanup; confirm Store-specific keys on next audit |
@@ -108,8 +108,6 @@ Disposition against WinUtil Essential + Advanced (Caution). “Covered” means 
 | Teredo - Disable | Reject | Networking edge cases |
 | Visual Effects - Best Performance | Reject | Tier 3 |
 | Windows AI - Disable And Remove | Covered | Recall always; Copilot/AI policy unless `-KeepCopilot` |
-
-Tier-1 gap from this pass (filed, not implemented here): **Explorer Automatic Folder Discovery** — https://github.com/yanai-sh/winmint/issues/14.
 
 ## Current WinMint Audit
 
@@ -166,7 +164,7 @@ These should be part of WinMint Core because they remove noise without compromis
 | Edge noise | Hide first-run, disable startup boost/background mode, disable recommendations/promos/personalization reporting, workspaces, Spotlight suggestions, import-on-launch nags, address-bar trending, and Bing ads on search results. Keep Edge Copilot page-context chat / sidebar. |
 | OneDrive pressure | Uninstall OneDrive, remove setup binaries/residue, disable personal sync and autostart, hide Explorer integration, and keep known folders local. |
 | Xbox/GameDVR | Remove Xbox packages, disable Game Bar/GameDVR overlays, and no-op Game Bar protocols to avoid Store prompts after removal. |
-| Developer package managers | Keep winget/msstore for GUI/system apps and install Scoop as the user-local owner for developer CLI tools. MinGit is installed through Scoop as baseline Windows-host Git plumbing; Starship is installed through Scoop with the `nerd-font-symbols` preset; selected Neovim is Scoop-owned. ARM64 builds prefer native ARM64/aarch64 package assets where package-manager metadata supports them; amd64 builds use default package-manager architecture selection. |
+| Developer package managers | Keep winget/msstore for GUI/system apps and install Scoop as the user-local owner for developer CLI tools. MinGit is installed through Scoop as baseline Windows-host Git plumbing; Coreutils for Windows (`Microsoft.Coreutils`) is installed through winget as baseline native UNIX-style host CLI; Starship is installed through Scoop with the `nerd-font-symbols` preset; selected Neovim is Scoop-owned. ARM64 builds prefer native ARM64/aarch64 package assets where package-manager metadata supports them; amd64 builds use default package-manager architecture selection. |
 | Explorer/dev QoL | Show file extensions, show hidden files, keep Explorer Home as the launch page, hide Gallery, enable long paths (`longpaths-policy`), enable End Task on the taskbar right-click menu (`taskbar-endtask`, always on), hide noisy taskbar/tray affordances, keep local clipboard history on with cloud upload off, and set sane context/menu defaults. |
 | Setup privacy | Keep `ProtectYourPC=3`. Fully unattended local-account installs hide OOBE network/account friction and use the profile computer name directly; Microsoft OOBE account installs leave the normal network/account pages visible. |
 | OEM payloads | Disable WPBT, Razer-style auto-installers, driver companion co-installers, network device-metadata / companion-app prompts (`PreventDeviceMetadataFromNetwork`), and known vendor app injection paths where policy exists. Windows Update driver delivery remains enabled. |
