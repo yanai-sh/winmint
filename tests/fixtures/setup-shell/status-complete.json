@@ -1,23 +1,17 @@
 {
   "phase": "complete",
-  "groupLabel": "Finishing setup",
-  "taskLabel": "Release desktop lock",
-  "stepIndex": 6,
-  "stepTotal": 6,
+  "stageId": "finish",
+  "taskLabel": "You're all set",
+  "detailLabel": "",
+  "itemIndex": 0,
+  "itemTotal": 0,
   "progressPct": 100,
   "progressMode": "determinate",
-  "profileName": "Hyper-V Smoke",
-  "elapsedMs": 560000,
-  "steps": [
-    { "id": "prepare", "label": "Preparing system", "status": "done" },
-    { "id": "region", "label": "Restoring your region", "status": "done" },
-    { "id": "tools", "label": "Installing tools", "status": "done" },
-    { "id": "dev", "label": "Development environment", "status": "done" },
-    { "id": "desktop", "label": "Desktop and shell", "status": "done" },
-    { "id": "finish", "label": "Finishing setup", "status": "done" }
-  ],
+  "profileName": "Projection Test",
+  "elapsedMs": 300000,
+  "groupLabel": "",
   "banner": "",
   "bannerKind": "",
-  "logDir": "C:\\ProgramData\\WinMint\\Logs",
-  "updatedAt": "2026-06-28T12:06:00.0000000+00:00"
+  "logDir": "C:\\Users\\Public\\WinMint\\Logs",
+  "updatedAt": "2026-01-01T00:00:00+00:00"
 }

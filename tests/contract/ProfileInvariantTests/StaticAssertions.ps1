@@ -1247,17 +1247,19 @@ function Assert-SetupShellNativeDesign {
     $guardPath = Join-Path $root 'src\runtime\setup\ProvisioningGuard.ps1'
     $statusText = (Get-Content -LiteralPath $statusPath -Raw) + (Get-Content -LiteralPath $guardPath -Raw)
     foreach ($expected in @(
-        'Get-WinMintSetupShellGroupLabel',
+        'Get-WinMintSetupShellStageLabel',
         'Get-WinMintSetupShellDevlogTask',
         'Get-WinMintSetupShellRuntimeTaskLabel',
         'Get-WinMintProvisioningProjection',
-        'Resolve-WinMintSetupShellCurrentGroupId',
+        'Resolve-WinMintSetupShellCurrentStageId',
         'Get-WinMintSetupShellHeadlineLabels',
         'Get-WinMintSetupShellPipelineProgress',
         'Get-WinMintSetupShellLiveTaskHint',
+        'Format-WinMintSetupShellSplashDetail',
         'progressPct',
         'progressMode',
-        'groupLabel',
+        'stageId',
+        'detailLabel',
         'taskLabel',
         'preAgentStage',
         'Start-WinMintSetupShellStatusPump',
@@ -1291,10 +1293,13 @@ function Assert-SetupShellNativeDesign {
     $fixtureDir = Join-Path $root 'tests\fixtures\setup-shell'
     foreach ($fixture in @(Get-ChildItem -LiteralPath $fixtureDir -Filter 'status-*.json' -ErrorAction SilentlyContinue)) {
         $payload = Get-Content -LiteralPath $fixture.FullName -Raw | ConvertFrom-Json
-        foreach ($required in @('phase', 'groupLabel', 'taskLabel', 'stepIndex', 'stepTotal', 'banner', 'bannerKind', 'logDir', 'updatedAt')) {
+        foreach ($required in @('phase', 'stageId', 'taskLabel', 'detailLabel', 'itemIndex', 'itemTotal', 'progressPct', 'progressMode', 'banner', 'bannerKind', 'logDir', 'updatedAt')) {
             if (-not $payload.PSObject.Properties[$required]) {
                 Add-SmokeFailure "Fixture $($fixture.Name) is missing required setup shell status field '$required'."
             }
+        }
+        if ($payload.PSObject.Properties['steps']) {
+            Add-SmokeFailure "Fixture $($fixture.Name) must not include removed steps[] field."
         }
     }
 
@@ -3368,6 +3373,33 @@ function Assert-RegistryTweakMetadataAndRollback {
         }
         if (@($explorer.set | Where-Object { [string]$_.path -like '*{f874310e-b6b7-47dc-bc84-b9e6b38f5903}*' }).Count -gt 0) {
             Add-SmokeFailure 'Explorer QoL tweak must not hide Home from the navigation pane.'
+        }
+    }
+
+    $folderDiscovery = $script:RegistryTweaks | Where-Object id -eq 'explorer-folder-discovery' | Select-Object -First 1
+    if (-not $folderDiscovery) {
+        Add-SmokeFailure 'Expected explorer-folder-discovery registry tweak to exist.'
+    }
+    else {
+        $folderTypePath = 'zNTUSER\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\Bags\AllFolders\Shell'
+        $match = @($folderDiscovery.set | Where-Object {
+                [string]$_.path -eq $folderTypePath -and
+                [string]$_.name -eq 'FolderType' -and
+                [string]$_.type -eq 'REG_SZ' -and
+                [string]$_.value -eq 'NotSpecified'
+            })
+        if ($match.Count -eq 0) {
+            Add-SmokeFailure 'explorer-folder-discovery must stamp FolderType=NotSpecified under Bags\AllFolders\Shell.'
+        }
+        else {
+            $undo = $match[0].undo
+            $undoAction = if ($undo -is [hashtable]) { [string]$undo['action'] } else { [string]$undo.action }
+            if ($undoAction -ne 'delete') {
+                Add-SmokeFailure 'explorer-folder-discovery FolderType undo must be action=delete.'
+            }
+        }
+        if (@($defaultConfig.RegistryTweaks) -notcontains 'explorer-folder-discovery') {
+            Add-SmokeFailure 'explorer-folder-discovery must apply by default.'
         }
     }
 }

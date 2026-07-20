@@ -34,15 +34,15 @@
       "type": "object",
       "required": [
         "phase",
-        "groupLabel",
+        "stageId",
         "taskLabel",
-        "stepIndex",
-        "stepTotal",
+        "detailLabel",
+        "itemIndex",
+        "itemTotal",
         "progressPct",
         "progressMode",
         "profileName",
         "elapsedMs",
-        "steps",
         "banner",
         "bannerKind",
         "logDir",
@@ -53,26 +53,21 @@
           "type": "string",
           "enum": ["running", "finishing", "complete", "failed", "reboot"]
         },
-        "groupLabel": { "type": "string" },
+        "stageId": {
+          "type": "string",
+          "enum": ["ready", "apps", "wsl", "finish"]
+        },
         "taskLabel": { "type": "string" },
-        "stepIndex": { "type": "integer", "minimum": 0 },
-        "stepTotal": { "type": "integer", "minimum": 1 },
+        "detailLabel": { "type": "string" },
+        "itemIndex": { "type": "integer", "minimum": 0 },
+        "itemTotal": { "type": "integer", "minimum": 0 },
         "progressPct": { "type": "number", "minimum": 0, "maximum": 100 },
         "progressMode": { "type": "string", "enum": ["determinate", "indeterminate"] },
         "profileName": { "type": "string" },
         "elapsedMs": { "type": "integer", "minimum": 0 },
-        "steps": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["id", "label", "status"],
-            "properties": {
-              "id": { "type": "string" },
-              "label": { "type": "string" },
-              "status": { "type": "string", "enum": ["pending", "current", "done"] }
-            },
-            "additionalProperties": false
-          }
+        "groupLabel": {
+          "type": "string",
+          "description": "Deprecated; unused by the presenter."
         },
         "banner": { "type": "string" },
         "bannerKind": { "type": "string", "enum": ["", "warn", "fail"] },

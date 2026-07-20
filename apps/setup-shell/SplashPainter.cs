@@ -105,15 +105,27 @@ internal static class SplashPainter
         DesignTokens tokens,
         SetupShellStatus status,
         HeroAsset? heroAsset,
-        IDWriteTextFormat groupFormat,
         IDWriteTextFormat taskFormat,
-        IDWriteTextFormat stepFormat,
-        IDWriteTextFormat bannerFormat)
+        IDWriteTextFormat detailFormat,
+        IDWriteTextFormat itemFormat,
+        IDWriteTextFormat bannerFormat,
+        bool stalled = false)
     {
         var elapsedS = _animationStopwatch.ElapsedMilliseconds / 1000f;
-        var metrics = SplashLayout.Resolve(width, height, tokens.Layout, status.Steps?.Count ?? 0);
+        var metrics = SplashLayout.Resolve(width, height, tokens.Layout);
+        var overlay = SplashPainterOverlay.Resolve(status, stalled);
+        var paint = new PaintModel(
+            overlay.TaskLabel,
+            overlay.DetailLabel,
+            overlay.ItemIndex,
+            overlay.ItemTotal,
+            overlay.ProgressPct,
+            overlay.ProgressMode,
+            overlay.BannerKind,
+            overlay.RecoveryLine,
+            overlay.IsAlert,
+            overlay.IsTerminal);
 
-        // 1. Base linear gradient background
         var linearProps = new LinearGradientBrushProperties
         {
             StartPoint = new Vector2(0, 0),
@@ -130,17 +142,17 @@ internal static class SplashPainter
             renderTarget.FillRectangle(new Rect(0, 0, width, height), linearBrush);
         }
 
-        // 2. Radial accent gradient flare behind the pulsing logo
+        var accentAlpha = paint.IsAlert ? 0.06f : 0.12f;
         var radialProps = new RadialGradientBrushProperties
         {
-            Center = new Vector2(width * 0.5f, height * 0.35f),
+            Center = new Vector2(width * 0.5f, height * 0.38f),
             GradientOriginOffset = Vector2.Zero,
             RadiusX = width * 0.8f,
             RadiusY = height * 0.5f
         };
         var radialStops = new[]
         {
-            new GradientStop(0.0f, ColorUtil.ParseHex(tokens.Accent, 0.12f)),
+            new GradientStop(0.0f, ColorUtil.ParseHex(tokens.Accent, accentAlpha)),
             new GradientStop(0.75f, ColorUtil.ParseHex("#000000", 0.0f))
         };
         using (var radialStopCollection = renderTarget.CreateGradientStopCollection(radialStops))
@@ -148,6 +160,9 @@ internal static class SplashPainter
         {
             renderTarget.FillRectangle(new Rect(0, 0, width, height), radialBrush);
         }
+
+        var indeterminate = string.Equals(paint.ProgressMode, "indeterminate", StringComparison.OrdinalIgnoreCase);
+        var allowPulse = indeterminate && !paint.IsAlert && !paint.IsTerminal;
 
         if (heroAsset is not null)
         {
@@ -158,98 +173,117 @@ internal static class SplashPainter
                 src = new Rect(0, 0, heroSize.Width, heroSize.Height);
             }
 
-            var pulse = 1.0f + 0.02f * (float)Math.Sin(elapsedS * 2.0f);
-            var logoSize = Clamp(height * 0.12f, 96f, 192f) * pulse;
+            var pulse = allowPulse ? 1.0f + 0.015f * (float)Math.Sin(elapsedS * 1.4f) : 1.0f;
+            var logoSize = Clamp(height * 0.11f, 88f, 168f) * pulse;
             var scale = Math.Min(logoSize / src.Width, logoSize / src.Height);
             var logoW = src.Width * scale;
             var logoH = src.Height * scale;
-
             var logoX = (width - logoW) * 0.5f;
-            var logoY = (height - logoH) * 0.35f;
-
-            var dest = new Rect(logoX, logoY, logoW, logoH);
-            renderTarget.DrawBitmap(heroAsset.Bitmap, dest, 1f, Vortice.Direct2D1.BitmapInterpolationMode.Linear, src);
+            var logoY = (height - logoH) * 0.34f;
+            renderTarget.DrawBitmap(
+                heroAsset.Bitmap,
+                new Rect(logoX, logoY, logoW, logoH),
+                1f,
+                Vortice.Direct2D1.BitmapInterpolationMode.Linear,
+                src);
         }
 
-        // Info stack (placed above progress bar)
-        var groupY = height * 0.52f;
-        var groupText = !string.IsNullOrWhiteSpace(status.GroupLabel) ? status.GroupLabel.ToUpperInvariant() : "SETTING UP";
-        var groupRect = new Rect((width - metrics.DockWidth) * 0.5f, groupY, metrics.DockWidth, metrics.GroupLineHeight * 2f);
-        using (var groupBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Muted)))
-        {
-            renderTarget.DrawText(groupText, groupFormat, groupRect, groupBrush);
-        }
-
-        var taskY = groupY + metrics.GroupLineHeight + metrics.GroupToTaskGap;
-        var taskText = !string.IsNullOrWhiteSpace(status.TaskLabel) ? status.TaskLabel : "Working…";
-        var taskRect = new Rect((width - metrics.DockWidth) * 0.5f, taskY, metrics.DockWidth, metrics.TaskLineHeight * 3f);
+        var dockX = (width - metrics.DockWidth) * 0.5f;
+        var stackY = height * 0.52f;
+        var taskText = string.IsNullOrWhiteSpace(paint.TaskLabel) ? "Getting things ready" : paint.TaskLabel;
+        var taskRect = new Rect(dockX, stackY, metrics.DockWidth, metrics.TaskLineHeight * 2.4f);
         using (var taskBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Ink)))
         {
             renderTarget.DrawText(taskText, taskFormat, taskRect, taskBrush);
         }
 
-        // Progress bar (positioned below active task description)
-        var barW = Clamp(width * 0.28f, 280f, 380f);
-        var barH = tokens.Layout.ProgressHeight > 0 ? tokens.Layout.ProgressHeight : 4f;
-        var barX = (width - barW) * 0.5f;
-        var barY = height * 0.63f;
-
-        using (var trackBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.ProgressTrack)))
+        var cursorY = stackY + metrics.TaskLineHeight + metrics.TaskToDetailGap;
+        if (!string.IsNullOrWhiteSpace(paint.DetailLabel))
         {
-            var trackRect = new RoundedRectangle { Rect = new Rect(barX, barY, barW, barH), RadiusX = 1.5f, RadiusY = 1.5f };
-            renderTarget.FillRoundedRectangle(trackRect, trackBrush);
+            var detailRect = new Rect(dockX, cursorY, metrics.DockWidth, metrics.DetailLineHeight * 2.2f);
+            using var detailBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Muted));
+            renderTarget.DrawText(paint.DetailLabel, detailFormat, detailRect, detailBrush);
+            cursorY += metrics.DetailLineHeight + metrics.DetailToItemGap;
         }
 
-        using (var accentBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Accent)))
+        if (paint.ItemTotal > 0 && !paint.IsAlert && !paint.IsTerminal)
         {
-            if (string.Equals(status.ProgressMode, "determinate", StringComparison.OrdinalIgnoreCase))
+            var itemText = $"{Math.Max(1, paint.ItemIndex)} of {paint.ItemTotal}";
+            var itemRect = new Rect(dockX, cursorY, metrics.DockWidth, metrics.ItemLineHeight * 1.6f);
+            using var itemBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Dim));
+            renderTarget.DrawText(itemText, itemFormat, itemRect, itemBrush);
+            cursorY += metrics.ItemLineHeight + metrics.ItemToBarGap;
+        }
+        else
+        {
+            cursorY += metrics.ItemToBarGap;
+        }
+
+        if (!paint.IsAlert)
+        {
+            var barW = Clamp(width * 0.28f, 260f, 360f);
+            var barH = tokens.Layout.ProgressHeight > 0 ? tokens.Layout.ProgressHeight : 3f;
+            var barX = (width - barW) * 0.5f;
+            var barY = Math.Max(cursorY, height * 0.62f);
+            var fillColor = string.IsNullOrWhiteSpace(tokens.ProgressFill) ? tokens.Accent : tokens.ProgressFill;
+
+            using (var trackBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.ProgressTrack)))
             {
-                var pct = (float)Clamp((float)status.ProgressPct, 0f, 100f);
+                var trackRect = new RoundedRectangle { Rect = new Rect(barX, barY, barW, barH), RadiusX = 1.5f, RadiusY = 1.5f };
+                renderTarget.FillRoundedRectangle(trackRect, trackBrush);
+            }
+
+            using var fillBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(fillColor));
+            if (!indeterminate)
+            {
+                var pct = (float)ProgressFillAnimator.Resolve(paint.ProgressPct, paint.ProgressMode);
                 var fillW = barW * (pct / 100f);
                 if (fillW > 0.1f)
                 {
                     var fillRect = new RoundedRectangle { Rect = new Rect(barX, barY, fillW, barH), RadiusX = 1.5f, RadiusY = 1.5f };
-                    renderTarget.FillRoundedRectangle(fillRect, accentBrush);
+                    renderTarget.FillRoundedRectangle(fillRect, fillBrush);
                 }
             }
             else
             {
-                var cycle = (elapsedS * 0.6f) % 1.0f;
-                var segW = barW * 0.25f;
+                var cycle = (elapsedS * 0.55f) % 1.0f;
+                var segW = barW * 0.28f;
                 var segX = barX + (barW - segW) * cycle;
                 var fillRect = new RoundedRectangle { Rect = new Rect(segX, barY, segW, barH), RadiusX = 1.5f, RadiusY = 1.5f };
-                renderTarget.FillRoundedRectangle(fillRect, accentBrush);
+                renderTarget.FillRoundedRectangle(fillRect, fillBrush);
             }
         }
 
-        // Heartbeat footer
-        var metaText = FormatShellMeta(status);
-        var metaY = height - tokens.Layout.DockPaddingBottom;
-        var metaRect = new Rect((width - metrics.DockWidth) * 0.5f, metaY, metrics.DockWidth, metrics.MetaLineHeight * 2f);
-        using (var metaBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(tokens.Dim, 0.72f)))
+        if (!string.IsNullOrWhiteSpace(paint.RecoveryLine))
         {
-            renderTarget.DrawText(metaText, bannerFormat, metaRect, metaBrush);
-        }
-
-        if (!string.IsNullOrWhiteSpace(status.Banner))
-        {
-            var bannerColor = status.BannerKind switch
+            var bannerColor = paint.BannerKind switch
             {
                 "fail" => tokens.Fail,
                 "warn" => tokens.Warn,
                 _ => tokens.Muted
             };
-            var bannerMaxWidth = Math.Min(420f, width * 0.90f);
-            var bannerOffsetBottom = Clamp(height * 0.08f, 48f, 72f);
+            var bannerMaxWidth = Math.Min(480f, width * 0.88f);
             var bannerRect = new Rect(
                 (width - bannerMaxWidth) * 0.5f,
-                height - bannerOffsetBottom,
+                height - Clamp(height * 0.12f, 64f, 96f),
                 bannerMaxWidth,
-                40);
+                56f);
             using var bannerBrush = renderTarget.CreateSolidColorBrush(ColorUtil.ParseHex(bannerColor));
-            renderTarget.DrawText(status.Banner, bannerFormat, bannerRect, bannerBrush);
+            renderTarget.DrawText(paint.RecoveryLine, bannerFormat, bannerRect, bannerBrush);
         }
     }
+
+    private readonly record struct PaintModel(
+        string TaskLabel,
+        string DetailLabel,
+        int ItemIndex,
+        int ItemTotal,
+        double ProgressPct,
+        string ProgressMode,
+        string BannerKind,
+        string RecoveryLine,
+        bool IsAlert,
+        bool IsTerminal);
 
     private static float Clamp(float value, float min, float max) => Math.Max(min, Math.Min(max, value));
 
@@ -292,13 +326,5 @@ internal static class SplashPainter
         }
 
         GuestScreenCapture.WritePngBgra32(outputPath, pixels, (int)width, (int)height, stride);
-    }
-
-
-    internal static string FormatShellMeta(SetupShellStatus status)
-    {
-        var elapsed = TimeSpan.FromMilliseconds(Math.Max(0, status.ElapsedMs));
-        var profile = string.IsNullOrWhiteSpace(status.ProfileName) ? "WinMint" : status.ProfileName;
-        return $"{profile} · {(int)elapsed.TotalMinutes}:{elapsed.Seconds:D2} elapsed";
     }
 }

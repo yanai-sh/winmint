@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WinMint — OOBE splash mockup</title>
+  <style>
+    :root {
+      --canvas: #11161d;
+      --canvas-top: #080a0e;
+      --ink: #f4f7fb;
+      --muted: #b7c0cc;
+      --dim: #8792a1;
+      --accent: #0067c0;
+      --progress-track: #2e3036;
+      --progress-fill: #ebeff5;
+      --warn: #f0c05f;
+      --fail: #ff5f57;
+      --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--canvas-top);
+      color: var(--ink);
+      font-family: var(--font);
+      overflow: hidden;
+      user-select: none;
+    }
+    .stage {
+      position: relative;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 32px 72px;
+      background:
+        radial-gradient(ellipse 55% 42% at 50% 40%, rgba(0, 103, 192, 0.16), transparent 70%),
+        linear-gradient(180deg, var(--canvas-top) 0%, var(--canvas) 55%, #0d1218 100%);
+    }
+    .hero {
+      width: min(80px, 16vw);
+      height: min(80px, 16vw);
+      margin-bottom: 40px;
+      border-radius: 20px;
+      background: linear-gradient(145deg, #1c2633 0%, #0c1118 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 0 48px rgba(0, 103, 192, 0.22);
+      display: grid;
+      place-items: center;
+    }
+    .hero.pulse { animation: heroPulse 2.8s ease-in-out infinite; }
+    .hero-mark {
+      font-size: clamp(20px, 3.6vw, 26px);
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      opacity: 0.92;
+    }
+    .copy { text-align: center; max-width: 420px; min-height: 88px; }
+    .main {
+      font-size: clamp(17px, 2.4vw, 20px);
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      line-height: 1.35;
+      transition: opacity 220ms ease;
+    }
+    .detail {
+      margin-top: 10px;
+      font-size: clamp(14px, 1.9vw, 15px);
+      color: var(--muted);
+      line-height: 1.4;
+      min-height: 1.4em;
+      transition: opacity 180ms ease;
+    }
+    .item {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--dim);
+      min-height: 1.2em;
+    }
+    .progress-wrap { margin-top: 28px; width: min(280px, 70vw); }
+    .progress-track {
+      height: 3px;
+      border-radius: 99px;
+      background: var(--progress-track);
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 99px;
+      background: var(--progress-fill);
+      transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .progress-track[data-mode="indeterminate"] .progress-fill {
+      position: absolute;
+      width: 28%;
+      transition: none;
+      animation: indeterminate 1.4s ease-in-out infinite;
+    }
+    .recovery {
+      position: absolute;
+      bottom: 48px;
+      left: 10%;
+      right: 10%;
+      text-align: center;
+      font-size: 13px;
+      color: var(--warn);
+      line-height: 1.45;
+    }
+    .recovery.fail { color: var(--fail); }
+    .chrome {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      gap: 8px;
+      z-index: 2;
+    }
+    .chrome button {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(17, 22, 29, 0.72);
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .hint {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      max-width: 300px;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--dim);
+      background: rgba(17, 22, 29, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 8px 10px;
+      z-index: 2;
+    }
+    .fade { opacity: 0.35; }
+    @keyframes heroPulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 40px rgba(0, 103, 192, 0.18); }
+      50% { transform: scale(1.015); box-shadow: 0 0 56px rgba(0, 103, 192, 0.28); }
+    }
+    @keyframes indeterminate {
+      0% { left: -34%; }
+      100% { left: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hint">Mockup — OOBE surface, item progress, no % label, pulse only while indeterminate.</div>
+  <div class="chrome">
+    <button type="button" id="btn-prev">Prev</button>
+    <button type="button" id="btn-pause">Pause</button>
+    <button type="button" id="btn-next">Next</button>
+  </div>
+  <main class="stage" aria-live="polite">
+    <div class="hero pulse" id="hero" aria-hidden="true"><span class="hero-mark">W</span></div>
+    <div class="copy">
+      <div class="main" id="main">Getting things ready</div>
+      <div class="detail" id="detail"></div>
+      <div class="item" id="item"></div>
+    </div>
+    <div class="progress-wrap" id="bar-wrap">
+      <div class="progress-track" id="track" data-mode="indeterminate">
+        <div class="progress-fill" id="fill"></div>
+      </div>
+    </div>
+    <div class="recovery" id="recovery" hidden></div>
+  </main>
+  <script>
+    const BEATS = [
+      { main: "Getting things ready", detail: "This may take a few minutes", item: "", mode: "indeterminate", frac: 0, dwell: 2200 },
+      { main: "Installing your apps", detail: "Installing Cursor", item: "1 of 5", mode: "indeterminate", frac: 0.2, dwell: 2400 },
+      { main: "Installing your apps", detail: "Installing Zen", item: "2 of 5", mode: "determinate", frac: 0.4, dwell: 2000 },
+      { main: "Installing your apps", detail: "Installing Windhawk", item: "4 of 5", mode: "determinate", frac: 0.8, dwell: 1800 },
+      { main: "Setting up WSL", detail: "Installing Fedora", item: "1 of 1", mode: "indeterminate", frac: 0.9, dwell: 2200 },
+      { main: "Finishing up", detail: "Almost done", item: "", mode: "indeterminate", frac: 0.95, dwell: 1600 },
+      { main: "Still working", detail: "Installing Fedora", item: "1 of 1", mode: "indeterminate", frac: 0.9, dwell: 2200, recovery: "This is taking longer than usual.", warn: true },
+      { main: "You're all set", detail: "", item: "", mode: "determinate", frac: 1, dwell: 2800, terminal: true },
+    ];
+    const mainEl = document.getElementById("main");
+    const detailEl = document.getElementById("detail");
+    const itemEl = document.getElementById("item");
+    const trackEl = document.getElementById("track");
+    const fillEl = document.getElementById("fill");
+    const heroEl = document.getElementById("hero");
+    const recoveryEl = document.getElementById("recovery");
+    const barWrap = document.getElementById("bar-wrap");
+    const btnPause = document.getElementById("btn-pause");
+    let beatIndex = 0, timer = null, paused = false;
+
+    function setText(el, text) {
+      if (el.textContent === text) return;
+      el.classList.add("fade");
+      setTimeout(() => { el.textContent = text; el.classList.remove("fade"); }, 120);
+    }
+    function applyBeat(i) {
+      const b = BEATS[i];
+      setText(mainEl, b.main);
+      setText(detailEl, b.detail || "");
+      setText(itemEl, b.item || "");
+      trackEl.dataset.mode = b.mode;
+      if (b.mode === "determinate") fillEl.style.width = Math.round(b.frac * 100) + "%";
+      else fillEl.style.width = "";
+      heroEl.classList.toggle("pulse", b.mode === "indeterminate" && !b.terminal && !b.recovery);
+      if (b.recovery) {
+        recoveryEl.hidden = false;
+        recoveryEl.textContent = b.recovery;
+        recoveryEl.classList.toggle("fail", !!b.fail);
+      } else {
+        recoveryEl.hidden = true;
+      }
+      barWrap.style.visibility = b.fail ? "hidden" : "visible";
+    }
+    function schedule() {
+      clearTimeout(timer);
+      if (paused) return;
+      timer = setTimeout(() => {
+        beatIndex = (beatIndex + 1) % BEATS.length;
+        applyBeat(beatIndex);
+        schedule();
+      }, BEATS[beatIndex].dwell);
+    }
+    function go(d) {
+      beatIndex = (beatIndex + d + BEATS.length) % BEATS.length;
+      applyBeat(beatIndex);
+      schedule();
+    }
+    btnPause.addEventListener("click", () => {
+      paused = !paused;
+      btnPause.textContent = paused ? "Play" : "Pause";
+      schedule();
+    });
+    document.getElementById("btn-prev").addEventListener("click", () => go(-1));
+    document.getElementById("btn-next").addEventListener("click", () => go(1));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); go(1); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); }
+      if (e.key === "p") btnPause.click();
+    });
+    applyBeat(0);
+    schedule();
+  </script>
+</body>
+</html>

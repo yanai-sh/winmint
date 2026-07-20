@@ -263,7 +263,7 @@ function Install-AgentScoop {
     }
 
     $installerPath = Join-Path $env:TEMP 'WinMint-Scoop-Install.ps1'
-    Write-AgentEvent -Type 'install' -Status 'running' -Step $key -Message 'Installing Scoop package manager.'
+    Write-AgentEvent -Type 'install' -Status 'running' -Step $key -Message 'Preparing installers.'
     Invoke-WebRequest -Uri 'https://get.scoop.sh' -OutFile $installerPath -UseBasicParsing -ErrorAction Stop
     $ps = Resolve-AgentPowerShellHost
     Invoke-AgentNative -FilePath $ps -ArgumentList @(
@@ -271,7 +271,7 @@ function Install-AgentScoop {
         '-ExecutionPolicy', 'Bypass',
         '-File', $installerPath,
         '-RunAsAdmin'
-    ) -ProgressMessage 'Installing Scoop package manager'
+    ) -ProgressMessage 'Preparing installers'
     Remove-Item -LiteralPath $installerPath -Force -ErrorAction SilentlyContinue
     Update-AgentProcessPath
     if (-not (Wait-ScoopPath)) { throw 'Scoop installer completed, but scoop was not found on PATH.' }
@@ -292,7 +292,7 @@ function Install-AgentTool {
     }
     try {
         $progressLabel = Get-AgentToolProgressLabel -Tool $Tool
-        Write-AgentEvent -Type 'install' -Status 'running' -Step $key -Message "Installing $progressLabel ($targetArch)." -Data @{
+        Write-AgentEvent -Type 'install' -Status 'running' -Step $key -Message "Installing $progressLabel." -Data @{
             toolId = [string]$Tool.id
             architecture = $targetArch
             displayName = $progressLabel
@@ -330,7 +330,7 @@ function Install-AgentTool {
                     $installArgs += @('--version', $requestedVersion)
                 }
                 Invoke-AgentNative -FilePath $winget -ArgumentList $installArgs `
-                    -ProgressMessage "Installing $progressLabel with winget"
+                    -ProgressMessage "Installing $progressLabel"
                 Update-AgentProcessPath
             }
             'store' {
@@ -348,7 +348,7 @@ function Install-AgentTool {
                     $installArgs += @('--version', $requestedVersion)
                 }
                 Invoke-AgentNative -FilePath $winget -ArgumentList $installArgs `
-                    -ProgressMessage "Installing $progressLabel from Microsoft Store"
+                    -ProgressMessage "Installing $progressLabel"
                 Update-AgentProcessPath
             }
             'scoop' {
@@ -360,7 +360,7 @@ function Install-AgentTool {
                 if ($targetArch -eq 'arm64') {
                     Write-AgentLog "Scoop install for $($Tool.id): target architecture is arm64; relying on Scoop manifest architecture selection for native ARM64/aarch64 assets where available."
                 }
-                Invoke-AgentScoop -ArgumentList $installArgs -ProgressMessage "Installing $progressLabel with Scoop"
+                Invoke-AgentScoop -ArgumentList $installArgs -ProgressMessage "Installing $progressLabel"
                 Update-AgentProcessPath
             }
             'direct' {

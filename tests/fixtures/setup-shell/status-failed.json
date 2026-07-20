@@ -1,23 +1,17 @@
 {
   "phase": "failed",
-  "groupLabel": "Development environment",
-  "taskLabel": "Failed: Enable WSL and install distros",
-  "stepIndex": 4,
-  "stepTotal": 6,
-  "progressPct": 58.33,
-  "progressMode": "determinate",
-  "profileName": "Hyper-V Smoke",
-  "elapsedMs": 420000,
-  "steps": [
-    { "id": "prepare", "label": "Preparing system", "status": "done" },
-    { "id": "region", "label": "Restoring your region", "status": "done" },
-    { "id": "tools", "label": "Installing tools", "status": "done" },
-    { "id": "dev", "label": "Development environment", "status": "current" },
-    { "id": "desktop", "label": "Desktop and shell", "status": "pending" },
-    { "id": "finish", "label": "Finishing setup", "status": "pending" }
-  ],
-  "banner": "Setup will retry on next sign-in. You can review the setup log for details.",
+  "stageId": "finish",
+  "taskLabel": "Something went wrong",
+  "detailLabel": "A setup step didn’t finish. Your desktop will unlock.",
+  "itemIndex": 0,
+  "itemTotal": 0,
+  "progressPct": 0,
+  "progressMode": "indeterminate",
+  "profileName": "Projection Test",
+  "elapsedMs": 180000,
+  "groupLabel": "",
+  "banner": "A setup step didn’t finish. Your desktop will unlock.",
   "bannerKind": "fail",
-  "logDir": "C:\\ProgramData\\WinMint\\Logs",
-  "updatedAt": "2026-06-28T12:03:00.0000000+00:00"
+  "logDir": "C:\\Users\\Public\\WinMint\\Logs",
+  "updatedAt": "2026-01-01T00:00:00+00:00"
 }

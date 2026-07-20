@@ -21,9 +21,9 @@ internal sealed class SetupShellHost : IDisposable
     private ID2D1Factory? _d2dFactory;
     private IDWriteFactory? _dwFactory;
     private ID2D1HwndRenderTarget? _renderTarget;
-    private IDWriteTextFormat? _groupFormat;
     private IDWriteTextFormat? _taskFormat;
-    private IDWriteTextFormat? _stepFormat;
+    private IDWriteTextFormat? _detailFormat;
+    private IDWriteTextFormat? _itemFormat;
     private IDWriteTextFormat? _bannerFormat;
     private HeroAsset? _heroAsset;
 
@@ -31,7 +31,11 @@ internal sealed class SetupShellHost : IDisposable
     private SetupShellControl _control = new();
     private DateTimeOffset? _firstPaintAt;
     private DateTimeOffset? _terminalPhaseAt;
+    private DateTimeOffset _lastMeaningfulStatusAt = DateTimeOffset.UtcNow;
+    private string _lastMeaningfulFingerprint = "";
+    private bool _stalled;
     private bool _disposed;
+    private const int StallSeconds = 90;
     private bool _guestCaptureWritten;
     private bool _renderResourcesReady;
     private int _lastClientWidth;
@@ -215,6 +219,31 @@ internal sealed class SetupShellHost : IDisposable
             _ = TryReadJson(_options.StatusPath, ref _status);
             _ = TryReadControl(_options.ControlPath, ref _control);
         }
+
+        UpdateStallState();
+    }
+
+    private void UpdateStallState()
+    {
+        var phase = _status.Phase ?? "running";
+        if (phase is "complete" or "failed" or "reboot")
+        {
+            _stalled = false;
+            _lastMeaningfulStatusAt = DateTimeOffset.UtcNow;
+            return;
+        }
+
+        // Ignore updatedAt — the status pump refreshes it every tick even when work is stuck.
+        var fingerprint = $"{_status.TaskLabel}|{_status.DetailLabel}|{_status.ItemIndex}|{_status.ItemTotal}|{_status.ProgressPct:0.##}|{_status.ProgressMode}";
+        if (!string.Equals(fingerprint, _lastMeaningfulFingerprint, StringComparison.Ordinal))
+        {
+            _lastMeaningfulFingerprint = fingerprint;
+            _lastMeaningfulStatusAt = DateTimeOffset.UtcNow;
+            _stalled = false;
+            return;
+        }
+
+        _stalled = (DateTimeOffset.UtcNow - _lastMeaningfulStatusAt).TotalSeconds >= StallSeconds;
     }
 
     private bool TryReadRuntimeState()
@@ -409,16 +438,6 @@ internal sealed class SetupShellHost : IDisposable
         var fontCollection = _dwFactory.GetSystemFontCollection(false);
         var fontFamily = ResolveFontFamily(fontCollection, _tokens.FontFamily);
 
-        _groupFormat = _dwFactory.CreateTextFormat(
-            fontFamily,
-            fontCollection,
-            FontWeight.SemiBold,
-            FontStyle.Normal,
-            FontStretch.Normal,
-            metrics.GroupFontSize);
-        _groupFormat.TextAlignment = TextAlignment.Center;
-        _groupFormat.ParagraphAlignment = ParagraphAlignment.Near;
-
         _taskFormat = _dwFactory.CreateTextFormat(
             fontFamily,
             fontCollection,
@@ -430,15 +449,26 @@ internal sealed class SetupShellHost : IDisposable
         _taskFormat.ParagraphAlignment = ParagraphAlignment.Near;
         _taskFormat.WordWrapping = WordWrapping.Wrap;
 
-        _stepFormat = _dwFactory.CreateTextFormat(
+        _detailFormat = _dwFactory.CreateTextFormat(
             fontFamily,
             fontCollection,
             FontWeight.Normal,
             FontStyle.Normal,
             FontStretch.Normal,
-            metrics.StepFontSize);
-        _stepFormat.TextAlignment = TextAlignment.Center;
-        _stepFormat.ParagraphAlignment = ParagraphAlignment.Near;
+            metrics.DetailFontSize);
+        _detailFormat.TextAlignment = TextAlignment.Center;
+        _detailFormat.ParagraphAlignment = ParagraphAlignment.Near;
+        _detailFormat.WordWrapping = WordWrapping.Wrap;
+
+        _itemFormat = _dwFactory.CreateTextFormat(
+            fontFamily,
+            fontCollection,
+            FontWeight.Normal,
+            FontStyle.Normal,
+            FontStretch.Normal,
+            metrics.ItemFontSize);
+        _itemFormat.TextAlignment = TextAlignment.Center;
+        _itemFormat.ParagraphAlignment = ParagraphAlignment.Near;
 
         _bannerFormat = _dwFactory.CreateTextFormat(
             fontFamily,
@@ -491,7 +521,7 @@ internal sealed class SetupShellHost : IDisposable
 
         if (_useGdiFallback)
         {
-            GdiFallbackPainter.Paint(hdc, width, height, _tokens, _status);
+            GdiFallbackPainter.Paint(hdc, width, height, _tokens, _status, _stalled);
             MarkFirstPaint();
             if (_firstPaintAt is not null && !_guestCaptureWritten)
             {
@@ -508,7 +538,7 @@ internal sealed class SetupShellHost : IDisposable
                 EngageGdiFallback();
                 if (hdc != nint.Zero)
                 {
-                    GdiFallbackPainter.Paint(hdc, width, height, _tokens, _status);
+                    GdiFallbackPainter.Paint(hdc, width, height, _tokens, _status, _stalled);
                     MarkFirstPaint();
                 }
             }
@@ -517,7 +547,7 @@ internal sealed class SetupShellHost : IDisposable
 
     private bool TryRenderD2D(int width, int height)
     {
-        if (!EnsureRenderResources() || _renderTarget is null || _groupFormat is null || _taskFormat is null || _stepFormat is null || _bannerFormat is null)
+        if (!EnsureRenderResources() || _renderTarget is null || _taskFormat is null || _detailFormat is null || _itemFormat is null || _bannerFormat is null)
         {
             return false;
         }
@@ -541,10 +571,11 @@ internal sealed class SetupShellHost : IDisposable
             _tokens,
             _status,
             _heroAsset,
-            _groupFormat,
             _taskFormat,
-            _stepFormat,
-            _bannerFormat);
+            _detailFormat,
+            _itemFormat,
+            _bannerFormat,
+            _stalled);
 
         try
         {
@@ -588,12 +619,12 @@ internal sealed class SetupShellHost : IDisposable
     {
         _heroAsset?.Dispose();
         _heroAsset = null;
-        _groupFormat?.Dispose();
-        _groupFormat = null;
         _taskFormat?.Dispose();
         _taskFormat = null;
-        _stepFormat?.Dispose();
-        _stepFormat = null;
+        _detailFormat?.Dispose();
+        _detailFormat = null;
+        _itemFormat?.Dispose();
+        _itemFormat = null;
         _bannerFormat?.Dispose();
         _bannerFormat = null;
         _renderTarget?.Dispose();

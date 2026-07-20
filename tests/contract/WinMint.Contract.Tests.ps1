@@ -5,7 +5,8 @@ BeforeAll {
     $script:Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $script:FixtureDir = Join-Path $script:Root 'tests\fixtures\setup-shell'
     $script:StatusRequiredFields = @(
-        'phase', 'groupLabel', 'taskLabel', 'stepIndex', 'stepTotal', 'banner', 'bannerKind', 'logDir', 'updatedAt'
+        'phase', 'stageId', 'taskLabel', 'detailLabel', 'itemIndex', 'itemTotal',
+        'progressPct', 'progressMode', 'banner', 'bannerKind', 'logDir', 'updatedAt'
     )
 }
 

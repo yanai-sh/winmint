@@ -7,7 +7,8 @@ internal static class GdiFallbackPainter
         int width,
         int height,
         DesignTokens tokens,
-        SetupShellStatus status)
+        SetupShellStatus status,
+        bool stalled = false)
     {
         if (hdc == nint.Zero || width <= 0 || height <= 0)
         {
@@ -18,7 +19,9 @@ internal static class GdiFallbackPainter
         var ink = ParseColor(tokens.Ink, 0x00FBF7F4);
         var muted = ParseColor(tokens.Muted, 0x00CCC0B7);
         var dim = ParseColor(tokens.Dim, 0x00A19287);
-        var accent = ParseColor(tokens.Accent, 0x00C06700);
+        var fill = ParseColor(
+            string.IsNullOrWhiteSpace(tokens.ProgressFill) ? tokens.Accent : tokens.ProgressFill,
+            0x00F5EFEB);
         var fail = ParseColor(tokens.Fail, 0x00575FFF);
         var warn = ParseColor(tokens.Warn, 0x005FC0F0);
 
@@ -26,109 +29,73 @@ internal static class GdiFallbackPainter
         var bg = NativeMethods.CreateSolidBrush(canvas);
         NativeMethods.FillRect(hdc, ref full, bg);
         NativeMethods.DeleteObject(bg);
-
         NativeMethods.SetBkMode(hdc, NativeMethods.TRANSPARENT);
 
-        // Logo text in the upper region
-        var text = "WinMint";
-        var fontSize = 24;
-        var textY = (int)(height * 0.35f - fontSize);
-        DrawLine(hdc, text, 0, textY, width, muted, fontSize, true);
+        var paint = SplashPainterOverlay.Resolve(status, stalled);
 
-        // Info stack (placed above progress bar)
-        var groupText = !string.IsNullOrWhiteSpace(status.GroupLabel) ? status.GroupLabel.ToUpperInvariant() : "SETTING UP";
-        var groupY = (int)(height * 0.52f);
-        DrawLine(hdc, groupText, 0, groupY, width, muted, 12, true);
+        DrawLine(hdc, "WinMint", 0, (int)(height * 0.34f), width, muted, 22, true);
 
-        var taskText = !string.IsNullOrWhiteSpace(status.TaskLabel) ? status.TaskLabel : "Working…";
-        var taskY = groupY + 20;
-        DrawLine(hdc, taskText, 0, taskY, width, ink, 18, false);
-
-        // Progress bar (positioned at 0.63 * height, below the task labels)
-        var barW = (int)Math.Clamp(width * 0.28f, 280f, 380f);
-        var barH = tokens.Layout.ProgressHeight > 0 ? (int)tokens.Layout.ProgressHeight : 4;
-        var barX = (width - barW) / 2;
-        var barY = (int)(height * 0.63f);
+        var stackY = (int)(height * 0.52f);
+        DrawLine(hdc, paint.TaskLabel, 0, stackY, width, ink, 18, false);
+        var cursorY = stackY + 28;
+        if (!string.IsNullOrWhiteSpace(paint.DetailLabel))
         {
+            DrawLine(hdc, paint.DetailLabel, 0, cursorY, width, muted, 15, false);
+            cursorY += 24;
+        }
+
+        if (paint.ItemTotal > 0 && !paint.IsAlert && !paint.IsTerminal)
+        {
+            DrawLine(hdc, $"{Math.Max(1, paint.ItemIndex)} of {paint.ItemTotal}", 0, cursorY, width, dim, 13, false);
+            cursorY += 22;
+        }
+
+        if (!paint.IsAlert)
+        {
+            var barW = (int)Math.Clamp(width * 0.28f, 260f, 360f);
+            var barH = tokens.Layout.ProgressHeight > 0 ? (int)tokens.Layout.ProgressHeight : 3;
+            var barX = (width - barW) / 2;
+            var barY = Math.Max(cursorY + 8, (int)(height * 0.62f));
             var trackBg = NativeMethods.CreateSolidBrush(ParseColor(tokens.ProgressTrack, 0x0036302E));
             var trackRect = new NativeMethods.RECT { Left = barX, Top = barY, Right = barX + barW, Bottom = barY + barH };
             NativeMethods.FillRect(hdc, ref trackRect, trackBg);
             NativeMethods.DeleteObject(trackBg);
 
-            var accentBrush = NativeMethods.CreateSolidBrush(accent);
-            if (string.Equals(status.ProgressMode, "determinate", StringComparison.OrdinalIgnoreCase))
+            var fillBrush = NativeMethods.CreateSolidBrush(fill);
+            if (string.Equals(paint.ProgressMode, "determinate", StringComparison.OrdinalIgnoreCase))
             {
-                var pct = status.ProgressPct;
-                if (pct < 0) pct = 0;
-                if (pct > 100) pct = 100;
+                var pct = ProgressFillAnimator.Resolve(paint.ProgressPct, paint.ProgressMode);
                 var fillW = (int)(barW * (pct / 100.0));
-                var fillRect = new NativeMethods.RECT { Left = barX, Top = barY, Right = barX + fillW, Bottom = barY + barH };
-                NativeMethods.FillRect(hdc, ref fillRect, accentBrush);
+                if (fillW > 0)
+                {
+                    var fillRect = new NativeMethods.RECT { Left = barX, Top = barY, Right = barX + fillW, Bottom = barY + barH };
+                    NativeMethods.FillRect(hdc, ref fillRect, fillBrush);
+                }
             }
             else
             {
-                var elapsedS = (float)(DateTime.Now.TimeOfDay.TotalSeconds);
-                var cycle = (elapsedS * 0.6f) % 1.0f;
-                var segW = (int)(barW * 0.25f);
+                var elapsedS = (float)DateTime.Now.TimeOfDay.TotalSeconds;
+                var cycle = (elapsedS * 0.55f) % 1.0f;
+                var segW = (int)(barW * 0.28f);
                 var segX = barX + (int)((barW - segW) * cycle);
                 var fillRect = new NativeMethods.RECT { Left = segX, Top = barY, Right = segX + segW, Bottom = barY + barH };
-                NativeMethods.FillRect(hdc, ref fillRect, accentBrush);
+                NativeMethods.FillRect(hdc, ref fillRect, fillBrush);
             }
-            NativeMethods.DeleteObject(accentBrush);
+
+            NativeMethods.DeleteObject(fillBrush);
         }
 
-
-
-        // Heartbeat footer
-        var metaText = SplashPainter.FormatShellMeta(status);
-        var metaY = height - (tokens.Layout.DockPaddingBottom > 0 ? tokens.Layout.DockPaddingBottom : 88);
-        DrawLine(hdc, metaText, 0, metaY, width, BlendColor(dim, canvas, 0.72f), 11, false);
-
-        if (!string.IsNullOrWhiteSpace(status.Banner))
+        if (!string.IsNullOrWhiteSpace(paint.RecoveryLine))
         {
-            var bannerColor = status.BannerKind switch
+            var bannerColor = paint.BannerKind switch
             {
                 "fail" => fail,
                 "warn" => warn,
                 _ => muted
             };
-            var bannerOffsetBottom = (int)Math.Max(48, height * 0.08f);
-            var bannerTop = Math.Max(24, height - bannerOffsetBottom);
-            DrawLine(hdc, status.Banner, 0, bannerTop, width, bannerColor, 13, false);
+            var bannerTop = Math.Max(24, height - (int)Math.Max(64, height * 0.12f));
+            DrawLine(hdc, paint.RecoveryLine.Replace('\n', ' '), 0, bannerTop, width, bannerColor, 13, false);
         }
-    }
-
-    private static int CountVisibleSteps(SetupShellStatus status)
-    {
-        if (status.Steps is null || status.Steps.Count == 0)
-        {
-            return 0;
-        }
-
-        var count = 0;
-        foreach (var step in status.Steps)
-        {
-            if (!string.Equals(step.Status, "done", StringComparison.OrdinalIgnoreCase))
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
-    private static int BlendColor(int fg, int bg, float amount)
-    {
-        var fr = fg & 0xFF;
-        var fgG = (fg >> 8) & 0xFF;
-        var fb = (fg >> 16) & 0xFF;
-        var br = bg & 0xFF;
-        var bgG = (bg >> 8) & 0xFF;
-        var bb = (bg >> 16) & 0xFF;
-        var r = (int)(fr * amount + br * (1f - amount));
-        var g = (int)(fgG * amount + bgG * (1f - amount));
-        var b = (int)(fb * amount + bb * (1f - amount));
-        return r | (g << 8) | (b << 16);
     }
 
     private static void DrawLine(
@@ -151,8 +118,13 @@ internal static class GdiFallbackPainter
             NativeMethods.DEFAULT_PITCH,
             "Segoe UI");
         var old = NativeMethods.SelectObject(hdc, font);
-        var rect = new NativeMethods.RECT { Left = x, Top = y, Right = x + maxWidth, Bottom = y + heightPx * 4 };
-        NativeMethods.DrawTextW(hdc, text, text.Length, ref rect, NativeMethods.DT_CENTER | NativeMethods.DT_TOP | NativeMethods.DT_WORDBREAK | NativeMethods.DT_NOPREFIX);
+        var rect = new NativeMethods.RECT { Left = x, Top = y, Right = x + maxWidth, Bottom = y + heightPx * 5 };
+        NativeMethods.DrawTextW(
+            hdc,
+            text,
+            text.Length,
+            ref rect,
+            NativeMethods.DT_CENTER | NativeMethods.DT_TOP | NativeMethods.DT_WORDBREAK | NativeMethods.DT_NOPREFIX);
         NativeMethods.SelectObject(hdc, old);
         NativeMethods.DeleteObject(font);
     }
@@ -176,4 +148,97 @@ internal static class GdiFallbackPainter
             return fallback;
         }
     }
+}
+
+/// <summary>Shared overlay resolution for D2D/GDI painters (stall/fail/reboot).</summary>
+internal static class SplashPainterOverlay
+{
+    public static OverlayModel Resolve(SetupShellStatus status, bool stalled)
+    {
+        var phase = status.Phase ?? "running";
+        var isTerminal = phase is "complete" or "failed" or "reboot";
+        var isFail = phase is "failed" || string.Equals(status.BannerKind, "fail", StringComparison.OrdinalIgnoreCase);
+        var isReboot = phase is "reboot";
+
+        if (isFail)
+        {
+            var detail = string.IsNullOrWhiteSpace(status.DetailLabel)
+                ? "Your desktop will unlock. You can continue and retry later."
+                : status.DetailLabel;
+            var recovery = string.IsNullOrWhiteSpace(status.LogDir)
+                ? detail
+                : $"{detail}  Logs: {status.LogDir}";
+            return new OverlayModel(
+                string.IsNullOrWhiteSpace(status.TaskLabel) ? "Something went wrong" : status.TaskLabel,
+                detail,
+                0,
+                0,
+                0,
+                "indeterminate",
+                "fail",
+                recovery,
+                IsAlert: true,
+                IsTerminal: true);
+        }
+
+        if (isReboot)
+        {
+            var detail = string.IsNullOrWhiteSpace(status.DetailLabel)
+                ? "Setup will continue after restart"
+                : status.DetailLabel;
+            return new OverlayModel(
+                string.IsNullOrWhiteSpace(status.TaskLabel) ? "Restart required" : status.TaskLabel,
+                detail,
+                0,
+                0,
+                status.ProgressPct,
+                "indeterminate",
+                "warn",
+                detail,
+                IsAlert: true,
+                IsTerminal: true);
+        }
+
+        if (stalled && !isTerminal)
+        {
+            var recovery = string.IsNullOrWhiteSpace(status.LogDir)
+                ? "This is taking longer than usual."
+                : $"This is taking longer than usual.  Logs: {status.LogDir}";
+            return new OverlayModel(
+                "Still working",
+                string.IsNullOrWhiteSpace(status.DetailLabel) ? status.TaskLabel : status.DetailLabel,
+                status.ItemIndex,
+                status.ItemTotal,
+                status.ProgressPct,
+                "indeterminate",
+                "warn",
+                recovery,
+                IsAlert: false,
+                IsTerminal: false);
+        }
+
+        return new OverlayModel(
+            string.IsNullOrWhiteSpace(status.TaskLabel) ? "Getting things ready" : status.TaskLabel,
+            status.DetailLabel ?? "",
+            status.ItemIndex,
+            status.ItemTotal,
+            status.ProgressPct,
+            status.ProgressMode ?? "indeterminate",
+            status.BannerKind ?? "",
+            "",
+            IsAlert: false,
+            IsTerminal: phase is "complete");
+    }
+
+    internal readonly record struct OverlayModel(
+        string TaskLabel,
+        string DetailLabel,
+        int ItemIndex,
+        int ItemTotal,
+        double ProgressPct,
+        string ProgressMode,
+        string BannerKind,
+        string RecoveryLine,
+        bool IsAlert,
+        bool IsTerminal);
 }

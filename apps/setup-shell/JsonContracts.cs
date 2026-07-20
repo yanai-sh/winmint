@@ -2,25 +2,19 @@ using System.Text.Json.Serialization;
 
 namespace WinMintSetupShell;
 
-public sealed class SetupShellStep
-{
-    public string Id { get; set; } = "";
-    public string Label { get; set; } = "";
-    public string Status { get; set; } = "pending";
-}
-
 public sealed class SetupShellStatus
 {
     public string Phase { get; set; } = "running";
-    public string GroupLabel { get; set; } = "Setting up";
-    public string TaskLabel { get; set; } = "Working…";
-    public int StepIndex { get; set; } = 1;
-    public int StepTotal { get; set; } = 1;
+    public string StageId { get; set; } = "ready";
+    public string TaskLabel { get; set; } = "Getting things ready";
+    public string DetailLabel { get; set; } = "";
+    public int ItemIndex { get; set; }
+    public int ItemTotal { get; set; }
     public double ProgressPct { get; set; }
-    public string ProgressMode { get; set; } = "determinate";
+    public string ProgressMode { get; set; } = "indeterminate";
     public string ProfileName { get; set; } = "";
     public long ElapsedMs { get; set; }
-    public List<SetupShellStep>? Steps { get; set; }
+    public string GroupLabel { get; set; } = "";
     public string Banner { get; set; } = "";
     public string BannerKind { get; set; } = "";
     public string LogDir { get; set; } = "";
@@ -79,8 +73,9 @@ public sealed class LayoutTokens
     public int HeroMaxWidth { get; set; } = 640;
     public int HeroMaxHeight { get; set; } = 160;
     public double HeroAreaRatio { get; set; } = 0.68;
-    public float GroupFontSize { get; set; } = 11;
-    public float TaskFontSize { get; set; } = 14;
+    public float GroupFontSize { get; set; } = 13;
+    public float TaskFontSize { get; set; } = 18;
+    public float DetailFontSize { get; set; } = 15;
     public float ProgressHeight { get; set; } = 3;
     public int BannerOffsetBottom { get; set; } = 160;
 }
@@ -90,7 +85,6 @@ public sealed class LayoutTokens
 [JsonSerializable(typeof(SetupShellControl))]
 [JsonSerializable(typeof(RuntimeStateDocument))]
 [JsonSerializable(typeof(RuntimeStateAgent))]
-[JsonSerializable(typeof(SetupShellStep))]
 [JsonSerializable(typeof(DesignTokens))]
 [JsonSerializable(typeof(LayoutTokens))]
 internal partial class SetupShellJsonContext : JsonSerializerContext;

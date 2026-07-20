@@ -365,11 +365,13 @@ function Invoke-WinMintAgentWslBootstrap {
                 continue
             }
             try {
+                Write-AgentEvent -Type 'install' -Status 'running' -Step "wsl:$distro" -Message "Installing $distro."
                 if ($distro -eq 'NixOS') {
                     Install-WinMintNixOsWslDistribution -WslPath $wsl.Source
                 }
                 else {
-                    Invoke-AgentNative -FilePath $wsl.Source -ArgumentList @('--install', '--no-launch', '-d', $distro)
+                    Invoke-AgentNative -FilePath $wsl.Source -ArgumentList @('--install', '--no-launch', '-d', $distro) `
+                        -ProgressMessage "Installing $distro"
                 }
                 $installedNow.Add($distro)
             }

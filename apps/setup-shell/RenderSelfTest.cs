@@ -15,19 +15,16 @@ internal static class RenderSelfTest
     {
         var status = new SetupShellStatus
         {
-            GroupLabel = "Setting up",
-            TaskLabel = "Preparing your system…",
-            StepIndex = 2,
-            StepTotal = 4,
+            Phase = "running",
+            StageId = "apps",
+            TaskLabel = "Installing your apps",
+            DetailLabel = "Installing Cursor",
+            ItemIndex = 2,
+            ItemTotal = 5,
+            ProgressPct = 42,
+            ProgressMode = "determinate",
             ProfileName = "WinMint",
-            ElapsedMs = 125_000,
-            Steps =
-            [
-                new SetupShellStep { Id = "prepare", Label = "Prepare", Status = "done" },
-                new SetupShellStep { Id = "agent", Label = "Install apps", Status = "current" },
-                new SetupShellStep { Id = "shell", Label = "Configure desktop", Status = "pending" },
-                new SetupShellStep { Id = "finish", Label = "Finish", Status = "pending" }
-            ]
+            ElapsedMs = 125_000
         };
 
         using var d2dFactory = D2D1.D2D1CreateFactory<ID2D1Factory>();
@@ -51,17 +48,7 @@ internal static class RenderSelfTest
         var fontCollection = dwFactory.GetSystemFontCollection(false);
         try
         {
-            var metrics = SplashLayout.Resolve(Width, Height, tokens.Layout, status.Steps!.Count);
-            using var groupFormat = dwFactory.CreateTextFormat(
-                tokens.FontFamily,
-                fontCollection,
-                FontWeight.SemiBold,
-                FontStyle.Normal,
-                FontStretch.Normal,
-                metrics.GroupFontSize);
-            groupFormat.TextAlignment = TextAlignment.Center;
-            groupFormat.ParagraphAlignment = ParagraphAlignment.Near;
-
+            var metrics = SplashLayout.Resolve(Width, Height, tokens.Layout);
             using var taskFormat = dwFactory.CreateTextFormat(
                 tokens.FontFamily,
                 fontCollection,
@@ -73,15 +60,26 @@ internal static class RenderSelfTest
             taskFormat.ParagraphAlignment = ParagraphAlignment.Near;
             taskFormat.WordWrapping = WordWrapping.Wrap;
 
-            using var stepFormat = dwFactory.CreateTextFormat(
+            using var detailFormat = dwFactory.CreateTextFormat(
                 tokens.FontFamily,
                 fontCollection,
                 FontWeight.Normal,
                 FontStyle.Normal,
                 FontStretch.Normal,
-                metrics.StepFontSize);
-            stepFormat.TextAlignment = TextAlignment.Center;
-            stepFormat.ParagraphAlignment = ParagraphAlignment.Near;
+                metrics.DetailFontSize);
+            detailFormat.TextAlignment = TextAlignment.Center;
+            detailFormat.ParagraphAlignment = ParagraphAlignment.Near;
+            detailFormat.WordWrapping = WordWrapping.Wrap;
+
+            using var itemFormat = dwFactory.CreateTextFormat(
+                tokens.FontFamily,
+                fontCollection,
+                FontWeight.Normal,
+                FontStyle.Normal,
+                FontStretch.Normal,
+                metrics.ItemFontSize);
+            itemFormat.TextAlignment = TextAlignment.Center;
+            itemFormat.ParagraphAlignment = ParagraphAlignment.Near;
 
             using var bannerFormat = dwFactory.CreateTextFormat(
                 tokens.FontFamily,
@@ -107,9 +105,9 @@ internal static class RenderSelfTest
                 tokens,
                 status,
                 heroAsset,
-                groupFormat,
                 taskFormat,
-                stepFormat,
+                detailFormat,
+                itemFormat,
                 bannerFormat);
             renderTarget.EndDraw();
         }

@@ -131,15 +131,16 @@ function Write-WinMintRuntimeState {
     if ($null -eq $displaySection) {
         $displaySection = [ordered]@{
             phase = [string]$controlSection.phase
-            groupLabel = 'Setting up'
-            taskLabel = 'Working…'
-            stepIndex = 1
-            stepTotal = 1
+            stageId = 'ready'
+            taskLabel = 'Getting things ready'
+            detailLabel = ''
+            itemIndex = 0
+            itemTotal = 0
             progressPct = 0
             progressMode = 'indeterminate'
             profileName = [string]$controlSection.profileName
             elapsedMs = 0
-            steps = @()
+            groupLabel = ''
             banner = ''
             bannerKind = ''
             logDir = ''

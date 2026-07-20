@@ -483,17 +483,16 @@ function Test-RuntimeStateSchema {
         }
         display = [pscustomobject][ordered]@{
             phase = 'running'
-            groupLabel = 'Setting up'
-            taskLabel = 'Working'
-            stepIndex = 1
-            stepTotal = 3
+            stageId = 'apps'
+            taskLabel = 'Installing your apps'
+            detailLabel = 'Installing Cursor'
+            itemIndex = 1
+            itemTotal = 3
             progressPct = 12.5
             progressMode = 'determinate'
             profileName = 'Smoke'
             elapsedMs = 1000
-            steps = @(
-                [pscustomobject][ordered]@{ id = 'prepare'; label = 'Prepare'; status = 'current' }
-            )
+            groupLabel = ''
             banner = ''
             bannerKind = ''
             logDir = 'C:\ProgramData\WinMint\Logs'

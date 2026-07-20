@@ -150,20 +150,16 @@ function Write-WinMintProvisioningHostBootstrapFiles {
     }
     $status = [ordered]@{
         phase = 'running'
-        groupLabel = 'Preparing system'
-        taskLabel = $TaskLabel
-        stepIndex = 1
-        stepTotal = 4
+        stageId = 'ready'
+        taskLabel = 'Getting things ready'
+        detailLabel = if ($TaskLabel -and $TaskLabel -ne 'Starting WinMint setup…') { $TaskLabel } else { 'This may take a few minutes' }
+        itemIndex = 0
+        itemTotal = 0
         progressPct = 0
         progressMode = 'indeterminate'
         profileName = $ProfileName
         elapsedMs = 0
-        steps = @(
-            [ordered]@{ id = 'prepare'; label = 'Preparing system'; status = 'current' }
-            [ordered]@{ id = 'region'; label = 'Restoring your region'; status = 'pending' }
-            [ordered]@{ id = 'tools'; label = 'Installing tools'; status = 'pending' }
-            [ordered]@{ id = 'finish'; label = 'Finishing setup'; status = 'pending' }
-        )
+        groupLabel = ''
         banner = ''
         bannerKind = ''
         logDir = 'C:\ProgramData\WinMint\Logs'

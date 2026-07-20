@@ -15,6 +15,7 @@ function Add-Failure {
 $setupRoot = Join-Path $root 'src\runtime\setup'
 . (Join-Path $setupRoot 'WinMint.Runtime.Common.ps1')
 . (Join-Path $setupRoot 'FirstLogon.Context.ps1')
+. (Join-Path $setupRoot 'WinMint.Diagnostics.ps1')
 . (Join-Path $setupRoot 'WinMintSetupShell.Status.ps1')
 
 $previewRoot = Join-Path $root 'output\projection-test'
@@ -49,22 +50,22 @@ $agentState = $null
 $agentProfile = Get-Content -LiteralPath (Join-Path $previewRoot 'WinMintAgent\BuildProfile.json') -Raw | ConvertFrom-Json
 
 $locked = Get-WinMintProvisioningProjection -Control $control -AgentState $agentState -AgentProfile $agentProfile -LogDir $logDir -PreAgentStage 'locked'
-if ($locked.groupLabel -ne 'Preparing system') {
-    Add-Failure "locked stage groupLabel expected 'Preparing system', got '$($locked.groupLabel)'."
+if ($locked.stageId -ne 'ready') {
+    Add-Failure "locked stageId expected 'ready', got '$($locked.stageId)'."
 }
-if ($locked.taskLabel -notmatch 'Lock desktop') {
-    Add-Failure "locked stage taskLabel should reflect prepare shell title, got '$($locked.taskLabel)'."
+if ($locked.taskLabel -ne 'Getting things ready') {
+    Add-Failure "locked taskLabel expected 'Getting things ready', got '$($locked.taskLabel)'."
 }
 if ($locked.progressMode -ne 'indeterminate') {
     Add-Failure "locked stage progressMode expected indeterminate, got '$($locked.progressMode)'."
 }
-if (@($locked.steps).Count -lt 3) {
-    Add-Failure "locked stage should emit visible setup steps."
+if ($locked.PSObject.Properties['steps']) {
+    Add-Failure 'status projection must not emit steps[].'
 }
 
 $region = Get-WinMintProvisioningProjection -Control $control -AgentState $agentState -AgentProfile $agentProfile -LogDir $logDir -PreAgentStage 'region'
-if ($region.groupLabel -ne 'Restoring your region') {
-    Add-Failure "region stage groupLabel expected 'Restoring your region', got '$($region.groupLabel)'."
+if ($region.stageId -ne 'ready') {
+    Add-Failure "region stageId expected 'ready', got '$($region.stageId)'."
 }
 if ($region.progressMode -ne 'indeterminate') {
     Add-Failure "region stage progressMode expected indeterminate before agent, got '$($region.progressMode)'."
@@ -72,21 +73,20 @@ if ($region.progressMode -ne 'indeterminate') {
 
 $finishing = Get-WinMintProvisioningProjection -Control (@{ phase = 'finishing'; profileName = 'Projection Test'; startedAt = (Get-Date).ToString('o') }) `
     -AgentState $agentState -AgentProfile $agentProfile -LogDir $logDir
-if ($finishing.groupLabel -ne 'Finishing setup') {
-    Add-Failure "finishing phase groupLabel expected 'Finishing setup', got '$($finishing.groupLabel)'."
+if ($finishing.stageId -ne 'finish') {
+    Add-Failure "finishing stageId expected 'finish', got '$($finishing.stageId)'."
 }
-if ($finishing.taskLabel -notmatch 'shell pins|desktop lock') {
-    Add-Failure "finishing taskLabel should reflect finalize shell work, got '$($finishing.taskLabel)'."
+if ($finishing.taskLabel -ne 'Finishing up') {
+    Add-Failure "finishing taskLabel expected 'Finishing up', got '$($finishing.taskLabel)'."
 }
-if ($finishing.progressPct -lt 90) {
-    Add-Failure "finishing progressPct should be near complete, got $($finishing.progressPct)."
+if ($finishing.progressMode -ne 'indeterminate') {
+    Add-Failure "finishing progressMode expected indeterminate, got '$($finishing.progressMode)'."
 }
 
-$passed = $false
-$prepareStatus = Get-WinMintSetupShellGroupStepStatus -GroupId 'prepare' -CurrentGroupId 'prepare' `
-    -Phase 'running' -PreAgentStage 'locked' -Progress @{ CompletedCount = 0; CurrentRuntimeStep = '' } -PassedCurrent ([ref]$passed)
-if ($prepareStatus -ne 'current') {
-    Add-Failure "prepare group should be current when locked, got '$prepareStatus'."
+$complete = Get-WinMintProvisioningProjection -Control (@{ phase = 'complete'; profileName = 'Projection Test'; startedAt = (Get-Date).ToString('o') }) `
+    -AgentState $agentState -AgentProfile $agentProfile -LogDir $logDir
+if ($complete.taskLabel -ne "You're all set") {
+    Add-Failure "complete taskLabel expected You're all set, got '$($complete.taskLabel)'."
 }
 
 $eventLog = Join-Path $logDir 'WinMintAgent-events.jsonl'
@@ -105,11 +105,11 @@ $agentWithEvents = @{
 } | ConvertTo-Json -Depth 6 | ConvertFrom-Json
 
 $liveHint = Get-WinMintSetupShellLiveTaskHint -AgentState $agentWithEvents
-if ($liveHint -notmatch 'mingit') {
+if ($liveHint -notmatch 'MinGit|mingit') {
     Add-Failure "event log hint should prefer install over generic winget.exe, got '$liveHint'."
 }
-if ($liveHint -match '(?i)Running winget') {
-    Add-Failure "event log hint must not surface generic 'Running winget.exe.', got '$liveHint'."
+if ($liveHint -match '(?i)Running winget|Scoop|winget') {
+    Add-Failure "event log hint must strip package-manager brands / generic Running.exe, got '$liveHint'."
 }
 $liveLabel = Resolve-WinMintSetupShellRunningTaskLabel `
     -RuntimeStepName 'package-managers' `
@@ -117,8 +117,18 @@ $liveLabel = Resolve-WinMintSetupShellRunningTaskLabel `
     -FallbackLabel 'Bootstrap winget and Scoop' `
     -ProfileDisplayName 'Projection Test' `
     -AgentState $agentWithEvents
-if ($liveLabel -notmatch 'mingit') {
+if ($liveLabel -notmatch 'MinGit|mingit|Preparing') {
     Add-Failure "running task label should surface live install hints, got '$liveLabel'."
+}
+
+$appsProjection = Get-WinMintProvisioningProjection `
+    -Control (@{ phase = 'running'; profileName = 'Projection Test'; startedAt = (Get-Date).ToString('o'); preAgentStage = 'agent' }) `
+    -AgentState $agentWithEvents `
+    -AgentProfile $agentProfile `
+    -LogDir $logDir `
+    -PreAgentStage 'agent'
+if ($appsProjection.stageId -ne 'ready') {
+    Add-Failure "package-managers should map to ready stage, got '$($appsProjection.stageId)'."
 }
 
 $profilesLabel = Get-WinMintSetupShellRuntimeTaskLabel -RuntimeStepName 'profiles'
@@ -126,14 +136,14 @@ if ($profilesLabel -ne 'Validate agent profile') {
     Add-Failure "profiles task label should come from catalog ShellLabel, got '$profilesLabel'."
 }
 
-$packageManagersLabel = Get-WinMintSetupShellRuntimeTaskLabel -RuntimeStepName 'package-managers'
-if ($packageManagersLabel -ne 'Bootstrap winget and Scoop') {
-    Add-Failure "package-managers task label should come from catalog ShellLabel, got '$packageManagersLabel'."
+$toolsGroup = Resolve-WinMintSetupShellRuntimeGroupId -RuntimeStepName 'profiles'
+if ($toolsGroup -ne 'ready') {
+    Add-Failure "profiles runtime step should resolve to ready stage, got '$toolsGroup'."
 }
 
-$toolsGroup = Resolve-WinMintSetupShellRuntimeGroupId -RuntimeStepName 'profiles'
-if ($toolsGroup -ne 'tools') {
-    Add-Failure "profiles runtime step should resolve to tools group, got '$toolsGroup'."
+$stripped = Format-WinMintSetupShellSplashDetail -Text 'Installing Cursor with winget'
+if ($stripped -ne 'Installing Cursor') {
+    Add-Failure "brand strip should yield 'Installing Cursor', got '$stripped'."
 }
 
 if ($failures.Count -gt 0) {
