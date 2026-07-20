@@ -16,6 +16,7 @@ function Add-ScEvidenceFailure {
 }
 
 . (Join-Path $root 'tools\vm\lib\VmSetupCompleteEvidence.ps1')
+. (Join-Path $root 'tools\acceptance\New-WinMintAcceptanceResult.ps1')
 
 $fx = Join-Path ([System.IO.Path]::GetTempPath()) ("winmint-sc-ev-" + [guid]::NewGuid().ToString('n'))
 $logs = Join-Path $fx 'ProgramData-Logs'
@@ -65,6 +66,46 @@ try {
     $empty = Test-WinMintVmSetupCompleteLogEvidence -EvidenceDir $fx
     if (-not $empty.plumbingOk -or $empty.softWarnings.Count -ne 0) {
         Add-ScEvidenceFailure 'Empty SetupComplete logs must pass plumbing with no soft warnings.'
+    }
+
+    # --- Smoke verdict glue: soft warnings alone must not flip plumbingVerdict ---
+    'soft warning line' | Set-Content -LiteralPath (Join-Path $logs 'SetupComplete_warnings.log') -Encoding UTF8
+    $warnClassified = Test-WinMintVmSetupCompleteLogEvidence -EvidenceDir $fx
+    $smokeResult = [ordered]@{
+        acceptanceMode  = 'vm'
+        acceptanceTier  = 'Smoke'
+        startedAt       = (Get-Date).ToString('o')
+        evidenceDir     = $fx
+        reachable       = $true
+        firstLogon      = @{ status = 'ok' }
+        warnings        = @($warnClassified.softWarnings)
+        reasons         = @()
+    }
+    # Soft warnings are recorded on the result, not as plumbing signals.
+    $smokeResult = Complete-WinMintAcceptanceResult -Result $smokeResult -Signals @() -AcceptanceTier Smoke
+    if ($smokeResult.plumbingVerdict -ne 'pass' -or $smokeResult.verdict -ne 'pass') {
+        Add-ScEvidenceFailure "Smoke+soft-warnings-only must pass plumbing/verdict (got plumbing=$($smokeResult.plumbingVerdict) verdict=$($smokeResult.verdict))."
+    }
+    if (@($smokeResult.warnings).Count -lt 1) {
+        Add-ScEvidenceFailure 'Smoke soft-warnings fixture must keep warnings on the acceptance result.'
+    }
+
+    # Hard errors as plumbing signals still fail Smoke.
+    $hardSignals = @(
+        New-WinMintAcceptanceSignalResult -Id 'vm.plumbing' -Ok $false -Severity plumbing -Message 'SetupComplete_errors.log is non-empty: hard'
+    )
+    $hardResult = Complete-WinMintAcceptanceResult -Result ([ordered]@{
+            acceptanceMode = 'vm'
+            acceptanceTier = 'Smoke'
+            startedAt      = (Get-Date).ToString('o')
+            evidenceDir    = $fx
+            reachable      = $true
+            firstLogon     = @{ status = 'ok' }
+            warnings       = @($warnClassified.softWarnings)
+            reasons        = @()
+        }) -Signals $hardSignals -AcceptanceTier Smoke
+    if ($hardResult.plumbingVerdict -ne 'fail' -or $hardResult.verdict -ne 'fail') {
+        Add-ScEvidenceFailure 'Smoke+SetupComplete_errors plumbing signal must fail plumbing/verdict.'
     }
 }
 finally {

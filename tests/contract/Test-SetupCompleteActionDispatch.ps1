@@ -150,6 +150,30 @@ if ($wuText -notmatch 'Write-ScError') {
     Add-ScDispatchFailure 'WindowsUpdate restore hard failures must use Write-ScError.'
 }
 
+# Soft-channel modules: best-effort failures must Write-ScWarn and must not Write-ScError.
+foreach ($softModule in @('OneDrive.ps1', 'AiCleanup.ps1', 'TelemetryTasks.ps1', 'SystemHygiene.ps1', 'Toolchain.ps1')) {
+    $softPath = Join-Path $moduleDir $softModule
+    if (-not (Test-Path -LiteralPath $softPath -PathType Leaf)) {
+        Add-ScDispatchFailure "Soft-channel module missing: $softModule"
+        continue
+    }
+    $softText = Get-Content -LiteralPath $softPath -Raw
+    if ($softText -notmatch 'Write-ScWarn') {
+        Add-ScDispatchFailure "$softModule must use Write-ScWarn for best-effort SetupComplete failures."
+    }
+    if ($softText -match 'Write-ScError') {
+        Add-ScDispatchFailure "$softModule must not Write-ScError (soft channel only)."
+    }
+}
+# Power: hibernate-off is soft; plan activation stays hard.
+$powerText = Get-Content -LiteralPath (Join-Path $moduleDir 'Power.ps1') -Raw
+if ($powerText -notmatch 'Write-ScWarn') {
+    Add-ScDispatchFailure 'Power.ps1 must Write-ScWarn for hibernate-off best-effort failures.'
+}
+if ($powerText -notmatch 'Write-ScError') {
+    Add-ScDispatchFailure 'Power.ps1 must Write-ScError when selected plan activation fails.'
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL $_" }
     exit 1
