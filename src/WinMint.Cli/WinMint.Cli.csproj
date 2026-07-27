@@ -1,0 +1,9 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Host → brain graph: types land with Smoke ticket 01 (BuildPlan). -->
+    <ProjectReference Include="..\WinMint.Orchestrator\WinMint.Orchestrator.csproj" />
+  </ItemGroup>
+</Project>

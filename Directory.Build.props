@@ -1,0 +1,18 @@
+﻿<Project>
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!-- AOT-friendly graph; PublishAot is per-project (Provisioning Release). -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- ponytail: no EnforceCodeStyleInBuild / GenerateDocumentationFile until public API exists — those turn IDE/CS1591 into hard fails on first types. -->
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(CI)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+</Project>
