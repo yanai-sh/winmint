@@ -15,7 +15,7 @@ jobs:
     # Primary host is Windows on ARM64 - gate there first.
     runs-on: windows-11-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup .NET 11 (latest preview on channel)
         uses: actions/setup-dotnet@v4
