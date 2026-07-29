@@ -1,0 +1,23 @@
+﻿root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+end_of_line = lf
+
+# Windows Setup scripts must be CRLF on disk / in the image.
+[*.cmd]
+end_of_line = crlf
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{cs,csx}]
+# Match docs/STACK.md — modern default when types arrive.
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+[*.{json,yml,yaml,jsonc}]
+indent_size = 2

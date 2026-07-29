@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+# Least privilege: gate only reads the tree.
+permissions:
+  contents: read
+
+# Force-push rhythm: stale runs on rewritten commits cancel themselves.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # Primary host is Windows on ARM64 - gate there first.
+    runs-on: windows-11-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET 11 (latest preview on channel)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "11.0.x"
+
+      # Mirror of local `just check` — inlined: no just binary/action on win-arm64 runners.
+      - name: Dotnet gate
+        shell: pwsh
+        run: |
+          dotnet format --verify-no-changes
+          dotnet restore
+          dotnet build --no-restore
+          dotnet test --no-build
+
+      # De-risk NativeAOT win-arm64 toolchain before Smoke tickets 02–03 depend on it.
+      - name: AOT publish (Provisioning Supervisor)
+        shell: pwsh
+        run: dotnet publish src/WinMint.Provisioning/WinMint.Provisioning.csproj -c Release -o artifacts/provisioning
