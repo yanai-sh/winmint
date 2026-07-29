@@ -7,16 +7,18 @@
 
 ## Implementation hold
 
-**Status: HOLD — do not `/implement` product tickets yet.**  
-Maintainer pause after Design Acceptance (quality/debloat of the plan pack). Scaffold may stay green; no BuildPlan/Servicing/Provisioning feature code until this hold is lifted in this file and [ROADMAP](ROADMAP.md).
+**Status: Released** (2026-07-29).  
+`/implement` may proceed from this backlog — one ticket per session, starting at **01**. Do not label `ready-for-agent` until starting that ticket.
 
 | When hold lifts | First action |
 |-----------------|--------------|
 | Maintainer sets hold → **Released** below | File Issues 01–10 (if missing), then `/implement` **01** only |
 
-**Hold:** **Active** (2026-07-28)
+**Hold:** **Released** (2026-07-29)
 
-**Before hold → Released:** pointer sync done (01–10); splash spike bar met ([SPLASH](design/SPLASH.md) appendix); `just check` green; then file Issues 01–10 (no `ready-for-agent` until starting **01**).
+**Before hold → Released:** pointer sync done (01–10); splash spike bar met ([SPLASH](design/SPLASH.md) appendix); `just check` green; then file Issues 01–10 (no `ready-for-agent` until starting **01**). ✓ met 2026-07-29
+
+**GitHub Issues (filed 2026-07-29):** ticket **01→#3** … **10→#12** (titles `01`–`10`; label `enhancement` only — apply `ready-for-agent` only when starting that ticket).
 
 ---
 
@@ -24,7 +26,7 @@ Maintainer pause after Design Acceptance (quality/debloat of the plan pack). Sca
 
 | # | Title | Module | Stories | Blocked by | Ready when |
 |---|--------|--------|---------|------------|------------|
-| 01 | Profile + plan + Cli `validate`/`plan` | BuildPlan | 1–2 | — | Hold released |
+| 01 | Profile + plan + Cli `validate`/`plan` | BuildPlan | 1–2 | — | Released — start here |
 | 02 | Servicing apply + Shell stamp + Cli `build`/`apply` | ImageServicing | 3 | 01 | 01 done |
 | 03 | Machine setup stamps | ProvisioningSession | 4 | 02 | 02 done |
 | 04 | Shell splash + status + evidence | ProvisioningSession | 5, 13 | 03 | 03 done **+ splash spike** |
@@ -46,7 +48,7 @@ Maintainer pause after Design Acceptance (quality/debloat of the plan pack). Sca
 ### 01 — Profile + plan + Cli `validate`/`plan`
 
 - **Design:** [BUILDPLAN](design/BUILDPLAN.md) · **Seam:** S1 · **Stories:** 1–2
-- **Blocked by:** — · **Ready when:** Hold released
+- **Blocked by:** — · **Ready when:** Released — start here
 - **Deliver:**
   - Profile DTOs + source-gen; freeze JSON field names / `schemaVersion` (`winmint.profile/v1`)
   - `TryParseProfile` / `Plan`; Cli `validate` / `plan`
@@ -55,10 +57,11 @@ Maintainer pause after Design Acceptance (quality/debloat of the plan pack). Sca
   - Default image-quality **lane name** = `Test` (field parses; no export param ownership)
 - **Out:** elevation; DISM; splash; Servicing; **`ExportWim` compression/cleanup params** (ticket **09**)
 - **DoD:**
-  - [BUILDPLAN tracers 1–4](design/BUILDPLAN.md#ticket-01-tdd-tracers-first-vertical-slices) green
-  - Local+autoLogon only; stages contain opcodes, not repo-relative `.ps1` paths
-  - `just check` green
+  - [BUILDPLAN tracers 1–4](design/BUILDPLAN.md#ticket-01-tdd-tracers-first-vertical-slices) green ✓
+  - Local+autoLogon only; stages contain opcodes, not repo-relative `.ps1` paths ✓
+  - `just check` green ✓
 - **First red:** Empty/invalid JSON → document error (S1 tracer 1).
+- **Done:** 2026-07-29 (issue #3)
 
 ### 02 — Servicing apply + Shell stamp + Cli `build`/`apply`
 

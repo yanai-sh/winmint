@@ -89,8 +89,8 @@ Work **one failing test → minimal green** at a time:
 
 **Ticket 09 (not 01):** Explicit `ImageQuality.Release` → `ExportWim` stage/export params differ from Test (BUILDPLAN owns lane field parse in 01; export param values are 09).
 
-## Open points (ticket 01)
+## Open points (closed in ticket 01)
 
-- Exact Profile JSON field names / `schemaVersion` string (freeze in 01).
-- C# DTOs + source-gen = source of truth; optional `schemas/*.json` only if generated or clearly secondary.
+- Profile JSON field names / `schemaVersion` **frozen**: `winmint.profile/v1` with `account.mode|username|password`, `dma.enabled|settle.{locale,geoId,timeZoneId,locationServicesEnabled}`; account mode string `localAutoLogon`.
+- C# DTOs + source-gen = source of truth; no `schemas/*.json` yet.
 - Secrets: follow [SECRETS](SECRETS.md) (already grill-locked).

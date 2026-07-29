@@ -1,6 +1,6 @@
 # WinMint v2 — Roadmap
 
-**Phase now:** Design Acceptance **signed** · Implementation **on hold** ([TICKETS](TICKETS.md)).  
+**Phase now:** Design Acceptance **signed** · Implementation **Released** ([TICKETS](TICKETS.md)).  
 **Authority:** [ARCHITECTURE](ARCHITECTURE.md), [Smoke](specs/2026-07-27-smoke.md), ADRs, [design/](design/), [DESIGN](DESIGN.md).
 
 ## Milestones
@@ -9,7 +9,7 @@
 |----|-----------|-------------|--------|
 | **D0** | Design-plan complete | Designs + roadmap + gate signed | **Done** (2026-07-28) |
 | **M0** | Repo scaffold | Reserved `src/` builds | Present |
-| **M1** | Smoke Hyper-V green | Profile → ISO → FirstLogon evidence | Design ready; **implement HOLD** |
+| **M1** | Smoke Hyper-V green | Profile → ISO → FirstLogon evidence | **In progress** (hold released 2026-07-29) |
 | **M2–M4** | Wizard / matrix / hardware | — | Stubs |
 
 ## Design Acceptance

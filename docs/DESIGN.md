@@ -55,7 +55,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Full table retained f
 | DMA off | Schema OK; acceptance Profile = on |
 | Hyper-V Smoke | Pro only |
 
-**Deferred:** Profile property names (01); M2–M4 specs.  
+**Deferred:** M2–M4 specs. Profile property names frozen in ticket **01** ([BUILDPLAN](design/BUILDPLAN.md)).  
 **Owned elsewhere:** AppearanceOnce → ticket **07**; splash spike measurements → [SPLASH](design/SPLASH.md) appendix (gate for **04**).
 
 ## Design Acceptance

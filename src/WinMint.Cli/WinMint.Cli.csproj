@@ -6,4 +6,7 @@
     <!-- Host → brain graph: types land with Smoke ticket 01 (BuildPlan). -->
     <ProjectReference Include="..\WinMint.Orchestrator\WinMint.Orchestrator.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.10" />
+  </ItemGroup>
 </Project>
