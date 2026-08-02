@@ -1,8 +1,16 @@
 # TDD plan — WinMint v2 Smoke
 
-**Hold:** [TICKETS](TICKETS.md) — use these seams when it lifts.  
 **Authority:** PLAN, ARCHITECTURE, DESIGN grill, module designs, TDD skill.  
-**Rule:** No test at an unconfirmed seam.
+**Rule:** No test at an unconfirmed seam.  
+**Backlog:** [TICKETS](TICKETS.md) (Released — implement by ticket).
+
+## Speed rules
+
+| | Rule |
+|---|------|
+| **Should** | Day-to-day = S1–S3 (`just check` + fakes); Smoke = `Test` lane + stub jobs; CI = scaffold only (no VM / no ISO); S4 fail-fast on stalls (don’t burn the 90‑min wall-clock timeout) |
+| **Could** | Diff VHD from a parent base; rebuild ISO only when plan/payload digests change; careful servicing workdir reuse — harness-only, ticket **10** |
+| **Don’t** | Skip S4 hard evidence; invent a Hyper-V-only settle/executor path “for speed” |
 
 ## Confirmed seams (test here only)
 

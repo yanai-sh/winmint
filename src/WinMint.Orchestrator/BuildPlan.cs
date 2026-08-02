@@ -172,20 +172,31 @@ public static class BuildPlan
             "jobs.json",
         ]);
 
-        string laneName = options.ImageQuality switch
+        string laneName;
+        string compression;
+        string cleanup;
+        if (options.ImageQuality == ImageQualityLane.Release)
         {
-            ImageQualityLane.Release => "Release",
-            _ => "Test",
-        };
+            laneName = "Release";
+            compression = "max";
+            cleanup = "full";
+        }
+        else
+        {
+            laneName = "Test";
+            compression = "fast";
+            cleanup = "skip";
+        }
 
-        // Export compression/cleanup values are ticket 09; lane name is enough for 01.
         ServicingStageList stages = new(
         [
             new ServicingStage(ServicingOpcode.MountInstallWim, Dict(("sourceIso", options.SourceIsoPath ?? ""))),
             new ServicingStage(ServicingOpcode.StagePayload, Dict()),
             new ServicingStage(ServicingOpcode.InjectUnattend, Dict()),
             new ServicingStage(ServicingOpcode.StampOfflineShell, Dict(("shellTarget", "Supervisor.exe"))),
-            new ServicingStage(ServicingOpcode.ExportWim, Dict(("lane", laneName))),
+            new ServicingStage(
+                ServicingOpcode.ExportWim,
+                Dict(("lane", laneName), ("compression", compression), ("cleanup", cleanup))),
             new ServicingStage(ServicingOpcode.BuildIso, Dict(("outputIso", options.OutputIsoPath ?? ""))),
         ]);
 

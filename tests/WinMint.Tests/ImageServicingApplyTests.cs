@@ -45,7 +45,11 @@ public class ImageServicingApplyTests
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.ExportWim
                     && s.Parameters.TryGetValue("lane", out string? lane)
-                    && lane == "Test");
+                    && lane == "Test"
+                    && s.Parameters.TryGetValue("compression", out string? compression)
+                    && compression == "fast"
+                    && s.Parameters.TryGetValue("cleanup", out string? cleanup)
+                    && cleanup == "skip");
             Assert.False(string.IsNullOrWhiteSpace(result.Value.ShellStampTargetPath));
             Assert.Equal(ImageQualityLane.Test, result.Value.Lane);
             Assert.Equal(ImageServicing.ShellStampGuestPath, result.Value.ShellStampTargetPath);

@@ -114,6 +114,50 @@ public class BuildPlanPlanTests
         Assert.All(
             artifacts.Stages.Stages,
             stage => Assert.DoesNotContain(".ps1", string.Join('\0', stage.Parameters.Values), StringComparison.OrdinalIgnoreCase));
+        ServicingStage export = Assert.Single(
+            artifacts.Stages.Stages,
+            s => s.Opcode == ServicingOpcode.ExportWim);
+        Assert.Equal("Test", export.Parameters["lane"]);
+        Assert.Equal("fast", export.Parameters["compression"]);
+        Assert.Equal("skip", export.Parameters["cleanup"]);
+    }
+
+    [Fact]
+    public void Plan_release_lane_export_params_differ_from_test()
+    {
+        Profile profile = Parse("""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "localAutoLogon",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { ImageQuality = ImageQualityLane.Release });
+
+        Assert.True(result.IsOk);
+        BuildArtifacts artifacts = result.Value;
+        Assert.Equal(ImageQualityLane.Release, artifacts.Manifest.ImageQuality);
+        ServicingStage export = Assert.Single(
+            artifacts.Stages.Stages,
+            s => s.Opcode == ServicingOpcode.ExportWim);
+        Assert.Equal("Release", export.Parameters["lane"]);
+        Assert.Equal("max", export.Parameters["compression"]);
+        Assert.Equal("full", export.Parameters["cleanup"]);
     }
 
     private static Profile Parse(string json)

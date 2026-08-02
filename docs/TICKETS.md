@@ -183,15 +183,17 @@
 
 ### 10 — Hyper-V Smoke harness
 
-- **Design:** [CONTRACTS](design/CONTRACTS.md) · [SPLASH](design/SPLASH.md) · **Seam:** S4 · **Stories:** 15
+- **Design:** [CONTRACTS](design/CONTRACTS.md) · [SPLASH](design/SPLASH.md) · **Seam:** S4 · **Stories:** 15 · **Speed:** [TDD](TDD.md#speed-rules)
 - **Blocked by:** 08, 09 · **Ready when:** 08+09 done
 - **Deliver:**
   - One pwsh entry under `tools/vm/` (“run Smoke → evidence”)
   - Pro + DMA-on acceptance Profile; evidence pull
-- **Out:** metal / hardware acceptance; guest pwsh; peer Splash; multi-entrypoint harness forest
+- **Out:** metal / hardware acceptance; guest pwsh; peer Splash; multi-entrypoint harness forest; Hyper-V-only settle/executor fork
+- **Optional later (harness only):** differencing VHD from parent base; ISO rebuild only on plan/payload digest change; careful servicing workdir reuse
 - **DoD:**
   - Splash before Explorer; DMA hard fields green **or** failed DMA path with evidence + unlock
   - Unlock on complete/failed; lane marker present; paint time recorded (**warn** if > 2.0 s)
+  - Stall fail-fast (Shell/OOBE/autologon hang) before burning `WallClockTimeout` (90 min)
   - Not part of `just check` (S4 / `just smoke` when gated)
 - **First red:** Harness returns evidence folder with splash-before-Explorer marker (S4).
 
