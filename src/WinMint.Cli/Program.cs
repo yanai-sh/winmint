@@ -20,6 +20,23 @@ internal static class Program
             Required = true,
         };
 
+        Option<FileInfo> isoOption = new("--iso")
+        {
+            Description = "Path to the user-supplied Source ISO.",
+            Required = true,
+        };
+
+        Option<DirectoryInfo> workOption = new("--work")
+        {
+            Description = "Servicing work directory (preserved on failure).",
+            Required = true,
+        };
+
+        Option<FileInfo?> outIsoOption = new("--out-iso")
+        {
+            Description = "Output ISO path (defaults to <work>/out.iso).",
+        };
+
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")
         {
             profileArgument,
@@ -42,10 +59,44 @@ internal static class Program
             return RunPlan(profilePath, outDir);
         });
 
-        RootCommand root = new("WinMint — Profile validate / plan (Smoke ticket 01)")
+        Command applyCommand = new("apply", "Plan a Profile and apply ImageServicing (one elevated RunPlan).")
+        {
+            profileArgument,
+            isoOption,
+            workOption,
+            outIsoOption,
+        };
+        applyCommand.SetAction(parseResult =>
+        {
+            FileInfo profilePath = parseResult.GetValue(profileArgument)!;
+            FileInfo iso = parseResult.GetValue(isoOption)!;
+            DirectoryInfo work = parseResult.GetValue(workOption)!;
+            FileInfo? outIso = parseResult.GetValue(outIsoOption);
+            return RunApply(profilePath, iso, work, outIso);
+        });
+
+        Command buildCommand = new("build", "Plan + apply (same path as apply; preferred product verb).")
+        {
+            profileArgument,
+            isoOption,
+            workOption,
+            outIsoOption,
+        };
+        buildCommand.SetAction(parseResult =>
+        {
+            FileInfo profilePath = parseResult.GetValue(profileArgument)!;
+            FileInfo iso = parseResult.GetValue(isoOption)!;
+            DirectoryInfo work = parseResult.GetValue(workOption)!;
+            FileInfo? outIso = parseResult.GetValue(outIsoOption);
+            return RunApply(profilePath, iso, work, outIso);
+        });
+
+        RootCommand root = new("WinMint — Profile plan and ImageServicing apply")
         {
             validateCommand,
             planCommand,
+            applyCommand,
+            buildCommand,
         };
 
         return root.Parse(args).Invoke();
@@ -75,7 +126,45 @@ internal static class Program
         return 0;
     }
 
-    private static bool TryLoadArtifacts(FileInfo profilePath, out BuildArtifacts? artifacts, out int exitCode)
+    private static int RunApply(FileInfo profilePath, FileInfo iso, DirectoryInfo work, FileInfo? outIso)
+    {
+        if (!TryLoadArtifacts(
+                profilePath,
+                out BuildArtifacts? artifacts,
+                out int exit,
+                new RunOptions
+                {
+                    SourceIsoPath = iso.FullName,
+                    OutputIsoPath = outIso?.FullName,
+                }))
+        {
+            return exit;
+        }
+
+        ServicingRun run = new(
+            SourceIsoPath: iso.FullName,
+            WorkDirectory: work.FullName,
+            OutputIsoPath: outIso?.FullName ?? Path.Combine(work.FullName, "out.iso"));
+
+        Result<ImageEvidence, ServicingFailure> applied = ImageServicing.Apply(artifacts!, run);
+        if (!applied.IsOk)
+        {
+            Console.Error.WriteLine($"{applied.Error.Code}: {applied.Error.Message}");
+            Console.Error.WriteLine($"Work directory preserved: {work.FullName}");
+            return 1;
+        }
+
+        Console.WriteLine($"Image OK: {applied.Value.OutputIsoPath}");
+        Console.WriteLine($"Shell stamp: {applied.Value.ShellStampTargetPath}");
+        Console.WriteLine($"Lane: {applied.Value.Lane}");
+        return 0;
+    }
+
+    private static bool TryLoadArtifacts(
+        FileInfo profilePath,
+        out BuildArtifacts? artifacts,
+        out int exitCode,
+        RunOptions? run = null)
     {
         artifacts = null;
         if (!profilePath.Exists)
@@ -98,7 +187,7 @@ internal static class Program
             return false;
         }
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value, run);
         if (!planned.IsOk)
         {
             Console.Error.WriteLine($"{planned.Error.Code}: {planned.Error.Message}");

@@ -27,7 +27,7 @@
 | # | Title | Module | Stories | Blocked by | Ready when |
 |---|--------|--------|---------|------------|------------|
 | 01 | Profile + plan + Cli `validate`/`plan` | BuildPlan | 1–2 | — | Released — start here |
-| 02 | Servicing apply + Shell stamp + Cli `build`/`apply` | ImageServicing | 3 | 01 | 01 done |
+| 02 | Servicing apply + Shell stamp + Cli `build`/`apply` | ImageServicing | 3 | 01 | 01 done — **done** |
 | 03 | Machine setup stamps | ProvisioningSession | 4 | 02 | 02 done |
 | 04 | Shell splash + status + evidence | ProvisioningSession | 5, 13 | 03 | 03 done **+ splash spike** |
 | 05 | DMA settle | ProvisioningSession | 6–8 | 04 | 04 done |
@@ -76,11 +76,11 @@
   - One Orchestrator path that calls elevated `pwsh -File` (enough for this ticket)
 - **Out:** Profile `if` branching in kernels; guest FirstLogon; **full `IElevatedPlanRunner` port** unless introduced in the same PR as its test fake
 - **DoD:**
-  - Stage order asserted; Shell stamp path param present
-  - Workdir preserved on failure; kernels param-only
-  - `just check` green
+  - Stage order asserted; Shell stamp path param present ✓
+  - Workdir preserved on failure; kernels param-only ✓
+  - `just check` green ✓
 - **First red:** Fake or scripted runner asserts stage order for a minimal plan (S2).
-
+- **Done:** 2026-08-02 (issue #4)
 ### 03 — Machine setup stamps
 
 - **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · **Seam:** S3 · **Stories:** 4
