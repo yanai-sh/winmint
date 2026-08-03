@@ -2,9 +2,9 @@
 
 Windows 11 ISO builder (greenfield v2). **ARM64-first**. Host Servicing: **pwsh 7.6+**. Guest FirstLogon: **C# only**.
 
-## Phase: pre-implement hold
+## Phase: implementation Released
 
-Product `/implement` is **on hold** until [TICKETS](docs/TICKETS.md) releases it.
+Product `/implement` may proceed from [TICKETS](docs/TICKETS.md) — **one ticket per session**. Apply `ready-for-agent` only when starting that ticket. Next open card: **04**.
 
 Gate/locks: [ROADMAP](docs/ROADMAP.md#design-acceptance) · [DESIGN](docs/DESIGN.md#decisions-locked-grill)  
 Backlog: [TICKETS](docs/TICKETS.md) · Sessions: [AGENTIC](docs/agents/AGENTIC.md) · Seams: [TDD](docs/TDD.md)
@@ -33,14 +33,12 @@ Local+autoLogon only; Pro Hyper-V; DMA on for acceptance Profile; `Test`|`Releas
 
 Lobby, not brochure — concise real content only; no placeholders. No badges yet: none has live metadata to mirror (at first release ≤5 functional, linked, non-vanity). Grows: quickstart at ticket **01** · features at smoke pass · screenshots via dark/light `<picture>` block · CONTRIBUTING + CODE_OF_CONDUCT before public launch. Bundled third-party assets → `THIRD_PARTY_NOTICES.md`, not the README.
 
-## While on hold
+## While implementing
 
-Docs/quality only. Keep `just check` green if touching scaffold. **No** feature types.
-
-When hold lifts: one ticket/session from [TICKETS](docs/TICKETS.md), starting at **01**.
+One ticket/session from [TICKETS](docs/TICKETS.md). Keep `just check` green. No keep-flag / debloat product code until ticket **10** is green.
 
 ```powershell
 just check
 ```
 
-Commits when asked: `docs:` on hold; later `feat(scope):` …
+Commits when asked: `docs:` · `feat(scope):` · `fix(scope):` …

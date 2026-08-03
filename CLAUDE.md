@@ -1,12 +1,12 @@
 Primary agent contract: [AGENTS.md](AGENTS.md).
 
-**Hold:** no product `/implement` — [docs/TICKETS.md](docs/TICKETS.md). Design accepted: [docs/DESIGN.md](docs/DESIGN.md).
+**Implement:** one ticket/session from [docs/TICKETS.md](docs/TICKETS.md). Design accepted: [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Agent skills
 
 ### Issue tracker
 
-`gh` on `yanai-sh/winmint` — [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md). Do not mark 01–10 `ready-for-agent` while TICKETS hold is active.
+`gh` on `yanai-sh/winmint` — [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md). Apply `ready-for-agent` only when starting that ticket.
 
 ### Triage labels
 
