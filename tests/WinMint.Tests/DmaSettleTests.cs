@@ -17,17 +17,19 @@ public class DmaSettleTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
         RecordingProcessHost processes = new();
+        RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
                 policy: TightSettlePolicy()),
-            Env(time, region, splash, evidence, processes),
+            Env(time, region, splash, evidence, processes, winlogon),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("settle.hard_mismatch", result.FinalStatus.Code);
+        Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
         Assert.DoesNotContain(splash.Events, e => e.StartsWith("Status:jobs.", StringComparison.Ordinal));
         Assert.Empty(processes.Starts);
         Assert.Single(region.Applied);
@@ -127,16 +129,32 @@ public class DmaSettleTests
         IRegionSnapshot region,
         ISplashPresenter splash,
         IEvidenceSink evidence,
-        IProcessHost? processes = null) =>
+        IProcessHost? processes = null,
+        IWinlogonRegistry? winlogon = null) =>
         new(
             Time: time,
-            Winlogon: new NoopWinlogon(),
+            Winlogon: winlogon ?? new NoopWinlogon(),
             Region: region,
             Processes: processes ?? new RecordingProcessHost(),
             Splash: splash,
             Checkpoints: new NoopCheckpoints(),
             Secrets: new NoopSecrets(),
             Evidence: evidence);
+
+    private sealed class RecordingWinlogon : IWinlogonRegistry
+    {
+        public string? Shell { get; set; }
+
+        public void SetAutoLogon(string username, string password) { }
+
+        public string? GetDefaultUserName() => null;
+
+        public bool GetAutoAdminLogon() => false;
+
+        public string? GetShell() => Shell;
+
+        public void SetShell(string path) => Shell = path;
+    }
 
     private abstract record RegionRead
     {
@@ -222,7 +240,12 @@ public class DmaSettleTests
         public void SetShell(string path) { }
     }
 
-    private sealed class NoopCheckpoints : ICheckpointStore;
+    private sealed class NoopCheckpoints : ICheckpointStore
+    {
+        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
+
+        public void WriteHeartbeat(DateTimeOffset utcNow) { }
+    }
 
     private sealed class NoopSecrets : ISecretScrubber
     {

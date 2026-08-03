@@ -32,7 +32,7 @@
 | 04 | Shell splash + status + evidence | ProvisioningSession | 5, 13 | 03 | 03 done **+ splash spike** — **done** |
 | 05 | DMA settle | ProvisioningSession | 6–8 | 04 | 04 done — **done** |
 | 06 | Stub jobs + child-process executor | ProvisioningSession | 9–10 | 05 | 05 done — **done** |
-| 07 | Unlock + timeout + stale fail-open | ProvisioningSession | 12 + appearance | 06 | 06 done |
+| 07 | Unlock + timeout + stale fail-open | ProvisioningSession | 12 + appearance | 06 | 06 done — **done** |
 | 08 | Checkpoint reboot keeps Shell | ProvisioningSession | 11 | 07 | 07 done |
 | 09 | `Test`/`Release` export lane | BuildPlan + ImageServicing | 14 | 02 | May parallel 03–08 |
 | 10 | Hyper-V Smoke harness | Acceptance S4 | 15 | 08, 09 | 08+09 done |
@@ -169,11 +169,12 @@
   - Policy defaults per [smoke defaults](design/PROVISIONINGSESSION.md#smoke-defaults-grill-locked) — `SessionPolicy` + `TimeProvider` must drive behavior (not dead fields)
 - **Out:** checkpoint / reboot-keeps-Shell (ticket **08**); hard input lock
 - **DoD:**
-  - `FakeTimeProvider`: timeout unlocks
-  - Stale tenure → `Failed` + unlock
-  - Success path: appearance applied once, then unlock
+  - `FakeTimeProvider`: timeout unlocks ✓
+  - Stale tenure → `Failed` + unlock ✓
+  - Success path: appearance applied once, then unlock ✓
 - **First red:** Wall-clock timeout yields unlock (S3).
-
+- **Done:** 2026-08-04 (issue #9)
+- **Carry:** Checkpoint write/clear + `Reboot` keep-Shell remain ticket **08** (`FileCheckpointStore` heartbeat/tenure read shipped; write path still 08). Profile→bundle appearance field not staged yet — `AppearanceOnce` on bundle is consumed when present.
 ### 08 — Checkpoint reboot keeps Shell
 
 - **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · **Seam:** S3 · **Stories:** 11

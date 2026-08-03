@@ -192,5 +192,10 @@ public class MachineSetupTests
         public void SetStatus(SessionStatus status) { }
     }
 
-    private sealed class NoopCheckpoints : ICheckpointStore;
+    private sealed class NoopCheckpoints : ICheckpointStore
+    {
+        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
+
+        public void WriteHeartbeat(DateTimeOffset utcNow) { }
+    }
 }

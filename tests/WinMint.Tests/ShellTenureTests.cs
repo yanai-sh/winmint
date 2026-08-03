@@ -87,20 +87,22 @@ public class ShellTenureTests
     }
 
     [Fact]
-    public void Shell_fails_closed_when_Evidence_sink_missing()
+    public void Shell_fails_open_when_Evidence_sink_missing()
     {
         RecordingSplashPresenter splash = new();
+        RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
             MinimalBundle(),
-            Env(splash, evidence: null),
+            Env(splash, evidence: null, winlogon),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("shell.evidence.required", result.FinalStatus.Code);
-        Assert.Empty(splash.Events);
+        Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
         Assert.Empty(result.EvidenceEmitted);
+        Assert.Contains("Status:shell.evidence.required", splash.Events);
     }
 
     private static ProvisioningBundle MinimalBundle() =>
@@ -111,16 +113,34 @@ public class ShellTenureTests
             Policy: SessionPolicy.SmokeDefaults,
             Supervisor: new SupervisorIdentity(SupervisorPath));
 
-    private static SessionEnvironment Env(ISplashPresenter splash, IEvidenceSink? evidence) =>
+    private static SessionEnvironment Env(
+        ISplashPresenter splash,
+        IEvidenceSink? evidence,
+        IWinlogonRegistry? winlogon = null) =>
         new(
             Time: TimeProvider.System,
-            Winlogon: new NoopWinlogon(),
+            Winlogon: winlogon ?? new NoopWinlogon(),
             Region: new MatchingRegion(),
             Processes: new NoopProcesses(),
             Splash: splash,
             Checkpoints: new NoopCheckpoints(),
             Secrets: new NoopSecrets(),
             Evidence: evidence);
+
+    private sealed class RecordingWinlogon : IWinlogonRegistry
+    {
+        public string? Shell { get; set; }
+
+        public void SetAutoLogon(string username, string password) { }
+
+        public string? GetDefaultUserName() => null;
+
+        public bool GetAutoAdminLogon() => false;
+
+        public string? GetShell() => Shell;
+
+        public void SetShell(string path) => Shell = path;
+    }
 
     private sealed class RecordingSplashPresenter : ISplashPresenter
     {
@@ -179,7 +199,12 @@ public class ShellTenureTests
             new(0);
     }
 
-    private sealed class NoopCheckpoints : ICheckpointStore;
+    private sealed class NoopCheckpoints : ICheckpointStore
+    {
+        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
+
+        public void WriteHeartbeat(DateTimeOffset utcNow) { }
+    }
 
     private sealed class NoopSecrets : ISecretScrubber
     {

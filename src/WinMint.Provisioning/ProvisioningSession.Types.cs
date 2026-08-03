@@ -127,9 +127,17 @@ public interface ISplashPresenter
     void SetStatus(SessionStatus status);
 }
 
+/// <summary>
+/// Durable tenure under %ProgramData%\WinMint\. Ticket 07: heartbeat + stale read.
+/// Ticket 08: checkpoint write/clear for reboot resume.
+/// </summary>
+public sealed record TenureState(bool CheckpointInProgress, DateTimeOffset? HeartbeatUtc);
+
 public interface ICheckpointStore
 {
-    // ponytail: ticket 08 fills this
+    TenureState ReadTenure();
+
+    void WriteHeartbeat(DateTimeOffset utcNow);
 }
 
 public interface ISecretScrubber

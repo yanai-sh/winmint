@@ -74,7 +74,8 @@ internal static class Program
                 bundlePath,
                 Log,
                 splash,
-                new FileEvidenceSink(evidenceDir));
+                new FileEvidenceSink(evidenceDir),
+                new FileCheckpointStore(programData));
             SessionResult result = ProvisioningSession.Run(SessionMode.Shell, bundle, env);
             Log($"{result.FinalStatus.Code}: {result.FinalStatus.Message}");
             foreach (EvidenceSnapshot snap in result.EvidenceEmitted)
@@ -116,7 +117,8 @@ internal static class Program
         string bundlePath,
         Action<string> log,
         ISplashPresenter? splash,
-        IEvidenceSink? evidence = null)
+        IEvidenceSink? evidence = null,
+        ICheckpointStore? checkpoints = null)
     {
         IWinlogonRegistry winlogon = OperatingSystem.IsWindows()
             ? CreateWin32Winlogon()
@@ -128,7 +130,7 @@ internal static class Program
             Region: CreateRegion(),
             Processes: CreateProcessHost(),
             Splash: splash ?? new NoopSplashPresenter(),
-            Checkpoints: new UnsupportedCheckpointStore(),
+            Checkpoints: checkpoints ?? new FileCheckpointStore(ProgramDataRoot()),
             Secrets: new FileSecretScrubber(bundlePath, log),
             Evidence: evidence);
     }
@@ -145,8 +147,6 @@ internal static class Program
     [SupportedOSPlatform("windows")]
     private static GdiSplashPresenter CreateSplash() => new();
 }
-
-internal sealed class UnsupportedCheckpointStore : ICheckpointStore; // ponytail: ticket 08
 
 /// <summary>Machine setup has no splash surface; Shell wires <see cref="GdiSplashPresenter"/>.</summary>
 internal sealed class NoopSplashPresenter : ISplashPresenter
