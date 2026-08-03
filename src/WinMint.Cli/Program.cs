@@ -37,6 +37,16 @@ internal static class Program
             Description = "Output ISO path (defaults to <work>/out.iso).",
         };
 
+        Option<int?> wimIndexOption = new("--wim-index")
+        {
+            Description = "install.wim index (default: 3 = Windows 11 Pro on consumer multi-edition ISOs).",
+        };
+
+        Option<bool> reuseMediaOption = new("--reuse-media")
+        {
+            Description = "Skip ISO copy/export; require existing single-image media under --work (fail closed if missing).",
+        };
+
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")
         {
             profileArgument,
@@ -65,6 +75,8 @@ internal static class Program
             isoOption,
             workOption,
             outIsoOption,
+            wimIndexOption,
+            reuseMediaOption,
         };
         applyCommand.SetAction(parseResult =>
         {
@@ -72,7 +84,9 @@ internal static class Program
             FileInfo iso = parseResult.GetValue(isoOption)!;
             DirectoryInfo work = parseResult.GetValue(workOption)!;
             FileInfo? outIso = parseResult.GetValue(outIsoOption);
-            return RunApply(profilePath, iso, work, outIso);
+            int? wimIndex = parseResult.GetValue(wimIndexOption);
+            bool reuseMedia = parseResult.GetValue(reuseMediaOption);
+            return RunApply(profilePath, iso, work, outIso, wimIndex, reuseMedia);
         });
 
         Command buildCommand = new("build", "Plan + apply (same path as apply; preferred product verb).")
@@ -81,6 +95,8 @@ internal static class Program
             isoOption,
             workOption,
             outIsoOption,
+            wimIndexOption,
+            reuseMediaOption,
         };
         buildCommand.SetAction(parseResult =>
         {
@@ -88,7 +104,9 @@ internal static class Program
             FileInfo iso = parseResult.GetValue(isoOption)!;
             DirectoryInfo work = parseResult.GetValue(workOption)!;
             FileInfo? outIso = parseResult.GetValue(outIsoOption);
-            return RunApply(profilePath, iso, work, outIso);
+            int? wimIndex = parseResult.GetValue(wimIndexOption);
+            bool reuseMedia = parseResult.GetValue(reuseMediaOption);
+            return RunApply(profilePath, iso, work, outIso, wimIndex, reuseMedia);
         });
 
         RootCommand root = new("WinMint — Profile plan and ImageServicing apply")
@@ -126,7 +144,13 @@ internal static class Program
         return 0;
     }
 
-    private static int RunApply(FileInfo profilePath, FileInfo iso, DirectoryInfo work, FileInfo? outIso)
+    private static int RunApply(
+        FileInfo profilePath,
+        FileInfo iso,
+        DirectoryInfo work,
+        FileInfo? outIso,
+        int? wimIndex,
+        bool reuseMedia)
     {
         if (!TryLoadArtifacts(
                 profilePath,
@@ -141,10 +165,18 @@ internal static class Program
             return exit;
         }
 
+        if (artifacts!.Manifest.ImageQuality == ImageQualityLane.Release)
+        {
+            Console.Error.WriteLine(
+                "Warning: ImageQuality=Release uses compression=max + cleanup=full — prefer Test for iterative Apply.");
+        }
+
         ServicingRun run = new(
             SourceIsoPath: iso.FullName,
             WorkDirectory: work.FullName,
-            OutputIsoPath: outIso?.FullName ?? Path.Combine(work.FullName, "out.iso"));
+            OutputIsoPath: outIso?.FullName ?? Path.Combine(work.FullName, "out.iso"),
+            WimIndex: wimIndex,
+            ReuseMedia: reuseMedia);
 
         Result<ImageEvidence, ServicingFailure> applied = ImageServicing.Apply(artifacts!, run);
         if (!applied.IsOk)

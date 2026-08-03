@@ -47,6 +47,7 @@ Do **not** test: private phase helpers, splash pixels (except status→presenter
 - Prefer fake elevated runner when introduced (same PR as port).
 - Assert: stage order, Shell stamp path param, lane params; not ISO bytes.
 - Kernels: no Profile branching (architecture violation if present).
+- **Invariant 7:** never commit multi-edition WIM — Mount splits; Export fail-closes ([IMAGESERVICING](design/IMAGESERVICING.md#invariants)).
 
 ### S3 — ProvisioningSession
 

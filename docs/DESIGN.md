@@ -54,6 +54,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Full table retained f
 | Cli | 01 `validate`/`plan`; 02 `build`/`apply` |
 | DMA off | Schema OK; acceptance Profile = on |
 | Hyper-V Smoke | Pro only |
+| WIM commit | Single-image only — Mount exports edition; Export fail-closes if multi-index ([IMAGESERVICING](design/IMAGESERVICING.md#invariants) §7) |
 
 **Deferred:** M2–M4 specs. Profile property names frozen in ticket **01** ([BUILDPLAN](design/BUILDPLAN.md)).  
 **Owned elsewhere:** AppearanceOnce → ticket **07**; splash spike measurements → [SPLASH](design/SPLASH.md) appendix (gate for **04**).

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Principal;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -22,6 +23,7 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         }
 
         string pwsh = ResolvePwsh();
+        bool elevated = IsProcessElevated();
         ProcessStartInfo psi = new()
         {
             FileName = pwsh,
@@ -34,9 +36,12 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
                 workDirectory,
             },
             WorkingDirectory = Path.GetDirectoryName(runPlan)!,
-            UseShellExecute = true,
-            Verb = "runas",
+            UseShellExecute = !elevated,
         };
+        if (!elevated)
+        {
+            psi.Verb = "runas";
+        }
 
         try
         {
@@ -175,6 +180,18 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
     }
 
     private static string ResolvePwsh() => "pwsh";
+
+    private static bool IsProcessElevated()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        using WindowsIdentity identity = WindowsIdentity.GetCurrent();
+        WindowsPrincipal principal = new(identity);
+        return principal.IsInRole(WindowsBuiltInRole.Administrator);
+    }
 }
 
 internal sealed record EvidenceFile(

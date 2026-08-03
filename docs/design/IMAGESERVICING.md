@@ -73,6 +73,7 @@ public sealed record ImageEvidence(
 4. First kernel non-zero → typed failure; workdir preserved (`logs/`, `failure.json`).
 5. Lane already encoded in `ExportWim` params by BuildPlan; manifest echoes lane.
 6. **One elevated** `servicing/RunPlan.ps1` per `Apply` loops kernels (single UAC).
+7. **Single-image WIM before commit (locked 2026-08-02):** `MountInstallWim` must leave `media/sources/install.wim` with **exactly one** index (export the planned edition out of a multi-edition consumer WIM first). `ExportWim` **fail-closes** if index count ≠ 1 before `Unmount /Commit`. Never commit a multi-edition `install.wim` in place — that path stalls DISM/`wimserv` for hours.
 
 ### Example stages (Test lane)
 
@@ -81,6 +82,7 @@ MountInstallWim → StagePayload → InjectUnattend → StampOfflineShell
   → ExportWim(compression=fast, cleanup=skip) → BuildIso
 ```
 
+`MountInstallWim` also: ISO→media copy, clear read-only, **single-index export** when needed, then DISM mount.  
 Release differs only in `ExportWim` params (`compression=max`, `cleanup=full`).
 
 ## Elevation model
@@ -110,8 +112,10 @@ Elevated runner: dumb sequential invoke.
 
 ## S2 test strategy
 
-- Until fake: optional elevated integration (manual / maintainer).
-- When fake lands: introduce `IElevatedPlanRunner` (or equivalent) **in the same PR**; assert stage order, Shell stamp path param, lane params — not ISO bytes.
+- Prefer fake elevated runner when introduced (same PR as port).
+- Assert: stage order, Shell stamp path param, lane params; not ISO bytes.
+- Kernels: no Profile branching (architecture violation if present).
+- **WIM shape:** `MountInstallWim` exports multi-edition → single-image; `ExportWim` refuses commit unless index count = 1 (invariant 7). Real DISM proof is maintainer Apply, not `just check`.
 
 ## Ticket mapping
 
@@ -122,4 +126,4 @@ Elevated runner: dumb sequential invoke.
 
 ## Explicitly rejected
 
-v1 `WinMint.ps1` wrap; in-process DISM as default; Profile parsing in kernels; script paths in BuildPlan; per-stage UAC.
+v1 `WinMint.ps1` wrap; in-process DISM as default; Profile parsing in kernels; script paths in BuildPlan; per-stage UAC; **in-place `Unmount /Commit` of multi-edition consumer `install.wim`**.
