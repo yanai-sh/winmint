@@ -52,7 +52,7 @@ public static class ProvisioningSession
         SettlePhaseResult settle = RunSettle(bundle, env, phases, ct);
         if (settle.HardFailed)
         {
-            // Jobs never start after hard settle failure (ticket 06 wires the executor past this gate).
+            // Jobs never start after hard settle failure.
             EvidenceSnapshot failSnap = env.Evidence.Write(
                 new ProvisioningEvidenceDocument(
                     SchemaVersion: EvidenceSchemaVersion,
@@ -64,20 +64,74 @@ public static class ProvisioningSession
             return new SessionResult(SessionOutcome.Failed, settle.Status, emitted);
         }
 
-        // ponytail: jobs = ticket 06; unlock/appearance = ticket 07; checkpoint reboot = ticket 08
-        SessionStatus finalStatus = new("shell.stub_complete", "Shell splash + DMA settle; later tickets deepen tenure.");
-        env.Splash.SetStatus(finalStatus);
-
+        // ponytail: unlock/appearance = ticket 07; checkpoint reboot = ticket 08
+        JobsPhaseResult jobs = RunJobs(bundle, env, phases, ct);
         EvidenceSnapshot snap = env.Evidence.Write(
             new ProvisioningEvidenceDocument(
                 SchemaVersion: EvidenceSchemaVersion,
-                Outcome: SessionOutcome.Complete.ToString(),
-                StatusCode: finalStatus.Code,
-                StatusMessage: finalStatus.Message,
+                Outcome: jobs.Outcome.ToString(),
+                StatusCode: jobs.Status.Code,
+                StatusMessage: jobs.Status.Message,
                 Phases: phases));
         emitted.Add(snap);
 
-        return new SessionResult(SessionOutcome.Complete, finalStatus, emitted);
+        return new SessionResult(jobs.Outcome, jobs.Status, emitted);
+    }
+
+    private readonly record struct JobsPhaseResult(SessionOutcome Outcome, SessionStatus Status);
+
+    private static JobsPhaseResult RunJobs(
+        ProvisioningBundle bundle,
+        SessionEnvironment env,
+        List<string> phases,
+        CancellationToken ct)
+    {
+        SessionStatus begin = new("jobs.begin", "Provisioning jobs start.");
+        env.Splash.SetStatus(begin);
+        phases.Add(begin.Code);
+
+        foreach (ProvisionJob job in bundle.Jobs)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (!string.Equals(job.Kind, "stub", StringComparison.OrdinalIgnoreCase))
+            {
+                SessionStatus unsupported = new(
+                    "jobs.kind.unsupported",
+                    $"Unsupported job kind '{job.Kind}' for id '{job.Id}'.");
+                env.Splash.SetStatus(unsupported);
+                phases.Add(unsupported.Code);
+                return new JobsPhaseResult(SessionOutcome.Failed, unsupported);
+            }
+
+            ProcessStartResult started;
+            try
+            {
+                started = env.Processes.Run("cmd.exe", ["/c", "exit", "0"], ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                SessionStatus spawnFailed = new("jobs.spawn_failed", $"{job.Id}: {ex.Message}");
+                env.Splash.SetStatus(spawnFailed);
+                phases.Add(spawnFailed.Code);
+                return new JobsPhaseResult(SessionOutcome.Failed, spawnFailed);
+            }
+
+            if (started.ExitCode != 0)
+            {
+                SessionStatus failed = new(
+                    "jobs.failed",
+                    $"Job '{job.Id}' exited {started.ExitCode}.");
+                env.Splash.SetStatus(failed);
+                phases.Add(failed.Code);
+                return new JobsPhaseResult(SessionOutcome.Failed, failed);
+            }
+        }
+
+        SessionStatus ok = new("jobs.ok", "Provisioning jobs completed.");
+        env.Splash.SetStatus(ok);
+        phases.Add(ok.Code);
+        return new JobsPhaseResult(SessionOutcome.Complete, ok);
     }
 
     private readonly record struct SettlePhaseResult(bool HardFailed, SessionStatus Status);

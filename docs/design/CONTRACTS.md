@@ -70,8 +70,9 @@ Form: lowercase dotted `area.token` segments (product area first).
 | Area | Examples |
 |------|----------|
 | `machineSetup` | `machineSetup.ok`, `machineSetup.account.forbidden`, `machineSetup.shell.verify_failed` |
-| `shell` | `shell.first_paint`, `shell.stub_complete`, `shell.evidence.required` |
+| `shell` | `shell.first_paint`, `shell.evidence.required` |
 | `settle` | `settle.begin`, `settle.ok`, `settle.skipped`, `settle.hard_mismatch`, `settle.location_warn`, `settle.apply_failed`, `settle.read_failed`, `settle.target_incomplete`, `settle.cancelled` |
+| `jobs` | `jobs.begin`, `jobs.ok`, `jobs.failed`, `jobs.spawn_failed`, `jobs.kind.unsupported` |
 | `session` | `session.mode.unknown` |
 | `servicing` | `servicing.runPlan.failed`, `servicing.sourceIso.missing` |
 | `account` / `document` / `dma` | BuildPlan validation (`account.mode.missing`, `document.schemaVersion.unsupported`) |

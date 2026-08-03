@@ -31,7 +31,7 @@
 | 03 | Machine setup stamps | ProvisioningSession | 4 | 02 | 02 done — **done** |
 | 04 | Shell splash + status + evidence | ProvisioningSession | 5, 13 | 03 | 03 done **+ splash spike** — **done** |
 | 05 | DMA settle | ProvisioningSession | 6–8 | 04 | 04 done — **done** |
-| 06 | Stub jobs + child-process executor | ProvisioningSession | 9–10 | 05 | 05 done |
+| 06 | Stub jobs + child-process executor | ProvisioningSession | 9–10 | 05 | 05 done — **done** |
 | 07 | Unlock + timeout + stale fail-open | ProvisioningSession | 12 + appearance | 06 | 06 done |
 | 08 | Checkpoint reboot keeps Shell | ProvisioningSession | 11 | 07 | 07 done |
 | 09 | `Test`/`Release` export lane | BuildPlan + ImageServicing | 14 | 02 | May parallel 03–08 |
@@ -140,7 +140,7 @@
   - Settle logic lives as private phase method(s) behind `ProvisioningSession.Run` ✓
 - **First red:** Final hard GeoID mismatch ⇒ `Failed` path and no job start (S3).
 - **Done:** 2026-08-03 (issue #7)
-- **Carry:** Jobs / unlock / checkpoint remain 06–08. Soft location warn continues without jobs. `Task.Delay(span, TimeProvider, ct)` drives settle poll (no `TimeProvider.Delay`).
+- **Carry:** Jobs / unlock / checkpoint remain 06–08. Soft location warn continues without hard-failing jobs. `Task.Delay(span, TimeProvider, ct)` drives settle poll (no `TimeProvider.Delay`).
 
 ### 06 — Stub jobs + child-process executor
 
@@ -155,6 +155,8 @@
   - Stub jobs run via `Run` + process-host fakes
   - Jobs never start when prior hard settle failed
 - **First red:** Stub job invoked as child process after green settle (S3).
+- **Done:** 2026-08-03 (issue #8)
+- **Carry:** Unlock / timeout / stale / appearance remain ticket **07**; checkpoint reboot **08**. Stub `Kind` maps to `cmd.exe /c exit 0` via `IProcessHost` — metal kinds fail closed until a later matrix ticket.
 
 ### 07 — Unlock + timeout + stale fail-open
 

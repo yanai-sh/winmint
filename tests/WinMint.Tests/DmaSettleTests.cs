@@ -33,7 +33,8 @@ public class DmaSettleTests
         Assert.Single(region.Applied);
         Assert.Equal(242, region.Applied[0].GeoId);
         Assert.Contains("settle.hard_mismatch", evidence.Documents[0].Phases);
-        Assert.DoesNotContain("shell.stub_complete", evidence.Documents[0].Phases);
+        Assert.DoesNotContain("jobs.begin", evidence.Documents[0].Phases);
+        Assert.DoesNotContain("jobs.ok", evidence.Documents[0].Phases);
     }
 
     [Fact]
@@ -83,7 +84,7 @@ public class DmaSettleTests
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Contains("Status:settle.location_warn", splash.Events);
-        Assert.Contains("Status:shell.stub_complete", splash.Events);
+        Assert.Contains("Status:jobs.ok", splash.Events);
         Assert.Contains("settle.location_warn", evidence.Documents[0].Phases);
         Assert.Equal("Complete", evidence.Documents[0].Outcome);
     }
@@ -117,7 +118,7 @@ public class DmaSettleTests
         new(
             Account: new AccountStamp("winmint", ""),
             Dma: dma,
-            Jobs: [new ProvisionJob("smoke.stub.hello", "stub")],
+            Jobs: [new ProvisionJob("smoke.stub.ready", "stub")],
             Policy: policy ?? TightSettlePolicy(),
             Supervisor: new SupervisorIdentity(SupervisorPath));
 
@@ -196,7 +197,16 @@ public class DmaSettleTests
 
     private sealed class RecordingProcessHost : IProcessHost
     {
-        public List<string> Starts { get; } = [];
+        public List<(string FileName, IReadOnlyList<string> Arguments)> Starts { get; } = [];
+
+        public ProcessStartResult Run(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            CancellationToken ct = default)
+        {
+            Starts.Add((fileName, arguments));
+            return new ProcessStartResult(0);
+        }
     }
 
     private sealed class NoopWinlogon : IWinlogonRegistry

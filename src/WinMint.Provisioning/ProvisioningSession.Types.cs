@@ -110,9 +110,14 @@ public interface IRegionSnapshot
     RegionState Read();
 }
 
+public sealed record ProcessStartResult(int ExitCode);
+
 public interface IProcessHost
 {
-    // ponytail: ticket 06 fills this
+    ProcessStartResult Run(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        CancellationToken ct = default);
 }
 
 public interface ISplashPresenter

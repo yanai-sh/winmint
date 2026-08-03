@@ -126,7 +126,7 @@ internal static class Program
             Time: TimeProvider.System,
             Winlogon: winlogon,
             Region: CreateRegion(),
-            Processes: new UnsupportedProcessHost(),
+            Processes: CreateProcessHost(),
             Splash: splash ?? new NoopSplashPresenter(),
             Checkpoints: new UnsupportedCheckpointStore(),
             Secrets: new FileSecretScrubber(bundlePath, log),
@@ -140,10 +140,11 @@ internal static class Program
     private static Win32RegionSnapshot CreateRegion() => new();
 
     [SupportedOSPlatform("windows")]
+    private static Win32ProcessHost CreateProcessHost() => new();
+
+    [SupportedOSPlatform("windows")]
     private static GdiSplashPresenter CreateSplash() => new();
 }
-
-internal sealed class UnsupportedProcessHost : IProcessHost; // ponytail: ticket 06
 
 internal sealed class UnsupportedCheckpointStore : ICheckpointStore; // ponytail: ticket 08
 

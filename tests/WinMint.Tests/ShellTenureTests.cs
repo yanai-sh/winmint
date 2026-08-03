@@ -82,7 +82,7 @@ public class ShellTenureTests
         Assert.Contains("Status:shell.first_paint", splash.Events);
         Assert.Contains("Status:settle.begin", splash.Events);
         Assert.Contains("Status:settle.ok", splash.Events);
-        Assert.Contains("Status:shell.stub_complete", splash.Events);
+        Assert.Contains("Status:jobs.ok", splash.Events);
         Assert.Equal("Show", splash.Events[0]);
     }
 
@@ -170,7 +170,14 @@ public class ShellTenureTests
         public RegionState Read() => _state;
     }
 
-    private sealed class NoopProcesses : IProcessHost;
+    private sealed class NoopProcesses : IProcessHost
+    {
+        public ProcessStartResult Run(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            CancellationToken ct = default) =>
+            new(0);
+    }
 
     private sealed class NoopCheckpoints : ICheckpointStore;
 

@@ -176,7 +176,14 @@ public class MachineSetupTests
         public RegionState Read() => new(null, null, null, null);
     }
 
-    private sealed class NoopProcesses : IProcessHost;
+    private sealed class NoopProcesses : IProcessHost
+    {
+        public ProcessStartResult Run(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            CancellationToken ct = default) =>
+            new(0);
+    }
 
     private sealed class NoopSplash : ISplashPresenter
     {
