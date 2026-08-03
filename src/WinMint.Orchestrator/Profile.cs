@@ -1,9 +1,10 @@
 namespace WinMint.Orchestrator;
 
-/// <summary>Parsed Profile document (winmint.profile/v1). Field names frozen in ticket 01.</summary>
+/// <summary>Parsed Profile document (winmint.profile/v1). Field names frozen in ticket 01; debloat in ticket 11.</summary>
 public sealed record Profile(
     AccountProfile Account,
-    DmaProfile Dma);
+    DmaProfile Dma,
+    IReadOnlyList<string> RemoveProvisionedAppx);
 
 public sealed record AccountProfile(
     AccountMode Mode,

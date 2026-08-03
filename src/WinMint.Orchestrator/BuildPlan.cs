@@ -113,9 +113,24 @@ public static class BuildPlan
                     settle.Locale,
                     settle.GeoId.Value,
                     settle.TimeZoneId,
-                    settle.LocationServicesEnabled.Value)));
+                    settle.LocationServicesEnabled.Value)),
+            NormalizeRemoveList(doc.Debloat?.RemoveProvisionedAppx));
 
         return Result.Ok<Profile, DocumentErrors>(profile);
+    }
+
+    private static string[] NormalizeRemoveList(string[]? raw)
+    {
+        if (raw is null || raw.Length == 0)
+        {
+            return [];
+        }
+
+        return raw
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null)
@@ -127,6 +142,17 @@ public static class BuildPlan
         {
             return Result.Fail<BuildArtifacts, PlanFailure>(
                 new PlanFailure("account.password.required", "Local autoLogon requires a non-empty password."));
+        }
+
+        foreach (string id in profile.RemoveProvisionedAppx)
+        {
+            if (!ProvisionedAppxCatalog.Contains(id))
+            {
+                return Result.Fail<BuildArtifacts, PlanFailure>(
+                    new PlanFailure(
+                        "debloat.removeProvisionedAppx.unknown",
+                        $"removeProvisionedAppx id '{id}' is not in the shipped provisioned AppX catalog."));
+            }
         }
 
         string unattendXml = profile.Dma.Enabled
@@ -188,9 +214,20 @@ public static class BuildPlan
             cleanup = "skip";
         }
 
-        ServicingStageList stages = new(
+        List<ServicingStage> stageList =
         [
             new ServicingStage(ServicingOpcode.MountInstallWim, Dict((StageParams.SourceIso, options.SourceIsoPath ?? ""))),
+        ];
+
+        if (profile.RemoveProvisionedAppx.Count > 0)
+        {
+            stageList.Add(new ServicingStage(
+                ServicingOpcode.RemoveProvisionedAppx,
+                Dict((StageParams.PackageFamilyNames, string.Join(';', profile.RemoveProvisionedAppx)))));
+        }
+
+        stageList.AddRange(
+        [
             new ServicingStage(ServicingOpcode.StagePayload, Dict()),
             new ServicingStage(ServicingOpcode.InjectUnattend, Dict()),
             new ServicingStage(ServicingOpcode.StampOfflineShell, Dict((StageParams.ShellTarget, "Supervisor.exe"))),
@@ -199,6 +236,8 @@ public static class BuildPlan
                 Dict((StageParams.Lane, laneName), (StageParams.Compression, compression), (StageParams.Cleanup, cleanup))),
             new ServicingStage(ServicingOpcode.BuildIso, Dict((StageParams.OutputIso, options.OutputIsoPath ?? ""))),
         ]);
+
+        ServicingStageList stages = new(stageList);
 
         BuildArtifacts artifacts = new(
             new UnattendArtifact(unattendXml),
@@ -230,7 +269,11 @@ public static class BuildPlan
 internal sealed record ProfileDocument(
     [property: JsonPropertyName("schemaVersion")] string? SchemaVersion,
     [property: JsonPropertyName("account")] AccountDocument? Account,
-    [property: JsonPropertyName("dma")] DmaDocument? Dma);
+    [property: JsonPropertyName("dma")] DmaDocument? Dma,
+    [property: JsonPropertyName("debloat")] DebloatDocument? Debloat);
+
+internal sealed record DebloatDocument(
+    [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx);
 
 internal sealed record AccountDocument(
     [property: JsonPropertyName("mode")] string? Mode,

@@ -236,13 +236,13 @@ Keep-flag **design** is accepted ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](deci
 
 ---
 
-## Post-M1 stubs — keep-flag matrix (not started)
+## Post-M1 — keep-flag matrix
 
 Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
-| 11 | Profile remove-list + static AppX catalog + plan validate | BuildPlan | **10** done |
+| 11 | Profile remove-list + static AppX catalog + plan validate | BuildPlan | **10** done — **done** |
 | 12 | Offline RemoveProvisionedAppx stage + Deprovisioned stamps + evidence | ImageServicing | **11** done |
 | 13 | FirstLogon PackageManager safety-net job (narrow) | ProvisioningSession | **12** done |
 
@@ -252,6 +252,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 - **Deliver:** optional `debloat.removeProvisionedAppx` on `winmint.profile/v1` (default empty); static in-repo catalog; plan ⊆ catalog; emit servicing opcode params (no `.ps1` paths)
 - **Out:** capabilities/features; Profile presets; `v2` schema bump; Servicing execution
 - **DoD:** empty list ⇒ no remove stages; unknown id ⇒ plan failure; `just check` green
+- **Done:** 2026-08-04 (issue #22)
 
 ### 12 — Offline provisioned AppX remove
 

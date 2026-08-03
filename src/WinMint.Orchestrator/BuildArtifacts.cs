@@ -54,6 +54,7 @@ public static class StageParams
     public const string Lane = "lane";
     public const string Compression = "compression";
     public const string Cleanup = "cleanup";
+    public const string PackageFamilyNames = "packageFamilyNames";
 }
 
 public enum ServicingOpcode
@@ -62,6 +63,7 @@ public enum ServicingOpcode
     StagePayload,
     InjectUnattend,
     StampOfflineShell,
+    RemoveProvisionedAppx,
     ExportWim,
     BuildIso,
 }
