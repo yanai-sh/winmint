@@ -41,6 +41,8 @@
 
 **Renumber note (2026-07-29):** old 06 (jobs+unlock+reboot) → **06 / 07 / 08**; old 07 (Test lane) → **09**; old 08 (Smoke harness) → **10**.
 
+**Carry / ponytail (2026-08-03):** [ponytail audit](research/2026-08-03-ponytail-audit.md) — fold into the owning ticket below; do **not** open a separate cleanup epic. Keep wipe, both Cli `build`/`apply`, and image digests. Do **not** pull keep-flag / debloat product code into M1 (wayfinder [#13](https://github.com/yanai-sh/winmint/issues/13) is design-only until **10** is green).
+
 ---
 
 ## Ticket cards
@@ -81,6 +83,8 @@
   - `just check` green ✓
 - **First red:** Fake or scripted runner asserts stage order for a minimal plan (S2).
 - **Done:** 2026-08-02 (issue #4)
+- **Carry (post-DoD):** Real DISM/oscdimg Apply + `ImageEvidence.Digests` (ISO/WIM SHA-256) landed after stub DoD — keep digests; keep both Cli verbs. **While here / next touch:** stage `payload/scripts/SetupComplete.cmd` instead of the embedded here-string in `ImageServicing.Materialize` (single source).
+
 ### 03 — Machine setup stamps
 
 - **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · **Seam:** S3 · **Stories:** 4
@@ -95,6 +99,7 @@
   - Fail path: non-zero exit; diagnosable logs under `%ProgramData%\WinMint\` ✓
 - **First red:** Autologon stamp rejects `defaultuser0` + AutoAdminLogon (S3).
 - **Done:** 2026-08-03 (issue #5)
+- **Carry:** Secret **wipe behavior** stays (lab hygiene after stamp). `ISecretScrubber` / `FileSecretScrubber` is judgement debt — prefer inline JSON redact (or DTO rewrite) when next editing Machine setup; do not drop wipe. Empty `SessionEnvironment` ports for 04–08 are judgement debt — **fill on the owning ticket**, do not leave `Unsupported*` once that ticket ships.
 
 ### 04 — Shell splash + status + evidence
 
@@ -105,10 +110,12 @@
   - In-memory splash status (not a file control plane)
   - Evidence projections: `winmint.provisioning.evidence/v1` (write-only)
   - Settle phase may be a **no-op/stub hook** until ticket **05** (enough to assert paint-before-settle order)
-- **Out:** hard input lock; real winget matrix; Hyper-V / S4 harness; real DMA restore logic (ticket **05**)
+  - Replace `UnsupportedSplashPresenter` with a real `ISplashPresenter` (recording fake in tests + production presenter); ship a real write-only `IEvidenceSink` (no longer `null` / empty marker)
+- **Out:** hard input lock; real winget matrix; Hyper-V / S4 harness; real DMA restore logic (ticket **05**); thinning unrelated empty ports for 05–08
 - **DoD:**
   - Recording presenter asserts paint-before-settle **order** (not wall-clock OS latency)
   - Evidence is write-only; session never reads evidence JSON to decide the next phase
+  - No `UnsupportedSplashPresenter` left in production `Program` wiring for Shell tenure
 - **First red:** `Show` (or equivalent) recorded before settle poll begins (S3).
 
 ### 05 — DMA settle
@@ -119,11 +126,13 @@
   - Bounded restore then **final snapshot** for hard locale / GeoID / TZ
   - Soft location-services: warn + continue (not a hard gate)
   - Hard settle failure skips jobs
+  - Real `IRegionSnapshot` (+ tests that script intermediate vs final); start using `TimeProvider` / settle deadline fields from `SessionPolicy` as needed
 - **Out:** real network location UX polish; metal-only settle forks; job executor details (ticket **06**)
 - **DoD:**
   - Scripted region-snapshot tests: intermediate probe failures are **non-authoritative**
   - Only the final snapshot gates hard fields
   - Hard fail ⇒ jobs not started
+  - No `UnsupportedRegionSnapshot` left once settle ships
 - **First red:** Final hard GeoID mismatch ⇒ `Failed` path and no job start (S3).
 
 ### 06 — Stub jobs + child-process executor
@@ -131,8 +140,9 @@
 - **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · **Seam:** S3 · **Stories:** 9–10
 - **Blocked by:** 05 · **Ready when:** 05 done
 - **Deliver:**
-  - Smoke stub job set (no real WSL / browser matrix)
+  - Smoke stub job set (no real WSL / browser matrix) — reuse BuildPlan’s existing `smoke.stub.*` ids if still emitted; do not invent a second stub catalog
   - Supervisor runs jobs as child processes; one executor shape for Smoke and metal
+  - Real `IProcessHost` (test fake + production); drop `UnsupportedProcessHost`
 - **Out:** unlock / timeout / stale policy (ticket **07**); checkpoint / reboot (ticket **08**); real package matrix
 - **DoD:**
   - Stub jobs run via `Run` + process-host fakes
@@ -146,8 +156,8 @@
 - **Deliver:**
   - Wall-clock timeout → `Failed` + unlock; failed dwell before unlock
   - Stale / missing heartbeat past `StaleTenureThreshold` → fail-open `Failed` + unlock
-  - Profile appearance applied **once** before Explorer unlock on success
-  - Policy defaults per [smoke defaults](design/PROVISIONINGSESSION.md#smoke-defaults-grill-locked)
+  - Profile appearance applied **once** before Explorer unlock on success (`AppearanceOnce` earns its keep here)
+  - Policy defaults per [smoke defaults](design/PROVISIONINGSESSION.md#smoke-defaults-grill-locked) — `SessionPolicy` + `TimeProvider` must drive behavior (not dead fields)
 - **Out:** checkpoint / reboot-keeps-Shell (ticket **08**); hard input lock
 - **DoD:**
   - `FakeTimeProvider`: timeout unlocks
@@ -162,6 +172,7 @@
 - **Deliver:**
   - Job `needsReboot` → durable checkpoint under `%ProgramData%\WinMint\` + keep Supervisor as Shell
   - Resume after reboot continues Shell tenure (no Explorer flash)
+  - Real `ICheckpointStore`; `SessionOutcome.Reboot` + `CheckpointState` earn their keep; drop `UnsupportedCheckpointStore`
 - **Out:** unlock-on-complete/failed (ticket **07**); real reboot-required package matrix
 - **DoD:**
   - `Reboot` outcome does **not** unlock
@@ -181,6 +192,7 @@
   - Release ⇒ `compression=max` + `cleanup=full`
   - Manifest lane matches run options
 - **First red:** Explicit `ImageQuality.Release` ⇒ export params differ from Test (BUILDPLAN tracer 5 / S1–S2).
+- **Note:** Plan already emits lane/compression/cleanup params from ticket 01 — this ticket owns verifying ExportWim **honors** Release vs Test end-to-end (not inventing a second lane model).
 
 ### 10 — Hyper-V Smoke harness
 
@@ -190,7 +202,7 @@
   - One pwsh entry under `tools/vm/` (“run Smoke → evidence”)
   - Pro + DMA-on acceptance Profile; evidence pull
 - **Out:** metal / hardware acceptance; guest pwsh; peer Splash; multi-entrypoint harness forest; Hyper-V-only settle/executor fork
-- **Optional later (harness only):** differencing VHD from parent base; ISO rebuild only on plan/payload digest change; careful servicing workdir reuse
+- **Optional later (harness only):** differencing VHD from parent base; ISO rebuild only on plan/payload digest change (`ImageEvidence.Digests` already available); careful servicing workdir reuse
 - **DoD:**
   - Splash before Explorer; DMA hard fields green **or** failed DMA path with evidence + unlock
   - Unlock on complete/failed; lane marker present; paint time recorded (**warn** if > 2.0 s)
