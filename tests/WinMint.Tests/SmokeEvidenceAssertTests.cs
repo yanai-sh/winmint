@@ -26,7 +26,7 @@ public class SmokeEvidenceAssertTests
             Assert.Contains("\"lane\": \"Test\"", json, StringComparison.Ordinal);
             Assert.Contains("\"keepFlagAppxAbsent\": true", json, StringComparison.Ordinal);
             Assert.Contains("Microsoft.BingNews", json, StringComparison.Ordinal);
-            Assert.Contains("Microsoft.GamingApp", json, StringComparison.Ordinal);
+            Assert.Contains("Microsoft.BingWeather", json, StringComparison.Ordinal);
             Assert.Contains(SmokeAcceptanceDocument.SchemaId, json, StringComparison.Ordinal);
         }
         finally
@@ -89,7 +89,7 @@ public class SmokeEvidenceAssertTests
                 """);
             File.WriteAllText(
                 Path.Combine(work, "apply", "evidence.json"),
-                """{"schemaVersion":"winmint.image.evidence/v1","lane":"Test","digests":{"removed.appx.Microsoft.BingNews":"absent","removed.appx.Microsoft.GamingApp":"absent"}}""");
+                """{"schemaVersion":"winmint.image.evidence/v1","lane":"Test","digests":{"removed.appx.Microsoft.BingNews":"absent","removed.appx.Microsoft.BingWeather":"absent"}}""");
 
             int exit = RunAssert(repo, work, out _, out _);
             Assert.NotEqual(0, exit);

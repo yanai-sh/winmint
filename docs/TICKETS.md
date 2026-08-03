@@ -286,7 +286,7 @@ Do not label `ready-for-agent` until starting that card. **Next:** **14**.
 
 - **Issue:** [#26](https://github.com/yanai-sh/winmint/issues/26)
 - **Design:** [Smoke](specs/2026-07-27-smoke.md) · [TDD](TDD.md) S4 · harness `tools/vm/` · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
-- **Deliver:** one green `just smoke` on a real Source ISO; acceptance Profile includes pinned keep-flag remove-list (`Microsoft.BingNews`, `Microsoft.GamingApp` in [samples/acceptance.profile.json](../samples/acceptance.profile.json))
+- **Deliver:** one green `just smoke` on a real Source ISO; acceptance Profile includes pinned keep-flag remove-list (`Microsoft.BingNews`, `Microsoft.BingWeather` in [samples/acceptance.profile.json](../samples/acceptance.profile.json) — re-pinned from `GamingApp` after 25H2 ARM64 English media had no provisioned GamingApp)
 - **Out:** Wizard; capabilities matrix; Diff VHD / digest-gated rebuild as required DoD (optional maintainer opt); leftover confidence; CDM-as-primary
 - **DoD:** Splash before Explorer; DMA hard fields; unlock; lane marker; paint time recorded; **pinned AppX families absent** from provisioned inventory / FirstLogon evidence as applicable; not only fixture S4
 - **Carry:** S4 assert requires apply digests `removed.appx.<id>=absent` for pinned ids (`Assert-SmokeEvidence.ps1`); fixture + S4 tests green. Full Hyper-V `just smoke ISO=…` still needs maintainer Source ISO + admin.

@@ -20,7 +20,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # ADR-006 / samples/acceptance.profile.json — frozen acceptance remove-list.
-$PinnedRemoveAppx = @('Microsoft.BingNews', 'Microsoft.GamingApp')
+# Re-pin if acceptance Source ISO churn drops an id (KEEPFLAG).
+$PinnedRemoveAppx = @('Microsoft.BingNews', 'Microsoft.BingWeather')
 
 function Get-LatestGuestEvidence {
     param([string] $Dir)

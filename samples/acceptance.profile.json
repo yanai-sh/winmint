@@ -17,7 +17,7 @@
   "debloat": {
     "removeProvisionedAppx": [
       "Microsoft.BingNews",
-      "Microsoft.GamingApp"
+      "Microsoft.BingWeather"
     ]
   }
 }

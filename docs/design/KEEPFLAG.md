@@ -29,7 +29,7 @@ Users need a fail-closed way to strip selected **provisioned inbox AppX** from a
 {
   "schemaVersion": "winmint.profile/v1",
   "debloat": {
-    "removeProvisionedAppx": ["Microsoft.BingNews", "Microsoft.GamingApp"]
+    "removeProvisionedAppx": ["Microsoft.BingNews", "Microsoft.BingWeather"]
   }
 }
 ```
@@ -80,7 +80,7 @@ Profile.remove list
 | CDM / consumer-features as primary remove | Not primary; optional later hive stamp only |
 | Wizard UX | M2 after maintainer Smoke (**14**); expands to same remove-list |
 | Product-default / opt-out “recommended set” | **No** — catalog bounds legal ids only |
-| Acceptance Smoke remove-list | **Yes (grill B4)** — small frozen list on acceptance Profile (`Microsoft.BingNews`, `Microsoft.GamingApp`); proves keep-flag E2E on M1 exit; re-pin if media churn |
+| Acceptance Smoke remove-list | **Yes (grill B4)** — small frozen list on acceptance Profile (`Microsoft.BingNews`, `Microsoft.BingWeather` on 25H2 ARM64 English; re-pin if media churn) |
 
 ## Do not
 

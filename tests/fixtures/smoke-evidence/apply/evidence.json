@@ -5,6 +5,6 @@
   "lane": "Test",
   "digests": {
     "removed.appx.Microsoft.BingNews": "absent",
-    "removed.appx.Microsoft.GamingApp": "absent"
+    "removed.appx.Microsoft.BingWeather": "absent"
   }
 }
