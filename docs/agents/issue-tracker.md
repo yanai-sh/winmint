@@ -26,3 +26,30 @@ Smoke tracers: [TICKETS](../TICKETS.md). While **hold** is active, do not label 
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --comments`.
+
+## Wayfinding operations
+
+Wayfinder maps and decision tickets live as GitHub issues. Requires `gh` ≥ 2.94 (parent / blocked-by flags).
+
+### Labels
+
+| Label | Role |
+|-------|------|
+| `wayfinder:map` | The map issue (index only) |
+| `wayfinder:research` | AFK research decision ticket |
+| `wayfinder:grilling` | HITL grilling decision ticket |
+| `wayfinder:prototype` | HITL prototype decision ticket |
+| `wayfinder:task` | Task that unblocks a decision |
+
+### Map and children
+
+- **Create a map**: `gh issue create --title "..." --label "wayfinder:map" --body "..."` with Destination, Notes, Decisions so far, Not yet specified, Out of scope.
+- **Create a child ticket**: `gh issue create --title "..." --label "wayfinder:<type>" --parent <map-number> --body "## Question"$'\n\n'..."`. Body is the question only.
+- **Wire blocking** (second pass, after ids exist): `gh issue edit <number> --add-blocked-by <blocker-number>`.
+- **Claim**: assign the ticket to the driver before work (`gh issue edit <number> --add-assignee "@me"`). An open unassigned child is unclaimed.
+- **Frontier**: open children of the map that have no open blockers and no assignee.
+- **Resolve**: post a resolution comment, close the issue, append one gist line to the map’s **Decisions so far** (link the ticket by **title**, with the URL inside the name — never bare `#N` alone in narration).
+
+### Refer by name
+
+In narration and in the map’s Decisions-so-far, refer to tickets by **title** wrapping the issue link — e.g. [Keep/exclude polarity and presets](https://github.com/yanai-sh/winmint/issues/N) — not by bare id.

@@ -39,3 +39,4 @@ BenchmarkDotNet.Artifacts/
 
 # Local planning scratch (gitignored; not product)
 .scratch/
+.superpowers/
