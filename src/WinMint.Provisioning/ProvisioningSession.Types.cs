@@ -109,7 +109,9 @@ public interface IProcessHost
 
 public interface ISplashPresenter
 {
-    // ponytail: ticket 04 fills this
+    void Show();
+
+    void SetStatus(SessionStatus status);
 }
 
 public interface ICheckpointStore
@@ -124,5 +126,13 @@ public interface ISecretScrubber
 
 public interface IEvidenceSink
 {
-    // ponytail: ticket 04 fills this
+    EvidenceSnapshot Write(ProvisioningEvidenceDocument document);
 }
+
+/// <summary>Write-only projection for S4 harness — never read by the session phase machine.</summary>
+public sealed record ProvisioningEvidenceDocument(
+    string SchemaVersion,
+    string Outcome,
+    string StatusCode,
+    string StatusMessage,
+    IReadOnlyList<string> Phases);

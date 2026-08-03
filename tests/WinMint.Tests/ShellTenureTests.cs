@@ -1,0 +1,152 @@
+using WinMint.Provisioning;
+
+namespace WinMint.Tests;
+
+public class ShellTenureTests
+{
+    private const string SupervisorPath = @"C:\Windows\WinMint\Supervisor.exe";
+
+    [Fact]
+    public void Shell_Show_is_recorded_before_settle_begins()
+    {
+        RecordingSplashPresenter splash = new();
+        RecordingEvidenceSink evidence = new();
+        ProvisioningBundle bundle = MinimalBundle();
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            bundle,
+            Env(splash, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        int showAt = splash.Events.IndexOf("Show");
+        int settleAt = splash.Events.IndexOf("Status:settle.begin");
+        Assert.True(showAt >= 0, "expected Splash.Show");
+        Assert.True(settleAt >= 0, "expected settle.begin status");
+        Assert.True(showAt < settleAt, "paint-before-settle order");
+        Assert.Single(evidence.Written);
+        Assert.Equal(ProvisioningSession.EvidenceSchemaVersion, evidence.Written[0].SchemaVersion);
+    }
+
+    [Fact]
+    public void Shell_emits_write_only_evidence_projection_shape()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "winmint-evidence-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            FileEvidenceSink sink = new(dir);
+            RecordingSplashPresenter splash = new();
+
+            SessionResult result = ProvisioningSession.Run(
+                SessionMode.Shell,
+                MinimalBundle(),
+                Env(splash, sink),
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(SessionOutcome.Complete, result.Outcome);
+            Assert.Single(result.EvidenceEmitted);
+            EvidenceSnapshot snap = result.EvidenceEmitted[0];
+            Assert.Equal(ProvisioningSession.EvidenceSchemaVersion, snap.SchemaVersion);
+            Assert.True(File.Exists(snap.Path));
+
+            string json = File.ReadAllText(snap.Path);
+            Assert.Contains($"\"schemaVersion\": \"{ProvisioningSession.EvidenceSchemaVersion}\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"outcome\": \"Complete\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"first_paint\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"settling\"", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("setup-shell-control", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("setup-shell-status", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Shell_pushes_in_memory_status_updates_to_presenter()
+    {
+        RecordingSplashPresenter splash = new();
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            MinimalBundle(),
+            Env(splash, new RecordingEvidenceSink()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Contains("Status:shell.first_paint", splash.Events);
+        Assert.Contains("Status:settle.begin", splash.Events);
+        Assert.Contains("Status:settle.stub_ok", splash.Events);
+        Assert.Contains("Status:shell.stub_complete", splash.Events);
+        Assert.Equal("Show", splash.Events[0]);
+    }
+
+    private static ProvisioningBundle MinimalBundle() =>
+        new(
+            Account: new AccountStamp("winmint", ""),
+            Dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+            Jobs: [],
+            Policy: SessionPolicy.SmokeDefaults,
+            Supervisor: new SupervisorIdentity(SupervisorPath));
+
+    private static SessionEnvironment Env(ISplashPresenter splash, IEvidenceSink evidence) =>
+        new(
+            Time: TimeProvider.System,
+            Winlogon: new NoopWinlogon(),
+            Region: new NoopRegion(),
+            Processes: new NoopProcesses(),
+            Splash: splash,
+            Checkpoints: new NoopCheckpoints(),
+            Secrets: new NoopSecrets(),
+            Evidence: evidence);
+
+    private sealed class RecordingSplashPresenter : ISplashPresenter
+    {
+        public List<string> Events { get; } = [];
+
+        public void Show() => Events.Add("Show");
+
+        public void SetStatus(SessionStatus status) => Events.Add($"Status:{status.Code}");
+    }
+
+    private sealed class RecordingEvidenceSink : IEvidenceSink
+    {
+        public List<EvidenceSnapshot> Written { get; } = [];
+
+        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)
+        {
+            EvidenceSnapshot snap = new(document.SchemaVersion, $"memory:{Written.Count}");
+            Written.Add(snap);
+            return snap;
+        }
+    }
+
+    private sealed class NoopWinlogon : IWinlogonRegistry
+    {
+        public void SetAutoLogon(string username, string password) { }
+
+        public string? GetDefaultUserName() => null;
+
+        public bool GetAutoAdminLogon() => false;
+
+        public string? GetShell() => SupervisorPath;
+
+        public void SetShell(string path) { }
+    }
+
+    private sealed class NoopRegion : IRegionSnapshot;
+
+    private sealed class NoopProcesses : IProcessHost;
+
+    private sealed class NoopCheckpoints : ICheckpointStore;
+
+    private sealed class NoopSecrets : ISecretScrubber
+    {
+        public void Wipe(ProvisioningBundle bundle) { }
+    }
+}

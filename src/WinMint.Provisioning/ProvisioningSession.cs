@@ -3,6 +3,7 @@ namespace WinMint.Provisioning;
 public static class ProvisioningSession
 {
     public const string ForbiddenAutologonUser = "defaultuser0";
+    public const string EvidenceSchemaVersion = "winmint.provisioning.evidence/v1";
 
     public static SessionResult Run(
         SessionMode mode,
@@ -16,16 +17,58 @@ public static class ProvisioningSession
         return mode switch
         {
             SessionMode.MachineSetup => RunMachineSetup(bundle, env, ct),
-            // ponytail: Shell tenure = ticket 04+; Failed until then
-            SessionMode.Shell => new SessionResult(
-                SessionOutcome.Failed,
-                new SessionStatus("shell.not_implemented", "Shell tenure is ticket 04+."),
-                []),
+            SessionMode.Shell => RunShell(bundle, env, ct),
             _ => new SessionResult(
                 SessionOutcome.Failed,
                 new SessionStatus("session.mode.unknown", $"Unknown mode: {mode}"),
                 []),
         };
+    }
+
+    private static SessionResult RunShell(
+        ProvisioningBundle bundle,
+        SessionEnvironment env,
+        CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested)
+        {
+            return Fail("shell.cancelled", "Shell tenure cancelled.");
+        }
+
+        List<string> phases = [];
+        List<EvidenceSnapshot> emitted = [];
+
+        // FirstPaint — opaque frame before any settle work (S3 order; S4 measures latency).
+        env.Splash.Show();
+        SessionStatus paintStatus = new("shell.first_paint", "First opaque splash frame.");
+        env.Splash.SetStatus(paintStatus);
+        phases.Add("first_paint");
+
+        // Settling — stub until ticket 05 fills DMA restore + final snapshot.
+        SessionStatus settleBegin = new("settle.begin", "Settle stub start (ticket 05 fills DMA).");
+        env.Splash.SetStatus(settleBegin);
+        phases.Add("settling");
+        // ponytail: real settle poll/deadline = ticket 05; stub is enough for paint-before-settle order
+        SessionStatus settleOk = new("settle.stub_ok", "Settle stub complete.");
+        env.Splash.SetStatus(settleOk);
+
+        // ponytail: jobs = ticket 06; unlock/appearance = ticket 07; checkpoint reboot = ticket 08
+        SessionStatus finalStatus = new("shell.stub_complete", "Shell splash + stub settle; later tickets deepen tenure.");
+        env.Splash.SetStatus(finalStatus);
+
+        if (env.Evidence is not null)
+        {
+            EvidenceSnapshot snap = env.Evidence.Write(
+                new ProvisioningEvidenceDocument(
+                    SchemaVersion: EvidenceSchemaVersion,
+                    Outcome: SessionOutcome.Complete.ToString(),
+                    StatusCode: finalStatus.Code,
+                    StatusMessage: finalStatus.Message,
+                    Phases: phases));
+            emitted.Add(snap);
+        }
+
+        return new SessionResult(SessionOutcome.Complete, finalStatus, emitted);
     }
 
     private static SessionResult RunMachineSetup(

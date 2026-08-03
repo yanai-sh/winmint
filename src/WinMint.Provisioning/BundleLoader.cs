@@ -63,5 +63,6 @@ internal sealed record SettleDto(
     [property: JsonPropertyName("locationServicesEnabled")] bool LocationServicesEnabled);
 
 [JsonSerializable(typeof(BundleDto))]
+[JsonSerializable(typeof(EvidenceDto))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class ProvisioningJsonContext : JsonSerializerContext;

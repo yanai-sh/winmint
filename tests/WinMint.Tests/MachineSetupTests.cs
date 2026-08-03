@@ -173,7 +173,12 @@ public class MachineSetupTests
 
     private sealed class NoopProcesses : IProcessHost;
 
-    private sealed class NoopSplash : ISplashPresenter;
+    private sealed class NoopSplash : ISplashPresenter
+    {
+        public void Show() { }
+
+        public void SetStatus(SessionStatus status) { }
+    }
 
     private sealed class NoopCheckpoints : ICheckpointStore;
 }

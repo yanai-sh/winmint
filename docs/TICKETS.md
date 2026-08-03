@@ -29,7 +29,7 @@
 | 01 | Profile + plan + Cli `validate`/`plan` | BuildPlan | 1–2 | — | Released — start here |
 | 02 | Servicing apply + Shell stamp + Cli `build`/`apply` | ImageServicing | 3 | 01 | 01 done — **done** |
 | 03 | Machine setup stamps | ProvisioningSession | 4 | 02 | 02 done — **done** |
-| 04 | Shell splash + status + evidence | ProvisioningSession | 5, 13 | 03 | 03 done **+ splash spike** |
+| 04 | Shell splash + status + evidence | ProvisioningSession | 5, 13 | 03 | 03 done **+ splash spike** — **done** |
 | 05 | DMA settle | ProvisioningSession | 6–8 | 04 | 04 done |
 | 06 | Stub jobs + child-process executor | ProvisioningSession | 9–10 | 05 | 05 done |
 | 07 | Unlock + timeout + stale fail-open | ProvisioningSession | 12 + appearance | 06 | 06 done |
@@ -113,10 +113,12 @@
   - Replace `UnsupportedSplashPresenter` with a real `ISplashPresenter` (recording fake in tests + production presenter); ship a real write-only `IEvidenceSink` (no longer `null` / empty marker)
 - **Out:** hard input lock; real winget matrix; Hyper-V / S4 harness; real DMA restore logic (ticket **05**); thinning unrelated empty ports for 05–08
 - **DoD:**
-  - Recording presenter asserts paint-before-settle **order** (not wall-clock OS latency)
-  - Evidence is write-only; session never reads evidence JSON to decide the next phase
-  - No `UnsupportedSplashPresenter` left in production `Program` wiring for Shell tenure
+  - Recording presenter asserts paint-before-settle **order** (not wall-clock OS latency) ✓
+  - Evidence is write-only; session never reads evidence JSON to decide the next phase ✓
+  - No `UnsupportedSplashPresenter` left in production `Program` wiring for Shell tenure ✓
 - **First red:** `Show` (or equivalent) recorded before settle poll begins (S3).
+- **Done:** 2026-08-03 (issue #6)
+- **Carry:** Settle is stub (`settle.begin` / `settle.stub_ok`) until ticket **05** fills DMA. Jobs / unlock / checkpoint remain 06–08. GDI solid fill presenter — D2D if S4 FirstPaintBudget slips.
 
 ### 05 — DMA settle
 

@@ -11,31 +11,16 @@ internal static class Program
             return RunMachineSetup();
         }
 
-        Console.Error.WriteLine("WinMint Provisioning: Shell tenure not implemented (ticket 04+).");
-        return 1;
+        return RunShell();
     }
 
     private static int RunMachineSetup()
     {
-        string programData = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "WinMint");
+        string programData = ProgramDataRoot();
         Directory.CreateDirectory(programData);
         string logPath = Path.Combine(programData, "machine-setup.log");
 
-        void Log(string line)
-        {
-            string stamped = $"{DateTimeOffset.UtcNow:o} {line}";
-            Console.Error.WriteLine(stamped);
-            try
-            {
-                File.AppendAllText(logPath, stamped + Environment.NewLine);
-            }
-            catch
-            {
-                // ponytail: best-effort ProgramData log
-            }
-        }
+        void Log(string line) => AppendLog(logPath, line);
 
         try
         {
@@ -47,7 +32,7 @@ internal static class Program
             }
 
             ProvisioningBundle bundle = BundleLoader.LoadFromFile(bundlePath);
-            SessionEnvironment env = CreateEnvironment(bundlePath, Log);
+            SessionEnvironment env = CreateEnvironment(bundlePath, Log, splash: null);
             SessionResult result = ProvisioningSession.Run(SessionMode.MachineSetup, bundle, env);
             Log($"{result.FinalStatus.Code}: {result.FinalStatus.Message}");
             return result.Outcome == SessionOutcome.Complete ? 0 : 1;
@@ -59,31 +44,112 @@ internal static class Program
         }
     }
 
-    private static SessionEnvironment CreateEnvironment(string bundlePath, Action<string> log)
+    private static int RunShell()
+    {
+        string programData = ProgramDataRoot();
+        Directory.CreateDirectory(programData);
+        string logPath = Path.Combine(programData, "shell.log");
+        string evidenceDir = Path.Combine(programData, "evidence");
+
+        void Log(string line) => AppendLog(logPath, line);
+
+        GdiSplashPresenter? splash = null;
+        try
+        {
+            string bundlePath = BundleLoader.DefaultGuestBundlePath;
+            if (!File.Exists(bundlePath))
+            {
+                Log($"Bundle missing: {bundlePath}");
+                return 1;
+            }
+
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException("Shell tenure requires Windows.");
+            }
+
+            splash = CreateSplash();
+            ProvisioningBundle bundle = BundleLoader.LoadFromFile(bundlePath);
+            SessionEnvironment env = CreateEnvironment(
+                bundlePath,
+                Log,
+                splash,
+                new FileEvidenceSink(evidenceDir));
+            SessionResult result = ProvisioningSession.Run(SessionMode.Shell, bundle, env);
+            Log($"{result.FinalStatus.Code}: {result.FinalStatus.Message}");
+            foreach (EvidenceSnapshot snap in result.EvidenceEmitted)
+            {
+                Log($"evidence: {snap.SchemaVersion} -> {snap.Path}");
+            }
+
+            return result.Outcome == SessionOutcome.Complete ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            Log($"shell.crash: {ex}");
+            return 1;
+        }
+        finally
+        {
+            splash?.Dispose();
+        }
+    }
+
+    private static string ProgramDataRoot() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "WinMint");
+
+    private static void AppendLog(string logPath, string line)
+    {
+        string stamped = $"{DateTimeOffset.UtcNow:o} {line}";
+        Console.Error.WriteLine(stamped);
+        try
+        {
+            File.AppendAllText(logPath, stamped + Environment.NewLine);
+        }
+        catch
+        {
+            // ponytail: best-effort ProgramData log
+        }
+    }
+
+    private static SessionEnvironment CreateEnvironment(
+        string bundlePath,
+        Action<string> log,
+        ISplashPresenter? splash,
+        IEvidenceSink? evidence = null)
     {
         IWinlogonRegistry winlogon = OperatingSystem.IsWindows()
             ? CreateWin32Winlogon()
-            : throw new PlatformNotSupportedException("Machine setup requires Windows.");
+            : throw new PlatformNotSupportedException("Provisioning requires Windows.");
 
         return new SessionEnvironment(
             Time: TimeProvider.System,
             Winlogon: winlogon,
             Region: new UnsupportedRegionSnapshot(),
             Processes: new UnsupportedProcessHost(),
-            Splash: new UnsupportedSplashPresenter(),
+            Splash: splash ?? new NoopSplashPresenter(),
             Checkpoints: new UnsupportedCheckpointStore(),
             Secrets: new FileSecretScrubber(bundlePath, log),
-            Evidence: null);
+            Evidence: evidence);
     }
 
     [SupportedOSPlatform("windows")]
     private static Win32WinlogonRegistry CreateWin32Winlogon() => new();
+
+    [SupportedOSPlatform("windows")]
+    private static GdiSplashPresenter CreateSplash() => new();
 }
 
 internal sealed class UnsupportedRegionSnapshot : IRegionSnapshot; // ponytail: ticket 05
 
 internal sealed class UnsupportedProcessHost : IProcessHost; // ponytail: ticket 06
 
-internal sealed class UnsupportedSplashPresenter : ISplashPresenter; // ponytail: ticket 04
-
 internal sealed class UnsupportedCheckpointStore : ICheckpointStore; // ponytail: ticket 08
+
+/// <summary>Machine setup has no splash surface; Shell wires <see cref="GdiSplashPresenter"/>.</summary>
+internal sealed class NoopSplashPresenter : ISplashPresenter
+{
+    public void Show() { }
+
+    public void SetStatus(SessionStatus status) { }
+}
