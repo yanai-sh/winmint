@@ -13,5 +13,11 @@
       "timeZoneId": "GMT Standard Time",
       "locationServicesEnabled": true
     }
+  },
+  "debloat": {
+    "removeProvisionedAppx": [
+      "Microsoft.BingNews",
+      "Microsoft.GamingApp"
+    ]
   }
 }

@@ -232,7 +232,7 @@
 
 Wizard, BitLocker, hardware acceptance, guest pwsh, peer Splash, Home Smoke SKU, MicrosoftOobe, enterprise secrets, MediatR/Generic Host/Contracts project.
 
-Keep-flag **design** is accepted ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md), wayfinder [Keep-flag matrix wayfinding](https://github.com/yanai-sh/winmint/issues/13)). **Implement** only after ticket **10** green — stub cards below. Do not label `ready-for-agent` until starting that card.
+Keep-flag **design** is accepted ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md)). AppX vertical **11–13** done. Sequencing: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md).
 
 ---
 
@@ -269,6 +269,39 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 - **Out:** BCU; UI Automation; CDM primary policy; guest pwsh
 - **DoD:** fake PackageManager tests for remove / still-provisioned deprovision paths
 - **Done:** 2026-08-04 (issue #24)
+
+---
+
+## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
+
+Do not label `ready-for-agent` until starting that card. **Next:** **14**.
+
+| # | Title | Module | Ready when |
+|---|--------|--------|------------|
+| 14 | Maintainer Hyper-V Smoke prove-out (real Source ISO) | Acceptance S4 | **13** done |
+| 15 | Wizard = second BuildPlan host (presets → remove-list) | BuildPlan host | **14** done |
+| 16 | First metal job kind `winget` | ProvisioningSession | After **15** (or after **14** if Wizard deferred by rescope) |
+
+### 14 — Maintainer Smoke prove-out
+
+- **Design:** [Smoke](specs/2026-07-27-smoke.md) · [TDD](TDD.md) S4 · harness `tools/vm/` · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
+- **Deliver:** one green `just smoke` on a real Source ISO; acceptance Profile includes pinned keep-flag remove-list (`Microsoft.BingNews`, `Microsoft.GamingApp` in [samples/acceptance.profile.json](../samples/acceptance.profile.json))
+- **Out:** Wizard; capabilities matrix; Diff VHD / digest-gated rebuild as required DoD (optional maintainer opt); leftover confidence; CDM-as-primary
+- **DoD:** Splash before Explorer; DMA hard fields; unlock; lane marker; paint time recorded; **pinned AppX families absent** from provisioned inventory / FirstLogon evidence as applicable; not only fixture S4
+
+### 15 — Wizard (stub)
+
+- **Design:** [ARCHITECTURE](ARCHITECTURE.md) · [BUILDPLAN](design/BUILDPLAN.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
+- **Deliver:** second BuildPlan host; UI presets expand to Profile remove-list (no presets in Profile JSON)
+- **Out:** second planning brain; capabilities matrix; schema `v2`
+
+### 16 — Metal `winget` job (stub)
+
+- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
+- **Deliver:** first non-stub job kind `winget`; fail-closed other metal kinds until ticketed; fold OS Win32 reboot-on-`NeedsReboot` into this (or immediate follow-on) card
+- **Out:** Scoop/WSL matrix; guest pwsh
+
+**Still deferred (no ticket):** capabilities/features matrix; Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash.
 
 ---
 

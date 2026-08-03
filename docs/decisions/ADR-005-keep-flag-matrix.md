@@ -20,9 +20,9 @@ Debloat / keep-flag is a post-M1 vertical ([TICKETS](../TICKETS.md), [ADR-002](A
 
 ### Consequences
 
-- Design module: [KEEPFLAG](../design/KEEPFLAG.md). Implement only after M1 Smoke (ticket **10**) is green; stub cards in [TICKETS](../TICKETS.md).
+- Design module: [KEEPFLAG](../design/KEEPFLAG.md). AppX vertical implemented (**11–13**). Expansion sequencing: [ADR-006](ADR-006-post-keepflag-sequencing.md).
 - BuildPlan gains catalog validation + servicing stage params for removes; ImageServicing gains a remove opcode; ProvisioningSession may gain an optional safety-net job — not a second debloat brain.
 
 ### Review trigger
 
-M1 Smoke green and first matrix implement ticket starts; or Microsoft changes provisioned-AppX offline remove semantics; or Pro gains a supported RemoveDefault-equivalent policy.
+Maintainer Smoke green (ticket **14**) before Wizard / keep-flag expansion; or Microsoft changes provisioned-AppX offline remove semantics; or Pro gains a supported RemoveDefault-equivalent policy.
