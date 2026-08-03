@@ -83,7 +83,7 @@
   - `just check` green ✓
 - **First red:** Fake or scripted runner asserts stage order for a minimal plan (S2).
 - **Done:** 2026-08-02 (issue #4)
-- **Carry (post-DoD):** Real DISM/oscdimg Apply + `ImageEvidence.Digests` (ISO/WIM SHA-256) landed after stub DoD — keep digests; keep both Cli verbs. **While here / next touch:** stage `payload/scripts/SetupComplete.cmd` instead of the embedded here-string in `ImageServicing.Materialize` (single source).
+- **Carry (post-DoD):** Real DISM/oscdimg Apply + `ImageEvidence.Digests` (ISO/WIM SHA-256) landed after stub DoD — keep digests; keep both Cli verbs. SetupComplete single source: Materialize copies `payload/scripts/SetupComplete.cmd` (no embedded here-string).
 
 ### 03 — Machine setup stamps
 
@@ -129,12 +129,15 @@
   - Soft location-services: warn + continue (not a hard gate)
   - Hard settle failure skips jobs
   - Real `IRegionSnapshot` (+ tests that script intermediate vs final); start using `TimeProvider` / settle deadline fields from `SessionPolicy` as needed
-- **Out:** real network location UX polish; metal-only settle forks; job executor details (ticket **06**)
+  - Replace settle stub with private `RunSettle` (or equivalent) inside `ProvisioningSession` — same `Run` seam; **no** Settling project/package
+  - New status codes only from [CONTRACTS](design/CONTRACTS.md) dotted `area.token` dialect
+- **Out:** real network location UX polish; metal-only settle forks; job executor details (ticket **06**); pre-splitting ProvisioningSession into folders
 - **DoD:**
   - Scripted region-snapshot tests: intermediate probe failures are **non-authoritative**
   - Only the final snapshot gates hard fields
   - Hard fail ⇒ jobs not started
   - No `UnsupportedRegionSnapshot` left once settle ships
+  - Settle logic lives as private phase method(s) behind `ProvisioningSession.Run`
 - **First red:** Final hard GeoID mismatch ⇒ `Failed` path and no job start (S3).
 
 ### 06 — Stub jobs + child-process executor

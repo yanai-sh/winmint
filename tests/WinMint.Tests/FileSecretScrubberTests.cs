@@ -1,4 +1,5 @@
 using System.Text.Json;
+using WinMint.Orchestrator;
 using WinMint.Provisioning;
 
 namespace WinMint.Tests;
@@ -15,10 +16,10 @@ public class FileSecretScrubberTests
         {
             File.WriteAllText(
                 path,
-                """
+                $$"""
                 {
-                  "schemaVersion": "winmint.provisioning.bundle/v1",
-                  "supervisorPath": "C:\\Windows\\WinMint\\Supervisor.exe",
+                  "schemaVersion": "{{BundleLoader.SchemaVersion}}",
+                  "supervisorPath": {{JsonSerializer.Serialize(ImageServicing.ShellStampGuestPath)}},
                   "username": "winmint",
                   "password": "lab-secret",
                   "dmaEnabled": true,

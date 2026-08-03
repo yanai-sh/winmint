@@ -50,8 +50,37 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 ## Shared types (logical)
 
 - `DmaSettleTarget` / `DmaContract` settle side: locale, GeoId, timeZoneId, location posture.
+- Orchestrator `DmaSettleTarget` (required settle fields on Profile) and Provisioning `DmaSettleTarget` (nullable settle on staged bundle) are **intentional** cross-process shapes — do not merge via a shared Contracts project.
 - `ServicingOpcode` enum owned with BuildPlan stages + ImageServicing catalog (three touch points on add — acceptable).
-- `SupervisorIdentity.ExePath` must match offline Shell stamp and Machine setup verify.
+- `SupervisorIdentity.ShellPath` (bundle JSON `supervisorPath`) must match offline Shell stamp and Machine setup verify.
+
+## Interchange DTO naming
+
+| Suffix | Use |
+|--------|-----|
+| `*Document` | Authored / parse input (e.g. Profile JSON DTOs, `ProvisioningEvidenceDocument`) |
+| `*File` | Workdir or guest interchange on disk (e.g. `JobsFile`, `BundleFile`, evidence on disk) |
+
+Do not introduce new `*Dump` / `*Dto` names. Existing Cli `*Dump` / BundleLoader `*Dto` stay until those files are touched.
+
+## Status codes & evidence phases
+
+Form: lowercase dotted `area.token` segments (product area first).
+
+| Area | Examples |
+|------|----------|
+| `machineSetup` | `machineSetup.ok`, `machineSetup.account.forbidden`, `machineSetup.shell.verify_failed` |
+| `shell` | `shell.first_paint`, `shell.stub_complete`, `shell.evidence.required` |
+| `settle` | `settle.begin`, `settle.stub_ok` (ticket **05** extends) |
+| `session` | `session.mode.unknown` |
+| `servicing` | `servicing.runPlan.failed`, `servicing.sourceIso.missing` |
+| `account` / `document` / `dma` | BuildPlan validation (`account.mode.missing`, `document.schemaVersion.unsupported`) |
+
+**Evidence `Phases`:** use the **same** strings as the status codes they record (e.g. `shell.first_paint`, `settle.begin`) — not a parallel short vocabulary.
+
+Prose stays “Machine setup”; types/flags stay `MachineSetup` / `--machine-setup`. Status codes are the third surface and follow this table only.
+
+Cli `build` and `apply` are both product verbs (same path) — intentional, not duplication to delete.
 
 ## Explicit non-contracts
 

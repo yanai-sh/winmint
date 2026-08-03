@@ -28,7 +28,7 @@ if ($indexCount -ne 1) {
 }
 
 if ($cleanup -eq 'full') {
-    Write-Host "DISM Cleanup-Image /StartComponentCleanup /ResetBase ($mountDir)"
+    Write-Output "DISM Cleanup-Image /StartComponentCleanup /ResetBase ($mountDir)"
     & dism.exe /English /Image:$mountDir /Cleanup-Image /StartComponentCleanup /ResetBase
     if ($LASTEXITCODE -ne 0) { throw "DISM Cleanup-Image failed: $LASTEXITCODE" }
 }
@@ -36,7 +36,7 @@ elseif ($cleanup -ne 'skip') {
     throw "unsupported cleanup='$cleanup' (expected skip|full)"
 }
 
-Write-Host "DISM Unmount-Image /Commit ($mountDir) lane=$lane compression=$compression cleanup=$cleanup"
+Write-Output "DISM Unmount-Image /Commit ($mountDir) lane=$lane compression=$compression cleanup=$cleanup"
 # Requires single-image WIM (Mount-InstallWim exports Pro-only). Committing a multi-edition
 # consumer WIM in-place is the stall we hit: Saving image ~4% then wimserv CPU flatline.
 & dism.exe /English /Unmount-Image /MountDir:$mountDir /Commit
@@ -45,7 +45,7 @@ if ($LASTEXITCODE -ne 0) { throw "DISM Unmount-Image failed: $LASTEXITCODE" }
 if ($compression -eq 'max') {
     $exportTmp = Join-Path $mediaDir 'sources\install.export.wim'
     if (Test-Path -LiteralPath $exportTmp) { Remove-Item -LiteralPath $exportTmp -Force }
-    Write-Host "DISM Export-Image /Compress:max → $exportTmp"
+    Write-Output "DISM Export-Image /Compress:max → $exportTmp"
     # After Mount-InstallWim single-index export, the only image is index 1.
     & dism.exe /English /Export-Image /SourceImageFile:$wimFile /SourceIndex:1 /DestinationImageFile:$exportTmp /Compress:max
     if ($LASTEXITCODE -ne 0) { throw "DISM Export-Image failed: $LASTEXITCODE" }
@@ -63,5 +63,5 @@ if (-not (Test-Path -LiteralPath $wimOut)) {
     Copy-Item -LiteralPath $wimFile -Destination $wimOut -Force
 }
 
-Write-Host "ExportWim ok lane=$lane compression=$compression cleanup=$cleanup wimOut=$wimOut"
+Write-Output "ExportWim ok lane=$lane compression=$compression cleanup=$cleanup wimOut=$wimOut"
 exit 0

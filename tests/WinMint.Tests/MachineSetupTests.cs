@@ -4,7 +4,7 @@ namespace WinMint.Tests;
 
 public class MachineSetupTests
 {
-    private const string SupervisorPath = @"C:\Windows\WinMint\Supervisor.exe";
+    private static string SupervisorPath => WinMint.Orchestrator.ImageServicing.ShellStampGuestPath;
 
     [Fact]
     public void MachineSetup_rejects_defaultuser0_with_AutoAdminLogon()
@@ -20,7 +20,7 @@ public class MachineSetupTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("machine_setup.account.forbidden", result.FinalStatus.Code);
+        Assert.Equal("machineSetup.account.forbidden", result.FinalStatus.Code);
         Assert.False(winlogon.AutoAdminLogon);
         Assert.Null(winlogon.DefaultUserName);
         Assert.Equal(0, secrets.WipeCount);
@@ -84,7 +84,7 @@ public class MachineSetupTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("machine_setup.shell.verify_failed", result.FinalStatus.Code);
+        Assert.Equal("machineSetup.shell.verify_failed", result.FinalStatus.Code);
         Assert.Equal(1, secrets.WipeCount);
         Assert.True(winlogon.AutoAdminLogon);
     }
@@ -104,7 +104,7 @@ public class MachineSetupTests
             cts.Token);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("machine_setup.cancelled", result.FinalStatus.Code);
+        Assert.Equal("machineSetup.cancelled", result.FinalStatus.Code);
         Assert.False(winlogon.AutoAdminLogon);
     }
 

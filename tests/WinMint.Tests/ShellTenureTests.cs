@@ -4,7 +4,7 @@ namespace WinMint.Tests;
 
 public class ShellTenureTests
 {
-    private const string SupervisorPath = @"C:\Windows\WinMint\Supervisor.exe";
+    private static string SupervisorPath => WinMint.Orchestrator.ImageServicing.ShellStampGuestPath;
 
     [Fact]
     public void Shell_Show_is_recorded_before_settle_begins()
@@ -53,8 +53,8 @@ public class ShellTenureTests
             string json = File.ReadAllText(snap.Path);
             Assert.Contains($"\"schemaVersion\": \"{ProvisioningSession.EvidenceSchemaVersion}\"", json, StringComparison.Ordinal);
             Assert.Contains("\"outcome\": \"Complete\"", json, StringComparison.Ordinal);
-            Assert.Contains("\"first_paint\"", json, StringComparison.Ordinal);
-            Assert.Contains("\"settling\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"shell.first_paint\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"settle.begin\"", json, StringComparison.Ordinal);
             Assert.DoesNotContain("setup-shell-control", json, StringComparison.Ordinal);
             Assert.DoesNotContain("setup-shell-status", json, StringComparison.Ordinal);
         }

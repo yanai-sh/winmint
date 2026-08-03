@@ -45,10 +45,10 @@ else {
     $bootdata = "1#pEF,e,b$efisys"
 }
 
-Write-Host "oscdimg → $outputIso"
+Write-Output "oscdimg → $outputIso"
 & $oscdimg -m -o -u2 -udfver102 "-bootdata:$bootdata" $mediaDir $outputIso
 if ($LASTEXITCODE -ne 0) { throw "oscdimg failed: $LASTEXITCODE" }
 if (-not (Test-Path -LiteralPath $outputIso)) { throw "oscdimg produced no file: $outputIso" }
 
-Write-Host "BuildIso ok outputIso=$outputIso"
+Write-Output "BuildIso ok outputIso=$outputIso"
 exit 0

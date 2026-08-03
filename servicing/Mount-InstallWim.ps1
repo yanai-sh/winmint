@@ -45,11 +45,11 @@ if ($reuseMedia) {
     }
     $existing = Get-Item -LiteralPath $wimFile
     if ($existing.IsReadOnly) { $existing.IsReadOnly = $false }
-    Write-Host "reuse-media: skipping ISO copy/export; mounting single-image WIM index 1"
-    Write-Host "DISM Mount-Image index=1 → $mountDir"
+    Write-Output "reuse-media: skipping ISO copy/export; mounting single-image WIM index 1"
+    Write-Output "DISM Mount-Image index=1 → $mountDir"
     & dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:1 /MountDir:$mountDir
     if ($LASTEXITCODE -ne 0) { throw "DISM Mount-Image failed: $LASTEXITCODE" }
-    Write-Host "MountInstallWim ok"
+    Write-Output "MountInstallWim ok"
     exit 0
 }
 
@@ -57,17 +57,17 @@ $needCopy = -not (Test-Path -LiteralPath $wimFile)
 if (-not $needCopy) {
     $existing = Get-Item -LiteralPath $wimFile
     if ($existing.IsReadOnly) { $existing.IsReadOnly = $false }
-    Write-Host "Reusing media WIM at $wimFile"
+    Write-Output "Reusing media WIM at $wimFile"
 }
 else {
-    Write-Host "Mounting ISO $sourceIso"
+    Write-Output "Mounting ISO $sourceIso"
     $disk = Mount-DiskImage -ImagePath $sourceIso -PassThru
     try {
         Start-Sleep -Seconds 2
         $letter = ($disk | Get-Volume | Select-Object -First 1).DriveLetter
         if ([string]::IsNullOrWhiteSpace($letter)) { throw 'ISO mounted but no drive letter' }
         $isoRoot = "${letter}:"
-        Write-Host "ISO at $isoRoot — copying media to $mediaDir"
+        Write-Output "ISO at $isoRoot — copying media to $mediaDir"
         & robocopy.exe $isoRoot $mediaDir /E /COPY:DAT /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Host
         $rc = $LASTEXITCODE
         if ($rc -ge 8) { throw "robocopy failed with exit $rc" }
@@ -92,7 +92,7 @@ $mountIndex = [int]$wimIndex
 $indexCount = Get-WimIndexCount -Path $wimFile
 
 if ($indexCount -gt 1) {
-    Write-Host "Multi-index WIM ($indexCount indexes) — exporting index $wimIndex to single-image WIM before mount"
+    Write-Output "Multi-index WIM ($indexCount indexes) — exporting index $wimIndex to single-image WIM before mount"
     $tmp = Join-Path $mediaDir 'sources\install.single.wim'
     if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force }
     # Compress:fast keeps Smoke Test lane cheap; Release recompress is ExportWim ticket 09.
@@ -102,19 +102,19 @@ if ($indexCount -gt 1) {
     Move-Item -LiteralPath $tmp -Destination $wimFile -Force
     Set-Content -LiteralPath $marker -Value "sourceIndex=$wimIndex" -Encoding utf8
     $mountIndex = 1
-    Write-Host "Single-image WIM ready (mount index 1); size=$((Get-Item -LiteralPath $wimFile).Length)"
+    Write-Output "Single-image WIM ready (mount index 1); size=$((Get-Item -LiteralPath $wimFile).Length)"
 }
 elseif (Test-Path -LiteralPath $marker) {
     $mountIndex = 1
-    Write-Host "Reusing single-image WIM (marker present); mount index 1"
+    Write-Output "Reusing single-image WIM (marker present); mount index 1"
 }
 else {
-    Write-Host "WIM already single-image; mount index $mountIndex"
+    Write-Output "WIM already single-image; mount index $mountIndex"
 }
 
-Write-Host "DISM Mount-Image index=$mountIndex → $mountDir"
+Write-Output "DISM Mount-Image index=$mountIndex → $mountDir"
 & dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:$mountIndex /MountDir:$mountDir
 if ($LASTEXITCODE -ne 0) { throw "DISM Mount-Image failed: $LASTEXITCODE" }
 
-Write-Host "MountInstallWim ok"
+Write-Output "MountInstallWim ok"
 exit 0

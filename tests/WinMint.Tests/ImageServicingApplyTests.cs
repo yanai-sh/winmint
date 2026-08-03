@@ -39,26 +39,30 @@ public class ImageServicingApplyTests
             Assert.Contains(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.StampOfflineShell
-                    && s.Parameters.TryGetValue("shellTarget", out string? target)
+                    && s.Parameters.TryGetValue(StageParams.ShellTarget, out string? target)
                     && !string.IsNullOrWhiteSpace(target));
             Assert.Contains(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.ExportWim
-                    && s.Parameters.TryGetValue("lane", out string? lane)
+                    && s.Parameters.TryGetValue(StageParams.Lane, out string? lane)
                     && lane == "Test"
-                    && s.Parameters.TryGetValue("compression", out string? compression)
+                    && s.Parameters.TryGetValue(StageParams.Compression, out string? compression)
                     && compression == "fast"
-                    && s.Parameters.TryGetValue("cleanup", out string? cleanup)
+                    && s.Parameters.TryGetValue(StageParams.Cleanup, out string? cleanup)
                     && cleanup == "skip");
             Assert.Contains(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.MountInstallWim
-                    && s.Parameters.TryGetValue("reuseMedia", out string? reuse)
+                    && s.Parameters.TryGetValue(StageParams.ReuseMedia, out string? reuse)
                     && reuse == "false");
             Assert.False(string.IsNullOrWhiteSpace(result.Value.ShellStampTargetPath));
             Assert.Equal(ImageQualityLane.Test, result.Value.Lane);
             Assert.Equal(ImageServicing.ShellStampGuestPath, result.Value.ShellStampTargetPath);
             Assert.True(File.Exists(Path.Combine(work, "payload", "SetupComplete.cmd")));
+            string stagedSetup = File.ReadAllText(Path.Combine(work, "payload", "SetupComplete.cmd"));
+            string repoSetup = File.ReadAllText(
+                Path.Combine(FindRepoRoot(), "payload", "scripts", "SetupComplete.cmd"));
+            Assert.Equal(repoSetup, stagedSetup);
             Assert.True(File.Exists(Path.Combine(work, "payload", "bundle.json")));
             Assert.True(File.Exists(Path.Combine(work, "payload", "Supervisor.exe")));
             string bundle = File.ReadAllText(Path.Combine(work, "payload", "bundle.json"));
@@ -97,7 +101,7 @@ public class ImageServicingApplyTests
             Assert.Contains(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.MountInstallWim
-                    && s.Parameters.TryGetValue("reuseMedia", out string? reuse)
+                    && s.Parameters.TryGetValue(StageParams.ReuseMedia, out string? reuse)
                     && reuse == "true");
         }
         finally
@@ -139,11 +143,11 @@ public class ImageServicingApplyTests
 
     private static BuildArtifacts MinimalPlan()
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes("""
+        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "localAutoLogon",
+                "mode": "{{AccountModeWire.LocalAutoLogon}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -169,6 +173,18 @@ public class ImageServicingApplyTests
         string path = Path.Combine(Path.GetTempPath(), "winmint-s2-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
         return path;
+    }
+
+    private static string FindRepoRoot()
+    {
+        DirectoryInfo? dir = new(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "WinMint.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return dir.FullName;
     }
 
     private static void TryDelete(string path)
@@ -201,7 +217,7 @@ public class ImageServicingApplyTests
             Stages.AddRange(stages);
             string shellTarget = stages
                 .First(s => s.Opcode == ServicingOpcode.StampOfflineShell)
-                .Parameters["shellTarget"];
+                .Parameters[StageParams.ShellTarget];
             return Result.Ok<ImageEvidence, ServicingFailure>(
                 new ImageEvidence(
                     run.OutputIsoPath ?? Path.Combine(workDirectory, "out.iso"),

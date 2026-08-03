@@ -50,4 +50,4 @@ Day one: `xunit.v3.mtp-v2` only. Justify every package. Avalonia **12.1.x** late
 
 ## External tools (when needed)
 
-DISM / oscdimg (host), winget/Scoop/wsl (guest jobs), Hyper-V (acceptance), Just, PSScriptAnalyzer (when `servicing/` exists).
+DISM / oscdimg (host), winget/Scoop/wsl (guest jobs), Hyper-V (acceptance), Just, **PSScriptAnalyzer** (`just analyze-servicing`; also run from `just check`). Install once: `Install-Module -Name PSScriptAnalyzer -Scope CurrentUser`. Servicing scripts are **UTF-8 without BOM** (pwsh-native); `servicing/PSScriptAnalyzerSettings.psd1` excludes only legacy `PSUseBOMForUnicodeEncodedFile`.

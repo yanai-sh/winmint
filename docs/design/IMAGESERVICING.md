@@ -101,6 +101,10 @@ Elevated runner: dumb sequential invoke.
 
 **Adapters:** thin `servicing/*.ps1` kernels. **Hard rule:** any Profile/DMA/SKU `if` in a kernel is an Architecture violation.
 
+**Supervisor binary name:** `dotnet publish` emits `WinMint.Provisioning.exe`; Materialize / StagePayload copy it to guest path `Supervisor.exe` (`C:\Windows\WinMint\Supervisor.exe` Shell stamp). Intentional rename — do not “fix” the guest name back to the project assembly name.
+
+**SetupComplete.cmd:** single source is repo [`payload/scripts/SetupComplete.cmd`](../../payload/scripts/SetupComplete.cmd); Materialize copies that file into the workdir payload (no embedded here-string).
+
 ## Dependencies
 
 | Dep | Category |

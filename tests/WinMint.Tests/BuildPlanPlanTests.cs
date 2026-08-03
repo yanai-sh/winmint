@@ -8,11 +8,11 @@ public class BuildPlanPlanTests
     [Fact]
     public void Plan_local_autologon_without_password_fails()
     {
-        Profile profile = Parse("""
+        Profile profile = Parse($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "localAutoLogon",
+                "mode": "{{AccountModeWire.LocalAutoLogon}}",
                 "username": "winmint"
               },
               "dma": {
@@ -36,11 +36,11 @@ public class BuildPlanPlanTests
     [Fact]
     public void Plan_dma_on_latches_ireland_and_copies_settle_target()
     {
-        Profile profile = Parse("""
+        Profile profile = Parse($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "localAutoLogon",
+                "mode": "{{AccountModeWire.LocalAutoLogon}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -73,11 +73,11 @@ public class BuildPlanPlanTests
     [Fact]
     public void Plan_default_emits_test_lane_stub_jobs_and_opcodes()
     {
-        Profile profile = Parse("""
+        Profile profile = Parse($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "localAutoLogon",
+                "mode": "{{AccountModeWire.LocalAutoLogon}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -117,19 +117,19 @@ public class BuildPlanPlanTests
         ServicingStage export = Assert.Single(
             artifacts.Stages.Stages,
             s => s.Opcode == ServicingOpcode.ExportWim);
-        Assert.Equal("Test", export.Parameters["lane"]);
-        Assert.Equal("fast", export.Parameters["compression"]);
-        Assert.Equal("skip", export.Parameters["cleanup"]);
+        Assert.Equal("Test", export.Parameters[StageParams.Lane]);
+        Assert.Equal("fast", export.Parameters[StageParams.Compression]);
+        Assert.Equal("skip", export.Parameters[StageParams.Cleanup]);
     }
 
     [Fact]
     public void Plan_release_lane_export_params_differ_from_test()
     {
-        Profile profile = Parse("""
+        Profile profile = Parse($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "localAutoLogon",
+                "mode": "{{AccountModeWire.LocalAutoLogon}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -155,9 +155,9 @@ public class BuildPlanPlanTests
         ServicingStage export = Assert.Single(
             artifacts.Stages.Stages,
             s => s.Opcode == ServicingOpcode.ExportWim);
-        Assert.Equal("Release", export.Parameters["lane"]);
-        Assert.Equal("max", export.Parameters["compression"]);
-        Assert.Equal("full", export.Parameters["cleanup"]);
+        Assert.Equal("Release", export.Parameters[StageParams.Lane]);
+        Assert.Equal("max", export.Parameters[StageParams.Compression]);
+        Assert.Equal("full", export.Parameters[StageParams.Cleanup]);
     }
 
     private static Profile Parse(string json)

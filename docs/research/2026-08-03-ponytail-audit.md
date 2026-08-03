@@ -36,7 +36,7 @@ The imaging / Winlogon core is appropriately serious — and after the full Appl
 | 1 | `yagni:` | Empty session ports + `Unsupported*`/`Noop*` stubs | Still valid; ticket 03 review agreed. Soften: 04–08 will fill them — prefer “add with first real adapter” over deleting if 04 starts immediately |
 | 2 | `yagni:` | Unused Shell-tenure types (`SessionPolicy`, `AppearanceOnce`, `Reboot`, …) | Softened: scheduled for tickets **07–08**; unused *today*, intentional for M1 |
 | 3 | `yagni:` | `ISecretScrubber` + `FileSecretScrubber` *as a port* | Still valid. **Wipe itself is required** (ticket 03 Deliver + SECRETS). Inline; don’t delete the behavior |
-| 4 | `yagni:` | Embedded `SetupComplete.cmd` vs `payload/scripts/` | Still valid |
+| 4 | `yagni:` | Embedded `SetupComplete.cmd` vs `payload/scripts/` | **Closed** (Materialize copies `payload/scripts/SetupComplete.cmd`) |
 | 5 | `yagni:` | Hard-coded `smoke.stub.*` in every plan | Softened: ticket **06** Deliver + smoke story 10; early but on-path |
 | 6 | `shrink:` | `DocumentErrors` wrapper | Still valid (mild) |
 | 7 | `shrink:` | Hand-rolled `Result<TOk,TErr>` | Optional; design-shaped |

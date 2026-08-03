@@ -47,12 +47,12 @@ public static class ProvisioningSession
         env.Splash.Show();
         SessionStatus paintStatus = new("shell.first_paint", "First opaque splash frame.");
         env.Splash.SetStatus(paintStatus);
-        phases.Add("first_paint");
+        phases.Add(paintStatus.Code);
 
         // Settling — stub until ticket 05 fills DMA restore + final snapshot.
         SessionStatus settleBegin = new("settle.begin", "Settle stub start (ticket 05 fills DMA).");
         env.Splash.SetStatus(settleBegin);
-        phases.Add("settling");
+        phases.Add(settleBegin.Code);
         // ponytail: real settle poll/deadline = ticket 05; stub is enough for paint-before-settle order
         SessionStatus settleOk = new("settle.stub_ok", "Settle stub complete.");
         env.Splash.SetStatus(settleOk);
@@ -80,20 +80,20 @@ public static class ProvisioningSession
     {
         if (ct.IsCancellationRequested)
         {
-            return Fail("machine_setup.cancelled", "Machine setup cancelled.");
+            return Fail("machineSetup.cancelled", "Machine setup cancelled.");
         }
 
         string username = bundle.Account.Username.Trim();
         string password = bundle.Account.Password;
         if (string.IsNullOrWhiteSpace(username))
         {
-            return Fail("machine_setup.account.empty", "Account username is required.");
+            return Fail("machineSetup.account.empty", "Account username is required.");
         }
 
         if (string.Equals(username, ForbiddenAutologonUser, StringComparison.OrdinalIgnoreCase))
         {
             return Fail(
-                "machine_setup.account.forbidden",
+                "machineSetup.account.forbidden",
                 $"Refusing AutoAdminLogon for forbidden user '{ForbiddenAutologonUser}'.");
         }
 
@@ -107,13 +107,13 @@ public static class ProvisioningSession
                     StringComparison.OrdinalIgnoreCase))
             {
                 return Fail(
-                    "machine_setup.account.forbidden",
+                    "machineSetup.account.forbidden",
                     $"Refusing to leave '{ForbiddenAutologonUser}' with AutoAdminLogon enabled.");
             }
         }
         catch (Exception ex)
         {
-            return Fail("machine_setup.autologon.stamp_failed", ex.Message);
+            return Fail("machineSetup.autologon.stamp_failed", ex.Message);
         }
 
         // No further use of stamp password in this phase (disk wipe next; string GC lifetime remains).
@@ -137,13 +137,13 @@ public static class ProvisioningSession
             if (!ShellEquals(shell, expectedShell))
             {
                 shellFailure = Fail(
-                    "machine_setup.shell.verify_failed",
+                    "machineSetup.shell.verify_failed",
                     $"Winlogon Shell is '{shell ?? "<null>"}' after restamp; expected '{expectedShell}'.");
             }
         }
         catch (Exception ex)
         {
-            shellFailure = Fail("machine_setup.shell.verify_failed", ex.Message);
+            shellFailure = Fail("machineSetup.shell.verify_failed", ex.Message);
         }
 
         try
@@ -152,7 +152,7 @@ public static class ProvisioningSession
         }
         catch (Exception ex)
         {
-            return Fail("machine_setup.secret_wipe_failed", ex.Message);
+            return Fail("machineSetup.secret_wipe_failed", ex.Message);
         }
 
         if (shellFailure is not null)
@@ -162,7 +162,7 @@ public static class ProvisioningSession
 
         return new SessionResult(
             SessionOutcome.Complete,
-            new SessionStatus("machine_setup.ok", "Autologon stamped; Shell verified; secrets wiped."),
+            new SessionStatus("machineSetup.ok", "Autologon stamped; Shell verified; secrets wiped."),
             []);
     }
 

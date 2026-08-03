@@ -11,5 +11,5 @@ if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
 $panther = Join-Path $mountDir 'Windows\Panther'
 New-Item -ItemType Directory -Force -Path $panther | Out-Null
 Copy-Item -LiteralPath $unattendPath -Destination (Join-Path $panther 'unattend.xml') -Force
-Write-Host "InjectUnattend ok"
+Write-Output "InjectUnattend ok"
 exit 0

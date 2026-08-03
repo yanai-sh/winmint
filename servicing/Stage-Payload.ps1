@@ -18,5 +18,5 @@ Copy-Item -LiteralPath (Join-Path $payloadDir 'SetupComplete.cmd') -Destination 
 Copy-Item -LiteralPath (Join-Path $payloadDir 'bundle.json') -Destination (Join-Path $guestWinMint 'bundle.json') -Force
 Copy-Item -LiteralPath (Join-Path $payloadDir 'jobs.json') -Destination (Join-Path $guestWinMint 'jobs.json') -Force
 
-Write-Host "StagePayload ok"
+Write-Output "StagePayload ok"
 exit 0

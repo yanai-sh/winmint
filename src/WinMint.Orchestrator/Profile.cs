@@ -15,6 +15,12 @@ public enum AccountMode
     LocalAutoLogon,
 }
 
+/// <summary>Wire form of <see cref="AccountMode"/> in profile JSON <c>account.mode</c>.</summary>
+public static class AccountModeWire
+{
+    public const string LocalAutoLogon = "localAutoLogon";
+}
+
 public sealed record DmaProfile(
     bool Enabled,
     DmaSettleTarget Settle);

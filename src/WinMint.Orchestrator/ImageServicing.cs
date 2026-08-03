@@ -101,13 +101,11 @@ public static class ImageServicing
             Path.Combine(payloadDir, "bundle.json"),
             JsonSerializer.Serialize(bundle, ServicingJsonContext.Default.BundleFile));
 
-        string setupComplete = """
-            @echo off
-            rem WinMint SetupComplete — Machine setup entry (ticket 02 staging; behaviour in ticket 03+)
-            "%SystemRoot%\WinMint\Supervisor.exe" --machine-setup
-            if errorlevel 1 exit /b 1
-            """;
-        File.WriteAllText(Path.Combine(payloadDir, "SetupComplete.cmd"), setupComplete);
+        Result<string, ServicingFailure> setupComplete = StageSetupCompleteScript(payloadDir);
+        if (!setupComplete.IsOk)
+        {
+            return Result.Fail<List<ServicingStage>, ServicingFailure>(setupComplete.Error);
+        }
 
         Result<string, ServicingFailure> supervisor = StageSupervisorBinary(payloadDir);
         if (!supervisor.IsOk)
@@ -122,34 +120,34 @@ public static class ImageServicing
             switch (stage.Opcode)
             {
                 case ServicingOpcode.MountInstallWim:
-                    parameters["sourceIso"] = run.SourceIsoPath;
-                    parameters["mountDir"] = mountDir;
-                    parameters["mediaDir"] = mediaDir;
-                    parameters["wimIndex"] = wimIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    parameters["reuseMedia"] = run.ReuseMedia ? "true" : "false";
+                    parameters[StageParams.SourceIso] = run.SourceIsoPath;
+                    parameters[StageParams.MountDir] = mountDir;
+                    parameters[StageParams.MediaDir] = mediaDir;
+                    parameters[StageParams.WimIndex] = wimIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    parameters[StageParams.ReuseMedia] = run.ReuseMedia ? "true" : "false";
                     break;
                 case ServicingOpcode.StagePayload:
-                    parameters["payloadDir"] = payloadDir;
-                    parameters["mountDir"] = mountDir;
+                    parameters[StageParams.PayloadDir] = payloadDir;
+                    parameters[StageParams.MountDir] = mountDir;
                     break;
                 case ServicingOpcode.InjectUnattend:
-                    parameters["unattendPath"] = unattendPath;
-                    parameters["mountDir"] = mountDir;
+                    parameters[StageParams.UnattendPath] = unattendPath;
+                    parameters[StageParams.MountDir] = mountDir;
                     break;
                 case ServicingOpcode.StampOfflineShell:
-                    parameters["shellTarget"] = ShellStampGuestPath;
-                    parameters["mountDir"] = mountDir;
+                    parameters[StageParams.ShellTarget] = ShellStampGuestPath;
+                    parameters[StageParams.MountDir] = mountDir;
                     break;
                 case ServicingOpcode.ExportWim:
                     // compression / cleanup / lane come from BuildPlan — do not invent defaults here.
-                    parameters["mountDir"] = mountDir;
-                    parameters["mediaDir"] = mediaDir;
-                    parameters["wimOut"] = wimOut;
+                    parameters[StageParams.MountDir] = mountDir;
+                    parameters[StageParams.MediaDir] = mediaDir;
+                    parameters[StageParams.WimOut] = wimOut;
                     break;
                 case ServicingOpcode.BuildIso:
-                    parameters["outputIso"] = outputIso;
-                    parameters["mediaDir"] = mediaDir;
-                    parameters["wimOut"] = wimOut;
+                    parameters[StageParams.OutputIso] = outputIso;
+                    parameters[StageParams.MediaDir] = mediaDir;
+                    parameters[StageParams.WimOut] = wimOut;
                     break;
             }
 
@@ -164,6 +162,22 @@ public static class ImageServicing
             JsonSerializer.Serialize(stagesFile, ServicingJsonContext.Default.StagesFile));
 
         return Result.Ok<List<ServicingStage>, ServicingFailure>(resolved);
+    }
+
+    private static Result<string, ServicingFailure> StageSetupCompleteScript(string payloadDir)
+    {
+        string dest = Path.Combine(payloadDir, "SetupComplete.cmd");
+        string? source = FindSetupCompleteScript();
+        if (source is null)
+        {
+            return Result.Fail<string, ServicingFailure>(
+                new ServicingFailure(
+                    "servicing.setupComplete.missing",
+                    "payload/scripts/SetupComplete.cmd not found."));
+        }
+
+        File.Copy(source, dest, overwrite: true);
+        return Result.Ok<string, ServicingFailure>(dest);
     }
 
     private static Result<string, ServicingFailure> StageSupervisorBinary(string payloadDir)
@@ -182,6 +196,12 @@ public static class ImageServicing
         return Result.Ok<string, ServicingFailure>(dest);
     }
 
+    private static string? FindSetupCompleteScript()
+    {
+        string candidate = Path.Combine(RepoRootGuess(), "payload", "scripts", "SetupComplete.cmd");
+        return File.Exists(candidate) ? candidate : null;
+    }
+
     private static string? FindPublishedSupervisor()
     {
         string[] candidates =
@@ -197,7 +217,8 @@ public static class ImageServicing
         string dir = AppContext.BaseDirectory;
         for (int i = 0; i < 8; i++)
         {
-            if (File.Exists(Path.Combine(dir, "justfile")))
+            if (File.Exists(Path.Combine(dir, "justfile"))
+                || File.Exists(Path.Combine(dir, "Justfile")))
             {
                 return dir;
             }

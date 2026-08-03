@@ -19,7 +19,7 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $statusPath = Join-Path $WorkDirectory 'apply-status.txt'
 Set-Content -LiteralPath $statusPath -Value "updated=$([datetime]::UtcNow.ToString('o'))`nstage=idle" -Encoding utf8
 
-# Shared state for heartbeat ThreadJob (cannot see $script: from job).
+# Shared state for heartbeat ThreadJob (in-process; $using: keeps the Synchronized reference).
 $sync = [hashtable]::Synchronized(@{
         Opcode = 'idle'
         Log    = ''
@@ -30,15 +30,16 @@ $heartbeatJob = $null
 try {
     # ponytail: ThreadJob polls every 30s; STALL_SUSPECT is advisory only (no kill).
     $heartbeatJob = Start-ThreadJob -ScriptBlock {
-        param([string] $StatusPath, [hashtable] $Sync)
+        $statusPath = $using:statusPath
+        $sync = $using:sync
         $watchStage = ''
         $watchLogMtime = $null
         $watchWimCpu = $null
         $watchSince = $null
-        while (-not $Sync.Stop) {
+        while (-not $sync.Stop) {
             try {
-                $opcode = [string]$Sync.Opcode
-                $logFile = [string]$Sync.Log
+                $opcode = [string]$sync.Opcode
+                $logFile = [string]$sync.Log
                 $dismCpu = ''
                 $wimCpu = ''
                 $dism = Get-Process -Name Dism -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -109,17 +110,18 @@ try {
                     $linesOut += 'STALL_SUSPECT=1'
                     $linesOut += "STALL_REASON=$stallReason"
                 }
-                Set-Content -LiteralPath $StatusPath -Value ($linesOut -join "`n") -Encoding utf8
+                Set-Content -LiteralPath $statusPath -Value ($linesOut -join "`n") -Encoding utf8
             }
             catch {
-                # ponytail: heartbeat must not fail Apply
+                # Heartbeat is advisory; never fail Apply.
+                Write-Debug "heartbeat tick failed: $_"
             }
             Start-Sleep -Seconds 30
         }
-    } -ArgumentList $statusPath, $sync
+    }
 }
 catch {
-    # ponytail: best-effort heartbeat
+    Write-Debug "heartbeat start failed: $_"
 }
 
 $stagesPath = Join-Path $WorkDirectory 'stages.json'
@@ -128,7 +130,13 @@ if (-not (Test-Path -LiteralPath $stagesPath)) {
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'failure.json') -Encoding utf8
     if ($heartbeatJob) {
         $sync.Stop = $true
-        try { Wait-Job $heartbeatJob -Timeout 5 | Out-Null; Remove-Job $heartbeatJob -Force -ErrorAction SilentlyContinue } catch { }
+        try {
+            Wait-Job $heartbeatJob -Timeout 5 | Out-Null
+            Remove-Job $heartbeatJob -Force -ErrorAction SilentlyContinue
+        }
+        catch {
+            Write-Debug "heartbeat cleanup failed: $_"
+        }
     }
     exit 1
 }
@@ -196,7 +204,9 @@ finally {
             Wait-Job $heartbeatJob -Timeout 5 | Out-Null
             Remove-Job $heartbeatJob -Force -ErrorAction SilentlyContinue
         }
-        catch { }
+        catch {
+            Write-Debug "heartbeat cleanup failed: $_"
+        }
     }
     # Final snapshot
     @(

@@ -39,7 +39,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Log($"machine_setup.crash: {ex}");
+            Log($"machineSetup.crash: {ex}");
             return 1;
         }
     }

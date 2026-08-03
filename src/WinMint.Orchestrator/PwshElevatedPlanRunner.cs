@@ -124,7 +124,7 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 
         string shellTarget = stages
             .First(s => s.Opcode == ServicingOpcode.StampOfflineShell)
-            .Parameters["shellTarget"];
+            .Parameters[StageParams.ShellTarget];
 
         return Result.Ok<ImageEvidence, ServicingFailure>(
             new ImageEvidence(

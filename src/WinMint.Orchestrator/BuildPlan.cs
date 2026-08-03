@@ -69,11 +69,11 @@ public static class BuildPlan
             {
                 issues.Add(new DocumentError("account.mode.missing", "account.mode is required.", "account.mode"));
             }
-            else if (!string.Equals(doc.Account.Mode, "localAutoLogon", StringComparison.Ordinal))
+            else if (!string.Equals(doc.Account.Mode, AccountModeWire.LocalAutoLogon, StringComparison.Ordinal))
             {
                 issues.Add(new DocumentError(
                     "account.mode.unsupported",
-                    $"Unsupported account.mode '{doc.Account.Mode}'. Smoke supports localAutoLogon only.",
+                    $"Unsupported account.mode '{doc.Account.Mode}'. Smoke supports {AccountModeWire.LocalAutoLogon} only.",
                     "account.mode"));
             }
             else
@@ -190,14 +190,14 @@ public static class BuildPlan
 
         ServicingStageList stages = new(
         [
-            new ServicingStage(ServicingOpcode.MountInstallWim, Dict(("sourceIso", options.SourceIsoPath ?? ""))),
+            new ServicingStage(ServicingOpcode.MountInstallWim, Dict((StageParams.SourceIso, options.SourceIsoPath ?? ""))),
             new ServicingStage(ServicingOpcode.StagePayload, Dict()),
             new ServicingStage(ServicingOpcode.InjectUnattend, Dict()),
-            new ServicingStage(ServicingOpcode.StampOfflineShell, Dict(("shellTarget", "Supervisor.exe"))),
+            new ServicingStage(ServicingOpcode.StampOfflineShell, Dict((StageParams.ShellTarget, "Supervisor.exe"))),
             new ServicingStage(
                 ServicingOpcode.ExportWim,
-                Dict(("lane", laneName), ("compression", compression), ("cleanup", cleanup))),
-            new ServicingStage(ServicingOpcode.BuildIso, Dict(("outputIso", options.OutputIsoPath ?? ""))),
+                Dict((StageParams.Lane, laneName), (StageParams.Compression, compression), (StageParams.Cleanup, cleanup))),
+            new ServicingStage(ServicingOpcode.BuildIso, Dict((StageParams.OutputIso, options.OutputIsoPath ?? ""))),
         ]);
 
         BuildArtifacts artifacts = new(
