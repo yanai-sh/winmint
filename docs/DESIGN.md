@@ -58,9 +58,9 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Post-13 sequencing | **M1 maintainer Smoke green before Wizard or keep-flag expansion** ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)) |
 | Post-13 tickets | Thin cards **14+**; no mega-epic; carry folds into owning card |
 | Keep-flag expand | Capabilities/features, `v2`, Profile presets, leftover confidence, CDM-as-primary — **defer past Wizard** |
-| Recommended remove set | Catalog only; **no default/auto remove-list** on Smoke acceptance Profile |
+| Acceptance remove-list | Smoke **acceptance** Profile pins a **small frozen** remove-list (E2E keep-flag on M1 exit); schema default elsewhere remains empty; **no** product-default / opt-out recommended set |
 | Schema | Stay on `winmint.profile/v1` until a breaking change forces `v2` |
-| Metal jobs | After Wizard or after M1 Smoke (second of the two); first kind = `winget` only |
+| Metal jobs | After Wizard (**15**); first kind = `winget` only |
 | OS reboot | Supervisor Win32 reboot on `NeedsReboot`; metal reboot matrix with metal jobs |
 | AppearanceOnce | Optional bundle field until a Profile appearance story is grilled |
 | Secrets hardening | Smoke plaintext+wipe; metal secrets later; inline JSON redact when next editing Machine setup |

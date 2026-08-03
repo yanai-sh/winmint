@@ -79,11 +79,12 @@ Profile.remove list
 | Confidence-tier leftover cleanup | Out of this product era — do not ticket |
 | CDM / consumer-features as primary remove | Not primary; optional later hive stamp only |
 | Wizard UX | M2 after maintainer Smoke (**14**); expands to same remove-list |
-| Default / auto “recommended remove set” | **No** — curated catalog only; Smoke acceptance Profile stays empty remove-list |
+| Product-default / opt-out “recommended set” | **No** — catalog bounds legal ids only |
+| Acceptance Smoke remove-list | **Yes (grill B4)** — small frozen list on acceptance Profile (`Microsoft.BingNews`, `Microsoft.GamingApp`); proves keep-flag E2E on M1 exit; re-pin if media churn |
 
 ## Do not
 
 - Bundle Bulk Crap Uninstaller
 - Treat HKLM Uninstall inventory as the ISO source of truth
 - Blind delete under `WindowsApps` as the primary path
-- Auto-on remove-list for acceptance Smoke
+- Auto-apply a “recommended” remove-list unless the Profile lists it (acceptance Profile lists explicitly)

@@ -284,10 +284,10 @@ Do not label `ready-for-agent` until starting that card. **Next:** **14**.
 
 ### 14 — Maintainer Smoke prove-out
 
-- **Design:** [Smoke](specs/2026-07-27-smoke.md) · [TDD](TDD.md) S4 · harness `tools/vm/`
-- **Deliver:** one green `just smoke` on a real Source ISO; evidence meets M1 exit criteria
-- **Out:** Wizard; keep-flag expansion; Diff VHD / digest-gated rebuild as required DoD (optional maintainer opt)
-- **DoD:** Splash before Explorer; DMA hard fields; unlock; lane marker; paint time recorded; not only fixture S4
+- **Design:** [Smoke](specs/2026-07-27-smoke.md) · [TDD](TDD.md) S4 · harness `tools/vm/` · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
+- **Deliver:** one green `just smoke` on a real Source ISO; acceptance Profile includes pinned keep-flag remove-list (`Microsoft.BingNews`, `Microsoft.GamingApp` in [samples/acceptance.profile.json](../samples/acceptance.profile.json))
+- **Out:** Wizard; capabilities matrix; Diff VHD / digest-gated rebuild as required DoD (optional maintainer opt); leftover confidence; CDM-as-primary
+- **DoD:** Splash before Explorer; DMA hard fields; unlock; lane marker; paint time recorded; **pinned AppX families absent** from provisioned inventory / FirstLogon evidence as applicable; not only fixture S4
 
 ### 15 — Wizard (stub)
 
@@ -298,10 +298,10 @@ Do not label `ready-for-agent` until starting that card. **Next:** **14**.
 ### 16 — Metal `winget` job (stub)
 
 - **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
-- **Deliver:** first non-stub job kind `winget`; fail-closed other metal kinds until ticketed
+- **Deliver:** first non-stub job kind `winget`; fail-closed other metal kinds until ticketed; fold OS Win32 reboot-on-`NeedsReboot` into this (or immediate follow-on) card
 - **Out:** Scoop/WSL matrix; guest pwsh
 
-**Still deferred (no ticket):** capabilities/features matrix; Profile presets; leftover confidence; CDM-as-primary; default/auto recommended remove-list; schema `v2`; hardware (M4); OS reboot Win32 trigger (fold into metal-jobs owning card); DPAPI metal secrets; proactive D2D splash.
+**Still deferred (no ticket):** capabilities/features matrix; Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash.
 
 ---
 

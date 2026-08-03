@@ -81,8 +81,8 @@ Run-specific WIM export / WinSxS cleanup posture for one build. Test lane priori
 _Avoid_: baking Max compression into every Smoke rebuild; claiming C# orchestration makes DISM faster
 
 **Keep-flag**:
-Remove-list polarity for selected provisioned inbox AppX: Profile lists what to strip; a static in-repo catalog bounds legal ids; ImageServicing removes offline; ProvisioningSession is a narrow FirstLogon safety net.
-_Avoid_: keep-list polarity; Profile presets; BCU; treating capabilities/CDM as the primary remove path
+Remove-list polarity for selected provisioned inbox AppX: Profile lists what to strip; a static in-repo catalog bounds legal ids; ImageServicing removes offline; ProvisioningSession is a narrow FirstLogon safety net. Smoke acceptance uses a small explicit remove-list to prove the path; other Profiles default empty.
+_Avoid_: keep-list polarity; Profile presets; BCU; treating capabilities/CDM as the primary remove path; auto-on “recommended” sets outside an explicit Profile list
 
 **Wizard**:
 A later interactive host of the same BuildPlan brain (not a second planner). May offer UI presets that expand into a Profile remove-list.

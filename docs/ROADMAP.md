@@ -29,8 +29,8 @@ Canonical ticket cards + DoD: **[TICKETS](TICKETS.md)**. Do not duplicate tables
 
 ## M1 exit criteria
 
-Pro Smoke; Local+autoLogon; DMA on acceptance Profile; splash before Explorer; DMA hard evidence; `Test` lane; fail-open; reboot keeps Shell; pwsh-free guest; `%ProgramData%\WinMint\`; paint time recorded. **Prove-out:** maintainer `just smoke` on a real Source ISO (ticket **14**) — fixture S4 alone is not exit.
+Pro Smoke; Local+autoLogon; DMA on acceptance Profile; splash before Explorer; DMA hard evidence; `Test` lane; fail-open; reboot keeps Shell; pwsh-free guest; `%ProgramData%\WinMint\`; paint time recorded; **pinned acceptance AppX remove-list proven gone** ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) B4). **Prove-out:** maintainer `just smoke` on a real Source ISO (ticket **14**) — fixture S4 alone is not exit.
 
 ## M2–M4
 
-Wizard = second BuildPlan host. Keep-flag AppX vertical (**11–13**) done; expansion (capabilities, presets, CDM-as-primary, default remove set) deferred past Wizard ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md), [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)). Hardware = stricter evidence bars. No guest pwsh / settle forks / ISO Avalonia.
+Keep-flag AppX vertical (**11–13**) done; expansion (capabilities, presets, CDM-as-primary, leftover confidence, product-default recommended set) deferred past Wizard ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md), [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)). Acceptance Profile carries a small frozen remove-list for M1 exit prove-out. Hardware = stricter evidence bars. No guest pwsh / settle forks / ISO Avalonia.
