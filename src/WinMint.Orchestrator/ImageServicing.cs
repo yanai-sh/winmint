@@ -53,6 +53,11 @@ public static class ImageServicing
             return Result.Fail<ImageEvidence, ServicingFailure>(materialized.Error);
         }
 
+        if (ValidateExportLaneParams(plan, materialized.Value) is { } laneError)
+        {
+            return Result.Fail<ImageEvidence, ServicingFailure>(laneError);
+        }
+
         Result<ImageEvidence, ServicingFailure> outcome = runner.Execute(
             run.WorkDirectory,
             materialized.Value,
@@ -61,6 +66,50 @@ public static class ImageServicing
             ct);
         // Invariant: never delete workdir on failure (or success) — caller owns lifetime.
         return outcome;
+    }
+
+    /// <summary>
+    /// Ticket 09: ExportWim compression/cleanup must match manifest lane (Test vs Release).
+    /// </summary>
+    private static ServicingFailure? ValidateExportLaneParams(
+        BuildArtifacts plan,
+        IReadOnlyList<ServicingStage> stages)
+    {
+        ServicingStage? export = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.ExportWim);
+        if (export is null)
+        {
+            return new ServicingFailure("servicing.export.missing", "Plan is missing ExportWim stage.");
+        }
+
+        string expectedLane;
+        string expectedCompression;
+        string expectedCleanup;
+        if (plan.Manifest.ImageQuality == ImageQualityLane.Release)
+        {
+            expectedLane = "Release";
+            expectedCompression = "max";
+            expectedCleanup = "full";
+        }
+        else
+        {
+            expectedLane = "Test";
+            expectedCompression = "fast";
+            expectedCleanup = "skip";
+        }
+
+        if (!export.Parameters.TryGetValue(StageParams.Lane, out string? lane)
+            || !export.Parameters.TryGetValue(StageParams.Compression, out string? compression)
+            || !export.Parameters.TryGetValue(StageParams.Cleanup, out string? cleanup)
+            || !string.Equals(lane, expectedLane, StringComparison.Ordinal)
+            || !string.Equals(compression, expectedCompression, StringComparison.Ordinal)
+            || !string.Equals(cleanup, expectedCleanup, StringComparison.Ordinal))
+        {
+            return new ServicingFailure(
+                "servicing.export.lane_mismatch",
+                $"ExportWim params must be lane={expectedLane} compression={expectedCompression} cleanup={expectedCleanup} for ImageQuality={plan.Manifest.ImageQuality}.");
+        }
+
+        return null;
     }
 
     private static Result<List<ServicingStage>, ServicingFailure> Materialize(BuildArtifacts plan, ServicingRun run)

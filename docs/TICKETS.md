@@ -34,7 +34,7 @@
 | 06 | Stub jobs + child-process executor | ProvisioningSession | 9–10 | 05 | 05 done — **done** |
 | 07 | Unlock + timeout + stale fail-open | ProvisioningSession | 12 + appearance | 06 | 06 done — **done** |
 | 08 | Checkpoint reboot keeps Shell | ProvisioningSession | 11 | 07 | 07 done — **done** |
-| 09 | `Test`/`Release` export lane | BuildPlan + ImageServicing | 14 | 02 | May parallel 03–08 |
+| 09 | `Test`/`Release` export lane | BuildPlan + ImageServicing | 14 | 02 | May parallel 03–08 — **done** |
 | 10 | Hyper-V Smoke harness | Acceptance S4 | 15 | 08, 09 | 08+09 done |
 
 **Non-ticket prerequisite:** splash prototype spike ([SPLASH](design/SPLASH.md)) before **04** is `ready-for-agent`. Spike bar: timing + ordering + one fresh-cycle replay in the appendix.
@@ -200,11 +200,13 @@
   - Manifest / report records which lane ran
 - **Out:** new Profile fields beyond lane; ISO byte asserts; guest behaviour
 - **DoD:**
-  - Test ⇒ fast compression + `cleanup=skip` (per [IMAGESERVICING](design/IMAGESERVICING.md))
-  - Release ⇒ `compression=max` + `cleanup=full`
-  - Manifest lane matches run options
+  - Test ⇒ fast compression + `cleanup=skip` (per [IMAGESERVICING](design/IMAGESERVICING.md)) ✓
+  - Release ⇒ `compression=max` + `cleanup=full` ✓
+  - Manifest lane matches run options ✓
 - **First red:** Explicit `ImageQuality.Release` ⇒ export params differ from Test (BUILDPLAN tracer 5 / S1–S2).
 - **Note:** Plan already emits lane/compression/cleanup params from ticket 01 — this ticket owns verifying ExportWim **honors** Release vs Test end-to-end (not inventing a second lane model).
+- **Done:** 2026-08-04 (issue #11)
+- **Carry:** `Apply` fail-closes on ExportWim↔manifest mismatch; `evidence.json` records `lane`; Cli `--image-quality Test|Release`.
 
 ### 10 — Hyper-V Smoke harness
 

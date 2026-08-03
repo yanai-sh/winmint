@@ -126,10 +126,31 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
             .First(s => s.Opcode == ServicingOpcode.StampOfflineShell)
             .Parameters[StageParams.ShellTarget];
 
+        ImageQualityLane lane = plan.Manifest.ImageQuality;
+        if (!string.IsNullOrWhiteSpace(file.Lane))
+        {
+            if (string.Equals(file.Lane, "Release", StringComparison.OrdinalIgnoreCase))
+            {
+                lane = ImageQualityLane.Release;
+            }
+            else if (string.Equals(file.Lane, "Test", StringComparison.OrdinalIgnoreCase))
+            {
+                lane = ImageQualityLane.Test;
+            }
+
+            if (lane != plan.Manifest.ImageQuality)
+            {
+                return Result.Fail<ImageEvidence, ServicingFailure>(
+                    new ServicingFailure(
+                        "servicing.evidence.lane_mismatch",
+                        $"evidence.json lane '{file.Lane}' does not match plan ImageQuality={plan.Manifest.ImageQuality}."));
+            }
+        }
+
         return Result.Ok<ImageEvidence, ServicingFailure>(
             new ImageEvidence(
                 file.OutputIsoPath ?? run.OutputIsoPath ?? Path.Combine(workDirectory, "out.iso"),
-                plan.Manifest.ImageQuality,
+                lane,
                 file.ShellStampTargetPath ?? shellTarget,
                 file.Digests ?? new Dictionary<string, string>(StringComparer.Ordinal)));
     }
@@ -198,6 +219,7 @@ internal sealed record EvidenceFile(
     [property: JsonPropertyName("schemaVersion")] string? SchemaVersion,
     [property: JsonPropertyName("outputIsoPath")] string? OutputIsoPath,
     [property: JsonPropertyName("shellStampTargetPath")] string? ShellStampTargetPath,
+    [property: JsonPropertyName("lane")] string? Lane,
     [property: JsonPropertyName("digests")] Dictionary<string, string>? Digests);
 
 internal sealed record FailureFile(

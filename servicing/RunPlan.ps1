@@ -222,12 +222,16 @@ if ($failed) {
 
 $shellTarget = $null
 $outputIso = $null
+$lane = $null
 foreach ($stage in $stagesDoc.stages) {
     if ($stage.opcode -eq 'StampOfflineShell' -and $stage.parameters.shellTarget) {
         $shellTarget = [string]$stage.parameters.shellTarget
     }
     if ($stage.opcode -eq 'BuildIso' -and $stage.parameters.outputIso) {
         $outputIso = [string]$stage.parameters.outputIso
+    }
+    if ($stage.opcode -eq 'ExportWim' -and $stage.parameters.lane) {
+        $lane = [string]$stage.parameters.lane
     }
 }
 
@@ -246,6 +250,7 @@ if (Test-Path -LiteralPath $wimOut) {
     schemaVersion         = 'winmint.image.evidence/v1'
     outputIsoPath         = $outputIso
     shellStampTargetPath  = $shellTarget
+    lane                  = $lane
     digests               = $digests
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'evidence.json') -Encoding utf8
 

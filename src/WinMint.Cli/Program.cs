@@ -47,26 +47,36 @@ internal static class Program
             Description = "Skip ISO copy/export; require existing single-image media under --work (fail closed if missing).",
         };
 
+        Option<string> imageQualityOption = new("--image-quality")
+        {
+            Description = "Image quality lane: Test (default) or Release.",
+            DefaultValueFactory = _ => "Test",
+        };
+
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")
         {
             profileArgument,
+            imageQualityOption,
         };
         validateCommand.SetAction(parseResult =>
         {
             FileInfo profilePath = parseResult.GetValue(profileArgument)!;
-            return RunValidate(profilePath);
+            string imageQuality = parseResult.GetValue(imageQualityOption)!;
+            return RunValidate(profilePath, imageQuality);
         });
 
         Command planCommand = new("plan", "Parse and plan a Profile; emit plan artifacts.")
         {
             profileArgument,
             outOption,
+            imageQualityOption,
         };
         planCommand.SetAction(parseResult =>
         {
             FileInfo profilePath = parseResult.GetValue(profileArgument)!;
             DirectoryInfo outDir = parseResult.GetValue(outOption)!;
-            return RunPlan(profilePath, outDir);
+            string imageQuality = parseResult.GetValue(imageQualityOption)!;
+            return RunPlan(profilePath, outDir, imageQuality);
         });
 
         Command applyCommand = new("apply", "Plan a Profile and apply ImageServicing (one elevated RunPlan).")
@@ -77,6 +87,7 @@ internal static class Program
             outIsoOption,
             wimIndexOption,
             reuseMediaOption,
+            imageQualityOption,
         };
         applyCommand.SetAction(parseResult =>
         {
@@ -86,7 +97,8 @@ internal static class Program
             FileInfo? outIso = parseResult.GetValue(outIsoOption);
             int? wimIndex = parseResult.GetValue(wimIndexOption);
             bool reuseMedia = parseResult.GetValue(reuseMediaOption);
-            return RunApply(profilePath, iso, work, outIso, wimIndex, reuseMedia);
+            string imageQuality = parseResult.GetValue(imageQualityOption)!;
+            return RunApply(profilePath, iso, work, outIso, wimIndex, reuseMedia, imageQuality);
         });
 
         Command buildCommand = new("build", "Plan + apply (same path as apply; preferred product verb).")
@@ -97,6 +109,7 @@ internal static class Program
             outIsoOption,
             wimIndexOption,
             reuseMediaOption,
+            imageQualityOption,
         };
         buildCommand.SetAction(parseResult =>
         {
@@ -106,7 +119,8 @@ internal static class Program
             FileInfo? outIso = parseResult.GetValue(outIsoOption);
             int? wimIndex = parseResult.GetValue(wimIndexOption);
             bool reuseMedia = parseResult.GetValue(reuseMediaOption);
-            return RunApply(profilePath, iso, work, outIso, wimIndex, reuseMedia);
+            string imageQuality = parseResult.GetValue(imageQualityOption)!;
+            return RunApply(profilePath, iso, work, outIso, wimIndex, reuseMedia, imageQuality);
         });
 
         RootCommand root = new("WinMint — Profile plan and ImageServicing apply")
@@ -120,9 +134,14 @@ internal static class Program
         return root.Parse(args).Invoke();
     }
 
-    private static int RunValidate(FileInfo profilePath)
+    private static int RunValidate(FileInfo profilePath, string imageQuality)
     {
-        if (!TryLoadArtifacts(profilePath, out _, out int exit))
+        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
+        {
+            return exit;
+        }
+
+        if (!TryLoadArtifacts(profilePath, out _, out exit, new RunOptions { ImageQuality = lane }))
         {
             return exit;
         }
@@ -131,9 +150,14 @@ internal static class Program
         return 0;
     }
 
-    private static int RunPlan(FileInfo profilePath, DirectoryInfo outDir)
+    private static int RunPlan(FileInfo profilePath, DirectoryInfo outDir, string imageQuality)
     {
-        if (!TryLoadArtifacts(profilePath, out BuildArtifacts? artifacts, out int exit))
+        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
+        {
+            return exit;
+        }
+
+        if (!TryLoadArtifacts(profilePath, out BuildArtifacts? artifacts, out exit, new RunOptions { ImageQuality = lane }))
         {
             return exit;
         }
@@ -141,6 +165,7 @@ internal static class Program
         Directory.CreateDirectory(outDir.FullName);
         PlanArtifactWriter.Write(outDir.FullName, artifacts!);
         Console.WriteLine($"Wrote plan artifacts to {outDir.FullName}");
+        Console.WriteLine($"Lane: {artifacts!.Manifest.ImageQuality}");
         return 0;
     }
 
@@ -150,14 +175,21 @@ internal static class Program
         DirectoryInfo work,
         FileInfo? outIso,
         int? wimIndex,
-        bool reuseMedia)
+        bool reuseMedia,
+        string imageQuality)
     {
+        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
+        {
+            return exit;
+        }
+
         if (!TryLoadArtifacts(
                 profilePath,
                 out BuildArtifacts? artifacts,
-                out int exit,
+                out exit,
                 new RunOptions
                 {
+                    ImageQuality = lane,
                     SourceIsoPath = iso.FullName,
                     OutputIsoPath = outIso?.FullName,
                 }))
@@ -190,6 +222,28 @@ internal static class Program
         Console.WriteLine($"Shell stamp: {applied.Value.ShellStampTargetPath}");
         Console.WriteLine($"Lane: {applied.Value.Lane}");
         return 0;
+    }
+
+    private static bool TryParseImageQuality(string raw, out ImageQualityLane lane, out int exitCode)
+    {
+        if (string.Equals(raw, "Test", StringComparison.OrdinalIgnoreCase))
+        {
+            lane = ImageQualityLane.Test;
+            exitCode = 0;
+            return true;
+        }
+
+        if (string.Equals(raw, "Release", StringComparison.OrdinalIgnoreCase))
+        {
+            lane = ImageQualityLane.Release;
+            exitCode = 0;
+            return true;
+        }
+
+        Console.Error.WriteLine($"Unsupported --image-quality '{raw}' (expected Test|Release).");
+        lane = ImageQualityLane.Test;
+        exitCode = 1;
+        return false;
     }
 
     private static bool TryLoadArtifacts(

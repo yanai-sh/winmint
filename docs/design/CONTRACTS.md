@@ -76,7 +76,7 @@ Form: lowercase dotted `area.token` segments (product area first).
 | `appearance` | `appearance.applied` |
 | `checkpoint` | `checkpoint.resume` |
 | `session` | `session.mode.unknown` |
-| `servicing` | `servicing.runPlan.failed`, `servicing.sourceIso.missing` |
+| `servicing` | `servicing.runPlan.failed`, `servicing.sourceIso.missing`, `servicing.export.missing`, `servicing.export.lane_mismatch`, `servicing.evidence.lane_mismatch` |
 | `account` / `document` / `dma` | BuildPlan validation (`account.mode.missing`, `document.schemaVersion.unsupported`) |
 
 **Evidence `Phases`:** use the **same** strings as the status codes they record (e.g. `shell.first_paint`, `settle.begin`) — not a parallel short vocabulary.
