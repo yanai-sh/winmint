@@ -5,6 +5,7 @@ param(
 )
 # Offline provisioned AppX remove — param-only; no Profile branching.
 # Policy (KEEPFLAG): listed id with no matching provisioned package ⇒ fail closed.
+# Uses dism.exe (not DISM AppX cmdlets) — Store-packaged pwsh hits "Class not registered" on those COM APIs.
 $mountDir = $Parameters['mountDir']
 $packageFamilyNames = $Parameters['packageFamilyNames']
 if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
@@ -25,11 +26,33 @@ $inventoryAfter = Join-Path $logDir 'provisioned-appx.after.txt'
 $dismLog = Join-Path $logDir 'remove-provisioned-appx.dism.log'
 $digestPath = Join-Path $logDir 'remove-provisioned-appx.digests.json'
 
-Import-Module Dism -ErrorAction Stop
-
 function Get-ProvisionedInventory {
     param([string] $Path)
-    return @(Get-AppxProvisionedPackage -Path $Path -ErrorAction Stop)
+    $text = & dism.exe /English /Image:$Path /Get-ProvisionedAppxPackages 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        throw "dism Get-ProvisionedAppxPackages failed: $LASTEXITCODE`n$text"
+    }
+    $pkgs = [System.Collections.Generic.List[object]]::new()
+    $cur = $null
+    foreach ($line in ($text -split "`r?`n")) {
+        if ($line -match '^DisplayName\s*:\s*(.+)\s*$') {
+            if ($null -ne $cur) { $pkgs.Add($cur) }
+            $cur = [pscustomobject]@{
+                DisplayName  = $Matches[1].Trim()
+                PackageName  = ''
+                PublisherId  = ''
+            }
+        }
+        elseif ($null -ne $cur -and $line -match '^PackageName\s*:\s*(.+)\s*$') {
+            $cur.PackageName = $Matches[1].Trim()
+            $parts = $cur.PackageName -split '_'
+            if ($parts.Count -ge 2) {
+                $cur.PublisherId = $parts[-1]
+            }
+        }
+    }
+    if ($null -ne $cur) { $pkgs.Add($cur) }
+    return @($pkgs)
 }
 
 function Test-PackageMatchesCatalogId {
@@ -49,7 +72,6 @@ function Get-PackageFamilyName {
     if (-not [string]::IsNullOrWhiteSpace($display) -and -not [string]::IsNullOrWhiteSpace($publisher)) {
         return "${display}_${publisher}"
     }
-    # Fallback: PackageName is DisplayName_Version_Arch_Resource_PublisherId — take first + last segments.
     $parts = ([string]$Package.PackageName) -split '_'
     if ($parts.Count -ge 2) {
         return "$($parts[0])_$($parts[-1])"
@@ -70,8 +92,11 @@ foreach ($id in $ids) {
     }
     foreach ($pkg in $matchedPkgs) {
         $packageName = [string]$pkg.PackageName
-        Write-Output "Remove-AppxProvisionedPackage PackageName=$packageName catalogId=$id"
-        Remove-AppxProvisionedPackage -Path $mountDir -PackageName $packageName -LogPath $dismLog -ErrorAction Stop
+        Write-Output "Remove-ProvisionedAppxPackage PackageName=$packageName catalogId=$id"
+        & dism.exe /English /Image:$mountDir /Remove-ProvisionedAppxPackage /PackageName:$packageName /LogPath:$dismLog
+        if ($LASTEXITCODE -ne 0) {
+            throw "dism Remove-ProvisionedAppxPackage failed for $packageName : $LASTEXITCODE"
+        }
         $removed.Add([pscustomobject]@{
                 CatalogId         = $id
                 PackageName       = $packageName
