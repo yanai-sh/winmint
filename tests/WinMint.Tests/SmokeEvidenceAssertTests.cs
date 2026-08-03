@@ -24,7 +24,40 @@ public class SmokeEvidenceAssertTests
             string json = File.ReadAllText(acceptancePath);
             Assert.Contains("\"splashBeforeExplorer\": true", json, StringComparison.Ordinal);
             Assert.Contains("\"lane\": \"Test\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"keepFlagAppxAbsent\": true", json, StringComparison.Ordinal);
+            Assert.Contains("Microsoft.BingNews", json, StringComparison.Ordinal);
+            Assert.Contains("Microsoft.GamingApp", json, StringComparison.Ordinal);
             Assert.Contains(SmokeAcceptanceDocument.SchemaId, json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "S4")]
+    public void Assert_smoke_evidence_fails_without_pinned_keepflag_digests()
+    {
+        string repo = FindRepoRoot();
+        string fixture = Path.Combine(repo, "tests", "fixtures", "smoke-evidence");
+        string work = Path.Combine(Path.GetTempPath(), "winmint-s4-nokeep-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyTree(fixture, work);
+            File.WriteAllText(
+                Path.Combine(work, "apply", "evidence.json"),
+                """{"schemaVersion":"winmint.image.evidence/v1","lane":"Test","digests":{}}""");
+            string acceptancePath = Path.Combine(work, "acceptance.json");
+            if (File.Exists(acceptancePath))
+            {
+                File.Delete(acceptancePath);
+            }
+
+            int exit = RunAssert(repo, work, out _, out string stderr);
+            Assert.NotEqual(0, exit);
+            Assert.Contains("keep-flag digest missing", stderr, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(acceptancePath));
         }
         finally
         {
@@ -56,7 +89,7 @@ public class SmokeEvidenceAssertTests
                 """);
             File.WriteAllText(
                 Path.Combine(work, "apply", "evidence.json"),
-                """{"schemaVersion":"winmint.image.evidence/v1","lane":"Test","digests":{}}""");
+                """{"schemaVersion":"winmint.image.evidence/v1","lane":"Test","digests":{"removed.appx.Microsoft.BingNews":"absent","removed.appx.Microsoft.GamingApp":"absent"}}""");
 
             int exit = RunAssert(repo, work, out _, out _);
             Assert.NotEqual(0, exit);

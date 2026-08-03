@@ -57,6 +57,7 @@ See [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md#s3-test-strategy-locked)
 
 - One harness entry → evidence.
 - Splash before Explorer; DMA hard fields; unlock; lane marker; record time-to-first-paint ([SPLASH](design/SPLASH.md)).
+- Keep-flag: apply digests `removed.appx.<id>=absent` for acceptance pinned remove-list (ADR-006 / ticket **14**).
 - Not part of `just check`.
 
 ## Gate commands

@@ -19,6 +19,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# ADR-006 / samples/acceptance.profile.json — frozen acceptance remove-list.
+$PinnedRemoveAppx = @('Microsoft.BingNews', 'Microsoft.GamingApp')
+
 function Get-LatestGuestEvidence {
     param([string] $Dir)
     $guest = Join-Path $Dir 'guest'
@@ -89,6 +92,21 @@ if ($lane -notin @('Test', 'Release')) {
     throw "lane marker must be Test|Release, got '$lane'"
 }
 
+# Keep-flag (ticket 14 / ADR-006 B4): offline remove digests from Apply evidence.
+$digestMap = @{}
+if ($apply.PSObject.Properties.Name -contains 'digests' -and $null -ne $apply.digests) {
+    foreach ($p in $apply.digests.PSObject.Properties) {
+        $digestMap[[string]$p.Name] = [string]$p.Value
+    }
+}
+foreach ($id in $PinnedRemoveAppx) {
+    if ([string]::IsNullOrWhiteSpace($id)) { continue }
+    $key = "removed.appx.$id"
+    if (-not $digestMap.ContainsKey($key) -or $digestMap[$key] -ne 'absent') {
+        throw "keep-flag digest missing: expected $key=absent in apply/evidence.json digests (pinned acceptance remove-list)"
+    }
+}
+
 $firstPaintMs = $null
 if ($guest.PSObject.Properties.Name -contains 'firstPaintMs' -and $null -ne $guest.firstPaintMs) {
     $firstPaintMs = [double]$guest.firstPaintMs
@@ -112,6 +130,8 @@ $acceptance = [ordered]@{
     lane                    = $lane
     firstPaintMs            = $firstPaintMs
     firstPaintWarn          = $paintWarn
+    keepFlagAppxAbsent      = $true
+    pinnedRemoveAppx        = @($PinnedRemoveAppx)
     guestEvidencePath       = $guestPath
 }
 $acceptancePath = Join-Path $EvidenceDir 'acceptance.json'

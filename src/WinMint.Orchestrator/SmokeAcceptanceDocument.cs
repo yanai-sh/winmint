@@ -12,7 +12,9 @@ public sealed record SmokeAcceptanceDocument(
     string Lane,
     long? FirstPaintMs,
     bool FirstPaintWarn,
-    string GuestEvidencePath)
+    string GuestEvidencePath,
+    bool KeepFlagAppxAbsent = false,
+    IReadOnlyList<string>? PinnedRemoveAppx = null)
 {
     public const string SchemaId = "winmint.smoke.acceptance/v1";
 }
