@@ -32,7 +32,7 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
             throw new InvalidOperationException($"SetUserDefaultLocaleName('{target.Locale}') failed.");
         }
 
-        if (!SetUserGeoID((short)target.GeoId.Value))
+        if (!SetUserGeoID(target.GeoId.Value))
         {
             throw new InvalidOperationException($"SetUserGeoID({target.GeoId.Value}) failed.");
         }
@@ -101,15 +101,35 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
             },
         };
         process.Start();
-        process.WaitForExit(30_000);
-        return process.ExitCode == 0;
+        if (!process.WaitForExit(30_000))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // best-effort; timeout already means Apply failed
+            }
+
+            return false;
+        }
+
+        if (process.ExitCode != 0)
+        {
+            return false;
+        }
+
+        // BCL caches TimeZoneInfo.Local — flush so the next Read() sees the new zone.
+        TimeZoneInfo.ClearCachedData();
+        return true;
     }
 
     private const int GEOCLASS_NATION = 16;
 
-    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetUserGeoID(short geoId);
+    private static partial bool SetUserGeoID(int geoId);
 
     [LibraryImport("kernel32.dll")]
     private static partial int GetUserGeoID(int geoClass);

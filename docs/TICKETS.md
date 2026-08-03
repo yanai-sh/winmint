@@ -30,7 +30,7 @@
 | 02 | Servicing apply + Shell stamp + Cli `build`/`apply` | ImageServicing | 3 | 01 | 01 done — **done** |
 | 03 | Machine setup stamps | ProvisioningSession | 4 | 02 | 02 done — **done** |
 | 04 | Shell splash + status + evidence | ProvisioningSession | 5, 13 | 03 | 03 done **+ splash spike** — **done** |
-| 05 | DMA settle | ProvisioningSession | 6–8 | 04 | 04 done |
+| 05 | DMA settle | ProvisioningSession | 6–8 | 04 | 04 done — **done** |
 | 06 | Stub jobs + child-process executor | ProvisioningSession | 9–10 | 05 | 05 done |
 | 07 | Unlock + timeout + stale fail-open | ProvisioningSession | 12 + appearance | 06 | 06 done |
 | 08 | Checkpoint reboot keeps Shell | ProvisioningSession | 11 | 07 | 07 done |
@@ -118,7 +118,7 @@
   - No `UnsupportedSplashPresenter` left in production `Program` wiring for Shell tenure ✓
 - **First red:** `Show` (or equivalent) recorded before settle poll begins (S3).
 - **Done:** 2026-08-03 (issue #6)
-- **Carry:** Settle is stub (`settle.begin` / `settle.stub_ok`) until ticket **05** fills DMA. Jobs / unlock / checkpoint remain 06–08. GDI solid fill presenter — D2D if S4 FirstPaintBudget slips. Shell fail-closes if `Evidence` is null (MachineSetup may omit).
+- **Carry:** Settle filled by ticket **05**. Jobs / unlock / checkpoint remain 06–08. GDI solid fill presenter — D2D if S4 FirstPaintBudget slips. Shell fail-closes if `Evidence` is null (MachineSetup may omit).
 
 ### 05 — DMA settle
 
@@ -133,12 +133,14 @@
   - New status codes only from [CONTRACTS](design/CONTRACTS.md) dotted `area.token` dialect
 - **Out:** real network location UX polish; metal-only settle forks; job executor details (ticket **06**); pre-splitting ProvisioningSession into folders
 - **DoD:**
-  - Scripted region-snapshot tests: intermediate probe failures are **non-authoritative**
-  - Only the final snapshot gates hard fields
-  - Hard fail ⇒ jobs not started
-  - No `UnsupportedRegionSnapshot` left once settle ships
-  - Settle logic lives as private phase method(s) behind `ProvisioningSession.Run`
+  - Scripted region-snapshot tests: intermediate probe failures are **non-authoritative** ✓
+  - Only the final snapshot gates hard fields ✓
+  - Hard fail ⇒ jobs not started ✓
+  - No `UnsupportedRegionSnapshot` left once settle ships ✓
+  - Settle logic lives as private phase method(s) behind `ProvisioningSession.Run` ✓
 - **First red:** Final hard GeoID mismatch ⇒ `Failed` path and no job start (S3).
+- **Done:** 2026-08-03 (issue #7)
+- **Carry:** Jobs / unlock / checkpoint remain 06–08. Soft location warn continues without jobs. `Task.Delay(span, TimeProvider, ct)` drives settle poll (no `TimeProvider.Delay`).
 
 ### 06 — Stub jobs + child-process executor
 
