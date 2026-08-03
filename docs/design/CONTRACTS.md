@@ -71,7 +71,7 @@ Form: lowercase dotted `area.token` segments (product area first).
 |------|----------|
 | `machineSetup` | `machineSetup.ok`, `machineSetup.account.forbidden`, `machineSetup.shell.verify_failed` |
 | `shell` | `shell.first_paint`, `shell.stub_complete`, `shell.evidence.required` |
-| `settle` | `settle.begin`, `settle.ok`, `settle.skipped`, `settle.hard_mismatch`, `settle.location_warn`, `settle.apply_failed`, `settle.read_failed`, `settle.target_incomplete` |
+| `settle` | `settle.begin`, `settle.ok`, `settle.skipped`, `settle.hard_mismatch`, `settle.location_warn`, `settle.apply_failed`, `settle.read_failed`, `settle.target_incomplete`, `settle.cancelled` |
 | `session` | `session.mode.unknown` |
 | `servicing` | `servicing.runPlan.failed`, `servicing.sourceIso.missing` |
 | `account` / `document` / `dma` | BuildPlan validation (`account.mode.missing`, `document.schemaVersion.unsupported`) |

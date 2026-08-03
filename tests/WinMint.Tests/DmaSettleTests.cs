@@ -147,6 +147,7 @@ public class DmaSettleTests
     private sealed class ScriptedRegionSnapshot : IRegionSnapshot
     {
         private readonly Queue<RegionRead> _reads;
+        private RegionState? _lastGood;
 
         public ScriptedRegionSnapshot(params RegionRead[] reads) =>
             _reads = new Queue<RegionRead>(reads);
@@ -157,17 +158,19 @@ public class DmaSettleTests
 
         public RegionState Read()
         {
-            if (_reads.Count == 0)
+            if (_reads.Count > 0)
             {
-                throw new InvalidOperationException("No scripted region reads left.");
+                return _reads.Dequeue() switch
+                {
+                    RegionRead.ValueRead v => _lastGood = v.State,
+                    RegionRead.ThrowRead t => throw new InvalidOperationException(t.Message),
+                    _ => throw new InvalidOperationException("Unknown scripted read."),
+                };
             }
 
-            return _reads.Dequeue() switch
-            {
-                RegionRead.ValueRead v => v.State,
-                RegionRead.ThrowRead t => throw new InvalidOperationException(t.Message),
-                _ => throw new InvalidOperationException("Unknown scripted read."),
-            };
+            // Sticky last probe — models OS state for the post-poll final snapshot Read.
+            return _lastGood
+                ?? throw new InvalidOperationException("No scripted region reads left.");
         }
     }
 

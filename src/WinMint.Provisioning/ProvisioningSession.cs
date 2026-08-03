@@ -106,12 +106,11 @@ public static class ProvisioningSession
 
         if (string.IsNullOrWhiteSpace(bundle.Dma.Locale)
             || bundle.Dma.GeoId is null
-            || string.IsNullOrWhiteSpace(bundle.Dma.TimeZoneId)
-            || bundle.Dma.LocationServicesEnabled is null)
+            || string.IsNullOrWhiteSpace(bundle.Dma.TimeZoneId))
         {
             SessionStatus incomplete = new(
                 "settle.target_incomplete",
-                "DMA settle requires locale, geoId, timeZoneId, and locationServicesEnabled.");
+                "DMA settle requires locale, geoId, and timeZoneId.");
             env.Splash.SetStatus(incomplete);
             phases.Add(incomplete.Code);
             return new SettlePhaseResult(HardFailed: true, incomplete);
@@ -130,23 +129,29 @@ public static class ProvisioningSession
         }
 
         DateTimeOffset deadline = env.Time.GetUtcNow() + bundle.Policy.SettleDeadline;
-        RegionState? lastGood = null;
 
         while (true)
         {
-            ct.ThrowIfCancellationRequested();
+            if (ct.IsCancellationRequested)
+            {
+                SessionStatus cancelled = new("settle.cancelled", "DMA settle cancelled.");
+                env.Splash.SetStatus(cancelled);
+                phases.Add(cancelled.Code);
+                return new SettlePhaseResult(HardFailed: true, cancelled);
+            }
+
             try
             {
                 RegionState snap = env.Region.Read();
-                lastGood = snap;
                 if (HardFieldsMatch(snap, bundle.Dma))
                 {
+                    // Still take an authoritative final snapshot after the loop.
                     break;
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Intermediate probe failures are non-authoritative — keep lastGood.
+                // Intermediate probe failures are non-authoritative.
                 _ = ex;
             }
 
@@ -168,29 +173,28 @@ public static class ProvisioningSession
                 break;
             }
 
-            Task.Delay(wait, env.Time, ct).GetAwaiter().GetResult();
-        }
-
-        // Final snapshot: prefer last successful probe; one more read if every probe threw.
-        RegionState? final = lastGood;
-        if (final is null)
-        {
             try
             {
-                final = env.Region.Read();
+                Task.Delay(wait, env.Time, ct).GetAwaiter().GetResult();
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (OperationCanceledException)
             {
-                SessionStatus readFailed = new("settle.read_failed", ex.Message);
-                env.Splash.SetStatus(readFailed);
-                phases.Add(readFailed.Code);
-                return new SettlePhaseResult(HardFailed: true, readFailed);
+                SessionStatus cancelled = new("settle.cancelled", "DMA settle cancelled.");
+                env.Splash.SetStatus(cancelled);
+                phases.Add(cancelled.Code);
+                return new SettlePhaseResult(HardFailed: true, cancelled);
             }
         }
 
-        if (final is null)
+        // Final snapshot gates hard fields — always read once after the bounded poll.
+        RegionState final;
+        try
         {
-            SessionStatus readFailed = new("settle.read_failed", "Final region snapshot unavailable.");
+            final = env.Region.Read();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SessionStatus readFailed = new("settle.read_failed", ex.Message);
             env.Splash.SetStatus(readFailed);
             phases.Add(readFailed.Code);
             return new SettlePhaseResult(HardFailed: true, readFailed);
@@ -206,11 +210,12 @@ public static class ProvisioningSession
             return new SettlePhaseResult(HardFailed: true, mismatch);
         }
 
-        if (final.LocationServicesEnabled != bundle.Dma.LocationServicesEnabled)
+        if (bundle.Dma.LocationServicesEnabled is bool expectedLocation
+            && final.LocationServicesEnabled != expectedLocation)
         {
             SessionStatus warn = new(
                 "settle.location_warn",
-                $"Location-services posture is {final.LocationServicesEnabled}; expected {bundle.Dma.LocationServicesEnabled}.");
+                $"Location-services posture is {final.LocationServicesEnabled}; expected {expectedLocation}.");
             env.Splash.SetStatus(warn);
             phases.Add(warn.Code);
             return new SettlePhaseResult(HardFailed: false, warn);
