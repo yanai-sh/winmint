@@ -29,7 +29,7 @@ param(
     [string] $VmName = 'winmint-smoke',
 
     [Parameter(ParameterSetName = 'Run')]
-    [int] $StallMinutes = 15,
+    [int] $StallMinutes = 45,
 
     [Parameter(ParameterSetName = 'Run')]
     [int] $WallClockMinutes = 90,
@@ -141,13 +141,30 @@ Write-Host "VM started. Waiting for guest evidence (stall=${StallMinutes}m, wall
 
 $deadline = [datetime]::UtcNow.AddMinutes($WallClockMinutes)
 $stallDeadline = [datetime]::UtcNow.AddMinutes($StallMinutes)
+$bootNudgeUntil = [datetime]::UtcNow.AddMinutes(3)
+
+# Local+autoLogon Profiles need explicit PS Direct credentials (workgroup guest).
+$guestCred = $null
+try {
+    $profileDoc = Get-Content -LiteralPath $Profile -Raw -Encoding utf8 | ConvertFrom-Json
+    $gu = [string]$profileDoc.account.username
+    $gp = [string]$profileDoc.account.password
+    if ($gu -and $gp) {
+        $guestCred = [pscredential]::new($gu, (ConvertTo-SecureString $gp -AsPlainText -Force))
+    }
+}
+catch {
+    Write-Warning "Could not read guest credentials from Profile: $($_.Exception.Message)"
+}
 
 function Test-GuestEvidenceReady {
     # Prefer PowerShell Direct when available; else host-copied folder under Work.
     $copied = Join-Path $guestDir 'evidence-*.json'
     if (Get-ChildItem -Path $copied -ErrorAction SilentlyContinue) { return $true }
     try {
-        $session = New-PSSession -VMName $VmName -ErrorAction Stop
+        $sessionParams = @{ VMName = $VmName; ErrorAction = 'Stop' }
+        if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
+        $session = New-PSSession @sessionParams
         try {
             $remote = Invoke-Command -Session $session -ScriptBlock {
                 $dir = Join-Path $env:ProgramData 'WinMint\evidence'
@@ -179,20 +196,46 @@ function Test-GuestEvidenceReady {
     return $false
 }
 
+function Send-VmEnterKey {
+    # Gen2 DVD boot often sits on "Press any key to boot from CD or DVD…"
+    try {
+        $vmCs = Get-CimInstance -Namespace root\virtualization\v2 -ClassName Msvm_ComputerSystem -Filter "ElementName='$VmName'" -ErrorAction Stop
+        $kb = Get-CimAssociatedInstance -InputObject $vmCs -ResultClassName Msvm_Keyboard -ErrorAction Stop | Select-Object -First 1
+        if ($null -eq $kb) { return }
+        Invoke-CimMethod -InputObject $kb -MethodName PressKey -Arguments @{ keyCode = 0x0D } | Out-Null
+        Start-Sleep -Milliseconds 200
+        Invoke-CimMethod -InputObject $kb -MethodName ReleaseKey -Arguments @{ keyCode = 0x0D } | Out-Null
+        Write-Host 'Sent Enter to VM (DVD boot keypress).'
+    }
+    catch {
+        Write-Warning "Could not send Enter to VM: $($_.Exception.Message)"
+    }
+}
+
+Send-VmEnterKey
+
 while ([datetime]::UtcNow -lt $deadline) {
     if (Test-GuestEvidenceReady) {
         Write-Host 'Guest evidence pulled.'
         break
     }
 
-    if ([datetime]::UtcNow -gt $stallDeadline) {
-        throw "STALL_SUSPECT: no guest evidence progress for ${StallMinutes} minutes (fail-fast before WallClockTimeout)."
-    }
-
-    # Heartbeat: VM Running counts as weak progress until first evidence
     $vm = Get-VM -Name $VmName
     if ($vm.State -ne 'Running') {
         throw "VM left Running state: $($vm.State)"
+    }
+
+    # Heartbeat: CPU activity during setup extends the stall window (wall clock still bounds).
+    if ([int]$vm.CPUUsage -gt 0) {
+        $stallDeadline = [datetime]::UtcNow.AddMinutes($StallMinutes)
+    }
+
+    if ([datetime]::UtcNow -gt $stallDeadline) {
+        throw "STALL_SUSPECT: no guest evidence / CPU progress for ${StallMinutes} minutes (fail-fast before WallClockTimeout)."
+    }
+
+    if ([datetime]::UtcNow -lt $bootNudgeUntil) {
+        Send-VmEnterKey
     }
 
     Start-Sleep -Seconds 30
