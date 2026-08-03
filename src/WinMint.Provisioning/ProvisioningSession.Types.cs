@@ -99,22 +99,22 @@ public interface IWinlogonRegistry
 
 public interface IRegionSnapshot
 {
-    // Ticket 05
+    // ponytail: ticket 05 fills this
 }
 
 public interface IProcessHost
 {
-    // Ticket 06
+    // ponytail: ticket 06 fills this
 }
 
 public interface ISplashPresenter
 {
-    // Ticket 04
+    // ponytail: ticket 04 fills this
 }
 
 public interface ICheckpointStore
 {
-    // Ticket 08
+    // ponytail: ticket 08 fills this
 }
 
 public interface ISecretScrubber
@@ -124,5 +124,5 @@ public interface ISecretScrubber
 
 public interface IEvidenceSink
 {
-    // Ticket 04
+    // ponytail: ticket 04 fills this
 }

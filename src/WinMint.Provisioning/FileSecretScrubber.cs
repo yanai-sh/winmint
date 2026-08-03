@@ -1,9 +1,12 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 namespace WinMint.Provisioning;
 
-/// <summary>Wipes staged secrets after Winlogon stamp (not the live DefaultPassword value).</summary>
+/// <summary>
+/// Redacts staged secrets after Winlogon stamp (not HKLM DefaultPassword).
+/// Guarantee: disk redact + no further use of the stamp password in MachineSetup.
+/// Not a cryptographic in-process memory scrub (immutable strings live until GC).
+/// </summary>
 public sealed class FileSecretScrubber : ISecretScrubber
 {
     private readonly string _bundlePath;
@@ -17,18 +20,22 @@ public sealed class FileSecretScrubber : ISecretScrubber
 
     public void Wipe(ProvisioningBundle bundle)
     {
+        _ = bundle;
         if (!File.Exists(_bundlePath))
         {
             return;
         }
 
-        string text = File.ReadAllText(_bundlePath);
-        JsonNode? root = JsonNode.Parse(text);
-        if (root is JsonObject obj && obj.ContainsKey("password"))
+        byte[] bytes = File.ReadAllBytes(_bundlePath);
+        BundleDto? dto = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.BundleDto);
+        if (dto is null)
         {
-            obj["password"] = "";
-            File.WriteAllText(_bundlePath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            _log?.Invoke($"Secret wipe: redacted password in {_bundlePath}");
+            throw new InvalidOperationException($"Secret wipe: failed to parse bundle {_bundlePath}");
         }
+
+        BundleDto redacted = dto with { Password = "" };
+        byte[] outBytes = JsonSerializer.SerializeToUtf8Bytes(redacted, ProvisioningJsonContext.Default.BundleDto);
+        File.WriteAllBytes(_bundlePath, outBytes);
+        _log?.Invoke($"Secret wipe: redacted password in {_bundlePath}");
     }
 }

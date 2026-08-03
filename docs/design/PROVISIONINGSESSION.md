@@ -112,6 +112,10 @@ Bootstrap (checkpoint | stale→fail-open)
 7. Crash/stale tenure past `StaleTenureThreshold` ⇒ fail-open `Failed`.
 8. Same settle + job executor on Smoke and metal; only `Jobs` list differs.
 
+### Secrets (Smoke)
+
+Smoke stages the Local+autoLogon password in plaintext under `C:\Windows\WinMint\bundle.json` (ImageServicing StagePayload). `Run(MachineSetup)` stamps Winlogon then redacts `password` in that file (`FileSecretScrubber`). Guarantee is disk redact + no further use in the MachineSetup phase — not cryptographic process-memory scrub. Metal hardening (DPAPI / ephemeral secret channel) is deferred.
+
 ### Error modes
 
 | Condition | Outcome | Unlock? |

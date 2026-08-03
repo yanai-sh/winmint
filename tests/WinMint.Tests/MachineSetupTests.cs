@@ -45,6 +45,7 @@ public class MachineSetupTests
         Assert.Equal("lab-only", winlogon.DefaultPassword);
         Assert.Equal(SupervisorPath, winlogon.Shell);
         Assert.Equal(1, secrets.WipeCount);
+        Assert.Equal("", secrets.LastBundle!.Account.Password);
     }
 
     [Fact]
@@ -159,7 +160,13 @@ public class MachineSetupTests
     {
         public int WipeCount { get; private set; }
 
-        public void Wipe(ProvisioningBundle bundle) => WipeCount++;
+        public ProvisioningBundle? LastBundle { get; private set; }
+
+        public void Wipe(ProvisioningBundle bundle)
+        {
+            WipeCount++;
+            LastBundle = bundle;
+        }
     }
 
     private sealed class NoopRegion : IRegionSnapshot;

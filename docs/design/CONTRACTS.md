@@ -37,7 +37,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 |----------|------------|---------|
 | Profile | Human / Wizard | BuildPlan |
 | BuildArtifacts | BuildPlan | ImageServicing; Cli dump |
-| Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader |
+| Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [PROVISIONINGSESSION Secrets](PROVISIONINGSESSION.md#secrets-smoke) |
 | Evidence JSON | ProvisioningSession (projection) | Smoke harness (S4) — **never** session control |
 | Checkpoint | ProvisioningSession | Next Shell `Run` via bundle.Resume |
 

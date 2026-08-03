@@ -16,6 +16,7 @@ public static class ProvisioningSession
         return mode switch
         {
             SessionMode.MachineSetup => RunMachineSetup(bundle, env, ct),
+            // ponytail: Shell tenure = ticket 04+; Failed until then
             SessionMode.Shell => new SessionResult(
                 SessionOutcome.Failed,
                 new SessionStatus("shell.not_implemented", "Shell tenure is ticket 04+."),
@@ -38,6 +39,7 @@ public static class ProvisioningSession
         }
 
         string username = bundle.Account.Username.Trim();
+        string password = bundle.Account.Password;
         if (string.IsNullOrWhiteSpace(username))
         {
             return Fail("machine_setup.account.empty", "Account username is required.");
@@ -52,7 +54,7 @@ public static class ProvisioningSession
 
         try
         {
-            env.Winlogon.SetAutoLogon(username, bundle.Account.Password);
+            env.Winlogon.SetAutoLogon(username, password);
             if (env.Winlogon.GetAutoAdminLogon()
                 && string.Equals(
                     env.Winlogon.GetDefaultUserName()?.Trim(),
@@ -69,7 +71,14 @@ public static class ProvisioningSession
             return Fail("machine_setup.autologon.stamp_failed", ex.Message);
         }
 
-        string expectedShell = bundle.Supervisor.ShellPath;
+        // No further use of stamp password in this phase (disk wipe next; string GC lifetime remains).
+        password = "";
+        ProvisioningBundle scrubbedView = bundle with
+        {
+            Account = new AccountStamp(username, ""),
+        };
+
+        string expectedShell = scrubbedView.Supervisor.ShellPath;
         SessionResult? shellFailure = null;
         try
         {
@@ -94,7 +103,7 @@ public static class ProvisioningSession
 
         try
         {
-            env.Secrets.Wipe(bundle);
+            env.Secrets.Wipe(scrubbedView);
         }
         catch (Exception ex)
         {

@@ -80,10 +80,10 @@ internal static class Program
     private static Win32WinlogonRegistry CreateWin32Winlogon() => new();
 }
 
-internal sealed class UnsupportedRegionSnapshot : IRegionSnapshot;
+internal sealed class UnsupportedRegionSnapshot : IRegionSnapshot; // ponytail: ticket 05
 
-internal sealed class UnsupportedProcessHost : IProcessHost;
+internal sealed class UnsupportedProcessHost : IProcessHost; // ponytail: ticket 06
 
-internal sealed class UnsupportedSplashPresenter : ISplashPresenter;
+internal sealed class UnsupportedSplashPresenter : ISplashPresenter; // ponytail: ticket 04
 
-internal sealed class UnsupportedCheckpointStore : ICheckpointStore;
+internal sealed class UnsupportedCheckpointStore : ICheckpointStore; // ponytail: ticket 08

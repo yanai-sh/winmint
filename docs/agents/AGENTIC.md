@@ -17,6 +17,8 @@
 
 One ticket from TICKETS per session. TDD at that seam. Ticket **04+** need splash spike first. After M1 green: `/to-spec` for M2+.
 
+Before `/implement` or a ticket code review: working tree clean **or** non-ticket WIP committed/stashed. Review `git diff <ticket-base>...HEAD` for that ticket’s commit(s) only — do not mix imaging/docs drive-bys into the review base.
+
 ```
 Implement Smoke ticket 0N only. Design: docs/design/...
 TDD seam S#. just check. See docs/TICKETS.md. No drive-bys.
