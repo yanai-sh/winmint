@@ -12,6 +12,9 @@ public static class BuildPlan
     public const string IrelandSetupLocale = "en-IE";
     public const int IrelandSetupGeoId = 68;
 
+    /// <summary>Generic Win11 Pro setup key — skips product-key page; does not activate (SPLASH).</summary>
+    public const string ProSetupProductKey = "VK7JG-NPHTM-C97JM-9MPGT-3V66T";
+
     public static Result<Profile, DocumentErrors> TryParseProfile(ReadOnlySpan<byte> utf8Json)
     {
         if (utf8Json.IsEmpty)
@@ -155,33 +158,7 @@ public static class BuildPlan
             }
         }
 
-        string unattendXml = profile.Dma.Enabled
-            ? $$"""
-              <?xml version="1.0" encoding="utf-8"?>
-              <unattend xmlns="urn:schemas-microsoft-com:unattend">
-                <settings pass="specialize">
-                  <component name="Microsoft-Windows-International-Core" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-                    <InputLocale>{{IrelandSetupLocale}}</InputLocale>
-                    <SystemLocale>{{IrelandSetupLocale}}</SystemLocale>
-                    <UILanguage>{{IrelandSetupLocale}}</UILanguage>
-                    <UserLocale>{{IrelandSetupLocale}}</UserLocale>
-                  </component>
-                  <component name="Microsoft-Windows-Deployment" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-                    <RunSynchronous>
-                      <RunSynchronousCommand wcm:action="add">
-                        <Order>1</Order>
-                        <Description>WinMint DMA setup GeoID latch (Ireland {{IrelandSetupGeoId}})</Description>
-                        <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Control\Nls\Geo" /v Nation /t REG_SZ /d {{IrelandSetupGeoId}} /f</Path>
-                      </RunSynchronousCommand>
-                    </RunSynchronous>
-                  </component>
-                </settings>
-              </unattend>
-              """
-            : """
-              <?xml version="1.0" encoding="utf-8"?>
-              <unattend xmlns="urn:schemas-microsoft-com:unattend" />
-              """;
+        string unattendXml = BuildAutounattendXml(profile);
 
         // Stub Smoke job set — real installs land later; executor shape shared with metal.
         // Keep-flag safety net when Profile remove-list is non-empty (ticket 13).
@@ -256,6 +233,148 @@ public static class BuildPlan
 
         return Result.Ok<BuildArtifacts, PlanFailure>(artifacts);
     }
+
+    /// <summary>
+    /// ISO-root Autounattend (windowsPE + oobeSystem) plus optional specialize DMA latch.
+    /// Panther copy alone cannot drive WinPE — 25H2 ConX shows "Select setup option" without this.
+    /// </summary>
+    internal static string BuildAutounattendXml(Profile profile)
+    {
+        string user = XmlEscape(profile.Account.Username);
+        string pass = XmlEscape(profile.Account.Password ?? "");
+        string specialize = profile.Dma.Enabled
+            ? $$"""
+                <settings pass="specialize">
+                  <component name="Microsoft-Windows-International-Core" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+                    <InputLocale>{{IrelandSetupLocale}}</InputLocale>
+                    <SystemLocale>{{IrelandSetupLocale}}</SystemLocale>
+                    <UILanguage>{{IrelandSetupLocale}}</UILanguage>
+                    <UserLocale>{{IrelandSetupLocale}}</UserLocale>
+                  </component>
+                  <component name="Microsoft-Windows-Deployment" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+                    <RunSynchronous>
+                      <RunSynchronousCommand wcm:action="add">
+                        <Order>1</Order>
+                        <Description>WinMint DMA setup GeoID latch (Ireland {{IrelandSetupGeoId}})</Description>
+                        <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Control\Nls\Geo" /v Nation /t REG_SZ /d {{IrelandSetupGeoId}} /f</Path>
+                      </RunSynchronousCommand>
+                    </RunSynchronous>
+                  </component>
+                </settings>
+                """
+            : "";
+
+        return $$"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <unattend xmlns="urn:schemas-microsoft-com:unattend">
+              <settings pass="windowsPE">
+                <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+                  <SetupUILanguage>
+                    <UILanguage>en-US</UILanguage>
+                  </SetupUILanguage>
+                  <InputLocale>en-US</InputLocale>
+                  <SystemLocale>en-US</SystemLocale>
+                  <UILanguage>en-US</UILanguage>
+                  <UserLocale>en-US</UserLocale>
+                </component>
+                <component name="Microsoft-Windows-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+                  <UserData>
+                    <AcceptEula>true</AcceptEula>
+                    <ProductKey>
+                      <Key>{{ProSetupProductKey}}</Key>
+                    </ProductKey>
+                  </UserData>
+                  <DiskConfiguration>
+                    <Disk wcm:action="add">
+                      <DiskID>0</DiskID>
+                      <WillWipeDisk>true</WillWipeDisk>
+                      <CreatePartitions>
+                        <CreatePartition wcm:action="add">
+                          <Order>1</Order>
+                          <Type>EFI</Type>
+                          <Size>100</Size>
+                        </CreatePartition>
+                        <CreatePartition wcm:action="add">
+                          <Order>2</Order>
+                          <Type>MSR</Type>
+                          <Size>16</Size>
+                        </CreatePartition>
+                        <CreatePartition wcm:action="add">
+                          <Order>3</Order>
+                          <Type>Primary</Type>
+                          <Extend>true</Extend>
+                        </CreatePartition>
+                      </CreatePartitions>
+                      <ModifyPartitions>
+                        <ModifyPartition wcm:action="add">
+                          <Order>1</Order>
+                          <PartitionID>1</PartitionID>
+                          <Format>FAT32</Format>
+                          <Label>System</Label>
+                        </ModifyPartition>
+                        <ModifyPartition wcm:action="add">
+                          <Order>2</Order>
+                          <PartitionID>2</PartitionID>
+                        </ModifyPartition>
+                        <ModifyPartition wcm:action="add">
+                          <Order>3</Order>
+                          <PartitionID>3</PartitionID>
+                          <Format>NTFS</Format>
+                          <Label>Windows</Label>
+                          <Letter>C</Letter>
+                        </ModifyPartition>
+                      </ModifyPartitions>
+                    </Disk>
+                  </DiskConfiguration>
+                  <ImageInstall>
+                    <OSImage>
+                      <InstallTo>
+                        <DiskID>0</DiskID>
+                        <PartitionID>3</PartitionID>
+                      </InstallTo>
+                    </OSImage>
+                  </ImageInstall>
+                </component>
+              </settings>
+              {{specialize}}
+              <settings pass="oobeSystem">
+                <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+                  <OOBE>
+                    <HideEULAPage>true</HideEULAPage>
+                    <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+                    <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+                    <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+                    <ProtectYourPC>3</ProtectYourPC>
+                  </OOBE>
+                  <UserAccounts>
+                    <LocalAccounts>
+                      <LocalAccount wcm:action="add">
+                        <Name>{{user}}</Name>
+                        <Group>Administrators</Group>
+                        <Password>
+                          <Value>{{pass}}</Value>
+                          <PlainText>true</PlainText>
+                        </Password>
+                      </LocalAccount>
+                    </LocalAccounts>
+                  </UserAccounts>
+                  <AutoLogon>
+                    <Enabled>true</Enabled>
+                    <Username>{{user}}</Username>
+                    <Password>
+                      <Value>{{pass}}</Value>
+                      <PlainText>true</PlainText>
+                    </Password>
+                    <LogonCount>5</LogonCount>
+                  </AutoLogon>
+                </component>
+              </settings>
+            </unattend>
+            """;
+    }
+
+    private static string XmlEscape(string value) =>
+        System.Security.SecurityElement.Escape(value) ?? string.Empty;
 
     private static DocumentErrors InvalidJson(string message) =>
         new([new DocumentError("document.invalidJson", message)]);

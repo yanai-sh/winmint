@@ -62,6 +62,10 @@ public class BuildPlanPlanTests
         BuildArtifacts artifacts = result.Value;
         Assert.Contains(BuildPlan.IrelandSetupLocale, artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains($"/d {BuildPlan.IrelandSetupGeoId} ", artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.Contains("windowsPE", artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.Contains(BuildPlan.ProSetupProductKey, artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.Contains("oobeSystem", artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.Contains("<Name>winmint</Name>", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.True(artifacts.Dma.Enabled);
         Assert.NotNull(artifacts.Dma.Settle);
         Assert.Equal("en-GB", artifacts.Dma.Settle.Locale);

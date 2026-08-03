@@ -194,6 +194,7 @@ public static class ImageServicing
                 case ServicingOpcode.InjectUnattend:
                     parameters[StageParams.UnattendPath] = unattendPath;
                     parameters[StageParams.MountDir] = mountDir;
+                    parameters[StageParams.MediaDir] = mediaDir;
                     break;
                 case ServicingOpcode.StampOfflineShell:
                     parameters[StageParams.ShellTarget] = ShellStampGuestPath;

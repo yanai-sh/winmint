@@ -109,7 +109,8 @@ if (Get-VM -Name $VmName -ErrorAction SilentlyContinue) {
 }
 if (Test-Path -LiteralPath $vhdx) { Remove-Item -LiteralPath $vhdx -Force }
 
-# Gen2, Secure Boot off for lab ISOs without vTPM (SPLASH spike lesson).
+# Gen2, Secure Boot off + no vTPM (Start-VM times out with vTPM on this host — SPLASH).
+# Win11 setup needs LabConfig on boot.wim (patched into media before BuildIso / SkipApply).
 New-VHD -Path $vhdx -SizeBytes 64GB -Dynamic | Out-Null
 New-VM -Name $VmName -Generation 2 -MemoryStartupBytes 4GB -VHDPath $vhdx | Out-Null
 Set-VMFirmware -VMName $VmName -EnableSecureBoot Off
@@ -122,10 +123,10 @@ if (-not $dvd) {
 else {
     Set-VMDvdDrive -VMName $VmName -Path $outIso
 }
-# Boot from DVD first
-$fw = Get-VMFirmware -VMName $VmName
+# Boot from DVD first (empty VHD otherwise triggers "Press any key to boot from CD…").
+$hddDev = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
 $dvdDev = Get-VMDvdDrive -VMName $VmName
-Set-VMFirmware -VMName $VmName -FirstBootDevice $dvdDev
+Set-VMFirmware -VMName $VmName -BootOrder $dvdDev, $hddDev
 
 # Hyper-V media ACL (SPLASH spike)
 $aclRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
@@ -196,23 +197,27 @@ function Test-GuestEvidenceReady {
     return $false
 }
 
-function Send-VmEnterKey {
-    # Gen2 DVD boot often sits on "Press any key to boot from CD or DVD…"
+function Send-VmBootNudge {
+    # Gen2 + empty VHD often sits on "Press any key to boot from CD or DVD…"
     try {
         $vmCs = Get-CimInstance -Namespace root\virtualization\v2 -ClassName Msvm_ComputerSystem -Filter "ElementName='$VmName'" -ErrorAction Stop
         $kb = Get-CimAssociatedInstance -InputObject $vmCs -ResultClassName Msvm_Keyboard -ErrorAction Stop | Select-Object -First 1
         if ($null -eq $kb) { return }
-        Invoke-CimMethod -InputObject $kb -MethodName PressKey -Arguments @{ keyCode = 0x0D } | Out-Null
-        Start-Sleep -Milliseconds 200
-        Invoke-CimMethod -InputObject $kb -MethodName ReleaseKey -Arguments @{ keyCode = 0x0D } | Out-Null
-        Write-Host 'Sent Enter to VM (DVD boot keypress).'
+        foreach ($code in @(0x20, 0x0D)) {
+            # 0x20 = VK_SPACE, 0x0D = VK_RETURN
+            Invoke-CimMethod -InputObject $kb -MethodName PressKey -Arguments @{ keyCode = $code } | Out-Null
+            Start-Sleep -Milliseconds 100
+            Invoke-CimMethod -InputObject $kb -MethodName ReleaseKey -Arguments @{ keyCode = $code } | Out-Null
+            Start-Sleep -Milliseconds 100
+        }
+        Write-Host 'Sent Space/Enter to VM (DVD boot keypress).'
     }
     catch {
-        Write-Warning "Could not send Enter to VM: $($_.Exception.Message)"
+        Write-Warning "Could not send boot keypress to VM: $($_.Exception.Message)"
     }
 }
 
-Send-VmEnterKey
+Send-VmBootNudge
 
 while ([datetime]::UtcNow -lt $deadline) {
     if (Test-GuestEvidenceReady) {
@@ -235,7 +240,7 @@ while ([datetime]::UtcNow -lt $deadline) {
     }
 
     if ([datetime]::UtcNow -lt $bootNudgeUntil) {
-        Send-VmEnterKey
+        Send-VmBootNudge
     }
 
     Start-Sleep -Seconds 30
