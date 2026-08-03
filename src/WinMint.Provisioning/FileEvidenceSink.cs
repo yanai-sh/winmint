@@ -34,7 +34,8 @@ public sealed class FileEvidenceSink : IEvidenceSink
             document.Outcome,
             document.StatusCode,
             document.StatusMessage,
-            document.Phases.ToArray());
+            document.Phases.ToArray(),
+            document.FirstPaintMs);
         byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(dto, ProvisioningJsonContext.Default.EvidenceDto);
         File.WriteAllBytes(path, bytes);
         return new EvidenceSnapshot(SchemaVersion, path);
@@ -46,4 +47,5 @@ internal sealed record EvidenceDto(
     [property: JsonPropertyName("outcome")] string Outcome,
     [property: JsonPropertyName("statusCode")] string StatusCode,
     [property: JsonPropertyName("statusMessage")] string StatusMessage,
-    [property: JsonPropertyName("phases")] string[] Phases);
+    [property: JsonPropertyName("phases")] string[] Phases,
+    [property: JsonPropertyName("firstPaintMs")] long? FirstPaintMs = null);

@@ -4,7 +4,7 @@ Windows 11 ISO builder (greenfield v2). **ARM64-first**. Host Servicing: **pwsh 
 
 ## Phase: implementation Released
 
-Product `/implement` may proceed from [TICKETS](docs/TICKETS.md) — **one ticket per session**. Apply `ready-for-agent` only when starting that ticket. Next open card: **10**.
+Product `/implement` may proceed from [TICKETS](docs/TICKETS.md) — **one ticket per session**. Apply `ready-for-agent` only when starting that ticket. Next open card: post-M1 **11** (after **10**).
 
 Gate/locks: [ROADMAP](docs/ROADMAP.md#design-acceptance) · [DESIGN](docs/DESIGN.md#decisions-locked-grill)  
 Backlog: [TICKETS](docs/TICKETS.md) · Sessions: [AGENTIC](docs/agents/AGENTIC.md) · Seams: [TDD](docs/TDD.md)

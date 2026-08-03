@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "winmint.profile/v1",
+  "account": {
+    "mode": "localAutoLogon",
+    "username": "winmint",
+    "password": "lab-only-not-for-prod"
+  },
+  "dma": {
+    "enabled": true,
+    "settle": {
+      "locale": "en-GB",
+      "geoId": 242,
+      "timeZoneId": "GMT Standard Time",
+      "locationServicesEnabled": true
+    }
+  }
+}

@@ -26,6 +26,7 @@ Profile JSON
 | Provisioning bundle (staged) | `winmint.provisioning.bundle/v1` |
 | Evidence snapshot | `winmint.provisioning.evidence/v1` |
 | Checkpoint | `winmint.provisioning.checkpoint/v1` |
+| Smoke acceptance summary | `winmint.smoke.acceptance/v1` |
 | Servicing stages (workdir) | `winmint.servicing.stages/v1` |
 | Image evidence | `winmint.image.evidence/v1` |
 
@@ -40,6 +41,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 | Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [PROVISIONINGSESSION Secrets](PROVISIONINGSESSION.md#secrets-smoke) |
 | Evidence JSON | ProvisioningSession (projection) | Smoke harness (S4) — **never** session control |
 | Checkpoint | ProvisioningSession (`ICheckpointStore`) | Next Shell `Run` via store (optional `bundle.Resume` inject) |
+| Smoke acceptance summary | Host harness (`tools/vm/`) | Maintainer — `SmokeAcceptanceDocument` |
 
 ## Compatibility
 

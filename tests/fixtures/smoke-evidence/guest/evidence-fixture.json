@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "winmint.provisioning.evidence/v1",
+  "outcome": "Complete",
+  "statusCode": "jobs.ok",
+  "statusMessage": "Provisioning jobs completed.",
+  "phases": [
+    "shell.first_paint",
+    "settle.begin",
+    "settle.ok",
+    "jobs.begin",
+    "jobs.ok"
+  ],
+  "firstPaintMs": 420
+}

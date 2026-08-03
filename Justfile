@@ -15,7 +15,7 @@ format-check:
     dotnet format --verify-no-changes
 
 check: format-check build
-    dotnet test --no-build
+    dotnet test --no-build -- --filter-not-trait "Category=S4"
     just analyze-servicing
 
 # Host-only: STACK promised PSScriptAnalyzer once servicing/ exists. Not a product NuGet.
@@ -34,3 +34,11 @@ exclude-scratch ISO="":
 # Prereq: just publish-provisioning. Watch: Get-Content <WORK>\apply-status.txt -Wait
 apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json":
     Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $marker = Join-Path '{{WORK}}' 'media\sources\.winmint-single-index'; $reuse = @(); if (Test-Path -LiteralPath $marker) { Write-Host 'Found single-image marker — passing --reuse-media'; $reuse = @('--reuse-media') }; Set-Location '{{justfile_directory()}}'; & dotnet run --project src/WinMint.Cli -- apply '{{PROFILE}}' --iso '{{ISO}}' --work '{{WORK}}' @reuse; exit $LASTEXITCODE
+
+# S4 Hyper-V Smoke — not part of `just check`. Needs admin + Hyper-V + user ISO.
+# Assert-only (no VM): just smoke-assert tests/fixtures/smoke-evidence
+smoke ISO WORK=".scratch/smoke" PROFILE="samples/acceptance.profile.json":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}'
+
+smoke-assert EVIDENCE:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'

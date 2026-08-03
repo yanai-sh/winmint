@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "winmint.image.evidence/v1",
+  "outputIsoPath": "C:\\scratch\\out.iso",
+  "shellStampTargetPath": "C:\\Windows\\WinMint\\Supervisor.exe",
+  "lane": "Test",
+  "digests": {}
+}

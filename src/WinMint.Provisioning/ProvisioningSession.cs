@@ -33,7 +33,9 @@ public static class ProvisioningSession
     {
         List<string> phases = [];
         List<EvidenceSnapshot> emitted = [];
-        DateTimeOffset wallDeadline = env.Time.GetUtcNow() + bundle.Policy.WallClockTimeout;
+        DateTimeOffset shellStart = env.Time.GetUtcNow();
+        DateTimeOffset wallDeadline = shellStart + bundle.Policy.WallClockTimeout;
+        long? firstPaintMs = null;
 
         if (ct.IsCancellationRequested)
         {
@@ -43,7 +45,8 @@ public static class ProvisioningSession
                 phases,
                 emitted,
                 new SessionStatus("shell.cancelled", "Shell tenure cancelled."),
-                dwell: false);
+                dwell: false,
+                firstPaintMs);
         }
 
         if (env.Evidence is null)
@@ -54,7 +57,8 @@ public static class ProvisioningSession
                 phases,
                 emitted,
                 new SessionStatus("shell.evidence.required", "Shell tenure requires a write-only evidence sink."),
-                dwell: false);
+                dwell: false,
+                firstPaintMs);
         }
 
         // Bootstrap: in-progress checkpoint + missing/stale heartbeat ⇒ fail-open.
@@ -71,7 +75,8 @@ public static class ProvisioningSession
                 new SessionStatus(
                     "shell.stale",
                     "In-progress checkpoint with missing or stale heartbeat; fail-open unlock."),
-                dwell: false);
+                dwell: false,
+                firstPaintMs);
         }
 
         if (tenure.CheckpointInProgress && storedCheckpoint is null)
@@ -85,7 +90,8 @@ public static class ProvisioningSession
                 new SessionStatus(
                     "shell.checkpoint.invalid",
                     "In-progress checkpoint missing or schema invalid; fail-closed."),
-                dwell: false);
+                dwell: false,
+                firstPaintMs);
         }
 
         CheckpointState? resume = storedCheckpoint ?? bundle.Resume;
@@ -100,6 +106,7 @@ public static class ProvisioningSession
 
         // FirstPaint — opaque frame before any settle work (S3 order; S4 measures latency).
         env.Splash.Show();
+        firstPaintMs = (long)(env.Time.GetUtcNow() - shellStart).TotalMilliseconds;
         SessionStatus paintStatus = new("shell.first_paint", "First opaque splash frame.");
         env.Splash.SetStatus(paintStatus);
         phases.Add(paintStatus.Code);
@@ -113,18 +120,18 @@ public static class ProvisioningSession
 
         if (IsTimedOut(env, wallDeadline))
         {
-            return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true);
+            return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
         }
 
         SettlePhaseResult settle = RunSettle(bundle, env, phases, wallDeadline, ct);
         if (settle.TimedOut)
         {
-            return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true);
+            return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
         }
 
         if (settle.HardFailed)
         {
-            return FailOpen(bundle, env, phases, emitted, settle.Status, dwell: true);
+            return FailOpen(bundle, env, phases, emitted, settle.Status, dwell: true, firstPaintMs);
         }
 
         JobsPhaseResult jobs;
@@ -140,17 +147,18 @@ public static class ProvisioningSession
                 phases,
                 emitted,
                 new SessionStatus("shell.cancelled", "Shell tenure cancelled."),
-                dwell: false);
+                dwell: false,
+                firstPaintMs);
         }
 
         if (jobs.TimedOut)
         {
-            return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true);
+            return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
         }
 
         if (jobs.Outcome == SessionOutcome.Failed)
         {
-            return FailOpen(bundle, env, phases, emitted, jobs.Status, dwell: true);
+            return FailOpen(bundle, env, phases, emitted, jobs.Status, dwell: true, firstPaintMs);
         }
 
         if (jobs.Outcome == SessionOutcome.Reboot)
@@ -162,7 +170,8 @@ public static class ProvisioningSession
                     Outcome: SessionOutcome.Reboot.ToString(),
                     StatusCode: jobs.Status.Code,
                     StatusMessage: jobs.Status.Message,
-                    Phases: phases));
+                    Phases: phases,
+                    FirstPaintMs: firstPaintMs));
             emitted.Add(rebootSnap);
             return new SessionResult(SessionOutcome.Reboot, jobs.Status, emitted);
         }
@@ -185,7 +194,8 @@ public static class ProvisioningSession
                 Outcome: SessionOutcome.Complete.ToString(),
                 StatusCode: jobs.Status.Code,
                 StatusMessage: jobs.Status.Message,
-                Phases: phases));
+                Phases: phases,
+                FirstPaintMs: firstPaintMs));
         emitted.Add(snap);
 
         return new SessionResult(SessionOutcome.Complete, jobs.Status, emitted);
@@ -219,7 +229,8 @@ public static class ProvisioningSession
         List<string> phases,
         List<EvidenceSnapshot> emitted,
         SessionStatus status,
-        bool dwell)
+        bool dwell,
+        long? firstPaintMs)
     {
         env.Splash.SetStatus(status);
         if (!phases.Contains(status.Code))
@@ -252,7 +263,8 @@ public static class ProvisioningSession
                     Outcome: SessionOutcome.Failed.ToString(),
                     StatusCode: status.Code,
                     StatusMessage: status.Message,
-                    Phases: phases));
+                    Phases: phases,
+                    FirstPaintMs: firstPaintMs));
             emitted.Add(snap);
         }
 

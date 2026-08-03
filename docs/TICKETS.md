@@ -35,7 +35,7 @@
 | 07 | Unlock + timeout + stale fail-open | ProvisioningSession | 12 + appearance | 06 | 06 done — **done** |
 | 08 | Checkpoint reboot keeps Shell | ProvisioningSession | 11 | 07 | 07 done — **done** |
 | 09 | `Test`/`Release` export lane | BuildPlan + ImageServicing | 14 | 02 | May parallel 03–08 — **done** |
-| 10 | Hyper-V Smoke harness | Acceptance S4 | 15 | 08, 09 | 08+09 done |
+| 10 | Hyper-V Smoke harness | Acceptance S4 | 15 | 08, 09 | 08+09 done — **done** |
 
 **Non-ticket prerequisite:** splash prototype spike ([SPLASH](design/SPLASH.md)) before **04** is `ready-for-agent`. Spike bar: timing + ordering + one fresh-cycle replay in the appendix.
 
@@ -218,11 +218,13 @@
 - **Out:** metal / hardware acceptance; guest pwsh; peer Splash; multi-entrypoint harness forest; Hyper-V-only settle/executor fork
 - **Optional later (harness only):** differencing VHD from parent base; ISO rebuild only on plan/payload digest change (`ImageEvidence.Digests` already available); careful servicing workdir reuse
 - **DoD:**
-  - Splash before Explorer; DMA hard fields green **or** failed DMA path with evidence + unlock
-  - Unlock on complete/failed; lane marker present; paint time recorded (**warn** if > 2.0 s)
-  - Stall fail-fast (Shell/OOBE/autologon hang) before burning `WallClockTimeout` (90 min)
-  - Not part of `just check` (S4 / `just smoke` when gated)
+  - Splash before Explorer; DMA hard fields green **or** failed DMA path with evidence + unlock ✓ (phase proxy; Explorer-first probe is harness observation)
+  - Unlock on complete/failed; lane marker present; paint time recorded (**warn** if > 2.0 s) ✓
+  - Stall fail-fast (Shell/OOBE/autologon hang) before burning `WallClockTimeout` (90 min) ✓
+  - Not part of `just check` (S4 / `just smoke` when gated) ✓
 - **First red:** Harness returns evidence folder with splash-before-Explorer marker (S4).
+- **Done:** 2026-08-04 (issue #12)
+- **Carry:** Full Hyper-V path is maintainer-gated (`just smoke ISO=…`); S4 fixture tests use `Category=S4` and are excluded from `just check`. Diff VHD / digest-gated ISO rebuild still optional. Explorer-first UI probe remains observational (phases + unlock outcome).
 
 ---
 

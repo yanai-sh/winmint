@@ -162,4 +162,5 @@ public sealed record ProvisioningEvidenceDocument(
     string Outcome,
     string StatusCode,
     string StatusMessage,
-    IReadOnlyList<string> Phases);
+    IReadOnlyList<string> Phases,
+    long? FirstPaintMs = null);

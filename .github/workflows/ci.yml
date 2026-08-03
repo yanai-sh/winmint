@@ -34,7 +34,7 @@ jobs:
           dotnet format --verify-no-changes
           dotnet restore
           dotnet build --no-restore
-          dotnet test --no-build
+          dotnet test --no-build -- --filter-not-trait "Category=S4"
 
       - name: PSScriptAnalyzer (servicing)
         shell: pwsh
