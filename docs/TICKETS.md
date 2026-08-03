@@ -33,7 +33,7 @@
 | 05 | DMA settle | ProvisioningSession | 6–8 | 04 | 04 done — **done** |
 | 06 | Stub jobs + child-process executor | ProvisioningSession | 9–10 | 05 | 05 done — **done** |
 | 07 | Unlock + timeout + stale fail-open | ProvisioningSession | 12 + appearance | 06 | 06 done — **done** |
-| 08 | Checkpoint reboot keeps Shell | ProvisioningSession | 11 | 07 | 07 done |
+| 08 | Checkpoint reboot keeps Shell | ProvisioningSession | 11 | 07 | 07 done — **done** |
 | 09 | `Test`/`Release` export lane | BuildPlan + ImageServicing | 14 | 02 | May parallel 03–08 |
 | 10 | Hyper-V Smoke harness | Acceptance S4 | 15 | 08, 09 | 08+09 done |
 
@@ -174,7 +174,7 @@
   - Success path: appearance applied once, then unlock ✓
 - **First red:** Wall-clock timeout yields unlock (S3).
 - **Done:** 2026-08-04 (issue #9)
-- **Carry:** Checkpoint write/clear + `Reboot` keep-Shell remain ticket **08** (`FileCheckpointStore` heartbeat/tenure read shipped; write path still 08). Profile→bundle appearance field not staged yet — `AppearanceOnce` on bundle is consumed when present.
+- **Carry:** Checkpoint write/clear + `Reboot` keep-Shell remain ticket **08** (`FileCheckpointStore` heartbeat/tenure read shipped; write path still 08). Profile→bundle appearance field not staged yet — `AppearanceOnce` on bundle is consumed when present. → **08 done** (write/clear + resume shipped).
 ### 08 — Checkpoint reboot keeps Shell
 
 - **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · **Seam:** S3 · **Stories:** 11
@@ -185,9 +185,11 @@
   - Real `ICheckpointStore`; `SessionOutcome.Reboot` + `CheckpointState` earn their keep; drop `UnsupportedCheckpointStore`
 - **Out:** unlock-on-complete/failed (ticket **07**); real reboot-required package matrix
 - **DoD:**
-  - `Reboot` outcome does **not** unlock
-  - Checkpoint written; Shell retained; resume continues tenure
+  - `Reboot` outcome does **not** unlock ✓
+  - Checkpoint written; Shell retained; resume continues tenure ✓
 - **First red:** `needsReboot` ⇒ `Reboot` + checkpoint + Shell kept (S3).
+- **Done:** 2026-08-04 (issue #10)
+- **Carry:** OS reboot trigger / metal reboot-required matrix still out. `ProvisionJob.NeedsReboot` is the S3 flag (no separate job catalog).
 
 ### 09 — `Test`/`Release` export lane
 

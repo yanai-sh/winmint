@@ -58,8 +58,11 @@ public static class ProvisioningSession
         }
 
         // Bootstrap: in-progress checkpoint + missing/stale heartbeat ⇒ fail-open.
-        if (IsStaleTenure(bundle, env))
+        TenureState tenure = env.Checkpoints.ReadTenure();
+        CheckpointState? storedCheckpoint = env.Checkpoints.TryReadCheckpoint();
+        if (tenure.CheckpointInProgress && IsStaleHeartbeat(bundle, env, tenure))
         {
+            env.Checkpoints.ClearCheckpoint();
             return FailOpen(
                 bundle,
                 env,
@@ -71,6 +74,28 @@ public static class ProvisioningSession
                 dwell: false);
         }
 
+        if (tenure.CheckpointInProgress && storedCheckpoint is null)
+        {
+            env.Checkpoints.ClearCheckpoint();
+            return FailOpen(
+                bundle,
+                env,
+                phases,
+                emitted,
+                new SessionStatus(
+                    "shell.checkpoint.invalid",
+                    "In-progress checkpoint missing or schema invalid; fail-closed."),
+                dwell: false);
+        }
+
+        CheckpointState? resume = storedCheckpoint ?? bundle.Resume;
+        int jobStartIndex = 0;
+        if (resume is not null
+            && TryParseJobsPhase(resume.Phase, out int resumeJobIndex))
+        {
+            jobStartIndex = resumeJobIndex;
+        }
+
         env.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
 
         // FirstPaint — opaque frame before any settle work (S3 order; S4 measures latency).
@@ -78,6 +103,13 @@ public static class ProvisioningSession
         SessionStatus paintStatus = new("shell.first_paint", "First opaque splash frame.");
         env.Splash.SetStatus(paintStatus);
         phases.Add(paintStatus.Code);
+
+        if (jobStartIndex > 0 && resume is not null)
+        {
+            SessionStatus resumed = new("checkpoint.resume", $"Resuming from {resume.Phase}.");
+            env.Splash.SetStatus(resumed);
+            phases.Add(resumed.Code);
+        }
 
         if (IsTimedOut(env, wallDeadline))
         {
@@ -98,7 +130,7 @@ public static class ProvisioningSession
         JobsPhaseResult jobs;
         try
         {
-            jobs = RunJobs(bundle, env, phases, wallDeadline, ct);
+            jobs = RunJobs(bundle, env, phases, wallDeadline, jobStartIndex, ct);
         }
         catch (OperationCanceledException)
         {
@@ -121,6 +153,20 @@ public static class ProvisioningSession
             return FailOpen(bundle, env, phases, emitted, jobs.Status, dwell: true);
         }
 
+        if (jobs.Outcome == SessionOutcome.Reboot)
+        {
+            // Keep Supervisor as Shell — do not unlock.
+            EvidenceSnapshot rebootSnap = env.Evidence.Write(
+                new ProvisioningEvidenceDocument(
+                    SchemaVersion: EvidenceSchemaVersion,
+                    Outcome: SessionOutcome.Reboot.ToString(),
+                    StatusCode: jobs.Status.Code,
+                    StatusMessage: jobs.Status.Message,
+                    Phases: phases));
+            emitted.Add(rebootSnap);
+            return new SessionResult(SessionOutcome.Reboot, jobs.Status, emitted);
+        }
+
         // Finishing: appearance once, then unlock → Complete.
         if (bundle.Appearance is not null
             && TryApplyAppearance(bundle.Appearance))
@@ -130,6 +176,7 @@ public static class ProvisioningSession
             phases.Add(appearance.Code);
         }
 
+        env.Checkpoints.ClearCheckpoint();
         Unlock(env.Winlogon);
 
         EvidenceSnapshot snap = env.Evidence.Write(
@@ -144,14 +191,11 @@ public static class ProvisioningSession
         return new SessionResult(SessionOutcome.Complete, jobs.Status, emitted);
     }
 
-    private static bool IsStaleTenure(ProvisioningBundle bundle, SessionEnvironment env)
+    private static bool IsStaleHeartbeat(
+        ProvisioningBundle bundle,
+        SessionEnvironment env,
+        TenureState tenure)
     {
-        TenureState tenure = env.Checkpoints.ReadTenure();
-        if (!tenure.CheckpointInProgress)
-        {
-            return false;
-        }
-
         if (tenure.HeartbeatUtc is null)
         {
             return true;
@@ -198,6 +242,7 @@ public static class ProvisioningSession
         }
 
         Unlock(env.Winlogon);
+        env.Checkpoints.ClearCheckpoint();
 
         if (env.Evidence is not null)
         {
@@ -219,19 +264,35 @@ public static class ProvisioningSession
         SessionStatus Status,
         bool TimedOut);
 
+    private static bool TryParseJobsPhase(string phase, out int jobIndex)
+    {
+        jobIndex = 0;
+        const string prefix = "jobs:";
+        if (!phase.StartsWith(prefix, StringComparison.Ordinal)
+            || !int.TryParse(phase.AsSpan(prefix.Length), out jobIndex)
+            || jobIndex < 0)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     private static JobsPhaseResult RunJobs(
         ProvisioningBundle bundle,
         SessionEnvironment env,
         List<string> phases,
         DateTimeOffset wallDeadline,
+        int startIndex,
         CancellationToken ct)
     {
         SessionStatus begin = new("jobs.begin", "Provisioning jobs start.");
         env.Splash.SetStatus(begin);
         phases.Add(begin.Code);
 
-        foreach (ProvisionJob job in bundle.Jobs)
+        for (int i = startIndex; i < bundle.Jobs.Count; i++)
         {
+            ProvisionJob job = bundle.Jobs[i];
             if (IsTimedOut(env, wallDeadline))
             {
                 return new JobsPhaseResult(SessionOutcome.Failed, TimeoutStatus(), TimedOut: true);
@@ -270,6 +331,20 @@ public static class ProvisioningSession
                 env.Splash.SetStatus(failed);
                 phases.Add(failed.Code);
                 return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+            }
+
+            if (job.NeedsReboot)
+            {
+                int nextIndex = i + 1;
+                CheckpointState checkpoint = new($"jobs:{nextIndex}");
+                env.Checkpoints.WriteCheckpoint(checkpoint);
+                env.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
+                SessionStatus reboot = new(
+                    "jobs.reboot",
+                    $"Job '{job.Id}' requires reboot; checkpoint {checkpoint.Phase}.");
+                env.Splash.SetStatus(reboot);
+                phases.Add(reboot.Code);
+                return new JobsPhaseResult(SessionOutcome.Reboot, reboot, TimedOut: false);
             }
         }
 

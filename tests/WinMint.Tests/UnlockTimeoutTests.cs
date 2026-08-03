@@ -209,6 +209,12 @@ public class UnlockTimeoutTests
         public TenureState ReadTenure() => tenure;
 
         public void WriteHeartbeat(DateTimeOffset utcNow) => HeartbeatsWritten.Add(utcNow);
+
+        public void WriteCheckpoint(CheckpointState state) { }
+
+        public CheckpointState? TryReadCheckpoint() => null;
+
+        public void ClearCheckpoint() { }
     }
 
     private sealed class RecordingSplashPresenter : ISplashPresenter
@@ -245,6 +251,12 @@ public class UnlockTimeoutTests
         public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
 
         public void WriteHeartbeat(DateTimeOffset utcNow) { }
+
+        public void WriteCheckpoint(CheckpointState state) { }
+
+        public CheckpointState? TryReadCheckpoint() => null;
+
+        public void ClearCheckpoint() { }
     }
 
     private sealed class NoopSecrets : ISecretScrubber

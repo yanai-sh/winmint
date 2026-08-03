@@ -40,7 +40,7 @@ public sealed record DmaSettleTarget(
     string? TimeZoneId,
     bool? LocationServicesEnabled);
 
-public sealed record ProvisionJob(string Id, string Kind);
+public sealed record ProvisionJob(string Id, string Kind, bool NeedsReboot = false);
 
 public sealed record SupervisorIdentity(string ShellPath);
 
@@ -128,8 +128,8 @@ public interface ISplashPresenter
 }
 
 /// <summary>
-/// Durable tenure under %ProgramData%\WinMint\. Ticket 07: heartbeat + stale read.
-/// Ticket 08: checkpoint write/clear for reboot resume.
+/// Durable tenure under %ProgramData%\WinMint\.
+/// Heartbeat + checkpoint write/clear for reboot resume.
 /// </summary>
 public sealed record TenureState(bool CheckpointInProgress, DateTimeOffset? HeartbeatUtc);
 
@@ -138,6 +138,12 @@ public interface ICheckpointStore
     TenureState ReadTenure();
 
     void WriteHeartbeat(DateTimeOffset utcNow);
+
+    void WriteCheckpoint(CheckpointState state);
+
+    CheckpointState? TryReadCheckpoint();
+
+    void ClearCheckpoint();
 }
 
 public interface ISecretScrubber

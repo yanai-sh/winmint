@@ -245,6 +245,12 @@ public class DmaSettleTests
         public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
 
         public void WriteHeartbeat(DateTimeOffset utcNow) { }
+
+        public void WriteCheckpoint(CheckpointState state) { }
+
+        public CheckpointState? TryReadCheckpoint() => null;
+
+        public void ClearCheckpoint() { }
     }
 
     private sealed class NoopSecrets : ISecretScrubber
