@@ -28,7 +28,7 @@
 |---|--------|--------|---------|------------|------------|
 | 01 | Profile + plan + Cli `validate`/`plan` | BuildPlan | 1–2 | — | Released — start here |
 | 02 | Servicing apply + Shell stamp + Cli `build`/`apply` | ImageServicing | 3 | 01 | 01 done — **done** |
-| 03 | Machine setup stamps | ProvisioningSession | 4 | 02 | 02 done |
+| 03 | Machine setup stamps | ProvisioningSession | 4 | 02 | 02 done — **done** |
 | 04 | Shell splash + status + evidence | ProvisioningSession | 5, 13 | 03 | 03 done **+ splash spike** |
 | 05 | DMA settle | ProvisioningSession | 6–8 | 04 | 04 done |
 | 06 | Stub jobs + child-process executor | ProvisioningSession | 9–10 | 05 | 05 done |
@@ -90,10 +90,11 @@
   - SetupComplete / `--machine-setup` exits non-zero on fail
 - **Out:** splash; DMA settle; jobs; unlock/reboot tenure
 - **DoD:**
-  - Fake-registry tests for stamp + Shell verify fail/success
-  - Never `defaultuser0` + AutoAdminLogon
-  - Fail path: non-zero exit; diagnosable logs under `%ProgramData%\WinMint\`
+  - Fake-registry tests for stamp + Shell verify fail/success ✓
+  - Never `defaultuser0` + AutoAdminLogon ✓
+  - Fail path: non-zero exit; diagnosable logs under `%ProgramData%\WinMint\` ✓
 - **First red:** Autologon stamp rejects `defaultuser0` + AutoAdminLogon (S3).
+- **Done:** 2026-08-03 (issue #5)
 
 ### 04 — Shell splash + status + evidence
 

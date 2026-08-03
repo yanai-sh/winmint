@@ -21,7 +21,8 @@ public sealed record BuildArtifacts(
     PayloadManifest Payload,
     ServicingStageList Stages,
     DmaContract Dma,
-    BuildManifest Manifest);
+    BuildManifest Manifest,
+    AccountProfile Account);
 
 public sealed record UnattendArtifact(string Xml);
 

@@ -3,7 +3,9 @@ namespace WinMint.Orchestrator;
 public sealed record ServicingRun(
     string SourceIsoPath,
     string WorkDirectory,
-    string? OutputIsoPath = null);
+    string? OutputIsoPath = null,
+    int? WimIndex = null,
+    bool ReuseMedia = false);
 
 public sealed record ServicingFailure(string Code, string Message);
 

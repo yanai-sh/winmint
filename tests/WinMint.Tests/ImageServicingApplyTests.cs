@@ -50,6 +50,11 @@ public class ImageServicingApplyTests
                     && compression == "fast"
                     && s.Parameters.TryGetValue("cleanup", out string? cleanup)
                     && cleanup == "skip");
+            Assert.Contains(
+                runner.Stages,
+                s => s.Opcode == ServicingOpcode.MountInstallWim
+                    && s.Parameters.TryGetValue("reuseMedia", out string? reuse)
+                    && reuse == "false");
             Assert.False(string.IsNullOrWhiteSpace(result.Value.ShellStampTargetPath));
             Assert.Equal(ImageQualityLane.Test, result.Value.Lane);
             Assert.Equal(ImageServicing.ShellStampGuestPath, result.Value.ShellStampTargetPath);
@@ -58,6 +63,42 @@ public class ImageServicingApplyTests
             Assert.True(File.Exists(Path.Combine(work, "payload", "Supervisor.exe")));
             string bundle = File.ReadAllText(Path.Combine(work, "payload", "bundle.json"));
             Assert.Contains(ImageServicing.BundleSchemaVersion, bundle, StringComparison.Ordinal);
+            Assert.Contains("username", bundle, StringComparison.Ordinal);
+            Assert.Contains("winmint", bundle, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    public void Apply_passes_reuseMedia_true_on_MountInstallWim_when_requested()
+    {
+        BuildArtifacts plan = MinimalPlan();
+        string work = NewTempDir();
+        try
+        {
+            RecordingElevatedPlanRunner runner = new();
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: Path.Combine(work, "out.iso"),
+                ReuseMedia: true);
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+
+            Result<ImageEvidence, ServicingFailure> result = ImageServicing.Apply(
+                plan,
+                run,
+                runner,
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
+            Assert.Contains(
+                runner.Stages,
+                s => s.Opcode == ServicingOpcode.MountInstallWim
+                    && s.Parameters.TryGetValue("reuseMedia", out string? reuse)
+                    && reuse == "true");
         }
         finally
         {

@@ -206,7 +206,8 @@ public static class BuildPlan
             payload,
             stages,
             new DmaContract(profile.Dma.Enabled, profile.Dma.Enabled ? profile.Dma.Settle : null),
-            new BuildManifest(options.ImageQuality));
+            new BuildManifest(options.ImageQuality),
+            profile.Account);
 
         return Result.Ok<BuildArtifacts, PlanFailure>(artifacts);
     }

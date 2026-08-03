@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\WinMint.Orchestrator\WinMint.Orchestrator.csproj" />
+    <ProjectReference Include="..\..\src\WinMint.Provisioning\WinMint.Provisioning.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
