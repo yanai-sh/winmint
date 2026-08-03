@@ -97,9 +97,17 @@ public interface IWinlogonRegistry
     void SetShell(string path);
 }
 
+public sealed record RegionState(
+    string? Locale,
+    int? GeoId,
+    string? TimeZoneId,
+    bool? LocationServicesEnabled);
+
 public interface IRegionSnapshot
 {
-    // ponytail: ticket 05 fills this
+    void Apply(DmaSettleTarget target);
+
+    RegionState Read();
 }
 
 public interface IProcessHost

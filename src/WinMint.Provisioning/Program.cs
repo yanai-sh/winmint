@@ -125,7 +125,7 @@ internal static class Program
         return new SessionEnvironment(
             Time: TimeProvider.System,
             Winlogon: winlogon,
-            Region: new UnsupportedRegionSnapshot(),
+            Region: CreateRegion(),
             Processes: new UnsupportedProcessHost(),
             Splash: splash ?? new NoopSplashPresenter(),
             Checkpoints: new UnsupportedCheckpointStore(),
@@ -137,10 +137,11 @@ internal static class Program
     private static Win32WinlogonRegistry CreateWin32Winlogon() => new();
 
     [SupportedOSPlatform("windows")]
+    private static Win32RegionSnapshot CreateRegion() => new();
+
+    [SupportedOSPlatform("windows")]
     private static GdiSplashPresenter CreateSplash() => new();
 }
-
-internal sealed class UnsupportedRegionSnapshot : IRegionSnapshot; // ponytail: ticket 05
 
 internal sealed class UnsupportedProcessHost : IProcessHost; // ponytail: ticket 06
 

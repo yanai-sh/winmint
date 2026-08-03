@@ -81,7 +81,7 @@ public class ShellTenureTests
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Contains("Status:shell.first_paint", splash.Events);
         Assert.Contains("Status:settle.begin", splash.Events);
-        Assert.Contains("Status:settle.stub_ok", splash.Events);
+        Assert.Contains("Status:settle.ok", splash.Events);
         Assert.Contains("Status:shell.stub_complete", splash.Events);
         Assert.Equal("Show", splash.Events[0]);
     }
@@ -115,7 +115,7 @@ public class ShellTenureTests
         new(
             Time: TimeProvider.System,
             Winlogon: new NoopWinlogon(),
-            Region: new NoopRegion(),
+            Region: new MatchingRegion(),
             Processes: new NoopProcesses(),
             Splash: splash,
             Checkpoints: new NoopCheckpoints(),
@@ -156,7 +156,19 @@ public class ShellTenureTests
         public void SetShell(string path) { }
     }
 
-    private sealed class NoopRegion : IRegionSnapshot;
+    private sealed class MatchingRegion : IRegionSnapshot
+    {
+        private RegionState _state = new("en-GB", 242, "GMT Standard Time", true);
+
+        public void Apply(DmaSettleTarget target) =>
+            _state = new RegionState(
+                target.Locale,
+                target.GeoId,
+                target.TimeZoneId,
+                target.LocationServicesEnabled);
+
+        public RegionState Read() => _state;
+    }
 
     private sealed class NoopProcesses : IProcessHost;
 

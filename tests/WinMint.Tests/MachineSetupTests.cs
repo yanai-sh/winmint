@@ -169,7 +169,12 @@ public class MachineSetupTests
         }
     }
 
-    private sealed class NoopRegion : IRegionSnapshot;
+    private sealed class NoopRegion : IRegionSnapshot
+    {
+        public void Apply(DmaSettleTarget target) { }
+
+        public RegionState Read() => new(null, null, null, null);
+    }
 
     private sealed class NoopProcesses : IProcessHost;
 
