@@ -6,6 +6,7 @@ namespace WinMint.Provisioning;
 public static class BundleLoader
 {
     public const string SchemaVersion = "winmint.provisioning.bundle/v1";
+    public const string JobsSchemaVersion = "winmint.jobs/v1";
     public const string DefaultGuestBundlePath = @"C:\Windows\WinMint\bundle.json";
 
     public static ProvisioningBundle LoadFromFile(string path)
@@ -33,6 +34,10 @@ public static class BundleLoader
             throw new InvalidOperationException("bundle.username is required.");
         }
 
+        string? dir = Path.GetDirectoryName(path);
+        string jobsPath = dir is null ? "jobs.json" : Path.Combine(dir, "jobs.json");
+        IReadOnlyList<ProvisionJob> jobs = LoadJobs(jobsPath, dto.JobIds);
+
         return new ProvisioningBundle(
             Account: new AccountStamp(dto.Username, dto.Password ?? ""),
             Dma: new DmaSettleTarget(
@@ -41,9 +46,35 @@ public static class BundleLoader
                 dto.Settle?.GeoId,
                 dto.Settle?.TimeZoneId,
                 dto.Settle?.LocationServicesEnabled),
-            Jobs: (dto.JobIds ?? []).Select(id => new ProvisionJob(id, "stub")).ToArray(),
+            Jobs: jobs,
             Policy: SessionPolicy.SmokeDefaults,
-            Supervisor: new SupervisorIdentity(dto.SupervisorPath));
+            Supervisor: new SupervisorIdentity(dto.SupervisorPath),
+            RemoveProvisionedAppx: dto.RemoveProvisionedAppx ?? []);
+    }
+
+    private static ProvisionJob[] LoadJobs(string jobsPath, string[]? fallbackJobIds)
+    {
+        if (File.Exists(jobsPath))
+        {
+            byte[] bytes = File.ReadAllBytes(jobsPath);
+            JobsFile? jobsFile = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.JobsFile);
+            if (jobsFile is null)
+            {
+                throw new InvalidOperationException($"Failed to parse jobs: {jobsPath}");
+            }
+
+            if (!string.Equals(jobsFile.SchemaVersion, JobsSchemaVersion, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Unsupported jobs schema '{jobsFile.SchemaVersion}' (need {JobsSchemaVersion}).");
+            }
+
+            return (jobsFile.Jobs ?? [])
+                .Select(j => new ProvisionJob(j.Id, j.Kind, j.NeedsReboot))
+                .ToArray();
+        }
+
+        return (fallbackJobIds ?? []).Select(id => new ProvisionJob(id, "stub")).ToArray();
     }
 }
 
@@ -54,7 +85,8 @@ internal sealed record BundleDto(
     [property: JsonPropertyName("password")] string? Password,
     [property: JsonPropertyName("dmaEnabled")] bool DmaEnabled,
     [property: JsonPropertyName("settle")] SettleDto? Settle,
-    [property: JsonPropertyName("jobIds")] string[]? JobIds);
+    [property: JsonPropertyName("jobIds")] string[]? JobIds,
+    [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx);
 
 internal sealed record SettleDto(
     [property: JsonPropertyName("locale")] string Locale,
@@ -62,7 +94,17 @@ internal sealed record SettleDto(
     [property: JsonPropertyName("timeZoneId")] string TimeZoneId,
     [property: JsonPropertyName("locationServicesEnabled")] bool LocationServicesEnabled);
 
+internal sealed record JobsFile(
+    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
+    [property: JsonPropertyName("jobs")] JobFile[]? Jobs);
+
+internal sealed record JobFile(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("needsReboot")] bool NeedsReboot = false);
+
 [JsonSerializable(typeof(BundleDto))]
+[JsonSerializable(typeof(JobsFile))]
 [JsonSerializable(typeof(EvidenceDto))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class ProvisioningJsonContext : JsonSerializerContext;

@@ -312,6 +312,17 @@ public static class ProvisioningSession
 
             ct.ThrowIfCancellationRequested();
 
+            if (string.Equals(job.Kind, "appx.safetyNet", StringComparison.OrdinalIgnoreCase))
+            {
+                JobsPhaseResult? appxResult = RunAppxSafetyNetJob(bundle, env, phases, job);
+                if (appxResult is not null)
+                {
+                    return appxResult.Value;
+                }
+
+                continue;
+            }
+
             if (!string.Equals(job.Kind, "stub", StringComparison.OrdinalIgnoreCase))
             {
                 SessionStatus unsupported = new(
@@ -364,6 +375,58 @@ public static class ProvisioningSession
         env.Splash.SetStatus(ok);
         phases.Add(ok.Code);
         return new JobsPhaseResult(SessionOutcome.Complete, ok, TimedOut: false);
+    }
+
+    /// <summary>
+    /// KEEPFLAG safety net: RemovePackage for registered matches; Deprovision only if still provisioned.
+    /// </summary>
+    /// <returns>Failure result, or null when the job succeeded (caller continues the loop).</returns>
+    private static JobsPhaseResult? RunAppxSafetyNetJob(
+        ProvisioningBundle bundle,
+        SessionEnvironment env,
+        List<string> phases,
+        ProvisionJob job)
+    {
+        if (env.Appx is null)
+        {
+            SessionStatus missing = new(
+                "jobs.failed",
+                $"Job '{job.Id}' requires IAppxPackageManager.");
+            env.Splash.SetStatus(missing);
+            phases.Add(missing.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, missing, TimedOut: false);
+        }
+
+        IReadOnlyList<string> ids = bundle.RemoveProvisionedAppx ?? [];
+        try
+        {
+            foreach (string catalogId in ids)
+            {
+                if (string.IsNullOrWhiteSpace(catalogId))
+                {
+                    continue;
+                }
+
+                foreach (AppxPackageInfo registered in env.Appx.FindRegisteredByCatalogId(catalogId))
+                {
+                    env.Appx.RemovePackage(registered.PackageFullName);
+                }
+
+                foreach (AppxPackageInfo provisioned in env.Appx.FindProvisionedByCatalogId(catalogId))
+                {
+                    env.Appx.DeprovisionPackageFamily(provisioned.PackageFamilyName);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SessionStatus failed = new("jobs.failed", $"Job '{job.Id}': {ex.Message}");
+            env.Splash.SetStatus(failed);
+            phases.Add(failed.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+        }
+
+        return null;
     }
 
     private readonly record struct SettlePhaseResult(bool HardFailed, bool TimedOut, SessionStatus Status);

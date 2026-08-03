@@ -184,12 +184,18 @@ public static class BuildPlan
               """;
 
         // Stub Smoke job set — real installs land later; executor shape shared with metal.
-        JobsArtifact jobs = new(
-            JobsSchemaVersion,
-            [
-                new JobDescriptor("smoke.stub.ready", "stub"),
-                new JobDescriptor("smoke.stub.complete", "stub"),
-            ]);
+        // Keep-flag safety net when Profile remove-list is non-empty (ticket 13).
+        List<JobDescriptor> jobList =
+        [
+            new JobDescriptor("smoke.stub.ready", "stub"),
+            new JobDescriptor("smoke.stub.complete", "stub"),
+        ];
+        if (profile.RemoveProvisionedAppx.Count > 0)
+        {
+            jobList.Add(new JobDescriptor("keepflag.appx.safetyNet", "appx.safetyNet"));
+        }
+
+        JobsArtifact jobs = new(JobsSchemaVersion, jobList);
 
         PayloadManifest payload = new(
         [

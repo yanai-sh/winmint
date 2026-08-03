@@ -244,7 +244,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 |---|--------|--------|------------|
 | 11 | Profile remove-list + static AppX catalog + plan validate | BuildPlan | **10** done — **done** |
 | 12 | Offline RemoveProvisionedAppx stage + Deprovisioned stamps + evidence | ImageServicing | **11** done — **done** |
-| 13 | FirstLogon PackageManager safety-net job (narrow) | ProvisioningSession | **12** done |
+| 13 | FirstLogon PackageManager safety-net job (narrow) | ProvisioningSession | **12** done — **done** |
 
 ### 11 — Profile remove-list + catalog + plan validate
 
@@ -268,6 +268,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 - **Deliver:** optional job when remove-list non-empty — `PackageManager.RemovePackageAsync`; live deprovision only if still provisioned
 - **Out:** BCU; UI Automation; CDM primary policy; guest pwsh
 - **DoD:** fake PackageManager tests for remove / still-provisioned deprovision paths
+- **Done:** 2026-08-04 (issue #24)
 
 ---
 

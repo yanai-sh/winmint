@@ -29,7 +29,8 @@ public sealed record ProvisioningBundle(
     SessionPolicy Policy,
     SupervisorIdentity Supervisor,
     AppearanceOnce? Appearance = null,
-    CheckpointState? Resume = null);
+    CheckpointState? Resume = null,
+    IReadOnlyList<string>? RemoveProvisionedAppx = null);
 
 public sealed record AccountStamp(string Username, string Password);
 
@@ -82,7 +83,25 @@ public sealed record SessionEnvironment(
     ISplashPresenter Splash,
     ICheckpointStore Checkpoints,
     ISecretScrubber Secrets,
-    IEvidenceSink? Evidence = null);
+    IEvidenceSink? Evidence = null,
+    IAppxPackageManager? Appx = null);
+
+public sealed record AppxPackageInfo(
+    string PackageFullName,
+    string PackageFamilyName,
+    string? DisplayName);
+
+/// <summary>FirstLogon AppX safety net (ticket 13) — fake in S3; WinRT adapter in production.</summary>
+public interface IAppxPackageManager
+{
+    IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId);
+
+    IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId);
+
+    void RemovePackage(string packageFullName);
+
+    void DeprovisionPackageFamily(string packageFamilyName);
+}
 
 public interface IWinlogonRegistry
 {

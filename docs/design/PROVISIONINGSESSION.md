@@ -78,10 +78,11 @@ public sealed record SessionEnvironment(
     ISplashPresenter Splash,
     ICheckpointStore Checkpoints,
     ISecretScrubber Secrets,
-    IEvidenceSink? Evidence = null);
+    IEvidenceSink? Evidence = null,
+    IAppxPackageManager? Appx = null);
 ```
 
-Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 adapters live in the same project; tests supply fakes.
+Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes. `IAppxPackageManager` is the keep-flag FirstLogon safety net (ticket **13**).
 
 ### Phase machine
 

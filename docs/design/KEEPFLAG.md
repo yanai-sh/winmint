@@ -63,7 +63,10 @@ Profile.remove list
 
 ### ProvisioningSession
 
-- Optional job when remove-list non-empty: enumerate registered packages for the FirstLogon user; `RemovePackageAsync` for listed families still present; `DeprovisionPackageForAllUsersAsync` only if still provisioned.
+- Optional job **`appx.safetyNet`** (`keepflag.appx.safetyNet`) when remove-list non-empty (ticket **13**).
+- Bundle carries `removeProvisionedAppx`; `jobs.json` carries kind (not hard-coded stub).
+- Enumerate registered packages → `RemovePackageAsync`; `DeprovisionPackageForAllUsersAsync` only for families still provisioned.
+- Port: `IAppxPackageManager` (S3 fake; production `WinRTAppxPackageManager`).
 - No guest pwsh; no UI Automation; no BCU.
 
 ## Explicitly deferred
