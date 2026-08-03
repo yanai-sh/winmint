@@ -187,6 +187,10 @@ public static class ImageServicing
                     parameters[StageParams.ShellTarget] = ShellStampGuestPath;
                     parameters[StageParams.MountDir] = mountDir;
                     break;
+                case ServicingOpcode.RemoveProvisionedAppx:
+                    // packageFamilyNames comes from BuildPlan — inject mount only.
+                    parameters[StageParams.MountDir] = mountDir;
+                    break;
                 case ServicingOpcode.ExportWim:
                     // compression / cleanup / lane come from BuildPlan — do not invent defaults here.
                     parameters[StageParams.MountDir] = mountDir;

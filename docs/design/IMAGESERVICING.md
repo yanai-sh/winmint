@@ -50,6 +50,7 @@ public enum ServicingOpcode
     StagePayload,
     InjectUnattend,
     StampOfflineShell,
+    RemoveProvisionedAppx, // keep-flag; after mount, before payload when Profile remove-list non-empty
     ExportWim,
     BuildIso,
 }
@@ -78,11 +79,12 @@ public sealed record ImageEvidence(
 ### Example stages (Test lane)
 
 ```
-MountInstallWim → StagePayload → InjectUnattend → StampOfflineShell
+MountInstallWim → [RemoveProvisionedAppx?] → StagePayload → InjectUnattend → StampOfflineShell
   → ExportWim(compression=fast, cleanup=skip) → BuildIso
 ```
 
 `MountInstallWim` also: ISO→media copy, clear read-only, **single-index export** when needed, then DISM mount.  
+`RemoveProvisionedAppx` (ticket **12**): optional; inventory → remove → re-inventory + Deprovisioned stamps.  
 Release differs only in `ExportWim` params (`compression=max`, `cleanup=full`).
 
 ## Elevation model

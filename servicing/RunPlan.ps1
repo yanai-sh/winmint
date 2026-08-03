@@ -161,6 +161,7 @@ function Resolve-KernelScript {
         'StagePayload' { return Join-Path $scriptRoot 'Stage-Payload.ps1' }
         'InjectUnattend' { return Join-Path $scriptRoot 'Inject-Unattend.ps1' }
         'StampOfflineShell' { return Join-Path $scriptRoot 'Stamp-OfflineShell.ps1' }
+        'RemoveProvisionedAppx' { return Join-Path $scriptRoot 'Remove-ProvisionedAppx.ps1' }
         'ExportWim' { return Join-Path $scriptRoot 'Export-Wim.ps1' }
         'BuildIso' { return Join-Path $scriptRoot 'Build-Iso.ps1' }
         default { throw "Unknown opcode: $Opcode" }
@@ -244,6 +245,13 @@ $wimOut = Join-Path $WorkDirectory 'install.wim'
 if (Test-Path -LiteralPath $wimOut) {
     $shaWim = Get-FileHash -LiteralPath $wimOut -Algorithm SHA256
     $digests['installWim.sha256'] = $shaWim.Hash.ToLowerInvariant()
+}
+$removeAppxDigests = Join-Path $logDir 'remove-provisioned-appx.digests.json'
+if (Test-Path -LiteralPath $removeAppxDigests) {
+    $side = Get-Content -LiteralPath $removeAppxDigests -Raw | ConvertFrom-Json
+    foreach ($p in $side.PSObject.Properties) {
+        $digests[[string]$p.Name] = [string]$p.Value
+    }
 }
 
 @{

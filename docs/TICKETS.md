@@ -243,7 +243,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
 | 11 | Profile remove-list + static AppX catalog + plan validate | BuildPlan | **10** done — **done** |
-| 12 | Offline RemoveProvisionedAppx stage + Deprovisioned stamps + evidence | ImageServicing | **11** done |
+| 12 | Offline RemoveProvisionedAppx stage + Deprovisioned stamps + evidence | ImageServicing | **11** done — **done** |
 | 13 | FirstLogon PackageManager safety-net job (narrow) | ProvisioningSession | **12** done |
 
 ### 11 — Profile remove-list + catalog + plan validate
@@ -260,6 +260,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 - **Deliver:** opaque remove opcode + param-only kernel; `Remove-AppxProvisionedPackage` / DISM `/Image`; optional `Deprovisioned` hive stamps; re-inventory evidence
 - **Out:** FirstLogon PackageManager; capabilities/features; Profile branching in kernels
 - **DoD:** listed present packages gone from provisioned inventory; absent-id policy freeze documented; workdir logs on failure
+- **Done:** 2026-08-04 (issue #23)
 
 ### 13 — FirstLogon AppX safety net
 

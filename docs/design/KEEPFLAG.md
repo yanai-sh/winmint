@@ -42,7 +42,7 @@ Users need a fail-closed way to strip selected **provisioned inbox AppX** from a
 
 - Repo-owned static list of **legal** provisioned AppX identities for the remove-list (not “everything on a reference PC”).
 - BuildPlan: validate remove-list ⊆ catalog; emit servicing stage params (package identities), never `.ps1` paths.
-- ImageServicing: inventory mounted image (`Get-AppxProvisionedPackage`); remove listed present packages; record identity → final state in evidence; absent listed id ⇒ typed failure or documented no-op policy (freeze at implement — prefer fail-closed if Profile asserted remove).
+- ImageServicing: inventory mounted image (`Get-AppxProvisionedPackage`); remove listed present packages; record identity → final state in evidence; **absent listed id ⇒ fail closed** (typed kernel failure; Profile asserted remove — frozen ticket **12**).
 
 ## Seam mapping
 
@@ -56,9 +56,10 @@ Profile.remove list
 
 ### ImageServicing
 
-- New opaque opcode (name freeze at implement), e.g. after mount / before or after payload stages — order freeze at implement.
+- Opcode **`RemoveProvisionedAppx`** (frozen ticket **11**/**12**): after `MountInstallWim`, before `StagePayload`.
+- Params: `packageFamilyNames` (semicolon-separated catalog ids) + `mountDir` (Materialize).
+- Kernel: inventory → `Remove-AppxProvisionedPackage` → re-inventory; stamp `AppxAllUserStore\Deprovisioned\<PFN>`; digests `removed.appx.<id>=absent` + workdir `logs/`.
 - Kernels remain param-only; no Profile JSON branching.
-- Evidence: re-inventory after removes; digests/logs per [offline DISM research](../research/2026-08-03-offline-dism-remove-apis.md).
 
 ### ProvisioningSession
 
