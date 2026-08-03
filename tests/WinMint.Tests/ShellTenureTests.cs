@@ -86,6 +86,23 @@ public class ShellTenureTests
         Assert.Equal("Show", splash.Events[0]);
     }
 
+    [Fact]
+    public void Shell_fails_closed_when_Evidence_sink_missing()
+    {
+        RecordingSplashPresenter splash = new();
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            MinimalBundle(),
+            Env(splash, evidence: null),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("shell.evidence.required", result.FinalStatus.Code);
+        Assert.Empty(splash.Events);
+        Assert.Empty(result.EvidenceEmitted);
+    }
+
     private static ProvisioningBundle MinimalBundle() =>
         new(
             Account: new AccountStamp("winmint", ""),
@@ -94,7 +111,7 @@ public class ShellTenureTests
             Policy: SessionPolicy.SmokeDefaults,
             Supervisor: new SupervisorIdentity(SupervisorPath));
 
-    private static SessionEnvironment Env(ISplashPresenter splash, IEvidenceSink evidence) =>
+    private static SessionEnvironment Env(ISplashPresenter splash, IEvidenceSink? evidence) =>
         new(
             Time: TimeProvider.System,
             Winlogon: new NoopWinlogon(),

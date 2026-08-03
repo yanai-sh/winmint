@@ -35,6 +35,11 @@ public static class ProvisioningSession
             return Fail("shell.cancelled", "Shell tenure cancelled.");
         }
 
+        if (env.Evidence is null)
+        {
+            return Fail("shell.evidence.required", "Shell tenure requires a write-only evidence sink.");
+        }
+
         List<string> phases = [];
         List<EvidenceSnapshot> emitted = [];
 
@@ -56,17 +61,14 @@ public static class ProvisioningSession
         SessionStatus finalStatus = new("shell.stub_complete", "Shell splash + stub settle; later tickets deepen tenure.");
         env.Splash.SetStatus(finalStatus);
 
-        if (env.Evidence is not null)
-        {
-            EvidenceSnapshot snap = env.Evidence.Write(
-                new ProvisioningEvidenceDocument(
-                    SchemaVersion: EvidenceSchemaVersion,
-                    Outcome: SessionOutcome.Complete.ToString(),
-                    StatusCode: finalStatus.Code,
-                    StatusMessage: finalStatus.Message,
-                    Phases: phases));
-            emitted.Add(snap);
-        }
+        EvidenceSnapshot snap = env.Evidence.Write(
+            new ProvisioningEvidenceDocument(
+                SchemaVersion: EvidenceSchemaVersion,
+                Outcome: SessionOutcome.Complete.ToString(),
+                StatusCode: finalStatus.Code,
+                StatusMessage: finalStatus.Message,
+                Phases: phases));
+        emitted.Add(snap);
 
         return new SessionResult(SessionOutcome.Complete, finalStatus, emitted);
     }

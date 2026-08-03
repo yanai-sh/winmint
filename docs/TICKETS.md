@@ -118,7 +118,7 @@
   - No `UnsupportedSplashPresenter` left in production `Program` wiring for Shell tenure ✓
 - **First red:** `Show` (or equivalent) recorded before settle poll begins (S3).
 - **Done:** 2026-08-03 (issue #6)
-- **Carry:** Settle is stub (`settle.begin` / `settle.stub_ok`) until ticket **05** fills DMA. Jobs / unlock / checkpoint remain 06–08. GDI solid fill presenter — D2D if S4 FirstPaintBudget slips.
+- **Carry:** Settle is stub (`settle.begin` / `settle.stub_ok`) until ticket **05** fills DMA. Jobs / unlock / checkpoint remain 06–08. GDI solid fill presenter — D2D if S4 FirstPaintBudget slips. Shell fail-closes if `Evidence` is null (MachineSetup may omit).
 
 ### 05 — DMA settle
 
