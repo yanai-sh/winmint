@@ -21,11 +21,11 @@
 
 ## Cross-cutting (accepted)
 
-[CONTRACTS](design/CONTRACTS.md) · [SECRETS](design/SECRETS.md) · [SPLASH](design/SPLASH.md) · [V1-LESSONS](design/V1-LESSONS.md)
+[CONTRACTS](design/CONTRACTS.md) · [SECRETS](design/SECRETS.md) · [SPLASH](design/SPLASH.md) · [V1-LESSONS](design/V1-LESSONS.md) · [KEEPFLAG](design/KEEPFLAG.md) (post-M1; design accepted)
 
 ## ADRs
 
-[001](decisions/ADR-001-source-iso-legal.md) · [002](decisions/ADR-002-v2-architecture.md) · [003](decisions/ADR-003-dma-interop.md) · [004](decisions/ADR-004-stack-and-guest-control-plane.md)
+[001](decisions/ADR-001-source-iso-legal.md) · [002](decisions/ADR-002-v2-architecture.md) · [003](decisions/ADR-003-dma-interop.md) · [004](decisions/ADR-004-stack-and-guest-control-plane.md) · [005](decisions/ADR-005-keep-flag-matrix.md)
 
 ## Decisions locked (grill)
 
@@ -56,7 +56,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Full table retained f
 | Hyper-V Smoke | Pro only |
 | WIM commit | Single-image only — Mount exports edition; Export fail-closes if multi-index ([IMAGESERVICING](design/IMAGESERVICING.md#invariants) §7) |
 
-**Deferred:** M2–M4 specs. Profile property names frozen in ticket **01** ([BUILDPLAN](design/BUILDPLAN.md)).  
+**Deferred:** M2–M4 implement (keep-flag design locked in [ADR-005](decisions/ADR-005-keep-flag-matrix.md) / [KEEPFLAG](design/KEEPFLAG.md); Wizard / hardware still stub). Profile property names frozen in ticket **01** ([BUILDPLAN](design/BUILDPLAN.md)); optional `debloat.removeProvisionedAppx` extends v1 post-**10**.  
 **Owned elsewhere:** AppearanceOnce → ticket **07**; splash spike measurements → [SPLASH](design/SPLASH.md) appendix (gate for **04**).
 
 ## Design Acceptance

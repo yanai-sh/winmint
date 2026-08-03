@@ -202,7 +202,42 @@
 
 ## Explicitly not in M1 backlog
 
-Wizard, debloat matrix, BitLocker, hardware acceptance, guest pwsh, peer Splash, Home Smoke SKU, MicrosoftOobe, enterprise secrets, MediatR/Generic Host/Contracts project.
+Wizard, BitLocker, hardware acceptance, guest pwsh, peer Splash, Home Smoke SKU, MicrosoftOobe, enterprise secrets, MediatR/Generic Host/Contracts project.
+
+Keep-flag **design** is accepted ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md), wayfinder [Keep-flag matrix wayfinding](https://github.com/yanai-sh/winmint/issues/13)). **Implement** only after ticket **10** green — stub cards below. Do not label `ready-for-agent` until starting that card.
+
+---
+
+## Post-M1 stubs — keep-flag matrix (not started)
+
+Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
+
+| # | Title | Module | Ready when |
+|---|--------|--------|------------|
+| 11 | Profile remove-list + static AppX catalog + plan validate | BuildPlan | **10** done |
+| 12 | Offline RemoveProvisionedAppx stage + Deprovisioned stamps + evidence | ImageServicing | **11** done |
+| 13 | FirstLogon PackageManager safety-net job (narrow) | ProvisioningSession | **12** done |
+
+### 11 — Profile remove-list + catalog + plan validate
+
+- **Design:** [KEEPFLAG](design/KEEPFLAG.md) · [BUILDPLAN](design/BUILDPLAN.md)
+- **Deliver:** optional `debloat.removeProvisionedAppx` on `winmint.profile/v1` (default empty); static in-repo catalog; plan ⊆ catalog; emit servicing opcode params (no `.ps1` paths)
+- **Out:** capabilities/features; Profile presets; `v2` schema bump; Servicing execution
+- **DoD:** empty list ⇒ no remove stages; unknown id ⇒ plan failure; `just check` green
+
+### 12 — Offline provisioned AppX remove
+
+- **Design:** [KEEPFLAG](design/KEEPFLAG.md) · [IMAGESERVICING](design/IMAGESERVICING.md)
+- **Deliver:** opaque remove opcode + param-only kernel; `Remove-AppxProvisionedPackage` / DISM `/Image`; optional `Deprovisioned` hive stamps; re-inventory evidence
+- **Out:** FirstLogon PackageManager; capabilities/features; Profile branching in kernels
+- **DoD:** listed present packages gone from provisioned inventory; absent-id policy freeze documented; workdir logs on failure
+
+### 13 — FirstLogon AppX safety net
+
+- **Design:** [KEEPFLAG](design/KEEPFLAG.md) · [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md)
+- **Deliver:** optional job when remove-list non-empty — `PackageManager.RemovePackageAsync`; live deprovision only if still provisioned
+- **Out:** BCU; UI Automation; CDM primary policy; guest pwsh
+- **DoD:** fake PackageManager tests for remove / still-provisioned deprovision paths
 
 ---
 

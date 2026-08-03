@@ -10,7 +10,7 @@
 | **D0** | Design-plan complete | Designs + roadmap + gate signed | **Done** (2026-07-28) |
 | **M0** | Repo scaffold | Reserved `src/` builds | Present |
 | **M1** | Smoke Hyper-V green | Profile → ISO → FirstLogon evidence | **In progress** (hold released 2026-07-29) |
-| **M2–M4** | Wizard / matrix / hardware | — | Stubs |
+| **M2–M4** | Wizard / matrix / hardware | Keep-flag design accepted ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md)); implement stubs post-**10** | Design ready; implement after M1 |
 
 ## Design Acceptance
 
@@ -31,4 +31,4 @@ Pro Smoke; Local+autoLogon; DMA on acceptance Profile; splash before Explorer; D
 
 ## M2–M4 stubs
 
-Wizard = second BuildPlan host. Matrix = Profile/job data. Hardware = stricter evidence bars. No guest pwsh / settle forks / ISO Avalonia.
+Wizard = second BuildPlan host. **Keep-flag matrix** = Profile remove-list + static AppX catalog → ImageServicing offline remove → narrow FirstLogon safety net ([KEEPFLAG](design/KEEPFLAG.md); implement cards in [TICKETS](TICKETS.md) after **10**). Hardware = stricter evidence bars. No guest pwsh / settle forks / ISO Avalonia.
