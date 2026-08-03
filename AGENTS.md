@@ -4,7 +4,7 @@ Windows 11 ISO builder (greenfield v2). **ARM64-first**. Host Servicing: **pwsh 
 
 ## Phase: implementation Released
 
-Product `/implement` may proceed from [TICKETS](docs/TICKETS.md) — **one ticket per session**. Apply `ready-for-agent` only when starting that ticket. Next open card: (keep-flag vertical complete through **13**).
+Product `/implement` may proceed from [TICKETS](docs/TICKETS.md) — **one ticket per session**. Apply `ready-for-agent` only when starting that ticket. Next open card: **14** (maintainer Smoke prove-out — [ADR-006](docs/decisions/ADR-006-post-keepflag-sequencing.md)).
 
 Gate/locks: [ROADMAP](docs/ROADMAP.md#design-acceptance) · [DESIGN](docs/DESIGN.md#decisions-locked-grill)  
 Backlog: [TICKETS](docs/TICKETS.md) · Sessions: [AGENTIC](docs/agents/AGENTIC.md) · Seams: [TDD](docs/TDD.md)
@@ -35,7 +35,7 @@ Lobby, not brochure — concise real content only; no placeholders. No badges ye
 
 ## While implementing
 
-One ticket/session from [TICKETS](docs/TICKETS.md). Keep `just check` green. Keep-flag implement starts at post-M1 **11** (after **10**).
+One ticket/session from [TICKETS](docs/TICKETS.md). Keep `just check` green. Sequencing after **13**: [ADR-006](docs/decisions/ADR-006-post-keepflag-sequencing.md) (Smoke prove-out before Wizard / keep-flag expand).
 
 ```powershell
 just check

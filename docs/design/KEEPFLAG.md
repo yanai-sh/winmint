@@ -2,7 +2,7 @@
 
 **Status:** **Accepted** (wayfinder map [Keep-flag matrix wayfinding](https://github.com/yanai-sh/winmint/issues/13), 2026-08-03)  
 **Authority:** [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) · [BUILDPLAN](BUILDPLAN.md) · [IMAGESERVICING](IMAGESERVICING.md) · [PROVISIONINGSESSION](PROVISIONINGSESSION.md)  
-**Implement:** after M1 ticket **10** green — stub cards in [TICKETS](../TICKETS.md)  
+**Implement:** AppX vertical tickets **11–13** done; expansion deferred past Wizard ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md))  
 **Research:** [BCU](../research/2026-08-03-bulk-crap-uninstaller.md) · [offline DISM](../research/2026-08-03-offline-dism-remove-apis.md) · [AppX rehydrate](../research/2026-08-03-appx-rehydrate-after-oobe.md)
 
 ## Problem space
@@ -69,18 +69,21 @@ Profile.remove list
 - Port: `IAppxPackageManager` (S3 fake; production `WinRTAppxPackageManager`).
 - No guest pwsh; no UI Automation; no BCU.
 
-## Explicitly deferred
+## Explicitly deferred (locked 2026-08-04 grill / ADR-006)
 
-- Capabilities / optional features in the matrix
-- Schema `v2` bump
-- Named Profile presets
-- Confidence-tier leftover cleanup
-- CDM / consumer-features policy as primary remove
-- Wizard UX (M2 host; expands to the same remove-list)
-- Default Pro ARM64 “recommended remove set” (fog — not locked here)
+| Item | Lock |
+|------|------|
+| Capabilities / optional features | Separate vertical after Wizard; AppX-only until then |
+| Schema `v2` | Stay on `winmint.profile/v1` until a breaking change forces bump |
+| Named Profile presets | None in Profile (host/Wizard expands → list) — [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) |
+| Confidence-tier leftover cleanup | Out of this product era — do not ticket |
+| CDM / consumer-features as primary remove | Not primary; optional later hive stamp only |
+| Wizard UX | M2 after maintainer Smoke (**14**); expands to same remove-list |
+| Default / auto “recommended remove set” | **No** — curated catalog only; Smoke acceptance Profile stays empty remove-list |
 
 ## Do not
 
 - Bundle Bulk Crap Uninstaller
 - Treat HKLM Uninstall inventory as the ISO source of truth
 - Blind delete under `WindowsApps` as the primary path
+- Auto-on remove-list for acceptance Smoke

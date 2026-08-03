@@ -79,3 +79,15 @@ _Avoid_: full install gate, hardware acceptance (those are later verticals); a d
 **Image quality**:
 Run-specific WIM export / WinSxS cleanup posture for one build. Test lane prioritizes speed; release lane prioritizes a smaller ISO. Not authored in the Profile.
 _Avoid_: baking Max compression into every Smoke rebuild; claiming C# orchestration makes DISM faster
+
+**Keep-flag**:
+Remove-list polarity for selected provisioned inbox AppX: Profile lists what to strip; a static in-repo catalog bounds legal ids; ImageServicing removes offline; ProvisioningSession is a narrow FirstLogon safety net.
+_Avoid_: keep-list polarity; Profile presets; BCU; treating capabilities/CDM as the primary remove path
+
+**Wizard**:
+A later interactive host of the same BuildPlan brain (not a second planner). May offer UI presets that expand into a Profile remove-list.
+_Avoid_: embedding DISM or a second planning brain in the UI; calling the CLI the Wizard
+
+**Metal jobs**:
+Non-stub provisioning job kinds (first: `winget`) run by the same Supervisor executor as Smoke stubs, on bare metal or richer profiles.
+_Avoid_: Hyper-V-only install executors; guest pwsh adapters as the default driver
