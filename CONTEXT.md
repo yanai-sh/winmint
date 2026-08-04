@@ -85,8 +85,8 @@ Remove-list polarity for selected provisioned inbox AppX: Profile lists what to 
 _Avoid_: keep-list polarity; Profile presets; BCU; treating capabilities/CDM as the primary remove path; auto-on “recommended” sets outside an explicit Profile list
 
 **Wizard**:
-A later interactive host of the same BuildPlan brain (not a second planner). May offer UI presets that expand into a Profile remove-list.
-_Avoid_: embedding DISM or a second planning brain in the UI; calling the CLI the Wizard
+Interactive host of the same BuildPlan brain (not a second planner). Keep-flag UI presets expand **host-side** into a Profile remove-list (preset names never appear in Profile JSON). May also author Profile `packages.winget` / `packages.scoop` and their `*NeedsReboot` subset lists as raw package ids (ids live in the Profile — not host-only preset names).
+_Avoid_: embedding DISM or a second planning brain in the UI; calling the CLI the Wizard; putting keep-flag preset names into Profile JSON; inventing a Wizard-only packages catalog or live winget/Scoop search as the authoring path
 
 **Metal jobs**:
 Non-stub provisioning job kinds (first: `winget`) run by the same Supervisor executor as Smoke stubs, on bare metal or richer profiles.
