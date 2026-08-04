@@ -89,12 +89,21 @@ public sealed record SessionEnvironment(
     ISecretScrubber Secrets,
     IEvidenceSink? Evidence = null,
     IAppxPackageManager? Appx = null,
-    ISystemReboot? Reboot = null);
+    ISystemReboot? Reboot = null,
+    ILocalAccounts? LocalAccounts = null);
 
 /// <summary>OS reboot after NeedsReboot checkpoint (ticket 16). Nullable in tests; production wires Win32.</summary>
 public interface ISystemReboot
 {
     void RequestReboot();
+}
+
+/// <summary>
+/// SetupComplete/SYSTEM: remove leftover OOBE temp accounts (defaultuser0). Best-effort; must not throw.
+/// </summary>
+public interface ILocalAccounts
+{
+    void TryDeleteLocalUserAndProfile(string username);
 }
 
 public sealed record AppxPackageInfo(

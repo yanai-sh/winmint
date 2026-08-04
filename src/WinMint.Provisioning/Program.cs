@@ -134,7 +134,8 @@ internal static class Program
             Secrets: new FileSecretScrubber(bundlePath, log),
             Evidence: evidence,
             Appx: CreateAppxPackageManager(),
-            Reboot: CreateSystemReboot());
+            Reboot: CreateSystemReboot(),
+            LocalAccounts: CreateLocalAccounts());
     }
 
     [SupportedOSPlatform("windows10.0.19041.0")]
@@ -151,6 +152,9 @@ internal static class Program
 
     [SupportedOSPlatform("windows")]
     private static Win32SystemReboot CreateSystemReboot() => new();
+
+    [SupportedOSPlatform("windows")]
+    private static Win32LocalAccounts CreateLocalAccounts() => new();
 
     [SupportedOSPlatform("windows")]
     private static GdiSplashPresenter CreateSplash() => new();

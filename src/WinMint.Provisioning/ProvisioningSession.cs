@@ -854,6 +854,20 @@ public static class ProvisioningSession
             }
         }
 
+        // OOBE often leaves defaultuser0 Enabled on the lock-screen picker; Unattend cannot prevent it.
+        // ponytail: best-effort delete (+ Win32 adapter may schedule ONLOGON retry if SetupComplete raced OOBE).
+        if (env.LocalAccounts is not null)
+        {
+            try
+            {
+                env.LocalAccounts.TryDeleteLocalUserAndProfile(ForbiddenAutologonUser);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // swallow — leftover temp user must not fail MachineSetup
+            }
+        }
+
         return new SessionResult(
             SessionOutcome.Complete,
             new SessionStatus("machineSetup.ok", "Autologon stamped; Shell verified; secrets wiped."),

@@ -80,14 +80,15 @@ public sealed record SessionEnvironment(
     ISecretScrubber Secrets,
     IEvidenceSink? Evidence = null,
     IAppxPackageManager? Appx = null,
-    ISystemReboot? Reboot = null);
+    ISystemReboot? Reboot = null,
+    ILocalAccounts? LocalAccounts = null);
 ```
 
-Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes. `IAppxPackageManager` is the keep-flag FirstLogon safety net (ticket **13**). `ISystemReboot` requests OS reboot after a `NeedsReboot` checkpoint (ticket **16**). Job kind `winget` spawns `winget` via `IProcessHost` from `jobs.json` `packageId`; unknown kinds fail closed.
+Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes. `IAppxPackageManager` is the keep-flag FirstLogon safety net (ticket **13**). `ISystemReboot` requests OS reboot after a `NeedsReboot` checkpoint (ticket **16**). `ILocalAccounts` removes OOBE leftover `defaultuser0` (+ profile) during Machine setup (best-effort; Unattend cannot prevent the temp account — [research](../research/2026-08-04-oobe-wifi-local-account.md)). Job kind `winget` spawns `winget` via `IProcessHost` from `jobs.json` `packageId`; unknown kinds fail closed.
 
 ### Phase machine
 
-**MachineSetup:** StampAutologon → VerifyOrRestampShell (fail-closed) → WipeSecrets → `Complete` | `Failed`  
+**MachineSetup:** StampAutologon → VerifyOrRestampShell (fail-closed) → WipeSecrets → RemoveOobeTempUser (`defaultuser0`) → `Complete` | `Failed`  
 (No splash, settle, or jobs.)
 
 **Shell:**
@@ -110,7 +111,7 @@ Bootstrap (checkpoint | stale→fail-open)
 3. DMA: intermediate probe failures are non-authoritative; **final snapshot** decides hard gates.
 4. Jobs never start if hard settle fails.
 5. Status is in-memory; evidence JSON is write-only projection (`winmint.provisioning.evidence/v1`).
-6. Never stamp `defaultuser0` + AutoAdminLogon.
+6. Never stamp `defaultuser0` + AutoAdminLogon; Machine setup best-effort **deletes** leftover `defaultuser0` (+ profile) so the lock-screen picker is Profile-only.
 7. Crash/stale tenure past `StaleTenureThreshold` ⇒ fail-open `Failed`.
 8. Same settle + job executor on Smoke and metal; only `Jobs` list differs.
 

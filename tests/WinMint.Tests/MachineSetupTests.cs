@@ -126,6 +126,41 @@ public class MachineSetupTests
         Assert.Equal(1, appx.EnsureSystemFullControlCalls);
     }
 
+    [Fact]
+    public void MachineSetup_removes_defaultuser0_via_LocalAccounts()
+    {
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        RecordingSecretScrubber secrets = new();
+        RecordingLocalAccounts accounts = new();
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.MachineSetup,
+            MinimalBundle("winmint", "lab-only"),
+            Env(winlogon, secrets, localAccounts: accounts),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal([ProvisioningSession.ForbiddenAutologonUser], accounts.Deleted);
+    }
+
+    [Fact]
+    public void MachineSetup_completes_when_LocalAccounts_delete_throws()
+    {
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        RecordingSecretScrubber secrets = new();
+        ThrowingLocalAccounts accounts = new();
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.MachineSetup,
+            MinimalBundle("winmint", "lab-only"),
+            Env(winlogon, secrets, localAccounts: accounts),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.True(winlogon.AutoAdminLogon);
+        Assert.Equal(1, secrets.WipeCount);
+    }
+
     private static ProvisioningBundle MinimalBundle(string username, string password) =>
         new(
             Account: new AccountStamp(username, password),
@@ -137,7 +172,8 @@ public class MachineSetupTests
     private static SessionEnvironment Env(
         IWinlogonRegistry winlogon,
         ISecretScrubber secrets,
-        IAppxPackageManager? appx = null) =>
+        IAppxPackageManager? appx = null,
+        ILocalAccounts? localAccounts = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: winlogon,
@@ -146,7 +182,21 @@ public class MachineSetupTests
             Splash: new NoopSplash(),
             Checkpoints: new NoopCheckpoints(),
             Secrets: secrets,
-            Appx: appx);
+            Appx: appx,
+            LocalAccounts: localAccounts);
+
+    private sealed class RecordingLocalAccounts : ILocalAccounts
+    {
+        public List<string> Deleted { get; } = [];
+
+        public void TryDeleteLocalUserAndProfile(string username) => Deleted.Add(username);
+    }
+
+    private sealed class ThrowingLocalAccounts : ILocalAccounts
+    {
+        public void TryDeleteLocalUserAndProfile(string username) =>
+            throw new InvalidOperationException("simulated delete failure");
+    }
 
     private sealed class RecordingAppx : IAppxPackageManager
     {
