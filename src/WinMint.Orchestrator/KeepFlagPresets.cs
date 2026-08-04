@@ -45,37 +45,21 @@ public static class KeepFlagPresets
 
         if (string.Equals(key, Acceptance, StringComparison.OrdinalIgnoreCase))
         {
-            foreach (string id in AcceptanceAppx)
+            PresetFailure? miss = TryFailMissing(
+                AcceptanceAppx,
+                ProvisionedAppxCatalog.Contains,
+                "provisioned AppX");
+            miss ??= TryFailMissing(
+                AcceptanceCapabilities,
+                CapabilityCatalog.Contains,
+                "capability");
+            miss ??= TryFailMissing(
+                AcceptanceFeatures,
+                OptionalFeatureCatalog.Contains,
+                "optional-feature");
+            if (miss is not null)
             {
-                if (!ProvisionedAppxCatalog.Contains(id))
-                {
-                    return Result.Fail<KeepFlagExpansion, PresetFailure>(
-                        new PresetFailure(
-                            "keepflag.preset.catalog",
-                            $"Acceptance preset id '{id}' is not in the shipped provisioned AppX catalog."));
-                }
-            }
-
-            foreach (string id in AcceptanceCapabilities)
-            {
-                if (!CapabilityCatalog.Contains(id))
-                {
-                    return Result.Fail<KeepFlagExpansion, PresetFailure>(
-                        new PresetFailure(
-                            "keepflag.preset.catalog",
-                            $"Acceptance preset capability '{id}' is not in the shipped capability catalog."));
-                }
-            }
-
-            foreach (string id in AcceptanceFeatures)
-            {
-                if (!OptionalFeatureCatalog.Contains(id))
-                {
-                    return Result.Fail<KeepFlagExpansion, PresetFailure>(
-                        new PresetFailure(
-                            "keepflag.preset.catalog",
-                            $"Acceptance preset feature '{id}' is not in the shipped optional-feature catalog."));
-                }
+                return Result.Fail<KeepFlagExpansion, PresetFailure>(miss);
             }
 
             return Result.Ok<KeepFlagExpansion, PresetFailure>(
@@ -84,6 +68,24 @@ public static class KeepFlagPresets
 
         return Result.Fail<KeepFlagExpansion, PresetFailure>(
             new PresetFailure("keepflag.preset.unknown", $"Unknown keep-flag preset '{key}'."));
+    }
+
+    private static PresetFailure? TryFailMissing(
+        IReadOnlyList<string> ids,
+        Func<string, bool> contains,
+        string catalogNoun)
+    {
+        foreach (string id in ids)
+        {
+            if (!contains(id))
+            {
+                return new PresetFailure(
+                    "keepflag.preset.catalog",
+                    $"Acceptance preset {catalogNoun} '{id}' is not in the shipped {catalogNoun} catalog.");
+            }
+        }
+
+        return null;
     }
 }
 

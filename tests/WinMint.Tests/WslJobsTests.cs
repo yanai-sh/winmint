@@ -1,40 +1,17 @@
 using System.Text;
 using WinMint.Orchestrator;
 using WinMint.Provisioning;
-using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
+using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
 /// <summary>Ticket 23 — metal wsl job at S1 (Plan) + S3 (Run).</summary>
 public class WslJobsTests
 {
-    private static string SupervisorPath => ImageServicing.ShellStampGuestPath;
-
     [Fact]
     public void Plan_emits_wsl_jobs_from_packages_wsl()
     {
-        Profile profile = Parse($$"""
-            {
-              "schemaVersion": "winmint.profile/v1",
-              "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
-                "username": "winmint",
-                "password": "lab-only"
-              },
-              "dma": {
-                "enabled": true,
-                "settle": {
-                  "locale": "en-GB",
-                  "geoId": 242,
-                  "timeZoneId": "GMT Standard Time",
-                  "locationServicesEnabled": true
-                }
-              },
-              "packages": {
-                "wsl": ["Ubuntu"]
-              }
-            }
-            """);
+        Profile profile = Parse(MinimalJson(wsl: ["Ubuntu"]));
 
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
 
@@ -48,29 +25,7 @@ public class WslJobsTests
     [Fact]
     public void Plan_wslNeedsReboot_subset_emits_needsReboot()
     {
-        Profile profile = Parse($$"""
-            {
-              "schemaVersion": "winmint.profile/v1",
-              "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
-                "username": "winmint",
-                "password": "lab-only"
-              },
-              "dma": {
-                "enabled": true,
-                "settle": {
-                  "locale": "en-GB",
-                  "geoId": 242,
-                  "timeZoneId": "GMT Standard Time",
-                  "locationServicesEnabled": true
-                }
-              },
-              "packages": {
-                "wsl": ["Ubuntu"],
-                "wslNeedsReboot": ["Ubuntu"]
-              }
-            }
-            """);
+        Profile profile = Parse(MinimalJson(wsl: ["Ubuntu"], wslNeedsReboot: ["Ubuntu"]));
 
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
 
@@ -81,29 +36,7 @@ public class WslJobsTests
     [Fact]
     public void Plan_wslNeedsReboot_id_not_in_wsl_fails_closed()
     {
-        Profile profile = Parse($$"""
-            {
-              "schemaVersion": "winmint.profile/v1",
-              "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
-                "username": "winmint",
-                "password": "lab-only"
-              },
-              "dma": {
-                "enabled": true,
-                "settle": {
-                  "locale": "en-GB",
-                  "geoId": 242,
-                  "timeZoneId": "GMT Standard Time",
-                  "locationServicesEnabled": true
-                }
-              },
-              "packages": {
-                "wsl": ["Ubuntu"],
-                "wslNeedsReboot": ["Debian"]
-              }
-            }
-            """);
+        Profile profile = Parse(MinimalJson(wsl: ["Ubuntu"], wslNeedsReboot: ["Debian"]));
 
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
 
@@ -142,103 +75,44 @@ public class WslJobsTests
         return parsed.Value;
     }
 
-    private static ProvisioningBundle Bundle(IReadOnlyList<ProvisionJob> jobs) =>
-        new(
-            Account: new AccountStamp("winmint", ""),
-            Dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
-            Jobs: jobs,
-            Policy: SessionPolicy.SmokeDefaults,
-            Supervisor: new SupervisorIdentity(SupervisorPath));
-
-    private static SessionEnvironment Env(IProcessHost processes, IEvidenceSink evidence) =>
-        new(
-            Time: TimeProvider.System,
-            Winlogon: new NoopWinlogon(),
-            Region: new MatchingRegion(),
-            Processes: processes,
-            Splash: new RecordingSplashPresenter(),
-            Checkpoints: new NoopCheckpoints(),
-            Secrets: new NoopSecrets(),
-            Evidence: evidence);
-
-    private sealed class RecordingProcessHost : IProcessHost
+    private static string MinimalJson(
+        IReadOnlyList<string>? wsl = null,
+        IReadOnlyList<string>? wslNeedsReboot = null)
     {
-        public List<(string FileName, IReadOnlyList<string> Arguments)> Starts { get; } = [];
-
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default)
+        List<string> fields = [];
+        if (wsl is not null)
         {
-            Starts.Add((fileName, arguments));
-            return new ProcessStartResult(0);
+            fields.Add($"\"wsl\": [{string.Join(",", wsl.Select(id => $"\"{id}\""))}]");
         }
-    }
 
-    private sealed class RecordingSplashPresenter : ISplashPresenter
-    {
-        public void Show() { }
-
-        public void SetStatus(SessionStatus status) { }
-    }
-
-    private sealed class RecordingEvidenceSink : IEvidenceSink
-    {
-        public List<ProvisioningEvidenceDocument> Documents { get; } = [];
-
-        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)
+        if (wslNeedsReboot is not null)
         {
-            Documents.Add(document);
-            return new EvidenceSnapshot(document.SchemaVersion, $"memory:{Documents.Count}");
+            fields.Add(
+                $"\"wslNeedsReboot\": [{string.Join(",", wslNeedsReboot.Select(id => $"\"{id}\""))}]");
         }
-    }
 
-    private sealed class MatchingRegion : IRegionSnapshot
-    {
-        private RegionState _state = new("en-GB", 242, "GMT Standard Time", true);
-
-        public void Apply(DmaSettleTarget target) =>
-            _state = new RegionState(
-                target.Locale,
-                target.GeoId,
-                target.TimeZoneId,
-                target.LocationServicesEnabled);
-
-        public RegionState Read() => _state;
-    }
-
-    private sealed class NoopWinlogon : IWinlogonRegistry
-    {
-        public string? Shell { get; private set; } = SupervisorPath;
-
-        public void SetAutoLogon(string username, string password) { }
-
-        public string? GetDefaultUserName() => null;
-
-        public bool GetAutoAdminLogon() => false;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path) => Shell = path;
-
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
-    private sealed class NoopCheckpoints : ICheckpointStore
-    {
-        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
-
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
-
-        public void WriteCheckpoint(CheckpointState state) { }
-
-        public CheckpointState? TryReadCheckpoint() => null;
-
-        public void ClearCheckpoint() { }
-    }
-
-    private sealed class NoopSecrets : ISecretScrubber
-    {
-        public void Wipe(ProvisioningBundle bundle) { }
+        string packagesBody = string.Join(",\n                ", fields);
+        return $$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              },
+              "packages": {
+                {{packagesBody}}
+              }
+            }
+            """;
     }
 }

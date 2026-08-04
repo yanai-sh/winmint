@@ -135,41 +135,28 @@ if ($apply.PSObject.Properties.Name -contains 'digests' -and $null -ne $apply.di
         $digestMap[[string]$p.Name] = [string]$p.Value
     }
 }
-$keepFlagChecked = $false
-if ($null -ne $PinnedRemoveAppx -and @($PinnedRemoveAppx).Count -gt 0) {
-    $keepFlagChecked = $true
-    foreach ($id in $PinnedRemoveAppx) {
+
+function Assert-PinnedDigests {
+    param(
+        [string[]] $Ids,
+        [string] $KeyPrefix,
+        [string] $ExpectedValue,
+        [string] $Label
+    )
+    if ($null -eq $Ids -or @($Ids).Count -eq 0) { return $false }
+    foreach ($id in $Ids) {
         if ([string]::IsNullOrWhiteSpace($id)) { continue }
-        $key = "removed.appx.$id"
-        if (-not $digestMap.ContainsKey($key) -or $digestMap[$key] -ne 'absent') {
-            throw "keep-flag digest missing: expected $key=absent in apply/evidence.json digests (pinned acceptance remove-list)"
+        $key = "$KeyPrefix$id"
+        if (-not $digestMap.ContainsKey($key) -or $digestMap[$key] -ne $ExpectedValue) {
+            throw "keep-flag digest missing: expected $key=$ExpectedValue in apply/evidence.json digests ($Label)"
         }
     }
+    return $true
 }
 
-$capsChecked = $false
-if ($null -ne $PinnedRemoveCapabilities -and @($PinnedRemoveCapabilities).Count -gt 0) {
-    $capsChecked = $true
-    foreach ($id in $PinnedRemoveCapabilities) {
-        if ([string]::IsNullOrWhiteSpace($id)) { continue }
-        $key = "removed.capability.$id"
-        if (-not $digestMap.ContainsKey($key) -or $digestMap[$key] -ne 'Absent') {
-            throw "keep-flag capability digest missing: expected $key=Absent in apply/evidence.json digests"
-        }
-    }
-}
-
-$featsChecked = $false
-if ($null -ne $PinnedDisableOptionalFeatures -and @($PinnedDisableOptionalFeatures).Count -gt 0) {
-    $featsChecked = $true
-    foreach ($id in $PinnedDisableOptionalFeatures) {
-        if ([string]::IsNullOrWhiteSpace($id)) { continue }
-        $key = "disabled.feature.$id"
-        if (-not $digestMap.ContainsKey($key) -or $digestMap[$key] -ne 'Disabled') {
-            throw "keep-flag feature digest missing: expected $key=Disabled in apply/evidence.json digests"
-        }
-    }
-}
+$keepFlagChecked = Assert-PinnedDigests -Ids $PinnedRemoveAppx -KeyPrefix 'removed.appx.' -ExpectedValue 'absent' -Label 'appx'
+$capsChecked = Assert-PinnedDigests -Ids $PinnedRemoveCapabilities -KeyPrefix 'removed.capability.' -ExpectedValue 'Absent' -Label 'capability'
+$featsChecked = Assert-PinnedDigests -Ids $PinnedDisableOptionalFeatures -KeyPrefix 'disabled.feature.' -ExpectedValue 'Disabled' -Label 'feature'
 
 $firstPaintMs = $null
 if ($guest.PSObject.Properties.Name -contains 'firstPaintMs' -and $null -ne $guest.firstPaintMs) {
