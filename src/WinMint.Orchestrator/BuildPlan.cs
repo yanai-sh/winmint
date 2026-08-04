@@ -124,7 +124,9 @@ public static class BuildPlan
             NormalizeRemoveList(doc.Packages?.Winget),
             NormalizeRemoveList(doc.Packages?.WingetNeedsReboot),
             NormalizeRemoveList(doc.Packages?.Scoop),
-            NormalizeRemoveList(doc.Packages?.ScoopNeedsReboot));
+            NormalizeRemoveList(doc.Packages?.ScoopNeedsReboot),
+            NormalizeRemoveList(doc.Debloat?.RemoveCapabilities),
+            NormalizeRemoveList(doc.Debloat?.DisableOptionalFeatures));
 
         return Result.Ok<Profile, DocumentErrors>(profile);
     }
@@ -162,6 +164,28 @@ public static class BuildPlan
                     new PlanFailure(
                         "debloat.removeProvisionedAppx.unknown",
                         $"removeProvisionedAppx id '{id}' is not in the shipped provisioned AppX catalog."));
+            }
+        }
+
+        foreach (string id in profile.RemoveCapabilities)
+        {
+            if (!CapabilityCatalog.Contains(id))
+            {
+                return Result.Fail<BuildArtifacts, PlanFailure>(
+                    new PlanFailure(
+                        "debloat.removeCapabilities.unknown",
+                        $"removeCapabilities id '{id}' is not in the shipped capability catalog."));
+            }
+        }
+
+        foreach (string id in profile.DisableOptionalFeatures)
+        {
+            if (!OptionalFeatureCatalog.Contains(id))
+            {
+                return Result.Fail<BuildArtifacts, PlanFailure>(
+                    new PlanFailure(
+                        "debloat.disableOptionalFeatures.unknown",
+                        $"disableOptionalFeatures id '{id}' is not in the shipped optional-feature catalog."));
             }
         }
 
@@ -259,6 +283,20 @@ public static class BuildPlan
             stageList.Add(new ServicingStage(
                 ServicingOpcode.RemoveProvisionedAppx,
                 Dict((StageParams.PackageFamilyNames, string.Join(';', profile.RemoveProvisionedAppx)))));
+        }
+
+        if (profile.RemoveCapabilities.Count > 0)
+        {
+            stageList.Add(new ServicingStage(
+                ServicingOpcode.RemoveCapabilities,
+                Dict((StageParams.CapabilityNames, string.Join(';', profile.RemoveCapabilities)))));
+        }
+
+        if (profile.DisableOptionalFeatures.Count > 0)
+        {
+            stageList.Add(new ServicingStage(
+                ServicingOpcode.DisableOptionalFeatures,
+                Dict((StageParams.FeatureNames, string.Join(';', profile.DisableOptionalFeatures)))));
         }
 
         stageList.AddRange(
@@ -460,7 +498,9 @@ internal sealed record PackagesDocument(
     [property: JsonPropertyName("scoopNeedsReboot")] string[]? ScoopNeedsReboot);
 
 internal sealed record DebloatDocument(
-    [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx);
+    [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx,
+    [property: JsonPropertyName("removeCapabilities")] string[]? RemoveCapabilities,
+    [property: JsonPropertyName("disableOptionalFeatures")] string[]? DisableOptionalFeatures);
 
 internal sealed record AccountDocument(
     [property: JsonPropertyName("mode")] string? Mode,

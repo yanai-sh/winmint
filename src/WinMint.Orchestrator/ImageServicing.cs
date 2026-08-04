@@ -222,6 +222,14 @@ public static class ImageServicing
                     parameters[StageParams.MountDir] = mountDir;
                     parameters[StageParams.WorkDirectory] = run.WorkDirectory;
                     break;
+                case ServicingOpcode.RemoveCapabilities:
+                    parameters[StageParams.MountDir] = mountDir;
+                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
+                    break;
+                case ServicingOpcode.DisableOptionalFeatures:
+                    parameters[StageParams.MountDir] = mountDir;
+                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
+                    break;
                 case ServicingOpcode.ExportWim:
                     // compression / cleanup / lane come from BuildPlan — do not invent defaults here.
                     parameters[StageParams.MountDir] = mountDir;

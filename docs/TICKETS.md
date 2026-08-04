@@ -274,7 +274,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** **20** (Offline ImageServicing capabilities from Profile). Metal milestone **18** done; keep-flag spike **19** done → **20** offline. WSL / Wizard packages deferred.
+Do not label `ready-for-agent` until starting that card. **Next:** none open in 17–20 sequence (deferred: WSL / Wizard packages UI / ExitWindowsEx). Metal + keep-flag capabilities offline complete.
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
@@ -284,7 +284,7 @@ Do not label `ready-for-agent` until starting that card. **Next:** **20** (Offli
 | 17 | Profile `needsReboot` + Hyper-V reboot-resume | ProvisioningSession | After **16** — **done** |
 | 18 | Scoop job kind (`packages.scoop`) | ProvisioningSession | After **17** — **done** (metal exit) |
 | 19 | Keep-flag capabilities / features matrix spike | Design | After **18** — **done** |
-| 20 | Offline ImageServicing capabilities from Profile | ImageServicing | After **19** |
+| 20 | Offline ImageServicing capabilities from Profile | ImageServicing | After **19** — **done** |
 
 ### 14 — Maintainer Smoke prove-out
 
@@ -355,9 +355,11 @@ Do not label `ready-for-agent` until starting that card. **Next:** **20** (Offli
 
 ### 20 — Offline ImageServicing capabilities from Profile
 
+- **Issue:** [#32](https://github.com/yanai-sh/winmint/issues/32)
 - **Design:** [IMAGESERVICING](design/IMAGESERVICING.md) · [KEEPFLAG](design/KEEPFLAG.md) · spike from **19**
 - **Deliver:** Profile field → BuildPlan → offline servicing adapter; digests as applicable; FirstLogon not required
 - **Out:** live FirstLogon feature flips; product-default recommended set
+- **Done:** 2026-08-04 — issue #32; `debloat.removeCapabilities` / `disableOptionalFeatures`; catalogs; opcodes + DISM kernels; digests; S1/S2 tests; Apply-path digests
 
 **Still deferred (no ticket):** Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash; Wizard polish; WSL job kind; Wizard packages UI; ExitWindowsEx unless prove-out forces it.
 
