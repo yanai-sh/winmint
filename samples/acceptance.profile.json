@@ -19,6 +19,13 @@
     "removeProvisionedAppx": [
       "Microsoft.BingNews",
       "Microsoft.BingWeather"
+    ],
+    "removeCapabilities": [
+      "App.StepsRecorder~~~~0.0.1.0",
+      "WMIC~~~~"
+    ],
+    "disableOptionalFeatures": [
+      "WorkFolders-Client"
     ]
   }
 }

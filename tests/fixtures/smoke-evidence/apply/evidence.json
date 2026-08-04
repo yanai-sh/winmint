@@ -5,6 +5,9 @@
   "lane": "Test",
   "digests": {
     "removed.appx.Microsoft.BingNews": "absent",
-    "removed.appx.Microsoft.BingWeather": "absent"
+    "removed.appx.Microsoft.BingWeather": "absent",
+    "removed.capability.App.StepsRecorder~~~~0.0.1.0": "Absent",
+    "removed.capability.WMIC~~~~": "Absent",
+    "disabled.feature.WorkFolders-Client": "Disabled"
   }
 }

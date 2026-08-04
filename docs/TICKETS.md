@@ -230,10 +230,9 @@
 
 ## Explicitly not in M1 backlog
 
-Wizard, BitLocker, hardware acceptance, guest pwsh, peer Splash, Home Smoke SKU, MicrosoftOobe, enterprise secrets, MediatR/Generic Host/Contracts project.
+BitLocker, Home Smoke SKU, MicrosoftOobe, enterprise secrets, MediatR/Generic Host/Contracts project, guest pwsh, peer Splash. (Wizard / hardware / metal / keep-flag expand shipped post-M1 — see cards **14–30**.)
 
-Keep-flag **design** is accepted ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md)). AppX vertical **11–13** done. Sequencing: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md).
-
+Keep-flag **design** is accepted ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md), [ADR-007](decisions/ADR-007-cdm-not-primary.md)). AppX **11–13** + capabilities **19–20** done. Sequencing [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) **met**.
 ---
 
 ## Post-M1 — keep-flag matrix
@@ -274,7 +273,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** deferred backlog (WSL / Wizard polish / ExitWindowsEx) or maintainer pick. Metal **17–18** + keep-flag **19–20** + Israel DMA **21** + Wizard packages **22** complete.
+Do not label `ready-for-agent` until starting that card. **Next:** none — backlog through **30** done 2026-08-05; maintainer pick or new rescope. Lasting policy: [DESIGN](DESIGN.md#decisions-locked-grill).
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
@@ -361,7 +360,7 @@ Do not label `ready-for-agent` until starting that card. **Next:** deferred back
 - **Design:** [IMAGESERVICING](design/IMAGESERVICING.md) · [KEEPFLAG](design/KEEPFLAG.md) · spike from **19**
 - **Deliver:** Profile field → BuildPlan → offline servicing adapter; digests as applicable; FirstLogon not required
 - **Out:** live FirstLogon feature flips; product-default recommended set
-- **Done:** 2026-08-04 — issue #32; `debloat.removeCapabilities` / `disableOptionalFeatures`; catalogs; opcodes + DISM kernels; digests; S1/S2 tests; Apply-path digests
+- **Done:** 2026-08-04 — issue #32; `debloat.removeCapabilities` / `disableOptionalFeatures`; catalogs; opcodes + DISM kernels; digests; S1/S2 tests; Apply-path digests (RunPlan side-car merge covered by `CapabilityPlanTests.RunPlan_merges_capability_and_feature_side_digests_into_evidence`; acceptance Profile + S4 assert pins capability/feature digests)
 
 ### 21 — Israel DMA sample + monotonic settle deadlines
 
@@ -385,7 +384,95 @@ Do not label `ready-for-agent` until starting that card. **Next:** deferred back
   - No schema bump; no second planning brain
 - **Done:** 2026-08-05 — issue #34; `WizardProfileComposer` packages + `ParseIdList`; Avalonia four lists; S1b `WizardPackagesTests`
 
-**Still deferred (no ticket):** Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash; Wizard polish; WSL job kind; ExitWindowsEx unless prove-out forces it.
+---
+
+## Deferred backlog (tickets 23–30)
+
+Post-**22** polish and close-out. Do not label `ready-for-agent` until starting that card.
+
+| # | Title | Module | Issue | Ready when |
+|---|--------|--------|-------|------------|
+| 23 | Metal `wsl` job kind | ProvisioningSession | [#35](https://github.com/yanai-sh/winmint/issues/35) | **22** done — **done** |
+| 24 | ExitWindowsEx reboot fallback | ProvisioningSession | [#36](https://github.com/yanai-sh/winmint/issues/36) | **23** done — **done** |
+| 25 | Wizard polish (caps/features + WSL + Israel DMA) | BuildPlan host | [#37](https://github.com/yanai-sh/winmint/issues/37) | **24** done — **done** |
+| 26 | Leftover confidence spike | Design / research | [#38](https://github.com/yanai-sh/winmint/issues/38) | **25** done — **done** |
+| 27 | CDM-as-primary decision | ADR | [#39](https://github.com/yanai-sh/winmint/issues/39) | **26** done — **done** |
+| 28 | DPAPI metal secrets (best-effort wipe) | ProvisioningSession | [#40](https://github.com/yanai-sh/winmint/issues/40) | **27** done — **done** |
+| 29 | Proactive GDI splash status text | ProvisioningSession | [#41](https://github.com/yanai-sh/winmint/issues/41) | **28** done — **done** |
+| 30 | Hardware M4 evidence bars | Acceptance S4 | [#42](https://github.com/yanai-sh/winmint/issues/42) | **29** done — **done** |
+
+### 23 — Metal `wsl` job kind
+
+- **Issue:** [#35](https://github.com/yanai-sh/winmint/issues/35)
+- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
+- **Deliver:** Profile `packages.wsl` / `wslNeedsReboot`; Plan emit `kind: wsl`; Supervisor spawns `wsl.exe --install -d … --no-launch`
+- **Out:** offline-staged distros; guest pwsh
+- **DoD:** S1 Plan + S3 argv tests; fail-closed subset; unknown kinds unchanged
+- **Done:** 2026-08-05 — issue #35; `WslJobsTests`; Wizard WSL lists (**25**)
+
+### 24 — ExitWindowsEx reboot fallback
+
+- **Issue:** [#36](https://github.com/yanai-sh/winmint/issues/36)
+- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md)
+- **Deliver:** `Win32SystemReboot` tries `ExitWindowsEx(EWX_REBOOT|EWX_FORCE)` with `SeShutdownPrivilege`; fall back to `shutdown.exe /r /t 0 /f`
+- **Out:** guest pwsh; WSL
+- **DoD:** primary path wired; fallback on refusal; existing reboot-resume tests green
+- **Done:** 2026-08-05 — issue #36; `Win32SystemReboot.cs`
+
+### 25 — Wizard polish (caps/features + WSL + Israel DMA)
+
+- **Issue:** [#37](https://github.com/yanai-sh/winmint/issues/37)
+- **Design:** [BUILDPLAN](design/BUILDPLAN.md) · [ARCHITECTURE](ARCHITECTURE.md) · [KEEPFLAG](design/KEEPFLAG.md)
+- **Deliver:** Wizard authors capability/feature lists (empty ⇒ Acceptance preset pins); `packages.wsl` / `wslNeedsReboot`; Israel DMA quick-fill; Validate/Plan/Save unchanged brain
+- **Out:** live distro/package search; schema `v2`; elevating Wizard; full UX polish
+- **DoD:** package lists (winget + scoop + wsl) + caps/features; Acceptance preset expands AppX+caps+features; compose→Plan tests; `just check` green
+- **Done:** 2026-08-05 — issue #37; `MainWindow` / `KeepFlagPresets` / composer
+### 26 — Leftover confidence spike
+
+- **Issue:** [#38](https://github.com/yanai-sh/winmint/issues/38)
+- **Design:** [KEEPFLAG](design/KEEPFLAG.md) · [ADR-005](decisions/ADR-005-keep-flag-matrix.md)
+- **Deliver:** research note — deferred product code; catalog+exclude ideas from BCU without shipping BCU; offline digests + FirstLogon safety-net remain primary; no CDM-as-primary until **27**
+- **Out:** implement leftover confidence; product-default recommended set; schema `v2`; Profile presets
+- **DoD:** [research note](research/2026-08-05-leftover-confidence.md) cites existing notes; ≤ ~80 lines
+- **Done:** 2026-08-05 — issue #38
+
+### 27 — CDM-as-primary decision
+
+- **Issue:** [#39](https://github.com/yanai-sh/winmint/issues/39)
+- **Design:** [KEEPFLAG](design/KEEPFLAG.md) · spike **26**
+- **Deliver:** ADR — offline ImageServicing + FirstLogon safety-net primary; CDM not keep-flag control plane for M1/M2
+- **Out:** CDM Supervisor job; Profile CDM fields
+- **DoD:** [ADR-007](decisions/ADR-007-cdm-not-primary.md) Accepted
+- **Done:** 2026-08-05 — issue #39
+
+### 28 — DPAPI metal secrets (best-effort wipe)
+
+- **Issue:** [#40](https://github.com/yanai-sh/winmint/issues/40)
+- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md#secrets-smoke)
+- **Deliver:** `FileSecretScrubber` overwrites previous bundle bytes with random before redacted JSON rewrite; comment that full DPAPI host→guest channel stays future
+- **Out:** full DPAPI staging channel; cryptographic in-process scrub
+- **DoD:** unit test asserts password empty on disk after `Wipe`; `just check` green
+- **Done:** 2026-08-05 — issue #40; `FileSecretScrubberTests`
+
+### 29 — Proactive GDI splash status text
+
+- **Issue:** [#41](https://github.com/yanai-sh/winmint/issues/41)
+- **Design:** [SPLASH](design/SPLASH.md) · [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md)
+- **Deliver:** `GdiSplashPresenter` draws status via `TextOutW` on opaque fill; ponytail comment — full ID2D1Factory only if S4 FirstPaintBudget still fails
+- **Out:** D2D COM; new NuGet; file status control plane
+- **DoD:** AOT-safe `LibraryImport` only; first paint shows in-memory status
+- **Done:** 2026-08-05 — issue #41; `GdiSplashPresenter.cs`
+
+### 30 — Hardware M4 evidence bars
+
+- **Issue:** [#42](https://github.com/yanai-sh/winmint/issues/42)
+- **Design:** [Smoke](specs/2026-07-27-smoke.md) · harness `tools/vm/`
+- **Deliver:** `Assert-SmokeEvidence.ps1` optional `-HardwareM4` or `WINMINT_M4=1` — `firstPaintMs` ≤ budget **fail** (not warn); phases require `settle.ok` or `settle.location_warn`
+- **Out:** Hyper-V hardware harness fork; default Smoke path unchanged (M4 off)
+- **DoD:** script comment documents M4; fixture S4 assert path unchanged with M4 off
+- **Done:** 2026-08-05 — issue #42; `Assert-SmokeEvidence.ps1`
+
+**Still out (policy — no ticket):** Profile presets-in-JSON; product-default recommended remove-list; schema `v2` without a break; leftover-confidence *product* cleanup; full DPAPI host→guest channel; full D2D splash; full Wizard UX polish beyond list authoring. See [DESIGN](DESIGN.md#decisions-locked-grill).
 
 ---
 

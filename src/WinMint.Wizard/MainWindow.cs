@@ -21,6 +21,10 @@ public sealed class MainWindow : Window
     private readonly TextBox _wingetNeedsReboot = IdListBox();
     private readonly TextBox _scoop = IdListBox();
     private readonly TextBox _scoopNeedsReboot = IdListBox();
+    private readonly TextBox _wsl = IdListBox();
+    private readonly TextBox _wslNeedsReboot = IdListBox();
+    private readonly TextBox _removeCapabilities = IdListBox();
+    private readonly TextBox _disableOptionalFeatures = IdListBox();
     private readonly TextBlock _status = new()
     {
         TextWrapping = TextWrapping.Wrap,
@@ -41,8 +45,8 @@ public sealed class MainWindow : Window
     public MainWindow()
     {
         Title = "WinMint Wizard";
-        Width = 560;
-        Height = 900;
+        Width = 640;
+        Height = 960;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         _preset = new ComboBox
@@ -57,6 +61,16 @@ public sealed class MainWindow : Window
 
         Button save = new() { Content = "Save Profile JSON…" };
         save.Click += async (_, _) => await OnSaveAsync();
+
+        Button israelDma = new() { Content = "Fill Israel DMA" };
+        israelDma.Click += (_, _) =>
+        {
+            _locale.Text = "en-US";
+            _geoId.Text = "117";
+            _timeZone.Text = "Israel Standard Time";
+            _location.IsChecked = true;
+            _dmaEnabled.IsChecked = true;
+        };
 
         Content = new ScrollViewer
         {
@@ -76,13 +90,19 @@ public sealed class MainWindow : Window
                     Labeled("GeoId", _geoId),
                     Labeled("Time zone", _timeZone),
                     _location,
-                    Heading("Keep-flag preset (host expands → remove-list)"),
+                    israelDma,
+                    Heading("Keep-flag preset (host expands → remove-lists)"),
                     Labeled("Preset", _preset),
+                    Heading("Capabilities / features (newline ids; empty = preset pins)"),
+                    Labeled("removeCapabilities", _removeCapabilities),
+                    Labeled("disableOptionalFeatures", _disableOptionalFeatures),
                     Heading("Packages (newline-separated ids; empty = stubs only)"),
                     Labeled("winget", _winget),
                     Labeled("wingetNeedsReboot (subset of winget)", _wingetNeedsReboot),
                     Labeled("scoop", _scoop),
                     Labeled("scoopNeedsReboot (subset of scoop)", _scoopNeedsReboot),
+                    Labeled("wsl (distro names)", _wsl),
+                    Labeled("wslNeedsReboot (subset of wsl)", _wslNeedsReboot),
                     new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
@@ -179,7 +199,11 @@ public sealed class MainWindow : Window
             _winget.Text ?? "",
             _wingetNeedsReboot.Text ?? "",
             _scoop.Text ?? "",
-            _scoopNeedsReboot.Text ?? "");
+            _scoopNeedsReboot.Text ?? "",
+            _wsl.Text ?? "",
+            _wslNeedsReboot.Text ?? "",
+            _removeCapabilities.Text ?? "",
+            _disableOptionalFeatures.Text ?? "");
     }
 
     private static TextBlock Heading(string text) => new()

@@ -81,13 +81,13 @@ Run-specific WIM export / WinSxS cleanup posture for one build. Test lane priori
 _Avoid_: baking Max compression into every Smoke rebuild; claiming C# orchestration makes DISM faster
 
 **Keep-flag**:
-Remove-list polarity for selected provisioned inbox AppX: Profile lists what to strip; a static in-repo catalog bounds legal ids; ImageServicing removes offline; ProvisioningSession is a narrow FirstLogon safety net. Smoke acceptance uses a small explicit remove-list to prove the path; other Profiles default empty.
-_Avoid_: keep-list polarity; Profile presets; BCU; treating capabilities/CDM as the primary remove path; auto-on “recommended” sets outside an explicit Profile list
+Remove-list polarity for selected provisioned inbox AppX, capabilities, and optional features: Profile lists what to strip/disable; static in-repo catalogs bound legal ids; ImageServicing removes offline; ProvisioningSession is a narrow FirstLogon AppX safety net. Smoke acceptance uses a small explicit remove-list to prove the path; other Profiles default empty. CDM is not the primary control plane.
+_Avoid_: keep-list polarity; Profile presets; BCU; treating CDM as the primary remove path; auto-on “recommended” sets outside an explicit Profile list
 
 **Wizard**:
-Interactive host of the same BuildPlan brain (not a second planner). Keep-flag UI presets expand **host-side** into a Profile remove-list (preset names never appear in Profile JSON). May also author Profile `packages.winget` / `packages.scoop` and their `*NeedsReboot` subset lists as raw package ids (ids live in the Profile — not host-only preset names).
+Interactive host of the same BuildPlan brain (not a second planner). Keep-flag UI presets expand **host-side** into Profile remove-lists (preset names never appear in Profile JSON). May also author Profile `packages.winget` / `scoop` / `wsl` (and `*NeedsReboot` subsets) and override capability/feature lists as raw ids.
 _Avoid_: embedding DISM or a second planning brain in the UI; calling the CLI the Wizard; putting keep-flag preset names into Profile JSON; inventing a Wizard-only packages catalog or live winget/Scoop search as the authoring path
 
 **Metal jobs**:
-Non-stub provisioning job kinds (first: `winget`) run by the same Supervisor executor as Smoke stubs, on bare metal or richer profiles.
+Non-stub provisioning job kinds (`winget`, `scoop`, `wsl`) run by the same Supervisor executor as Smoke stubs, on bare metal or richer profiles.
 _Avoid_: Hyper-V-only install executors; guest pwsh adapters as the default driver

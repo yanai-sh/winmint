@@ -266,23 +266,14 @@ if (Test-Path -LiteralPath $wimOut) {
     $shaWim = Get-FileHash -LiteralPath $wimOut -Algorithm SHA256
     $digests['installWim.sha256'] = $shaWim.Hash.ToLowerInvariant()
 }
-$removeAppxDigests = Join-Path $logDir 'remove-provisioned-appx.digests.json'
-if (Test-Path -LiteralPath $removeAppxDigests) {
-    $side = Get-Content -LiteralPath $removeAppxDigests -Raw | ConvertFrom-Json
-    foreach ($p in $side.PSObject.Properties) {
-        $digests[[string]$p.Name] = [string]$p.Value
-    }
-}
-$removeCapDigests = Join-Path $logDir 'remove-capabilities.digests.json'
-if (Test-Path -LiteralPath $removeCapDigests) {
-    $side = Get-Content -LiteralPath $removeCapDigests -Raw | ConvertFrom-Json
-    foreach ($p in $side.PSObject.Properties) {
-        $digests[[string]$p.Name] = [string]$p.Value
-    }
-}
-$disableFeatDigests = Join-Path $logDir 'disable-optional-features.digests.json'
-if (Test-Path -LiteralPath $disableFeatDigests) {
-    $side = Get-Content -LiteralPath $disableFeatDigests -Raw | ConvertFrom-Json
+# Side-car digests from remove/disable kernels (AppX / capabilities / optional features).
+foreach ($sideName in @(
+        'remove-provisioned-appx.digests.json',
+        'remove-capabilities.digests.json',
+        'disable-optional-features.digests.json')) {
+    $sidePath = Join-Path $logDir $sideName
+    if (-not (Test-Path -LiteralPath $sidePath)) { continue }
+    $side = Get-Content -LiteralPath $sidePath -Raw | ConvertFrom-Json
     foreach ($p in $side.PSObject.Properties) {
         $digests[[string]$p.Name] = [string]$p.Value
     }

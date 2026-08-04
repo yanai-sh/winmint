@@ -58,15 +58,16 @@ function Invoke-AssertSmokeEvidence {
     param(
         [string] $Dir,
         # $null ⇒ Assert-SmokeEvidence default acceptance pins (AssertOnly / fixtures).
-        [string[]] $PinnedRemoveAppx = $null
+        [string[]] $PinnedRemoveAppx = $null,
+        [string[]] $PinnedRemoveCapabilities = $null,
+        [string[]] $PinnedDisableOptionalFeatures = $null
     )
     $assert = Join-Path $PSScriptRoot 'Assert-SmokeEvidence.ps1'
-    if ($null -eq $PinnedRemoveAppx) {
-        & $assert -EvidenceDir $Dir
-    }
-    else {
-        & $assert -EvidenceDir $Dir -PinnedRemoveAppx $PinnedRemoveAppx
-    }
+    $splat = @{ EvidenceDir = $Dir }
+    if ($null -ne $PinnedRemoveAppx) { $splat.PinnedRemoveAppx = $PinnedRemoveAppx }
+    if ($null -ne $PinnedRemoveCapabilities) { $splat.PinnedRemoveCapabilities = $PinnedRemoveCapabilities }
+    if ($null -ne $PinnedDisableOptionalFeatures) { $splat.PinnedDisableOptionalFeatures = $PinnedDisableOptionalFeatures }
+    & $assert @splat
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
@@ -193,6 +194,8 @@ $bootNudgeUntil = [datetime]::UtcNow.AddMinutes(3)
 # Local+autoLogon Profiles need explicit PS Direct credentials (workgroup guest).
 $guestCred = $null
 $pinnedRemoveAppx = @()
+$pinnedRemoveCapabilities = @()
+$pinnedDisableOptionalFeatures = @()
 try {
     $profileDoc = Get-Content -LiteralPath $Profile -Raw -Encoding utf8 | ConvertFrom-Json
     $gu = [string]$profileDoc.account.username
@@ -200,11 +203,20 @@ try {
     if ($gu -and $gp) {
         $guestCred = [pscredential]::new($gu, (ConvertTo-SecureString $gp -AsPlainText -Force))
     }
-    if ($profileDoc.PSObject.Properties.Name -contains 'debloat' -and
-        $null -ne $profileDoc.debloat -and
-        $profileDoc.debloat.PSObject.Properties.Name -contains 'removeProvisionedAppx' -and
-        $null -ne $profileDoc.debloat.removeProvisionedAppx) {
-        $pinnedRemoveAppx = @($profileDoc.debloat.removeProvisionedAppx)
+    if ($profileDoc.PSObject.Properties.Name -contains 'debloat' -and $null -ne $profileDoc.debloat) {
+        $debloat = $profileDoc.debloat
+        if ($debloat.PSObject.Properties.Name -contains 'removeProvisionedAppx' -and
+            $null -ne $debloat.removeProvisionedAppx) {
+            $pinnedRemoveAppx = @($debloat.removeProvisionedAppx)
+        }
+        if ($debloat.PSObject.Properties.Name -contains 'removeCapabilities' -and
+            $null -ne $debloat.removeCapabilities) {
+            $pinnedRemoveCapabilities = @($debloat.removeCapabilities)
+        }
+        if ($debloat.PSObject.Properties.Name -contains 'disableOptionalFeatures' -and
+            $null -ne $debloat.disableOptionalFeatures) {
+            $pinnedDisableOptionalFeatures = @($debloat.disableOptionalFeatures)
+        }
     }
 }
 catch {
@@ -388,6 +400,9 @@ if (-not (Get-ChildItem -LiteralPath $guestDir -Filter 'evidence-*.json' -ErrorA
     throw "Wall clock elapsed without guest evidence under $guestDir"
 }
 
-Invoke-AssertSmokeEvidence -Dir $evidenceOut -PinnedRemoveAppx $pinnedRemoveAppx
+Invoke-AssertSmokeEvidence -Dir $evidenceOut `
+    -PinnedRemoveAppx $pinnedRemoveAppx `
+    -PinnedRemoveCapabilities $pinnedRemoveCapabilities `
+    -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures
 Write-Host "Smoke green. Evidence: $evidenceOut"
 exit 0

@@ -95,7 +95,7 @@ public class StubJobsTests
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("wsl.install", "wsl")]),
+            Bundle(jobs: [new ProvisionJob("metal.browser", "browser")]),
             Env(processes, new RecordingSplashPresenter(), evidence),
             TestContext.Current.CancellationToken);
 

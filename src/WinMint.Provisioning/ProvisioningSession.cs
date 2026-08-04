@@ -551,6 +551,28 @@ public static class ProvisioningSession
                 fileName = scoopCmd;
                 arguments = ["install", job.PackageId];
             }
+            else if (string.Equals(job.Kind, "wsl", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(job.PackageId))
+                {
+                    SessionStatus missingPkg = new(
+                        "jobs.failed",
+                        $"Job '{job.Id}' kind wsl requires packageId (distro name).");
+                    env.Splash.SetStatus(missingPkg);
+                    phases.Add(missingPkg.Code);
+                    return new JobsPhaseResult(SessionOutcome.Failed, missingPkg, TimedOut: false);
+                }
+
+                // Distro id from Profile packages.wsl — e.g. Ubuntu. Network + admin; fail closed offline.
+                fileName = "wsl.exe";
+                arguments =
+                [
+                    "--install",
+                    "-d",
+                    job.PackageId,
+                    "--no-launch",
+                ];
+            }
             else
             {
                 SessionStatus unsupported = new(

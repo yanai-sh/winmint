@@ -1,9 +1,9 @@
 # Design: Keep-flag matrix (first vertical)
 
 **Status:** **Accepted** (wayfinder map [Keep-flag matrix wayfinding](https://github.com/yanai-sh/winmint/issues/13), 2026-08-03)  
-**Authority:** [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) · [BUILDPLAN](BUILDPLAN.md) · [IMAGESERVICING](IMAGESERVICING.md) · [PROVISIONINGSESSION](PROVISIONINGSESSION.md)  
-**Implement:** AppX vertical tickets **11–13** done; capabilities expand tickets **19** (spike — [research](../research/2026-08-04-capabilities-features-matrix.md)) → **20** (offline) after metal milestone (**18**); other expansion still deferred ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md))  
-**Research:** [BCU](../research/2026-08-03-bulk-crap-uninstaller.md) · [offline DISM](../research/2026-08-03-offline-dism-remove-apis.md) · [AppX rehydrate](../research/2026-08-03-appx-rehydrate-after-oobe.md) · [capabilities/features matrix](../research/2026-08-04-capabilities-features-matrix.md)
+**Authority:** [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) · [ADR-007](../decisions/ADR-007-cdm-not-primary.md) · [BUILDPLAN](BUILDPLAN.md) · [IMAGESERVICING](IMAGESERVICING.md) · [PROVISIONINGSESSION](PROVISIONINGSESSION.md)  
+**Implement:** AppX **11–13** done; capabilities/features **19** spike → **20** offline done; Acceptance Wizard preset expands AppX + thin caps/features (**25**). Lasting out: Profile presets-in-JSON, product-default recommended set, schema `v2`, leftover *product* cleanup ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md)).  
+**Research:** [BCU](../research/2026-08-03-bulk-crap-uninstaller.md) · [offline DISM](../research/2026-08-03-offline-dism-remove-apis.md) · [AppX rehydrate](../research/2026-08-03-appx-rehydrate-after-oobe.md) · [capabilities/features matrix](../research/2026-08-04-capabilities-features-matrix.md) · [leftover confidence](../research/2026-08-05-leftover-confidence.md)
 
 ## Problem space
 
@@ -15,7 +15,7 @@ Users need a fail-closed way to strip selected **provisioned inbox AppX** from a
 |-------|------|
 | Polarity | **Remove-list only** |
 | Presets in Profile | **None** (host/Wizard may expand to the list) |
-| Kinds | **Provisioned AppX only** |
+| Kinds | **Provisioned AppX** + **capabilities** + **optional features** (same remove-list polarity; separate catalogs) |
 | Catalog | **Static shipped** in-repo; plan ⊆ catalog; image inventory for evidence |
 | Schema | Optional remove-list on **`winmint.profile/v1`** (default empty) |
 | Offline | **ImageServicing** primary — `Remove-AppxProvisionedPackage` / DISM `/Image`; `Deprovisioned` stamps when needed |
@@ -39,7 +39,7 @@ Users need a fail-closed way to strip selected **provisioned inbox AppX** from a
 - Absent / empty `removeProvisionedAppx` ⇒ no removes (Smoke-compatible).
 - Each AppX entry must match a catalog id (package family name or catalog key — freeze at implement).
 - Unknown id ⇒ plan document/plan failure (fail closed).
-- Capabilities / optional features: same remove-list polarity; thin acceptance pins only — **no** product-default recommended set ([spike](../research/2026-08-04-capabilities-features-matrix.md)).
+- Capabilities / optional features: same remove-list polarity; thin acceptance pins only — **no** product-default recommended set ([spike](../research/2026-08-04-capabilities-features-matrix.md)). Offline kernels: listed-but-absent / not-on-image ⇒ **ok + digest** (capabilities `Absent`, features `Disabled`) — not throw-on-missing.
 
 ## Catalog
 
@@ -72,18 +72,23 @@ Profile.remove list
 - Port: `IAppxPackageManager` (S3 fake; production `WinRTAppxPackageManager`).
 - No guest pwsh; no UI Automation; no BCU.
 
-## Explicitly deferred (locked 2026-08-04 grill / ADR-006)
+## Explicitly out (lasting policy — ADR-005/006/007)
 
 | Item | Lock |
 |------|------|
-| Capabilities / optional features | Spike **19** done ([research](../research/2026-08-04-capabilities-features-matrix.md)); offline implement **20** |
 | Schema `v2` | Stay on `winmint.profile/v1` until a breaking change forces bump |
-| Named Profile presets | None in Profile (host/Wizard expands → list) — [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) |
-| Confidence-tier leftover cleanup | Out of this product era — do not ticket |
-| CDM / consumer-features as primary remove | Not primary; optional later hive stamp only |
-| Wizard UX | M2 after maintainer Smoke (**14**); expands to same remove-list |
+| Named Profile presets | None in Profile (host/Wizard expands → lists) — [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) |
+| Confidence-tier leftover *product* cleanup | Spike [done](../research/2026-08-05-leftover-confidence.md); no product ticket — do not ship BCU |
+| CDM / consumer-features as primary remove | **Not primary** — [ADR-007](../decisions/ADR-007-cdm-not-primary.md) |
 | Product-default / opt-out “recommended set” | **No** — catalog bounds legal ids only |
-| Acceptance Smoke remove-list | **Yes (grill B4)** — small frozen list on acceptance Profile (`Microsoft.BingNews`, `Microsoft.BingWeather` on 25H2 ARM64 English; re-pin if media churn) |
+| Acceptance Smoke remove-list | **Yes (grill B4)** — small frozen list on acceptance Profile (AppX + thin caps/features; re-pin if media churn) |
+
+## Shipped (no longer “deferred”)
+
+| Item | Status |
+|------|--------|
+| Capabilities / optional features | Spike **19** + offline **20** |
+| Wizard expands to remove-lists | **15** / **25** (Acceptance preset includes AppX + caps/features pins) |
 
 ## Do not
 

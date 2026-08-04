@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace WinMint.Provisioning;
@@ -35,6 +36,16 @@ public sealed class FileSecretScrubber : ISecretScrubber
 
         BundleDto redacted = dto with { Password = "" };
         byte[] outBytes = JsonSerializer.SerializeToUtf8Bytes(redacted, ProvisioningJsonContext.Default.BundleDto);
+        // ponytail: full DPAPI host→guest staging channel stays future if Smoke plaintext+wipe remains lab-ok
+        try
+        {
+            File.WriteAllBytes(_bundlePath, RandomNumberGenerator.GetBytes(bytes.Length));
+        }
+        catch
+        {
+            // best-effort metal hygiene — redacted rewrite is the guarantee
+        }
+
         File.WriteAllBytes(_bundlePath, outBytes);
         _log?.Invoke($"Secret wipe: redacted password in {_bundlePath}");
     }

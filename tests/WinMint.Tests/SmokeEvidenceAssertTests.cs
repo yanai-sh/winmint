@@ -25,8 +25,12 @@ public class SmokeEvidenceAssertTests
             Assert.Contains("\"splashBeforeExplorer\": true", json, StringComparison.Ordinal);
             Assert.Contains("\"lane\": \"Test\"", json, StringComparison.Ordinal);
             Assert.Contains("\"keepFlagAppxAbsent\": true", json, StringComparison.Ordinal);
+            Assert.Contains("\"keepFlagCapsAbsent\": true", json, StringComparison.Ordinal);
+            Assert.Contains("\"keepFlagFeaturesDisabled\": true", json, StringComparison.Ordinal);
             Assert.Contains("Microsoft.BingNews", json, StringComparison.Ordinal);
             Assert.Contains("Microsoft.BingWeather", json, StringComparison.Ordinal);
+            Assert.Contains("App.StepsRecorder", json, StringComparison.Ordinal);
+            Assert.Contains("WorkFolders-Client", json, StringComparison.Ordinal);
             Assert.Contains(SmokeAcceptanceDocument.SchemaId, json, StringComparison.Ordinal);
         }
         finally
@@ -89,7 +93,7 @@ public class SmokeEvidenceAssertTests
                 """);
             File.WriteAllText(
                 Path.Combine(work, "apply", "evidence.json"),
-                """{"schemaVersion":"winmint.image.evidence/v1","lane":"Test","digests":{"removed.appx.Microsoft.BingNews":"absent","removed.appx.Microsoft.BingWeather":"absent"}}""");
+                """{"schemaVersion":"winmint.image.evidence/v1","lane":"Test","digests":{"removed.appx.Microsoft.BingNews":"absent","removed.appx.Microsoft.BingWeather":"absent","removed.capability.App.StepsRecorder~~~~0.0.1.0":"Absent","removed.capability.WMIC~~~~":"Absent","disabled.feature.WorkFolders-Client":"Disabled"}}""");
 
             int exit = RunAssert(repo, work, out _, out _);
             Assert.NotEqual(0, exit);

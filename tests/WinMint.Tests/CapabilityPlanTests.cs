@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using WinMint.Orchestrator;
 
@@ -104,6 +105,80 @@ public class CapabilityPlanTests
             {
                 // ponytail: temp cleanup best-effort
             }
+        }
+    }
+
+    [Fact]
+    public void RunPlan_merges_capability_and_feature_side_digests_into_evidence()
+    {
+        string repo = FindRepoRoot();
+        string work = Path.Combine(Path.GetTempPath(), "winmint-s2-cap-digests-" + Guid.NewGuid().ToString("N"));
+        string logs = Path.Combine(work, "logs");
+        Directory.CreateDirectory(logs);
+        try
+        {
+            File.WriteAllText(Path.Combine(work, "stages.json"), """{"stages":[]}""");
+            File.WriteAllText(
+                Path.Combine(logs, "remove-capabilities.digests.json"),
+                """{"removed.capability.App.StepsRecorder~~~~0.0.1.0":"Absent","removed.capability.WMIC~~~~":"Absent"}""");
+            File.WriteAllText(
+                Path.Combine(logs, "disable-optional-features.digests.json"),
+                """{"disabled.feature.WorkFolders-Client":"Disabled"}""");
+
+            string runPlan = Path.Combine(repo, "servicing", "RunPlan.ps1");
+            ProcessStartInfo psi = new()
+            {
+                FileName = "pwsh",
+                ArgumentList = { "-NoProfile", "-File", runPlan, "-WorkDirectory", work },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            using Process p = Process.Start(psi) ?? throw new InvalidOperationException("pwsh failed to start");
+            string stdout = p.StandardOutput.ReadToEnd();
+            string stderr = p.StandardError.ReadToEnd();
+            Assert.True(p.WaitForExit(60_000), "RunPlan timed out");
+            Assert.True(p.ExitCode == 0, $"exit={p.ExitCode}\nstdout={stdout}\nstderr={stderr}");
+
+            string evidencePath = Path.Combine(work, "evidence.json");
+            Assert.True(File.Exists(evidencePath), "expected evidence.json");
+            string json = File.ReadAllText(evidencePath);
+            Assert.Contains("removed.capability.App.StepsRecorder~~~~0.0.1.0", json, StringComparison.Ordinal);
+            Assert.Contains("removed.capability.WMIC~~~~", json, StringComparison.Ordinal);
+            Assert.Contains("disabled.feature.WorkFolders-Client", json, StringComparison.Ordinal);
+            Assert.Contains("\"Absent\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"Disabled\"", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    private static string FindRepoRoot()
+    {
+        DirectoryInfo? dir = new(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "WinMint.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return dir.FullName;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch
+        {
+            // ponytail: best-effort temp cleanup
         }
     }
 

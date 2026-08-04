@@ -84,7 +84,7 @@ public sealed record SessionEnvironment(
     ILocalAccounts? LocalAccounts = null);
 ```
 
-Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes. `IAppxPackageManager` is the keep-flag FirstLogon safety net (ticket **13**). `ISystemReboot` requests OS reboot after a `NeedsReboot` checkpoint (ticket **16**). Profile-driven `packages.wingetNeedsReboot` (ticket **17**) is a fail-closed subset of `packages.winget` that sets `needsReboot: true` on Plan winget jobs. Job kinds `winget` / `scoop` (ticket **18**) spawn via `IProcessHost`; Scoop bootstraps via official `get.scoop.sh` + `-RunAsAdmin` on inbox `powershell.exe` when missing ([research](../research/2026-08-04-scoop-firstlogon-bootstrap.md)). `ILocalAccounts` removes OOBE leftover `defaultuser0` (+ profile) during Machine setup (best-effort; Unattend cannot prevent the temp account — [research](../research/2026-08-04-oobe-wifi-local-account.md)). Unknown kinds fail closed. Guest Hyper-V prove-out: winget (**16**), reboot-resume (**17**), Scoop (**18**).
+Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes. `IAppxPackageManager` is the keep-flag FirstLogon safety net (ticket **13**). `ISystemReboot` requests OS reboot after a `NeedsReboot` checkpoint (ticket **16**): `Win32SystemReboot` prefers `ExitWindowsEx` with `SeShutdownPrivilege`, falling back to `shutdown.exe /r /t 0 /f` (ticket **24**). Profile-driven `packages.wingetNeedsReboot` (ticket **17**) is a fail-closed subset of `packages.winget` that sets `needsReboot: true` on Plan winget jobs. Job kinds `winget` / `scoop` / `wsl` (tickets **18** / **23**) spawn via `IProcessHost`; Scoop bootstraps via official `get.scoop.sh` + `-RunAsAdmin` on inbox `powershell.exe` when missing ([research](../research/2026-08-04-scoop-firstlogon-bootstrap.md)); WSL uses `wsl.exe --install -d <distro> --no-launch` (network; fail closed offline). `ILocalAccounts` removes OOBE leftover `defaultuser0` (+ profile) during Machine setup (best-effort; Unattend cannot prevent the temp account — [research](../research/2026-08-04-oobe-wifi-local-account.md)). Unknown kinds fail closed. Guest Hyper-V prove-out: winget (**16**), reboot-resume (**17**), Scoop (**18**).
 
 ### Phase machine
 
@@ -117,7 +117,7 @@ Bootstrap (checkpoint | stale→fail-open)
 
 ### Secrets (Smoke)
 
-Smoke stages the Local+autoLogon password in plaintext under `C:\Windows\WinMint\bundle.json` (ImageServicing StagePayload). `Run(MachineSetup)` stamps Winlogon then redacts `password` in that file (`FileSecretScrubber`). Guarantee is disk redact + no further use in the MachineSetup phase — not cryptographic process-memory scrub. Metal hardening (DPAPI / ephemeral secret channel) is deferred.
+Smoke stages the Local+autoLogon password in plaintext under `C:\Windows\WinMint\bundle.json` (ImageServicing StagePayload). `Run(MachineSetup)` stamps Winlogon then redacts `password` in that file (`FileSecretScrubber`: JSON redact + best-effort random overwrite of prior bytes — ticket **28**). Guarantee is disk redact + no further use in the MachineSetup phase — not cryptographic process-memory scrub. Full DPAPI host→guest staging channel remains future if lab plaintext+wipe stays acceptable for Smoke.
 
 ### Error modes
 
@@ -191,6 +191,10 @@ Expected failures return `SessionResult`; exceptions = bugs.
 | 08 | Checkpoint reboot keeps Shell |
 | 13 | AppX safety-net job |
 | 16 | Metal `winget` job + OS reboot request |
+| 23 | Metal `wsl` job |
+| 24 | ExitWindowsEx reboot fallback |
+| 28 | Best-effort bundle secret overwrite |
+| 29 | GDI splash status text |
 
 ## Explicitly rejected
 

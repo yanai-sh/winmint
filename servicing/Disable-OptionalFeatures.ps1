@@ -4,7 +4,7 @@ param(
     [hashtable] $Parameters
 )
 # Offline optional-feature disable — param-only; no Profile branching.
-# Already-Disabled ⇒ ok + digest Disabled. Uses dism.exe.
+# Already-Disabled / not listed ⇒ ok + digest Disabled (reuse-media; spike ticket 20). Uses dism.exe.
 $mountDir = $Parameters['mountDir']
 $featureNames = $Parameters['featureNames']
 $workDir = $Parameters['workDirectory']
@@ -53,7 +53,9 @@ $before.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } |
 foreach ($id in ($ids | Select-Object -Unique)) {
     $state = $before[$id]
     if (-not $state) {
-        throw "Optional feature '$id' not found on image"
+        # Not listed on this image — treat as already disabled (reuse-media; spike ticket 20).
+        Write-Output "FeatureAbsent=$id"
+        continue
     }
     if ($state -ieq 'Disabled' -or $state -ieq 'DisabledWithPayloadRemoved') {
         Write-Output "FeatureAlreadyDisabled=$id"
@@ -74,7 +76,8 @@ $after.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } |
 $digests = [ordered]@{}
 foreach ($id in ($ids | Select-Object -Unique)) {
     $state = $after[$id]
-    if ($state -ieq 'Disabled' -or $state -ieq 'DisabledWithPayloadRemoved') {
+    # Absent from inventory OR Disabled* ⇒ digest Disabled (capabilities use Absent; same idempotent posture).
+    if (-not $state -or $state -ieq 'Disabled' -or $state -ieq 'DisabledWithPayloadRemoved') {
         $digests["disabled.feature.$id"] = 'Disabled'
     }
     else {

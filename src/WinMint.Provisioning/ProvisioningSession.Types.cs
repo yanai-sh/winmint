@@ -54,6 +54,7 @@ public sealed record AppearanceOnce(string? Theme);
 public sealed record CheckpointState(string Phase);
 
 public sealed record SessionPolicy(
+    // Name is historical: tenure/settle budgets use monotonic TimeProvider timestamps (not DateTime UTC).
     TimeSpan WallClockTimeout,
     TimeSpan SettleDeadline,
     TimeSpan SettlePollInterval,

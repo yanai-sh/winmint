@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 namespace WinMint.Orchestrator;
 
 /// <summary>
-/// Host helper: compose <c>winmint.profile/v1</c> UTF-8 JSON from UI/CLI fields + an already-expanded remove-list.
+/// Host helper: compose <c>winmint.profile/v1</c> UTF-8 JSON from UI/CLI fields + already-expanded debloat lists.
 /// Does not embed preset names (KEEPFLAG: none in Profile). Package ids (when present) live in Profile JSON.
 /// </summary>
 public static class WizardProfileComposer
@@ -44,21 +44,42 @@ public static class WizardProfileComposer
         IReadOnlyList<string>? winget = null,
         IReadOnlyList<string>? wingetNeedsReboot = null,
         IReadOnlyList<string>? scoop = null,
-        IReadOnlyList<string>? scoopNeedsReboot = null)
+        IReadOnlyList<string>? scoopNeedsReboot = null,
+        IReadOnlyList<string>? wsl = null,
+        IReadOnlyList<string>? wslNeedsReboot = null,
+        IReadOnlyList<string>? removeCapabilities = null,
+        IReadOnlyList<string>? disableOptionalFeatures = null)
     {
         winget ??= [];
         wingetNeedsReboot ??= [];
         scoop ??= [];
         scoopNeedsReboot ??= [];
+        wsl ??= [];
+        wslNeedsReboot ??= [];
+        removeCapabilities ??= [];
+        disableOptionalFeatures ??= [];
 
         PackagesWireDoc? packages = null;
-        if (winget.Count > 0 || wingetNeedsReboot.Count > 0 || scoop.Count > 0 || scoopNeedsReboot.Count > 0)
+        if (winget.Count > 0 || wingetNeedsReboot.Count > 0
+            || scoop.Count > 0 || scoopNeedsReboot.Count > 0
+            || wsl.Count > 0 || wslNeedsReboot.Count > 0)
         {
             packages = new PackagesWireDoc(
                 winget.Count == 0 ? null : winget.ToArray(),
                 wingetNeedsReboot.Count == 0 ? null : wingetNeedsReboot.ToArray(),
                 scoop.Count == 0 ? null : scoop.ToArray(),
-                scoopNeedsReboot.Count == 0 ? null : scoopNeedsReboot.ToArray());
+                scoopNeedsReboot.Count == 0 ? null : scoopNeedsReboot.ToArray(),
+                wsl.Count == 0 ? null : wsl.ToArray(),
+                wslNeedsReboot.Count == 0 ? null : wslNeedsReboot.ToArray());
+        }
+
+        DebloatWireDoc? debloat = null;
+        if (removeProvisionedAppx.Count > 0 || removeCapabilities.Count > 0 || disableOptionalFeatures.Count > 0)
+        {
+            debloat = new DebloatWireDoc(
+                removeProvisionedAppx.Count == 0 ? null : removeProvisionedAppx.ToArray(),
+                removeCapabilities.Count == 0 ? null : removeCapabilities.ToArray(),
+                disableOptionalFeatures.Count == 0 ? null : disableOptionalFeatures.ToArray());
         }
 
         ProfileWireDoc doc = new(
@@ -71,9 +92,7 @@ public static class WizardProfileComposer
             new DmaWireDoc(
                 dmaEnabled,
                 new SettleWireDoc(locale, geoId, timeZoneId, locationServicesEnabled)),
-            removeProvisionedAppx.Count == 0
-                ? null
-                : new DebloatWireDoc(removeProvisionedAppx.ToArray()),
+            debloat,
             packages);
 
         return Encoding.UTF8.GetBytes(
@@ -105,13 +124,17 @@ internal sealed record SettleWireDoc(
     [property: JsonPropertyName("locationServicesEnabled")] bool LocationServicesEnabled);
 
 internal sealed record DebloatWireDoc(
-    [property: JsonPropertyName("removeProvisionedAppx")] string[] RemoveProvisionedAppx);
+    [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx,
+    [property: JsonPropertyName("removeCapabilities")] string[]? RemoveCapabilities,
+    [property: JsonPropertyName("disableOptionalFeatures")] string[]? DisableOptionalFeatures);
 
 internal sealed record PackagesWireDoc(
     [property: JsonPropertyName("winget")] string[]? Winget,
     [property: JsonPropertyName("wingetNeedsReboot")] string[]? WingetNeedsReboot,
     [property: JsonPropertyName("scoop")] string[]? Scoop,
-    [property: JsonPropertyName("scoopNeedsReboot")] string[]? ScoopNeedsReboot);
+    [property: JsonPropertyName("scoopNeedsReboot")] string[]? ScoopNeedsReboot,
+    [property: JsonPropertyName("wsl")] string[]? Wsl,
+    [property: JsonPropertyName("wslNeedsReboot")] string[]? WslNeedsReboot);
 
 [JsonSerializable(typeof(ProfileWireDoc))]
 [JsonSourceGenerationOptions(

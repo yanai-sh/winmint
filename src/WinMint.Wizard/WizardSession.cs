@@ -19,9 +19,13 @@ internal static class WizardSession
         string wingetText = "",
         string wingetNeedsRebootText = "",
         string scoopText = "",
-        string scoopNeedsRebootText = "")
+        string scoopNeedsRebootText = "",
+        string wslText = "",
+        string wslNeedsRebootText = "",
+        string removeCapabilitiesText = "",
+        string disableOptionalFeaturesText = "")
     {
-        Result<IReadOnlyList<string>, PresetFailure> expanded = KeepFlagPresets.TryExpand(preset);
+        Result<KeepFlagExpansion, PresetFailure> expanded = KeepFlagPresets.TryExpand(preset);
         if (!expanded.IsOk)
         {
             return WizardSessionResult.Fail($"{expanded.Error.Code}: {expanded.Error.Message}");
@@ -30,6 +34,19 @@ internal static class WizardSession
         if (!int.TryParse(geoIdText.Trim(), out int geoId))
         {
             return WizardSessionResult.Fail("dma.settle.geoId: must be an integer.");
+        }
+
+        // UI lists override empty; when non-empty they replace preset pins for that field (union would surprise).
+        IReadOnlyList<string> caps = WizardProfileComposer.ParseIdList(removeCapabilitiesText);
+        if (caps.Count == 0)
+        {
+            caps = expanded.Value.RemoveCapabilities;
+        }
+
+        IReadOnlyList<string> feats = WizardProfileComposer.ParseIdList(disableOptionalFeaturesText);
+        if (feats.Count == 0)
+        {
+            feats = expanded.Value.DisableOptionalFeatures;
         }
 
         byte[] utf8 = WizardProfileComposer.ToUtf8Json(
@@ -41,11 +58,15 @@ internal static class WizardSession
             geoId,
             timeZoneId.Trim(),
             locationServicesEnabled,
-            expanded.Value,
+            expanded.Value.RemoveProvisionedAppx,
             WizardProfileComposer.ParseIdList(wingetText),
             WizardProfileComposer.ParseIdList(wingetNeedsRebootText),
             WizardProfileComposer.ParseIdList(scoopText),
-            WizardProfileComposer.ParseIdList(scoopNeedsRebootText));
+            WizardProfileComposer.ParseIdList(scoopNeedsRebootText),
+            WizardProfileComposer.ParseIdList(wslText),
+            WizardProfileComposer.ParseIdList(wslNeedsRebootText),
+            caps,
+            feats);
 
         Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
         if (!parsed.IsOk)
@@ -62,9 +83,9 @@ internal static class WizardSession
             return WizardSessionResult.Fail($"{planned.Error.Code}: {planned.Error.Message}");
         }
 
-        string removeSummary = expanded.Value.Count == 0
+        string removeSummary = expanded.Value.RemoveProvisionedAppx.Count == 0
             ? "(none)"
-            : string.Join(", ", expanded.Value);
+            : string.Join(", ", expanded.Value.RemoveProvisionedAppx);
         string ok =
             $"Plan OK. Lane={planned.Value.Manifest.ImageQuality}; removeProvisionedAppx={removeSummary}; jobs={planned.Value.Jobs.Jobs.Count}.";
         return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8));

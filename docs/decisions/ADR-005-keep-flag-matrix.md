@@ -1,6 +1,6 @@
 # ADR-005: Keep-flag matrix (provisioned AppX remove-list)
 
-**Status:** Accepted  
+**Status:** Accepted (partially superseded for kinds — see below)  
 **Date:** 2026-08-03  
 **Wayfinder:** [Keep-flag matrix wayfinding](https://github.com/yanai-sh/winmint/issues/13)
 
@@ -11,18 +11,23 @@ Debloat / keep-flag is a post-M1 vertical ([TICKETS](../TICKETS.md), [ADR-002](A
 ### Decision
 
 1. **Remove-list only** — nothing removed unless the Profile lists it. No keep-list polarity; no BCU include/exclude filters in Profile.
-2. **No Profile presets** — named presets are a host/Wizard concern that expand to the same remove-list.
-3. **First vertical kinds = provisioned AppX only** — capabilities and optional features deferred.
-4. **Static in-repo catalog** — legal package-family identities for the remove-list. Plan validates ⊆ catalog; ImageServicing inventories the mount and records evidence. Discovery does not invent the catalog.
-5. **Extend `winmint.profile/v1`** with an optional remove-list (default empty). No `v2` bump for this vertical.
-6. **Ownership:** ImageServicing is primary (offline `Remove-AppxProvisionedPackage` / DISM `/Image`, plus `Deprovisioned` stamps when update-survival is required). ProvisioningSession is a narrow FirstLogon safety net (`PackageManager.RemovePackageAsync`; live deprovision only if still provisioned).
-7. **Out of this vertical:** shipping BCU; UI Automation uninstall; leftover confidence cleanup; CDM whack-a-mole as primary policy; Ent/Edu-only RemoveDefault on Pro smoke.
+2. **No Profile presets** — named presets are a host/Wizard concern that expand to the same remove-list(s).
+3. **First vertical kinds = provisioned AppX** — shipped tickets **11–13**. Capabilities / optional features were deferred here, then sequenced in [ADR-006](ADR-006-post-keepflag-sequencing.md) and implemented tickets **19–20** (same remove-list polarity + catalogs).
+4. **Static in-repo catalog(s)** — legal identities for each remove-list kind. Plan validates ⊆ catalog; ImageServicing inventories the mount and records evidence. Discovery does not invent the catalog.
+5. **Extend `winmint.profile/v1`** with optional remove-list fields (default empty). No `v2` bump for this vertical.
+6. **Ownership:** ImageServicing is primary (offline DISM `/Image` removes / disables, plus `Deprovisioned` stamps when update-survival is required for AppX). ProvisioningSession is a narrow FirstLogon safety net for AppX (`PackageManager.RemovePackageAsync`; live deprovision only if still provisioned).
+7. **Out of this vertical:** shipping BCU; UI Automation uninstall; product leftover-confidence cleanup; CDM as primary policy ([ADR-007](ADR-007-cdm-not-primary.md)); Ent/Edu-only RemoveDefault on Pro smoke; product-default / opt-out “recommended remove set.”
 
 ### Consequences
 
-- Design module: [KEEPFLAG](../design/KEEPFLAG.md). AppX vertical implemented (**11–13**). Expansion sequencing: [ADR-006](ADR-006-post-keepflag-sequencing.md).
-- BuildPlan gains catalog validation + servicing stage params for removes; ImageServicing gains a remove opcode; ProvisioningSession may gain an optional safety-net job — not a second debloat brain.
+- Design module: [KEEPFLAG](../design/KEEPFLAG.md). AppX **11–13**; capabilities/features **19–20**. Sequencing history: [ADR-006](ADR-006-post-keepflag-sequencing.md).
+- BuildPlan validates catalogs + emits servicing stage params; ImageServicing runs remove/disable opcodes; ProvisioningSession optional AppX safety-net — not a second debloat brain.
+
+### Supersession
+
+- **§3 “capabilities deferred”** — superseded by implementation **19–20** (fields still remove-list + catalog; no recommended set). Policy §§1–2, 4–7 remain binding.
+- Review trigger for maintainer Smoke before expansion — **met** (ticket **14**).
 
 ### Review trigger
 
-Maintainer Smoke green (ticket **14**) before Wizard / keep-flag expansion; or Microsoft changes provisioned-AppX offline remove semantics; or Pro gains a supported RemoveDefault-equivalent policy.
+Microsoft changes provisioned-AppX / capability / feature offline remove semantics; or Pro gains a supported RemoveDefault-equivalent policy; or maintainer overturns remove-list / no-recommended-set polarity.

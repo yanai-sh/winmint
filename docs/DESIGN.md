@@ -25,15 +25,15 @@
 
 ## ADRs
 
-[001](decisions/ADR-001-source-iso-legal.md) · [002](decisions/ADR-002-v2-architecture.md) · [003](decisions/ADR-003-dma-interop.md) · [004](decisions/ADR-004-stack-and-guest-control-plane.md) · [005](decisions/ADR-005-keep-flag-matrix.md) · [006](decisions/ADR-006-post-keepflag-sequencing.md)
+[001](decisions/ADR-001-source-iso-legal.md) · [002](decisions/ADR-002-v2-architecture.md) · [003](decisions/ADR-003-dma-interop.md) · [004](decisions/ADR-004-stack-and-guest-control-plane.md) · [005](decisions/ADR-005-keep-flag-matrix.md) · [006](decisions/ADR-006-post-keepflag-sequencing.md) · [007](decisions/ADR-007-cdm-not-primary.md)
 
 ## Decisions locked (grill)
 
-Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag grill 2026-08-04 ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)). Full table retained for agents:
+Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag grill 2026-08-04 ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)); CDM decision 2026-08-05 ([ADR-007](decisions/ADR-007-cdm-not-primary.md)). Full table retained for agents:
 
 | Topic | Lock |
 |-------|------|
-| Gate scope | Smoke M1 design; M2–M4 stubs |
+| Gate scope | Smoke M1 design; M2–M4 stubs at gate — **M1–M3 product path largely shipped** (see [ROADMAP](ROADMAP.md), [TICKETS](TICKETS.md)) |
 | Modules | As written in design/* |
 | Cross-cutting | CONTRACTS + SECRETS + SPLASH required |
 | Sign-off | ROADMAP table only |
@@ -41,7 +41,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | First paint | ≤ 2.0 s target; S3 order; S4 measure |
 | Secrets | Lab honesty; fixtures inline OK; prefer path/env in Cli |
 | Scaffold | Keep `src/` + `just check` |
-| Profile fields | Freeze at ticket **01** |
+| Profile fields | Freeze at ticket **01** (+ later optional v1 fields without schema bump) |
 | SessionPolicy | Smoke defaults per [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md#smoke-defaults-grill-locked) |
 | Guest paths | `%ProgramData%\WinMint\` |
 | MachineSetup fail | Non-zero exit; fail closed |
@@ -55,22 +55,26 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | DMA off | Schema OK; acceptance Profile = on |
 | Hyper-V Smoke | Pro only |
 | WIM commit | Single-image only — Mount exports edition; Export fail-closes if multi-index ([IMAGESERVICING](design/IMAGESERVICING.md#invariants) §7) |
-| Post-13 sequencing | **M1 maintainer Smoke green before Wizard or keep-flag expansion** ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)) |
+| Post-13 sequencing | **Met** — M1 Smoke (**14**) before Wizard / keep-flag expand / metal ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)); tickets **14–30** done |
 | Post-13 tickets | Thin cards **14+**; no mega-epic; carry folds into owning card |
-| Keep-flag expand | Capabilities/features, `v2`, Profile presets, leftover confidence, CDM-as-primary — **defer past Wizard** |
-| Acceptance remove-list | Smoke **acceptance** Profile pins a **small frozen** remove-list (E2E keep-flag on M1 exit); schema default elsewhere remains empty; **no** product-default / opt-out recommended set |
+| Keep-flag polarity | Remove-list only; **no** Profile preset names; **no** product-default / opt-out recommended set ([ADR-005](decisions/ADR-005-keep-flag-matrix.md)) |
+| Keep-flag kinds | AppX **11–13**; capabilities/features **19–20** (same polarity) |
+| CDM | Not primary keep-flag control ([ADR-007](decisions/ADR-007-cdm-not-primary.md)) |
+| Acceptance remove-list | Smoke **acceptance** Profile pins a **small frozen** list (AppX + thin caps/features); schema default elsewhere empty |
 | Schema | Stay on `winmint.profile/v1` until a breaking change forces `v2` |
-| Metal jobs | After Wizard (**15**); first kind = `winget` (**16** done); Scoop/WSL still fail-closed |
-| OS reboot | Supervisor `ISystemReboot` on `NeedsReboot` (**16**); metal reboot-required Profile matrix later |
+| Metal jobs | `winget` / Scoop / WSL shipped (**16–18**, **23**); unknown kinds fail closed until ticketed |
+| OS reboot | `ISystemReboot` (`ExitWindowsEx` + `shutdown.exe` fallback **24**); Profile `*NeedsReboot` subsets |
 | AppearanceOnce | Optional bundle field until a Profile appearance story is grilled |
-| Secrets hardening | Smoke plaintext+wipe; metal secrets later; inline JSON redact when next editing Machine setup |
-| Splash D2D | Only if S4 FirstPaintBudget fails on real Smoke |
+| Secrets hardening | Smoke plaintext + wipe (**28** best-effort overwrite); full DPAPI host→guest channel later |
+| Splash D2D | GDI status text (**29**); full D2D only if S4 FirstPaintBudget still fails on real Smoke |
 | S4 VHD/digest rebuild | Maintainer optimization — not a product ticket |
 | `*Dto` rename | Opportunistic on next BundleLoader touch |
-| Wizard | After M1 Smoke green; second BuildPlan host only |
-| Hardware | M4; stricter evidence; no Supervisor fork |
+| Wizard | Second BuildPlan host only (**15** + packages **22** + polish **25**) |
+| Hardware | M4 stricter evidence bars (**30** opt-in); no Supervisor fork; full hardware campaign maintainer-timed |
 
-**Deferred implement:** Wizard / hardware / metal jobs / keep-flag expansion — order per [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md). Keep-flag AppX vertical (**11–13**) implemented. Profile property names frozen in ticket **01**; optional `debloat.removeProvisionedAppx` and `account.requireWifiDuringOobe` on v1 ([research](research/2026-08-04-oobe-wifi-local-account.md)).  
+**Still out (policy):** Profile presets-in-JSON; product-default recommended remove-list; schema `v2` without a break; full DPAPI host→guest; full D2D; leftover-confidence *product* cleanup; full Wizard UX beyond list authoring.  
+**Shipped:** AppX + capabilities keep-flag; Wizard thin + packages + caps/WSL lists; metal winget/Scoop/WSL; Israel DMA sample; M4 assert switch. Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` on v1.
+
 **Owned elsewhere:** AppearanceOnce consume path → ticket **07** (done); splash spike → [SPLASH](design/SPLASH.md) appendix.
 
 ## Design Acceptance
@@ -79,4 +83,4 @@ Sign-off: [ROADMAP](ROADMAP.md#design-acceptance) (grill lock: ROADMAP table onl
 
 ## After hold lifts
 
-Work only from [TICKETS](TICKETS.md). Do not expand M2–M4 until M1 green or rescope ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)).
+Work only from [TICKETS](TICKETS.md). Sequencing gate in [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) is **met**; lasting policy locks above still bind.

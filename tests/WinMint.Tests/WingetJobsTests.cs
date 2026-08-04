@@ -211,7 +211,7 @@ public class WingetJobsTests
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("wsl.install", "wsl")]),
+            Bundle(jobs: [new ProvisionJob("metal.browser", "browser")]),
             Env(processes, evidence),
             TestContext.Current.CancellationToken);
 

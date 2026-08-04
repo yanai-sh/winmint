@@ -4,7 +4,8 @@ param(
     [hashtable] $Parameters
 )
 # Offline capability remove — param-only; no Profile branching.
-# Already-Absent ⇒ ok + digest Absent (reuse-media). Uses dism.exe.
+# Already-Absent / not listed ⇒ ok + digest Absent (reuse-media). Uses dism.exe.
+# Optional features mirror this posture (Disable-OptionalFeatures.ps1) — not throw-on-missing.
 $mountDir = $Parameters['mountDir']
 $capabilityNames = $Parameters['capabilityNames']
 $workDir = $Parameters['workDirectory']

@@ -16,13 +16,23 @@ param(
 
     [double] $FirstPaintBudgetSeconds = 2.0,
 
+    # Ticket 30 / hardware M4: stricter bars — firstPaint fail (not warn); settle.ok|location_warn only.
+    [switch] $HardwareM4,
+
     # Empty ⇒ skip keep-flag digest asserts (israel/smoke Profiles without remove-list).
     # Default = acceptance pins when AssertOnly without an explicit list.
-    [string[]] $PinnedRemoveAppx = @('Microsoft.BingNews', 'Microsoft.BingWeather')
+    [string[]] $PinnedRemoveAppx = @('Microsoft.BingNews', 'Microsoft.BingWeather'),
+
+    # Ticket 19/20 thin acceptance pins (samples/acceptance.profile.json). Empty ⇒ skip.
+    [string[]] $PinnedRemoveCapabilities = @('App.StepsRecorder~~~~0.0.1.0', 'WMIC~~~~'),
+
+    [string[]] $PinnedDisableOptionalFeatures = @('WorkFolders-Client')
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+$hardwareM4 = $HardwareM4.IsPresent -or ($env:WINMINT_M4 -eq '1')
 
 # ADR-006 / samples/acceptance.profile.json — frozen acceptance remove-list when caller omits -PinnedRemoveAppx.
 # Re-pin if acceptance Source ISO churn drops an id (KEEPFLAG).
@@ -72,11 +82,17 @@ if ($outcome -ne 'Complete') {
 }
 
 # DMA hard fields must succeed — apply_failed / hard_mismatch are not acceptance-green.
-# Checkpoint resume skips re-settle (ticket 17); resume_skip + checkpoint.resume proves prior settle.
-$dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn') -or
-    (($phases -contains 'settle.resume_skip') -and ($phases -contains 'checkpoint.resume'))
+# M4 (hardware): settle.ok or settle.location_warn only — no resume_skip shortcut.
+# Default: resume_skip + checkpoint.resume also proves prior settle (ticket 17).
+$dmaOk = if ($hardwareM4) {
+    ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn')
+} else {
+    ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn') -or
+        (($phases -contains 'settle.resume_skip') -and ($phases -contains 'checkpoint.resume'))
+}
 if (-not $dmaOk) {
-    throw 'DMA hard fields missing: need settle.ok, settle.location_warn, or settle.resume_skip+checkpoint.resume'
+    $need = if ($hardwareM4) { 'settle.ok or settle.location_warn (M4)' } else { 'settle.ok, settle.location_warn, or settle.resume_skip+checkpoint.resume' }
+    throw "DMA hard fields missing: need $need"
 }
 
 # Unlock: Winlogon Shell must be Explorer, not Supervisor.
@@ -131,6 +147,30 @@ if ($null -ne $PinnedRemoveAppx -and @($PinnedRemoveAppx).Count -gt 0) {
     }
 }
 
+$capsChecked = $false
+if ($null -ne $PinnedRemoveCapabilities -and @($PinnedRemoveCapabilities).Count -gt 0) {
+    $capsChecked = $true
+    foreach ($id in $PinnedRemoveCapabilities) {
+        if ([string]::IsNullOrWhiteSpace($id)) { continue }
+        $key = "removed.capability.$id"
+        if (-not $digestMap.ContainsKey($key) -or $digestMap[$key] -ne 'Absent') {
+            throw "keep-flag capability digest missing: expected $key=Absent in apply/evidence.json digests"
+        }
+    }
+}
+
+$featsChecked = $false
+if ($null -ne $PinnedDisableOptionalFeatures -and @($PinnedDisableOptionalFeatures).Count -gt 0) {
+    $featsChecked = $true
+    foreach ($id in $PinnedDisableOptionalFeatures) {
+        if ([string]::IsNullOrWhiteSpace($id)) { continue }
+        $key = "disabled.feature.$id"
+        if (-not $digestMap.ContainsKey($key) -or $digestMap[$key] -ne 'Disabled') {
+            throw "keep-flag feature digest missing: expected $key=Disabled in apply/evidence.json digests"
+        }
+    }
+}
+
 $firstPaintMs = $null
 if ($guest.PSObject.Properties.Name -contains 'firstPaintMs' -and $null -ne $guest.firstPaintMs) {
     $firstPaintMs = [double]$guest.firstPaintMs
@@ -141,6 +181,9 @@ if ($null -eq $firstPaintMs) {
 $paintWarn = $false
 $budgetMs = $FirstPaintBudgetSeconds * 1000.0
 if ($firstPaintMs -gt $budgetMs) {
+    if ($hardwareM4) {
+        throw ("M4: time-to-first-paint {0:N0} ms exceeds budget {1:N0} ms" -f $firstPaintMs, $budgetMs)
+    }
     $paintWarn = $true
     Write-Warning ("time-to-first-paint {0:N0} ms exceeds budget {1:N0} ms" -f $firstPaintMs, $budgetMs)
 }
@@ -154,8 +197,13 @@ $acceptance = [ordered]@{
     lane                    = $lane
     firstPaintMs            = $firstPaintMs
     firstPaintWarn          = $paintWarn
+    hardwareM4              = $hardwareM4
     keepFlagAppxAbsent      = $keepFlagChecked
+    keepFlagCapsAbsent      = $capsChecked
+    keepFlagFeaturesDisabled = $featsChecked
     pinnedRemoveAppx        = @($PinnedRemoveAppx)
+    pinnedRemoveCapabilities = @($PinnedRemoveCapabilities)
+    pinnedDisableOptionalFeatures = @($PinnedDisableOptionalFeatures)
     winlogonShell           = $shell
     guestEvidencePath       = $guestPath
 }

@@ -34,7 +34,10 @@ public class FileSecretScrubberTests
             FileSecretScrubber scrubber = new(path);
             scrubber.Wipe(bundle);
 
-            using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(path));
+            string onDisk = File.ReadAllText(path);
+            Assert.DoesNotContain("lab-secret", onDisk, StringComparison.Ordinal);
+
+            using JsonDocument doc = JsonDocument.Parse(onDisk);
             Assert.Equal("", doc.RootElement.GetProperty("password").GetString());
             Assert.Equal("winmint", doc.RootElement.GetProperty("username").GetString());
 

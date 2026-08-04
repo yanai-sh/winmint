@@ -10,9 +10,9 @@
 | **D0** | Design-plan complete | Designs + roadmap + gate signed | **Done** (2026-07-28) |
 | **M0** | Repo scaffold | Reserved `src/` builds | Present |
 | **M1** | Smoke Hyper-V green | Profile → ISO → FirstLogon evidence | **Done** — maintainer Smoke prove-out (**14**) green 2026-08-04 |
-| **M2** | Wizard | Second BuildPlan host; UI presets → remove-list | **Thin vertical done** (**15**, 2026-08-04); polish deferred |
-| **M3** | Metal jobs / matrix expand | `winget` + reboot-resume + **Scoop** guest-proven (**16–18** metal exit); keep-flag **19→20**; WSL deferred | **Metal exit** (2026-08-04) |
-| **M4** | Hardware acceptance | Stricter evidence bars; same Supervisor/settle/jobs | After M2/M3 |
+| **M2** | Wizard | Second BuildPlan host; presets → remove-lists; packages + caps UI | **Done** thin + packages (**15**, **22**) + polish (**25**, 2026-08-05); full UX polish still out |
+| **M3** | Metal jobs / matrix expand | winget + reboot-resume + Scoop (**16–18**); caps **19–20**; WSL **23**; ExitWindowsEx **24** | **Done** (metal exit 2026-08-04; WSL/caps follow-on 2026-08-05) |
+| **M4** | Hardware acceptance | Stricter evidence bars; same Supervisor/settle/jobs | Bars opt-in (**30**); full hardware campaign after M2/M3 — maintainer-timed |
 
 ## Design Acceptance
 
@@ -21,7 +21,7 @@
 | Date | **2026-07-28** |
 | Maintainer | Project owner (batch-grill shared understanding) |
 | Splash prototype | Waived for gate; required before ticket **04** |
-| Notes | Grill locks: [DESIGN](DESIGN.md#decisions-locked-grill). Quality pass: canonical backlog [TICKETS](TICKETS.md). Post–keep-flag sequencing: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) (2026-08-04). |
+| Notes | Grill locks: [DESIGN](DESIGN.md#decisions-locked-grill). Quality pass: canonical backlog [TICKETS](TICKETS.md). Post–keep-flag sequencing: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) (sequencing **met**; lasting policy still binds). CDM: [ADR-007](decisions/ADR-007-cdm-not-primary.md). |
 
 ## M1 order
 
@@ -29,8 +29,8 @@ Canonical ticket cards + DoD: **[TICKETS](TICKETS.md)**. Do not duplicate tables
 
 ## M1 exit criteria
 
-Pro Smoke; Local+autoLogon; DMA on acceptance Profile; splash before Explorer; DMA hard evidence; `Test` lane; fail-open; reboot keeps Shell; pwsh-free guest; `%ProgramData%\WinMint\`; paint time recorded; **pinned acceptance AppX remove-list proven gone** ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) B4). **Prove-out:** maintainer `just smoke` on a real Source ISO (ticket **14**) — fixture S4 alone is not exit.
+Pro Smoke; Local+autoLogon; DMA on acceptance Profile; splash before Explorer; DMA hard evidence; `Test` lane; fail-open; reboot keeps Shell; pwsh-free guest; `%ProgramData%\WinMint\`; paint time recorded; **pinned acceptance remove-list proven** ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) B4). **Prove-out:** maintainer `just smoke` on a real Source ISO (ticket **14**) — fixture S4 alone is not exit. **Met** 2026-08-04.
 
 ## M2–M4
 
-Keep-flag AppX vertical (**11–13**) done; capabilities expand after metal milestone (**19** spike → **20** offline). Presets / CDM-as-primary / leftover confidence / product-default recommended set stay deferred ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md), [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)). Acceptance Profile carries a small frozen remove-list for M1 exit prove-out. Hardware = stricter evidence bars. No guest pwsh / settle forks / ISO Avalonia.
+Keep-flag AppX (**11–13**) + capabilities/features (**19–20**) done. Wizard + metal + deferred backlog **23–30** done. **Still locked out by policy** ([ADR-005](decisions/ADR-005-keep-flag-matrix.md) / [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) / [ADR-007](decisions/ADR-007-cdm-not-primary.md)): Profile presets-in-JSON; product-default recommended remove-list; schema `v2` without a break; CDM-as-primary; leftover-confidence *product* cleanup. Acceptance Profile carries a small frozen remove-list for prove-out. Hardware = stricter evidence bars (**30**); no Supervisor fork. No guest pwsh / settle forks / ISO Avalonia.

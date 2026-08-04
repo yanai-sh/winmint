@@ -125,6 +125,8 @@ public static class BuildPlan
             NormalizeRemoveList(doc.Packages?.WingetNeedsReboot),
             NormalizeRemoveList(doc.Packages?.Scoop),
             NormalizeRemoveList(doc.Packages?.ScoopNeedsReboot),
+            NormalizeRemoveList(doc.Packages?.Wsl),
+            NormalizeRemoveList(doc.Packages?.WslNeedsReboot),
             NormalizeRemoveList(doc.Debloat?.RemoveCapabilities),
             NormalizeRemoveList(doc.Debloat?.DisableOptionalFeatures));
 
@@ -143,6 +145,27 @@ public static class BuildPlan
             .Select(s => s.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private static PlanFailure? ValidateNeedsRebootSubset(
+        IReadOnlyList<string> packages,
+        IReadOnlyList<string> needsReboot,
+        string code,
+        string needsName,
+        string packagesName)
+    {
+        HashSet<string> set = new(packages, StringComparer.OrdinalIgnoreCase);
+        foreach (string id in needsReboot)
+        {
+            if (!set.Contains(id))
+            {
+                return new PlanFailure(
+                    code,
+                    $"{needsName} id '{id}' is not in {packagesName}.");
+            }
+        }
+
+        return null;
     }
 
     public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null)
@@ -189,36 +212,46 @@ public static class BuildPlan
             }
         }
 
-        HashSet<string> wingetSet = new(profile.WingetPackages, StringComparer.OrdinalIgnoreCase);
-        foreach (string id in profile.WingetNeedsReboot)
+        PlanFailure? needsRebootFail = ValidateNeedsRebootSubset(
+            profile.WingetPackages,
+            profile.WingetNeedsReboot,
+            "packages.wingetNeedsReboot.unknown",
+            "wingetNeedsReboot",
+            "packages.winget");
+        if (needsRebootFail is not null)
         {
-            if (!wingetSet.Contains(id))
-            {
-                return Result.Fail<BuildArtifacts, PlanFailure>(
-                    new PlanFailure(
-                        "packages.wingetNeedsReboot.unknown",
-                        $"wingetNeedsReboot id '{id}' is not in packages.winget."));
-            }
+            return Result.Fail<BuildArtifacts, PlanFailure>(needsRebootFail);
         }
 
-        HashSet<string> scoopSet = new(profile.ScoopPackages, StringComparer.OrdinalIgnoreCase);
-        foreach (string id in profile.ScoopNeedsReboot)
+        needsRebootFail = ValidateNeedsRebootSubset(
+            profile.ScoopPackages,
+            profile.ScoopNeedsReboot,
+            "packages.scoopNeedsReboot.unknown",
+            "scoopNeedsReboot",
+            "packages.scoop");
+        if (needsRebootFail is not null)
         {
-            if (!scoopSet.Contains(id))
-            {
-                return Result.Fail<BuildArtifacts, PlanFailure>(
-                    new PlanFailure(
-                        "packages.scoopNeedsReboot.unknown",
-                        $"scoopNeedsReboot id '{id}' is not in packages.scoop."));
-            }
+            return Result.Fail<BuildArtifacts, PlanFailure>(needsRebootFail);
+        }
+
+        needsRebootFail = ValidateNeedsRebootSubset(
+            profile.WslDistros,
+            profile.WslNeedsReboot,
+            "packages.wslNeedsReboot.unknown",
+            "wslNeedsReboot",
+            "packages.wsl");
+        if (needsRebootFail is not null)
+        {
+            return Result.Fail<BuildArtifacts, PlanFailure>(needsRebootFail);
         }
 
         HashSet<string> wingetNeedsReboot = new(profile.WingetNeedsReboot, StringComparer.OrdinalIgnoreCase);
         HashSet<string> scoopNeedsReboot = new(profile.ScoopNeedsReboot, StringComparer.OrdinalIgnoreCase);
+        HashSet<string> wslNeedsReboot = new(profile.WslNeedsReboot, StringComparer.OrdinalIgnoreCase);
 
         string unattendXml = BuildAutounattendXml(profile);
 
-        // Stub Smoke job set — real installs from packages.winget / packages.scoop; executor shared.
+        // Stub Smoke job set — real installs from packages.winget / packages.scoop / packages.wsl; executor shared.
         // Keep-flag safety net when Profile remove-list is non-empty (ticket 13).
         List<JobDescriptor> jobList =
         [
@@ -246,6 +279,15 @@ public static class BuildPlan
                 "scoop",
                 PackageId: packageId,
                 NeedsReboot: scoopNeedsReboot.Contains(packageId)));
+        }
+
+        foreach (string distroId in profile.WslDistros)
+        {
+            jobList.Add(new JobDescriptor(
+                $"wsl.{distroId}",
+                "wsl",
+                PackageId: distroId,
+                NeedsReboot: wslNeedsReboot.Contains(distroId)));
         }
 
         JobsArtifact jobs = new(JobsSchemaVersion, jobList);
@@ -495,7 +537,9 @@ internal sealed record PackagesDocument(
     [property: JsonPropertyName("winget")] string[]? Winget,
     [property: JsonPropertyName("wingetNeedsReboot")] string[]? WingetNeedsReboot,
     [property: JsonPropertyName("scoop")] string[]? Scoop,
-    [property: JsonPropertyName("scoopNeedsReboot")] string[]? ScoopNeedsReboot);
+    [property: JsonPropertyName("scoopNeedsReboot")] string[]? ScoopNeedsReboot,
+    [property: JsonPropertyName("wsl")] string[]? Wsl,
+    [property: JsonPropertyName("wslNeedsReboot")] string[]? WslNeedsReboot);
 
 internal sealed record DebloatDocument(
     [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx,

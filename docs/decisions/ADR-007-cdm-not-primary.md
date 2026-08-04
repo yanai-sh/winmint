@@ -1,0 +1,21 @@
+# ADR-007: CDM is not primary keep-flag control (M1/M2)
+
+**Status:** Accepted  
+**Date:** 2026-08-05  
+**Ticket:** 27 · **Issue:** [#39](https://github.com/yanai-sh/winmint/issues/39)
+
+### Context
+
+Keep-flag vertical is **remove-list only** on `winmint.profile/v1` ([ADR-005](ADR-005-keep-flag-matrix.md), [KEEPFLAG](../design/KEEPFLAG.md)). [AppX rehydrate research](../research/2026-08-03-appx-rehydrate-after-oobe.md) and [leftover-confidence spike](../research/2026-08-05-leftover-confidence.md) classify consumer/CDM paths separately from offline provisioned-package removal. Community HKCU `ContentDeliveryManager` DWORD lists are reset-prone and not edition-guaranteed on Pro.
+
+### Decision
+
+1. **Primary control plane (M1/M2):** offline **ImageServicing** remove (AppX, capabilities, optional features) with **digests** on apply evidence, plus narrow **FirstLogon PackageManager** safety-net when the Profile remove-list is non-empty.
+2. **CDM / consumer-features are not primary** — no Supervisor job or Profile field that treats per-user CDM suppression as the main debloat mechanism for M1/M2.
+3. **Optional later:** offline HKLM policy stamps (e.g. CloudContent) when Profile explicitly asks and edition semantics are documented — not ticketed in M1/M2.
+
+### Consequences
+
+- Leftover-confidence *product* cleanup stays out ([research spike](../research/2026-08-05-leftover-confidence.md)); CDM whack-a-mole is not the M1/M2 control plane.
+- Smoke / acceptance evidence continues to assert **offline digests** + guest settle/jobs — not CDM registry state.
+- Future CDM work requires a new ADR if it becomes primary policy.

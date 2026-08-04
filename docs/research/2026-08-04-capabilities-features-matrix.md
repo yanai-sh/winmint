@@ -25,7 +25,7 @@ Trust tiers:
 | Capability | `Get-WindowsCapability -Path` / `dism /Get-Capabilities` | `Remove-WindowsCapability` / `dism /Remove-Capability` | `removed.capability.<id>=Absent` |
 | Optional feature | `Get-WindowsOptionalFeature -Path` | `Disable-WindowsOptionalFeature` / `dism /Disable-Feature` | `disabled.feature.<id>=Disabled` |
 
-Fail closed: Profile id not in shipped catalog ⇒ Plan error. Listed id not present / already Absent|Disabled ⇒ idempotent ok (match AppX reuse-media posture) **or** fail closed if product prefers assert-present — **ticket 20** should mirror AppX: already-absent ⇒ ok + digest.
+Fail closed: Profile id not in shipped catalog ⇒ Plan error. Listed id not present / already Absent|Disabled ⇒ **idempotent ok + digest** (ticket **20** froze this): capabilities write `removed.capability.<id>=Absent` when not listed or already Absent; optional features write `disabled.feature.<id>=Disabled` when not listed or already Disabled* (same reuse-media posture — do **not** throw-on-missing).
 
 ## Profile wire (freeze in **20**)
 

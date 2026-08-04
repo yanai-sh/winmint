@@ -4,13 +4,13 @@ using System.Runtime.Versioning;
 namespace WinMint.Provisioning;
 
 /// <summary>
-/// In-process opaque splash frame via GDI (Direct2D upgrade path if cold-start budget slips).
+/// In-process opaque splash frame via GDI (full ID2D1Factory path only if S4 FirstPaintBudget still fails after status TextOutW).
 /// Status is held in-memory; pixels are not a control plane.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
 {
-    // ponytail: solid branded fill is enough for first opaque frame; D2D if FirstPaintBudget slips on S4
+    // ponytail: solid fill + status TextOutW for first opaque frame; full D2D only if S4 FirstPaintBudget still fails
     private const uint FillColorRef = 0x00281810; // BGR: 16,24,40
 
     private IntPtr _hwnd;
@@ -103,8 +103,6 @@ public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
 
     private void PaintOpaque(IntPtr hwnd)
     {
-        // Opaque fill is the first-frame guarantee; CurrentStatus is the in-memory channel.
-        _ = CurrentStatus.Code;
         IntPtr hdc = GetDC(hwnd);
         if (hdc == IntPtr.Zero)
         {
@@ -138,6 +136,8 @@ public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
                     // best-effort cleanup
                 }
             }
+
+            DrawStatusText(hdc, rect);
         }
         finally
         {
@@ -147,6 +147,47 @@ public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
             }
         }
     }
+
+    private void DrawStatusText(IntPtr hdc, RECT rect)
+    {
+        string label = string.IsNullOrWhiteSpace(_status.Message) ? _status.Code : _status.Message;
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return;
+        }
+
+        IntPtr font = GetStockObject(StockGuiFont);
+        if (font == IntPtr.Zero)
+        {
+            return;
+        }
+
+        IntPtr oldFont = SelectObject(hdc, font);
+        try
+        {
+            if (SetBkMode(hdc, BkModeTransparent) == 0)
+            {
+                return;
+            }
+
+            if (SetTextColor(hdc, 0x00FFFFFF) == 0xFFFFFFFF)
+            {
+                return;
+            }
+
+            TextOutW(hdc, 48, 48, label, label.Length);
+        }
+        finally
+        {
+            if (oldFont != IntPtr.Zero)
+            {
+                SelectObject(hdc, oldFont);
+            }
+        }
+    }
+
+    private const int BkModeTransparent = 1;
+    private const int StockGuiFont = 17;
 
     private const int SW_SHOW = 5;
     private const int SM_CXSCREEN = 0;
@@ -213,6 +254,22 @@ public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
     [LibraryImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool DeleteObject(IntPtr ho);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial int SetBkMode(IntPtr hdc, int mode);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial uint SetTextColor(IntPtr hdc, uint color);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial IntPtr SelectObject(IntPtr hdc, IntPtr hgdiobj);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial IntPtr GetStockObject(int i);
+
+    [LibraryImport("gdi32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool TextOutW(IntPtr hdc, int x, int y, string lpString, int c);
 
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial IntPtr GetModuleHandleW(string? lpModuleName);
