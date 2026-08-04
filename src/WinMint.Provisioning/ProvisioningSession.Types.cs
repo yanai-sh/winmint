@@ -117,6 +117,18 @@ public interface IAppxPackageManager
     /// Register a provisioned package family for the current user (winget / App Installer FirstLogon).
     /// </summary>
     void RegisterPackageFamilyForCurrentUser(string packageFamilyName);
+
+    /// <summary>
+    /// SetupComplete/SYSTEM: grant LocalSystem FullControl on staged App Installer framework
+    /// packages. Inbox ACLs often leave SYSTEM RX-only; AppXDeploymentServer then fails Trust Label
+    /// registration (error surfaces as logo.png access denied for S-1-5-18).
+    /// </summary>
+    void EnsureSystemFullControlOnWingetFrameworkPackages();
+
+    /// <summary>
+    /// Resolve <c>winget.exe</c> under the current user's registered DesktopAppInstaller package.
+    /// </summary>
+    string? TryResolveWingetExecutablePath();
 }
 
 public interface IWinlogonRegistry

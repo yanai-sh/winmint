@@ -10,6 +10,11 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
 {
     private readonly PackageManager _manager = new();
 
+    private static string WindowsAppsRoot =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "WindowsApps");
+
     public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(catalogId);
@@ -117,6 +122,44 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
             throw new InvalidOperationException(
                 $"RegisterPackageByFamilyNameAsync({packageFamilyName}): {result.ErrorText}");
         }
+    }
+
+    public void EnsureSystemFullControlOnWingetFrameworkPackages()
+    {
+        foreach (string dir in WingetFrameworkPackageAcl.FindPackageDirectories(WindowsAppsRoot))
+        {
+            try
+            {
+                WingetFrameworkPackageAcl.GrantSystemFullControlTree(dir);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or SystemException)
+            {
+                // ponytail: MachineSetup best-effort; FirstLogon register still surfaces failure
+            }
+        }
+    }
+
+    public string? TryResolveWingetExecutablePath()
+    {
+        try
+        {
+            foreach (Package package in _manager.FindPackagesForUser(
+                         string.Empty,
+                         ProvisioningSession.DesktopAppInstallerFamilyName))
+            {
+                string candidate = Path.Combine(package.InstalledLocation.Path, "winget.exe");
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+        catch (Exception ex) when (IsAccessDenied(ex) || ex is IOException)
+        {
+            return null;
+        }
+
+        return null;
     }
 
     private static bool IsAccessDenied(Exception ex)

@@ -410,6 +410,8 @@ public static class ProvisioningSession
 
                 // FirstLogon: App Installer is often provisioned but not yet registered for the
                 // interactive user — winget.exe alias missing until RegisterByFamilyName (MS docs).
+                // MachineSetup (SYSTEM) must have repaired framework package ACLs first; otherwise
+                // Register fails setting Trust Labels (UI.Xaml logo.png denied for S-1-5-18).
                 if (env.Appx is not null)
                 {
                     try
@@ -426,7 +428,8 @@ public static class ProvisioningSession
                         return new JobsPhaseResult(SessionOutcome.Failed, regFailed, TimedOut: false);
                     }
 
-                    fileName = WaitForWingetAliasOrFallback();
+                    fileName = env.Appx.TryResolveWingetExecutablePath()
+                        ?? WaitForWingetAliasOrFallback();
                 }
                 else
                 {
@@ -835,6 +838,20 @@ public static class ProvisioningSession
         if (shellFailure is not null)
         {
             return shellFailure;
+        }
+
+        // SetupComplete runs as SYSTEM — only elevated window before FirstLogon medium-IL Shell.
+        // ponytail: best-effort; winget register still fails closed if ACLs stay wrong.
+        if (env.Appx is not null)
+        {
+            try
+            {
+                env.Appx.EnsureSystemFullControlOnWingetFrameworkPackages();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // swallow — MachineSetup must not fail closed on optional winget prep
+            }
         }
 
         return new SessionResult(

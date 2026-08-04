@@ -108,6 +108,24 @@ public class MachineSetupTests
         Assert.False(winlogon.AutoAdminLogon);
     }
 
+    [Fact]
+    public void MachineSetup_repairs_winget_framework_acls_when_Appx_present()
+    {
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        RecordingSecretScrubber secrets = new();
+        RecordingAppx appx = new();
+        ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.MachineSetup,
+            bundle,
+            Env(winlogon, secrets, appx),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal(1, appx.EnsureSystemFullControlCalls);
+    }
+
     private static ProvisioningBundle MinimalBundle(string username, string password) =>
         new(
             Account: new AccountStamp(username, password),
@@ -116,7 +134,10 @@ public class MachineSetupTests
             Policy: SessionPolicy.SmokeDefaults,
             Supervisor: new SupervisorIdentity(SupervisorPath));
 
-    private static SessionEnvironment Env(IWinlogonRegistry winlogon, ISecretScrubber secrets) =>
+    private static SessionEnvironment Env(
+        IWinlogonRegistry winlogon,
+        ISecretScrubber secrets,
+        IAppxPackageManager? appx = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: winlogon,
@@ -124,7 +145,27 @@ public class MachineSetupTests
             Processes: new NoopProcesses(),
             Splash: new NoopSplash(),
             Checkpoints: new NoopCheckpoints(),
-            Secrets: secrets);
+            Secrets: secrets,
+            Appx: appx);
+
+    private sealed class RecordingAppx : IAppxPackageManager
+    {
+        public int EnsureSystemFullControlCalls { get; private set; }
+
+        public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) => [];
+
+        public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) => [];
+
+        public void RemovePackage(string packageFullName) { }
+
+        public void DeprovisionPackageFamily(string packageFamilyName) { }
+
+        public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) { }
+
+        public void EnsureSystemFullControlOnWingetFrameworkPackages() => EnsureSystemFullControlCalls++;
+
+        public string? TryResolveWingetExecutablePath() => null;
+    }
 
     private sealed class FakeWinlogonRegistry : IWinlogonRegistry
     {

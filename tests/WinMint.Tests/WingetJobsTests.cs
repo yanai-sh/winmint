@@ -115,7 +115,10 @@ public class WingetJobsTests
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
-        RecordingAppx appx = new();
+        RecordingAppx appx = new()
+        {
+            WingetPath = @"C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_1.0_arm64__8wekyb3d8bbwe\winget.exe",
+        };
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
@@ -128,10 +131,7 @@ public class WingetJobsTests
             ProvisioningSession.DesktopAppInstallerFamilyName,
             appx.RegisteredFamilyNames);
         Assert.Single(processes.Starts);
-        // After register we prefer the WindowsApps alias when present on the host.
-        Assert.True(
-            processes.Starts[0].FileName.Equals("winget", StringComparison.OrdinalIgnoreCase)
-            || processes.Starts[0].FileName.EndsWith("winget.exe", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(appx.WingetPath, processes.Starts[0].FileName);
     }
 
     [Fact]
@@ -213,6 +213,8 @@ public class WingetJobsTests
     {
         public List<string> RegisteredFamilyNames { get; } = [];
 
+        public string? WingetPath { get; init; }
+
         public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) => [];
 
         public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) => [];
@@ -223,6 +225,10 @@ public class WingetJobsTests
 
         public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) =>
             RegisteredFamilyNames.Add(packageFamilyName);
+
+        public void EnsureSystemFullControlOnWingetFrameworkPackages() { }
+
+        public string? TryResolveWingetExecutablePath() => WingetPath;
     }
 
     private sealed class RecordingProcessHost : IProcessHost

@@ -189,6 +189,10 @@ public class KeepFlagAppxSafetyNetTests
         public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) =>
             RegisteredFamilyNames.Add(packageFamilyName);
 
+        public void EnsureSystemFullControlOnWingetFrameworkPackages() { }
+
+        public string? TryResolveWingetExecutablePath() => null;
+
         public List<string> RegisteredFamilyNames { get; } = [];
 
         private static bool Matches(AppxPackageInfo package, string catalogId) =>
