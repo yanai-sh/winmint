@@ -120,6 +120,7 @@ if ($ReuseVm) {
 }
 else {
     Write-Host "Preparing VM $VmName…"
+    # Soft-guard: do not Remove-VM / rewrite out.iso while another Smoke wait loop is live.
     if ($existing) {
         Stop-VM -Name $VmName -TurnOff -Force -ErrorAction SilentlyContinue
         Remove-VM -Name $VmName -Force
@@ -293,12 +294,18 @@ while ([datetime]::UtcNow -lt $deadline) {
 
     $vm = Get-VM -Name $VmName
     # Setup reboots flip Running → Stopping → Off → Starting → Running; do not fail-closed.
+    # Prefer HDD+eject DVD on first setup reboot (not only at PS Direct) so efisys_noprompt
+    # cannot re-enter Setup against a half-installed disk.
     switch ([string]$vm.State) {
         'Running' { }
         'Starting' { Write-Host 'VM Starting (setup reboot)…' }
-        'Stopping' { Write-Host 'VM Stopping (setup reboot)…' }
+        'Stopping' {
+            Write-Host 'VM Stopping (setup reboot)…'
+            Prefer-DiskBoot
+        }
         'Off' {
             Write-Host 'VM Off during setup — starting again…'
+            Prefer-DiskBoot
             Start-VM -Name $VmName -ErrorAction SilentlyContinue
         }
         default {
