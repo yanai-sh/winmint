@@ -28,6 +28,7 @@ if (-not (Test-Path -LiteralPath $bootWim)) {
 if (-not (Test-Path -LiteralPath $bootMarker)) {
     $bootItem = Get-Item -LiteralPath $bootWim
     if ($bootItem.IsReadOnly) { $bootItem.IsReadOnly = $false }
+    # Sibling of install mount under %ProgramData%\WinMint\Servicing (or legacy workdir parent).
     $bootMount = Join-Path (Split-Path -Parent $mountDir) 'boot-mount'
     if (Test-Path -LiteralPath $bootMount) {
         # Best-effort discard leftover

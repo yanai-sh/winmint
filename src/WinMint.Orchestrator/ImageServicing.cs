@@ -11,6 +11,20 @@ public static class ImageServicing
     /// <summary>Guest path stamped into Winlogon Shell (offline); Machine setup verifies the same path.</summary>
     public const string ShellStampGuestPath = @"C:\Windows\WinMint\Supervisor.exe";
 
+    /// <summary>
+    /// Host-only DISM mount root (not guest durable state). Keeps mounts off workdir/.scratch trees —
+    /// short path, single cleanup locus. Subdirs: mount, boot-mount.
+    /// </summary>
+    public static string HostServicingRoot { get; } =
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "WinMint",
+            "Servicing");
+
+    public static string HostMountDir => Path.Combine(HostServicingRoot, "mount");
+
+    public static string HostBootMountDir => Path.Combine(HostServicingRoot, "boot-mount");
+
     /// <summary>Smoke default: Windows 11 Pro on consumer multi-edition ARM64/x64 ISOs (Home=1, Home SL=2, Pro=3).
     /// MountInstallWim exports this index to a single-image WIM before mount (IMAGESERVICING invariant 7).</summary>
     public const int DefaultProWimIndex = 3;
@@ -46,6 +60,7 @@ public static class ImageServicing
         Directory.CreateDirectory(run.WorkDirectory);
         Directory.CreateDirectory(Path.Combine(run.WorkDirectory, "logs"));
         Directory.CreateDirectory(Path.Combine(run.WorkDirectory, "payload"));
+        Directory.CreateDirectory(HostServicingRoot);
 
         Result<List<ServicingStage>, ServicingFailure> materialized = Materialize(plan, run);
         if (!materialized.IsOk)
@@ -116,7 +131,7 @@ public static class ImageServicing
     {
         string payloadDir = Path.Combine(run.WorkDirectory, "payload");
         string mediaDir = Path.Combine(run.WorkDirectory, "media");
-        string mountDir = Path.Combine(run.WorkDirectory, "mount");
+        string mountDir = HostMountDir;
         string unattendPath = Path.Combine(run.WorkDirectory, "unattend.xml");
         string wimOut = Path.Combine(run.WorkDirectory, "install.wim");
         string outputIso = run.OutputIsoPath ?? Path.Combine(run.WorkDirectory, "out.iso");
@@ -203,8 +218,9 @@ public static class ImageServicing
                     parameters[StageParams.MountDir] = mountDir;
                     break;
                 case ServicingOpcode.RemoveProvisionedAppx:
-                    // packageFamilyNames comes from BuildPlan — inject mount only.
+                    // packageFamilyNames comes from BuildPlan — inject mount + workdir for logs.
                     parameters[StageParams.MountDir] = mountDir;
+                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
                     break;
                 case ServicingOpcode.ExportWim:
                     // compression / cleanup / lane come from BuildPlan — do not invent defaults here.

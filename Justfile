@@ -28,7 +28,17 @@ publish-provisioning:
 
 # Host hygiene for maintainer Apply (admin). Speeds DISM commit; not a product dependency.
 exclude-scratch ISO="":
-    $scratch = Join-Path '{{justfile_directory()}}' '.scratch'; New-Item -ItemType Directory -Force -Path $scratch | Out-Null; $paths = @($scratch); if ('{{ISO}}' -ne '') { $paths += '{{ISO}}' }; foreach ($p in $paths) { Add-MpPreference -ExclusionPath $p; Write-Host "Excluded: $p" }
+    $scratch = Join-Path '{{justfile_directory()}}' '.scratch'; $servicing = Join-Path $env:ProgramData 'WinMint\Servicing'; New-Item -ItemType Directory -Force -Path $scratch, $servicing | Out-Null; $paths = @($scratch, $servicing); if ('{{ISO}}' -ne '') { $paths += '{{ISO}}' }; foreach ($p in $paths) { Add-MpPreference -ExclusionPath $p; Write-Host "Excluded: $p" }
+
+# Artifact hygiene — matches the ~386 GB failure mode (stacked output ISOs + multiple full workdirs).
+# Default: under .scratch keep 1 newest heavy workdir, 2 newest ISOs, purge disks >14d.
+# Nuclear (what the cleanup session did): just wipe-scratch
+# Flat v1-style output: just clean-artifacts root="C:/Users/yanai/Projects/winmint_v1/output" keep=1
+clean-artifacts root=".scratch" keep="2" workdirs="1" days="14":
+    $root = '{{root}}'; if (-not [System.IO.Path]::IsPathRooted($root)) { $root = Join-Path '{{justfile_directory()}}' $root }; pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-ArtifactHygiene.ps1' -Root $root -KeepIso {{keep}} -KeepWorkDirs {{workdirs}} -MaxAgeDays {{days}}
+
+wipe-scratch:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-ArtifactHygiene.ps1' -Root (Join-Path '{{justfile_directory()}}' '.scratch') -Wipe
 
 # Multi-hour DISM Apply. Cold first; later runs auto --reuse-media when marker exists.
 # Prereq: just publish-provisioning. Watch: Get-Content <WORK>\apply-status.txt -Wait

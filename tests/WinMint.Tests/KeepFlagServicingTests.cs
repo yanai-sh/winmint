@@ -34,8 +34,9 @@ public class KeepFlagServicingTests
                 "Microsoft.BingNews;Microsoft.GamingApp",
                 remove.Parameters[StageParams.PackageFamilyNames]);
             Assert.Equal(
-                Path.Combine(work, "mount"),
+                ImageServicing.HostMountDir,
                 remove.Parameters[StageParams.MountDir]);
+            Assert.Equal(work, remove.Parameters[StageParams.WorkDirectory]);
             Assert.DoesNotContain(
                 ".ps1",
                 string.Join('\0', remove.Parameters.Values),

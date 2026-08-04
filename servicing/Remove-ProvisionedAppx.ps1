@@ -9,8 +9,10 @@ param(
 # hits "Class not registered" on those COM APIs.
 $mountDir = $Parameters['mountDir']
 $packageFamilyNames = $Parameters['packageFamilyNames']
+$workDir = $Parameters['workDirectory']
 if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
 if ([string]::IsNullOrWhiteSpace($packageFamilyNames)) { throw 'packageFamilyNames required' }
+if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
 
 $ids = @(
     $packageFamilyNames.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) |
@@ -19,7 +21,6 @@ $ids = @(
 )
 if ($ids.Count -eq 0) { throw 'packageFamilyNames empty after split' }
 
-$workDir = Split-Path -Parent $mountDir
 $logDir = Join-Path $workDir 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $inventoryBefore = Join-Path $logDir 'provisioned-appx.before.txt'

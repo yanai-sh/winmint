@@ -71,10 +71,11 @@ public sealed record ImageEvidence(
 1. Stages run in plan order; ImageServicing does not reorder or invent product stages.
 2. BuildPlan emits opcodes + params; **never** repo-relative `.ps1` paths.
 3. Kernels receive parameter hashtables only — no Profile JSON.
-4. First kernel non-zero → typed failure; workdir preserved (`logs/`, `failure.json`).
+4. First kernel non-zero → typed failure; workdir preserved (`logs/`, `failure.json`). **Leftover mounts discarded** (`%ProgramData%\WinMint\Servicing\{mount,boot-mount}` via DISM `/Discard`; legacy workdir mounts too) so a failed Apply does not leave an open WIM lock; media bytes stay for diagnosis.
 5. Lane already encoded in `ExportWim` params by BuildPlan; manifest echoes lane.
 6. **One elevated** `servicing/RunPlan.ps1` per `Apply` loops kernels (single UAC).
 7. **Single-image WIM before commit (locked 2026-08-02):** `MountInstallWim` must leave `media/sources/install.wim` with **exactly one** index (export the planned edition out of a multi-edition consumer WIM first). `ExportWim` **fail-closes** if index count ≠ 1 before `Unmount /Commit`. Never commit a multi-edition `install.wim` in place — that path stalls DISM/`wimserv` for hours.
+8. **Host mount root:** DISM mount points are `%ProgramData%\WinMint\Servicing\mount` (+ `boot-mount`), not under the workdir. Media/ISO/WIM stay in the workdir. Distinct from **guest** `%ProgramData%\WinMint\` durable tenure (checkpoint/heartbeat/evidence).
 
 ### Example stages (Test lane)
 

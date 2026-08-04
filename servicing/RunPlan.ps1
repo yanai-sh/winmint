@@ -168,6 +168,23 @@ function Resolve-KernelScript {
     }
 }
 
+function Clear-LeftoverMount {
+    # Host mounts live under %ProgramData%\WinMint\Servicing (not workdir).
+    # Also discard legacy workdir mounts from older Applies.
+    # ponytail: Discard only — workdir/logs/media stay for diagnosis (IMAGESERVICING invariant 4).
+    $roots = @(
+        (Join-Path $env:ProgramData 'WinMint\Servicing')
+        $WorkDirectory
+    )
+    foreach ($root in $roots) {
+        foreach ($name in @('mount', 'boot-mount')) {
+            $dir = Join-Path $root $name
+            if (-not (Test-Path -LiteralPath $dir)) { continue }
+            & dism.exe /English /Unmount-Image /MountDir:$dir /Discard 2>$null | Out-Null
+        }
+    }
+}
+
 $failed = $false
 try {
     $index = 0
@@ -198,6 +215,7 @@ try {
     }
 }
 finally {
+    if ($failed) { Clear-LeftoverMount }
     if (-not $failed) { $sync.Opcode = 'done' }
     $sync.Stop = $true
     if ($heartbeatJob) {

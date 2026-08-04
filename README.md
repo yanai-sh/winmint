@@ -28,6 +28,7 @@ dotnet run --project src/WinMint.Cli -- plan samples/smoke.profile.json --out .s
 - **Maintainer Apply** (multi-hour DISM): `just publish-provisioning`, then `just apply-maintainer path\to\source.iso .scratch/work`. After a successful cold run, the recipe passes `--reuse-media` when `.scratch/work/media/sources/.winmint-single-index` exists (skips ISO copy + single-image export).
 - **Watch progress:** `Get-Content .scratch\work\apply-status.txt -Wait` (`STALL_SUSPECT` is advisory only).
 - **Optional:** `just exclude-scratch` (admin) adds Defender exclusions for `.scratch` to speed commits.
+- **Disk hygiene:** `output/` + `.scratch/` + `*.iso`/`*.wim`/`*.esd`/`*.vhdx`/`*.avhdx` are gitignored. DISM mounts live under `%ProgramData%\WinMint\Servicing\` (not `.scratch`). Failed Apply discards leftover mounts (workdir/logs kept). After Apply/Smoke campaigns: `just clean-artifacts` (keeps 1 newest heavy workdir + 2 newest ISOs under `.scratch`) or `just wipe-scratch` to empty `.scratch` entirely. Do not run during Apply/Smoke.
 
 [Design](docs/DESIGN.md) · [Architecture](docs/ARCHITECTURE.md) · [Tickets](docs/TICKETS.md) · [Issues](https://github.com/yanai-sh/winmint/issues) · [Agents](AGENTS.md)
 

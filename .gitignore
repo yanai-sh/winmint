@@ -21,6 +21,7 @@ dist/
 *.swm
 *.vhd
 *.vhdx
+*.avhdx
 
 # Secrets / local noise
 .env

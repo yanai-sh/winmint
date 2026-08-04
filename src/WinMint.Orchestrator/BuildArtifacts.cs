@@ -59,6 +59,7 @@ public static class StageParams
     public const string Compression = "compression";
     public const string Cleanup = "cleanup";
     public const string PackageFamilyNames = "packageFamilyNames";
+    public const string WorkDirectory = "workDirectory";
 }
 
 public enum ServicingOpcode
