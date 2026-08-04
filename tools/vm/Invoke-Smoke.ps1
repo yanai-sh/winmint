@@ -137,6 +137,12 @@ else {
     New-VM -Name $VmName -Generation 2 -MemoryStartupBytes 4GB -VHDPath $vhdx | Out-Null
     Set-VMFirmware -VMName $VmName -EnableSecureBoot Off
     Set-VMProcessor -VMName $VmName -Count 4
+    # Guest NAT for winget/source (prior Smoke was offline-friendly stubs; Default Switch = Hyper-V NAT).
+    $switch = Get-VMSwitch -Name 'Default Switch' -ErrorAction SilentlyContinue
+    if (-not $switch) {
+        throw "Hyper-V 'Default Switch' not found — needed for guest network (winget prove-out)."
+    }
+    Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
     # DVD boot from applied ISO
     $dvd = Get-VMDvdDrive -VMName $VmName -ErrorAction SilentlyContinue
     if (-not $dvd) {

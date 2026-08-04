@@ -111,6 +111,30 @@ public class WingetJobsTests
     }
 
     [Fact]
+    public void Shell_winget_job_registers_app_installer_before_spawn()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+        RecordingAppx appx = new();
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", "winget", PackageId: "jqlang.jq")]),
+            Env(processes, evidence, appx: appx),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Contains(
+            ProvisioningSession.DesktopAppInstallerFamilyName,
+            appx.RegisteredFamilyNames);
+        Assert.Single(processes.Starts);
+        // After register we prefer the WindowsApps alias when present on the host.
+        Assert.True(
+            processes.Starts[0].FileName.Equals("winget", StringComparison.OrdinalIgnoreCase)
+            || processes.Starts[0].FileName.EndsWith("winget.exe", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Shell_unknown_job_kind_still_unsupported()
     {
         RecordingProcessHost processes = new();
@@ -171,7 +195,8 @@ public class WingetJobsTests
         IProcessHost processes,
         IEvidenceSink evidence,
         ICheckpointStore? checkpoints = null,
-        ISystemReboot? reboot = null) =>
+        ISystemReboot? reboot = null,
+        IAppxPackageManager? appx = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: new NoopWinlogon(),
@@ -181,7 +206,24 @@ public class WingetJobsTests
             Checkpoints: checkpoints ?? new NoopCheckpoints(),
             Secrets: new NoopSecrets(),
             Evidence: evidence,
-            Reboot: reboot);
+            Reboot: reboot,
+            Appx: appx);
+
+    private sealed class RecordingAppx : IAppxPackageManager
+    {
+        public List<string> RegisteredFamilyNames { get; } = [];
+
+        public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) => [];
+
+        public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) => [];
+
+        public void RemovePackage(string packageFullName) { }
+
+        public void DeprovisionPackageFamily(string packageFamilyName) { }
+
+        public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) =>
+            RegisteredFamilyNames.Add(packageFamilyName);
+    }
 
     private sealed class RecordingProcessHost : IProcessHost
     {

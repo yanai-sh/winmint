@@ -6,6 +6,13 @@ public static class ProvisioningSession
     public const string EvidenceSchemaVersion = "winmint.provisioning.evidence/v1";
     public const string ExplorerShell = "explorer.exe";
 
+    /// <summary>App Installer / winget package family (Microsoft-documented FirstLogon register target).</summary>
+    public const string DesktopAppInstallerFamilyName = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe";
+
+    // ponytail: alias creation after RegisterByFamilyName can lag a few seconds; ceiling ~5s then PATH fallback.
+    private const int WingetAliasPollAttempts = 20;
+    private static readonly TimeSpan WingetAliasPollDelay = TimeSpan.FromMilliseconds(250);
+
     public static SessionResult Run(
         SessionMode mode,
         ProvisioningBundle bundle,
@@ -220,6 +227,29 @@ public static class ProvisioningSession
         !string.IsNullOrWhiteSpace(shell)
         && shell.Trim().Equals(ExplorerShell, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Prefer the per-user App Execution Alias after RegisterByFamilyName; fall back to PATH.
+    /// </summary>
+    private static string WaitForWingetAliasOrFallback()
+    {
+        string alias = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Microsoft",
+            "WindowsApps",
+            "winget.exe");
+        for (int i = 0; i < WingetAliasPollAttempts; i++)
+        {
+            if (File.Exists(alias))
+            {
+                return alias;
+            }
+
+            Thread.Sleep(WingetAliasPollDelay);
+        }
+
+        return "winget";
+    }
+
     private static bool IsStaleHeartbeat(
         ProvisioningBundle bundle,
         SessionEnvironment env,
@@ -378,7 +408,31 @@ public static class ProvisioningSession
                     return new JobsPhaseResult(SessionOutcome.Failed, missingPkg, TimedOut: false);
                 }
 
-                fileName = "winget";
+                // FirstLogon: App Installer is often provisioned but not yet registered for the
+                // interactive user — winget.exe alias missing until RegisterByFamilyName (MS docs).
+                if (env.Appx is not null)
+                {
+                    try
+                    {
+                        env.Appx.RegisterPackageFamilyForCurrentUser(DesktopAppInstallerFamilyName);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        SessionStatus regFailed = new(
+                            "jobs.winget.register_failed",
+                            $"{job.Id}: register {DesktopAppInstallerFamilyName}: {ex.Message}");
+                        env.Splash.SetStatus(regFailed);
+                        phases.Add(regFailed.Code);
+                        return new JobsPhaseResult(SessionOutcome.Failed, regFailed, TimedOut: false);
+                    }
+
+                    fileName = WaitForWingetAliasOrFallback();
+                }
+                else
+                {
+                    fileName = "winget";
+                }
+
                 arguments =
                 [
                     "install",

@@ -186,6 +186,11 @@ public class KeepFlagAppxSafetyNetTests
         public void DeprovisionPackageFamily(string packageFamilyName) =>
             DeprovisionedFamilyNames.Add(packageFamilyName);
 
+        public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) =>
+            RegisteredFamilyNames.Add(packageFamilyName);
+
+        public List<string> RegisteredFamilyNames { get; } = [];
+
         private static bool Matches(AppxPackageInfo package, string catalogId) =>
             string.Equals(package.DisplayName, catalogId, StringComparison.OrdinalIgnoreCase)
             || package.PackageFamilyName.StartsWith(catalogId + "_", StringComparison.OrdinalIgnoreCase)

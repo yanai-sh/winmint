@@ -112,6 +112,11 @@ public interface IAppxPackageManager
     void RemovePackage(string packageFullName);
 
     void DeprovisionPackageFamily(string packageFamilyName);
+
+    /// <summary>
+    /// Register a provisioned package family for the current user (winget / App Installer FirstLogon).
+    /// </summary>
+    void RegisterPackageFamilyForCurrentUser(string packageFamilyName);
 }
 
 public interface IWinlogonRegistry

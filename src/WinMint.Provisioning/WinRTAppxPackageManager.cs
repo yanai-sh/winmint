@@ -97,6 +97,26 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
         }
     }
 
+    public void RegisterPackageFamilyForCurrentUser(string packageFamilyName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
+        DeploymentResult result = _manager
+            .RegisterPackageByFamilyNameAsync(
+                packageFamilyName,
+                dependencyPackageFamilyNames: Array.Empty<string>(),
+                DeploymentOptions.None,
+                appDataVolume: null!,
+                optionalPackageFamilyNames: Array.Empty<string>())
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+        if (!string.IsNullOrEmpty(result.ErrorText))
+        {
+            throw new InvalidOperationException(
+                $"RegisterPackageByFamilyNameAsync({packageFamilyName}): {result.ErrorText}");
+        }
+    }
+
     private static bool IsAccessDenied(Exception ex)
     {
         for (Exception? e = ex; e is not null; e = e.InnerException)
