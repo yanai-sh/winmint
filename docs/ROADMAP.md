@@ -11,7 +11,7 @@
 | **M0** | Repo scaffold | Reserved `src/` builds | Present |
 | **M1** | Smoke Hyper-V green | Profile → ISO → FirstLogon evidence | **Done** — maintainer Smoke prove-out (**14**) green 2026-08-04 |
 | **M2** | Wizard | Second BuildPlan host; UI presets → remove-list | **Thin vertical done** (**15**, 2026-08-04); polish deferred |
-| **M3** | Metal jobs / matrix expand | `winget` guest-proven (**16**); next **17** reboot-resume → **18** Scoop (metal exit); then keep-flag **19→20**; WSL deferred | After M2 |
+| **M3** | Metal jobs / matrix expand | `winget` + reboot-resume + **Scoop** guest-proven (**16–18** metal exit); keep-flag **19→20**; WSL deferred | **Metal exit** (2026-08-04) |
 | **M4** | Hardware acceptance | Stricter evidence bars; same Supervisor/settle/jobs | After M2/M3 |
 
 ## Design Acceptance

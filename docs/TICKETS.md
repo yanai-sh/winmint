@@ -274,7 +274,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** **18** (Scoop job kind). Metal milestone = **17** done → **18** Scoop; then keep-flag **19** spike → **20** offline. WSL / Wizard packages deferred.
+Do not label `ready-for-agent` until starting that card. **Next:** **19** (Keep-flag capabilities / features matrix spike). Metal milestone **18** done; keep-flag **19** spike → **20** offline. WSL / Wizard packages deferred.
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
@@ -282,7 +282,7 @@ Do not label `ready-for-agent` until starting that card. **Next:** **18** (Scoop
 | 15 | Wizard = second BuildPlan host (presets → remove-list) | BuildPlan host | **14** done — **done** |
 | 16 | First metal job kind `winget` | ProvisioningSession | After **15** — **done** (guest-proven) |
 | 17 | Profile `needsReboot` + Hyper-V reboot-resume | ProvisioningSession | After **16** — **done** |
-| 18 | Scoop job kind (`packages.scoop`) | ProvisioningSession | After **17** — metal exit |
+| 18 | Scoop job kind (`packages.scoop`) | ProvisioningSession | After **17** — **done** (metal exit) |
 | 19 | Keep-flag capabilities / features matrix spike | Design | After **18** |
 | 20 | Offline ImageServicing capabilities from Profile | ImageServicing | After **19** |
 
@@ -338,10 +338,12 @@ Do not label `ready-for-agent` until starting that card. **Next:** **18** (Scoop
 
 ### 18 — Scoop metal job
 
-- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [BUILDPLAN](design/BUILDPLAN.md)
+- **Issue:** [#30](https://github.com/yanai-sh/winmint/issues/30)
+- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [BUILDPLAN](design/BUILDPLAN.md) · [research](research/2026-08-04-scoop-firstlogon-bootstrap.md)
 - **Deliver:** job kind `scoop`; Profile `packages.scoop: string[]`; official FirstLogon bootstrap (network; fail closed offline) unless research spike overturns; Hyper-V prove-out
 - **Out:** WSL; Wizard Scoop UI; offline-staged Scoop on ISO unless spike requires it
 - **DoD:** bootstrap research note; Plan emit; Supervisor spawn; tests + Hyper-V with one small Scoop package — **metal milestone exit**
+- **Done:** 2026-08-04 — issue #30; research note; Profile `scoop`/`scoopNeedsReboot`; Supervisor inbox `powershell.exe` admin bootstrap + `scoop.cmd install`; Hyper-V prove-out green (`scoop install curl` → `outcome=Complete`/`jobs.ok`; guest has `scoop.cmd` + curl/7zip)
 
 ### 19 — Keep-flag capabilities / features matrix spike
 

@@ -73,8 +73,8 @@ Form: lowercase dotted `area.token` segments (product area first).
 |------|----------|
 | `machineSetup` | `machineSetup.ok`, `machineSetup.account.forbidden`, `machineSetup.shell.verify_failed` |
 | `shell` | `shell.first_paint`, `shell.evidence.required`, `shell.timeout`, `shell.stale`, `shell.cancelled`, `shell.checkpoint.invalid` |
-| `settle` | `settle.begin`, `settle.ok`, `settle.skipped`, `settle.hard_mismatch`, `settle.location_warn`, `settle.apply_failed`, `settle.read_failed`, `settle.target_incomplete`, `settle.cancelled` |
-| `jobs` | `jobs.begin`, `jobs.ok`, `jobs.failed`, `jobs.spawn_failed`, `jobs.kind.unsupported`, `jobs.reboot` |
+| `settle` | `settle.begin`, `settle.ok`, `settle.skipped`, `settle.resume_skip`, `settle.hard_mismatch`, `settle.location_warn`, `settle.apply_failed`, `settle.read_failed`, `settle.target_incomplete`, `settle.cancelled` |
+| `jobs` | `jobs.begin`, `jobs.ok`, `jobs.failed`, `jobs.spawn_failed`, `jobs.kind.unsupported`, `jobs.reboot`, `jobs.winget.register_failed`, `jobs.scoop.bootstrap_failed` |
 | `appearance` | `appearance.applied` |
 | `checkpoint` | `checkpoint.resume` |
 | `session` | `session.mode.unknown` |

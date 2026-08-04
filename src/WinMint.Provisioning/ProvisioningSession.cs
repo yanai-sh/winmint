@@ -265,6 +265,17 @@ public static class ProvisioningSession
         return "winget";
     }
 
+    /// <summary>Default Scoop shim path after official bootstrap (research 2026-08-04).</summary>
+    private static string? TryResolveScoopCmd()
+    {
+        string candidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "scoop",
+            "shims",
+            "scoop.cmd");
+        return File.Exists(candidate) ? candidate : null;
+    }
+
     private static bool IsStaleHeartbeat(
         ProvisioningBundle bundle,
         SessionEnvironment env,
@@ -472,6 +483,72 @@ public static class ProvisioningSession
                     "--accept-source-agreements",
                     "--disable-interactivity",
                 ];
+            }
+            else if (string.Equals(job.Kind, "scoop", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(job.PackageId))
+                {
+                    SessionStatus missingPkg = new(
+                        "jobs.failed",
+                        $"Job '{job.Id}' kind scoop requires packageId.");
+                    env.Splash.SetStatus(missingPkg);
+                    phases.Add(missingPkg.Code);
+                    return new JobsPhaseResult(SessionOutcome.Failed, missingPkg, TimedOut: false);
+                }
+
+                string? scoopCmd = TryResolveScoopCmd();
+                if (scoopCmd is null)
+                {
+                    ProcessStartResult bootstrap;
+                    try
+                    {
+                        // Official admin bootstrap — ScoopInstaller/Install (research 2026-08-04).
+                        // Inbox powershell.exe only; not guest pwsh product control plane.
+                        bootstrap = env.Processes.Run(
+                            "powershell.exe",
+                            [
+                                "-NoProfile",
+                                "-ExecutionPolicy",
+                                "Bypass",
+                                "-Command",
+                                """iex "& {$(irm get.scoop.sh)} -RunAsAdmin"; exit $LASTEXITCODE""",
+                            ],
+                            ct);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        SessionStatus bootstrapSpawn = new(
+                            "jobs.scoop.bootstrap_failed",
+                            $"{job.Id}: scoop bootstrap spawn: {ex.Message}");
+                        env.Splash.SetStatus(bootstrapSpawn);
+                        phases.Add(bootstrapSpawn.Code);
+                        return new JobsPhaseResult(SessionOutcome.Failed, bootstrapSpawn, TimedOut: false);
+                    }
+
+                    if (bootstrap.ExitCode != 0)
+                    {
+                        SessionStatus bootstrapFailed = new(
+                            "jobs.scoop.bootstrap_failed",
+                            $"{job.Id}: scoop bootstrap exited {bootstrap.ExitCode} (network required).");
+                        env.Splash.SetStatus(bootstrapFailed);
+                        phases.Add(bootstrapFailed.Code);
+                        return new JobsPhaseResult(SessionOutcome.Failed, bootstrapFailed, TimedOut: false);
+                    }
+
+                    scoopCmd = TryResolveScoopCmd();
+                    if (scoopCmd is null)
+                    {
+                        SessionStatus missingScoop = new(
+                            "jobs.scoop.bootstrap_failed",
+                            $"{job.Id}: scoop.cmd missing after bootstrap.");
+                        env.Splash.SetStatus(missingScoop);
+                        phases.Add(missingScoop.Code);
+                        return new JobsPhaseResult(SessionOutcome.Failed, missingScoop, TimedOut: false);
+                    }
+                }
+
+                fileName = scoopCmd;
+                arguments = ["install", job.PackageId];
             }
             else
             {

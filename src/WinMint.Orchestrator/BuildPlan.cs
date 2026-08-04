@@ -122,7 +122,9 @@ public static class BuildPlan
                     settle.LocationServicesEnabled.Value)),
             NormalizeRemoveList(doc.Debloat?.RemoveProvisionedAppx),
             NormalizeRemoveList(doc.Packages?.Winget),
-            NormalizeRemoveList(doc.Packages?.WingetNeedsReboot));
+            NormalizeRemoveList(doc.Packages?.WingetNeedsReboot),
+            NormalizeRemoveList(doc.Packages?.Scoop),
+            NormalizeRemoveList(doc.Packages?.ScoopNeedsReboot));
 
         return Result.Ok<Profile, DocumentErrors>(profile);
     }
@@ -175,11 +177,24 @@ public static class BuildPlan
             }
         }
 
-        HashSet<string> needsReboot = new(profile.WingetNeedsReboot, StringComparer.OrdinalIgnoreCase);
+        HashSet<string> scoopSet = new(profile.ScoopPackages, StringComparer.OrdinalIgnoreCase);
+        foreach (string id in profile.ScoopNeedsReboot)
+        {
+            if (!scoopSet.Contains(id))
+            {
+                return Result.Fail<BuildArtifacts, PlanFailure>(
+                    new PlanFailure(
+                        "packages.scoopNeedsReboot.unknown",
+                        $"scoopNeedsReboot id '{id}' is not in packages.scoop."));
+            }
+        }
+
+        HashSet<string> wingetNeedsReboot = new(profile.WingetNeedsReboot, StringComparer.OrdinalIgnoreCase);
+        HashSet<string> scoopNeedsReboot = new(profile.ScoopNeedsReboot, StringComparer.OrdinalIgnoreCase);
 
         string unattendXml = BuildAutounattendXml(profile);
 
-        // Stub Smoke job set — real installs from packages.winget (ticket 16); executor shared.
+        // Stub Smoke job set — real installs from packages.winget / packages.scoop; executor shared.
         // Keep-flag safety net when Profile remove-list is non-empty (ticket 13).
         List<JobDescriptor> jobList =
         [
@@ -197,7 +212,16 @@ public static class BuildPlan
                 $"winget.{packageId}",
                 "winget",
                 PackageId: packageId,
-                NeedsReboot: needsReboot.Contains(packageId)));
+                NeedsReboot: wingetNeedsReboot.Contains(packageId)));
+        }
+
+        foreach (string packageId in profile.ScoopPackages)
+        {
+            jobList.Add(new JobDescriptor(
+                $"scoop.{packageId}",
+                "scoop",
+                PackageId: packageId,
+                NeedsReboot: scoopNeedsReboot.Contains(packageId)));
         }
 
         JobsArtifact jobs = new(JobsSchemaVersion, jobList);
@@ -431,7 +455,9 @@ internal sealed record ProfileDocument(
 
 internal sealed record PackagesDocument(
     [property: JsonPropertyName("winget")] string[]? Winget,
-    [property: JsonPropertyName("wingetNeedsReboot")] string[]? WingetNeedsReboot);
+    [property: JsonPropertyName("wingetNeedsReboot")] string[]? WingetNeedsReboot,
+    [property: JsonPropertyName("scoop")] string[]? Scoop,
+    [property: JsonPropertyName("scoopNeedsReboot")] string[]? ScoopNeedsReboot);
 
 internal sealed record DebloatDocument(
     [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx);
