@@ -274,12 +274,12 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** **15**.
+Do not label `ready-for-agent` until starting that card. **Next:** **16**.
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
 | 14 | Maintainer Hyper-V Smoke prove-out (real Source ISO) | Acceptance S4 | **13** done — **done** |
-| 15 | Wizard = second BuildPlan host (presets → remove-list) | BuildPlan host | **14** done |
+| 15 | Wizard = second BuildPlan host (presets → remove-list) | BuildPlan host | **14** done — **done** |
 | 16 | First metal job kind `winget` | ProvisioningSession | After **15** (or after **14** if Wizard deferred by rescope) |
 
 ### 14 — Maintainer Smoke prove-out
@@ -292,11 +292,19 @@ Do not label `ready-for-agent` until starting that card. **Next:** **15**.
 - **Carry:** S4 assert requires apply digests `removed.appx.<id>=absent` for pinned ids (`Assert-SmokeEvidence.ps1`); fixture + S4 tests green.
 - **Done:** 2026-08-04 — maintainer Hyper-V Smoke green on 25H2 ARM64 English ISO (`outcome=Complete`, `settle.location_warn`, unlock `explorer.exe`, keep-flag digests absent); issue #26
 
-### 15 — Wizard (stub)
+### 15 — Wizard (Avalonia second BuildPlan host)
 
-- **Design:** [ARCHITECTURE](ARCHITECTURE.md) · [BUILDPLAN](design/BUILDPLAN.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
+- **Issue:** [#27](https://github.com/yanai-sh/winmint/issues/27)
+- **Design:** [ARCHITECTURE](ARCHITECTURE.md) · [BUILDPLAN](design/BUILDPLAN.md) · [KEEPFLAG](design/KEEPFLAG.md) · [STACK](STACK.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
 - **Deliver:** second BuildPlan host; UI presets expand to Profile remove-list (no presets in Profile JSON)
-- **Out:** second planning brain; capabilities matrix; schema `v2`
+- **Out:** second planning brain; capabilities matrix; schema `v2`; full Wizard polish; elevating Wizard for Servicing
+- **DoD:**
+  - `src/WinMint.Wizard/` Avalonia **12.1.x** WinExe references Orchestrator; in [WinMint.slnx](../WinMint.slnx)
+  - Host-side `KeepFlagPresets` (`empty` / `acceptance` → catalog ids; unknown → `keepflag.preset.unknown`); `WizardProfileComposer` writes `winmint.profile/v1` UTF-8 (no preset field)
+  - Minimal Avalonia UI: account/DMA fields + preset → Validate/Plan via BuildPlan → Save Profile JSON; show plan errors
+  - Tests (S1b): expand + compose→Plan; unknown fails — `KeepFlagPresetTests`
+  - `just check` green
+- **Done:** 2026-08-04 — thin vertical host + presets; issue #27
 
 ### 16 — Metal `winget` job (stub)
 
@@ -304,7 +312,7 @@ Do not label `ready-for-agent` until starting that card. **Next:** **15**.
 - **Deliver:** first non-stub job kind `winget`; fail-closed other metal kinds until ticketed; fold OS Win32 reboot-on-`NeedsReboot` into this (or immediate follow-on) card
 - **Out:** Scoop/WSL matrix; guest pwsh
 
-**Still deferred (no ticket):** capabilities/features matrix; Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash.
+**Still deferred (no ticket):** capabilities/features matrix; Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash; Wizard polish.
 
 ---
 

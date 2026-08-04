@@ -2,7 +2,7 @@
 
 **Status:** **Accepted** (Design-it-twice + batch-grill 2026-07-28) — design lock  
 **Module:** BuildPlan · **Owner project:** `WinMint.Orchestrator`  
-**Hosts:** `WinMint.Cli` (now), Avalonia Wizard (later)  
+**Hosts:** `WinMint.Cli`, Avalonia `WinMint.Wizard` (ticket **15**)  
 **Smoke ticket:** 01 (`validate`/`plan`; freeze Profile JSON names here)  
 **Authority:** [ARCHITECTURE](../ARCHITECTURE.md), [CONTEXT](../../CONTEXT.md), [DESIGN](../DESIGN.md)
 

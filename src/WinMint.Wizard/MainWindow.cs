@@ -1,0 +1,192 @@
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using WinMint.Orchestrator;
+
+namespace WinMint.Wizard;
+
+public sealed class MainWindow : Window
+{
+    private readonly TextBox _username = Field("winmint");
+    private readonly TextBox _password = PasswordField("winmint");
+    private readonly CheckBox _requireWifi = new() { Content = "Require Wi‑Fi during OOBE", IsChecked = false };
+    private readonly CheckBox _dmaEnabled = new() { Content = "DMA enabled", IsChecked = true };
+    private readonly TextBox _locale = Field("en-GB");
+    private readonly TextBox _geoId = Field("242");
+    private readonly TextBox _timeZone = Field("GMT Standard Time");
+    private readonly CheckBox _location = new() { Content = "Location services", IsChecked = true };
+    private readonly ComboBox _preset;
+    private readonly TextBlock _status = new()
+    {
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Avalonia.Thickness(0, 12, 0, 0),
+    };
+    private readonly TextBox _preview = new()
+    {
+        IsReadOnly = true,
+        AcceptsReturn = true,
+        TextWrapping = TextWrapping.NoWrap,
+        FontFamily = new FontFamily("Consolas"),
+        MinHeight = 160,
+        PlaceholderText = "Profile JSON preview after Validate",
+    };
+
+    private byte[]? _lastProfileUtf8;
+
+    public MainWindow()
+    {
+        Title = "WinMint Wizard";
+        Width = 560;
+        Height = 720;
+        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+
+        _preset = new ComboBox
+        {
+            ItemsSource = new[] { KeepFlagPresets.Empty, KeepFlagPresets.Acceptance },
+            SelectedIndex = 1,
+            MinWidth = 180,
+        };
+
+        Button validate = new() { Content = "Validate / Plan" };
+        validate.Click += (_, _) => OnValidate();
+
+        Button save = new() { Content = "Save Profile JSON…" };
+        save.Click += async (_, _) => await OnSaveAsync();
+
+        Content = new ScrollViewer
+        {
+            Content = new StackPanel
+            {
+                Margin = new Avalonia.Thickness(16),
+                Spacing = 8,
+                Children =
+                {
+                    Heading("Account"),
+                    Labeled("Username", _username),
+                    Labeled("Password", _password),
+                    _requireWifi,
+                    Heading("DMA settle"),
+                    _dmaEnabled,
+                    Labeled("Locale", _locale),
+                    Labeled("GeoId", _geoId),
+                    Labeled("Time zone", _timeZone),
+                    _location,
+                    Heading("Keep-flag preset (host expands → remove-list)"),
+                    Labeled("Preset", _preset),
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 8,
+                        Children = { validate, save },
+                    },
+                    _status,
+                    Heading("Composed Profile"),
+                    _preview,
+                },
+            },
+        };
+    }
+
+    private void OnValidate()
+    {
+        WizardSessionResult result = RunSession();
+        _status.Text = result.Message;
+        _status.Foreground = result.Succeeded ? Brushes.DarkGreen : Brushes.DarkRed;
+        if (result.Succeeded)
+        {
+            _lastProfileUtf8 = result.ProfileUtf8;
+            _preview.Text = result.ProfileJson;
+        }
+        else
+        {
+            _lastProfileUtf8 = null;
+        }
+    }
+
+    private async System.Threading.Tasks.Task OnSaveAsync()
+    {
+        WizardSessionResult result = RunSession();
+        _status.Text = result.Message;
+        _status.Foreground = result.Succeeded ? Brushes.DarkGreen : Brushes.DarkRed;
+        if (!result.Succeeded || result.ProfileUtf8 is null || result.ProfileJson is null)
+        {
+            _lastProfileUtf8 = null;
+            return;
+        }
+
+        _lastProfileUtf8 = result.ProfileUtf8;
+        _preview.Text = result.ProfileJson;
+
+        IStorageProvider? storage = StorageProvider;
+        if (storage is null)
+        {
+            _status.Text = "Save failed: no storage provider.";
+            _status.Foreground = Brushes.DarkRed;
+            return;
+        }
+
+        IStorageFile? file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save WinMint Profile",
+            SuggestedFileName = "winmint.profile.json",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("Profile JSON") { Patterns = ["*.json"] },
+            ],
+        });
+
+        if (file is null)
+        {
+            return;
+        }
+
+        string? path = file.TryGetLocalPath();
+        if (string.IsNullOrEmpty(path))
+        {
+            _status.Text = "Save failed: could not resolve local path.";
+            _status.Foreground = Brushes.DarkRed;
+            return;
+        }
+
+        await File.WriteAllBytesAsync(path, _lastProfileUtf8);
+        _status.Text = $"Saved {_lastProfileUtf8.Length} bytes → {path}\n{result.Message}";
+        _status.Foreground = Brushes.DarkGreen;
+    }
+
+    private WizardSessionResult RunSession()
+    {
+        string preset = (_preset.SelectedItem as string) ?? "";
+        return WizardSession.ComposeAndPlan(
+            preset,
+            _username.Text ?? "",
+            _password.Text ?? "",
+            _requireWifi.IsChecked == true,
+            _dmaEnabled.IsChecked == true,
+            _locale.Text ?? "",
+            _geoId.Text ?? "",
+            _timeZone.Text ?? "",
+            _location.IsChecked == true);
+    }
+
+    private static TextBlock Heading(string text) => new()
+    {
+        Text = text,
+        FontWeight = FontWeight.SemiBold,
+        Margin = new Avalonia.Thickness(0, 12, 0, 0),
+    };
+
+    private static StackPanel Labeled(string label, Control control) => new()
+    {
+        Spacing = 4,
+        Children =
+        {
+            new TextBlock { Text = label },
+            control,
+        },
+    };
+
+    private static TextBox Field(string text) => new() { Text = text };
+
+    private static TextBox PasswordField(string text) => new() { Text = text, PasswordChar = '•' };
+}
