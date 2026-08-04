@@ -6,10 +6,31 @@ namespace WinMint.Orchestrator;
 
 /// <summary>
 /// Host helper: compose <c>winmint.profile/v1</c> UTF-8 JSON from UI/CLI fields + an already-expanded remove-list.
-/// Does not embed preset names (KEEPFLAG: none in Profile).
+/// Does not embed preset names (KEEPFLAG: none in Profile). Package ids (when present) live in Profile JSON.
 /// </summary>
 public static class WizardProfileComposer
 {
+    /// <summary>Newline-separated package ids: trim lines, drop blanks, preserve order.</summary>
+    public static IReadOnlyList<string> ParseIdList(string? multiline)
+    {
+        if (string.IsNullOrWhiteSpace(multiline))
+        {
+            return [];
+        }
+
+        List<string> ids = [];
+        foreach (string line in multiline.Split(['\r', '\n'], StringSplitOptions.None))
+        {
+            string id = line.Trim();
+            if (id.Length > 0)
+            {
+                ids.Add(id);
+            }
+        }
+
+        return ids;
+    }
+
     public static byte[] ToUtf8Json(
         string username,
         string password,
@@ -19,8 +40,27 @@ public static class WizardProfileComposer
         int geoId,
         string timeZoneId,
         bool locationServicesEnabled,
-        IReadOnlyList<string> removeProvisionedAppx)
+        IReadOnlyList<string> removeProvisionedAppx,
+        IReadOnlyList<string>? winget = null,
+        IReadOnlyList<string>? wingetNeedsReboot = null,
+        IReadOnlyList<string>? scoop = null,
+        IReadOnlyList<string>? scoopNeedsReboot = null)
     {
+        winget ??= [];
+        wingetNeedsReboot ??= [];
+        scoop ??= [];
+        scoopNeedsReboot ??= [];
+
+        PackagesWireDoc? packages = null;
+        if (winget.Count > 0 || wingetNeedsReboot.Count > 0 || scoop.Count > 0 || scoopNeedsReboot.Count > 0)
+        {
+            packages = new PackagesWireDoc(
+                winget.Count == 0 ? null : winget.ToArray(),
+                wingetNeedsReboot.Count == 0 ? null : wingetNeedsReboot.ToArray(),
+                scoop.Count == 0 ? null : scoop.ToArray(),
+                scoopNeedsReboot.Count == 0 ? null : scoopNeedsReboot.ToArray());
+        }
+
         ProfileWireDoc doc = new(
             BuildPlan.ProfileSchemaVersion,
             new AccountWireDoc(
@@ -33,7 +73,8 @@ public static class WizardProfileComposer
                 new SettleWireDoc(locale, geoId, timeZoneId, locationServicesEnabled)),
             removeProvisionedAppx.Count == 0
                 ? null
-                : new DebloatWireDoc(removeProvisionedAppx.ToArray()));
+                : new DebloatWireDoc(removeProvisionedAppx.ToArray()),
+            packages);
 
         return Encoding.UTF8.GetBytes(
             JsonSerializer.Serialize(doc, WizardProfileJsonContext.Default.ProfileWireDoc));
@@ -44,7 +85,8 @@ internal sealed record ProfileWireDoc(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
     [property: JsonPropertyName("account")] AccountWireDoc Account,
     [property: JsonPropertyName("dma")] DmaWireDoc Dma,
-    [property: JsonPropertyName("debloat")] DebloatWireDoc? Debloat);
+    [property: JsonPropertyName("debloat")] DebloatWireDoc? Debloat,
+    [property: JsonPropertyName("packages")] PackagesWireDoc? Packages);
 
 internal sealed record AccountWireDoc(
     [property: JsonPropertyName("mode")] string Mode,
@@ -64,6 +106,12 @@ internal sealed record SettleWireDoc(
 
 internal sealed record DebloatWireDoc(
     [property: JsonPropertyName("removeProvisionedAppx")] string[] RemoveProvisionedAppx);
+
+internal sealed record PackagesWireDoc(
+    [property: JsonPropertyName("winget")] string[]? Winget,
+    [property: JsonPropertyName("wingetNeedsReboot")] string[]? WingetNeedsReboot,
+    [property: JsonPropertyName("scoop")] string[]? Scoop,
+    [property: JsonPropertyName("scoopNeedsReboot")] string[]? ScoopNeedsReboot);
 
 [JsonSerializable(typeof(ProfileWireDoc))]
 [JsonSourceGenerationOptions(

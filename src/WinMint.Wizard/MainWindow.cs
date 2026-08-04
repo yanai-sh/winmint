@@ -17,6 +17,10 @@ public sealed class MainWindow : Window
     private readonly TextBox _timeZone = Field("GMT Standard Time");
     private readonly CheckBox _location = new() { Content = "Location services", IsChecked = true };
     private readonly ComboBox _preset;
+    private readonly TextBox _winget = IdListBox();
+    private readonly TextBox _wingetNeedsReboot = IdListBox();
+    private readonly TextBox _scoop = IdListBox();
+    private readonly TextBox _scoopNeedsReboot = IdListBox();
     private readonly TextBlock _status = new()
     {
         TextWrapping = TextWrapping.Wrap,
@@ -38,7 +42,7 @@ public sealed class MainWindow : Window
     {
         Title = "WinMint Wizard";
         Width = 560;
-        Height = 720;
+        Height = 900;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         _preset = new ComboBox
@@ -74,6 +78,11 @@ public sealed class MainWindow : Window
                     _location,
                     Heading("Keep-flag preset (host expands → remove-list)"),
                     Labeled("Preset", _preset),
+                    Heading("Packages (newline-separated ids; empty = stubs only)"),
+                    Labeled("winget", _winget),
+                    Labeled("wingetNeedsReboot (subset of winget)", _wingetNeedsReboot),
+                    Labeled("scoop", _scoop),
+                    Labeled("scoopNeedsReboot (subset of scoop)", _scoopNeedsReboot),
                     new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
@@ -166,7 +175,11 @@ public sealed class MainWindow : Window
             _locale.Text ?? "",
             _geoId.Text ?? "",
             _timeZone.Text ?? "",
-            _location.IsChecked == true);
+            _location.IsChecked == true,
+            _winget.Text ?? "",
+            _wingetNeedsReboot.Text ?? "",
+            _scoop.Text ?? "",
+            _scoopNeedsReboot.Text ?? "");
     }
 
     private static TextBlock Heading(string text) => new()
@@ -189,4 +202,13 @@ public sealed class MainWindow : Window
     private static TextBox Field(string text) => new() { Text = text };
 
     private static TextBox PasswordField(string text) => new() { Text = text, PasswordChar = '•' };
+
+    private static TextBox IdListBox() => new()
+    {
+        AcceptsReturn = true,
+        TextWrapping = TextWrapping.NoWrap,
+        MinHeight = 56,
+        FontFamily = new FontFamily("Consolas"),
+        PlaceholderText = "one id per line",
+    };
 }

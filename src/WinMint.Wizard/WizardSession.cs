@@ -15,7 +15,11 @@ internal static class WizardSession
         string locale,
         string geoIdText,
         string timeZoneId,
-        bool locationServicesEnabled)
+        bool locationServicesEnabled,
+        string wingetText = "",
+        string wingetNeedsRebootText = "",
+        string scoopText = "",
+        string scoopNeedsRebootText = "")
     {
         Result<IReadOnlyList<string>, PresetFailure> expanded = KeepFlagPresets.TryExpand(preset);
         if (!expanded.IsOk)
@@ -37,7 +41,11 @@ internal static class WizardSession
             geoId,
             timeZoneId.Trim(),
             locationServicesEnabled,
-            expanded.Value);
+            expanded.Value,
+            WizardProfileComposer.ParseIdList(wingetText),
+            WizardProfileComposer.ParseIdList(wingetNeedsRebootText),
+            WizardProfileComposer.ParseIdList(scoopText),
+            WizardProfileComposer.ParseIdList(scoopNeedsRebootText));
 
         Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
         if (!parsed.IsOk)

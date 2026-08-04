@@ -274,7 +274,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** Wizard packages UI (deferred backlog) or maintainer pick. Metal **17–18** + keep-flag capabilities **19–20** + Israel DMA **21** complete.
+Do not label `ready-for-agent` until starting that card. **Next:** deferred backlog (WSL / Wizard polish / ExitWindowsEx) or maintainer pick. Metal **17–18** + keep-flag **19–20** + Israel DMA **21** + Wizard packages **22** complete.
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
@@ -286,6 +286,7 @@ Do not label `ready-for-agent` until starting that card. **Next:** Wizard packag
 | 19 | Keep-flag capabilities / features matrix spike | Design | After **18** — **done** |
 | 20 | Offline ImageServicing capabilities from Profile | ImageServicing | After **19** — **done** |
 | 21 | Israel DMA sample + monotonic settle deadlines | ProvisioningSession + harness | After **20** — **done** |
+| 22 | Wizard packages UI (winget + Scoop lists) | BuildPlan host | After **21** — **done** |
 
 ### 14 — Maintainer Smoke prove-out
 
@@ -371,7 +372,20 @@ Do not label `ready-for-agent` until starting that card. **Next:** Wizard packag
 - **DoD:** S3 fake UTC +3h jump during settle does not false-timeout; `just check` green; Hyper-V israel Profile hard settle fields green
 - **Done:** 2026-08-05 — issue #33; monotonic tenure/settle deadlines; IC Time Synchronization off in harness; `samples/israel.profile.json`; Hyper-V prove-out green (`outcome=Complete`, `settle.location_warn`, Time Synchronization disabled)
 
-**Still deferred (no ticket):** Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash; Wizard polish; WSL job kind; Wizard packages UI; ExitWindowsEx unless prove-out forces it.
+### 22 — Wizard packages UI
+
+- **Issue:** [#34](https://github.com/yanai-sh/winmint/issues/34)
+- **Design:** [ARCHITECTURE](ARCHITECTURE.md) · [BUILDPLAN](design/BUILDPLAN.md) · [CONTEXT](../CONTEXT.md) Wizard · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
+- **Blocked by:** — · **Ready when:** **21** done — start here (apply `ready-for-agent` when starting)
+- **Deliver:** Wizard authors `packages.winget` / `wingetNeedsReboot` / `packages.scoop` / `scoopNeedsReboot` as raw newline-separated id lists (empty default); `WizardProfileComposer` emits Profile wire (omit empty `packages` / empty sibling arrays); Validate/Plan/Save via existing BuildPlan; S1b compose→Plan tests
+- **Out:** WSL; live winget/Scoop search; package presets catalog; capabilities UI; schema `v2`; elevating Wizard; full polish; Hyper-V Smoke DoD
+- **DoD:**
+  - Four lists in Wizard UI; composer + Plan fail-closed on reboot-subset errors
+  - S1b tests green; `just check` green
+  - No schema bump; no second planning brain
+- **Done:** 2026-08-05 — issue #34; `WizardProfileComposer` packages + `ParseIdList`; Avalonia four lists; S1b `WizardPackagesTests`
+
+**Still deferred (no ticket):** Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash; Wizard polish; WSL job kind; ExitWindowsEx unless prove-out forces it.
 
 ---
 
