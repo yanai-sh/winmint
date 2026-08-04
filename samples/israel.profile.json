@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "winmint.profile/v1",
+  "account": {
+    "mode": "localAutoLogon",
+    "username": "winmint",
+    "password": "winmint",
+    "requireWifiDuringOobe": false
+  },
+  "dma": {
+    "enabled": true,
+    "settle": {
+      "locale": "en-US",
+      "geoId": 117,
+      "timeZoneId": "Israel Standard Time",
+      "locationServicesEnabled": true
+    }
+  }
+}

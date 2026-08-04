@@ -14,7 +14,7 @@ public class UnlockTimeoutTests
     {
         ManualTimeProvider time = new();
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
-        // Never-matching region forces settle to poll until wall-clock timeout.
+        // Never-matching region forces settle to poll until tenure timeout.
         StickyRegion region = new(new RegionState("en-IE", 68, "GMT Standard Time", true));
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
@@ -40,6 +40,38 @@ public class UnlockTimeoutTests
         Assert.DoesNotContain(splash.Events, e => e.StartsWith("Status:jobs.", StringComparison.Ordinal));
         Assert.Contains("shell.timeout", evidence.Documents[0].Phases);
         Assert.Equal("Failed", evidence.Documents[0].Outcome);
+    }
+
+    [Fact]
+    public void Shell_wall_clock_jump_during_settle_does_not_false_timeout()
+    {
+        // Hyper-V IC/NTP can jump guest UTC ~+3h mid-settle; tenure deadlines must be monotonic.
+        ManualTimeProvider time = new();
+        RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
+        JumpThenMatchRegion region = new(
+            mismatch: new RegionState("en-IE", 68, "GMT Standard Time", true),
+            match: new RegionState("en-GB", 242, "GMT Standard Time", true),
+            onFirstMismatch: () => time.JumpWallClock(TimeSpan.FromHours(3)));
+        RecordingSplashPresenter splash = new();
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            Bundle(
+                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                policy: SessionPolicy.SmokeDefaults with
+                {
+                    WallClockTimeout = TimeSpan.FromSeconds(10),
+                    SettleDeadline = TimeSpan.FromSeconds(10),
+                    SettlePollInterval = TimeSpan.FromSeconds(1),
+                    FailedDwell = TimeSpan.Zero,
+                }),
+            Env(time, winlogon, region, splash, new RecordingEvidenceSink()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Contains("Status:settle.ok", splash.Events);
+        Assert.DoesNotContain(splash.Events, e => e.Contains("shell.timeout", StringComparison.Ordinal));
+        Assert.Equal(ExplorerShell, winlogon.Shell);
     }
 
     [Fact]
@@ -203,6 +235,35 @@ public class UnlockTimeoutTests
         public RegionState Read() => _state;
     }
 
+    /// <summary>First probe mismatches (and may jump wall clock); later probes match.</summary>
+    private sealed class JumpThenMatchRegion : IRegionSnapshot
+    {
+        private readonly RegionState _mismatch;
+        private readonly RegionState _match;
+        private readonly Action _onFirstMismatch;
+        private int _reads;
+
+        public JumpThenMatchRegion(RegionState mismatch, RegionState match, Action onFirstMismatch)
+        {
+            _mismatch = mismatch;
+            _match = match;
+            _onFirstMismatch = onFirstMismatch;
+        }
+
+        public void Apply(DmaSettleTarget target) { }
+
+        public RegionState Read()
+        {
+            if (_reads++ == 0)
+            {
+                _onFirstMismatch();
+                return _mismatch;
+            }
+
+            return _match;
+        }
+    }
+
     private sealed class StaleCheckpoints(TenureState tenure) : ICheckpointStore
     {
         public List<DateTimeOffset> HeartbeatsWritten { get; } = [];
@@ -265,14 +326,26 @@ public class UnlockTimeoutTests
         public void Wipe(ProvisioningBundle bundle) { }
     }
 
-    /// <summary>Advances UTC on each timer due-time so Wait is instant under test.</summary>
+    /// <summary>Advances UTC + monotonic stamp on timer due-time; wall jump is UTC-only.</summary>
     private sealed class ManualTimeProvider : TimeProvider
     {
         private DateTimeOffset _utcNow = DateTimeOffset.UnixEpoch;
+        private long _timestamp;
 
         public override DateTimeOffset GetUtcNow() => _utcNow;
 
-        public void Advance(TimeSpan delta) => _utcNow += delta;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => _timestamp;
+
+        public void Advance(TimeSpan delta)
+        {
+            _utcNow += delta;
+            _timestamp += delta.Ticks;
+        }
+
+        /// <summary>Guest NTP/IC-style UTC jump — must not advance tenure deadlines.</summary>
+        public void JumpWallClock(TimeSpan delta) => _utcNow += delta;
 
         public override ITimer CreateTimer(
             TimerCallback callback,

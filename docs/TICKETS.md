@@ -274,7 +274,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** none open in 17–20 sequence (deferred: WSL / Wizard packages UI / ExitWindowsEx). Metal + keep-flag capabilities offline complete.
+Do not label `ready-for-agent` until starting that card. **Next:** Wizard packages UI (deferred backlog) or maintainer pick. Metal **17–18** + keep-flag capabilities **19–20** + Israel DMA **21** complete.
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
@@ -285,6 +285,7 @@ Do not label `ready-for-agent` until starting that card. **Next:** none open in 
 | 18 | Scoop job kind (`packages.scoop`) | ProvisioningSession | After **17** — **done** (metal exit) |
 | 19 | Keep-flag capabilities / features matrix spike | Design | After **18** — **done** |
 | 20 | Offline ImageServicing capabilities from Profile | ImageServicing | After **19** — **done** |
+| 21 | Israel DMA sample + monotonic settle deadlines | ProvisioningSession + harness | After **20** — **done** |
 
 ### 14 — Maintainer Smoke prove-out
 
@@ -360,6 +361,15 @@ Do not label `ready-for-agent` until starting that card. **Next:** none open in 
 - **Deliver:** Profile field → BuildPlan → offline servicing adapter; digests as applicable; FirstLogon not required
 - **Out:** live FirstLogon feature flips; product-default recommended set
 - **Done:** 2026-08-04 — issue #32; `debloat.removeCapabilities` / `disableOptionalFeatures`; catalogs; opcodes + DISM kernels; digests; S1/S2 tests; Apply-path digests
+
+### 21 — Israel DMA sample + monotonic settle deadlines
+
+- **Issue:** [#33](https://github.com/yanai-sh/winmint/issues/33)
+- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [ADR-003](decisions/ADR-003-dma-interop.md)
+- **Deliver:** `samples/israel.profile.json` (en-US / GeoId 117 / `Israel Standard Time` / location on; Local+autoLogon; no package matrix); tenure + settle deadlines via monotonic `TimeProvider` timestamps; Smoke harness disables Hyper-V Time Synchronization IC; Hyper-V prove-out
+- **Out:** Hebrew UI; replace acceptance/smoke UK restore; package matrix; re-settle after reboot; ExitWindowsEx; WSL; Wizard packages UI
+- **DoD:** S3 fake UTC +3h jump during settle does not false-timeout; `just check` green; Hyper-V israel Profile hard settle fields green
+- **Done:** 2026-08-05 — issue #33; monotonic tenure/settle deadlines; IC Time Synchronization off in harness; `samples/israel.profile.json`; Hyper-V prove-out green (`outcome=Complete`, `settle.location_warn`, Time Synchronization disabled)
 
 **Still deferred (no ticket):** Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash; Wizard polish; WSL job kind; Wizard packages UI; ExitWindowsEx unless prove-out forces it.
 

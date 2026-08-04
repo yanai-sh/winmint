@@ -264,12 +264,17 @@ public class DmaSettleTests
         public void Wipe(ProvisioningBundle bundle) { }
     }
 
-    /// <summary>Advances UTC on each timer due-time so settle Wait is instant under test.</summary>
+    /// <summary>Advances UTC + monotonic stamp on timer due-time so settle Wait is instant under test.</summary>
     private sealed class ManualTimeProvider : TimeProvider
     {
         private DateTimeOffset _utcNow = DateTimeOffset.UnixEpoch;
+        private long _timestamp;
 
         public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => _timestamp;
 
         public override ITimer CreateTimer(
             TimerCallback callback,
@@ -278,7 +283,11 @@ public class DmaSettleTests
             TimeSpan period) =>
             new AutoAdvanceTimer(this, callback, state, dueTime);
 
-        private void Advance(TimeSpan delta) => _utcNow += delta;
+        private void Advance(TimeSpan delta)
+        {
+            _utcNow += delta;
+            _timestamp += delta.Ticks;
+        }
 
         private sealed class AutoAdvanceTimer : ITimer
         {

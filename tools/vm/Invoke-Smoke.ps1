@@ -55,9 +55,18 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 
 function Invoke-AssertSmokeEvidence {
-    param([string] $Dir)
+    param(
+        [string] $Dir,
+        # $null ⇒ Assert-SmokeEvidence default acceptance pins (AssertOnly / fixtures).
+        [string[]] $PinnedRemoveAppx = $null
+    )
     $assert = Join-Path $PSScriptRoot 'Assert-SmokeEvidence.ps1'
-    & $assert -EvidenceDir $Dir
+    if ($null -eq $PinnedRemoveAppx) {
+        & $assert -EvidenceDir $Dir
+    }
+    else {
+        & $assert -EvidenceDir $Dir -PinnedRemoveAppx $PinnedRemoveAppx
+    }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
@@ -114,6 +123,7 @@ $existing = Get-VM -Name $VmName -ErrorAction SilentlyContinue
 if ($ReuseVm) {
     if (-not $existing) { throw "ReuseVm: VM '$VmName' not found" }
     Write-Host "Reusing existing VM $VmName (state=$($existing.State))…"
+    Disable-VMIntegrationService -VMName $VmName -Name 'Time Synchronization' -ErrorAction SilentlyContinue
     if ($existing.State -eq 'Off') {
         Start-VM -Name $VmName
     }
@@ -157,6 +167,10 @@ else {
     $dvdDev = Get-VMDvdDrive -VMName $VmName
     Set-VMFirmware -VMName $VmName -BootOrder $dvdDev, $hddDev
 
+    # Disable guest IC time sync — host/guest NTP jumps otherwise blow wall-facing clocks
+    # during settle (product deadlines are monotonic; harness still removes the class of jump).
+    Disable-VMIntegrationService -VMName $VmName -Name 'Time Synchronization'
+
     # Hyper-V media ACL (SPLASH spike)
     $aclRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
         'NT VIRTUAL MACHINE\Virtual Machines', 'Read', 'Allow')
@@ -178,12 +192,19 @@ $bootNudgeUntil = [datetime]::UtcNow.AddMinutes(3)
 
 # Local+autoLogon Profiles need explicit PS Direct credentials (workgroup guest).
 $guestCred = $null
+$pinnedRemoveAppx = @()
 try {
     $profileDoc = Get-Content -LiteralPath $Profile -Raw -Encoding utf8 | ConvertFrom-Json
     $gu = [string]$profileDoc.account.username
     $gp = [string]$profileDoc.account.password
     if ($gu -and $gp) {
         $guestCred = [pscredential]::new($gu, (ConvertTo-SecureString $gp -AsPlainText -Force))
+    }
+    if ($profileDoc.PSObject.Properties.Name -contains 'debloat' -and
+        $null -ne $profileDoc.debloat -and
+        $profileDoc.debloat.PSObject.Properties.Name -contains 'removeProvisionedAppx' -and
+        $null -ne $profileDoc.debloat.removeProvisionedAppx) {
+        $pinnedRemoveAppx = @($profileDoc.debloat.removeProvisionedAppx)
     }
 }
 catch {
@@ -367,6 +388,6 @@ if (-not (Get-ChildItem -LiteralPath $guestDir -Filter 'evidence-*.json' -ErrorA
     throw "Wall clock elapsed without guest evidence under $guestDir"
 }
 
-Invoke-AssertSmokeEvidence -Dir $evidenceOut
+Invoke-AssertSmokeEvidence -Dir $evidenceOut -PinnedRemoveAppx $pinnedRemoveAppx
 Write-Host "Smoke green. Evidence: $evidenceOut"
 exit 0

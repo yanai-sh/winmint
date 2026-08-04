@@ -158,12 +158,12 @@ Expected failures return `SessionResult`; exceptions = bugs.
 
 | Policy field | Smoke default |
 |--------------|---------------|
-| `WallClockTimeout` | **90 min** |
+| `WallClockTimeout` | **90 min** (measured with **monotonic** `TimeProvider.GetTimestamp` / `GetElapsedTime` — survives Hyper-V IC/NTP UTC jumps; wall clock remains OK for evidence / heartbeat UTC) |
 | `FailedDwell` | **5 s** |
-| `SettleDeadline` | **120 s** |
+| `SettleDeadline` | **120 s** (same monotonic clock as tenure) |
 | `SettlePollInterval` | implementation choice inside deadline |
 | `FirstPaintBudget` | **2.0 s** (S3 = order; S4 = measure) |
-| `StaleTenureThreshold` | **15 min** |
+| `StaleTenureThreshold` | **15 min** (wall-clock vs persisted heartbeat UTC — must survive process restart) |
 | `InputLock` | `None` |
 
 **Durable paths (guest):** `%ProgramData%\WinMint\` — `checkpoint.json`, heartbeat file, `evidence\`.

@@ -14,15 +14,18 @@ param(
     [Parameter(Mandatory)]
     [string] $EvidenceDir,
 
-    [double] $FirstPaintBudgetSeconds = 2.0
+    [double] $FirstPaintBudgetSeconds = 2.0,
+
+    # Empty ⇒ skip keep-flag digest asserts (israel/smoke Profiles without remove-list).
+    # Default = acceptance pins when AssertOnly without an explicit list.
+    [string[]] $PinnedRemoveAppx = @('Microsoft.BingNews', 'Microsoft.BingWeather')
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# ADR-006 / samples/acceptance.profile.json — frozen acceptance remove-list.
+# ADR-006 / samples/acceptance.profile.json — frozen acceptance remove-list when caller omits -PinnedRemoveAppx.
 # Re-pin if acceptance Source ISO churn drops an id (KEEPFLAG).
-$PinnedRemoveAppx = @('Microsoft.BingNews', 'Microsoft.BingWeather')
 $ExplorerShell = 'explorer.exe'
 $SupervisorShellLeaf = 'Supervisor.exe'
 
@@ -109,18 +112,22 @@ if ($lane -notin @('Test', 'Release')) {
     throw "lane marker must be Test|Release, got '$lane'"
 }
 
-# Keep-flag (ticket 14 / ADR-006 B4): offline remove digests from Apply evidence.
+# Keep-flag (ticket 14 / ADR-006 B4): offline remove digests from Apply evidence when Profile pins any.
 $digestMap = @{}
 if ($apply.PSObject.Properties.Name -contains 'digests' -and $null -ne $apply.digests) {
     foreach ($p in $apply.digests.PSObject.Properties) {
         $digestMap[[string]$p.Name] = [string]$p.Value
     }
 }
-foreach ($id in $PinnedRemoveAppx) {
-    if ([string]::IsNullOrWhiteSpace($id)) { continue }
-    $key = "removed.appx.$id"
-    if (-not $digestMap.ContainsKey($key) -or $digestMap[$key] -ne 'absent') {
-        throw "keep-flag digest missing: expected $key=absent in apply/evidence.json digests (pinned acceptance remove-list)"
+$keepFlagChecked = $false
+if ($null -ne $PinnedRemoveAppx -and @($PinnedRemoveAppx).Count -gt 0) {
+    $keepFlagChecked = $true
+    foreach ($id in $PinnedRemoveAppx) {
+        if ([string]::IsNullOrWhiteSpace($id)) { continue }
+        $key = "removed.appx.$id"
+        if (-not $digestMap.ContainsKey($key) -or $digestMap[$key] -ne 'absent') {
+            throw "keep-flag digest missing: expected $key=absent in apply/evidence.json digests (pinned acceptance remove-list)"
+        }
     }
 }
 
@@ -147,7 +154,7 @@ $acceptance = [ordered]@{
     lane                    = $lane
     firstPaintMs            = $firstPaintMs
     firstPaintWarn          = $paintWarn
-    keepFlagAppxAbsent      = $true
+    keepFlagAppxAbsent      = $keepFlagChecked
     pinnedRemoveAppx        = @($PinnedRemoveAppx)
     winlogonShell           = $shell
     guestEvidencePath       = $guestPath

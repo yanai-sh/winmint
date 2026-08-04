@@ -40,8 +40,9 @@ public static class ProvisioningSession
     {
         List<string> phases = [];
         List<EvidenceSnapshot> emitted = [];
-        DateTimeOffset shellStart = env.Time.GetUtcNow();
-        DateTimeOffset wallDeadline = shellStart + bundle.Policy.WallClockTimeout;
+        // Tenure deadlines are monotonic (survive Hyper-V IC/NTP UTC jumps); wall clock for evidence only.
+        long tenureStartTs = env.Time.GetTimestamp();
+        DateTimeOffset shellStartUtc = env.Time.GetUtcNow();
         long? firstPaintMs = null;
 
         if (ct.IsCancellationRequested)
@@ -113,7 +114,7 @@ public static class ProvisioningSession
 
         // FirstPaint — opaque frame before any settle work (S3 order; S4 measures latency).
         env.Splash.Show();
-        firstPaintMs = (long)(env.Time.GetUtcNow() - shellStart).TotalMilliseconds;
+        firstPaintMs = (long)(env.Time.GetUtcNow() - shellStartUtc).TotalMilliseconds;
         SessionStatus paintStatus = new("shell.first_paint", "First opaque splash frame.");
         env.Splash.SetStatus(paintStatus);
         phases.Add(paintStatus.Code);
@@ -124,8 +125,8 @@ public static class ProvisioningSession
             env.Splash.SetStatus(resumed);
             phases.Add(resumed.Code);
 
-            // Settle already ran before NeedsReboot. Re-settle after OS reboot re-enters
-            // timezone/NTP churn (Hyper-V IC sync vs guest NTP) and can jump wall-clock past deadline.
+            // Settle already ran before NeedsReboot. Skip re-settle on resume (idempotent restore;
+            // also avoids re-entering TZ/location churn right after OS reboot).
             SessionStatus settleSkip = new(
                 "settle.resume_skip",
                 "DMA settle skipped on checkpoint resume.");
@@ -134,12 +135,12 @@ public static class ProvisioningSession
         }
         else
         {
-            if (IsTimedOut(env, wallDeadline))
+            if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
             {
                 return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
             }
 
-            SettlePhaseResult settle = RunSettle(bundle, env, phases, wallDeadline, ct);
+            SettlePhaseResult settle = RunSettle(bundle, env, phases, tenureStartTs, ct);
             if (settle.TimedOut)
             {
                 return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
@@ -151,7 +152,7 @@ public static class ProvisioningSession
             }
         }
 
-        if (IsTimedOut(env, wallDeadline))
+        if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
         {
             return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
         }
@@ -159,7 +160,7 @@ public static class ProvisioningSession
         JobsPhaseResult jobs;
         try
         {
-            jobs = RunJobs(bundle, env, phases, wallDeadline, jobStartIndex, ct);
+            jobs = RunJobs(bundle, env, phases, tenureStartTs, jobStartIndex, ct);
         }
         catch (OperationCanceledException)
         {
@@ -289,11 +290,11 @@ public static class ProvisioningSession
         return env.Time.GetUtcNow() - tenure.HeartbeatUtc.Value > bundle.Policy.StaleTenureThreshold;
     }
 
-    private static bool IsTimedOut(SessionEnvironment env, DateTimeOffset wallDeadline) =>
-        env.Time.GetUtcNow() >= wallDeadline;
+    private static bool IsTimedOut(SessionEnvironment env, long startTimestamp, TimeSpan timeout) =>
+        env.Time.GetElapsedTime(startTimestamp) >= timeout;
 
     private static SessionStatus TimeoutStatus() =>
-        new("shell.timeout", "Wall-clock Shell tenure timeout.");
+        new("shell.timeout", "Shell tenure timeout.");
 
     private static void Unlock(IWinlogonRegistry winlogon) =>
         winlogon.SetShell(ExplorerShell);
@@ -386,7 +387,7 @@ public static class ProvisioningSession
         ProvisioningBundle bundle,
         SessionEnvironment env,
         List<string> phases,
-        DateTimeOffset wallDeadline,
+        long tenureStartTs,
         int startIndex,
         CancellationToken ct)
     {
@@ -397,7 +398,7 @@ public static class ProvisioningSession
         for (int i = startIndex; i < bundle.Jobs.Count; i++)
         {
             ProvisionJob job = bundle.Jobs[i];
-            if (IsTimedOut(env, wallDeadline))
+            if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
             {
                 return new JobsPhaseResult(SessionOutcome.Failed, TimeoutStatus(), TimedOut: true);
             }
@@ -666,7 +667,7 @@ public static class ProvisioningSession
         ProvisioningBundle bundle,
         SessionEnvironment env,
         List<string> phases,
-        DateTimeOffset wallDeadline,
+        long tenureStartTs,
         CancellationToken ct)
     {
         SessionStatus begin = new("settle.begin", "DMA settle start.");
@@ -705,7 +706,8 @@ public static class ProvisioningSession
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, applyFailed);
         }
 
-        DateTimeOffset settleDeadline = env.Time.GetUtcNow() + bundle.Policy.SettleDeadline;
+        long settleStartTs = env.Time.GetTimestamp();
+        TimeSpan settleBudget = bundle.Policy.SettleDeadline;
 
         while (true)
         {
@@ -717,7 +719,7 @@ public static class ProvisioningSession
                 return new SettlePhaseResult(HardFailed: true, TimedOut: false, cancelled);
             }
 
-            if (IsTimedOut(env, wallDeadline))
+            if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
             {
                 return new SettlePhaseResult(HardFailed: true, TimedOut: true, TimeoutStatus());
             }
@@ -737,23 +739,25 @@ public static class ProvisioningSession
                 _ = ex;
             }
 
-            DateTimeOffset now = env.Time.GetUtcNow();
-            if (now >= settleDeadline || now >= wallDeadline)
+            TimeSpan settleElapsed = env.Time.GetElapsedTime(settleStartTs);
+            TimeSpan tenureElapsed = env.Time.GetElapsedTime(tenureStartTs);
+            if (settleElapsed >= settleBudget
+                || tenureElapsed >= bundle.Policy.WallClockTimeout)
             {
                 break;
             }
 
             TimeSpan wait = bundle.Policy.SettlePollInterval;
-            TimeSpan remainingSettle = settleDeadline - now;
-            TimeSpan remainingWall = wallDeadline - now;
+            TimeSpan remainingSettle = settleBudget - settleElapsed;
+            TimeSpan remainingTenure = bundle.Policy.WallClockTimeout - tenureElapsed;
             if (remainingSettle < wait)
             {
                 wait = remainingSettle;
             }
 
-            if (remainingWall < wait)
+            if (remainingTenure < wait)
             {
-                wait = remainingWall;
+                wait = remainingTenure;
             }
 
             if (wait <= TimeSpan.Zero)
@@ -774,7 +778,7 @@ public static class ProvisioningSession
             }
         }
 
-        if (IsTimedOut(env, wallDeadline))
+        if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
         {
             return new SettlePhaseResult(HardFailed: true, TimedOut: true, TimeoutStatus());
         }
