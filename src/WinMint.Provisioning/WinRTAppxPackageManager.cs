@@ -100,13 +100,15 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
     public void RegisterPackageFamilyForCurrentUser(string packageFamilyName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
+
+        // CsWinRT: null IIterable args — string[] fails CCW cast (IID IIterable<HSTRING>).
         DeploymentResult result = _manager
             .RegisterPackageByFamilyNameAsync(
                 packageFamilyName,
-                dependencyPackageFamilyNames: Array.Empty<string>(),
+                dependencyPackageFamilyNames: null,
                 DeploymentOptions.None,
-                appDataVolume: null!,
-                optionalPackageFamilyNames: Array.Empty<string>())
+                appDataVolume: null,
+                optionalPackageFamilyNames: null)
             .AsTask()
             .GetAwaiter()
             .GetResult();
