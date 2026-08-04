@@ -293,7 +293,9 @@ internal static class PlanArtifactWriter
     {
         File.WriteAllText(Path.Combine(directory, "unattend.xml"), artifacts.Unattend.Xml);
 
-        JobsDump jobs = new(artifacts.Jobs.SchemaVersion, artifacts.Jobs.Jobs.Select(j => new JobDump(j.Id, j.Kind)).ToArray());
+        JobsDump jobs = new(
+            artifacts.Jobs.SchemaVersion,
+            artifacts.Jobs.Jobs.Select(j => new JobDump(j.Id, j.Kind, j.NeedsReboot, j.PackageId)).ToArray());
         File.WriteAllText(
             Path.Combine(directory, "jobs.json"),
             JsonSerializer.Serialize(jobs, CliJsonContext.Default.JobsDump));
@@ -336,7 +338,9 @@ internal sealed record JobsDump(
 
 internal sealed record JobDump(
     [property: JsonPropertyName("id")] string Id,
-    [property: JsonPropertyName("kind")] string Kind);
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("needsReboot")] bool NeedsReboot = false,
+    [property: JsonPropertyName("packageId")] string? PackageId = null);
 
 internal sealed record PayloadDump(
     [property: JsonPropertyName("entries")] string[] Entries);

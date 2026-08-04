@@ -95,7 +95,7 @@ public class StubJobsTests
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("winget.install", "winget")]),
+            Bundle(jobs: [new ProvisionJob("scoop.install", "scoop")]),
             Env(processes, new RecordingSplashPresenter(), evidence),
             TestContext.Current.CancellationToken);
 

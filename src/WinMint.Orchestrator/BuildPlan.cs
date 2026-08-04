@@ -120,7 +120,8 @@ public static class BuildPlan
                     settle.GeoId.Value,
                     settle.TimeZoneId,
                     settle.LocationServicesEnabled.Value)),
-            NormalizeRemoveList(doc.Debloat?.RemoveProvisionedAppx));
+            NormalizeRemoveList(doc.Debloat?.RemoveProvisionedAppx),
+            NormalizeRemoveList(doc.Packages?.Winget));
 
         return Result.Ok<Profile, DocumentErrors>(profile);
     }
@@ -163,7 +164,7 @@ public static class BuildPlan
 
         string unattendXml = BuildAutounattendXml(profile);
 
-        // Stub Smoke job set — real installs land later; executor shape shared with metal.
+        // Stub Smoke job set — real installs from packages.winget (ticket 16); executor shared.
         // Keep-flag safety net when Profile remove-list is non-empty (ticket 13).
         List<JobDescriptor> jobList =
         [
@@ -173,6 +174,11 @@ public static class BuildPlan
         if (profile.RemoveProvisionedAppx.Count > 0)
         {
             jobList.Add(new JobDescriptor("keepflag.appx.safetyNet", "appx.safetyNet"));
+        }
+
+        foreach (string packageId in profile.WingetPackages)
+        {
+            jobList.Add(new JobDescriptor($"winget.{packageId}", "winget", PackageId: packageId));
         }
 
         JobsArtifact jobs = new(JobsSchemaVersion, jobList);
@@ -401,7 +407,11 @@ internal sealed record ProfileDocument(
     [property: JsonPropertyName("schemaVersion")] string? SchemaVersion,
     [property: JsonPropertyName("account")] AccountDocument? Account,
     [property: JsonPropertyName("dma")] DmaDocument? Dma,
-    [property: JsonPropertyName("debloat")] DebloatDocument? Debloat);
+    [property: JsonPropertyName("debloat")] DebloatDocument? Debloat,
+    [property: JsonPropertyName("packages")] PackagesDocument? Packages);
+
+internal sealed record PackagesDocument(
+    [property: JsonPropertyName("winget")] string[]? Winget);
 
 internal sealed record DebloatDocument(
     [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx);

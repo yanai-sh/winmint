@@ -41,7 +41,11 @@ public sealed record DmaSettleTarget(
     string? TimeZoneId,
     bool? LocationServicesEnabled);
 
-public sealed record ProvisionJob(string Id, string Kind, bool NeedsReboot = false);
+public sealed record ProvisionJob(
+    string Id,
+    string Kind,
+    bool NeedsReboot = false,
+    string? PackageId = null);
 
 public sealed record SupervisorIdentity(string ShellPath);
 
@@ -84,7 +88,14 @@ public sealed record SessionEnvironment(
     ICheckpointStore Checkpoints,
     ISecretScrubber Secrets,
     IEvidenceSink? Evidence = null,
-    IAppxPackageManager? Appx = null);
+    IAppxPackageManager? Appx = null,
+    ISystemReboot? Reboot = null);
+
+/// <summary>OS reboot after NeedsReboot checkpoint (ticket 16). Nullable in tests; production wires Win32.</summary>
+public interface ISystemReboot
+{
+    void RequestReboot();
+}
 
 public sealed record AppxPackageInfo(
     string PackageFullName,

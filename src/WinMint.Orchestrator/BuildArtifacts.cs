@@ -28,7 +28,11 @@ public sealed record UnattendArtifact(string Xml);
 
 public sealed record JobsArtifact(string SchemaVersion, IReadOnlyList<JobDescriptor> Jobs);
 
-public sealed record JobDescriptor(string Id, string Kind);
+public sealed record JobDescriptor(
+    string Id,
+    string Kind,
+    string? PackageId = null,
+    bool NeedsReboot = false);
 
 public sealed record PayloadManifest(IReadOnlyList<string> Entries);
 

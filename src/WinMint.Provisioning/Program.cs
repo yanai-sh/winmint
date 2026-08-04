@@ -133,7 +133,8 @@ internal static class Program
             Checkpoints: checkpoints ?? new FileCheckpointStore(ProgramDataRoot()),
             Secrets: new FileSecretScrubber(bundlePath, log),
             Evidence: evidence,
-            Appx: CreateAppxPackageManager());
+            Appx: CreateAppxPackageManager(),
+            Reboot: CreateSystemReboot());
     }
 
     [SupportedOSPlatform("windows10.0.19041.0")]
@@ -147,6 +148,9 @@ internal static class Program
 
     [SupportedOSPlatform("windows")]
     private static Win32ProcessHost CreateProcessHost() => new();
+
+    [SupportedOSPlatform("windows")]
+    private static Win32SystemReboot CreateSystemReboot() => new();
 
     [SupportedOSPlatform("windows")]
     private static GdiSplashPresenter CreateSplash() => new();

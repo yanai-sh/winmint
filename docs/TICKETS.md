@@ -274,13 +274,13 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** **16**.
+Do not label `ready-for-agent` until starting that card. **Next:** post-16 deferred (Scoop/WSL / keep-flag expand — no numbered card yet).
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
 | 14 | Maintainer Hyper-V Smoke prove-out (real Source ISO) | Acceptance S4 | **13** done — **done** |
 | 15 | Wizard = second BuildPlan host (presets → remove-list) | BuildPlan host | **14** done — **done** |
-| 16 | First metal job kind `winget` | ProvisioningSession | After **15** (or after **14** if Wizard deferred by rescope) |
+| 16 | First metal job kind `winget` | ProvisioningSession | After **15** — **done** |
 
 ### 14 — Maintainer Smoke prove-out
 
@@ -306,13 +306,23 @@ Do not label `ready-for-agent` until starting that card. **Next:** **16**.
   - `just check` green
 - **Done:** 2026-08-04 — thin vertical host + presets; issue #27
 
-### 16 — Metal `winget` job (stub)
+### 16 — Metal `winget` job
 
-- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
-- **Deliver:** first non-stub job kind `winget`; fail-closed other metal kinds until ticketed; fold OS Win32 reboot-on-`NeedsReboot` into this (or immediate follow-on) card
-- **Out:** Scoop/WSL matrix; guest pwsh
+- **Issue:** [#28](https://github.com/yanai-sh/winmint/issues/28)
+- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) · [BUILDPLAN](design/BUILDPLAN.md)
+- **Deliver:** first non-stub job kind `winget`; fail-closed other metal kinds until ticketed; OS reboot on `NeedsReboot` via `ISystemReboot`
+- **Out:** Scoop/WSL matrix; guest pwsh; Wizard packages UI
+- **DoD:**
+  - Profile optional `packages.winget: string[]` on `winmint.profile/v1` (no schema bump) ✓
+  - BuildPlan emits `kind: "winget"` jobs (`id` = `winget.<packageId>`, `packageId` wire field); stubs still when packages empty / Smoke ✓
+  - Supervisor spawns `winget install --id … --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity` via `IProcessHost` ✓
+  - Unknown kinds remain `jobs.kind.unsupported` ✓
+  - `NeedsReboot` ⇒ checkpoint + evidence + `ISystemReboot.RequestReboot` (`shutdown.exe /r /t 0 /f`) ✓
+  - S1 + S3 tests green; `just check` green ✓
+- **Done:** 2026-08-04 — issue #28
+- **Carry:** Scoop/WSL kinds; Profile-driven `needsReboot` for winget packages (not yet a Profile field — job flag only); ExitWindowsEx if `shutdown.exe` flakes on metal.
 
-**Still deferred (no ticket):** capabilities/features matrix; Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash; Wizard polish.
+**Still deferred (no ticket):** capabilities/features matrix; Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash; Wizard polish; Scoop/WSL job kinds.
 
 ---
 

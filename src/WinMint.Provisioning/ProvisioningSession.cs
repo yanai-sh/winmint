@@ -173,6 +173,7 @@ public static class ProvisioningSession
                     Phases: phases,
                     FirstPaintMs: firstPaintMs));
             emitted.Add(rebootSnap);
+            env.Reboot?.RequestReboot();
             return new SessionResult(SessionOutcome.Reboot, jobs.Status, emitted);
         }
 
@@ -358,7 +359,39 @@ public static class ProvisioningSession
                 continue;
             }
 
-            if (!string.Equals(job.Kind, "stub", StringComparison.OrdinalIgnoreCase))
+            string fileName;
+            IReadOnlyList<string> arguments;
+            if (string.Equals(job.Kind, "stub", StringComparison.OrdinalIgnoreCase))
+            {
+                fileName = "cmd.exe";
+                arguments = ["/c", "exit", "0"];
+            }
+            else if (string.Equals(job.Kind, "winget", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(job.PackageId))
+                {
+                    SessionStatus missingPkg = new(
+                        "jobs.failed",
+                        $"Job '{job.Id}' kind winget requires packageId.");
+                    env.Splash.SetStatus(missingPkg);
+                    phases.Add(missingPkg.Code);
+                    return new JobsPhaseResult(SessionOutcome.Failed, missingPkg, TimedOut: false);
+                }
+
+                fileName = "winget";
+                arguments =
+                [
+                    "install",
+                    "--id",
+                    job.PackageId,
+                    "--exact",
+                    "--silent",
+                    "--accept-package-agreements",
+                    "--accept-source-agreements",
+                    "--disable-interactivity",
+                ];
+            }
+            else
             {
                 SessionStatus unsupported = new(
                     "jobs.kind.unsupported",
@@ -371,7 +404,7 @@ public static class ProvisioningSession
             ProcessStartResult started;
             try
             {
-                started = env.Processes.Run("cmd.exe", ["/c", "exit", "0"], ct);
+                started = env.Processes.Run(fileName, arguments, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

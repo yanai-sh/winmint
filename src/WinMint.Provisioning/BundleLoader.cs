@@ -70,7 +70,7 @@ public static class BundleLoader
             }
 
             return (jobsFile.Jobs ?? [])
-                .Select(j => new ProvisionJob(j.Id, j.Kind, j.NeedsReboot))
+                .Select(j => new ProvisionJob(j.Id, j.Kind, j.NeedsReboot, j.PackageId))
                 .ToArray();
         }
 
@@ -101,7 +101,8 @@ internal sealed record JobsFile(
 internal sealed record JobFile(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("kind")] string Kind,
-    [property: JsonPropertyName("needsReboot")] bool NeedsReboot = false);
+    [property: JsonPropertyName("needsReboot")] bool NeedsReboot = false,
+    [property: JsonPropertyName("packageId")] string? PackageId = null);
 
 [JsonSerializable(typeof(BundleDto))]
 [JsonSerializable(typeof(JobsFile))]

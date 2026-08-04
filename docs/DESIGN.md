@@ -60,8 +60,8 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Keep-flag expand | Capabilities/features, `v2`, Profile presets, leftover confidence, CDM-as-primary — **defer past Wizard** |
 | Acceptance remove-list | Smoke **acceptance** Profile pins a **small frozen** remove-list (E2E keep-flag on M1 exit); schema default elsewhere remains empty; **no** product-default / opt-out recommended set |
 | Schema | Stay on `winmint.profile/v1` until a breaking change forces `v2` |
-| Metal jobs | After Wizard (**15**); first kind = `winget` only |
-| OS reboot | Supervisor Win32 reboot on `NeedsReboot`; metal reboot matrix with metal jobs |
+| Metal jobs | After Wizard (**15**); first kind = `winget` (**16** done); Scoop/WSL still fail-closed |
+| OS reboot | Supervisor `ISystemReboot` on `NeedsReboot` (**16**); metal reboot-required Profile matrix later |
 | AppearanceOnce | Optional bundle field until a Profile appearance story is grilled |
 | Secrets hardening | Smoke plaintext+wipe; metal secrets later; inline JSON redact when next editing Machine setup |
 | Splash D2D | Only if S4 FirstPaintBudget fails on real Smoke |

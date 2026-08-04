@@ -124,7 +124,9 @@ public static class ImageServicing
 
         File.WriteAllText(unattendPath, plan.Unattend.Xml);
 
-        JobsFile jobs = new(plan.Jobs.SchemaVersion, plan.Jobs.Jobs.Select(j => new JobFile(j.Id, j.Kind)).ToArray());
+        JobsFile jobs = new(
+            plan.Jobs.SchemaVersion,
+            plan.Jobs.Jobs.Select(j => new JobFile(j.Id, j.Kind, j.NeedsReboot, j.PackageId)).ToArray());
         File.WriteAllText(
             Path.Combine(run.WorkDirectory, "jobs.json"),
             JsonSerializer.Serialize(jobs, ServicingJsonContext.Default.JobsFile));
@@ -308,7 +310,9 @@ internal sealed record JobsFile(
 
 internal sealed record JobFile(
     [property: JsonPropertyName("id")] string Id,
-    [property: JsonPropertyName("kind")] string Kind);
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("needsReboot")] bool NeedsReboot = false,
+    [property: JsonPropertyName("packageId")] string? PackageId = null);
 
 internal sealed record BundleFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,

@@ -1,10 +1,11 @@
 namespace WinMint.Orchestrator;
 
-/// <summary>Parsed Profile document (winmint.profile/v1). Field names frozen in ticket 01; debloat in ticket 11; OOBE Wi‑Fi in research 2026-08-04.</summary>
+/// <summary>Parsed Profile document (winmint.profile/v1). Field names frozen in ticket 01; debloat in ticket 11; OOBE Wi‑Fi in research 2026-08-04; packages.winget in ticket 16.</summary>
 public sealed record Profile(
     AccountProfile Account,
     DmaProfile Dma,
-    IReadOnlyList<string> RemoveProvisionedAppx);
+    IReadOnlyList<string> RemoveProvisionedAppx,
+    IReadOnlyList<string> WingetPackages);
 
 public sealed record AccountProfile(
     AccountMode Mode,

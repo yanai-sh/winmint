@@ -79,10 +79,11 @@ public sealed record SessionEnvironment(
     ICheckpointStore Checkpoints,
     ISecretScrubber Secrets,
     IEvidenceSink? Evidence = null,
-    IAppxPackageManager? Appx = null);
+    IAppxPackageManager? Appx = null,
+    ISystemReboot? Reboot = null);
 ```
 
-Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes. `IAppxPackageManager` is the keep-flag FirstLogon safety net (ticket **13**).
+Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes. `IAppxPackageManager` is the keep-flag FirstLogon safety net (ticket **13**). `ISystemReboot` requests OS reboot after a `NeedsReboot` checkpoint (ticket **16**). Job kind `winget` spawns `winget` via `IProcessHost` from `jobs.json` `packageId`; unknown kinds fail closed.
 
 ### Phase machine
 
@@ -187,6 +188,8 @@ Expected failures return `SessionResult`; exceptions = bugs.
 | 06 | Stub jobs + child-process executor |
 | 07 | Unlock + timeout + stale fail-open + appearance once |
 | 08 | Checkpoint reboot keeps Shell |
+| 13 | AppX safety-net job |
+| 16 | Metal `winget` job + OS reboot request |
 
 ## Explicitly rejected
 

@@ -10,8 +10,8 @@
 | **D0** | Design-plan complete | Designs + roadmap + gate signed | **Done** (2026-07-28) |
 | **M0** | Repo scaffold | Reserved `src/` builds | Present |
 | **M1** | Smoke Hyper-V green | Profile → ISO → FirstLogon evidence | **Done** — maintainer Smoke prove-out (**14**) green 2026-08-04 |
-| **M2** | Wizard | Second BuildPlan host; UI presets → remove-list | **Thin vertical done** (**15**, 2026-08-04); polish deferred — next **16** metal `winget` |
-| **M3** | Metal jobs / matrix expand | First metal kind `winget`; keep-flag expand only after Wizard | After M2 (or after **14** if Wizard deferred by rescope) |
+| **M2** | Wizard | Second BuildPlan host; UI presets → remove-list | **Thin vertical done** (**15**, 2026-08-04); polish deferred |
+| **M3** | Metal jobs / matrix expand | First metal kind `winget` (**16** done 2026-08-04); Scoop/WSL / keep-flag expand next | After M2 |
 | **M4** | Hardware acceptance | Stricter evidence bars; same Supervisor/settle/jobs | After M2/M3 |
 
 ## Design Acceptance
