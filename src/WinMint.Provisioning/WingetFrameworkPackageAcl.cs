@@ -1,6 +1,5 @@
+using System.Diagnostics;
 using System.Runtime.Versioning;
-using System.Security.AccessControl;
-using System.Security.Principal;
 
 namespace WinMint.Provisioning;
 
@@ -36,52 +35,52 @@ public static class WingetFrameworkPackageAcl
         }
     }
 
+    /// <summary>
+    /// takeown + icacls /grant:r — .NET SetAccessRule leaves explicit SYSTEM=RX ACEs (logo.png) untouched.
+    /// </summary>
     public static void GrantSystemFullControlTree(string packageDirectory)
     {
-        SecurityIdentifier system = new(WellKnownSidType.LocalSystemSid, null);
-        FileSystemAccessRule rule = new(
-            system,
-            FileSystemRights.FullControl,
-            InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
-            PropagationFlags.None,
-            AccessControlType.Allow);
-
-        ApplyRule(new DirectoryInfo(packageDirectory), rule);
-        foreach (string path in Directory.EnumerateFileSystemEntries(
-                     packageDirectory,
-                     "*",
-                     SearchOption.AllDirectories))
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageDirectory);
+        if (!Directory.Exists(packageDirectory))
         {
-            try
-            {
-                if (Directory.Exists(path))
-                {
-                    ApplyRule(new DirectoryInfo(path), rule);
-                }
-                else
-                {
-                    ApplyRule(new FileInfo(path), rule);
-                }
-            }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or SystemException)
-            {
-                // ponytail: best-effort per entry; one locked file must not abort the tree
-            }
-        }
-    }
-
-    private static void ApplyRule(FileSystemInfo info, FileSystemAccessRule rule)
-    {
-        if (info is DirectoryInfo dir)
-        {
-            DirectorySecurity security = dir.GetAccessControl();
-            security.SetAccessRule(rule);
-            dir.SetAccessControl(security);
             return;
         }
 
-        FileSecurity fileSecurity = ((FileInfo)info).GetAccessControl();
-        fileSecurity.SetAccessRule(rule);
-        ((FileInfo)info).SetAccessControl(fileSecurity);
+        // SetupComplete is SYSTEM; takeown still needed so icacls can replace TrustedInstaller ACEs.
+        RunHidden("takeown.exe", $"/F \"{packageDirectory}\" /R /D Y");
+        RunHidden(
+            "icacls.exe",
+            $"\"{packageDirectory}\" /grant:r \"NT AUTHORITY\\SYSTEM:(OI)(CI)(F)\" /T /C");
+    }
+
+    private static void RunHidden(string fileName, string arguments)
+    {
+        using Process process = new()
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            },
+        };
+        process.Start();
+        // Drain so the child cannot block on full pipes.
+        _ = process.StandardOutput.ReadToEnd();
+        _ = process.StandardError.ReadToEnd();
+        if (!process.WaitForExit(120_000))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // ponytail: best-effort kill on ACL helper hang
+            }
+        }
     }
 }

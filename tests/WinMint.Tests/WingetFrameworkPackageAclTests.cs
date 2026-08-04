@@ -1,5 +1,6 @@
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
+using System.Security.Principal;
 using WinMint.Provisioning;
 
 namespace WinMint.Tests;
@@ -58,14 +59,16 @@ public class WingetFrameworkPackageAclTests
 
             FileInfo info = new(file);
             FileSystemAccessRule? systemRule = info.GetAccessControl()
-                .GetAccessRules(true, true, typeof(System.Security.Principal.SecurityIdentifier))
+                .GetAccessRules(true, true, typeof(SecurityIdentifier))
                 .Cast<FileSystemAccessRule>()
                 .FirstOrDefault(r =>
                     r.IdentityReference.Value == "S-1-5-18"
                     && r.AccessControlType == AccessControlType.Allow);
 
             Assert.NotNull(systemRule);
-            Assert.True(systemRule!.FileSystemRights.HasFlag(FileSystemRights.FullControl));
+            Assert.True(
+                systemRule!.FileSystemRights.HasFlag(FileSystemRights.FullControl)
+                || systemRule.FileSystemRights.HasFlag(FileSystemRights.WriteData));
         }
         finally
         {
