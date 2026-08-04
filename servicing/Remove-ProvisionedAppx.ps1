@@ -4,8 +4,9 @@ param(
     [hashtable] $Parameters
 )
 # Offline provisioned AppX remove — param-only; no Profile branching.
-# Policy (KEEPFLAG): listed id with no matching provisioned package ⇒ fail closed.
-# Uses dism.exe (not DISM AppX cmdlets) — Store-packaged pwsh hits "Class not registered" on those COM APIs.
+# Policy (KEEPFLAG): Plan ⊆ catalog (typos fail at plan). Remove is idempotent: already-absent ⇒ ok + digest absent
+# (reuse-media re-Apply after a prior remove). Uses dism.exe (not DISM AppX cmdlets) — Store pwsh
+# hits "Class not registered" on those COM APIs.
 $mountDir = $Parameters['mountDir']
 $packageFamilyNames = $Parameters['packageFamilyNames']
 if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
@@ -88,7 +89,9 @@ $removed = [System.Collections.Generic.List[object]]::new()
 foreach ($id in $ids) {
     $matchedPkgs = @($before | Where-Object { Test-PackageMatchesCatalogId -Package $_ -CatalogId $id })
     if ($matchedPkgs.Count -eq 0) {
-        throw "Absent provisioned AppX for catalog id '$id' (fail-closed; Profile asserted remove)."
+        # Idempotent: prior Apply / reuse-media already stripped this id.
+        Write-Output "Remove-ProvisionedAppx already absent catalogId=$id"
+        continue
     }
     foreach ($pkg in $matchedPkgs) {
         $packageName = [string]$pkg.PackageName
@@ -118,29 +121,31 @@ foreach ($row in $removed) {
 }
 
 # Deprovisioned stamps — survive feature-update reintroduction (KEEPFLAG / rehydrate research).
-$hiveSoftware = Join-Path $mountDir 'Windows\System32\config\SOFTWARE'
-if (-not (Test-Path -LiteralPath $hiveSoftware)) { throw "SOFTWARE hive missing: $hiveSoftware" }
-$hiveKey = 'HKLM\WinMintAppx'
-$deprovRoot = 'HKLM\WinMintAppx\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned'
-Write-Output "REG LOAD $hiveKey (Deprovisioned stamps)"
-& reg.exe load $hiveKey $hiveSoftware
-if ($LASTEXITCODE -ne 0) { throw "reg load failed: $LASTEXITCODE" }
-try {
-    foreach ($row in $removed) {
-        $pfn = [string]$row.PackageFamilyName
-        if ([string]::IsNullOrWhiteSpace($pfn)) { throw "PackageFamilyName empty for $($row.PackageName)" }
-        $keyPath = "$deprovRoot\$pfn"
-        & reg.exe add $keyPath /f
-        if ($LASTEXITCODE -ne 0) { throw "reg add Deprovisioned\$pfn failed: $LASTEXITCODE" }
-        Write-Output "Deprovisioned=$pfn"
+if ($removed.Count -gt 0) {
+    $hiveSoftware = Join-Path $mountDir 'Windows\System32\config\SOFTWARE'
+    if (-not (Test-Path -LiteralPath $hiveSoftware)) { throw "SOFTWARE hive missing: $hiveSoftware" }
+    $hiveKey = 'HKLM\WinMintAppx'
+    $deprovRoot = 'HKLM\WinMintAppx\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned'
+    Write-Output "REG LOAD $hiveKey (Deprovisioned stamps)"
+    & reg.exe load $hiveKey $hiveSoftware
+    if ($LASTEXITCODE -ne 0) { throw "reg load failed: $LASTEXITCODE" }
+    try {
+        foreach ($row in $removed) {
+            $pfn = [string]$row.PackageFamilyName
+            if ([string]::IsNullOrWhiteSpace($pfn)) { throw "PackageFamilyName empty for $($row.PackageName)" }
+            $keyPath = "$deprovRoot\$pfn"
+            & reg.exe add $keyPath /f
+            if ($LASTEXITCODE -ne 0) { throw "reg add Deprovisioned\$pfn failed: $LASTEXITCODE" }
+            Write-Output "Deprovisioned=$pfn"
+        }
     }
-}
-finally {
-    [gc]::Collect()
-    [gc]::WaitForPendingFinalizers()
-    Start-Sleep -Milliseconds 500
-    & reg.exe unload $hiveKey
-    if ($LASTEXITCODE -ne 0) { throw "reg unload failed: $LASTEXITCODE" }
+    finally {
+        [gc]::Collect()
+        [gc]::WaitForPendingFinalizers()
+        Start-Sleep -Milliseconds 500
+        & reg.exe unload $hiveKey
+        if ($LASTEXITCODE -ne 0) { throw "reg unload failed: $LASTEXITCODE" }
+    }
 }
 
 $digests = [ordered]@{}

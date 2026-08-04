@@ -186,7 +186,21 @@ public static class ProvisioningSession
         }
 
         env.Checkpoints.ClearCheckpoint();
-        Unlock(env.Winlogon);
+
+        // Unlock before Complete evidence so S4 never claims green while Shell is still Supervisor.
+        if (!TryUnlock(env) || !IsExplorerShell(env.Winlogon.GetShell()))
+        {
+            return FailOpen(
+                bundle,
+                env,
+                phases,
+                emitted,
+                new SessionStatus(
+                    "shell.unlock_failed",
+                    "Winlogon Shell was not restored to explorer.exe after jobs."),
+                dwell: true,
+                firstPaintMs);
+        }
 
         EvidenceSnapshot snap = env.Evidence.Write(
             new ProvisioningEvidenceDocument(
@@ -200,6 +214,10 @@ public static class ProvisioningSession
 
         return new SessionResult(SessionOutcome.Complete, jobs.Status, emitted);
     }
+
+    private static bool IsExplorerShell(string? shell) =>
+        !string.IsNullOrWhiteSpace(shell)
+        && shell.Trim().Equals(ExplorerShell, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsStaleHeartbeat(
         ProvisioningBundle bundle,
@@ -252,7 +270,6 @@ public static class ProvisioningSession
             }
         }
 
-        Unlock(env.Winlogon);
         env.Checkpoints.ClearCheckpoint();
 
         if (env.Evidence is not null)
@@ -268,7 +285,25 @@ public static class ProvisioningSession
             emitted.Add(snap);
         }
 
+        // Unlock after evidence — custom Shell is medium-IL and may lack HKLM write.
+        _ = TryUnlock(env);
+
         return new SessionResult(SessionOutcome.Failed, status, emitted);
+    }
+
+    /// <returns>true when SetShell(explorer) did not throw.</returns>
+    private static bool TryUnlock(SessionEnvironment env)
+    {
+        try
+        {
+            Unlock(env.Winlogon);
+            return true;
+        }
+        catch (Exception)
+        {
+            // ponytail: evidence already durable; MachineSetup grants unlock ACL for Shell (see GrantShellUnlockAccess)
+            return false;
+        }
     }
 
     private readonly record struct JobsPhaseResult(
@@ -654,6 +689,7 @@ public static class ProvisioningSession
         try
         {
             env.Winlogon.SetAutoLogon(username, password);
+            env.Winlogon.GrantShellUnlockAccess(username);
             if (env.Winlogon.GetAutoAdminLogon()
                 && string.Equals(
                     env.Winlogon.GetDefaultUserName()?.Trim(),

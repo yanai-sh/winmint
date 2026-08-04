@@ -3,7 +3,8 @@
   "account": {
     "mode": "localAutoLogon",
     "username": "winmint",
-    "password": "lab-only-not-for-prod"
+    "password": "winmint",
+    "requireWifiDuringOobe": false
   },
   "dma": {
     "enabled": true,

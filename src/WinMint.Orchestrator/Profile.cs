@@ -1,6 +1,6 @@
 namespace WinMint.Orchestrator;
 
-/// <summary>Parsed Profile document (winmint.profile/v1). Field names frozen in ticket 01; debloat in ticket 11.</summary>
+/// <summary>Parsed Profile document (winmint.profile/v1). Field names frozen in ticket 01; debloat in ticket 11; OOBE Wi‑Fi in research 2026-08-04.</summary>
 public sealed record Profile(
     AccountProfile Account,
     DmaProfile Dma,
@@ -9,7 +9,13 @@ public sealed record Profile(
 public sealed record AccountProfile(
     AccountMode Mode,
     string Username,
-    string? Password);
+    string? Password,
+    /// <summary>
+    /// When true, Autounattend leaves the OOBE Network page visible (<c>HideWirelessSetupInOOBE=false</c>).
+    /// Local account + <c>HideOnlineAccountScreens</c> still come from the ISO. Default true (metal);
+    /// Smoke Profiles set false for headless Hyper‑V.
+    /// </summary>
+    bool RequireWifiDuringOobe);
 
 public enum AccountMode
 {

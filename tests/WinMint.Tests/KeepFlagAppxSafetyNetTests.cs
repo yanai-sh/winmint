@@ -223,9 +223,13 @@ public class KeepFlagAppxSafetyNetTests
 
         public bool GetAutoAdminLogon() => false;
 
-        public string? GetShell() => SupervisorPath;
+        public string? Shell { get; private set; } = SupervisorPath;
 
-        public void SetShell(string path) { }
+        public string? GetShell() => Shell;
+
+        public void SetShell(string path) => Shell = path;
+
+        public void GrantShellUnlockAccess(string username) { }
     }
 
     private sealed class NoopProcesses : IProcessHost

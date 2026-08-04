@@ -70,7 +70,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Wizard | After M1 Smoke green; second BuildPlan host only |
 | Hardware | M4; stricter evidence; no Supervisor fork |
 
-**Deferred implement:** Wizard / hardware / metal jobs / keep-flag expansion — order per [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md). Keep-flag AppX vertical (**11–13**) implemented. Profile property names frozen in ticket **01**; optional `debloat.removeProvisionedAppx` on v1.  
+**Deferred implement:** Wizard / hardware / metal jobs / keep-flag expansion — order per [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md). Keep-flag AppX vertical (**11–13**) implemented. Profile property names frozen in ticket **01**; optional `debloat.removeProvisionedAppx` and `account.requireWifiDuringOobe` on v1 ([research](research/2026-08-04-oobe-wifi-local-account.md)).  
 **Owned elsewhere:** AppearanceOnce consume path → ticket **07** (done); splash spike → [SPLASH](design/SPLASH.md) appendix.
 
 ## Design Acceptance

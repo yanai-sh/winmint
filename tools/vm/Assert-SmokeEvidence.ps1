@@ -7,6 +7,7 @@
   Expects:
     <EvidenceDir>/guest/evidence-*.json  (winmint.provisioning.evidence/v1)
     <EvidenceDir>/apply/evidence.json    (winmint.image.evidence/v1, optional lane)
+    <EvidenceDir>/guest/winlogon-shell.txt  (Winlogon Shell after tenure — must be explorer.exe)
   Writes <EvidenceDir>/acceptance.json summary on success.
 #>
 param(
@@ -22,6 +23,8 @@ $ErrorActionPreference = 'Stop'
 # ADR-006 / samples/acceptance.profile.json — frozen acceptance remove-list.
 # Re-pin if acceptance Source ISO churn drops an id (KEEPFLAG).
 $PinnedRemoveAppx = @('Microsoft.BingNews', 'Microsoft.BingWeather')
+$ExplorerShell = 'explorer.exe'
+$SupervisorShellLeaf = 'Supervisor.exe'
 
 function Get-LatestGuestEvidence {
     param([string] $Dir)
@@ -61,20 +64,31 @@ if ($settleIdx -ge 0 -and $paintIdx -gt $settleIdx) {
 }
 
 $outcome = [string]$guest.outcome
-$unlockedOutcomes = @('Complete', 'Failed')
-if ($unlockedOutcomes -notcontains $outcome) {
-    throw "expected unlock outcome Complete|Failed, got '$outcome' (Reboot keeps Shell — not Smoke green)"
+if ($outcome -ne 'Complete') {
+    throw "Smoke acceptance requires outcome Complete, got '$outcome' (Failed/Reboot is not green)"
 }
 
-# DMA: hard green (settle.ok / location_warn) OR hard fail path with evidence.
-# settle.skipped is not acceptance-green (acceptance Profile is DMA-on).
+# DMA hard fields must succeed — apply_failed / hard_mismatch are not acceptance-green.
 $dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn')
-$dmaFailed = ($phases -contains 'settle.hard_mismatch') -or
-    ($phases -contains 'settle.apply_failed') -or
-    ($phases -contains 'settle.read_failed') -or
-    ($phases -contains 'settle.target_incomplete')
-if (-not $dmaOk -and -not $dmaFailed) {
-    throw 'DMA settle marker missing (need settle.ok|location_warn or hard-fail phase)'
+if (-not $dmaOk) {
+    throw 'DMA hard fields missing: need settle.ok or settle.location_warn (settle.apply_failed is not green)'
+}
+
+# Unlock: Winlogon Shell must be Explorer, not Supervisor.
+$shellPath = Join-Path $EvidenceDir 'guest\winlogon-shell.txt'
+if (-not (Test-Path -LiteralPath $shellPath)) {
+    throw "unlock marker missing: expected guest/winlogon-shell.txt (Winlogon Shell after tenure)"
+}
+$shell = ([string](Get-Content -LiteralPath $shellPath -Raw -Encoding utf8)).Trim()
+if ([string]::IsNullOrWhiteSpace($shell)) {
+    throw 'unlock marker empty: guest/winlogon-shell.txt'
+}
+if ($shell -like "*$SupervisorShellLeaf") {
+    throw "unlock failed: Winlogon Shell still Supervisor ('$shell')"
+}
+if (-not ($shell.Equals($ExplorerShell, [System.StringComparison]::OrdinalIgnoreCase) -or
+        $shell.EndsWith("\$ExplorerShell", [System.StringComparison]::OrdinalIgnoreCase))) {
+    throw "unlock failed: expected explorer.exe, got '$shell'"
 }
 
 $lane = $null
@@ -125,7 +139,7 @@ if ($firstPaintMs -gt $budgetMs) {
 $acceptance = [ordered]@{
     schemaVersion           = 'winmint.smoke.acceptance/v1'
     splashBeforeExplorer    = $true
-    dmaHardFields           = $(if ($dmaOk) { 'ok' } else { 'failed' })
+    dmaHardFields           = 'ok'
     unlocked                = $true
     outcome                 = $outcome
     lane                    = $lane
@@ -133,6 +147,7 @@ $acceptance = [ordered]@{
     firstPaintWarn          = $paintWarn
     keepFlagAppxAbsent      = $true
     pinnedRemoveAppx        = @($PinnedRemoveAppx)
+    winlogonShell           = $shell
     guestEvidencePath       = $guestPath
 }
 $acceptancePath = Join-Path $EvidenceDir 'acceptance.json'

@@ -108,8 +108,11 @@ public static class BuildPlan
             return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(issues));
         }
 
+        // Default true: metal contract shows OOBE Network; Smoke Profiles set false explicitly.
+        bool requireWifi = doc.Account!.RequireWifiDuringOobe ?? true;
+
         Profile profile = new(
-            new AccountProfile(mode!.Value, doc.Account!.Username!, doc.Account.Password),
+            new AccountProfile(mode!.Value, doc.Account.Username!, doc.Account.Password, requireWifi),
             new DmaProfile(
                 doc.Dma.Enabled ?? true,
                 new DmaSettleTarget(
@@ -242,6 +245,9 @@ public static class BuildPlan
     {
         string user = XmlEscape(profile.Account.Username);
         string pass = XmlEscape(profile.Account.Password ?? "");
+        // Official Unattend: show Network when false/omit; hide when true (Smoke headless).
+        // docs/research/2026-08-04-oobe-wifi-local-account.md
+        string hideWireless = profile.Account.RequireWifiDuringOobe ? "false" : "true";
         string specialize = profile.Dma.Enabled
             ? $$"""
                 <settings pass="specialize">
@@ -343,7 +349,7 @@ public static class BuildPlan
                     <HideEULAPage>true</HideEULAPage>
                     <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
                     <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
-                    <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+                    <HideWirelessSetupInOOBE>{{hideWireless}}</HideWirelessSetupInOOBE>
                     <ProtectYourPC>3</ProtectYourPC>
                   </OOBE>
                   <UserAccounts>
@@ -403,7 +409,8 @@ internal sealed record DebloatDocument(
 internal sealed record AccountDocument(
     [property: JsonPropertyName("mode")] string? Mode,
     [property: JsonPropertyName("username")] string? Username,
-    [property: JsonPropertyName("password")] string? Password);
+    [property: JsonPropertyName("password")] string? Password,
+    [property: JsonPropertyName("requireWifiDuringOobe")] bool? RequireWifiDuringOobe);
 
 internal sealed record DmaDocument(
     [property: JsonPropertyName("enabled")] bool? Enabled,

@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Security;
 using Microsoft.Win32;
 
 namespace WinMint.Provisioning;
@@ -26,11 +28,7 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
                 nameof(target));
         }
 
-        int localeRc = SetUserDefaultLocaleName(target.Locale);
-        if (localeRc == 0)
-        {
-            throw new InvalidOperationException($"SetUserDefaultLocaleName('{target.Locale}') failed.");
-        }
+        SetUserLocaleName(target.Locale);
 
         if (!SetUserGeoID(target.GeoId.Value))
         {
@@ -42,7 +40,19 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
             throw new InvalidOperationException($"Set time zone '{target.TimeZoneId}' failed.");
         }
 
-        SetLocationServices(target.LocationServicesEnabled.Value);
+        // Soft field: Shell is medium-IL; HKLM ConsentStore may deny. Settle poll emits location_warn.
+        try
+        {
+            SetLocationServices(target.LocationServicesEnabled.Value);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // ponytail: location is soft; MachineSetup may pre-stamp or Users ACL grants later
+        }
+        catch (SecurityException)
+        {
+            // RegistrySecurity path
+        }
     }
 
     public RegionState Read()
@@ -52,6 +62,69 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
         string? tz = TimeZoneInfo.Local.Id;
         bool? location = ReadLocationServices();
         return new RegionState(locale, geoId, tz, location);
+    }
+
+    /// <summary>
+    /// There is no <c>SetUserDefaultLocaleName</c> export (only Get*). Inbox
+    /// <c>Set-Culture</c> (Windows PowerShell International module) is the supported setter —
+    /// same role as <c>tzutil</c> for time zones. Not guest pwsh Core.
+    /// </summary>
+    public static void SetUserLocaleName(string localeName)
+    {
+        CultureInfo culture = CultureInfo.GetCultureInfo(localeName);
+        string powershell = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            @"WindowsPowerShell\v1.0\powershell.exe");
+        if (!File.Exists(powershell))
+        {
+            throw new InvalidOperationException($"Windows PowerShell missing: {powershell}");
+        }
+
+        // Escape single quotes for -Command '…'
+        string escaped = culture.Name.Replace("'", "''", StringComparison.Ordinal);
+        using var process = new System.Diagnostics.Process
+        {
+            StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = powershell,
+                ArgumentList =
+                {
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    $"Set-Culture -CultureInfo '{escaped}'",
+                },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            },
+        };
+        process.Start();
+        if (!process.WaitForExit(60_000))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // best-effort
+            }
+
+            throw new InvalidOperationException($"Set-Culture '{culture.Name}' timed out.");
+        }
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Set-Culture '{culture.Name}' exited {process.ExitCode}.");
+        }
+
+        string? read = GetUserDefaultLocaleName();
+        if (!string.Equals(read, culture.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"User locale apply verify failed: Set-Culture '{culture.Name}', GetUserDefaultLocaleName returned '{read}'.");
+        }
     }
 
     private static string? GetUserDefaultLocaleName()
@@ -134,9 +207,6 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
     [LibraryImport("kernel32.dll")]
     private static partial int GetUserGeoID(int geoClass);
 
-    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial int SetUserDefaultLocaleName(string localeName);
-
-    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    [LibraryImport("kernel32.dll", EntryPoint = "GetUserDefaultLocaleName", StringMarshalling = StringMarshalling.Utf16)]
     private static partial int GetUserDefaultLocaleName(Span<char> localeName, int cchLocaleName);
 }

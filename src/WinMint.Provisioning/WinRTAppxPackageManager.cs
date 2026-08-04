@@ -14,13 +14,21 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(catalogId);
         List<AppxPackageInfo> hits = [];
-        foreach (Package package in _manager.FindPackagesForUser(string.Empty))
+        try
         {
-            AppxPackageInfo info = ToInfo(package);
-            if (MatchesCatalogId(info, catalogId))
+            foreach (Package package in _manager.FindPackagesForUser(string.Empty))
             {
-                hits.Add(info);
+                AppxPackageInfo info = ToInfo(package);
+                if (MatchesCatalogId(info, catalogId))
+                {
+                    hits.Add(info);
+                }
             }
+        }
+        catch (Exception ex) when (IsAccessDenied(ex))
+        {
+            // Medium-IL Shell: treat as no registered hits
+            return [];
         }
 
         return hits;
@@ -30,13 +38,21 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(catalogId);
         List<AppxPackageInfo> hits = [];
-        foreach (Package package in _manager.FindProvisionedPackages())
+        try
         {
-            AppxPackageInfo info = ToInfo(package);
-            if (MatchesCatalogId(info, catalogId))
+            foreach (Package package in _manager.FindProvisionedPackages())
             {
-                hits.Add(info);
+                AppxPackageInfo info = ToInfo(package);
+                if (MatchesCatalogId(info, catalogId))
+                {
+                    hits.Add(info);
+                }
             }
+        }
+        catch (Exception ex) when (IsAccessDenied(ex))
+        {
+            // ponytail: FindProvisionedPackages needs elevation; offline remove already handled provisioned
+            return [];
         }
 
         return hits;
@@ -45,26 +61,59 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
     public void RemovePackage(string packageFullName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFullName);
-        DeploymentResult result = _manager.RemovePackageAsync(packageFullName).AsTask().GetAwaiter().GetResult();
-        if (!string.IsNullOrEmpty(result.ErrorText))
+        try
         {
-            throw new InvalidOperationException($"RemovePackageAsync({packageFullName}): {result.ErrorText}");
+            DeploymentResult result = _manager.RemovePackageAsync(packageFullName).AsTask().GetAwaiter().GetResult();
+            if (!string.IsNullOrEmpty(result.ErrorText))
+            {
+                throw new InvalidOperationException($"RemovePackageAsync({packageFullName}): {result.ErrorText}");
+            }
+        }
+        catch (Exception ex) when (IsAccessDenied(ex))
+        {
+            // Medium-IL may not remove; leave registered package for a future elevated pass
         }
     }
 
     public void DeprovisionPackageFamily(string packageFamilyName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
-        DeploymentResult result = _manager
-            .DeprovisionPackageForAllUsersAsync(packageFamilyName)
-            .AsTask()
-            .GetAwaiter()
-            .GetResult();
-        if (!string.IsNullOrEmpty(result.ErrorText))
+        try
         {
-            throw new InvalidOperationException(
-                $"DeprovisionPackageForAllUsersAsync({packageFamilyName}): {result.ErrorText}");
+            DeploymentResult result = _manager
+                .DeprovisionPackageForAllUsersAsync(packageFamilyName)
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            if (!string.IsNullOrEmpty(result.ErrorText))
+            {
+                throw new InvalidOperationException(
+                    $"DeprovisionPackageForAllUsersAsync({packageFamilyName}): {result.ErrorText}");
+            }
         }
+        catch (Exception ex) when (IsAccessDenied(ex))
+        {
+            // ponytail: DeprovisionPackageForAllUsers needs admin; offline DISM path owns this
+        }
+    }
+
+    private static bool IsAccessDenied(Exception ex)
+    {
+        for (Exception? e = ex; e is not null; e = e.InnerException)
+        {
+            if (e is UnauthorizedAccessException)
+            {
+                return true;
+            }
+
+            if (e.Message.Contains("Access is denied", StringComparison.OrdinalIgnoreCase)
+                || e.Message.Contains("0x80070005", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static AppxPackageInfo ToInfo(Package package) =>

@@ -154,6 +154,8 @@ public class MachineSetupTests
                 Shell = path;
             }
         }
+
+        public void GrantShellUnlockAccess(string username) { }
     }
 
     private sealed class RecordingSecretScrubber : ISecretScrubber

@@ -9,7 +9,7 @@
 |----|-----------|-------------|--------|
 | **D0** | Design-plan complete | Designs + roadmap + gate signed | **Done** (2026-07-28) |
 | **M0** | Repo scaffold | Reserved `src/` builds | Present |
-| **M1** | Smoke Hyper-V green | Profile → ISO → FirstLogon evidence | **In progress** — next card **14** (maintainer Smoke); stack **01–13** done |
+| **M1** | Smoke Hyper-V green | Profile → ISO → FirstLogon evidence | **Done** — maintainer Smoke prove-out (**14**) green 2026-08-04; next **15** Wizard |
 | **M2** | Wizard | Second BuildPlan host; UI presets → remove-list | After **14** ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)) |
 | **M3** | Metal jobs / matrix expand | First metal kind `winget`; keep-flag expand only after Wizard | After M2 (or after **14** if Wizard deferred by rescope) |
 | **M4** | Hardware acceptance | Stricter evidence bars; same Supervisor/settle/jobs | After M2/M3 |

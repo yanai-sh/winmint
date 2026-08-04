@@ -37,6 +37,8 @@ apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json":
 
 # S4 Hyper-V Smoke — not part of `just check`. Needs admin + Hyper-V + user ISO.
 # Assert-only (no VM): just smoke-assert tests/fixtures/smoke-evidence
+# Reuse prior Apply ISO: pwsh tools/vm/Invoke-Smoke.ps1 -Iso … -SkipApply
+# Attach in-progress VM:  … -ReuseVm
 smoke ISO WORK=".scratch/smoke" PROFILE="samples/acceptance.profile.json":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}'
 

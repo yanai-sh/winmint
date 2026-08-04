@@ -164,6 +164,7 @@ public class CheckpointRebootTests
             ShellWrites.Add(path);
             Shell = path;
         }
+        public void GrantShellUnlockAccess(string username) { }
     }
 
     private sealed class RecordingCheckpoints : ICheckpointStore

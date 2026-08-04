@@ -114,6 +114,8 @@ public interface IWinlogonRegistry
     string? GetShell();
 
     void SetShell(string path);
+
+    void GrantShellUnlockAccess(string username);
 }
 
 public sealed record RegionState(

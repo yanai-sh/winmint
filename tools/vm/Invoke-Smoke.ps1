@@ -37,6 +37,10 @@ param(
     [Parameter(ParameterSetName = 'Run')]
     [switch] $SkipApply,
 
+    # Attach to an in-progress winmint-smoke VM (setup reboot); do not recreate VHD.
+    [Parameter(ParameterSetName = 'Run')]
+    [switch] $ReuseVm,
+
     [Parameter(Mandatory, ParameterSetName = 'AssertOnly')]
     [switch] $AssertOnly,
 
@@ -72,6 +76,10 @@ if (-not (Test-Path -LiteralPath $Iso)) {
 $evidenceOut = Join-Path $Work 'smoke-evidence'
 $applyDir = Join-Path $evidenceOut 'apply'
 $guestDir = Join-Path $evidenceOut 'guest'
+# Fresh pull folder each run — do not treat prior guest JSON as success.
+if (Test-Path -LiteralPath $guestDir) {
+    Remove-Item -LiteralPath $guestDir -Recurse -Force -ErrorAction SilentlyContinue
+}
 New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 
 $outIso = Join-Path $Work 'out.iso'
@@ -102,43 +110,60 @@ if (-not (Get-Command Get-VM -ErrorAction SilentlyContinue)) {
 }
 
 $vhdx = Join-Path $Work 'smoke.vhdx'
-Write-Host "Preparing VM $VmName…"
-if (Get-VM -Name $VmName -ErrorAction SilentlyContinue) {
-    Stop-VM -Name $VmName -TurnOff -Force -ErrorAction SilentlyContinue
-    Remove-VM -Name $VmName -Force
-}
-if (Test-Path -LiteralPath $vhdx) { Remove-Item -LiteralPath $vhdx -Force }
-
-# Gen2, Secure Boot off + no vTPM (Start-VM times out with vTPM on this host — SPLASH).
-# Win11 setup needs LabConfig on boot.wim (patched into media before BuildIso / SkipApply).
-New-VHD -Path $vhdx -SizeBytes 64GB -Dynamic | Out-Null
-New-VM -Name $VmName -Generation 2 -MemoryStartupBytes 4GB -VHDPath $vhdx | Out-Null
-Set-VMFirmware -VMName $VmName -EnableSecureBoot Off
-Set-VMProcessor -VMName $VmName -Count 4
-# DVD boot from applied ISO
-$dvd = Get-VMDvdDrive -VMName $VmName -ErrorAction SilentlyContinue
-if (-not $dvd) {
-    Add-VMDvdDrive -VMName $VmName -Path $outIso
+$existing = Get-VM -Name $VmName -ErrorAction SilentlyContinue
+if ($ReuseVm) {
+    if (-not $existing) { throw "ReuseVm: VM '$VmName' not found" }
+    Write-Host "Reusing existing VM $VmName (state=$($existing.State))…"
+    if ($existing.State -eq 'Off') {
+        Start-VM -Name $VmName
+    }
 }
 else {
-    Set-VMDvdDrive -VMName $VmName -Path $outIso
-}
-# Boot from DVD first (empty VHD otherwise triggers "Press any key to boot from CD…").
-$hddDev = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
-$dvdDev = Get-VMDvdDrive -VMName $VmName
-Set-VMFirmware -VMName $VmName -BootOrder $dvdDev, $hddDev
+    Write-Host "Preparing VM $VmName…"
+    if ($existing) {
+        Stop-VM -Name $VmName -TurnOff -Force -ErrorAction SilentlyContinue
+        Remove-VM -Name $VmName -Force
+    }
+    # Dynamic VHD may be renamed by Hyper-V; clear any smoke*.vhdx under Work.
+    Get-ChildItem -LiteralPath $Work -Filter 'smoke*.vhdx' -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    Get-ChildItem -LiteralPath $Work -Filter 'smoke_*.avhdx' -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $vhdx) { Remove-Item -LiteralPath $vhdx -Force }
 
-# Hyper-V media ACL (SPLASH spike)
-$aclRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-    'NT VIRTUAL MACHINE\Virtual Machines', 'Read', 'Allow')
-foreach ($media in @($outIso, $vhdx)) {
-    $acl = Get-Acl -LiteralPath $media
-    $acl.AddAccessRule($aclRule)
-    Set-Acl -LiteralPath $media -AclObject $acl
+    # Gen2, Secure Boot off + no vTPM (Start-VM times out with vTPM on this host — SPLASH).
+    # Win11 setup needs LabConfig on boot.wim (patched into media before BuildIso / SkipApply).
+    New-VHD -Path $vhdx -SizeBytes 64GB -Dynamic | Out-Null
+    New-VM -Name $VmName -Generation 2 -MemoryStartupBytes 4GB -VHDPath $vhdx | Out-Null
+    Set-VMFirmware -VMName $VmName -EnableSecureBoot Off
+    Set-VMProcessor -VMName $VmName -Count 4
+    # DVD boot from applied ISO
+    $dvd = Get-VMDvdDrive -VMName $VmName -ErrorAction SilentlyContinue
+    if (-not $dvd) {
+        Add-VMDvdDrive -VMName $VmName -Path $outIso
+    }
+    else {
+        Set-VMDvdDrive -VMName $VmName -Path $outIso
+    }
+    # Boot from DVD first (empty VHD otherwise triggers "Press any key to boot from CD…").
+    $hddDev = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
+    $dvdDev = Get-VMDvdDrive -VMName $VmName
+    Set-VMFirmware -VMName $VmName -BootOrder $dvdDev, $hddDev
+
+    # Hyper-V media ACL (SPLASH spike)
+    $aclRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        'NT VIRTUAL MACHINE\Virtual Machines', 'Read', 'Allow')
+    foreach ($media in @($outIso, $vhdx)) {
+        if (-not (Test-Path -LiteralPath $media)) { continue }
+        $acl = Get-Acl -LiteralPath $media
+        $acl.AddAccessRule($aclRule)
+        Set-Acl -LiteralPath $media -AclObject $acl
+    }
+
+    Start-VM -Name $VmName
 }
 
-Start-VM -Name $VmName
-Write-Host "VM started. Waiting for guest evidence (stall=${StallMinutes}m, wall=${WallClockMinutes}m)…"
+Write-Host "VM ready. Waiting for guest evidence (stall=${StallMinutes}m, wall=${WallClockMinutes}m)…"
 
 $deadline = [datetime]::UtcNow.AddMinutes($WallClockMinutes)
 $stallDeadline = [datetime]::UtcNow.AddMinutes($StallMinutes)
@@ -167,6 +192,9 @@ function Test-GuestEvidenceReady {
         if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
         $session = New-PSSession @sessionParams
         try {
+            # Disk is booting Windows — prefer HDD and eject install ISO (avoid re-Setup).
+            Prefer-DiskBoot
+
             $remote = Invoke-Command -Session $session -ScriptBlock {
                 $dir = Join-Path $env:ProgramData 'WinMint\evidence'
                 if (-not (Test-Path -LiteralPath $dir)) { return $null }
@@ -184,6 +212,16 @@ function Test-GuestEvidenceReady {
                 if ($logExists) {
                     Copy-Item -FromSession $session -Path $remoteLog -Destination (Join-Path $guestDir 'shell.log') -Force -ErrorAction SilentlyContinue
                 }
+                # Unlock prove-out: Winlogon Shell after tenure
+                $shellVal = Invoke-Command -Session $session -ScriptBlock {
+                    try {
+                        (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name Shell -ErrorAction Stop).Shell
+                    }
+                    catch { $null }
+                }
+                if ($shellVal) {
+                    Set-Content -LiteralPath (Join-Path $guestDir 'winlogon-shell.txt') -Value ([string]$shellVal).Trim() -Encoding utf8
+                }
                 return $true
             }
         }
@@ -195,6 +233,28 @@ function Test-GuestEvidenceReady {
         # PS Direct unavailable until guest is up / integration services ready
     }
     return $false
+}
+
+$script:DiskBootPreferred = $false
+function Prefer-DiskBoot {
+    if ($script:DiskBootPreferred) { return }
+    try {
+        $hddDev = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
+        $dvdDev = Get-VMDvdDrive -VMName $VmName
+        if ($null -eq $hddDev) { return }
+        if ($null -ne $dvdDev) {
+            Set-VMFirmware -VMName $VmName -BootOrder $hddDev, $dvdDev
+            Set-VMDvdDrive -VMName $VmName -Path $null
+        }
+        else {
+            Set-VMFirmware -VMName $VmName -BootOrder $hddDev
+        }
+        $script:DiskBootPreferred = $true
+        Write-Host 'Preferred HDD boot and ejected install DVD.'
+    }
+    catch {
+        Write-Warning "Could not prefer disk boot: $($_.Exception.Message)"
+    }
 }
 
 function Send-VmBootNudge {
@@ -226,12 +286,24 @@ while ([datetime]::UtcNow -lt $deadline) {
     }
 
     $vm = Get-VM -Name $VmName
-    if ($vm.State -ne 'Running') {
-        throw "VM left Running state: $($vm.State)"
+    # Setup reboots flip Running → Stopping → Off → Starting → Running; do not fail-closed.
+    switch ([string]$vm.State) {
+        'Running' { }
+        'Starting' { Write-Host 'VM Starting (setup reboot)…' }
+        'Stopping' { Write-Host 'VM Stopping (setup reboot)…' }
+        'Off' {
+            Write-Host 'VM Off during setup — starting again…'
+            Start-VM -Name $VmName -ErrorAction SilentlyContinue
+        }
+        default {
+            throw "VM in unexpected state: $($vm.State)"
+        }
     }
 
-    # Heartbeat: CPU activity during setup extends the stall window (wall clock still bounds).
-    if ([int]$vm.CPUUsage -gt 0) {
+    # Heartbeat: CPU activity or setup reboot churn extends stall — idle Running does not.
+    $cpu = 0
+    try { $cpu = [int]$vm.CPUUsage } catch { $cpu = 0 }
+    if ($cpu -gt 0 -or $vm.State -in @('Starting', 'Stopping')) {
         $stallDeadline = [datetime]::UtcNow.AddMinutes($StallMinutes)
     }
 
@@ -239,7 +311,8 @@ while ([datetime]::UtcNow -lt $deadline) {
         throw "STALL_SUSPECT: no guest evidence / CPU progress for ${StallMinutes} minutes (fail-fast before WallClockTimeout)."
     }
 
-    if ([datetime]::UtcNow -lt $bootNudgeUntil) {
+    # Boot nudge only while DVD is still first (before Prefer-DiskBoot).
+    if (-not $script:DiskBootPreferred -and [datetime]::UtcNow -lt $bootNudgeUntil -and $vm.State -eq 'Running') {
         Send-VmBootNudge
     }
 

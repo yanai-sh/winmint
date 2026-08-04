@@ -140,6 +140,8 @@ public class ShellTenureTests
         public string? GetShell() => Shell;
 
         public void SetShell(string path) => Shell = path;
+
+        public void GrantShellUnlockAccess(string username) { }
     }
 
     private sealed class RecordingSplashPresenter : ISplashPresenter
@@ -165,15 +167,19 @@ public class ShellTenureTests
 
     private sealed class NoopWinlogon : IWinlogonRegistry
     {
+        public string? Shell { get; private set; } = SupervisorPath;
+
         public void SetAutoLogon(string username, string password) { }
 
         public string? GetDefaultUserName() => null;
 
         public bool GetAutoAdminLogon() => false;
 
-        public string? GetShell() => SupervisorPath;
+        public string? GetShell() => Shell;
 
-        public void SetShell(string path) { }
+        public void SetShell(string path) => Shell = path;
+
+        public void GrantShellUnlockAccess(string username) { }
     }
 
     private sealed class MatchingRegion : IRegionSnapshot

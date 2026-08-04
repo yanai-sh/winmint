@@ -274,11 +274,11 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** **14**.
+Do not label `ready-for-agent` until starting that card. **Next:** **15**.
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
-| 14 | Maintainer Hyper-V Smoke prove-out (real Source ISO) | Acceptance S4 | **13** done |
+| 14 | Maintainer Hyper-V Smoke prove-out (real Source ISO) | Acceptance S4 | **13** done — **done** |
 | 15 | Wizard = second BuildPlan host (presets → remove-list) | BuildPlan host | **14** done |
 | 16 | First metal job kind `winget` | ProvisioningSession | After **15** (or after **14** if Wizard deferred by rescope) |
 
@@ -289,7 +289,8 @@ Do not label `ready-for-agent` until starting that card. **Next:** **14**.
 - **Deliver:** one green `just smoke` on a real Source ISO; acceptance Profile includes pinned keep-flag remove-list (`Microsoft.BingNews`, `Microsoft.BingWeather` in [samples/acceptance.profile.json](../samples/acceptance.profile.json) — re-pinned from `GamingApp` after 25H2 ARM64 English media had no provisioned GamingApp)
 - **Out:** Wizard; capabilities matrix; Diff VHD / digest-gated rebuild as required DoD (optional maintainer opt); leftover confidence; CDM-as-primary
 - **DoD:** Splash before Explorer; DMA hard fields; unlock; lane marker; paint time recorded; **pinned AppX families absent** from provisioned inventory / FirstLogon evidence as applicable; not only fixture S4
-- **Carry:** S4 assert requires apply digests `removed.appx.<id>=absent` for pinned ids (`Assert-SmokeEvidence.ps1`); fixture + S4 tests green. Full Hyper-V `just smoke ISO=…` still needs maintainer Source ISO + admin.
+- **Carry:** S4 assert requires apply digests `removed.appx.<id>=absent` for pinned ids (`Assert-SmokeEvidence.ps1`); fixture + S4 tests green.
+- **Done:** 2026-08-04 — maintainer Hyper-V Smoke green on 25H2 ARM64 English ISO (`outcome=Complete`, `settle.location_warn`, unlock `explorer.exe`, keep-flag digests absent); issue #26
 
 ### 15 — Wizard (stub)
 

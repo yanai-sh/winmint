@@ -66,12 +66,49 @@ public class BuildPlanPlanTests
         Assert.Contains(BuildPlan.ProSetupProductKey, artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("oobeSystem", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("<Name>winmint</Name>", artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.Contains("<HideOnlineAccountScreens>true</HideOnlineAccountScreens>", artifacts.Unattend.Xml, StringComparison.Ordinal);
+        // Default requireWifiDuringOobe=true → show Network page
+        Assert.Contains("<HideWirelessSetupInOOBE>false</HideWirelessSetupInOOBE>", artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.True(artifacts.Account.RequireWifiDuringOobe);
         Assert.True(artifacts.Dma.Enabled);
         Assert.NotNull(artifacts.Dma.Settle);
         Assert.Equal("en-GB", artifacts.Dma.Settle.Locale);
         Assert.Equal(242, artifacts.Dma.Settle.GeoId);
         Assert.Equal("GMT Standard Time", artifacts.Dma.Settle.TimeZoneId);
         Assert.True(artifacts.Dma.Settle.LocationServicesEnabled);
+    }
+
+    [Fact]
+    public void Plan_require_wifi_false_hides_wireless_oobe()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "username": "winmint",
+                "password": "lab-only",
+                "requireWifiDuringOobe": false
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk);
+        BuildArtifacts artifacts = result.Value;
+        Assert.False(artifacts.Account.RequireWifiDuringOobe);
+        Assert.Contains("<HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>", artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.Contains("<HideOnlineAccountScreens>true</HideOnlineAccountScreens>", artifacts.Unattend.Xml, StringComparison.Ordinal);
     }
 
     [Fact]
