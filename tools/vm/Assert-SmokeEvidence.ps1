@@ -69,9 +69,11 @@ if ($outcome -ne 'Complete') {
 }
 
 # DMA hard fields must succeed — apply_failed / hard_mismatch are not acceptance-green.
-$dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn')
+# Checkpoint resume skips re-settle (ticket 17); resume_skip + checkpoint.resume proves prior settle.
+$dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn') -or
+    (($phases -contains 'settle.resume_skip') -and ($phases -contains 'checkpoint.resume'))
 if (-not $dmaOk) {
-    throw 'DMA hard fields missing: need settle.ok or settle.location_warn (settle.apply_failed is not green)'
+    throw 'DMA hard fields missing: need settle.ok, settle.location_warn, or settle.resume_skip+checkpoint.resume'
 }
 
 # Unlock: Winlogon Shell must be Explorer, not Supervisor.

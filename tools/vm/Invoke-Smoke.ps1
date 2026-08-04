@@ -192,8 +192,26 @@ catch {
 
 function Test-GuestEvidenceReady {
     # Prefer PowerShell Direct when available; else host-copied folder under Work.
-    $copied = Join-Path $guestDir 'evidence-*.json'
-    if (Get-ChildItem -Path $copied -ErrorAction SilentlyContinue) { return $true }
+    # Reboot evidence is not terminal — keep waiting for resume → Complete (ticket 17).
+    $localReady = Get-ChildItem -Path (Join-Path $guestDir 'evidence-*.json') -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+    if ($null -ne $localReady) {
+        try {
+            $localDoc = Get-Content -LiteralPath $localReady.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+            $localOutcome = [string]$localDoc.outcome
+            if ($localOutcome -eq 'Complete' -and (Test-Path -LiteralPath (Join-Path $guestDir 'winlogon-shell.txt'))) {
+                return $true
+            }
+            if ($localOutcome -eq 'Failed') {
+                return $true
+            }
+            # Reboot / incomplete unlock marker — fall through and re-query guest.
+        }
+        catch {
+            # corrupt local copy — re-query
+        }
+    }
     try {
         $sessionParams = @{ VMName = $VmName; ErrorAction = 'Stop' }
         if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
@@ -225,6 +243,12 @@ function Test-GuestEvidenceReady {
                 } -ArgumentList $remoteSetupLog
                 if ($setupLogExists) {
                     Copy-Item -FromSession $session -Path $remoteSetupLog -Destination (Join-Path $guestDir 'machine-setup.log') -Force -ErrorAction SilentlyContinue
+                }
+                $pulled = Get-Content -LiteralPath (Join-Path $guestDir $leaf) -Raw -Encoding utf8 | ConvertFrom-Json
+                $outcome = [string]$pulled.outcome
+                if ($outcome -eq 'Reboot') {
+                    Write-Host 'Guest evidence outcome=Reboot — waiting for checkpoint resume…'
+                    return $false
                 }
                 # Unlock prove-out: Winlogon Shell after tenure
                 $shellVal = Invoke-Command -Session $session -ScriptBlock {

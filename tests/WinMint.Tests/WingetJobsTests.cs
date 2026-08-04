@@ -80,6 +80,75 @@ public class WingetJobsTests
     }
 
     [Fact]
+    public void Plan_wingetNeedsReboot_subset_emits_needsReboot_on_matching_jobs()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              },
+              "packages": {
+                "winget": ["jqlang.jq", "Git.Git"],
+                "wingetNeedsReboot": ["jqlang.jq"]
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk);
+        JobDescriptor jq = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "jqlang.jq");
+        Assert.True(jq.NeedsReboot);
+        JobDescriptor git = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "Git.Git");
+        Assert.False(git.NeedsReboot);
+    }
+
+    [Fact]
+    public void Plan_wingetNeedsReboot_id_not_in_winget_fails_closed()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              },
+              "packages": {
+                "winget": ["jqlang.jq"],
+                "wingetNeedsReboot": ["Git.Git"]
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+
+        Assert.False(result.IsOk);
+        Assert.Equal("packages.wingetNeedsReboot.unknown", result.Error.Code);
+    }
+
+    [Fact]
     public void Shell_winget_job_invokes_expected_argv()
     {
         RecordingProcessHost processes = new();

@@ -79,11 +79,12 @@ public class CheckpointRebootTests
         Assert.Null(checkpoints.LastWritten);
         Assert.Equal(2, processes.Starts.Count);
         Assert.Contains("Status:checkpoint.resume", splash.Events);
-        Assert.Contains("Status:settle.begin", splash.Events);
+        Assert.Contains("Status:settle.resume_skip", splash.Events);
         int resumeAt = splash.Events.IndexOf("Status:checkpoint.resume");
         int settleAt = splash.Events.FindLastIndex(e => e == "Status:settle.begin");
-        Assert.True(settleAt > resumeAt, "settle still runs after resume marker");
+        Assert.True(settleAt >= 0 && settleAt < resumeAt, "settle runs before reboot only; resume skips settle");
         Assert.Contains("checkpoint.resume", evidence.Documents[^1].Phases);
+        Assert.Contains("settle.resume_skip", evidence.Documents[^1].Phases);
         Assert.Equal("Complete", evidence.Documents[^1].Outcome);
     }
 

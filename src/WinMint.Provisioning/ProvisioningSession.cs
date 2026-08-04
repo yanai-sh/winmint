@@ -123,22 +123,37 @@ public static class ProvisioningSession
             SessionStatus resumed = new("checkpoint.resume", $"Resuming from {resume.Phase}.");
             env.Splash.SetStatus(resumed);
             phases.Add(resumed.Code);
+
+            // Settle already ran before NeedsReboot. Re-settle after OS reboot re-enters
+            // timezone/NTP churn (Hyper-V IC sync vs guest NTP) and can jump wall-clock past deadline.
+            SessionStatus settleSkip = new(
+                "settle.resume_skip",
+                "DMA settle skipped on checkpoint resume.");
+            env.Splash.SetStatus(settleSkip);
+            phases.Add(settleSkip.Code);
+        }
+        else
+        {
+            if (IsTimedOut(env, wallDeadline))
+            {
+                return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
+            }
+
+            SettlePhaseResult settle = RunSettle(bundle, env, phases, wallDeadline, ct);
+            if (settle.TimedOut)
+            {
+                return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
+            }
+
+            if (settle.HardFailed)
+            {
+                return FailOpen(bundle, env, phases, emitted, settle.Status, dwell: true, firstPaintMs);
+            }
         }
 
         if (IsTimedOut(env, wallDeadline))
         {
             return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
-        }
-
-        SettlePhaseResult settle = RunSettle(bundle, env, phases, wallDeadline, ct);
-        if (settle.TimedOut)
-        {
-            return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
-        }
-
-        if (settle.HardFailed)
-        {
-            return FailOpen(bundle, env, phases, emitted, settle.Status, dwell: true, firstPaintMs);
         }
 
         JobsPhaseResult jobs;

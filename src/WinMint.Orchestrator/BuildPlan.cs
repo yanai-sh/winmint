@@ -121,7 +121,8 @@ public static class BuildPlan
                     settle.TimeZoneId,
                     settle.LocationServicesEnabled.Value)),
             NormalizeRemoveList(doc.Debloat?.RemoveProvisionedAppx),
-            NormalizeRemoveList(doc.Packages?.Winget));
+            NormalizeRemoveList(doc.Packages?.Winget),
+            NormalizeRemoveList(doc.Packages?.WingetNeedsReboot));
 
         return Result.Ok<Profile, DocumentErrors>(profile);
     }
@@ -162,6 +163,20 @@ public static class BuildPlan
             }
         }
 
+        HashSet<string> wingetSet = new(profile.WingetPackages, StringComparer.OrdinalIgnoreCase);
+        foreach (string id in profile.WingetNeedsReboot)
+        {
+            if (!wingetSet.Contains(id))
+            {
+                return Result.Fail<BuildArtifacts, PlanFailure>(
+                    new PlanFailure(
+                        "packages.wingetNeedsReboot.unknown",
+                        $"wingetNeedsReboot id '{id}' is not in packages.winget."));
+            }
+        }
+
+        HashSet<string> needsReboot = new(profile.WingetNeedsReboot, StringComparer.OrdinalIgnoreCase);
+
         string unattendXml = BuildAutounattendXml(profile);
 
         // Stub Smoke job set — real installs from packages.winget (ticket 16); executor shared.
@@ -178,7 +193,11 @@ public static class BuildPlan
 
         foreach (string packageId in profile.WingetPackages)
         {
-            jobList.Add(new JobDescriptor($"winget.{packageId}", "winget", PackageId: packageId));
+            jobList.Add(new JobDescriptor(
+                $"winget.{packageId}",
+                "winget",
+                PackageId: packageId,
+                NeedsReboot: needsReboot.Contains(packageId)));
         }
 
         JobsArtifact jobs = new(JobsSchemaVersion, jobList);
@@ -411,7 +430,8 @@ internal sealed record ProfileDocument(
     [property: JsonPropertyName("packages")] PackagesDocument? Packages);
 
 internal sealed record PackagesDocument(
-    [property: JsonPropertyName("winget")] string[]? Winget);
+    [property: JsonPropertyName("winget")] string[]? Winget,
+    [property: JsonPropertyName("wingetNeedsReboot")] string[]? WingetNeedsReboot);
 
 internal sealed record DebloatDocument(
     [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx);

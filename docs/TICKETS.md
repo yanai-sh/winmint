@@ -274,14 +274,14 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** **17** (Profile `needsReboot` + Hyper-V reboot-resume). Metal milestone = **17** → **18** Scoop; then keep-flag **19** spike → **20** offline. WSL / Wizard packages deferred.
+Do not label `ready-for-agent` until starting that card. **Next:** **18** (Scoop job kind). Metal milestone = **17** done → **18** Scoop; then keep-flag **19** spike → **20** offline. WSL / Wizard packages deferred.
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
 | 14 | Maintainer Hyper-V Smoke prove-out (real Source ISO) | Acceptance S4 | **13** done — **done** |
 | 15 | Wizard = second BuildPlan host (presets → remove-list) | BuildPlan host | **14** done — **done** |
 | 16 | First metal job kind `winget` | ProvisioningSession | After **15** — **done** (guest-proven) |
-| 17 | Profile `needsReboot` + Hyper-V reboot-resume | ProvisioningSession | After **16** |
+| 17 | Profile `needsReboot` + Hyper-V reboot-resume | ProvisioningSession | After **16** — **done** |
 | 18 | Scoop job kind (`packages.scoop`) | ProvisioningSession | After **17** — metal exit |
 | 19 | Keep-flag capabilities / features matrix spike | Design | After **18** |
 | 20 | Offline ImageServicing capabilities from Profile | ImageServicing | After **19** |
@@ -329,10 +329,12 @@ Do not label `ready-for-agent` until starting that card. **Next:** **17** (Profi
 
 ### 17 — Profile `needsReboot` + Hyper-V reboot-resume
 
+- **Issue:** [#29](https://github.com/yanai-sh/winmint/issues/29)
 - **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
 - **Deliver:** Profile marks packages that need reboot; BuildPlan emits `needsReboot` on jobs; Hyper-V prove-out of checkpoint → OS reboot → Shell tenure resume → Complete
 - **Out:** ExitWindowsEx fallback (unless prove-out forces it); Scoop; WSL
 - **DoD:** Profile wire (`packages.wingetNeedsReboot: string[]` subset of `packages.winget`) → Plan emit; S1/S3 green; Hyper-V prove-out with forced reboot job before Done
+- **Done:** 2026-08-04 — issue #29; Profile `wingetNeedsReboot` fail-closed subset; Plan emits `needsReboot`; Hyper-V prove-out: jq + needsReboot → `jobs.reboot` checkpoint → OS reboot → `checkpoint.resume` + `settle.resume_skip` → `Complete`/`jobs.ok` (skip re-settle on resume — Hyper-V IC/NTP clock jump otherwise blew wall-clock during settle)
 
 ### 18 — Scoop metal job
 
