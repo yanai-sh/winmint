@@ -274,7 +274,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** **19** (Keep-flag capabilities / features matrix spike). Metal milestone **18** done; keep-flag **19** spike → **20** offline. WSL / Wizard packages deferred.
+Do not label `ready-for-agent` until starting that card. **Next:** **20** (Offline ImageServicing capabilities from Profile). Metal milestone **18** done; keep-flag spike **19** done → **20** offline. WSL / Wizard packages deferred.
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
@@ -283,7 +283,7 @@ Do not label `ready-for-agent` until starting that card. **Next:** **19** (Keep-
 | 16 | First metal job kind `winget` | ProvisioningSession | After **15** — **done** (guest-proven) |
 | 17 | Profile `needsReboot` + Hyper-V reboot-resume | ProvisioningSession | After **16** — **done** |
 | 18 | Scoop job kind (`packages.scoop`) | ProvisioningSession | After **17** — **done** (metal exit) |
-| 19 | Keep-flag capabilities / features matrix spike | Design | After **18** |
+| 19 | Keep-flag capabilities / features matrix spike | Design | After **18** — **done** |
 | 20 | Offline ImageServicing capabilities from Profile | ImageServicing | After **19** |
 
 ### 14 — Maintainer Smoke prove-out
@@ -347,9 +347,11 @@ Do not label `ready-for-agent` until starting that card. **Next:** **19** (Keep-
 
 ### 19 — Keep-flag capabilities / features matrix spike
 
+- **Issue:** [#31](https://github.com/yanai-sh/winmint/issues/31)
 - **Design:** [KEEPFLAG](design/KEEPFLAG.md) · [ADR-005](decisions/ADR-005-keep-flag-matrix.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
 - **Deliver:** research note pinning target media (25H2 ARM64 English); DISM capability/feature id matrix; thin acceptance pin list — **no** product-default recommended set
 - **Out:** implement adapters (ticket **20**); leftover confidence; CDM-as-primary; Profile presets; schema `v2`
+- **Done:** 2026-08-04 — issue #31; [research note](research/2026-08-04-capabilities-features-matrix.md); pins `App.StepsRecorder~~~~0.0.1.0`, `WMIC~~~~`, `WorkFolders-Client`; Profile fields `removeCapabilities` / `disableOptionalFeatures`
 
 ### 20 — Offline ImageServicing capabilities from Profile
 

@@ -2,8 +2,8 @@
 
 **Status:** **Accepted** (wayfinder map [Keep-flag matrix wayfinding](https://github.com/yanai-sh/winmint/issues/13), 2026-08-03)  
 **Authority:** [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) · [BUILDPLAN](BUILDPLAN.md) · [IMAGESERVICING](IMAGESERVICING.md) · [PROVISIONINGSESSION](PROVISIONINGSESSION.md)  
-**Implement:** AppX vertical tickets **11–13** done; capabilities expand tickets **19** (spike) → **20** (offline) after metal milestone (**18**); other expansion still deferred ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md))  
-**Research:** [BCU](../research/2026-08-03-bulk-crap-uninstaller.md) · [offline DISM](../research/2026-08-03-offline-dism-remove-apis.md) · [AppX rehydrate](../research/2026-08-03-appx-rehydrate-after-oobe.md)
+**Implement:** AppX vertical tickets **11–13** done; capabilities expand tickets **19** (spike — [research](../research/2026-08-04-capabilities-features-matrix.md)) → **20** (offline) after metal milestone (**18**); other expansion still deferred ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md))  
+**Research:** [BCU](../research/2026-08-03-bulk-crap-uninstaller.md) · [offline DISM](../research/2026-08-03-offline-dism-remove-apis.md) · [AppX rehydrate](../research/2026-08-03-appx-rehydrate-after-oobe.md) · [capabilities/features matrix](../research/2026-08-04-capabilities-features-matrix.md)
 
 ## Problem space
 
@@ -29,14 +29,17 @@ Users need a fail-closed way to strip selected **provisioned inbox AppX** from a
 {
   "schemaVersion": "winmint.profile/v1",
   "debloat": {
-    "removeProvisionedAppx": ["Microsoft.BingNews", "Microsoft.BingWeather"]
+    "removeProvisionedAppx": ["Microsoft.BingNews", "Microsoft.BingWeather"],
+    "removeCapabilities": ["App.StepsRecorder~~~~0.0.1.0", "WMIC~~~~"],
+    "disableOptionalFeatures": ["WorkFolders-Client"]
   }
 }
 ```
 
 - Absent / empty `removeProvisionedAppx` ⇒ no removes (Smoke-compatible).
-- Each entry must match a catalog id (package family name or catalog key — freeze at implement).
+- Each AppX entry must match a catalog id (package family name or catalog key — freeze at implement).
 - Unknown id ⇒ plan document/plan failure (fail closed).
+- Capabilities / optional features: same remove-list polarity; thin acceptance pins only — **no** product-default recommended set ([spike](../research/2026-08-04-capabilities-features-matrix.md)).
 
 ## Catalog
 
@@ -73,7 +76,7 @@ Profile.remove list
 
 | Item | Lock |
 |------|------|
-| Capabilities / optional features | Separate vertical after Wizard; AppX-only until then |
+| Capabilities / optional features | Spike **19** done ([research](../research/2026-08-04-capabilities-features-matrix.md)); offline implement **20** |
 | Schema `v2` | Stay on `winmint.profile/v1` until a breaking change forces bump |
 | Named Profile presets | None in Profile (host/Wizard expands → list) — [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) |
 | Confidence-tier leftover cleanup | Out of this product era — do not ticket |
