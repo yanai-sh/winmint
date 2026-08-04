@@ -4,7 +4,7 @@ Windows 11 ISO builder (greenfield v2). **ARM64-first**. Host Servicing: **pwsh 
 
 ## Phase: implementation Released
 
-Product `/implement` may proceed from [TICKETS](docs/TICKETS.md) — **one ticket per session**. Apply `ready-for-agent` only when starting that ticket. Next open card: post-16 deferred (Scoop/WSL / keep-flag expand — no numbered card yet; [ADR-006](docs/decisions/ADR-006-post-keepflag-sequencing.md)).
+Product `/implement` may proceed from [TICKETS](docs/TICKETS.md) — **one ticket per session**. Apply `ready-for-agent` only when starting that ticket. Next open card: **17** (Profile `needsReboot` + Hyper-V reboot-resume — [ADR-006](docs/decisions/ADR-006-post-keepflag-sequencing.md); metal milestone = **17** then **18** Scoop, then keep-flag **19→20**).
 
 Gate/locks: [ROADMAP](docs/ROADMAP.md#design-acceptance) · [DESIGN](docs/DESIGN.md#decisions-locked-grill)  
 Backlog: [TICKETS](docs/TICKETS.md) · Sessions: [AGENTIC](docs/agents/AGENTIC.md) · Seams: [TDD](docs/TDD.md)
@@ -35,7 +35,7 @@ Lobby, not brochure — concise real content only; no placeholders. No badges ye
 
 ## While implementing
 
-One ticket/session from [TICKETS](docs/TICKETS.md). Keep `just check` green. Sequencing after **13**: [ADR-006](docs/decisions/ADR-006-post-keepflag-sequencing.md) (Smoke prove-out before Wizard / keep-flag expand).
+One ticket/session from [TICKETS](docs/TICKETS.md). Keep `just check` green. Sequencing: [ADR-006](docs/decisions/ADR-006-post-keepflag-sequencing.md) — metal (**17** reboot, **18** Scoop) before keep-flag capabilities (**19** spike → **20** implement).
 
 ```powershell
 just check

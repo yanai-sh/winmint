@@ -11,7 +11,7 @@
 | **M0** | Repo scaffold | Reserved `src/` builds | Present |
 | **M1** | Smoke Hyper-V green | Profile → ISO → FirstLogon evidence | **Done** — maintainer Smoke prove-out (**14**) green 2026-08-04 |
 | **M2** | Wizard | Second BuildPlan host; UI presets → remove-list | **Thin vertical done** (**15**, 2026-08-04); polish deferred |
-| **M3** | Metal jobs / matrix expand | First metal kind `winget` (**16** done 2026-08-04); Scoop/WSL / keep-flag expand next | After M2 |
+| **M3** | Metal jobs / matrix expand | `winget` guest-proven (**16**); next **17** reboot-resume → **18** Scoop (metal exit); then keep-flag **19→20**; WSL deferred | After M2 |
 | **M4** | Hardware acceptance | Stricter evidence bars; same Supervisor/settle/jobs | After M2/M3 |
 
 ## Design Acceptance
@@ -33,4 +33,4 @@ Pro Smoke; Local+autoLogon; DMA on acceptance Profile; splash before Explorer; D
 
 ## M2–M4
 
-Keep-flag AppX vertical (**11–13**) done; expansion (capabilities, presets, CDM-as-primary, leftover confidence, product-default recommended set) deferred past Wizard ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md), [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)). Acceptance Profile carries a small frozen remove-list for M1 exit prove-out. Hardware = stricter evidence bars. No guest pwsh / settle forks / ISO Avalonia.
+Keep-flag AppX vertical (**11–13**) done; capabilities expand after metal milestone (**19** spike → **20** offline). Presets / CDM-as-primary / leftover confidence / product-default recommended set stay deferred ([KEEPFLAG](design/KEEPFLAG.md), [ADR-005](decisions/ADR-005-keep-flag-matrix.md), [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)). Acceptance Profile carries a small frozen remove-list for M1 exit prove-out. Hardware = stricter evidence bars. No guest pwsh / settle forks / ISO Avalonia.

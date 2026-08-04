@@ -84,7 +84,7 @@ public sealed record SessionEnvironment(
     ILocalAccounts? LocalAccounts = null);
 ```
 
-Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes. `IAppxPackageManager` is the keep-flag FirstLogon safety net (ticket **13**). `ISystemReboot` requests OS reboot after a `NeedsReboot` checkpoint (ticket **16**). `ILocalAccounts` removes OOBE leftover `defaultuser0` (+ profile) during Machine setup (best-effort; Unattend cannot prevent the temp account — [research](../research/2026-08-04-oobe-wifi-local-account.md)). Job kind `winget` spawns `winget` via `IProcessHost` from `jobs.json` `packageId`; unknown kinds fail closed.
+Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes. `IAppxPackageManager` is the keep-flag FirstLogon safety net (ticket **13**). `ISystemReboot` requests OS reboot after a `NeedsReboot` checkpoint (ticket **16**; Profile-driven `packages.wingetNeedsReboot` in ticket **17**). `ILocalAccounts` removes OOBE leftover `defaultuser0` (+ profile) during Machine setup (best-effort; Unattend cannot prevent the temp account — [research](../research/2026-08-04-oobe-wifi-local-account.md)). Job kind `winget` spawns `winget` via `IProcessHost` from `jobs.json` `packageId`; unknown kinds fail closed. Guest Hyper-V prove-out for `winget` landed post-**16** (framework ACL repair + Prefer-DiskBoot).
 
 ### Phase machine
 

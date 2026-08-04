@@ -274,13 +274,17 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 
 ## Post-13 stubs — sequencing ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md))
 
-Do not label `ready-for-agent` until starting that card. **Next:** post-16 deferred (Scoop/WSL / keep-flag expand — no numbered card yet).
+Do not label `ready-for-agent` until starting that card. **Next:** **17** (Profile `needsReboot` + Hyper-V reboot-resume). Metal milestone = **17** → **18** Scoop; then keep-flag **19** spike → **20** offline. WSL / Wizard packages deferred.
 
 | # | Title | Module | Ready when |
 |---|--------|--------|------------|
 | 14 | Maintainer Hyper-V Smoke prove-out (real Source ISO) | Acceptance S4 | **13** done — **done** |
 | 15 | Wizard = second BuildPlan host (presets → remove-list) | BuildPlan host | **14** done — **done** |
-| 16 | First metal job kind `winget` | ProvisioningSession | After **15** — **done** |
+| 16 | First metal job kind `winget` | ProvisioningSession | After **15** — **done** (guest-proven) |
+| 17 | Profile `needsReboot` + Hyper-V reboot-resume | ProvisioningSession | After **16** |
+| 18 | Scoop job kind (`packages.scoop`) | ProvisioningSession | After **17** — metal exit |
+| 19 | Keep-flag capabilities / features matrix spike | Design | After **18** |
+| 20 | Offline ImageServicing capabilities from Profile | ImageServicing | After **19** |
 
 ### 14 — Maintainer Smoke prove-out
 
@@ -319,10 +323,37 @@ Do not label `ready-for-agent` until starting that card. **Next:** post-16 defer
   - Unknown kinds remain `jobs.kind.unsupported` ✓
   - `NeedsReboot` ⇒ checkpoint + evidence + `ISystemReboot.RequestReboot` (`shutdown.exe /r /t 0 /f`) ✓
   - S1 + S3 tests green; `just check` green ✓
-- **Done:** 2026-08-04 — issue #28
-- **Carry:** Scoop/WSL kinds; Profile-driven `needsReboot` for winget packages (not yet a Profile field — job flag only); ExitWindowsEx if `shutdown.exe` flakes on metal.
+  - **Guest Hyper-V prove-out** (post-close): Smoke with `packages.winget` (`jqlang.jq`) → `outcome=Complete` / `jobs.ok` after MachineSetup `takeown`+`icacls` FullControl on UI.Xaml/VCLibs frameworks; Prefer-DiskBoot on setup reboot; OOBE `defaultuser0` removed in MachineSetup ✓
+- **Done:** 2026-08-04 — issue #28; guest path proven same day (harness Prefer-DiskBoot; AppInstaller ACL repair; `defaultuser0` delete)
+- **Carry into 17–18:** Profile-driven `needsReboot` for packages (job flag only until **17**); Scoop (**18**); ExitWindowsEx if `shutdown.exe` flakes; WSL deferred
 
-**Still deferred (no ticket):** capabilities/features matrix; Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash; Wizard polish; Scoop/WSL job kinds.
+### 17 — Profile `needsReboot` + Hyper-V reboot-resume
+
+- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
+- **Deliver:** Profile marks packages that need reboot; BuildPlan emits `needsReboot` on jobs; Hyper-V prove-out of checkpoint → OS reboot → Shell tenure resume → Complete
+- **Out:** ExitWindowsEx fallback (unless prove-out forces it); Scoop; WSL
+- **DoD:** Profile wire (`packages.wingetNeedsReboot: string[]` subset of `packages.winget`) → Plan emit; S1/S3 green; Hyper-V prove-out with forced reboot job before Done
+
+### 18 — Scoop metal job
+
+- **Design:** [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) · [BUILDPLAN](design/BUILDPLAN.md)
+- **Deliver:** job kind `scoop`; Profile `packages.scoop: string[]`; official FirstLogon bootstrap (network; fail closed offline) unless research spike overturns; Hyper-V prove-out
+- **Out:** WSL; Wizard Scoop UI; offline-staged Scoop on ISO unless spike requires it
+- **DoD:** bootstrap research note; Plan emit; Supervisor spawn; tests + Hyper-V with one small Scoop package — **metal milestone exit**
+
+### 19 — Keep-flag capabilities / features matrix spike
+
+- **Design:** [KEEPFLAG](design/KEEPFLAG.md) · [ADR-005](decisions/ADR-005-keep-flag-matrix.md) · [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)
+- **Deliver:** research note pinning target media (25H2 ARM64 English); DISM capability/feature id matrix; thin acceptance pin list — **no** product-default recommended set
+- **Out:** implement adapters (ticket **20**); leftover confidence; CDM-as-primary; Profile presets; schema `v2`
+
+### 20 — Offline ImageServicing capabilities from Profile
+
+- **Design:** [IMAGESERVICING](design/IMAGESERVICING.md) · [KEEPFLAG](design/KEEPFLAG.md) · spike from **19**
+- **Deliver:** Profile field → BuildPlan → offline servicing adapter; digests as applicable; FirstLogon not required
+- **Out:** live FirstLogon feature flips; product-default recommended set
+
+**Still deferred (no ticket):** Profile presets; leftover confidence; CDM-as-primary; product-default recommended remove-list; schema `v2`; hardware (M4); DPAPI metal secrets; proactive D2D splash; Wizard polish; WSL job kind; Wizard packages UI; ExitWindowsEx unless prove-out forces it.
 
 ---
 

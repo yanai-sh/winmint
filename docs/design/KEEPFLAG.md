@@ -2,7 +2,7 @@
 
 **Status:** **Accepted** (wayfinder map [Keep-flag matrix wayfinding](https://github.com/yanai-sh/winmint/issues/13), 2026-08-03)  
 **Authority:** [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) · [BUILDPLAN](BUILDPLAN.md) · [IMAGESERVICING](IMAGESERVICING.md) · [PROVISIONINGSESSION](PROVISIONINGSESSION.md)  
-**Implement:** AppX vertical tickets **11–13** done; expansion deferred past Wizard ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md))  
+**Implement:** AppX vertical tickets **11–13** done; capabilities expand tickets **19** (spike) → **20** (offline) after metal milestone (**18**); other expansion still deferred ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md))  
 **Research:** [BCU](../research/2026-08-03-bulk-crap-uninstaller.md) · [offline DISM](../research/2026-08-03-offline-dism-remove-apis.md) · [AppX rehydrate](../research/2026-08-03-appx-rehydrate-after-oobe.md)
 
 ## Problem space

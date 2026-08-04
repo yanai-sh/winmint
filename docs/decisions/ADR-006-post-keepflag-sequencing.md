@@ -22,10 +22,10 @@ Tickets **01–13** (M1 Smoke stack + keep-flag AppX vertical) are implemented. 
 
 ### Consequences
 
-- [ROADMAP](../ROADMAP.md) / [TICKETS](../TICKETS.md) next card = **14** (maintainer Smoke prove-out, including keep-flag assertions for the pinned acceptance ids).
-- Do not label Wizard or keep-flag expansion `ready-for-agent` until **14** is green (unless maintainer rescopes).
-- Update [samples/acceptance.profile.json](../../samples/acceptance.profile.json) with the pinned remove-list.
+- **14–16** done (Smoke prove-out, Wizard thin vertical, `winget` + guest Hyper-V prove-out). Next cards: **17** Profile `needsReboot` + reboot-resume Hyper-V → **18** Scoop → metal exit → **19** capabilities spike → **20** offline capabilities. WSL / Wizard packages stay deferred.
+- Do not label keep-flag capabilities `ready-for-agent` until metal milestone (**18**) is green (unless maintainer rescopes).
+- Acceptance Profile keeps the pinned remove-list ([samples/acceptance.profile.json](../../samples/acceptance.profile.json)).
 
 ### Review trigger
 
-M1 Smoke green on real ISO; or maintainer explicitly rescopes to Wizard-first; or pinned acceptance AppX ids vanish from current Win11 media (re-pin catalog ids).
+M1 Smoke green on real ISO (met); metal milestone (**18**) green; or maintainer rescopes; or pinned acceptance AppX ids vanish from current Win11 media (re-pin catalog ids).
