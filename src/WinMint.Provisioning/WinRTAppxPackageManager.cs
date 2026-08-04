@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using System.Security.Principal;
 using Windows.ApplicationModel;
 using Windows.Management.Deployment;
 
@@ -9,6 +10,9 @@ namespace WinMint.Provisioning;
 public sealed class WinRTAppxPackageManager : IAppxPackageManager
 {
     private readonly PackageManager _manager = new();
+    private readonly Action<string>? _log;
+
+    public WinRTAppxPackageManager(Action<string>? log = null) => _log = log;
 
     private static string WindowsAppsRoot =>
         Path.Combine(
@@ -126,15 +130,33 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
 
     public void EnsureSystemFullControlOnWingetFrameworkPackages()
     {
-        foreach (string dir in WingetFrameworkPackageAcl.FindPackageDirectories(WindowsAppsRoot))
+        // FirstLogon Shell is medium-IL — cannot takeown TrustedInstaller WindowsApps trees.
+        if (!WindowsIdentity.GetCurrent().IsSystem)
+        {
+            _log?.Invoke("winget.acl: skip — not SYSTEM");
+            return;
+        }
+
+        string root = WindowsAppsRoot;
+        string[] dirs = WingetFrameworkPackageAcl.FindPackageDirectories(root).ToArray();
+        _log?.Invoke($"winget.acl: found {dirs.Length} under {root}");
+        if (dirs.Length == 0)
+        {
+            _log?.Invoke(
+                "winget.acl: none matched Microsoft.UI.Xaml.2.8_* / Microsoft.VCLibs.140.00_*");
+            return;
+        }
+
+        foreach (string dir in dirs)
         {
             try
             {
-                WingetFrameworkPackageAcl.GrantSystemFullControlTree(dir);
+                WingetFrameworkPackageAcl.GrantSystemFullControlTree(dir, _log);
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or SystemException)
             {
-                // ponytail: MachineSetup best-effort; FirstLogon register still surfaces failure
+                // Breadcrumb only — MachineSetup must not fail closed; FirstLogon register surfaces fail.
+                _log?.Invoke($"winget.acl: FAILED {dir}: {ex.Message}");
             }
         }
     }

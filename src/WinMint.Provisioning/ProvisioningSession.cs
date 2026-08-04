@@ -414,6 +414,16 @@ public static class ProvisioningSession
                 // Register fails setting Trust Labels (UI.Xaml logo.png denied for S-1-5-18).
                 if (env.Appx is not null)
                 {
+                    // Re-repair only succeeds as SYSTEM; medium-IL FirstLogon logs skip and continues.
+                    try
+                    {
+                        env.Appx.EnsureSystemFullControlOnWingetFrameworkPackages();
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // breadcrumb via Appx adapter log when present; register still fails closed
+                    }
+
                     try
                     {
                         env.Appx.RegisterPackageFamilyForCurrentUser(DesktopAppInstallerFamilyName);

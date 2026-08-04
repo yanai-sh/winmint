@@ -133,13 +133,13 @@ internal static class Program
             Checkpoints: checkpoints ?? new FileCheckpointStore(ProgramDataRoot()),
             Secrets: new FileSecretScrubber(bundlePath, log),
             Evidence: evidence,
-            Appx: CreateAppxPackageManager(),
+            Appx: CreateAppxPackageManager(log),
             Reboot: CreateSystemReboot(),
             LocalAccounts: CreateLocalAccounts());
     }
 
     [SupportedOSPlatform("windows10.0.19041.0")]
-    private static WinRTAppxPackageManager CreateAppxPackageManager() => new();
+    private static WinRTAppxPackageManager CreateAppxPackageManager(Action<string> log) => new(log);
 
     [SupportedOSPlatform("windows")]
     private static Win32WinlogonRegistry CreateWin32Winlogon() => new();

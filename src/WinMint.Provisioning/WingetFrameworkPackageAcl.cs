@@ -37,41 +37,55 @@ public static class WingetFrameworkPackageAcl
 
     /// <summary>
     /// takeown + icacls /grant:r — .NET SetAccessRule leaves explicit SYSTEM=RX ACEs (logo.png) untouched.
+    /// Throws when either tool exits non-zero (caller logs; MachineSetup stays best-effort).
     /// </summary>
-    public static void GrantSystemFullControlTree(string packageDirectory)
+    public static void GrantSystemFullControlTree(string packageDirectory, Action<string>? log = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageDirectory);
         if (!Directory.Exists(packageDirectory))
         {
+            log?.Invoke($"winget.acl: skip missing {packageDirectory}");
             return;
         }
 
+        string system32 = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        string takeown = Path.Combine(system32, "takeown.exe");
+        string icacls = Path.Combine(system32, "icacls.exe");
+
         // SetupComplete is SYSTEM; takeown still needed so icacls can replace TrustedInstaller ACEs.
-        RunHidden("takeown.exe", $"/F \"{packageDirectory}\" /R /D Y");
-        RunHidden(
-            "icacls.exe",
-            $"\"{packageDirectory}\" /grant:r \"NT AUTHORITY\\SYSTEM:(OI)(CI)(F)\" /T /C");
+        // (F) + /T — not (OI)(CI)(F): inherit-only grants leave explicit SYSTEM=RX on files (logo.png).
+        RunTool(takeown, ["/F", packageDirectory, "/R", "/D", "Y"], log);
+        RunTool(
+            icacls,
+            [packageDirectory, "/grant:r", @"NT AUTHORITY\SYSTEM:(F)", "/T", "/C", "/Q"],
+            log);
+        log?.Invoke($"winget.acl: granted SYSTEM FullControl on {packageDirectory}");
     }
 
-    private static void RunHidden(string fileName, string arguments)
+    private static void RunTool(string fileName, IReadOnlyList<string> arguments, Action<string>? log)
     {
+        if (!File.Exists(fileName))
+        {
+            throw new InvalidOperationException($"ACL helper missing: {fileName}");
+        }
+
         using Process process = new()
         {
             StartInfo = new ProcessStartInfo
             {
                 FileName = fileName,
-                Arguments = arguments,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
+                // ponytail: no redirect — recursive takeown floods pipes and deadlocks ReadToEnd.
             },
         };
+        foreach (string arg in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(arg);
+        }
+
         process.Start();
-        // Drain so the child cannot block on full pipes.
-        _ = process.StandardOutput.ReadToEnd();
-        _ = process.StandardError.ReadToEnd();
-        if (!process.WaitForExit(120_000))
+        if (!process.WaitForExit(180_000))
         {
             try
             {
@@ -81,6 +95,16 @@ public static class WingetFrameworkPackageAcl
             {
                 // ponytail: best-effort kill on ACL helper hang
             }
+
+            throw new TimeoutException($"{Path.GetFileName(fileName)} timed out on {arguments[0]}");
+        }
+
+        if (process.ExitCode != 0)
+        {
+            string detail =
+                $"{Path.GetFileName(fileName)} exit {process.ExitCode} args=[{string.Join(' ', arguments)}]";
+            log?.Invoke($"winget.acl: FAILED {detail}");
+            throw new InvalidOperationException(detail);
         }
     }
 }

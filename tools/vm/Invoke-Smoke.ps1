@@ -219,6 +219,13 @@ function Test-GuestEvidenceReady {
                 if ($logExists) {
                     Copy-Item -FromSession $session -Path $remoteLog -Destination (Join-Path $guestDir 'shell.log') -Force -ErrorAction SilentlyContinue
                 }
+                $remoteSetupLog = 'C:\ProgramData\WinMint\machine-setup.log'
+                $setupLogExists = Invoke-Command -Session $session -ScriptBlock {
+                    param($p) Test-Path -LiteralPath $p
+                } -ArgumentList $remoteSetupLog
+                if ($setupLogExists) {
+                    Copy-Item -FromSession $session -Path $remoteSetupLog -Destination (Join-Path $guestDir 'machine-setup.log') -Force -ErrorAction SilentlyContinue
+                }
                 # Unlock prove-out: Winlogon Shell after tenure
                 $shellVal = Invoke-Command -Session $session -ScriptBlock {
                     try {

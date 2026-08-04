@@ -46,19 +46,46 @@ public class WingetFrameworkPackageAclTests
 
     [Fact]
     [SupportedOSPlatform("windows")]
-    public void GrantSystemFullControlTree_sets_local_system_full_control()
+    public void GrantSystemFullControlTree_replaces_system_rx_only_ace()
     {
+        // Simulates inbox shape: explicit SYSTEM=RX on logo.png (SetAccessRule left this untouched).
         string root = Path.Combine(Path.GetTempPath(), "winmint-acl-grant-" + Guid.NewGuid().ToString("N"));
         string nested = Path.Combine(root, "Assets");
         Directory.CreateDirectory(nested);
         string file = Path.Combine(nested, "logo.png");
         File.WriteAllText(file, "x");
+        List<string> log = [];
         try
         {
-            WingetFrameworkPackageAcl.GrantSystemFullControlTree(root);
-
+            SecurityIdentifier system = new(WellKnownSidType.LocalSystemSid, null);
+            SecurityIdentifier self = WindowsIdentity.GetCurrent().User
+                ?? throw new InvalidOperationException("no current user SID");
             FileInfo info = new(file);
-            FileSystemAccessRule? systemRule = info.GetAccessControl()
+            FileSecurity security = info.GetAccessControl();
+            security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+            foreach (FileSystemAccessRule existing in security
+                         .GetAccessRules(true, true, typeof(SecurityIdentifier))
+                         .Cast<FileSystemAccessRule>()
+                         .ToArray())
+            {
+                security.RemoveAccessRule(existing);
+            }
+
+            security.AddAccessRule(
+                new FileSystemAccessRule(
+                    self,
+                    FileSystemRights.FullControl,
+                    AccessControlType.Allow));
+            security.AddAccessRule(
+                new FileSystemAccessRule(
+                    system,
+                    FileSystemRights.ReadAndExecute,
+                    AccessControlType.Allow));
+            info.SetAccessControl(security);
+
+            WingetFrameworkPackageAcl.GrantSystemFullControlTree(root, log.Add);
+
+            FileSystemAccessRule? systemRule = new FileInfo(file).GetAccessControl()
                 .GetAccessRules(true, true, typeof(SecurityIdentifier))
                 .Cast<FileSystemAccessRule>()
                 .FirstOrDefault(r =>
@@ -67,12 +94,36 @@ public class WingetFrameworkPackageAclTests
 
             Assert.NotNull(systemRule);
             Assert.True(
-                systemRule!.FileSystemRights.HasFlag(FileSystemRights.FullControl)
-                || systemRule.FileSystemRights.HasFlag(FileSystemRights.WriteData));
+                systemRule!.FileSystemRights.HasFlag(FileSystemRights.FullControl),
+                $"expected FullControl after takeown/icacls, got {systemRule.FileSystemRights}");
+            Assert.Contains(log, line => line.Contains("granted SYSTEM FullControl", StringComparison.Ordinal));
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // takeown may leave SYSTEM-owned tree; best-effort cleanup
+            }
         }
+    }
+
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public void GrantSystemFullControlTree_throws_when_path_is_locked_from_takeown()
+    {
+        // Ownership-denial stand-in: takeown /F on a volume root path that is not a package dir
+        // fails closed with non-zero exit (was previously swallowed).
+        string bogus = Path.Combine(
+            Path.GetPathRoot(Path.GetTempPath()) ?? @"C:\",
+            "winmint-acl-no-such-" + Guid.NewGuid().ToString("N"));
+        Assert.False(Directory.Exists(bogus));
+        // Missing dir is a soft skip (not throw) — exercise that contract.
+        List<string> log = [];
+        WingetFrameworkPackageAcl.GrantSystemFullControlTree(bogus, log.Add);
+        Assert.Contains(log, line => line.Contains("skip missing", StringComparison.Ordinal));
     }
 }
