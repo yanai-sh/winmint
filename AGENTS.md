@@ -42,3 +42,7 @@ just check
 ```
 
 Commits when asked: `docs:` · `feat(scope):` · `fix(scope):` …
+
+## Solo maintainer — no PRs
+
+This is a **solo** project. **Do not open pull requests** unless the maintainer explicitly asks. Default delivery: branch → commit → push when asked → maintainer merges locally (or fast-forward `dev`/`main`). Issues remain the work surface; PRs are not triage or review theater ([issue-tracker](docs/agents/issue-tracker.md)).
