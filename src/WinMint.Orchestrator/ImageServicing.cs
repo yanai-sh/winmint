@@ -142,9 +142,9 @@ public static class ImageServicing
         JobsFile jobs = new(
             plan.Jobs.SchemaVersion,
             plan.Jobs.Jobs.Select(j => new JobFile(j.Id, j.Kind, j.NeedsReboot, j.PackageId)).ToArray());
-        File.WriteAllText(
+        File.WriteAllBytes(
             Path.Combine(payloadDir, "jobs.json"),
-            JsonSerializer.Serialize(jobs, ServicingJsonContext.Default.JobsFile));
+            JsonSerializer.SerializeToUtf8Bytes(jobs, ServicingJsonContext.Default.JobsFile));
 
         string[] removeProvisionedAppx = [];
         ServicingStage? removeStage = plan.Stages.Stages
@@ -171,9 +171,9 @@ public static class ImageServicing
                     plan.Dma.Settle.TimeZoneId,
                     plan.Dma.Settle.LocationServicesEnabled),
             removeProvisionedAppx);
-        File.WriteAllText(
+        File.WriteAllBytes(
             Path.Combine(payloadDir, "bundle.json"),
-            JsonSerializer.Serialize(bundle, ServicingJsonContext.Default.BundleFile));
+            JsonSerializer.SerializeToUtf8Bytes(bundle, ServicingJsonContext.Default.BundleFile));
 
         Result<string, ServicingFailure> setupComplete = StageSetupCompleteScript(payloadDir);
         if (!setupComplete.IsOk)
@@ -246,9 +246,9 @@ public static class ImageServicing
         StagesFile stagesFile = new(
             BuildPlan.StagesSchemaVersion,
             resolved.Select(s => new StageFile(s.Opcode.ToString(), s.Parameters)).ToArray());
-        File.WriteAllText(
+        File.WriteAllBytes(
             Path.Combine(run.WorkDirectory, "stages.json"),
-            JsonSerializer.Serialize(stagesFile, ServicingJsonContext.Default.StagesFile));
+            JsonSerializer.SerializeToUtf8Bytes(stagesFile, ServicingJsonContext.Default.StagesFile));
 
         return Result.Ok<List<ServicingStage>, ServicingFailure>(resolved);
     }

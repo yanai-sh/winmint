@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -174,8 +173,7 @@ public static class BuildPlan
             debloat,
             packages);
 
-        return Encoding.UTF8.GetBytes(
-            JsonSerializer.Serialize(doc, BuildPlanJsonContext.Default.ProfileDocument));
+        return JsonSerializer.SerializeToUtf8Bytes(doc, BuildPlanJsonContext.Default.ProfileDocument);
     }
 
     private static string[] NormalizeRemoveList(string[]? raw)
