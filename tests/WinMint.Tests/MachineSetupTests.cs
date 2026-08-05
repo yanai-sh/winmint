@@ -1,3 +1,4 @@
+using System.Text.Json;
 using WinMint.Provisioning;
 
 namespace WinMint.Tests;
@@ -119,7 +120,7 @@ public class MachineSetupTests
         SessionResult result = ProvisioningSession.Run(
             SessionMode.MachineSetup,
             bundle,
-            Env(winlogon, secrets, appx),
+            Env(winlogon, secrets, appx: appx),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
@@ -141,6 +142,72 @@ public class MachineSetupTests
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Equal([ProvisioningSession.ForbiddenAutologonUser], accounts.Deleted);
+    }
+
+    [Fact]
+    public void MachineSetup_wipes_bundle_password_on_disk()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "winmint-wipe-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string path = Path.Combine(dir, "bundle.json");
+        try
+        {
+            File.WriteAllText(
+                path,
+                $$"""
+                {
+                  "schemaVersion": "{{BundleLoader.SchemaVersion}}",
+                  "supervisorPath": {{JsonSerializer.Serialize(WinMint.Orchestrator.ImageServicing.ShellStampGuestPath)}},
+                  "username": "winmint",
+                  "password": "lab-secret",
+                  "dmaEnabled": true,
+                  "settle": null
+                }
+                """);
+            File.WriteAllText(
+                Path.Combine(dir, "jobs.json"),
+                $$"""
+                {
+                  "schemaVersion": "{{BundleLoader.JobsSchemaVersion}}",
+                  "jobs": []
+                }
+                """);
+
+            ProvisioningBundle bundle = BundleLoader.LoadFromFile(path);
+            Assert.Equal("lab-secret", bundle.Account.Password);
+
+            FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+            SessionResult result = ProvisioningSession.Run(
+                SessionMode.MachineSetup,
+                bundle,
+                Env(
+                    winlogon,
+                    wipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(path, null)),
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(SessionOutcome.Complete, result.Outcome);
+
+            string onDisk = File.ReadAllText(path);
+            Assert.DoesNotContain("lab-secret", onDisk, StringComparison.Ordinal);
+
+            using JsonDocument doc = JsonDocument.Parse(onDisk);
+            Assert.Equal("", doc.RootElement.GetProperty("password").GetString());
+            Assert.Equal("winmint", doc.RootElement.GetProperty("username").GetString());
+
+            ProvisioningBundle reloaded = BundleLoader.LoadFromFile(path);
+            Assert.Equal("", reloaded.Account.Password);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+            catch
+            {
+                // ponytail: best-effort temp cleanup
+            }
+        }
     }
 
     [Fact]
@@ -171,7 +238,8 @@ public class MachineSetupTests
 
     private static SessionEnvironment Env(
         IWinlogonRegistry winlogon,
-        RecordingSecretScrubber secrets,
+        RecordingSecretScrubber? secrets = null,
+        Action<ProvisioningBundle>? wipeSecrets = null,
         IAppxPackageManager? appx = null,
         ILocalAccounts? localAccounts = null) =>
         new(
@@ -181,7 +249,7 @@ public class MachineSetupTests
             Processes: new NoopProcesses(),
             Splash: new NoopSplash(),
             Checkpoints: new NoopCheckpoints(),
-            WipeSecrets: secrets.Wipe,
+            WipeSecrets: wipeSecrets ?? secrets!.Wipe,
             Appx: appx,
             LocalAccounts: localAccounts);
 

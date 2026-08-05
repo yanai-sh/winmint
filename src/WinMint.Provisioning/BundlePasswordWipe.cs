@@ -7,36 +7,26 @@ namespace WinMint.Provisioning;
 /// Guarantee: disk redact + no further use of the stamp password in MachineSetup.
 /// Not a cryptographic in-process memory scrub (immutable strings live until GC).
 /// </summary>
-public sealed class FileSecretScrubber
+internal static class BundlePasswordWipe
 {
-    private readonly string _bundlePath;
-    private readonly Action<string>? _log;
-
-    public FileSecretScrubber(string bundlePath, Action<string>? log = null)
+    internal static void WipeBundlePassword(string bundlePath, Action<string>? log)
     {
-        _bundlePath = bundlePath;
-        _log = log;
-    }
-
-    public void Wipe(ProvisioningBundle bundle)
-    {
-        _ = bundle;
-        if (!File.Exists(_bundlePath))
+        if (!File.Exists(bundlePath))
         {
             return;
         }
 
-        byte[] bytes = File.ReadAllBytes(_bundlePath);
+        byte[] bytes = File.ReadAllBytes(bundlePath);
         BundleDto? dto = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.BundleDto);
         if (dto is null)
         {
-            throw new InvalidOperationException($"Secret wipe: failed to parse bundle {_bundlePath}");
+            throw new InvalidOperationException($"Secret wipe: failed to parse bundle {bundlePath}");
         }
 
         BundleDto redacted = dto with { Password = "" };
         byte[] outBytes = JsonSerializer.SerializeToUtf8Bytes(redacted, ProvisioningJsonContext.Default.BundleDto);
         // ponytail: full DPAPI host→guest staging channel stays future if Smoke plaintext+wipe remains lab-ok
-        File.WriteAllBytes(_bundlePath, outBytes);
-        _log?.Invoke($"Secret wipe: redacted password in {_bundlePath}");
+        File.WriteAllBytes(bundlePath, outBytes);
+        log?.Invoke($"Secret wipe: redacted password in {bundlePath}");
     }
 }

@@ -8,4 +8,7 @@
     <!-- LibraryImport generator emits unsafe marshalling helpers -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WinMint.Tests" />
+  </ItemGroup>
 </Project>

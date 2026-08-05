@@ -131,7 +131,7 @@ internal static class Program
             Processes: new Win32ProcessHost(),
             Splash: splash ?? new NoopSplashPresenter(),
             Checkpoints: checkpoints ?? new FileCheckpointStore(ProgramDataRoot()),
-            WipeSecrets: new FileSecretScrubber(bundlePath, log).Wipe,
+            WipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(bundlePath, log),
             Evidence: evidence,
             Appx: CreateAppxPackageManager(log),
             Reboot: CreateSystemReboot(),
