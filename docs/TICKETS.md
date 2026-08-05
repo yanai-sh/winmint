@@ -259,7 +259,7 @@ Blocked by: M1 ticket **10** done. Design: [KEEPFLAG](design/KEEPFLAG.md).
 - **Deliver:** opaque remove opcode + param-only kernel; `Remove-AppxProvisionedPackage` / DISM `/Image`; optional `Deprovisioned` hive stamps; re-inventory evidence
 - **Out:** FirstLogon PackageManager; capabilities/features; Profile branching in kernels
 - **DoD:** listed present packages gone from provisioned inventory; absent-id policy freeze documented; workdir logs on failure
-- **Done:** 2026-08-04 (issue #23)
+- **Done:** 2026-08-04 (issue #23). Absent-id policy: **idempotent ok + digest** (KEEPFLAG retcon 2026-08-05; matches shipped kernel / reuse-media).
 
 ### 13 — FirstLogon AppX safety net
 

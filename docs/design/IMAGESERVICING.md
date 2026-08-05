@@ -86,7 +86,7 @@ MountInstallWim → [RemoveProvisionedAppx?] → StagePayload → InjectUnattend
 ```
 
 `MountInstallWim` also: ISO→media copy, clear read-only, **single-index export** when needed, then DISM mount.  
-`RemoveProvisionedAppx` (ticket **12**): optional; inventory → remove → re-inventory + Deprovisioned stamps.  
+`RemoveProvisionedAppx` (ticket **12**): optional; inventory → remove → re-inventory + Deprovisioned stamps; listed-but-absent ⇒ idempotent ok + `removed.appx.<id>=absent` ([KEEPFLAG](KEEPFLAG.md)).  
 Release differs only in `ExportWim` params (`compression=max`, `cleanup=full`).
 
 ## Elevation model

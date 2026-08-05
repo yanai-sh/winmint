@@ -45,7 +45,7 @@ Users need a fail-closed way to strip selected **provisioned inbox AppX** from a
 
 - Repo-owned static list of **legal** provisioned AppX identities for the remove-list (not “everything on a reference PC”).
 - BuildPlan: validate remove-list ⊆ catalog; emit servicing stage params (package identities), never `.ps1` paths.
-- ImageServicing: inventory mounted image (`Get-AppxProvisionedPackage`); remove listed present packages; record identity → final state in evidence; **absent listed id ⇒ fail closed** (typed kernel failure; Profile asserted remove — frozen ticket **12**).
+- ImageServicing: inventory mounted image (`Get-AppxProvisionedPackage`); remove listed present packages; record identity → final state in evidence; listed-but-absent / already stripped ⇒ **idempotent ok + digest** (`removed.appx.<id>=absent`) — same reuse-media posture as capabilities/features (ticket **20**); do **not** throw-on-missing. (Ticket **12** early “fail closed on absent” wording overturned to match shipped `Remove-ProvisionedAppx.ps1`.)
 
 ## Seam mapping
 
