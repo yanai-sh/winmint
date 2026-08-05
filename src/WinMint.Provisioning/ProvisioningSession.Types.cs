@@ -82,7 +82,8 @@ public sealed record SessionEnvironment(
     IEvidenceSink? Evidence = null,
     IAppxPackageManager? Appx = null,
     ISystemReboot? Reboot = null,
-    ILocalAccounts? LocalAccounts = null);
+    ILocalAccounts? LocalAccounts = null,
+    Func<string?>? ResolveScoopCmd = null);
 
 /// <summary>OS reboot after NeedsReboot checkpoint (ticket 16). Nullable in tests; production wires Win32.</summary>
 public interface ISystemReboot

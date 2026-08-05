@@ -135,7 +135,19 @@ internal static class Program
             Evidence: evidence,
             Appx: CreateAppxPackageManager(log),
             Reboot: CreateSystemReboot(),
-            LocalAccounts: CreateLocalAccounts());
+            LocalAccounts: CreateLocalAccounts(),
+            ResolveScoopCmd: TryResolveScoopShim);
+    }
+
+    /// <summary>Default Scoop shim after official bootstrap (research 2026-08-04). Host-owned File.Exists.</summary>
+    private static string? TryResolveScoopShim()
+    {
+        string candidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "scoop",
+            "shims",
+            "scoop.cmd");
+        return File.Exists(candidate) ? candidate : null;
     }
 
     [SupportedOSPlatform("windows10.0.19041.0")]

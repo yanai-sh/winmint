@@ -33,7 +33,8 @@ internal static class ProvisioningSessionTestFakes
         ICheckpointStore? checkpoints = null,
         ISystemReboot? reboot = null,
         IAppxPackageManager? appx = null,
-        ISplashPresenter? splash = null) =>
+        ISplashPresenter? splash = null,
+        Func<string?>? resolveScoopCmd = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: new NoopWinlogon(),
@@ -43,7 +44,8 @@ internal static class ProvisioningSessionTestFakes
             Checkpoints: checkpoints ?? new NoopCheckpoints(),
             Evidence: evidence,
             Reboot: reboot,
-            Appx: appx);
+            Appx: appx,
+            ResolveScoopCmd: resolveScoopCmd);
 
     internal static SessionEnvironment Env(
         IWinlogonRegistry winlogon,

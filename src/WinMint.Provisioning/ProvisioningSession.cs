@@ -239,30 +239,6 @@ public static class ProvisioningSession
         !string.IsNullOrWhiteSpace(shell)
         && shell.Trim().Equals(ExplorerShell, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Prefer the per-user App Execution Alias after RegisterByFamilyName; fall back to PATH.
-    /// </summary>
-    private static string ResolveWingetAliasOrFallback()
-    {
-        string alias = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Microsoft",
-            "WindowsApps",
-            "winget.exe");
-        return File.Exists(alias) ? alias : "winget";
-    }
-
-    /// <summary>Default Scoop shim path after official bootstrap (research 2026-08-04).</summary>
-    private static string? TryResolveScoopCmd()
-    {
-        string candidate = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "scoop",
-            "shims",
-            "scoop.cmd");
-        return File.Exists(candidate) ? candidate : null;
-    }
-
     private static bool IsStaleHeartbeat(
         ProvisioningBundle bundle,
         SessionEnvironment env,
@@ -422,31 +398,45 @@ public static class ProvisioningSession
                 }
 
                 // FirstLogon: App Installer is often provisioned but not yet registered for the
-                // interactive user — winget.exe alias missing until RegisterByFamilyName (MS docs).
+                // interactive user — winget.exe missing until RegisterByFamilyName (MS docs).
                 // Framework ACLs are MachineSetup-only (SYSTEM); Shell must not re-call takeown/icacls.
-                if (env.Appx is not null)
+                // Path seam: AppX only — no LocalAppData alias / PATH "winget" fallback (deepening #51).
+                if (env.Appx is null)
                 {
-                    try
-                    {
-                        env.Appx.RegisterPackageFamilyForCurrentUser(DesktopAppInstallerFamilyName);
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        SessionStatus regFailed = new(
-                            "jobs.winget.register_failed",
-                            $"{job.Id}: register {DesktopAppInstallerFamilyName}: {ex.Message}");
-                        env.Splash.SetStatus(regFailed);
-                        phases.Add(regFailed.Code);
-                        return new JobsPhaseResult(SessionOutcome.Failed, regFailed, TimedOut: false);
-                    }
+                    SessionStatus missingAppx = new(
+                        "jobs.failed",
+                        $"Job '{job.Id}' requires IAppxPackageManager.");
+                    env.Splash.SetStatus(missingAppx);
+                    phases.Add(missingAppx.Code);
+                    return new JobsPhaseResult(SessionOutcome.Failed, missingAppx, TimedOut: false);
+                }
 
-                    fileName = env.Appx.TryResolveWingetExecutablePath()
-                        ?? ResolveWingetAliasOrFallback();
-                }
-                else
+                try
                 {
-                    fileName = "winget";
+                    env.Appx.RegisterPackageFamilyForCurrentUser(DesktopAppInstallerFamilyName);
                 }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    SessionStatus regFailed = new(
+                        "jobs.winget.register_failed",
+                        $"{job.Id}: register {DesktopAppInstallerFamilyName}: {ex.Message}");
+                    env.Splash.SetStatus(regFailed);
+                    phases.Add(regFailed.Code);
+                    return new JobsPhaseResult(SessionOutcome.Failed, regFailed, TimedOut: false);
+                }
+
+                string? resolvedWinget = env.Appx.TryResolveWingetExecutablePath();
+                if (string.IsNullOrWhiteSpace(resolvedWinget))
+                {
+                    SessionStatus pathMissing = new(
+                        "jobs.winget.path_missing",
+                        $"{job.Id}: winget.exe not found after registering {DesktopAppInstallerFamilyName}.");
+                    env.Splash.SetStatus(pathMissing);
+                    phases.Add(pathMissing.Code);
+                    return new JobsPhaseResult(SessionOutcome.Failed, pathMissing, TimedOut: false);
+                }
+
+                fileName = resolvedWinget;
 
                 arguments =
                 [
@@ -472,7 +462,17 @@ public static class ProvisioningSession
                     return new JobsPhaseResult(SessionOutcome.Failed, missingPkg, TimedOut: false);
                 }
 
-                string? scoopCmd = TryResolveScoopCmd();
+                if (env.ResolveScoopCmd is null)
+                {
+                    SessionStatus missingResolve = new(
+                        "jobs.failed",
+                        $"Job '{job.Id}' requires ResolveScoopCmd.");
+                    env.Splash.SetStatus(missingResolve);
+                    phases.Add(missingResolve.Code);
+                    return new JobsPhaseResult(SessionOutcome.Failed, missingResolve, TimedOut: false);
+                }
+
+                string? scoopCmd = env.ResolveScoopCmd();
                 if (scoopCmd is null)
                 {
                     ProcessStartResult bootstrap;
@@ -511,7 +511,7 @@ public static class ProvisioningSession
                         return new JobsPhaseResult(SessionOutcome.Failed, bootstrapFailed, TimedOut: false);
                     }
 
-                    scoopCmd = TryResolveScoopCmd();
+                    scoopCmd = env.ResolveScoopCmd();
                     if (scoopCmd is null)
                     {
                         SessionStatus missingScoop = new(

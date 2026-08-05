@@ -151,17 +151,18 @@ public class WingetJobsTests
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
+        RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
             Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git")]),
-            Env(processes, evidence),
+            Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Equal("jobs.ok", result.FinalStatus.Code);
         Assert.Single(processes.Starts);
-        Assert.Equal("winget", processes.Starts[0].FileName, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(appx.WingetPath, processes.Starts[0].FileName);
         Assert.Equal(
             [
                 "install",
@@ -175,6 +176,43 @@ public class WingetJobsTests
             ],
             processes.Starts[0].Arguments);
         Assert.Contains("jobs.ok", evidence.Documents[0].Phases);
+    }
+
+    [Fact]
+    public void Shell_winget_job_fails_closed_when_Appx_missing()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git")]),
+            Env(processes, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.failed", result.FinalStatus.Code);
+        Assert.Contains("IAppxPackageManager", result.FinalStatus.Message);
+        Assert.Empty(processes.Starts);
+    }
+
+    [Fact]
+    public void Shell_winget_job_fails_closed_when_resolve_returns_null()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+        RecordingAppx appx = new() { WingetPath = null };
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git")]),
+            Env(processes, evidence, appx: appx),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.winget.path_missing", result.FinalStatus.Code);
+        Assert.Empty(processes.Starts);
+        Assert.Contains(ProvisioningSession.DesktopAppInstallerFamilyName, appx.RegisteredFamilyNames);
     }
 
     [Fact]

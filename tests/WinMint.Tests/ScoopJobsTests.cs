@@ -46,129 +46,93 @@ public class ScoopJobsTests
     }
 
     [Fact]
-    public void Shell_scoop_bootstraps_then_installs_when_scoop_missing()
+    public void Shell_scoop_installs_when_ResolveScoopCmd_returns_path()
     {
-        RecordingProcessHost processes = new()
-        {
-            OnRun = (file, args) =>
-            {
-                if (file.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase))
-                {
-                    return new ProcessStartResult(0);
-                }
-
-                return new ProcessStartResult(0);
-            },
-        };
+        RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
+        string scoopPath = @"C:\Users\lab\scoop\shims\scoop.cmd";
 
-        string userScoop = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "scoop",
-            "shims");
-        bool createdShim = false;
-        string? previous = null;
-        string target = Path.Combine(userScoop, "scoop.cmd");
-        try
-        {
-            Directory.CreateDirectory(userScoop);
-            if (File.Exists(target))
-            {
-                previous = File.ReadAllText(target);
-            }
-            else
-            {
-                createdShim = true;
-            }
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]),
+            Env(processes, evidence, resolveScoopCmd: () => scoopPath),
+            TestContext.Current.CancellationToken);
 
-            File.WriteAllText(target, "@echo off");
-
-            SessionResult result = ProvisioningSession.Run(
-                SessionMode.Shell,
-                Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]),
-                Env(processes, evidence),
-                TestContext.Current.CancellationToken);
-
-            Assert.Equal(SessionOutcome.Complete, result.Outcome);
-            Assert.Equal("jobs.ok", result.FinalStatus.Code);
-            Assert.DoesNotContain(
-                processes.Starts,
-                s => s.FileName.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase));
-            Assert.Contains(
-                processes.Starts,
-                s => s.FileName.EndsWith("scoop.cmd", StringComparison.OrdinalIgnoreCase)
-                    && s.Arguments is ["install", "curl"]);
-        }
-        finally
-        {
-            if (createdShim && File.Exists(target))
-            {
-                File.Delete(target);
-            }
-            else if (previous is not null)
-            {
-                File.WriteAllText(target, previous);
-            }
-        }
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal("jobs.ok", result.FinalStatus.Code);
+        Assert.DoesNotContain(
+            processes.Starts,
+            s => s.FileName.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            processes.Starts,
+            s => s.FileName == scoopPath && s.Arguments is ["install", "curl"]);
     }
 
     [Fact]
-    public void Shell_scoop_bootstraps_via_official_admin_one_liner_when_missing()
+    public void Shell_scoop_bootstraps_then_installs_when_resolve_returns_path_after()
     {
-        string userScoopShim = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "scoop",
-            "shims",
-            "scoop.cmd");
-
-        bool moved = false;
-        string backupPath = userScoopShim + ".winmint-test-bak";
-        try
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+        string scoopPath = @"C:\Users\lab\scoop\shims\scoop.cmd";
+        int resolveCalls = 0;
+        string? Resolve()
         {
-            if (File.Exists(userScoopShim))
-            {
-                File.Move(userScoopShim, backupPath, overwrite: true);
-                moved = true;
-            }
-
-            RecordingProcessHost processes = new()
-            {
-                OnRun = (file, args) =>
-                {
-                    if (file.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return new ProcessStartResult(0);
-                    }
-
-                    return new ProcessStartResult(0);
-                },
-            };
-            RecordingEvidenceSink evidence = new();
-
-            SessionResult result = ProvisioningSession.Run(
-                SessionMode.Shell,
-                Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]),
-                Env(processes, evidence),
-                TestContext.Current.CancellationToken);
-
-            Assert.Equal(SessionOutcome.Failed, result.Outcome);
-            Assert.Equal("jobs.scoop.bootstrap_failed", result.FinalStatus.Code);
-            Assert.Single(processes.Starts);
-            Assert.Equal("powershell.exe", processes.Starts[0].FileName, StringComparer.OrdinalIgnoreCase);
-            Assert.Equal("-NoProfile", processes.Starts[0].Arguments[0]);
-            Assert.Equal("-ExecutionPolicy", processes.Starts[0].Arguments[1]);
-            Assert.Equal("Bypass", processes.Starts[0].Arguments[2]);
-            Assert.Equal("-Command", processes.Starts[0].Arguments[3]);
-            Assert.Contains("get.scoop.sh", processes.Starts[0].Arguments[4]);
-            Assert.Contains("-RunAsAdmin", processes.Starts[0].Arguments[4]);
+            resolveCalls++;
+            return resolveCalls == 1 ? null : scoopPath;
         }
-        finally
-        {
-            if (moved && File.Exists(backupPath))
-            {
-                File.Move(backupPath, userScoopShim, overwrite: true);
-            }
-        }
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]),
+            Env(processes, evidence, resolveScoopCmd: Resolve),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal("jobs.ok", result.FinalStatus.Code);
+        Assert.Equal(2, resolveCalls);
+        Assert.Equal("powershell.exe", processes.Starts[0].FileName, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("get.scoop.sh", processes.Starts[0].Arguments[4]);
+        Assert.Contains(
+            processes.Starts,
+            s => s.FileName == scoopPath && s.Arguments is ["install", "curl"]);
+    }
+
+    [Fact]
+    public void Shell_scoop_bootstraps_then_fails_when_still_missing()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]),
+            Env(processes, evidence, resolveScoopCmd: () => null),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.scoop.bootstrap_failed", result.FinalStatus.Code);
+        Assert.Single(processes.Starts);
+        Assert.Equal("powershell.exe", processes.Starts[0].FileName, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("get.scoop.sh", processes.Starts[0].Arguments[4]);
+        Assert.Contains("-RunAsAdmin", processes.Starts[0].Arguments[4]);
+    }
+
+    [Fact]
+    public void Shell_scoop_fails_when_ResolveScoopCmd_missing()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]),
+            Env(processes, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.failed", result.FinalStatus.Code);
+        Assert.Contains("ResolveScoopCmd", result.FinalStatus.Message);
+        Assert.Empty(processes.Starts);
     }
 
     [Fact]
