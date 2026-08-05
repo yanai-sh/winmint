@@ -77,18 +77,23 @@ public sealed record SessionEnvironment(
     IProcessHost Processes,
     ISplashPresenter Splash,
     ICheckpointStore Checkpoints,
-    ISecretScrubber Secrets,
+    Action<ProvisioningBundle>? WipeSecrets = null,
     IEvidenceSink? Evidence = null,
     IAppxPackageManager? Appx = null,
     ISystemReboot? Reboot = null,
-    ILocalAccounts? LocalAccounts = null);
+    ILocalAccounts? LocalAccounts = null,
+    Func<string?>? ResolveScoopCmd = null);
 ```
 
-Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes. `IAppxPackageManager` is the keep-flag FirstLogon safety net (ticket **13**). `ISystemReboot` requests OS reboot after a `NeedsReboot` checkpoint (ticket **16**): `Win32SystemReboot` prefers `ExitWindowsEx` with `SeShutdownPrivilege`, falling back to `shutdown.exe /r /t 0 /f` (ticket **24**). Profile-driven `packages.wingetNeedsReboot` (ticket **17**) is a fail-closed subset of `packages.winget` that sets `needsReboot: true` on Plan winget jobs. Job kinds `winget` / `scoop` / `wsl` (tickets **18** / **23**) spawn via `IProcessHost`; Scoop bootstraps via official `get.scoop.sh` + `-RunAsAdmin` on inbox `powershell.exe` when missing ([research](../research/2026-08-04-scoop-firstlogon-bootstrap.md)); WSL uses `wsl.exe --install -d <distro> --no-launch` (network; fail closed offline). `ILocalAccounts` removes OOBE leftover `defaultuser0` (+ profile) during Machine setup (best-effort; Unattend cannot prevent the temp account — [research](../research/2026-08-04-oobe-wifi-local-account.md)). Unknown kinds fail closed. Guest Hyper-V prove-out: winget (**16**), reboot-resume (**17**), Scoop (**18**).
+Adapter interfaces are part of the **module interface** (callers/tests must know them) but stay thin. Production Win32 / WinRT adapters live in the same project; tests supply fakes.
+
+**`IAppxPackageManager` (one env port — do not split Machine setup vs Shell):** keep-flag FirstLogon safety net (ticket **13**) **and** winget path seam. Method subsets: Machine setup calls `EnsureSystemFullControlOnWingetFrameworkPackages` (best-effort swallow — must not fail Machine setup); Shell safety-net uses find/remove/deprovision; Shell winget uses `RegisterPackageFamilyForCurrentUser` then `TryResolveWingetExecutablePath` (null ⇒ fail closed; no alias / `File.Exists` / PATH `"winget"` fallback). Winget jobs **require** `Appx`. Seven methods stay; slim = fold former public `WingetFrameworkPackageAcl` into `WinRTAppxPackageManager` (private takeown/icacls) — locked on [How slim should IAppxPackageManager be?](https://github.com/yanai-sh/winmint/issues/49). Path sealing: [Where do winget and Scoop paths resolve?](https://github.com/yanai-sh/winmint/issues/44).
+
+Scoop discovery is **not** AppX: `ResolveScoopCmd` on the env bag (same Func/Action pattern as `WipeSecrets`); production wires shim `File.Exists` in `Program`; session never touches the filesystem for Scoop. Scoop jobs **require** the Func; null return → official bootstrap via inbox `powershell.exe` ([research](../research/2026-08-04-scoop-firstlogon-bootstrap.md)) → call the same Func again → still null ⇒ fail closed. `ISystemReboot` requests OS reboot after a `NeedsReboot` checkpoint (ticket **16**): `Win32SystemReboot` prefers `ExitWindowsEx` with `SeShutdownPrivilege`, falling back to `shutdown.exe /r /t 0 /f` (ticket **24**). Profile-driven `packages.wingetNeedsReboot` (ticket **17**) is a fail-closed subset of `packages.winget` that sets `needsReboot: true` on Plan winget jobs. Job kinds `winget` / `scoop` / `wsl` (tickets **18** / **23**) spawn via `IProcessHost`; WSL uses `wsl.exe --install -d <distro> --no-launch` (network; fail closed offline). `ILocalAccounts` removes OOBE leftover `defaultuser0` (+ profile) during Machine setup (best-effort; Unattend cannot prevent the temp account — [research](../research/2026-08-04-oobe-wifi-local-account.md)). Unknown kinds fail closed. Guest Hyper-V prove-out: winget (**16**), reboot-resume (**17**), Scoop (**18**).
 
 ### Phase machine
 
-**MachineSetup:** StampAutologon → VerifyOrRestampShell (fail-closed) → WipeSecrets → RemoveOobeTempUser (`defaultuser0`) → `Complete` | `Failed`  
+**MachineSetup:** StampAutologon → VerifyOrRestampShell (fail-closed) → WipeSecrets → EnsureWingetFrameworkAcls (best-effort via AppX) → RemoveOobeTempUser (`defaultuser0`) → `Complete` | `Failed`  
 (No splash, settle, or jobs.)
 
 **Shell:**
@@ -114,10 +119,11 @@ Bootstrap (checkpoint | stale→fail-open)
 6. Never stamp `defaultuser0` + AutoAdminLogon; Machine setup best-effort **deletes** leftover `defaultuser0` (+ profile) so the lock-screen picker is Profile-only.
 7. Crash/stale tenure past `StaleTenureThreshold` ⇒ fail-open `Failed`.
 8. Same settle + job executor on Smoke and metal; only `Jobs` list differs.
+9. Winget executable path only via `IAppxPackageManager.TryResolveWingetExecutablePath` (AppX required). Scoop shim path only via `SessionEnvironment.ResolveScoopCmd` (Func required for scoop jobs). No in-session `File.Exists` for either.
 
 ### Secrets (Smoke)
 
-Smoke stages the Local+autoLogon password in plaintext under `C:\Windows\WinMint\bundle.json` (ImageServicing StagePayload). `Run(MachineSetup)` stamps Winlogon then redacts `password` in that file (`FileSecretScrubber`: JSON redact + best-effort random overwrite of prior bytes — ticket **28**). Guarantee is disk redact + no further use in the MachineSetup phase — not cryptographic process-memory scrub. Full DPAPI host→guest staging channel remains future if lab plaintext+wipe stays acceptable for Smoke.
+Smoke stages the Local+autoLogon password in plaintext under `C:\Windows\WinMint\bundle.json` (ImageServicing StagePayload). `Run(MachineSetup)` stamps Winlogon then redacts `password` in that file via `SessionEnvironment.WipeSecrets` (`Action<ProvisioningBundle>?` — ticket **28**; deepening [Delete FileSecretScrubber or keep the module?](https://github.com/yanai-sh/winmint/issues/47): **delete** the `FileSecretScrubber` class; wire wipe in `Program` as the Action). Guarantee is disk JSON redact (`Password=""`) + `WriteAllBytes` + no further use in the MachineSetup phase — not cryptographic process-memory scrub, not random overwrite of prior bytes. Assert wipe through `Run(MachineSetup)` against a temp `bundle.json`. Full DPAPI host→guest staging channel remains future if lab plaintext+wipe stays acceptable for Smoke.
 
 ### Error modes
 
@@ -137,7 +143,7 @@ Expected failures return `SessionResult`; exceptions = bugs.
 
 **Outside:** `Program.cs` arg parse; staged JSON → `ProvisioningBundle` loader; SetupComplete.cmd; Winlogon launching the exe.
 
-**Hidden:** registry key paths, D2D/GDI details, DMA poll loop, job argv, checkpoint file layout, heartbeat, evidence projection formatting, appearance apply.
+**Hidden:** registry key paths, D2D/GDI details, DMA poll loop, job argv construction (not which exe — that is behind AppX / `ResolveScoopCmd`), checkpoint file layout, heartbeat, evidence projection formatting, appearance apply, production Scoop shim `File.Exists` wiring in `Program`, WinRT-private winget framework ACL grant (former `WingetFrameworkPackageAcl`).
 
 ## S3 test strategy (locked)
 
@@ -147,6 +153,7 @@ Expected failures return `SessionResult`; exceptions = bugs.
 | 04 | Splash `Show` before settle; status updates; evidence projection shape |
 | 05 | Scripted region reads → final hard fail skips jobs; soft location warns + continues |
 | 06 | Stub jobs via child-process fakes; jobs skipped after hard settle fail |
+| metal jobs | Winget: AppX fake canned path → `IProcessHost` recording asserts `fileName`; resolve null → fail, host not started. Scoop: Func null→path after bootstrap script → recording sees powershell then `scoop.cmd`. No leaf tests of private path helpers. |
 | 07 | Timeout via `FakeTimeProvider`; stale fail-open; unlock on Failed; appearance once |
 | 08 | Reboot keeps Shell + checkpoint; resume continues tenure |
 

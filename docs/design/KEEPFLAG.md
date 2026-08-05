@@ -82,6 +82,7 @@ Profile.remove list
 | CDM / consumer-features as primary remove | **Not primary** — [ADR-007](../decisions/ADR-007-cdm-not-primary.md) |
 | Product-default / opt-out “recommended set” | **No** — catalog bounds legal ids only |
 | Acceptance Smoke remove-list | **Yes (grill B4)** — small frozen list on acceptance Profile (AppX + thin caps/features; re-pin if media churn) |
+| Acceptance pin SOT | **`KeepFlagPresets.Acceptance` expansion is host SOT** ([What is the single SOT for acceptance keep-flag pins?](https://github.com/yanai-sh/winmint/issues/46)). `samples/acceptance.profile.json` stays a concrete Profile fixture; one test asserts sample `debloat.*` equals that expansion. Preset names never in Profile JSON. |
 
 ## Shipped (no longer “deferred”)
 

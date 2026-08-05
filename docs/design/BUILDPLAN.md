@@ -77,6 +77,7 @@ public sealed record BuildArtifacts(
 - Source ISO existence checks (host or pre-Servicing).
 - Elevated DISM / hive / oscdimg (ImageServicing).
 - Splash / settle / jobs execution (ProvisioningSession).
+- Host Profile JSON compose (`WizardProfileComposer.ToUtf8Json` / `ParseIdList`) — **defer** replacing with `SerializeProfile(Profile)` until the next Profile list field or serialize drift bites ([Profile serialize — go or no-go and shape?](https://github.com/yanai-sh/winmint/issues/48)).
 
 ## Ticket 01 TDD tracers (first vertical slices)
 

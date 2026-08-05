@@ -73,9 +73,10 @@ public sealed record ImageEvidence(
 3. Kernels receive parameter hashtables only — no Profile JSON.
 4. First kernel non-zero → typed failure; workdir preserved (`logs/`, `failure.json`). **Leftover mounts discarded** (`%ProgramData%\WinMint\Servicing\{mount,boot-mount}` via DISM `/Discard`; legacy workdir mounts too) so a failed Apply does not leave an open WIM lock; media bytes stay for diagnosis.
 5. Lane already encoded in `ExportWim` params by BuildPlan; manifest echoes lane.
-6. **One elevated** `servicing/RunPlan.ps1` per `Apply` loops kernels (single UAC).
-7. **Single-image WIM before commit (locked 2026-08-02):** `MountInstallWim` must leave `media/sources/install.wim` with **exactly one** index (export the planned edition out of a multi-edition consumer WIM first). `ExportWim` **fail-closes** if index count ≠ 1 before `Unmount /Commit`. Never commit a multi-edition `install.wim` in place — that path stalls DISM/`wimserv` for hours.
-8. **Host mount root:** DISM mount points are `%ProgramData%\WinMint\Servicing\mount` (+ `boot-mount`), not under the workdir. Media/ISO/WIM stay in the workdir. Distinct from **guest** `%ProgramData%\WinMint\` durable tenure (checkpoint/heartbeat/evidence).
+6. **One elevated** `servicing/RunPlan.ps1` per `Apply` loops kernels (single UAC). RunPlan is a **dumb loop** — opcode → script map only; no product param injection.
+7. **Materialize owns all Mutate params** (deepening map [Does Materialize own Mutate kind?](https://github.com/yanai-sh/winmint/issues/45)): for `RemoveCapabilities` / `DisableOptionalFeatures`, Materialize sets `kind=capability|feature` next to `mountDir` / `workDirectory`. Do not inject `kind` in RunPlan. Assert `kind` in S2 recording tests.
+8. **Single-image WIM before commit (locked 2026-08-02):** `MountInstallWim` must leave `media/sources/install.wim` with **exactly one** index (export the planned edition out of a multi-edition consumer WIM first). `ExportWim` **fail-closes** if index count ≠ 1 before `Unmount /Commit`. Never commit a multi-edition `install.wim` in place — that path stalls DISM/`wimserv` for hours.
+9. **Host mount root:** DISM mount points are `%ProgramData%\WinMint\Servicing\mount` (+ `boot-mount`), not under the workdir. Media/ISO/WIM stay in the workdir. Distinct from **guest** `%ProgramData%\WinMint\` durable tenure (checkpoint/heartbeat/evidence).
 
 ### Example stages (Test lane)
 
@@ -95,8 +96,8 @@ Release differs only in `ExportWim` params (`compression=max`, `cleanup=full`).
 | One UAC → `RunPlan.ps1` | **Recommended** |
 | Per-kernel UAC | Rejected |
 
-Unelevated `Apply`: preflight, materialize artifacts + resolved `stages.json`, spawn elevated runner, parse evidence/failure.  
-Elevated runner: dumb sequential invoke.
+Unelevated `Apply`: preflight, materialize artifacts + resolved `stages.json` (all kernel params including Mutate `kind`), spawn elevated runner, parse evidence/failure.  
+Elevated runner: dumb sequential invoke (no opcode→`kind` branching).
 
 ## What hides / what adapters do
 

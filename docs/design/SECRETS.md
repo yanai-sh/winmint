@@ -20,7 +20,7 @@ Password may appear in:
 |------|--------|
 | Plan-time | Local+autoLogon without password ⇒ BuildPlan `PlanFailure` |
 | Transport | Prefer `PasswordPath` / `PasswordEnvVar` in Profile over inline password when Cli supports it; fixtures may inline test-only secrets |
-| Machine setup | After successful autologon stamp, **wipe** in-memory password buffers (`ISecretScrubber`) |
+| Machine setup | After successful autologon stamp, **wipe** staged bundle password on disk via `WipeSecrets` Action (JSON redact + rewrite; no `FileSecretScrubber` / `ISecretScrubber` class) |
 | Evidence | Harness must **redact** passwords from pulled logs/evidence; never commit real passwords |
 | Guest jobs JSON | Must not round-trip cleartext password |
 | defaultuser0 | Never leave `DefaultUserName=defaultuser0` with `AutoAdminLogon` |
