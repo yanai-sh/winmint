@@ -179,9 +179,6 @@ $bootNudgeUntil = [datetime]::UtcNow.AddMinutes(3)
 
 # Local+autoLogon Profiles need explicit PS Direct credentials (workgroup guest).
 $guestCred = $null
-$pinnedRemoveAppx = @()
-$pinnedRemoveCapabilities = @()
-$pinnedDisableOptionalFeatures = @()
 try {
     $profileDoc = Get-Content -LiteralPath $Profile -Raw -Encoding utf8 | ConvertFrom-Json
     $gu = [string]$profileDoc.account.username
@@ -189,25 +186,45 @@ try {
     if ($gu -and $gp) {
         $guestCred = [pscredential]::new($gu, (ConvertTo-SecureString $gp -AsPlainText -Force))
     }
-    if ($profileDoc.PSObject.Properties.Name -contains 'debloat' -and $null -ne $profileDoc.debloat) {
-        $debloat = $profileDoc.debloat
-        if ($debloat.PSObject.Properties.Name -contains 'removeProvisionedAppx' -and
-            $null -ne $debloat.removeProvisionedAppx) {
-            $pinnedRemoveAppx = @($debloat.removeProvisionedAppx)
-        }
-        if ($debloat.PSObject.Properties.Name -contains 'removeCapabilities' -and
-            $null -ne $debloat.removeCapabilities) {
-            $pinnedRemoveCapabilities = @($debloat.removeCapabilities)
-        }
-        if ($debloat.PSObject.Properties.Name -contains 'disableOptionalFeatures' -and
-            $null -ne $debloat.disableOptionalFeatures) {
-            $pinnedDisableOptionalFeatures = @($debloat.disableOptionalFeatures)
-        }
-    }
 }
 catch {
     Write-Warning "Could not read guest credentials from Profile: $($_.Exception.Message)"
 }
+
+# Keep-flag pins from Apply Materialize (stages.json) — not Profile debloat.* (CONTRACTS ownership).
+$stagesPath = Join-Path $Work 'stages.json'
+if (-not (Test-Path -LiteralPath $stagesPath)) {
+    throw "stages.json missing under $Work (Apply materialize required for keep-flag pins)"
+}
+try {
+    $stagesDoc = Get-Content -LiteralPath $stagesPath -Raw -Encoding utf8 | ConvertFrom-Json
+}
+catch {
+    throw "stages.json unreadable under $Work : $($_.Exception.Message)"
+}
+
+function Get-StageParamIds {
+    param(
+        [Parameter(Mandatory)] $StagesDoc,
+        [Parameter(Mandatory)] [string] $Opcode,
+        [Parameter(Mandatory)] [string] $ParamName
+    )
+    $stage = @($StagesDoc.stages) |
+        Where-Object { [string]$_.opcode -eq $Opcode } |
+        Select-Object -First 1
+    if ($null -eq $stage) { return @() }
+    $joined = [string]$stage.parameters.$ParamName
+    if ([string]::IsNullOrWhiteSpace($joined)) { return @() }
+    return @(
+        $joined.Split(
+            ';',
+            [System.StringSplitOptions]::RemoveEmptyEntries -bor [System.StringSplitOptions]::TrimEntries)
+    )
+}
+
+$pinnedRemoveAppx = @(Get-StageParamIds -StagesDoc $stagesDoc -Opcode 'RemoveProvisionedAppx' -ParamName 'packageFamilyNames')
+$pinnedRemoveCapabilities = @(Get-StageParamIds -StagesDoc $stagesDoc -Opcode 'RemoveCapabilities' -ParamName 'capabilityNames')
+$pinnedDisableOptionalFeatures = @(Get-StageParamIds -StagesDoc $stagesDoc -Opcode 'DisableOptionalFeatures' -ParamName 'featureNames')
 
 function Test-GuestEvidenceReady {
     # Prefer PowerShell Direct when available; else host-copied folder under Work.

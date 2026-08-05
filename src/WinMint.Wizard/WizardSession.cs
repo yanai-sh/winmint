@@ -20,52 +20,47 @@ internal static class WizardSession
         }
 
         // UI lists override empty; when non-empty they replace preset pins for that field (union would surprise).
-        IReadOnlyList<string> caps = WizardProfileComposer.ParseIdList(input.RemoveCapabilitiesText);
+        IReadOnlyList<string> caps = IdList.FromMultiline(input.RemoveCapabilitiesText);
         if (caps.Count == 0)
         {
             caps = expanded.Value.RemoveCapabilities;
         }
 
-        IReadOnlyList<string> feats = WizardProfileComposer.ParseIdList(input.DisableOptionalFeaturesText);
+        IReadOnlyList<string> feats = IdList.FromMultiline(input.DisableOptionalFeaturesText);
         if (feats.Count == 0)
         {
             feats = expanded.Value.DisableOptionalFeatures;
         }
 
-        byte[] utf8 = WizardProfileComposer.ToUtf8Json(
-            input.Username.Trim(),
-            input.Password,
-            input.RequireWifiDuringOobe,
-            input.DmaEnabled,
-            input.Locale.Trim(),
-            geoId,
-            input.TimeZoneId.Trim(),
-            input.LocationServicesEnabled,
+        Profile profile = new(
+            new AccountProfile(
+                input.Username.Trim(),
+                input.Password,
+                input.RequireWifiDuringOobe),
+            new DmaProfile(
+                input.DmaEnabled,
+                new DmaSettleTarget(
+                    input.Locale.Trim(),
+                    geoId,
+                    input.TimeZoneId.Trim(),
+                    input.LocationServicesEnabled)),
             expanded.Value.RemoveProvisionedAppx,
-            WizardProfileComposer.ParseIdList(input.WingetText),
-            WizardProfileComposer.ParseIdList(input.WingetNeedsRebootText),
-            WizardProfileComposer.ParseIdList(input.ScoopText),
-            WizardProfileComposer.ParseIdList(input.ScoopNeedsRebootText),
-            WizardProfileComposer.ParseIdList(input.WslText),
-            WizardProfileComposer.ParseIdList(input.WslNeedsRebootText),
+            IdList.FromMultiline(input.WingetText),
+            IdList.FromMultiline(input.WingetNeedsRebootText),
+            IdList.FromMultiline(input.ScoopText),
+            IdList.FromMultiline(input.ScoopNeedsRebootText),
+            IdList.FromMultiline(input.WslText),
+            IdList.FromMultiline(input.WslNeedsRebootText),
             caps,
             feats);
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
-        if (!parsed.IsOk)
-        {
-            string issues = string.Join(
-                Environment.NewLine,
-                parsed.Error.Issues.Select(i => $"{i.Code}: {i.Message}" + (i.Path is null ? "" : $" ({i.Path})")));
-            return WizardSessionResult.Fail(issues);
-        }
-
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
         if (!planned.IsOk)
         {
             return WizardSessionResult.Fail($"{planned.Error.Code}: {planned.Error.Message}");
         }
 
+        byte[] utf8 = BuildPlan.SerializeProfile(profile);
         string removeSummary = expanded.Value.RemoveProvisionedAppx.Count == 0
             ? "(none)"
             : string.Join(", ", expanded.Value.RemoveProvisionedAppx);

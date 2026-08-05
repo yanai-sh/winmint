@@ -7,24 +7,34 @@ namespace WinMint.Tests;
 /// <summary>Ticket 22 — Wizard authors packages.* into Profile (S1b compose → Plan).</summary>
 public class WizardPackagesTests
 {
+    private static Profile LabProfile(
+        IReadOnlyList<string>? winget = null,
+        IReadOnlyList<string>? wingetNeedsReboot = null,
+        IReadOnlyList<string>? scoop = null,
+        IReadOnlyList<string>? scoopNeedsReboot = null) =>
+        new(
+            new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
+            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            [],
+            winget ?? [],
+            wingetNeedsReboot ?? [],
+            scoop ?? [],
+            scoopNeedsReboot ?? [],
+            [],
+            [],
+            [],
+            []);
+
     [Fact]
-    public void Compose_winget_and_scoop_plans_metal_jobs()
+    public void Serialize_winget_and_scoop_plans_metal_jobs()
     {
-        byte[] utf8 = WizardProfileComposer.ToUtf8Json(
-            username: "winmint",
-            password: "lab-only",
-            requireWifiDuringOobe: false,
-            dmaEnabled: true,
-            locale: "en-GB",
-            geoId: 242,
-            timeZoneId: "GMT Standard Time",
-            locationServicesEnabled: true,
-            removeProvisionedAppx: [],
+        Profile profile = LabProfile(
             winget: ["jqlang.jq"],
             wingetNeedsReboot: ["jqlang.jq"],
             scoop: ["curl"],
             scoopNeedsReboot: []);
 
+        byte[] utf8 = BuildPlan.SerializeProfile(profile);
         string json = Encoding.UTF8.GetString(utf8);
         using JsonDocument doc = JsonDocument.Parse(json);
         JsonElement packages = doc.RootElement.GetProperty("packages");
@@ -47,18 +57,9 @@ public class WizardPackagesTests
     }
 
     [Fact]
-    public void Compose_empty_packages_omits_packages_object()
+    public void Serialize_empty_packages_omits_packages_object()
     {
-        byte[] utf8 = WizardProfileComposer.ToUtf8Json(
-            username: "winmint",
-            password: "lab-only",
-            requireWifiDuringOobe: false,
-            dmaEnabled: true,
-            locale: "en-GB",
-            geoId: 242,
-            timeZoneId: "GMT Standard Time",
-            locationServicesEnabled: true,
-            removeProvisionedAppx: []);
+        byte[] utf8 = BuildPlan.SerializeProfile(LabProfile());
 
         string json = Encoding.UTF8.GetString(utf8);
         Assert.DoesNotContain("\"packages\"", json, StringComparison.Ordinal);
@@ -69,59 +70,43 @@ public class WizardPackagesTests
     }
 
     [Fact]
-    public void Compose_wingetNeedsReboot_not_in_winget_fails_plan()
+    public void Serialize_wingetNeedsReboot_not_in_winget_fails_plan()
     {
-        byte[] utf8 = WizardProfileComposer.ToUtf8Json(
-            username: "winmint",
-            password: "lab-only",
-            requireWifiDuringOobe: false,
-            dmaEnabled: true,
-            locale: "en-GB",
-            geoId: 242,
-            timeZoneId: "GMT Standard Time",
-            locationServicesEnabled: true,
-            removeProvisionedAppx: [],
-            winget: ["jqlang.jq"],
-            wingetNeedsReboot: ["Git.Git"]);
+        Profile profile = LabProfile(winget: ["jqlang.jq"], wingetNeedsReboot: ["Git.Git"]);
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
-        Assert.True(parsed.IsOk);
-
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
         Assert.False(planned.IsOk);
         Assert.Equal("packages.wingetNeedsReboot.unknown", planned.Error.Code);
     }
 
     [Fact]
-    public void Compose_scoopNeedsReboot_not_in_scoop_fails_plan()
+    public void Serialize_scoopNeedsReboot_not_in_scoop_fails_plan()
     {
-        byte[] utf8 = WizardProfileComposer.ToUtf8Json(
-            username: "winmint",
-            password: "lab-only",
-            requireWifiDuringOobe: false,
-            dmaEnabled: true,
-            locale: "en-GB",
-            geoId: 242,
-            timeZoneId: "GMT Standard Time",
-            locationServicesEnabled: true,
-            removeProvisionedAppx: [],
-            scoop: ["curl"],
-            scoopNeedsReboot: ["7zip"]);
+        Profile profile = LabProfile(scoop: ["curl"], scoopNeedsReboot: ["7zip"]);
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
-        Assert.True(parsed.IsOk);
-
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
         Assert.False(planned.IsOk);
         Assert.Equal("packages.scoopNeedsReboot.unknown", planned.Error.Code);
     }
 
     [Fact]
-    public void ParseIdList_newline_trim_drops_blanks()
+    public void Serialize_roundtrips_TryParseProfile()
     {
-        IReadOnlyList<string> ids = WizardProfileComposer.ParseIdList("  jqlang.jq\n\ncurl  \r\n\n");
+        Profile profile = LabProfile(winget: ["jqlang.jq"], scoop: ["curl"]);
+        byte[] utf8 = BuildPlan.SerializeProfile(profile);
+        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Assert.True(parsed.IsOk);
+        Assert.Equal(profile.WingetPackages, parsed.Value.WingetPackages);
+        Assert.Equal(profile.ScoopPackages, parsed.Value.ScoopPackages);
+        Assert.Equal(profile.Account.Username, parsed.Value.Account.Username);
+    }
+
+    [Fact]
+    public void FromMultiline_newline_trim_drops_blanks()
+    {
+        IReadOnlyList<string> ids = IdList.FromMultiline("  jqlang.jq\n\ncurl  \r\n\n");
         Assert.Equal(["jqlang.jq", "curl"], ids);
-        Assert.Empty(WizardProfileComposer.ParseIdList(null));
-        Assert.Empty(WizardProfileComposer.ParseIdList("  \n  "));
+        Assert.Empty(IdList.FromMultiline(null));
+        Assert.Empty(IdList.FromMultiline("  \n  "));
     }
 }

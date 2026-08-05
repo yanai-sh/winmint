@@ -48,18 +48,20 @@ public class KeepFlagPresetTests
         Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Acceptance);
         Assert.True(expanded.IsOk);
 
-        byte[] utf8 = WizardProfileComposer.ToUtf8Json(
-            username: "winmint",
-            password: "lab-only",
-            requireWifiDuringOobe: false,
-            dmaEnabled: true,
-            locale: "en-GB",
-            geoId: 242,
-            timeZoneId: "GMT Standard Time",
-            locationServicesEnabled: true,
-            removeProvisionedAppx: expanded.Value.RemoveProvisionedAppx,
-            removeCapabilities: expanded.Value.RemoveCapabilities,
-            disableOptionalFeatures: expanded.Value.DisableOptionalFeatures);
+        Profile profile = new(
+            new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
+            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            expanded.Value.RemoveProvisionedAppx,
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            expanded.Value.RemoveCapabilities,
+            expanded.Value.DisableOptionalFeatures);
+
+        byte[] utf8 = BuildPlan.SerializeProfile(profile);
 
         // Preset name must not appear in Profile JSON (host expands only).
         string json = Encoding.UTF8.GetString(utf8);
@@ -93,16 +95,20 @@ public class KeepFlagPresetTests
         Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Empty);
         Assert.True(expanded.IsOk);
 
-        byte[] utf8 = WizardProfileComposer.ToUtf8Json(
-            username: "winmint",
-            password: "lab-only",
-            requireWifiDuringOobe: false,
-            dmaEnabled: true,
-            locale: "en-GB",
-            geoId: 242,
-            timeZoneId: "GMT Standard Time",
-            locationServicesEnabled: true,
-            removeProvisionedAppx: expanded.Value.RemoveProvisionedAppx);
+        Profile profile = new(
+            new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
+            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            expanded.Value.RemoveProvisionedAppx,
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []);
+
+        byte[] utf8 = BuildPlan.SerializeProfile(profile);
 
         Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
         Assert.True(parsed.IsOk);

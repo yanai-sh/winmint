@@ -21,7 +21,7 @@ Constraints any interface must satisfy:
 
 ## Designs considered (summary)
 
-Design-it-twice: minimize (`TryParseProfile`+`Plan`) vs flexible `Execute(flags)` vs Validate/Plan/Write. **Locked:** minimize hybrid — two pure entry points; structured validation issues + job discriminators from the flexible design; no `PlanIntent` soup; no day-one artifact sink port. Details archived in git history of this file if needed.
+Design-it-twice: minimize (`TryParseProfile`+`Plan`) vs flexible `Execute(flags)` vs Validate/Plan/Write. **Locked:** minimize hybrid — pure entry points; structured validation issues + job discriminators from the flexible design; no `PlanIntent` soup; no day-one artifact sink port. Details archived in git history of this file if needed. **SerializeProfile** landed 2026-08-05 (overturn of issue #48 defer) as inverse of `TryParseProfile`.
 
 ## Locked interface sketch
 
@@ -32,6 +32,9 @@ public static class BuildPlan
 {
     public static Result<Profile, DocumentErrors> TryParseProfile(ReadOnlySpan<byte> utf8Json);
     // DocumentErrors stays — one-field wrapper; collapse rejected (unwrap tax ≠ reopen locked interface).
+
+    public static byte[] SerializeProfile(Profile profile);
+    // Inverse of TryParseProfile; omit empty packages/debloat (WhenWritingNull).
 
     public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null);
     // run null ⇒ Smoke defaults (ImageQuality.Test; SourceIsoPath may be empty until servicing)
@@ -47,7 +50,6 @@ public sealed record RunOptions
 public sealed record BuildArtifacts(
     UnattendArtifact Unattend,
     JobsArtifact Jobs,
-    PayloadManifest Payload,
     ServicingStageList Stages,   // opaque ServicingOpcode + params — NOT .ps1 paths
     DmaContract Dma,
     BuildManifest Manifest);
@@ -58,12 +60,12 @@ public sealed record BuildArtifacts(
 ### Invariants (callers must know)
 
 1. Pure / deterministic: same inputs → same artifacts (stable ordering for tests).
-2. No I/O inside `Plan` / `TryParseProfile`.
+2. No I/O inside `Plan` / `TryParseProfile` / `SerializeProfile`.
 3. Failure ⇒ no partial artifacts.
 4. Image quality only from `RunOptions` (encoded into `ExportWim` stage params).
 5. DMA enabled (default) ⇒ Ireland latch in unattend **and** settle targets in `DmaContract`.
 6. Local+autoLogon ⇒ non-empty password or `PlanFailure` ([SECRETS](SECRETS.md)).
-7. Ordering for hosts: parse (if JSON) → `Plan` → host may write files → ImageServicing.Apply.
+7. Ordering for hosts: build or parse Profile → `Plan` → optional `SerializeProfile` for export → host may write files → ImageServicing.Apply.
 8. No repo-relative script paths in artifacts.
 
 ### Error modes
@@ -78,8 +80,8 @@ public sealed record BuildArtifacts(
 - Source ISO existence checks (host or pre-Servicing).
 - Elevated DISM / hive / oscdimg (ImageServicing).
 - Splash / settle / jobs execution (ProvisioningSession).
-- Host Profile JSON compose (`WizardProfileComposer.ToUtf8Json` / `ParseIdList`) — **defer** replacing with `SerializeProfile(Profile)` until the next Profile list field or serialize drift bites ([Profile serialize — go or no-go and shape?](https://github.com/yanai-sh/winmint/issues/48)).
-- Cli human plan dump (`WritePlanArtifacts` untyped JSON) vs ImageServicing Materialize `*File` serializers — **defer** merging until the next StageParams / artifact field change (same trigger class as serialize drift above). CONTRACTS allows the dump; twin serializers are accepted debt until then.
+- Host multiline id lists (`IdList.FromMultiline`) — UI/text helper, not Profile domain.
+- Cli human plan dump (`WritePlanArtifacts` untyped JSON) vs ImageServicing Materialize `*File` serializers — **defer** merging until the next StageParams / artifact field change (same trigger class as serialize drift). CONTRACTS allows the dump; twin serializers are accepted debt until then.
 
 ## Ticket 01 TDD tracers (first vertical slices)
 

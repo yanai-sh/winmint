@@ -36,8 +36,9 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 
 | Artifact | Written by | Read by |
 |----------|------------|---------|
-| Profile | Human / Wizard | BuildPlan |
+| Profile | Human / Wizard | BuildPlan; Smoke harness (guest creds only) |
 | BuildArtifacts | BuildPlan | ImageServicing; Cli dump |
+| Servicing stages (`stages.json`) | ImageServicing Materialize | Elevated `RunPlan.ps1`; Smoke harness (keep-flag pin lists) |
 | Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [PROVISIONINGSESSION Secrets](PROVISIONINGSESSION.md#secrets-smoke) |
 | Evidence JSON | ProvisioningSession (projection) | Smoke harness (S4) — **never** session control |
 | Checkpoint | ProvisioningSession (`ICheckpointStore`) | Next Shell `Run` via store (optional `bundle.Resume` inject) |
@@ -54,6 +55,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 - `DmaSettleTarget` / `DmaContract` settle side: locale, GeoId, timeZoneId, location posture.
 - Orchestrator `DmaSettleTarget` (required settle fields on Profile) and Provisioning `DmaSettleTarget` (nullable settle on staged bundle) are **intentional** cross-process shapes — do not merge via a shared Contracts project.
 - `ServicingOpcode` enum owned with BuildPlan stages + ImageServicing catalog (three touch points on add — acceptable).
+- Provisioning job `Kind` stays a **string** across BuildPlan → guest jobs JSON → ProvisioningSession `RunJobs` (not an enum yet). **Defer** a Kind catalog / CONTRACTS touch-point rule until the next job kind lands — same cost class as ServicingOpcode, no drift incident yet.
 - `SupervisorIdentity.ShellPath` (bundle JSON `supervisorPath`) must match offline Shell stamp and Machine setup verify.
 
 ## Interchange DTO naming

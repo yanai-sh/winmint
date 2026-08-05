@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -126,6 +127,55 @@ public static class BuildPlan
             NormalizeRemoveList(doc.Debloat?.DisableOptionalFeatures));
 
         return Result.Ok<Profile, DocumentErrors>(profile);
+    }
+
+    /// <summary>Inverse of <see cref="TryParseProfile"/> — omit empty packages/debloat objects (same as former host composer).</summary>
+    public static byte[] SerializeProfile(Profile profile)
+    {
+        PackagesDocument? packages = null;
+        if (profile.WingetPackages.Count > 0 || profile.WingetNeedsReboot.Count > 0
+            || profile.ScoopPackages.Count > 0 || profile.ScoopNeedsReboot.Count > 0
+            || profile.WslDistros.Count > 0 || profile.WslNeedsReboot.Count > 0)
+        {
+            packages = new PackagesDocument(
+                profile.WingetPackages.Count == 0 ? null : profile.WingetPackages.ToArray(),
+                profile.WingetNeedsReboot.Count == 0 ? null : profile.WingetNeedsReboot.ToArray(),
+                profile.ScoopPackages.Count == 0 ? null : profile.ScoopPackages.ToArray(),
+                profile.ScoopNeedsReboot.Count == 0 ? null : profile.ScoopNeedsReboot.ToArray(),
+                profile.WslDistros.Count == 0 ? null : profile.WslDistros.ToArray(),
+                profile.WslNeedsReboot.Count == 0 ? null : profile.WslNeedsReboot.ToArray());
+        }
+
+        DebloatDocument? debloat = null;
+        if (profile.RemoveProvisionedAppx.Count > 0
+            || profile.RemoveCapabilities.Count > 0
+            || profile.DisableOptionalFeatures.Count > 0)
+        {
+            debloat = new DebloatDocument(
+                profile.RemoveProvisionedAppx.Count == 0 ? null : profile.RemoveProvisionedAppx.ToArray(),
+                profile.RemoveCapabilities.Count == 0 ? null : profile.RemoveCapabilities.ToArray(),
+                profile.DisableOptionalFeatures.Count == 0 ? null : profile.DisableOptionalFeatures.ToArray());
+        }
+
+        ProfileDocument doc = new(
+            ProfileSchemaVersion,
+            new AccountDocument(
+                AccountModeWire.LocalAutoLogon,
+                profile.Account.Username,
+                profile.Account.Password,
+                profile.Account.RequireWifiDuringOobe),
+            new DmaDocument(
+                profile.Dma.Enabled,
+                new DmaSettleDocument(
+                    profile.Dma.Settle.Locale,
+                    profile.Dma.Settle.GeoId,
+                    profile.Dma.Settle.TimeZoneId,
+                    profile.Dma.Settle.LocationServicesEnabled)),
+            debloat,
+            packages);
+
+        return Encoding.UTF8.GetBytes(
+            JsonSerializer.Serialize(doc, BuildPlanJsonContext.Default.ProfileDocument));
     }
 
     private static string[] NormalizeRemoveList(string[]? raw)
@@ -286,13 +336,6 @@ public static class BuildPlan
 
         JobsArtifact jobs = new(JobsSchemaVersion, jobList);
 
-        PayloadManifest payload = new(
-        [
-            "Supervisor.exe",
-            "SetupComplete.cmd",
-            "jobs.json",
-        ]);
-
         string laneName;
         string compression;
         string cleanup;
@@ -380,7 +423,6 @@ public static class BuildPlan
         BuildArtifacts artifacts = new(
             new UnattendArtifact(unattendXml),
             jobs,
-            payload,
             stages,
             new DmaContract(profile.Dma.Enabled, profile.Dma.Enabled ? profile.Dma.Settle : null),
             new BuildManifest(options.ImageQuality),

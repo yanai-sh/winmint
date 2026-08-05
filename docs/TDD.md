@@ -16,8 +16,8 @@
 
 | Seam | Module interface | Dependency category | Tickets (post-gate) |
 |------|------------------|---------------------|---------------------|
-| **S1** | BuildPlan (`TryParseProfile`, `Plan`) | In-process | 01, 09, 11, 16 |
-| **S1b** | Host keep-flag presets + Wizard packages compose (`KeepFlagPresets.TryExpand` + `WizardProfileComposer`) | In-process | 15, 22 |
+| **S1** | BuildPlan (`TryParseProfile`, `SerializeProfile`, `Plan`) | In-process | 01, 09, 11, 16 |
+| **S1b** | Host keep-flag presets + Wizard packages (`KeepFlagPresets.TryExpand` + `IdList.FromMultiline` → Profile → Plan/Serialize) | In-process | 15, 22 |
 | **S2** | ImageServicing (`Apply`) | True external (DISM) — fake when port exists | 02, 09 |
 | **S3** | ProvisioningSession (`Run` + env adapters) | Local-substitutable OS | 03–08, 13, 16, 21 |
 | **S4** | Smoke acceptance (“run → evidence”) | Harness | 10 |
