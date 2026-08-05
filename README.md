@@ -9,7 +9,7 @@
 ARM64-first Windows 11 ISO builder for clean developer workstation installs.
 You supply the official Microsoft ISO — WinMint does not download or redistribute Windows ([ADR-001](docs/decisions/ADR-001-source-iso-legal.md)).
 
-**Status:** M1 in progress — tickets **01**–**03** landed; next is **04** (Shell splash; needs splash spike appendix).
+**Status:** M1–M3 done (Smoke Hyper-V green; Wizard + metal jobs + keep-flag). Backlog **01–30** closed — next work is maintainer pick ([TICKETS](docs/TICKETS.md)).
 
 ## Quickstart
 
