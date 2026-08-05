@@ -74,6 +74,7 @@ internal static class WizardSession
         {
             ImageQuality = lane,
             SourceIsoPath = string.IsNullOrWhiteSpace(input.SourceIsoPath) ? null : input.SourceIsoPath.Trim(),
+            ImageArchitecture = PackageCatalog.DefaultImageArchitecture,
         };
 
         Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile, run);
@@ -133,6 +134,23 @@ internal static class WizardSession
 
         error = "run.imageQuality: must be Test or Release.";
         return false;
+    }
+
+    /// <summary>Resolve curated chip keys to Profile install ids via <see cref="PackageCatalog"/>.</summary>
+    public static PackageSelection ResolvePackageChips(
+        IEnumerable<string> browserChipKeys,
+        IEnumerable<string> editorChipKeys,
+        IEnumerable<string> shellChipKeys,
+        IEnumerable<string> wslChipKeys)
+    {
+        PackageCatalog catalog = PackageCatalog.Default;
+        IEnumerable<string> toolKeys = browserChipKeys
+            .Concat(editorChipKeys)
+            .Concat(shellChipKeys)
+            .Where(static key => !string.Equals(key, "edge", StringComparison.OrdinalIgnoreCase));
+        PackageSelection tools = catalog.ResolveToolKeys(toolKeys);
+        IReadOnlyList<string> wsl = catalog.ResolveWslTokens(wslChipKeys);
+        return new PackageSelection(tools.WingetInstallIds, tools.ScoopInstallIds, wsl);
     }
 
     /// <summary>Advanced multiline wins when non-empty; else selected chip ids; else empty (preset fills).</summary>

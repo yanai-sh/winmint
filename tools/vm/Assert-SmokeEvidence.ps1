@@ -21,7 +21,9 @@ param(
 
     [string[]] $PinnedRemoveCapabilities = @(),
 
-    [string[]] $PinnedDisableOptionalFeatures = @()
+    [string[]] $PinnedDisableOptionalFeatures = @(),
+
+    [switch] $ExpectNativePackageAudit
 )
 
 Set-StrictMode -Version Latest
@@ -147,6 +149,20 @@ if ($null -eq $firstPaintMs) {
 $budgetMs = $FirstPaintBudgetSeconds * 1000.0
 if ($firstPaintMs -gt $budgetMs) {
     Write-Warning ("time-to-first-paint {0:N0} ms exceeds budget {1:N0} ms" -f $firstPaintMs, $budgetMs)
+}
+
+if ($ExpectNativePackageAudit) {
+    $nativePath = Join-Path $EvidenceDir 'guest\native-packages.json'
+    if (-not (Test-Path -LiteralPath $nativePath)) {
+        throw "native package audit missing: expected guest/native-packages.json (Profile had winget packages)"
+    }
+    $native = Get-Content -LiteralPath $nativePath -Raw -Encoding utf8 | ConvertFrom-Json
+    if ([string]$native.schemaVersion -ne 'winmint.native-packages/v1') {
+        throw "unexpected native audit schema '$($native.schemaVersion)'"
+    }
+    if ($null -eq $native.packages -or @($native.packages).Count -eq 0) {
+        throw 'native-packages.json must list at least one audited package'
+    }
 }
 
 $acceptance = [ordered]@{

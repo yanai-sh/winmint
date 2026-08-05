@@ -89,5 +89,9 @@ Interactive Avalonia host of the same BuildPlan brain (not a second planner). Au
 _Avoid_: embedding DISM or a second planning brain in the UI; calling the CLI the Wizard; putting keep-flag preset names into Profile JSON; inventing a Wizard-only packages catalog or live winget/Scoop search as the authoring path; WebView2 on the host wizard
 
 **Metal jobs**:
-Non-stub provisioning job kinds (`winget`, `scoop`, `wsl`) run by the same Supervisor executor as Smoke stubs, on bare metal or richer profiles.
+Non-stub provisioning job kinds (`winget`, `scoop`, `wsl`, `package.auditNative`) run by the same Supervisor executor as Smoke stubs, on bare metal or richer profiles.
 _Avoid_: Hyper-V-only install executors; guest pwsh adapters as the default driver
+
+**Package catalog**:
+Shipped manifest at `config/packages.json` (embedded). **Catalog key** = Wizard chip; **install id** = Profile `packages.*` value. Plan validates fail-closed; debloat stays `CapabilityCatalog`.
+_Avoid_: live winget/Scoop search in Wizard; catalog keys in Profile JSON

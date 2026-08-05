@@ -104,6 +104,29 @@ public class WizardSessionTests
     }
 
     [Fact]
+    public void ComposeAndPlan_advanced_winget_overrides_chip_resolution()
+    {
+        WizardSessionResult result = WizardSession.ComposeAndPlan(
+            Lab(winget: "jqlang.jq"));
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Contains("jqlang.jq", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.DoesNotContain("Anysphere.Cursor", result.ProfileJson!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResolvePackageChips_zen_and_cursor_emit_catalog_install_ids()
+    {
+        PackageSelection selection = WizardSession.ResolvePackageChips(
+            ["zen-browser"],
+            ["cursor"],
+            [],
+            ["FedoraLinux"]);
+        Assert.Contains("Zen-Team.Zen-Browser", selection.WingetInstallIds);
+        Assert.Contains("Anysphere.Cursor", selection.WingetInstallIds);
+        Assert.Equal("FedoraLinux", Assert.Single(selection.WslProfileTokens));
+    }
+
+    [Fact]
     public void MergeChipAndAdvanced_advanced_wins()
     {
         string merged = WizardSession.MergeChipAndAdvanced(["a", "b"], "c\nd");

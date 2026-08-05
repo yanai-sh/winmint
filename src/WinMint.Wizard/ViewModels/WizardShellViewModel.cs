@@ -27,23 +27,23 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         BrowserChips = ToChips(
         [
             ("zen-browser", "Zen"),
-            ("Mozilla.Firefox.DeveloperEdition", "Firefox Dev"),
-            ("Brave.Brave", "Brave"),
-            ("Microsoft.Edge", "Edge"),
+            ("firefox-developer-edition", "Firefox Dev"),
+            ("brave", "Brave"),
+            ("edge", "Edge"),
         ]);
         EditorChips = ToChips(
         [
-            ("Anysphere.Cursor", "Cursor"),
-            ("Microsoft.VisualStudioCode", "VS Code"),
-            ("zedindustries.zed", "Zed"),
-            ("Neovim.Neovim", "Neovim"),
+            ("cursor", "Cursor"),
+            ("vscode", "VS Code"),
+            ("zed", "Zed"),
+            ("neovim", "Neovim"),
         ]);
         ShellChips = ToChips(
         [
             ("windhawk", "Windhawk"),
             ("yasb", "YASB"),
             ("komorebi", "Komorebi"),
-            ("nilesoft-shell", "Nilesoft"),
+            ("nilesoft", "Nilesoft"),
         ]);
         foreach (ChipItem chip in ShellChips)
         {
@@ -89,6 +89,11 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _geoId = "242";
     [ObservableProperty] private string _timeZone = "GMT Standard Time";
     [ObservableProperty] private bool _locationServices = true;
+
+    /// <summary>Power-user multiline overrides (install ids / WSL tokens). Empty ⇒ curated chips only.</summary>
+    [ObservableProperty] private string _advancedWingetText = "";
+    [ObservableProperty] private string _advancedScoopText = "";
+    [ObservableProperty] private string _advancedWslText = "";
 
     [ObservableProperty] private string _status = "";
     [ObservableProperty] private bool _statusIsError;
@@ -375,12 +380,11 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 
     private WizardSessionInput BuildInput()
     {
-        List<string> winget = SelectedIds(BrowserChips)
-            .Concat(SelectedIds(EditorChips))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        List<string> scoop = SelectedIds(ShellChips).ToList();
-        List<string> wsl = SelectedIds(WslChips).ToList();
+        PackageSelection packages = WizardSession.ResolvePackageChips(
+            SelectedIds(BrowserChips),
+            SelectedIds(EditorChips),
+            SelectedIds(ShellChips),
+            SelectedIds(WslChips));
 
         return new WizardSessionInput(
             Preset,
@@ -394,9 +398,9 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             LocationServices,
             KeepGaming: KeepGaming,
             KeepCopilot: KeepCopilot,
-            WingetText: string.Join(Environment.NewLine, winget),
-            ScoopText: string.Join(Environment.NewLine, scoop),
-            WslText: string.Join(Environment.NewLine, wsl),
+            WingetText: WizardSession.MergeChipAndAdvanced(packages.WingetInstallIds, AdvancedWingetText),
+            ScoopText: WizardSession.MergeChipAndAdvanced(packages.ScoopInstallIds, AdvancedScoopText),
+            WslText: WizardSession.MergeChipAndAdvanced(packages.WslProfileTokens, AdvancedWslText),
             SourceIsoPath: SourceIsoPath,
             ImageQualityText: ImageQuality,
             WimIndex: _wimIndex);

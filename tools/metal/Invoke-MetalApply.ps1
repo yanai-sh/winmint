@@ -38,7 +38,9 @@ param(
     [Parameter(ParameterSetName = 'AssertOnly')]
     [string] $WorkDirectory = '',
 
-    [switch] $ExpectDrivers
+    [switch] $ExpectDrivers,
+
+    [switch] $ExpectNativePackageAuditJobs
 )
 
 Set-StrictMode -Version Latest
@@ -50,16 +52,17 @@ Set-Location $repoRoot
 $assertScript = Join-Path $PSScriptRoot 'Assert-MetalEvidence.ps1'
 
 function Invoke-MetalAssert {
-    param([string] $Dir, [switch] $Drivers)
+    param([string] $Dir, [switch] $Drivers, [switch] $NativeAuditJobs)
     $args = @('-WorkDirectory', $Dir, '-RequireOutputIso')
     if ($Drivers) { $args += '-ExpectDrivers' }
+    if ($NativeAuditJobs) { $args += '-ExpectNativePackageAuditJobs' }
     & $assertScript @args
     if ($LASTEXITCODE -ne 0) { throw "Metal assert failed: $LASTEXITCODE" }
 }
 
 if ($AssertOnly) {
     $dir = if ([string]::IsNullOrWhiteSpace($WorkDirectory)) { $Work } else { $WorkDirectory }
-    Invoke-MetalAssert -Dir $dir -Drivers:$ExpectDrivers
+    Invoke-MetalAssert -Dir $dir -Drivers:$ExpectDrivers -NativeAuditJobs:$ExpectNativePackageAuditJobs
     exit 0
 }
 
@@ -74,6 +77,7 @@ if (-not (Test-Path -LiteralPath $Profile)) {
 }
 
 $expectDrivers = $ExpectDrivers
+$expectNativeAuditJobs = $false
 if (-not $expectDrivers) {
     try {
         $doc = Get-Content -LiteralPath $Profile -Raw -Encoding utf8 | ConvertFrom-Json
@@ -83,19 +87,38 @@ if (-not $expectDrivers) {
         Write-Warning "Could not read Profile drivers block: $($_.Exception.Message)"
     }
 }
+try {
+    if (-not (Get-Variable -Name doc -ErrorAction SilentlyContinue)) {
+        $doc = Get-Content -LiteralPath $Profile -Raw -Encoding utf8 | ConvertFrom-Json
+    }
+    if ($null -ne $doc.packages -and $null -ne $doc.packages.winget) {
+        $wingetIds = @($doc.packages.winget | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+        $expectNativeAuditJobs = $wingetIds.Count -gt 0
+    }
+}
+catch {
+    Write-Warning "Could not read Profile packages.winget: $($_.Exception.Message)"
+}
 
 if (-not $SkipApply) {
     Write-Host 'Publishing Supervisor (Release AOT)…'
     & just publish-provisioning
     if ($LASTEXITCODE -ne 0) { throw "just publish-provisioning failed: $LASTEXITCODE" }
 
+    $reuseArgs = @()
+    $marker = Join-Path $Work 'media\sources\.winmint-single-index'
+    if (Test-Path -LiteralPath $marker) {
+        Write-Host 'Found single-image marker — passing --reuse-media'
+        $reuseArgs = @('--reuse-media')
+    }
+
     Write-Host "Metal Apply Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality…"
     Write-Host 'Pre-wipe only: mutates offline WIM from Source ISO — does not install to this device.'
-    & dotnet run --project src/WinMint.Cli -- build $Profile --iso $Iso --work $Work --image-quality $ImageQuality
+    & dotnet run --project src/WinMint.Cli -- build $Profile --iso $Iso --work $Work --image-quality $ImageQuality --package-audit-strict @reuseArgs
     if ($LASTEXITCODE -ne 0) { throw "Metal Apply failed: $LASTEXITCODE" }
 }
 
-Invoke-MetalAssert -Dir $Work -Drivers:$expectDrivers
+Invoke-MetalAssert -Dir $Work -Drivers:$expectDrivers -NativeAuditJobs:$expectNativeAuditJobs
 Write-Host "Metal gate OK. Work preserved: $Work"
 Write-Host 'Next step (manual, destructive): write out.iso to USB and bare-metal install — not run by this harness.'
 exit 0

@@ -46,7 +46,12 @@ public sealed record ProvisionJob(
     string Id,
     string Kind,
     bool NeedsReboot = false,
-    string? PackageId = null);
+    string? PackageId = null,
+    string? WingetArchitecture = null,
+    string? WslInstallKind = null,
+    string? WslFromFileRepo = null,
+    IReadOnlyList<string>? WslFromFileAssetNames = null,
+    bool AuditStrict = false);
 
 public sealed record SupervisorIdentity(string ShellPath);
 

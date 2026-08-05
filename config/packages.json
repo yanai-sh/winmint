@@ -1,0 +1,138 @@
+{
+  "sourcePolicy": {
+    "winget": "GUI apps, Microsoft apps, signed installers, shell integrations, desktop services.",
+    "scoop": "User-local developer CLI tools and shell plumbing via official Scoop bootstrap.",
+    "store": "Microsoft Store-backed packages via winget msstore source (catalog entries only).",
+    "direct": "Reserved — not approved without ADR.",
+    "github": "Reserved — not implemented."
+  },
+  "tools": {
+    "cursor": {
+      "displayName": "Cursor",
+      "source": "winget",
+      "id": "Anysphere.Cursor",
+      "architectures": ["amd64", "arm64"]
+    },
+    "vscode": {
+      "displayName": "Visual Studio Code",
+      "source": "winget",
+      "id": "Microsoft.VisualStudioCode",
+      "architectures": ["amd64", "arm64"]
+    },
+    "zed": {
+      "displayName": "Zed",
+      "source": "winget",
+      "id": "ZedIndustries.Zed",
+      "architectures": ["amd64", "arm64"]
+    },
+    "neovim": {
+      "displayName": "Neovim",
+      "source": "scoop",
+      "id": "neovim",
+      "architectures": ["amd64", "arm64"]
+    },
+    "zen-browser": {
+      "displayName": "Zen Browser",
+      "source": "winget",
+      "id": "Zen-Team.Zen-Browser",
+      "architectures": ["amd64", "arm64"]
+    },
+    "firefox-developer-edition": {
+      "displayName": "Firefox Developer Edition",
+      "source": "winget",
+      "id": "Mozilla.Firefox.DeveloperEdition",
+      "architectures": ["amd64", "arm64"]
+    },
+    "brave": {
+      "displayName": "Brave",
+      "source": "winget",
+      "id": "Brave.Brave",
+      "architectures": ["amd64", "arm64"]
+    },
+    "windhawk": {
+      "displayName": "Windhawk",
+      "source": "winget",
+      "id": "RamenSoftware.Windhawk",
+      "architectures": ["amd64", "arm64"]
+    },
+    "yasb": {
+      "displayName": "YASB",
+      "source": "winget",
+      "id": "AmN.yasb",
+      "architectures": ["amd64", "arm64"]
+    },
+    "komorebi": {
+      "displayName": "Komorebi",
+      "source": "scoop",
+      "id": "komorebi",
+      "architectures": ["amd64", "arm64"]
+    },
+    "nilesoft": {
+      "displayName": "Nilesoft Shell",
+      "source": "winget",
+      "id": "Nilesoft.Shell",
+      "architectures": ["amd64", "arm64"]
+    },
+    "whkd": {
+      "displayName": "whkd",
+      "source": "scoop",
+      "id": "whkd",
+      "architectures": ["amd64", "arm64"]
+    },
+    "jqlang.jq": {
+      "displayName": "jq",
+      "source": "winget",
+      "id": "jqlang.jq",
+      "architectures": ["amd64", "arm64"]
+    },
+    "Git.Git": {
+      "displayName": "Git",
+      "source": "winget",
+      "id": "Git.Git",
+      "architectures": ["amd64", "arm64"]
+    },
+    "curl": {
+      "displayName": "curl",
+      "source": "scoop",
+      "id": "curl",
+      "architectures": ["amd64", "arm64"]
+    }
+  },
+  "wslDistros": {
+    "Ubuntu": {
+      "displayName": "Ubuntu",
+      "installKind": "store",
+      "installId": "Ubuntu",
+      "architectures": ["amd64", "arm64"]
+    },
+    "FedoraLinux": {
+      "displayName": "Fedora",
+      "installKind": "store",
+      "installId": "FedoraLinux",
+      "architectures": ["amd64", "arm64"]
+    },
+    "archlinux": {
+      "displayName": "Arch Linux",
+      "installKind": "store",
+      "installId": "archlinux",
+      "architectures": ["amd64", "arm64"]
+    },
+    "NixOS-WSL": {
+      "displayName": "NixOS",
+      "installKind": "fromFile",
+      "installId": "NixOS",
+      "repo": "nix-community/NixOS-WSL",
+      "assets": {
+        "arm64": ["nixos.aarch64.wsl", "nixos.arm64.wsl", "nixos.wsl"],
+        "amd64": ["nixos.wsl", "nixos.x86_64.wsl", "nixos.amd64.wsl"]
+      },
+      "architectures": ["amd64", "arm64"]
+    },
+    "pengwin": {
+      "displayName": "Pengwin",
+      "installKind": "store",
+      "installId": "pengwin",
+      "architectures": ["amd64", "arm64"]
+    }
+  }
+}

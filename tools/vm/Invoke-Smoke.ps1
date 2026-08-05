@@ -179,6 +179,7 @@ $bootNudgeUntil = [datetime]::UtcNow.AddMinutes(3)
 
 # Local+autoLogon Profiles need explicit PS Direct credentials (workgroup guest).
 $guestCred = $null
+$profileDoc = $null
 try {
     $profileDoc = Get-Content -LiteralPath $Profile -Raw -Encoding utf8 | ConvertFrom-Json
     $gu = [string]$profileDoc.account.username
@@ -189,6 +190,17 @@ try {
 }
 catch {
     Write-Warning "Could not read guest credentials from Profile: $($_.Exception.Message)"
+}
+
+$expectNativePackageAudit = $false
+try {
+    if ($null -ne $profileDoc.packages -and $null -ne $profileDoc.packages.winget) {
+        $wingetIds = @($profileDoc.packages.winget | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+        $expectNativePackageAudit = $wingetIds.Count -gt 0
+    }
+}
+catch {
+    Write-Warning "Could not read Profile packages.winget: $($_.Exception.Message)"
 }
 
 # Keep-flag pins from Apply Materialize (stages.json) — not Profile debloat.* (CONTRACTS ownership).
@@ -268,6 +280,15 @@ function Test-GuestEvidenceReady {
                 Copy-Item -FromSession $session -Path $remote -Destination (Join-Path $guestDir $leaf) -Force
                 $pulled = Get-Content -LiteralPath (Join-Path $guestDir $leaf) -Raw -Encoding utf8 | ConvertFrom-Json
                 $outcome = [string]$pulled.outcome
+                if ($expectNativePackageAudit) {
+                    $nativeRemote = Invoke-Command -Session $session -ScriptBlock {
+                        $p = Join-Path $env:ProgramData 'WinMint\evidence\native-packages.json'
+                        if (Test-Path -LiteralPath $p) { $p } else { $null }
+                    }
+                    if ($nativeRemote) {
+                        Copy-Item -FromSession $session -Path $nativeRemote -Destination (Join-Path $guestDir 'native-packages.json') -Force
+                    }
+                }
                 if ($outcome -eq 'Reboot') {
                     Write-Host 'Guest evidence outcome=Reboot — waiting for checkpoint resume…'
                     return $false
@@ -392,7 +413,8 @@ if (-not (Get-ChildItem -LiteralPath $guestDir -Filter 'evidence-*.json' -ErrorA
 & $assertScript -EvidenceDir $evidenceOut `
     -PinnedRemoveAppx $pinnedRemoveAppx `
     -PinnedRemoveCapabilities $pinnedRemoveCapabilities `
-    -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures
+    -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures `
+    $(if ($expectNativePackageAudit) { '-ExpectNativePackageAudit' })
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "Smoke green. Evidence: $evidenceOut"
 exit 0

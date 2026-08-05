@@ -149,7 +149,16 @@ public static class ImageServicing
 
         JobsFile jobs = new(
             plan.Jobs.SchemaVersion,
-            plan.Jobs.Jobs.Select(j => new JobFile(j.Id, j.Kind, j.NeedsReboot, j.PackageId)).ToArray());
+            plan.Jobs.Jobs.Select(j => new JobFile(
+                j.Id,
+                j.Kind,
+                j.NeedsReboot,
+                j.PackageId,
+                j.WingetArchitecture,
+                j.WslInstallKind,
+                j.WslFromFileRepo,
+                j.WslFromFileAssetNames?.ToArray(),
+                j.AuditStrict)).ToArray());
         File.WriteAllBytes(
             Path.Combine(payloadDir, "jobs.json"),
             JsonSerializer.SerializeToUtf8Bytes(jobs, ServicingJsonContext.Default.JobsFile));
@@ -352,7 +361,12 @@ internal sealed record JobFile(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("kind")] string Kind,
     [property: JsonPropertyName("needsReboot")] bool NeedsReboot = false,
-    [property: JsonPropertyName("packageId")] string? PackageId = null);
+    [property: JsonPropertyName("packageId")] string? PackageId = null,
+    [property: JsonPropertyName("wingetArchitecture")] string? WingetArchitecture = null,
+    [property: JsonPropertyName("wslInstallKind")] string? WslInstallKind = null,
+    [property: JsonPropertyName("wslFromFileRepo")] string? WslFromFileRepo = null,
+    [property: JsonPropertyName("wslFromFileAssetNames")] string[]? WslFromFileAssetNames = null,
+    [property: JsonPropertyName("auditStrict")] bool AuditStrict = false);
 
 internal sealed record BundleFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,

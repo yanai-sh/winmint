@@ -1,2 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\config\packages.json" Link="packages.json" />
+  </ItemGroup>
 </Project>

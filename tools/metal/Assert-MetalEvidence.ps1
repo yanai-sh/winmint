@@ -23,7 +23,9 @@ param(
 
     [int] $MinimumIncludedDrivers = 1,
 
-    [switch] $RequireOutputIso
+    [switch] $RequireOutputIso,
+
+    [switch] $ExpectNativePackageAuditJobs
 )
 
 Set-StrictMode -Version Latest
@@ -110,6 +112,24 @@ if ($ExpectDrivers) {
     }
     if ($digestMap['policy.deviceInstaller.DisableCoInstallers'] -ne '1') {
         throw "DisableCoInstallers expected 1, got '$($digestMap['policy.deviceInstaller.DisableCoInstallers'])'"
+    }
+}
+
+if ($ExpectNativePackageAuditJobs) {
+    $jobsPath = Join-Path $WorkDirectory 'payload\jobs.json'
+    if (-not (Test-Path -LiteralPath $jobsPath)) {
+        throw "payload/jobs.json missing: $jobsPath (ExpectNativePackageAuditJobs)"
+    }
+    $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+    $auditJobs = @($jobsDoc.jobs | Where-Object { [string]$_.kind -eq 'package.auditNative' })
+    if ($auditJobs.Count -eq 0) {
+        throw 'payload/jobs.json must include package.auditNative when Profile lists winget packages'
+    }
+    $wingetJobs = @($jobsDoc.jobs | Where-Object {
+            [string]$_.kind -eq 'winget' -and -not [string]::IsNullOrWhiteSpace([string]$_.wingetArchitecture)
+        })
+    if ($wingetJobs.Count -eq 0) {
+        throw 'payload/jobs.json must include winget jobs with wingetArchitecture for ARM64 metal profiles'
     }
 }
 

@@ -157,7 +157,7 @@ public class WingetJobsTests
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git")]),
+            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git", WingetArchitecture: "arm64")]),
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
@@ -175,6 +175,8 @@ public class WingetJobsTests
                 "--accept-package-agreements",
                 "--accept-source-agreements",
                 "--disable-interactivity",
+                "--architecture",
+                "arm64",
             ],
             processes.Starts[0].Arguments);
         Assert.Contains("jobs.ok", evidence.Documents[0].Phases);

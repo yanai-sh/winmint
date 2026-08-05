@@ -1,5 +1,10 @@
 namespace WinMint.Provisioning;
 
+using System.Net.Http.Json;
+using System.Reflection.PortableExecutable;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 public static class ProvisioningSession
 {
     public const string ForbiddenAutologonUser = "defaultuser0";
@@ -430,6 +435,17 @@ public static class ProvisioningSession
                 continue;
             }
 
+            if (string.Equals(job.Kind, "package.auditNative", StringComparison.OrdinalIgnoreCase))
+            {
+                JobsPhaseResult? audit = RunNativePackageAuditJob(env, phases, job, ct);
+                if (audit is not null)
+                {
+                    return audit.Value;
+                }
+
+                continue;
+            }
+
             string fileName;
             IReadOnlyList<string> arguments;
             if (string.Equals(job.Kind, "stub", StringComparison.OrdinalIgnoreCase))
@@ -485,6 +501,10 @@ public static class ProvisioningSession
                     "--accept-source-agreements",
                     "--disable-interactivity",
                 ];
+                if (!string.IsNullOrWhiteSpace(job.WingetArchitecture))
+                {
+                    arguments = [.. arguments, "--architecture", job.WingetArchitecture];
+                }
             }
             else if (string.Equals(job.Kind, "scoop", StringComparison.OrdinalIgnoreCase))
             {
@@ -552,7 +572,31 @@ public static class ProvisioningSession
                         $"Job '{job.Id}' kind wsl requires packageId (distro name).");
                 }
 
-                // Distro id from Profile packages.wsl — e.g. Ubuntu. Network + admin; fail closed offline.
+                if (string.Equals(job.WslInstallKind, "fromFile", StringComparison.OrdinalIgnoreCase))
+                {
+                    JobsPhaseResult? fromFile = RunWslFromFileInstall(env, phases, job, ct);
+                    if (fromFile is not null)
+                    {
+                        return fromFile.Value;
+                    }
+
+                    if (job.NeedsReboot)
+                    {
+                        int nextIndex = i + 1;
+                        CheckpointState checkpoint = new($"jobs:{nextIndex}");
+                        env.Checkpoints.WriteCheckpoint(checkpoint);
+                        env.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
+                        SessionStatus reboot = new(
+                            "jobs.reboot",
+                            $"Job '{job.Id}' requires reboot; checkpoint {checkpoint.Phase}.");
+                        env.Splash.SetStatus(reboot);
+                        phases.Add(reboot.Code);
+                        return new JobsPhaseResult(SessionOutcome.Reboot, reboot, TimedOut: false);
+                    }
+
+                    continue;
+                }
+
                 fileName = "wsl.exe";
                 arguments =
                 [
@@ -1109,6 +1153,242 @@ public static class ProvisioningSession
         !string.IsNullOrWhiteSpace(actual)
         && string.Equals(actual.Trim(), expected.Trim(), StringComparison.OrdinalIgnoreCase);
 
+    private static JobsPhaseResult? RunWslFromFileInstall(
+        SessionEnvironment env,
+        List<string> phases,
+        ProvisionJob job,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(job.WslFromFileRepo)
+            || job.WslFromFileAssetNames is not { Count: > 0 })
+        {
+            SessionStatus bad = new("jobs.failed", $"{job.Id}: fromFile WSL requires repo and asset names.");
+            env.Splash.SetStatus(bad);
+            phases.Add(bad.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, bad, TimedOut: false);
+        }
+
+        string? assetPath;
+        try
+        {
+            assetPath = DownloadWslFromFileAsset(job.WslFromFileRepo, job.WslFromFileAssetNames, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SessionStatus failed = new("jobs.wsl.fromFile_download_failed", $"{job.Id}: {ex.Message}");
+            env.Splash.SetStatus(failed);
+            phases.Add(failed.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+        }
+
+        if (assetPath is null)
+        {
+            SessionStatus failed = new(
+                "jobs.wsl.fromFile_asset_missing",
+                $"{job.Id}: no matching GitHub release asset for {job.WslFromFileRepo}.");
+            env.Splash.SetStatus(failed);
+            phases.Add(failed.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+        }
+
+        try
+        {
+            ProcessStartResult started = env.Processes.Run(
+                "wsl.exe",
+                ["--install", "--from-file", assetPath, "--no-launch"],
+                ct);
+            if (started.ExitCode != 0)
+            {
+                SessionStatus failed = new("jobs.failed", $"{job.Id}: wsl --from-file exited {started.ExitCode}.");
+                env.Splash.SetStatus(failed);
+                phases.Add(failed.Code);
+                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
+            env.Splash.SetStatus(failed);
+            phases.Add(failed.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+        }
+    }
+
+    private static string? DownloadWslFromFileAsset(
+        string repo,
+        IReadOnlyList<string> assetNameHints,
+        CancellationToken ct)
+    {
+        using HttpClient client = new();
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("WinMint-Provisioning/1.0");
+        string url = $"https://api.github.com/repos/{repo}/releases/latest";
+        using HttpResponseMessage response = client.GetAsync(url, ct).GetAwaiter().GetResult();
+        response.EnsureSuccessStatusCode();
+        GitHubRelease? release = response.Content.ReadFromJsonAsync(
+            GitHubReleaseJsonContext.Default.GitHubRelease,
+            ct).GetAwaiter().GetResult();
+        if (release?.Assets is null)
+        {
+            return null;
+        }
+
+        foreach (string hint in assetNameHints)
+        {
+            GitHubAsset? asset = release.Assets.FirstOrDefault(
+                a => a.Name.Contains(hint, StringComparison.OrdinalIgnoreCase));
+            if (asset?.BrowserDownloadUrl is null)
+            {
+                continue;
+            }
+
+            string tempDir = Path.Combine(Path.GetTempPath(), "WinMint", "wsl");
+            Directory.CreateDirectory(tempDir);
+            string dest = Path.Combine(tempDir, asset.Name);
+            using HttpResponseMessage assetResponse = client.GetAsync(asset.BrowserDownloadUrl, ct).GetAwaiter().GetResult();
+            assetResponse.EnsureSuccessStatusCode();
+            using FileStream stream = File.Create(dest);
+            assetResponse.Content.CopyToAsync(stream, ct).GetAwaiter().GetResult();
+            return dest;
+        }
+
+        return null;
+    }
+
+    private static JobsPhaseResult? RunNativePackageAuditJob(
+        SessionEnvironment env,
+        List<string> phases,
+        ProvisionJob job,
+        CancellationToken ct)
+    {
+        _ = ct;
+        if (string.IsNullOrWhiteSpace(job.PackageId))
+        {
+            SessionStatus bad = new("jobs.failed", $"{job.Id}: audit requires packageId list.");
+            env.Splash.SetStatus(bad);
+            phases.Add(bad.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, bad, TimedOut: false);
+        }
+
+        List<NativePackageAuditEntry> entries = [];
+        bool anyNonNative = false;
+        foreach (string installId in job.PackageId.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            bool found = false;
+            foreach (string path in GuessGuiBinaryPaths(installId))
+            {
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                found = true;
+                bool native = IsArm64NativeBinary(path);
+                entries.Add(new NativePackageAuditEntry(installId, path, native));
+                if (!native)
+                {
+                    anyNonNative = true;
+                }
+
+                break;
+            }
+
+            if (!found)
+            {
+                entries.Add(new NativePackageAuditEntry(installId, null, null));
+            }
+        }
+
+        string evidenceDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "WinMint",
+            "evidence");
+        Directory.CreateDirectory(evidenceDir);
+        string evidencePath = Path.Combine(evidenceDir, "native-packages.json");
+        NativePackageAuditDocument doc = new("winmint.native-packages/v1", entries);
+        File.WriteAllText(
+            evidencePath,
+            JsonSerializer.Serialize(doc, NativePackageAuditJsonContext.Default.NativePackageAuditDocument));
+
+        if (job.AuditStrict && anyNonNative)
+        {
+            SessionStatus failed = new(
+                "jobs.package.audit_non_native",
+                $"{job.Id}: one or more winget GUI binaries are not native ARM64 (see {evidencePath}).");
+            env.Splash.SetStatus(failed);
+            phases.Add(failed.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GuessGuiBinaryPaths(string wingetId)
+    {
+        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        return wingetId switch
+        {
+            "Anysphere.Cursor" =>
+            [
+                Path.Combine(localAppData, "Programs", "cursor", "Cursor.exe"),
+                Path.Combine(localAppData, "Programs", "Cursor", "Cursor.exe"),
+            ],
+            "Zen-Team.Zen-Browser" =>
+            [
+                Path.Combine(programFiles, "Zen Browser", "zen.exe"),
+                Path.Combine(localAppData, "Zen Browser", "zen.exe"),
+            ],
+            "Brave.Brave" =>
+            [
+                Path.Combine(programFiles, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+                Path.Combine(localAppData, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+            ],
+            "Microsoft.VisualStudioCode" =>
+            [
+                Path.Combine(localAppData, "Programs", "Microsoft VS Code", "Code.exe"),
+                Path.Combine(programFiles, "Microsoft VS Code", "Code.exe"),
+            ],
+            "ZedIndustries.Zed" =>
+            [
+                Path.Combine(localAppData, "Programs", "Zed", "Zed.exe"),
+                Path.Combine(programFiles, "Zed", "Zed.exe"),
+            ],
+            _ => [],
+        };
+    }
+
+    private static bool IsArm64NativeBinary(string path)
+    {
+        using FileStream stream = File.OpenRead(path);
+        PEReader reader = new(stream);
+        return reader.PEHeaders.CoffHeader.Machine == Machine.Arm64;
+    }
+
     private static SessionResult Fail(string code, string message) =>
         new(SessionOutcome.Failed, new SessionStatus(code, message), []);
 }
+
+internal sealed record GitHubRelease(
+    [property: JsonPropertyName("assets")] GitHubAsset[]? Assets);
+
+internal sealed record GitHubAsset(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("browser_download_url")] string? BrowserDownloadUrl);
+
+[JsonSerializable(typeof(GitHubRelease))]
+internal sealed partial class GitHubReleaseJsonContext : JsonSerializerContext;
+
+internal sealed record NativePackageAuditDocument(
+    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
+    [property: JsonPropertyName("packages")] IReadOnlyList<NativePackageAuditEntry> Packages);
+
+internal sealed record NativePackageAuditEntry(
+    [property: JsonPropertyName("wingetId")] string WingetId,
+    [property: JsonPropertyName("binaryPath")] string? BinaryPath,
+    [property: JsonPropertyName("isArm64Native")] bool? IsArm64Native);
+
+[JsonSerializable(typeof(NativePackageAuditDocument))]
+[JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+internal sealed partial class NativePackageAuditJsonContext : JsonSerializerContext;

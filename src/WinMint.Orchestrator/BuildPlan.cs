@@ -422,6 +422,17 @@ public static class BuildPlan
             }
         }
 
+        PackageCatalog catalog = options.PackageCatalog ?? PackageCatalog.Default;
+        string imageArchitecture = PackageCatalog.EffectiveImageArchitecture(options);
+        IReadOnlyList<string> wingetAuditTargets = catalog.ValidateProfilePackages(
+            profile,
+            imageArchitecture,
+            out PlanFailure? catalogFail);
+        if (catalogFail is not null)
+        {
+            return Result.Fail<BuildArtifacts, PlanFailure>(catalogFail);
+        }
+
         HashSet<string> wingetNeedsReboot = new(profile.WingetNeedsReboot, StringComparer.OrdinalIgnoreCase);
         HashSet<string> scoopNeedsReboot = new(profile.ScoopNeedsReboot, StringComparer.OrdinalIgnoreCase);
         HashSet<string> wslNeedsReboot = new(profile.WslNeedsReboot, StringComparer.OrdinalIgnoreCase);
@@ -456,11 +467,16 @@ public static class BuildPlan
 
         foreach (string packageId in profile.WingetPackages)
         {
+            catalog.TryGetToolByInstallId(packageId, out PackageToolEntry? wingetTool);
+            string? wingetArch = wingetTool is null
+                ? null
+                : PackageCatalog.ResolveWingetArchitectureFlag(wingetTool, imageArchitecture);
             jobList.Add(new JobDescriptor(
                 $"winget.{packageId}",
                 "winget",
                 PackageId: packageId,
-                NeedsReboot: wingetNeedsReboot.Contains(packageId)));
+                NeedsReboot: wingetNeedsReboot.Contains(packageId),
+                WingetArchitecture: wingetArch));
         }
 
         foreach (string packageId in profile.ScoopPackages)
@@ -472,13 +488,30 @@ public static class BuildPlan
                 NeedsReboot: scoopNeedsReboot.Contains(packageId)));
         }
 
-        foreach (string distroId in profile.WslDistros)
+        foreach (string distroToken in profile.WslDistros)
+        {
+            catalog.TryGetWslByProfileToken(distroToken, out WslDistroEntry? wslEntry);
+            string installId = wslEntry?.InstallId ?? distroToken;
+            string? installKind = wslEntry?.InstallKind;
+            IReadOnlyList<string>? assetNames = wslEntry?.FromFileAssetNamesFor(imageArchitecture);
+            jobList.Add(new JobDescriptor(
+                $"wsl.{installId}",
+                "wsl",
+                PackageId: installId,
+                NeedsReboot: wslNeedsReboot.Contains(distroToken),
+                WslInstallKind: installKind,
+                WslFromFileRepo: wslEntry?.FromFileRepo,
+                WslFromFileAssetNames: assetNames is { Count: > 0 } ? assetNames : null));
+        }
+
+        if (wingetAuditTargets.Count > 0
+            && string.Equals(imageArchitecture, "arm64", StringComparison.OrdinalIgnoreCase))
         {
             jobList.Add(new JobDescriptor(
-                $"wsl.{distroId}",
-                "wsl",
-                PackageId: distroId,
-                NeedsReboot: wslNeedsReboot.Contains(distroId)));
+                "package.auditNative",
+                "package.auditNative",
+                PackageId: string.Join(';', wingetAuditTargets),
+                AuditStrict: options.PackageAuditStrict));
         }
 
         JobsArtifact jobs = new(JobsSchemaVersion, jobList);

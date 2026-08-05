@@ -73,7 +73,16 @@ public static class BundleLoader
         }
 
         return (jobsFile.Jobs ?? [])
-            .Select(j => new ProvisionJob(j.Id, j.Kind, j.NeedsReboot, j.PackageId))
+            .Select(j => new ProvisionJob(
+                j.Id,
+                j.Kind,
+                j.NeedsReboot,
+                j.PackageId,
+                j.WingetArchitecture,
+                j.WslInstallKind,
+                j.WslFromFileRepo,
+                j.WslFromFileAssetNames,
+                j.AuditStrict))
             .ToArray();
     }
 }
@@ -101,7 +110,12 @@ internal sealed record JobFile(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("kind")] string Kind,
     [property: JsonPropertyName("needsReboot")] bool NeedsReboot = false,
-    [property: JsonPropertyName("packageId")] string? PackageId = null);
+    [property: JsonPropertyName("packageId")] string? PackageId = null,
+    [property: JsonPropertyName("wingetArchitecture")] string? WingetArchitecture = null,
+    [property: JsonPropertyName("wslInstallKind")] string? WslInstallKind = null,
+    [property: JsonPropertyName("wslFromFileRepo")] string? WslFromFileRepo = null,
+    [property: JsonPropertyName("wslFromFileAssetNames")] string[]? WslFromFileAssetNames = null,
+    [property: JsonPropertyName("auditStrict")] bool AuditStrict = false);
 
 [JsonSerializable(typeof(BundleFile))]
 [JsonSerializable(typeof(JobsFile))]

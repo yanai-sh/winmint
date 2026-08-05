@@ -11,6 +11,12 @@ public sealed record RunOptions
     public string? ImageArchitecture { get; init; }
     /// <summary>When set, catalog minimumWindowsBuild is checked at Plan.</summary>
     public int? WindowsBuild { get; init; }
+
+    /// <summary>When true, native ARM64 audit job fails closed on emulated/x64 binaries (SL7/metal).</summary>
+    public bool PackageAuditStrict { get; init; }
+
+    /// <summary>Override embedded package catalog (tests); null uses <see cref="PackageCatalog.Default"/>.</summary>
+    public PackageCatalog? PackageCatalog { get; init; }
 }
 
 public enum ImageQualityLane
@@ -35,7 +41,12 @@ public sealed record JobDescriptor(
     string Id,
     string Kind,
     string? PackageId = null,
-    bool NeedsReboot = false);
+    bool NeedsReboot = false,
+    string? WingetArchitecture = null,
+    string? WslInstallKind = null,
+    string? WslFromFileRepo = null,
+    IReadOnlyList<string>? WslFromFileAssetNames = null,
+    bool AuditStrict = false);
 
 public sealed record ServicingStageList(IReadOnlyList<ServicingStage> Stages);
 

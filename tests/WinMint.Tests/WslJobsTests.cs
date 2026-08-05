@@ -19,7 +19,23 @@ public class WslJobsTests
         JobDescriptor ubuntu = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "wsl");
         Assert.Equal("wsl.Ubuntu", ubuntu.Id);
         Assert.Equal("Ubuntu", ubuntu.PackageId);
+        Assert.Equal("store", ubuntu.WslInstallKind);
         Assert.False(ubuntu.NeedsReboot);
+    }
+
+    [Fact]
+    public void Plan_nixos_wsl_emits_fromFile_metadata()
+    {
+        Profile profile = Parse(MinimalJson(wsl: ["NixOS-WSL"]));
+
+        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk);
+        JobDescriptor nix = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "wsl");
+        Assert.Equal("NixOS", nix.PackageId);
+        Assert.Equal("fromFile", nix.WslInstallKind);
+        Assert.Equal("nix-community/NixOS-WSL", nix.WslFromFileRepo);
+        Assert.Contains("nixos.aarch64.wsl", nix.WslFromFileAssetNames!);
     }
 
     [Fact]

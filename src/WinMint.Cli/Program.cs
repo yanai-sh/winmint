@@ -55,16 +55,31 @@ internal static class Program
             DefaultValueFactory = _ => "Test",
         };
 
+        Option<string?> imageArchitectureOption = new("--image-architecture")
+        {
+            Description = "Target image CPU architecture for package validation (default arm64).",
+        };
+
+        Option<bool> packageAuditStrictOption = new("--package-audit-strict")
+        {
+            Description = "Fail closed when native ARM64 audit finds x64/emulated winget GUI binaries.",
+        };
+
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")
         {
             profileArgument,
             imageQualityOption,
+            imageArchitectureOption,
+            packageAuditStrictOption,
         };
         validateCommand.SetAction(parseResult =>
         {
             FileInfo profilePath = parseResult.GetValue(profileArgument)!;
-            string imageQuality = parseResult.GetValue(imageQualityOption)!;
-            return RunValidate(profilePath, imageQuality);
+            return RunValidate(
+                profilePath,
+                parseResult.GetValue(imageQualityOption)!,
+                parseResult.GetValue(imageArchitectureOption),
+                parseResult.GetValue(packageAuditStrictOption));
         });
 
         Command planCommand = new("plan", "Parse and plan a Profile; emit plan artifacts.")
@@ -72,13 +87,19 @@ internal static class Program
             profileArgument,
             outOption,
             imageQualityOption,
+            imageArchitectureOption,
+            packageAuditStrictOption,
         };
         planCommand.SetAction(parseResult =>
         {
             FileInfo profilePath = parseResult.GetValue(profileArgument)!;
             DirectoryInfo outDir = parseResult.GetValue(outOption)!;
-            string imageQuality = parseResult.GetValue(imageQualityOption)!;
-            return RunPlan(profilePath, outDir, imageQuality);
+            return RunPlan(
+                profilePath,
+                outDir,
+                parseResult.GetValue(imageQualityOption)!,
+                parseResult.GetValue(imageArchitectureOption),
+                parseResult.GetValue(packageAuditStrictOption));
         });
 
         Command buildCommand = new("build", "Plan a Profile and apply ImageServicing (one elevated RunPlan).")
@@ -90,6 +111,8 @@ internal static class Program
             wimIndexOption,
             reuseMediaOption,
             imageQualityOption,
+            imageArchitectureOption,
+            packageAuditStrictOption,
         };
         buildCommand.SetAction(parseResult =>
         {
@@ -99,8 +122,16 @@ internal static class Program
             FileInfo? outIso = parseResult.GetValue(outIsoOption);
             int? wimIndex = parseResult.GetValue(wimIndexOption);
             bool reuseMedia = parseResult.GetValue(reuseMediaOption);
-            string imageQuality = parseResult.GetValue(imageQualityOption)!;
-            return RunBuild(profilePath, iso, work, outIso, wimIndex, reuseMedia, imageQuality);
+            return RunBuild(
+                profilePath,
+                iso,
+                work,
+                outIso,
+                wimIndex,
+                reuseMedia,
+                parseResult.GetValue(imageQualityOption)!,
+                parseResult.GetValue(imageArchitectureOption),
+                parseResult.GetValue(packageAuditStrictOption));
         });
 
         RootCommand root = new("WinMint — Profile plan and ImageServicing build")
@@ -113,14 +144,18 @@ internal static class Program
         return root.Parse(args).Invoke();
     }
 
-    private static int RunValidate(FileInfo profilePath, string imageQuality)
+    private static int RunValidate(
+        FileInfo profilePath,
+        string imageQuality,
+        string? imageArchitecture,
+        bool packageAuditStrict)
     {
-        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
+        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, out RunOptions run, out int exit))
         {
             return exit;
         }
 
-        if (!TryLoadArtifacts(profilePath, out _, out exit, new RunOptions { ImageQuality = lane }))
+        if (!TryLoadArtifacts(profilePath, out _, out exit, run))
         {
             return exit;
         }
@@ -129,14 +164,19 @@ internal static class Program
         return 0;
     }
 
-    private static int RunPlan(FileInfo profilePath, DirectoryInfo outDir, string imageQuality)
+    private static int RunPlan(
+        FileInfo profilePath,
+        DirectoryInfo outDir,
+        string imageQuality,
+        string? imageArchitecture,
+        bool packageAuditStrict)
     {
-        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
+        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, out RunOptions run, out int exit))
         {
             return exit;
         }
 
-        if (!TryLoadArtifacts(profilePath, out BuildArtifacts? artifacts, out exit, new RunOptions { ImageQuality = lane }))
+        if (!TryLoadArtifacts(profilePath, out BuildArtifacts? artifacts, out exit, run))
         {
             return exit;
         }
@@ -155,9 +195,11 @@ internal static class Program
         FileInfo? outIso,
         int? wimIndex,
         bool reuseMedia,
-        string imageQuality)
+        string imageQuality,
+        string? imageArchitecture,
+        bool packageAuditStrict)
     {
-        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
+        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, out RunOptions planRun, out int exit))
         {
             return exit;
         }
@@ -166,9 +208,8 @@ internal static class Program
                 profilePath,
                 out BuildArtifacts? artifacts,
                 out exit,
-                new RunOptions
+                planRun with
                 {
-                    ImageQuality = lane,
                     SourceIsoPath = iso.FullName,
                     OutputIsoPath = outIso?.FullName,
                 }))
@@ -182,14 +223,14 @@ internal static class Program
                 "Warning: ImageQuality=Release uses compression=max + cleanup=full — prefer Test for iterative builds.");
         }
 
-        ServicingRun run = new(
+        ServicingRun servicingRun = new(
             SourceIsoPath: iso.FullName,
             WorkDirectory: work.FullName,
             OutputIsoPath: outIso?.FullName ?? Path.Combine(work.FullName, "out.iso"),
             WimIndex: wimIndex,
             ReuseMedia: reuseMedia);
 
-        Result<ImageEvidence, ServicingFailure> applied = ImageServicing.Apply(artifacts!, run);
+        Result<ImageEvidence, ServicingFailure> applied = ImageServicing.Apply(artifacts!, servicingRun);
         if (!applied.IsOk)
         {
             Console.Error.WriteLine($"{applied.Error.Code}: {applied.Error.Message}");
@@ -201,6 +242,29 @@ internal static class Program
         Console.WriteLine($"Shell stamp: {applied.Value.ShellStampTargetPath}");
         Console.WriteLine($"Lane: {applied.Value.Lane}");
         return 0;
+    }
+
+    private static bool TryBuildRunOptions(
+        string imageQuality,
+        string? imageArchitecture,
+        bool packageAuditStrict,
+        out RunOptions run,
+        out int exitCode)
+    {
+        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out exitCode))
+        {
+            run = new RunOptions();
+            return false;
+        }
+
+        run = new RunOptions
+        {
+            ImageQuality = lane,
+            ImageArchitecture = imageArchitecture,
+            PackageAuditStrict = packageAuditStrict,
+        };
+        exitCode = 0;
+        return true;
     }
 
     private static bool TryParseImageQuality(string raw, out ImageQualityLane lane, out int exitCode)
@@ -268,12 +332,46 @@ internal static class Program
             {
                 ["schemaVersion"] = artifacts.Jobs.SchemaVersion,
                 ["jobs"] = new JsonArray(
-                    artifacts.Jobs.Jobs.Select(static j => (JsonNode)new JsonObject
+                    artifacts.Jobs.Jobs.Select(static j =>
                     {
-                        ["id"] = j.Id,
-                        ["kind"] = j.Kind,
-                        ["needsReboot"] = j.NeedsReboot,
-                        ["packageId"] = j.PackageId,
+                        JsonObject obj = new()
+                        {
+                            ["id"] = j.Id,
+                            ["kind"] = j.Kind,
+                            ["needsReboot"] = j.NeedsReboot,
+                        };
+                        if (j.PackageId is not null)
+                        {
+                            obj["packageId"] = j.PackageId;
+                        }
+
+                        if (j.WingetArchitecture is not null)
+                        {
+                            obj["wingetArchitecture"] = j.WingetArchitecture;
+                        }
+
+                        if (j.WslInstallKind is not null)
+                        {
+                            obj["wslInstallKind"] = j.WslInstallKind;
+                        }
+
+                        if (j.WslFromFileRepo is not null)
+                        {
+                            obj["wslFromFileRepo"] = j.WslFromFileRepo;
+                        }
+
+                        if (j.WslFromFileAssetNames is { Count: > 0 })
+                        {
+                            obj["wslFromFileAssetNames"] = new JsonArray(
+                                j.WslFromFileAssetNames.Select(static n => (JsonNode)n).ToArray());
+                        }
+
+                        if (j.AuditStrict)
+                        {
+                            obj["auditStrict"] = true;
+                        }
+
+                        return (JsonNode)obj;
                     }).ToArray()),
             });
 

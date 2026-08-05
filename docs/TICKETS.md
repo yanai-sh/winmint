@@ -53,6 +53,7 @@ Also never in product: BitLocker Smoke, Home Smoke SKU, MicrosoftOobe, enterpris
 | 28 | [#40](https://github.com/yanai-sh/winmint/issues/40) | 2026-08-05 | Best-effort secrets wipe on Machine setup |
 | 29 | [#41](https://github.com/yanai-sh/winmint/issues/41) | 2026-08-05 | GDI splash status text (`TextOutW`) |
 | 30 | [#42](https://github.com/yanai-sh/winmint/issues/42) | 2026-08-05 | Hardware M4 opt-in evidence bars |
+| 31 | [#64–#69](https://github.com/yanai-sh/winmint/issues/64) | 2026-08-05 | Package catalog + ARM64 harvest (Plan validation, Wizard chips, winget arch, WSL fromFile, native audit) |
 
 Sequencing history: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) (**met**). Keep-flag design: [KEEPFLAG](design/KEEPFLAG.md).
 

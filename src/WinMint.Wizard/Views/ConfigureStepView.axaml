@@ -104,5 +104,24 @@
         </StackPanel>
       </Border>
     </UniformGrid>
+
+    <Expander Header="Advanced packages (optional)" IsExpanded="False">
+      <StackPanel Spacing="8" Margin="0,8,0,0">
+        <TextBlock Classes="hero-sub"
+                   Text="One install id or WSL token per line. When non-empty, overrides chip selections for that source." />
+        <TextBlock Classes="panel-label" Text="WINGET INSTALL IDS" />
+        <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
+                 PlaceholderText="Anysphere.Cursor&#x0a;Zen-Team.Zen-Browser"
+                 Text="{Binding AdvancedWingetText}" />
+        <TextBlock Classes="panel-label" Text="SCOOP IDS" />
+        <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
+                 PlaceholderText="curl&#x0a;komorebi"
+                 Text="{Binding AdvancedScoopText}" />
+        <TextBlock Classes="panel-label" Text="WSL TOKENS" />
+        <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
+                 PlaceholderText="FedoraLinux&#x0a;NixOS-WSL"
+                 Text="{Binding AdvancedWslText}" />
+      </StackPanel>
+    </Expander>
   </StackPanel>
 </UserControl>
