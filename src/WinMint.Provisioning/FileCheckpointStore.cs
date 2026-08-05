@@ -1,15 +1,8 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
 namespace WinMint.Provisioning;
 
-/// <summary>
-/// Heartbeat + checkpoint under ProgramData (`winmint.provisioning.checkpoint/v1`).
-/// </summary>
+/// <summary>Heartbeat + checkpoint under ProgramData (plain phase string, same shape as heartbeat).</summary>
 public sealed class FileCheckpointStore : ICheckpointStore
 {
-    public const string CheckpointSchemaVersion = "winmint.provisioning.checkpoint/v1";
-
     private readonly string _checkpointPath;
     private readonly string _heartbeatPath;
 
@@ -49,9 +42,7 @@ public sealed class FileCheckpointStore : ICheckpointStore
     public void WriteCheckpoint(CheckpointState state)
     {
         EnsureDir(_checkpointPath);
-        CheckpointFile file = new(CheckpointSchemaVersion, state.Phase);
-        string json = JsonSerializer.Serialize(file, CheckpointJsonContext.Default.CheckpointFile);
-        File.WriteAllText(_checkpointPath, json);
+        File.WriteAllText(_checkpointPath, state.Phase);
     }
 
     public CheckpointState? TryReadCheckpoint()
@@ -61,23 +52,8 @@ public sealed class FileCheckpointStore : ICheckpointStore
             return null;
         }
 
-        try
-        {
-            byte[] bytes = File.ReadAllBytes(_checkpointPath);
-            CheckpointFile? file = JsonSerializer.Deserialize(bytes, CheckpointJsonContext.Default.CheckpointFile);
-            if (file is null
-                || !string.Equals(file.SchemaVersion, CheckpointSchemaVersion, StringComparison.Ordinal)
-                || string.IsNullOrWhiteSpace(file.Phase))
-            {
-                return null;
-            }
-
-            return new CheckpointState(file.Phase);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        string phase = File.ReadAllText(_checkpointPath).Trim();
+        return string.IsNullOrWhiteSpace(phase) ? null : new CheckpointState(phase);
     }
 
     public void ClearCheckpoint()
@@ -97,11 +73,3 @@ public sealed class FileCheckpointStore : ICheckpointStore
         }
     }
 }
-
-internal sealed record CheckpointFile(
-    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
-    [property: JsonPropertyName("phase")] string Phase);
-
-[JsonSerializable(typeof(CheckpointFile))]
-[JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal sealed partial class CheckpointJsonContext : JsonSerializerContext;

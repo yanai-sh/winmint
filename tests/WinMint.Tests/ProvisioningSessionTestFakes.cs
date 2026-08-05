@@ -4,7 +4,7 @@ using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
 
 namespace WinMint.Tests;
 
-/// <summary>Shared S3 fakes for metal job tests (Scoop / WSL / …).</summary>
+/// <summary>Shared S3 fakes for ProvisioningSession metal / shell tenure tests.</summary>
 internal static class ProvisioningSessionTestFakes
 {
     internal static string SupervisorPath => ImageServicing.ShellStampGuestPath;
@@ -17,20 +17,54 @@ internal static class ProvisioningSessionTestFakes
             Policy: SessionPolicy.SmokeDefaults,
             Supervisor: new SupervisorIdentity(SupervisorPath));
 
-    internal static SessionEnvironment Env(IProcessHost processes, IEvidenceSink evidence) =>
+    internal static ProvisioningBundle BundleFastSettle(IReadOnlyList<ProvisionJob> jobs) =>
+        Bundle(jobs) with
+        {
+            Policy = SessionPolicy.SmokeDefaults with
+            {
+                SettleDeadline = TimeSpan.Zero,
+                FailedDwell = TimeSpan.Zero,
+            },
+        };
+
+    internal static SessionEnvironment Env(
+        IProcessHost processes,
+        IEvidenceSink evidence,
+        ICheckpointStore? checkpoints = null,
+        ISystemReboot? reboot = null,
+        IAppxPackageManager? appx = null,
+        ISplashPresenter? splash = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: new NoopWinlogon(),
             Region: new MatchingRegion(),
             Processes: processes,
-            Splash: new RecordingSplashPresenter(),
-            Checkpoints: new NoopCheckpoints(),
-            Secrets: new NoopSecrets(),
+            Splash: splash ?? new RecordingSplashPresenter(),
+            Checkpoints: checkpoints ?? new NoopCheckpoints(),
+            Evidence: evidence,
+            Reboot: reboot,
+            Appx: appx);
+
+    internal static SessionEnvironment Env(
+        IWinlogonRegistry winlogon,
+        ICheckpointStore checkpoints,
+        ISplashPresenter splash,
+        IEvidenceSink evidence,
+        IProcessHost? processes = null) =>
+        new(
+            Time: TimeProvider.System,
+            Winlogon: winlogon,
+            Region: new MatchingRegion(),
+            Processes: processes ?? new NoopProcesses(),
+            Splash: splash,
+            Checkpoints: checkpoints,
             Evidence: evidence);
 
     internal sealed class RecordingProcessHost : IProcessHost
     {
         public List<(string FileName, IReadOnlyList<string> Arguments)> Starts { get; } = [];
+
+        public int ExitCode { get; set; }
 
         public Func<string, IReadOnlyList<string>, ProcessStartResult>? OnRun { get; init; }
 
@@ -40,15 +74,17 @@ internal static class ProvisioningSessionTestFakes
             CancellationToken ct = default)
         {
             Starts.Add((fileName, arguments));
-            return OnRun?.Invoke(fileName, arguments) ?? new ProcessStartResult(0);
+            return OnRun?.Invoke(fileName, arguments) ?? new ProcessStartResult(ExitCode);
         }
     }
 
     internal sealed class RecordingSplashPresenter : ISplashPresenter
     {
-        public void Show() { }
+        public List<string> Events { get; } = [];
 
-        public void SetStatus(SessionStatus status) { }
+        public void Show() => Events.Add("Show");
+
+        public void SetStatus(SessionStatus status) => Events.Add($"Status:{status.Code}");
     }
 
     internal sealed class RecordingEvidenceSink : IEvidenceSink
@@ -60,6 +96,74 @@ internal static class ProvisioningSessionTestFakes
             Documents.Add(document);
             return new EvidenceSnapshot(document.SchemaVersion, $"memory:{Documents.Count}");
         }
+    }
+
+    internal sealed class RecordingAppx : IAppxPackageManager
+    {
+        public List<string> RegisteredFamilyNames { get; } = [];
+
+        public string? WingetPath { get; init; }
+
+        public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) => [];
+
+        public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) => [];
+
+        public void RemovePackage(string packageFullName) { }
+
+        public void DeprovisionPackageFamily(string packageFamilyName) { }
+
+        public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) =>
+            RegisteredFamilyNames.Add(packageFamilyName);
+
+        public void EnsureSystemFullControlOnWingetFrameworkPackages() { }
+
+        public string? TryResolveWingetExecutablePath() => WingetPath;
+    }
+
+    internal sealed class RecordingSystemReboot : ISystemReboot
+    {
+        public bool Requested { get; private set; }
+
+        public void RequestReboot() => Requested = true;
+    }
+
+    internal sealed class RecordingCheckpoints : ICheckpointStore
+    {
+        public CheckpointState? LastWritten { get; private set; }
+
+        public TenureState ReadTenure() =>
+            new(CheckpointInProgress: LastWritten is not null, HeartbeatUtc: DateTimeOffset.UtcNow);
+
+        public void WriteHeartbeat(DateTimeOffset utcNow) { }
+
+        public void WriteCheckpoint(CheckpointState state) => LastWritten = state;
+
+        public CheckpointState? TryReadCheckpoint() => LastWritten;
+
+        public void ClearCheckpoint() => LastWritten = null;
+    }
+
+    internal sealed class RecordingWinlogon : IWinlogonRegistry
+    {
+        public string? Shell { get; set; } = SupervisorPath;
+
+        public List<string> ShellWrites { get; } = [];
+
+        public void SetAutoLogon(string username, string password) { }
+
+        public string? GetDefaultUserName() => null;
+
+        public bool GetAutoAdminLogon() => false;
+
+        public string? GetShell() => Shell;
+
+        public void SetShell(string path)
+        {
+            ShellWrites.Add(path);
+            Shell = path;
+        }
+
+        public void GrantShellUnlockAccess(string username) { }
     }
 
     internal sealed class MatchingRegion : IRegionSnapshot
@@ -93,6 +197,15 @@ internal static class ProvisioningSessionTestFakes
         public void GrantShellUnlockAccess(string username) { }
     }
 
+    internal sealed class NoopProcesses : IProcessHost
+    {
+        public ProcessStartResult Run(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            CancellationToken ct = default) =>
+            new(0);
+    }
+
     internal sealed class NoopCheckpoints : ICheckpointStore
     {
         public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
@@ -104,10 +217,5 @@ internal static class ProvisioningSessionTestFakes
         public CheckpointState? TryReadCheckpoint() => null;
 
         public void ClearCheckpoint() { }
-    }
-
-    internal sealed class NoopSecrets : ISecretScrubber
-    {
-        public void Wipe(ProvisioningBundle bundle) { }
     }
 }

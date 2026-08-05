@@ -6,65 +6,48 @@ namespace WinMint.Wizard;
 /// <summary>Thin BuildPlan host glue — no Avalonia. Presets expand here; Profile JSON never carries preset names.</summary>
 internal static class WizardSession
 {
-    public static WizardSessionResult ComposeAndPlan(
-        string preset,
-        string username,
-        string password,
-        bool requireWifiDuringOobe,
-        bool dmaEnabled,
-        string locale,
-        string geoIdText,
-        string timeZoneId,
-        bool locationServicesEnabled,
-        string wingetText = "",
-        string wingetNeedsRebootText = "",
-        string scoopText = "",
-        string scoopNeedsRebootText = "",
-        string wslText = "",
-        string wslNeedsRebootText = "",
-        string removeCapabilitiesText = "",
-        string disableOptionalFeaturesText = "")
+    public static WizardSessionResult ComposeAndPlan(WizardSessionInput input)
     {
-        Result<KeepFlagExpansion, PresetFailure> expanded = KeepFlagPresets.TryExpand(preset);
+        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(input.Preset);
         if (!expanded.IsOk)
         {
             return WizardSessionResult.Fail($"{expanded.Error.Code}: {expanded.Error.Message}");
         }
 
-        if (!int.TryParse(geoIdText.Trim(), out int geoId))
+        if (!int.TryParse(input.GeoIdText.Trim(), out int geoId))
         {
             return WizardSessionResult.Fail("dma.settle.geoId: must be an integer.");
         }
 
         // UI lists override empty; when non-empty they replace preset pins for that field (union would surprise).
-        IReadOnlyList<string> caps = WizardProfileComposer.ParseIdList(removeCapabilitiesText);
+        IReadOnlyList<string> caps = WizardProfileComposer.ParseIdList(input.RemoveCapabilitiesText);
         if (caps.Count == 0)
         {
             caps = expanded.Value.RemoveCapabilities;
         }
 
-        IReadOnlyList<string> feats = WizardProfileComposer.ParseIdList(disableOptionalFeaturesText);
+        IReadOnlyList<string> feats = WizardProfileComposer.ParseIdList(input.DisableOptionalFeaturesText);
         if (feats.Count == 0)
         {
             feats = expanded.Value.DisableOptionalFeatures;
         }
 
         byte[] utf8 = WizardProfileComposer.ToUtf8Json(
-            username.Trim(),
-            password,
-            requireWifiDuringOobe,
-            dmaEnabled,
-            locale.Trim(),
+            input.Username.Trim(),
+            input.Password,
+            input.RequireWifiDuringOobe,
+            input.DmaEnabled,
+            input.Locale.Trim(),
             geoId,
-            timeZoneId.Trim(),
-            locationServicesEnabled,
+            input.TimeZoneId.Trim(),
+            input.LocationServicesEnabled,
             expanded.Value.RemoveProvisionedAppx,
-            WizardProfileComposer.ParseIdList(wingetText),
-            WizardProfileComposer.ParseIdList(wingetNeedsRebootText),
-            WizardProfileComposer.ParseIdList(scoopText),
-            WizardProfileComposer.ParseIdList(scoopNeedsRebootText),
-            WizardProfileComposer.ParseIdList(wslText),
-            WizardProfileComposer.ParseIdList(wslNeedsRebootText),
+            WizardProfileComposer.ParseIdList(input.WingetText),
+            WizardProfileComposer.ParseIdList(input.WingetNeedsRebootText),
+            WizardProfileComposer.ParseIdList(input.ScoopText),
+            WizardProfileComposer.ParseIdList(input.ScoopNeedsRebootText),
+            WizardProfileComposer.ParseIdList(input.WslText),
+            WizardProfileComposer.ParseIdList(input.WslNeedsRebootText),
             caps,
             feats);
 
@@ -91,6 +74,25 @@ internal static class WizardSession
         return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8));
     }
 }
+
+internal sealed record WizardSessionInput(
+    string Preset,
+    string Username,
+    string Password,
+    bool RequireWifiDuringOobe,
+    bool DmaEnabled,
+    string Locale,
+    string GeoIdText,
+    string TimeZoneId,
+    bool LocationServicesEnabled,
+    string WingetText = "",
+    string WingetNeedsRebootText = "",
+    string ScoopText = "",
+    string ScoopNeedsRebootText = "",
+    string WslText = "",
+    string WslNeedsRebootText = "",
+    string RemoveCapabilitiesText = "",
+    string DisableOptionalFeaturesText = "");
 
 internal sealed record WizardSessionResult(bool Succeeded, string Message, byte[]? ProfileUtf8, string? ProfileJson)
 {

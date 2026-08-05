@@ -42,8 +42,9 @@ wipe-scratch:
 
 # Multi-hour DISM Apply. Cold first; later runs auto --reuse-media when marker exists.
 # Prereq: just publish-provisioning. Watch: Get-Content <WORK>\apply-status.txt -Wait
+# ponytail: recipe keeps Apply name (DISM loop); Cli verb is build only.
 apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json":
-    Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $marker = Join-Path '{{WORK}}' 'media\sources\.winmint-single-index'; $reuse = @(); if (Test-Path -LiteralPath $marker) { Write-Host 'Found single-image marker — passing --reuse-media'; $reuse = @('--reuse-media') }; Set-Location '{{justfile_directory()}}'; & dotnet run --project src/WinMint.Cli -- apply '{{PROFILE}}' --iso '{{ISO}}' --work '{{WORK}}' @reuse; exit $LASTEXITCODE
+    Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $marker = Join-Path '{{WORK}}' 'media\sources\.winmint-single-index'; $reuse = @(); if (Test-Path -LiteralPath $marker) { Write-Host 'Found single-image marker — passing --reuse-media'; $reuse = @('--reuse-media') }; Set-Location '{{justfile_directory()}}'; & dotnet run --project src/WinMint.Cli -- build '{{PROFILE}}' --iso '{{ISO}}' --work '{{WORK}}' @reuse; exit $LASTEXITCODE
 
 # S4 Hyper-V Smoke — not part of `just check`. Needs admin + Hyper-V + user ISO.
 # Assert-only (no VM): just smoke-assert tests/fixtures/smoke-evidence

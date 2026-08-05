@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace WinMint.Provisioning;
 
 public enum SessionMode
@@ -59,25 +61,14 @@ public sealed record SessionPolicy(
     TimeSpan SettleDeadline,
     TimeSpan SettlePollInterval,
     TimeSpan FailedDwell,
-    TimeSpan FirstPaintBudget,
-    TimeSpan StaleTenureThreshold,
-    InputLockMode InputLock = InputLockMode.None)
+    TimeSpan StaleTenureThreshold)
 {
     public static SessionPolicy SmokeDefaults { get; } = new(
         WallClockTimeout: TimeSpan.FromMinutes(90),
         SettleDeadline: TimeSpan.FromSeconds(120),
         SettlePollInterval: TimeSpan.FromSeconds(2),
         FailedDwell: TimeSpan.FromSeconds(5),
-        FirstPaintBudget: TimeSpan.FromSeconds(2),
-        StaleTenureThreshold: TimeSpan.FromMinutes(15),
-        InputLock: InputLockMode.None);
-}
-
-public enum InputLockMode
-{
-    None,
-    Soft,
-    Hard,
+        StaleTenureThreshold: TimeSpan.FromMinutes(15));
 }
 
 public sealed record SessionEnvironment(
@@ -87,7 +78,7 @@ public sealed record SessionEnvironment(
     IProcessHost Processes,
     ISplashPresenter Splash,
     ICheckpointStore Checkpoints,
-    ISecretScrubber Secrets,
+    Action<ProvisioningBundle>? WipeSecrets = null,
     IEvidenceSink? Evidence = null,
     IAppxPackageManager? Appx = null,
     ISystemReboot? Reboot = null,
@@ -205,11 +196,6 @@ public interface ICheckpointStore
     void ClearCheckpoint();
 }
 
-public interface ISecretScrubber
-{
-    void Wipe(ProvisioningBundle bundle);
-}
-
 public interface IEvidenceSink
 {
     EvidenceSnapshot Write(ProvisioningEvidenceDocument document);
@@ -217,9 +203,9 @@ public interface IEvidenceSink
 
 /// <summary>Write-only projection for S4 harness — never read by the session phase machine.</summary>
 public sealed record ProvisioningEvidenceDocument(
-    string SchemaVersion,
-    string Outcome,
-    string StatusCode,
-    string StatusMessage,
-    IReadOnlyList<string> Phases,
-    long? FirstPaintMs = null);
+    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
+    [property: JsonPropertyName("outcome")] string Outcome,
+    [property: JsonPropertyName("statusCode")] string StatusCode,
+    [property: JsonPropertyName("statusMessage")] string StatusMessage,
+    [property: JsonPropertyName("phases")] IReadOnlyList<string> Phases,
+    [property: JsonPropertyName("firstPaintMs")] long? FirstPaintMs = null);

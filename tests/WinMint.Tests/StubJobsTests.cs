@@ -1,13 +1,10 @@
-using WinMint.Orchestrator;
 using WinMint.Provisioning;
-using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
+using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
 public class StubJobsTests
 {
-    private static string SupervisorPath => ImageServicing.ShellStampGuestPath;
-
     [Fact]
     public void Shell_invokes_stub_job_as_child_process_after_green_settle()
     {
@@ -18,7 +15,7 @@ public class StubJobsTests
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
             Bundle(jobs: [new ProvisionJob("smoke.stub.ready", "stub")]),
-            Env(processes, splash, evidence),
+            Env(processes, evidence, splash: splash),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
@@ -48,7 +45,7 @@ public class StubJobsTests
                 new ProvisionJob("smoke.stub.ready", "stub"),
                 new ProvisionJob("smoke.stub.complete", "stub"),
             ]),
-            Env(processes, splash, evidence),
+            Env(processes, evidence, splash: splash),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
@@ -77,7 +74,7 @@ public class StubJobsTests
                 new ProvisionJob("smoke.stub.ready", "stub"),
                 new ProvisionJob("smoke.stub.complete", "stub"),
             ]),
-            Env(processes, splash, evidence),
+            Env(processes, evidence, splash: splash),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
@@ -96,119 +93,12 @@ public class StubJobsTests
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
             Bundle(jobs: [new ProvisionJob("metal.browser", "browser")]),
-            Env(processes, new RecordingSplashPresenter(), evidence),
+            Env(processes, evidence, splash: new RecordingSplashPresenter()),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("jobs.kind.unsupported", result.FinalStatus.Code);
         Assert.Empty(processes.Starts);
         Assert.Contains("jobs.kind.unsupported", evidence.Documents[0].Phases);
-    }
-
-    private static ProvisioningBundle Bundle(IReadOnlyList<ProvisionJob> jobs) =>
-        new(
-            Account: new AccountStamp("winmint", ""),
-            Dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
-            Jobs: jobs,
-            Policy: SessionPolicy.SmokeDefaults,
-            Supervisor: new SupervisorIdentity(SupervisorPath));
-
-    private static SessionEnvironment Env(
-        IProcessHost processes,
-        ISplashPresenter splash,
-        IEvidenceSink evidence) =>
-        new(
-            Time: TimeProvider.System,
-            Winlogon: new NoopWinlogon(),
-            Region: new MatchingRegion(),
-            Processes: processes,
-            Splash: splash,
-            Checkpoints: new NoopCheckpoints(),
-            Secrets: new NoopSecrets(),
-            Evidence: evidence);
-
-    private sealed class RecordingProcessHost : IProcessHost
-    {
-        public List<(string FileName, IReadOnlyList<string> Arguments)> Starts { get; } = [];
-
-        public int ExitCode { get; set; }
-
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default)
-        {
-            Starts.Add((fileName, arguments));
-            return new ProcessStartResult(ExitCode);
-        }
-    }
-
-    private sealed class RecordingSplashPresenter : ISplashPresenter
-    {
-        public List<string> Events { get; } = [];
-
-        public void Show() => Events.Add("Show");
-
-        public void SetStatus(SessionStatus status) => Events.Add($"Status:{status.Code}");
-    }
-
-    private sealed class RecordingEvidenceSink : IEvidenceSink
-    {
-        public List<ProvisioningEvidenceDocument> Documents { get; } = [];
-
-        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)
-        {
-            Documents.Add(document);
-            return new EvidenceSnapshot(document.SchemaVersion, $"memory:{Documents.Count}");
-        }
-    }
-
-    private sealed class MatchingRegion : IRegionSnapshot
-    {
-        private RegionState _state = new("en-GB", 242, "GMT Standard Time", true);
-
-        public void Apply(DmaSettleTarget target) =>
-            _state = new RegionState(
-                target.Locale,
-                target.GeoId,
-                target.TimeZoneId,
-                target.LocationServicesEnabled);
-
-        public RegionState Read() => _state;
-    }
-
-    private sealed class NoopWinlogon : IWinlogonRegistry
-    {
-        public string? Shell { get; private set; } = SupervisorPath;
-
-        public void SetAutoLogon(string username, string password) { }
-
-        public string? GetDefaultUserName() => null;
-
-        public bool GetAutoAdminLogon() => false;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path) => Shell = path;
-
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
-    private sealed class NoopCheckpoints : ICheckpointStore
-    {
-        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
-
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
-
-        public void WriteCheckpoint(CheckpointState state) { }
-
-        public CheckpointState? TryReadCheckpoint() => null;
-
-        public void ClearCheckpoint() { }
-    }
-
-    private sealed class NoopSecrets : ISecretScrubber
-    {
-        public void Wipe(ProvisioningBundle bundle) { }
     }
 }

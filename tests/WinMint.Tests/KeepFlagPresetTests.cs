@@ -9,7 +9,7 @@ public class KeepFlagPresetTests
     [Fact]
     public void Expand_acceptance_returns_pinned_acceptance_ids()
     {
-        Result<KeepFlagExpansion, PresetFailure> result = KeepFlagPresets.TryExpand("acceptance");
+        Result<KeepFlagExpansion, PlanFailure> result = KeepFlagPresets.TryExpand("acceptance");
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
         Assert.Equal(
@@ -24,7 +24,7 @@ public class KeepFlagPresetTests
     [Fact]
     public void Expand_empty_returns_no_ids()
     {
-        Result<KeepFlagExpansion, PresetFailure> result = KeepFlagPresets.TryExpand("empty");
+        Result<KeepFlagExpansion, PlanFailure> result = KeepFlagPresets.TryExpand("empty");
 
         Assert.True(result.IsOk);
         Assert.Empty(result.Value.RemoveProvisionedAppx);
@@ -35,7 +35,7 @@ public class KeepFlagPresetTests
     [Fact]
     public void Expand_unknown_preset_fails()
     {
-        Result<KeepFlagExpansion, PresetFailure> result = KeepFlagPresets.TryExpand("not-a-preset");
+        Result<KeepFlagExpansion, PlanFailure> result = KeepFlagPresets.TryExpand("not-a-preset");
 
         Assert.False(result.IsOk);
         Assert.Equal("keepflag.preset.unknown", result.Error.Code);
@@ -45,7 +45,7 @@ public class KeepFlagPresetTests
     [Fact]
     public void Compose_acceptance_preset_parses_and_plans()
     {
-        Result<KeepFlagExpansion, PresetFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Acceptance);
+        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Acceptance);
         Assert.True(expanded.IsOk);
 
         byte[] utf8 = WizardProfileComposer.ToUtf8Json(
@@ -90,7 +90,7 @@ public class KeepFlagPresetTests
     [Fact]
     public void Compose_empty_preset_plans_without_remove_stage()
     {
-        Result<KeepFlagExpansion, PresetFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Empty);
+        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Empty);
         Assert.True(expanded.IsOk);
 
         byte[] utf8 = WizardProfileComposer.ToUtf8Json(

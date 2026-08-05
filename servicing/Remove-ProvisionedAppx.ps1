@@ -23,10 +23,8 @@ if ($ids.Count -eq 0) { throw 'packageFamilyNames empty after split' }
 
 $logDir = Join-Path $workDir 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$inventoryBefore = Join-Path $logDir 'provisioned-appx.before.txt'
-$inventoryAfter = Join-Path $logDir 'provisioned-appx.after.txt'
 $dismLog = Join-Path $logDir 'remove-provisioned-appx.dism.log'
-$digestPath = Join-Path $logDir 'remove-provisioned-appx.digests.json'
+$digestPath = Join-Path $logDir 'digests.json'
 
 function Get-ProvisionedInventory {
     param([string] $Path)
@@ -82,9 +80,6 @@ function Get-PackageFamilyName {
 }
 
 $before = Get-ProvisionedInventory -Path $mountDir
-$before |
-    ForEach-Object { "$($_.DisplayName)`t$($_.PackageName)`t$($_.PublisherId)" } |
-    Set-Content -LiteralPath $inventoryBefore -Encoding utf8
 
 $removed = [System.Collections.Generic.List[object]]::new()
 foreach ($id in $ids) {
@@ -110,9 +105,6 @@ foreach ($id in $ids) {
 }
 
 $after = Get-ProvisionedInventory -Path $mountDir
-$after |
-    ForEach-Object { "$($_.DisplayName)`t$($_.PackageName)`t$($_.PublisherId)" } |
-    Set-Content -LiteralPath $inventoryAfter -Encoding utf8
 
 foreach ($row in $removed) {
     $still = @($after | Where-Object { [string]$_.PackageName -ieq $row.PackageName })
@@ -149,11 +141,18 @@ if ($removed.Count -gt 0) {
     }
 }
 
-$digests = [ordered]@{}
+$digests = @{}
 foreach ($id in ($ids | Select-Object -Unique)) {
     $digests["removed.appx.$id"] = 'absent'
 }
-$digests | ConvertTo-Json | Set-Content -LiteralPath $digestPath -Encoding utf8
+$map = [ordered]@{}
+if (Test-Path -LiteralPath $digestPath) {
+    foreach ($p in (Get-Content -LiteralPath $digestPath -Raw | ConvertFrom-Json).PSObject.Properties) {
+        $map[$p.Name] = [string]$p.Value
+    }
+}
+foreach ($k in $digests.Keys) { $map[$k] = [string]$digests[$k] }
+$map | ConvertTo-Json | Set-Content -LiteralPath $digestPath -Encoding utf8
 
 Write-Output "RemoveProvisionedAppx ok count=$($removed.Count)"
 exit 0

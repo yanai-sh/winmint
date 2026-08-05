@@ -23,8 +23,15 @@ public class FileSecretScrubberTests
                   "username": "winmint",
                   "password": "lab-secret",
                   "dmaEnabled": true,
-                  "settle": null,
-                  "jobIds": []
+                  "settle": null
+                }
+                """);
+            File.WriteAllText(
+                Path.Combine(dir, "jobs.json"),
+                $$"""
+                {
+                  "schemaVersion": "{{BundleLoader.JobsSchemaVersion}}",
+                  "jobs": []
                 }
                 """);
 

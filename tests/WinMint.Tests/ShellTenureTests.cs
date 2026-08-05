@@ -124,7 +124,6 @@ public class ShellTenureTests
             Processes: new NoopProcesses(),
             Splash: splash,
             Checkpoints: new NoopCheckpoints(),
-            Secrets: new NoopSecrets(),
             Evidence: evidence);
 
     private sealed class RecordingWinlogon : IWinlogonRegistry
@@ -216,10 +215,5 @@ public class ShellTenureTests
         public CheckpointState? TryReadCheckpoint() => null;
 
         public void ClearCheckpoint() { }
-    }
-
-    private sealed class NoopSecrets : ISecretScrubber
-    {
-        public void Wipe(ProvisioningBundle bundle) { }
     }
 }

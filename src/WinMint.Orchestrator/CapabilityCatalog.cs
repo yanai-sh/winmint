@@ -19,8 +19,6 @@ public static class CapabilityCatalog
         "Print.Management.Console~~~~0.0.1.0",
         "Media.WindowsMediaPlayer~~~~0.0.12.0",
     };
-
-    public static bool Contains(string id) => Ids.Contains(id);
 }
 
 /// <summary>
@@ -39,6 +37,4 @@ public static class OptionalFeatureCatalog
         "SimpleTCP",
         "Microsoft-RemoteDesktopConnection",
     };
-
-    public static bool Contains(string id) => Ids.Contains(id);
 }

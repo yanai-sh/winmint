@@ -18,7 +18,7 @@ Requires .NET 11 preview SDK (see `global.json`) and `pwsh` 7.6+ on the host.
 ```powershell
 dotnet run --project src/WinMint.Cli -- validate samples/smoke.profile.json
 dotnet run --project src/WinMint.Cli -- plan samples/smoke.profile.json --out .scratch/plan
-# build/apply need a Source ISO + workdir (elevates once via servicing/RunPlan.ps1):
+# build needs a Source ISO + workdir (elevates once via servicing/RunPlan.ps1):
 # dotnet run --project src/WinMint.Cli -- build samples/smoke.profile.json --iso path\to\source.iso --work .scratch/work
 ```
 

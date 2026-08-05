@@ -51,7 +51,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Stale | Heartbeat + checkpoint ⇒ fail-open |
 | Smoke accounts | Local+autoLogon only |
 | Soft location | Location-services on/off; warn, continue |
-| Cli | 01 `validate`/`plan`; 02 `build`/`apply` |
+| Cli | 01 `validate`/`plan`; 02 `build` |
 | DMA off | Schema OK; acceptance Profile = on |
 | Hyper-V Smoke | Pro only |
 | WIM commit | Single-image only — Mount exports edition; Export fail-closes if multi-index ([IMAGESERVICING](design/IMAGESERVICING.md#invariants) §7) |

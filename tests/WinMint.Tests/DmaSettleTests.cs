@@ -138,7 +138,6 @@ public class DmaSettleTests
             Processes: processes ?? new RecordingProcessHost(),
             Splash: splash,
             Checkpoints: new NoopCheckpoints(),
-            Secrets: new NoopSecrets(),
             Evidence: evidence);
 
     private sealed class RecordingWinlogon : IWinlogonRegistry
@@ -257,11 +256,6 @@ public class DmaSettleTests
         public CheckpointState? TryReadCheckpoint() => null;
 
         public void ClearCheckpoint() { }
-    }
-
-    private sealed class NoopSecrets : ISecretScrubber
-    {
-        public void Wipe(ProvisioningBundle bundle) { }
     }
 
     /// <summary>Advances UTC + monotonic stamp on timer due-time so settle Wait is instant under test.</summary>

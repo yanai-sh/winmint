@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using WinMint.Orchestrator;
+using System.Text.Json.Nodes;
 
 namespace WinMint.Tests;
 
@@ -22,16 +22,10 @@ public class SmokeEvidenceAssertTests
             string acceptancePath = Path.Combine(work, "acceptance.json");
             Assert.True(File.Exists(acceptancePath), "expected acceptance.json splash-before-Explorer marker");
             string json = File.ReadAllText(acceptancePath);
+            Assert.Contains("winmint.smoke.acceptance/v1", json, StringComparison.Ordinal);
             Assert.Contains("\"splashBeforeExplorer\": true", json, StringComparison.Ordinal);
             Assert.Contains("\"lane\": \"Test\"", json, StringComparison.Ordinal);
-            Assert.Contains("\"keepFlagAppxAbsent\": true", json, StringComparison.Ordinal);
-            Assert.Contains("\"keepFlagCapsAbsent\": true", json, StringComparison.Ordinal);
-            Assert.Contains("\"keepFlagFeaturesDisabled\": true", json, StringComparison.Ordinal);
-            Assert.Contains("Microsoft.BingNews", json, StringComparison.Ordinal);
-            Assert.Contains("Microsoft.BingWeather", json, StringComparison.Ordinal);
-            Assert.Contains("App.StepsRecorder", json, StringComparison.Ordinal);
-            Assert.Contains("WorkFolders-Client", json, StringComparison.Ordinal);
-            Assert.Contains(SmokeAcceptanceDocument.SchemaId, json, StringComparison.Ordinal);
+            Assert.Contains("\"outcome\": \"Complete\"", json, StringComparison.Ordinal);
         }
         finally
         {
@@ -58,7 +52,13 @@ public class SmokeEvidenceAssertTests
                 File.Delete(acceptancePath);
             }
 
-            int exit = RunAssert(repo, work, out _, out string stderr);
+            // Empty Assert defaults skip keep-flag — pass pins explicitly.
+            int exit = RunAssert(
+                repo,
+                work,
+                out _,
+                out string stderr,
+                "-PinnedRemoveAppx", "Microsoft.BingNews");
             Assert.NotEqual(0, exit);
             Assert.Contains("keep-flag digest missing", stderr, StringComparison.OrdinalIgnoreCase);
             Assert.False(File.Exists(acceptancePath));
@@ -74,26 +74,16 @@ public class SmokeEvidenceAssertTests
     public void Assert_smoke_evidence_fails_without_first_paint_phase()
     {
         string repo = FindRepoRoot();
+        string fixture = Path.Combine(repo, "tests", "fixtures", "smoke-evidence");
         string work = Path.Combine(Path.GetTempPath(), "winmint-s4-bad-" + Guid.NewGuid().ToString("N"));
         try
         {
-            Directory.CreateDirectory(Path.Combine(work, "guest"));
-            Directory.CreateDirectory(Path.Combine(work, "apply"));
-            File.WriteAllText(
-                Path.Combine(work, "guest", "evidence-bad.json"),
-                """
-                {
-                  "schemaVersion": "winmint.provisioning.evidence/v1",
-                  "outcome": "Complete",
-                  "statusCode": "jobs.ok",
-                  "statusMessage": "ok",
-                  "phases": [ "settle.begin", "settle.ok", "jobs.ok" ],
-                  "firstPaintMs": 100
-                }
-                """);
-            File.WriteAllText(
-                Path.Combine(work, "apply", "evidence.json"),
-                """{"schemaVersion":"winmint.image.evidence/v1","lane":"Test","digests":{"removed.appx.Microsoft.BingNews":"absent","removed.appx.Microsoft.BingWeather":"absent","removed.capability.App.StepsRecorder~~~~0.0.1.0":"Absent","removed.capability.WMIC~~~~":"Absent","disabled.feature.WorkFolders-Client":"Disabled"}}""");
+            CopyTree(fixture, work);
+            string guestPath = Directory.GetFiles(Path.Combine(work, "guest"), "evidence-*.json")[0];
+            JsonNode doc = JsonNode.Parse(File.ReadAllText(guestPath))
+                ?? throw new InvalidOperationException("guest evidence parse failed");
+            doc["phases"] = new JsonArray("settle.begin", "settle.ok", "jobs.ok");
+            File.WriteAllText(guestPath, doc.ToJsonString());
 
             int exit = RunAssert(repo, work, out _, out _);
             Assert.NotEqual(0, exit);
@@ -105,19 +95,29 @@ public class SmokeEvidenceAssertTests
         }
     }
 
-    private static int RunAssert(string repo, string evidenceDir, out string stdout, out string stderr)
+    private static int RunAssert(
+        string repo,
+        string evidenceDir,
+        out string stdout,
+        out string stderr,
+        params string[] extraArgs)
     {
-        // One harness entry: Invoke-Smoke.ps1 -AssertOnly
-        string script = Path.Combine(repo, "tools", "vm", "Invoke-Smoke.ps1");
+        // Call Assert script directly (pins need to reach Assert; empty defaults skip keep-flag).
+        string script = Path.Combine(repo, "tools", "vm", "Assert-SmokeEvidence.ps1");
         Assert.True(File.Exists(script), script);
         ProcessStartInfo psi = new()
         {
             FileName = "pwsh",
-            ArgumentList = { "-NoProfile", "-File", script, "-AssertOnly", "-EvidenceDir", evidenceDir },
+            ArgumentList = { "-NoProfile", "-File", script, "-EvidenceDir", evidenceDir },
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+        foreach (string arg in extraArgs)
+        {
+            psi.ArgumentList.Add(arg);
+        }
+
         using Process p = Process.Start(psi) ?? throw new InvalidOperationException("pwsh failed to start");
         stdout = p.StandardOutput.ReadToEnd();
         stderr = p.StandardError.ReadToEnd();

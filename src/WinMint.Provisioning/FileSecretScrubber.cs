@@ -7,7 +7,7 @@ namespace WinMint.Provisioning;
 /// Guarantee: disk redact + no further use of the stamp password in MachineSetup.
 /// Not a cryptographic in-process memory scrub (immutable strings live until GC).
 /// </summary>
-public sealed class FileSecretScrubber : ISecretScrubber
+public sealed class FileSecretScrubber
 {
     private readonly string _bundlePath;
     private readonly Action<string>? _log;

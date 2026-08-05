@@ -18,7 +18,6 @@ public sealed record Profile(
     IReadOnlyList<string> DisableOptionalFeatures);
 
 public sealed record AccountProfile(
-    AccountMode Mode,
     string Username,
     string? Password,
     /// <summary>
@@ -28,12 +27,7 @@ public sealed record AccountProfile(
     /// </summary>
     bool RequireWifiDuringOobe);
 
-public enum AccountMode
-{
-    LocalAutoLogon,
-}
-
-/// <summary>Wire form of <see cref="AccountMode"/> in profile JSON <c>account.mode</c>.</summary>
+/// <summary>Wire form of account.mode in profile JSON. Only localAutoLogon is supported.</summary>
 public static class AccountModeWire
 {
     public const string LocalAutoLogon = "localAutoLogon";

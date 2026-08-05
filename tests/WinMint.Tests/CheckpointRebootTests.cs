@@ -1,13 +1,10 @@
-using WinMint.Orchestrator;
 using WinMint.Provisioning;
-using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
+using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
 public class CheckpointRebootTests
 {
-    private static string SupervisorPath => ImageServicing.ShellStampGuestPath;
-
     [Fact]
     public void Shell_needsReboot_writes_checkpoint_and_keeps_Shell()
     {
@@ -18,7 +15,7 @@ public class CheckpointRebootTests
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
-            Bundle(
+            BundleFastSettle(
             [
                 new ProvisionJob("smoke.stub.reboot", "stub", NeedsReboot: true),
                 new ProvisionJob("smoke.stub.complete", "stub"),
@@ -51,7 +48,7 @@ public class CheckpointRebootTests
 
         SessionResult first = ProvisioningSession.Run(
             SessionMode.Shell,
-            Bundle(
+            BundleFastSettle(
             [
                 new ProvisionJob("smoke.stub.reboot", "stub", NeedsReboot: true),
                 new ProvisionJob("smoke.stub.complete", "stub"),
@@ -66,7 +63,7 @@ public class CheckpointRebootTests
 
         SessionResult second = ProvisioningSession.Run(
             SessionMode.Shell,
-            Bundle(
+            BundleFastSettle(
             [
                 new ProvisionJob("smoke.stub.reboot", "stub", NeedsReboot: true),
                 new ProvisionJob("smoke.stub.complete", "stub"),
@@ -89,7 +86,7 @@ public class CheckpointRebootTests
     }
 
     [Fact]
-    public void FileCheckpointStore_round_trips_schema_under_programdata()
+    public void FileCheckpointStore_round_trips_phase_under_programdata()
     {
         string root = Path.Combine(Path.GetTempPath(), "winmint-cp-" + Guid.NewGuid().ToString("N"));
         try
@@ -102,8 +99,7 @@ public class CheckpointRebootTests
             TenureState tenure = store.ReadTenure();
             Assert.True(tenure.CheckpointInProgress);
             Assert.Equal(DateTimeOffset.UnixEpoch, tenure.HeartbeatUtc);
-            string json = File.ReadAllText(Path.Combine(root, "checkpoint.json"));
-            Assert.Contains(FileCheckpointStore.CheckpointSchemaVersion, json, StringComparison.Ordinal);
+            Assert.Equal("jobs:2", File.ReadAllText(Path.Combine(root, "checkpoint.json")).Trim());
 
             store.ClearCheckpoint();
             Assert.Null(store.TryReadCheckpoint());
@@ -116,133 +112,5 @@ public class CheckpointRebootTests
                 Directory.Delete(root, recursive: true);
             }
         }
-    }
-
-    private static ProvisioningBundle Bundle(IReadOnlyList<ProvisionJob> jobs) =>
-        new(
-            Account: new AccountStamp("winmint", ""),
-            Dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
-            Jobs: jobs,
-            Policy: SessionPolicy.SmokeDefaults with
-            {
-                SettleDeadline = TimeSpan.Zero,
-                FailedDwell = TimeSpan.Zero,
-            },
-            Supervisor: new SupervisorIdentity(SupervisorPath));
-
-    private static SessionEnvironment Env(
-        IWinlogonRegistry winlogon,
-        ICheckpointStore checkpoints,
-        ISplashPresenter splash,
-        IEvidenceSink evidence,
-        IProcessHost? processes = null) =>
-        new(
-            Time: TimeProvider.System,
-            Winlogon: winlogon,
-            Region: new MatchingRegion(),
-            Processes: processes ?? new NoopProcesses(),
-            Splash: splash,
-            Checkpoints: checkpoints,
-            Secrets: new NoopSecrets(),
-            Evidence: evidence);
-
-    private sealed class RecordingWinlogon : IWinlogonRegistry
-    {
-        public string? Shell { get; set; }
-
-        public List<string> ShellWrites { get; } = [];
-
-        public void SetAutoLogon(string username, string password) { }
-
-        public string? GetDefaultUserName() => null;
-
-        public bool GetAutoAdminLogon() => false;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path)
-        {
-            ShellWrites.Add(path);
-            Shell = path;
-        }
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
-    private sealed class RecordingCheckpoints : ICheckpointStore
-    {
-        public CheckpointState? LastWritten { get; private set; }
-
-        public TenureState ReadTenure() =>
-            new(LastWritten is not null, HeartbeatUtc: DateTimeOffset.UtcNow);
-
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
-
-        public void WriteCheckpoint(CheckpointState state) => LastWritten = state;
-
-        public CheckpointState? TryReadCheckpoint() => LastWritten;
-
-        public void ClearCheckpoint() => LastWritten = null;
-    }
-
-    private sealed class MatchingRegion : IRegionSnapshot
-    {
-        private RegionState _state = new("en-GB", 242, "GMT Standard Time", true);
-
-        public void Apply(DmaSettleTarget target) =>
-            _state = new RegionState(
-                target.Locale,
-                target.GeoId,
-                target.TimeZoneId,
-                target.LocationServicesEnabled);
-
-        public RegionState Read() => _state;
-    }
-
-    private sealed class RecordingSplashPresenter : ISplashPresenter
-    {
-        public List<string> Events { get; } = [];
-
-        public void Show() => Events.Add("Show");
-
-        public void SetStatus(SessionStatus status) => Events.Add($"Status:{status.Code}");
-    }
-
-    private sealed class RecordingEvidenceSink : IEvidenceSink
-    {
-        public List<ProvisioningEvidenceDocument> Documents { get; } = [];
-
-        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)
-        {
-            Documents.Add(document);
-            return new EvidenceSnapshot(document.SchemaVersion, $"memory:{Documents.Count}");
-        }
-    }
-
-    private sealed class NoopProcesses : IProcessHost
-    {
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default) =>
-            new(0);
-    }
-
-    private sealed class RecordingProcessHost : IProcessHost
-    {
-        public List<(string FileName, IReadOnlyList<string> Arguments)> Starts { get; } = [];
-
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default)
-        {
-            Starts.Add((fileName, arguments));
-            return new ProcessStartResult(0);
-        }
-    }
-
-    private sealed class NoopSecrets : ISecretScrubber
-    {
-        public void Wipe(ProvisioningBundle bundle) { }
     }
 }

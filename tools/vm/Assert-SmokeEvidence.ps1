@@ -16,26 +16,17 @@ param(
 
     [double] $FirstPaintBudgetSeconds = 2.0,
 
-    # Ticket 30 / hardware M4: stricter bars — firstPaint fail (not warn); settle.ok|location_warn only.
-    [switch] $HardwareM4,
+    # Empty ⇒ skip keep-flag digest asserts. Full Smoke run passes Profile remove-lists.
+    [string[]] $PinnedRemoveAppx = @(),
 
-    # Empty ⇒ skip keep-flag digest asserts (israel/smoke Profiles without remove-list).
-    # Default = acceptance pins when AssertOnly without an explicit list.
-    [string[]] $PinnedRemoveAppx = @('Microsoft.BingNews', 'Microsoft.BingWeather'),
+    [string[]] $PinnedRemoveCapabilities = @(),
 
-    # Ticket 19/20 thin acceptance pins (samples/acceptance.profile.json). Empty ⇒ skip.
-    [string[]] $PinnedRemoveCapabilities = @('App.StepsRecorder~~~~0.0.1.0', 'WMIC~~~~'),
-
-    [string[]] $PinnedDisableOptionalFeatures = @('WorkFolders-Client')
+    [string[]] $PinnedDisableOptionalFeatures = @()
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$hardwareM4 = $HardwareM4.IsPresent -or ($env:WINMINT_M4 -eq '1')
-
-# ADR-006 / samples/acceptance.profile.json — frozen acceptance remove-list when caller omits -PinnedRemoveAppx.
-# Re-pin if acceptance Source ISO churn drops an id (KEEPFLAG).
 $ExplorerShell = 'explorer.exe'
 $SupervisorShellLeaf = 'Supervisor.exe'
 
@@ -53,13 +44,8 @@ function Get-LatestGuestEvidence {
     return $files[0].FullName
 }
 
-function Read-JsonFile {
-    param([string] $Path)
-    return (Get-Content -LiteralPath $Path -Raw -Encoding utf8 | ConvertFrom-Json)
-}
-
 $guestPath = Get-LatestGuestEvidence -Dir $EvidenceDir
-$guest = Read-JsonFile -Path $guestPath
+$guest = Get-Content -LiteralPath $guestPath -Raw -Encoding utf8 | ConvertFrom-Json
 
 if ($guest.schemaVersion -ne 'winmint.provisioning.evidence/v1') {
     throw "unexpected guest schema '$($guest.schemaVersion)'"
@@ -82,17 +68,11 @@ if ($outcome -ne 'Complete') {
 }
 
 # DMA hard fields must succeed — apply_failed / hard_mismatch are not acceptance-green.
-# M4 (hardware): settle.ok or settle.location_warn only — no resume_skip shortcut.
-# Default: resume_skip + checkpoint.resume also proves prior settle (ticket 17).
-$dmaOk = if ($hardwareM4) {
-    ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn')
-} else {
-    ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn') -or
-        (($phases -contains 'settle.resume_skip') -and ($phases -contains 'checkpoint.resume'))
-}
+# resume_skip + checkpoint.resume also proves prior settle (ticket 17).
+$dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn') -or
+    (($phases -contains 'settle.resume_skip') -and ($phases -contains 'checkpoint.resume'))
 if (-not $dmaOk) {
-    $need = if ($hardwareM4) { 'settle.ok or settle.location_warn (M4)' } else { 'settle.ok, settle.location_warn, or settle.resume_skip+checkpoint.resume' }
-    throw "DMA hard fields missing: need $need"
+    throw 'DMA hard fields missing: need settle.ok, settle.location_warn, or settle.resume_skip+checkpoint.resume'
 }
 
 # Unlock: Winlogon Shell must be Explorer, not Supervisor.
@@ -117,7 +97,7 @@ $applyEvidence = Join-Path $EvidenceDir 'apply\evidence.json'
 if (-not (Test-Path -LiteralPath $applyEvidence)) {
     throw "lane marker missing: expected apply/evidence.json under $EvidenceDir"
 }
-$apply = Read-JsonFile -Path $applyEvidence
+$apply = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json
 if ($apply.PSObject.Properties.Name -contains 'lane' -and $apply.lane) {
     $lane = [string]$apply.lane
 }
@@ -143,7 +123,7 @@ function Assert-PinnedDigests {
         [string] $ExpectedValue,
         [string] $Label
     )
-    if ($null -eq $Ids -or @($Ids).Count -eq 0) { return $false }
+    if ($null -eq $Ids -or @($Ids).Count -eq 0) { return }
     foreach ($id in $Ids) {
         if ([string]::IsNullOrWhiteSpace($id)) { continue }
         $key = "$KeyPrefix$id"
@@ -151,12 +131,11 @@ function Assert-PinnedDigests {
             throw "keep-flag digest missing: expected $key=$ExpectedValue in apply/evidence.json digests ($Label)"
         }
     }
-    return $true
 }
 
-$keepFlagChecked = Assert-PinnedDigests -Ids $PinnedRemoveAppx -KeyPrefix 'removed.appx.' -ExpectedValue 'absent' -Label 'appx'
-$capsChecked = Assert-PinnedDigests -Ids $PinnedRemoveCapabilities -KeyPrefix 'removed.capability.' -ExpectedValue 'Absent' -Label 'capability'
-$featsChecked = Assert-PinnedDigests -Ids $PinnedDisableOptionalFeatures -KeyPrefix 'disabled.feature.' -ExpectedValue 'Disabled' -Label 'feature'
+Assert-PinnedDigests -Ids $PinnedRemoveAppx -KeyPrefix 'removed.appx.' -ExpectedValue 'absent' -Label 'appx'
+Assert-PinnedDigests -Ids $PinnedRemoveCapabilities -KeyPrefix 'removed.capability.' -ExpectedValue 'Absent' -Label 'capability'
+Assert-PinnedDigests -Ids $PinnedDisableOptionalFeatures -KeyPrefix 'disabled.feature.' -ExpectedValue 'Disabled' -Label 'feature'
 
 $firstPaintMs = $null
 if ($guest.PSObject.Properties.Name -contains 'firstPaintMs' -and $null -ne $guest.firstPaintMs) {
@@ -165,34 +144,16 @@ if ($guest.PSObject.Properties.Name -contains 'firstPaintMs' -and $null -ne $gue
 if ($null -eq $firstPaintMs) {
     throw 'firstPaintMs missing on guest evidence (S4 must record time-to-first-paint)'
 }
-$paintWarn = $false
 $budgetMs = $FirstPaintBudgetSeconds * 1000.0
 if ($firstPaintMs -gt $budgetMs) {
-    if ($hardwareM4) {
-        throw ("M4: time-to-first-paint {0:N0} ms exceeds budget {1:N0} ms" -f $firstPaintMs, $budgetMs)
-    }
-    $paintWarn = $true
     Write-Warning ("time-to-first-paint {0:N0} ms exceeds budget {1:N0} ms" -f $firstPaintMs, $budgetMs)
 }
 
 $acceptance = [ordered]@{
-    schemaVersion           = 'winmint.smoke.acceptance/v1'
-    splashBeforeExplorer    = $true
-    dmaHardFields           = 'ok'
-    unlocked                = $true
-    outcome                 = $outcome
-    lane                    = $lane
-    firstPaintMs            = $firstPaintMs
-    firstPaintWarn          = $paintWarn
-    hardwareM4              = $hardwareM4
-    keepFlagAppxAbsent      = $keepFlagChecked
-    keepFlagCapsAbsent      = $capsChecked
-    keepFlagFeaturesDisabled = $featsChecked
-    pinnedRemoveAppx        = @($PinnedRemoveAppx)
-    pinnedRemoveCapabilities = @($PinnedRemoveCapabilities)
-    pinnedDisableOptionalFeatures = @($PinnedDisableOptionalFeatures)
-    winlogonShell           = $shell
-    guestEvidencePath       = $guestPath
+    schemaVersion        = 'winmint.smoke.acceptance/v1'
+    splashBeforeExplorer = $true
+    outcome              = $outcome
+    lane                 = $lane
 }
 $acceptancePath = Join-Path $EvidenceDir 'acceptance.json'
 $acceptance | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $acceptancePath -Encoding utf8

@@ -54,25 +54,11 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 
-function Invoke-AssertSmokeEvidence {
-    param(
-        [string] $Dir,
-        # $null ⇒ Assert-SmokeEvidence default acceptance pins (AssertOnly / fixtures).
-        [string[]] $PinnedRemoveAppx = $null,
-        [string[]] $PinnedRemoveCapabilities = $null,
-        [string[]] $PinnedDisableOptionalFeatures = $null
-    )
-    $assert = Join-Path $PSScriptRoot 'Assert-SmokeEvidence.ps1'
-    $splat = @{ EvidenceDir = $Dir }
-    if ($null -ne $PinnedRemoveAppx) { $splat.PinnedRemoveAppx = $PinnedRemoveAppx }
-    if ($null -ne $PinnedRemoveCapabilities) { $splat.PinnedRemoveCapabilities = $PinnedRemoveCapabilities }
-    if ($null -ne $PinnedDisableOptionalFeatures) { $splat.PinnedDisableOptionalFeatures = $PinnedDisableOptionalFeatures }
-    & $assert @splat
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-}
+$assertScript = Join-Path $PSScriptRoot 'Assert-SmokeEvidence.ps1'
 
 if ($AssertOnly) {
-    Invoke-AssertSmokeEvidence -Dir $EvidenceDir
+    & $assertScript -EvidenceDir $EvidenceDir
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     exit 0
 }
 
@@ -263,20 +249,6 @@ function Test-GuestEvidenceReady {
             if ($remote) {
                 $leaf = Split-Path $remote -Leaf
                 Copy-Item -FromSession $session -Path $remote -Destination (Join-Path $guestDir $leaf) -Force
-                $remoteLog = 'C:\ProgramData\WinMint\shell.log'
-                $logExists = Invoke-Command -Session $session -ScriptBlock {
-                    param($p) Test-Path -LiteralPath $p
-                } -ArgumentList $remoteLog
-                if ($logExists) {
-                    Copy-Item -FromSession $session -Path $remoteLog -Destination (Join-Path $guestDir 'shell.log') -Force -ErrorAction SilentlyContinue
-                }
-                $remoteSetupLog = 'C:\ProgramData\WinMint\machine-setup.log'
-                $setupLogExists = Invoke-Command -Session $session -ScriptBlock {
-                    param($p) Test-Path -LiteralPath $p
-                } -ArgumentList $remoteSetupLog
-                if ($setupLogExists) {
-                    Copy-Item -FromSession $session -Path $remoteSetupLog -Destination (Join-Path $guestDir 'machine-setup.log') -Force -ErrorAction SilentlyContinue
-                }
                 $pulled = Get-Content -LiteralPath (Join-Path $guestDir $leaf) -Raw -Encoding utf8 | ConvertFrom-Json
                 $outcome = [string]$pulled.outcome
                 if ($outcome -eq 'Reboot') {
@@ -400,9 +372,10 @@ if (-not (Get-ChildItem -LiteralPath $guestDir -Filter 'evidence-*.json' -ErrorA
     throw "Wall clock elapsed without guest evidence under $guestDir"
 }
 
-Invoke-AssertSmokeEvidence -Dir $evidenceOut `
+& $assertScript -EvidenceDir $evidenceOut `
     -PinnedRemoveAppx $pinnedRemoveAppx `
     -PinnedRemoveCapabilities $pinnedRemoveCapabilities `
     -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "Smoke green. Evidence: $evidenceOut"
 exit 0

@@ -105,7 +105,7 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         {
             file = JsonSerializer.Deserialize(
                 File.ReadAllBytes(evidencePath),
-                ServicingEvidenceJsonContext.Default.EvidenceFile);
+                ServicingJsonContext.Default.EvidenceFile);
         }
         catch (JsonException ex)
         {
@@ -126,31 +126,10 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
             .First(s => s.Opcode == ServicingOpcode.StampOfflineShell)
             .Parameters[StageParams.ShellTarget];
 
-        ImageQualityLane lane = plan.Manifest.ImageQuality;
-        if (!string.IsNullOrWhiteSpace(file.Lane))
-        {
-            if (string.Equals(file.Lane, "Release", StringComparison.OrdinalIgnoreCase))
-            {
-                lane = ImageQualityLane.Release;
-            }
-            else if (string.Equals(file.Lane, "Test", StringComparison.OrdinalIgnoreCase))
-            {
-                lane = ImageQualityLane.Test;
-            }
-
-            if (lane != plan.Manifest.ImageQuality)
-            {
-                return Result.Fail<ImageEvidence, ServicingFailure>(
-                    new ServicingFailure(
-                        "servicing.evidence.lane_mismatch",
-                        $"evidence.json lane '{file.Lane}' does not match plan ImageQuality={plan.Manifest.ImageQuality}."));
-            }
-        }
-
         return Result.Ok<ImageEvidence, ServicingFailure>(
             new ImageEvidence(
                 file.OutputIsoPath ?? run.OutputIsoPath ?? Path.Combine(workDirectory, "out.iso"),
-                lane,
+                plan.Manifest.ImageQuality,
                 file.ShellStampTargetPath ?? shellTarget,
                 file.Digests ?? new Dictionary<string, string>(StringComparer.Ordinal)));
     }
@@ -167,7 +146,7 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         {
             FailureFile? failure = JsonSerializer.Deserialize(
                 File.ReadAllBytes(path),
-                ServicingEvidenceJsonContext.Default.FailureFile);
+                ServicingJsonContext.Default.FailureFile);
             return failure?.Message;
         }
         catch (JsonException)
@@ -226,8 +205,3 @@ internal sealed record FailureFile(
     [property: JsonPropertyName("schemaVersion")] string? SchemaVersion,
     [property: JsonPropertyName("message")] string? Message,
     [property: JsonPropertyName("opcode")] string? Opcode);
-
-[JsonSerializable(typeof(EvidenceFile))]
-[JsonSerializable(typeof(FailureFile))]
-[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal sealed partial class ServicingEvidenceJsonContext : JsonSerializerContext;

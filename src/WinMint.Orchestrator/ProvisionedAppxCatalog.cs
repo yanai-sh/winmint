@@ -31,6 +31,4 @@ public static class ProvisionedAppxCatalog
         "Microsoft.ZuneVideo",
         "MicrosoftCorporationII.QuickAssist",
     };
-
-    public static bool Contains(string id) => Ids.Contains(id);
 }

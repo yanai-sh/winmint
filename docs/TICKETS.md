@@ -41,7 +41,7 @@
 
 **Renumber note (2026-07-29):** old 06 (jobs+unlock+reboot) → **06 / 07 / 08**; old 07 (Test lane) → **09**; old 08 (Smoke harness) → **10**.
 
-**Carry / ponytail (2026-08-03):** [ponytail audit](research/2026-08-03-ponytail-audit.md) — fold into the owning ticket below; do **not** open a separate cleanup epic. Keep wipe, both Cli `build`/`apply`, and image digests. Do **not** pull keep-flag / debloat product code into M1 (wayfinder [#13](https://github.com/yanai-sh/winmint/issues/13) is design-only until **10** is green).
+**Carry / ponytail (2026-08-03):** [ponytail audit](research/2026-08-03-ponytail-audit.md) — fold into the owning ticket below; do **not** open a separate cleanup epic. Keep wipe and image digests. Cli verb is `build` only (`apply` twin deleted). Do **not** pull keep-flag / debloat product code into M1 (wayfinder [#13](https://github.com/yanai-sh/winmint/issues/13) is design-only until **10** is green).
 
 ---
 

@@ -31,8 +31,5 @@ finally {
     if ($LASTEXITCODE -ne 0) { throw "reg unload failed: $LASTEXITCODE" }
 }
 
-$stampNote = Join-Path $mountDir 'Windows\WinMint\shell-stamp.txt'
-New-Item -ItemType Directory -Force -Path (Split-Path -Parent $stampNote) | Out-Null
-Set-Content -LiteralPath $stampNote -Value "Shell=$shellTarget" -Encoding utf8
 Write-Output "StampOfflineShell ok"
 exit 0

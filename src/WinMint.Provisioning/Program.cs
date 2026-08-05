@@ -68,7 +68,7 @@ internal static class Program
                 throw new PlatformNotSupportedException("Shell tenure requires Windows.");
             }
 
-            splash = CreateSplash();
+            splash = new GdiSplashPresenter();
             ProvisioningBundle bundle = BundleLoader.LoadFromFile(bundlePath);
             SessionEnvironment env = CreateEnvironment(
                 bundlePath,
@@ -128,10 +128,10 @@ internal static class Program
             Time: TimeProvider.System,
             Winlogon: winlogon,
             Region: CreateRegion(),
-            Processes: CreateProcessHost(),
+            Processes: new Win32ProcessHost(),
             Splash: splash ?? new NoopSplashPresenter(),
             Checkpoints: checkpoints ?? new FileCheckpointStore(ProgramDataRoot()),
-            Secrets: new FileSecretScrubber(bundlePath, log),
+            WipeSecrets: new FileSecretScrubber(bundlePath, log).Wipe,
             Evidence: evidence,
             Appx: CreateAppxPackageManager(log),
             Reboot: CreateSystemReboot(),
@@ -148,16 +148,10 @@ internal static class Program
     private static Win32RegionSnapshot CreateRegion() => new();
 
     [SupportedOSPlatform("windows")]
-    private static Win32ProcessHost CreateProcessHost() => new();
-
-    [SupportedOSPlatform("windows")]
     private static Win32SystemReboot CreateSystemReboot() => new();
 
     [SupportedOSPlatform("windows")]
     private static Win32LocalAccounts CreateLocalAccounts() => new();
-
-    [SupportedOSPlatform("windows")]
-    private static GdiSplashPresenter CreateSplash() => new();
 }
 
 /// <summary>Machine setup has no splash surface; Shell wires <see cref="GdiSplashPresenter"/>.</summary>

@@ -143,9 +143,6 @@ public static class ImageServicing
             plan.Jobs.SchemaVersion,
             plan.Jobs.Jobs.Select(j => new JobFile(j.Id, j.Kind, j.NeedsReboot, j.PackageId)).ToArray());
         File.WriteAllText(
-            Path.Combine(run.WorkDirectory, "jobs.json"),
-            JsonSerializer.Serialize(jobs, ServicingJsonContext.Default.JobsFile));
-        File.WriteAllText(
             Path.Combine(payloadDir, "jobs.json"),
             JsonSerializer.Serialize(jobs, ServicingJsonContext.Default.JobsFile));
 
@@ -173,7 +170,6 @@ public static class ImageServicing
                     plan.Dma.Settle.GeoId,
                     plan.Dma.Settle.TimeZoneId,
                     plan.Dma.Settle.LocationServicesEnabled),
-            plan.Jobs.Jobs.Select(j => j.Id).ToArray(),
             removeProvisionedAppx);
         File.WriteAllText(
             Path.Combine(payloadDir, "bundle.json"),
@@ -239,7 +235,6 @@ public static class ImageServicing
                 case ServicingOpcode.BuildIso:
                     parameters[StageParams.OutputIso] = outputIso;
                     parameters[StageParams.MediaDir] = mediaDir;
-                    parameters[StageParams.WimOut] = wimOut;
                     break;
             }
 
@@ -345,7 +340,6 @@ internal sealed record BundleFile(
     [property: JsonPropertyName("password")] string Password,
     [property: JsonPropertyName("dmaEnabled")] bool DmaEnabled,
     [property: JsonPropertyName("settle")] SettleFile? Settle,
-    [property: JsonPropertyName("jobIds")] string[] JobIds,
     [property: JsonPropertyName("removeProvisionedAppx")] string[] RemoveProvisionedAppx);
 
 internal sealed record SettleFile(
@@ -365,5 +359,7 @@ internal sealed record StageFile(
 [JsonSerializable(typeof(JobsFile))]
 [JsonSerializable(typeof(BundleFile))]
 [JsonSerializable(typeof(StagesFile))]
+[JsonSerializable(typeof(EvidenceFile))]
+[JsonSerializable(typeof(FailureFile))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class ServicingJsonContext : JsonSerializerContext;

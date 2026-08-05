@@ -41,7 +41,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 | Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [PROVISIONINGSESSION Secrets](PROVISIONINGSESSION.md#secrets-smoke) |
 | Evidence JSON | ProvisioningSession (projection) | Smoke harness (S4) — **never** session control |
 | Checkpoint | ProvisioningSession (`ICheckpointStore`) | Next Shell `Run` via store (optional `bundle.Resume` inject) |
-| Smoke acceptance summary | Host harness (`tools/vm/`) | Maintainer — `SmokeAcceptanceDocument` |
+| Smoke acceptance summary | Host harness (`tools/vm/`) | Maintainer — `Assert-SmokeEvidence.ps1` |
 
 ## Compatibility
 
@@ -85,7 +85,7 @@ Form: lowercase dotted `area.token` segments (product area first).
 
 Prose stays “Machine setup”; types/flags stay `MachineSetup` / `--machine-setup`. Status codes are the third surface and follow this table only.
 
-Cli `build` and `apply` are both product verbs (same path) — intentional, not duplication to delete.
+Cli product verb for ImageServicing is `build` only (`apply` removed as identical twin).
 
 ## Explicit non-contracts
 

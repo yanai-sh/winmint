@@ -9,10 +9,6 @@ public static class ProvisioningSession
     /// <summary>App Installer / winget package family (Microsoft-documented FirstLogon register target).</summary>
     public const string DesktopAppInstallerFamilyName = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe";
 
-    // ponytail: alias creation after RegisterByFamilyName can lag a few seconds; ceiling ~5s then PATH fallback.
-    private const int WingetAliasPollAttempts = 20;
-    private static readonly TimeSpan WingetAliasPollDelay = TimeSpan.FromMilliseconds(250);
-
     public static SessionResult Run(
         SessionMode mode,
         ProvisioningBundle bundle,
@@ -97,7 +93,7 @@ public static class ProvisioningSession
                 emitted,
                 new SessionStatus(
                     "shell.checkpoint.invalid",
-                    "In-progress checkpoint missing or schema invalid; fail-closed."),
+                    "In-progress checkpoint missing or empty; fail-closed."),
                 dwell: false,
                 firstPaintMs);
         }
@@ -246,24 +242,14 @@ public static class ProvisioningSession
     /// <summary>
     /// Prefer the per-user App Execution Alias after RegisterByFamilyName; fall back to PATH.
     /// </summary>
-    private static string WaitForWingetAliasOrFallback()
+    private static string ResolveWingetAliasOrFallback()
     {
         string alias = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Microsoft",
             "WindowsApps",
             "winget.exe");
-        for (int i = 0; i < WingetAliasPollAttempts; i++)
-        {
-            if (File.Exists(alias))
-            {
-                return alias;
-            }
-
-            Thread.Sleep(WingetAliasPollDelay);
-        }
-
-        return "winget";
+        return File.Exists(alias) ? alias : "winget";
     }
 
     /// <summary>Default Scoop shim path after official bootstrap (research 2026-08-04).</summary>
@@ -437,20 +423,9 @@ public static class ProvisioningSession
 
                 // FirstLogon: App Installer is often provisioned but not yet registered for the
                 // interactive user — winget.exe alias missing until RegisterByFamilyName (MS docs).
-                // MachineSetup (SYSTEM) must have repaired framework package ACLs first; otherwise
-                // Register fails setting Trust Labels (UI.Xaml logo.png denied for S-1-5-18).
+                // Framework ACLs are MachineSetup-only (SYSTEM); Shell must not re-call takeown/icacls.
                 if (env.Appx is not null)
                 {
-                    // Re-repair only succeeds as SYSTEM; medium-IL FirstLogon logs skip and continues.
-                    try
-                    {
-                        env.Appx.EnsureSystemFullControlOnWingetFrameworkPackages();
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        // breadcrumb via Appx adapter log when present; register still fails closed
-                    }
-
                     try
                     {
                         env.Appx.RegisterPackageFamilyForCurrentUser(DesktopAppInstallerFamilyName);
@@ -466,7 +441,7 @@ public static class ProvisioningSession
                     }
 
                     fileName = env.Appx.TryResolveWingetExecutablePath()
-                        ?? WaitForWingetAliasOrFallback();
+                        ?? ResolveWingetAliasOrFallback();
                 }
                 else
                 {
@@ -954,13 +929,16 @@ public static class ProvisioningSession
             shellFailure = Fail("machineSetup.shell.verify_failed", ex.Message);
         }
 
-        try
+        if (env.WipeSecrets is not null)
         {
-            env.Secrets.Wipe(scrubbedView);
-        }
-        catch (Exception ex)
-        {
-            return Fail("machineSetup.secret_wipe_failed", ex.Message);
+            try
+            {
+                env.WipeSecrets(scrubbedView);
+            }
+            catch (Exception ex)
+            {
+                return Fail("machineSetup.secret_wipe_failed", ex.Message);
+            }
         }
 
         if (shellFailure is not null)

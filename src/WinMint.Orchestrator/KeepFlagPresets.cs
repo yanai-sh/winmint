@@ -29,63 +29,28 @@ public static class KeepFlagPresets
         "WorkFolders-Client",
     ];
 
-    public static Result<KeepFlagExpansion, PresetFailure> TryExpand(string name)
+    public static Result<KeepFlagExpansion, PlanFailure> TryExpand(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return Result.Fail<KeepFlagExpansion, PresetFailure>(
-                new PresetFailure("keepflag.preset.unknown", "Preset name is required."));
+            return Result.Fail<KeepFlagExpansion, PlanFailure>(
+                new PlanFailure("keepflag.preset.unknown", "Preset name is required."));
         }
 
         string key = name.Trim();
         if (string.Equals(key, Empty, StringComparison.OrdinalIgnoreCase))
         {
-            return Result.Ok<KeepFlagExpansion, PresetFailure>(KeepFlagExpansion.Empty);
+            return Result.Ok<KeepFlagExpansion, PlanFailure>(KeepFlagExpansion.Empty);
         }
 
         if (string.Equals(key, Acceptance, StringComparison.OrdinalIgnoreCase))
         {
-            PresetFailure? miss = TryFailMissing(
-                AcceptanceAppx,
-                ProvisionedAppxCatalog.Contains,
-                "provisioned AppX");
-            miss ??= TryFailMissing(
-                AcceptanceCapabilities,
-                CapabilityCatalog.Contains,
-                "capability");
-            miss ??= TryFailMissing(
-                AcceptanceFeatures,
-                OptionalFeatureCatalog.Contains,
-                "optional-feature");
-            if (miss is not null)
-            {
-                return Result.Fail<KeepFlagExpansion, PresetFailure>(miss);
-            }
-
-            return Result.Ok<KeepFlagExpansion, PresetFailure>(
+            return Result.Ok<KeepFlagExpansion, PlanFailure>(
                 new KeepFlagExpansion(AcceptanceAppx, AcceptanceCapabilities, AcceptanceFeatures));
         }
 
-        return Result.Fail<KeepFlagExpansion, PresetFailure>(
-            new PresetFailure("keepflag.preset.unknown", $"Unknown keep-flag preset '{key}'."));
-    }
-
-    private static PresetFailure? TryFailMissing(
-        IReadOnlyList<string> ids,
-        Func<string, bool> contains,
-        string catalogNoun)
-    {
-        foreach (string id in ids)
-        {
-            if (!contains(id))
-            {
-                return new PresetFailure(
-                    "keepflag.preset.catalog",
-                    $"Acceptance preset {catalogNoun} '{id}' is not in the shipped {catalogNoun} catalog.");
-            }
-        }
-
-        return null;
+        return Result.Fail<KeepFlagExpansion, PlanFailure>(
+            new PlanFailure("keepflag.preset.unknown", $"Unknown keep-flag preset '{key}'."));
     }
 }
 
@@ -97,5 +62,3 @@ public sealed record KeepFlagExpansion(
 {
     public static KeepFlagExpansion Empty { get; } = new([], [], []);
 }
-
-public sealed record PresetFailure(string Code, string Message);

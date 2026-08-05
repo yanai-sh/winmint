@@ -33,14 +33,14 @@ A cold maintainer Apply against a consumer multi-edition ISO is multi-hour (most
   - Maintainer Apply: multi-hour; use `just apply-maintainer` / `--reuse-media` after a successful cold run.
 - `just apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json"`:
   - Prints a one-line wall-clock warning.
-  - Invokes Cli `apply` with `--iso` / `--work` / profile; passes `--reuse-media` when `WORK/media/sources/.winmint-single-index` exists (else cold).
+  - Invokes Cli `build` with `--iso` / `--work` / profile; passes `--reuse-media` when `WORK/media/sources/.winmint-single-index` exists (else cold).
   - Requires prior `just publish-provisioning` (document; fail via existing supervisor-missing path if absent).
 
 ### 2. `--reuse-media` (Cli → Mount kernel)
 
 **Cli**
 
-- `bool` option `--reuse-media` on `apply` and `build`.
+- `bool` option `--reuse-media` on `build`.
 - Plumb into `ServicingRun` (new field `ReuseMedia`).
 - `ImageServicing.Materialize` adds `reuseMedia=true|false` to `MountInstallWim` parameters.
 

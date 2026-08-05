@@ -36,7 +36,7 @@ public static class BundleLoader
 
         string? dir = Path.GetDirectoryName(path);
         string jobsPath = dir is null ? "jobs.json" : Path.Combine(dir, "jobs.json");
-        IReadOnlyList<ProvisionJob> jobs = LoadJobs(jobsPath, dto.JobIds);
+        IReadOnlyList<ProvisionJob> jobs = LoadJobs(jobsPath);
 
         return new ProvisioningBundle(
             Account: new AccountStamp(dto.Username, dto.Password ?? ""),
@@ -52,29 +52,29 @@ public static class BundleLoader
             RemoveProvisionedAppx: dto.RemoveProvisionedAppx ?? []);
     }
 
-    private static ProvisionJob[] LoadJobs(string jobsPath, string[]? fallbackJobIds)
+    private static ProvisionJob[] LoadJobs(string jobsPath)
     {
-        if (File.Exists(jobsPath))
+        if (!File.Exists(jobsPath))
         {
-            byte[] bytes = File.ReadAllBytes(jobsPath);
-            JobsFile? jobsFile = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.JobsFile);
-            if (jobsFile is null)
-            {
-                throw new InvalidOperationException($"Failed to parse jobs: {jobsPath}");
-            }
-
-            if (!string.Equals(jobsFile.SchemaVersion, JobsSchemaVersion, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    $"Unsupported jobs schema '{jobsFile.SchemaVersion}' (need {JobsSchemaVersion}).");
-            }
-
-            return (jobsFile.Jobs ?? [])
-                .Select(j => new ProvisionJob(j.Id, j.Kind, j.NeedsReboot, j.PackageId))
-                .ToArray();
+            throw new InvalidOperationException($"jobs.json required beside bundle (missing: {jobsPath}).");
         }
 
-        return (fallbackJobIds ?? []).Select(id => new ProvisionJob(id, "stub")).ToArray();
+        byte[] bytes = File.ReadAllBytes(jobsPath);
+        JobsFile? jobsFile = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.JobsFile);
+        if (jobsFile is null)
+        {
+            throw new InvalidOperationException($"Failed to parse jobs: {jobsPath}");
+        }
+
+        if (!string.Equals(jobsFile.SchemaVersion, JobsSchemaVersion, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Unsupported jobs schema '{jobsFile.SchemaVersion}' (need {JobsSchemaVersion}).");
+        }
+
+        return (jobsFile.Jobs ?? [])
+            .Select(j => new ProvisionJob(j.Id, j.Kind, j.NeedsReboot, j.PackageId))
+            .ToArray();
     }
 }
 
@@ -85,7 +85,6 @@ internal sealed record BundleDto(
     [property: JsonPropertyName("password")] string? Password,
     [property: JsonPropertyName("dmaEnabled")] bool DmaEnabled,
     [property: JsonPropertyName("settle")] SettleDto? Settle,
-    [property: JsonPropertyName("jobIds")] string[]? JobIds,
     [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx);
 
 internal sealed record SettleDto(
@@ -106,6 +105,6 @@ internal sealed record JobFile(
 
 [JsonSerializable(typeof(BundleDto))]
 [JsonSerializable(typeof(JobsFile))]
-[JsonSerializable(typeof(EvidenceDto))]
+[JsonSerializable(typeof(ProvisioningEvidenceDocument))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class ProvisioningJsonContext : JsonSerializerContext;

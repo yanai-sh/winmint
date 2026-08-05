@@ -65,7 +65,6 @@ public static class BuildPlan
             issues.Add(new DocumentError("dma.settle.missing", "dma.settle is required.", "dma.settle"));
         }
 
-        AccountMode? mode = null;
         if (doc.Account is not null)
         {
             if (string.IsNullOrWhiteSpace(doc.Account.Mode))
@@ -78,10 +77,6 @@ public static class BuildPlan
                     "account.mode.unsupported",
                     $"Unsupported account.mode '{doc.Account.Mode}'. Smoke supports {AccountModeWire.LocalAutoLogon} only.",
                     "account.mode"));
-            }
-            else
-            {
-                mode = AccountMode.LocalAutoLogon;
             }
 
             if (string.IsNullOrWhiteSpace(doc.Account.Username))
@@ -112,7 +107,7 @@ public static class BuildPlan
         bool requireWifi = doc.Account!.RequireWifiDuringOobe ?? true;
 
         Profile profile = new(
-            new AccountProfile(mode!.Value, doc.Account.Username!, doc.Account.Password, requireWifi),
+            new AccountProfile(doc.Account.Username!, doc.Account.Password, requireWifi),
             new DmaProfile(
                 doc.Dma.Enabled ?? true,
                 new DmaSettleTarget(
@@ -172,8 +167,7 @@ public static class BuildPlan
     {
         RunOptions options = run ?? new RunOptions();
 
-        if (profile.Account.Mode == AccountMode.LocalAutoLogon
-            && string.IsNullOrEmpty(profile.Account.Password))
+        if (string.IsNullOrEmpty(profile.Account.Password))
         {
             return Result.Fail<BuildArtifacts, PlanFailure>(
                 new PlanFailure("account.password.required", "Local autoLogon requires a non-empty password."));
@@ -181,7 +175,7 @@ public static class BuildPlan
 
         foreach (string id in profile.RemoveProvisionedAppx)
         {
-            if (!ProvisionedAppxCatalog.Contains(id))
+            if (!ProvisionedAppxCatalog.Ids.Contains(id))
             {
                 return Result.Fail<BuildArtifacts, PlanFailure>(
                     new PlanFailure(
@@ -192,7 +186,7 @@ public static class BuildPlan
 
         foreach (string id in profile.RemoveCapabilities)
         {
-            if (!CapabilityCatalog.Contains(id))
+            if (!CapabilityCatalog.Ids.Contains(id))
             {
                 return Result.Fail<BuildArtifacts, PlanFailure>(
                     new PlanFailure(
@@ -203,7 +197,7 @@ public static class BuildPlan
 
         foreach (string id in profile.DisableOptionalFeatures)
         {
-            if (!OptionalFeatureCatalog.Contains(id))
+            if (!OptionalFeatureCatalog.Ids.Contains(id))
             {
                 return Result.Fail<BuildArtifacts, PlanFailure>(
                     new PlanFailure(
@@ -317,39 +311,68 @@ public static class BuildPlan
 
         List<ServicingStage> stageList =
         [
-            new ServicingStage(ServicingOpcode.MountInstallWim, Dict((StageParams.SourceIso, options.SourceIsoPath ?? ""))),
+            new ServicingStage(
+                ServicingOpcode.MountInstallWim,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [StageParams.SourceIso] = options.SourceIsoPath ?? "",
+                }),
         ];
 
         if (profile.RemoveProvisionedAppx.Count > 0)
         {
             stageList.Add(new ServicingStage(
                 ServicingOpcode.RemoveProvisionedAppx,
-                Dict((StageParams.PackageFamilyNames, string.Join(';', profile.RemoveProvisionedAppx)))));
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [StageParams.PackageFamilyNames] = string.Join(';', profile.RemoveProvisionedAppx),
+                }));
         }
 
         if (profile.RemoveCapabilities.Count > 0)
         {
             stageList.Add(new ServicingStage(
                 ServicingOpcode.RemoveCapabilities,
-                Dict((StageParams.CapabilityNames, string.Join(';', profile.RemoveCapabilities)))));
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [StageParams.CapabilityNames] = string.Join(';', profile.RemoveCapabilities),
+                }));
         }
 
         if (profile.DisableOptionalFeatures.Count > 0)
         {
             stageList.Add(new ServicingStage(
                 ServicingOpcode.DisableOptionalFeatures,
-                Dict((StageParams.FeatureNames, string.Join(';', profile.DisableOptionalFeatures)))));
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [StageParams.FeatureNames] = string.Join(';', profile.DisableOptionalFeatures),
+                }));
         }
 
         stageList.AddRange(
         [
-            new ServicingStage(ServicingOpcode.StagePayload, Dict()),
-            new ServicingStage(ServicingOpcode.InjectUnattend, Dict()),
-            new ServicingStage(ServicingOpcode.StampOfflineShell, Dict((StageParams.ShellTarget, "Supervisor.exe"))),
+            new ServicingStage(ServicingOpcode.StagePayload, new Dictionary<string, string>(StringComparer.Ordinal)),
+            new ServicingStage(ServicingOpcode.InjectUnattend, new Dictionary<string, string>(StringComparer.Ordinal)),
+            new ServicingStage(
+                ServicingOpcode.StampOfflineShell,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [StageParams.ShellTarget] = "Supervisor.exe",
+                }),
             new ServicingStage(
                 ServicingOpcode.ExportWim,
-                Dict((StageParams.Lane, laneName), (StageParams.Compression, compression), (StageParams.Cleanup, cleanup))),
-            new ServicingStage(ServicingOpcode.BuildIso, Dict((StageParams.OutputIso, options.OutputIsoPath ?? ""))),
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [StageParams.Lane] = laneName,
+                    [StageParams.Compression] = compression,
+                    [StageParams.Cleanup] = cleanup,
+                }),
+            new ServicingStage(
+                ServicingOpcode.BuildIso,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [StageParams.OutputIso] = options.OutputIsoPath ?? "",
+                }),
         ]);
 
         ServicingStageList stages = new(stageList);
@@ -513,17 +536,6 @@ public static class BuildPlan
 
     private static DocumentErrors InvalidJson(string message) =>
         new([new DocumentError("document.invalidJson", message)]);
-
-    private static Dictionary<string, string> Dict(params (string Key, string Value)[] pairs)
-    {
-        Dictionary<string, string> map = new(pairs.Length, StringComparer.Ordinal);
-        foreach ((string key, string value) in pairs)
-        {
-            map[key] = value;
-        }
-
-        return map;
-    }
 }
 
 internal sealed record ProfileDocument(
@@ -563,5 +575,8 @@ internal sealed record DmaSettleDocument(
     [property: JsonPropertyName("locationServicesEnabled")] bool? LocationServicesEnabled);
 
 [JsonSerializable(typeof(ProfileDocument))]
-[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSourceGenerationOptions(
+    WriteIndented = true,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class BuildPlanJsonContext : JsonSerializerContext;

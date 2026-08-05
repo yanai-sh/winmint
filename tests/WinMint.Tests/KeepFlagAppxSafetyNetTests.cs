@@ -164,7 +164,6 @@ public class KeepFlagAppxSafetyNetTests
             Processes: new NoopProcesses(),
             Splash: splash,
             Checkpoints: new NoopCheckpoints(),
-            Secrets: new NoopSecrets(),
             Evidence: new NoopEvidence(),
             Appx: appx);
 
@@ -261,11 +260,6 @@ public class KeepFlagAppxSafetyNetTests
         public CheckpointState? TryReadCheckpoint() => null;
 
         public void ClearCheckpoint() { }
-    }
-
-    private sealed class NoopSecrets : ISecretScrubber
-    {
-        public void Wipe(ProvisioningBundle bundle) { }
     }
 
     private sealed class NoopEvidence : IEvidenceSink

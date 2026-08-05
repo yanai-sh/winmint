@@ -171,7 +171,7 @@ public class MachineSetupTests
 
     private static SessionEnvironment Env(
         IWinlogonRegistry winlogon,
-        ISecretScrubber secrets,
+        RecordingSecretScrubber secrets,
         IAppxPackageManager? appx = null,
         ILocalAccounts? localAccounts = null) =>
         new(
@@ -181,7 +181,7 @@ public class MachineSetupTests
             Processes: new NoopProcesses(),
             Splash: new NoopSplash(),
             Checkpoints: new NoopCheckpoints(),
-            Secrets: secrets,
+            WipeSecrets: secrets.Wipe,
             Appx: appx,
             LocalAccounts: localAccounts);
 
@@ -249,7 +249,7 @@ public class MachineSetupTests
         public void GrantShellUnlockAccess(string username) { }
     }
 
-    private sealed class RecordingSecretScrubber : ISecretScrubber
+    private sealed class RecordingSecretScrubber
     {
         public int WipeCount { get; private set; }
 

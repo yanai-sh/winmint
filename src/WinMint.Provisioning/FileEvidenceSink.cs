@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace WinMint.Provisioning;
 
@@ -29,23 +28,10 @@ public sealed class FileEvidenceSink : IEvidenceSink
 
         Directory.CreateDirectory(_directory);
         string path = Path.Combine(_directory, $"evidence-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}.json");
-        EvidenceDto dto = new(
-            document.SchemaVersion,
-            document.Outcome,
-            document.StatusCode,
-            document.StatusMessage,
-            document.Phases.ToArray(),
-            document.FirstPaintMs);
-        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(dto, ProvisioningJsonContext.Default.EvidenceDto);
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(
+            document,
+            ProvisioningJsonContext.Default.ProvisioningEvidenceDocument);
         File.WriteAllBytes(path, bytes);
         return new EvidenceSnapshot(SchemaVersion, path);
     }
 }
-
-internal sealed record EvidenceDto(
-    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
-    [property: JsonPropertyName("outcome")] string Outcome,
-    [property: JsonPropertyName("statusCode")] string StatusCode,
-    [property: JsonPropertyName("statusMessage")] string StatusMessage,
-    [property: JsonPropertyName("phases")] string[] Phases,
-    [property: JsonPropertyName("firstPaintMs")] long? FirstPaintMs = null);

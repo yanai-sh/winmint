@@ -69,6 +69,7 @@ public static class WingetFrameworkPackageAcl
             throw new InvalidOperationException($"ACL helper missing: {fileName}");
         }
 
+        // ponytail: local spawn — Win32ProcessHost is CT/no-timeout; ACL needs 180s + no-redirect (pipe flood)
         using Process process = new()
         {
             StartInfo = new ProcessStartInfo

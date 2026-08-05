@@ -119,11 +119,8 @@ public class CapabilityPlanTests
         {
             File.WriteAllText(Path.Combine(work, "stages.json"), """{"stages":[]}""");
             File.WriteAllText(
-                Path.Combine(logs, "remove-capabilities.digests.json"),
-                """{"removed.capability.App.StepsRecorder~~~~0.0.1.0":"Absent","removed.capability.WMIC~~~~":"Absent"}""");
-            File.WriteAllText(
-                Path.Combine(logs, "disable-optional-features.digests.json"),
-                """{"disabled.feature.WorkFolders-Client":"Disabled"}""");
+                Path.Combine(logs, "digests.json"),
+                """{"removed.capability.App.StepsRecorder~~~~0.0.1.0":"Absent","removed.capability.WMIC~~~~":"Absent","disabled.feature.WorkFolders-Client":"Disabled"}""");
 
             string runPlan = Path.Combine(repo, "servicing", "RunPlan.ps1");
             ProcessStartInfo psi = new()

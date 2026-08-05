@@ -185,9 +185,8 @@ public sealed class MainWindow : Window
 
     private WizardSessionResult RunSession()
     {
-        string preset = (_preset.SelectedItem as string) ?? "";
-        return WizardSession.ComposeAndPlan(
-            preset,
+        return WizardSession.ComposeAndPlan(new WizardSessionInput(
+            (_preset.SelectedItem as string) ?? "",
             _username.Text ?? "",
             _password.Text ?? "",
             _requireWifi.IsChecked == true,
@@ -203,7 +202,7 @@ public sealed class MainWindow : Window
             _wsl.Text ?? "",
             _wslNeedsReboot.Text ?? "",
             _removeCapabilities.Text ?? "",
-            _disableOptionalFeatures.Text ?? "");
+            _disableOptionalFeatures.Text ?? ""));
     }
 
     private static TextBlock Heading(string text) => new()

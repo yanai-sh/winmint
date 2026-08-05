@@ -189,7 +189,6 @@ public class UnlockTimeoutTests
             Processes: new NoopProcesses(),
             Splash: splash,
             Checkpoints: checkpoints ?? new NoopCheckpoints(),
-            Secrets: new NoopSecrets(),
             Evidence: evidence);
 
     private sealed class RecordingWinlogon : IWinlogonRegistry
@@ -319,11 +318,6 @@ public class UnlockTimeoutTests
         public CheckpointState? TryReadCheckpoint() => null;
 
         public void ClearCheckpoint() { }
-    }
-
-    private sealed class NoopSecrets : ISecretScrubber
-    {
-        public void Wipe(ProvisioningBundle bundle) { }
     }
 
     /// <summary>Advances UTC + monotonic stamp on timer due-time; wall jump is UTC-only.</summary>

@@ -1,15 +1,13 @@
 using System.Text;
 using WinMint.Orchestrator;
 using WinMint.Provisioning;
-using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
+using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
 /// <summary>Ticket 16 — metal winget job at S1 (Plan) + S3 (Run).</summary>
 public class WingetJobsTests
 {
-    private static string SupervisorPath => ImageServicing.ShellStampGuestPath;
-
     [Fact]
     public void Plan_emits_winget_jobs_from_packages_winget()
     {
@@ -250,157 +248,5 @@ public class WingetJobsTests
         }
 
         return parsed.Value;
-    }
-
-    private static ProvisioningBundle Bundle(IReadOnlyList<ProvisionJob> jobs) =>
-        new(
-            Account: new AccountStamp("winmint", ""),
-            Dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
-            Jobs: jobs,
-            Policy: SessionPolicy.SmokeDefaults,
-            Supervisor: new SupervisorIdentity(SupervisorPath));
-
-    private static SessionEnvironment Env(
-        IProcessHost processes,
-        IEvidenceSink evidence,
-        ICheckpointStore? checkpoints = null,
-        ISystemReboot? reboot = null,
-        IAppxPackageManager? appx = null) =>
-        new(
-            Time: TimeProvider.System,
-            Winlogon: new NoopWinlogon(),
-            Region: new MatchingRegion(),
-            Processes: processes,
-            Splash: new RecordingSplashPresenter(),
-            Checkpoints: checkpoints ?? new NoopCheckpoints(),
-            Secrets: new NoopSecrets(),
-            Evidence: evidence,
-            Reboot: reboot,
-            Appx: appx);
-
-    private sealed class RecordingAppx : IAppxPackageManager
-    {
-        public List<string> RegisteredFamilyNames { get; } = [];
-
-        public string? WingetPath { get; init; }
-
-        public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) => [];
-
-        public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) => [];
-
-        public void RemovePackage(string packageFullName) { }
-
-        public void DeprovisionPackageFamily(string packageFamilyName) { }
-
-        public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) =>
-            RegisteredFamilyNames.Add(packageFamilyName);
-
-        public void EnsureSystemFullControlOnWingetFrameworkPackages() { }
-
-        public string? TryResolveWingetExecutablePath() => WingetPath;
-    }
-
-    private sealed class RecordingProcessHost : IProcessHost
-    {
-        public List<(string FileName, IReadOnlyList<string> Arguments)> Starts { get; } = [];
-
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default)
-        {
-            Starts.Add((fileName, arguments));
-            return new ProcessStartResult(0);
-        }
-    }
-
-    private sealed class RecordingSystemReboot : ISystemReboot
-    {
-        public bool Requested { get; private set; }
-
-        public void RequestReboot() => Requested = true;
-    }
-
-    private sealed class RecordingCheckpoints : ICheckpointStore
-    {
-        public CheckpointState? LastWritten { get; private set; }
-
-        public TenureState ReadTenure() =>
-            new(CheckpointInProgress: LastWritten is not null, HeartbeatUtc: null);
-
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
-
-        public void WriteCheckpoint(CheckpointState state) => LastWritten = state;
-
-        public CheckpointState? TryReadCheckpoint() => LastWritten;
-
-        public void ClearCheckpoint() => LastWritten = null;
-    }
-
-    private sealed class RecordingSplashPresenter : ISplashPresenter
-    {
-        public void Show() { }
-
-        public void SetStatus(SessionStatus status) { }
-    }
-
-    private sealed class RecordingEvidenceSink : IEvidenceSink
-    {
-        public List<ProvisioningEvidenceDocument> Documents { get; } = [];
-
-        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)
-        {
-            Documents.Add(document);
-            return new EvidenceSnapshot(document.SchemaVersion, $"memory:{Documents.Count}");
-        }
-    }
-
-    private sealed class MatchingRegion : IRegionSnapshot
-    {
-        private RegionState _state = new("en-GB", 242, "GMT Standard Time", true);
-
-        public void Apply(DmaSettleTarget target) =>
-            _state = new RegionState(
-                target.Locale,
-                target.GeoId,
-                target.TimeZoneId,
-                target.LocationServicesEnabled);
-
-        public RegionState Read() => _state;
-    }
-
-    private sealed class NoopWinlogon : IWinlogonRegistry
-    {
-        public string? Shell { get; private set; } = SupervisorPath;
-
-        public void SetAutoLogon(string username, string password) { }
-
-        public string? GetDefaultUserName() => null;
-
-        public bool GetAutoAdminLogon() => false;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path) => Shell = path;
-
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
-    private sealed class NoopCheckpoints : ICheckpointStore
-    {
-        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
-
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
-
-        public void WriteCheckpoint(CheckpointState state) { }
-
-        public CheckpointState? TryReadCheckpoint() => null;
-
-        public void ClearCheckpoint() { }
-    }
-
-    private sealed class NoopSecrets : ISecretScrubber
-    {
-        public void Wipe(ProvisioningBundle bundle) { }
     }
 }
