@@ -29,8 +29,8 @@ The elevated imaging deep module: apply BuildPlan artifacts to a user-supplied S
 _Avoid_: day-one `IServicing` indirection with a single adapter; guest FirstLogon work
 
 **Payload**:
-Files staged into the image for Machine setup / FirstLogon: media, `SetupComplete.cmd` (repo: `payload/scripts/` → image: `%WINDIR%\Setup\Scripts\`), the published Provisioning Supervisor binary, and job manifests. Not the Orchestrator.
-_Avoid_: engine scripts, InstallPlan (v1 staged-profile dump); staged guest PowerShell as the control plane or default install driver
+Files staged into the image for Machine setup / FirstLogon: media, `SetupComplete.cmd` (repo: `payload/scripts/` → image: `%WINDIR%\Setup\Scripts\`), the published Provisioning Supervisor binary, and job manifests. Not the Orchestrator. After successful Shell Complete, branded payload under `%WINDIR%\WinMint\` and SetupComplete are best-effort erased ([ADR-008](docs/decisions/ADR-008-residual-minimization.md)); `%ProgramData%\WinMint\` may remain for harness evidence.
+_Avoid_: engine scripts, InstallPlan (v1 staged-profile dump); staged guest PowerShell as the control plane or default install driver; durable brand surface after green FirstLogon; dual `$OEM$` SetupScripts copies
 
 **Machine setup**:
 The SetupComplete phase before first interactive logon. Invokes the Provisioning Supervisor in `--machine-setup` mode to stamp autologon and fail-closed verify/restamp Winlogon Shell → Supervisor (after offline Servicing already stamped Shell). Does not run DMA settle, splash, or provisioning jobs.
@@ -77,8 +77,8 @@ The first acceptance vertical: Profile → ISO → unattended Hyper-V install �
 _Avoid_: full install gate, hardware acceptance (those are later verticals); a different DMA settle or install executor than production
 
 **Image quality**:
-Run-specific WIM export / WinSxS cleanup posture for one build. Test lane prioritizes speed; release lane prioritizes a smaller ISO. Not authored in the Profile.
-_Avoid_: baking Max compression into every Smoke rebuild; claiming C# orchestration makes DISM faster
+Run-specific WIM export / WinSxS cleanup posture for one build. Test lane prioritizes speed; release lane prioritizes a smaller ISO. Not authored in the Profile. Export/commit paths snapshot and assert WIM metadata (Name/Architecture/edition build) so DISM exit 0 cannot silently leave Setup-breaking image info.
+_Avoid_: baking Max compression into every Smoke rebuild; claiming C# orchestration makes DISM faster; trusting Unmount/Commit without re-reading Get-WimInfo
 
 **Keep-flag**:
 Remove-list polarity for selected provisioned inbox AppX, capabilities, and optional features: Profile lists what to strip/disable; static in-repo catalogs bound legal ids; ImageServicing removes offline; ProvisioningSession is a narrow FirstLogon AppX safety net. Smoke acceptance uses a small explicit remove-list to prove the path; other Profiles default empty. CDM is not the primary control plane.

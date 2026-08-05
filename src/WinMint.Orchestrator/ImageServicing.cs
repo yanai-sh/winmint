@@ -26,7 +26,7 @@ public static class ImageServicing
     public static string HostBootMountDir => Path.Combine(HostServicingRoot, "boot-mount");
 
     /// <summary>Smoke default: Windows 11 Pro on consumer multi-edition ARM64/x64 ISOs (Home=1, Home SL=2, Pro=3).
-    /// MountInstallWim exports this index to a single-image WIM before mount (IMAGESERVICING invariant 7).</summary>
+    /// MountInstallWim exports this index to a single-image WIM before mount (IMAGESERVICING invariant 8).</summary>
     public const int DefaultProWimIndex = 3;
 
     public static Result<ImageEvidence, ServicingFailure> Apply(
@@ -199,6 +199,7 @@ public static class ImageServicing
                     parameters[StageParams.MediaDir] = mediaDir;
                     parameters[StageParams.WimIndex] = wimIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     parameters[StageParams.ReuseMedia] = run.ReuseMedia ? "true" : "false";
+                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
                     break;
                 case ServicingOpcode.StagePayload:
                     parameters[StageParams.PayloadDir] = payloadDir;
@@ -233,6 +234,7 @@ public static class ImageServicing
                     parameters[StageParams.MountDir] = mountDir;
                     parameters[StageParams.MediaDir] = mediaDir;
                     parameters[StageParams.WimOut] = wimOut;
+                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
                     break;
                 case ServicingOpcode.BuildIso:
                     parameters[StageParams.OutputIso] = outputIso;

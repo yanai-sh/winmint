@@ -55,7 +55,14 @@ public class ImageServicingApplyTests
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.MountInstallWim
                     && s.Parameters.TryGetValue(StageParams.ReuseMedia, out string? reuse)
-                    && reuse == "false");
+                    && reuse == "false"
+                    && s.Parameters.TryGetValue(StageParams.WorkDirectory, out string? mountWork)
+                    && mountWork == work);
+            Assert.Contains(
+                runner.Stages,
+                s => s.Opcode == ServicingOpcode.ExportWim
+                    && s.Parameters.TryGetValue(StageParams.WorkDirectory, out string? exportWork)
+                    && exportWork == work);
             Assert.False(string.IsNullOrWhiteSpace(result.Value.ShellStampTargetPath));
             Assert.Equal(ImageQualityLane.Test, result.Value.Lane);
             Assert.Equal(ImageServicing.ShellStampGuestPath, result.Value.ShellStampTargetPath);

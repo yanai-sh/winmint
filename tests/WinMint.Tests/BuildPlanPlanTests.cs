@@ -64,6 +64,8 @@ public class BuildPlanPlanTests
         Assert.Contains($"/d {BuildPlan.IrelandSetupGeoId} ", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("windowsPE", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains(BuildPlan.ProSetupProductKey, artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.Contains("<Key>/IMAGE/INDEX</Key>", artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.Contains("<Value>1</Value>", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("oobeSystem", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("<Name>winmint</Name>", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("<HideOnlineAccountScreens>true</HideOnlineAccountScreens>", artifacts.Unattend.Xml, StringComparison.Ordinal);

@@ -80,7 +80,8 @@ public sealed record SessionEnvironment(
     IAppxPackageManager? Appx = null,
     ISystemReboot? Reboot = null,
     ILocalAccounts? LocalAccounts = null,
-    Func<string?>? ResolveScoopCmd = null);
+    Func<string?>? ResolveScoopCmd = null,
+    IResidueCleaner? ResidueCleaner = null);
 
 /// <summary>OS reboot after NeedsReboot checkpoint (ticket 16). Nullable in tests; production wires Win32.</summary>
 public interface ISystemReboot
@@ -134,6 +135,9 @@ public interface IWinlogonRegistry
 {
     void SetAutoLogon(string username, string password);
 
+    /// <summary>Clear AutoAdminLogon / DefaultPassword (and related stamps) after successful provisioning.</summary>
+    void ClearAutoLogon();
+
     string? GetDefaultUserName();
 
     bool GetAutoAdminLogon();
@@ -143,6 +147,14 @@ public interface IWinlogonRegistry
     void SetShell(string path);
 
     void GrantShellUnlockAccess(string username);
+}
+
+/// <summary>
+/// Best-effort erase of branded WinMint payload after Shell Complete (ADR-008).
+/// </summary>
+public interface IResidueCleaner
+{
+    void TryEraseAfterComplete();
 }
 
 public sealed record RegionState(

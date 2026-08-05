@@ -224,7 +224,26 @@ public static class ProvisioningSession
                 FirstPaintMs: firstPaintMs));
         emitted.Add(snap);
 
+        TryEraseResidue(env);
+
         return new SessionResult(SessionOutcome.Complete, jobs.Status, emitted);
+    }
+
+    private static void TryEraseResidue(SessionEnvironment env)
+    {
+        if (env.ResidueCleaner is null)
+        {
+            return;
+        }
+
+        try
+        {
+            env.ResidueCleaner.TryEraseAfterComplete();
+        }
+        catch (Exception)
+        {
+            // ponytail: Explorer already held; residue erase is best-effort (ADR-008)
+        }
     }
 
     private static bool IsExplorerShell(string? shell) =>
