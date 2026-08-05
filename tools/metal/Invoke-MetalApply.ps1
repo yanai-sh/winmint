@@ -53,10 +53,13 @@ $assertScript = Join-Path $PSScriptRoot 'Assert-MetalEvidence.ps1'
 
 function Invoke-MetalAssert {
     param([string] $Dir, [switch] $Drivers, [switch] $NativeAuditJobs)
-    $args = @('-WorkDirectory', $Dir, '-RequireOutputIso')
-    if ($Drivers) { $args += '-ExpectDrivers' }
-    if ($NativeAuditJobs) { $args += '-ExpectNativePackageAuditJobs' }
-    & $assertScript @args
+    $assertParams = @{
+        WorkDirectory    = $Dir
+        RequireOutputIso = $true
+    }
+    if ($Drivers) { $assertParams['ExpectDrivers'] = $true }
+    if ($NativeAuditJobs) { $assertParams['ExpectNativePackageAuditJobs'] = $true }
+    & $assertScript @assertParams
     if ($LASTEXITCODE -ne 0) { throw "Metal assert failed: $LASTEXITCODE" }
 }
 

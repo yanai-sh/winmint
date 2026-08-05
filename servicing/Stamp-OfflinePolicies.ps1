@@ -66,6 +66,7 @@ foreach ($group in $byHive) {
             }
             $family = if ($row.SubKey -match 'BraveSoftware') { 'brave'
             } elseif ($row.SubKey -match 'OneDrive') { 'onedrive'
+            } elseif ($row.SubKey -match 'Device Installer') { 'deviceInstaller'
             } elseif ($row.SubKey -match 'Device Metadata') { 'device'
             } elseif ($row.SubKey -match 'WindowsCopilot') { 'copilot'
             } elseif ($row.SubKey -match 'Session Manager') { 'wpbt'

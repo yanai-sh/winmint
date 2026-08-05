@@ -23,8 +23,8 @@ function ConvertFrom-WimInfoText {
     )
 
     $indexCount = ([regex]::Matches($Text, '(?m)^Index : \d+\s*$')).Count
-    $blocks = [regex]::Split($Text, '(?m)(?=^Index : \d+\s*$)') |
-        Where-Object { $_ -match '(?m)^Index : \d+\s*$' }
+    $blocks = @([regex]::Split($Text, '(?m)(?=^Index : \d+\s*$)') |
+        Where-Object { $_ -match '(?m)^Index : \d+\s*$' })
 
     $selected = $null
     if ($Index -gt 0) {
@@ -99,13 +99,32 @@ function Get-WimMetadataSnapshot {
         throw "WIM missing: $WimFile"
     }
 
-    # Full list (no /Index) so IndexCount reflects every image; then select one block.
-    $text = & dism.exe /English /Get-WimInfo /WimFile:$WimFile 2>&1 | Out-String
+    # IndexCount from summary list (no /Index). Per-index detail needs /Index — 25H2 summary omits Architecture.
+    $summary = & dism.exe /English /Get-WimInfo /WimFile:$WimFile 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) {
-        throw "Get-WimInfo failed: $LASTEXITCODE`n$text"
+        throw "Get-WimInfo failed: $LASTEXITCODE`n$summary"
     }
 
-    return ConvertFrom-WimInfoText -Text $text -Index $Index
+    $indexCount = ([regex]::Matches($summary, '(?m)^Index : \d+\s*$')).Count
+    if ($indexCount -lt 1) {
+        throw 'Get-WimInfo: no Index blocks parsed'
+    }
+
+    $detailIndex = $Index
+    if ($detailIndex -le 0) {
+        if ($indexCount -eq 1) { $detailIndex = 1 }
+        else { throw "Get-WimInfo: Index parameter required when indexCount=$indexCount" }
+    }
+
+    $detail = & dism.exe /English /Get-WimInfo /WimFile:$WimFile /Index:$detailIndex 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        throw "Get-WimInfo /Index:$detailIndex failed: $LASTEXITCODE`n$detail"
+    }
+
+    $snap = ConvertFrom-WimInfoText -Text $detail -Index 0
+    $snap['IndexCount'] = $indexCount
+    $snap['Index'] = $detailIndex
+    return $snap
 }
 
 function Clear-WimReadOnly {

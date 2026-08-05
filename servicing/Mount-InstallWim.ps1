@@ -83,8 +83,15 @@ if (-not (Test-Path -LiteralPath $wimFile)) {
 }
 
 $mountIndex = [int]$wimIndex
-$beforeExport = Get-WimMetadataSnapshot -WimFile $wimFile -Index $mountIndex
-$indexCount = [int]$beforeExport.IndexCount
+$probe = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
+$indexCount = [int]$probe.IndexCount
+if ($indexCount -eq 1) {
+    $mountIndex = 1
+    $beforeExport = $probe
+}
+else {
+    $beforeExport = Get-WimMetadataSnapshot -WimFile $wimFile -Index $mountIndex
+}
 
 if ($indexCount -gt 1) {
     Write-Output "Multi-index WIM ($indexCount indexes) — exporting index $wimIndex ($($beforeExport.Name))"
