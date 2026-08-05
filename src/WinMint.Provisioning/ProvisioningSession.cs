@@ -764,7 +764,8 @@ public static class ProvisioningSession
 
             try
             {
-                Task.Delay(wait, env.Time, ct).GetAwaiter().GetResult();
+                // ponytail: sync settle loop — ConfigureAwait(false) while IAppx/session stay sync
+                Task.Delay(wait, env.Time, ct).ConfigureAwait(false).GetAwaiter().GetResult();
             }
             catch (OperationCanceledException)
             {

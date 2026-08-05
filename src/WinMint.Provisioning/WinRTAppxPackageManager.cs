@@ -80,7 +80,7 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFullName);
         try
         {
-            DeploymentResult result = _manager.RemovePackageAsync(packageFullName).AsTask().GetAwaiter().GetResult();
+            DeploymentResult result = AwaitWinRt(_manager.RemovePackageAsync(packageFullName).AsTask());
             if (!string.IsNullOrEmpty(result.ErrorText))
             {
                 throw new InvalidOperationException($"RemovePackageAsync({packageFullName}): {result.ErrorText}");
@@ -97,11 +97,8 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
         try
         {
-            DeploymentResult result = _manager
-                .DeprovisionPackageForAllUsersAsync(packageFamilyName)
-                .AsTask()
-                .GetAwaiter()
-                .GetResult();
+            DeploymentResult result = AwaitWinRt(
+                _manager.DeprovisionPackageForAllUsersAsync(packageFamilyName).AsTask());
             if (!string.IsNullOrEmpty(result.ErrorText))
             {
                 throw new InvalidOperationException(
@@ -119,22 +116,23 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
 
         // CsWinRT: null IIterable args — string[] fails CCW cast (IID IIterable<HSTRING>).
-        DeploymentResult result = _manager
-            .RegisterPackageByFamilyNameAsync(
+        DeploymentResult result = AwaitWinRt(
+            _manager.RegisterPackageByFamilyNameAsync(
                 packageFamilyName,
                 dependencyPackageFamilyNames: null,
                 DeploymentOptions.None,
                 appDataVolume: null,
-                optionalPackageFamilyNames: null)
-            .AsTask()
-            .GetAwaiter()
-            .GetResult();
+                optionalPackageFamilyNames: null).AsTask());
         if (!string.IsNullOrEmpty(result.ErrorText))
         {
             throw new InvalidOperationException(
                 $"RegisterPackageByFamilyNameAsync({packageFamilyName}): {result.ErrorText}");
         }
     }
+
+    // ponytail: sync IAppxPackageManager — ConfigureAwait(false) avoids sync-context deadlock; full async if Shell gains a pump
+    private static DeploymentResult AwaitWinRt(Task<DeploymentResult> operation) =>
+        operation.ConfigureAwait(false).GetAwaiter().GetResult();
 
     public void EnsureSystemFullControlOnWingetFrameworkPackages()
     {
