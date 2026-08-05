@@ -7,6 +7,10 @@ public sealed record RunOptions
     public ImageQualityLane ImageQuality { get; init; } = ImageQualityLane.Test;
     public string? SourceIsoPath { get; init; }
     public string? OutputIsoPath { get; init; }
+    /// <summary>When set, driver catalog entries must match (arm64/amd64/x64).</summary>
+    public string? ImageArchitecture { get; init; }
+    /// <summary>When set, catalog minimumWindowsBuild is checked at Plan.</summary>
+    public int? WindowsBuild { get; init; }
 }
 
 public enum ImageQualityLane
@@ -61,6 +65,11 @@ public static class StageParams
     public const string WorkDirectory = "workDirectory";
     public const string Kind = "kind";
     public const string PolicySpecs = "policySpecs";
+    public const string DeviceId = "deviceId";
+    public const string DetailsUrl = "detailsUrl";
+    public const string ExpectedFileNameRegex = "expectedFileNameRegex";
+    public const string MinimumWindowsBuild = "minimumWindowsBuild";
+    public const string Architecture = "architecture";
 }
 
 public enum ServicingOpcode
@@ -73,6 +82,7 @@ public enum ServicingOpcode
     RemoveProvisionedAppx,
     RemoveCapabilities,
     DisableOptionalFeatures,
+    InjectDrivers,
     ExportWim,
     BuildIso,
 }

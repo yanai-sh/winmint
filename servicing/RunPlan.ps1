@@ -63,6 +63,7 @@ function Resolve-KernelScript {
         'RemoveProvisionedAppx' { return Join-Path $scriptRoot 'Remove-ProvisionedAppx.ps1' }
         'RemoveCapabilities' { return Join-Path $scriptRoot 'Mutate-OfflineComponent.ps1' }
         'DisableOptionalFeatures' { return Join-Path $scriptRoot 'Mutate-OfflineComponent.ps1' }
+        'InjectDrivers' { return Join-Path $scriptRoot 'Inject-SurfaceDrivers.ps1' }
         'ExportWim' { return Join-Path $scriptRoot 'Export-Wim.ps1' }
         'BuildIso' { return Join-Path $scriptRoot 'Build-Iso.ps1' }
         default { throw "Unknown opcode: $Opcode" }

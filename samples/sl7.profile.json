@@ -64,5 +64,9 @@
     "wsl": [
       "FedoraLinux"
     ]
+  },
+  "drivers": {
+    "source": "surfaceCatalog",
+    "deviceId": "surface-laptop-7"
   }
 }

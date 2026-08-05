@@ -17,10 +17,15 @@ public sealed record Profile(
     IReadOnlyList<string> RemoveCapabilities,
     IReadOnlyList<string> DisableOptionalFeatures,
     /// <summary>Optional; null/omit ⇒ <see cref="PoliciesProfile.Defaults"/>.</summary>
-    PoliciesProfile? Policies = null)
+    PoliciesProfile? Policies = null,
+    /// <summary>Optional Surface Catalog driver injection (issue 63); null/omit ⇒ no driver stages.</summary>
+    DriversProfile? Drivers = null)
 {
     public PoliciesProfile EffectivePolicies => Policies ?? PoliciesProfile.Defaults;
 }
+
+/// <summary>Surface Catalog driver selection (winmint.profile/v1 drivers block).</summary>
+public sealed record DriversProfile(string Source, string DeviceId);
 
 public sealed record AccountProfile(
     string Username,

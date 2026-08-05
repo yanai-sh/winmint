@@ -16,7 +16,8 @@ public static class ProductOfflinePolicies
 
     public static IReadOnlyList<OfflinePolicyRow> Compose(
         bool keepCopilot,
-        bool includeBraveDebloat)
+        bool includeBraveDebloat,
+        bool includeDriverHygiene = false)
     {
         List<OfflinePolicyRow> rows = [.. EdgeDebloat, .. OneDriveDisable, .. DeviceMetadata, .. WpbtDisable];
         if (!keepCopilot)
@@ -27,6 +28,11 @@ public static class ProductOfflinePolicies
         if (includeBraveDebloat)
         {
             rows.AddRange(BraveDebloat);
+        }
+
+        if (includeDriverHygiene)
+        {
+            rows.AddRange(DriverHygiene);
         }
 
         return rows;
@@ -124,6 +130,18 @@ public static class ProductOfflinePolicies
     [
         Soft("Policies\\Microsoft\\Edge", "HubsSidebarEnabled", "0"),
         Soft("Policies\\Microsoft\\Windows\\WindowsCopilot", "TurnOffWindowsCopilot", "1"),
+    ];
+
+    // v1 driver hygiene — stamped when Surface Catalog injection is selected (issue 63).
+    private static readonly OfflinePolicyRow[] DriverHygiene =
+    [
+        new(
+            "SOFTWARE",
+            @"Microsoft\Windows\CurrentVersion\Device Installer",
+            "DisableCoInstallers",
+            "REG_DWORD",
+            "1",
+            "policy.deviceInstaller.DisableCoInstallers"),
     ];
 
     // winutil WPFTweaksBraveDebloat — 12 BraveSoftware policies.

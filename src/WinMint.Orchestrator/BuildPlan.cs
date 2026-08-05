@@ -148,6 +148,28 @@ public static class BuildPlan
             policies = new PoliciesProfile(KeepCopilot: false, DohProvider: doh);
         }
 
+        DriversProfile? drivers = null;
+        if (doc.Drivers is not null)
+        {
+            if (string.IsNullOrWhiteSpace(doc.Drivers.Source))
+            {
+                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+                [
+                    new DocumentError("drivers.source.missing", "drivers.source is required.", "drivers.source"),
+                ]));
+            }
+
+            if (string.IsNullOrWhiteSpace(doc.Drivers.DeviceId))
+            {
+                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+                [
+                    new DocumentError("drivers.deviceId.missing", "drivers.deviceId is required.", "drivers.deviceId"),
+                ]));
+            }
+
+            drivers = new DriversProfile(doc.Drivers.Source.Trim(), doc.Drivers.DeviceId.Trim());
+        }
+
         Profile profile = new(
             new AccountProfile(doc.Account.Username!, password, requireWifi, passwordPath),
             new DmaProfile(
@@ -166,7 +188,8 @@ public static class BuildPlan
             NormalizeRemoveList(doc.Packages?.WslNeedsReboot),
             NormalizeRemoveList(doc.Debloat?.RemoveCapabilities),
             NormalizeRemoveList(doc.Debloat?.DisableOptionalFeatures),
-            policies);
+            policies,
+            drivers);
 
         return Result.Ok<Profile, DocumentErrors>(profile);
     }
@@ -208,6 +231,10 @@ public static class BuildPlan
                 string.IsNullOrWhiteSpace(effective.DohProvider) ? null : effective.DohProvider);
         }
 
+        DriversDocument? drivers = profile.Drivers is null
+            ? null
+            : new DriversDocument(profile.Drivers.Source, profile.Drivers.DeviceId);
+
         ProfileDocument doc = new(
             ProfileSchemaVersion,
             new AccountDocument(
@@ -225,9 +252,54 @@ public static class BuildPlan
                     profile.Dma.Settle.LocationServicesEnabled)),
             debloat,
             packages,
-            policies);
+            policies,
+            drivers);
 
         return JsonSerializer.SerializeToUtf8Bytes(doc, BuildPlanJsonContext.Default.ProfileDocument);
+    }
+
+    private static PlanFailure? ValidateDrivers(DriversProfile drivers, RunOptions options)
+    {
+        if (!string.Equals(drivers.Source, SurfaceDriverCatalog.SourceSurfaceCatalog, StringComparison.OrdinalIgnoreCase))
+        {
+            return new PlanFailure(
+                "drivers.source.unsupported",
+                $"drivers.source '{drivers.Source}' is unsupported (only '{SurfaceDriverCatalog.SourceSurfaceCatalog}' in this vertical).");
+        }
+
+        if (!SurfaceDriverCatalog.TryGet(drivers.DeviceId, out SurfaceDriverDevice? device) || device is null)
+        {
+            return new PlanFailure(
+                "drivers.deviceId.unknown",
+                $"drivers.deviceId '{drivers.DeviceId}' is not in the Surface driver catalog.");
+        }
+
+        if (!SurfaceDriverCatalog.WiredDeviceIds.Contains(device.Id))
+        {
+            return new PlanFailure(
+                "drivers.deviceId.notWired",
+                $"drivers.deviceId '{device.Id}' is in the catalog but not wired for build yet (SL7-only this release).");
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.ImageArchitecture))
+        {
+            string imageArch = SurfaceDriverCatalog.NormalizeArchitecture(options.ImageArchitecture);
+            if (!string.Equals(imageArch, device.Architecture, StringComparison.OrdinalIgnoreCase))
+            {
+                return new PlanFailure(
+                    "drivers.architecture.mismatch",
+                    $"drivers.deviceId '{device.Id}' targets {device.Architecture}, but the image architecture is {options.ImageArchitecture}.");
+            }
+        }
+
+        if (options.WindowsBuild is int build && build < device.MinimumWindowsBuild)
+        {
+            return new PlanFailure(
+                "drivers.windowsBuild.tooLow",
+                $"drivers.deviceId '{device.Id}' requires Windows build {device.MinimumWindowsBuild} or later; source build is {build}.");
+        }
+
+        return null;
     }
 
     private static string[] NormalizeRemoveList(string[]? raw)
@@ -339,6 +411,15 @@ public static class BuildPlan
         if (needsRebootFail is not null)
         {
             return Result.Fail<BuildArtifacts, PlanFailure>(needsRebootFail);
+        }
+
+        if (profile.Drivers is not null)
+        {
+            PlanFailure? driverFail = ValidateDrivers(profile.Drivers, options);
+            if (driverFail is not null)
+            {
+                return Result.Fail<BuildArtifacts, PlanFailure>(driverFail);
+            }
         }
 
         HashSet<string> wingetNeedsReboot = new(profile.WingetNeedsReboot, StringComparer.OrdinalIgnoreCase);
@@ -458,11 +539,28 @@ public static class BuildPlan
                 }));
         }
 
+        bool injectDrivers = profile.Drivers is not null;
+        if (injectDrivers)
+        {
+            SurfaceDriverDevice device = SurfaceDriverCatalog.Devices[profile.Drivers!.DeviceId];
+            stageList.Add(new ServicingStage(
+                ServicingOpcode.InjectDrivers,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [StageParams.DeviceId] = device.Id,
+                    [StageParams.DetailsUrl] = device.DetailsUrl,
+                    [StageParams.ExpectedFileNameRegex] = device.ExpectedFileNameRegex,
+                    [StageParams.MinimumWindowsBuild] = device.MinimumWindowsBuild.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    [StageParams.Architecture] = device.Architecture,
+                }));
+        }
+
         bool braveSelected = profile.WingetPackages.Any(
             id => string.Equals(id, ProductOfflinePolicies.BraveWingetId, StringComparison.OrdinalIgnoreCase));
         IReadOnlyList<OfflinePolicyRow> policyRows = ProductOfflinePolicies.Compose(
             keepCopilot: policies.KeepCopilot,
-            includeBraveDebloat: braveSelected);
+            includeBraveDebloat: braveSelected,
+            includeDriverHygiene: injectDrivers);
         stageList.Add(new ServicingStage(
             ServicingOpcode.StampOfflinePolicies,
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -669,7 +767,12 @@ internal sealed record ProfileDocument(
     [property: JsonPropertyName("dma")] DmaDocument? Dma,
     [property: JsonPropertyName("debloat")] DebloatDocument? Debloat,
     [property: JsonPropertyName("packages")] PackagesDocument? Packages,
-    [property: JsonPropertyName("policies")] PoliciesDocument? Policies = null);
+    [property: JsonPropertyName("policies")] PoliciesDocument? Policies = null,
+    [property: JsonPropertyName("drivers")] DriversDocument? Drivers = null);
+
+internal sealed record DriversDocument(
+    [property: JsonPropertyName("source")] string? Source,
+    [property: JsonPropertyName("deviceId")] string? DeviceId);
 
 internal sealed record PoliciesDocument(
     [property: JsonPropertyName("keepCopilot")] bool? KeepCopilot,

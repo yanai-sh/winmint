@@ -241,6 +241,11 @@ public static class ImageServicing
                     parameters[StageParams.WorkDirectory] = run.WorkDirectory;
                     parameters[StageParams.Kind] = "feature";
                     break;
+                case ServicingOpcode.InjectDrivers:
+                    parameters[StageParams.MountDir] = mountDir;
+                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
+                    parameters[StageParams.MediaDir] = mediaDir;
+                    break;
                 case ServicingOpcode.ExportWim:
                     // compression / cleanup / lane come from BuildPlan — do not invent defaults here.
                     parameters[StageParams.MountDir] = mountDir;
