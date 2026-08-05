@@ -139,7 +139,7 @@ internal static class Program
             ResolveScoopCmd: TryResolveScoopShim);
     }
 
-    /// <summary>Default Scoop shim after official bootstrap (research 2026-08-04). Host-owned File.Exists.</summary>
+    /// <summary>Default Scoop shim after official bootstrap (PROVISIONINGSESSION). Host-owned File.Exists.</summary>
     private static string? TryResolveScoopShim()
     {
         string candidate = Path.Combine(

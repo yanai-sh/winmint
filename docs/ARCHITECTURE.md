@@ -2,7 +2,7 @@
 
 Greenfield product repo [`yanai-sh/winmint`](https://github.com/yanai-sh/winmint) — no WinMint v1 contract or CLI back-compat. Decisions: [ADR-002](decisions/ADR-002-v2-architecture.md), [ADR-004](decisions/ADR-004-stack-and-guest-control-plane.md). Stack pins: [STACK.md](STACK.md). Glossary: [CONTEXT.md](../CONTEXT.md). Smoke: [specs/2026-07-27-smoke.md](specs/2026-07-27-smoke.md).
 
-**Phase:** gate + hold: [ROADMAP](ROADMAP.md#design-acceptance) · [TICKETS](TICKETS.md). Canonical: [DESIGN](DESIGN.md) · [ROADMAP](ROADMAP.md) · [TDD](TDD.md) · [design/](design/) · [AGENTIC](agents/AGENTIC.md).
+**Phase:** Backlog **01–30** closed — next is maintainer pick / new issue ([TICKETS](TICKETS.md)) · [ROADMAP](ROADMAP.md#design-acceptance). Canonical: [DESIGN](DESIGN.md) · [ROADMAP](ROADMAP.md) · [TDD](TDD.md) · [design/](design/) · [AGENTIC](agents/AGENTIC.md).
 
 **Design stance:** prefer modern elegant solutions over v1 when they conflict. Smoke and metal share Supervisor / settle / job executor / reboot / lock; differ in Profile job set and evidence bars only. Grill: [DESIGN](DESIGN.md#decisions-locked-grill).
 
@@ -79,7 +79,7 @@ Sibling archive [`winmint_v1`](https://github.com/yanai-sh/winmint_v1) and media
 
 ## First vertical: Smoke
 
-Stories, constraints, tracer map: [Smoke spec](specs/2026-07-27-smoke.md). Backlog/hold: [TICKETS](TICKETS.md).
+Stories, constraints, tracer map: [Smoke spec](specs/2026-07-27-smoke.md). Closed index: [TICKETS](TICKETS.md).
 
 Standing architecture invariants (also in grill locks):
 
@@ -119,10 +119,9 @@ Manifest records lane. Harness caching remains harness concern.
 
 Stage SetupComplete.cmd, Supervisor, job/bundle manifests, media. No v1 `WinMint.ps1`; no guest pwsh. [Harvest rule](#v1-harvest-rule).
 
-## Scaffold / hold rules
+## Scaffold / session rules
 
-- **Implement hold:** [TICKETS](TICKETS.md) — no feature tickets until released.
+- **Implement:** one issue/session from maintainer pick or a new GitHub issue — [TICKETS](TICKETS.md) is the closed index, not an open queue.
 - Honor [grill locks](DESIGN.md#decisions-locked-grill).
 - No empty trees ahead of tickets; no hypothetical Servicing ports; no MediatR/Generic Host/Contracts project by default.
-- Ticket 10: one pwsh entry under `tools/vm/`. Ticket 04: splash spike first.
 

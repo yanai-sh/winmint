@@ -2,12 +2,13 @@
 
 **Status:** **Accepted** (wayfinder map [Keep-flag matrix wayfinding](https://github.com/yanai-sh/winmint/issues/13), 2026-08-03)  
 **Authority:** [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) · [ADR-007](../decisions/ADR-007-cdm-not-primary.md) · [BUILDPLAN](BUILDPLAN.md) · [IMAGESERVICING](IMAGESERVICING.md) · [PROVISIONINGSESSION](PROVISIONINGSESSION.md)  
-**Implement:** AppX **11–13** done; capabilities/features **19** spike → **20** offline done; Acceptance Wizard preset expands AppX + thin caps/features (**25**). Lasting out: Profile presets-in-JSON, product-default recommended set, schema `v2`, leftover *product* cleanup ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md)).  
-**Research:** [BCU](../research/2026-08-03-bulk-crap-uninstaller.md) · [offline DISM](../research/2026-08-03-offline-dism-remove-apis.md) · [AppX rehydrate](../research/2026-08-03-appx-rehydrate-after-oobe.md) · [capabilities/features matrix](../research/2026-08-04-capabilities-features-matrix.md) · [leftover confidence](../research/2026-08-05-leftover-confidence.md)
+**Implement:** AppX **11–13** done; capabilities/features **19** spike → **20** offline done; Acceptance Wizard preset expands AppX + thin caps/features (**25**). Lasting out: Profile presets-in-JSON, product-default recommended set, schema `v2`, leftover *product* cleanup ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md)).
 
 ## Problem space
 
 Users need a fail-closed way to strip selected **provisioned inbox AppX** from a Source ISO without a live uninstaller GUI, guest pwsh, or shipping third-party tools.
+
+**Folded research conclusions (spent notes deleted):** BCU is live-only — borrow declarative list + catalog patterns; never ship BCU or leftover-confidence junk tiers. Offline remove surfaces are DISM `/Image` (or Dism `-Path`): provisioned AppX, capabilities, optional features — not host `/Online`. What looks like AppX “rehydrate” after OOBE is usually still-provisioned registration, missing `Deprovisioned` stamps, or consumer/CDM installs — hence ImageServicing primary + narrow FirstLogon safety-net, and CDM not primary ([ADR-007](../decisions/ADR-007-cdm-not-primary.md)).
 
 ## Locked decisions
 
@@ -39,7 +40,17 @@ Users need a fail-closed way to strip selected **provisioned inbox AppX** from a
 - Absent / empty `removeProvisionedAppx` ⇒ no removes (Smoke-compatible).
 - Each AppX entry must match a catalog id (package family name or catalog key — freeze at implement).
 - Unknown id ⇒ plan document/plan failure (fail closed).
-- Capabilities / optional features: same remove-list polarity; thin acceptance pins only — **no** product-default recommended set ([spike](../research/2026-08-04-capabilities-features-matrix.md)). Offline kernels: listed-but-absent / not-on-image ⇒ **ok + digest** (capabilities `Absent`, features `Disabled`) — not throw-on-missing.
+- Capabilities / optional features: same remove-list polarity; thin acceptance pins only — **no** product-default recommended set. Inventory media pin: **Windows 11 25H2 ARM64 English** Pro. Offline kernels: listed-but-absent / not-on-image ⇒ **ok + digest** (capabilities `Absent`, features `Disabled`) — not throw-on-missing.
+
+### Thin acceptance pins (prove-out only — not a product default)
+
+| Kind | Id |
+|------|----|
+| AppX | `Microsoft.BingNews`, `Microsoft.BingWeather` (Acceptance preset / sample) |
+| Capability | `App.StepsRecorder~~~~0.0.1.0`, `WMIC~~~~` |
+| Optional feature | `WorkFolders-Client` |
+
+Re-pin if a future 25H2 English ARM64 ISO drops an id. Host SOT for expansion: `KeepFlagPresets.Acceptance` (below).
 
 ## Catalog
 
@@ -89,7 +100,7 @@ S3 fakes must call production `MatchesCatalogId` (no copied predicate). Do **not
 |------|------|
 | Schema `v2` | Stay on `winmint.profile/v1` until a breaking change forces bump |
 | Named Profile presets | None in Profile (host/Wizard expands → lists) — [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) |
-| Confidence-tier leftover *product* cleanup | Spike [done](../research/2026-08-05-leftover-confidence.md); no product ticket — do not ship BCU |
+| Confidence-tier leftover *product* cleanup | **Out** — no product ticket; do not ship BCU / JunkManager tiers |
 | CDM / consumer-features as primary remove | **Not primary** — [ADR-007](../decisions/ADR-007-cdm-not-primary.md) |
 | Product-default / opt-out “recommended set” | **No** — catalog bounds legal ids only |
 | Acceptance Smoke remove-list | **Yes (grill B4)** — small frozen list on acceptance Profile (AppX + thin caps/features; re-pin if media churn) |

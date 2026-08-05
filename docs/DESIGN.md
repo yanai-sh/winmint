@@ -1,6 +1,6 @@
 # WinMint v2 — Design plan (canonical)
 
-**Phase:** gate + hold: [ROADMAP](ROADMAP.md#design-acceptance) · [TICKETS](TICKETS.md).  
+**Phase:** Backlog **01–30** closed — next is maintainer pick / new issue ([TICKETS](TICKETS.md)) · [ROADMAP](ROADMAP.md#design-acceptance).  
 **Product:** Windows 11 ISO builder (greenfield). Host ARM64-first. Guest = C# Supervisor only.
 
 ## Read order
@@ -8,7 +8,7 @@
 1. [CONTEXT](../CONTEXT.md) · [V1-LESSONS](design/V1-LESSONS.md)  
 2. [ARCHITECTURE](ARCHITECTURE.md)  
 3. This file + [design/](design/)  
-4. [TICKETS](TICKETS.md) (backlog + hold) · [ROADMAP](ROADMAP.md)  
+4. [TICKETS](TICKETS.md) (closed index + policy-out) · [ROADMAP](ROADMAP.md)  
 5. [Smoke](specs/2026-07-27-smoke.md) · [TDD](TDD.md) · [AGENTIC](agents/AGENTIC.md)
 
 ## Modules (accepted)
@@ -46,7 +46,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Guest paths | `%ProgramData%\WinMint\` |
 | MachineSetup fail | Non-zero exit; fail closed |
 | S4 harness | Thin pwsh `tools/vm/` |
-| Issues | File at release from hold / gate |
+| Issues | File when work is specified; apply `ready-for-agent` only when starting |
 | Lanes | `Test` \| `Release` |
 | Stale | Heartbeat + checkpoint ⇒ fail-open |
 | Smoke accounts | Local+autoLogon only |
@@ -81,6 +81,6 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 
 Sign-off: [ROADMAP](ROADMAP.md#design-acceptance) (grill lock: ROADMAP table only).
 
-## After hold lifts
+## After backlog close
 
-Work only from [TICKETS](TICKETS.md). Sequencing gate in [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) is **met**; lasting policy locks above still bind.
+Next work is maintainer pick or a new issue (grill → to-spec) — not “start at **01**.” Sequencing gate in [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) is **met**; lasting policy locks above still bind.

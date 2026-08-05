@@ -397,8 +397,7 @@ public static class BuildPlan
     {
         string user = XmlEscape(profile.Account.Username);
         string pass = XmlEscape(profile.Account.Password ?? "");
-        // Official Unattend: show Network when false/omit; hide when true (Smoke headless).
-        // docs/research/2026-08-04-oobe-wifi-local-account.md
+        // Official Unattend: show Network when false/omit; hide when true (Smoke headless). See BUILDPLAN.
         string hideWireless = profile.Account.RequireWifiDuringOobe ? "false" : "true";
         string specialize = profile.Dma.Enabled
             ? $$"""

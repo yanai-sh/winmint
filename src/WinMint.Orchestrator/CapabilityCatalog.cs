@@ -2,7 +2,7 @@ namespace WinMint.Orchestrator;
 
 /// <summary>
 /// Static catalog of legal capability ids for <c>debloat.removeCapabilities</c> (ticket 20).
-/// Inventory pin: 25H2 ARM64 English — [research](../../docs/research/2026-08-04-capabilities-features-matrix.md).
+/// Inventory pin: 25H2 ARM64 English — thin acceptance pins in [KEEPFLAG](../../docs/design/KEEPFLAG.md).
 /// </summary>
 public static class CapabilityCatalog
 {

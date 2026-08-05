@@ -21,11 +21,11 @@
 | Date | **2026-07-28** |
 | Maintainer | Project owner (batch-grill shared understanding) |
 | Splash prototype | Waived for gate; required before ticket **04** |
-| Notes | Grill locks: [DESIGN](DESIGN.md#decisions-locked-grill). Quality pass: canonical backlog [TICKETS](TICKETS.md). Post–keep-flag sequencing: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) (sequencing **met**; lasting policy still binds). CDM: [ADR-007](decisions/ADR-007-cdm-not-primary.md). |
+| Notes | Grill locks: [DESIGN](DESIGN.md#decisions-locked-grill). Closed index: [TICKETS](TICKETS.md). Post–keep-flag sequencing: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) (sequencing **met**; lasting policy still binds). CDM: [ADR-007](decisions/ADR-007-cdm-not-primary.md). |
 
 ## M1 order
 
-Canonical ticket cards + DoD: **[TICKETS](TICKETS.md)**. Do not duplicate tables elsewhere.
+Canonical closed index: **[TICKETS](TICKETS.md)**. Do not duplicate tables elsewhere.
 
 ## M1 exit criteria
 

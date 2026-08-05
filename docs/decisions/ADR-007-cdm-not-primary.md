@@ -6,7 +6,7 @@
 
 ### Context
 
-Keep-flag vertical is **remove-list only** on `winmint.profile/v1` ([ADR-005](ADR-005-keep-flag-matrix.md), [KEEPFLAG](../design/KEEPFLAG.md)). [AppX rehydrate research](../research/2026-08-03-appx-rehydrate-after-oobe.md) and [leftover-confidence spike](../research/2026-08-05-leftover-confidence.md) classify consumer/CDM paths separately from offline provisioned-package removal. Community HKCU `ContentDeliveryManager` DWORD lists are reset-prone and not edition-guaranteed on Pro.
+Keep-flag vertical is **remove-list only** on `winmint.profile/v1` ([ADR-005](ADR-005-keep-flag-matrix.md), [KEEPFLAG](../design/KEEPFLAG.md)). Consumer/CDM paths are a separate failure mode from offline provisioned-package removal (per-user Store suggestions / ContentDeliveryManager — not the same as still-provisioned registration). Community HKCU `ContentDeliveryManager` DWORD lists are reset-prone and not edition-guaranteed on Pro. Leftover-confidence *product* cleanup is out of this product era.
 
 ### Decision
 
@@ -16,6 +16,6 @@ Keep-flag vertical is **remove-list only** on `winmint.profile/v1` ([ADR-005](AD
 
 ### Consequences
 
-- Leftover-confidence *product* cleanup stays out ([research spike](../research/2026-08-05-leftover-confidence.md)); CDM whack-a-mole is not the M1/M2 control plane.
+- Leftover-confidence *product* cleanup stays out; CDM whack-a-mole is not the M1/M2 control plane.
 - Smoke / acceptance evidence continues to assert **offline digests** + guest settle/jobs — not CDM registry state.
 - Future CDM work requires a new ADR if it becomes primary policy.

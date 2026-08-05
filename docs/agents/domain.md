@@ -2,7 +2,7 @@
 
 ## Before exploring
 
-- [DESIGN](../DESIGN.md) · [TICKETS](../TICKETS.md) (hold + backlog)
+- [DESIGN](../DESIGN.md) · [TICKETS](../TICKETS.md) (closed index + policy-out)
 - [CONTEXT](../../CONTEXT.md)
 - [ARCHITECTURE](../ARCHITECTURE.md) · [design/](../design/)
 - [AGENTIC](AGENTIC.md)

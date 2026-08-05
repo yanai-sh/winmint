@@ -21,7 +21,7 @@ Infer the repo from `git remote -v` — `gh` does this automatically when run in
 
 Create a GitHub issue.
 
-Smoke tracers: [TICKETS](../TICKETS.md). While **hold** is active, do not label implementation issues `ready-for-agent`. After hold lifts, file 01–10 (module column in TICKETS). Optional local drafts: `.scratch/winmint-v2-smoke/issues/`.
+Closed index: [TICKETS](../TICKETS.md). Apply `ready-for-agent` only when starting an implement session on that issue. Optional local drafts: `.scratch/winmint-v2-smoke/issues/`.
 
 ## When a skill says "fetch the relevant ticket"
 

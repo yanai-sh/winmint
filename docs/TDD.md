@@ -2,13 +2,13 @@
 
 **Authority:** PLAN, ARCHITECTURE, DESIGN grill, module designs, TDD skill.  
 **Rule:** No test at an unconfirmed seam.  
-**Backlog:** [TICKETS](TICKETS.md) (Released — implement by ticket).
+**Backlog:** [TICKETS](TICKETS.md) (closed index — next work is maintainer pick / new issue).
 
 ## Speed rules
 
 | | Rule |
 |---|------|
-| **Should** | Day-to-day = S1–S3 (`just check` + fakes); Smoke = `Test` lane + stub jobs; CI = scaffold only (no VM / no ISO); S4 fail-fast on stalls (don’t burn the 90‑min wall-clock timeout) |
+| **Should** | Day-to-day = S1–S3 (`just check` + fakes); Smoke = `Test` lane + stub jobs; metal jobs share S3 executor; CI = scaffold only (no VM / no ISO); S4 fail-fast on stalls (don’t burn the 90‑min wall-clock timeout) |
 | **Could** | Diff VHD from a parent base; rebuild ISO only when plan/payload digests change; careful servicing workdir reuse — harness-only, ticket **10** |
 | **Don’t** | Skip S4 hard evidence; invent a Hyper-V-only settle/executor path “for speed” |
 

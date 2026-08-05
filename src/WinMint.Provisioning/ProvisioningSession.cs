@@ -478,7 +478,7 @@ public static class ProvisioningSession
                     ProcessStartResult bootstrap;
                     try
                     {
-                        // Official admin bootstrap — ScoopInstaller/Install (research 2026-08-04).
+                        // Official admin bootstrap — ScoopInstaller/Install (see PROVISIONINGSESSION).
                         // Inbox powershell.exe only; not guest pwsh product control plane.
                         bootstrap = env.Processes.Run(
                             "powershell.exe",

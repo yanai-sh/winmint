@@ -6,7 +6,7 @@
 
 ### Context
 
-Debloat / keep-flag is a post-M1 vertical ([TICKETS](../TICKETS.md), [ADR-002](ADR-002-v2-architecture.md)). Bulk Crap Uninstaller research ([note](../research/2026-08-03-bulk-crap-uninstaller.md)) suggested declarative lists and multi-source catalogs, but BCU is live-only and must not ship. Offline DISM and AppX rehydrate research ([offline DISM](../research/2026-08-03-offline-dism-remove-apis.md), [rehydrate](../research/2026-08-03-appx-rehydrate-after-oobe.md)) define the Microsoft surfaces and ownership split.
+Debloat / keep-flag is a post-M1 vertical ([TICKETS](../TICKETS.md) closed index, [ADR-002](ADR-002-v2-architecture.md)). BCU (live uninstaller) suggested declarative lists and multi-source catalogs but is live-only and must not ship. Microsoft offline surfaces are DISM `/Image` removes for provisioned AppX, capabilities, and optional features; FirstLogon “rehydrate” is usually still-provisioned registration or consumer/CDM installs — ownership split below (see [KEEPFLAG](../design/KEEPFLAG.md)).
 
 ### Decision
 
