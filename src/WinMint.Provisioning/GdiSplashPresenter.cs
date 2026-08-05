@@ -205,11 +205,11 @@ public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
         public int Bottom;
     }
 
-    [LibraryImport("user32.dll", SetLastError = true)]
+    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     private static partial IntPtr CreateWindowExW(
         int dwExStyle,
-        [MarshalAs(UnmanagedType.LPWStr)] string lpClassName,
-        [MarshalAs(UnmanagedType.LPWStr)] string lpWindowName,
+        string lpClassName,
+        string lpWindowName,
         int dwStyle,
         int x,
         int y,
@@ -228,27 +228,27 @@ public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
-    [LibraryImport("user32.dll")]
+    [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool UpdateWindow(IntPtr hWnd);
 
     [LibraryImport("user32.dll")]
     private static partial int GetSystemMetrics(int nIndex);
 
-    [LibraryImport("user32.dll")]
+    [LibraryImport("user32.dll", SetLastError = true)]
     private static partial IntPtr GetDC(IntPtr hWnd);
 
     [LibraryImport("user32.dll")]
     private static partial int ReleaseDC(IntPtr hWnd, IntPtr hDC);
 
-    [LibraryImport("user32.dll")]
+    [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetClientRect(IntPtr hWnd, out RECT lpRect);
 
-    [LibraryImport("user32.dll")]
+    [LibraryImport("user32.dll", SetLastError = true)]
     private static partial int FillRect(IntPtr hDC, ref RECT lprc, IntPtr hbr);
 
-    [LibraryImport("gdi32.dll")]
+    [LibraryImport("gdi32.dll", SetLastError = true)]
     private static partial IntPtr CreateSolidBrush(uint crColor);
 
     [LibraryImport("gdi32.dll")]
