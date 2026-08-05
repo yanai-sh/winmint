@@ -279,14 +279,6 @@ internal static class Program
 
         WriteJson(
             directory,
-            "payload.json",
-            new JsonObject
-            {
-                ["entries"] = new JsonArray(artifacts.Payload.Entries.Select(static e => (JsonNode)e).ToArray()),
-            });
-
-        WriteJson(
-            directory,
             "stages.json",
             new JsonObject
             {
@@ -301,23 +293,6 @@ internal static class Program
                     }).ToArray()),
             });
 
-        JsonObject dma = new() { ["enabled"] = artifacts.Dma.Enabled };
-        if (artifacts.Dma.Settle is { } settle)
-        {
-            dma["settle"] = new JsonObject
-            {
-                ["locale"] = settle.Locale,
-                ["geoId"] = settle.GeoId,
-                ["timeZoneId"] = settle.TimeZoneId,
-                ["locationServicesEnabled"] = settle.LocationServicesEnabled,
-            };
-        }
-        else
-        {
-            dma["settle"] = null;
-        }
-
-        WriteJson(directory, "dma.json", dma);
         WriteJson(
             directory,
             "manifest.json",

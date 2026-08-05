@@ -116,7 +116,7 @@ Elevated runner: dumb sequential invoke (no opcode→`kind` branching).
 | BuildArtifacts | In-process from BuildPlan |
 | Source ISO + workdir | Local filesystem |
 | Elevated pwsh + DISM/oscdimg | True external |
-| Staged Supervisor binary | From plan.Payload |
+| Staged Supervisor binary | Materialize (repo payload/) |
 
 ## S2 test strategy
 

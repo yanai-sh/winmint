@@ -18,7 +18,6 @@ public enum ImageQualityLane
 public sealed record BuildArtifacts(
     UnattendArtifact Unattend,
     JobsArtifact Jobs,
-    PayloadManifest Payload,
     ServicingStageList Stages,
     DmaContract Dma,
     BuildManifest Manifest,
@@ -33,8 +32,6 @@ public sealed record JobDescriptor(
     string Kind,
     string? PackageId = null,
     bool NeedsReboot = false);
-
-public sealed record PayloadManifest(IReadOnlyList<string> Entries);
 
 public sealed record ServicingStageList(IReadOnlyList<ServicingStage> Stages);
 
