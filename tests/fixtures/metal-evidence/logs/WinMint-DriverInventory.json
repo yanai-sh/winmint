@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-05T12:00:00Z",
+  "deviceId": "surface-laptop-7",
+  "strategy": "SurfaceMsiSafe",
+  "includedOfflineCount": 12,
+  "excludedCount": 8,
+  "bootSetupCriticalCount": 3,
+  "records": [
+    {
+      "name": "surface_system.inf",
+      "relativePath": "SurfaceUpdate\\surface_system.inf",
+      "class": "system",
+      "decision": "includeOffline",
+      "reason": "included in offline driver subset"
+    },
+    {
+      "name": "surface_firmware.inf",
+      "relativePath": "SurfaceUpdate\\surface_firmware.inf",
+      "class": "firmware",
+      "decision": "excludeOrDefer",
+      "reason": "firmware drivers are never injected offline"
+    }
+  ]
+}

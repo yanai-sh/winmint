@@ -20,9 +20,12 @@
 | **S1b** | Host keep-flag presets + Wizard packages (`KeepFlagPresets.TryExpand` + `IdList.FromMultiline` → Profile → Plan/Serialize) | In-process | 15, 22 |
 | **S2** | ImageServicing (`Apply`) | True external (DISM) — fake when port exists | 02, 09 |
 | **S3** | ProvisioningSession (`Run` + env adapters) | Local-substitutable OS | 03–08, 13, 16, 21 |
-| **S4** | Smoke acceptance (“run → evidence”) | Harness | 10 |
+| **S4** | Hyper-V Smoke acceptance (“run → guest evidence”) | Harness + VM | 10 |
+| **S5** | Metal Apply acceptance (“build → apply evidence”, pre-wipe) | Harness on build host | 63 |
 
 Do **not** test: private phase helpers, splash pixels (except status→presenter via `ISplashPresenter`), DISM internals, v1 scripts, evidence JSON as control plane.
+
+**S4 vs S5:** S4 proves FirstLogon inside a Hyper-V VM (splash, DMA, unlock). S5 proves ImageServicing Apply on the **physical build host** (ISO built, driver inventory, digests) — **never** a bare-metal install or USB boot. Substituting S4 for S5 (or vice versa) is invalid.
 
 ## Good test criteria
 
@@ -54,19 +57,29 @@ Do **not** test: private phase helpers, splash pixels (except status→presenter
 
 See [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md#s3-test-strategy-locked). Hyper-V **not** required. Use `SessionEnvironment` fakes + `TimeProvider`. Assert paint-before-settle **order**; wall-clock paint budget is S4.
 
-### S4 — Acceptance
+### S4 — Hyper-V acceptance
 
-- One harness entry → evidence.
+- One harness entry → **guest** evidence (`tools/vm/`).
 - Splash before Explorer; DMA hard fields; unlock; lane marker; record time-to-first-paint ([SPLASH](design/SPLASH.md)).
 - Keep-flag: apply digests `removed.appx.<id>=absent` for acceptance pinned remove-list (ADR-006 / ticket **14**).
-- Not part of `just check`.
+- Not part of `just check`. Does **not** prove bare-metal driver correctness.
+
+### S5 — Metal acceptance (pre-wipe)
+
+- One harness entry → **Apply workdir** evidence (`tools/metal/`).
+- Real elevated Apply against Source ISO offline WIM on the build host — safe on the install-target laptop (no wipe, no USB boot).
+- Assert: `evidence.json` lane + digests; when Profile has `drivers`, `WinMint-DriverInventory.json` (firmware excluded, included count > 0) and `DisableCoInstallers` digest.
+- Fixture assert tests: `[Trait("Category", "Metal")]` — excluded from `just check`.
+- Destructive bare-metal install is **manual only**, after S5 green — never automated by the harness.
 
 ## Gate commands
 
 ```powershell
-just check          # scaffold / later S1–S3
-# post-gate:
-just smoke          # S4 — ticket 10
+just check          # S1–S3 (excludes Category=S4 and Category=Metal)
+# maintainer:
+just metal ISO=…    # S5 — ticket 63 gate B (pre-wipe)
+just metal-assert WORK=…
+just smoke          # S4 Hyper-V — ticket 10
 ```
 
 ## Anti-patterns
