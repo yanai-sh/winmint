@@ -22,6 +22,15 @@ public sealed class Win32WinlogonRegistry : IWinlogonRegistry
         key.SetValue("AutoAdminLogon", "1", RegistryValueKind.String);
     }
 
+    public void ClearAutoLogon()
+    {
+        using RegistryKey key = OpenWritable();
+        key.SetValue("AutoAdminLogon", "0", RegistryValueKind.String);
+        try { key.DeleteValue("DefaultPassword", throwOnMissingValue: false); } catch { /* best-effort */ }
+        try { key.DeleteValue("DefaultUserName", throwOnMissingValue: false); } catch { /* best-effort */ }
+        try { key.DeleteValue("DefaultDomainName", throwOnMissingValue: false); } catch { /* best-effort */ }
+    }
+
     public string? GetDefaultUserName()
     {
         using RegistryKey? key = Registry.LocalMachine.OpenSubKey(WinlogonSubKey, writable: false);

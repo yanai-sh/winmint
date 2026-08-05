@@ -77,6 +77,7 @@ public sealed record ImageEvidence(
 7. **Materialize owns all Mutate params** (deepening map [Does Materialize own Mutate kind?](https://github.com/yanai-sh/winmint/issues/45)): for `RemoveCapabilities` / `DisableOptionalFeatures`, Materialize sets `kind=capability|feature` next to `mountDir` / `workDirectory`. Do not inject `kind` in RunPlan. Assert `kind` in S2 recording tests.
 8. **Single-image WIM before commit (locked 2026-08-02):** `MountInstallWim` must leave `media/sources/install.wim` with **exactly one** index (export the planned edition out of a multi-edition consumer WIM first). `ExportWim` **fail-closes** if index count ≠ 1 before `Unmount /Commit`. Never commit a multi-edition `install.wim` in place — that path stalls DISM/`wimserv` for hours.
 9. **Host mount root:** DISM mount points are `%ProgramData%\WinMint\Servicing\mount` (+ `boot-mount`), not under the workdir. Media/ISO/WIM stay in the workdir. Distinct from **guest** `%ProgramData%\WinMint\` durable tenure (checkpoint/heartbeat/evidence).
+10. **WIM metadata discipline:** Snapshot `Get-WimInfo` (`Name`, `Architecture`, plus `Edition` / `Installation` / `ProductType` / `ProductSuite` / `Languages` when present; reject literal `<undefined>`) before multi-index export and before ResetBase/`Unmount /Commit`; re-assert after export, commit, and Release `/Compress:max`. Clear `install.wim` read-only before Export/Commit/max-export. After single-image WIM is ready: delete `sources\PID.txt` if present and write `sources\ei.cfg`; unattend pins `/IMAGE/INDEX=1`. Record under `logs/wim-metadata.json` + digest keys.
 
 ### Example stages (Test lane)
 
@@ -123,7 +124,7 @@ Elevated runner: dumb sequential invoke (no opcode→`kind` branching).
 - Prefer fake elevated runner when introduced (same PR as port).
 - Assert: stage order, Shell stamp path param, lane params; not ISO bytes.
 - Kernels: no Profile branching (architecture violation if present).
-- **WIM shape:** `MountInstallWim` exports multi-edition → single-image; `ExportWim` refuses commit unless index count = 1 (invariant 7). Real DISM proof is maintainer Apply, not `just check`.
+- **WIM shape:** `MountInstallWim` exports multi-edition → single-image; `ExportWim` refuses commit unless index count = 1 (invariant 8). Metadata / ei.cfg / R/O clears (invariant 10); parser SelfCheck is unit-tested; real DISM proof is maintainer Apply.
 
 ## Ticket mapping
 

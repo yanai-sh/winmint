@@ -105,9 +105,9 @@ Bootstrap (checkpoint | stale→fail-open)
   → Settling (poll → final snapshot)
   → RunningJobs (hard settle green only)
   → Finishing
-  → Unlock → Complete
-       ↘ hard DMA / job fail / timeout → FailedDwell → Unlock → Failed
-       ↘ needsReboot → Checkpoint → Reboot (Shell kept)
+  → Unlock → Complete evidence → ResidueErase (branded payload; ADR-008)
+       ↘ hard DMA / job fail / timeout → FailedDwell → Unlock → Failed (no residue erase)
+       ↘ needsReboot → Checkpoint → Reboot (Shell kept; no residue erase)
 ```
 
 ### Invariants
@@ -121,6 +121,7 @@ Bootstrap (checkpoint | stale→fail-open)
 7. Crash/stale tenure past `StaleTenureThreshold` ⇒ fail-open `Failed`.
 8. Same settle + job executor on Smoke and metal; only `Jobs` list differs.
 9. Winget executable path only via `IAppxPackageManager.TryResolveWingetExecutablePath` (AppX required). Scoop shim path only via `SessionEnvironment.ResolveScoopCmd` (Func required for scoop jobs). No in-session `File.Exists` for either.
+10. **Residual minimization ([ADR-008](../decisions/ADR-008-residual-minimization.md)):** on Shell `Complete` only, best-effort clear AutoAdminLogon secrets and delete `%WINDIR%\WinMint\` + `SetupComplete.cmd`. Failed/Reboot skip erase. `%ProgramData%\WinMint\` may remain for harness harvest.
 
 ### Secrets (Smoke)
 
@@ -176,7 +177,7 @@ Expected failures return `SessionResult`; exceptions = bugs.
 | `StaleTenureThreshold` | **15 min** (wall-clock vs persisted heartbeat UTC — must survive process restart) |
 | `InputLock` | `None` |
 
-**Durable paths (guest):** `%ProgramData%\WinMint\` — `checkpoint.json`, heartbeat file, `evidence\`.
+**Durable paths (guest):** `%ProgramData%\WinMint\` — `checkpoint.json`, heartbeat file, `evidence\` (optional diagnostics; harness may wipe after harvest). Staged `C:\Windows\WinMint\` + `SetupComplete.cmd` are **tenure-only** — erased after successful Shell Complete ([ADR-008](../decisions/ADR-008-residual-minimization.md)).
 
 **MachineSetup failure:** Supervisor exits non-zero; SetupComplete must not treat stamps as success; leave diagnosable logs under ProgramData.
 

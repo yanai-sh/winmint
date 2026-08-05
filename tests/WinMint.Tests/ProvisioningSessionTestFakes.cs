@@ -178,6 +178,8 @@ internal static class ProvisioningSessionTestFakes
 
         public void SetAutoLogon(string username, string password) { }
 
+        public void ClearAutoLogon() { }
+
         public string? GetDefaultUserName() => null;
 
         public bool GetAutoAdminLogon() => false;
@@ -212,6 +214,8 @@ internal static class ProvisioningSessionTestFakes
         public string? Shell { get; private set; } = SupervisorPath;
 
         public void SetAutoLogon(string username, string password) { }
+
+        public void ClearAutoLogon() { }
 
         public string? GetDefaultUserName() => null;
 
@@ -293,6 +297,13 @@ internal static class ProvisioningSessionTestFakes
             DefaultUserName = username;
             DefaultPassword = password;
             AutoAdminLogon = true;
+        }
+
+        public void ClearAutoLogon()
+        {
+            AutoAdminLogon = false;
+            DefaultPassword = null;
+            DefaultUserName = null;
         }
 
         public string? GetDefaultUserName() => DefaultUserName;

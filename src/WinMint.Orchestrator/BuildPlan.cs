@@ -525,6 +525,12 @@ public static class BuildPlan
                   </DiskConfiguration>
                   <ImageInstall>
                     <OSImage>
+                      <InstallFrom>
+                        <MetaData wcm:action="add">
+                          <Key>/IMAGE/INDEX</Key>
+                          <Value>1</Value>
+                        </MetaData>
+                      </InstallFrom>
                       <InstallTo>
                         <DiskID>0</DiskID>
                         <PartitionID>3</PartitionID>

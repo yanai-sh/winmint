@@ -29,7 +29,7 @@
 
 ## Decisions locked (grill)
 
-Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag grill 2026-08-04 ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)); CDM decision 2026-08-05 ([ADR-007](decisions/ADR-007-cdm-not-primary.md)). Full table retained for agents:
+Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag grill 2026-08-04 ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)); CDM decision 2026-08-05 ([ADR-007](decisions/ADR-007-cdm-not-primary.md)); residual minimization 2026-08-05 ([ADR-008](decisions/ADR-008-residual-minimization.md)). Full table retained for agents:
 
 | Topic | Lock |
 |-------|------|
@@ -43,7 +43,9 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Scaffold | Keep `src/` + `just check` |
 | Profile fields | Freeze at ticket **01** (+ later optional v1 fields without schema bump) |
 | SessionPolicy | Smoke defaults per [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md#smoke-defaults-grill-locked) |
-| Guest paths | `%ProgramData%\WinMint\` |
+| Guest paths | `%ProgramData%\WinMint\` (logs/evidence); `C:\Windows\WinMint\` + SetupComplete are tenure-only — erased after Shell Complete ([ADR-008](decisions/ADR-008-residual-minimization.md)) |
+| WIM metadata | Snapshot + assert Name/Arch/(Edition\|Build) across export/commit/max export ([IMAGESERVICING](design/IMAGESERVICING.md#invariants) §10) |
+| Residual | Not a distro — self-erase branded payload on green; no dual `$OEM$` SetupScripts; CDM spray not product default ([ADR-008](decisions/ADR-008-residual-minimization.md), [ADR-007](decisions/ADR-007-cdm-not-primary.md)) |
 | MachineSetup fail | Non-zero exit; fail closed |
 | S4 harness | Thin pwsh `tools/vm/` |
 | Issues | File when work is specified; apply `ready-for-agent` only when starting |
@@ -73,7 +75,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Hardware | M4 stricter evidence bars (**30** opt-in); no Supervisor fork; full hardware campaign maintainer-timed |
 
 **Still out (policy):** Profile presets-in-JSON; product-default recommended remove-list; schema `v2` without a break; full DPAPI host→guest; full D2D; leftover-confidence *product* cleanup; Wizard edition probe / rich per-stage DISM progress.  
-**Shipped:** AppX + capabilities keep-flag; Wizard thin + packages + caps/WSL lists; metal winget/Scoop/WSL; Israel DMA sample; M4 assert switch. Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` on v1.  
+**Shipped:** AppX + capabilities keep-flag; Wizard thin + packages + caps/WSL lists; metal winget/Scoop/WSL; Israel DMA sample; M4 assert switch; WIM metadata discipline; residual self-erase ([ADR-008](decisions/ADR-008-residual-minimization.md)). Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` on v1.  
 **Unlocked:** Phase A multi-step Avalonia Wizard shell; Phase B live elevated build invoke (busy/cancel) via shared ImageServicing path.
 
 **Owned elsewhere:** Splash spike → [SPLASH](design/SPLASH.md) appendix. Appearance consume path was ticket **07**; removed 2026-08-05 until Profile appearance is grilled.
