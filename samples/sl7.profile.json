@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "winmint.profile/v1",
+  "account": {
+    "mode": "localAutoLogon",
+    "username": "yanai",
+    "passwordPath": ".scratch/sl7.password",
+    "requireWifiDuringOobe": true
+  },
+  "dma": {
+    "enabled": true,
+    "settle": {
+      "locale": "en-US",
+      "geoId": 117,
+      "timeZoneId": "Israel Standard Time",
+      "locationServicesEnabled": true
+    }
+  },
+  "debloat": {
+    "removeProvisionedAppx": [
+      "Microsoft.BingNews",
+      "Microsoft.BingWeather",
+      "Microsoft.GetHelp",
+      "Microsoft.Getstarted",
+      "Microsoft.MicrosoftOfficeHub",
+      "Microsoft.MicrosoftSolitaireCollection",
+      "Microsoft.People",
+      "Microsoft.PowerAutomateDesktop",
+      "Microsoft.Todos",
+      "Microsoft.WindowsAlarms",
+      "Microsoft.WindowsFeedbackHub",
+      "Microsoft.WindowsMaps",
+      "Microsoft.YourPhone",
+      "Microsoft.ZuneMusic",
+      "Microsoft.ZuneVideo",
+      "MicrosoftCorporationII.QuickAssist",
+      "Microsoft.GamingApp",
+      "Microsoft.Xbox.TCUI",
+      "Microsoft.XboxGamingOverlay",
+      "Microsoft.XboxSpeechToTextOverlay"
+    ],
+    "removeCapabilities": [
+      "App.StepsRecorder~~~~0.0.1.0",
+      "WMIC~~~~",
+      "VBSCRIPT~~~~",
+      "Browser.InternetExplorer~~~~0.0.11.0",
+      "Microsoft.Windows.PowerShell.ISE~~~~0.0.1.0",
+      "Microsoft.Wallpapers.Extended~~~~0.0.1.0",
+      "Media.WindowsMediaPlayer~~~~0.0.12.0"
+    ],
+    "disableOptionalFeatures": [
+      "WorkFolders-Client",
+      "WindowsMediaPlayer",
+      "TelnetClient",
+      "TFTP",
+      "SimpleTCP"
+    ]
+  },
+  "packages": {
+    "winget": [
+      "Anysphere.Cursor",
+      "Zen-Team.Zen-Browser"
+    ],
+    "wsl": [
+      "FedoraLinux"
+    ]
+  }
+}

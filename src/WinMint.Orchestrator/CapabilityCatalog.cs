@@ -8,7 +8,7 @@ public static class CapabilityCatalog
 {
     public static IReadOnlySet<string> Ids { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        // Thin acceptance pins + a few legal siblings from Installed inventory (not a recommended set).
+        // Thin acceptance pins + legal siblings from Installed inventory; recommended set lives in KeepFlagPresets (issue 56).
         "App.StepsRecorder~~~~0.0.1.0",
         "WMIC~~~~",
         "VBSCRIPT~~~~",

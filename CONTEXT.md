@@ -81,8 +81,8 @@ Run-specific WIM export / WinSxS cleanup posture for one build. Test lane priori
 _Avoid_: baking Max compression into every Smoke rebuild; claiming C# orchestration makes DISM faster; trusting Unmount/Commit without re-reading Get-WimInfo
 
 **Keep-flag**:
-Remove-list polarity for selected provisioned inbox AppX, capabilities, and optional features: Profile lists what to strip/disable; static in-repo catalogs bound legal ids; ImageServicing removes offline; ProvisioningSession is a narrow FirstLogon AppX safety net. Smoke acceptance uses a small explicit remove-list to prove the path; other Profiles default empty. CDM is not the primary control plane.
-_Avoid_: keep-list polarity; Profile presets; BCU; treating CDM as the primary remove path; auto-on “recommended” sets outside an explicit Profile list
+Remove-list polarity for selected provisioned inbox AppX, capabilities, and optional features: Profile lists what to strip/disable; static in-repo catalogs bound legal ids; ImageServicing removes offline; ProvisioningSession is a narrow FirstLogon AppX safety net. Product zero-config is host preset **`recommended`** (expands → Profile ids; never preset names in JSON). Smoke **acceptance** uses a small explicit remove-list to prove the path; intentional empty Cli Profiles stay empty. CDM is not the primary control plane.
+_Avoid_: keep-list polarity; Profile presets-in-JSON; BCU; treating CDM as the primary remove path; silent BuildPlan fill of intentional empty remove-lists; catalog growth auto-expanding `recommended`
 
 **Wizard**:
 Interactive Avalonia host of the same BuildPlan brain (not a second planner). Authors a **Profile** and **RunOptions** (Source ISO path, image-quality lane, optional WIM index). Keep-flag UI presets and chip catalogs expand **host-side** into Profile remove-lists / package ids (preset names never appear in Profile JSON). Phase A: multi-step shell (Source → Configure → Preview → Review) with Plan/Save. Phase B: Review **Build** invokes elevated **ImageServicing.Apply** (same path as Cli; UAC via PwshElevatedPlanRunner) — not DISM inside the UI.

@@ -59,7 +59,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | WIM commit | Single-image only — Mount exports edition; Export fail-closes if multi-index ([IMAGESERVICING](design/IMAGESERVICING.md#invariants) §7) |
 | Post-13 sequencing | **Met** — M1 Smoke (**14**) before Wizard / keep-flag expand / metal ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)); tickets **14–30** done |
 | Post-13 tickets | Thin cards **14+**; no mega-epic; carry folds into owning card |
-| Keep-flag polarity | Remove-list only; **no** Profile preset names; **no** product-default / opt-out recommended set ([ADR-005](decisions/ADR-005-keep-flag-matrix.md)) |
+| Keep-flag polarity | Remove-list only; **no** Profile preset names; product **`recommended`** host preset is the zero-config default (expands → ids); Acceptance remains prove-out-only ([ADR-005](decisions/ADR-005-keep-flag-matrix.md), issue **56**) |
 | Keep-flag kinds | AppX **11–13**; capabilities/features **19–20** (same polarity) |
 | CDM | Not primary keep-flag control ([ADR-007](decisions/ADR-007-cdm-not-primary.md)) |
 | Acceptance remove-list | Smoke **acceptance** Profile pins a **small frozen** list (AppX + thin caps/features); schema default elsewhere empty |
@@ -67,15 +67,15 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Metal jobs | `winget` / Scoop / WSL shipped (**16–18**, **23**); unknown kinds fail closed until ticketed |
 | OS reboot | `ISystemReboot` (`ExitWindowsEx` + `shutdown.exe` fallback **24**); Profile `*NeedsReboot` subsets |
 | Appearance | No AppearanceOnce / theme apply until a Profile appearance story is grilled; prior consume path removed as unused |
-| Secrets hardening | Smoke plaintext + wipe (**28** best-effort overwrite); full DPAPI host→guest channel later |
+| Secrets hardening | Smoke plaintext + wipe (**28**); metal: `passwordPath` and/or Wizard prompt — **no** PasswordEnvVar (issue **56**); full DPAPI host→guest later |
 | Splash D2D | GDI status text (**29**); full D2D only if S4 FirstPaintBudget still fails on real Smoke |
 | S4 VHD/digest rebuild | Maintainer optimization — not a product ticket |
 | `*Dto` rename | Opportunistic on next BundleLoader touch |
 | Wizard | Second BuildPlan host (**15** + packages **22** + polish **25**); Phase A multi-step Avalonia UX; Phase B Review Build → ImageServicing.Apply |
 | Hardware | M4 stricter evidence bars (**30** opt-in); no Supervisor fork; full hardware campaign maintainer-timed |
 
-**Still out (policy):** Profile presets-in-JSON; product-default recommended remove-list; schema `v2` without a break; full DPAPI host→guest; full D2D; leftover-confidence *product* cleanup; Wizard edition probe / rich per-stage DISM progress.  
-**Shipped:** AppX + capabilities keep-flag; Wizard thin + packages + caps/WSL lists; metal winget/Scoop/WSL; Israel DMA sample; M4 assert switch; WIM metadata discipline; residual self-erase ([ADR-008](decisions/ADR-008-residual-minimization.md)). Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` on v1.  
+**Still out (policy):** Profile presets-in-JSON; schema `v2` without a break; full DPAPI host→guest; full D2D; leftover-confidence *product* cleanup; Wizard edition probe / rich per-stage DISM progress.  
+**Shipped:** AppX + capabilities keep-flag; product-default **`recommended`** host expansion (issue **56**); KeepGaming overlay; Wizard thin + packages + caps/WSL lists + host-DMA fill; metal winget/Scoop/WSL; Israel DMA sample; SL7 sample; M4 assert switch; WIM metadata discipline; residual self-erase ([ADR-008](decisions/ADR-008-residual-minimization.md)). Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` / `account.passwordPath` on v1.  
 **Unlocked:** Phase A multi-step Avalonia Wizard shell; Phase B live elevated build invoke (busy/cancel) via shared ImageServicing path.
 
 **Owned elsewhere:** Splash spike → [SPLASH](design/SPLASH.md) appendix. Appearance consume path was ticket **07**; removed 2026-08-05 until Profile appearance is grilled.

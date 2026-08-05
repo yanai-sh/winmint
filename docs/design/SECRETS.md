@@ -9,7 +9,7 @@ Smoke accounts: **Local + autoLogon only** (password required). Other account mo
 
 Password may appear in:
 
-1. Profile on the **build host** — fixtures may **inline** test secrets; Cli should prefer `PasswordPath` / `PasswordEnvVar` when implemented.
+1. Profile on the **build host** — fixtures may **inline** lab secrets; metal Cli prefers `passwordPath`; Wizard uses a password prompt. **No** `PasswordEnvVar`.
 2. Autologon material stamped into the offline image / Machine setup (Windows requirements).
 
 **Lab-grade only** — not enterprise secret management. No BitLocker/TPM-sealed secrets in Smoke.
@@ -19,7 +19,7 @@ Password may appear in:
 | Rule | Detail |
 |------|--------|
 | Plan-time | Local+autoLogon without password ⇒ BuildPlan `PlanFailure` |
-| Transport | Prefer `PasswordPath` / `PasswordEnvVar` in Profile over inline password when Cli supports it; fixtures may inline test-only secrets |
+| Transport | Prefer `passwordPath` (Cli) or Wizard prompt over inline password; fixtures may inline test-only secrets; **no** `PasswordEnvVar` |
 | Machine setup | After successful autologon stamp, **wipe** staged bundle password on disk via `WipeSecrets` Action (JSON redact + rewrite; no `FileSecretScrubber` / `ISecretScrubber` class) |
 | Evidence | Harness must **redact** passwords from pulled logs/evidence; never commit real passwords |
 | Guest jobs JSON | Must not round-trip cleartext password |

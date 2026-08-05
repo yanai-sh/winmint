@@ -12,14 +12,6 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 {
     private static readonly string[] StepNames = ["Source", "Configure", "Preview", "Review"];
 
-    private static readonly string[] GamingAppx =
-    [
-        "Microsoft.GamingApp",
-        "Microsoft.Xbox.TCUI",
-        "Microsoft.XboxGamingOverlay",
-        "Microsoft.XboxSpeechToTextOverlay",
-    ];
-
     private readonly Window _window;
     private byte[]? _lastProfileUtf8;
     private string? _savedProfilePath;
@@ -67,6 +59,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             ("pengwin", "Pengwin"),
         ]);
 
+        ApplyHostDmaDefaults();
         RefreshNav();
     }
 
@@ -84,7 +77,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] private string _sourceIsoPath = "";
     [ObservableProperty] private string _imageQuality = "Test";
-    [ObservableProperty] private string _preset = KeepFlagPresets.Acceptance;
+    [ObservableProperty] private string _preset = KeepFlagPresets.Recommended;
     [ObservableProperty] private bool _keepGaming;
     [ObservableProperty] private bool _keepCopilot;
 
@@ -115,6 +108,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 
     public bool IsEmptyPreset => string.Equals(Preset, KeepFlagPresets.Empty, StringComparison.OrdinalIgnoreCase);
     public bool IsAcceptancePreset => string.Equals(Preset, KeepFlagPresets.Acceptance, StringComparison.OrdinalIgnoreCase);
+    public bool IsRecommendedPreset => string.Equals(Preset, KeepFlagPresets.Recommended, StringComparison.OrdinalIgnoreCase);
     public bool IsTestLane => string.Equals(ImageQuality, "Test", StringComparison.OrdinalIgnoreCase);
     public bool IsReleaseLane => string.Equals(ImageQuality, "Release", StringComparison.OrdinalIgnoreCase);
 
@@ -136,6 +130,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(IsEmptyPreset));
         OnPropertyChanged(nameof(IsAcceptancePreset));
+        OnPropertyChanged(nameof(IsRecommendedPreset));
     }
 
     partial void OnImageQualityChanged(string value)
@@ -146,6 +141,20 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 
     [RelayCommand] private void SelectEmptyPreset() => Preset = KeepFlagPresets.Empty;
     [RelayCommand] private void SelectAcceptancePreset() => Preset = KeepFlagPresets.Acceptance;
+    [RelayCommand] private void SelectRecommendedPreset() => Preset = KeepFlagPresets.Recommended;
+
+    [RelayCommand]
+    private void UseHostDma() => ApplyHostDmaDefaults();
+
+    private void ApplyHostDmaDefaults()
+    {
+        HostDmaSnapshot snap = HostDma.Capture();
+        Locale = snap.Locale;
+        GeoId = snap.GeoId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        TimeZone = snap.TimeZoneId;
+        LocationServices = snap.LocationServicesEnabled;
+    }
+
     [RelayCommand] private void SelectTestLane() => ImageQuality = "Test";
     [RelayCommand] private void SelectReleaseLane() => ImageQuality = "Release";
 
@@ -373,19 +382,6 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         List<string> scoop = SelectedIds(ShellChips).ToList();
         List<string> wsl = SelectedIds(WslChips).ToList();
 
-        string appxOverride = "";
-        if (IsAcceptancePreset && !KeepGaming)
-        {
-            Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Acceptance);
-            if (expanded.IsOk)
-            {
-                IEnumerable<string> merged = expanded.Value.RemoveProvisionedAppx
-                    .Concat(GamingAppx)
-                    .Distinct(StringComparer.OrdinalIgnoreCase);
-                appxOverride = string.Join(Environment.NewLine, merged);
-            }
-        }
-
         return new WizardSessionInput(
             Preset,
             Username,
@@ -396,10 +392,11 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             GeoId,
             TimeZone,
             LocationServices,
+            KeepGaming: KeepGaming,
+            KeepCopilot: KeepCopilot,
             WingetText: string.Join(Environment.NewLine, winget),
             ScoopText: string.Join(Environment.NewLine, scoop),
             WslText: string.Join(Environment.NewLine, wsl),
-            RemoveProvisionedAppxText: appxOverride,
             SourceIsoPath: SourceIsoPath,
             ImageQualityText: ImageQuality,
             WimIndex: _wimIndex);

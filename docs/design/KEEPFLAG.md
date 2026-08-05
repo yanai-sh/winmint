@@ -2,7 +2,7 @@
 
 **Status:** **Accepted** (wayfinder map [Keep-flag matrix wayfinding](https://github.com/yanai-sh/winmint/issues/13), 2026-08-03)  
 **Authority:** [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) · [ADR-007](../decisions/ADR-007-cdm-not-primary.md) · [BUILDPLAN](BUILDPLAN.md) · [IMAGESERVICING](IMAGESERVICING.md) · [PROVISIONINGSESSION](PROVISIONINGSESSION.md)  
-**Implement:** AppX **11–13** done; capabilities/features **19** spike → **20** offline done; Acceptance Wizard preset expands AppX + thin caps/features (**25**). Lasting out: Profile presets-in-JSON, product-default recommended set, schema `v2`, leftover *product* cleanup ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md)).
+**Implement:** AppX **11–13** done; capabilities/features **19** spike → **20** offline done; Acceptance Wizard preset expands AppX + thin caps/features (**25**); product **`recommended`** host preset + KeepGaming (issue **56**). Lasting out: Profile presets-in-JSON, schema `v2`, leftover *product* cleanup ([ADR-006](../decisions/ADR-006-post-keepflag-sequencing.md)).
 
 ## Problem space
 
@@ -40,7 +40,7 @@ Users need a fail-closed way to strip selected **provisioned inbox AppX** from a
 - Absent / empty `removeProvisionedAppx` ⇒ no removes (Smoke-compatible).
 - Each AppX entry must match a catalog id (package family name or catalog key — freeze at implement).
 - Unknown id ⇒ plan document/plan failure (fail closed).
-- Capabilities / optional features: same remove-list polarity; thin acceptance pins only — **no** product-default recommended set. Inventory media pin: **Windows 11 25H2 ARM64 English** Pro. Offline kernels: listed-but-absent / not-on-image ⇒ **ok + digest** (capabilities `Absent`, features `Disabled`) — not throw-on-missing.
+- Capabilities / optional features: same remove-list polarity; Acceptance pins for prove-out; product **`recommended`** host expansion (issue 56) is separate and curated (catalog growth does not auto-expand it). Inventory media pin: **Windows 11 25H2 ARM64 English** Pro. Offline kernels: listed-but-absent / not-on-image ⇒ **ok + digest** (capabilities `Absent`, features `Disabled`) — not throw-on-missing.
 
 ### Thin acceptance pins (prove-out only — not a product default)
 
@@ -51,6 +51,18 @@ Users need a fail-closed way to strip selected **provisioned inbox AppX** from a
 | Optional feature | `WorkFolders-Client` |
 
 Re-pin if a future 25H2 English ARM64 ISO drops an id. Host SOT for expansion: `KeepFlagPresets.Acceptance` (below).
+
+### Product `recommended` (issue 56 — host expansion SOT: `KeepFlagPresets.Recommended`)
+
+Curated workstation strip. Catalog add does **not** auto-add here. Hard excludes (do not emit): Store, App Installer, Terminal, Camera, Photos, Edge foundations, MathRecognizer, print-related caps.
+
+| Kind | Strip (unless KeepGaming for gaming rows) |
+|------|-------------------------------------------|
+| AppX | BingNews/Weather, GetHelp/Getstarted, OfficeHub, Solitaire, People, PowerAutomateDesktop, Todos, Alarms, FeedbackHub, Maps, YourPhone, ZuneMusic/Video, QuickAssist; GamingApp + Xbox.* unless KeepGaming |
+| Capability | StepsRecorder, WMIC, VBSCRIPT, IE, PowerShell ISE, Wallpapers.Extended, WindowsMediaPlayer |
+| Optional feature | WorkFolders-Client, WindowsMediaPlayer, TelnetClient, TFTP, SimpleTCP |
+
+Keep overlays: **KeepGaming**, **KeepCopilot** (Copilot no-op until Slice 2). Always-strip OneDrive/Recall = Slice 2.
 
 ## Catalog
 
@@ -102,7 +114,7 @@ S3 fakes must call production `MatchesCatalogId` (no copied predicate). Do **not
 | Named Profile presets | None in Profile (host/Wizard expands → lists) — [ADR-005](../decisions/ADR-005-keep-flag-matrix.md) |
 | Confidence-tier leftover *product* cleanup | **Out** — no product ticket; do not ship BCU / JunkManager tiers |
 | CDM / consumer-features as primary remove | **Not primary** — [ADR-007](../decisions/ADR-007-cdm-not-primary.md) |
-| Product-default / opt-out “recommended set” | **No** — catalog bounds legal ids only |
+| Product-default **`recommended`** host preset | **Yes (issue 56)** — expands → Profile remove-list ids; never preset names in JSON; Cli empty lists stay empty outside Wizard default compose |
 | Acceptance Smoke remove-list | **Yes (grill B4)** — small frozen list on acceptance Profile (AppX + thin caps/features; re-pin if media churn) |
 | Acceptance pin SOT | **`KeepFlagPresets.Acceptance` expansion is host SOT** ([What is the single SOT for acceptance keep-flag pins?](https://github.com/yanai-sh/winmint/issues/46)). `samples/acceptance.profile.json` stays a concrete Profile fixture; one test asserts sample `debloat.*` equals that expansion. Preset names never in Profile JSON. |
 
@@ -118,4 +130,4 @@ S3 fakes must call production `MatchesCatalogId` (no copied predicate). Do **not
 - Bundle Bulk Crap Uninstaller
 - Treat HKLM Uninstall inventory as the ISO source of truth
 - Blind delete under `WindowsApps` as the primary path
-- Auto-apply a “recommended” remove-list unless the Profile lists it (acceptance Profile lists explicitly)
+- Auto-inject a “recommended” remove-list into intentional empty Cli Profiles (Wizard/host compose expands; Profile remains the expanded list)
