@@ -1,13 +1,11 @@
-using WinMint.Orchestrator;
 using WinMint.Provisioning;
 using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
+using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
 public class DmaSettleTests
 {
-    private static string SupervisorPath => ImageServicing.ShellStampGuestPath;
-
     [Fact]
     public void Shell_final_hard_GeoId_mismatch_fails_and_skips_jobs()
     {
@@ -140,23 +138,6 @@ public class DmaSettleTests
             Checkpoints: new NoopCheckpoints(),
             Evidence: evidence);
 
-    private sealed class RecordingWinlogon : IWinlogonRegistry
-    {
-        public string? Shell { get; set; }
-
-        public void SetAutoLogon(string username, string password) { }
-
-        public string? GetDefaultUserName() => null;
-
-        public bool GetAutoAdminLogon() => false;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path) => Shell = path;
-
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
     private abstract record RegionRead
     {
         public sealed record ValueRead(RegionState State) : RegionRead;
@@ -192,70 +173,6 @@ public class DmaSettleTests
             return _lastGood
                 ?? throw new InvalidOperationException("No scripted region reads left.");
         }
-    }
-
-    private sealed class RecordingSplashPresenter : ISplashPresenter
-    {
-        public List<string> Events { get; } = [];
-
-        public void Show() => Events.Add("Show");
-
-        public void SetStatus(SessionStatus status) => Events.Add($"Status:{status.Code}");
-    }
-
-    private sealed class RecordingEvidenceSink : IEvidenceSink
-    {
-        public List<ProvisioningEvidenceDocument> Documents { get; } = [];
-
-        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)
-        {
-            Documents.Add(document);
-            return new EvidenceSnapshot(document.SchemaVersion, $"memory:{Documents.Count}");
-        }
-    }
-
-    private sealed class RecordingProcessHost : IProcessHost
-    {
-        public List<(string FileName, IReadOnlyList<string> Arguments)> Starts { get; } = [];
-
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default)
-        {
-            Starts.Add((fileName, arguments));
-            return new ProcessStartResult(0);
-        }
-    }
-
-    private sealed class NoopWinlogon : IWinlogonRegistry
-    {
-        public string? Shell { get; private set; } = SupervisorPath;
-
-        public void SetAutoLogon(string username, string password) { }
-
-        public string? GetDefaultUserName() => null;
-
-        public bool GetAutoAdminLogon() => false;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path) => Shell = path;
-
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
-    private sealed class NoopCheckpoints : ICheckpointStore
-    {
-        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
-
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
-
-        public void WriteCheckpoint(CheckpointState state) { }
-
-        public CheckpointState? TryReadCheckpoint() => null;
-
-        public void ClearCheckpoint() { }
     }
 
     /// <summary>Advances UTC + monotonic stamp on timer due-time so settle Wait is instant under test.</summary>

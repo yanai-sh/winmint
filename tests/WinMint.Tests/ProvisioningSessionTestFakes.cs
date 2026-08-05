@@ -117,7 +117,9 @@ internal static class ProvisioningSessionTestFakes
         public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) =>
             RegisteredFamilyNames.Add(packageFamilyName);
 
-        public void EnsureSystemFullControlOnWingetFrameworkPackages() { }
+        public int EnsureSystemFullControlCalls { get; private set; }
+
+        public void EnsureSystemFullControlOnWingetFrameworkPackages() => EnsureSystemFullControlCalls++;
 
         public string? TryResolveWingetExecutablePath() => WingetPath;
     }
@@ -219,5 +221,25 @@ internal static class ProvisioningSessionTestFakes
         public CheckpointState? TryReadCheckpoint() => null;
 
         public void ClearCheckpoint() { }
+    }
+
+    internal sealed class NoopSplash : ISplashPresenter
+    {
+        public void Show() { }
+
+        public void SetStatus(SessionStatus status) { }
+    }
+
+    internal sealed class NoopRegion : IRegionSnapshot
+    {
+        public void Apply(DmaSettleTarget target) { }
+
+        public RegionState Read() => new(null, null, null, null);
+    }
+
+    internal sealed class NoopEvidence : IEvidenceSink
+    {
+        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document) =>
+            new(document.SchemaVersion, "memory:1");
     }
 }

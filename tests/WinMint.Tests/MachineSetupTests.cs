@@ -1,12 +1,11 @@
 using System.Text.Json;
 using WinMint.Provisioning;
+using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
 public class MachineSetupTests
 {
-    private static string SupervisorPath => WinMint.Orchestrator.ImageServicing.ShellStampGuestPath;
-
     [Fact]
     public void MachineSetup_rejects_defaultuser0_with_AutoAdminLogon()
     {
@@ -266,25 +265,6 @@ public class MachineSetupTests
             throw new InvalidOperationException("simulated delete failure");
     }
 
-    private sealed class RecordingAppx : IAppxPackageManager
-    {
-        public int EnsureSystemFullControlCalls { get; private set; }
-
-        public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) => [];
-
-        public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) => [];
-
-        public void RemovePackage(string packageFullName) { }
-
-        public void DeprovisionPackageFamily(string packageFamilyName) { }
-
-        public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) { }
-
-        public void EnsureSystemFullControlOnWingetFrameworkPackages() => EnsureSystemFullControlCalls++;
-
-        public string? TryResolveWingetExecutablePath() => null;
-    }
-
     private sealed class FakeWinlogonRegistry : IWinlogonRegistry
     {
         public string? DefaultUserName { get; private set; }
@@ -328,41 +308,5 @@ public class MachineSetupTests
             WipeCount++;
             LastBundle = bundle;
         }
-    }
-
-    private sealed class NoopRegion : IRegionSnapshot
-    {
-        public void Apply(DmaSettleTarget target) { }
-
-        public RegionState Read() => new(null, null, null, null);
-    }
-
-    private sealed class NoopProcesses : IProcessHost
-    {
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default) =>
-            new(0);
-    }
-
-    private sealed class NoopSplash : ISplashPresenter
-    {
-        public void Show() { }
-
-        public void SetStatus(SessionStatus status) { }
-    }
-
-    private sealed class NoopCheckpoints : ICheckpointStore
-    {
-        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
-
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
-
-        public void WriteCheckpoint(CheckpointState state) { }
-
-        public CheckpointState? TryReadCheckpoint() => null;
-
-        public void ClearCheckpoint() { }
     }
 }

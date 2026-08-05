@@ -1,11 +1,10 @@
 using WinMint.Provisioning;
+using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
 public class ShellTenureTests
 {
-    private static string SupervisorPath => WinMint.Orchestrator.ImageServicing.ShellStampGuestPath;
-
     [Fact]
     public void Shell_Show_is_recorded_before_settle_begins()
     {
@@ -25,8 +24,8 @@ public class ShellTenureTests
         Assert.True(showAt >= 0, "expected Splash.Show");
         Assert.True(settleAt >= 0, "expected settle.begin status");
         Assert.True(showAt < settleAt, "paint-before-settle order");
-        Assert.Single(evidence.Written);
-        Assert.Equal(ProvisioningSession.EvidenceSchemaVersion, evidence.Written[0].SchemaVersion);
+        Assert.Single(evidence.Documents);
+        Assert.Equal(ProvisioningSession.EvidenceSchemaVersion, evidence.Documents[0].SchemaVersion);
     }
 
     [Fact]
@@ -125,95 +124,4 @@ public class ShellTenureTests
             Splash: splash,
             Checkpoints: new NoopCheckpoints(),
             Evidence: evidence);
-
-    private sealed class RecordingWinlogon : IWinlogonRegistry
-    {
-        public string? Shell { get; set; }
-
-        public void SetAutoLogon(string username, string password) { }
-
-        public string? GetDefaultUserName() => null;
-
-        public bool GetAutoAdminLogon() => false;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path) => Shell = path;
-
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
-    private sealed class RecordingSplashPresenter : ISplashPresenter
-    {
-        public List<string> Events { get; } = [];
-
-        public void Show() => Events.Add("Show");
-
-        public void SetStatus(SessionStatus status) => Events.Add($"Status:{status.Code}");
-    }
-
-    private sealed class RecordingEvidenceSink : IEvidenceSink
-    {
-        public List<EvidenceSnapshot> Written { get; } = [];
-
-        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)
-        {
-            EvidenceSnapshot snap = new(document.SchemaVersion, $"memory:{Written.Count}");
-            Written.Add(snap);
-            return snap;
-        }
-    }
-
-    private sealed class NoopWinlogon : IWinlogonRegistry
-    {
-        public string? Shell { get; private set; } = SupervisorPath;
-
-        public void SetAutoLogon(string username, string password) { }
-
-        public string? GetDefaultUserName() => null;
-
-        public bool GetAutoAdminLogon() => false;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path) => Shell = path;
-
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
-    private sealed class MatchingRegion : IRegionSnapshot
-    {
-        private RegionState _state = new("en-GB", 242, "GMT Standard Time", true);
-
-        public void Apply(DmaSettleTarget target) =>
-            _state = new RegionState(
-                target.Locale,
-                target.GeoId,
-                target.TimeZoneId,
-                target.LocationServicesEnabled);
-
-        public RegionState Read() => _state;
-    }
-
-    private sealed class NoopProcesses : IProcessHost
-    {
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default) =>
-            new(0);
-    }
-
-    private sealed class NoopCheckpoints : ICheckpointStore
-    {
-        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
-
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
-
-        public void WriteCheckpoint(CheckpointState state) { }
-
-        public CheckpointState? TryReadCheckpoint() => null;
-
-        public void ClearCheckpoint() { }
-    }
 }

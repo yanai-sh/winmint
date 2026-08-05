@@ -1,14 +1,13 @@
 using WinMint.Orchestrator;
 using WinMint.Provisioning;
 using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
+using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
 /// <summary>Ticket 13 — FirstLogon AppX safety-net job at S3 (fake PackageManager).</summary>
 public class KeepFlagAppxSafetyNetTests
 {
-    private static string SupervisorPath => ImageServicing.ShellStampGuestPath;
-
     [Fact]
     public void Shell_appx_safetyNet_removes_registered_packages_matching_catalog_ids()
     {
@@ -193,73 +192,5 @@ public class KeepFlagAppxSafetyNetTests
         public string? TryResolveWingetExecutablePath() => null;
 
         public List<string> RegisteredFamilyNames { get; } = [];
-    }
-
-    private sealed class RecordingSplashPresenter : ISplashPresenter
-    {
-        public List<string> Events { get; } = [];
-
-        public void Show() => Events.Add("Show");
-
-        public void SetStatus(SessionStatus status) => Events.Add($"Status:{status.Code}");
-    }
-
-    private sealed class MatchingRegion : IRegionSnapshot
-    {
-        private RegionState _state = new("en-GB", 242, "GMT Standard Time", true);
-
-        public void Apply(DmaSettleTarget target) =>
-            _state = new RegionState(
-                target.Locale,
-                target.GeoId,
-                target.TimeZoneId,
-                target.LocationServicesEnabled);
-
-        public RegionState Read() => _state;
-    }
-
-    private sealed class NoopWinlogon : IWinlogonRegistry
-    {
-        public void SetAutoLogon(string username, string password) { }
-
-        public string? GetDefaultUserName() => null;
-
-        public bool GetAutoAdminLogon() => false;
-
-        public string? Shell { get; private set; } = SupervisorPath;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path) => Shell = path;
-
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
-    private sealed class NoopProcesses : IProcessHost
-    {
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default) =>
-            new(0);
-    }
-
-    private sealed class NoopCheckpoints : ICheckpointStore
-    {
-        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
-
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
-
-        public void WriteCheckpoint(CheckpointState state) { }
-
-        public CheckpointState? TryReadCheckpoint() => null;
-
-        public void ClearCheckpoint() { }
-    }
-
-    private sealed class NoopEvidence : IEvidenceSink
-    {
-        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document) =>
-            new(document.SchemaVersion, "memory:1");
     }
 }

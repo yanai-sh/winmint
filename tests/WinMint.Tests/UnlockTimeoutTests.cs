@@ -1,12 +1,11 @@
-using WinMint.Orchestrator;
 using WinMint.Provisioning;
 using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
+using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
 public class UnlockTimeoutTests
 {
-    private static string SupervisorPath => ImageServicing.ShellStampGuestPath;
     private const string ExplorerShell = "explorer.exe";
 
     [Fact]
@@ -191,47 +190,11 @@ public class UnlockTimeoutTests
             Checkpoints: checkpoints ?? new NoopCheckpoints(),
             Evidence: evidence);
 
-    private sealed class RecordingWinlogon : IWinlogonRegistry
-    {
-        public string? Shell { get; set; }
-
-        public List<string> ShellWrites { get; } = [];
-
-        public void SetAutoLogon(string username, string password) { }
-
-        public string? GetDefaultUserName() => null;
-
-        public bool GetAutoAdminLogon() => false;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path)
-        {
-            ShellWrites.Add(path);
-            Shell = path;
-        }
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
     private sealed class StickyRegion(RegionState state) : IRegionSnapshot
     {
         public void Apply(DmaSettleTarget target) { }
 
         public RegionState Read() => state;
-    }
-
-    private sealed class MatchingRegion : IRegionSnapshot
-    {
-        private RegionState _state = new("en-GB", 242, "GMT Standard Time", true);
-
-        public void Apply(DmaSettleTarget target) =>
-            _state = new RegionState(
-                target.Locale,
-                target.GeoId,
-                target.TimeZoneId,
-                target.LocationServicesEnabled);
-
-        public RegionState Read() => _state;
     }
 
     /// <summary>First probe mismatches (and may jump wall clock); later probes match.</summary>
@@ -270,48 +233,6 @@ public class UnlockTimeoutTests
         public TenureState ReadTenure() => tenure;
 
         public void WriteHeartbeat(DateTimeOffset utcNow) => HeartbeatsWritten.Add(utcNow);
-
-        public void WriteCheckpoint(CheckpointState state) { }
-
-        public CheckpointState? TryReadCheckpoint() => null;
-
-        public void ClearCheckpoint() { }
-    }
-
-    private sealed class RecordingSplashPresenter : ISplashPresenter
-    {
-        public List<string> Events { get; } = [];
-
-        public void Show() => Events.Add("Show");
-
-        public void SetStatus(SessionStatus status) => Events.Add($"Status:{status.Code}");
-    }
-
-    private sealed class RecordingEvidenceSink : IEvidenceSink
-    {
-        public List<ProvisioningEvidenceDocument> Documents { get; } = [];
-
-        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)
-        {
-            Documents.Add(document);
-            return new EvidenceSnapshot(document.SchemaVersion, $"memory:{Documents.Count}");
-        }
-    }
-
-    private sealed class NoopProcesses : IProcessHost
-    {
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default) =>
-            new(0);
-    }
-
-    private sealed class NoopCheckpoints : ICheckpointStore
-    {
-        public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
-
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
 
         public void WriteCheckpoint(CheckpointState state) { }
 

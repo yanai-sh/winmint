@@ -1,5 +1,6 @@
 using System.Text;
 using WinMint.Orchestrator;
+using static WinMint.Tests.ImageServicingTestFakes;
 
 namespace WinMint.Tests;
 
@@ -137,30 +138,6 @@ public class ExportLaneTests
         catch
         {
             // ponytail: best-effort temp cleanup
-        }
-    }
-
-    private sealed class RecordingElevatedPlanRunner : IElevatedPlanRunner
-    {
-        public List<ServicingStage> Stages { get; } = [];
-
-        public Result<ImageEvidence, ServicingFailure> Execute(
-            string workDirectory,
-            IReadOnlyList<ServicingStage> stages,
-            ServicingRun run,
-            BuildArtifacts plan,
-            CancellationToken ct)
-        {
-            Stages.AddRange(stages);
-            string shellTarget = stages
-                .First(s => s.Opcode == ServicingOpcode.StampOfflineShell)
-                .Parameters[StageParams.ShellTarget];
-            return Result.Ok<ImageEvidence, ServicingFailure>(
-                new ImageEvidence(
-                    run.OutputIsoPath ?? Path.Combine(workDirectory, "out.iso"),
-                    plan.Manifest.ImageQuality,
-                    shellTarget,
-                    new Dictionary<string, string>(StringComparer.Ordinal)));
         }
     }
 }
