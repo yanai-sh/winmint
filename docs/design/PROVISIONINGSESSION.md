@@ -56,7 +56,6 @@ public sealed record ProvisioningBundle(
     IReadOnlyList<ProvisionJob> Jobs,
     SessionPolicy Policy,
     SupervisorIdentity Supervisor,
-    AppearanceOnce? Appearance = null,
     CheckpointState? Resume = null);
 
 public sealed record SessionPolicy(
@@ -105,7 +104,7 @@ Bootstrap (checkpoint | stale→fail-open)
   → FirstPaint (≤ FirstPaintBudget)
   → Settling (poll → final snapshot)
   → RunningJobs (hard settle green only)
-  → Finishing (appearance once)
+  → Finishing
   → Unlock → Complete
        ↘ hard DMA / job fail / timeout → FailedDwell → Unlock → Failed
        ↘ needsReboot → Checkpoint → Reboot (Shell kept)
@@ -145,7 +144,7 @@ Expected failures return `SessionResult`; exceptions = bugs.
 
 **Outside:** `Program.cs` arg parse; staged JSON → `ProvisioningBundle` loader; SetupComplete.cmd; Winlogon launching the exe.
 
-**Hidden:** registry key paths, D2D/GDI details, DMA poll loop, job argv construction (not which exe — that is behind AppX / `ResolveScoopCmd`), checkpoint file layout, heartbeat, evidence projection formatting, appearance apply, production Scoop shim `File.Exists` wiring in `Program`, WinRT-private winget framework ACL grant (former `WingetFrameworkPackageAcl`).
+**Hidden:** registry key paths, D2D/GDI details, DMA poll loop, job argv construction (not which exe — that is behind AppX / `ResolveScoopCmd`), checkpoint file layout, heartbeat, evidence projection formatting, production Scoop shim `File.Exists` wiring in `Program`, WinRT-private winget framework ACL grant (former `WingetFrameworkPackageAcl`).
 
 ## S3 test strategy (locked)
 
@@ -156,14 +155,14 @@ Expected failures return `SessionResult`; exceptions = bugs.
 | 05 | Scripted region reads → final hard fail skips jobs; soft location warns + continues |
 | 06 | Stub jobs via child-process fakes; jobs skipped after hard settle fail |
 | metal jobs | Winget: AppX fake canned path → `IProcessHost` recording asserts `fileName`; resolve null → fail, host not started. Scoop: Func null→path after bootstrap script → recording sees powershell then `scoop.cmd`. No leaf tests of private path helpers. |
-| 07 | Timeout via `FakeTimeProvider`; stale fail-open; unlock on Failed; appearance once |
+| 07 | Timeout via `FakeTimeProvider`; stale fail-open; unlock on Failed |
 | 08 | Reboot keeps Shell + checkpoint; resume continues tenure |
 
 **No Hyper-V required for S3.** Hyper-V is S4 only.
 
 **Assembly shape (design decision):** keep logic in `WinMint.Provisioning` with public adapter interfaces so `WinMint.Tests` references the project and runs phase tests on the non-AOT TFM build. Extract `WinMint.Provisioning.Core` **only** if AOT/test friction forces it (ponytail).
 
-**RunJobs fail ceremony (defer):** `RunMachineSetup` has a local `Fail(…)` helper; `RunJobs` / settle still hand-roll SetStatus + phases + return. Extract a shared Fail helper only if another job kind (or edit pass) touches those branches — not a standalone deepen.
+**RunJobs fail ceremony:** `RunJobs` uses a local `FailJob(code, message)` helper (SetStatus + phases + Failed). Settle still hand-rolls; extract further only if another edit pass touches those branches.
 
 ## Smoke defaults (grill-locked)
 
@@ -198,7 +197,7 @@ Expected failures return `SessionResult`; exceptions = bugs.
 | 04 | Splash + status + evidence |
 | 05 | Settling + final snapshot |
 | 06 | Stub jobs + child-process executor |
-| 07 | Unlock + timeout + stale fail-open + appearance once |
+| 07 | Unlock + timeout + stale fail-open |
 | 08 | Checkpoint reboot keeps Shell |
 | 13 | AppX safety-net job |
 | 16 | Metal `winget` job + OS reboot request |

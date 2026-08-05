@@ -20,7 +20,7 @@ Guest/runtime reliability (Shell-before-Explorer, DMA settle races, splash timin
 6. **Provisioning jobs:** Supervisor runs winget/Scoop/wsl (etc.) as child processes. Smoke vs metal differ in job *set*, not executor.
 7. **Status:** In-memory for paint; JSON snapshots for evidence only (projections — not a control-plane mailbox).
 8. **Fail-open:** Unlock Shell on `complete`/`failed` (+ failed dwell) and wall-clock timeout; hold Shell on `reboot` with durable checkpoint resume.
-9. **Theme:** Splash-owned canvas; apply Profile appearance once before Explorer unlock — no theme hard-gate.
+9. **Theme:** Splash-owned canvas; no Profile appearance / theme apply until a Profile appearance story is grilled — no theme hard-gate.
 10. **Provisioning lock:** Shell tenure while Supervisor is Shell; hard input lockdown is later hardening.
 11. **NuGet:** Microsoft-thin (source-gen JSON, `System.CommandLine`, xUnit; Avalonia 12.1.x later for host wizard). Every package needs “why not BCL.”
 12. **Rejected for day-one:** guest pwsh adapters, file-as-control-plane status, C#-only in-process DISM as default, separate Splash.exe peer, Hyper-V-only settle/executor forks, Servicing port with a single adapter, copying v1 `runtime/` topology.

@@ -1,5 +1,3 @@
-using System.Runtime.Versioning;
-
 namespace WinMint.Provisioning;
 
 internal static class Program
@@ -121,21 +119,21 @@ internal static class Program
         ICheckpointStore? checkpoints = null)
     {
         IWinlogonRegistry winlogon = OperatingSystem.IsWindows()
-            ? CreateWin32Winlogon()
+            ? new Win32WinlogonRegistry()
             : throw new PlatformNotSupportedException("Provisioning requires Windows.");
 
         return new SessionEnvironment(
             Time: TimeProvider.System,
             Winlogon: winlogon,
-            Region: CreateRegion(),
+            Region: new Win32RegionSnapshot(),
             Processes: new Win32ProcessHost(),
             Splash: splash ?? new NoopSplashPresenter(),
             Checkpoints: checkpoints ?? new FileCheckpointStore(ProgramDataRoot()),
             WipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(bundlePath, log),
             Evidence: evidence,
-            Appx: CreateAppxPackageManager(log),
-            Reboot: CreateSystemReboot(),
-            LocalAccounts: CreateLocalAccounts(),
+            Appx: new WinRTAppxPackageManager(log),
+            Reboot: new Win32SystemReboot(),
+            LocalAccounts: new Win32LocalAccounts(),
             ResolveScoopCmd: TryResolveScoopShim);
     }
 
@@ -149,21 +147,6 @@ internal static class Program
             "scoop.cmd");
         return File.Exists(candidate) ? candidate : null;
     }
-
-    [SupportedOSPlatform("windows10.0.19041.0")]
-    private static WinRTAppxPackageManager CreateAppxPackageManager(Action<string> log) => new(log);
-
-    [SupportedOSPlatform("windows")]
-    private static Win32WinlogonRegistry CreateWin32Winlogon() => new();
-
-    [SupportedOSPlatform("windows")]
-    private static Win32RegionSnapshot CreateRegion() => new();
-
-    [SupportedOSPlatform("windows")]
-    private static Win32SystemReboot CreateSystemReboot() => new();
-
-    [SupportedOSPlatform("windows")]
-    private static Win32LocalAccounts CreateLocalAccounts() => new();
 }
 
 /// <summary>Machine setup has no splash surface; Shell wires <see cref="GdiSplashPresenter"/>.</summary>

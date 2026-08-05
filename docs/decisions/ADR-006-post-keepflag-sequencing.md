@@ -18,7 +18,7 @@ Tickets **01–13** (M1 Smoke stack + keep-flag AppX vertical) were implemented.
 6. **Metal job kinds** — after Wizard (**15**); first = `winget` (**16**), then reboot-resume (**17**), Scoop (**18** metal exit), WSL (**23**). Unknown kinds fail closed until ticketed.
 7. **OS reboot** — Supervisor `ISystemReboot` on `NeedsReboot` (`ExitWindowsEx` + `shutdown.exe` fallback — **24**); Profile `*NeedsReboot` subsets on metal package lists.
 8. **Hardware acceptance** — M4; stricter evidence bars only (**30** optional `-HardwareM4` / `WINMINT_M4=1`); same Supervisor / settle / jobs (no fork). Full metal-on-hardware campaign still maintainer-timed.
-9. **Hygiene carries** — Smoke plaintext + wipe (**28** best-effort overwrite); full DPAPI host→guest channel later; splash status text on GDI (**29**); full D2D only if S4 FirstPaintBudget still fails; Diff VHD / digest-gated ISO rebuild is maintainer opt; `BundleDto`/`SettleDto` → `*File` opportunistic; AppearanceOnce optional until a Profile appearance story is grilled.
+9. **Hygiene carries** — Smoke plaintext + wipe (**28** best-effort overwrite); full DPAPI host→guest channel later; splash status text on GDI (**29**); full D2D only if S4 FirstPaintBudget still fails; Diff VHD / digest-gated ISO rebuild is maintainer opt; `BundleDto`/`SettleDto` → `*File` opportunistic; no AppearanceOnce / theme apply until a Profile appearance story is grilled (prior consume path removed as unused).
 
 ### Consequences (current)
 

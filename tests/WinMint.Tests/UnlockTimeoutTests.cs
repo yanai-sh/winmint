@@ -129,7 +129,7 @@ public class UnlockTimeoutTests
     }
 
     [Fact]
-    public void Shell_success_applies_appearance_once_then_unlocks()
+    public void Shell_success_unlocks_after_jobs()
     {
         ManualTimeProvider time = new();
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
@@ -144,35 +144,27 @@ public class UnlockTimeoutTests
                 {
                     SettleDeadline = TimeSpan.Zero,
                     FailedDwell = TimeSpan.Zero,
-                },
-                appearance: new AppearanceOnce("Dark")),
+                }),
             Env(time, winlogon, new MatchingRegion(), splash, evidence),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Equal(ExplorerShell, winlogon.Shell);
         Assert.Equal(["explorer.exe"], winlogon.ShellWrites);
-        int appearanceAt = splash.Events.IndexOf("Status:appearance.applied");
-        Assert.True(appearanceAt >= 0, "appearance.applied status once");
-        Assert.Equal(1, splash.Events.Count(e => e == "Status:appearance.applied"));
         Assert.Contains("Status:jobs.ok", splash.Events);
-        int jobsOkAt = splash.Events.IndexOf("Status:jobs.ok");
-        Assert.True(appearanceAt > jobsOkAt, "appearance after jobs");
-        Assert.Contains("appearance.applied", evidence.Documents[0].Phases);
+        Assert.DoesNotContain(splash.Events, e => e.StartsWith("Status:appearance.", StringComparison.Ordinal));
         Assert.Equal("Complete", evidence.Documents[0].Outcome);
     }
 
     private static ProvisioningBundle Bundle(
         DmaSettleTarget dma,
-        SessionPolicy policy,
-        AppearanceOnce? appearance = null) =>
+        SessionPolicy policy) =>
         new(
             Account: new AccountStamp("winmint", ""),
             Dma: dma,
             Jobs: [new ProvisionJob("smoke.stub.ready", "stub")],
             Policy: policy,
-            Supervisor: new SupervisorIdentity(SupervisorPath),
-            Appearance: appearance);
+            Supervisor: new SupervisorIdentity(SupervisorPath));
 
     private static SessionEnvironment Env(
         TimeProvider time,

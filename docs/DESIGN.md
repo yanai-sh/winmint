@@ -64,7 +64,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Schema | Stay on `winmint.profile/v1` until a breaking change forces `v2` |
 | Metal jobs | `winget` / Scoop / WSL shipped (**16–18**, **23**); unknown kinds fail closed until ticketed |
 | OS reboot | `ISystemReboot` (`ExitWindowsEx` + `shutdown.exe` fallback **24**); Profile `*NeedsReboot` subsets |
-| AppearanceOnce | Optional bundle field until a Profile appearance story is grilled |
+| Appearance | No AppearanceOnce / theme apply until a Profile appearance story is grilled; prior consume path removed as unused |
 | Secrets hardening | Smoke plaintext + wipe (**28** best-effort overwrite); full DPAPI host→guest channel later |
 | Splash D2D | GDI status text (**29**); full D2D only if S4 FirstPaintBudget still fails on real Smoke |
 | S4 VHD/digest rebuild | Maintainer optimization — not a product ticket |
@@ -75,7 +75,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 **Still out (policy):** Profile presets-in-JSON; product-default recommended remove-list; schema `v2` without a break; full DPAPI host→guest; full D2D; leftover-confidence *product* cleanup; full Wizard UX beyond list authoring.  
 **Shipped:** AppX + capabilities keep-flag; Wizard thin + packages + caps/WSL lists; metal winget/Scoop/WSL; Israel DMA sample; M4 assert switch. Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` on v1.
 
-**Owned elsewhere:** AppearanceOnce consume path → ticket **07** (done); splash spike → [SPLASH](design/SPLASH.md) appendix.
+**Owned elsewhere:** Splash spike → [SPLASH](design/SPLASH.md) appendix. Appearance consume path was ticket **07**; removed 2026-08-05 until Profile appearance is grilled.
 
 ## Design Acceptance
 

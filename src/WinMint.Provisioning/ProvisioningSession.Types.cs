@@ -30,7 +30,6 @@ public sealed record ProvisioningBundle(
     IReadOnlyList<ProvisionJob> Jobs,
     SessionPolicy Policy,
     SupervisorIdentity Supervisor,
-    AppearanceOnce? Appearance = null,
     CheckpointState? Resume = null,
     IReadOnlyList<string>? RemoveProvisionedAppx = null);
 
@@ -50,8 +49,6 @@ public sealed record ProvisionJob(
     string? PackageId = null);
 
 public sealed record SupervisorIdentity(string ShellPath);
-
-public sealed record AppearanceOnce(string? Theme);
 
 public sealed record CheckpointState(string Phase);
 

@@ -196,15 +196,7 @@ public static class ProvisioningSession
             return new SessionResult(SessionOutcome.Reboot, jobs.Status, emitted);
         }
 
-        // Finishing: appearance once, then unlock → Complete.
-        if (bundle.Appearance is not null
-            && TryApplyAppearance(bundle.Appearance))
-        {
-            SessionStatus appearance = new("appearance.applied", "Profile appearance applied once.");
-            env.Splash.SetStatus(appearance);
-            phases.Add(appearance.Code);
-        }
-
+        // Finishing: unlock → Complete. (No AppearanceOnce until Profile appearance grilled.)
         env.Checkpoints.ClearCheckpoint();
 
         // Unlock before Complete evidence so S4 never claims green while Shell is still Supervisor.
@@ -353,6 +345,14 @@ public static class ProvisioningSession
         int startIndex,
         CancellationToken ct)
     {
+        JobsPhaseResult FailJob(string code, string message)
+        {
+            SessionStatus status = new(code, message);
+            env.Splash.SetStatus(status);
+            phases.Add(status.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, status, TimedOut: false);
+        }
+
         SessionStatus begin = new("jobs.begin", "Provisioning jobs start.");
         env.Splash.SetStatus(begin);
         phases.Add(begin.Code);
@@ -389,12 +389,7 @@ public static class ProvisioningSession
             {
                 if (string.IsNullOrWhiteSpace(job.PackageId))
                 {
-                    SessionStatus missingPkg = new(
-                        "jobs.failed",
-                        $"Job '{job.Id}' kind winget requires packageId.");
-                    env.Splash.SetStatus(missingPkg);
-                    phases.Add(missingPkg.Code);
-                    return new JobsPhaseResult(SessionOutcome.Failed, missingPkg, TimedOut: false);
+                    return FailJob("jobs.failed", $"Job '{job.Id}' kind winget requires packageId.");
                 }
 
                 // FirstLogon: App Installer is often provisioned but not yet registered for the
@@ -403,12 +398,7 @@ public static class ProvisioningSession
                 // Path seam: AppX only — no LocalAppData alias / PATH "winget" fallback (deepening #51).
                 if (env.Appx is null)
                 {
-                    SessionStatus missingAppx = new(
-                        "jobs.failed",
-                        $"Job '{job.Id}' requires IAppxPackageManager.");
-                    env.Splash.SetStatus(missingAppx);
-                    phases.Add(missingAppx.Code);
-                    return new JobsPhaseResult(SessionOutcome.Failed, missingAppx, TimedOut: false);
+                    return FailJob("jobs.failed", $"Job '{job.Id}' requires IAppxPackageManager.");
                 }
 
                 try
@@ -417,23 +407,17 @@ public static class ProvisioningSession
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    SessionStatus regFailed = new(
+                    return FailJob(
                         "jobs.winget.register_failed",
                         $"{job.Id}: register {DesktopAppInstallerFamilyName}: {ex.Message}");
-                    env.Splash.SetStatus(regFailed);
-                    phases.Add(regFailed.Code);
-                    return new JobsPhaseResult(SessionOutcome.Failed, regFailed, TimedOut: false);
                 }
 
                 string? resolvedWinget = env.Appx.TryResolveWingetExecutablePath();
                 if (string.IsNullOrWhiteSpace(resolvedWinget))
                 {
-                    SessionStatus pathMissing = new(
+                    return FailJob(
                         "jobs.winget.path_missing",
                         $"{job.Id}: winget.exe not found after registering {DesktopAppInstallerFamilyName}.");
-                    env.Splash.SetStatus(pathMissing);
-                    phases.Add(pathMissing.Code);
-                    return new JobsPhaseResult(SessionOutcome.Failed, pathMissing, TimedOut: false);
                 }
 
                 fileName = resolvedWinget;
@@ -454,22 +438,12 @@ public static class ProvisioningSession
             {
                 if (string.IsNullOrWhiteSpace(job.PackageId))
                 {
-                    SessionStatus missingPkg = new(
-                        "jobs.failed",
-                        $"Job '{job.Id}' kind scoop requires packageId.");
-                    env.Splash.SetStatus(missingPkg);
-                    phases.Add(missingPkg.Code);
-                    return new JobsPhaseResult(SessionOutcome.Failed, missingPkg, TimedOut: false);
+                    return FailJob("jobs.failed", $"Job '{job.Id}' kind scoop requires packageId.");
                 }
 
                 if (env.ResolveScoopCmd is null)
                 {
-                    SessionStatus missingResolve = new(
-                        "jobs.failed",
-                        $"Job '{job.Id}' requires ResolveScoopCmd.");
-                    env.Splash.SetStatus(missingResolve);
-                    phases.Add(missingResolve.Code);
-                    return new JobsPhaseResult(SessionOutcome.Failed, missingResolve, TimedOut: false);
+                    return FailJob("jobs.failed", $"Job '{job.Id}' requires ResolveScoopCmd.");
                 }
 
                 string? scoopCmd = env.ResolveScoopCmd();
@@ -493,33 +467,24 @@ public static class ProvisioningSession
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
-                        SessionStatus bootstrapSpawn = new(
+                        return FailJob(
                             "jobs.scoop.bootstrap_failed",
                             $"{job.Id}: scoop bootstrap spawn: {ex.Message}");
-                        env.Splash.SetStatus(bootstrapSpawn);
-                        phases.Add(bootstrapSpawn.Code);
-                        return new JobsPhaseResult(SessionOutcome.Failed, bootstrapSpawn, TimedOut: false);
                     }
 
                     if (bootstrap.ExitCode != 0)
                     {
-                        SessionStatus bootstrapFailed = new(
+                        return FailJob(
                             "jobs.scoop.bootstrap_failed",
                             $"{job.Id}: scoop bootstrap exited {bootstrap.ExitCode} (network required).");
-                        env.Splash.SetStatus(bootstrapFailed);
-                        phases.Add(bootstrapFailed.Code);
-                        return new JobsPhaseResult(SessionOutcome.Failed, bootstrapFailed, TimedOut: false);
                     }
 
                     scoopCmd = env.ResolveScoopCmd();
                     if (scoopCmd is null)
                     {
-                        SessionStatus missingScoop = new(
+                        return FailJob(
                             "jobs.scoop.bootstrap_failed",
                             $"{job.Id}: scoop.cmd missing after bootstrap.");
-                        env.Splash.SetStatus(missingScoop);
-                        phases.Add(missingScoop.Code);
-                        return new JobsPhaseResult(SessionOutcome.Failed, missingScoop, TimedOut: false);
                     }
                 }
 
@@ -530,12 +495,9 @@ public static class ProvisioningSession
             {
                 if (string.IsNullOrWhiteSpace(job.PackageId))
                 {
-                    SessionStatus missingPkg = new(
+                    return FailJob(
                         "jobs.failed",
                         $"Job '{job.Id}' kind wsl requires packageId (distro name).");
-                    env.Splash.SetStatus(missingPkg);
-                    phases.Add(missingPkg.Code);
-                    return new JobsPhaseResult(SessionOutcome.Failed, missingPkg, TimedOut: false);
                 }
 
                 // Distro id from Profile packages.wsl — e.g. Ubuntu. Network + admin; fail closed offline.
@@ -550,12 +512,9 @@ public static class ProvisioningSession
             }
             else
             {
-                SessionStatus unsupported = new(
+                return FailJob(
                     "jobs.kind.unsupported",
                     $"Unsupported job kind '{job.Kind}' for id '{job.Id}'.");
-                env.Splash.SetStatus(unsupported);
-                phases.Add(unsupported.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, unsupported, TimedOut: false);
             }
 
             ProcessStartResult started;
@@ -565,20 +524,12 @@ public static class ProvisioningSession
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                SessionStatus spawnFailed = new("jobs.spawn_failed", $"{job.Id}: {ex.Message}");
-                env.Splash.SetStatus(spawnFailed);
-                phases.Add(spawnFailed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, spawnFailed, TimedOut: false);
+                return FailJob("jobs.spawn_failed", $"{job.Id}: {ex.Message}");
             }
 
             if (started.ExitCode != 0)
             {
-                SessionStatus failed = new(
-                    "jobs.failed",
-                    $"Job '{job.Id}' exited {started.ExitCode}.");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                return FailJob("jobs.failed", $"Job '{job.Id}' exited {started.ExitCode}.");
             }
 
             if (job.NeedsReboot)
@@ -826,35 +777,6 @@ public static class ProvisioningSession
         string.Equals(actual.Locale, target.Locale, StringComparison.OrdinalIgnoreCase)
         && actual.GeoId == target.GeoId
         && string.Equals(actual.TimeZoneId, target.TimeZoneId, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>Best-effort theme apply; never a hard gate (ADR-004). Returns false if nothing to apply.</summary>
-    private static bool TryApplyAppearance(AppearanceOnce appearance)
-    {
-        if (string.IsNullOrWhiteSpace(appearance.Theme))
-        {
-            return false;
-        }
-
-        if (!appearance.Theme.Equals("Dark", StringComparison.OrdinalIgnoreCase)
-            && !appearance.Theme.Equals("Light", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (OperatingSystem.IsWindows())
-        {
-            try
-            {
-                AppearanceApplier.ApplyTheme(appearance.Theme);
-            }
-            catch
-            {
-                // ponytail: appearance is not a hard gate — still count as applied attempt
-            }
-        }
-
-        return true;
-    }
 
     private static SessionResult RunMachineSetup(
         ProvisioningBundle bundle,
