@@ -114,4 +114,40 @@ public class KeepFlagPresetTests
             planned.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
     }
+
+    [Fact]
+    public void Acceptance_sample_profile_debloat_matches_KeepFlagPresets_Acceptance()
+    {
+        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Acceptance);
+        Assert.True(expanded.IsOk, expanded.IsOk ? null : $"{expanded.Error.Code}: {expanded.Error.Message}");
+
+        string samplePath = Path.Combine(FindRepoRoot(), "samples", "acceptance.profile.json");
+        byte[] utf8 = File.ReadAllBytes(samplePath);
+        string json = Encoding.UTF8.GetString(utf8);
+        Assert.DoesNotContain("\"preset\"", json, StringComparison.OrdinalIgnoreCase);
+
+        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
+
+        Assert.Equal(expanded.Value.RemoveProvisionedAppx, parsed.Value.RemoveProvisionedAppx);
+        Assert.Equal(expanded.Value.RemoveCapabilities, parsed.Value.RemoveCapabilities);
+        Assert.Equal(expanded.Value.DisableOptionalFeatures, parsed.Value.DisableOptionalFeatures);
+    }
+
+    private static string FindRepoRoot()
+    {
+        string? dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir, "Justfile"))
+                && Directory.Exists(Path.Combine(dir, "samples")))
+            {
+                return dir;
+            }
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new InvalidOperationException("Repo root not found from test BaseDirectory.");
+    }
 }
