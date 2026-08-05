@@ -11,10 +11,11 @@ You supply the official Microsoft ISO — WinMint does not download or redistrib
 
 **Status**
 
+- Debloated default: host preset **`recommended`** (zero-config curated remove-lists)
 - Smoke: **Proven** (Hyper-V real Source ISO, ticket **14**)
 - Wizard / WSL / caps-features: **Built** (`just check`; no separate Hyper-V prove-out for each)
 - M4: opt-in evidence bars only — not a hardware campaign
-- Backlog **01–30** closed — next is maintainer pick ([TICKETS](docs/TICKETS.md))
+- Backlog **01–30** closed — next is maintainer pick ([TICKETS](docs/TICKETS.md) · [issue 56](https://github.com/yanai-sh/winmint/issues/56))
 
 ## Quickstart
 

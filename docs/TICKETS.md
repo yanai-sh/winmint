@@ -11,11 +11,11 @@ Full ticket-card novels lived here through delivery; git history retains them. T
 Do **not** casually reopen. See [DESIGN](DESIGN.md#decisions-locked-grill):
 
 - Profile presets-in-JSON
-- Product-default / opt-out recommended remove-list
 - Schema `v2` without a breaking change
 - Leftover-confidence *product* cleanup
 - CDM-as-primary keep-flag control ([ADR-007](decisions/ADR-007-cdm-not-primary.md))
-- Full DPAPI host→guest channel; full D2D splash; full Wizard UX beyond list authoring
+- Full DPAPI host→guest channel; full D2D splash
+- Slice 2 always-on OneDrive / Recall / KeepCopilot (issue **56** follow-on)
 
 Also never in product: BitLocker Smoke, Home Smoke SKU, MicrosoftOobe, enterprise secrets, MediatR/Generic Host/Contracts project, guest pwsh, peer Splash.
 

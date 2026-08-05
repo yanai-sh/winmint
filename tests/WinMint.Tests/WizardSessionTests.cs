@@ -6,22 +6,27 @@ namespace WinMint.Tests;
 public class WizardSessionTests
 {
     private static WizardSessionInput Lab(
-        string preset = KeepFlagPresets.Acceptance,
+        string preset = KeepFlagPresets.Recommended,
+        bool keepGaming = false,
         string winget = "",
         string appx = "",
         string caps = "",
         string iso = @"C:\isos\Win11.iso",
-        string lane = "Test") =>
+        string lane = "Test",
+        string locale = "en-GB",
+        string geoId = "242",
+        string timeZone = "GMT Standard Time") =>
         new(
             preset,
             "winmint",
             "lab-only",
             RequireWifiDuringOobe: false,
             DmaEnabled: true,
-            Locale: "en-GB",
-            GeoIdText: "242",
-            TimeZoneId: "GMT Standard Time",
+            Locale: locale,
+            GeoIdText: geoId,
+            TimeZoneId: timeZone,
             LocationServicesEnabled: true,
+            KeepGaming: keepGaming,
             WingetText: winget,
             RemoveCapabilitiesText: caps,
             RemoveProvisionedAppxText: appx,
@@ -29,9 +34,39 @@ public class WizardSessionTests
             ImageQualityText: lane);
 
     [Fact]
-    public void ComposeAndPlan_acceptance_ok()
+    public void ComposeAndPlan_recommended_default_expands_debloat()
     {
         WizardSessionResult result = WizardSession.ComposeAndPlan(Lab());
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Contains("Microsoft.YourPhone", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.GamingApp", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.DoesNotContain("recommended", result.ProfileJson!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ComposeAndPlan_keep_gaming_omits_xbox()
+    {
+        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(keepGaming: true));
+        Assert.True(result.Succeeded, result.Message);
+        Assert.DoesNotContain("Microsoft.GamingApp", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.YourPhone", result.ProfileJson!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ComposeAndPlan_host_dma_settle_fields_round_trip()
+    {
+        WizardSessionResult result = WizardSession.ComposeAndPlan(
+            Lab(locale: "en-US", geoId: "117", timeZone: "Israel Standard Time"));
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Contains("\"locale\": \"en-US\"", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.Contains("\"geoId\": 117", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.Contains("Israel Standard Time", result.ProfileJson!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ComposeAndPlan_acceptance_ok()
+    {
+        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(preset: KeepFlagPresets.Acceptance));
         Assert.True(result.Succeeded, result.Message);
         Assert.NotNull(result.ProfileUtf8);
         Assert.Contains("Microsoft.BingNews", result.ProfileJson!, StringComparison.Ordinal);

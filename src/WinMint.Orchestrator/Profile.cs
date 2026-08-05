@@ -25,7 +25,9 @@ public sealed record AccountProfile(
     /// Local account + <c>HideOnlineAccountScreens</c> still come from the ISO. Default true (metal);
     /// Smoke Profiles set false for headless Hyper‑V.
     /// </summary>
-    bool RequireWifiDuringOobe);
+    bool RequireWifiDuringOobe,
+    /// <summary>Host path to password file (issue 56). Resolved at parse; never an environment variable.</summary>
+    string? PasswordPath = null);
 
 /// <summary>Wire form of account.mode in profile JSON. Only localAutoLogon is supported.</summary>
 public static class AccountModeWire

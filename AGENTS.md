@@ -35,7 +35,7 @@ Lobby, not brochure — concise real content only; no placeholders. No badges ye
 
 ## While implementing
 
-One issue/session. Keep `just check` green. Sequencing in [ADR-006](docs/decisions/ADR-006-post-keepflag-sequencing.md) is **met**. Lasting policy: remove-list only; no Profile presets-in-JSON; no product-default recommended set; no casual `v2`; CDM not primary ([ADR-007](docs/decisions/ADR-007-cdm-not-primary.md)).
+One issue/session. Keep `just check` green. Sequencing in [ADR-006](docs/decisions/ADR-006-post-keepflag-sequencing.md) is **met**. Lasting policy: remove-list only; no Profile presets-in-JSON; product-default **`recommended`** host expansion (issue 56); no casual `v2`; CDM not primary ([ADR-007](docs/decisions/ADR-007-cdm-not-primary.md)); residual self-erase after Shell Complete ([ADR-008](docs/decisions/ADR-008-residual-minimization.md)).
 
 ```powershell
 just check

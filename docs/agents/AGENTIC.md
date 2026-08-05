@@ -17,4 +17,4 @@ TDD seam S#. just check. See docs/TICKETS.md (closed index). No drive-bys.
 
 ## Anti-patterns
 
-v1 `runtime/` copy; peer Splash/JSON mailbox; guest pwsh; script paths in BuildPlan; Profile `if` in kernels; Profile presets-in-JSON; product-default recommended remove-list; casual schema `v2`; CDM-as-primary; commit unless asked; treating spent research notes or session specs as living status.
+v1 `runtime/` copy; peer Splash/JSON mailbox; guest pwsh; script paths in BuildPlan; Profile `if` in kernels; Profile presets-in-JSON; casual schema `v2`; CDM-as-primary; commit unless asked; treating spent research notes or session specs as living status.

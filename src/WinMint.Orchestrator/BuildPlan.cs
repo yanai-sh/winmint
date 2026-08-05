@@ -106,8 +106,30 @@ public static class BuildPlan
         // Default true: metal contract shows OOBE Network; Smoke Profiles set false explicitly.
         bool requireWifi = doc.Account!.RequireWifiDuringOobe ?? true;
 
+        string? password = doc.Account.Password;
+        string? passwordPath = string.IsNullOrWhiteSpace(doc.Account.PasswordPath)
+            ? null
+            : doc.Account.PasswordPath.Trim();
+        if (string.IsNullOrEmpty(password) && passwordPath is not null)
+        {
+            try
+            {
+                password = File.ReadAllText(passwordPath).TrimEnd('\r', '\n');
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+                [
+                    new DocumentError(
+                        "account.passwordPath.unreadable",
+                        $"Cannot read account.passwordPath '{passwordPath}': {ex.Message}",
+                        "account.passwordPath"),
+                ]));
+            }
+        }
+
         Profile profile = new(
-            new AccountProfile(doc.Account.Username!, doc.Account.Password, requireWifi),
+            new AccountProfile(doc.Account.Username!, password, requireWifi, passwordPath),
             new DmaProfile(
                 doc.Dma.Enabled ?? true,
                 new DmaSettleTarget(
@@ -161,8 +183,9 @@ public static class BuildPlan
             new AccountDocument(
                 AccountModeWire.LocalAutoLogon,
                 profile.Account.Username,
-                profile.Account.Password,
-                profile.Account.RequireWifiDuringOobe),
+                profile.Account.PasswordPath is null ? profile.Account.Password : null,
+                profile.Account.RequireWifiDuringOobe,
+                profile.Account.PasswordPath),
             new DmaDocument(
                 profile.Dma.Enabled,
                 new DmaSettleDocument(
@@ -607,7 +630,8 @@ internal sealed record AccountDocument(
     [property: JsonPropertyName("mode")] string? Mode,
     [property: JsonPropertyName("username")] string? Username,
     [property: JsonPropertyName("password")] string? Password,
-    [property: JsonPropertyName("requireWifiDuringOobe")] bool? RequireWifiDuringOobe);
+    [property: JsonPropertyName("requireWifiDuringOobe")] bool? RequireWifiDuringOobe,
+    [property: JsonPropertyName("passwordPath")] string? PasswordPath = null);
 
 internal sealed record DmaDocument(
     [property: JsonPropertyName("enabled")] bool? Enabled,
