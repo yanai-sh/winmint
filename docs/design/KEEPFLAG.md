@@ -72,6 +72,17 @@ Profile.remove list
 - Port: `IAppxPackageManager` (S3 fake; production `WinRTAppxPackageManager`).
 - No guest pwsh; no UI Automation; no BCU.
 
+### Catalog-id match (Offline vs live)
+
+Same Profile catalog id; two adapters; **intentionally different fields** (DISM provisioned inventory ≠ WinRT package id):
+
+| Seam | Matcher | Fields |
+|------|---------|--------|
+| ImageServicing `Remove-ProvisionedAppx` | `Test-PackageMatchesCatalogId` | `DisplayName` equality; `PackageName` prefix `id_` |
+| ProvisioningSession safety-net | `WinRTAppxPackageManager.MatchesCatalogId` | `DisplayName` equality; `PackageFamilyName` / `PackageFullName` prefix `id_` |
+
+S3 fakes must call production `MatchesCatalogId` (no copied predicate). Do **not** merge via a shared Contracts project; do **not** “align” Offline to live without a real mismatch bite.
+
 ## Explicitly out (lasting policy — ADR-005/006/007)
 
 | Item | Lock |

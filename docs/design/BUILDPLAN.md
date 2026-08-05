@@ -31,6 +31,7 @@ namespace WinMint.Orchestrator;
 public static class BuildPlan
 {
     public static Result<Profile, DocumentErrors> TryParseProfile(ReadOnlySpan<byte> utf8Json);
+    // DocumentErrors stays — one-field wrapper; collapse rejected (unwrap tax ≠ reopen locked interface).
 
     public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null);
     // run null ⇒ Smoke defaults (ImageQuality.Test; SourceIsoPath may be empty until servicing)
@@ -78,6 +79,7 @@ public sealed record BuildArtifacts(
 - Elevated DISM / hive / oscdimg (ImageServicing).
 - Splash / settle / jobs execution (ProvisioningSession).
 - Host Profile JSON compose (`WizardProfileComposer.ToUtf8Json` / `ParseIdList`) — **defer** replacing with `SerializeProfile(Profile)` until the next Profile list field or serialize drift bites ([Profile serialize — go or no-go and shape?](https://github.com/yanai-sh/winmint/issues/48)).
+- Cli human plan dump (`WritePlanArtifacts` untyped JSON) vs ImageServicing Materialize `*File` serializers — **defer** merging until the next StageParams / artifact field change (same trigger class as serialize drift above). CONTRACTS allows the dump; twin serializers are accepted debt until then.
 
 ## Ticket 01 TDD tracers (first vertical slices)
 

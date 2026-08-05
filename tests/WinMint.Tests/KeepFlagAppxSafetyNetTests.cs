@@ -175,10 +175,10 @@ public class KeepFlagAppxSafetyNetTests
         public List<string> DeprovisionedFamilyNames { get; } = [];
 
         public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) =>
-            Registered.Where(p => Matches(p, catalogId)).ToArray();
+            Registered.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId)).ToArray();
 
         public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) =>
-            Provisioned.Where(p => Matches(p, catalogId)).ToArray();
+            Provisioned.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId)).ToArray();
 
         public void RemovePackage(string packageFullName) => RemovedFullNames.Add(packageFullName);
 
@@ -193,11 +193,6 @@ public class KeepFlagAppxSafetyNetTests
         public string? TryResolveWingetExecutablePath() => null;
 
         public List<string> RegisteredFamilyNames { get; } = [];
-
-        private static bool Matches(AppxPackageInfo package, string catalogId) =>
-            string.Equals(package.DisplayName, catalogId, StringComparison.OrdinalIgnoreCase)
-            || package.PackageFamilyName.StartsWith(catalogId + "_", StringComparison.OrdinalIgnoreCase)
-            || package.PackageFullName.StartsWith(catalogId + "_", StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class RecordingSplashPresenter : ISplashPresenter

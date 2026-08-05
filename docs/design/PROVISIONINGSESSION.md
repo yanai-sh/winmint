@@ -161,6 +161,8 @@ Expected failures return `SessionResult`; exceptions = bugs.
 
 **Assembly shape (design decision):** keep logic in `WinMint.Provisioning` with public adapter interfaces so `WinMint.Tests` references the project and runs phase tests on the non-AOT TFM build. Extract `WinMint.Provisioning.Core` **only** if AOT/test friction forces it (ponytail).
 
+**RunJobs fail ceremony (defer):** `RunMachineSetup` has a local `Fail(…)` helper; `RunJobs` / settle still hand-roll SetStatus + phases + return. Extract a shared Fail helper only if another job kind (or edit pass) touches those branches — not a standalone deepen.
+
 ## Smoke defaults (grill-locked)
 
 | Policy field | Smoke default |

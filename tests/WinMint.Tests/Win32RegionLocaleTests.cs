@@ -6,6 +6,7 @@ namespace WinMint.Tests;
 
 /// <summary>Host-side check: locale Apply must not call a fictional kernel32 export.</summary>
 [SupportedOSPlatform("windows")]
+[Collection(HostCultureMutatingDefinition.Name)]
 public class Win32RegionLocaleTests
 {
     [Fact]
