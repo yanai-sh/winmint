@@ -27,7 +27,7 @@
           <TextBlock Classes="panel-label" Text="KEEP" />
           <StackPanel Orientation="Horizontal">
             <ToggleButton Classes="chip" Content="Xbox &amp; gaming" IsChecked="{Binding KeepGaming}" />
-            <ToggleButton Classes="chip" Content="Copilot (later)" IsChecked="{Binding KeepCopilot}" IsEnabled="False" />
+            <ToggleButton Classes="chip" Content="Copilot" IsChecked="{Binding KeepCopilot}" />
           </StackPanel>
         </StackPanel>
       </Border>

@@ -59,6 +59,7 @@ function Resolve-KernelScript {
         'StagePayload' { return Join-Path $scriptRoot 'Stage-Payload.ps1' }
         'InjectUnattend' { return Join-Path $scriptRoot 'Inject-Unattend.ps1' }
         'StampOfflineShell' { return Join-Path $scriptRoot 'Stamp-OfflineShell.ps1' }
+        'StampOfflinePolicies' { return Join-Path $scriptRoot 'Stamp-OfflinePolicies.ps1' }
         'RemoveProvisionedAppx' { return Join-Path $scriptRoot 'Remove-ProvisionedAppx.ps1' }
         'RemoveCapabilities' { return Join-Path $scriptRoot 'Mutate-OfflineComponent.ps1' }
         'DisableOptionalFeatures' { return Join-Path $scriptRoot 'Mutate-OfflineComponent.ps1' }

@@ -67,7 +67,8 @@ internal static class WizardSession
             IdList.FromMultiline(input.WslText),
             IdList.FromMultiline(input.WslNeedsRebootText),
             caps,
-            feats);
+            feats,
+            new PoliciesProfile(KeepCopilot: input.KeepCopilot));
 
         RunOptions run = new()
         {

@@ -25,11 +25,11 @@
 
 ## ADRs
 
-[001](decisions/ADR-001-source-iso-legal.md) · [002](decisions/ADR-002-v2-architecture.md) · [003](decisions/ADR-003-dma-interop.md) · [004](decisions/ADR-004-stack-and-guest-control-plane.md) · [005](decisions/ADR-005-keep-flag-matrix.md) · [006](decisions/ADR-006-post-keepflag-sequencing.md) · [007](decisions/ADR-007-cdm-not-primary.md)
+[001](decisions/ADR-001-source-iso-legal.md) · [002](decisions/ADR-002-v2-architecture.md) · [003](decisions/ADR-003-dma-interop.md) · [004](decisions/ADR-004-stack-and-guest-control-plane.md) · [005](decisions/ADR-005-keep-flag-matrix.md) · [006](decisions/ADR-006-post-keepflag-sequencing.md) · [007](decisions/ADR-007-cdm-not-primary.md) · [008](decisions/ADR-008-residual-minimization.md) · [009](decisions/ADR-009-product-constant-policies.md)
 
 ## Decisions locked (grill)
 
-Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag grill 2026-08-04 ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)); CDM decision 2026-08-05 ([ADR-007](decisions/ADR-007-cdm-not-primary.md)); residual minimization 2026-08-05 ([ADR-008](decisions/ADR-008-residual-minimization.md)). Full table retained for agents:
+Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag grill 2026-08-04 ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)); CDM decision 2026-08-05 ([ADR-007](decisions/ADR-007-cdm-not-primary.md)); residual minimization 2026-08-05 ([ADR-008](decisions/ADR-008-residual-minimization.md)); product-constant policies 2026-08-05 ([ADR-009](decisions/ADR-009-product-constant-policies.md)). Full table retained for agents:
 
 | Topic | Lock |
 |-------|------|
@@ -62,6 +62,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Keep-flag polarity | Remove-list only; **no** Profile preset names; product **`recommended`** host preset is the zero-config default (expands → ids); Acceptance remains prove-out-only ([ADR-005](decisions/ADR-005-keep-flag-matrix.md), issue **56**) |
 | Keep-flag kinds | AppX **11–13**; capabilities/features **19–20** (same polarity) |
 | CDM | Not primary keep-flag control ([ADR-007](decisions/ADR-007-cdm-not-primary.md)) |
+| Product policies | Always EdgeDebloat + OneDrive + DeviceMetadata + WPBT + ReservedStorage; Copilot-kill iff `!keepCopilot`; BraveDebloat iff Brave selected ([ADR-009](decisions/ADR-009-product-constant-policies.md)) |
 | Acceptance remove-list | Smoke **acceptance** Profile pins a **small frozen** list (AppX + thin caps/features); schema default elsewhere empty |
 | Schema | Stay on `winmint.profile/v1` until a breaking change forces `v2` |
 | Metal jobs | `winget` / Scoop / WSL shipped (**16–18**, **23**); unknown kinds fail closed until ticketed |
@@ -75,7 +76,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Hardware | M4 stricter evidence bars (**30** opt-in); no Supervisor fork; full hardware campaign maintainer-timed |
 
 **Still out (policy):** Profile presets-in-JSON; schema `v2` without a break; full DPAPI host→guest; full D2D; leftover-confidence *product* cleanup; Wizard edition probe / rich per-stage DISM progress.  
-**Shipped:** AppX + capabilities keep-flag; product-default **`recommended`** host expansion (issue **56**); KeepGaming overlay; Wizard thin + packages + caps/WSL lists + host-DMA fill; metal winget/Scoop/WSL; Israel DMA sample; SL7 sample; M4 assert switch; WIM metadata discipline; residual self-erase ([ADR-008](decisions/ADR-008-residual-minimization.md)). Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` / `account.passwordPath` on v1.  
+**Shipped:** AppX + capabilities keep-flag; product-default **`recommended`** host expansion (issue **56**); KeepGaming / KeepCopilot overlays; Wizard thin + packages + caps/WSL lists + host-DMA fill; metal winget/Scoop/WSL; Israel DMA sample; SL7 sample; M4 assert switch; WIM metadata discipline; residual self-erase ([ADR-008](decisions/ADR-008-residual-minimization.md)); product-constant offline policies + OneDrive/ReservedStorage jobs ([ADR-009](decisions/ADR-009-product-constant-policies.md)). Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` / `account.passwordPath` / `policies.*` on v1.  
 **Unlocked:** Phase A multi-step Avalonia Wizard shell; Phase B live elevated build invoke (busy/cancel) via shared ImageServicing path.
 
 **Owned elsewhere:** Splash spike → [SPLASH](design/SPLASH.md) appendix. Appearance consume path was ticket **07**; removed 2026-08-05 until Profile appearance is grilled.

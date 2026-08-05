@@ -66,7 +66,10 @@ public class WizardPackagesTests
 
         Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(BuildPlan.TryParseProfile(utf8).Value);
         Assert.True(planned.IsOk);
-        Assert.All(planned.Value.Jobs.Jobs, j => Assert.Equal("stub", j.Kind));
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "stub");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
+        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind is "winget" or "scoop" or "wsl");
     }
 
     [Fact]

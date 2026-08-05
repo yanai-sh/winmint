@@ -30,6 +30,7 @@ public class ImageServicingApplyTests
             Assert.Equal(
                 [
                     ServicingOpcode.MountInstallWim,
+                    ServicingOpcode.StampOfflinePolicies,
                     ServicingOpcode.StagePayload,
                     ServicingOpcode.InjectUnattend,
                     ServicingOpcode.StampOfflineShell,
@@ -37,6 +38,15 @@ public class ImageServicingApplyTests
                     ServicingOpcode.BuildIso,
                 ],
                 runner.Opcodes.ToArray());
+            Assert.Contains(
+                runner.Stages,
+                s => s.Opcode == ServicingOpcode.StampOfflinePolicies
+                    && s.Parameters.TryGetValue(StageParams.PolicySpecs, out string? specs)
+                    && specs.Contains("HideFirstRunExperience", StringComparison.Ordinal)
+                    && s.Parameters.TryGetValue(StageParams.MountDir, out string? polMount)
+                    && polMount == ImageServicing.HostMountDir
+                    && s.Parameters.TryGetValue(StageParams.WorkDirectory, out string? polWork)
+                    && polWork == work);
             Assert.Contains(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.StampOfflineShell

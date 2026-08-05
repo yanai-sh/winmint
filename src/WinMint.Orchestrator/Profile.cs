@@ -1,6 +1,6 @@
 namespace WinMint.Orchestrator;
 
-/// <summary>Parsed Profile document (winmint.profile/v1). Field names frozen in ticket 01; debloat in ticket 11; OOBE Wi‑Fi via account.requireWifiDuringOobe (BUILDPLAN); packages.winget in ticket 16; wingetNeedsReboot in ticket 17; packages.scoop in ticket 18; capabilities/features in ticket 20; packages.wsl in ticket 23.</summary>
+/// <summary>Parsed Profile document (winmint.profile/v1). Field names frozen in ticket 01; debloat in ticket 11; OOBE Wi‑Fi via account.requireWifiDuringOobe (BUILDPLAN); packages.winget in ticket 16; wingetNeedsReboot in ticket 17; packages.scoop in ticket 18; capabilities/features in ticket 20; packages.wsl in ticket 23; policies in ADR-009.</summary>
 public sealed record Profile(
     AccountProfile Account,
     DmaProfile Dma,
@@ -15,7 +15,12 @@ public sealed record Profile(
     /// <summary>Subset of <see cref="WslDistros"/> that emit <c>needsReboot: true</c> on Plan jobs.</summary>
     IReadOnlyList<string> WslNeedsReboot,
     IReadOnlyList<string> RemoveCapabilities,
-    IReadOnlyList<string> DisableOptionalFeatures);
+    IReadOnlyList<string> DisableOptionalFeatures,
+    /// <summary>Optional; null/omit ⇒ <see cref="PoliciesProfile.Defaults"/>.</summary>
+    PoliciesProfile? Policies = null)
+{
+    public PoliciesProfile EffectivePolicies => Policies ?? PoliciesProfile.Defaults;
+}
 
 public sealed record AccountProfile(
     string Username,

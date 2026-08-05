@@ -62,7 +62,7 @@ Curated workstation strip. Catalog add does **not** auto-add here. Hard excludes
 | Capability | StepsRecorder, WMIC, VBSCRIPT, IE, PowerShell ISE, Wallpapers.Extended, WindowsMediaPlayer |
 | Optional feature | WorkFolders-Client, WindowsMediaPlayer, TelnetClient, TFTP, SimpleTCP |
 
-Keep overlays: **KeepGaming**, **KeepCopilot** (Copilot no-op until Slice 2). Always-strip OneDrive/Recall = Slice 2.
+Keep overlays: **KeepGaming**, **KeepCopilot** (when false, recommended adds `Microsoft.Copilot` + Plan stamps Copilot-kill policies — [ADR-009](../decisions/ADR-009-product-constant-policies.md)). OneDrive uninstall + EdgeDebloat / DeviceMetadata / WPBT / ReservedStorage are product constants (not AppX recommended-set).
 
 ## Catalog
 

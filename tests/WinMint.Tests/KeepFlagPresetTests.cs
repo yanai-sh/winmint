@@ -70,6 +70,7 @@ public class KeepFlagPresetTests
                 "Microsoft.Xbox.TCUI",
                 "Microsoft.XboxGamingOverlay",
                 "Microsoft.XboxSpeechToTextOverlay",
+                "Microsoft.Copilot",
             ],
             result.Value.RemoveProvisionedAppx);
         Assert.Equal(
@@ -112,7 +113,7 @@ public class KeepFlagPresetTests
     }
 
     [Fact]
-    public void Expand_recommended_keep_copilot_is_noop_until_slice2()
+    public void Expand_recommended_keep_copilot_drops_copilot_appx()
     {
         Result<KeepFlagExpansion, PlanFailure> baseExpand =
             KeepFlagPresets.TryExpand(KeepFlagPresets.Recommended);
@@ -121,7 +122,8 @@ public class KeepFlagPresetTests
 
         Assert.True(baseExpand.IsOk);
         Assert.True(withCopilot.IsOk);
-        Assert.Equal(baseExpand.Value.RemoveProvisionedAppx, withCopilot.Value.RemoveProvisionedAppx);
+        Assert.Contains("Microsoft.Copilot", baseExpand.Value.RemoveProvisionedAppx);
+        Assert.DoesNotContain("Microsoft.Copilot", withCopilot.Value.RemoveProvisionedAppx);
         Assert.Equal(baseExpand.Value.RemoveCapabilities, withCopilot.Value.RemoveCapabilities);
         Assert.Equal(baseExpand.Value.DisableOptionalFeatures, withCopilot.Value.DisableOptionalFeatures);
     }

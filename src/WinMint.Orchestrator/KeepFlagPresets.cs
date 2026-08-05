@@ -62,6 +62,11 @@ public static class KeepFlagPresets
         "Microsoft.XboxSpeechToTextOverlay",
     ];
 
+    private static readonly string[] RecommendedAppxCopilot =
+    [
+        "Microsoft.Copilot",
+    ];
+
     private static readonly string[] RecommendedCapabilities =
     [
         "App.StepsRecorder~~~~0.0.1.0",
@@ -87,8 +92,6 @@ public static class KeepFlagPresets
         bool keepGaming = false,
         bool keepCopilot = false)
     {
-        _ = keepCopilot; // ponytail: Slice 2 Copilot/Recall catalog — KeepCopilot is UI stub until then
-
         if (string.IsNullOrWhiteSpace(name))
         {
             return Result.Fail<KeepFlagExpansion, PlanFailure>(
@@ -109,9 +112,17 @@ public static class KeepFlagPresets
 
         if (string.Equals(key, Recommended, StringComparison.OrdinalIgnoreCase))
         {
-            string[] appx = keepGaming
-                ? RecommendedAppxCore
-                : [.. RecommendedAppxCore, .. RecommendedAppxGaming];
+            List<string> appx = [.. RecommendedAppxCore];
+            if (!keepGaming)
+            {
+                appx.AddRange(RecommendedAppxGaming);
+            }
+
+            if (!keepCopilot)
+            {
+                appx.AddRange(RecommendedAppxCopilot);
+            }
+
             return Result.Ok<KeepFlagExpansion, PlanFailure>(
                 new KeepFlagExpansion(appx, RecommendedCapabilities, RecommendedFeatures));
         }

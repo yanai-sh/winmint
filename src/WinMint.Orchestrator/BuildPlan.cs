@@ -128,6 +128,26 @@ public static class BuildPlan
             }
         }
 
+        if (!ProductOfflinePolicies.TryNormalizeDohProvider(doc.Policies?.DohProvider, out string? doh, out string? dohError))
+        {
+            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+            [
+                new DocumentError("policies.dohProvider.unsupported", dohError!, "policies.dohProvider"),
+            ]));
+        }
+
+        PoliciesProfile? policies = null;
+        if (doc.Policies is not null)
+        {
+            policies = new PoliciesProfile(
+                doc.Policies.KeepCopilot ?? false,
+                doh);
+        }
+        else if (doh is not null)
+        {
+            policies = new PoliciesProfile(KeepCopilot: false, DohProvider: doh);
+        }
+
         Profile profile = new(
             new AccountProfile(doc.Account.Username!, password, requireWifi, passwordPath),
             new DmaProfile(
@@ -145,7 +165,8 @@ public static class BuildPlan
             NormalizeRemoveList(doc.Packages?.Wsl),
             NormalizeRemoveList(doc.Packages?.WslNeedsReboot),
             NormalizeRemoveList(doc.Debloat?.RemoveCapabilities),
-            NormalizeRemoveList(doc.Debloat?.DisableOptionalFeatures));
+            NormalizeRemoveList(doc.Debloat?.DisableOptionalFeatures),
+            policies);
 
         return Result.Ok<Profile, DocumentErrors>(profile);
     }
@@ -178,6 +199,15 @@ public static class BuildPlan
                 profile.DisableOptionalFeatures.Count == 0 ? null : profile.DisableOptionalFeatures.ToArray());
         }
 
+        PoliciesProfile effective = profile.EffectivePolicies;
+        PoliciesDocument? policies = null;
+        if (effective.KeepCopilot || !string.IsNullOrWhiteSpace(effective.DohProvider))
+        {
+            policies = new PoliciesDocument(
+                effective.KeepCopilot ? true : null,
+                string.IsNullOrWhiteSpace(effective.DohProvider) ? null : effective.DohProvider);
+        }
+
         ProfileDocument doc = new(
             ProfileSchemaVersion,
             new AccountDocument(
@@ -194,7 +224,8 @@ public static class BuildPlan
                     profile.Dma.Settle.TimeZoneId,
                     profile.Dma.Settle.LocationServicesEnabled)),
             debloat,
-            packages);
+            packages,
+            policies);
 
         return JsonSerializer.SerializeToUtf8Bytes(doc, BuildPlanJsonContext.Default.ProfileDocument);
     }
@@ -316,13 +347,27 @@ public static class BuildPlan
 
         string unattendXml = BuildAutounattendXml(profile);
 
+        PoliciesProfile policies = profile.EffectivePolicies;
+        if (!ProductOfflinePolicies.TryNormalizeDohProvider(policies.DohProvider, out string? dohProvider, out string? dohPlanError))
+        {
+            return Result.Fail<BuildArtifacts, PlanFailure>(
+                new PlanFailure("policies.dohProvider.unsupported", dohPlanError!));
+        }
+
         // Stub Smoke job set — real installs from packages.winget / packages.scoop / packages.wsl; executor shared.
-        // Keep-flag safety net when Profile remove-list is non-empty (ticket 13).
+        // Product-constant FirstLogon jobs (ADR-009) + keep-flag safety net when remove-list non-empty.
         List<JobDescriptor> jobList =
         [
             new JobDescriptor("smoke.stub.ready", "stub"),
             new JobDescriptor("smoke.stub.complete", "stub"),
+            new JobDescriptor("onedrive.uninstall", "onedrive.uninstall"),
+            new JobDescriptor("reservedStorage.disable", "reservedStorage.disable"),
         ];
+        if (dohProvider is not null)
+        {
+            jobList.Add(new JobDescriptor($"doh.{dohProvider}", "doh.set", PackageId: dohProvider));
+        }
+
         if (profile.RemoveProvisionedAppx.Count > 0)
         {
             jobList.Add(new JobDescriptor("keepflag.appx.safetyNet", "appx.safetyNet"));
@@ -412,6 +457,18 @@ public static class BuildPlan
                     [StageParams.FeatureNames] = string.Join(';', profile.DisableOptionalFeatures),
                 }));
         }
+
+        bool braveSelected = profile.WingetPackages.Any(
+            id => string.Equals(id, ProductOfflinePolicies.BraveWingetId, StringComparison.OrdinalIgnoreCase));
+        IReadOnlyList<OfflinePolicyRow> policyRows = ProductOfflinePolicies.Compose(
+            keepCopilot: policies.KeepCopilot,
+            includeBraveDebloat: braveSelected);
+        stageList.Add(new ServicingStage(
+            ServicingOpcode.StampOfflinePolicies,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [StageParams.PolicySpecs] = ProductOfflinePolicies.EncodeSpecs(policyRows),
+            }));
 
         stageList.AddRange(
         [
@@ -611,7 +668,12 @@ internal sealed record ProfileDocument(
     [property: JsonPropertyName("account")] AccountDocument? Account,
     [property: JsonPropertyName("dma")] DmaDocument? Dma,
     [property: JsonPropertyName("debloat")] DebloatDocument? Debloat,
-    [property: JsonPropertyName("packages")] PackagesDocument? Packages);
+    [property: JsonPropertyName("packages")] PackagesDocument? Packages,
+    [property: JsonPropertyName("policies")] PoliciesDocument? Policies = null);
+
+internal sealed record PoliciesDocument(
+    [property: JsonPropertyName("keepCopilot")] bool? KeepCopilot,
+    [property: JsonPropertyName("dohProvider")] string? DohProvider);
 
 internal sealed record PackagesDocument(
     [property: JsonPropertyName("winget")] string[]? Winget,

@@ -74,7 +74,9 @@ public class WingetJobsTests
 
         Assert.True(result.IsOk);
         Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "winget");
-        Assert.All(result.Value.Jobs.Jobs, j => Assert.Equal("stub", j.Kind));
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "stub");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
     }
 
     [Fact]

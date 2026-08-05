@@ -51,6 +51,14 @@ public static class ImageServicing
                 new ServicingFailure("servicing.workdir.missing", "WorkDirectory is required."));
         }
 
+        if (PwshHostGuard.IsStoreMsixPwsh(PwshHostGuard.CurrentProcessPath()))
+        {
+            return Result.Fail<ImageEvidence, ServicingFailure>(
+                new ServicingFailure(
+                    "servicing.pwsh.storeMsix",
+                    "Host PowerShell is Microsoft Store MSIX; DISM/AppX offline servicing requires WinPS 5.1 or non-Store pwsh (install from GitHub)."));
+        }
+
         if (string.IsNullOrWhiteSpace(run.SourceIsoPath) || !File.Exists(run.SourceIsoPath))
         {
             return Result.Fail<ImageEvidence, ServicingFailure>(
@@ -213,6 +221,10 @@ public static class ImageServicing
                 case ServicingOpcode.StampOfflineShell:
                     parameters[StageParams.ShellTarget] = ShellStampGuestPath;
                     parameters[StageParams.MountDir] = mountDir;
+                    break;
+                case ServicingOpcode.StampOfflinePolicies:
+                    parameters[StageParams.MountDir] = mountDir;
+                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
                     break;
                 case ServicingOpcode.RemoveProvisionedAppx:
                     // packageFamilyNames comes from BuildPlan — inject mount + workdir for logs.

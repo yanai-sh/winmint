@@ -176,6 +176,7 @@ function Resolve-WimEditionId {
     $name = [string]$Snapshot['Name']
     if (Test-WimMetadataUndefined $name) { return $null }
 
+    # Order matters: more-specific names before generic Pro/Home/Enterprise/Education.
     switch -Regex ($name.Trim()) {
         'Pro for Workstations N' { return 'ProfessionalWorkstationN' }
         'Pro for Workstations' { return 'ProfessionalWorkstation' }
@@ -186,6 +187,8 @@ function Resolve-WimEditionId {
         'Home N' { return 'CoreN' }
         'Home Single Language' { return 'CoreSingleLanguage' }
         '(?i)\bHome\b' { return 'Core' }
+        '(?i)IoT Enterprise LTSC' { return 'IoTEnterpriseS' }
+        '(?i)Enterprise LTSC' { return 'EnterpriseS' }
         'Enterprise N' { return 'EnterpriseN' }
         'Enterprise' { return 'Enterprise' }
         'Education N' { return 'EducationN' }
@@ -353,6 +356,13 @@ ServicePack Build : 26100
 
     $fromName = Resolve-WimEditionId -Snapshot ([ordered]@{ Name = 'Windows 11 Pro'; Edition = $null })
     if ($fromName -ne 'Professional') { throw 'SelfCheck: EditionId from Name' }
+
+    $ltsc = Resolve-WimEditionId -Snapshot ([ordered]@{ Name = 'Windows 11 Enterprise LTSC'; Edition = $null })
+    if ($ltsc -ne 'EnterpriseS') { throw "SelfCheck: Enterprise LTSC EditionId got '$ltsc'" }
+    $iot = Resolve-WimEditionId -Snapshot ([ordered]@{ Name = 'Windows 11 IoT Enterprise LTSC'; Edition = $null })
+    if ($iot -ne 'IoTEnterpriseS') { throw "SelfCheck: IoT Enterprise LTSC EditionId got '$iot'" }
+    $ws = Resolve-WimEditionId -Snapshot ([ordered]@{ Name = 'Windows 11 Pro for Workstations'; Edition = $null })
+    if ($ws -ne 'ProfessionalWorkstation') { throw "SelfCheck: Pro for Workstations EditionId got '$ws'" }
 
     Write-Output 'Wim-Metadata SelfCheck ok'
     exit 0

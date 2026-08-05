@@ -397,6 +397,39 @@ public static class ProvisioningSession
                 continue;
             }
 
+            if (string.Equals(job.Kind, "onedrive.uninstall", StringComparison.OrdinalIgnoreCase))
+            {
+                JobsPhaseResult? od = RunOneDriveUninstallJob(env, phases, job, ct);
+                if (od is not null)
+                {
+                    return od.Value;
+                }
+
+                continue;
+            }
+
+            if (string.Equals(job.Kind, "reservedStorage.disable", StringComparison.OrdinalIgnoreCase))
+            {
+                JobsPhaseResult? rs = RunReservedStorageDisableJob(env, phases, job, ct);
+                if (rs is not null)
+                {
+                    return rs.Value;
+                }
+
+                continue;
+            }
+
+            if (string.Equals(job.Kind, "doh.set", StringComparison.OrdinalIgnoreCase))
+            {
+                JobsPhaseResult? doh = RunDohSetJob(env, phases, job, ct);
+                if (doh is not null)
+                {
+                    return doh.Value;
+                }
+
+                continue;
+            }
+
             string fileName;
             IReadOnlyList<string> arguments;
             if (string.Equals(job.Kind, "stub", StringComparison.OrdinalIgnoreCase))
@@ -576,6 +609,155 @@ public static class ProvisioningSession
     /// KEEPFLAG safety net: RemovePackage for registered matches; Deprovision only if still provisioned.
     /// </summary>
     /// <returns>Failure result, or null when the job succeeded (caller continues the loop).</returns>
+    private static JobsPhaseResult? RunOneDriveUninstallJob(
+        SessionEnvironment env,
+        List<string> phases,
+        ProvisionJob job,
+        CancellationToken ct)
+    {
+        string systemRoot = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        string[] candidates =
+        [
+            Path.Combine(systemRoot, "System32", "OneDriveSetup.exe"),
+            Path.Combine(systemRoot, "SysWOW64", "OneDriveSetup.exe"),
+        ];
+        string? setup = candidates.FirstOrDefault(File.Exists);
+        if (setup is null)
+        {
+            // Already gone — product-constant uninstall is idempotent.
+            return null;
+        }
+
+        try
+        {
+            ProcessStartResult started = env.Processes.Run(setup, ["/uninstall", "/allusers"], ct);
+            // Non-zero is common when OneDrive was never fully installed; treat as best-effort ok.
+            _ = started;
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
+            env.Splash.SetStatus(failed);
+            phases.Add(failed.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+        }
+    }
+
+    private static JobsPhaseResult? RunReservedStorageDisableJob(
+        SessionEnvironment env,
+        List<string> phases,
+        ProvisionJob job,
+        CancellationToken ct)
+    {
+        try
+        {
+            ProcessStartResult started = env.Processes.Run(
+                "dism.exe",
+                ["/Online", "/Set-ReservedStorageState", "/State:Disabled"],
+                ct);
+            if (started.ExitCode != 0)
+            {
+                SessionStatus failed = new(
+                    "jobs.failed",
+                    $"{job.Id}: dism Set-ReservedStorageState exited {started.ExitCode}.");
+                env.Splash.SetStatus(failed);
+                phases.Add(failed.Code);
+                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
+            env.Splash.SetStatus(failed);
+            phases.Add(failed.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+        }
+    }
+
+    private static JobsPhaseResult? RunDohSetJob(
+        SessionEnvironment env,
+        List<string> phases,
+        ProvisionJob job,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(job.PackageId)
+            || !TryResolveDohProvider(job.PackageId, out string primary, out string secondary, out string template))
+        {
+            SessionStatus bad = new(
+                "jobs.failed",
+                $"Job '{job.Id}' kind doh.set requires packageId cloudflare|google|quad9.");
+            env.Splash.SetStatus(bad);
+            phases.Add(bad.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, bad, TimedOut: false);
+        }
+
+        // Inbox powershell.exe only — not guest pwsh product control plane (scoop bootstrap precedent).
+        string command =
+            $"$up = Get-NetAdapter | Where-Object Status -eq 'Up'; " +
+            $"foreach ($a in $up) {{ Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses @('{primary}','{secondary}') }}; " +
+            $"foreach ($ip in @('{primary}','{secondary}')) {{ " +
+            $"try {{ Add-DnsClientDohServerAddress -ServerAddress $ip -DohTemplate '{template}' -AllowFallbackToUdp $true -AutoUpgrade $true -ErrorAction Stop }} catch {{ }}; " +
+            $"try {{ Set-DnsClientDohServerAddress -ServerAddress $ip -DohTemplate '{template}' -AllowFallbackToUdp $true -AutoUpgrade $true -ErrorAction Stop }} catch {{ }} }}";
+
+        try
+        {
+            ProcessStartResult started = env.Processes.Run(
+                "powershell.exe",
+                ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+                ct);
+            if (started.ExitCode != 0)
+            {
+                SessionStatus failed = new(
+                    "jobs.failed",
+                    $"{job.Id}: DoH configure exited {started.ExitCode}.");
+                env.Splash.SetStatus(failed);
+                phases.Add(failed.Code);
+                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
+            env.Splash.SetStatus(failed);
+            phases.Add(failed.Code);
+            return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+        }
+    }
+
+    private static bool TryResolveDohProvider(
+        string id,
+        out string primary,
+        out string secondary,
+        out string template)
+    {
+        switch (id.Trim().ToLowerInvariant())
+        {
+            case "cloudflare":
+                primary = "1.1.1.1";
+                secondary = "1.0.0.1";
+                template = "https://cloudflare-dns.com/dns-query";
+                return true;
+            case "google":
+                primary = "8.8.8.8";
+                secondary = "8.8.4.4";
+                template = "https://dns.google/dns-query";
+                return true;
+            case "quad9":
+                primary = "9.9.9.9";
+                secondary = "149.112.112.112";
+                template = "https://dns.quad9.net/dns-query";
+                return true;
+            default:
+                primary = secondary = template = "";
+                return false;
+        }
+    }
+
     private static JobsPhaseResult? RunAppxSafetyNetJob(
         ProvisioningBundle bundle,
         SessionEnvironment env,

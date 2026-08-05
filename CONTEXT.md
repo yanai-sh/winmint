@@ -25,11 +25,11 @@ Offline image work on the WIM/ISO (mount, package/hive changes, export). Execute
 _Avoid_: in-process DISM from the wizard; staging pwsh into the guest for FirstLogon; a fat Servicing monolith or product CLI in `servicing/`
 
 **ImageServicing**:
-The elevated imaging deep module: apply BuildPlan artifacts to a user-supplied Source ISO and return image evidence. Production adapter is `pwsh -File` kernels; a C# port type appears only when a test fake shares that shape.
+The elevated imaging deep module: apply BuildPlan artifacts to a user-supplied Source ISO and return image evidence. Production adapter is `pwsh -File` kernels; a C# port type appears only when a test fake shares that shape. Always stamps product-constant offline policies after keep-flag removes ([ADR-009](docs/decisions/ADR-009-product-constant-policies.md)); rejects Store MSIX host pwsh.
 _Avoid_: day-one `IServicing` indirection with a single adapter; guest FirstLogon work
 
 **Payload**:
-Files staged into the image for Machine setup / FirstLogon: media, `SetupComplete.cmd` (repo: `payload/scripts/` → image: `%WINDIR%\Setup\Scripts\`), the published Provisioning Supervisor binary, and job manifests. Not the Orchestrator. After successful Shell Complete, branded payload under `%WINDIR%\WinMint\` and SetupComplete are best-effort erased ([ADR-008](docs/decisions/ADR-008-residual-minimization.md)); `%ProgramData%\WinMint\` may remain for harness evidence.
+Files staged into the image for Machine setup / FirstLogon: media, `SetupComplete.cmd` (repo: `payload/scripts/` → image: `%WINDIR%\Setup\Scripts\`), the published Provisioning Supervisor binary, and job manifests. Not the Orchestrator. After successful Shell Complete, branded payload under `%WINDIR%\WinMint\` and SetupComplete are best-effort erased ([ADR-008](docs/decisions/ADR-008-residual-minimization.md)); `%ProgramData%\WinMint\` may remain for harness evidence. Product-constant FirstLogon jobs always include OneDrive uninstall + Reserved Storage disable ([ADR-009](docs/decisions/ADR-009-product-constant-policies.md)).
 _Avoid_: engine scripts, InstallPlan (v1 staged-profile dump); staged guest PowerShell as the control plane or default install driver; durable brand surface after green FirstLogon; dual `$OEM$` SetupScripts copies
 
 **Machine setup**:

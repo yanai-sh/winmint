@@ -8,6 +8,7 @@ public class WizardSessionTests
     private static WizardSessionInput Lab(
         string preset = KeepFlagPresets.Recommended,
         bool keepGaming = false,
+        bool keepCopilot = false,
         string winget = "",
         string appx = "",
         string caps = "",
@@ -27,6 +28,7 @@ public class WizardSessionTests
             TimeZoneId: timeZone,
             LocationServicesEnabled: true,
             KeepGaming: keepGaming,
+            KeepCopilot: keepCopilot,
             WingetText: winget,
             RemoveCapabilitiesText: caps,
             RemoveProvisionedAppxText: appx,
@@ -40,7 +42,18 @@ public class WizardSessionTests
         Assert.True(result.Succeeded, result.Message);
         Assert.Contains("Microsoft.YourPhone", result.ProfileJson!, StringComparison.Ordinal);
         Assert.Contains("Microsoft.GamingApp", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.Copilot", result.ProfileJson!, StringComparison.Ordinal);
         Assert.DoesNotContain("recommended", result.ProfileJson!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"keepCopilot\"", result.ProfileJson!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ComposeAndPlan_keep_copilot_round_trips_policies()
+    {
+        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(keepCopilot: true));
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Contains("\"keepCopilot\": true", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.DoesNotContain("Microsoft.Copilot", result.ProfileJson!, StringComparison.Ordinal);
     }
 
     [Fact]

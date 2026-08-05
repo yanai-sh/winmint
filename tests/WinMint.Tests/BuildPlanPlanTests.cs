@@ -147,6 +147,7 @@ public class BuildPlanPlanTests
         Assert.Equal(
             [
                 ServicingOpcode.MountInstallWim,
+                ServicingOpcode.StampOfflinePolicies,
                 ServicingOpcode.StagePayload,
                 ServicingOpcode.InjectUnattend,
                 ServicingOpcode.StampOfflineShell,
@@ -154,6 +155,8 @@ public class BuildPlanPlanTests
                 ServicingOpcode.BuildIso,
             ],
             artifacts.Stages.Stages.Select(s => s.Opcode).ToArray());
+        Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
+        Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
         Assert.All(
             artifacts.Stages.Stages,
             stage => Assert.DoesNotContain(".ps1", string.Join('\0', stage.Parameters.Values), StringComparison.OrdinalIgnoreCase));

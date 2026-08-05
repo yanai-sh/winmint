@@ -60,6 +60,7 @@ public static class StageParams
     public const string FeatureNames = "featureNames";
     public const string WorkDirectory = "workDirectory";
     public const string Kind = "kind";
+    public const string PolicySpecs = "policySpecs";
 }
 
 public enum ServicingOpcode
@@ -68,6 +69,7 @@ public enum ServicingOpcode
     StagePayload,
     InjectUnattend,
     StampOfflineShell,
+    StampOfflinePolicies,
     RemoveProvisionedAppx,
     RemoveCapabilities,
     DisableOptionalFeatures,
