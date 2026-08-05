@@ -92,8 +92,6 @@ try {
         $index++
         $opcode = [string]$stage.opcode
         $params = ConvertTo-ParamHashtable $stage.parameters
-        if ($opcode -eq 'RemoveCapabilities') { $params['kind'] = 'capability' }
-        elseif ($opcode -eq 'DisableOptionalFeatures') { $params['kind'] = 'feature' }
         $kernel = Resolve-KernelScript -Opcode $opcode
         $logFile = Join-Path $logDir ("{0:D2}-{1}.log" -f $index, $opcode)
         Write-ApplyStatus -Stage $opcode -Log $logFile

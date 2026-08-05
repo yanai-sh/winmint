@@ -62,6 +62,7 @@ public static class StageParams
     public const string CapabilityNames = "capabilityNames";
     public const string FeatureNames = "featureNames";
     public const string WorkDirectory = "workDirectory";
+    public const string Kind = "kind";
 }
 
 public enum ServicingOpcode

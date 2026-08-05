@@ -87,10 +87,12 @@ public class CapabilityPlanTests
                 s => s.Opcode == ServicingOpcode.RemoveCapabilities);
             Assert.Equal(ImageServicing.HostMountDir, caps.Parameters[StageParams.MountDir]);
             Assert.Equal(work, caps.Parameters[StageParams.WorkDirectory]);
+            Assert.Equal("capability", caps.Parameters[StageParams.Kind]);
             ServicingStage feats = Assert.Single(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.DisableOptionalFeatures);
             Assert.Equal(ImageServicing.HostMountDir, feats.Parameters[StageParams.MountDir]);
+            Assert.Equal("feature", feats.Parameters[StageParams.Kind]);
         }
         finally
         {
