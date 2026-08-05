@@ -17,9 +17,17 @@ internal static class ImageServicingTestFakes
             CancellationToken ct)
         {
             Stages.AddRange(stages);
-            string shellTarget = stages
-                .First(s => s.Opcode == ServicingOpcode.StampOfflineShell)
-                .Parameters[StageParams.ShellTarget];
+            ServicingStage? stamp = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.StampOfflineShell);
+            if (stamp is null
+                || !stamp.Parameters.TryGetValue(StageParams.ShellTarget, out string? shellTarget)
+                || string.IsNullOrWhiteSpace(shellTarget))
+            {
+                return Result.Fail<ImageEvidence, ServicingFailure>(
+                    new ServicingFailure(
+                        "servicing.shellStamp.missing",
+                        "StampOfflineShell stage missing or incomplete."));
+            }
+
             return Result.Ok<ImageEvidence, ServicingFailure>(
                 new ImageEvidence(
                     run.OutputIsoPath ?? Path.Combine(workDirectory, "out.iso"),

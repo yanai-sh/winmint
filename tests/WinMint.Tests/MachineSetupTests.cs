@@ -10,7 +10,7 @@ public class MachineSetupTests
     public void MachineSetup_rejects_defaultuser0_with_AutoAdminLogon()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
-        RecordingSecretScrubber secrets = new();
+        RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle(ProvisioningSession.ForbiddenAutologonUser, "lab-only");
 
         SessionResult result = ProvisioningSession.Run(
@@ -30,7 +30,7 @@ public class MachineSetupTests
     public void MachineSetup_stamps_autologon_and_wipes_secrets_when_Shell_ok()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
-        RecordingSecretScrubber secrets = new();
+        RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
         SessionResult result = ProvisioningSession.Run(
@@ -52,7 +52,7 @@ public class MachineSetupTests
     public void MachineSetup_restamps_Shell_when_mismatched_then_succeeds()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = "explorer.exe" };
-        RecordingSecretScrubber secrets = new();
+        RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
         SessionResult result = ProvisioningSession.Run(
@@ -74,7 +74,7 @@ public class MachineSetupTests
             Shell = "explorer.exe",
             ShellWriteNoOp = true,
         };
-        RecordingSecretScrubber secrets = new();
+        RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
         SessionResult result = ProvisioningSession.Run(
@@ -95,7 +95,7 @@ public class MachineSetupTests
         using CancellationTokenSource cts = new();
         cts.Cancel();
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
-        RecordingSecretScrubber secrets = new();
+        RecordingWipeSecrets secrets = new();
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.MachineSetup,
@@ -112,7 +112,7 @@ public class MachineSetupTests
     public void MachineSetup_repairs_winget_framework_acls_when_Appx_present()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
-        RecordingSecretScrubber secrets = new();
+        RecordingWipeSecrets secrets = new();
         RecordingAppx appx = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
@@ -130,7 +130,7 @@ public class MachineSetupTests
     public void MachineSetup_removes_defaultuser0_via_LocalAccounts()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
-        RecordingSecretScrubber secrets = new();
+        RecordingWipeSecrets secrets = new();
         RecordingLocalAccounts accounts = new();
 
         SessionResult result = ProvisioningSession.Run(
@@ -213,7 +213,7 @@ public class MachineSetupTests
     public void MachineSetup_completes_when_LocalAccounts_delete_throws()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
-        RecordingSecretScrubber secrets = new();
+        RecordingWipeSecrets secrets = new();
         ThrowingLocalAccounts accounts = new();
 
         SessionResult result = ProvisioningSession.Run(
@@ -237,7 +237,7 @@ public class MachineSetupTests
 
     private static SessionEnvironment Env(
         IWinlogonRegistry winlogon,
-        RecordingSecretScrubber? secrets = null,
+        RecordingWipeSecrets? secrets = null,
         Action<ProvisioningBundle>? wipeSecrets = null,
         IAppxPackageManager? appx = null,
         ILocalAccounts? localAccounts = null) =>
@@ -251,62 +251,4 @@ public class MachineSetupTests
             WipeSecrets: wipeSecrets ?? secrets!.Wipe,
             Appx: appx,
             LocalAccounts: localAccounts);
-
-    private sealed class RecordingLocalAccounts : ILocalAccounts
-    {
-        public List<string> Deleted { get; } = [];
-
-        public void TryDeleteLocalUserAndProfile(string username) => Deleted.Add(username);
-    }
-
-    private sealed class ThrowingLocalAccounts : ILocalAccounts
-    {
-        public void TryDeleteLocalUserAndProfile(string username) =>
-            throw new InvalidOperationException("simulated delete failure");
-    }
-
-    private sealed class FakeWinlogonRegistry : IWinlogonRegistry
-    {
-        public string? DefaultUserName { get; private set; }
-        public string? DefaultPassword { get; private set; }
-        public bool AutoAdminLogon { get; private set; }
-        public string? Shell { get; set; }
-        public bool ShellWriteNoOp { get; set; }
-
-        public void SetAutoLogon(string username, string password)
-        {
-            DefaultUserName = username;
-            DefaultPassword = password;
-            AutoAdminLogon = true;
-        }
-
-        public string? GetDefaultUserName() => DefaultUserName;
-
-        public bool GetAutoAdminLogon() => AutoAdminLogon;
-
-        public string? GetShell() => Shell;
-
-        public void SetShell(string path)
-        {
-            if (!ShellWriteNoOp)
-            {
-                Shell = path;
-            }
-        }
-
-        public void GrantShellUnlockAccess(string username) { }
-    }
-
-    private sealed class RecordingSecretScrubber
-    {
-        public int WipeCount { get; private set; }
-
-        public ProvisioningBundle? LastBundle { get; private set; }
-
-        public void Wipe(ProvisioningBundle bundle)
-        {
-            WipeCount++;
-            LastBundle = bundle;
-        }
-    }
 }

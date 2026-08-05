@@ -1,16 +1,15 @@
 namespace WinMint.Provisioning;
 
 /// <summary>Heartbeat + checkpoint under ProgramData (plain phase string, same shape as heartbeat).</summary>
-public sealed class FileCheckpointStore : ICheckpointStore
+public sealed class FileCheckpointStore(string programDataRoot) : ICheckpointStore
 {
-    private readonly string _checkpointPath;
-    private readonly string _heartbeatPath;
+    private readonly string _checkpointPath = Path.Combine(RequireRoot(programDataRoot), "checkpoint.json");
+    private readonly string _heartbeatPath = Path.Combine(RequireRoot(programDataRoot), "heartbeat");
 
-    public FileCheckpointStore(string programDataRoot)
+    private static string RequireRoot(string programDataRoot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(programDataRoot);
-        _checkpointPath = Path.Combine(programDataRoot, "checkpoint.json");
-        _heartbeatPath = Path.Combine(programDataRoot, "heartbeat");
+        return programDataRoot;
     }
 
     public TenureState ReadTenure()

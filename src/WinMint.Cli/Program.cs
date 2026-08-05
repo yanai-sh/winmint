@@ -300,5 +300,7 @@ internal static class Program
     }
 
     private static void WriteJson(string directory, string name, JsonNode node) =>
-        File.WriteAllText(Path.Combine(directory, name), node.ToJsonString(IndentedJson));
+        File.WriteAllBytes(
+            Path.Combine(directory, name),
+            System.Text.Encoding.UTF8.GetBytes(node.ToJsonString(IndentedJson)));
 }

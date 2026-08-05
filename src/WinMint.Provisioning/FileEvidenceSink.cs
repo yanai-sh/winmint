@@ -6,15 +6,16 @@ namespace WinMint.Provisioning;
 /// Write-only evidence projection under %ProgramData%\WinMint\evidence\.
 /// Session must never read these files to decide the next phase.
 /// </summary>
-public sealed class FileEvidenceSink : IEvidenceSink
+public sealed class FileEvidenceSink(string directory) : IEvidenceSink
 {
     public const string SchemaVersion = ProvisioningSession.EvidenceSchemaVersion;
 
-    private readonly string _directory;
+    private readonly string _directory = RequireDir(directory);
 
-    public FileEvidenceSink(string directory)
+    private static string RequireDir(string directory)
     {
-        _directory = directory;
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        return directory;
     }
 
     public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)

@@ -8,12 +8,10 @@ namespace WinMint.Provisioning;
 
 /// <summary>Production PackageManager adapter for FirstLogon AppX safety net (ticket 13).</summary>
 [SupportedOSPlatform("windows10.0.19041.0")]
-public sealed class WinRTAppxPackageManager : IAppxPackageManager
+public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxPackageManager
 {
     private readonly PackageManager _manager = new();
-    private readonly Action<string>? _log;
-
-    public WinRTAppxPackageManager(Action<string>? log = null) => _log = log;
+    private readonly Action<string>? _log = log;
 
     private static string WindowsAppsRoot =>
         Path.Combine(
@@ -44,7 +42,7 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
         }
         catch (Exception ex) when (IsAccessDenied(ex))
         {
-            // Medium-IL Shell: treat as no registered hits
+            // ponytail: medium-IL FirstLogon — access-denied ⇒ empty hits (offline DISM owns provisioned)
             return [];
         }
 
@@ -88,7 +86,7 @@ public sealed class WinRTAppxPackageManager : IAppxPackageManager
         }
         catch (Exception ex) when (IsAccessDenied(ex))
         {
-            // Medium-IL may not remove; leave registered package for a future elevated pass
+            // ponytail: medium-IL remove fail-open — leave registered package for elevated pass
         }
     }
 

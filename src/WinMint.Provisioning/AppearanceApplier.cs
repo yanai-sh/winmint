@@ -12,6 +12,7 @@ internal static class AppearanceApplier
     [SupportedOSPlatform("windows")]
     public static void ApplyTheme(string theme)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(theme);
         int light = theme.Equals("Light", StringComparison.OrdinalIgnoreCase) ? 1
             : theme.Equals("Dark", StringComparison.OrdinalIgnoreCase) ? 0
             : -1;

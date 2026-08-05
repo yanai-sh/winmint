@@ -17,6 +17,11 @@ internal static class ProvisioningSessionTestFakes
             Policy: SessionPolicy.SmokeDefaults,
             Supervisor: new SupervisorIdentity(SupervisorPath));
 
+    internal static ProvisioningBundle Bundle(
+        IReadOnlyList<ProvisionJob> jobs,
+        IReadOnlyList<string> removeProvisionedAppx) =>
+        Bundle(jobs) with { RemoveProvisionedAppx = removeProvisionedAppx };
+
     internal static ProvisioningBundle BundleFastSettle(IReadOnlyList<ProvisionJob> jobs) =>
         Bundle(jobs) with
         {
@@ -62,6 +67,17 @@ internal static class ProvisioningSessionTestFakes
             Checkpoints: checkpoints,
             Evidence: evidence);
 
+    internal static SessionEnvironment Env(IAppxPackageManager appx, ISplashPresenter splash) =>
+        new(
+            Time: TimeProvider.System,
+            Winlogon: new NoopWinlogon(),
+            Region: new MatchingRegion(),
+            Processes: new NoopProcesses(),
+            Splash: splash,
+            Checkpoints: new NoopCheckpoints(),
+            Evidence: new NoopEvidence(),
+            Appx: appx);
+
     internal sealed class RecordingProcessHost : IProcessHost
     {
         public List<(string FileName, IReadOnlyList<string> Arguments)> Starts { get; } = [];
@@ -102,22 +118,29 @@ internal static class ProvisioningSessionTestFakes
 
     internal sealed class RecordingAppx : IAppxPackageManager
     {
+        public List<AppxPackageInfo> Registered { get; } = [];
+        public List<AppxPackageInfo> Provisioned { get; } = [];
+        public List<string> RemovedFullNames { get; } = [];
+        public List<string> DeprovisionedFamilyNames { get; } = [];
         public List<string> RegisteredFamilyNames { get; } = [];
 
         public string? WingetPath { get; init; }
 
-        public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) => [];
+        public int EnsureSystemFullControlCalls { get; private set; }
 
-        public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) => [];
+        public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) =>
+            Registered.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId)).ToArray();
 
-        public void RemovePackage(string packageFullName) { }
+        public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) =>
+            Provisioned.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId)).ToArray();
 
-        public void DeprovisionPackageFamily(string packageFamilyName) { }
+        public void RemovePackage(string packageFullName) => RemovedFullNames.Add(packageFullName);
+
+        public void DeprovisionPackageFamily(string packageFamilyName) =>
+            DeprovisionedFamilyNames.Add(packageFamilyName);
 
         public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) =>
             RegisteredFamilyNames.Add(packageFamilyName);
-
-        public int EnsureSystemFullControlCalls { get; private set; }
 
         public void EnsureSystemFullControlOnWingetFrameworkPackages() => EnsureSystemFullControlCalls++;
 
@@ -241,5 +264,143 @@ internal static class ProvisioningSessionTestFakes
     {
         public EvidenceSnapshot Write(ProvisioningEvidenceDocument document) =>
             new(document.SchemaVersion, "memory:1");
+    }
+
+    internal sealed class RecordingLocalAccounts : ILocalAccounts
+    {
+        public List<string> Deleted { get; } = [];
+
+        public void TryDeleteLocalUserAndProfile(string username) => Deleted.Add(username);
+    }
+
+    internal sealed class ThrowingLocalAccounts : ILocalAccounts
+    {
+        public void TryDeleteLocalUserAndProfile(string username) =>
+            throw new InvalidOperationException("simulated delete failure");
+    }
+
+    /// <summary>Winlogon fake with autologon capture for MachineSetup tests.</summary>
+    internal sealed class FakeWinlogonRegistry : IWinlogonRegistry
+    {
+        public string? DefaultUserName { get; private set; }
+        public string? DefaultPassword { get; private set; }
+        public bool AutoAdminLogon { get; private set; }
+        public string? Shell { get; set; }
+        public bool ShellWriteNoOp { get; set; }
+
+        public void SetAutoLogon(string username, string password)
+        {
+            DefaultUserName = username;
+            DefaultPassword = password;
+            AutoAdminLogon = true;
+        }
+
+        public string? GetDefaultUserName() => DefaultUserName;
+
+        public bool GetAutoAdminLogon() => AutoAdminLogon;
+
+        public string? GetShell() => Shell;
+
+        public void SetShell(string path)
+        {
+            if (!ShellWriteNoOp)
+            {
+                Shell = path;
+            }
+        }
+
+        public void GrantShellUnlockAccess(string username) { }
+    }
+
+    internal sealed class RecordingWipeSecrets
+    {
+        public int WipeCount { get; private set; }
+
+        public ProvisioningBundle? LastBundle { get; private set; }
+
+        public void Wipe(ProvisioningBundle bundle)
+        {
+            WipeCount++;
+            LastBundle = bundle;
+        }
+    }
+
+    /// <summary>Advances UTC + monotonic stamp on timer due-time; wall jump is UTC-only.</summary>
+    internal sealed class ManualTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _utcNow = DateTimeOffset.UnixEpoch;
+        private long _timestamp;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => _timestamp;
+
+        public void Advance(TimeSpan delta)
+        {
+            _utcNow += delta;
+            _timestamp += delta.Ticks;
+        }
+
+        /// <summary>Guest NTP/IC-style UTC jump — must not advance tenure deadlines.</summary>
+        public void JumpWallClock(TimeSpan delta) => _utcNow += delta;
+
+        public override ITimer CreateTimer(
+            TimerCallback callback,
+            object? state,
+            TimeSpan dueTime,
+            TimeSpan period) =>
+            new AutoAdvanceTimer(this, callback, state, dueTime);
+
+        private sealed class AutoAdvanceTimer : ITimer
+        {
+            private readonly ManualTimeProvider _owner;
+            private readonly TimerCallback _callback;
+            private readonly object? _state;
+            private bool _disposed;
+
+            public AutoAdvanceTimer(
+                ManualTimeProvider owner,
+                TimerCallback callback,
+                object? state,
+                TimeSpan dueTime)
+            {
+                _owner = owner;
+                _callback = callback;
+                _state = state;
+                Change(dueTime, Timeout.InfiniteTimeSpan);
+            }
+
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                if (_disposed)
+                {
+                    return false;
+                }
+
+                if (dueTime == Timeout.InfiniteTimeSpan)
+                {
+                    return true;
+                }
+
+                if (dueTime < TimeSpan.Zero)
+                {
+                    dueTime = TimeSpan.Zero;
+                }
+
+                _owner.Advance(dueTime);
+                _callback(_state);
+                return true;
+            }
+
+            public void Dispose() => _disposed = true;
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 }

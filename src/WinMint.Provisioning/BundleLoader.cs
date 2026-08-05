@@ -12,7 +12,7 @@ public static class BundleLoader
     public static ProvisioningBundle LoadFromFile(string path)
     {
         byte[] bytes = File.ReadAllBytes(path);
-        BundleDto? dto = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.BundleDto);
+        BundleFile? dto = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.BundleFile);
         if (dto is null)
         {
             throw new InvalidOperationException($"Failed to parse bundle: {path}");
@@ -78,16 +78,16 @@ public static class BundleLoader
     }
 }
 
-internal sealed record BundleDto(
+internal sealed record BundleFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
     [property: JsonPropertyName("supervisorPath")] string SupervisorPath,
     [property: JsonPropertyName("username")] string Username,
     [property: JsonPropertyName("password")] string? Password,
     [property: JsonPropertyName("dmaEnabled")] bool DmaEnabled,
-    [property: JsonPropertyName("settle")] SettleDto? Settle,
+    [property: JsonPropertyName("settle")] SettleFile? Settle,
     [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx);
 
-internal sealed record SettleDto(
+internal sealed record SettleFile(
     [property: JsonPropertyName("locale")] string Locale,
     [property: JsonPropertyName("geoId")] int GeoId,
     [property: JsonPropertyName("timeZoneId")] string TimeZoneId,
@@ -103,7 +103,7 @@ internal sealed record JobFile(
     [property: JsonPropertyName("needsReboot")] bool NeedsReboot = false,
     [property: JsonPropertyName("packageId")] string? PackageId = null);
 
-[JsonSerializable(typeof(BundleDto))]
+[JsonSerializable(typeof(BundleFile))]
 [JsonSerializable(typeof(JobsFile))]
 [JsonSerializable(typeof(ProvisioningEvidenceDocument))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]

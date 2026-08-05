@@ -1,6 +1,5 @@
 using WinMint.Orchestrator;
 using WinMint.Provisioning;
-using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
@@ -11,7 +10,7 @@ public class KeepFlagAppxSafetyNetTests
     [Fact]
     public void Shell_appx_safetyNet_removes_registered_packages_matching_catalog_ids()
     {
-        FakeAppxPackageManager appx = new();
+        RecordingAppx appx = new();
         appx.Registered.Add(new AppxPackageInfo(
             "Microsoft.BingNews_1.0.0.0_neutral__8wekyb3d8bbwe",
             "Microsoft.BingNews_8wekyb3d8bbwe",
@@ -41,7 +40,7 @@ public class KeepFlagAppxSafetyNetTests
     [Fact]
     public void Shell_appx_safetyNet_deprovisions_only_when_still_provisioned()
     {
-        FakeAppxPackageManager appx = new();
+        RecordingAppx appx = new();
         appx.Registered.Add(new AppxPackageInfo(
             "Microsoft.GamingApp_1.0.0.0_neutral__8wekyb3d8bbwe",
             "Microsoft.GamingApp_8wekyb3d8bbwe",
@@ -142,55 +141,5 @@ public class KeepFlagAppxSafetyNetTests
             System.Text.Encoding.UTF8.GetBytes(json));
         Assert.True(parsed.IsOk);
         return parsed.Value;
-    }
-
-    private static ProvisioningBundle Bundle(
-        IReadOnlyList<ProvisionJob> jobs,
-        IReadOnlyList<string> removeProvisionedAppx) =>
-        new(
-            Account: new AccountStamp("winmint", ""),
-            Dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
-            Jobs: jobs,
-            Policy: SessionPolicy.SmokeDefaults,
-            Supervisor: new SupervisorIdentity(SupervisorPath),
-            RemoveProvisionedAppx: removeProvisionedAppx);
-
-    private static SessionEnvironment Env(IAppxPackageManager appx, ISplashPresenter splash) =>
-        new(
-            Time: TimeProvider.System,
-            Winlogon: new NoopWinlogon(),
-            Region: new MatchingRegion(),
-            Processes: new NoopProcesses(),
-            Splash: splash,
-            Checkpoints: new NoopCheckpoints(),
-            Evidence: new NoopEvidence(),
-            Appx: appx);
-
-    private sealed class FakeAppxPackageManager : IAppxPackageManager
-    {
-        public List<AppxPackageInfo> Registered { get; } = [];
-        public List<AppxPackageInfo> Provisioned { get; } = [];
-        public List<string> RemovedFullNames { get; } = [];
-        public List<string> DeprovisionedFamilyNames { get; } = [];
-
-        public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) =>
-            Registered.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId)).ToArray();
-
-        public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) =>
-            Provisioned.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId)).ToArray();
-
-        public void RemovePackage(string packageFullName) => RemovedFullNames.Add(packageFullName);
-
-        public void DeprovisionPackageFamily(string packageFamilyName) =>
-            DeprovisionedFamilyNames.Add(packageFamilyName);
-
-        public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) =>
-            RegisteredFamilyNames.Add(packageFamilyName);
-
-        public void EnsureSystemFullControlOnWingetFrameworkPackages() { }
-
-        public string? TryResolveWingetExecutablePath() => null;
-
-        public List<string> RegisteredFamilyNames { get; } = [];
     }
 }

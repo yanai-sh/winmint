@@ -732,7 +732,7 @@ public static class ProvisioningSession
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Intermediate probe failures are non-authoritative.
+                // ponytail: intermediate DMA probe fail-open — final snapshot after loop is authoritative
                 _ = ex;
             }
 
@@ -957,7 +957,8 @@ public static class ProvisioningSession
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // swallow — MachineSetup must not fail closed on optional winget prep
+                // ponytail: MachineSetup fail-open on winget ACL prep — Shell register still fail-closed
+                _ = ex;
             }
         }
 

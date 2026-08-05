@@ -12,6 +12,8 @@ public sealed class Win32WinlogonRegistry : IWinlogonRegistry
 
     public void SetAutoLogon(string username, string password)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentNullException.ThrowIfNull(password);
         using RegistryKey key = OpenWritable();
         // Username/password before AutoAdminLogon — never leave defaultuser0 + AutoAdminLogon=1 mid-write.
         key.SetValue("DefaultUserName", username, RegistryValueKind.String);
@@ -41,6 +43,7 @@ public sealed class Win32WinlogonRegistry : IWinlogonRegistry
 
     public void SetShell(string path)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
         using RegistryKey key = OpenWritable();
         key.SetValue("Shell", path, RegistryValueKind.String);
     }
