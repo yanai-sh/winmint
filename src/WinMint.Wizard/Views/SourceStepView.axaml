@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WinMint.Wizard.ViewModels"
+             x:Class="WinMint.Wizard.Views.SourceStepView"
+             x:DataType="vm:WizardShellViewModel">
+  <StackPanel Spacing="22" MaxWidth="720" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <!-- Brand: v1 winmint_hero_ui.png (= wordmark lockup UI raster); SVG lockups kept in Assets for later. -->
+    <Image Source="avares://WinMint.Wizard/Assets/lockup_ui.png"
+           MaxHeight="72"
+           HorizontalAlignment="Left"
+           Stretch="Uniform" />
+
+    <TextBlock Classes="hero-title" Text="Choose your Windows ISO" />
+    <TextBlock Classes="hero-sub"
+               Text="WinMint services the official image you provide. Pick a source file, then choose the image-quality lane." />
+
+    <Border Classes="iso-stage">
+      <StackPanel Spacing="18" HorizontalAlignment="Center">
+        <TextBlock Text="{Binding SourceIsoPath}"
+                   TextWrapping="Wrap"
+                   TextAlignment="Center"
+                   FontFamily="Cascadia Mono, Consolas, monospace"
+                   FontSize="13"
+                   Opacity="0.75"
+                   IsVisible="{Binding SourceIsoPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Text="No ISO selected"
+                   TextAlignment="Center"
+                   Opacity="0.45"
+                   IsVisible="{Binding SourceIsoPath, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+        <Button Classes="primary"
+                Content="Choose ISO"
+                HorizontalAlignment="Center"
+                Command="{Binding BrowseIsoCommand}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="panel-card" HorizontalAlignment="Left" MinWidth="280">
+      <StackPanel>
+        <TextBlock Classes="panel-label" Text="IMAGE QUALITY" />
+        <StackPanel Orientation="Horizontal">
+          <ToggleButton Classes="chip" Content="Test" IsChecked="{Binding IsTestLane}" Command="{Binding SelectTestLaneCommand}" />
+          <ToggleButton Classes="chip" Content="Release" IsChecked="{Binding IsReleaseLane}" Command="{Binding SelectReleaseLaneCommand}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <TextBlock Text="{Binding Status}"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource SystemErrorTextColor}"
+               IsVisible="{Binding StatusIsError}" />
+  </StackPanel>
+</UserControl>

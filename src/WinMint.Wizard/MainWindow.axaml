@@ -1,0 +1,86 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:WinMint.Wizard.ViewModels"
+        xmlns:views="using:WinMint.Wizard.Views"
+        x:Class="WinMint.Wizard.MainWindow"
+        x:DataType="vm:WizardShellViewModel"
+        Title="WinMint"
+        Width="1280"
+        Height="860"
+        MinWidth="960"
+        MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        TransparencyLevelHint="Mica"
+        Background="Transparent"
+        TransparencyBackgroundFallback="{DynamicResource SystemRegionBrush}"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="40">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <!-- Drag region under system caption -->
+    <Border Grid.Row="0"
+            Height="40"
+            Background="Transparent"
+            WindowDecorationProperties.ElementRole="TitleBar">
+        <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center">
+          <Image Source="avares://WinMint.Wizard/Assets/mark_ui_132.png"
+                 Width="20" Height="20" />
+          <TextBlock Text="WinMint"
+                     FontWeight="SemiBold"
+                     FontSize="13"
+                     Opacity="0.9"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+    </Border>
+
+    <ProgressBar Grid.Row="1"
+                 Minimum="0"
+                 Maximum="1"
+                 Value="{Binding ProgressFraction}"
+                 Height="3"
+                 ShowProgressText="False" />
+
+    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+      <Panel Margin="56,28,56,24">
+        <views:SourceStepView IsVisible="{Binding IsSourceStep}" />
+        <views:ConfigureStepView IsVisible="{Binding IsConfigureStep}" />
+        <views:PreviewStepView IsVisible="{Binding IsPreviewStep}" />
+        <views:ReviewStepView IsVisible="{Binding IsReviewStep}" />
+      </Panel>
+    </ScrollViewer>
+
+    <Border Grid.Row="3"
+            Padding="28,0"
+            Height="72"
+            BorderThickness="0,1,0,0"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+      <DockPanel>
+        <TextBlock Text="{Binding StageLabel}"
+                   VerticalAlignment="Center"
+                   FontSize="12"
+                   FontWeight="Medium"
+                   Opacity="0.55"
+                   LetterSpacing="1" />
+        <StackPanel DockPanel.Dock="Right"
+                    Orientation="Horizontal"
+                    Spacing="10"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center">
+          <Button Classes="ghost"
+                  Content="Back"
+                  Command="{Binding BackCommand}"
+                  IsEnabled="{Binding CanGoBack}" />
+          <Button Classes="primary"
+                  Content="{Binding NextLabel}"
+                  Command="{Binding NextCommand}"
+                  IsEnabled="{Binding CanGoNext}"
+                  IsVisible="{Binding !IsReviewStep}" />
+          <Button Classes="primary"
+                  Content="Finish"
+                  Command="{Binding CloseCommand}"
+                  IsVisible="{Binding IsReviewStep}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>

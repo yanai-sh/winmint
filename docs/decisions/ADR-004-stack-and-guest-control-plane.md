@@ -22,7 +22,8 @@ Guest/runtime reliability (Shell-before-Explorer, DMA settle races, splash timin
 8. **Fail-open:** Unlock Shell on `complete`/`failed` (+ failed dwell) and wall-clock timeout; hold Shell on `reboot` with durable checkpoint resume.
 9. **Theme:** Splash-owned canvas; no Profile appearance / theme apply until a Profile appearance story is grilled — no theme hard-gate.
 10. **Provisioning lock:** Shell tenure while Supervisor is Shell; hard input lockdown is later hardening.
-11. **NuGet:** Microsoft-thin (source-gen JSON, `System.CommandLine`, xUnit; Avalonia 12.1.x later for host wizard). Every package needs “why not BCL.”
+11. **NuGet:** Microsoft-thin (source-gen JSON, `System.CommandLine`, xUnit; Avalonia 12.1.x for host wizard). Every package needs “why not BCL.”
+    - **Wizard-only:** `CommunityToolkit.Mvvm` — Microsoft source-gen `INotifyPropertyChanged` / commands; Avalonia’s documented MVVM path. Why not BCL: avoids hand-rolled INPC boilerplate across multi-step ViewModels. **Not on the ISO** (host Wizard only; Wizard stays non-AOT).
 12. **Rejected for day-one:** guest pwsh adapters, file-as-control-plane status, C#-only in-process DISM as default, separate Splash.exe peer, Hyper-V-only settle/executor forks, Servicing port with a single adapter, copying v1 `runtime/` topology.
 
 ### Consequences
@@ -31,6 +32,7 @@ Guest/runtime reliability (Shell-before-Explorer, DMA settle races, splash timin
 - v1 harvest notes map behaviour into BuildPlan / ProvisioningSession interfaces; scripts are archaeology ([ARCHITECTURE harvest rule](../ARCHITECTURE.md#v1-harvest-rule)).
 - Host build wall-clock remains DISM-bound; keep image-quality lanes and VM harness caching.
 - Ticket 10 should expose one acceptance interface, not a peer forest of harness entrypoints.
+- Wizard Phase A (2026-08-05): multi-step Avalonia host; Phase B (same day): Review Build → ImageServicing.Apply via elevated pwsh.
 
 ### Review trigger
 

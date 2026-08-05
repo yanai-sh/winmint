@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using WinMint.Wizard.ViewModels;
 
 namespace WinMint.Wizard;
 
@@ -15,7 +16,11 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow();
+            MainWindow window = new();
+            WizardShellViewModel vm = new(window);
+            window.DataContext = vm;
+            window.Closed += (_, _) => vm.Dispose();
+            desktop.MainWindow = window;
         }
 
         base.OnFrameworkInitializationCompleted();
