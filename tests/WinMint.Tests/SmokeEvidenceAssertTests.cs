@@ -121,7 +121,7 @@ public class SmokeEvidenceAssertTests
         using Process p = Process.Start(psi) ?? throw new InvalidOperationException("pwsh failed to start");
         stdout = p.StandardOutput.ReadToEnd();
         stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit(60_000);
+        Assert.True(p.WaitForExit(60_000), "SmokeEvidenceAssert.ps1 timed out");
         return p.ExitCode;
     }
 
