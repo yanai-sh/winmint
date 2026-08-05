@@ -69,11 +69,12 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Splash D2D | GDI status text (**29**); full D2D only if S4 FirstPaintBudget still fails on real Smoke |
 | S4 VHD/digest rebuild | Maintainer optimization — not a product ticket |
 | `*Dto` rename | Opportunistic on next BundleLoader touch |
-| Wizard | Second BuildPlan host only (**15** + packages **22** + polish **25**) |
+| Wizard | Second BuildPlan host (**15** + packages **22** + polish **25**); Phase A multi-step Avalonia UX unlocked (Source → Configure → Preview → Review; Plan/Save + Cli recipe) |
 | Hardware | M4 stricter evidence bars (**30** opt-in); no Supervisor fork; full hardware campaign maintainer-timed |
 
-**Still out (policy):** Profile presets-in-JSON; product-default recommended remove-list; schema `v2` without a break; full DPAPI host→guest; full D2D; leftover-confidence *product* cleanup; full Wizard UX beyond list authoring.  
-**Shipped:** AppX + capabilities keep-flag; Wizard thin + packages + caps/WSL lists; metal winget/Scoop/WSL; Israel DMA sample; M4 assert switch. Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` on v1.
+**Still out (policy):** Profile presets-in-JSON; product-default recommended remove-list; schema `v2` without a break; full DPAPI host→guest; full D2D; leftover-confidence *product* cleanup; Wizard Phase B live elevated build/progress (and edition probe).  
+**Shipped:** AppX + capabilities keep-flag; Wizard thin + packages + caps/WSL lists; metal winget/Scoop/WSL; Israel DMA sample; M4 assert switch. Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` on v1.  
+**Unlocked (Phase A):** Multi-step Avalonia Wizard shell authors Profile + RunOptions; Build control deferred to Phase B with honest Cli recipe after Save.
 
 **Owned elsewhere:** Splash spike → [SPLASH](design/SPLASH.md) appendix. Appearance consume path was ticket **07**; removed 2026-08-05 until Profile appearance is grilled.
 

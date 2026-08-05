@@ -85,8 +85,8 @@ Remove-list polarity for selected provisioned inbox AppX, capabilities, and opti
 _Avoid_: keep-list polarity; Profile presets; BCU; treating CDM as the primary remove path; auto-on “recommended” sets outside an explicit Profile list
 
 **Wizard**:
-Interactive host of the same BuildPlan brain (not a second planner). Keep-flag UI presets expand **host-side** into Profile remove-lists (preset names never appear in Profile JSON). May also author Profile `packages.winget` / `scoop` / `wsl` (and `*NeedsReboot` subsets) and override capability/feature lists as raw ids.
-_Avoid_: embedding DISM or a second planning brain in the UI; calling the CLI the Wizard; putting keep-flag preset names into Profile JSON; inventing a Wizard-only packages catalog or live winget/Scoop search as the authoring path
+Interactive Avalonia host of the same BuildPlan brain (not a second planner). Authors a **Profile** and **RunOptions** (Source ISO path, image-quality lane, optional WIM index). Keep-flag UI presets and chip catalogs expand **host-side** into Profile remove-lists / package ids (preset names never appear in Profile JSON). Phase A: multi-step shell (Source → Configure → Preview → Review) with Plan/Save and a Cli build recipe. Phase B (later): invoke elevated ImageServicing via the shared host/Cli path — not DISM inside the UI.
+_Avoid_: embedding DISM or a second planning brain in the UI; calling the CLI the Wizard; putting keep-flag preset names into Profile JSON; inventing a Wizard-only packages catalog or live winget/Scoop search as the authoring path; WebView2 on the host wizard
 
 **Metal jobs**:
 Non-stub provisioning job kinds (`winget`, `scoop`, `wsl`) run by the same Supervisor executor as Smoke stubs, on bare metal or richer profiles.

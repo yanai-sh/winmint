@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using WinMint.Orchestrator;
 
@@ -17,6 +18,17 @@ internal static class WizardSession
         if (!int.TryParse(input.GeoIdText.Trim(), out int geoId))
         {
             return WizardSessionResult.Fail("dma.settle.geoId: must be an integer.");
+        }
+
+        if (!TryParseLane(input.ImageQualityText, out ImageQualityLane lane, out string? laneError))
+        {
+            return WizardSessionResult.Fail(laneError!);
+        }
+
+        IReadOnlyList<string> appx = IdList.FromMultiline(input.RemoveProvisionedAppxText);
+        if (appx.Count == 0)
+        {
+            appx = expanded.Value.RemoveProvisionedAppx;
         }
 
         // UI lists override empty; when non-empty they replace preset pins for that field (union would surprise).
@@ -44,7 +56,7 @@ internal static class WizardSession
                     geoId,
                     input.TimeZoneId.Trim(),
                     input.LocationServicesEnabled)),
-            expanded.Value.RemoveProvisionedAppx,
+            appx,
             IdList.FromMultiline(input.WingetText),
             IdList.FromMultiline(input.WingetNeedsRebootText),
             IdList.FromMultiline(input.ScoopText),
@@ -54,19 +66,97 @@ internal static class WizardSession
             caps,
             feats);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        RunOptions run = new()
+        {
+            ImageQuality = lane,
+            SourceIsoPath = string.IsNullOrWhiteSpace(input.SourceIsoPath) ? null : input.SourceIsoPath.Trim(),
+        };
+
+        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile, run);
         if (!planned.IsOk)
         {
             return WizardSessionResult.Fail($"{planned.Error.Code}: {planned.Error.Message}");
         }
 
         byte[] utf8 = BuildPlan.SerializeProfile(profile);
-        string removeSummary = expanded.Value.RemoveProvisionedAppx.Count == 0
+        string removeSummary = appx.Count == 0
             ? "(none)"
-            : string.Join(", ", expanded.Value.RemoveProvisionedAppx);
+            : string.Join(", ", appx);
         string ok =
             $"Plan OK. Lane={planned.Value.Manifest.ImageQuality}; removeProvisionedAppx={removeSummary}; jobs={planned.Value.Jobs.Jobs.Count}.";
         return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8));
+    }
+
+    /// <summary>Honest Phase A handoff — no process spawn. Work dir is a conventional placeholder.</summary>
+    public static string FormatBuildRecipe(
+        string profilePath,
+        string sourceIsoPath,
+        string imageQualityText,
+        int? wimIndex)
+    {
+        string profile = QuoteArg(profilePath);
+        string iso = QuoteArg(sourceIsoPath);
+        string lane = string.IsNullOrWhiteSpace(imageQualityText) ? "Test" : imageQualityText.Trim();
+        StringBuilder sb = new();
+        sb.Append(CultureInfo.InvariantCulture, $"winmint build {profile} --iso {iso} --work \"%ProgramData%\\WinMint\\work\" --image-quality {lane}");
+        // Cli defaults WIM index to Pro when omitted — always emit Home (and any non-Pro) so the recipe matches Wizard intent.
+        if (wimIndex is int index)
+        {
+            if (index != ImageServicing.DefaultProWimIndex)
+            {
+                sb.Append(CultureInfo.InvariantCulture, $" --wim-index {index}");
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    public static bool TryParseLane(string? raw, out ImageQualityLane lane, out string? error)
+    {
+        lane = ImageQualityLane.Test;
+        error = null;
+        if (string.IsNullOrWhiteSpace(raw) ||
+            string.Equals(raw.Trim(), "Test", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(raw.Trim(), "Release", StringComparison.OrdinalIgnoreCase))
+        {
+            lane = ImageQualityLane.Release;
+            return true;
+        }
+
+        error = "run.imageQuality: must be Test or Release.";
+        return false;
+    }
+
+    /// <summary>Advanced multiline wins when non-empty; else selected chip ids; else empty (preset fills).</summary>
+    public static string MergeChipAndAdvanced(IEnumerable<string> selectedChipIds, string? advancedMultiline)
+    {
+        IReadOnlyList<string> advanced = IdList.FromMultiline(advancedMultiline);
+        if (advanced.Count > 0)
+        {
+            return string.Join(Environment.NewLine, advanced);
+        }
+
+        List<string> chips = selectedChipIds
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Select(static id => id.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return string.Join(Environment.NewLine, chips);
+    }
+
+    private static string QuoteArg(string path)
+    {
+        string trimmed = path.Trim();
+        if (trimmed.Contains('"', StringComparison.Ordinal))
+        {
+            trimmed = trimmed.Replace("\"", "\\\"", StringComparison.Ordinal);
+        }
+
+        return $"\"{trimmed}\"";
     }
 }
 
@@ -87,7 +177,11 @@ internal sealed record WizardSessionInput(
     string WslText = "",
     string WslNeedsRebootText = "",
     string RemoveCapabilitiesText = "",
-    string DisableOptionalFeaturesText = "");
+    string DisableOptionalFeaturesText = "",
+    string RemoveProvisionedAppxText = "",
+    string SourceIsoPath = "",
+    string ImageQualityText = "Test",
+    int? WimIndex = null);
 
 internal sealed record WizardSessionResult(bool Succeeded, string Message, byte[]? ProfileUtf8, string? ProfileJson)
 {
