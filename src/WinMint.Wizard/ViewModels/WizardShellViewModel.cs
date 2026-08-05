@@ -8,7 +8,7 @@ using WinMint.Orchestrator;
 namespace WinMint.Wizard.ViewModels;
 
 /// <summary>v1-shaped host shell — curated chips, silent account/DMA defaults, no catalog dump.</summary>
-public sealed partial class WizardShellViewModel : ObservableObject
+public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 {
     private static readonly string[] StepNames = ["Source", "Configure", "Preview", "Review"];
 
@@ -23,6 +23,7 @@ public sealed partial class WizardShellViewModel : ObservableObject
     private readonly Window _window;
     private byte[]? _lastProfileUtf8;
     private string? _savedProfilePath;
+    private CancellationTokenSource? _buildCts;
 
     // Silent default from host SKU: Home unless Wizard host is Pro (not shown in Source UI).
     private readonly int? _wimIndex = HostEdition.DefaultWimIndex();
@@ -102,6 +103,10 @@ public sealed partial class WizardShellViewModel : ObservableObject
     [ObservableProperty] private string _planSummary = "";
     [ObservableProperty] private string _buildRecipe = "";
     [ObservableProperty] private string _saveStatus = "";
+    [ObservableProperty] private bool _canBuild;
+    [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private string _buildStatus = "";
+    [ObservableProperty] private string? _outputIsoPath;
 
     public bool IsSourceStep => StepIndex == 0;
     public bool IsConfigureStep => StepIndex == 1;
@@ -114,7 +119,18 @@ public sealed partial class WizardShellViewModel : ObservableObject
     public bool IsReleaseLane => string.Equals(ImageQuality, "Release", StringComparison.OrdinalIgnoreCase);
 
     partial void OnStepIndexChanged(int value) => RefreshNav();
-    partial void OnSourceIsoPathChanged(string value) => RefreshNav();
+
+    partial void OnSourceIsoPathChanged(string value)
+    {
+        RefreshNav();
+        RefreshCanBuild();
+    }
+
+    partial void OnIsBusyChanged(bool value)
+    {
+        RefreshNav();
+        RefreshCanBuild();
+    }
 
     partial void OnPresetChanged(string value)
     {
@@ -240,14 +256,71 @@ public sealed partial class WizardShellViewModel : ObservableObject
         Status = SaveStatus;
         StatusIsError = false;
         RefreshRecipe();
+        RefreshCanBuild();
     }
+
+    [RelayCommand]
+    private async Task BuildAsync()
+    {
+        if (!CanBuild || _savedProfilePath is null)
+        {
+            return;
+        }
+
+        _buildCts?.Cancel();
+        _buildCts?.Dispose();
+        _buildCts = new CancellationTokenSource();
+        CancellationToken ct = _buildCts.Token;
+
+        IsBusy = true;
+        BuildStatus = "Building… (approve UAC if prompted)";
+        Status = BuildStatus;
+        StatusIsError = false;
+        OutputIsoPath = null;
+
+        WizardBuildInput input = new(
+            _savedProfilePath,
+            SourceIsoPath.Trim(),
+            ImageQuality,
+            WorkDirectory: WizardBuild.DefaultWorkDirectory,
+            WimIndex: _wimIndex);
+
+        WizardBuildResult result = await Task.Run(() => WizardBuild.TryApply(input, cancellationToken: ct), ct)
+            .ConfigureAwait(true);
+
+        IsBusy = false;
+        if (ct.IsCancellationRequested && !result.Succeeded)
+        {
+            BuildStatus = "Build cancelled.";
+            Status = BuildStatus;
+            StatusIsError = true;
+            return;
+        }
+
+        BuildStatus = result.Message;
+        Status = result.Message;
+        StatusIsError = !result.Succeeded;
+        if (result.Succeeded)
+        {
+            OutputIsoPath = result.OutputIsoPath;
+            SaveStatus = $"Saved → {_savedProfilePath}\n{result.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void CancelBuild() => _buildCts?.Cancel();
 
     [RelayCommand] private void Close() => _window.Close();
 
+    private void RefreshCanBuild() =>
+        CanBuild = !IsBusy
+            && !string.IsNullOrEmpty(_savedProfilePath)
+            && SourceIsoReady();
+
     private void RefreshNav()
     {
-        CanGoBack = StepIndex > 0;
-        CanGoNext = StepIndex < StepNames.Length - 1 && (StepIndex != 0 || SourceIsoReady());
+        CanGoBack = !IsBusy && StepIndex > 0;
+        CanGoNext = !IsBusy && StepIndex < StepNames.Length - 1 && (StepIndex != 0 || SourceIsoReady());
         NextLabel = "Continue";
         if (StepIndex == StepNames.Length - 1)
         {
@@ -344,5 +417,12 @@ public sealed partial class WizardShellViewModel : ObservableObject
         }
 
         return chips;
+    }
+
+    public void Dispose()
+    {
+        _buildCts?.Cancel();
+        _buildCts?.Dispose();
+        _buildCts = null;
     }
 }

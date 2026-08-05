@@ -6,27 +6,41 @@
   <StackPanel Spacing="20" MaxWidth="720" HorizontalAlignment="Center" VerticalAlignment="Center">
     <TextBlock Classes="hero-title" Text="Review output" />
     <TextBlock Classes="hero-sub"
-               Text="Save the Profile, then run the build from a terminal. In-Wizard build arrives in Phase B." />
+               Text="Save the Profile, then build. Build elevates once (UAC) and runs the same ImageServicing path as Cli." />
 
     <Border Classes="iso-stage">
       <StackPanel Spacing="14">
-        <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+        <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
           <TextBlock Text="Source" Opacity="0.55" />
           <TextBlock Grid.Column="1" Text="{Binding SourceIsoPath}" TextWrapping="Wrap" TextAlignment="Right" />
           <TextBlock Grid.Row="1" Text="Lane" Opacity="0.55" />
           <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ImageQuality}" TextAlignment="Right" />
           <TextBlock Grid.Row="2" Text="Plan" Opacity="0.55" />
           <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PlanSummary}" TextWrapping="Wrap" TextAlignment="Right" />
+          <TextBlock Grid.Row="3" Text="Output" Opacity="0.55" />
+          <TextBlock Grid.Row="3" Grid.Column="1"
+                     Text="{Binding OutputIsoPath}"
+                     TextWrapping="Wrap"
+                     TextAlignment="Right" />
         </Grid>
 
         <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center" Margin="0,8,0,0">
-          <Button Classes="primary" Content="Save Profile" Command="{Binding SaveProfileCommand}" />
+          <Button Classes="primary"
+                  Content="Save Profile"
+                  Command="{Binding SaveProfileCommand}"
+                  IsEnabled="{Binding !IsBusy}" />
+          <Button Classes="primary"
+                  Content="Build"
+                  Command="{Binding BuildCommand}"
+                  IsEnabled="{Binding CanBuild}"
+                  ToolTip.Tip="Requires a saved Profile and an existing Source ISO. Elevates via UAC." />
           <Button Classes="ghost"
-                  Content="Build (Phase B)"
-                  IsEnabled="False"
-                  ToolTip.Tip="Elevated ImageServicing invoke ships in Phase B." />
+                  Content="Cancel"
+                  Command="{Binding CancelBuildCommand}"
+                  IsVisible="{Binding IsBusy}" />
         </StackPanel>
 
+        <TextBlock Text="{Binding BuildStatus}" TextWrapping="Wrap" Opacity="0.85" />
         <TextBlock Text="{Binding SaveStatus}" Opacity="0.75" TextWrapping="Wrap" />
         <TextBlock Classes="panel-label" Text="CLI RECIPE" Margin="0,8,0,4" />
         <TextBox Text="{Binding BuildRecipe}"

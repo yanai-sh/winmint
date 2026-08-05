@@ -32,7 +32,7 @@ Guest/runtime reliability (Shell-before-Explorer, DMA settle races, splash timin
 - v1 harvest notes map behaviour into BuildPlan / ProvisioningSession interfaces; scripts are archaeology ([ARCHITECTURE harvest rule](../ARCHITECTURE.md#v1-harvest-rule)).
 - Host build wall-clock remains DISM-bound; keep image-quality lanes and VM harness caching.
 - Ticket 10 should expose one acceptance interface, not a peer forest of harness entrypoints.
-- Wizard Phase A (2026-08-05): multi-step Avalonia host; Phase B elevated build invoke remains a separate ticket.
+- Wizard Phase A (2026-08-05): multi-step Avalonia host; Phase B (same day): Review Build → ImageServicing.Apply via elevated pwsh.
 
 ### Review trigger
 
