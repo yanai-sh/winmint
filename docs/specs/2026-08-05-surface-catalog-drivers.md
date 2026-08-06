@@ -1,6 +1,6 @@
 # Spec: Surface Catalog offline driver injection
 
-**Status:** Published — [#63](https://github.com/yanai-sh/winmint/issues/63) (`ready-for-agent`; grill closed 2026-08-05)  
+**Status:** Shipped — [#63](https://github.com/yanai-sh/winmint/issues/63) (commit `7d12cb3`; `ready-for-agent` cleared on close)  
 **Authority:** [CONTEXT](../../CONTEXT.md) · [IMAGESERVICING](../design/IMAGESERVICING.md) · [TDD](../TDD.md) · [V1-LESSONS](../design/V1-LESSONS.md)  
 **Harvest:** v1 `Drivers.ps1` behaviour only — not topology ([ARCHITECTURE harvest rule](../ARCHITECTURE.md#v1-harvest-rule))
 
