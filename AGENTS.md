@@ -1,10 +1,10 @@
 # WinMint — Agent contract
 
-Windows 11 ISO builder (greenfield v2). **ARM64-first**. Host Servicing: **pwsh 7.6+**. Guest FirstLogon: **C# only**.
+Windows 11 ISO builder (**alpha**). **ARM64-first**. Host Servicing: **pwsh 7.6+**. Guest FirstLogon: **Provisioning Supervisor** (C# phase machine); package installs may delegate to platform tools ([ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md)).
 
-## Phase: backlog closed (post 01–30)
+## Phase: alpha (post backlog 01–30)
 
-Product `/implement` is **maintainer pick** or a new GitHub issue (grill → to-spec) — **one issue per session**. Apply `ready-for-agent` only when starting that work. Closed index: [TICKETS](docs/TICKETS.md). Lasting policy: [DESIGN](docs/DESIGN.md#decisions-locked-grill).
+Product `/implement` is **maintainer pick** or a new GitHub issue (grill → to-spec) — **one issue per session**. Apply `ready-for-agent` only when starting that work. Closed index: [TICKETS](docs/TICKETS.md). Requirement tiers: [ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md); grill index: [DESIGN](docs/DESIGN.md#decisions-locked-grill).
 
 Gate/locks: [ROADMAP](docs/ROADMAP.md#design-acceptance) · [DESIGN](docs/DESIGN.md#decisions-locked-grill)  
 Closed index: [TICKETS](docs/TICKETS.md) · Sessions: [AGENTIC](docs/agents/AGENTIC.md) · Seams: [TDD](docs/TDD.md)
@@ -15,7 +15,7 @@ Closed index: [TICKETS](docs/TICKETS.md) · Sessions: [AGENTIC](docs/agents/AGEN
 
 **CLI/Orchestrator creates intent. Servicing mutates the offline image. Provisioning Supervisor finishes live-user setup.**
 
-Elevate **only** Servicing `pwsh -File`. No v1 `WinMint.ps1`. No guest pwsh.
+Elevate **only** Servicing `pwsh -File`. No v1 `WinMint.ps1`. No guest **pwsh product runtime** — inbox `powershell.exe` for Scoop bootstrap or delegated winget import/configure is OK ([ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md)).
 
 ## Deep modules
 
@@ -35,7 +35,7 @@ Lobby, not brochure — concise real content only; no placeholders. No badges ye
 
 ## While implementing
 
-One issue/session. Keep `just check` green. Sequencing in [ADR-006](docs/decisions/ADR-006-post-keepflag-sequencing.md) is **met**. Lasting policy: remove-list only; no Profile presets-in-JSON; product-default **`recommended`** host expansion (issue 56); no casual `v2`; CDM not primary ([ADR-007](docs/decisions/ADR-007-cdm-not-primary.md)); residual self-erase after Shell Complete ([ADR-008](docs/decisions/ADR-008-residual-minimization.md)).
+One issue/session. Keep `just check` green. Sequencing in [ADR-006](docs/decisions/ADR-006-post-keepflag-sequencing.md) is **met**. **Invariants:** remove-list only; no Profile presets-in-JSON; product-default **`recommended`** host expansion (issue 56); no casual `v2`; CDM not primary ([ADR-007](docs/decisions/ADR-007-cdm-not-primary.md)); residual self-erase ([ADR-008](docs/decisions/ADR-008-residual-minimization.md)). **Defaults** (package shape, fail-closed scope, audit) revisable per [ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md).
 
 ```powershell
 just check

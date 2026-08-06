@@ -114,6 +114,15 @@ public class WinPeApplyPlanTests
         Assert.DoesNotContain("/legacy", script, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Plan_default_install_engine_is_winpeApply()
+    {
+        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(ParseProfile());
+        Assert.True(result.IsOk);
+        Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.PatchBootWimApply);
+        Assert.DoesNotContain(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.InjectUnattend);
+    }
+
     private static Profile ParseProfile()
     {
         Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""

@@ -1,6 +1,6 @@
 # WinMint
 
-Windows 11 ISO customization product. The user supplies official Microsoft media; WinMint produces a tailored install image and first-logon setup.
+Workstation state compiler — debloat posture, policies, packages, DMA settle, and account intent compiled from a **Profile**. Bootable USB/ISO is the default delivery artifact; the user always supplies official Microsoft **Source ISO** media.
 
 ## Language
 
@@ -37,8 +37,8 @@ The SetupComplete phase before first interactive logon. Invokes the Provisioning
 _Avoid_: winget/toolchain in SetupComplete; calling this FirstLogon; Shell stamp with no verify
 
 **Provisioning Supervisor**:
-Single Native AOT C# process used as Winlogon Shell after auth (and as `--machine-setup` during Machine setup). Owns the in-process splash presenter, DMA settle, in-memory status, evidence snapshots, provisioning jobs, reboot checkpoint resume, and fail-open to Explorer. There is no peer splash executable and no guest PowerShell runtime requirement. Deep module interface: **ProvisioningSession** (one phase machine; modes are entrypoints).
-_Avoid_: pwsh PreLock as Shell; a separate Splash.exe; Explorer as first session UI while Shell tenure holds; guest pwsh adapters
+Single Native AOT C# process used as Winlogon Shell after auth (and as `--machine-setup` during Machine setup). Owns the in-process splash presenter, DMA settle, in-memory status, evidence snapshots, provisioning **phase orchestration**, reboot checkpoint resume, and fail-open to Explorer. Package installs run as delegated child processes (winget/scoop/wsl) or batch import/configure — not necessarily one C# code path per package ([ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md)). There is no peer splash executable and no guest **pwsh product runtime**.
+_Avoid_: pwsh PreLock as Shell; a separate Splash.exe; Explorer as first session UI while Shell tenure holds; v1 guest script monolith
 
 **ProvisioningSession**:
 The Supervisor’s deep module: Machine setup and Shell-tenure FirstLogon share one phase machine (stamp → splash → DMA settle → jobs → unlock / reboot checkpoint). Modes (`--machine-setup` vs Shell) are entrypoints, not separate architectures.
@@ -57,8 +57,8 @@ The period while the Provisioning Supervisor is Winlogon Shell and showing splas
 _Avoid_: multi-layer PS guard as the definition of lock; releasing Shell then hoping autologon recovers; treating splash as optional decoration during Shell tenure
 
 **Provisioning jobs**:
-Install/setup units the Supervisor runs as child processes (`winget`, Scoop, `wsl`, etc.) after DMA settle’s hard fields are green. Smoke and bare metal use the same executor; they may differ in which jobs the Profile schedules, not in how jobs run.
-_Avoid_: guest pwsh adapter modules as the default driver; Hyper-V-only install executors; starting jobs before hard settle
+Install/setup units after DMA hard settle. Supervisor orchestrates phases; packages may run as per-id jobs or **delegated batch** (winget import/configure, batch scoop). Same executor on Smoke and metal; Profile chooses the job set ([ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md)).
+_Avoid_: guest pwsh product runtime; Hyper-V-only install executors; starting jobs before hard settle
 
 **Provisioning status**:
 In-memory model the Supervisor uses to drive the splash presenter. Optional JSON snapshots are for harness/evidence only — not the control-plane mailbox.
@@ -80,9 +80,16 @@ _Avoid_: full install gate, hardware acceptance (those are later verticals); a d
 Run-specific WIM export / WinSxS cleanup posture for one build. Test lane prioritizes speed; release lane prioritizes a smaller ISO. Not authored in the Profile. Export/commit paths snapshot and assert WIM metadata (Name/Architecture/edition build) so DISM exit 0 cannot silently leave Setup-breaking image info.
 _Avoid_: baking Max compression into every Smoke rebuild; claiming C# orchestration makes DISM faster; trusting Unmount/Commit without re-reading Get-WimInfo
 
+**Install engine**:
+Default path is **WinPE apply** (`diskpart` + `dism /Apply-Image` + `bcdboot` + Panther OOBE unattend) — no `setup.exe /legacy`. Legacy ConX/Setup patch remains on explicit `RunOptions.InstallEngine=legacy` opt-in only. See [workstation-compiler spec](docs/specs/2026-08-05-workstation-compiler-winpe-apply.md).
+_Avoid_: treating ISO craftsmanship as the product; assuming Setup honors full Autounattend on 25H2+ without legacy hack
+
+**Debloat venue**:
+AppX remove-list default is **online** (`debloat.mode` absent ⇒ online): live removes via FirstLogon `appx.safetyNet` after DMA settle. `debloat.mode: offline` keeps DISM `RemoveProvisionedAppx` for air-gap. Capabilities/features are always offline DISM when listed. Network requirement is Plan-derived (`requiresNetwork` on bundle), not a Profile field.
+_Avoid_: offline-primary debloat as the solo-dev default; authoring `network.*` in Profile JSON
+
 **Keep-flag**:
-Remove-list polarity for selected provisioned inbox AppX, capabilities, and optional features: Profile lists what to strip/disable; static in-repo catalogs bound legal ids; ImageServicing removes offline; ProvisioningSession is a narrow FirstLogon AppX safety net. Product zero-config is host preset **`recommended`** (expands → Profile ids; never preset names in JSON). Smoke **acceptance** uses a small explicit remove-list to prove the path; intentional empty Cli Profiles stay empty. CDM is not the primary control plane.
-_Avoid_: keep-list polarity; Profile presets-in-JSON; BCU; treating CDM as the primary remove path; silent BuildPlan fill of intentional empty remove-lists; catalog growth auto-expanding `recommended`
+Remove-list polarity for selected provisioned inbox AppX, capabilities, and optional features: Profile lists what to strip/disable; static in-repo catalogs bound legal ids; AppX via online job (default) or offline DISM (explicit mode); caps/features offline when listed. Product zero-config is host preset **`recommended`** (expands → Profile ids; never preset names in JSON). Smoke **acceptance** uses a small explicit remove-list to prove the path; intentional empty Cli Profiles stay empty. CDM is not the primary control plane.
 
 **Wizard**:
 Interactive Avalonia host of the same BuildPlan brain (not a second planner). Authors a **Profile** and **RunOptions** (Source ISO path, image-quality lane, optional WIM index). Keep-flag UI presets and chip catalogs expand **host-side** into Profile remove-lists / package ids (preset names never appear in Profile JSON). Phase A: multi-step shell (Source → Configure → Preview → Review) with Plan/Save. Phase B: Review **Build** invokes elevated **ImageServicing.Apply** (same path as Cli; UAC via PwshElevatedPlanRunner) — not DISM inside the UI.

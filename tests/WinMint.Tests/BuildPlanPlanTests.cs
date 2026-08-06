@@ -62,10 +62,7 @@ public class BuildPlanPlanTests
         BuildArtifacts artifacts = result.Value;
         Assert.Contains(BuildPlan.IrelandSetupLocale, artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains($"/d {BuildPlan.IrelandSetupGeoId} ", artifacts.Unattend.Xml, StringComparison.Ordinal);
-        Assert.Contains("windowsPE", artifacts.Unattend.Xml, StringComparison.Ordinal);
-        Assert.Contains(BuildPlan.ProSetupProductKey, artifacts.Unattend.Xml, StringComparison.Ordinal);
-        Assert.Contains("<Key>/IMAGE/INDEX</Key>", artifacts.Unattend.Xml, StringComparison.Ordinal);
-        Assert.Contains("<Value>1</Value>", artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("windowsPE", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("oobeSystem", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("<Name>winmint</Name>", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("<HideOnlineAccountScreens>true</HideOnlineAccountScreens>", artifacts.Unattend.Xml, StringComparison.Ordinal);
@@ -149,8 +146,9 @@ public class BuildPlanPlanTests
                 ServicingOpcode.MountInstallWim,
                 ServicingOpcode.StampOfflinePolicies,
                 ServicingOpcode.StagePayload,
-                ServicingOpcode.InjectUnattend,
+                ServicingOpcode.StageOobeUnattend,
                 ServicingOpcode.StampOfflineShell,
+                ServicingOpcode.PatchBootWimApply,
                 ServicingOpcode.ExportWim,
                 ServicingOpcode.BuildIso,
             ],

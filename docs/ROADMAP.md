@@ -1,6 +1,6 @@
 # WinMint v2 — Roadmap
 
-**Phase now:** Design Acceptance **signed** · Implementation **Released** ([TICKETS](TICKETS.md)).  
+**Phase now:** **Alpha** — Design Acceptance signed · Implementation Released ([TICKETS](TICKETS.md)). Requirement tiers: [ADR-011](decisions/ADR-011-alpha-posture-and-package-delegation.md).  
 **Authority:** [ARCHITECTURE](ARCHITECTURE.md), [Smoke](specs/2026-07-27-smoke.md), ADRs, [design/](design/), [DESIGN](DESIGN.md).
 
 ## Milestones
@@ -13,6 +13,7 @@
 | **M2** | Wizard | Second BuildPlan host; presets → remove-lists; packages + caps UI | **Done** thin + packages (**15**, **22**) + polish (**25**, 2026-08-05); full UX polish still out |
 | **M3** | Metal jobs / matrix expand | winget + reboot-resume + Scoop (**16–18**); caps **19–20**; WSL **23**; ExitWindowsEx **24** | **Done** (metal exit 2026-08-04; WSL/caps follow-on 2026-08-05) |
 | **M4** | Hardware acceptance | Stricter evidence bars; same Supervisor/settle/jobs | Bars opt-in (**30**); full hardware campaign after M2/M3 — maintainer-timed |
+| **M5** | Workstation compiler | WinPE apply + online debloat default; legacy Setup opt-in | **Done** — Gates A–C ([#70](https://github.com/yanai-sh/winmint/issues/70)–[#72](https://github.com/yanai-sh/winmint/issues/72)); spec: [workstation-compiler](specs/2026-08-05-workstation-compiler-winpe-apply.md) |
 
 ## Design Acceptance
 
@@ -21,7 +22,7 @@
 | Date | **2026-07-28** |
 | Maintainer | Project owner (batch-grill shared understanding) |
 | Splash prototype | Waived for gate; required before ticket **04** |
-| Notes | Grill locks: [DESIGN](DESIGN.md#decisions-locked-grill). Closed index: [TICKETS](TICKETS.md). Post–keep-flag sequencing: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) (sequencing **met**; lasting policy still binds). CDM: [ADR-007](decisions/ADR-007-cdm-not-primary.md). |
+| Notes | Grill locks: [DESIGN](DESIGN.md#decisions-locked-grill). **Alpha:** defaults revisable per [ADR-011](decisions/ADR-011-alpha-posture-and-package-delegation.md). Post–keep-flag sequencing: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) (**met**). CDM: [ADR-007](decisions/ADR-007-cdm-not-primary.md). |
 
 ## M1 order
 

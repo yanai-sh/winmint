@@ -1,4 +1,6 @@
 #requires -Version 7.6
+# ponytail: legacy opt-in only — BuildPlan emits InjectUnattend when RunOptions.InstallEngine=legacy.
+# Default winpeApply path uses StageOobeUnattend + PatchBootWimApply instead (issue #72).
 param(
     [Parameter(Mandatory)]
     [hashtable] $Parameters

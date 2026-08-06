@@ -67,8 +67,8 @@ internal static class Program
 
         Option<string> installEngineOption = new("--install-engine")
         {
-            Description = "Install lane: legacy (default) or winpeApply.",
-            DefaultValueFactory = _ => "legacy",
+            Description = "Install lane: winpeApply (default) or legacy opt-in.",
+            DefaultValueFactory = _ => "winpeApply",
         };
 
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")

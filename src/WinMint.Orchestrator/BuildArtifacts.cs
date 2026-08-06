@@ -18,8 +18,8 @@ public sealed record RunOptions
     /// <summary>Override embedded package catalog (tests); null uses <see cref="PackageCatalog.Default"/>.</summary>
     public PackageCatalog? PackageCatalog { get; init; }
 
-    /// <summary>Install lane: legacy Setup.exe /legacy (default) or WinPE diskpart+DISM apply.</summary>
-    public InstallEngine InstallEngine { get; init; } = InstallEngine.Legacy;
+    /// <summary>Install lane: WinPE diskpart+DISM apply (default) or legacy Setup.exe /legacy opt-in.</summary>
+    public InstallEngine InstallEngine { get; init; } = InstallEngine.WinPeApply;
 }
 
 public enum InstallEngine
