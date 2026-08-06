@@ -137,6 +137,7 @@ public class KeepFlagPresetTests
         Profile profile = new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
             new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            DebloatMode.Online,
             expanded.Value.RemoveProvisionedAppx,
             [],
             [],
@@ -164,7 +165,8 @@ public class KeepFlagPresetTests
 
         Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
-        Assert.Contains(
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
+        Assert.DoesNotContain(
             planned.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
         Assert.Contains(
@@ -185,6 +187,7 @@ public class KeepFlagPresetTests
         Profile profile = new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
             new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            DebloatMode.Online,
             expanded.Value.RemoveProvisionedAppx,
             [],
             [],
@@ -212,6 +215,7 @@ public class KeepFlagPresetTests
         Profile profile = new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
             new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            DebloatMode.Online,
             expanded.Value.RemoveProvisionedAppx,
             [],
             [],

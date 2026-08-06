@@ -40,7 +40,8 @@ public sealed record BuildArtifacts(
     ServicingStageList Stages,
     DmaContract Dma,
     BuildManifest Manifest,
-    AccountProfile Account);
+    AccountProfile Account,
+    IReadOnlyList<string> RemoveProvisionedAppx);
 
 public sealed record UnattendArtifact(string Xml);
 
@@ -111,4 +112,4 @@ public enum ServicingOpcode
 
 public sealed record DmaContract(bool Enabled, DmaSettleTarget? Settle);
 
-public sealed record BuildManifest(ImageQualityLane ImageQuality);
+public sealed record BuildManifest(ImageQualityLane ImageQuality, bool RequiresNetwork);

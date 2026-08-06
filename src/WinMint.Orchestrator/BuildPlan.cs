@@ -170,6 +170,29 @@ public static class BuildPlan
             drivers = new DriversProfile(doc.Drivers.Source.Trim(), doc.Drivers.DeviceId.Trim());
         }
 
+        DebloatMode debloatMode = DebloatMode.Online;
+        if (doc.Debloat?.Mode is not null)
+        {
+            if (string.Equals(doc.Debloat.Mode, "online", StringComparison.OrdinalIgnoreCase))
+            {
+                debloatMode = DebloatMode.Online;
+            }
+            else if (string.Equals(doc.Debloat.Mode, "offline", StringComparison.OrdinalIgnoreCase))
+            {
+                debloatMode = DebloatMode.Offline;
+            }
+            else
+            {
+                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+                [
+                    new DocumentError(
+                        "debloat.mode.unsupported",
+                        $"Unsupported debloat.mode '{doc.Debloat.Mode}'. Expected online|offline.",
+                        "debloat.mode"),
+                ]));
+            }
+        }
+
         Profile profile = new(
             new AccountProfile(doc.Account.Username!, password, requireWifi, passwordPath),
             new DmaProfile(
@@ -179,6 +202,7 @@ public static class BuildPlan
                     settle.GeoId.Value,
                     settle.TimeZoneId,
                     settle.LocationServicesEnabled.Value)),
+            debloatMode,
             NormalizeRemoveList(doc.Debloat?.RemoveProvisionedAppx),
             NormalizeRemoveList(doc.Packages?.Winget),
             NormalizeRemoveList(doc.Packages?.WingetNeedsReboot),
@@ -212,11 +236,13 @@ public static class BuildPlan
         }
 
         DebloatDocument? debloat = null;
-        if (profile.RemoveProvisionedAppx.Count > 0
+        if (profile.DebloatMode == DebloatMode.Offline
+            || profile.RemoveProvisionedAppx.Count > 0
             || profile.RemoveCapabilities.Count > 0
             || profile.DisableOptionalFeatures.Count > 0)
         {
             debloat = new DebloatDocument(
+                profile.DebloatMode == DebloatMode.Offline ? "offline" : null,
                 profile.RemoveProvisionedAppx.Count == 0 ? null : profile.RemoveProvisionedAppx.ToArray(),
                 profile.RemoveCapabilities.Count == 0 ? null : profile.RemoveCapabilities.ToArray(),
                 profile.DisableOptionalFeatures.Count == 0 ? null : profile.DisableOptionalFeatures.ToArray());
@@ -336,6 +362,13 @@ public static class BuildPlan
 
         return null;
     }
+
+    /// <summary>Derived network requirement — not authored in Profile JSON (issue 71).</summary>
+    public static bool PlanRequiresNetwork(Profile profile) =>
+        (profile.DebloatMode == DebloatMode.Online && profile.RemoveProvisionedAppx.Count > 0)
+        || profile.WingetPackages.Count > 0
+        || profile.ScoopPackages.Count > 0
+        || profile.WslDistros.Count > 0;
 
     public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null)
     {
@@ -462,7 +495,7 @@ public static class BuildPlan
             jobList.Add(new JobDescriptor($"doh.{dohProvider}", "doh.set", PackageId: dohProvider));
         }
 
-        if (profile.RemoveProvisionedAppx.Count > 0)
+        if (profile.RemoveProvisionedAppx.Count > 0 && profile.DebloatMode == DebloatMode.Online)
         {
             jobList.Add(new JobDescriptor("keepflag.appx.safetyNet", "appx.safetyNet"));
         }
@@ -544,7 +577,7 @@ public static class BuildPlan
                 }),
         ];
 
-        if (profile.RemoveProvisionedAppx.Count > 0)
+        if (profile.RemoveProvisionedAppx.Count > 0 && profile.DebloatMode == DebloatMode.Offline)
         {
             stageList.Add(new ServicingStage(
                 ServicingOpcode.RemoveProvisionedAppx,
@@ -651,8 +684,9 @@ public static class BuildPlan
             jobs,
             stages,
             new DmaContract(profile.Dma.Enabled, profile.Dma.Enabled ? profile.Dma.Settle : null),
-            new BuildManifest(options.ImageQuality),
-            profile.Account);
+            new BuildManifest(options.ImageQuality, PlanRequiresNetwork(profile)),
+            profile.Account,
+            profile.RemoveProvisionedAppx);
 
         return Result.Ok<BuildArtifacts, PlanFailure>(artifacts);
     }
@@ -852,6 +886,7 @@ internal sealed record PackagesDocument(
     [property: JsonPropertyName("wslNeedsReboot")] string[]? WslNeedsReboot);
 
 internal sealed record DebloatDocument(
+    [property: JsonPropertyName("mode")] string? Mode,
     [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx,
     [property: JsonPropertyName("removeCapabilities")] string[]? RemoveCapabilities,
     [property: JsonPropertyName("disableOptionalFeatures")] string[]? DisableOptionalFeatures);

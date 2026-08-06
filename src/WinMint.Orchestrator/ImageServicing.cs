@@ -163,16 +163,7 @@ public static class ImageServicing
             Path.Combine(payloadDir, "jobs.json"),
             JsonSerializer.SerializeToUtf8Bytes(jobs, ServicingJsonContext.Default.JobsFile));
 
-        string[] removeProvisionedAppx = [];
-        ServicingStage? removeStage = plan.Stages.Stages
-            .FirstOrDefault(s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
-        if (removeStage is not null
-            && removeStage.Parameters.TryGetValue(StageParams.PackageFamilyNames, out string? joined)
-            && !string.IsNullOrWhiteSpace(joined))
-        {
-            removeProvisionedAppx = joined
-                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        }
+        string[] removeProvisionedAppx = plan.RemoveProvisionedAppx.ToArray();
 
         BundleFile bundle = new(
             BundleSchemaVersion,
@@ -187,7 +178,8 @@ public static class ImageServicing
                     plan.Dma.Settle.GeoId,
                     plan.Dma.Settle.TimeZoneId,
                     plan.Dma.Settle.LocationServicesEnabled),
-            removeProvisionedAppx);
+            removeProvisionedAppx,
+            plan.Manifest.RequiresNetwork);
         File.WriteAllBytes(
             Path.Combine(payloadDir, "bundle.json"),
             JsonSerializer.SerializeToUtf8Bytes(bundle, ServicingJsonContext.Default.BundleFile));
@@ -385,7 +377,8 @@ internal sealed record BundleFile(
     [property: JsonPropertyName("password")] string Password,
     [property: JsonPropertyName("dmaEnabled")] bool DmaEnabled,
     [property: JsonPropertyName("settle")] SettleFile? Settle,
-    [property: JsonPropertyName("removeProvisionedAppx")] string[] RemoveProvisionedAppx);
+    [property: JsonPropertyName("removeProvisionedAppx")] string[] RemoveProvisionedAppx,
+    [property: JsonPropertyName("requiresNetwork")] bool RequiresNetwork = false);
 
 internal sealed record SettleFile(
     [property: JsonPropertyName("locale")] string Locale,

@@ -104,7 +104,45 @@ public class KeepFlagAppxSafetyNetTests
             planned.Value.Jobs.Jobs,
             j => j.Kind == "appx.safetyNet");
         Assert.Equal("keepflag.appx.safetyNet", safety.Id);
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "stub");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
+        Assert.DoesNotContain(
+            planned.Value.Stages.Stages,
+            s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
+    }
+
+    [Fact]
+    public void Plan_offline_emits_remove_stage_not_safetyNet_job()
+    {
+        Profile profile = ParseProfile("""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "localAutoLogon",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              },
+              "debloat": {
+                "mode": "offline",
+                "removeProvisionedAppx": ["Microsoft.BingNews"]
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Assert.True(planned.IsOk);
+        Assert.Contains(
+            planned.Value.Stages.Stages,
+            s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
+        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
     }
 
     [Fact]

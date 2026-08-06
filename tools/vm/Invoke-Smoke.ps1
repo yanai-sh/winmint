@@ -239,6 +239,22 @@ function Get-StageParamIds {
 }
 
 $pinnedRemoveAppx = @(Get-StageParamIds -StagesDoc $stagesDoc -Opcode 'RemoveProvisionedAppx' -ParamName 'packageFamilyNames')
+$pinnedOnlineRemoveAppx = @()
+if ($pinnedRemoveAppx.Count -eq 0) {
+    $debloatDoc = $null
+    try {
+        $debloatDoc = Get-Content -LiteralPath $Profile -Raw -Encoding utf8 | ConvertFrom-Json
+    }
+    catch {
+        Write-Warning "Could not read Profile debloat for online pins: $($_.Exception.Message)"
+    }
+    if ($null -ne $debloatDoc.debloat -and $null -ne $debloatDoc.debloat.removeProvisionedAppx) {
+        $mode = [string]$debloatDoc.debloat.mode
+        if ([string]::IsNullOrWhiteSpace($mode) -or $mode -eq 'online') {
+            $pinnedOnlineRemoveAppx = @($debloatDoc.debloat.removeProvisionedAppx | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+        }
+    }
+}
 $pinnedRemoveCapabilities = @(Get-StageParamIds -StagesDoc $stagesDoc -Opcode 'RemoveCapabilities' -ParamName 'capabilityNames')
 $pinnedDisableOptionalFeatures = @(Get-StageParamIds -StagesDoc $stagesDoc -Opcode 'DisableOptionalFeatures' -ParamName 'featureNames')
 
@@ -416,6 +432,7 @@ if (-not (Get-ChildItem -LiteralPath $guestDir -Filter 'evidence-*.json' -ErrorA
 
 & $assertScript -EvidenceDir $evidenceOut `
     -PinnedRemoveAppx $pinnedRemoveAppx `
+    -PinnedOnlineRemoveAppx $pinnedOnlineRemoveAppx `
     -PinnedRemoveCapabilities $pinnedRemoveCapabilities `
     -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures `
     $(if ($expectNativePackageAudit) { '-ExpectNativePackageAudit' })

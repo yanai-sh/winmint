@@ -135,7 +135,8 @@ internal static class Program
             Reboot: new Win32SystemReboot(),
             LocalAccounts: new Win32LocalAccounts(),
             ResolveScoopCmd: TryResolveScoopShim,
-            ResidueCleaner: new Win32ResidueCleaner(winlogon, log));
+            ResidueCleaner: new Win32ResidueCleaner(winlogon, log),
+            Connectivity: new WindowsConnectivityProbe());
     }
 
     /// <summary>Default Scoop shim after official bootstrap (PROVISIONINGSESSION). Host-owned File.Exists.</summary>

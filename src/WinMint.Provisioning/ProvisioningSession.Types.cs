@@ -31,7 +31,8 @@ public sealed record ProvisioningBundle(
     SessionPolicy Policy,
     SupervisorIdentity Supervisor,
     CheckpointState? Resume = null,
-    IReadOnlyList<string>? RemoveProvisionedAppx = null);
+    IReadOnlyList<string>? RemoveProvisionedAppx = null,
+    bool RequiresNetwork = false);
 
 public sealed record AccountStamp(string Username, string Password);
 
@@ -73,6 +74,11 @@ public sealed record SessionPolicy(
         StaleTenureThreshold: TimeSpan.FromMinutes(15));
 }
 
+public interface IConnectivityProbe
+{
+    bool HasOutboundNetwork();
+}
+
 public sealed record SessionEnvironment(
     TimeProvider Time,
     IWinlogonRegistry Winlogon,
@@ -86,7 +92,8 @@ public sealed record SessionEnvironment(
     ISystemReboot? Reboot = null,
     ILocalAccounts? LocalAccounts = null,
     Func<string?>? ResolveScoopCmd = null,
-    IResidueCleaner? ResidueCleaner = null);
+    IResidueCleaner? ResidueCleaner = null,
+    IConnectivityProbe? Connectivity = null);
 
 /// <summary>OS reboot after NeedsReboot checkpoint (ticket 16). Nullable in tests; production wires Win32.</summary>
 public interface ISystemReboot

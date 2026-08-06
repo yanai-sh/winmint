@@ -1,9 +1,17 @@
 namespace WinMint.Orchestrator;
 
+/// <summary>AppX remove-list execution venue (issue 71). Absent in Profile JSON ⇒ online.</summary>
+public enum DebloatMode
+{
+    Online,
+    Offline,
+}
+
 /// <summary>Parsed Profile document (winmint.profile/v1). Field names frozen in ticket 01; debloat in ticket 11; OOBE Wi‑Fi via account.requireWifiDuringOobe (BUILDPLAN); packages.winget in ticket 16; wingetNeedsReboot in ticket 17; packages.scoop in ticket 18; capabilities/features in ticket 20; packages.wsl in ticket 23; policies in ADR-009.</summary>
 public sealed record Profile(
     AccountProfile Account,
     DmaProfile Dma,
+    DebloatMode DebloatMode,
     IReadOnlyList<string> RemoveProvisionedAppx,
     IReadOnlyList<string> WingetPackages,
     /// <summary>Subset of <see cref="WingetPackages"/> that emit <c>needsReboot: true</c> on Plan jobs.</summary>

@@ -49,7 +49,8 @@ public static class BundleLoader
             Jobs: jobs,
             Policy: SessionPolicy.SmokeDefaults,
             Supervisor: new SupervisorIdentity(dto.SupervisorPath),
-            RemoveProvisionedAppx: dto.RemoveProvisionedAppx ?? []);
+            RemoveProvisionedAppx: dto.RemoveProvisionedAppx ?? [],
+            RequiresNetwork: dto.RequiresNetwork);
     }
 
     private static ProvisionJob[] LoadJobs(string jobsPath)
@@ -94,7 +95,8 @@ internal sealed record BundleFile(
     [property: JsonPropertyName("password")] string? Password,
     [property: JsonPropertyName("dmaEnabled")] bool DmaEnabled,
     [property: JsonPropertyName("settle")] SettleFile? Settle,
-    [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx);
+    [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx,
+    [property: JsonPropertyName("requiresNetwork")] bool RequiresNetwork = false);
 
 internal sealed record SettleFile(
     [property: JsonPropertyName("locale")] string Locale,

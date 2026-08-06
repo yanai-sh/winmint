@@ -76,6 +76,7 @@ public class KeepFlagServicingTests
                 }
               },
               "debloat": {
+                "mode": "offline",
                 "removeProvisionedAppx": {{array}}
               }
             }

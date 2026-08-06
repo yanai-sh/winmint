@@ -110,6 +110,7 @@ public class WizardBuildTests
         Profile profile = new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
             new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            DebloatMode.Online,
             [],
             [],
             [],

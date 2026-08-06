@@ -59,6 +59,7 @@ internal static class WizardSession
                     geoId,
                     input.TimeZoneId.Trim(),
                     input.LocationServicesEnabled)),
+            DebloatMode.Online,
             appx,
             IdList.FromMultiline(input.WingetText),
             IdList.FromMultiline(input.WingetNeedsRebootText),

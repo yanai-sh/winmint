@@ -19,6 +19,9 @@ param(
     # Empty ⇒ skip keep-flag digest asserts. Full Smoke run passes Profile remove-lists.
     [string[]] $PinnedRemoveAppx = @(),
 
+    # Online debloat: assert guest phase removed.appx.online.{id} instead of offline apply digest.
+    [string[]] $PinnedOnlineRemoveAppx = @(),
+
     [string[]] $PinnedRemoveCapabilities = @(),
 
     [string[]] $PinnedDisableOptionalFeatures = @(),
@@ -136,6 +139,16 @@ function Assert-PinnedDigests {
 }
 
 Assert-PinnedDigests -Ids $PinnedRemoveAppx -KeyPrefix 'removed.appx.' -ExpectedValue 'absent' -Label 'appx'
+if (@($PinnedOnlineRemoveAppx).Count -gt 0) {
+    $phaseList = @($guest.phases)
+    foreach ($id in $PinnedOnlineRemoveAppx) {
+        if ([string]::IsNullOrWhiteSpace($id)) { continue }
+        $phase = "removed.appx.online.$id"
+        if ($phaseList -notcontains $phase) {
+            throw "online debloat phase missing: expected guest phases to contain '$phase'"
+        }
+    }
+}
 Assert-PinnedDigests -Ids $PinnedRemoveCapabilities -KeyPrefix 'removed.capability.' -ExpectedValue 'Absent' -Label 'capability'
 Assert-PinnedDigests -Ids $PinnedDisableOptionalFeatures -KeyPrefix 'disabled.feature.' -ExpectedValue 'Disabled' -Label 'feature'
 

@@ -52,7 +52,7 @@ public class KeepFlagPlanTests
         [
             "Microsoft.BingNews",
             "Microsoft.GamingApp",
-        ]));
+        ], debloatMode: "offline"));
 
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
 
@@ -75,7 +75,8 @@ public class KeepFlagPlanTests
 
     private static string MinimalProfileJson(
         bool includeDebloat = true,
-        IReadOnlyList<string>? removeIds = null)
+        IReadOnlyList<string>? removeIds = null,
+        string? debloatMode = null)
     {
         string debloat = "";
         if (includeDebloat)
@@ -84,9 +85,15 @@ public class KeepFlagPlanTests
             string array = ids.Length == 0
                 ? "[]"
                 : "[" + string.Join(",", ids.Select(id => $"\"{id}\"")) + "]";
+            string modeLine = debloatMode is null
+                ? ""
+                : $$"""
+                      "mode": "{{debloatMode}}",
+                  """;
             debloat = $$"""
                   ,
                   "debloat": {
+                    {{modeLine}}
                     "removeProvisionedAppx": {{array}}
                   }
                 """;

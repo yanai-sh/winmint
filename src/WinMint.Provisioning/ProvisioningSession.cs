@@ -158,6 +158,15 @@ public static class ProvisioningSession
             return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
         }
 
+        if (bundle.RequiresNetwork)
+        {
+            JobsPhaseResult? network = EnsureNetworkAvailable(bundle, env, phases);
+            if (network is not null)
+            {
+                return FailOpen(bundle, env, phases, emitted, network.Value.Status, dwell: true, firstPaintMs);
+            }
+        }
+
         JobsPhaseResult jobs;
         try
         {
@@ -837,6 +846,8 @@ public static class ProvisioningSession
                 {
                     env.Appx.DeprovisionPackageFamily(provisioned.PackageFamilyName);
                 }
+
+                phases.Add($"removed.appx.online.{catalogId}");
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -848,6 +859,27 @@ public static class ProvisioningSession
         }
 
         return null;
+    }
+
+    private static JobsPhaseResult? EnsureNetworkAvailable(
+        ProvisioningBundle bundle,
+        SessionEnvironment env,
+        List<string> phases)
+    {
+        if (env.Connectivity?.HasOutboundNetwork() == true)
+        {
+            SessionStatus ok = new("network.ok", "Outbound connectivity available.");
+            env.Splash.SetStatus(ok);
+            phases.Add(ok.Code);
+            return null;
+        }
+
+        SessionStatus failed = new(
+            "network.required.offline",
+            "Plan requires network but outbound connectivity probe failed.");
+        env.Splash.SetStatus(failed);
+        phases.Add(failed.Code);
+        return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
     }
 
     private readonly record struct SettlePhaseResult(bool HardFailed, bool TimedOut, SessionStatus Status);
