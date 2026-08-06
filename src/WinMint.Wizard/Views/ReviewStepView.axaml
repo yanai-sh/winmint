@@ -6,7 +6,7 @@
   <StackPanel Spacing="20" MaxWidth="720" HorizontalAlignment="Center" VerticalAlignment="Center">
     <TextBlock Classes="hero-title" Text="Review output" />
     <TextBlock Classes="hero-sub"
-               Text="Save the Profile, then build. Build elevates once (UAC) and runs the same ImageServicing path as Cli." />
+               Text="Save the Profile, then build. Build elevates once (UAC) and runs the same ImageServicing path as Cli. While busy, the current servicing stage and log path are shown." />
 
     <Border Classes="iso-stage">
       <StackPanel Spacing="14">

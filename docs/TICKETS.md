@@ -57,6 +57,7 @@ Also never in product: BitLocker Smoke, Home Smoke SKU, MicrosoftOobe, enterpris
 | 32 | [#73–#79](https://github.com/yanai-sh/winmint/issues/73) | 2026-08-06 | Alpha package program: ADR-011 docs + winget import + scoop batch + best-effort + harness ([spec](specs/2026-08-06-alpha-package-program.md)) |
 | 33 | [#63](https://github.com/yanai-sh/winmint/issues/63) | 2026-08-06 | Surface Catalog offline driver injection (SL7 `surface-laptop-7`, Inject-SurfaceDrivers.ps1, metal inventory digests) |
 | 34 | [#58](https://github.com/yanai-sh/winmint/issues/58) | 2026-08-06 | Wizard Source edition probe: list ISO WIM indexes via Wim-Metadata; picker → `WimIndex` Apply path |
+| 35 | [#59](https://github.com/yanai-sh/winmint/issues/59) | 2026-08-06 | Wizard Build polls `apply-status.txt` for opcode stage + log path during Apply |
 
 Sequencing history: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) (**met**). Keep-flag design: [KEEPFLAG](design/KEEPFLAG.md).
 

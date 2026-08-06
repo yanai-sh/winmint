@@ -1,7 +1,8 @@
 # Wizard servicing stage progress — design lock
 
 **Date:** 2026-08-05  
-**Status:** Spec’d for ticket · DESIGN still parks until implement unlocks  
+**Status:** Shipped (issue **59**) · DESIGN unlocked for opcode-stage progress  
+ 
 **Related:** Phase B busy/cancel; [IMAGESERVICING](../../design/IMAGESERVICING.md); `servicing/RunPlan.ps1` `apply-status.txt`
 
 ## Locks

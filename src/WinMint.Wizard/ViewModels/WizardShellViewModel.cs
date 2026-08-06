@@ -326,15 +326,34 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         StatusIsError = false;
         OutputIsoPath = null;
 
+        string work = WizardBuild.DefaultWorkDirectory;
         WizardBuildInput input = new(
             _savedProfilePath,
             SourceIsoPath.Trim(),
             ImageQuality,
-            WorkDirectory: WizardBuild.DefaultWorkDirectory,
+            WorkDirectory: work,
             WimIndex: _wimIndex);
 
-        WizardBuildResult result = await Task.Run(() => WizardBuild.TryApply(input, cancellationToken: ct), ct)
-            .ConfigureAwait(true);
+        using CancellationTokenSource pollCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task pollTask = PollApplyStatusAsync(ApplyStatusReader.StatusPath(work), pollCts.Token);
+        WizardBuildResult result;
+        try
+        {
+            result = await Task.Run(() => WizardBuild.TryApply(input, cancellationToken: ct), ct)
+                .ConfigureAwait(true);
+        }
+        finally
+        {
+            await pollCts.CancelAsync().ConfigureAwait(true);
+            try
+            {
+                await pollTask.ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                // expected when Apply finishes or Cancel is pressed
+            }
+        }
 
         IsBusy = false;
         if (ct.IsCancellationRequested && !result.Succeeded)
@@ -345,6 +364,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Finalize honestly — do not leave a mid-stage / done label after exit.
         BuildStatus = result.Message;
         Status = result.Message;
         StatusIsError = !result.Succeeded;
@@ -352,6 +372,32 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         {
             OutputIsoPath = result.OutputIsoPath;
             SaveStatus = $"Saved → {_savedProfilePath}\n{result.Message}";
+        }
+    }
+
+    private async Task PollApplyStatusAsync(string statusPath, CancellationToken ct)
+    {
+        string? last = null;
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                string? label = ApplyStatusReader.FormatBusyLabel(
+                    ApplyStatusReader.TryRead(statusPath, ct));
+                if (label is not null && !string.Equals(label, last, StringComparison.Ordinal))
+                {
+                    last = label;
+                    BuildStatus = label;
+                    Status = label;
+                    StatusIsError = label.StartsWith("Failed:", StringComparison.Ordinal);
+                }
+
+                await Task.Delay(500, ct).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
         }
     }
 
