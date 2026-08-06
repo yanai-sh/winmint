@@ -17,6 +17,15 @@ public sealed record RunOptions
 
     /// <summary>Override embedded package catalog (tests); null uses <see cref="PackageCatalog.Default"/>.</summary>
     public PackageCatalog? PackageCatalog { get; init; }
+
+    /// <summary>Install lane: legacy Setup.exe /legacy (default) or WinPE diskpart+DISM apply.</summary>
+    public InstallEngine InstallEngine { get; init; } = InstallEngine.Legacy;
+}
+
+public enum InstallEngine
+{
+    Legacy,
+    WinPeApply,
 }
 
 public enum ImageQualityLane
@@ -88,6 +97,8 @@ public enum ServicingOpcode
     MountInstallWim,
     StagePayload,
     InjectUnattend,
+    StageOobeUnattend,
+    PatchBootWimApply,
     StampOfflineShell,
     StampOfflinePolicies,
     RemoveProvisionedAppx,

@@ -437,7 +437,9 @@ public static class BuildPlan
         HashSet<string> scoopNeedsReboot = new(profile.ScoopNeedsReboot, StringComparer.OrdinalIgnoreCase);
         HashSet<string> wslNeedsReboot = new(profile.WslNeedsReboot, StringComparer.OrdinalIgnoreCase);
 
-        string unattendXml = BuildAutounattendXml(profile);
+        string unattendXml = options.InstallEngine == InstallEngine.WinPeApply
+            ? BuildOobeUnattendXml(profile)
+            : BuildAutounattendXml(profile);
 
         PoliciesProfile policies = profile.EffectivePolicies;
         if (!ProductOfflinePolicies.TryNormalizeDohProvider(policies.DohProvider, out string? dohProvider, out string? dohPlanError))
@@ -601,16 +603,31 @@ public static class BuildPlan
                 [StageParams.PolicySpecs] = ProductOfflinePolicies.EncodeSpecs(policyRows),
             }));
 
+        stageList.Add(new ServicingStage(ServicingOpcode.StagePayload, new Dictionary<string, string>(StringComparer.Ordinal)));
+
+        if (options.InstallEngine == InstallEngine.WinPeApply)
+        {
+            stageList.Add(new ServicingStage(ServicingOpcode.StageOobeUnattend, new Dictionary<string, string>(StringComparer.Ordinal)));
+        }
+        else
+        {
+            stageList.Add(new ServicingStage(ServicingOpcode.InjectUnattend, new Dictionary<string, string>(StringComparer.Ordinal)));
+        }
+
+        stageList.Add(new ServicingStage(
+            ServicingOpcode.StampOfflineShell,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [StageParams.ShellTarget] = "Supervisor.exe",
+            }));
+
+        if (options.InstallEngine == InstallEngine.WinPeApply)
+        {
+            stageList.Add(new ServicingStage(ServicingOpcode.PatchBootWimApply, new Dictionary<string, string>(StringComparer.Ordinal)));
+        }
+
         stageList.AddRange(
         [
-            new ServicingStage(ServicingOpcode.StagePayload, new Dictionary<string, string>(StringComparer.Ordinal)),
-            new ServicingStage(ServicingOpcode.InjectUnattend, new Dictionary<string, string>(StringComparer.Ordinal)),
-            new ServicingStage(
-                ServicingOpcode.StampOfflineShell,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    [StageParams.ShellTarget] = "Supervisor.exe",
-                }),
             new ServicingStage(
                 ServicingOpcode.ExportWim,
                 new Dictionary<string, string>(StringComparer.Ordinal)
@@ -640,41 +657,27 @@ public static class BuildPlan
         return Result.Ok<BuildArtifacts, PlanFailure>(artifacts);
     }
 
+    /// <summary>OOBE-phase unattend (specialize + oobeSystem) for WinPE apply — no windowsPE disk/ImageInstall.</summary>
+    internal static string BuildOobeUnattendXml(Profile profile) =>
+        ComposeUnattendXml(profile, includeWindowsPe: false);
+
     /// <summary>
     /// ISO-root Autounattend (windowsPE + oobeSystem) plus optional specialize DMA latch.
     /// Panther copy alone cannot drive WinPE — 25H2 ConX shows "Select setup option" without this.
     /// </summary>
-    internal static string BuildAutounattendXml(Profile profile)
+    internal static string BuildAutounattendXml(Profile profile) =>
+        ComposeUnattendXml(profile, includeWindowsPe: true);
+
+    private static string ComposeUnattendXml(Profile profile, bool includeWindowsPe)
     {
         string user = XmlEscape(profile.Account.Username);
         string pass = XmlEscape(profile.Account.Password ?? "");
         // Official Unattend: show Network when false/omit; hide when true (Smoke headless). See BUILDPLAN.
         string hideWireless = profile.Account.RequireWifiDuringOobe ? "false" : "true";
-        string specialize = profile.Dma.Enabled
-            ? $$"""
-                <settings pass="specialize">
-                  <component name="Microsoft-Windows-International-Core" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-                    <InputLocale>{{IrelandSetupLocale}}</InputLocale>
-                    <SystemLocale>{{IrelandSetupLocale}}</SystemLocale>
-                    <UILanguage>{{IrelandSetupLocale}}</UILanguage>
-                    <UserLocale>{{IrelandSetupLocale}}</UserLocale>
-                  </component>
-                  <component name="Microsoft-Windows-Deployment" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-                    <RunSynchronous>
-                      <RunSynchronousCommand wcm:action="add">
-                        <Order>1</Order>
-                        <Description>WinMint DMA setup GeoID latch (Ireland {{IrelandSetupGeoId}})</Description>
-                        <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Control\Nls\Geo" /v Nation /t REG_SZ /d {{IrelandSetupGeoId}} /f</Path>
-                      </RunSynchronousCommand>
-                    </RunSynchronous>
-                  </component>
-                </settings>
-                """
-            : "";
+        string specialize = BuildSpecializeXml(profile);
 
-        return $$"""
-            <?xml version="1.0" encoding="utf-8"?>
-            <unattend xmlns="urn:schemas-microsoft-com:unattend">
+        string windowsPe = includeWindowsPe
+            ? $$"""
               <settings pass="windowsPE">
                 <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
                   <SetupUILanguage>
@@ -750,7 +753,13 @@ public static class BuildPlan
                   </ImageInstall>
                 </component>
               </settings>
-              {{specialize}}
+              """
+            : string.Empty;
+
+        return $$"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <unattend xmlns="urn:schemas-microsoft-com:unattend">
+              {{windowsPe}}{{specialize}}
               <settings pass="oobeSystem">
                 <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
                   <OOBE>
@@ -786,6 +795,29 @@ public static class BuildPlan
             </unattend>
             """;
     }
+
+    private static string BuildSpecializeXml(Profile profile) =>
+        profile.Dma.Enabled
+            ? $$"""
+              <settings pass="specialize">
+                <component name="Microsoft-Windows-International-Core" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+                  <InputLocale>{{IrelandSetupLocale}}</InputLocale>
+                  <SystemLocale>{{IrelandSetupLocale}}</SystemLocale>
+                  <UILanguage>{{IrelandSetupLocale}}</UILanguage>
+                  <UserLocale>{{IrelandSetupLocale}}</UserLocale>
+                </component>
+                <component name="Microsoft-Windows-Deployment" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+                  <RunSynchronous>
+                    <RunSynchronousCommand wcm:action="add">
+                      <Order>1</Order>
+                      <Description>WinMint DMA setup GeoID latch (Ireland {{IrelandSetupGeoId}})</Description>
+                      <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Control\Nls\Geo" /v Nation /t REG_SZ /d {{IrelandSetupGeoId}} /f</Path>
+                    </RunSynchronousCommand>
+                  </RunSynchronous>
+                </component>
+              </settings>
+              """
+            : string.Empty;
 
     private static string XmlEscape(string value) =>
         System.Security.SecurityElement.Escape(value) ?? string.Empty;

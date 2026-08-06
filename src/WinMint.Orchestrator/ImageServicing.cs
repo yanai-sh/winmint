@@ -227,6 +227,16 @@ public static class ImageServicing
                     parameters[StageParams.MountDir] = mountDir;
                     parameters[StageParams.MediaDir] = mediaDir;
                     break;
+                case ServicingOpcode.StageOobeUnattend:
+                    parameters[StageParams.UnattendPath] = unattendPath;
+                    parameters[StageParams.MountDir] = mountDir;
+                    parameters[StageParams.MediaDir] = mediaDir;
+                    break;
+                case ServicingOpcode.PatchBootWimApply:
+                    parameters[StageParams.MediaDir] = mediaDir;
+                    parameters[StageParams.MountDir] = mountDir;
+                    parameters[StageParams.WimIndex] = wimIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    break;
                 case ServicingOpcode.StampOfflineShell:
                     parameters[StageParams.ShellTarget] = ShellStampGuestPath;
                     parameters[StageParams.MountDir] = mountDir;

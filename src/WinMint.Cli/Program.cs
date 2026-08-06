@@ -65,12 +65,19 @@ internal static class Program
             Description = "Fail closed when native ARM64 audit finds x64/emulated winget GUI binaries.",
         };
 
+        Option<string> installEngineOption = new("--install-engine")
+        {
+            Description = "Install lane: legacy (default) or winpeApply.",
+            DefaultValueFactory = _ => "legacy",
+        };
+
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")
         {
             profileArgument,
             imageQualityOption,
             imageArchitectureOption,
             packageAuditStrictOption,
+            installEngineOption,
         };
         validateCommand.SetAction(parseResult =>
         {
@@ -79,7 +86,8 @@ internal static class Program
                 profilePath,
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
-                parseResult.GetValue(packageAuditStrictOption));
+                parseResult.GetValue(packageAuditStrictOption),
+                parseResult.GetValue(installEngineOption)!);
         });
 
         Command planCommand = new("plan", "Parse and plan a Profile; emit plan artifacts.")
@@ -89,6 +97,7 @@ internal static class Program
             imageQualityOption,
             imageArchitectureOption,
             packageAuditStrictOption,
+            installEngineOption,
         };
         planCommand.SetAction(parseResult =>
         {
@@ -99,7 +108,8 @@ internal static class Program
                 outDir,
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
-                parseResult.GetValue(packageAuditStrictOption));
+                parseResult.GetValue(packageAuditStrictOption),
+                parseResult.GetValue(installEngineOption)!);
         });
 
         Command buildCommand = new("build", "Plan a Profile and apply ImageServicing (one elevated RunPlan).")
@@ -113,6 +123,7 @@ internal static class Program
             imageQualityOption,
             imageArchitectureOption,
             packageAuditStrictOption,
+            installEngineOption,
         };
         buildCommand.SetAction(parseResult =>
         {
@@ -131,7 +142,8 @@ internal static class Program
                 reuseMedia,
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
-                parseResult.GetValue(packageAuditStrictOption));
+                parseResult.GetValue(packageAuditStrictOption),
+                parseResult.GetValue(installEngineOption)!);
         });
 
         RootCommand root = new("WinMint — Profile plan and ImageServicing build")
@@ -148,9 +160,10 @@ internal static class Program
         FileInfo profilePath,
         string imageQuality,
         string? imageArchitecture,
-        bool packageAuditStrict)
+        bool packageAuditStrict,
+        string installEngine)
     {
-        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, out RunOptions run, out int exit))
+        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, installEngine, out RunOptions run, out int exit))
         {
             return exit;
         }
@@ -169,9 +182,10 @@ internal static class Program
         DirectoryInfo outDir,
         string imageQuality,
         string? imageArchitecture,
-        bool packageAuditStrict)
+        bool packageAuditStrict,
+        string installEngine)
     {
-        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, out RunOptions run, out int exit))
+        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, installEngine, out RunOptions run, out int exit))
         {
             return exit;
         }
@@ -197,9 +211,10 @@ internal static class Program
         bool reuseMedia,
         string imageQuality,
         string? imageArchitecture,
-        bool packageAuditStrict)
+        bool packageAuditStrict,
+        string installEngine)
     {
-        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, out RunOptions planRun, out int exit))
+        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, installEngine, out RunOptions planRun, out int exit))
         {
             return exit;
         }
@@ -248,10 +263,17 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
+        string installEngine,
         out RunOptions run,
         out int exitCode)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out exitCode))
+        {
+            run = new RunOptions();
+            return false;
+        }
+
+        if (!TryParseInstallEngine(installEngine, out InstallEngine engine, out exitCode))
         {
             run = new RunOptions();
             return false;
@@ -262,9 +284,32 @@ internal static class Program
             ImageQuality = lane,
             ImageArchitecture = imageArchitecture,
             PackageAuditStrict = packageAuditStrict,
+            InstallEngine = engine,
         };
         exitCode = 0;
         return true;
+    }
+
+    private static bool TryParseInstallEngine(string raw, out InstallEngine engine, out int exitCode)
+    {
+        if (string.Equals(raw, "legacy", StringComparison.OrdinalIgnoreCase))
+        {
+            engine = InstallEngine.Legacy;
+            exitCode = 0;
+            return true;
+        }
+
+        if (string.Equals(raw, "winpeApply", StringComparison.OrdinalIgnoreCase))
+        {
+            engine = InstallEngine.WinPeApply;
+            exitCode = 0;
+            return true;
+        }
+
+        Console.Error.WriteLine($"Unsupported --install-engine '{raw}' (expected legacy|winpeApply).");
+        engine = InstallEngine.Legacy;
+        exitCode = 1;
+        return false;
     }
 
     private static bool TryParseImageQuality(string raw, out ImageQualityLane lane, out int exitCode)
