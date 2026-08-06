@@ -35,11 +35,11 @@ public class PackageCatalogTests
         Profile profile = LabProfile(winget: ["Anysphere.Cursor"]);
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
             profile,
-            new RunOptions { ImageArchitecture = "arm64" });
+            new RunOptions { ImageArchitecture = "arm64", PackagePhase = PackagePhase.PerJob });
         Assert.True(result.IsOk);
         JobDescriptor job = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "winget");
         Assert.Equal("arm64", job.WingetArchitecture);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "package.auditNative");
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "package.auditNative");
     }
 
     [Fact]
@@ -77,9 +77,7 @@ public class PackageCatalogTests
         Assert.True(result.IsOk);
         JobDescriptor audit = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "package.auditNative");
         Assert.True(audit.AuditStrict);
-        Assert.All(
-            result.Value.Jobs.Jobs.Where(j => j.Kind == "winget"),
-            j => Assert.Equal("arm64", j.WingetArchitecture));
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
     }
 
     private static Profile LabProfile(IReadOnlyList<string>? winget = null) =>

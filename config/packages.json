@@ -1,11 +1,4 @@
 {
-  "sourcePolicy": {
-    "winget": "GUI apps, Microsoft apps, signed installers, shell integrations, desktop services.",
-    "scoop": "User-local developer CLI tools and shell plumbing via official Scoop bootstrap.",
-    "store": "Microsoft Store-backed packages via winget msstore source (catalog entries only).",
-    "direct": "Reserved — not approved without ADR.",
-    "github": "Reserved — not implemented."
-  },
   "tools": {
     "cursor": {
       "displayName": "Cursor",
@@ -65,6 +58,7 @@
       "displayName": "Komorebi",
       "source": "scoop",
       "id": "komorebi",
+      "scoopBucket": "extras",
       "architectures": ["amd64", "arm64"]
     },
     "nilesoft": {
@@ -77,6 +71,7 @@
       "displayName": "whkd",
       "source": "scoop",
       "id": "whkd",
+      "scoopBucket": "extras",
       "architectures": ["amd64", "arm64"]
     },
     "jqlang.jq": {

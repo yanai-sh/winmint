@@ -4,9 +4,9 @@ Windows 11 ISO builder (**alpha**). **ARM64-first**. Host Servicing: **pwsh 7.6+
 
 ## Phase: alpha (post backlog 01–30)
 
-Product `/implement` is **maintainer pick** or a new GitHub issue (grill → to-spec) — **one issue per session**. Apply `ready-for-agent` only when starting that work. Closed index: [TICKETS](docs/TICKETS.md). Requirement tiers: [ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md); grill index: [DESIGN](docs/DESIGN.md#decisions-locked-grill).
+Product `/implement` is **maintainer pick** or a new GitHub issue (grill → to-spec) — **one issue per session**. Apply `ready-for-agent` only when starting that work. Closed index: [TICKETS](docs/TICKETS.md). Requirement tiers: [ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md); grill index: [DESIGN](docs/DESIGN.md#grill-index-tiered).
 
-Gate/locks: [ROADMAP](docs/ROADMAP.md#design-acceptance) · [DESIGN](docs/DESIGN.md#decisions-locked-grill)  
+Gate/locks: [ROADMAP](docs/ROADMAP.md#design-acceptance) · [DESIGN](docs/DESIGN.md#grill-index-tiered)  
 Closed index: [TICKETS](docs/TICKETS.md) · Sessions: [AGENTIC](docs/agents/AGENTIC.md) · Seams: [TDD](docs/TDD.md)
 
 [`CONTEXT`](CONTEXT.md) · [`DESIGN`](docs/DESIGN.md) · [`ARCHITECTURE`](docs/ARCHITECTURE.md) · [`ROADMAP`](docs/ROADMAP.md) · [`Smoke`](docs/specs/2026-07-27-smoke.md) · [`design/`](docs/design/)

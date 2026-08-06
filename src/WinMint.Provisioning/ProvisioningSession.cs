@@ -9,6 +9,7 @@ public static class ProvisioningSession
 {
     public const string ForbiddenAutologonUser = "defaultuser0";
     public const string EvidenceSchemaVersion = "winmint.provisioning.evidence/v1";
+    public const string PackagesEvidenceSchemaVersion = "winmint.packages.evidence/v1";
     public const string ExplorerShell = "explorer.exe";
 
     /// <summary>App Installer / winget package family (Microsoft-documented FirstLogon register target).</summary>
@@ -390,6 +391,24 @@ public static class ProvisioningSession
         env.Splash.SetStatus(begin);
         phases.Add(begin.Code);
 
+        List<PackageFailureEntry> packageFailures = [];
+
+        JobsPhaseResult? RecordPackageFailure(ProvisionJob failingJob, string code, string message, int exitCode = 1)
+        {
+            if (!IsPackageKind(failingJob.Kind))
+            {
+                return FailJob(code, message);
+            }
+
+            if (bundle.PackageStrict)
+            {
+                return FailJob(code, message);
+            }
+
+            packageFailures.Add(new PackageFailureEntry(failingJob.Id, failingJob.Kind, exitCode, message));
+            return null;
+        }
+
         for (int i = startIndex; i < bundle.Jobs.Count; i++)
         {
             ProvisionJob job = bundle.Jobs[i];
@@ -462,17 +481,15 @@ public static class ProvisioningSession
                 fileName = "cmd.exe";
                 arguments = ["/c", "exit", "0"];
             }
-            else if (string.Equals(job.Kind, "winget", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(job.Kind, "winget", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(job.Kind, "winget.import", StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(job.PackageId))
+                if (string.Equals(job.Kind, "winget", StringComparison.OrdinalIgnoreCase)
+                    && string.IsNullOrWhiteSpace(job.PackageId))
                 {
                     return FailJob("jobs.failed", $"Job '{job.Id}' kind winget requires packageId.");
                 }
 
-                // FirstLogon: App Installer is often provisioned but not yet registered for the
-                // interactive user — winget.exe missing until RegisterByFamilyName (MS docs).
-                // Framework ACLs are MachineSetup-only (SYSTEM); Shell must not re-call takeown/icacls.
-                // Path seam: AppX only — no LocalAppData alias / PATH "winget" fallback (deepening #51).
                 if (env.Appx is null)
                 {
                     return FailJob("jobs.failed", $"Job '{job.Id}' requires IAppxPackageManager.");
@@ -484,42 +501,93 @@ public static class ProvisioningSession
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    return FailJob(
+                    JobsPhaseResult? regFail = RecordPackageFailure(
+                        job,
                         "jobs.winget.register_failed",
                         $"{job.Id}: register {DesktopAppInstallerFamilyName}: {ex.Message}");
+                    if (regFail is not null)
+                    {
+                        return regFail.Value;
+                    }
+
+                    continue;
                 }
 
                 string? resolvedWinget = env.Appx.TryResolveWingetExecutablePath();
                 if (string.IsNullOrWhiteSpace(resolvedWinget))
                 {
-                    return FailJob(
+                    JobsPhaseResult? pathFail = RecordPackageFailure(
+                        job,
                         "jobs.winget.path_missing",
                         $"{job.Id}: winget.exe not found after registering {DesktopAppInstallerFamilyName}.");
+                    if (pathFail is not null)
+                    {
+                        return pathFail.Value;
+                    }
+
+                    continue;
                 }
 
                 fileName = resolvedWinget;
 
-                arguments =
-                [
-                    "install",
-                    "--id",
-                    job.PackageId,
-                    "--exact",
-                    "--silent",
-                    "--accept-package-agreements",
-                    "--accept-source-agreements",
-                    "--disable-interactivity",
-                ];
-                if (!string.IsNullOrWhiteSpace(job.WingetArchitecture))
+                if (string.Equals(job.Kind, "winget.import", StringComparison.OrdinalIgnoreCase))
                 {
-                    arguments = [.. arguments, "--architecture", job.WingetArchitecture];
+                    if (!File.Exists(BundleLoader.DefaultGuestWingetImportPath))
+                    {
+                        JobsPhaseResult? importFail = RecordPackageFailure(
+                            job,
+                            "jobs.winget.import_missing",
+                            $"{job.Id}: winget-import.json missing at {BundleLoader.DefaultGuestWingetImportPath}.");
+                        if (importFail is not null)
+                        {
+                            return importFail.Value;
+                        }
+
+                        continue;
+                    }
+
+                    arguments =
+                    [
+                        "import",
+                        "--import-file",
+                        BundleLoader.DefaultGuestWingetImportPath,
+                        "--accept-package-agreements",
+                        "--accept-source-agreements",
+                        "--disable-interactivity",
+                    ];
+                }
+                else
+                {
+                    arguments =
+                    [
+                        "install",
+                        "--id",
+                        job.PackageId!,
+                        "--exact",
+                        "--silent",
+                        "--accept-package-agreements",
+                        "--accept-source-agreements",
+                        "--disable-interactivity",
+                    ];
+                    if (!string.IsNullOrWhiteSpace(job.WingetArchitecture))
+                    {
+                        arguments = [.. arguments, "--architecture", job.WingetArchitecture];
+                    }
                 }
             }
-            else if (string.Equals(job.Kind, "scoop", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(job.Kind, "scoop", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(job.Kind, "scoop.batch", StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(job.PackageId))
+                if (string.Equals(job.Kind, "scoop", StringComparison.OrdinalIgnoreCase)
+                    && string.IsNullOrWhiteSpace(job.PackageId))
                 {
                     return FailJob("jobs.failed", $"Job '{job.Id}' kind scoop requires packageId.");
+                }
+
+                if (string.Equals(job.Kind, "scoop.batch", StringComparison.OrdinalIgnoreCase)
+                    && string.IsNullOrWhiteSpace(job.PackageId))
+                {
+                    return FailJob("jobs.failed", $"Job '{job.Id}' kind scoop.batch requires packageId.");
                 }
 
                 if (env.ResolveScoopCmd is null)
@@ -527,50 +595,82 @@ public static class ProvisioningSession
                     return FailJob("jobs.failed", $"Job '{job.Id}' requires ResolveScoopCmd.");
                 }
 
-                string? scoopCmd = env.ResolveScoopCmd();
+                JobsPhaseResult? scoopReady = EnsureScoopReady(env, job, RecordPackageFailure, ct, out string? scoopCmd);
+                if (scoopReady is not null)
+                {
+                    return scoopReady.Value;
+                }
+
                 if (scoopCmd is null)
                 {
-                    ProcessStartResult bootstrap;
-                    try
-                    {
-                        // Official admin bootstrap — ScoopInstaller/Install (see PROVISIONINGSESSION).
-                        // Inbox powershell.exe only; not guest pwsh product control plane.
-                        bootstrap = env.Processes.Run(
-                            "powershell.exe",
-                            [
-                                "-NoProfile",
-                                "-ExecutionPolicy",
-                                "Bypass",
-                                "-Command",
-                                """iex "& {$(irm get.scoop.sh)} -RunAsAdmin"; exit $LASTEXITCODE""",
-                            ],
-                            ct);
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        return FailJob(
-                            "jobs.scoop.bootstrap_failed",
-                            $"{job.Id}: scoop bootstrap spawn: {ex.Message}");
-                    }
+                    continue;
+                }
 
-                    if (bootstrap.ExitCode != 0)
+                if (job.ScoopBuckets is { Count: > 0 })
+                {
+                    foreach (string bucket in job.ScoopBuckets)
                     {
-                        return FailJob(
-                            "jobs.scoop.bootstrap_failed",
-                            $"{job.Id}: scoop bootstrap exited {bootstrap.ExitCode} (network required).");
-                    }
+                        if (string.IsNullOrWhiteSpace(bucket)
+                            || string.Equals(bucket, "main", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
 
-                    scoopCmd = env.ResolveScoopCmd();
-                    if (scoopCmd is null)
-                    {
-                        return FailJob(
-                            "jobs.scoop.bootstrap_failed",
-                            $"{job.Id}: scoop.cmd missing after bootstrap.");
+                        ProcessStartResult bucketAdd;
+                        try
+                        {
+                            bucketAdd = env.Processes.Run(scoopCmd, ["bucket", "add", bucket], ct);
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            JobsPhaseResult? bucketFail = RecordPackageFailure(
+                                job,
+                                "jobs.scoop.bucket_failed",
+                                $"{job.Id}: scoop bucket add {bucket}: {ex.Message}");
+                            if (bucketFail is not null)
+                            {
+                                return bucketFail.Value;
+                            }
+
+                            goto ScoopBucketsFailed;
+                        }
+
+                        if (bucketAdd.ExitCode != 0)
+                        {
+                            JobsPhaseResult? bucketFail = RecordPackageFailure(
+                                job,
+                                "jobs.scoop.bucket_failed",
+                                $"{job.Id}: scoop bucket add {bucket} exited {bucketAdd.ExitCode}.");
+                            if (bucketFail is not null)
+                            {
+                                return bucketFail.Value;
+                            }
+
+                            goto ScoopBucketsFailed;
+                        }
                     }
                 }
 
                 fileName = scoopCmd;
-                arguments = ["install", job.PackageId];
+                if (string.Equals(job.Kind, "scoop.batch", StringComparison.OrdinalIgnoreCase))
+                {
+                    string[] ids = job.PackageId!.Split(
+                        ';',
+                        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    arguments = ["install", .. ids];
+                }
+                else
+                {
+                    arguments = ["install", job.PackageId!];
+                }
+
+                goto ScoopRun;
+
+            ScoopBucketsFailed:
+                continue;
+
+            ScoopRun:
+                ;
             }
             else if (string.Equals(job.Kind, "wsl", StringComparison.OrdinalIgnoreCase))
             {
@@ -629,12 +729,31 @@ public static class ProvisioningSession
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                return FailJob("jobs.spawn_failed", $"{job.Id}: {ex.Message}");
+                JobsPhaseResult? spawnFail = RecordPackageFailure(
+                    job,
+                    "jobs.spawn_failed",
+                    $"{job.Id}: {ex.Message}");
+                if (spawnFail is not null)
+                {
+                    return spawnFail.Value;
+                }
+
+                continue;
             }
 
             if (started.ExitCode != 0)
             {
-                return FailJob("jobs.failed", $"Job '{job.Id}' exited {started.ExitCode}.");
+                JobsPhaseResult? runFail = RecordPackageFailure(
+                    job,
+                    "jobs.failed",
+                    $"Job '{job.Id}' exited {started.ExitCode}.",
+                    started.ExitCode);
+                if (runFail is not null)
+                {
+                    return runFail.Value;
+                }
+
+                continue;
             }
 
             if (job.NeedsReboot)
@@ -652,7 +771,12 @@ public static class ProvisioningSession
             }
         }
 
-        SessionStatus ok = new("jobs.ok", "Provisioning jobs completed.");
+        WritePackagesEvidence(env.EvidenceDirectory, packageFailures);
+
+        string okMessage = packageFailures.Count > 0
+            ? $"Provisioning jobs completed with {packageFailures.Count} package failure(s)."
+            : "Provisioning jobs completed.";
+        SessionStatus ok = new("jobs.ok", okMessage);
         env.Splash.SetStatus(ok);
         phases.Add(ok.Code);
         return new JobsPhaseResult(SessionOutcome.Complete, ok, TimedOut: false);
@@ -1286,6 +1410,89 @@ public static class ProvisioningSession
         }
 
         return null;
+    }
+
+    private static bool IsPackageKind(string kind) =>
+        string.Equals(kind, "winget", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(kind, "winget.import", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(kind, "scoop", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(kind, "scoop.batch", StringComparison.OrdinalIgnoreCase);
+
+    private static JobsPhaseResult? EnsureScoopReady(
+        SessionEnvironment env,
+        ProvisionJob job,
+        Func<ProvisionJob, string, string, int, JobsPhaseResult?> recordFailure,
+        CancellationToken ct,
+        out string? scoopCmd)
+    {
+        scoopCmd = env.ResolveScoopCmd!();
+        if (scoopCmd is not null)
+        {
+            return null;
+        }
+
+        ProcessStartResult bootstrap;
+        try
+        {
+            bootstrap = env.Processes.Run(
+                "powershell.exe",
+                [
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    """iex "& {$(irm get.scoop.sh)} -RunAsAdmin"; exit $LASTEXITCODE""",
+                ],
+                ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            JobsPhaseResult? fail = recordFailure(
+                job,
+                "jobs.scoop.bootstrap_failed",
+                $"{job.Id}: scoop bootstrap spawn: {ex.Message}",
+                1);
+            scoopCmd = null;
+            return fail;
+        }
+
+        if (bootstrap.ExitCode != 0)
+        {
+            JobsPhaseResult? fail = recordFailure(
+                job,
+                "jobs.scoop.bootstrap_failed",
+                $"{job.Id}: scoop bootstrap exited {bootstrap.ExitCode} (network required).",
+                bootstrap.ExitCode);
+            scoopCmd = null;
+            return fail;
+        }
+
+        scoopCmd = env.ResolveScoopCmd!();
+        if (scoopCmd is null)
+        {
+            JobsPhaseResult? fail = recordFailure(
+                job,
+                "jobs.scoop.bootstrap_failed",
+                $"{job.Id}: scoop.cmd missing after bootstrap.",
+                1);
+            return fail;
+        }
+
+        return null;
+    }
+
+    private static void WritePackagesEvidence(string? evidenceDirectory, List<PackageFailureEntry> failures)
+    {
+        if (failures.Count == 0 || string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(evidenceDirectory);
+        string path = Path.Combine(evidenceDirectory, "packages.evidence.json");
+        PackagesEvidenceDocument doc = new(PackagesEvidenceSchemaVersion, failures);
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(doc, ProvisioningJsonContext.Default.PackagesEvidenceDocument);
+        File.WriteAllBytes(path, bytes);
     }
 
     private static JobsPhaseResult? RunNativePackageAuditJob(

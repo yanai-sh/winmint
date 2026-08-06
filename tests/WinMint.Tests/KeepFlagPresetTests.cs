@@ -367,7 +367,7 @@ public class KeepFlagPresetTests
 
             Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
             Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
-            Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "winget");
+            Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "winget.import");
             Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "wsl");
         }
         finally

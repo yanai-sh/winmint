@@ -457,6 +457,7 @@ public static class BuildPlan
 
         PackageCatalog catalog = options.PackageCatalog ?? PackageCatalog.Default;
         string imageArchitecture = PackageCatalog.EffectiveImageArchitecture(options);
+        PackagePhase packagePhase = PackageCatalog.EffectivePackagePhase(options, profile, imageArchitecture);
         IReadOnlyList<string> wingetAuditTargets = catalog.ValidateProfilePackages(
             profile,
             imageArchitecture,
@@ -464,6 +465,19 @@ public static class BuildPlan
         if (catalogFail is not null)
         {
             return Result.Fail<BuildArtifacts, PlanFailure>(catalogFail);
+        }
+
+        byte[]? wingetImportJson = null;
+        if (packagePhase == PackagePhase.WingetImport && profile.WingetPackages.Count > 0)
+        {
+            wingetImportJson = WingetImportBuilder.BuildUtf8Json(
+                profile.WingetPackages,
+                catalog,
+                imageArchitecture);
+            if (wingetImportJson.Length == 0)
+            {
+                wingetImportJson = null;
+            }
         }
 
         HashSet<string> wingetNeedsReboot = new(profile.WingetNeedsReboot, StringComparer.OrdinalIgnoreCase);
@@ -500,27 +514,42 @@ public static class BuildPlan
             jobList.Add(new JobDescriptor("keepflag.appx.safetyNet", "appx.safetyNet"));
         }
 
-        foreach (string packageId in profile.WingetPackages)
+        if (wingetImportJson is { Length: > 0 })
         {
-            catalog.TryGetToolByInstallId(packageId, out PackageToolEntry? wingetTool);
-            string? wingetArch = wingetTool is null
-                ? null
-                : PackageCatalog.ResolveWingetArchitectureFlag(wingetTool, imageArchitecture);
+            bool importReboot = profile.WingetPackages.Any(id => wingetNeedsReboot.Contains(id));
             jobList.Add(new JobDescriptor(
-                $"winget.{packageId}",
-                "winget",
-                PackageId: packageId,
-                NeedsReboot: wingetNeedsReboot.Contains(packageId),
-                WingetArchitecture: wingetArch));
+                "winget.import",
+                "winget.import",
+                PackageId: "winget-import.json",
+                NeedsReboot: importReboot));
+        }
+        else
+        {
+            foreach (string packageId in profile.WingetPackages)
+            {
+                catalog.TryGetToolByInstallId(packageId, out PackageToolEntry? wingetTool);
+                string? wingetArch = wingetTool is null
+                    ? null
+                    : PackageCatalog.ResolveWingetArchitectureFlag(wingetTool, imageArchitecture);
+                jobList.Add(new JobDescriptor(
+                    $"winget.{packageId}",
+                    "winget",
+                    PackageId: packageId,
+                    NeedsReboot: wingetNeedsReboot.Contains(packageId),
+                    WingetArchitecture: wingetArch));
+            }
         }
 
-        foreach (string packageId in profile.ScoopPackages)
+        if (profile.ScoopPackages.Count > 0)
         {
+            IReadOnlySet<string> scoopBuckets = catalog.ScoopBucketsForInstallIds(profile.ScoopPackages);
+            bool batchReboot = profile.ScoopPackages.Any(id => scoopNeedsReboot.Contains(id));
             jobList.Add(new JobDescriptor(
-                $"scoop.{packageId}",
-                "scoop",
-                PackageId: packageId,
-                NeedsReboot: scoopNeedsReboot.Contains(packageId)));
+                "scoop.batch",
+                "scoop.batch",
+                PackageId: string.Join(';', profile.ScoopPackages),
+                NeedsReboot: batchReboot,
+                ScoopBuckets: scoopBuckets.OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToArray()));
         }
 
         foreach (string distroToken in profile.WslDistros)
@@ -539,14 +568,15 @@ public static class BuildPlan
                 WslFromFileAssetNames: assetNames is { Count: > 0 } ? assetNames : null));
         }
 
-        if (wingetAuditTargets.Count > 0
+        if (options.PackageAuditStrict
+            && wingetAuditTargets.Count > 0
             && string.Equals(imageArchitecture, "arm64", StringComparison.OrdinalIgnoreCase))
         {
             jobList.Add(new JobDescriptor(
                 "package.auditNative",
                 "package.auditNative",
                 PackageId: string.Join(';', wingetAuditTargets),
-                AuditStrict: options.PackageAuditStrict));
+                AuditStrict: true));
         }
 
         JobsArtifact jobs = new(JobsSchemaVersion, jobList);
@@ -686,7 +716,9 @@ public static class BuildPlan
             new DmaContract(profile.Dma.Enabled, profile.Dma.Enabled ? profile.Dma.Settle : null),
             new BuildManifest(options.ImageQuality, PlanRequiresNetwork(profile)),
             profile.Account,
-            profile.RemoveProvisionedAppx);
+            profile.RemoveProvisionedAppx,
+            wingetImportJson,
+            options.PackageStrict);
 
         return Result.Ok<BuildArtifacts, PlanFailure>(artifacts);
     }

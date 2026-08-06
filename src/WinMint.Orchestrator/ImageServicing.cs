@@ -158,10 +158,16 @@ public static class ImageServicing
                 j.WslInstallKind,
                 j.WslFromFileRepo,
                 j.WslFromFileAssetNames?.ToArray(),
-                j.AuditStrict)).ToArray());
+                j.AuditStrict,
+                j.ScoopBuckets?.ToArray())).ToArray());
         File.WriteAllBytes(
             Path.Combine(payloadDir, "jobs.json"),
             JsonSerializer.SerializeToUtf8Bytes(jobs, ServicingJsonContext.Default.JobsFile));
+
+        if (plan.WingetImportJson is { Length: > 0 })
+        {
+            File.WriteAllBytes(Path.Combine(payloadDir, "winget-import.json"), plan.WingetImportJson);
+        }
 
         string[] removeProvisionedAppx = plan.RemoveProvisionedAppx.ToArray();
 
@@ -179,7 +185,8 @@ public static class ImageServicing
                     plan.Dma.Settle.TimeZoneId,
                     plan.Dma.Settle.LocationServicesEnabled),
             removeProvisionedAppx,
-            plan.Manifest.RequiresNetwork);
+            plan.Manifest.RequiresNetwork,
+            plan.PackageStrict);
         File.WriteAllBytes(
             Path.Combine(payloadDir, "bundle.json"),
             JsonSerializer.SerializeToUtf8Bytes(bundle, ServicingJsonContext.Default.BundleFile));
@@ -368,7 +375,8 @@ internal sealed record JobFile(
     [property: JsonPropertyName("wslInstallKind")] string? WslInstallKind = null,
     [property: JsonPropertyName("wslFromFileRepo")] string? WslFromFileRepo = null,
     [property: JsonPropertyName("wslFromFileAssetNames")] string[]? WslFromFileAssetNames = null,
-    [property: JsonPropertyName("auditStrict")] bool AuditStrict = false);
+    [property: JsonPropertyName("auditStrict")] bool AuditStrict = false,
+    [property: JsonPropertyName("scoopBuckets")] string[]? ScoopBuckets = null);
 
 internal sealed record BundleFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
@@ -378,7 +386,8 @@ internal sealed record BundleFile(
     [property: JsonPropertyName("dmaEnabled")] bool DmaEnabled,
     [property: JsonPropertyName("settle")] SettleFile? Settle,
     [property: JsonPropertyName("removeProvisionedAppx")] string[] RemoveProvisionedAppx,
-    [property: JsonPropertyName("requiresNetwork")] bool RequiresNetwork = false);
+    [property: JsonPropertyName("requiresNetwork")] bool RequiresNetwork = false,
+    [property: JsonPropertyName("packageStrict")] bool PackageStrict = false);
 
 internal sealed record SettleFile(
     [property: JsonPropertyName("locale")] string Locale,

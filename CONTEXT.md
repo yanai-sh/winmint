@@ -102,3 +102,15 @@ _Avoid_: Hyper-V-only install executors; guest pwsh adapters as the default driv
 **Package catalog**:
 Shipped manifest at `config/packages.json` (embedded). **Catalog key** = Wizard chip; **install id** = Profile `packages.*` value. Plan validates fail-closed; debloat stays `CapabilityCatalog`.
 _Avoid_: live winget/Scoop search in Wizard; catalog keys in Profile JSON
+
+**Fail-closed (invariant layer)**:
+Machine setup stamp, Shell registration, DMA hard fields, debloat/offline policy digests, and Plan validation errors stop the session or build. Network required but unavailable at Plan time when Profile schedules online work ⇒ Plan fail-closed ([ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md)).
+_Avoid_: treating every winget timeout as session Failed during alpha FirstLogon
+
+**Best-effort (package layer)**:
+Curated winget/scoop/wsl installs default to continue-on-failure with `%ProgramData%\WinMint\evidence\packages.evidence.json`; splash summarizes failures; Explorer unlock still follows complete/failed-dwell rules unless an invariant failed first.
+_Avoid_: silent swallow without evidence; mixing best-effort with DMA or Shell invariants
+
+**Package phase**:
+How Plan stages package work: `perJob` (one spawn per id), `wingetImport` (single `winget import` from staged JSON), `batchScoop` (one `scoop install a b c` after buckets). Alpha default for non-empty winget on arm64: `wingetImport` when import artifact staged; per-job remains for Smoke stubs and opt-out.
+_Avoid_: hand-maintaining winget import JSON beside `packages.json`; `winget configure` as default (DSC architecture gap)

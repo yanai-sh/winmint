@@ -2,13 +2,13 @@
 
 **Status:** Product backlog **01–30** done (2026-08-05). Not an open queue.  
 **Next work:** maintainer pick, grill → to-spec, or a new GitHub issue — apply `ready-for-agent` only when starting that work.  
-**Authority:** locks [DESIGN grill](DESIGN.md#decisions-locked-grill) · modules [design/](design/) · milestones [ROADMAP](ROADMAP.md) · seams [TDD](TDD.md) · Smoke [spec](specs/2026-07-27-smoke.md)
+**Authority:** grill [DESIGN](DESIGN.md#grill-index-tiered) · modules [design/](design/) · milestones [ROADMAP](ROADMAP.md) · seams [TDD](TDD.md) · Smoke [spec](specs/2026-07-27-smoke.md)
 
 Full ticket-card novels lived here through delivery; git history retains them. This file is the closed index only.
 
-## Policy still out
+## Invariants still out
 
-Do **not** casually reopen. See [DESIGN](DESIGN.md#decisions-locked-grill):
+See [DESIGN grill index](DESIGN.md#grill-index-tiered) tier **I** and [ADR-011](decisions/ADR-011-alpha-posture-and-package-delegation.md):
 
 - Profile presets-in-JSON
 - Schema `v2` without a breaking change
@@ -17,7 +17,7 @@ Do **not** casually reopen. See [DESIGN](DESIGN.md#decisions-locked-grill):
 - Full DPAPI host→guest channel; full D2D splash
 - Slice 2 always-on OneDrive / Recall / KeepCopilot (issue **56** follow-on)
 
-Also never in product: BitLocker Smoke, Home Smoke SKU, MicrosoftOobe, enterprise secrets, MediatR/Generic Host/Contracts project, guest pwsh, peer Splash.
+Also never in product: BitLocker Smoke, Home Smoke SKU, MicrosoftOobe, enterprise secrets, MediatR/Generic Host/Contracts project, **guest pwsh product runtime**, peer Splash.
 
 ## Closed index
 
@@ -54,6 +54,7 @@ Also never in product: BitLocker Smoke, Home Smoke SKU, MicrosoftOobe, enterpris
 | 29 | [#41](https://github.com/yanai-sh/winmint/issues/41) | 2026-08-05 | GDI splash status text (`TextOutW`) |
 | 30 | [#42](https://github.com/yanai-sh/winmint/issues/42) | 2026-08-05 | Hardware M4 opt-in evidence bars |
 | 31 | [#64–#69](https://github.com/yanai-sh/winmint/issues/64) | 2026-08-05 | Package catalog + ARM64 harvest (Plan validation, Wizard chips, winget arch, WSL fromFile, native audit) |
+| 32 | [#73–#79](https://github.com/yanai-sh/winmint/issues/73) | 2026-08-06 | Alpha package program: ADR-011 docs + winget import + scoop batch + best-effort + harness ([spec](specs/2026-08-06-alpha-package-program.md)) |
 
 Sequencing history: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) (**met**). Keep-flag design: [KEEPFLAG](design/KEEPFLAG.md).
 

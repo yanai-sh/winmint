@@ -19,7 +19,7 @@ Constraints any interface must satisfy:
 - Never leave `defaultuser0` + AutoAdminLogon after Machine setup.
 - Time-to-first-paint budget; crash/stale tenure → fail-open.
 - Secret wipe after Machine setup stamp.
-- No guest pwsh; no peer Splash.exe; no Shell↔RunOnce coupling.
+- No **guest pwsh product runtime**; no peer Splash.exe; no Shell↔RunOnce coupling. Inbox `powershell.exe` for Scoop bootstrap or winget import is OK ([ADR-011](../decisions/ADR-011-alpha-posture-and-package-delegation.md)).
 
 Dependency category: **local-substitutable** OS (registry, locale snapshot, process spawn, splash presenter, clock) + true-external child processes (winget/etc.) behind the job runner.
 

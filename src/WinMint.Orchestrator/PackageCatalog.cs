@@ -170,6 +170,39 @@ public sealed class PackageCatalog
             ? DefaultImageArchitecture
             : NormalizeArch(run.ImageArchitecture);
 
+    public static PackagePhase EffectivePackagePhase(RunOptions? run, Profile profile, string imageArchitecture)
+    {
+        if (run?.PackagePhase is PackagePhase phase && phase != PackagePhase.Default)
+        {
+            return phase;
+        }
+
+        if (profile.WingetPackages.Count > 0
+            && string.Equals(NormalizeArch(imageArchitecture), "arm64", StringComparison.OrdinalIgnoreCase))
+        {
+            return PackagePhase.WingetImport;
+        }
+
+        return PackagePhase.PerJob;
+    }
+
+    public IReadOnlyList<string> ToolCatalogKeys => _toolsByKey.Keys.ToList();
+
+    public IReadOnlySet<string> ScoopBucketsForInstallIds(IEnumerable<string> installIds)
+    {
+        HashSet<string> buckets = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string installId in installIds)
+        {
+            if (_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
+                && string.Equals(tool.Source, "scoop", StringComparison.OrdinalIgnoreCase))
+            {
+                buckets.Add(tool.ScoopBucket ?? "main");
+            }
+        }
+
+        return buckets;
+    }
+
     public IReadOnlyList<string> ValidateProfilePackages(
         Profile profile,
         string imageArchitecture,
@@ -285,7 +318,8 @@ public sealed class PackageCatalog
                     dto.DisplayName ?? key,
                     dto.Source,
                     dto.Id,
-                    arch);
+                    arch,
+                    dto.ScoopBucket);
                 toolsByKey[key] = entry;
                 toolsByInstallId[dto.Id] = entry;
             }
@@ -322,7 +356,8 @@ public sealed record PackageToolEntry(
     string DisplayName,
     string Source,
     string InstallId,
-    IReadOnlyList<string> Architectures);
+    IReadOnlyList<string> Architectures,
+    string? ScoopBucket = null);
 
 public sealed record WslDistroEntry(
     string ProfileToken,
@@ -373,6 +408,9 @@ internal sealed class PackageToolDto
 
     [JsonPropertyName("architectures")]
     public string[]? Architectures { get; set; }
+
+    [JsonPropertyName("scoopBucket")]
+    public string? ScoopBucket { get; set; }
 }
 
 internal sealed class WslDistroDto

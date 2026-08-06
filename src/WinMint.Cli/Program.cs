@@ -65,6 +65,16 @@ internal static class Program
             Description = "Fail closed when native ARM64 audit finds x64/emulated winget GUI binaries.",
         };
 
+        Option<bool> packageStrictOption = new("--package-strict")
+        {
+            Description = "Fail closed when winget/scoop package jobs fail (harness/metal). Default best-effort.",
+        };
+
+        Option<string?> packagePhaseOption = new("--package-phase")
+        {
+            Description = "Package phase override: perJob or wingetImport (default arm64+winget → wingetImport).",
+        };
+
         Option<string> installEngineOption = new("--install-engine")
         {
             Description = "Install lane: winpeApply (default) or legacy opt-in.",
@@ -77,6 +87,8 @@ internal static class Program
             imageQualityOption,
             imageArchitectureOption,
             packageAuditStrictOption,
+            packageStrictOption,
+            packagePhaseOption,
             installEngineOption,
         };
         validateCommand.SetAction(parseResult =>
@@ -87,6 +99,8 @@ internal static class Program
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
+                parseResult.GetValue(packageStrictOption),
+                parseResult.GetValue(packagePhaseOption),
                 parseResult.GetValue(installEngineOption)!);
         });
 
@@ -97,6 +111,8 @@ internal static class Program
             imageQualityOption,
             imageArchitectureOption,
             packageAuditStrictOption,
+            packageStrictOption,
+            packagePhaseOption,
             installEngineOption,
         };
         planCommand.SetAction(parseResult =>
@@ -109,6 +125,8 @@ internal static class Program
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
+                parseResult.GetValue(packageStrictOption),
+                parseResult.GetValue(packagePhaseOption),
                 parseResult.GetValue(installEngineOption)!);
         });
 
@@ -123,6 +141,8 @@ internal static class Program
             imageQualityOption,
             imageArchitectureOption,
             packageAuditStrictOption,
+            packageStrictOption,
+            packagePhaseOption,
             installEngineOption,
         };
         buildCommand.SetAction(parseResult =>
@@ -143,6 +163,8 @@ internal static class Program
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
+                parseResult.GetValue(packageStrictOption),
+                parseResult.GetValue(packagePhaseOption),
                 parseResult.GetValue(installEngineOption)!);
         });
 
@@ -161,9 +183,19 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
+        bool packageStrict,
+        string? packagePhase,
         string installEngine)
     {
-        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, installEngine, out RunOptions run, out int exit))
+        if (!TryBuildRunOptions(
+                imageQuality,
+                imageArchitecture,
+                packageAuditStrict,
+                packageStrict,
+                packagePhase,
+                installEngine,
+                out RunOptions run,
+                out int exit))
         {
             return exit;
         }
@@ -183,9 +215,19 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
+        bool packageStrict,
+        string? packagePhase,
         string installEngine)
     {
-        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, installEngine, out RunOptions run, out int exit))
+        if (!TryBuildRunOptions(
+                imageQuality,
+                imageArchitecture,
+                packageAuditStrict,
+                packageStrict,
+                packagePhase,
+                installEngine,
+                out RunOptions run,
+                out int exit))
         {
             return exit;
         }
@@ -212,9 +254,19 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
+        bool packageStrict,
+        string? packagePhase,
         string installEngine)
     {
-        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, installEngine, out RunOptions planRun, out int exit))
+        if (!TryBuildRunOptions(
+                imageQuality,
+                imageArchitecture,
+                packageAuditStrict,
+                packageStrict,
+                packagePhase,
+                installEngine,
+                out RunOptions planRun,
+                out int exit))
         {
             return exit;
         }
@@ -263,6 +315,8 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
+        bool packageStrict,
+        string? packagePhase,
         string installEngine,
         out RunOptions run,
         out int exitCode)
@@ -279,15 +333,52 @@ internal static class Program
             return false;
         }
 
+        if (!TryParsePackagePhase(packagePhase, out PackagePhase phase, out exitCode))
+        {
+            run = new RunOptions();
+            return false;
+        }
+
         run = new RunOptions
         {
             ImageQuality = lane,
             ImageArchitecture = imageArchitecture,
             PackageAuditStrict = packageAuditStrict,
+            PackageStrict = packageStrict,
+            PackagePhase = phase,
             InstallEngine = engine,
         };
         exitCode = 0;
         return true;
+    }
+
+    private static bool TryParsePackagePhase(string? raw, out PackagePhase phase, out int exitCode)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            phase = PackagePhase.Default;
+            exitCode = 0;
+            return true;
+        }
+
+        if (string.Equals(raw, "perJob", StringComparison.OrdinalIgnoreCase))
+        {
+            phase = PackagePhase.PerJob;
+            exitCode = 0;
+            return true;
+        }
+
+        if (string.Equals(raw, "wingetImport", StringComparison.OrdinalIgnoreCase))
+        {
+            phase = PackagePhase.WingetImport;
+            exitCode = 0;
+            return true;
+        }
+
+        Console.Error.WriteLine($"Unsupported --package-phase '{raw}' (expected perJob|wingetImport).");
+        phase = PackagePhase.Default;
+        exitCode = 1;
+        return false;
     }
 
     private static bool TryParseInstallEngine(string raw, out InstallEngine engine, out int exitCode)

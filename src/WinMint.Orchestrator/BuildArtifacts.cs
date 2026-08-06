@@ -1,5 +1,12 @@
 namespace WinMint.Orchestrator;
 
+public enum PackagePhase
+{
+    Default,
+    PerJob,
+    WingetImport,
+}
+
 public sealed record PlanFailure(string Code, string Message);
 
 public sealed record RunOptions
@@ -14,6 +21,11 @@ public sealed record RunOptions
 
     /// <summary>When true, native ARM64 audit job fails closed on emulated/x64 binaries (SL7/metal).</summary>
     public bool PackageAuditStrict { get; init; }
+
+    /// <summary>When true, package install failures fail the session (harness/metal). Default best-effort.</summary>
+    public bool PackageStrict { get; init; }
+
+    public PackagePhase PackagePhase { get; init; } = PackagePhase.Default;
 
     /// <summary>Override embedded package catalog (tests); null uses <see cref="PackageCatalog.Default"/>.</summary>
     public PackageCatalog? PackageCatalog { get; init; }
@@ -41,7 +53,9 @@ public sealed record BuildArtifacts(
     DmaContract Dma,
     BuildManifest Manifest,
     AccountProfile Account,
-    IReadOnlyList<string> RemoveProvisionedAppx);
+    IReadOnlyList<string> RemoveProvisionedAppx,
+    byte[]? WingetImportJson = null,
+    bool PackageStrict = false);
 
 public sealed record UnattendArtifact(string Xml);
 
@@ -56,7 +70,8 @@ public sealed record JobDescriptor(
     string? WslInstallKind = null,
     string? WslFromFileRepo = null,
     IReadOnlyList<string>? WslFromFileAssetNames = null,
-    bool AuditStrict = false);
+    bool AuditStrict = false,
+    IReadOnlyList<string>? ScoopBuckets = null);
 
 public sealed record ServicingStageList(IReadOnlyList<ServicingStage> Stages);
 

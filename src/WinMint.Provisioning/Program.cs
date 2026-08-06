@@ -73,7 +73,8 @@ internal static class Program
                 Log,
                 splash,
                 new FileEvidenceSink(evidenceDir),
-                new FileCheckpointStore(programData));
+                new FileCheckpointStore(programData),
+                evidenceDirectory: evidenceDir);
             SessionResult result = ProvisioningSession.Run(SessionMode.Shell, bundle, env);
             Log($"{result.FinalStatus.Code}: {result.FinalStatus.Message}");
             foreach (EvidenceSnapshot snap in result.EvidenceEmitted)
@@ -116,7 +117,8 @@ internal static class Program
         Action<string> log,
         ISplashPresenter? splash,
         IEvidenceSink? evidence = null,
-        ICheckpointStore? checkpoints = null)
+        ICheckpointStore? checkpoints = null,
+        string? evidenceDirectory = null)
     {
         IWinlogonRegistry winlogon = OperatingSystem.IsWindows()
             ? new Win32WinlogonRegistry()
@@ -136,7 +138,8 @@ internal static class Program
             LocalAccounts: new Win32LocalAccounts(),
             ResolveScoopCmd: TryResolveScoopShim,
             ResidueCleaner: new Win32ResidueCleaner(winlogon, log),
-            Connectivity: new WindowsConnectivityProbe());
+            Connectivity: new WindowsConnectivityProbe(),
+            EvidenceDirectory: evidenceDirectory);
     }
 
     /// <summary>Default Scoop shim after official bootstrap (PROVISIONINGSESSION). Host-owned File.Exists.</summary>

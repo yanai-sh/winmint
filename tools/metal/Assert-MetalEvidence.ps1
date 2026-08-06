@@ -25,7 +25,9 @@ param(
 
     [switch] $RequireOutputIso,
 
-    [switch] $ExpectNativePackageAuditJobs
+    [switch] $ExpectNativePackageAuditJobs,
+
+    [switch] $ExpectWingetImport
 )
 
 Set-StrictMode -Version Latest
@@ -123,13 +125,27 @@ if ($ExpectNativePackageAuditJobs) {
     $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
     $auditJobs = @($jobsDoc.jobs | Where-Object { [string]$_.kind -eq 'package.auditNative' })
     if ($auditJobs.Count -eq 0) {
-        throw 'payload/jobs.json must include package.auditNative when Profile lists winget packages'
+        throw 'payload/jobs.json must include package.auditNative when -ExpectNativePackageAuditJobs'
     }
-    $wingetJobs = @($jobsDoc.jobs | Where-Object {
-            [string]$_.kind -eq 'winget' -and -not [string]::IsNullOrWhiteSpace([string]$_.wingetArchitecture)
-        })
-    if ($wingetJobs.Count -eq 0) {
-        throw 'payload/jobs.json must include winget jobs with wingetArchitecture for ARM64 metal profiles'
+}
+
+if ($ExpectWingetImport) {
+    $importPath = Join-Path $WorkDirectory 'payload\winget-import.json'
+    if (-not (Test-Path -LiteralPath $importPath)) {
+        throw "payload/winget-import.json missing: $importPath (ExpectWingetImport)"
+    }
+    $importDoc = Get-Content -LiteralPath $importPath -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($null -eq $importDoc.Sources -or @($importDoc.Sources).Count -eq 0) {
+        throw 'winget-import.json must include Sources[]'
+    }
+    $jobsPath = Join-Path $WorkDirectory 'payload\jobs.json'
+    if (-not (Test-Path -LiteralPath $jobsPath)) {
+        throw "payload/jobs.json missing: $jobsPath (ExpectWingetImport)"
+    }
+    $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+    $importJobs = @($jobsDoc.jobs | Where-Object { [string]$_.kind -eq 'winget.import' })
+    if ($importJobs.Count -eq 0) {
+        throw 'payload/jobs.json must include winget.import when -ExpectWingetImport'
     }
 }
 

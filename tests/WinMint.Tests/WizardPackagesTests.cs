@@ -47,14 +47,16 @@ public class WizardPackagesTests
         Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
         Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(
+            parsed.Value,
+            new RunOptions { PackagePhase = PackagePhase.PerJob });
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         Assert.Contains(
             planned.Value.Jobs.Jobs,
             j => j.Kind == "winget" && j.PackageId == "jqlang.jq" && j.NeedsReboot);
         Assert.Contains(
             planned.Value.Jobs.Jobs,
-            j => j.Kind == "scoop" && j.PackageId == "curl" && !j.NeedsReboot);
+            j => j.Kind == "scoop.batch" && j.PackageId!.Contains("curl") && !j.NeedsReboot);
     }
 
     [Fact]

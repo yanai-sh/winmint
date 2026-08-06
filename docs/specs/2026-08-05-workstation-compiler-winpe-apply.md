@@ -39,7 +39,7 @@ Profile → BuildPlan → ImageServicing (thin offline) → bootable USB
 | P3 | **WinPE apply replaces Setup** as the target install engine — `diskpart` + `dism /Apply-Image` + `bcdboot`; no `setup.exe /legacy` on the green path. |
 | P4 | **Online-first debloat** — `debloat.mode` default `online`; AppX remove-list runs live in FirstLogon. `offline` keeps today’s DISM path. No `both` (ponytail: offline + existing `appx.safetyNet` already covers stragglers). |
 | P5 | **Shell tenure unchanged** — Winlogon Shell = Supervisor until complete/failed-dwell/timeout; user never accesses desktop until unlock. |
-| P6 | **Network is derived, not authored** — BuildPlan fail-closed when Plan schedules online AppX removes or non-stub package jobs and Smoke/harness provides no outbound path. No `network.*` Profile fields. |
+| P6 | **Network is derived, not authored** — Plan fail-closed when Profile schedules online AppX removes or non-stub package jobs and harness provides no outbound path. **Package install runtime failures** are best-effort + evidence per [ADR-011](../decisions/ADR-011-alpha-posture-and-package-delegation.md). No `network.*` Profile fields. |
 | P7 | **Transitional coexistence** — current legacy-setup path stays until WinPE apply passes Smoke on 25H2 ARM64; then deprecate `Inject-Unattend.ps1` legacy patch. |
 
 ## Primary persona & demo
@@ -58,7 +58,7 @@ Profile → BuildPlan → ImageServicing (thin offline) → bootable USB
 3. As a solo dev, I want the first interactive surface after install to be WinMint splash—not Explorer—so that I know provisioning owns the session.
 4. As a solo dev, I want debloat and package installs to run online during FirstLogon by default, so that removes stay current without rebuilding a heavy offline image.
 5. As a solo dev, I want offline policy stamps (Edge debloat, DMA latch, Shell stamp) applied before first boot, so that posture is correct even when debloat is online.
-6. As a solo dev, I want provisioning to fail closed when network is required but unavailable, so that I get evidence instead of a half-debloated desktop.
+6. As a solo dev, I want Plan to fail closed when network is required but unavailable at build/provision scheduling time, so that I do not start an online debloat/package run with no path out — while individual package install failures during FirstLogon record evidence and still unlock when invariants are green ([ADR-011](../decisions/ADR-011-alpha-posture-and-package-delegation.md)).
 7. As a maintainer, I want WinPE apply to eliminate ConX/legacy Setup dependency, so that 26H2 media changes do not break the install seam.
 8. As a maintainer, I want Smoke to prove the new apply lane on 25H2 ARM64 Hyper-V, so that regression is caught before legacy removal.
 9. As a maintainer, I want `debloat.mode: offline` for air-gapped Profiles, so that today’s offline keep-flag path remains available.

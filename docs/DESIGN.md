@@ -31,7 +31,7 @@
 
 Grill locks below are **not all immutable**. [ADR-011](decisions/ADR-011-alpha-posture-and-package-delegation.md) splits **Invariant** (identity/safety), **Default** (current behaviour, change with spike), and **Guideline**. Agents should not treat ticket-sequence wording as a blocker when a net-positive alternative fits alpha.
 
-## Decisions locked (grill)
+## Grill index (tiered)
 
 Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag grill 2026-08-04 ([ADR-006](decisions/ADR-006-post-keepflag-sequencing.md)); CDM 2026-08-05 ([ADR-007](decisions/ADR-007-cdm-not-primary.md)); residual ([ADR-008](decisions/ADR-008-residual-minimization.md)); product policies ([ADR-009](decisions/ADR-009-product-constant-policies.md)); package catalog ([ADR-010](decisions/ADR-010-arm64-package-policy.md)); **alpha tiers** 2026-08-06 ([ADR-011](decisions/ADR-011-alpha-posture-and-package-delegation.md)). Tier column: **I** = invariant, **D** = default (revisable), **G** = guideline.
 
