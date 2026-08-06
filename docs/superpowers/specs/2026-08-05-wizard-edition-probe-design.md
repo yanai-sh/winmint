@@ -1,7 +1,8 @@
 # Wizard edition probe — design lock
 
 **Date:** 2026-08-05  
-**Status:** Spec’d for ticket · DESIGN still parks until implement unlocks  
+**Status:** Shipped (issue **58**) · DESIGN unlocked for edition probe  
+ 
 **Related:** Phase A/B Wizard UX; [IMAGESERVICING](../../design/IMAGESERVICING.md) §8–10; `servicing/Wim-Metadata.ps1`; CTT/WIM-discipline findings (2026-08-05)
 
 ## Locks

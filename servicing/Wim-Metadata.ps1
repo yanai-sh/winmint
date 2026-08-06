@@ -6,7 +6,9 @@
   Dot-source from Mount-InstallWim / Export-Wim / Build-Iso. Self-check: pwsh -File Wim-Metadata.ps1 -SelfCheck
 #>
 param(
-    [switch] $SelfCheck
+    [switch] $SelfCheck,
+    [string] $ListFromTextPath,
+    [string] $ListFromIso
 )
 
 function Test-WimMetadataUndefined([string] $Value) {
@@ -86,6 +88,119 @@ function ConvertFrom-WimInfoText {
         Build         = $build
         Version       = $version
     }
+}
+
+function ConvertFrom-WimInfoListText {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Text
+    )
+
+    $blocks = @([regex]::Split($Text, '(?m)(?=^Index : \d+\s*$)') |
+        Where-Object { $_ -match '(?m)^Index : \d+\s*$' })
+    if ($blocks.Count -lt 1) {
+        throw 'wim.probe.empty: no Index blocks parsed'
+    }
+
+    $rows = [System.Collections.Generic.List[object]]::new()
+    foreach ($block in $blocks) {
+        $snap = ConvertFrom-WimInfoText -Text $block -Index 0
+        $name = [string]$snap.Name
+        if (Test-WimMetadataUndefined $name) {
+            throw "wim.probe.incompleteName: Index $($snap.Index) Name is missing or undefined"
+        }
+
+        $rows.Add([ordered]@{
+                index        = [int]$snap.Index
+                name         = $name.Trim()
+                architecture = $(if ($snap.Architecture) { [string]$snap.Architecture } else { $null })
+                edition      = $(if ($snap.Edition) { [string]$snap.Edition } else { $null })
+                version      = $(if ($snap.Version) { [string]$snap.Version } else { $null })
+                build        = $(if ($snap.Build) { [string]$snap.Build } else { $null })
+            })
+    }
+
+    return $rows
+}
+
+function Get-WimIndexList {
+    param(
+        [Parameter(Mandatory)]
+        [string] $WimFile
+    )
+
+    if (-not (Test-Path -LiteralPath $WimFile)) {
+        throw "wim.probe.wimMissing: WIM missing: $WimFile"
+    }
+
+    # IndexCount from summary list (no /Index). Per-index detail needs /Index — 25H2 summary omits Architecture.
+    $summary = & dism.exe /English /Get-WimInfo /WimFile:$WimFile 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        throw "wim.probe.unreadable: Get-WimInfo failed: $LASTEXITCODE`n$summary"
+    }
+
+    $indexCount = ([regex]::Matches($summary, '(?m)^Index : \d+\s*$')).Count
+    if ($indexCount -lt 1) {
+        throw 'wim.probe.empty: no Index blocks parsed'
+    }
+
+    $parts = [System.Collections.Generic.List[string]]::new()
+    for ($i = 1; $i -le $indexCount; $i++) {
+        $detail = & dism.exe /English /Get-WimInfo /WimFile:$WimFile /Index:$i 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) {
+            throw "wim.probe.unreadable: Get-WimInfo /Index:$i failed: $LASTEXITCODE`n$detail"
+        }
+
+        $parts.Add($detail)
+    }
+
+    return ,(ConvertFrom-WimInfoListText -Text ($parts -join "`n"))
+}
+
+function Get-SourceIsoWimIndexList {
+    param(
+        [Parameter(Mandatory)]
+        [string] $IsoPath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($IsoPath) -or -not (Test-Path -LiteralPath $IsoPath)) {
+        throw "wim.probe.isoMissing: Source ISO not found: $IsoPath"
+    }
+
+    $disk = Mount-DiskImage -ImagePath $IsoPath -PassThru -ErrorAction Stop
+    try {
+        Start-Sleep -Seconds 1
+        $letter = ($disk | Get-Volume | Select-Object -First 1).DriveLetter
+        if ([string]::IsNullOrWhiteSpace($letter)) {
+            throw 'wim.probe.unreadable: ISO mounted but no drive letter'
+        }
+
+        $isoRoot = "${letter}:"
+        $wimFile = Join-Path $isoRoot 'sources\install.wim'
+        if (-not (Test-Path -LiteralPath $wimFile)) {
+            $esd = Join-Path $isoRoot 'sources\install.esd'
+            if (Test-Path -LiteralPath $esd) {
+                throw 'wim.probe.unreadable: install.esd present; convert to WIM before probing (not implemented)'
+            }
+
+            throw "wim.probe.wimMissing: install.wim missing under $isoRoot\sources"
+        }
+
+        return ,(Get-WimIndexList -WimFile $wimFile)
+    }
+    finally {
+        Dismount-DiskImage -ImagePath $IsoPath -ErrorAction SilentlyContinue | Out-Null
+    }
+}
+
+function Write-WimIndexListJson {
+    param(
+        [Parameter(Mandatory)]
+        $Rows
+    )
+
+    $payload = [ordered]@{ indexes = @($Rows) }
+    $payload | ConvertTo-Json -Depth 6 -Compress
 }
 
 function Get-WimMetadataSnapshot {
@@ -288,6 +403,36 @@ function Write-WimMetadataEvidence {
     ($digests | ConvertTo-Json) | Set-Content -LiteralPath $digestPath -Encoding utf8
 }
 
+if ($ListFromTextPath) {
+    if (-not (Test-Path -LiteralPath $ListFromTextPath)) {
+        Write-Error "wim.probe.unreadable: text path missing: $ListFromTextPath"
+        exit 1
+    }
+
+    try {
+        $text = Get-Content -LiteralPath $ListFromTextPath -Raw -Encoding utf8
+        $rows = ConvertFrom-WimInfoListText -Text $text
+        Write-Output (Write-WimIndexListJson -Rows $rows)
+        exit 0
+    }
+    catch {
+        Write-Error $_.Exception.Message
+        exit 1
+    }
+}
+
+if ($ListFromIso) {
+    try {
+        $rows = Get-SourceIsoWimIndexList -IsoPath $ListFromIso
+        Write-Output (Write-WimIndexListJson -Rows $rows)
+        exit 0
+    }
+    catch {
+        Write-Error $_.Exception.Message
+        exit 1
+    }
+}
+
 if ($SelfCheck) {
     $sample = @'
 Deployment Image Servicing and Management tool
@@ -348,6 +493,23 @@ ServicePack Build : 26100
     if ($proSnap.Architecture -ne 'ARM64') { throw "SelfCheck: arch" }
     if ($proSnap.Edition -ne 'Professional') { throw "SelfCheck: edition" }
     if ($proSnap.Build -ne '26100') { throw "SelfCheck: build" }
+
+    $list = ConvertFrom-WimInfoListText -Text $multi
+    if ($list.Count -ne 2) { throw "SelfCheck: list count $($list.Count)" }
+    if ($list[0].index -ne 1 -or $list[0].name -ne 'Windows 11 Home') { throw 'SelfCheck: list Home' }
+    if ($list[1].index -ne 3 -or $list[1].edition -ne 'Professional') { throw 'SelfCheck: list Pro' }
+    $listJson = Write-WimIndexListJson -Rows $list
+    if ($listJson -notmatch '"index"\s*:\s*1') { throw "SelfCheck: list JSON`n$listJson" }
+
+    $badList = @'
+Index : 1
+Name : <undefined>
+Architecture : ARM64
+Edition : Core
+'@
+    $threw = $false
+    try { ConvertFrom-WimInfoListText -Text $badList | Out-Null } catch { $threw = $true }
+    if (-not $threw) { throw 'SelfCheck: expected list refuse on <undefined> Name' }
 
     Assert-WimMetadataStable -Before $proSnap -After $proSnap -Context 'SelfCheck identity'
 

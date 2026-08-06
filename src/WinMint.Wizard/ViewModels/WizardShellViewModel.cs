@@ -13,16 +13,26 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     private static readonly string[] StepNames = ["Source", "Configure", "Preview", "Review"];
 
     private readonly Window _window;
+    private readonly int _hostWimDefault = HostEdition.DefaultWimIndex();
+    private readonly IWimIndexSource? _wimIndexSource;
     private byte[]? _lastProfileUtf8;
     private string? _savedProfilePath;
     private CancellationTokenSource? _buildCts;
-
-    // Silent default from host SKU: Home unless Wizard host is Pro (not shown in Source UI).
-    private readonly int? _wimIndex = HostEdition.DefaultWimIndex();
+    private CancellationTokenSource? _probeCts;
+    private int _wimIndex;
+    private bool _userChoseWimIndex;
+    private int _probeGeneration;
 
     public WizardShellViewModel(Window window)
+        : this(window, wimIndexSource: null)
+    {
+    }
+
+    internal WizardShellViewModel(Window window, IWimIndexSource? wimIndexSource)
     {
         _window = window;
+        _wimIndexSource = wimIndexSource;
+        _wimIndex = _hostWimDefault;
 
         BrowserChips = ToChips(
         [
@@ -81,6 +91,11 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _keepGaming;
     [ObservableProperty] private bool _keepCopilot;
 
+    public ObservableCollection<WimIndexInfo> WimIndexes { get; } = [];
+    [ObservableProperty] private WimIndexInfo? _selectedWimIndex;
+    [ObservableProperty] private bool _isWimPickerVisible;
+    [ObservableProperty] private bool _isWimProbeBusy;
+
     [ObservableProperty] private string _username = "winmint";
     [ObservableProperty] private string _password = "winmint";
     [ObservableProperty] private bool _requireWifi;
@@ -123,6 +138,23 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     {
         RefreshNav();
         RefreshCanBuild();
+        _ = ProbeSourceWimAsync();
+    }
+
+    partial void OnSelectedWimIndexChanged(WimIndexInfo? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        if (value.Index != _wimIndex)
+        {
+            _userChoseWimIndex = true;
+        }
+
+        _wimIndex = value.Index;
+        RefreshRecipe();
     }
 
     partial void OnIsBusyChanged(bool value)
@@ -184,6 +216,8 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             string? path = files[0].TryGetLocalPath();
             if (!string.IsNullOrEmpty(path))
             {
+                // Path change triggers probe via OnSourceIsoPathChanged.
+                _userChoseWimIndex = false;
                 SourceIsoPath = path;
                 Status = "";
                 StatusIsError = false;
@@ -353,6 +387,70 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     private bool SourceIsoReady() =>
         !string.IsNullOrWhiteSpace(SourceIsoPath) && File.Exists(SourceIsoPath.Trim());
 
+    private async Task ProbeSourceWimAsync()
+    {
+        int generation = ++_probeGeneration;
+        _probeCts?.Cancel();
+        _probeCts?.Dispose();
+        _probeCts = new CancellationTokenSource();
+        CancellationToken ct = _probeCts.Token;
+
+        WimIndexes.Clear();
+        SelectedWimIndex = null;
+        IsWimPickerVisible = false;
+
+        if (!SourceIsoReady())
+        {
+            IsWimProbeBusy = false;
+            return;
+        }
+
+        IsWimProbeBusy = true;
+        string path = SourceIsoPath.Trim();
+        IWimIndexSource? source = _wimIndexSource;
+        Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> result = await Task.Run(
+                () => SourceWimProbe.TryProbeIso(path, source, ct), ct)
+            .ConfigureAwait(true);
+
+        if (generation != _probeGeneration || ct.IsCancellationRequested)
+        {
+            return;
+        }
+
+        IsWimProbeBusy = false;
+        if (!result.IsOk)
+        {
+            // Fail open on probe UX — reset to host default so Save/Build still work.
+            _userChoseWimIndex = false;
+            _wimIndex = _hostWimDefault;
+            Status = $"{result.Error.Code}: {result.Error.Message}";
+            StatusIsError = true;
+            RefreshRecipe();
+            return;
+        }
+
+        foreach (WimIndexInfo row in result.Value)
+        {
+            WimIndexes.Add(row);
+        }
+
+        int selected = SourceWimProbe.ResolveSelection(
+            result.Value,
+            _wimIndex,
+            _userChoseWimIndex,
+            _hostWimDefault);
+        _wimIndex = selected;
+        SelectedWimIndex = WimIndexes.FirstOrDefault(r => r.Index == selected);
+        IsWimPickerVisible = true;
+        if (StatusIsError && Status.StartsWith("wim.probe.", StringComparison.Ordinal))
+        {
+            Status = "";
+            StatusIsError = false;
+        }
+
+        RefreshRecipe();
+    }
+
     private bool RunPlan()
     {
         WizardSessionResult result = WizardSession.ComposeAndPlan(BuildInput());
@@ -425,5 +523,8 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         _buildCts?.Cancel();
         _buildCts?.Dispose();
         _buildCts = null;
+        _probeCts?.Cancel();
+        _probeCts?.Dispose();
+        _probeCts = null;
     }
 }
