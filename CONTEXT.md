@@ -74,7 +74,11 @@ _Avoid_: Hyper-V-only settle forks; sticky intermediate failures as authoritativ
 
 **Smoke**:
 The first acceptance vertical: Profile → ISO → unattended Hyper-V install → FirstLogon complete with splash and DMA **hard**-field evidence. Plumbing-focused; not full desktop-product parity. Uses the **test image-quality lane**. Requires Machine setup autologon + Shell stamp correctness when Local+autoLogon is selected. Same Supervisor/settle/job executor as production.
-_Avoid_: full install gate, hardware acceptance (those are later verticals); a different DMA settle or install executor than production
+_Avoid_: Primary gate; a different DMA settle or install executor than production
+
+**Primary gate**:
+Maintainer acceptance that a **Release**-lane ISO from the frozen `samples/sl7.profile.json` is safe to wipe the primary Surface Laptop 7: Gate B (`metal-acceptance.json` on the same Profile + lane) → destructive install → FirstLogon with online AppX complete, `--package-strict` curated packages green, evidence copy-off + checklist assert. Residual stays ADR-008; leftover-confidence / CDM junk and M4 flags are out of this bar. Until met, Wizard and host-deepening issues are parked.
+_Avoid_: stable ISO, hardware campaign (vague), treating Gate B or Smoke alone as wipe confidence
 
 **Image quality**:
 Run-specific WIM export / WinSxS cleanup posture for one build. Test lane prioritizes speed; release lane prioritizes a smaller ISO. Not authored in the Profile. Export/commit paths snapshot and assert WIM metadata (Name/Architecture/edition build) so DISM exit 0 cannot silently leave Setup-breaking image info.
