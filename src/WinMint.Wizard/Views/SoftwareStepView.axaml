@@ -1,15 +1,15 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
-             x:Class="WinMint.Wizard.Views.TasteStepView"
+             x:Class="WinMint.Wizard.Views.SoftwareStepView"
              x:DataType="vm:WizardShellViewModel">
   <StackPanel Spacing="20" MaxWidth="900" HorizontalAlignment="Center" VerticalAlignment="Center">
-    <TextBlock Classes="hero-title" Text="Taste" />
+    <TextBlock Classes="hero-title" Text="Software" />
     <TextBlock Classes="hero-sub"
-               Text="Apps, desktop, and posture — or skip with recommended defaults. Defaults already reflect the WinMint posture." />
+               Text="Apps, desktop shell, WSL, and cleanup — or continue with recommended defaults." />
 
     <Button Classes="ghost"
-            Content="Use defaults → Included"
+            Content="Use defaults → Review"
             HorizontalAlignment="Left"
             Command="{Binding UseDefaultsCommand}" />
 
@@ -17,13 +17,8 @@
     <UniformGrid Columns="2" Rows="3">
       <Border Classes="panel-card" Margin="0,0,8,8">
         <StackPanel>
-          <TextBlock Classes="panel-label" Text="POSTURE" />
-          <StackPanel Orientation="Horizontal">
-            <ToggleButton Classes="chip" Content="Recommended" IsChecked="{Binding IsRecommendedPreset}" Command="{Binding SelectRecommendedPresetCommand}" />
-            <ToggleButton Classes="chip" Content="Acceptance" IsChecked="{Binding IsAcceptancePreset}" Command="{Binding SelectAcceptancePresetCommand}" />
-            <ToggleButton Classes="chip" Content="Empty" IsChecked="{Binding IsEmptyPreset}" Command="{Binding SelectEmptyPresetCommand}" />
-          </StackPanel>
-          <Button Classes="chip" Content="Use this PC region" Command="{Binding UseHostDmaCommand}" Margin="0,8,0,0" />
+          <TextBlock Classes="panel-label" Text="CLEANUP" />
+          <ToggleButton Classes="chip" Content="Recommended" IsChecked="{Binding IsRecommendedPreset}" Command="{Binding SelectRecommendedPresetCommand}" />
         </StackPanel>
       </Border>
 
@@ -102,6 +97,11 @@
 
     <Expander Header="Advanced packages (optional)" IsExpanded="False">
       <StackPanel Spacing="8" Margin="0,8,0,0">
+        <TextBlock Classes="panel-label" Text="PRESET OVERRIDE" />
+        <StackPanel Orientation="Horizontal">
+          <ToggleButton Classes="chip" Content="Acceptance" IsChecked="{Binding IsAcceptancePreset}" Command="{Binding SelectAcceptancePresetCommand}" />
+          <ToggleButton Classes="chip" Content="Empty" IsChecked="{Binding IsEmptyPreset}" Command="{Binding SelectEmptyPresetCommand}" />
+        </StackPanel>
         <TextBlock Classes="hero-sub"
                    Text="One install id or WSL token per line. When non-empty, overrides chip selections for that source. MinGit and Nilesoft Shell are always installed — not listed here and cannot be turned off." />
         <TextBlock Classes="panel-label" Text="WINGET INSTALL IDS" />

@@ -9,27 +9,27 @@ public class WizardStageGatesTests
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(true, true)]
-    public void CanGoTo_Media_always_true(bool sourceReady, bool identityReady)
+    public void CanGoTo_Source_always_true(bool sourceReady, bool identityReady)
     {
-        Assert.True(WizardStageGates.CanGoTo(WizardStageGates.Media, sourceReady, identityReady));
+        Assert.True(WizardStageGates.CanGoTo(WizardStageGates.Source, sourceReady, identityReady));
     }
 
     [Theory]
-    [InlineData(WizardStageGates.You)]
-    [InlineData(WizardStageGates.Taste)]
-    public void CanGoTo_You_or_Taste_requires_source(int target)
+    [InlineData(WizardStageGates.Account)]
+    [InlineData(WizardStageGates.Software)]
+    public void CanGoTo_Account_or_Software_requires_source(int target)
     {
         Assert.False(WizardStageGates.CanGoTo(target, sourceReady: false, identityReady: true));
         Assert.True(WizardStageGates.CanGoTo(target, sourceReady: true, identityReady: false));
     }
 
     [Fact]
-    public void CanGoTo_Included_requires_source_and_identity()
+    public void CanGoTo_Review_requires_source_and_identity()
     {
-        Assert.False(WizardStageGates.CanGoTo(WizardStageGates.Included, false, false));
-        Assert.False(WizardStageGates.CanGoTo(WizardStageGates.Included, true, false));
-        Assert.False(WizardStageGates.CanGoTo(WizardStageGates.Included, false, true));
-        Assert.True(WizardStageGates.CanGoTo(WizardStageGates.Included, true, true));
+        Assert.False(WizardStageGates.CanGoTo(WizardStageGates.Review, false, false));
+        Assert.False(WizardStageGates.CanGoTo(WizardStageGates.Review, true, false));
+        Assert.False(WizardStageGates.CanGoTo(WizardStageGates.Review, false, true));
+        Assert.True(WizardStageGates.CanGoTo(WizardStageGates.Review, true, true));
     }
 
     [Theory]
@@ -60,31 +60,31 @@ public class WizardStageGatesTests
     }
 
     [Fact]
-    public void CanAdvance_from_Taste_requires_source_and_identity()
+    public void CanAdvance_from_Software_requires_source_and_identity()
     {
-        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Taste, sourceReady: true, identityReady: false));
-        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Taste, sourceReady: false, identityReady: true));
-        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.Taste, sourceReady: true, identityReady: true));
+        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Software, sourceReady: true, identityReady: false));
+        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Software, sourceReady: false, identityReady: true));
+        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.Software, sourceReady: true, identityReady: true));
     }
 
     [Fact]
-    public void CanAdvance_from_Media_requires_source()
+    public void CanAdvance_from_Source_requires_source()
     {
-        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Media, sourceReady: false, identityReady: true));
-        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.Media, sourceReady: true, identityReady: false));
+        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Source, sourceReady: false, identityReady: true));
+        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.Source, sourceReady: true, identityReady: false));
     }
 
     [Fact]
-    public void CanAdvance_from_You_requires_source_only()
+    public void CanAdvance_from_Account_requires_source_only()
     {
-        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.You, sourceReady: false, identityReady: true));
-        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.You, sourceReady: true, identityReady: false));
+        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Account, sourceReady: false, identityReady: true));
+        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.Account, sourceReady: true, identityReady: false));
     }
 
     [Fact]
-    public void CanGoTo_skips_Taste_when_source_and_identity_ready()
+    public void CanGoTo_skips_Software_when_source_and_identity_ready()
     {
-        Assert.True(WizardStageGates.CanGoTo(WizardStageGates.Included, sourceReady: true, identityReady: true));
+        Assert.True(WizardStageGates.CanGoTo(WizardStageGates.Review, sourceReady: true, identityReady: true));
     }
 
     [Theory]

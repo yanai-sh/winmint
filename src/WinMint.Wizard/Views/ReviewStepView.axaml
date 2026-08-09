@@ -1,10 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
-             x:Class="WinMint.Wizard.Views.IncludedStepView"
+             x:Class="WinMint.Wizard.Views.ReviewStepView"
              x:DataType="vm:WizardShellViewModel">
   <StackPanel Spacing="18" MaxWidth="760" HorizontalAlignment="Center" VerticalAlignment="Center">
-    <TextBlock Classes="hero-title" Text="Included" />
+    <TextBlock Classes="hero-title" Text="Review" />
     <TextBlock Classes="hero-sub" Text="{Binding QuietSummaryText}" />
 
     <Border Classes="iso-stage">
@@ -25,6 +25,16 @@
         <Expander Header="What's included" IsExpanded="False"
                    IsVisible="{Binding WhatsIncludedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
           <TextBlock Text="{Binding WhatsIncludedText}" TextWrapping="Wrap" Opacity="0.75" Margin="0,8,0,0" />
+        </Expander>
+
+        <Expander Header="Show full plan" IsExpanded="False"
+                   IsVisible="{Binding FullPlanText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding FullPlanText}"
+                     TextWrapping="Wrap"
+                     Opacity="0.8"
+                     Margin="0,8,0,0"
+                     FontFamily="Cascadia Mono, Consolas, monospace"
+                     FontSize="12" />
         </Expander>
 
         <Expander Header="Plan detail" IsExpanded="False">

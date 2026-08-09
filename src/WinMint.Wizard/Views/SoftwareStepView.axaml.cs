@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace WinMint.Wizard.Views;
 
-public partial class IncludedStepView : UserControl
+public partial class SoftwareStepView : UserControl
 {
-    public IncludedStepView()
+    public SoftwareStepView()
     {
         InitializeComponent();
     }

@@ -1,10 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
-             x:Class="WinMint.Wizard.Views.YouStepView"
+             x:Class="WinMint.Wizard.Views.AccountStepView"
              x:DataType="vm:WizardShellViewModel">
   <StackPanel Spacing="22" MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
-    <TextBlock Classes="hero-title" Text="You" />
+    <TextBlock Classes="hero-title" Text="Account" />
     <TextBlock Classes="hero-sub"
                Text="Local account for first sign-in. Password required — Windows autologon never accepts a blank one." />
 

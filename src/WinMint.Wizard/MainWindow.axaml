@@ -41,10 +41,10 @@
 
     <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
       <Panel Margin="56,28,56,24">
-        <views:MediaStepView IsVisible="{Binding IsMediaStep}" />
-        <views:YouStepView IsVisible="{Binding IsYouStep}" />
-        <views:TasteStepView IsVisible="{Binding IsTasteStep}" />
-        <views:IncludedStepView IsVisible="{Binding IsIncludedStep}" />
+        <views:SourceStepView IsVisible="{Binding IsSourceStep}" />
+        <views:AccountStepView IsVisible="{Binding IsAccountStep}" />
+        <views:SoftwareStepView IsVisible="{Binding IsSoftwareStep}" />
+        <views:ReviewStepView IsVisible="{Binding IsReviewStep}" />
       </Panel>
     </ScrollViewer>
 
@@ -55,16 +55,16 @@
             BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
             Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
       <DockPanel>
-        <!-- Stage scrub — click Media/You/Taste/Included to jump directly (moodboard intent, no pixel morph). -->
+        <!-- Stage scrub — click Source/Account/Software/Review to jump directly (moodboard intent, no pixel morph). -->
         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <Button Classes="stage-scrub" Classes.active="{Binding IsMediaStep}"
-                  Content="MEDIA" Command="{Binding GoToMediaCommand}" IsEnabled="{Binding CanGoToMedia}" />
-          <Button Classes="stage-scrub" Classes.active="{Binding IsYouStep}"
-                  Content="YOU" Command="{Binding GoToYouCommand}" IsEnabled="{Binding CanGoToYou}" />
-          <Button Classes="stage-scrub" Classes.active="{Binding IsTasteStep}"
-                  Content="TASTE" Command="{Binding GoToTasteCommand}" IsEnabled="{Binding CanGoToTaste}" />
-          <Button Classes="stage-scrub" Classes.active="{Binding IsIncludedStep}"
-                  Content="INCLUDED" Command="{Binding GoToIncludedCommand}" IsEnabled="{Binding CanGoToIncluded}" />
+          <Button Classes="stage-scrub" Classes.active="{Binding IsSourceStep}"
+                  Content="1 Source" Command="{Binding GoToSourceCommand}" IsEnabled="{Binding CanGoToSource}" />
+          <Button Classes="stage-scrub" Classes.active="{Binding IsAccountStep}"
+                  Content="2 Account" Command="{Binding GoToAccountCommand}" IsEnabled="{Binding CanGoToAccount}" />
+          <Button Classes="stage-scrub" Classes.active="{Binding IsSoftwareStep}"
+                  Content="3 Software" Command="{Binding GoToSoftwareCommand}" IsEnabled="{Binding CanGoToSoftware}" />
+          <Button Classes="stage-scrub" Classes.active="{Binding IsReviewStep}"
+                  Content="4 Review" Command="{Binding GoToReviewCommand}" IsEnabled="{Binding CanGoToReview}" />
         </StackPanel>
         <StackPanel DockPanel.Dock="Right"
                     Orientation="Horizontal"
@@ -89,11 +89,11 @@
                   Content="{Binding NextLabel}"
                   Command="{Binding NextCommand}"
                   IsEnabled="{Binding CanGoNext}"
-                  IsVisible="{Binding !IsIncludedStep}" />
+                  IsVisible="{Binding !IsReviewStep}" />
           <Button Classes="primary"
                   Content="Finish"
                   Command="{Binding CloseCommand}"
-                  IsVisible="{Binding IsIncludedStep}" />
+                  IsVisible="{Binding IsReviewStep}" />
         </StackPanel>
       </DockPanel>
     </Border>

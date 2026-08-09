@@ -10,13 +10,15 @@ namespace WinMint.Wizard.ViewModels;
 /// <summary>v1-shaped host shell — curated chips, silent account/DMA defaults, no catalog dump.</summary>
 public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 {
-    private static readonly string[] StepNames = ["Media", "You", "Taste", "Included"];
+    private static readonly string[] StepNames = ["Source", "Account", "Software", "Review"];
 
     private readonly Window _window;
     private readonly int _hostWimDefault = HostEdition.DefaultWimIndex();
     private readonly IWimIndexSource? _wimIndexSource;
     private byte[]? _lastProfileUtf8;
     private bool _lastRequiresNetwork;
+    private BuildArtifacts? _lastArtifacts;
+    private Profile? _lastProfile;
     private string? _savedProfilePath;
     private CancellationTokenSource? _buildCts;
     private CancellationTokenSource? _probeCts;
@@ -80,22 +82,19 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     public ObservableCollection<ChipItem> WslChips { get; }
 
     [ObservableProperty] private int _stepIndex;
-    [ObservableProperty] private string _stageLabel = "Media";
+    [ObservableProperty] private string _stageLabel = "Source";
     [ObservableProperty] private double _progressFraction = 0.25;
     [ObservableProperty] private bool _canGoBack;
     [ObservableProperty] private bool _canGoNext = true;
     [ObservableProperty] private string _nextLabel = "Continue";
-    [ObservableProperty] private bool _canGoToMedia = true;
-    [ObservableProperty] private bool _canGoToYou;
-    [ObservableProperty] private bool _canGoToTaste;
-    [ObservableProperty] private bool _canGoToIncluded;
+    [ObservableProperty] private bool _canGoToSource = true;
+    [ObservableProperty] private bool _canGoToAccount;
+    [ObservableProperty] private bool _canGoToSoftware;
+    [ObservableProperty] private bool _canGoToReview;
 
     [ObservableProperty] private string _sourceIsoPath = "";
     [ObservableProperty] private string _imageQuality = "Test";
     [ObservableProperty] private string _preset = KeepFlagPresets.Recommended;
-    // Task 4 removes these legacy Taste bindings with their UI.
-    [ObservableProperty] private bool _keepGaming;
-    [ObservableProperty] private bool _keepCopilot;
 
     public ObservableCollection<WimIndexInfo> WimIndexes { get; } = [];
     [ObservableProperty] private WimIndexInfo? _selectedWimIndex;
@@ -122,22 +121,23 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _planSummary = "";
     [ObservableProperty] private string _buildRecipe = "";
 
-    // Included receipt layers (quiet block from ProductPosture, pick strip, effective remove-list, plan meta).
+    // Review receipt layers: quiet product defaults, selected picks, effective remove-list, and plan meta.
     [ObservableProperty] private string _quietSummaryText = "";
     [ObservableProperty] private string _pickStripText = "";
     [ObservableProperty] private string _quietBlockText = "";
     [ObservableProperty] private string _whatsIncludedText = "";
     [ObservableProperty] private string _planMetaText = "";
+    [ObservableProperty] private string _fullPlanText = "";
     [ObservableProperty] private string _saveStatus = "";
     [ObservableProperty] private bool _canBuild;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _buildStatus = "";
     [ObservableProperty] private string? _outputIsoPath;
 
-    public bool IsMediaStep => StepIndex == WizardStageGates.Media;
-    public bool IsYouStep => StepIndex == WizardStageGates.You;
-    public bool IsTasteStep => StepIndex == WizardStageGates.Taste;
-    public bool IsIncludedStep => StepIndex == WizardStageGates.Included;
+    public bool IsSourceStep => StepIndex == WizardStageGates.Source;
+    public bool IsAccountStep => StepIndex == WizardStageGates.Account;
+    public bool IsSoftwareStep => StepIndex == WizardStageGates.Software;
+    public bool IsReviewStep => StepIndex == WizardStageGates.Review;
 
     public bool IsEmptyPreset => string.Equals(Preset, KeepFlagPresets.Empty, StringComparison.OrdinalIgnoreCase);
     public bool IsAcceptancePreset => string.Equals(Preset, KeepFlagPresets.Acceptance, StringComparison.OrdinalIgnoreCase);
@@ -254,7 +254,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     private void Back()
     {
         // Free within visited — no gate on the way back.
-        if (StepIndex > WizardStageGates.Media)
+        if (StepIndex > WizardStageGates.Source)
         {
             StepIndex--;
         }
@@ -263,34 +263,34 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Next()
     {
-        if (StepIndex >= WizardStageGates.Included)
+        if (StepIndex >= WizardStageGates.Review)
         {
             return;
         }
 
         if (!WizardStageGates.CanAdvance(StepIndex, SourceIsoReady(), IdentityReadyNow()))
         {
-            Status = StepIndex == WizardStageGates.Taste
-                ? "Add a password on You to continue."
+            Status = StepIndex == WizardStageGates.Software
+                ? "Add a password on Account to continue."
                 : "Choose an existing Source ISO to continue.";
             StatusIsError = true;
             return;
         }
 
-        if (StepIndex == WizardStageGates.Taste)
+        if (StepIndex == WizardStageGates.Software)
         {
-            TryEnterIncluded();
+            TryEnterReview();
             return;
         }
 
         StepIndex++;
     }
 
-    // Stage scrub — status-bar Media/You/Taste/Included labels jump directly via WizardStageGates.CanGoTo.
-    [RelayCommand] private void GoToMedia() => GoToStage(WizardStageGates.Media);
-    [RelayCommand] private void GoToYou() => GoToStage(WizardStageGates.You);
-    [RelayCommand] private void GoToTaste() => GoToStage(WizardStageGates.Taste);
-    [RelayCommand] private void GoToIncluded() => GoToStage(WizardStageGates.Included);
+    // Stage scrub — status-bar Source/Account/Software/Review labels jump directly via WizardStageGates.CanGoTo.
+    [RelayCommand] private void GoToSource() => GoToStage(WizardStageGates.Source);
+    [RelayCommand] private void GoToAccount() => GoToStage(WizardStageGates.Account);
+    [RelayCommand] private void GoToSoftware() => GoToStage(WizardStageGates.Software);
+    [RelayCommand] private void GoToReview() => GoToStage(WizardStageGates.Review);
 
     private void GoToStage(int targetIndex)
     {
@@ -301,47 +301,55 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 
         if (!WizardStageGates.CanGoTo(targetIndex, SourceIsoReady(), IdentityReadyNow()))
         {
-            Status = targetIndex == WizardStageGates.Included
-                ? "Add a password on You to continue."
+            Status = targetIndex == WizardStageGates.Review
+                ? "Add a password on Account to continue."
                 : "Choose an existing Source ISO to continue.";
             StatusIsError = true;
             return;
         }
 
-        if (targetIndex == WizardStageGates.Included)
+        if (targetIndex == WizardStageGates.Review)
         {
-            // Jumping straight to Included composes the receipt, same as Next from Taste.
-            TryEnterIncluded();
+            // Entering Review from stage navigation composes the same receipt as Next.
+            TryEnterReview();
             return;
         }
 
         StepIndex = targetIndex;
     }
 
-    /// <summary>Taste skip — host `recommended` + product defaults, keeps/packages untouched (spec §Taste skip).</summary>
+    /// <summary>Software skip — recommended preset, clear package chips, jump to Review.</summary>
     [RelayCommand]
     private void UseDefaults()
     {
         Preset = KeepFlagPresets.Recommended;
-        if (!WizardStageGates.CanGoTo(WizardStageGates.Included, SourceIsoReady(), IdentityReadyNow()))
+        foreach (ChipItem chip in BrowserChips.Concat(EditorChips).Concat(ShellChips).Concat(WslChips))
         {
-            StepIndex = WizardStageGates.You;
-            Status = "Add a password on You to continue.";
+            chip.IsSelected = false;
+        }
+
+        AdvancedWingetText = "";
+        AdvancedScoopText = "";
+        AdvancedWslText = "";
+        if (!WizardStageGates.CanGoTo(WizardStageGates.Review, SourceIsoReady(), IdentityReadyNow()))
+        {
+            StepIndex = WizardStageGates.Account;
+            Status = "Add a password on Account to continue.";
             StatusIsError = true;
             return;
         }
 
-        TryEnterIncluded();
+        TryEnterReview();
     }
 
-    private bool TryEnterIncluded()
+    private bool TryEnterReview()
     {
         if (!RunPlan())
         {
             return false;
         }
 
-        StepIndex = WizardStageGates.Included;
+        StepIndex = WizardStageGates.Review;
         RefreshRecipe();
         return true;
     }
@@ -504,12 +512,12 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     {
         bool sourceReady = SourceIsoReady();
         bool identityReady = IdentityReadyNow();
-        CanGoBack = !IsBusy && StepIndex > WizardStageGates.Media;
+        CanGoBack = !IsBusy && StepIndex > WizardStageGates.Source;
         CanGoNext = !IsBusy
-            && StepIndex < WizardStageGates.Included
+            && StepIndex < WizardStageGates.Review
             && WizardStageGates.CanAdvance(StepIndex, sourceReady, identityReady);
         NextLabel = "Continue";
-        if (StepIndex == WizardStageGates.Included)
+        if (StepIndex == WizardStageGates.Review)
         {
             NextLabel = "Finish";
             CanGoNext = false;
@@ -517,15 +525,15 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 
         StageLabel = StepNames[StepIndex];
         ProgressFraction = (StepIndex + 1) / (double)StepNames.Length;
-        OnPropertyChanged(nameof(IsMediaStep));
-        OnPropertyChanged(nameof(IsYouStep));
-        OnPropertyChanged(nameof(IsTasteStep));
-        OnPropertyChanged(nameof(IsIncludedStep));
+        OnPropertyChanged(nameof(IsSourceStep));
+        OnPropertyChanged(nameof(IsAccountStep));
+        OnPropertyChanged(nameof(IsSoftwareStep));
+        OnPropertyChanged(nameof(IsReviewStep));
 
-        CanGoToMedia = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.Media, sourceReady, identityReady);
-        CanGoToYou = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.You, sourceReady, identityReady);
-        CanGoToTaste = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.Taste, sourceReady, identityReady);
-        CanGoToIncluded = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.Included, sourceReady, identityReady);
+        CanGoToSource = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.Source, sourceReady, identityReady);
+        CanGoToAccount = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.Account, sourceReady, identityReady);
+        CanGoToSoftware = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.Software, sourceReady, identityReady);
+        CanGoToReview = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.Review, sourceReady, identityReady);
     }
 
     private bool SourceIsoReady() => WizardStageGates.SourceReady(SourceIsoPath);
@@ -604,26 +612,46 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         if (!result.Succeeded)
         {
             _lastProfileUtf8 = null;
+            _lastArtifacts = null;
+            _lastProfile = null;
             PreviewJson = "";
             PlanSummary = result.Message;
+            FullPlanText = "";
             return false;
         }
 
         _lastProfileUtf8 = result.ProfileUtf8;
         _lastRequiresNetwork = result.RequiresNetwork;
+        _lastArtifacts = result.Artifacts;
         PreviewJson = result.ProfileJson ?? "";
         PlanSummary = result.Message;
+        if (_lastProfileUtf8 is not null)
+        {
+            Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(_lastProfileUtf8);
+            _lastProfile = parsed.IsOk ? parsed.Value : null;
+        }
+
         RefreshReceipt();
         return true;
     }
 
-    /// <summary>Included receipt — quiet labels from ProductPosture; What's included from Plan-effective AppX.</summary>
+    /// <summary>Review receipt — quiet labels from ProductPosture; What's included from Plan-effective AppX.</summary>
     private void RefreshReceipt()
     {
         QuietBlockText = IncludedReceipt.FormatQuietBlock(IsBraveSelected());
         PickStripText = IncludedReceipt.FormatPickStrip(SelectedPickLabels());
         PlanMetaText =
-            $"requiresNetwork {(_lastRequiresNetwork ? "yes" : "no")} · DMA {(DmaEnabled ? "on" : "off")} · {ImageQuality} lane";
+            $"Account {Username.Trim()} · region {Locale} / {TimeZone} · network {(_lastRequiresNetwork ? "needed" : "not needed")} · DMA {(DmaEnabled ? "on" : "off")} · {ImageQuality} lane";
+
+        if (_lastArtifacts is not null && _lastProfile is not null)
+        {
+            FullPlanText = PlanDiff.Format(_lastArtifacts, _lastProfile);
+            WhatsIncludedText = IsRecommendedPreset
+                ? IncludedReceipt.FormatWhatsIncluded(_lastArtifacts.RemoveProvisionedAppx)
+                : string.Empty;
+            QuietSummaryText = IncludedReceipt.FormatQuietSummary(_lastArtifacts.RemoveProvisionedAppx.Count);
+            return;
+        }
 
         Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(Preset);
         if (!expanded.IsOk)
@@ -636,6 +664,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             ? IncludedReceipt.FormatWhatsIncluded(effectiveAppx)
             : string.Empty;
         QuietSummaryText = IncludedReceipt.FormatQuietSummary(effectiveAppx.Count);
+        FullPlanText = "";
     }
 
     private bool IsBraveSelected() =>

@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace WinMint.Wizard.Views;
 
-public partial class MediaStepView : UserControl
+public partial class ReviewStepView : UserControl
 {
-    public MediaStepView()
+    public ReviewStepView()
     {
         InitializeComponent();
     }
