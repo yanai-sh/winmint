@@ -85,6 +85,7 @@ public class WinPeApplyPlanTests
     public void PatchBootWimApply_script_contains_apply_lane_steps_not_legacy_setup()
     {
         string script = File.ReadAllText(FindPatchBootScript());
+        Assert.Contains("$bootWim = Join-Path $mediaDir", script, StringComparison.Ordinal);
         Assert.Contains("LaunchApply.cmd", script, StringComparison.Ordinal);
         Assert.Contains("diskpart", script, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Apply-Image", script, StringComparison.Ordinal);

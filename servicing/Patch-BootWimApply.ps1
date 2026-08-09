@@ -12,6 +12,7 @@ if ($wimIndex -lt 1) { throw "wimIndex must be >= 1 (got $wimIndex)" }
 
 # Spike #70: 3-partition GPT (EFI 100 MB, MSR 16 MB, primary) — WinPE apply disk layout.
 # LabConfig on applied-image SYSTEM hive (not boot.wim) — Hyper-V no-vTPM VMs read it at first boot.
+$bootWim = Join-Path $mediaDir 'sources\boot.wim'
 $bootMarker = Join-Path $mediaDir 'sources\.winmint-boot-apply'
 if (-not (Test-Path -LiteralPath $bootWim)) {
     throw "boot.wim missing under media (expected $bootWim)"
