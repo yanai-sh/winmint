@@ -287,7 +287,7 @@ MountInstallWim
 - [ ] Default `installEngine` = `winpeApply`
 - [ ] Legacy path behind explicit opt-in only
 - [ ] `Inject-Unattend.ps1` legacy block removed or dead-code flagged
-- [ ] Docs: CONTEXT product identity; DESIGN note ADRs tentative; this spec linked from ROADMAP
+- [ ] Docs: CONTEXT product identity; DESIGN acceptance; this spec linked from DESIGN cold history
 
 ## Out of Scope
 

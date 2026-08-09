@@ -1,45 +1,40 @@
-# WinMint v2 architecture (locked)
+# WinMint architecture
 
-Greenfield product repo [`yanai-sh/winmint`](https://github.com/yanai-sh/winmint) — no WinMint v1 contract or CLI back-compat. Decisions: [ADR-002](decisions/ADR-002-v2-architecture.md), [ADR-004](decisions/ADR-004-stack-and-guest-control-plane.md). Stack pins: [STACK.md](STACK.md). Glossary: [CONTEXT.md](../CONTEXT.md). Smoke: [specs/2026-07-27-smoke.md](specs/2026-07-27-smoke.md).
+Greenfield product repo [`yanai-sh/winmint`](https://github.com/yanai-sh/winmint) — no WinMint v1 contract or CLI back-compat. Living rules: [DESIGN](DESIGN.md). Stack pins: [STACK](STACK.md). Glossary: [CONTEXT](../CONTEXT.md).
 
-**Phase:** Backlog **01–30** closed — next is maintainer pick / new issue ([TICKETS](TICKETS.md)) · [ROADMAP](ROADMAP.md#design-acceptance). Canonical: [DESIGN](DESIGN.md) · [ROADMAP](ROADMAP.md) · [TDD](TDD.md) · [design/](design/) · [AGENTIC](agents/AGENTIC.md).
-
-**Design stance:** prefer modern elegant solutions over v1 when they conflict. Smoke and metal share Supervisor / settle / job executor / reboot / lock; differ in Profile job set and evidence bars only. Grill: [DESIGN](DESIGN.md#decisions-locked-grill).
-
+**Design stance:** prefer modern elegant solutions over v1 when they conflict. Smoke and metal share Supervisor / settle / job executor / reboot / lock; differ in Profile job set and evidence bars only.
 
 ## Architectural style
 
-**Use: pipeline orchestrator + ports & adapters** (hexagonal at **one** hard seam — elevated Servicing — and only when a second adapter justifies a port).
+**Pipeline orchestrator + ports & adapters** (hexagonal at **one** hard seam — elevated Servicing — and only when a second adapter justifies a port).
 
-| Idea | How it shows up here |
-|------|----------------------|
+| Idea | How it shows up |
+|------|-----------------|
 | **Pipeline / orchestrator** | Unelevated C# sequences validate → plan → emit job/unattend → invoke Servicing → collect evidence |
-| **Port** | Small surface for “run elevated imaging job” — introduce only when prod `pwsh -File` and a test fake share a shape (not day-one) |
-| **Adapter** | Thin `pwsh -File` kernels under `servicing/` (DISM, hive, oscdimg); filesystem staging |
-| **Deep modules** | Fat behaviour behind small interfaces — see below |
+| **Port** | “Run elevated imaging job” — only when prod `pwsh -File` and a test fake share a shape |
+| **Adapter** | Thin `pwsh -File` kernels under `servicing/`; filesystem staging |
+| **Deep modules** | Fat behaviour behind small interfaces — below |
 
-**Do not use as the backbone:** Clean Architecture onion, tactical DDD / bounded-context packing, or microservices. This is one batch imaging pipeline + elevated Servicing helper. Do not pre-split Orchestrator into Authoring / Planning / Contracts projects.
+**Do not use as the backbone:** Clean Architecture onion, tactical DDD packing, or microservices. One batch imaging pipeline + elevated Servicing helper. Do not pre-split Orchestrator into Authoring / Planning / Contracts projects.
 
-## Deep modules (product seams)
-
-Three modules carry the product. Projects and scripts are hosts/adapters around them — not parallel brains.
+## Deep modules
 
 | Module | Lives in | Interface (intent) | Hides |
 |--------|----------|--------------------|-------|
-| **BuildPlan** | `WinMint.Orchestrator` | Profile + run options → plan artifacts (opcodes, not script paths) — [design](design/BUILDPLAN.md) | Schema details, DMA Ireland latch, password/autologon plan rules |
-| **ImageServicing** | Orchestrator call-out → `servicing/` | Apply plan to Source ISO → image evidence — [design](design/IMAGESERVICING.md) | DISM/WIM/hive/oscdimg; opcode→script map |
+| **BuildPlan** | `WinMint.Orchestrator` | Profile + run options → plan artifacts — [design](design/BUILDPLAN.md) | Schema, DMA Ireland latch, password/autologon plan rules |
+| **ImageServicing** | Orchestrator → `servicing/` | Apply plan to Source ISO → evidence — [design](design/IMAGESERVICING.md) | DISM/WIM/hive/oscdimg; opcode→script map |
 | **ProvisioningSession** | `WinMint.Provisioning` | `--machine-setup` *or* Shell → `SessionResult` — [design](design/PROVISIONINGSESSION.md) | Splash, stamps, DMA settle, jobs, checkpoint |
 
-**Hosts (not deep modules):** `WinMint.Cli` and later Avalonia Wizard are thin clients of **BuildPlan**. `servicing/*.ps1` are adapters of **ImageServicing**, not a second product CLI.
+**Hosts (not deep modules):** `WinMint.Cli` and Avalonia Wizard are thin clients of **BuildPlan**. `servicing/*.ps1` are ImageServicing adapters, not a second product CLI.
 
 **Seam discipline:**
 
-- One adapter = call through directly (e.g. Orchestrator invokes `pwsh -File`). Two adapters (prod + test fake) = real port type.
+- One adapter = call through directly. Two adapters (prod + test fake) = real port type.
 - Imaging **stages** Provisioning bits; it must not call live Provisioning APIs. Provisioning never mounts WIMs.
-- Evidence JSON is a **projection** of in-memory Supervisor status — not a control-plane mailbox (reject v1 setup-shell status/control file pairs as architecture).
+- Evidence JSON is a **projection** of in-memory Supervisor status — not a control-plane mailbox.
 - If a new type does not sit behind one of these three modules, question it (YAGNI).
 
-**Test surfaces (same as module interfaces):** (1) BuildPlan contracts, (2) ProvisioningSession phase machine, (3) Hyper-V Smoke acceptance evidence (highest product seam).
+**Test surfaces:** (1) BuildPlan contracts, (2) ProvisioningSession phase machine, (3) Hyper-V Smoke acceptance evidence.
 
 ## Ownership
 
@@ -47,16 +42,15 @@ Three modules carry the product. Projects and scripts are hosts/adapters around 
 |-------|------|----------------|
 | **Orchestrator** (C#) | BuildPlan; Profile validation; plan / unattend / job JSON; drives Servicing | In-process DISM / offline hive |
 | **Servicing** (elevated `pwsh -File`) | Thin DISM/WIM/hive/export adapters | Product CLI, fat monolith, guest FirstLogon |
-| **Provisioning Supervisor** (C# AOT) | ProvisioningSession: Machine setup, Shell tenure, splash, DMA settle, jobs, evidence snapshots, unlock | Offline imaging |
+| **Provisioning Supervisor** (C# AOT) | ProvisioningSession | Offline imaging |
 | **Cli** | Flags → BuildPlan | Profile schema ownership, Servicing |
-| **Wizard** (Avalonia, later) | Profile authoring UI → same BuildPlan | Servicing, ISO splash |
+| **Wizard** (Avalonia) | Profile authoring UI → same BuildPlan | Servicing, ISO splash |
 
 ## Runtime shape
 
 ```
-Unelevated C# CLI / Orchestrator  →  elevated pwsh Servicing adapters
-                                 →  stages Provisioning binary; stamps Shell offline
-Avalonia wizard (later)          →  same BuildPlan (Orchestrator)
+Unelevated C# CLI / Wizard / Orchestrator  →  elevated pwsh Servicing adapters
+                                           →  stages Provisioning binary; stamps Shell offline
 
 Guest:
   SetupComplete.cmd → Provisioning --machine-setup
@@ -68,60 +62,29 @@ Guest:
 
 ## v1 harvest rule
 
-Sibling archive [`winmint_v1`](https://github.com/yanai-sh/winmint_v1) and media shelf `winmint_v2_future-assets/` are **archaeology**, not topology to copy. **Why greenfield:** [design/V1-LESSONS.md](design/V1-LESSONS.md) (FirstLogon multi-process + JSON mailbox + hard-to-test ambient engine).
+Sibling archive [`winmint_v1`](https://github.com/yanai-sh/winmint_v1) is **archaeology**, not topology to copy. **Why:** [V1-LESSONS](design/V1-LESSONS.md).
 
 | Take | Leave |
 |------|-------|
-| Invariants (password-required local, DMA Ireland, image-quality lanes, Hyper-V Smoke = Pro, fail-open unlock) | `src/runtime/{image,setup,firstlogon}` folder trees |
-| Evidence / VM acceptance *ideas* | Peer Splash.exe + JSON status/control mailbox |
-| Behaviour notes mapped into BuildPlan / ProvisioningSession | Guest pwsh PreLock / agent module catalog as control plane |
-| | `tools/ui-bridge`, wrapping `WinMint.ps1`, dual ISO hosts; Shell↔RunOnce coupling |
+| Invariants (password-required local, DMA Ireland, lanes, Pro Smoke, fail-open unlock) | `src/runtime/{image,setup,firstlogon}` trees |
+| Evidence / VM acceptance *ideas* | Peer Splash.exe + JSON mailbox |
+| Behaviour notes mapped into BuildPlan / ProvisioningSession | Guest pwsh PreLock; `WinMint.ps1`; Shell↔RunOnce coupling |
 
-## First vertical: Smoke
+## Standing invariants (guest path)
 
-Stories, constraints, tracer map: [Smoke spec](specs/2026-07-27-smoke.md). Closed index: [TICKETS](TICKETS.md).
+1. Servicing stamps Shell offline to Supervisor; Machine setup: autologon → fail-closed Shell verify/restamp → secret wipe. No jobs. Never `DefaultUserName=defaultuser0` with `AutoAdminLogon` for first interactive logon. MachineSetup Failed ⇒ non-zero exit.
+2. Supervisor as Shell + splash = lock. Unlock = `explorer.exe` + exit. Fail-open on complete/failed/timeout. Reboot keeps Shell + checkpoint. Durable state: `%ProgramData%\WinMint\`.
+3. DMA settle: final snapshot authoritative. Hard: locale / GeoID / TZ. Soft: location-services.
+4. Splash: in-process Direct2D/GDI; paint before settle. Status in-memory; JSON = evidence only.
+5. Jobs: child-process / delegated batch; `needsReboot` ⇒ checkpoint, keep Shell, reboot, resume. No guest pwsh product runtime.
 
-Standing architecture invariants (also in grill locks):
-
-### Machine setup + Autologon / Shell
-
-1. Servicing stamps Shell offline to Supervisor path.
-2. Machine setup: autologon stamp → fail-closed Shell verify/restamp → secret wipe. No jobs.
-3. Never `DefaultUserName=defaultuser0` with `AutoAdminLogon` for first interactive logon.
-4. MachineSetup `Failed` ⇒ non-zero exit from Supervisor/SetupComplete.
-
-### Shell tenure
-
-Supervisor as Shell + splash = provisioning lock. Unlock = `explorer.exe` + exit. Fail-open on complete/failed/timeout (failed dwell). `reboot` keeps Shell + checkpoint. Stale heartbeat ⇒ fail-open on next start. Durable state: `%ProgramData%\WinMint\`.
-
-### DMA settle
-
-Final snapshot authoritative. Hard: locale / GeoID / TZ. Soft: location-services (warn, continue). Same policy Smoke and metal.
-
-### Splash and status
-
-In-process Direct2D/GDI; paint before settle; appearance once before unlock. In-memory status; JSON = evidence projection only.
-
-### Jobs + reboot
-
-Child-process executor; Smoke stub set vs metal set. `needsReboot` ⇒ checkpoint, keep Shell, reboot, resume.
-
-## Image quality (run override, not Profile)
+## Image quality (run override)
 
 | Lane | Export / cleanup | Use |
 |------|------------------|-----|
 | **Test** | Soft/no recompress; skip WinSxS cleanup | Smoke / iteration |
-| **Release** | Hard recompress + `StartComponentCleanup` | Published / metal ISOs |
+| **Release** | Hard recompress + `StartComponentCleanup` | Published / metal / Primary |
 
-Manifest records lane. Harness caching remains harness concern.
+## Payload
 
-## Payload strategy
-
-Stage SetupComplete.cmd, Supervisor, job/bundle manifests, media. No v1 `WinMint.ps1`; no guest pwsh. [Harvest rule](#v1-harvest-rule).
-
-## Scaffold / session rules
-
-- **Implement:** one issue/session from maintainer pick or a new GitHub issue — [TICKETS](TICKETS.md) is the closed index, not an open queue.
-- Honor [grill locks](DESIGN.md#decisions-locked-grill).
-- No empty trees ahead of tickets; no hypothetical Servicing ports; no MediatR/Generic Host/Contracts project by default.
-
+Stage SetupComplete.cmd, Supervisor, job/bundle manifests, media. No v1 `WinMint.ps1`; no guest pwsh product runtime.

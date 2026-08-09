@@ -1,9 +1,9 @@
 # Cross-process contracts
 
-**Status:** Accepted (batch-grill 2026-07-28)  
+**Status:** Accepted  
 **Authority:** BuildPlan → ImageServicing → staged payload → ProvisioningSession  
 **Rule:** One versioned schema family; C# DTOs are source of truth; JSON on disk is interchange.  
-**Grill:** Public image-quality names **`Test` \| `Release`**. Guest durable files under `%ProgramData%\WinMint\`.
+**Lanes:** Public image-quality names **`Test` \| `Release`**. Guest durable files under `%ProgramData%\WinMint\`.
 
 ## Pipeline
 
@@ -42,7 +42,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 | Profile | Human / Wizard | ProfileFile / BuildPlan; Smoke harness (guest creds only) |
 | BuildArtifacts | BuildPlan | ImageServicing; Cli dump |
 | Servicing stages (`stages.json`) | ImageServicing Materialize | Elevated `RunPlan.ps1`; Smoke harness (keep-flag pin lists) |
-| Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [PROVISIONINGSESSION Secrets](PROVISIONINGSESSION.md#secrets-smoke) |
+| Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [SECRETS](SECRETS.md) |
 | Evidence JSON | ProvisioningSession (projection) | Smoke harness (S4) — **never** session control |
 | Checkpoint | ProvisioningSession (`ICheckpointStore`) | Next Shell `Run` via store (optional `bundle.Resume` inject) |
 | Smoke acceptance summary | Host harness (`tools/vm/`) | Maintainer — `Assert-SmokeEvidence.ps1` |
@@ -68,7 +68,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 | `*Document` | Authored / parse input (e.g. Profile JSON DTOs, `ProvisioningEvidenceDocument`) |
 | `*File` | Workdir or guest interchange on disk (e.g. `JobsFile`, `BundleFile`, evidence on disk) |
 
-Do not introduce new `*Dump` / `*Dto` names. Existing Cli `*Dump` / BundleLoader `*Dto` stay until those files are touched.
+Prefer `*File` over new `*Dump` / `*Dto` when touching those types; no rename campaign required.
 
 ## Status codes & evidence phases
 

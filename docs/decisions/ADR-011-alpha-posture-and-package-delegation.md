@@ -61,7 +61,7 @@ Smoke acceptance may keep strict package asserts; product FirstLogon may relax a
 ### Consequences
 
 - Spikes before large refactors: e.g. Plan → `winget import` on ARM64 metal vs per-job loop (time, failure surface, reboot).
-- Update [DESIGN](../DESIGN.md) grill table: label rows **Invariant** / **Default** / **Guideline** where agents confuse lock with law.
+- Living I/D list lives in [DESIGN](../DESIGN.md); do not treat spent ticket sequencing as immutable law.
 - [ADR-004](ADR-004-stack-and-guest-control-plane.md) item 1 read as **no guest pwsh runtime**, not “never spawn powershell.exe.”
 
 ### Review trigger

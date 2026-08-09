@@ -12,10 +12,10 @@ You supply the official Microsoft ISO — WinMint does not download or redistrib
 **Status**
 
 - Debloated default: host preset **`recommended`** (zero-config curated remove-lists)
-- Smoke: **Proven** (Hyper-V real Source ISO, ticket **14**)
-- Wizard / WSL / caps-features: **Built** (`just check`; no separate Hyper-V prove-out for each)
-- M4: opt-in evidence bars only — not a hardware campaign
-- Backlog **01–30** closed — next is maintainer pick ([TICKETS](docs/TICKETS.md) · [issue 56](https://github.com/yanai-sh/winmint/issues/56))
+- Smoke: **Proven** (Hyper-V real Source ISO)
+- Wizard / metal jobs / caps-features: **Built** (`just check`)
+- Primary gate: maintainer-timed ([DESIGN](docs/DESIGN.md#acceptance))
+- Alpha — next work is maintainer pick ([Issues](https://github.com/yanai-sh/winmint/issues))
 
 ## Quickstart
 
@@ -38,6 +38,6 @@ dotnet run --project src/WinMint.Cli -- plan samples/smoke.profile.json --out .s
 - **Optional:** `just exclude-scratch` (admin) adds Defender exclusions for `.scratch` to speed commits.
 - **Disk hygiene:** `output/` + `.scratch/` + `*.iso`/`*.wim`/`*.esd`/`*.vhdx`/`*.avhdx` are gitignored. DISM mounts live under `%ProgramData%\WinMint\Servicing\` (not `.scratch`). Failed Apply discards leftover mounts (workdir/logs kept). After Apply/Smoke campaigns: `just clean-artifacts` (keeps 1 newest heavy workdir + 2 newest ISOs under `.scratch`) or `just wipe-scratch` to empty `.scratch` entirely. Do not run during Apply/Smoke.
 
-[Design](docs/DESIGN.md) · [Architecture](docs/ARCHITECTURE.md) · [Tickets](docs/TICKETS.md) · [Issues](https://github.com/yanai-sh/winmint/issues) · [Agents](AGENTS.md)
+[Design](docs/DESIGN.md) · [Architecture](docs/ARCHITECTURE.md) · [Agents](AGENTS.md) · [Issues](https://github.com/yanai-sh/winmint/issues)
 
 [GPL-3.0-or-later](LICENSE)

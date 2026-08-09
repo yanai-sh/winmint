@@ -1,8 +1,6 @@
 # ADR-009: Product-constant offline policies (not AppX recommended set)
 
-**Status:** Accepted  
-**Date:** 2026-08-05  
-**Related:** [ADR-005](ADR-005-keep-flag-matrix.md), [ADR-007](ADR-007-cdm-not-primary.md), [IMAGESERVICING](../design/IMAGESERVICING.md), [KEEPFLAG](../design/KEEPFLAG.md)
+**Status:** Accepted — concrete id list is **code/default**, not DESIGN invariant wording. Living bar: [DESIGN](../DESIGN.md#invariants) item 10.
 
 ### Context
 
@@ -21,6 +19,7 @@ CDM spray remains out ([ADR-007](ADR-007-cdm-not-primary.md)).
    - Offline: `DisableWpbtExecution=1` (SYSTEM ControlSet001).
    - FirstLogon: `onedrive.uninstall` (`OneDriveSetup.exe /uninstall`, best-effort).
    - FirstLogon: `reservedStorage.disable` (`dism /Online /Set-ReservedStorageState /State:Disabled`).
+   - FirstLogon: winget **`Git.MinGit`** (MinGit — not Git Bash) and **`Nilesoft.Shell`** (unioned into effective winget set; Profile may list them too; no opt-out).
 2. **Optional Profile `policies`** on `winmint.profile/v1` (omit = defaults):
    - `keepCopilot` (default **false**) — when false, stamp `HubsSidebarEnabled=0` + `TurnOffWindowsCopilot=1`; host recommended preset may add Copilot AppX to the remove-list. When true, do **not** stamp those keys and do **not** add Copilot AppX via preset.
    - `dohProvider` (`cloudflare` \| `google` \| `quad9` \| null) — optional FirstLogon `doh.set` job; Smoke default off.
