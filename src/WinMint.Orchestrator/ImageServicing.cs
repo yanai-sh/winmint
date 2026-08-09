@@ -147,22 +147,9 @@ public static class ImageServicing
 
         File.WriteAllText(unattendPath, plan.Unattend.Xml);
 
-        JobsFile jobs = new(
-            plan.Jobs.SchemaVersion,
-            plan.Jobs.Jobs.Select(j => new JobFile(
-                j.Id,
-                j.Kind,
-                j.NeedsReboot,
-                j.PackageId,
-                j.WingetArchitecture,
-                j.WslInstallKind,
-                j.WslFromFileRepo,
-                j.WslFromFileAssetNames?.ToArray(),
-                j.AuditStrict,
-                j.ScoopBuckets?.ToArray())).ToArray());
-        File.WriteAllBytes(
+        File.WriteAllText(
             Path.Combine(payloadDir, "jobs.json"),
-            JsonSerializer.SerializeToUtf8Bytes(jobs, ServicingJsonContext.Default.JobsFile));
+            BuildPlan.SerializeJobsDump(plan.Jobs));
 
         if (plan.WingetImportJson is { Length: > 0 })
         {
@@ -275,12 +262,9 @@ public static class ImageServicing
             resolved.Add(new ServicingStage(stage.Opcode, parameters));
         }
 
-        StagesFile stagesFile = new(
-            BuildPlan.StagesSchemaVersion,
-            resolved.Select(s => new StageFile(s.Opcode.ToString(), s.Parameters)).ToArray());
-        File.WriteAllBytes(
+        File.WriteAllText(
             Path.Combine(run.WorkDirectory, "stages.json"),
-            JsonSerializer.SerializeToUtf8Bytes(stagesFile, ServicingJsonContext.Default.StagesFile));
+            BuildPlan.SerializeStagesDump(new ServicingStageList(resolved)));
 
         return Result.Ok<List<ServicingStage>, ServicingFailure>(resolved);
     }
@@ -357,22 +341,6 @@ public static class ImageServicing
     }
 }
 
-internal sealed record JobsFile(
-    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
-    [property: JsonPropertyName("jobs")] JobFile[] Jobs);
-
-internal sealed record JobFile(
-    [property: JsonPropertyName("id")] string Id,
-    [property: JsonPropertyName("kind")] string Kind,
-    [property: JsonPropertyName("needsReboot")] bool NeedsReboot = false,
-    [property: JsonPropertyName("packageId")] string? PackageId = null,
-    [property: JsonPropertyName("wingetArchitecture")] string? WingetArchitecture = null,
-    [property: JsonPropertyName("wslInstallKind")] string? WslInstallKind = null,
-    [property: JsonPropertyName("wslFromFileRepo")] string? WslFromFileRepo = null,
-    [property: JsonPropertyName("wslFromFileAssetNames")] string[]? WslFromFileAssetNames = null,
-    [property: JsonPropertyName("auditStrict")] bool AuditStrict = false,
-    [property: JsonPropertyName("scoopBuckets")] string[]? ScoopBuckets = null);
-
 internal sealed record BundleFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
     [property: JsonPropertyName("supervisorPath")] string SupervisorPath,
@@ -390,17 +358,7 @@ internal sealed record SettleFile(
     [property: JsonPropertyName("timeZoneId")] string TimeZoneId,
     [property: JsonPropertyName("locationServicesEnabled")] bool LocationServicesEnabled);
 
-internal sealed record StagesFile(
-    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
-    [property: JsonPropertyName("stages")] StageFile[] Stages);
-
-internal sealed record StageFile(
-    [property: JsonPropertyName("opcode")] string Opcode,
-    [property: JsonPropertyName("parameters")] IReadOnlyDictionary<string, string> Parameters);
-
-[JsonSerializable(typeof(JobsFile))]
 [JsonSerializable(typeof(BundleFile))]
-[JsonSerializable(typeof(StagesFile))]
 [JsonSerializable(typeof(EvidenceFile))]
 [JsonSerializable(typeof(FailureFile))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]

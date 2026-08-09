@@ -20,6 +20,28 @@ public class PlanHonestyTests
     }
 
     [Fact]
+    public void SerializeJobsDump_includes_scoopBuckets()
+    {
+        string json = BuildPlan.SerializeJobsDump(
+            new JobsArtifact(
+                BuildPlan.JobsSchemaVersion,
+                [
+                    new JobDescriptor(
+                        "scoop.batch",
+                        "scoop.batch",
+                        PackageId: "curl komorebi",
+                        ScoopBuckets: ["extras", "main"]),
+                ]));
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement job = doc.RootElement.GetProperty("jobs")[0];
+        Assert.Equal("scoop.batch", job.GetProperty("kind").GetString());
+        Assert.Equal(
+            ["extras", "main"],
+            job.GetProperty("scoopBuckets").EnumerateArray().Select(e => e.GetString()).ToArray());
+    }
+
+    [Fact]
     public void FormatPlanHonesty_warns_when_requires_network()
     {
         string text = BuildPlan.FormatPlanHonesty(

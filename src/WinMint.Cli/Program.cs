@@ -1,14 +1,10 @@
 using System.CommandLine;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using WinMint.Orchestrator;
 
 namespace WinMint.Cli;
 
 internal static class Program
 {
-    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
-
     private static int Main(string[] args)
     {
         Argument<FileInfo> profileArgument = new("profile")
@@ -379,72 +375,12 @@ internal static class Program
     {
         File.WriteAllText(Path.Combine(directory, "unattend.xml"), artifacts.Unattend.Xml);
 
-        WriteJson(
-            directory,
-            "jobs.json",
-            new JsonObject
-            {
-                ["schemaVersion"] = artifacts.Jobs.SchemaVersion,
-                ["jobs"] = new JsonArray(
-                    artifacts.Jobs.Jobs.Select(static j =>
-                    {
-                        JsonObject obj = new()
-                        {
-                            ["id"] = j.Id,
-                            ["kind"] = j.Kind,
-                            ["needsReboot"] = j.NeedsReboot,
-                        };
-                        if (j.PackageId is not null)
-                        {
-                            obj["packageId"] = j.PackageId;
-                        }
-
-                        if (j.WingetArchitecture is not null)
-                        {
-                            obj["wingetArchitecture"] = j.WingetArchitecture;
-                        }
-
-                        if (j.WslInstallKind is not null)
-                        {
-                            obj["wslInstallKind"] = j.WslInstallKind;
-                        }
-
-                        if (j.WslFromFileRepo is not null)
-                        {
-                            obj["wslFromFileRepo"] = j.WslFromFileRepo;
-                        }
-
-                        if (j.WslFromFileAssetNames is { Count: > 0 })
-                        {
-                            obj["wslFromFileAssetNames"] = new JsonArray(
-                                j.WslFromFileAssetNames.Select(static n => (JsonNode)n).ToArray());
-                        }
-
-                        if (j.AuditStrict)
-                        {
-                            obj["auditStrict"] = true;
-                        }
-
-                        return (JsonNode)obj;
-                    }).ToArray()),
-            });
-
-        WriteJson(
-            directory,
-            "stages.json",
-            new JsonObject
-            {
-                ["schemaVersion"] = BuildPlan.StagesSchemaVersion,
-                ["stages"] = new JsonArray(
-                    artifacts.Stages.Stages.Select(static s => (JsonNode)new JsonObject
-                    {
-                        ["opcode"] = s.Opcode.ToString(),
-                        ["parameters"] = new JsonObject(
-                            s.Parameters.Select(static kv =>
-                                KeyValuePair.Create<string, JsonNode?>(kv.Key, kv.Value))),
-                    }).ToArray()),
-            });
-
+        File.WriteAllText(
+            Path.Combine(directory, "jobs.json"),
+            BuildPlan.SerializeJobsDump(artifacts.Jobs));
+        File.WriteAllText(
+            Path.Combine(directory, "stages.json"),
+            BuildPlan.SerializeStagesDump(artifacts.Stages));
         File.WriteAllText(
             Path.Combine(directory, "manifest.json"),
             BuildPlan.SerializeManifestDump(artifacts.Manifest));
@@ -468,9 +404,4 @@ internal static class Program
             }
         }
     }
-
-    private static void WriteJson(string directory, string name, JsonNode node) =>
-        File.WriteAllBytes(
-            Path.Combine(directory, name),
-            System.Text.Encoding.UTF8.GetBytes(node.ToJsonString(IndentedJson)));
 }

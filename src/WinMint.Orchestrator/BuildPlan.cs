@@ -362,8 +362,84 @@ public static class BuildPlan
             ["imageQuality"] = manifest.ImageQuality.ToString(),
             ["requiresNetwork"] = manifest.RequiresNetwork,
         };
-        return node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        return node.ToJsonString(DumpJsonOptions);
     }
+
+    public static string SerializeJobsDump(JobsArtifact jobs)
+    {
+        var node = new System.Text.Json.Nodes.JsonObject
+        {
+            ["schemaVersion"] = jobs.SchemaVersion,
+            ["jobs"] = new System.Text.Json.Nodes.JsonArray(
+                jobs.Jobs.Select(static j =>
+                {
+                    var obj = new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["id"] = j.Id,
+                        ["kind"] = j.Kind,
+                        ["needsReboot"] = j.NeedsReboot,
+                    };
+                    if (j.PackageId is not null)
+                    {
+                        obj["packageId"] = j.PackageId;
+                    }
+
+                    if (j.WingetArchitecture is not null)
+                    {
+                        obj["wingetArchitecture"] = j.WingetArchitecture;
+                    }
+
+                    if (j.WslInstallKind is not null)
+                    {
+                        obj["wslInstallKind"] = j.WslInstallKind;
+                    }
+
+                    if (j.WslFromFileRepo is not null)
+                    {
+                        obj["wslFromFileRepo"] = j.WslFromFileRepo;
+                    }
+
+                    if (j.WslFromFileAssetNames is { Count: > 0 })
+                    {
+                        obj["wslFromFileAssetNames"] = new System.Text.Json.Nodes.JsonArray(
+                            j.WslFromFileAssetNames.Select(static n => (System.Text.Json.Nodes.JsonNode)n).ToArray());
+                    }
+
+                    if (j.AuditStrict)
+                    {
+                        obj["auditStrict"] = true;
+                    }
+
+                    if (j.ScoopBuckets is { Count: > 0 })
+                    {
+                        obj["scoopBuckets"] = new System.Text.Json.Nodes.JsonArray(
+                            j.ScoopBuckets.Select(static b => (System.Text.Json.Nodes.JsonNode)b).ToArray());
+                    }
+
+                    return (System.Text.Json.Nodes.JsonNode)obj;
+                }).ToArray()),
+        };
+        return node.ToJsonString(DumpJsonOptions);
+    }
+
+    public static string SerializeStagesDump(ServicingStageList stages)
+    {
+        var node = new System.Text.Json.Nodes.JsonObject
+        {
+            ["schemaVersion"] = StagesSchemaVersion,
+            ["stages"] = new System.Text.Json.Nodes.JsonArray(
+                stages.Stages.Select(static s => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
+                {
+                    ["opcode"] = s.Opcode.ToString(),
+                    ["parameters"] = new System.Text.Json.Nodes.JsonObject(
+                        s.Parameters.Select(static kv =>
+                            KeyValuePair.Create<string, System.Text.Json.Nodes.JsonNode?>(kv.Key, kv.Value))),
+                }).ToArray()),
+        };
+        return node.ToJsonString(DumpJsonOptions);
+    }
+
+    private static readonly JsonSerializerOptions DumpJsonOptions = new() { WriteIndented = true };
 
     /// <summary>
     /// Host-facing plan honesty (Cli + Wizard). Warns when FirstLogon needs network; never a PlanFailure.
