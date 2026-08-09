@@ -69,14 +69,24 @@ public class BrowserPolicyPlanTests
     }
 
     [Fact]
-    public void Plan_doh_provider_emits_doh_job()
+    public void Plan_doh_provider_emits_doh_job_with_resolved_params()
     {
         Result<BuildArtifacts, PlanFailure> result =
             BuildPlan.Plan(Lab(policies: new PoliciesProfile(DohProvider: "cloudflare")));
         Assert.True(result.IsOk);
-        Assert.Contains(
-            result.Value.Jobs.Jobs,
-            j => j.Kind == "doh.set" && j.PackageId == "cloudflare");
+        JobDescriptor job = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "doh.set");
+        Assert.Equal("cloudflare", job.PackageId);
+        Assert.Equal("1.1.1.1", job.DohPrimary);
+        Assert.Equal("1.0.0.1", job.DohSecondary);
+        Assert.Equal("https://cloudflare-dns.com/dns-query", job.DohTemplate);
+
+        using JsonDocument doc = JsonDocument.Parse(BuildPlan.SerializeJobsDump(result.Value.Jobs));
+        JsonElement dumped = Assert.Single(
+            doc.RootElement.GetProperty("jobs").EnumerateArray(),
+            e => e.GetProperty("kind").GetString() == "doh.set");
+        Assert.Equal("1.1.1.1", dumped.GetProperty("dohPrimary").GetString());
+        Assert.Equal("1.0.0.1", dumped.GetProperty("dohSecondary").GetString());
+        Assert.Equal("https://cloudflare-dns.com/dns-query", dumped.GetProperty("dohTemplate").GetString());
     }
 
     [Fact]

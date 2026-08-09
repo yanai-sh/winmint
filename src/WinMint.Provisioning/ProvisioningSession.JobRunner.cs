@@ -497,16 +497,22 @@ public static partial class ProvisioningSession
             ProvisionJob job,
             CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(job.PackageId)
-                || !TryResolveDohProvider(job.PackageId, out string primary, out string secondary, out string template))
+            // Plan-emitted params only — no guest DoH provider table (ProductOfflinePolicies owns the catalog).
+            if (string.IsNullOrWhiteSpace(job.DohPrimary)
+                || string.IsNullOrWhiteSpace(job.DohSecondary)
+                || string.IsNullOrWhiteSpace(job.DohTemplate))
             {
                 SessionStatus bad = new(
                     "jobs.failed",
-                    $"Job '{job.Id}' kind doh.set requires packageId cloudflare|google|quad9.");
+                    $"Job '{job.Id}' kind doh.set requires dohPrimary/dohSecondary/dohTemplate from the plan.");
                 env.Splash.SetStatus(bad);
                 phases.Add(bad.Code);
                 return new JobsPhaseResult(SessionOutcome.Failed, bad, TimedOut: false);
             }
+
+            string primary = job.DohPrimary;
+            string secondary = job.DohSecondary;
+            string template = job.DohTemplate;
 
             // Inbox powershell.exe only — not guest pwsh product control plane (scoop bootstrap precedent).
             string command =
@@ -540,35 +546,6 @@ public static partial class ProvisioningSession
                 env.Splash.SetStatus(failed);
                 phases.Add(failed.Code);
                 return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
-            }
-        }
-
-        private static bool TryResolveDohProvider(
-            string id,
-            out string primary,
-            out string secondary,
-            out string template)
-        {
-            switch (id.Trim().ToLowerInvariant())
-            {
-                case "cloudflare":
-                    primary = "1.1.1.1";
-                    secondary = "1.0.0.1";
-                    template = "https://cloudflare-dns.com/dns-query";
-                    return true;
-                case "google":
-                    primary = "8.8.8.8";
-                    secondary = "8.8.4.4";
-                    template = "https://dns.google/dns-query";
-                    return true;
-                case "quad9":
-                    primary = "9.9.9.9";
-                    secondary = "149.112.112.112";
-                    template = "https://dns.quad9.net/dns-query";
-                    return true;
-                default:
-                    primary = secondary = template = "";
-                    return false;
             }
         }
 

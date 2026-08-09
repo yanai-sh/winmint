@@ -62,7 +62,10 @@ public sealed record JobDescriptor(
     string? WslFromFileRepo = null,
     IReadOnlyList<string>? WslFromFileAssetNames = null,
     bool AuditStrict = false,
-    IReadOnlyList<string>? ScoopBuckets = null);
+    IReadOnlyList<string>? ScoopBuckets = null,
+    string? DohPrimary = null,
+    string? DohSecondary = null,
+    string? DohTemplate = null);
 
 public sealed record ServicingStageList(IReadOnlyList<ServicingStage> Stages);
 

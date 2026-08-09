@@ -86,7 +86,10 @@ public static class BundleLoader
                 j.WslFromFileRepo,
                 j.WslFromFileAssetNames,
                 j.AuditStrict,
-                j.ScoopBuckets))
+                j.ScoopBuckets,
+                j.DohPrimary,
+                j.DohSecondary,
+                j.DohTemplate))
             .ToArray();
     }
 }
@@ -122,7 +125,10 @@ internal sealed record JobFile(
     [property: JsonPropertyName("wslFromFileRepo")] string? WslFromFileRepo = null,
     [property: JsonPropertyName("wslFromFileAssetNames")] string[]? WslFromFileAssetNames = null,
     [property: JsonPropertyName("auditStrict")] bool AuditStrict = false,
-    [property: JsonPropertyName("scoopBuckets")] string[]? ScoopBuckets = null);
+    [property: JsonPropertyName("scoopBuckets")] string[]? ScoopBuckets = null,
+    [property: JsonPropertyName("dohPrimary")] string? DohPrimary = null,
+    [property: JsonPropertyName("dohSecondary")] string? DohSecondary = null,
+    [property: JsonPropertyName("dohTemplate")] string? DohTemplate = null);
 
 [JsonSerializable(typeof(BundleFile))]
 [JsonSerializable(typeof(JobsFile))]

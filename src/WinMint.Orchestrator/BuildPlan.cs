@@ -416,6 +416,21 @@ public static class BuildPlan
                             j.ScoopBuckets.Select(static b => (System.Text.Json.Nodes.JsonNode)b).ToArray());
                     }
 
+                    if (j.DohPrimary is not null)
+                    {
+                        obj["dohPrimary"] = j.DohPrimary;
+                    }
+
+                    if (j.DohSecondary is not null)
+                    {
+                        obj["dohSecondary"] = j.DohSecondary;
+                    }
+
+                    if (j.DohTemplate is not null)
+                    {
+                        obj["dohTemplate"] = j.DohTemplate;
+                    }
+
                     return (System.Text.Json.Nodes.JsonNode)obj;
                 }).ToArray()),
         };
@@ -597,7 +612,22 @@ public static class BuildPlan
         jobList.Add(new JobDescriptor("reservedStorage.disable", "reservedStorage.disable"));
         if (dohProvider is not null)
         {
-            jobList.Add(new JobDescriptor($"doh.{dohProvider}", "doh.set", PackageId: dohProvider));
+            DohProviderSpec? doh = ProductOfflinePolicies.ResolveDoh(dohProvider);
+            if (doh is null)
+            {
+                return Result.Fail<BuildArtifacts, PlanFailure>(
+                    new PlanFailure(
+                        "policies.dohProvider.unsupported",
+                        $"policies.dohProvider '{dohProvider}' is unsupported (use cloudflare, google, or quad9)."));
+            }
+
+            jobList.Add(new JobDescriptor(
+                $"doh.{dohProvider}",
+                "doh.set",
+                PackageId: dohProvider,
+                DohPrimary: doh.Primary,
+                DohSecondary: doh.Secondary,
+                DohTemplate: doh.DohTemplate));
         }
 
         if (profile.RemoveProvisionedAppx.Count > 0 && profile.DebloatMode == DebloatMode.Online)
