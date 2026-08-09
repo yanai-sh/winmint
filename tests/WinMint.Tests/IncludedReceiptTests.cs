@@ -2,36 +2,29 @@ using WinMint.Wizard;
 
 namespace WinMint.Tests;
 
-/// <summary>Issue #95 — Avalonia-free Included receipt text layers (ADR-009 quiet vs recommended strip).</summary>
+/// <summary>Issue #95 — Avalonia-free Included receipt text layers.</summary>
 public class IncludedReceiptTests
 {
     [Fact]
     public void FormatQuietBlock_always_lists_product_constants()
     {
-        string text = IncludedReceipt.FormatQuietBlock(keepCopilot: true, braveSelected: false);
+        string text = IncludedReceipt.FormatQuietBlock(braveSelected: false);
 
         Assert.Contains("Edge policies", text, StringComparison.Ordinal);
         Assert.Contains("OneDrive", text, StringComparison.Ordinal);
         Assert.Contains("device metadata", text, StringComparison.Ordinal);
         Assert.Contains("WPBT", text, StringComparison.Ordinal);
         Assert.Contains("Reserved Storage", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void FormatQuietBlock_adds_copilot_off_only_when_not_kept()
-    {
-        string kept = IncludedReceipt.FormatQuietBlock(keepCopilot: true, braveSelected: false);
-        string stripped = IncludedReceipt.FormatQuietBlock(keepCopilot: false, braveSelected: false);
-
-        Assert.DoesNotContain("Copilot off", kept, StringComparison.Ordinal);
-        Assert.Contains("Copilot off", stripped, StringComparison.Ordinal);
+        Assert.Contains("MinGit", text, StringComparison.Ordinal);
+        Assert.Contains("Nilesoft Shell", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Copilot off", text, StringComparison.Ordinal);
     }
 
     [Fact]
     public void FormatQuietBlock_adds_brave_only_when_selected()
     {
-        string without = IncludedReceipt.FormatQuietBlock(keepCopilot: true, braveSelected: false);
-        string withBrave = IncludedReceipt.FormatQuietBlock(keepCopilot: true, braveSelected: true);
+        string without = IncludedReceipt.FormatQuietBlock(braveSelected: false);
+        string withBrave = IncludedReceipt.FormatQuietBlock(braveSelected: true);
 
         Assert.DoesNotContain("Brave", without, StringComparison.Ordinal);
         Assert.Contains("Brave policies", withBrave, StringComparison.Ordinal);
@@ -40,7 +33,7 @@ public class IncludedReceiptTests
     [Fact]
     public void FormatQuietBlock_does_not_list_recommended_appx_names()
     {
-        string text = IncludedReceipt.FormatQuietBlock(keepCopilot: false, braveSelected: true);
+        string text = IncludedReceipt.FormatQuietBlock(braveSelected: true);
 
         Assert.DoesNotContain("Bing Weather", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Solitaire", text, StringComparison.Ordinal);
@@ -83,9 +76,9 @@ public class IncludedReceiptTests
     [Fact]
     public void FormatPickStrip_joins_labels_with_middle_dot()
     {
-        string text = IncludedReceipt.FormatPickStrip(["VS Code", "Brave", "Gaming kept"]);
+        string text = IncludedReceipt.FormatPickStrip(["VS Code", "Brave"]);
 
-        Assert.Equal("VS Code · Brave · Gaming kept", text);
+        Assert.Equal("VS Code · Brave", text);
     }
 
     [Fact]
@@ -98,13 +91,8 @@ public class IncludedReceiptTests
     [Fact]
     public void FormatQuietSummary_counts_stripped_apps()
     {
-        string summary = IncludedReceipt.FormatQuietSummary(
-            strippedAppCount: 5,
-            keepCopilot: false,
-            keepGaming: false);
+        string summary = IncludedReceipt.FormatQuietSummary(strippedAppCount: 5);
 
-        Assert.Contains("strips 5 apps", summary, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Copilot off", summary, StringComparison.Ordinal);
-        Assert.Contains("gaming apps removed", summary, StringComparison.Ordinal);
+        Assert.Equal("This build strips 5 apps.", summary);
     }
 }

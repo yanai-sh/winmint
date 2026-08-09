@@ -72,7 +72,8 @@ public class WizardPackagesTests
         Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == "stub");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
-        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind is "winget" or "scoop" or "wsl");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind is "scoop" or "wsl");
     }
 
     [Fact]

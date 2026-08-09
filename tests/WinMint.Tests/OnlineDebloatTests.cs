@@ -11,7 +11,7 @@ public class OnlineDebloatPlanTests
     [Theory]
     [InlineData(null, true, false, true)]
     [InlineData("online", true, false, true)]
-    [InlineData("offline", false, true, false)]
+    [InlineData("offline", false, true, true)]
     public void Plan_debloat_mode_controls_appx_venue(
         string? mode,
         bool expectSafetyNet,
@@ -97,32 +97,9 @@ public class OnlineDebloatPlanTests
     }
 
     [Fact]
-    public void PlanRequiresNetwork_true_for_winget_packages()
+    public void PlanRequiresNetwork_always_true()
     {
-        Profile profile = Parse("""
-            {
-              "schemaVersion": "winmint.profile/v1",
-              "account": {
-                "mode": "localAutoLogon",
-                "username": "winmint",
-                "password": "lab-only"
-              },
-              "dma": {
-                "enabled": true,
-                "settle": {
-                  "locale": "en-GB",
-                  "geoId": 242,
-                  "timeZoneId": "GMT Standard Time",
-                  "locationServicesEnabled": true
-                }
-              },
-              "packages": {
-                "winget": ["Anysphere.Cursor"]
-              }
-            }
-            """);
-
-        Assert.True(BuildPlan.PlanRequiresNetwork(profile));
+        Assert.True(BuildPlan.PlanRequiresNetwork());
     }
 
     private static Profile Parse(string json)

@@ -9,10 +9,7 @@ internal static class WizardSession
 {
     public static WizardSessionResult ComposeAndPlan(WizardSessionInput input)
     {
-        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(
-            input.Preset,
-            input.KeepGaming,
-            input.KeepCopilot);
+        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(input.Preset);
         if (!expanded.IsOk)
         {
             return WizardSessionResult.Fail($"{expanded.Error.Code}: {expanded.Error.Message}");
@@ -33,6 +30,8 @@ internal static class WizardSession
         {
             appx = expanded.Value.RemoveProvisionedAppx;
         }
+
+        appx = ProductPosture.UnionAppx(appx);
 
         // UI lists override empty; when non-empty they replace preset pins for that field (union would surprise).
         IReadOnlyList<string> caps = IdList.FromMultiline(input.RemoveCapabilitiesText);
@@ -68,8 +67,7 @@ internal static class WizardSession
             IdList.FromMultiline(input.WslText),
             IdList.FromMultiline(input.WslNeedsRebootText),
             caps,
-            feats,
-            new PoliciesProfile(KeepCopilot: input.KeepCopilot));
+            feats);
 
         RunOptions run = new()
         {
@@ -198,8 +196,6 @@ internal sealed record WizardSessionInput(
     string GeoIdText,
     string TimeZoneId,
     bool LocationServicesEnabled,
-    bool KeepGaming = false,
-    bool KeepCopilot = false,
     string WingetText = "",
     string WingetNeedsRebootText = "",
     string ScoopText = "",

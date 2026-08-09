@@ -32,7 +32,7 @@ public class KeepFlagServicingTests
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
             Assert.Equal(
-                string.Join(';', ProductRequiredStrip.UnionAppx(["Microsoft.BingNews", "Microsoft.GamingApp"])),
+                string.Join(';', ProductPosture.UnionAppx(["Microsoft.BingNews", "Microsoft.GamingApp"])),
                 remove.Parameters[StageParams.PackageFamilyNames]);
             Assert.Equal(
                 ImageServicing.HostMountDir,

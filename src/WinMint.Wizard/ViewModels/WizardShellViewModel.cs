@@ -93,6 +93,9 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _sourceIsoPath = "";
     [ObservableProperty] private string _imageQuality = "Test";
     [ObservableProperty] private string _preset = KeepFlagPresets.Recommended;
+    // Task 4 removes these legacy Taste bindings with their UI.
+    [ObservableProperty] private bool _keepGaming;
+    [ObservableProperty] private bool _keepCopilot;
 
     public ObservableCollection<WimIndexInfo> WimIndexes { get; } = [];
     [ObservableProperty] private WimIndexInfo? _selectedWimIndex;
@@ -614,55 +617,37 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         return true;
     }
 
-    /// <summary>Included receipt text layers — quiet block is ADR-009 constants only; What's included is the `recommended` remove-list.</summary>
+    /// <summary>Included receipt — quiet labels from ProductPosture; What's included from Plan-effective AppX.</summary>
     private void RefreshReceipt()
     {
-        QuietBlockText = IncludedReceipt.FormatQuietBlock(KeepCopilot, IsBraveSelected());
+        QuietBlockText = IncludedReceipt.FormatQuietBlock(IsBraveSelected());
         PickStripText = IncludedReceipt.FormatPickStrip(SelectedPickLabels());
         PlanMetaText =
             $"requiresNetwork {(_lastRequiresNetwork ? "yes" : "no")} · DMA {(DmaEnabled ? "on" : "off")} · {ImageQuality} lane";
 
-        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(Preset, KeepGaming, KeepCopilot);
+        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(Preset);
         if (!expanded.IsOk)
         {
             return;
         }
 
+        IReadOnlyList<string> effectiveAppx = ProductPosture.UnionAppx(expanded.Value.RemoveProvisionedAppx);
         WhatsIncludedText = IsRecommendedPreset
-            ? IncludedReceipt.FormatWhatsIncluded(expanded.Value.RemoveProvisionedAppx)
+            ? IncludedReceipt.FormatWhatsIncluded(effectiveAppx)
             : string.Empty;
-        QuietSummaryText = IncludedReceipt.FormatQuietSummary(
-            expanded.Value.RemoveProvisionedAppx.Count,
-            KeepCopilot,
-            KeepGaming);
+        QuietSummaryText = IncludedReceipt.FormatQuietSummary(effectiveAppx.Count);
     }
 
     private bool IsBraveSelected() =>
         BrowserChips.Any(static c => c.Id == "brave" && c.IsSelected) ||
-        AdvancedWingetText
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-            .Any(static line => line.Trim().Equals("Brave.Brave", StringComparison.OrdinalIgnoreCase));
+        IdList.FromMultiline(AdvancedWingetText)
+            .Any(static id => string.Equals(id, ProductPosture.BraveWingetId, StringComparison.OrdinalIgnoreCase));
 
-    private IEnumerable<string> SelectedPickLabels()
-    {
-        if (KeepGaming)
-        {
-            yield return "Xbox & gaming";
-        }
-
-        if (KeepCopilot)
-        {
-            yield return "Copilot";
-        }
-
-        foreach (string label in SelectedLabels(BrowserChips)
+    private IEnumerable<string> SelectedPickLabels() =>
+        SelectedLabels(BrowserChips)
             .Concat(SelectedLabels(EditorChips))
             .Concat(SelectedLabels(ShellChips))
-            .Concat(SelectedLabels(WslChips)))
-        {
-            yield return label;
-        }
-    }
+            .Concat(SelectedLabels(WslChips));
 
     private static IEnumerable<string> SelectedLabels(ObservableCollection<ChipItem> chips) =>
         chips.Where(static c => c.IsSelected).Select(static c => c.Label);
@@ -691,9 +676,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             GeoId,
             TimeZone,
             LocationServices,
-            KeepGaming: KeepGaming,
-            KeepCopilot: KeepCopilot,
-            WingetText: WizardSession.StripProductConstantWingetIds(
+            WingetText: ProductPosture.StripWingetFromAuthored(
                 WizardSession.MergeChipAndAdvanced(packages.WingetInstallIds, AdvancedWingetText)),
             ScoopText: WizardSession.MergeChipAndAdvanced(packages.ScoopInstallIds, AdvancedScoopText),
             WslText: WizardSession.MergeChipAndAdvanced(packages.WslProfileTokens, AdvancedWslText),

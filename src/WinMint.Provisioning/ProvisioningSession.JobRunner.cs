@@ -497,7 +497,7 @@ public static partial class ProvisioningSession
             ProvisionJob job,
             CancellationToken ct)
         {
-            // Plan-emitted params only — no guest DoH provider table (ProductOfflinePolicies owns the catalog).
+            // Plan-emitted params only — no guest DoH provider table (ProductPosture owns the catalog).
             if (string.IsNullOrWhiteSpace(job.DohPrimary)
                 || string.IsNullOrWhiteSpace(job.DohSecondary)
                 || string.IsNullOrWhiteSpace(job.DohTemplate))

@@ -1,9 +1,9 @@
 namespace WinMint.Wizard;
 
-/// <summary>Media/You/Taste/Included stage navigation gates (Avalonia-free).</summary>
+/// <summary>Source/Account/Software/Review stage navigation gates (Avalonia-free).</summary>
 public static class WizardStageGates
 {
-    public const int Media = 0, You = 1, Taste = 2, Included = 3;
+    public const int Source = 0, Account = 1, Software = 2, Review = 3;
 
     /// <summary>Non-whitespace path that exists on disk. VM should pass the result as <c>sourceReady</c> to gate methods.</summary>
     public static bool SourceReady(string? isoPath) =>
@@ -14,12 +14,12 @@ public static class WizardStageGates
 
     public static bool CanGoTo(int targetIndex, bool sourceReady, bool identityReady)
     {
-        if (targetIndex is < Media or > Included)
+        if (targetIndex is < Source or > Review)
         {
             return false;
         }
 
-        if (targetIndex == Media)
+        if (targetIndex == Source)
         {
             return true;
         }
@@ -29,7 +29,7 @@ public static class WizardStageGates
             return false;
         }
 
-        if (targetIndex >= Included && !identityReady)
+        if (targetIndex >= Review && !identityReady)
         {
             return false;
         }
@@ -39,17 +39,17 @@ public static class WizardStageGates
 
     public static bool CanAdvance(int currentIndex, bool sourceReady, bool identityReady)
     {
-        if (currentIndex is < Media or >= Included)
+        if (currentIndex is < Source or >= Review)
         {
             return false;
         }
 
-        // You→Taste needs source alone; Taste→Included needs source + identity (matches CanGoTo Included).
+        // Account→Software needs source alone; Software→Review needs source + identity.
         return currentIndex switch
         {
-            Media => sourceReady,
-            You => sourceReady,
-            Taste => sourceReady && identityReady,
+            Source => sourceReady,
+            Account => sourceReady,
+            Software => sourceReady && identityReady,
             _ => false,
         };
     }

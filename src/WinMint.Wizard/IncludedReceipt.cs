@@ -1,21 +1,12 @@
+using WinMint.Orchestrator;
+
 namespace WinMint.Wizard;
 
-/// <summary>
-/// Avalonia-free Included receipt text layers — ADR-009 quiet block vs recommended remove-list friendly names.
-/// </summary>
+/// <summary>Avalonia-free Included receipt text — quiet labels from <see cref="ProductPosture"/>; What's included from effective AppX.</summary>
 public static class IncludedReceipt
 {
     private const string QuietPrefix = "Also applied quietly: ";
     private const string QuietSeparator = " · ";
-
-    private static readonly string[] QuietAlways =
-    [
-        "Edge policies",
-        "OneDrive",
-        "device metadata",
-        "WPBT",
-        "Reserved Storage",
-    ];
 
     private static readonly Dictionary<string, string> RecommendedAppxLabels =
         new(StringComparer.OrdinalIgnoreCase)
@@ -43,14 +34,9 @@ public static class IncludedReceipt
             ["Microsoft.Copilot"] = "Copilot",
         };
 
-    public static string FormatQuietBlock(bool keepCopilot, bool braveSelected)
+    public static string FormatQuietBlock(bool braveSelected)
     {
-        List<string> parts = [.. QuietAlways];
-        if (!keepCopilot)
-        {
-            parts.Add("Copilot off");
-        }
-
+        List<string> parts = [.. ProductPosture.QuietLabels];
         if (braveSelected)
         {
             parts.Add("Brave policies");
@@ -80,28 +66,10 @@ public static class IncludedReceipt
     public static string FormatWhatsIncluded(IEnumerable<string> appxFamilyIds) =>
         string.Join(QuietSeparator, FriendlyRemoveNames(appxFamilyIds));
 
-    public static string FormatQuietSummary(int strippedAppCount, bool keepCopilot, bool keepGaming)
-    {
-        List<string> notes = [];
-        if (strippedAppCount > 0)
-        {
-            notes.Add($"strips {strippedAppCount} apps");
-        }
-
-        if (!keepCopilot)
-        {
-            notes.Add("Copilot off");
-        }
-
-        if (!keepGaming)
-        {
-            notes.Add("gaming apps removed");
-        }
-
-        return notes.Count == 0
-            ? "This build applies product defaults."
-            : "This build " + string.Join(", ", notes) + ".";
-    }
+    public static string FormatQuietSummary(int strippedAppCount) =>
+        strippedAppCount > 0
+            ? $"This build strips {strippedAppCount} apps."
+            : "This build applies product defaults.";
 
     private static string FriendlyRemoveName(string appxFamilyId)
     {

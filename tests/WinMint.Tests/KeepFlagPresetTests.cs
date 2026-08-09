@@ -66,11 +66,6 @@ public class KeepFlagPresetTests
                 "Microsoft.ZuneMusic",
                 "Microsoft.ZuneVideo",
                 "MicrosoftCorporationII.QuickAssist",
-                "Microsoft.GamingApp",
-                "Microsoft.Xbox.TCUI",
-                "Microsoft.XboxGamingOverlay",
-                "Microsoft.XboxSpeechToTextOverlay",
-                "Microsoft.Copilot",
             ],
             result.Value.RemoveProvisionedAppx);
         Assert.Equal(
@@ -98,34 +93,19 @@ public class KeepFlagPresetTests
     }
 
     [Fact]
-    public void Expand_recommended_keep_gaming_subtracts_xbox_ids()
+    public void Expand_recommended_leaves_product_required_appx_to_posture()
     {
         Result<KeepFlagExpansion, PlanFailure> result =
-            KeepFlagPresets.TryExpand(KeepFlagPresets.Recommended, keepGaming: true);
+            KeepFlagPresets.TryExpand(KeepFlagPresets.Recommended);
 
         Assert.True(result.IsOk);
         Assert.DoesNotContain("Microsoft.GamingApp", result.Value.RemoveProvisionedAppx);
-        Assert.DoesNotContain("Microsoft.Xbox.TCUI", result.Value.RemoveProvisionedAppx);
-        Assert.DoesNotContain("Microsoft.XboxGamingOverlay", result.Value.RemoveProvisionedAppx);
-        Assert.DoesNotContain("Microsoft.XboxSpeechToTextOverlay", result.Value.RemoveProvisionedAppx);
-        Assert.Contains("Microsoft.YourPhone", result.Value.RemoveProvisionedAppx);
-        Assert.Contains("Microsoft.Todos", result.Value.RemoveProvisionedAppx);
-    }
-
-    [Fact]
-    public void Expand_recommended_keep_copilot_drops_copilot_appx()
-    {
-        Result<KeepFlagExpansion, PlanFailure> baseExpand =
-            KeepFlagPresets.TryExpand(KeepFlagPresets.Recommended);
-        Result<KeepFlagExpansion, PlanFailure> withCopilot =
-            KeepFlagPresets.TryExpand(KeepFlagPresets.Recommended, keepCopilot: true);
-
-        Assert.True(baseExpand.IsOk);
-        Assert.True(withCopilot.IsOk);
-        Assert.Contains("Microsoft.Copilot", baseExpand.Value.RemoveProvisionedAppx);
-        Assert.DoesNotContain("Microsoft.Copilot", withCopilot.Value.RemoveProvisionedAppx);
-        Assert.Equal(baseExpand.Value.RemoveCapabilities, withCopilot.Value.RemoveCapabilities);
-        Assert.Equal(baseExpand.Value.DisableOptionalFeatures, withCopilot.Value.DisableOptionalFeatures);
+        Assert.DoesNotContain("Microsoft.Copilot", result.Value.RemoveProvisionedAppx);
+        Assert.Equal(
+            ProductPosture.AppxIds,
+            ProductPosture.UnionAppx(result.Value.RemoveProvisionedAppx)
+                .Where(id => ProductPosture.AppxIds.Contains(id, StringComparer.OrdinalIgnoreCase))
+                .ToArray());
     }
 
     [Fact]
@@ -285,13 +265,30 @@ public class KeepFlagPresetTests
         Assert.Equal(expanded.Value.RemoveProvisionedAppx, parsed.Value.RemoveProvisionedAppx);
         Assert.Equal(expanded.Value.RemoveCapabilities, parsed.Value.RemoveCapabilities);
         Assert.Equal(expanded.Value.DisableOptionalFeatures, parsed.Value.DisableOptionalFeatures);
-        Assert.Equal(["Anysphere.Cursor", "Zen-Team.Zen-Browser"], parsed.Value.WingetPackages);
+        Assert.Equal(
+            ["Anysphere.Cursor", "Zen-Team.Zen-Browser"],
+            parsed.Value.WingetPackages);
+        Assert.Equal(
+            ["Git.MinGit", "Nilesoft.Shell", "Anysphere.Cursor", "Zen-Team.Zen-Browser"],
+            ProductPosture.MergeWinget(parsed.Value.WingetPackages));
         Assert.Equal(["FedoraLinux"], parsed.Value.WslDistros);
 
         Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "winget.import");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "wsl");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
+        Assert.DoesNotContain(
+            planned.Value.Stages.Stages,
+            s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
+        Assert.Contains(planned.Value.RemoveProvisionedAppx, id => id == "Microsoft.Copilot");
+        Assert.Contains(planned.Value.RemoveProvisionedAppx, id => id == "Microsoft.GamingApp");
+        Assert.Contains(
+            planned.Value.Stages.Stages,
+            s => s.Opcode == ServicingOpcode.RemoveCapabilities);
+        Assert.Contains(
+            planned.Value.Stages.Stages,
+            s => s.Opcode == ServicingOpcode.DisableOptionalFeatures);
     }
 
     private static string FindRepoRoot()

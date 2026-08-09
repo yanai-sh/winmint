@@ -7,8 +7,6 @@ public class WizardSessionTests
 {
     private static WizardSessionInput Lab(
         string preset = KeepFlagPresets.Recommended,
-        bool keepGaming = false,
-        bool keepCopilot = false,
         string winget = "",
         string appx = "",
         string caps = "",
@@ -27,8 +25,6 @@ public class WizardSessionTests
             GeoIdText: geoId,
             TimeZoneId: timeZone,
             LocationServicesEnabled: true,
-            KeepGaming: keepGaming,
-            KeepCopilot: keepCopilot,
             WingetText: winget,
             RemoveCapabilitiesText: caps,
             RemoveProvisionedAppxText: appx,
@@ -48,21 +44,12 @@ public class WizardSessionTests
     }
 
     [Fact]
-    public void ComposeAndPlan_keep_copilot_round_trips_policies()
+    public void ComposeAndPlan_always_unions_product_required_appx()
     {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(keepCopilot: true));
+        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(preset: KeepFlagPresets.Empty));
         Assert.True(result.Succeeded, result.Message);
-        Assert.Contains("\"keepCopilot\": true", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.DoesNotContain("Microsoft.Copilot", result.ProfileJson!, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ComposeAndPlan_keep_gaming_omits_xbox()
-    {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(keepGaming: true));
-        Assert.True(result.Succeeded, result.Message);
-        Assert.DoesNotContain("Microsoft.GamingApp", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.Contains("Microsoft.YourPhone", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.GamingApp", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.Copilot", result.ProfileJson!, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -101,6 +88,8 @@ public class WizardSessionTests
         Assert.True(result.Succeeded, result.Message);
         Assert.Contains("Microsoft.GetHelp", result.ProfileJson!, StringComparison.Ordinal);
         Assert.DoesNotContain("Microsoft.BingNews", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.Copilot", result.ProfileJson!, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.GamingApp", result.ProfileJson!, StringComparison.Ordinal);
     }
 
     [Fact]

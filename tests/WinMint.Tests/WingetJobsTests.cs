@@ -46,11 +46,13 @@ public class WingetJobsTests
         Assert.Equal("winget.Git.Git", git.Id);
         JobDescriptor vscode = Assert.Single(jobs, j => j.Kind == "winget" && j.PackageId == "Microsoft.VisualStudioCode");
         Assert.Equal("winget.Microsoft.VisualStudioCode", vscode.Id);
-        Assert.Equal(2, jobs.Count(j => j.Kind == "winget"));
+        Assert.Contains(jobs, j => j is { Kind: "winget", PackageId: "Git.MinGit" });
+        Assert.Contains(jobs, j => j is { Kind: "winget", PackageId: "Nilesoft.Shell" });
+        Assert.Equal(4, jobs.Count(j => j.Kind == "winget"));
     }
 
     [Fact]
-    public void Plan_without_packages_omits_stubs_by_default()
+    public void Plan_without_packages_still_emits_product_constant_winget()
     {
         Profile profile = Parse($$"""
             {
@@ -75,10 +77,11 @@ public class WingetJobsTests
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "winget");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
         Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "stub");
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
+        Assert.True(result.Value.Manifest.RequiresNetwork);
     }
 
     [Fact]

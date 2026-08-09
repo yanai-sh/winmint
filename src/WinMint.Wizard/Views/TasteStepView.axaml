@@ -29,16 +29,6 @@
 
       <Border Classes="panel-card" Margin="8,0,0,8">
         <StackPanel>
-          <TextBlock Classes="panel-label" Text="KEEP" />
-          <StackPanel Orientation="Horizontal">
-            <ToggleButton Classes="chip" Content="Xbox &amp; gaming" IsChecked="{Binding KeepGaming}" />
-            <ToggleButton Classes="chip" Content="Copilot" IsChecked="{Binding KeepCopilot}" />
-          </StackPanel>
-        </StackPanel>
-      </Border>
-
-      <Border Classes="panel-card" Margin="0,0,8,8">
-        <StackPanel>
           <TextBlock Classes="panel-label" Text="BROWSERS" />
           <ItemsControl ItemsSource="{Binding BrowserChips}">
             <ItemsControl.ItemsPanel>
@@ -55,7 +45,7 @@
         </StackPanel>
       </Border>
 
-      <Border Classes="panel-card" Margin="8,0,0,8">
+      <Border Classes="panel-card" Margin="0,0,8,8">
         <StackPanel>
           <TextBlock Classes="panel-label" Text="EDITORS" />
           <ItemsControl ItemsSource="{Binding EditorChips}">
@@ -73,7 +63,7 @@
         </StackPanel>
       </Border>
 
-      <Border Classes="panel-card" Margin="0,0,8,0">
+      <Border Classes="panel-card" Margin="8,0,0,8">
         <StackPanel>
           <TextBlock Classes="panel-label" Text="SHELL" />
           <ItemsControl ItemsSource="{Binding ShellChips}">
@@ -91,7 +81,7 @@
         </StackPanel>
       </Border>
 
-      <Border Classes="panel-card" Margin="8,0,0,0">
+      <Border Classes="panel-card" Margin="0,0,8,0">
         <StackPanel>
           <TextBlock Classes="panel-label" Text="WSL" />
           <ItemsControl ItemsSource="{Binding WslChips}">
@@ -113,7 +103,7 @@
     <Expander Header="Advanced packages (optional)" IsExpanded="False">
       <StackPanel Spacing="8" Margin="0,8,0,0">
         <TextBlock Classes="hero-sub"
-                   Text="One install id or WSL token per line. When non-empty, overrides chip selections for that source." />
+                   Text="One install id or WSL token per line. When non-empty, overrides chip selections for that source. MinGit and Nilesoft Shell are always installed — not listed here and cannot be turned off." />
         <TextBlock Classes="panel-label" Text="WINGET INSTALL IDS" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
                  PlaceholderText="Anysphere.Cursor&#x0a;Zen-Team.Zen-Browser"

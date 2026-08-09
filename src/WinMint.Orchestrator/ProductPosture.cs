@@ -1,14 +1,61 @@
 namespace WinMint.Orchestrator;
 
 /// <summary>
-/// Product-constant + conditional offline HKLM policy rows (winutil EdgeDebloat / BraveDebloat / essentials).
-/// Plan owns branching; StampOfflinePolicies kernel is param-only ([ADR-009]).
+/// Always-on WinMint posture: AppX strip, winget constants, offline HKLM rows, DoH catalog.
+/// Plan and Wizard consume effective lists from here — one locality for product locks.
 /// </summary>
-public static class ProductOfflinePolicies
+public static class ProductPosture
 {
     public const string BraveWingetId = "Brave.Brave";
+    public const string MinGitWingetId = "Git.MinGit";
+    public const string NilesoftShellWingetId = "Nilesoft.Shell";
 
-    public static IReadOnlyList<OfflinePolicyRow> Compose(
+    /// <summary>Install order: MinGit, then Nilesoft Shell.</summary>
+    public static IReadOnlyList<string> WingetIds { get; } =
+    [
+        MinGitWingetId,
+        NilesoftShellWingetId,
+    ];
+
+    public static IReadOnlySet<string> WingetIdSet { get; } =
+        new HashSet<string>(WingetIds, StringComparer.OrdinalIgnoreCase);
+
+    public static IReadOnlyList<string> AppxIds { get; } =
+    [
+        "Microsoft.Copilot",
+        "Microsoft.GamingApp",
+        "Microsoft.Xbox.TCUI",
+        "Microsoft.XboxGamingOverlay",
+        "Microsoft.XboxSpeechToTextOverlay",
+    ];
+
+    /// <summary>Quiet receipt labels for always-on offline/FirstLogon posture (not AppX).</summary>
+    public static IReadOnlyList<string> QuietLabels { get; } =
+    [
+        "Edge policies",
+        "OneDrive",
+        "device metadata",
+        "WPBT",
+        "Reserved Storage",
+        "MinGit",
+        "Nilesoft Shell",
+    ];
+
+    /// <summary>Profile appx first, then product-required; case-insensitive dedupe.</summary>
+    public static IReadOnlyList<string> UnionAppx(IReadOnlyList<string> profileAppx) =>
+        IdList.UnionOrdered(profileAppx, AppxIds);
+
+    /// <summary>Constants first, then Profile winget ids; case-insensitive dedupe.</summary>
+    public static IReadOnlyList<string> MergeWinget(IReadOnlyList<string> profileWinget) =>
+        IdList.UnionOrdered(WingetIds, profileWinget);
+
+    /// <summary>Drop product-constant winget ids from authored Profile text.</summary>
+    public static string StripWingetFromAuthored(string? wingetMultiline) =>
+        string.Join(
+            Environment.NewLine,
+            IdList.FromMultiline(wingetMultiline).Where(static id => !WingetIdSet.Contains(id)));
+
+    public static IReadOnlyList<OfflinePolicyRow> ComposePolicies(
         bool includeBraveDebloat,
         bool includeDriverHygiene = false)
     {
@@ -26,7 +73,7 @@ public static class ProductOfflinePolicies
         return rows;
     }
 
-    public static string EncodeSpecs(IReadOnlyList<OfflinePolicyRow> rows) =>
+    public static string EncodePolicySpecs(IReadOnlyList<OfflinePolicyRow> rows) =>
         string.Join(';', rows.Select(r => $"{r.Hive}|{r.SubKey}|{r.Name}|{r.RegType}|{r.Data}"));
 
     public static bool TryNormalizeDohProvider(string? raw, out string? provider, out string? error)
@@ -70,7 +117,6 @@ public static class ProductOfflinePolicies
                 "https://dns.quad9.net/dns-query"),
         };
 
-    // winutil WPFTweaksEdgeDebloat — 17 HKLM Edge / EdgeUpdate policies (no HubsSidebar / Copilot).
     private static readonly OfflinePolicyRow[] EdgeDebloat =
     [
         Soft("Policies\\Microsoft\\EdgeUpdate", "CreateDesktopShortcutDefault", "0"),
@@ -102,7 +148,6 @@ public static class ProductOfflinePolicies
         Soft("Policies\\Microsoft\\Windows\\Device Metadata", "PreventDeviceMetadataFromNetwork", "1"),
     ];
 
-    // Offline SYSTEM hive: ControlSet001 (CurrentControlSet is online-only).
     private static readonly OfflinePolicyRow[] WpbtDisable =
     [
         new(
@@ -114,7 +159,6 @@ public static class ProductOfflinePolicies
             "policy.wpbt.DisableWpbtExecution"),
     ];
 
-    // v1 driver hygiene — stamped when Surface Catalog injection is selected (issue 63).
     private static readonly OfflinePolicyRow[] DriverHygiene =
     [
         new(
@@ -126,7 +170,6 @@ public static class ProductOfflinePolicies
             "policy.deviceInstaller.DisableCoInstallers"),
     ];
 
-    // winutil WPFTweaksBraveDebloat — 12 BraveSoftware policies.
     private static readonly OfflinePolicyRow[] BraveDebloat =
     [
         Soft("Policies\\BraveSoftware\\Brave", "BraveRewardsDisabled", "1"),

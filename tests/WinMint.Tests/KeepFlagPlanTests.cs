@@ -61,7 +61,7 @@ public class KeepFlagPlanTests
             result.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
         Assert.Equal(
-            string.Join(';', ProductRequiredStrip.UnionAppx(["Microsoft.BingNews", "Microsoft.GamingApp"])),
+            string.Join(';', ProductPosture.UnionAppx(["Microsoft.BingNews", "Microsoft.GamingApp"])),
             remove.Parameters[StageParams.PackageFamilyNames]);
         Assert.DoesNotContain(".ps1", string.Join('\0', remove.Parameters.Values), StringComparison.OrdinalIgnoreCase);
 

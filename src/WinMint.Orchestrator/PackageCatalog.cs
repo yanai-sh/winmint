@@ -170,16 +170,11 @@ public sealed class PackageCatalog
             ? DefaultImageArchitecture
             : NormalizeArch(run.ImageArchitecture);
 
-    public static PackagePhase EffectivePackagePhase(Profile profile, string imageArchitecture)
-    {
-        if (profile.WingetPackages.Count > 0
-            && string.Equals(NormalizeArch(imageArchitecture), "arm64", StringComparison.OrdinalIgnoreCase))
-        {
-            return PackagePhase.WingetImport;
-        }
-
-        return PackagePhase.PerJob;
-    }
+    // ponytail: product-constant winget always non-empty (ADR-009); phase is arch-only until constants become optional.
+    public static PackagePhase EffectivePackagePhase(string imageArchitecture) =>
+        string.Equals(NormalizeArch(imageArchitecture), "arm64", StringComparison.OrdinalIgnoreCase)
+            ? PackagePhase.WingetImport
+            : PackagePhase.PerJob;
 
     public IReadOnlyList<string> ToolCatalogKeys => _toolsByKey.Keys.ToList();
 
@@ -206,8 +201,9 @@ public sealed class PackageCatalog
         failure = null;
         string imageArch = NormalizeArch(imageArchitecture);
         List<string> wingetAuditTargets = [];
+        IReadOnlyList<string> wingetIds = ProductPosture.MergeWinget(profile.WingetPackages);
 
-        foreach (string installId in profile.WingetPackages)
+        foreach (string installId in wingetIds)
         {
             if (!_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
                 || !string.Equals(tool.Source, "winget", StringComparison.OrdinalIgnoreCase)

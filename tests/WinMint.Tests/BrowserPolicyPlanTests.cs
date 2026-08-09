@@ -56,20 +56,6 @@ public class BrowserPolicyPlanTests
     }
 
     [Fact]
-    public void Plan_keep_copilot_does_not_change_edge_copilot_policy_rows()
-    {
-        Result<BuildArtifacts, PlanFailure> result =
-            BuildPlan.Plan(Lab(policies: new PoliciesProfile(KeepCopilot: true)));
-        Assert.True(result.IsOk);
-        string specs = Assert.Single(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.StampOfflinePolicies).Parameters[StageParams.PolicySpecs];
-        Assert.DoesNotContain("HubsSidebarEnabled", specs, StringComparison.Ordinal);
-        Assert.DoesNotContain("TurnOffWindowsCopilot", specs, StringComparison.Ordinal);
-        Assert.Contains("HideFirstRunExperience", specs, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Plan_doh_provider_emits_doh_job_with_resolved_params()
     {
         Result<BuildArtifacts, PlanFailure> result =
@@ -91,16 +77,49 @@ public class BrowserPolicyPlanTests
     }
 
     [Fact]
-    public void Serialize_keep_copilot_round_trips()
+    public void Serialize_doh_round_trips_without_keep_copilot()
     {
-        Profile profile = Lab(policies: new PoliciesProfile(KeepCopilot: true));
+        Profile profile = Lab(policies: new PoliciesProfile(DohProvider: "quad9"));
         byte[] utf8 = BuildPlan.SerializeProfile(profile);
         using JsonDocument doc = JsonDocument.Parse(utf8);
-        Assert.True(doc.RootElement.GetProperty("policies").GetProperty("keepCopilot").GetBoolean());
+        Assert.Equal("quad9", doc.RootElement.GetProperty("policies").GetProperty("dohProvider").GetString());
+        Assert.False(doc.RootElement.GetProperty("policies").TryGetProperty("keepCopilot", out _));
 
         Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
         Assert.True(parsed.IsOk);
-        Assert.True(parsed.Value.EffectivePolicies.KeepCopilot);
+        Assert.Equal("quad9", parsed.Value.EffectivePolicies.DohProvider);
+    }
+
+    [Fact]
+    public void Parse_ignores_legacy_keep_copilot_json()
+    {
+        byte[] utf8 = """
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "localAutoLogon",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              },
+              "policies": {
+                "keepCopilot": true,
+                "dohProvider": "google"
+              }
+            }
+            """u8.ToArray();
+
+        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : parsed.Error.Issues[0].Message);
+        Assert.Equal("google", parsed.Value.EffectivePolicies.DohProvider);
     }
 
     [Fact]

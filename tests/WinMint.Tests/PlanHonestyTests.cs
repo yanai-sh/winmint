@@ -38,7 +38,7 @@ public class PlanHonestyTests
         Assert.Equal("scoop.batch", job.GetProperty("kind").GetString());
         Assert.Equal(
             ["extras", "main"],
-            job.GetProperty("scoopBuckets").EnumerateArray().Select(e => e.GetString()).ToArray());
+            job.GetProperty("scoopBuckets").EnumerateArray().Select(e => e.GetString()!).ToArray());
     }
 
     [Fact]

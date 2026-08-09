@@ -12,7 +12,7 @@ Profile optional lists on `winmint.profile/v1` (default empty):
 - `debloat.removeCapabilities`
 - `debloat.disableOptionalFeatures`
 
-Unknown catalog id ⇒ Plan fail-closed. Absent/empty ⇒ no removes. Host/Wizard presets (**`recommended`**, Acceptance, KeepGaming / KeepCopilot overlays) expand → ids; never write preset names into JSON.
+Unknown catalog id ⇒ Plan fail-closed. Absent/empty ⇒ no removes. Host/Wizard presets (**`recommended`**, Acceptance) expand → ids; never write preset names into JSON. Copilot/gaming AppX are product-required via `ProductPosture` (always unioned at Plan/Compose).
 
 **Offline (ImageServicing):** primary remove via DISM `/Image` (AppX / caps / features). Listed-but-absent ⇒ ok + digest. Kernels param-only.
 

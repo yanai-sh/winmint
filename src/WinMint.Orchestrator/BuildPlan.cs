@@ -119,7 +119,7 @@ public static class BuildPlan
             ]));
         }
 
-        if (!ProductOfflinePolicies.TryNormalizeDohProvider(doc.Policies?.DohProvider, out string? doh, out string? dohError))
+        if (!ProductPosture.TryNormalizeDohProvider(doc.Policies?.DohProvider, out string? doh, out string? dohError))
         {
             return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
             [
@@ -128,15 +128,9 @@ public static class BuildPlan
         }
 
         PoliciesProfile? policies = null;
-        if (doc.Policies is not null)
+        if (doc.Policies is not null || doh is not null)
         {
-            policies = new PoliciesProfile(
-                doc.Policies.KeepCopilot ?? false,
-                doh);
-        }
-        else if (doh is not null)
-        {
-            policies = new PoliciesProfile(KeepCopilot: false, DohProvider: doh);
+            policies = new PoliciesProfile(DohProvider: doh);
         }
 
         DriversProfile? drivers = null;
@@ -240,13 +234,9 @@ public static class BuildPlan
         }
 
         PoliciesProfile effective = profile.EffectivePolicies;
-        PoliciesDocument? policies = null;
-        if (effective.KeepCopilot || !string.IsNullOrWhiteSpace(effective.DohProvider))
-        {
-            policies = new PoliciesDocument(
-                effective.KeepCopilot ? true : null,
-                string.IsNullOrWhiteSpace(effective.DohProvider) ? null : effective.DohProvider);
-        }
+        PoliciesDocument? policies = string.IsNullOrWhiteSpace(effective.DohProvider)
+            ? null
+            : new PoliciesDocument(effective.DohProvider);
 
         DriversDocument? drivers = profile.Drivers is null
             ? null
@@ -347,12 +337,8 @@ public static class BuildPlan
         return null;
     }
 
-    /// <summary>Derived network requirement — not authored in Profile JSON (issue 71).</summary>
-    public static bool PlanRequiresNetwork(Profile profile) =>
-        (profile.DebloatMode == DebloatMode.Online && profile.RemoveProvisionedAppx.Count > 0)
-        || profile.WingetPackages.Count > 0
-        || profile.ScoopPackages.Count > 0
-        || profile.WslDistros.Count > 0;
+    /// <summary>FirstLogon always needs outbound network (product-constant MinGit + Nilesoft winget). Not authored in Profile JSON.</summary>
+    public static bool PlanRequiresNetwork() => true;
 
     /// <summary>Cli plan-dump shape for <c>manifest.json</c> (includes RequiresNetwork — #90 honesty).</summary>
     public static string SerializeManifestDump(BuildManifest manifest)
@@ -486,7 +472,7 @@ public static class BuildPlan
                 new PlanFailure("account.password.required", "Local autoLogon requires a non-empty password."));
         }
 
-        IReadOnlyList<string> appx = ProductRequiredStrip.UnionAppx(profile.RemoveProvisionedAppx);
+        IReadOnlyList<string> appx = ProductPosture.UnionAppx(profile.RemoveProvisionedAppx);
         foreach (string id in appx)
         {
             if (!ProvisionedAppxCatalog.Ids.Contains(id))
@@ -564,7 +550,8 @@ public static class BuildPlan
 
         PackageCatalog catalog = options.PackageCatalog ?? PackageCatalog.Default;
         string imageArchitecture = PackageCatalog.EffectiveImageArchitecture(options);
-        PackagePhase packagePhase = PackageCatalog.EffectivePackagePhase(profile, imageArchitecture);
+        IReadOnlyList<string> wingetPackages = ProductPosture.MergeWinget(profile.WingetPackages);
+        PackagePhase packagePhase = PackageCatalog.EffectivePackagePhase(imageArchitecture);
         IReadOnlyList<string> wingetAuditTargets = catalog.ValidateProfilePackages(
             profile,
             imageArchitecture,
@@ -575,10 +562,10 @@ public static class BuildPlan
         }
 
         byte[]? wingetImportJson = null;
-        if (packagePhase == PackagePhase.WingetImport && profile.WingetPackages.Count > 0)
+        if (packagePhase == PackagePhase.WingetImport && wingetPackages.Count > 0)
         {
             wingetImportJson = WingetImportBuilder.BuildUtf8Json(
-                profile.WingetPackages,
+                wingetPackages,
                 catalog,
                 imageArchitecture);
             if (wingetImportJson.Length == 0)
@@ -594,7 +581,7 @@ public static class BuildPlan
         string unattendXml = BuildOobeUnattendXml(profile);
 
         PoliciesProfile policies = profile.EffectivePolicies;
-        if (!ProductOfflinePolicies.TryNormalizeDohProvider(policies.DohProvider, out string? dohProvider, out string? dohPlanError))
+        if (!ProductPosture.TryNormalizeDohProvider(policies.DohProvider, out string? dohProvider, out string? dohPlanError))
         {
             return Result.Fail<BuildArtifacts, PlanFailure>(
                 new PlanFailure("policies.dohProvider.unsupported", dohPlanError!));
@@ -613,7 +600,7 @@ public static class BuildPlan
         jobList.Add(new JobDescriptor("reservedStorage.disable", "reservedStorage.disable"));
         if (dohProvider is not null)
         {
-            DohProviderSpec? doh = ProductOfflinePolicies.ResolveDoh(dohProvider);
+            DohProviderSpec? doh = ProductPosture.ResolveDoh(dohProvider);
             if (doh is null)
             {
                 return Result.Fail<BuildArtifacts, PlanFailure>(
@@ -638,7 +625,7 @@ public static class BuildPlan
 
         if (wingetImportJson is { Length: > 0 })
         {
-            bool importReboot = profile.WingetPackages.Any(id => wingetNeedsReboot.Contains(id));
+            bool importReboot = wingetPackages.Any(id => wingetNeedsReboot.Contains(id));
             jobList.Add(new JobDescriptor(
                 "winget.import",
                 "winget.import",
@@ -647,7 +634,7 @@ public static class BuildPlan
         }
         else
         {
-            foreach (string packageId in profile.WingetPackages)
+            foreach (string packageId in wingetPackages)
             {
                 catalog.TryGetToolByInstallId(packageId, out PackageToolEntry? wingetTool);
                 string? wingetArch = wingetTool is null
@@ -776,15 +763,15 @@ public static class BuildPlan
         }
 
         bool braveSelected = profile.WingetPackages.Any(
-            id => string.Equals(id, ProductOfflinePolicies.BraveWingetId, StringComparison.OrdinalIgnoreCase));
-        IReadOnlyList<OfflinePolicyRow> policyRows = ProductOfflinePolicies.Compose(
+            id => string.Equals(id, ProductPosture.BraveWingetId, StringComparison.OrdinalIgnoreCase));
+        IReadOnlyList<OfflinePolicyRow> policyRows = ProductPosture.ComposePolicies(
             includeBraveDebloat: braveSelected,
             includeDriverHygiene: injectDrivers);
         stageList.Add(new ServicingStage(
             ServicingOpcode.StampOfflinePolicies,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                [StageParams.PolicySpecs] = ProductOfflinePolicies.EncodeSpecs(policyRows),
+                [StageParams.PolicySpecs] = ProductPosture.EncodePolicySpecs(policyRows),
             }));
 
         stageList.Add(new ServicingStage(ServicingOpcode.StagePayload, new Dictionary<string, string>(StringComparer.Ordinal)));
@@ -824,7 +811,7 @@ public static class BuildPlan
             jobs,
             stages,
             new DmaContract(profile.Dma.Enabled, profile.Dma.Enabled ? profile.Dma.Settle : null),
-            new BuildManifest(options.ImageQuality, PlanRequiresNetwork(profile)),
+            new BuildManifest(options.ImageQuality, PlanRequiresNetwork()),
             profile.Account,
             appx,
             wingetImportJson,
@@ -926,7 +913,6 @@ internal sealed record DriversDocument(
     [property: JsonPropertyName("deviceId")] string? DeviceId);
 
 internal sealed record PoliciesDocument(
-    [property: JsonPropertyName("keepCopilot")] bool? KeepCopilot,
     [property: JsonPropertyName("dohProvider")] string? DohProvider);
 
 internal sealed record PackagesDocument(

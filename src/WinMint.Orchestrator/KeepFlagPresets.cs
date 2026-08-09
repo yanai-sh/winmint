@@ -3,6 +3,7 @@ namespace WinMint.Orchestrator;
 /// <summary>
 /// Host-side named presets that expand to debloat remove-lists.
 /// Preset names never appear in Profile JSON ([KEEPFLAG] / ADR-005 / issue 56).
+/// Copilot/gaming AppX are product-required via <see cref="ProductPosture"/> — not preset overlays.
 /// </summary>
 public static class KeepFlagPresets
 {
@@ -10,21 +11,18 @@ public static class KeepFlagPresets
     public const string Acceptance = "acceptance";
     public const string Recommended = "recommended";
 
-    /// <summary>Pinned acceptance AppX remove-list (samples/acceptance.profile.json / ticket 14).</summary>
     private static readonly string[] AcceptanceAppx =
     [
         "Microsoft.BingNews",
         "Microsoft.BingWeather",
     ];
 
-    /// <summary>Thin acceptance capability pins (ticket 19/20 / ticket 25).</summary>
     private static readonly string[] AcceptanceCapabilities =
     [
         "App.StepsRecorder~~~~0.0.1.0",
         "WMIC~~~~",
     ];
 
-    /// <summary>Thin acceptance optional-feature pins (ticket 19/20 / ticket 25).</summary>
     private static readonly string[] AcceptanceFeatures =
     [
         "WorkFolders-Client",
@@ -32,9 +30,8 @@ public static class KeepFlagPresets
 
     /// <summary>
     /// Product zero-config AppX strip (issue 56). Catalog-bound; catalog growth does not auto-expand this list.
-    /// Gaming families are included unless keepGaming subtracts them.
     /// </summary>
-    private static readonly string[] RecommendedAppxCore =
+    private static readonly string[] RecommendedAppx =
     [
         "Microsoft.BingNews",
         "Microsoft.BingWeather",
@@ -52,19 +49,6 @@ public static class KeepFlagPresets
         "Microsoft.ZuneMusic",
         "Microsoft.ZuneVideo",
         "MicrosoftCorporationII.QuickAssist",
-    ];
-
-    private static readonly string[] RecommendedAppxGaming =
-    [
-        "Microsoft.GamingApp",
-        "Microsoft.Xbox.TCUI",
-        "Microsoft.XboxGamingOverlay",
-        "Microsoft.XboxSpeechToTextOverlay",
-    ];
-
-    private static readonly string[] RecommendedAppxCopilot =
-    [
-        "Microsoft.Copilot",
     ];
 
     private static readonly string[] RecommendedCapabilities =
@@ -87,10 +71,7 @@ public static class KeepFlagPresets
         "SimpleTCP",
     ];
 
-    public static Result<KeepFlagExpansion, PlanFailure> TryExpand(
-        string name,
-        bool keepGaming = false,
-        bool keepCopilot = false)
+    public static Result<KeepFlagExpansion, PlanFailure> TryExpand(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -112,19 +93,8 @@ public static class KeepFlagPresets
 
         if (string.Equals(key, Recommended, StringComparison.OrdinalIgnoreCase))
         {
-            List<string> appx = [.. RecommendedAppxCore];
-            if (!keepGaming)
-            {
-                appx.AddRange(RecommendedAppxGaming);
-            }
-
-            if (!keepCopilot)
-            {
-                appx.AddRange(RecommendedAppxCopilot);
-            }
-
             return Result.Ok<KeepFlagExpansion, PlanFailure>(
-                new KeepFlagExpansion(appx, RecommendedCapabilities, RecommendedFeatures));
+                new KeepFlagExpansion(RecommendedAppx, RecommendedCapabilities, RecommendedFeatures));
         }
 
         return Result.Fail<KeepFlagExpansion, PlanFailure>(
