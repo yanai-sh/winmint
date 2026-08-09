@@ -61,6 +61,12 @@
       "scoopBucket": "extras",
       "architectures": ["amd64", "arm64"]
     },
+    "fancywm": {
+      "displayName": "FancyWM",
+      "source": "winget",
+      "id": "FancyWM.FancyWM",
+      "architectures": ["amd64", "arm64"]
+    },
     "nilesoft": {
       "displayName": "Nilesoft Shell",
       "source": "winget",
@@ -84,6 +90,12 @@
       "displayName": "Git",
       "source": "winget",
       "id": "Git.Git",
+      "architectures": ["amd64", "arm64"]
+    },
+    "mingit": {
+      "displayName": "MinGit",
+      "source": "winget",
+      "id": "Git.MinGit",
       "architectures": ["amd64", "arm64"]
     },
     "curl": {

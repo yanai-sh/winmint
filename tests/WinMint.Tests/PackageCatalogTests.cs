@@ -13,6 +13,14 @@ public class PackageCatalogTests
     }
 
     [Fact]
+    public void Catalog_contains_fancywm_stub()
+    {
+        Assert.True(PackageCatalog.Default.TryGetToolByKey("fancywm", out PackageToolEntry? tool));
+        Assert.Equal("winget", tool!.Source);
+        Assert.False(string.IsNullOrWhiteSpace(tool.InstallId));
+    }
+
+    [Fact]
     public void Default_catalog_splits_winget_and_scoop_shell_tools()
     {
         PackageSelection selection = PackageCatalog.Default.ResolveToolKeys(["windhawk", "komorebi"]);

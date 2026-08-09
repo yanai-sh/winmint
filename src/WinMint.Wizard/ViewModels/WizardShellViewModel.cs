@@ -54,11 +54,11 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             ("windhawk", "Windhawk"),
             ("yasb", "YASB"),
             ("komorebi", "Komorebi"),
-            ("nilesoft", "Nilesoft"),
+            ("fancywm", "FancyWM"),
         ]);
         foreach (ChipItem chip in ShellChips)
         {
-            chip.IsSelected = chip.Id is "windhawk" or "yasb" or "komorebi";
+            chip.IsSelected = false;
         }
 
         WslChips = ToChips(
@@ -93,8 +93,6 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _sourceIsoPath = "";
     [ObservableProperty] private string _imageQuality = "Test";
     [ObservableProperty] private string _preset = KeepFlagPresets.Recommended;
-    [ObservableProperty] private bool _keepGaming;
-    [ObservableProperty] private bool _keepCopilot;
 
     public ObservableCollection<WimIndexInfo> WimIndexes { get; } = [];
     [ObservableProperty] private WimIndexInfo? _selectedWimIndex;
@@ -121,7 +119,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _planSummary = "";
     [ObservableProperty] private string _buildRecipe = "";
 
-    // Included receipt layers (ADR-009 quiet block, pick strip, collapsed remove-list, plan meta).
+    // Included receipt layers (quiet block from ProductPosture, pick strip, effective remove-list, plan meta).
     [ObservableProperty] private string _quietSummaryText = "";
     [ObservableProperty] private string _pickStripText = "";
     [ObservableProperty] private string _quietBlockText = "";
@@ -695,7 +693,8 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             LocationServices,
             KeepGaming: KeepGaming,
             KeepCopilot: KeepCopilot,
-            WingetText: WizardSession.MergeChipAndAdvanced(packages.WingetInstallIds, AdvancedWingetText),
+            WingetText: WizardSession.StripProductConstantWingetIds(
+                WizardSession.MergeChipAndAdvanced(packages.WingetInstallIds, AdvancedWingetText)),
             ScoopText: WizardSession.MergeChipAndAdvanced(packages.ScoopInstallIds, AdvancedScoopText),
             WslText: WizardSession.MergeChipAndAdvanced(packages.WslProfileTokens, AdvancedWslText),
             SourceIsoPath: SourceIsoPath,
