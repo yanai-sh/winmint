@@ -8,23 +8,11 @@ public static class ProductOfflinePolicies
 {
     public const string BraveWingetId = "Brave.Brave";
 
-    /// <summary>Copilot AppX families host may union into remove-list when <c>keepCopilot</c> is false.</summary>
-    public static IReadOnlyList<string> CopilotAppxIds { get; } =
-    [
-        "Microsoft.Copilot",
-    ];
-
     public static IReadOnlyList<OfflinePolicyRow> Compose(
-        bool keepCopilot,
         bool includeBraveDebloat,
         bool includeDriverHygiene = false)
     {
         List<OfflinePolicyRow> rows = [.. EdgeDebloat, .. OneDriveDisable, .. DeviceMetadata, .. WpbtDisable];
-        if (!keepCopilot)
-        {
-            rows.AddRange(CopilotKill);
-        }
-
         if (includeBraveDebloat)
         {
             rows.AddRange(BraveDebloat);
@@ -126,12 +114,6 @@ public static class ProductOfflinePolicies
             "policy.wpbt.DisableWpbtExecution"),
     ];
 
-    private static readonly OfflinePolicyRow[] CopilotKill =
-    [
-        Soft("Policies\\Microsoft\\Edge", "HubsSidebarEnabled", "0"),
-        Soft("Policies\\Microsoft\\Windows\\WindowsCopilot", "TurnOffWindowsCopilot", "1"),
-    ];
-
     // v1 driver hygiene — stamped when Surface Catalog injection is selected (issue 63).
     private static readonly OfflinePolicyRow[] DriverHygiene =
     [
@@ -182,11 +164,6 @@ public static class ProductOfflinePolicies
         if (subKey.Contains("Device Metadata", StringComparison.OrdinalIgnoreCase))
         {
             return "device";
-        }
-
-        if (subKey.Contains("WindowsCopilot", StringComparison.OrdinalIgnoreCase))
-        {
-            return "copilot";
         }
 
         if (subKey.Contains("\\Edge", StringComparison.OrdinalIgnoreCase)

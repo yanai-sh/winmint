@@ -486,7 +486,8 @@ public static class BuildPlan
                 new PlanFailure("account.password.required", "Local autoLogon requires a non-empty password."));
         }
 
-        foreach (string id in profile.RemoveProvisionedAppx)
+        IReadOnlyList<string> appx = ProductRequiredStrip.UnionAppx(profile.RemoveProvisionedAppx);
+        foreach (string id in appx)
         {
             if (!ProvisionedAppxCatalog.Ids.Contains(id))
             {
@@ -630,7 +631,7 @@ public static class BuildPlan
                 DohTemplate: doh.DohTemplate));
         }
 
-        if (profile.RemoveProvisionedAppx.Count > 0 && profile.DebloatMode == DebloatMode.Online)
+        if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Online)
         {
             jobList.Add(new JobDescriptor("keepflag.appx.safetyNet", "appx.safetyNet"));
         }
@@ -728,13 +729,13 @@ public static class BuildPlan
                 }),
         ];
 
-        if (profile.RemoveProvisionedAppx.Count > 0 && profile.DebloatMode == DebloatMode.Offline)
+        if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Offline)
         {
             stageList.Add(new ServicingStage(
                 ServicingOpcode.RemoveProvisionedAppx,
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    [StageParams.PackageFamilyNames] = string.Join(';', profile.RemoveProvisionedAppx),
+                    [StageParams.PackageFamilyNames] = string.Join(';', appx),
                 }));
         }
 
@@ -777,7 +778,6 @@ public static class BuildPlan
         bool braveSelected = profile.WingetPackages.Any(
             id => string.Equals(id, ProductOfflinePolicies.BraveWingetId, StringComparison.OrdinalIgnoreCase));
         IReadOnlyList<OfflinePolicyRow> policyRows = ProductOfflinePolicies.Compose(
-            keepCopilot: policies.KeepCopilot,
             includeBraveDebloat: braveSelected,
             includeDriverHygiene: injectDrivers);
         stageList.Add(new ServicingStage(
@@ -826,7 +826,7 @@ public static class BuildPlan
             new DmaContract(profile.Dma.Enabled, profile.Dma.Enabled ? profile.Dma.Settle : null),
             new BuildManifest(options.ImageQuality, PlanRequiresNetwork(profile)),
             profile.Account,
-            profile.RemoveProvisionedAppx,
+            appx,
             wingetImportJson,
             options.PackageStrict);
 
