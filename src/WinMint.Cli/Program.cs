@@ -224,7 +224,7 @@ internal static class Program
         Directory.CreateDirectory(outDir.FullName);
         WritePlanArtifacts(outDir.FullName, artifacts!);
         Console.WriteLine($"Wrote plan artifacts to {outDir.FullName}");
-        Console.WriteLine($"Lane: {artifacts!.Manifest.ImageQuality}");
+        WritePlanHonesty(artifacts!);
         return 0;
     }
 
@@ -271,6 +271,8 @@ internal static class Program
             Console.Error.WriteLine(
                 "Warning: ImageQuality=Release uses compression=max + cleanup=full — prefer Test for iterative builds.");
         }
+
+        WritePlanHonesty(artifacts!);
 
         ServicingRun servicingRun = new(
             SourceIsoPath: iso.FullName,
@@ -444,10 +446,28 @@ internal static class Program
                     }).ToArray()),
             });
 
-        WriteJson(
-            directory,
-            "manifest.json",
-            new JsonObject { ["imageQuality"] = artifacts.Manifest.ImageQuality.ToString() });
+        File.WriteAllText(
+            Path.Combine(directory, "manifest.json"),
+            BuildPlan.SerializeManifestDump(artifacts.Manifest));
+    }
+
+    private static void WritePlanHonesty(BuildArtifacts artifacts)
+    {
+        Console.WriteLine($"Lane: {artifacts.Manifest.ImageQuality}");
+        string honesty = BuildPlan.FormatPlanHonesty(
+            artifacts.Manifest,
+            artifacts.Account.RequireWifiDuringOobe);
+        foreach (string line in honesty.Split(["\r\n", "\n"], StringSplitOptions.None))
+        {
+            if (line.StartsWith("Warning:", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine(line);
+            }
+            else if (line.Length > 0)
+            {
+                Console.WriteLine(line);
+            }
+        }
     }
 
     private static void WriteJson(string directory, string name, JsonNode node) =>

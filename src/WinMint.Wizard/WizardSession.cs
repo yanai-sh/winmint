@@ -88,8 +88,13 @@ internal static class WizardSession
         string removeSummary = appx.Count == 0
             ? "(none)"
             : string.Join(", ", appx);
+        string honesty = BuildPlan.FormatPlanHonesty(
+            planned.Value.Manifest,
+            profile.Account.RequireWifiDuringOobe);
         string ok =
-            $"Plan OK. Lane={planned.Value.Manifest.ImageQuality}; removeProvisionedAppx={removeSummary}; jobs={planned.Value.Jobs.Jobs.Count}.";
+            $"Plan OK. Lane={planned.Value.Manifest.ImageQuality}; removeProvisionedAppx={removeSummary}; jobs={planned.Value.Jobs.Jobs.Count}."
+            + Environment.NewLine
+            + honesty;
         return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8));
     }
 

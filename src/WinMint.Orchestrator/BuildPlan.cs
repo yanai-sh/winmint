@@ -360,6 +360,37 @@ public static class BuildPlan
         || profile.ScoopPackages.Count > 0
         || profile.WslDistros.Count > 0;
 
+    /// <summary>Cli plan-dump shape for <c>manifest.json</c> (includes RequiresNetwork — #90 honesty).</summary>
+    public static string SerializeManifestDump(BuildManifest manifest)
+    {
+        var node = new System.Text.Json.Nodes.JsonObject
+        {
+            ["imageQuality"] = manifest.ImageQuality.ToString(),
+            ["requiresNetwork"] = manifest.RequiresNetwork,
+        };
+        return node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// Host-facing plan honesty (Cli + Wizard). Warns when FirstLogon needs network; never a PlanFailure.
+    /// </summary>
+    public static string FormatPlanHonesty(BuildManifest manifest, bool requireWifiDuringOobe)
+    {
+        string wifi = requireWifiDuringOobe
+            ? "requireWifiDuringOobe=true (OOBE may show Network page)"
+            : "requireWifiDuringOobe=false (OOBE Network page hidden)";
+        string head =
+            $"requiresNetwork={(manifest.RequiresNetwork ? "true" : "false")}; {wifi}";
+        if (!manifest.RequiresNetwork)
+        {
+            return head;
+        }
+
+        return head
+            + Environment.NewLine
+            + "Warning: FirstLogon needs outbound network (packages and/or online AppX removes).";
+    }
+
     public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null)
     {
         RunOptions options = run ?? new RunOptions();

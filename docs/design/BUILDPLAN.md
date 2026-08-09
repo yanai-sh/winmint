@@ -81,7 +81,7 @@ public sealed record BuildArtifacts(
 - Elevated DISM / hive / oscdimg (ImageServicing).
 - Splash / settle / jobs execution (ProvisioningSession).
 - Host multiline id lists (`IdList.FromMultiline`) — UI/text helper, not Profile domain.
-- Cli human plan dump (`WritePlanArtifacts` untyped JSON) vs ImageServicing Materialize `*File` serializers — **defer** merging until the next StageParams / artifact field change (same trigger class as serialize drift). CONTRACTS allows the dump; twin serializers are accepted debt until then.
+- Cli human plan dump (`WritePlanArtifacts` untyped JSON) vs ImageServicing Materialize `*File` serializers — twin serializers remain for jobs/stages; **manifest.json** dump goes through `BuildPlan.SerializeManifestDump` so `requiresNetwork` cannot drift (#90).
 
 ## Ticket 01 TDD tracers (first vertical slices)
 
