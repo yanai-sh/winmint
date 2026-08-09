@@ -77,8 +77,8 @@ The first acceptance vertical: Profile → ISO → unattended Hyper-V install �
 _Avoid_: Primary gate; a different DMA settle or install executor than production
 
 **Primary gate**:
-Maintainer acceptance that a **Release**-lane ISO from the frozen `samples/sl7.profile.json` is safe to wipe the primary Surface Laptop 7: Gate B (`metal-acceptance.json` on the same Profile + lane) → destructive install → FirstLogon with online AppX complete, `--package-strict` curated packages green, evidence copy-off + checklist assert. Residual stays ADR-008; leftover-confidence / CDM junk and M4 flags are out of this bar. Until met, Wizard and host-deepening issues are parked.
-_Avoid_: stable ISO, hardware campaign (vague), treating Gate B or Smoke alone as wipe confidence
+Maintainer acceptance that a **Release**-lane ISO from the frozen `samples/sl7.profile.json` is safe to wipe the primary Surface Laptop 7: Gate B (`metal-acceptance.json` on the same Profile + lane) → destructive install → FirstLogon with online AppX complete, `--package-strict` curated packages green, evidence copy-off + checklist assert. Restore path is **operator hygiene** (OEM recovery for this device, e.g. Surface serial-gated BMR, or Windows recovery media) — not a WinMint download; see README. Residual stays ADR-008; leftover-confidence / CDM junk and M4 flags are out of this bar. Until met, Wizard and host-deepening issues are parked.
+_Avoid_: stable ISO, hardware campaign (vague), treating Gate B or Smoke alone as wipe confidence; CLI/Wizard backup guardrails; shipping or hotlinking recovery images
 
 **Image quality**:
 Run-specific WIM export / WinSxS cleanup posture for one build. Test lane prioritizes speed; release lane prioritizes a smaller ISO. Not authored in the Profile. Export/commit paths snapshot and assert WIM metadata (Name/Architecture/edition build) so DISM exit 0 cannot silently leave Setup-breaking image info.

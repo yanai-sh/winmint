@@ -21,6 +21,8 @@ You supply the official Microsoft ISO — WinMint does not download or redistrib
 
 Requires .NET 11 preview SDK (see `global.json`) and `pwsh` 7.6+ on the host.
 
+**Before you wipe a machine** with a WinMint ISO: have a restore path for *that* PC — OEM recovery when the vendor provides it (Surface: [recovery image download](https://support.microsoft.com/surfacerecoveryimage), serial + Microsoft account), or a Windows recovery drive. WinMint does not download or ship recovery images.
+
 ```powershell
 dotnet run --project src/WinMint.Cli -- validate samples/smoke.profile.json
 dotnet run --project src/WinMint.Cli -- plan samples/smoke.profile.json --out .scratch/plan
