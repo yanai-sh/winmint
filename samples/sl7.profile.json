@@ -32,7 +32,12 @@
       "Microsoft.YourPhone",
       "Microsoft.ZuneMusic",
       "Microsoft.ZuneVideo",
-      "MicrosoftCorporationII.QuickAssist"
+      "MicrosoftCorporationII.QuickAssist",
+      "Microsoft.Copilot",
+      "Microsoft.GamingApp",
+      "Microsoft.Xbox.TCUI",
+      "Microsoft.XboxGamingOverlay",
+      "Microsoft.XboxSpeechToTextOverlay"
     ],
     "removeCapabilities": [
       "App.StepsRecorder~~~~0.0.1.0",

@@ -262,7 +262,9 @@ public class KeepFlagPresetTests
         Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
         Assert.Equal("yanai", parsed.Value.Account.Username);
         Assert.Equal("lab-only-sl7", parsed.Value.Account.Password);
-        Assert.Equal(expanded.Value.RemoveProvisionedAppx, parsed.Value.RemoveProvisionedAppx);
+        Assert.Equal(
+            ProductPosture.UnionAppx(expanded.Value.RemoveProvisionedAppx),
+            parsed.Value.RemoveProvisionedAppx);
         Assert.Equal(expanded.Value.RemoveCapabilities, parsed.Value.RemoveCapabilities);
         Assert.Equal(expanded.Value.DisableOptionalFeatures, parsed.Value.DisableOptionalFeatures);
         Assert.Equal(

@@ -57,7 +57,7 @@ _Avoid_: shipping recovery images
 **Debloat venue / Keep-flag** — AppX online by default; caps/features offline when listed; remove-list polarity; host **`recommended`** expands → ids; CDM not primary.  
 _Avoid_: presets-in-JSON; CDM-as-primary
 
-**Wizard** — Avalonia BuildPlan host: Media → You → Taste → Included; Phase B elevated Apply.  
+**Wizard** — Avalonia BuildPlan host: Source → Account → Software → Review; Phase B elevated Apply.
 _Avoid_: DISM or second planner in UI
 
 **Package catalog** — `config/packages.json`: chip key ≠ Profile install id.  
