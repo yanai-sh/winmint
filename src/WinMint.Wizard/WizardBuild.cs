@@ -35,8 +35,7 @@ internal static class WizardBuild
             return WizardBuildResult.Fail("wizard.build.imageQuality", laneError!);
         }
 
-        byte[] utf8 = File.ReadAllBytes(input.ProfilePath);
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Result<Profile, DocumentErrors> parsed = ProfileFile.TryLoad(input.ProfilePath);
         if (!parsed.IsOk)
         {
             string detail = string.Join("; ", parsed.Error.Issues.Select(static i => $"{i.Code}: {i.Message}"));

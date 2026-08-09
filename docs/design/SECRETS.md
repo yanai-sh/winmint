@@ -9,7 +9,7 @@ Smoke accounts: **Local + autoLogon only** (password required). Other account mo
 
 Password may appear in:
 
-1. Profile on the **build host** — fixtures may **inline** lab secrets; metal Cli prefers `passwordPath`; Wizard uses a password prompt. **No** `PasswordEnvVar`.
+1. Profile on the **build host** — fixtures may **inline** lab secrets; metal Cli prefers `passwordPath` (resolved by `ProfileFile` relative to the Profile JSON directory; absolute paths stay absolute); Wizard uses a password prompt. **No** `PasswordEnvVar`.
 2. Autologon material stamped into the offline image / Machine setup (Windows requirements).
 
 **Lab-grade only** — not enterprise secret management. No BitLocker/TPM-sealed secrets in Smoke.
@@ -19,7 +19,10 @@ Password may appear in:
 | Rule | Detail |
 |------|--------|
 | Plan-time | Local+autoLogon without password ⇒ BuildPlan `PlanFailure` |
-| Transport | Prefer `passwordPath` (Cli) or Wizard prompt over inline password; fixtures may inline test-only secrets; **no** `PasswordEnvVar` |
+| Transport | Prefer `passwordPath` (Cli via `ProfileFile`) or Wizard prompt over inline password; fixtures may inline test-only secrets; **no** `PasswordEnvVar` |
+| Sources | Non-empty `password` **and** non-empty trimmed `passwordPath` ⇒ document error `account.password.sources.conflict` (before password-file I/O) |
+| Materialize | `ProfileFile` reads the password file, strips trailing CR/LF only (never trims contents), keeps authored `passwordPath` on the Profile for safe `SerializeProfile` round-trip |
+| Relative path | Ordinary relative `passwordPath` (incl. `..`) resolves against the Profile file directory; Windows drive-relative / root-relative ambient forms fail closed |
 | Machine setup | After successful autologon stamp, **wipe** staged bundle password on disk via `WipeSecrets` Action (JSON redact + rewrite; no `FileSecretScrubber` / `ISecretScrubber` class) |
 | Evidence | Harness must **redact** passwords from pulled logs/evidence; never commit real passwords |
 | Guest jobs JSON | Must not round-trip cleartext password |

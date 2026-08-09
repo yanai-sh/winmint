@@ -44,7 +44,7 @@ public sealed record AccountProfile(
     /// Smoke Profiles set false for headless Hyper‑V.
     /// </summary>
     bool RequireWifiDuringOobe,
-    /// <summary>Host path to password file (issue 56). Resolved at parse; never an environment variable.</summary>
+    /// <summary>Authored host path to password file (issue 56). Materialized by ProfileFile; never an environment variable.</summary>
     string? PasswordPath = null);
 
 /// <summary>Wire form of account.mode in profile JSON. Only localAutoLogon is supported.</summary>

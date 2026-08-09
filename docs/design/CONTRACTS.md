@@ -9,13 +9,16 @@
 
 ```
 Profile JSON
-  → BuildPlan.TryParseProfile / Plan
+  → ProfileFile.TryLoad (host; materialize passwordPath)
+  → BuildPlan.Plan
   → BuildArtifacts (in-memory)
        ├─ (optional) plan dump for humans
        └─ ImageServicing.Apply
             → stages ISO: Supervisor.exe, SetupComplete.cmd, bundle JSON, jobs, DmaSettleTarget
                  → Machine setup / Shell: host loads ProvisioningBundle → ProvisioningSession.Run
 ```
+
+`BuildPlan.TryParseProfile` remains the pure document parse (tests, Wizard compose round-trips). Hosts that load from disk use `ProfileFile` then `Plan`.
 
 ## Schema versions (strings)
 
@@ -36,7 +39,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 
 | Artifact | Written by | Read by |
 |----------|------------|---------|
-| Profile | Human / Wizard | BuildPlan; Smoke harness (guest creds only) |
+| Profile | Human / Wizard | ProfileFile / BuildPlan; Smoke harness (guest creds only) |
 | BuildArtifacts | BuildPlan | ImageServicing; Cli dump |
 | Servicing stages (`stages.json`) | ImageServicing Materialize | Elevated `RunPlan.ps1`; Smoke harness (keep-flag pin lists) |
 | Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [PROVISIONINGSESSION Secrets](PROVISIONINGSESSION.md#secrets-smoke) |

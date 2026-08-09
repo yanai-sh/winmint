@@ -110,22 +110,16 @@ public static class BuildPlan
         string? passwordPath = string.IsNullOrWhiteSpace(doc.Account.PasswordPath)
             ? null
             : doc.Account.PasswordPath.Trim();
-        if (string.IsNullOrEmpty(password) && passwordPath is not null)
+        // Host materializes passwordPath via ProfileFile; BuildPlan stays pure (issue 91).
+        if (!string.IsNullOrEmpty(password) && passwordPath is not null)
         {
-            try
-            {
-                password = File.ReadAllText(passwordPath).TrimEnd('\r', '\n');
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-            {
-                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
-                [
-                    new DocumentError(
-                        "account.passwordPath.unreadable",
-                        $"Cannot read account.passwordPath '{passwordPath}': {ex.Message}",
-                        "account.passwordPath"),
-                ]));
-            }
+            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+            [
+                new DocumentError(
+                    "account.password.sources.conflict",
+                    "account.password and account.passwordPath cannot both be set.",
+                    "account"),
+            ]));
         }
 
         if (!ProductOfflinePolicies.TryNormalizeDohProvider(doc.Policies?.DohProvider, out string? doh, out string? dohError))

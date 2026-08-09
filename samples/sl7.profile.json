@@ -3,7 +3,7 @@
   "account": {
     "mode": "localAutoLogon",
     "username": "yanai",
-    "passwordPath": ".scratch/sl7.password",
+    "passwordPath": "../.scratch/sl7.password",
     "requireWifiDuringOobe": true
   },
   "dma": {

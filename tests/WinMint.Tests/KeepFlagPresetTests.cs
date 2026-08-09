@@ -259,82 +259,6 @@ public class KeepFlagPresetTests
     }
 
     [Fact]
-    public void PasswordPath_resolves_and_serialize_omits_inline_password()
-    {
-        string dir = Path.Combine(Path.GetTempPath(), "winmint-pw-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        try
-        {
-            string pwFile = Path.Combine(dir, "secret.txt");
-            File.WriteAllText(pwFile, "from-path\n");
-
-            string json = $$"""
-                {
-                  "schemaVersion": "winmint.profile/v1",
-                  "account": {
-                    "mode": "localAutoLogon",
-                    "username": "yanai",
-                    "passwordPath": {{JsonEscape(pwFile)}},
-                    "requireWifiDuringOobe": false
-                  },
-                  "dma": {
-                    "enabled": true,
-                    "settle": {
-                      "locale": "en-US",
-                      "geoId": 117,
-                      "timeZoneId": "Israel Standard Time",
-                      "locationServicesEnabled": true
-                    }
-                  }
-                }
-                """;
-
-            Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
-            Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
-            Assert.Equal("from-path", parsed.Value.Account.Password);
-            Assert.Equal(pwFile, parsed.Value.Account.PasswordPath);
-
-            string roundTrip = Encoding.UTF8.GetString(BuildPlan.SerializeProfile(parsed.Value));
-            Assert.Contains("passwordPath", roundTrip, StringComparison.Ordinal);
-            Assert.DoesNotContain("\"password\"", roundTrip, StringComparison.Ordinal);
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void PasswordPath_missing_file_fails_closed()
-    {
-        string missing = Path.Combine(Path.GetTempPath(), "winmint-missing-" + Guid.NewGuid().ToString("N") + ".txt");
-        string json = $$"""
-            {
-              "schemaVersion": "winmint.profile/v1",
-              "account": {
-                "mode": "localAutoLogon",
-                "username": "yanai",
-                "passwordPath": {{JsonEscape(missing)}},
-                "requireWifiDuringOobe": false
-              },
-              "dma": {
-                "enabled": true,
-                "settle": {
-                  "locale": "en-US",
-                  "geoId": 117,
-                  "timeZoneId": "Israel Standard Time",
-                  "locationServicesEnabled": true
-                }
-              }
-            }
-            """;
-
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
-        Assert.False(parsed.IsOk);
-        Assert.Contains(parsed.Error.Issues, i => i.Code == "account.passwordPath.unreadable");
-    }
-
-    [Fact]
     public void Sl7_sample_matches_recommended_and_plans_packages()
     {
         Result<KeepFlagExpansion, PlanFailure> expanded =
@@ -347,37 +271,28 @@ public class KeepFlagPresetTests
         string pwFile = Path.Combine(scratch, "sl7.password");
         File.WriteAllText(pwFile, "lab-only-sl7");
 
-        string cwd = Directory.GetCurrentDirectory();
-        try
-        {
-            Directory.SetCurrentDirectory(root);
-            byte[] utf8 = File.ReadAllBytes(Path.Combine(root, "samples", "sl7.profile.json"));
-            string json = Encoding.UTF8.GetString(utf8);
-            Assert.DoesNotContain("\"preset\"", json, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("\"password\"", json, StringComparison.Ordinal);
+        string samplePath = Path.Combine(root, "samples", "sl7.profile.json");
+        byte[] utf8 = File.ReadAllBytes(samplePath);
+        string json = Encoding.UTF8.GetString(utf8);
+        Assert.DoesNotContain("\"preset\"", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"password\"", json, StringComparison.Ordinal);
+        Assert.Contains("../.scratch/sl7.password", json, StringComparison.Ordinal);
 
-            Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
-            Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
-            Assert.Equal("yanai", parsed.Value.Account.Username);
-            Assert.Equal(expanded.Value.RemoveProvisionedAppx, parsed.Value.RemoveProvisionedAppx);
-            Assert.Equal(expanded.Value.RemoveCapabilities, parsed.Value.RemoveCapabilities);
-            Assert.Equal(expanded.Value.DisableOptionalFeatures, parsed.Value.DisableOptionalFeatures);
-            Assert.Equal(["Anysphere.Cursor", "Zen-Team.Zen-Browser"], parsed.Value.WingetPackages);
-            Assert.Equal(["FedoraLinux"], parsed.Value.WslDistros);
+        Result<Profile, DocumentErrors> parsed = ProfileFile.TryLoad(samplePath);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
+        Assert.Equal("yanai", parsed.Value.Account.Username);
+        Assert.Equal("lab-only-sl7", parsed.Value.Account.Password);
+        Assert.Equal(expanded.Value.RemoveProvisionedAppx, parsed.Value.RemoveProvisionedAppx);
+        Assert.Equal(expanded.Value.RemoveCapabilities, parsed.Value.RemoveCapabilities);
+        Assert.Equal(expanded.Value.DisableOptionalFeatures, parsed.Value.DisableOptionalFeatures);
+        Assert.Equal(["Anysphere.Cursor", "Zen-Team.Zen-Browser"], parsed.Value.WingetPackages);
+        Assert.Equal(["FedoraLinux"], parsed.Value.WslDistros);
 
-            Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
-            Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
-            Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "winget.import");
-            Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "wsl");
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(cwd);
-        }
+        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "wsl");
     }
-
-    private static string JsonEscape(string path) =>
-        "\"" + path.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     private static string FindRepoRoot()
     {

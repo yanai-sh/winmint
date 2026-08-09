@@ -18,6 +18,7 @@
 |------|------------------|---------------------|---------------------|
 | **S1** | BuildPlan (`TryParseProfile`, `SerializeProfile`, `Plan`) | In-process | 01, 09, 11, 16 |
 | **S1b** | Host keep-flag presets + Wizard packages (`KeepFlagPresets.TryExpand` + `IdList.FromMultiline` → Profile → Plan/Serialize) | In-process | 15, 22 |
+| **S1c** | `ProfileFile.TryLoad` (host Profile + `passwordPath` materialization) | Local-substitutable OS (real temp dirs) | 91 |
 | **S2** | ImageServicing (`Apply`) | True external (DISM) — fake when port exists | 02, 09 |
 | **S3** | ProvisioningSession (`Run` + env adapters) | Local-substitutable OS | 03–08, 13, 16, 21 |
 | **S4** | Hyper-V Smoke acceptance (“run → guest evidence”) | Harness + VM | 10 |
@@ -45,6 +46,12 @@ Do **not** test: private phase helpers, splash pixels (except status→presenter
 | DMA on | Ireland latch + settle targets |
 | Default Plan | Stub jobs + Test lane + opcodes (not .ps1 paths) |
 | Release lane (ticket **09**) | `ExportWim` params differ |
+| passwordPath purity (ticket **91**) | Path-only parse never reads; both sources conflict; unresolved path fails Plan; serialize omits inline password when path set |
+
+### S1c — ProfileFile
+
+- Real temporary directories only (no `IFileSystem` port).
+- Assert: absolute + Profile-relative resolution (CWD-independent), ambient drive/root-relative fail closed, missing Profile/password file, CR/LF strip, empty file → Plan `account.password.required`, source conflict before password-file I/O, authored path retained.
 
 ### S2 — ImageServicing
 
