@@ -44,10 +44,11 @@ public static class WizardStageGates
             return false;
         }
 
+        // Password gates Included only (moodboard canGo); You→Taste needs source alone.
         return currentIndex switch
         {
             Media => sourceReady,
-            You => identityReady,
+            You => sourceReady,
             Taste => identityReady,
             _ => false,
         };

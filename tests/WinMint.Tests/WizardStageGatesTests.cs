@@ -74,10 +74,10 @@ public class WizardStageGatesTests
     }
 
     [Fact]
-    public void CanAdvance_from_You_requires_identity()
+    public void CanAdvance_from_You_requires_source_only()
     {
-        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.You, sourceReady: true, identityReady: false));
-        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.You, sourceReady: true, identityReady: true));
+        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.You, sourceReady: false, identityReady: true));
+        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.You, sourceReady: true, identityReady: false));
     }
 
     [Fact]
