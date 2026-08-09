@@ -431,8 +431,7 @@ internal static class Program
             return false;
         }
 
-        byte[] utf8 = File.ReadAllBytes(profilePath.FullName);
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Result<Profile, DocumentErrors> parsed = ProfileFile.TryLoad(profilePath.FullName);
         if (!parsed.IsOk)
         {
             foreach (DocumentError issue in parsed.Error.Issues)

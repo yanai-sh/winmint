@@ -32,12 +32,21 @@ public static class BuildPlan
 {
     public static Result<Profile, DocumentErrors> TryParseProfile(ReadOnlySpan<byte> utf8Json);
     // DocumentErrors stays — one-field wrapper; collapse rejected (unwrap tax ≠ reopen locked interface).
+    // Pure: retains authored passwordPath; does not read files. Hosts materialize via ProfileFile.
 
     public static byte[] SerializeProfile(Profile profile);
     // Inverse of TryParseProfile; omit empty packages/debloat (WhenWritingNull).
+    // When PasswordPath is set, emit passwordPath and omit the in-memory password.
 
     public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null);
     // run null ⇒ Smoke defaults (ImageQuality.Test; SourceIsoPath may be empty until servicing)
+}
+
+/// <summary>Host load — outside BuildPlan purity (issue 91).</summary>
+public static class ProfileFile
+{
+    public static Result<Profile, DocumentErrors> TryLoad(string profilePath);
+    // Read Profile bytes → TryParseProfile → materialize path-backed password (Profile-dir relative).
 }
 
 public sealed record RunOptions
@@ -60,23 +69,23 @@ public sealed record BuildArtifacts(
 ### Invariants (callers must know)
 
 1. Pure / deterministic: same inputs → same artifacts (stable ordering for tests).
-2. No I/O inside `Plan` / `TryParseProfile` / `SerializeProfile`.
+2. No I/O inside `Plan` / `TryParseProfile` / `SerializeProfile`. Password filesystem I/O lives in `ProfileFile.TryLoad`.
 3. Failure ⇒ no partial artifacts.
 4. Image quality only from `RunOptions` (encoded into `ExportWim` stage params).
 5. DMA enabled (default) ⇒ Ireland latch in unattend **and** settle targets in `DmaContract`.
-6. Local+autoLogon ⇒ non-empty password or `PlanFailure` ([SECRETS](SECRETS.md)).
-7. Ordering for hosts: build or parse Profile → `Plan` → optional `SerializeProfile` for export → host may write files → ImageServicing.Apply.
+6. Local+autoLogon ⇒ non-empty password or `PlanFailure` ([SECRETS](SECRETS.md)). Unresolved `passwordPath` (parse-only) fails Plan the same way until `ProfileFile` materializes it.
+7. Ordering for hosts: `ProfileFile.TryLoad` (or equivalent materialized Profile) → `Plan` → optional `SerializeProfile` for export → host may write files → ImageServicing.Apply.
 8. No repo-relative script paths in artifacts.
 
 ### Error modes
 
-- Document errors: schema/JSON/field shape.
+- Document errors: schema/JSON/field shape; `account.password.sources.conflict` when both `password` and `passwordPath` are non-empty; host-load `document.unreadable` / `account.passwordPath.unreadable` from `ProfileFile`.
 - Plan failures: semantic + run-option errors (`account.password.required`, …).
 - Exceptions: bugs only.
 
 ## What stays outside the seam
 
-- File read/write of Profile and artifacts (Cli adapter).
+- File read/write of Profile and artifacts — Cli/Wizard via `ProfileFile.TryLoad` then optional artifact dumps.
 - Source ISO existence checks (host or pre-Servicing).
 - Elevated DISM / hive / oscdimg (ImageServicing).
 - Splash / settle / jobs execution (ProvisioningSession).
