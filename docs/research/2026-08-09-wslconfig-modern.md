@@ -10,11 +10,9 @@ Official `.wslconfig` still has **two sections only**: `[wsl2]` (main / stable-i
 
 **`sparseVhd` remains experimental and is not safe for product defaults.** Docs still describe “new VHDs become sparse when `sparseVhd=true`,” but current WSL builds **disable sparse creation** with an explicit corruption warning and require `wsl --manage <Distro> --set-sparse true --allow-unsafe` to force it — including when the setting was already enabled in `.wslconfig` / WSL Settings before install. Microsoft still treats sparse as quality-gated opt-in (open feature request through 2026-07).
 
-**Minimal WinMint-owned file:** create-if-absent only when Profile selects any WSL distro; set **`defaultVhdSize=256GB`** only; **omit** `memory`/`processors`/`swap` (WSL already scales those to the booted machine). Leave experimental/sparse/Dev Drive alone.
+**WinMint product decision (locked 2026-08-09):** **do not stage a `.wslconfig`.** Leave `%USERPROFILE%\.wslconfig` entirely to the user. Create-if-absent product constants were considered and rejected — the useful portable pins are either already engine defaults, host/workload taste (mirrored, `vmIdleTimeout`, reclaim), or a single VHD ceiling that is better documented than silently written. Maintainer recipes live in §11; they are not FirstLogon jobs.
 
-**Recommended full (personal) file:** pin only **non-defaults** — `defaultVhdSize=256GB` + `networkingMode=mirrored`. Do not rewrite keys that already default on (`dnsTunneling`, `autoProxy`, `firewall`, `guiApplications`, `nestedVirtualization`, …).
-
-**Experimental caveats (Aug 2026):** `sparseVhd` is quality-blocked / needs `--allow-unsafe`; `autoMemoryReclaim=gradual` has hang history with systemd/Docker; mirrored companions (`hostAddressLoopback`, `ignoredPorts`) must stay under `[experimental]` and only with `networkingMode=mirrored`. Full dive: §10; files: §11.
+**If a human wants a file anyway:** §11-A is obsolete as product; use §11-B or §11-E as a **manual** starting point only.
 
 ## Sources (primary)
 
@@ -189,32 +187,9 @@ Given official default `1099511627776` = **1024⁴** labeled “1 TB”, WSL’s
 
 ### 8. Minimal product-owned `.wslconfig` for WinMint
 
-Constraints from the question: create file only when Profile selects any WSL distro; fixed constants; create-if-absent; no Dev Drive ownership.
+**Rejected (2026-08-09).** Earlier draft assumed create-if-absent `defaultVhdSize=256GB` when Profile selects WSL. Final lock: **WinMint does not write `.wslconfig`.** See Implications and §11 (manual recipes only).
 
-| Include | Omit / leave alone |
-| --- | --- |
-| `[wsl2]` + `defaultVhdSize=256GB` | `memory`, `processors`, `swap`, `swapFile` (**device-relative** — WSL defaults scale to the booted host; never derive from the WinMint *build* host) |
-| | `networkingMode` / `dnsTunneling` / `autoProxy` / `firewall` (already good defaults on Win11 22H2+; mirrored is a user preference — OK in personal §11-B, not in product §11-A) |
-| | Entire `[experimental]` block |
-| | `sparseVhd` (corruption gate / `--allow-unsafe`) |
-| | Custom `kernel` / debug / safeMode |
-| | Any Dev Drive / install-path ownership |
-
-**Suggested staged content (create-if-absent):**
-
-```ini
-# WinMint product defaults — created only when Profile selects WSL.
-# Create-if-absent; do not overwrite user customizations.
-[wsl2]
-defaultVhdSize=256GB
-```
-
-**Operational notes for metal FirstLogon WSL jobs:**
-
-- Stage the file **before** `wsl --install` / `--from-file` so the new VHD picks up the size ceiling.
-- After edits, ensure WSL is shut down before install if a VM was already warm (`wsl --shutdown`).
-- Do not call `--set-sparse` / `--allow-unsafe` from product code.
-- Per-distro systemd etc. → guest `/etc/wsl.conf` later if needed; out of `.wslconfig` scope.
+Rationale in short: RAM/CPU/swap are already device-dynamic via WSL; mirrored/idle/reclaim are taste; a lone VHD ceiling is better as docs than a FirstLogon side effect that races with user files and invents product ownership of a Microsoft per-user config.
 
 ### 9. Sane “human laptop” profile (not product-owned)
 
@@ -222,13 +197,11 @@ See **§11-B**: only **`defaultVhdSize=256GB`** + **`networkingMode=mirrored`**.
 
 ## Implications for WinMint
 
-1. **One constant is enough** for product staging: `defaultVhdSize=256GB` under `[wsl2]`.
-2. **Do not set `memory`/`processors`/`swap` from WinMint** — not from the build host (wrong machine) and not via FirstLogon formulas; omission is the device-adaptive policy.
-3. **Create-if-absent** avoids clobbering power-user mirrored/memory tuning.
-4. **Gate on Profile WSL selection** — Smoke/stub Profiles without `packages.wsl` should not drop a `.wslconfig`.
-5. **Sparse is explicitly not a WinMint product seam** until Microsoft lifts the corruption disable / `--allow-unsafe` gate and Learn + runtime agree again.
-6. **Dev Drive remains out of scope** for this file; no Learn-documented `.wslconfig` coupling.
-7. Keep WSL engine current on metal (`wsl --update`) so keys like `defaultVhdSize` are recognized (older engines logged `Unknown key 'wsl2.defaultVhdSize'` — [Discussion #12168](https://github.com/microsoft/WSL/discussions/12168)).
+1. **Do not create or manage `.wslconfig` in product code** (no FirstLogon write, no Plan sidecar, no Profile fields for WSL config). User owns the file.
+2. **Optional docs only:** point metal/WSL users at §11-B or §11-E; call out that stock `defaultVhdSize` is **1 TiB** so a full disk is a user footgun, not WinMint’s to pre-empt.
+3. **Create-if-absent + `defaultVhdSize=256GB` was rejected** — too little value vs ownership/taste/clobber questions; mirrored/idle/reclaim are not universal product policy.
+4. **Sparse / Dev Drive** remain out of WinMint scope for this seam.
+5. Keep WSL engine current on metal (`wsl --update`) so whatever *the user* puts in `.wslconfig` is recognized.
 
 ## 10. Experimental caveats (deep dive, Aug 2026)
 
@@ -288,30 +261,24 @@ Not experimental anymore, but couples to experimental helpers:
 - `localhostForwarding` is ignored under mirrored (Learn example comment).
 - File bugs on mirrored to microsoft/WSL; treat as “try on metal, keep NAT as fallback.”
 
-## 11. Full recommended files
+## 11. Recommended files (manual / docs only — not WinMint-staged)
 
-**Rule:** write a key only if it **changes** engine behavior. Do not restate defaults (`dnsTunneling`, `autoProxy`, `firewall`, `guiApplications`, `nestedVirtualization`, …).
+**Product does not write these.** Recipes for humans who opt in.
 
-| Bar | Pins (non-default only) |
+**Rule:** write a key only if it **changes** engine behavior. Do not restate defaults.
+
+| Recipe | Pins (non-default only) |
 | --- | --- |
-| **A — WinMint product** | `defaultVhdSize=256GB` |
-| **B — Modern recommended** | `defaultVhdSize=256GB` + `networkingMode=mirrored` (Learn upgrade; engine default is still NAT) |
+| **B — Modern** | `defaultVhdSize=256GB` + `networkingMode=mirrored` |
+| **E — Agentic + Cursor Remote-WSL** | B + `vmIdleTimeout=-1` + `autoMemoryReclaim=disabled` |
 
-### A) WinMint product-owned (create-if-absent when Profile has WSL)
+### A) ~~WinMint product-owned~~ (rejected)
 
-```ini
-# WinMint — only when packages.wsl is non-empty. Create-if-absent; never overwrite.
-[wsl2]
-defaultVhdSize=256GB
-```
+Previously considered: create-if-absent `defaultVhdSize=256GB` when Profile has WSL. **Rejected** — user owns `.wslconfig`; see Implications.
 
-### B) Modern recommended (portable)
+### B) Modern recommended (portable, manual)
 
 ```ini
-# Only non-defaults. Engine already: dnsTunneling/autoProxy/firewall/gui/nestedVirt;
-# memory≈50% RAM, processors=all, swap≈25% RAM.
-# Apply: wsl --shutdown. If mirrored breaks VPN → networkingMode=nat or remove it.
-
 [wsl2]
 defaultVhdSize=256GB
 networkingMode=mirrored
@@ -334,10 +301,10 @@ autoMemoryReclaim=disabled
 [wsl2]
 defaultVhdSize=256GB
 networkingMode=mirrored
-memory=24GB    # example only: known host; never ship from WinMint
+memory=24GB    # example only: known host
 ```
 
-### Considered, not written
+### Considered, not written in B
 
 | Option | Why absent from B |
 | --- | --- |
@@ -345,8 +312,20 @@ memory=24GB    # example only: known host; never ship from WinMint
 | `localhostForwarding=true` | Default; ignored under mirrored anyway |
 | `memory` / `processors` / `swap` | Device-relative engine defaults |
 | `sparseVhd` / `autoMemoryReclaim=gradual` / mirrored companions | Experimental caveats (§10) |
-| Promoting `mirrored` into **A** | Product create-if-absent freezes taste; keep A to VHD ceiling unless a Profile flag exists |
 
+### E) Agentic coding + Cursor Remote-WSL (manual)
+
+```ini
+[wsl2]
+defaultVhdSize=256GB
+networkingMode=mirrored
+vmIdleTimeout=-1
+
+[experimental]
+autoMemoryReclaim=disabled
+```
+
+Do not pin `swap`/`memory` in shared recipes — engine % defaults scale per host.
 ## Open / watch
 
 - Whether Microsoft re-enables silent `sparseVhd` for new VHDs without `--allow-unsafe` (track [#13241](https://github.com/microsoft/WSL/issues/13241)).
