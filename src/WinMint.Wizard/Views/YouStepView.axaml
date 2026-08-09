@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WinMint.Wizard.ViewModels"
+             x:Class="WinMint.Wizard.Views.YouStepView"
+             x:DataType="vm:WizardShellViewModel">
+  <StackPanel Spacing="22" MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <TextBlock Classes="hero-title" Text="You" />
+    <TextBlock Classes="hero-sub"
+               Text="Local account for first sign-in. Password required — Windows autologon never accepts a blank one." />
+
+    <Border Classes="panel-card" HorizontalAlignment="Stretch">
+      <StackPanel Spacing="14">
+        <StackPanel Spacing="6">
+          <TextBlock Classes="panel-label" Text="USERNAME" />
+          <TextBox Text="{Binding Username}" PlaceholderText="winmint" />
+        </StackPanel>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="panel-label" Text="PASSWORD" />
+          <TextBox Text="{Binding Password}" PasswordChar="•" PlaceholderText="Required" />
+        </StackPanel>
+        <CheckBox Content="Require Wi-Fi during OOBE" IsChecked="{Binding RequireWifi}" />
+      </StackPanel>
+    </Border>
+
+    <TextBlock Text="{Binding Status}"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource SystemErrorTextColor}"
+               IsVisible="{Binding StatusIsError}" />
+  </StackPanel>
+</UserControl>

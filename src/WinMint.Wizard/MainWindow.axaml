@@ -41,10 +41,10 @@
 
     <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
       <Panel Margin="56,28,56,24">
-        <views:SourceStepView IsVisible="{Binding IsSourceStep}" />
-        <views:ConfigureStepView IsVisible="{Binding IsConfigureStep}" />
-        <views:PreviewStepView IsVisible="{Binding IsPreviewStep}" />
-        <views:ReviewStepView IsVisible="{Binding IsReviewStep}" />
+        <views:MediaStepView IsVisible="{Binding IsMediaStep}" />
+        <views:YouStepView IsVisible="{Binding IsYouStep}" />
+        <views:TasteStepView IsVisible="{Binding IsTasteStep}" />
+        <views:IncludedStepView IsVisible="{Binding IsIncludedStep}" />
       </Panel>
     </ScrollViewer>
 
@@ -74,11 +74,11 @@
                   Content="{Binding NextLabel}"
                   Command="{Binding NextCommand}"
                   IsEnabled="{Binding CanGoNext}"
-                  IsVisible="{Binding !IsReviewStep}" />
+                  IsVisible="{Binding !IsIncludedStep}" />
           <Button Classes="primary"
                   Content="Finish"
                   Command="{Binding CloseCommand}"
-                  IsVisible="{Binding IsReviewStep}" />
+                  IsVisible="{Binding IsIncludedStep}" />
         </StackPanel>
       </DockPanel>
     </Border>

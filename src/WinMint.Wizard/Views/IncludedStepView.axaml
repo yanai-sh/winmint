@@ -1,0 +1,91 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WinMint.Wizard.ViewModels"
+             x:Class="WinMint.Wizard.Views.IncludedStepView"
+             x:DataType="vm:WizardShellViewModel">
+  <StackPanel Spacing="18" MaxWidth="760" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <TextBlock Classes="hero-title" Text="Included" />
+    <TextBlock Classes="hero-sub" Text="{Binding QuietSummaryText}" />
+
+    <Border Classes="iso-stage">
+      <StackPanel Spacing="14">
+        <TextBlock Text="{Binding PickStripText}"
+                   TextWrapping="Wrap"
+                   FontWeight="Medium"
+                   IsVisible="{Binding PickStripText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Text="{Binding QuietBlockText}"
+                   TextWrapping="Wrap"
+                   Opacity="0.7"
+                   FontSize="13" />
+        <TextBlock Text="{Binding PlanMetaText}"
+                   TextWrapping="Wrap"
+                   Opacity="0.55"
+                   FontSize="12" />
+
+        <Expander Header="What's included" IsExpanded="False"
+                   IsVisible="{Binding WhatsIncludedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding WhatsIncludedText}" TextWrapping="Wrap" Opacity="0.75" Margin="0,8,0,0" />
+        </Expander>
+
+        <Expander Header="Plan detail" IsExpanded="False">
+          <StackPanel Spacing="8" Margin="0,8,0,0">
+            <TextBlock Text="{Binding PlanSummary}" TextWrapping="Wrap" Opacity="0.75" />
+            <Button Classes="ghost" Content="Re-run Plan" HorizontalAlignment="Left" Command="{Binding ReplanCommand}" />
+            <TextBox Text="{Binding PreviewJson}"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="NoWrap"
+                     MinHeight="160"
+                     FontFamily="Cascadia Mono, Consolas, monospace"
+                     PlaceholderText="Profile JSON" />
+          </StackPanel>
+        </Expander>
+      </StackPanel>
+    </Border>
+
+    <Border Classes="panel-card" HorizontalAlignment="Stretch">
+      <StackPanel Spacing="14">
+        <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto" RowSpacing="8">
+          <TextBlock Text="Source" Opacity="0.55" />
+          <TextBlock Grid.Column="1" Text="{Binding SourceIsoPath}" TextWrapping="Wrap" TextAlignment="Right" />
+          <TextBlock Grid.Row="1" Text="Output" Opacity="0.55" />
+          <TextBlock Grid.Row="1" Grid.Column="1"
+                     Text="{Binding OutputIsoPath}"
+                     TextWrapping="Wrap"
+                     TextAlignment="Right" />
+        </Grid>
+
+        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center" Margin="0,8,0,0">
+          <Button Classes="primary"
+                  Content="Save Profile"
+                  Command="{Binding SaveProfileCommand}"
+                  IsEnabled="{Binding !IsBusy}" />
+          <Button Classes="primary"
+                  Content="Build"
+                  Command="{Binding BuildCommand}"
+                  IsEnabled="{Binding CanBuild}"
+                  ToolTip.Tip="Requires a saved Profile and an existing Source ISO. Elevates via UAC." />
+          <Button Classes="ghost"
+                  Content="Cancel"
+                  Command="{Binding CancelBuildCommand}"
+                  IsVisible="{Binding IsBusy}" />
+        </StackPanel>
+
+        <TextBlock Text="{Binding BuildStatus}" TextWrapping="Wrap" Opacity="0.85" />
+        <TextBlock Text="{Binding SaveStatus}" Opacity="0.75" TextWrapping="Wrap" />
+        <TextBlock Classes="panel-label" Text="CLI RECIPE" Margin="0,8,0,4" />
+        <TextBox Text="{Binding BuildRecipe}"
+                 IsReadOnly="True"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 MinHeight="64"
+                 FontFamily="Cascadia Mono, Consolas, monospace" />
+      </StackPanel>
+    </Border>
+
+    <TextBlock Text="{Binding Status}"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource SystemErrorTextColor}"
+               IsVisible="{Binding StatusIsError}" />
+  </StackPanel>
+</UserControl>

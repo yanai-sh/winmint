@@ -1,12 +1,17 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
-             x:Class="WinMint.Wizard.Views.ConfigureStepView"
+             x:Class="WinMint.Wizard.Views.TasteStepView"
              x:DataType="vm:WizardShellViewModel">
   <StackPanel Spacing="20" MaxWidth="900" HorizontalAlignment="Center" VerticalAlignment="Center">
-    <TextBlock Classes="hero-title" Text="Configure the build" />
+    <TextBlock Classes="hero-title" Text="Taste" />
     <TextBlock Classes="hero-sub"
-               Text="Adjust what stays on the image and what FirstLogon installs. Defaults already reflect the WinMint posture." />
+               Text="Apps, desktop, and posture — or skip with recommended defaults. Defaults already reflect the WinMint posture." />
+
+    <Button Classes="ghost"
+            Content="Use defaults → Included"
+            HorizontalAlignment="Left"
+            Command="{Binding UseDefaultsCommand}" />
 
     <!-- v1 wizard-columns: curated panels only -->
     <UniformGrid Columns="2" Rows="3">
@@ -123,5 +128,10 @@
                  Text="{Binding AdvancedWslText}" />
       </StackPanel>
     </Expander>
+
+    <TextBlock Text="{Binding Status}"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource SystemErrorTextColor}"
+               IsVisible="{Binding StatusIsError}" />
   </StackPanel>
 </UserControl>

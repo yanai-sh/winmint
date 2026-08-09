@@ -77,7 +77,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | Splash D2D | D | GDI status text (**29**); full D2D only if S4 budget fails |
 | S4 VHD/digest rebuild | G | Maintainer optimization |
 | `*Dto` rename | G | Opportunistic |
-| Wizard | D | BuildPlan host (**15** + packages **22**); Phase B Review → Apply |
+| Wizard | D | BuildPlan host (**15** + packages **22**); Media→You→Taste→Included shell + Included receipt (**95**); Phase B Save→Apply |
 | Hardware | D | M4 stricter evidence bars (**30** opt-in); no Supervisor fork |
 | Install engine | D | **WinPE apply** only (`diskpart` + DISM apply + `bcdboot` + Panther OOBE unattend); legacy Setup `/legacy` deleted ([#90](https://github.com/yanai-sh/winmint/issues/90)) |
 | Debloat venue | D | AppX **online** default (`debloat.mode` absent); offline DISM + caps/features always offline when listed |
@@ -86,7 +86,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 
 **Still out (policy):** Profile presets-in-JSON; schema `v2` without a break; full DPAPI host→guest; full D2D; leftover-confidence *product* cleanup; true DISM byte/% progress.  
 **Shipped:** AppX + capabilities keep-flag; product-default **`recommended`** host expansion (issue **56**); KeepGaming / KeepCopilot overlays; Wizard thin + packages + caps/WSL lists + host-DMA fill + Source ISO edition probe (issue **58**) + opcode-stage Build progress from `apply-status.txt` (issue **59**); metal winget/Scoop/WSL; Israel DMA sample; SL7 sample; M4 assert switch; WIM metadata discipline; residual self-erase ([ADR-008](decisions/ADR-008-residual-minimization.md)); product-constant offline policies + OneDrive/ReservedStorage jobs ([ADR-009](decisions/ADR-009-product-constant-policies.md)). Profile property names frozen in ticket **01**; optional `debloat.*` / `packages.*` / `account.requireWifiDuringOobe` / `account.passwordPath` / `policies.*` on v1.  
-**Unlocked:** Phase A multi-step Avalonia Wizard shell; Phase B live elevated build invoke (busy/cancel) via shared ImageServicing path; unelevated Source WIM index probe before Apply; Wizard polls `apply-status.txt` for opcode stage during Build.
+**Unlocked:** Media→You→Taste→Included Avalonia Wizard shell with an Included compose receipt (pick strip, ADR-009 quiet block, collapsed What's included, plan meta; issue **95**); Phase B live elevated build invoke (busy/cancel) via shared ImageServicing path; unelevated Source WIM index probe before Apply; Wizard polls `apply-status.txt` for opcode stage during Build.
 
 **Owned elsewhere:** Splash spike → [SPLASH](design/SPLASH.md) appendix. Appearance consume path was ticket **07**; removed 2026-08-05 until Profile appearance is grilled.
 

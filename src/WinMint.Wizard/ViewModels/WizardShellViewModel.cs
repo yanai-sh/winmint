@@ -10,7 +10,7 @@ namespace WinMint.Wizard.ViewModels;
 /// <summary>v1-shaped host shell — curated chips, silent account/DMA defaults, no catalog dump.</summary>
 public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 {
-    private static readonly string[] StepNames = ["Source", "Configure", "Preview", "Review"];
+    private static readonly string[] StepNames = ["Media", "You", "Taste", "Included"];
 
     private readonly Window _window;
     private readonly int _hostWimDefault = HostEdition.DefaultWimIndex();
@@ -79,7 +79,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     public ObservableCollection<ChipItem> WslChips { get; }
 
     [ObservableProperty] private int _stepIndex;
-    [ObservableProperty] private string _stageLabel = "Source";
+    [ObservableProperty] private string _stageLabel = "Media";
     [ObservableProperty] private double _progressFraction = 0.25;
     [ObservableProperty] private bool _canGoBack;
     [ObservableProperty] private bool _canGoNext = true;
@@ -97,7 +97,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isWimProbeBusy;
 
     [ObservableProperty] private string _username = "winmint";
-    [ObservableProperty] private string _password = "winmint";
+    [ObservableProperty] private string _password = "";
     [ObservableProperty] private bool _requireWifi;
     [ObservableProperty] private bool _dmaEnabled = true;
     [ObservableProperty] private string _locale = "en-GB";
@@ -115,16 +115,23 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _previewJson = "";
     [ObservableProperty] private string _planSummary = "";
     [ObservableProperty] private string _buildRecipe = "";
+
+    // Included receipt layers (ADR-009 quiet block, pick strip, collapsed remove-list, plan meta).
+    [ObservableProperty] private string _quietSummaryText = "";
+    [ObservableProperty] private string _pickStripText = "";
+    [ObservableProperty] private string _quietBlockText = "";
+    [ObservableProperty] private string _whatsIncludedText = "";
+    [ObservableProperty] private string _planMetaText = "";
     [ObservableProperty] private string _saveStatus = "";
     [ObservableProperty] private bool _canBuild;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _buildStatus = "";
     [ObservableProperty] private string? _outputIsoPath;
 
-    public bool IsSourceStep => StepIndex == 0;
-    public bool IsConfigureStep => StepIndex == 1;
-    public bool IsPreviewStep => StepIndex == 2;
-    public bool IsReviewStep => StepIndex == 3;
+    public bool IsMediaStep => StepIndex == WizardStageGates.Media;
+    public bool IsYouStep => StepIndex == WizardStageGates.You;
+    public bool IsTasteStep => StepIndex == WizardStageGates.Taste;
+    public bool IsIncludedStep => StepIndex == WizardStageGates.Included;
 
     public bool IsEmptyPreset => string.Equals(Preset, KeepFlagPresets.Empty, StringComparison.OrdinalIgnoreCase);
     public bool IsAcceptancePreset => string.Equals(Preset, KeepFlagPresets.Acceptance, StringComparison.OrdinalIgnoreCase);
@@ -158,6 +165,18 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     }
 
     partial void OnIsBusyChanged(bool value)
+    {
+        RefreshNav();
+        RefreshCanBuild();
+    }
+
+    partial void OnUsernameChanged(string value)
+    {
+        RefreshNav();
+        RefreshCanBuild();
+    }
+
+    partial void OnPasswordChanged(string value)
     {
         RefreshNav();
         RefreshCanBuild();
@@ -228,7 +247,8 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Back()
     {
-        if (StepIndex > 0)
+        // Free within visited — no gate on the way back.
+        if (StepIndex > WizardStageGates.Media)
         {
             StepIndex--;
         }
@@ -237,26 +257,55 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Next()
     {
-        if (StepIndex == 0 && !SourceIsoReady())
+        if (StepIndex >= WizardStageGates.Included)
         {
-            Status = "Choose an existing Source ISO to continue.";
+            return;
+        }
+
+        if (!WizardStageGates.CanAdvance(StepIndex, SourceIsoReady(), IdentityReadyNow()))
+        {
+            Status = StepIndex == WizardStageGates.Taste
+                ? "Add a password on You to continue."
+                : "Choose an existing Source ISO to continue.";
             StatusIsError = true;
             return;
         }
 
-        if (StepIndex == 1 && !RunPlan())
+        if (StepIndex == WizardStageGates.Taste)
         {
+            TryEnterIncluded();
             return;
         }
 
-        if (StepIndex < StepNames.Length - 1)
+        StepIndex++;
+    }
+
+    /// <summary>Taste skip — host `recommended` + product defaults, keeps/packages untouched (spec §Taste skip).</summary>
+    [RelayCommand]
+    private void UseDefaults()
+    {
+        Preset = KeepFlagPresets.Recommended;
+        if (!WizardStageGates.CanGoTo(WizardStageGates.Included, SourceIsoReady(), IdentityReadyNow()))
         {
-            StepIndex++;
-            if (StepIndex == 3)
-            {
-                RefreshRecipe();
-            }
+            StepIndex = WizardStageGates.You;
+            Status = "Add a password on You to continue.";
+            StatusIsError = true;
+            return;
         }
+
+        TryEnterIncluded();
+    }
+
+    private bool TryEnterIncluded()
+    {
+        if (!RunPlan())
+        {
+            return false;
+        }
+
+        StepIndex = WizardStageGates.Included;
+        RefreshRecipe();
+        return true;
     }
 
     [RelayCommand]
@@ -407,16 +456,22 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [RelayCommand] private void Close() => _window.Close();
 
     private void RefreshCanBuild() =>
-        CanBuild = !IsBusy
-            && !string.IsNullOrEmpty(_savedProfilePath)
-            && SourceIsoReady();
+        CanBuild = WizardStageGates.CanBuild(
+            SourceIsoReady(),
+            IdentityReadyNow(),
+            !string.IsNullOrEmpty(_savedProfilePath),
+            IsBusy);
 
     private void RefreshNav()
     {
-        CanGoBack = !IsBusy && StepIndex > 0;
-        CanGoNext = !IsBusy && StepIndex < StepNames.Length - 1 && (StepIndex != 0 || SourceIsoReady());
+        bool sourceReady = SourceIsoReady();
+        bool identityReady = IdentityReadyNow();
+        CanGoBack = !IsBusy && StepIndex > WizardStageGates.Media;
+        CanGoNext = !IsBusy
+            && StepIndex < WizardStageGates.Included
+            && WizardStageGates.CanAdvance(StepIndex, sourceReady, identityReady);
         NextLabel = "Continue";
-        if (StepIndex == StepNames.Length - 1)
+        if (StepIndex == WizardStageGates.Included)
         {
             NextLabel = "Finish";
             CanGoNext = false;
@@ -424,14 +479,15 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 
         StageLabel = StepNames[StepIndex];
         ProgressFraction = (StepIndex + 1) / (double)StepNames.Length;
-        OnPropertyChanged(nameof(IsSourceStep));
-        OnPropertyChanged(nameof(IsConfigureStep));
-        OnPropertyChanged(nameof(IsPreviewStep));
-        OnPropertyChanged(nameof(IsReviewStep));
+        OnPropertyChanged(nameof(IsMediaStep));
+        OnPropertyChanged(nameof(IsYouStep));
+        OnPropertyChanged(nameof(IsTasteStep));
+        OnPropertyChanged(nameof(IsIncludedStep));
     }
 
-    private bool SourceIsoReady() =>
-        !string.IsNullOrWhiteSpace(SourceIsoPath) && File.Exists(SourceIsoPath.Trim());
+    private bool SourceIsoReady() => WizardStageGates.SourceReady(SourceIsoPath);
+
+    private bool IdentityReadyNow() => WizardStageGates.IdentityReady(Username, Password);
 
     private async Task ProbeSourceWimAsync()
     {
@@ -513,8 +569,61 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         _lastProfileUtf8 = result.ProfileUtf8;
         PreviewJson = result.ProfileJson ?? "";
         PlanSummary = result.Message;
+        RefreshReceipt();
         return true;
     }
+
+    /// <summary>Included receipt text layers — quiet block is ADR-009 constants only; What's included is the `recommended` remove-list.</summary>
+    private void RefreshReceipt()
+    {
+        QuietBlockText = IncludedReceipt.FormatQuietBlock(KeepCopilot, IsBraveSelected());
+        PickStripText = IncludedReceipt.FormatPickStrip(SelectedPickLabels());
+        PlanMetaText = $"{ImageQuality} lane · DMA {(DmaEnabled ? "on" : "off")} · {Locale}";
+
+        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(Preset, KeepGaming, KeepCopilot);
+        if (!expanded.IsOk)
+        {
+            return;
+        }
+
+        WhatsIncludedText = IsRecommendedPreset
+            ? IncludedReceipt.FormatWhatsIncluded(expanded.Value.RemoveProvisionedAppx)
+            : string.Empty;
+        QuietSummaryText = IncludedReceipt.FormatQuietSummary(
+            expanded.Value.RemoveProvisionedAppx.Count,
+            KeepCopilot,
+            KeepGaming);
+    }
+
+    private bool IsBraveSelected() =>
+        BrowserChips.Any(static c => c.Id == "brave" && c.IsSelected) ||
+        AdvancedWingetText
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Any(static line => line.Trim().Equals("Brave.Brave", StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<string> SelectedPickLabels()
+    {
+        if (KeepGaming)
+        {
+            yield return "Xbox & gaming";
+        }
+
+        if (KeepCopilot)
+        {
+            yield return "Copilot";
+        }
+
+        foreach (string label in SelectedLabels(BrowserChips)
+            .Concat(SelectedLabels(EditorChips))
+            .Concat(SelectedLabels(ShellChips))
+            .Concat(SelectedLabels(WslChips)))
+        {
+            yield return label;
+        }
+    }
+
+    private static IEnumerable<string> SelectedLabels(ObservableCollection<ChipItem> chips) =>
+        chips.Where(static c => c.IsSelected).Select(static c => c.Label);
 
     private void RefreshRecipe()
     {
