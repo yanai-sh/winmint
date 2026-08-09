@@ -33,7 +33,11 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:ChipItem">
-                <ToggleButton Classes="chip" Content="{Binding Label}" IsChecked="{Binding IsSelected}" />
+                <ToggleButton Classes="chip"
+                              Content="{Binding Label}"
+                              IsChecked="{Binding IsSelected}"
+                              IsEnabled="{Binding IsEnabled}"
+                              ToolTip.Tip="{Binding ToolTip}" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
@@ -51,7 +55,11 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:ChipItem">
-                <ToggleButton Classes="chip" Content="{Binding Label}" IsChecked="{Binding IsSelected}" />
+                <ToggleButton Classes="chip"
+                              Content="{Binding Label}"
+                              IsChecked="{Binding IsSelected}"
+                              IsEnabled="{Binding IsEnabled}"
+                              ToolTip.Tip="{Binding ToolTip}" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
@@ -69,7 +77,11 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:ChipItem">
-                <ToggleButton Classes="chip" Content="{Binding Label}" IsChecked="{Binding IsSelected}" />
+                <ToggleButton Classes="chip"
+                              Content="{Binding Label}"
+                              IsChecked="{Binding IsSelected}"
+                              IsEnabled="{Binding IsEnabled}"
+                              ToolTip.Tip="{Binding ToolTip}" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
@@ -87,7 +99,11 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:ChipItem">
-                <ToggleButton Classes="chip" Content="{Binding Label}" IsChecked="{Binding IsSelected}" />
+                <ToggleButton Classes="chip"
+                              Content="{Binding Label}"
+                              IsChecked="{Binding IsSelected}"
+                              IsEnabled="{Binding IsEnabled}"
+                              ToolTip.Tip="{Binding ToolTip}" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>

@@ -131,7 +131,7 @@ When `debloat.mode` is `online` (default):
 
 **Network gate (Plan-derived, not Profile):**
 
-- `PlanRequiresNetwork(profile)` ⇒ true when `(debloat.mode == online && removeProvisionedAppx non-empty) || packages non-stub`.
+- `PlanRequiresNetwork()` currently ⇒ true for every plan: product-constant MinGit and Nilesoft Shell installs are non-stub jobs. A future optional-constants posture may derive this from online AppX removes and selected non-stub packages.
 - Supervisor: bounded connectivity probe before online jobs; if Plan required net and probe fails ⇒ `failed` path, splash, unlock after failed dwell.
 - Distinct from `account.requireWifiDuringOobe` (OOBE Wi‑Fi page only; Smoke keeps `false`).
 
@@ -244,7 +244,7 @@ MountInstallWim
 
 | Seam | Prove |
 |------|-------|
-| **S1 — BuildPlan** | absent/`online` ⇒ `appx.safetyNet` job, no AppX DISM stage; `offline` ⇒ DISM, no safetyNet unless lists differ (ponytail: offline ⇒ no safetyNet for same ids); caps/features always DISM; `PlanRequiresNetwork` true/false matrix; unattend split |
+| **S1 — BuildPlan** | absent/`online` ⇒ `appx.safetyNet` job, no AppX DISM stage; `offline` ⇒ DISM, no safetyNet unless lists differ (ponytail: offline ⇒ no safetyNet for same ids); caps/features always DISM; `PlanRequiresNetwork()` remains true while product-constant installs are enabled; unattend split |
 | **S2 — ImageServicing** | stage order; `PatchBootWimApply` params; `RecordingElevatedPlanRunner` captures new opcodes; legacy flag still emits old patch when `installEngine: legacy` |
 | **S3 — ProvisioningSession** | online debloat job runs after settle; network required + offline ⇒ failed path; Shell before Explorer order preserved |
 | **S4 — Hyper-V Smoke** | **new acceptance bar:** WinPE apply lane on 25H2 ARM64; zero-touch; splash before Explorer; DMA hard; online debloat digest; unlock |

@@ -51,13 +51,13 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             ("zed", "Zed"),
             ("neovim", "Neovim"),
         ]);
-        ShellChips = ToChips(
+        ShellChips =
         [
-            ("windhawk", "Windhawk"),
-            ("yasb", "YASB"),
-            ("komorebi", "Komorebi"),
-            ("fancywm", "FancyWM"),
-        ]);
+            new("windhawk", "Windhawk"),
+            new("yasb", "YASB"),
+            new("komorebi", "Komorebi"),
+            new("fancywm", "FancyWM", isEnabled: false, toolTip: "Coming soon"),
+        ];
         foreach (ChipItem chip in ShellChips)
         {
             chip.IsSelected = false;
@@ -679,7 +679,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             .Concat(SelectedLabels(WslChips));
 
     private static IEnumerable<string> SelectedLabels(ObservableCollection<ChipItem> chips) =>
-        chips.Where(static c => c.IsSelected).Select(static c => c.Label);
+        chips.Where(static c => c.IsEnabled && c.IsSelected).Select(static c => c.Label);
 
     private void RefreshRecipe()
     {
@@ -715,7 +715,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     }
 
     private static IEnumerable<string> SelectedIds(ObservableCollection<ChipItem> chips) =>
-        chips.Where(static c => c.IsSelected).Select(static c => c.Id);
+        chips.Where(static c => c.IsEnabled && c.IsSelected).Select(static c => c.Id);
 
     private static ObservableCollection<ChipItem> ToChips((string Id, string Label)[] items)
     {

@@ -151,7 +151,9 @@ internal static class WizardSession
         IEnumerable<string> toolKeys = browserChipKeys
             .Concat(editorChipKeys)
             .Concat(shellChipKeys)
-            .Where(static key => !string.Equals(key, "edge", StringComparison.OrdinalIgnoreCase));
+            .Where(static key =>
+                !string.Equals(key, "edge", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(key, "fancywm", StringComparison.OrdinalIgnoreCase));
         PackageSelection tools = catalog.ResolveToolKeys(toolKeys);
         IReadOnlyList<string> wsl = catalog.ResolveWslTokens(wslChipKeys);
         return new PackageSelection(tools.WingetInstallIds, tools.ScoopInstallIds, wsl);
