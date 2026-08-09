@@ -146,7 +146,7 @@ public class KeepFlagAppxSafetyNetTests
     }
 
     [Fact]
-    public void Plan_omits_appx_safetyNet_job_when_remove_list_empty()
+    public void Plan_emits_appx_safetyNet_job_when_profile_remove_list_empty()
     {
         Profile profile = ParseProfile("""
             {
@@ -170,7 +170,10 @@ public class KeepFlagAppxSafetyNetTests
 
         Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
-        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
+        JobDescriptor safety = Assert.Single(
+            planned.Value.Jobs.Jobs,
+            j => j.Kind == "appx.safetyNet");
+        Assert.Equal("keepflag.appx.safetyNet", safety.Id);
     }
 
     private static Profile ParseProfile(string json)
