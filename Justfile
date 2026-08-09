@@ -43,15 +43,16 @@ wipe-scratch:
 # Multi-hour DISM Apply. Cold first; later runs auto --reuse-media when marker exists.
 # Prereq: just publish-provisioning. Watch: Get-Content <WORK>\apply-status.txt -Wait
 # ponytail: recipe keeps Apply name (DISM loop); Cli verb is build only.
-apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INSTALL_ENGINE="winpeApply":
-    Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $marker = Join-Path '{{WORK}}' 'media\sources\.winmint-single-index'; $reuse = @(); if (Test-Path -LiteralPath $marker) { Write-Host 'Found single-image marker — passing --reuse-media'; $reuse = @('--reuse-media') }; Set-Location '{{justfile_directory()}}'; & dotnet run --project src/WinMint.Cli -- build '{{PROFILE}}' --iso '{{ISO}}' --work '{{WORK}}' --install-engine '{{INSTALL_ENGINE}}' @reuse; exit $LASTEXITCODE
+# INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs (Smoke/acceptance only).
+apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STUBS="false":
+    Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $marker = Join-Path '{{WORK}}' 'media\sources\.winmint-single-index'; $reuse = @(); if (Test-Path -LiteralPath $marker) { Write-Host 'Found single-image marker — passing --reuse-media'; $reuse = @('--reuse-media') }; $stubs = @(); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $stubs = @('--include-smoke-stubs') }; Set-Location '{{justfile_directory()}}'; & dotnet run --project src/WinMint.Cli -- build '{{PROFILE}}' --iso '{{ISO}}' --work '{{WORK}}' @stubs @reuse; exit $LASTEXITCODE
 
 # S4 Hyper-V Smoke — not part of `just check`. Needs admin + Hyper-V + user ISO.
 # Assert-only (no VM): just smoke-assert tests/fixtures/smoke-evidence
 # Reuse prior Apply ISO: pwsh tools/vm/Invoke-Smoke.ps1 -Iso … -SkipApply
 # Attach in-progress VM:  … -ReuseVm
-smoke ISO WORK=".scratch/smoke" PROFILE="samples/acceptance.profile.json" INSTALL_ENGINE="winpeApply":
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -InstallEngine '{{INSTALL_ENGINE}}'
+smoke ISO WORK=".scratch/smoke" PROFILE="samples/acceptance.profile.json":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}'
 
 smoke-assert EVIDENCE:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'

@@ -36,7 +36,7 @@ public class WingetJobsTests
 
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
             profile,
-            new RunOptions { PackagePhase = PackagePhase.PerJob });
+            new RunOptions { ImageArchitecture = "amd64", IncludeSmokeStubs = true });
 
         Assert.True(result.IsOk);
         IReadOnlyList<JobDescriptor> jobs = result.Value.Jobs.Jobs;
@@ -50,7 +50,7 @@ public class WingetJobsTests
     }
 
     [Fact]
-    public void Plan_without_packages_emits_stubs_only()
+    public void Plan_without_packages_omits_stubs_by_default()
     {
         Profile profile = Parse($$"""
             {
@@ -76,7 +76,7 @@ public class WingetJobsTests
 
         Assert.True(result.IsOk);
         Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "winget");
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "stub");
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "stub");
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
     }
@@ -144,7 +144,7 @@ public class WingetJobsTests
 
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
             profile,
-            new RunOptions { PackagePhase = PackagePhase.PerJob });
+            new RunOptions { ImageArchitecture = "amd64" });
 
         Assert.True(result.IsOk);
         JobDescriptor jq = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "jqlang.jq");

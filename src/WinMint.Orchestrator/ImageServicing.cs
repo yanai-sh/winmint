@@ -221,11 +221,6 @@ public static class ImageServicing
                     parameters[StageParams.PayloadDir] = payloadDir;
                     parameters[StageParams.MountDir] = mountDir;
                     break;
-                case ServicingOpcode.InjectUnattend:
-                    parameters[StageParams.UnattendPath] = unattendPath;
-                    parameters[StageParams.MountDir] = mountDir;
-                    parameters[StageParams.MediaDir] = mediaDir;
-                    break;
                 case ServicingOpcode.StageOobeUnattend:
                     parameters[StageParams.UnattendPath] = unattendPath;
                     parameters[StageParams.MountDir] = mountDir;

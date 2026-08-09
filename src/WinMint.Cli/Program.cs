@@ -70,15 +70,9 @@ internal static class Program
             Description = "Fail closed when winget/scoop package jobs fail (harness/metal). Default best-effort.",
         };
 
-        Option<string?> packagePhaseOption = new("--package-phase")
+        Option<bool> includeSmokeStubsOption = new("--include-smoke-stubs")
         {
-            Description = "Package phase override: perJob or wingetImport (default arm64+winget → wingetImport).",
-        };
-
-        Option<string> installEngineOption = new("--install-engine")
-        {
-            Description = "Install lane: winpeApply (default) or legacy opt-in.",
-            DefaultValueFactory = _ => "winpeApply",
+            Description = "Include smoke.stub.* FirstLogon jobs (Smoke/acceptance harness). Default off.",
         };
 
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")
@@ -88,8 +82,7 @@ internal static class Program
             imageArchitectureOption,
             packageAuditStrictOption,
             packageStrictOption,
-            packagePhaseOption,
-            installEngineOption,
+            includeSmokeStubsOption,
         };
         validateCommand.SetAction(parseResult =>
         {
@@ -100,8 +93,7 @@ internal static class Program
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
                 parseResult.GetValue(packageStrictOption),
-                parseResult.GetValue(packagePhaseOption),
-                parseResult.GetValue(installEngineOption)!);
+                parseResult.GetValue(includeSmokeStubsOption));
         });
 
         Command planCommand = new("plan", "Parse and plan a Profile; emit plan artifacts.")
@@ -112,8 +104,7 @@ internal static class Program
             imageArchitectureOption,
             packageAuditStrictOption,
             packageStrictOption,
-            packagePhaseOption,
-            installEngineOption,
+            includeSmokeStubsOption,
         };
         planCommand.SetAction(parseResult =>
         {
@@ -126,8 +117,7 @@ internal static class Program
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
                 parseResult.GetValue(packageStrictOption),
-                parseResult.GetValue(packagePhaseOption),
-                parseResult.GetValue(installEngineOption)!);
+                parseResult.GetValue(includeSmokeStubsOption));
         });
 
         Command buildCommand = new("build", "Plan a Profile and apply ImageServicing (one elevated RunPlan).")
@@ -142,8 +132,7 @@ internal static class Program
             imageArchitectureOption,
             packageAuditStrictOption,
             packageStrictOption,
-            packagePhaseOption,
-            installEngineOption,
+            includeSmokeStubsOption,
         };
         buildCommand.SetAction(parseResult =>
         {
@@ -164,8 +153,7 @@ internal static class Program
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
                 parseResult.GetValue(packageStrictOption),
-                parseResult.GetValue(packagePhaseOption),
-                parseResult.GetValue(installEngineOption)!);
+                parseResult.GetValue(includeSmokeStubsOption));
         });
 
         RootCommand root = new("WinMint — Profile plan and ImageServicing build")
@@ -184,16 +172,14 @@ internal static class Program
         string? imageArchitecture,
         bool packageAuditStrict,
         bool packageStrict,
-        string? packagePhase,
-        string installEngine)
+        bool includeSmokeStubs)
     {
         if (!TryBuildRunOptions(
                 imageQuality,
                 imageArchitecture,
                 packageAuditStrict,
                 packageStrict,
-                packagePhase,
-                installEngine,
+                includeSmokeStubs,
                 out RunOptions run,
                 out int exit))
         {
@@ -216,16 +202,14 @@ internal static class Program
         string? imageArchitecture,
         bool packageAuditStrict,
         bool packageStrict,
-        string? packagePhase,
-        string installEngine)
+        bool includeSmokeStubs)
     {
         if (!TryBuildRunOptions(
                 imageQuality,
                 imageArchitecture,
                 packageAuditStrict,
                 packageStrict,
-                packagePhase,
-                installEngine,
+                includeSmokeStubs,
                 out RunOptions run,
                 out int exit))
         {
@@ -240,7 +224,7 @@ internal static class Program
         Directory.CreateDirectory(outDir.FullName);
         WritePlanArtifacts(outDir.FullName, artifacts!);
         Console.WriteLine($"Wrote plan artifacts to {outDir.FullName}");
-        Console.WriteLine($"Lane: {artifacts!.Manifest.ImageQuality}");
+        WritePlanHonesty(artifacts!);
         return 0;
     }
 
@@ -255,16 +239,14 @@ internal static class Program
         string? imageArchitecture,
         bool packageAuditStrict,
         bool packageStrict,
-        string? packagePhase,
-        string installEngine)
+        bool includeSmokeStubs)
     {
         if (!TryBuildRunOptions(
                 imageQuality,
                 imageArchitecture,
                 packageAuditStrict,
                 packageStrict,
-                packagePhase,
-                installEngine,
+                includeSmokeStubs,
                 out RunOptions planRun,
                 out int exit))
         {
@@ -289,6 +271,8 @@ internal static class Program
             Console.Error.WriteLine(
                 "Warning: ImageQuality=Release uses compression=max + cleanup=full — prefer Test for iterative builds.");
         }
+
+        WritePlanHonesty(artifacts!);
 
         ServicingRun servicingRun = new(
             SourceIsoPath: iso.FullName,
@@ -316,24 +300,11 @@ internal static class Program
         string? imageArchitecture,
         bool packageAuditStrict,
         bool packageStrict,
-        string? packagePhase,
-        string installEngine,
+        bool includeSmokeStubs,
         out RunOptions run,
         out int exitCode)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out exitCode))
-        {
-            run = new RunOptions();
-            return false;
-        }
-
-        if (!TryParseInstallEngine(installEngine, out InstallEngine engine, out exitCode))
-        {
-            run = new RunOptions();
-            return false;
-        }
-
-        if (!TryParsePackagePhase(packagePhase, out PackagePhase phase, out exitCode))
         {
             run = new RunOptions();
             return false;
@@ -345,62 +316,10 @@ internal static class Program
             ImageArchitecture = imageArchitecture,
             PackageAuditStrict = packageAuditStrict,
             PackageStrict = packageStrict,
-            PackagePhase = phase,
-            InstallEngine = engine,
+            IncludeSmokeStubs = includeSmokeStubs,
         };
         exitCode = 0;
         return true;
-    }
-
-    private static bool TryParsePackagePhase(string? raw, out PackagePhase phase, out int exitCode)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            phase = PackagePhase.Default;
-            exitCode = 0;
-            return true;
-        }
-
-        if (string.Equals(raw, "perJob", StringComparison.OrdinalIgnoreCase))
-        {
-            phase = PackagePhase.PerJob;
-            exitCode = 0;
-            return true;
-        }
-
-        if (string.Equals(raw, "wingetImport", StringComparison.OrdinalIgnoreCase))
-        {
-            phase = PackagePhase.WingetImport;
-            exitCode = 0;
-            return true;
-        }
-
-        Console.Error.WriteLine($"Unsupported --package-phase '{raw}' (expected perJob|wingetImport).");
-        phase = PackagePhase.Default;
-        exitCode = 1;
-        return false;
-    }
-
-    private static bool TryParseInstallEngine(string raw, out InstallEngine engine, out int exitCode)
-    {
-        if (string.Equals(raw, "legacy", StringComparison.OrdinalIgnoreCase))
-        {
-            engine = InstallEngine.Legacy;
-            exitCode = 0;
-            return true;
-        }
-
-        if (string.Equals(raw, "winpeApply", StringComparison.OrdinalIgnoreCase))
-        {
-            engine = InstallEngine.WinPeApply;
-            exitCode = 0;
-            return true;
-        }
-
-        Console.Error.WriteLine($"Unsupported --install-engine '{raw}' (expected legacy|winpeApply).");
-        engine = InstallEngine.Legacy;
-        exitCode = 1;
-        return false;
     }
 
     private static bool TryParseImageQuality(string raw, out ImageQualityLane lane, out int exitCode)
@@ -526,10 +445,28 @@ internal static class Program
                     }).ToArray()),
             });
 
-        WriteJson(
-            directory,
-            "manifest.json",
-            new JsonObject { ["imageQuality"] = artifacts.Manifest.ImageQuality.ToString() });
+        File.WriteAllText(
+            Path.Combine(directory, "manifest.json"),
+            BuildPlan.SerializeManifestDump(artifacts.Manifest));
+    }
+
+    private static void WritePlanHonesty(BuildArtifacts artifacts)
+    {
+        Console.WriteLine($"Lane: {artifacts.Manifest.ImageQuality}");
+        string honesty = BuildPlan.FormatPlanHonesty(
+            artifacts.Manifest,
+            artifacts.Account.RequireWifiDuringOobe);
+        foreach (string line in honesty.Split(["\r\n", "\n"], StringSplitOptions.None))
+        {
+            if (line.StartsWith("Warning:", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine(line);
+            }
+            else if (line.Length > 0)
+            {
+                Console.WriteLine(line);
+            }
+        }
     }
 
     private static void WriteJson(string directory, string name, JsonNode node) =>

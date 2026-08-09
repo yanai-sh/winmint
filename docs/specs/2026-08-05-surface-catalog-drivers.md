@@ -16,7 +16,7 @@ Without offline driver injection, SL7 builds depend on post-install Windows Upda
 
 Add optional **Surface Catalog driver injection** to the existing **BuildPlan → ImageServicing** pipeline:
 
-1. **Profile** — additive optional `drivers` block on `winmint.profile/v1` selects a catalog device id (initial wiring: `surface-laptop-7` only; full device list ported from v1 catalog JSON).
+1. **Profile** — additive optional `drivers` block on `winmint.profile/v1` selects a catalog device id (alpha: `surface-laptop-7` only; catalog rows = wired set).
 2. **BuildPlan** — validate device id against the in-repo catalog; emit an `InjectDrivers` servicing opcode with parameter-only payload (no Profile JSON in kernels).
 3. **ImageServicing** — new thin elevated kernel downloads the Microsoft Surface driver MSI during Apply (network required), extracts offline-safe INFs (firmware excluded; SurfaceMsiSafe class filter), injects into mounted `install.wim` and setup-critical subset into `boot.wim`, records **driver inventory** in workdir evidence and **digests** on `ImageEvidence`.
 4. **Product posture** — stamp `DisableCoInstallers=1` offline (v1 driver hygiene) via existing policy stamping path or bundled with driver vertical.
@@ -100,8 +100,9 @@ MountInstallWim
 → [InjectDrivers?]          ← new
 → StampOfflinePolicies      ← include DisableCoInstallers when drivers injected
 → StagePayload
-→ InjectUnattend
+→ StageOobeUnattend
 → StampOfflineShell
+→ PatchBootWimApply
 → ExportWim
 → BuildIso
 ```

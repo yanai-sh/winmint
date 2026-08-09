@@ -44,7 +44,7 @@ Do **not** test: private phase helpers, splash pixels (except status→presenter
 | Bad JSON | Document errors |
 | No password + Local+autoLogon | Plan failure |
 | DMA on | Ireland latch + settle targets |
-| Default Plan | Stub jobs + Test lane + opcodes (not .ps1 paths) |
+| Default Plan | Test lane + opcodes (not .ps1 paths); `smoke.stub.*` only when `IncludeSmokeStubs` |
 | Release lane (ticket **09**) | `ExportWim` params differ |
 | passwordPath purity (ticket **91**) | Path-only parse never reads; both sources conflict; unresolved path fails Plan; serialize omits inline password when path set |
 

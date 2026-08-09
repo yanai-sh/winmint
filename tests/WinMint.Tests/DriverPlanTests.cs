@@ -29,14 +29,14 @@ public class DriverPlanTests
     }
 
     [Fact]
-    public void Plan_catalog_device_not_wired_fails()
+    public void Plan_unknown_deviceId_outside_catalog_fails()
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-pro-11-snapdragon"));
 
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
-        Assert.Equal("drivers.deviceId.notWired", result.Error.Code);
+        Assert.Equal("drivers.deviceId.unknown", result.Error.Code);
     }
 
     [Fact]

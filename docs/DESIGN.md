@@ -79,7 +79,7 @@ Batch-grill rounds 1–4; shared understanding 2026-07-28. Post–keep-flag gril
 | `*Dto` rename | G | Opportunistic |
 | Wizard | D | BuildPlan host (**15** + packages **22**); Phase B Review → Apply |
 | Hardware | D | M4 stricter evidence bars (**30** opt-in); no Supervisor fork |
-| Install engine | D | **WinPE apply** default; legacy Setup `/legacy` opt-in only ([workstation-compiler spec](specs/2026-08-05-workstation-compiler-winpe-apply.md)) |
+| Install engine | D | **WinPE apply** only (`diskpart` + DISM apply + `bcdboot` + Panther OOBE unattend); legacy Setup `/legacy` deleted ([#90](https://github.com/yanai-sh/winmint/issues/90)) |
 | Debloat venue | D | AppX **online** default (`debloat.mode` absent); offline DISM + caps/features always offline when listed |
 
 **Workstation-compiler vertical (2026-08):** Gates A–C in [spec](specs/2026-08-05-workstation-compiler-winpe-apply.md). Pre-vertical ADRs remain guidance where superseded (install engine, offline-primary debloat); see spec + [ADR-011](decisions/ADR-011-alpha-posture-and-package-delegation.md) default tier.

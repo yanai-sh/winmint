@@ -49,7 +49,7 @@ public class WizardPackagesTests
 
         Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(
             parsed.Value,
-            new RunOptions { PackagePhase = PackagePhase.PerJob });
+            new RunOptions { ImageArchitecture = "amd64" });
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         Assert.Contains(
             planned.Value.Jobs.Jobs,
@@ -69,7 +69,7 @@ public class WizardPackagesTests
 
         Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(BuildPlan.TryParseProfile(utf8).Value);
         Assert.True(planned.IsOk);
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "stub");
+        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == "stub");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
         Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind is "winget" or "scoop" or "wsl");

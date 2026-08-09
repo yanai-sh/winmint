@@ -35,11 +35,15 @@ public class PackageCatalogTests
         Profile profile = LabProfile(winget: ["Anysphere.Cursor"]);
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
             profile,
-            new RunOptions { ImageArchitecture = "arm64", PackagePhase = PackagePhase.PerJob });
+            new RunOptions { ImageArchitecture = "arm64" });
         Assert.True(result.IsOk);
-        JobDescriptor job = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "winget");
-        Assert.Equal("arm64", job.WingetArchitecture);
+        Assert.NotNull(result.Value.WingetImportJson);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "winget");
         Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "package.auditNative");
+        using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(result.Value.WingetImportJson);
+        System.Text.Json.JsonElement pkg = doc.RootElement.GetProperty("Sources")[0].GetProperty("Packages")[0];
+        Assert.Equal("--architecture arm64", pkg.GetProperty("InitialOverrideArguments").GetString());
     }
 
     [Fact]

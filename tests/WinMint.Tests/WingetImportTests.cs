@@ -21,12 +21,12 @@ public class WingetImportTests
     }
 
     [Fact]
-    public void Plan_perJob_phase_emits_individual_winget_jobs()
+    public void Plan_non_arm64_emits_individual_winget_jobs()
     {
         Profile profile = LabProfile(winget: ["Git.Git"]);
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
             profile,
-            new RunOptions { ImageArchitecture = "arm64", PackagePhase = PackagePhase.PerJob });
+            new RunOptions { ImageArchitecture = "amd64" });
 
         Assert.True(result.IsOk);
         Assert.Null(result.Value.WingetImportJson);

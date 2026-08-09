@@ -81,12 +81,12 @@ Run-specific WIM export / WinSxS cleanup posture for one build. Test lane priori
 _Avoid_: baking Max compression into every Smoke rebuild; claiming C# orchestration makes DISM faster; trusting Unmount/Commit without re-reading Get-WimInfo
 
 **Install engine**:
-Default path is **WinPE apply** (`diskpart` + `dism /Apply-Image` + `bcdboot` + Panther OOBE unattend) — no `setup.exe /legacy`. Legacy ConX/Setup patch remains on explicit `RunOptions.InstallEngine=legacy` opt-in only. See [workstation-compiler spec](docs/specs/2026-08-05-workstation-compiler-winpe-apply.md).
-_Avoid_: treating ISO craftsmanship as the product; assuming Setup honors full Autounattend on 25H2+ without legacy hack
+**WinPE apply** only (`diskpart` + `dism /Apply-Image` + `bcdboot` + Panther OOBE unattend) — no `setup.exe /legacy`. See [workstation-compiler spec](docs/specs/2026-08-05-workstation-compiler-winpe-apply.md).
+_Avoid_: treating ISO craftsmanship as the product; resurrecting ConX/Setup `/legacy` as a product dial
 
 **Debloat venue**:
-AppX remove-list default is **online** (`debloat.mode` absent ⇒ online): live removes via FirstLogon `appx.safetyNet` after DMA settle. `debloat.mode: offline` keeps DISM `RemoveProvisionedAppx` for air-gap. Capabilities/features are always offline DISM when listed. Network requirement is Plan-derived (`requiresNetwork` on bundle), not a Profile field.
-_Avoid_: offline-primary debloat as the solo-dev default; authoring `network.*` in Profile JSON
+AppX remove-list default is **online** (`debloat.mode` absent ⇒ online): live removes via FirstLogon `appx.safetyNet` after DMA settle. `debloat.mode: offline` keeps DISM `RemoveProvisionedAppx` for air-gap. Capabilities/features are always offline DISM when listed. Network requirement is Plan-derived (`requiresNetwork` on bundle/manifest), not a Profile field — Cli `plan`/`build` and Wizard Preview/Review surface it as a hard warning; Save/Build are not blocked.
+_Avoid_: offline-primary debloat as the solo-dev default; authoring `network.*` in Profile JSON; failing Plan solely because FirstLogon will need network
 
 **Keep-flag**:
 Remove-list polarity for selected provisioned inbox AppX, capabilities, and optional features: Profile lists what to strip/disable; static in-repo catalogs bound legal ids; AppX via online job (default) or offline DISM (explicit mode); caps/features offline when listed. Product zero-config is host preset **`recommended`** (expands → Profile ids; never preset names in JSON). Smoke **acceptance** uses a small explicit remove-list to prove the path; intentional empty Cli Profiles stay empty. CDM is not the primary control plane.
@@ -104,13 +104,13 @@ Shipped manifest at `config/packages.json` (embedded). **Catalog key** = Wizard 
 _Avoid_: live winget/Scoop search in Wizard; catalog keys in Profile JSON
 
 **Fail-closed (invariant layer)**:
-Machine setup stamp, Shell registration, DMA hard fields, debloat/offline policy digests, and Plan validation errors stop the session or build. Network required but unavailable at Plan time when Profile schedules online work ⇒ Plan fail-closed ([ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md)).
-_Avoid_: treating every winget timeout as session Failed during alpha FirstLogon
+Machine setup stamp, Shell registration, DMA hard fields, debloat/offline policy digests, and Plan validation errors stop the session or build. Host surfaces Plan-derived `requiresNetwork` as a warning only; guest FailOpen when outbound probe fails remains the live gate ([ADR-011](docs/decisions/ADR-011-alpha-posture-and-package-delegation.md)).
+_Avoid_: treating every winget timeout as session Failed during alpha FirstLogon; blocking Save/Build solely because the Profile needs network
 
 **Best-effort (package layer)**:
 Curated winget/scoop/wsl installs default to continue-on-failure with `%ProgramData%\WinMint\evidence\packages.evidence.json`; splash summarizes failures; Explorer unlock still follows complete/failed-dwell rules unless an invariant failed first.
 _Avoid_: silent swallow without evidence; mixing best-effort with DMA or Shell invariants
 
 **Package phase**:
-How Plan stages package work: `perJob` (one spawn per id), `wingetImport` (single `winget import` from staged JSON), `batchScoop` (one `scoop install a b c` after buckets). Alpha default for non-empty winget on arm64: `wingetImport` when import artifact staged; per-job remains for Smoke stubs and opt-out.
+How Plan stages package work: `perJob` (one spawn per id), `wingetImport` (single `winget import` from staged JSON), `batchScoop` (one `scoop install a b c` after buckets). Alpha default for non-empty winget on arm64: `wingetImport` when import artifact staged; otherwise `perJob` (e.g. non-arm64). Not a CLI/`RunOptions` dial.
 _Avoid_: hand-maintaining winget import JSON beside `packages.json`; `winget configure` as default (DSC architecture gap)

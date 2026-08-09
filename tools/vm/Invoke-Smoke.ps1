@@ -26,10 +26,6 @@ param(
     [string] $Profile = 'samples/acceptance.profile.json',
 
     [Parameter(ParameterSetName = 'Run')]
-    [ValidateSet('legacy', 'winpeApply')]
-    [string] $InstallEngine = 'winpeApply',
-
-    [Parameter(ParameterSetName = 'Run')]
     [string] $VmName = 'winmint-smoke',
 
     [Parameter(ParameterSetName = 'Run')]
@@ -88,8 +84,8 @@ if (-not $SkipApply) {
     & just publish-provisioning
     if ($LASTEXITCODE -ne 0) { throw "just publish-provisioning failed: $LASTEXITCODE" }
 
-    Write-Host "Applying Profile=$Profile Iso=$Iso Work=$Work (Test lane, installEngine=$InstallEngine)…"
-    & just apply-maintainer $Iso $Work $Profile $InstallEngine
+    Write-Host "Applying Profile=$Profile Iso=$Iso Work=$Work (Test lane, smoke stubs on)…"
+    & just apply-maintainer $Iso $Work $Profile true
     if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
 }
 
@@ -134,7 +130,7 @@ else {
     if (Test-Path -LiteralPath $vhdx) { Remove-Item -LiteralPath $vhdx -Force }
 
     # Gen2, Secure Boot off + no vTPM (Start-VM times out with vTPM on this host — SPLASH).
-    # WinPE apply stamps LabConfig on applied image; legacy path patches boot.wim.
+    # WinPE apply stamps LabConfig on the applied-image SYSTEM hive.
     New-VHD -Path $vhdx -SizeBytes 64GB -Dynamic | Out-Null
     New-VM -Name $VmName -Generation 2 -MemoryStartupBytes 4GB -VHDPath $vhdx | Out-Null
     Set-VMFirmware -VMName $VmName -EnableSecureBoot Off

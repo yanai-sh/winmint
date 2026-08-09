@@ -57,7 +57,6 @@ function Resolve-KernelScript {
     switch ($Opcode) {
         'MountInstallWim' { return Join-Path $scriptRoot 'Mount-InstallWim.ps1' }
         'StagePayload' { return Join-Path $scriptRoot 'Stage-Payload.ps1' }
-        'InjectUnattend' { return Join-Path $scriptRoot 'Inject-Unattend.ps1' }
         'StageOobeUnattend' { return Join-Path $scriptRoot 'Stage-OobeUnattend.ps1' }
         'PatchBootWimApply' { return Join-Path $scriptRoot 'Patch-BootWimApply.ps1' }
         'StampOfflineShell' { return Join-Path $scriptRoot 'Stamp-OfflineShell.ps1' }

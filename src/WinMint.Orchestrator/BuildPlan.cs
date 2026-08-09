@@ -12,9 +12,6 @@ public static class BuildPlan
     public const string IrelandSetupLocale = "en-IE";
     public const int IrelandSetupGeoId = 68;
 
-    /// <summary>Generic Win11 Pro setup key — skips product-key page; does not activate (SPLASH).</summary>
-    public const string ProSetupProductKey = "VK7JG-NPHTM-C97JM-9MPGT-3V66T";
-
     public static Result<Profile, DocumentErrors> TryParseProfile(ReadOnlySpan<byte> utf8Json)
     {
         if (utf8Json.IsEmpty)
@@ -294,13 +291,6 @@ public static class BuildPlan
                 $"drivers.deviceId '{drivers.DeviceId}' is not in the Surface driver catalog.");
         }
 
-        if (!SurfaceDriverCatalog.WiredDeviceIds.Contains(device.Id))
-        {
-            return new PlanFailure(
-                "drivers.deviceId.notWired",
-                $"drivers.deviceId '{device.Id}' is in the catalog but not wired for build yet (SL7-only this release).");
-        }
-
         if (!string.IsNullOrWhiteSpace(options.ImageArchitecture))
         {
             string imageArch = SurfaceDriverCatalog.NormalizeArchitecture(options.ImageArchitecture);
@@ -363,6 +353,37 @@ public static class BuildPlan
         || profile.WingetPackages.Count > 0
         || profile.ScoopPackages.Count > 0
         || profile.WslDistros.Count > 0;
+
+    /// <summary>Cli plan-dump shape for <c>manifest.json</c> (includes RequiresNetwork — #90 honesty).</summary>
+    public static string SerializeManifestDump(BuildManifest manifest)
+    {
+        var node = new System.Text.Json.Nodes.JsonObject
+        {
+            ["imageQuality"] = manifest.ImageQuality.ToString(),
+            ["requiresNetwork"] = manifest.RequiresNetwork,
+        };
+        return node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// Host-facing plan honesty (Cli + Wizard). Warns when FirstLogon needs network; never a PlanFailure.
+    /// </summary>
+    public static string FormatPlanHonesty(BuildManifest manifest, bool requireWifiDuringOobe)
+    {
+        string wifi = requireWifiDuringOobe
+            ? "requireWifiDuringOobe=true (OOBE may show Network page)"
+            : "requireWifiDuringOobe=false (OOBE Network page hidden)";
+        string head =
+            $"requiresNetwork={(manifest.RequiresNetwork ? "true" : "false")}; {wifi}";
+        if (!manifest.RequiresNetwork)
+        {
+            return head;
+        }
+
+        return head
+            + Environment.NewLine
+            + "Warning: FirstLogon needs outbound network (packages and/or online AppX removes).";
+    }
 
     public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null)
     {
@@ -451,7 +472,7 @@ public static class BuildPlan
 
         PackageCatalog catalog = options.PackageCatalog ?? PackageCatalog.Default;
         string imageArchitecture = PackageCatalog.EffectiveImageArchitecture(options);
-        PackagePhase packagePhase = PackageCatalog.EffectivePackagePhase(options, profile, imageArchitecture);
+        PackagePhase packagePhase = PackageCatalog.EffectivePackagePhase(profile, imageArchitecture);
         IReadOnlyList<string> wingetAuditTargets = catalog.ValidateProfilePackages(
             profile,
             imageArchitecture,
@@ -478,9 +499,7 @@ public static class BuildPlan
         HashSet<string> scoopNeedsReboot = new(profile.ScoopNeedsReboot, StringComparer.OrdinalIgnoreCase);
         HashSet<string> wslNeedsReboot = new(profile.WslNeedsReboot, StringComparer.OrdinalIgnoreCase);
 
-        string unattendXml = options.InstallEngine == InstallEngine.WinPeApply
-            ? BuildOobeUnattendXml(profile)
-            : BuildAutounattendXml(profile);
+        string unattendXml = BuildOobeUnattendXml(profile);
 
         PoliciesProfile policies = profile.EffectivePolicies;
         if (!ProductOfflinePolicies.TryNormalizeDohProvider(policies.DohProvider, out string? dohProvider, out string? dohPlanError))
@@ -489,15 +508,17 @@ public static class BuildPlan
                 new PlanFailure("policies.dohProvider.unsupported", dohPlanError!));
         }
 
-        // Stub Smoke job set — real installs from packages.winget / packages.scoop / packages.wsl; executor shared.
         // Product-constant FirstLogon jobs (ADR-009) + keep-flag safety net when remove-list non-empty.
-        List<JobDescriptor> jobList =
-        [
-            new JobDescriptor("smoke.stub.ready", "stub"),
-            new JobDescriptor("smoke.stub.complete", "stub"),
-            new JobDescriptor("onedrive.uninstall", "onedrive.uninstall"),
-            new JobDescriptor("reservedStorage.disable", "reservedStorage.disable"),
-        ];
+        // smoke.stub.* only when RunOptions.IncludeSmokeStubs (Smoke/acceptance harness).
+        List<JobDescriptor> jobList = [];
+        if (options.IncludeSmokeStubs)
+        {
+            jobList.Add(new JobDescriptor("smoke.stub.ready", "stub"));
+            jobList.Add(new JobDescriptor("smoke.stub.complete", "stub"));
+        }
+
+        jobList.Add(new JobDescriptor("onedrive.uninstall", "onedrive.uninstall"));
+        jobList.Add(new JobDescriptor("reservedStorage.disable", "reservedStorage.disable"));
         if (dohProvider is not null)
         {
             jobList.Add(new JobDescriptor($"doh.{dohProvider}", "doh.set", PackageId: dohProvider));
@@ -661,15 +682,7 @@ public static class BuildPlan
             }));
 
         stageList.Add(new ServicingStage(ServicingOpcode.StagePayload, new Dictionary<string, string>(StringComparer.Ordinal)));
-
-        if (options.InstallEngine == InstallEngine.WinPeApply)
-        {
-            stageList.Add(new ServicingStage(ServicingOpcode.StageOobeUnattend, new Dictionary<string, string>(StringComparer.Ordinal)));
-        }
-        else
-        {
-            stageList.Add(new ServicingStage(ServicingOpcode.InjectUnattend, new Dictionary<string, string>(StringComparer.Ordinal)));
-        }
+        stageList.Add(new ServicingStage(ServicingOpcode.StageOobeUnattend, new Dictionary<string, string>(StringComparer.Ordinal)));
 
         stageList.Add(new ServicingStage(
             ServicingOpcode.StampOfflineShell,
@@ -678,10 +691,7 @@ public static class BuildPlan
                 [StageParams.ShellTarget] = "Supervisor.exe",
             }));
 
-        if (options.InstallEngine == InstallEngine.WinPeApply)
-        {
-            stageList.Add(new ServicingStage(ServicingOpcode.PatchBootWimApply, new Dictionary<string, string>(StringComparer.Ordinal)));
-        }
+        stageList.Add(new ServicingStage(ServicingOpcode.PatchBootWimApply, new Dictionary<string, string>(StringComparer.Ordinal)));
 
         stageList.AddRange(
         [
@@ -718,17 +728,7 @@ public static class BuildPlan
     }
 
     /// <summary>OOBE-phase unattend (specialize + oobeSystem) for WinPE apply — no windowsPE disk/ImageInstall.</summary>
-    internal static string BuildOobeUnattendXml(Profile profile) =>
-        ComposeUnattendXml(profile, includeWindowsPe: false);
-
-    /// <summary>
-    /// ISO-root Autounattend (windowsPE + oobeSystem) plus optional specialize DMA latch.
-    /// Panther copy alone cannot drive WinPE — 25H2 ConX shows "Select setup option" without this.
-    /// </summary>
-    internal static string BuildAutounattendXml(Profile profile) =>
-        ComposeUnattendXml(profile, includeWindowsPe: true);
-
-    private static string ComposeUnattendXml(Profile profile, bool includeWindowsPe)
+    internal static string BuildOobeUnattendXml(Profile profile)
     {
         string user = XmlEscape(profile.Account.Username);
         string pass = XmlEscape(profile.Account.Password ?? "");
@@ -736,90 +736,10 @@ public static class BuildPlan
         string hideWireless = profile.Account.RequireWifiDuringOobe ? "false" : "true";
         string specialize = BuildSpecializeXml(profile);
 
-        string windowsPe = includeWindowsPe
-            ? $$"""
-              <settings pass="windowsPE">
-                <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-                  <SetupUILanguage>
-                    <UILanguage>en-US</UILanguage>
-                  </SetupUILanguage>
-                  <InputLocale>en-US</InputLocale>
-                  <SystemLocale>en-US</SystemLocale>
-                  <UILanguage>en-US</UILanguage>
-                  <UserLocale>en-US</UserLocale>
-                </component>
-                <component name="Microsoft-Windows-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-                  <UserData>
-                    <AcceptEula>true</AcceptEula>
-                    <ProductKey>
-                      <Key>{{ProSetupProductKey}}</Key>
-                    </ProductKey>
-                  </UserData>
-                  <DiskConfiguration>
-                    <Disk wcm:action="add">
-                      <DiskID>0</DiskID>
-                      <WillWipeDisk>true</WillWipeDisk>
-                      <CreatePartitions>
-                        <CreatePartition wcm:action="add">
-                          <Order>1</Order>
-                          <Type>EFI</Type>
-                          <Size>100</Size>
-                        </CreatePartition>
-                        <CreatePartition wcm:action="add">
-                          <Order>2</Order>
-                          <Type>MSR</Type>
-                          <Size>16</Size>
-                        </CreatePartition>
-                        <CreatePartition wcm:action="add">
-                          <Order>3</Order>
-                          <Type>Primary</Type>
-                          <Extend>true</Extend>
-                        </CreatePartition>
-                      </CreatePartitions>
-                      <ModifyPartitions>
-                        <ModifyPartition wcm:action="add">
-                          <Order>1</Order>
-                          <PartitionID>1</PartitionID>
-                          <Format>FAT32</Format>
-                          <Label>System</Label>
-                        </ModifyPartition>
-                        <ModifyPartition wcm:action="add">
-                          <Order>2</Order>
-                          <PartitionID>2</PartitionID>
-                        </ModifyPartition>
-                        <ModifyPartition wcm:action="add">
-                          <Order>3</Order>
-                          <PartitionID>3</PartitionID>
-                          <Format>NTFS</Format>
-                          <Label>Windows</Label>
-                          <Letter>C</Letter>
-                        </ModifyPartition>
-                      </ModifyPartitions>
-                    </Disk>
-                  </DiskConfiguration>
-                  <ImageInstall>
-                    <OSImage>
-                      <InstallFrom>
-                        <MetaData wcm:action="add">
-                          <Key>/IMAGE/INDEX</Key>
-                          <Value>1</Value>
-                        </MetaData>
-                      </InstallFrom>
-                      <InstallTo>
-                        <DiskID>0</DiskID>
-                        <PartitionID>3</PartitionID>
-                      </InstallTo>
-                    </OSImage>
-                  </ImageInstall>
-                </component>
-              </settings>
-              """
-            : string.Empty;
-
         return $$"""
             <?xml version="1.0" encoding="utf-8"?>
             <unattend xmlns="urn:schemas-microsoft-com:unattend">
-              {{windowsPe}}{{specialize}}
+              {{specialize}}
               <settings pass="oobeSystem">
                 <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
                   <OOBE>
