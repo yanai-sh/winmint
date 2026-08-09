@@ -59,6 +59,7 @@ Also never in product: BitLocker Smoke, Home Smoke SKU, MicrosoftOobe, enterpris
 | 34 | [#58](https://github.com/yanai-sh/winmint/issues/58) | 2026-08-06 | Wizard Source edition probe: list ISO WIM indexes via Wim-Metadata; picker ? `WimIndex` Apply path |
 | 35 | [#59](https://github.com/yanai-sh/winmint/issues/59) | 2026-08-06 | Wizard Build polls `apply-status.txt` for opcode stage + log path during Apply |
 | 36 | [#91](https://github.com/yanai-sh/winmint/issues/91) | 2026-08-09 | `ProfileFile.TryLoad` host load; BuildPlan passwordPath purity; Profile-relative SL7 sample |
+| 37 | [#95](https://github.com/yanai-sh/winmint/issues/95) | 2026-08-09 | Wizard shell: Media → You → Taste → Included (compose receipt) + status-bar Build/stage scrub |
 
 Sequencing history: [ADR-006](decisions/ADR-006-post-keepflag-sequencing.md) (**met**). Keep-flag design: [KEEPFLAG](design/KEEPFLAG.md).
 
