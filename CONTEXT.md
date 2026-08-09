@@ -81,8 +81,8 @@ Run-specific WIM export / WinSxS cleanup posture for one build. Test lane priori
 _Avoid_: baking Max compression into every Smoke rebuild; claiming C# orchestration makes DISM faster; trusting Unmount/Commit without re-reading Get-WimInfo
 
 **Install engine**:
-Default path is **WinPE apply** (`diskpart` + `dism /Apply-Image` + `bcdboot` + Panther OOBE unattend) — no `setup.exe /legacy`. Legacy ConX/Setup patch remains on explicit `RunOptions.InstallEngine=legacy` opt-in only. See [workstation-compiler spec](docs/specs/2026-08-05-workstation-compiler-winpe-apply.md).
-_Avoid_: treating ISO craftsmanship as the product; assuming Setup honors full Autounattend on 25H2+ without legacy hack
+**WinPE apply** only (`diskpart` + `dism /Apply-Image` + `bcdboot` + Panther OOBE unattend) — no `setup.exe /legacy`. See [workstation-compiler spec](docs/specs/2026-08-05-workstation-compiler-winpe-apply.md).
+_Avoid_: treating ISO craftsmanship as the product; resurrecting ConX/Setup `/legacy` as a product dial
 
 **Debloat venue**:
 AppX remove-list default is **online** (`debloat.mode` absent ⇒ online): live removes via FirstLogon `appx.safetyNet` after DMA settle. `debloat.mode: offline` keeps DISM `RemoveProvisionedAppx` for air-gap. Capabilities/features are always offline DISM when listed. Network requirement is Plan-derived (`requiresNetwork` on bundle), not a Profile field.
@@ -112,5 +112,5 @@ Curated winget/scoop/wsl installs default to continue-on-failure with `%ProgramD
 _Avoid_: silent swallow without evidence; mixing best-effort with DMA or Shell invariants
 
 **Package phase**:
-How Plan stages package work: `perJob` (one spawn per id), `wingetImport` (single `winget import` from staged JSON), `batchScoop` (one `scoop install a b c` after buckets). Alpha default for non-empty winget on arm64: `wingetImport` when import artifact staged; per-job remains for Smoke stubs and opt-out.
+How Plan stages package work: `perJob` (one spawn per id), `wingetImport` (single `winget import` from staged JSON), `batchScoop` (one `scoop install a b c` after buckets). Alpha default for non-empty winget on arm64: `wingetImport` when import artifact staged; otherwise `perJob` (e.g. non-arm64). Not a CLI/`RunOptions` dial.
 _Avoid_: hand-maintaining winget import JSON beside `packages.json`; `winget configure` as default (DSC architecture gap)

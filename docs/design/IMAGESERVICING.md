@@ -48,7 +48,8 @@ public enum ServicingOpcode
 {
     MountInstallWim,
     StagePayload,
-    InjectUnattend,
+    StageOobeUnattend,
+    PatchBootWimApply,
     StampOfflineShell,
     StampOfflinePolicies, // product-constant + conditional HKLM stamps (ADR-009); after keep-flag, before payload
     RemoveProvisionedAppx, // keep-flag; after mount, before payload when Profile remove-list non-empty
@@ -84,13 +85,14 @@ public sealed record ImageEvidence(
 
 ```
 MountInstallWim → [RemoveProvisionedAppx?] → [RemoveCapabilities?] → [DisableOptionalFeatures?]
-  → StampOfflinePolicies → StagePayload → InjectUnattend → StampOfflineShell
+  → StampOfflinePolicies → StagePayload → StageOobeUnattend → StampOfflineShell → PatchBootWimApply
   → ExportWim(compression=fast, cleanup=skip) → BuildIso
 ```
 
 `MountInstallWim` also: ISO→media copy, clear read-only, **single-index export** when needed, then DISM mount.  
 `RemoveProvisionedAppx` (ticket **12**): optional; inventory → remove → re-inventory + Deprovisioned stamps; listed-but-absent ⇒ idempotent ok + `removed.appx.<id>=absent` ([KEEPFLAG](KEEPFLAG.md)).  
 `StampOfflinePolicies` ([ADR-009](../decisions/ADR-009-product-constant-policies.md)): always; Plan emits `policySpecs` (EdgeDebloat + OneDrive + DeviceMetadata + WPBT; Copilot-kill iff `!keepCopilot`; BraveDebloat iff `Brave.Brave` in winget). Store MSIX host pwsh fails closed before Apply.  
+`StageOobeUnattend` + `PatchBootWimApply`: WinPE apply lane (no legacy `InjectUnattend` / `setup.exe /legacy`).  
 Release differs only in `ExportWim` params (`compression=max`, `cleanup=full`).
 
 ## Elevation model

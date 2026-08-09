@@ -51,7 +51,7 @@ internal static class ImageServicingTestFakes
                 Path.Combine(workDirectory, "failure.json"),
                 """{"schemaVersion":"winmint.image.evidence/v1","failed":true}""");
             return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure("servicing.stage.failed", "InjectUnattend failed (test)."));
+                new ServicingFailure("servicing.stage.failed", "StageOobeUnattend failed (test)."));
         }
     }
 }

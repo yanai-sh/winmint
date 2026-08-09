@@ -2,7 +2,6 @@ namespace WinMint.Orchestrator;
 
 public enum PackagePhase
 {
-    Default,
     PerJob,
     WingetImport,
 }
@@ -25,19 +24,11 @@ public sealed record RunOptions
     /// <summary>When true, package install failures fail the session (harness/metal). Default best-effort.</summary>
     public bool PackageStrict { get; init; }
 
-    public PackagePhase PackagePhase { get; init; } = PackagePhase.Default;
+    /// <summary>When true, Plan emits smoke.stub.* jobs (Smoke/acceptance harness). Default false.</summary>
+    public bool IncludeSmokeStubs { get; init; }
 
     /// <summary>Override embedded package catalog (tests); null uses <see cref="PackageCatalog.Default"/>.</summary>
     public PackageCatalog? PackageCatalog { get; init; }
-
-    /// <summary>Install lane: WinPE diskpart+DISM apply (default) or legacy Setup.exe /legacy opt-in.</summary>
-    public InstallEngine InstallEngine { get; init; } = InstallEngine.WinPeApply;
-}
-
-public enum InstallEngine
-{
-    Legacy,
-    WinPeApply,
 }
 
 public enum ImageQualityLane
@@ -112,7 +103,6 @@ public enum ServicingOpcode
 {
     MountInstallWim,
     StagePayload,
-    InjectUnattend,
     StageOobeUnattend,
     PatchBootWimApply,
     StampOfflineShell,

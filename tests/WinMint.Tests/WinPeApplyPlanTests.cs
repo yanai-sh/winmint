@@ -7,12 +7,10 @@ namespace WinMint.Tests;
 public class WinPeApplyPlanTests
 {
     [Fact]
-    public void Plan_winpeApply_emits_oobe_unattend_stages_without_windowsPE()
+    public void Plan_emits_oobe_unattend_stages_without_windowsPE()
     {
         Profile profile = ParseProfile();
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
-            profile,
-            new RunOptions { InstallEngine = InstallEngine.WinPeApply });
+        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
@@ -36,27 +34,10 @@ public class WinPeApplyPlanTests
     }
 
     [Fact]
-    public void Plan_legacy_still_emits_InjectUnattend_with_windowsPE()
+    public void Apply_materializes_winpe_opcode_params()
     {
         Profile profile = ParseProfile();
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
-            profile,
-            new RunOptions { InstallEngine = InstallEngine.Legacy });
-
-        Assert.True(result.IsOk);
-        Assert.Contains("windowsPE", result.Value.Unattend.Xml, StringComparison.Ordinal);
-        Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.InjectUnattend);
-        Assert.DoesNotContain(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.StageOobeUnattend);
-        Assert.DoesNotContain(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.PatchBootWimApply);
-    }
-
-    [Fact]
-    public void Apply_winpeApply_materializes_new_opcode_params()
-    {
-        Profile profile = ParseProfile();
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(
-            profile,
-            new RunOptions { InstallEngine = InstallEngine.WinPeApply });
+        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
 
         string work = NewTempDir();
@@ -115,12 +96,12 @@ public class WinPeApplyPlanTests
     }
 
     [Fact]
-    public void Plan_default_install_engine_is_winpeApply()
+    public void Plan_emits_winpe_stages_only()
     {
         Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(ParseProfile());
         Assert.True(result.IsOk);
+        Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.StageOobeUnattend);
         Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.PatchBootWimApply);
-        Assert.DoesNotContain(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.InjectUnattend);
     }
 
     private static Profile ParseProfile()

@@ -111,7 +111,7 @@ public class BuildPlanPlanTests
     }
 
     [Fact]
-    public void Plan_default_emits_test_lane_stub_jobs_and_opcodes()
+    public void Plan_default_emits_test_lane_opcodes_without_smoke_stubs()
     {
         Profile profile = Parse($$"""
             {
@@ -139,7 +139,7 @@ public class BuildPlanPlanTests
         BuildArtifacts artifacts = result.Value;
         Assert.Equal(ImageQualityLane.Test, artifacts.Manifest.ImageQuality);
         Assert.Equal(BuildPlan.JobsSchemaVersion, artifacts.Jobs.SchemaVersion);
-        Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == "stub");
+        Assert.DoesNotContain(artifacts.Jobs.Jobs, j => j.Kind == "stub");
         Assert.NotEmpty(artifacts.Stages.Stages);
         Assert.Equal(
             [
@@ -164,6 +164,38 @@ public class BuildPlanPlanTests
         Assert.Equal("Test", export.Parameters[StageParams.Lane]);
         Assert.Equal("fast", export.Parameters[StageParams.Compression]);
         Assert.Equal("skip", export.Parameters[StageParams.Cleanup]);
+    }
+
+    [Fact]
+    public void Plan_includeSmokeStubs_emits_stub_jobs()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { IncludeSmokeStubs = true });
+
+        Assert.True(result.IsOk);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: "stub", Id: "smoke.stub.ready" });
+        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: "stub", Id: "smoke.stub.complete" });
     }
 
     [Fact]

@@ -170,13 +170,8 @@ public sealed class PackageCatalog
             ? DefaultImageArchitecture
             : NormalizeArch(run.ImageArchitecture);
 
-    public static PackagePhase EffectivePackagePhase(RunOptions? run, Profile profile, string imageArchitecture)
+    public static PackagePhase EffectivePackagePhase(Profile profile, string imageArchitecture)
     {
-        if (run?.PackagePhase is PackagePhase phase && phase != PackagePhase.Default)
-        {
-            return phase;
-        }
-
         if (profile.WingetPackages.Count > 0
             && string.Equals(NormalizeArch(imageArchitecture), "arm64", StringComparison.OrdinalIgnoreCase))
         {

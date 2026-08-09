@@ -43,7 +43,7 @@ Do **not** test: private phase helpers, splash pixels (except status→presenter
 | Bad JSON | Document errors |
 | No password + Local+autoLogon | Plan failure |
 | DMA on | Ireland latch + settle targets |
-| Default Plan | Stub jobs + Test lane + opcodes (not .ps1 paths) |
+| Default Plan | Test lane + opcodes (not .ps1 paths); `smoke.stub.*` only when `IncludeSmokeStubs` |
 | Release lane (ticket **09**) | `ExportWim` params differ |
 
 ### S2 — ImageServicing

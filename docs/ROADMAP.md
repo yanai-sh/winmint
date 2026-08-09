@@ -13,7 +13,7 @@
 | **M2** | Wizard | Second BuildPlan host; presets → remove-lists; packages + caps UI | **Done** thin + packages (**15**, **22**) + polish (**25**, 2026-08-05); full UX polish still out |
 | **M3** | Metal jobs / matrix expand | winget + reboot-resume + Scoop (**16–18**); caps **19–20**; WSL **23**; ExitWindowsEx **24** | **Done** (metal exit 2026-08-04; WSL/caps follow-on 2026-08-05) |
 | **M4** | Hardware acceptance | Stricter evidence bars; same Supervisor/settle/jobs | Bars opt-in (**30**); full hardware campaign after M2/M3 — maintainer-timed |
-| **M5** | Workstation compiler | WinPE apply + online debloat default; legacy Setup opt-in | **Done** — Gates A–C ([#70](https://github.com/yanai-sh/winmint/issues/70)–[#72](https://github.com/yanai-sh/winmint/issues/72)); spec: [workstation-compiler](specs/2026-08-05-workstation-compiler-winpe-apply.md) |
+| **M5** | Workstation compiler | WinPE apply + online debloat default (legacy Setup deleted in [#90](https://github.com/yanai-sh/winmint/issues/90)) | **Done** — Gates A–C ([#70](https://github.com/yanai-sh/winmint/issues/70)–[#72](https://github.com/yanai-sh/winmint/issues/72)); spec: [workstation-compiler](specs/2026-08-05-workstation-compiler-winpe-apply.md) |
 
 ## Design Acceptance
 

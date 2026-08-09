@@ -10,9 +10,8 @@ if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
 if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
 if ($wimIndex -lt 1) { throw "wimIndex must be >= 1 (got $wimIndex)" }
 
-# Spike #70: 3-partition GPT (EFI 100 MB, MSR 16 MB, primary) — ports BuildAutounattendXml disk intent.
+# Spike #70: 3-partition GPT (EFI 100 MB, MSR 16 MB, primary) — WinPE apply disk layout.
 # LabConfig on applied-image SYSTEM hive (not boot.wim) — Hyper-V no-vTPM VMs read it at first boot.
-# ponytail: boot.wim mount loop mirrors Inject-Unattend.ps1; extract shared helper if a third lane appears.
 $bootMarker = Join-Path $mediaDir 'sources\.winmint-boot-apply'
 if (-not (Test-Path -LiteralPath $bootWim)) {
     throw "boot.wim missing under media (expected $bootWim)"

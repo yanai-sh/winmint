@@ -30,13 +30,13 @@ Grill-era defaults (per-job winget, fail-closed on every package, runtime PE aud
 
 ## Implementation Decisions
 
-### Package phase (`RunOptions.PackagePhase`)
+### Package phase (`EffectivePackagePhase`)
 
-- `PerJob` — legacy one spawn per catalog id (Smoke-friendly).
+- `PerJob` — one spawn per catalog id (non-arm64 winget, or empty winget).
 - `WingetImport` — Plan omits per-id winget jobs when import JSON non-empty; stages `winget-import.json`; one job `kind: winget.import`.
-- Default when Profile has winget on arm64 image: `WingetImport`.
+- Default when Profile has winget on arm64 image: `WingetImport`. Not a CLI/`RunOptions` override.
 
-Scoop: Plan collapses scoop jobs into one `kind: scoop.batch` when `PackagePhase` allows batch (default batch when ≥1 scoop id).
+Scoop: Plan collapses scoop jobs into one `kind: scoop.batch` when ≥1 scoop id.
 
 ### Winget import JSON
 
