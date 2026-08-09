@@ -1,4 +1,3 @@
-using WinMint.Orchestrator;
 using WinMint.Wizard;
 
 namespace WinMint.Tests;
@@ -99,17 +98,13 @@ public class IncludedReceiptTests
     [Fact]
     public void FormatQuietSummary_counts_stripped_apps()
     {
-        Result<KeepFlagExpansion, PlanFailure> expansion =
-            KeepFlagPresets.TryExpand(KeepFlagPresets.Recommended);
-
-        Assert.True(expansion.IsOk);
-
         string summary = IncludedReceipt.FormatQuietSummary(
-            expansion.Value.RemoveProvisionedAppx.Count,
+            strippedAppCount: 5,
             keepCopilot: false,
             keepGaming: false);
 
-        Assert.Contains("strips", summary, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("21", summary, StringComparison.Ordinal);
+        Assert.Contains("strips 5 apps", summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Copilot off", summary, StringComparison.Ordinal);
+        Assert.Contains("gaming apps removed", summary, StringComparison.Ordinal);
     }
 }

@@ -35,6 +35,24 @@
       <Setter Property="BorderThickness" Value="0" />
     </Style>
 
+    <!-- Status-bar stage scrub — Media/You/Taste/Included jump labels (#95 stage nav). -->
+    <Style Selector="Button.stage-scrub">
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="LetterSpacing" Value="1" />
+      <Setter Property="Opacity" Value="0.45" />
+    </Style>
+    <Style Selector="Button.stage-scrub.active">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Button.stage-scrub:disabled">
+      <Setter Property="Opacity" Value="0.25" />
+    </Style>
+
     <Style Selector="TextBlock.hero-title">
       <Setter Property="FontSize" Value="40" />
       <Setter Property="FontWeight" Value="SemiBold" />

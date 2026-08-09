@@ -55,17 +55,32 @@
             BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
             Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
       <DockPanel>
-        <TextBlock Text="{Binding StageLabel}"
-                   VerticalAlignment="Center"
-                   FontSize="12"
-                   FontWeight="Medium"
-                   Opacity="0.55"
-                   LetterSpacing="1" />
+        <!-- Stage scrub — click Media/You/Taste/Included to jump directly (moodboard intent, no pixel morph). -->
+        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Classes="stage-scrub" Classes.active="{Binding IsMediaStep}"
+                  Content="MEDIA" Command="{Binding GoToMediaCommand}" IsEnabled="{Binding CanGoToMedia}" />
+          <Button Classes="stage-scrub" Classes.active="{Binding IsYouStep}"
+                  Content="YOU" Command="{Binding GoToYouCommand}" IsEnabled="{Binding CanGoToYou}" />
+          <Button Classes="stage-scrub" Classes.active="{Binding IsTasteStep}"
+                  Content="TASTE" Command="{Binding GoToTasteCommand}" IsEnabled="{Binding CanGoToTaste}" />
+          <Button Classes="stage-scrub" Classes.active="{Binding IsIncludedStep}"
+                  Content="INCLUDED" Command="{Binding GoToIncludedCommand}" IsEnabled="{Binding CanGoToIncluded}" />
+        </StackPanel>
         <StackPanel DockPanel.Dock="Right"
                     Orientation="Horizontal"
                     Spacing="10"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Center">
+          <!-- Build/Cancel live here (status bar) so they're reachable from any stage, not just Included (US#11/#28). -->
+          <Button Classes="ghost"
+                  Content="Cancel"
+                  Command="{Binding CancelBuildCommand}"
+                  IsVisible="{Binding IsBusy}" />
+          <Button Classes="primary"
+                  Content="Build"
+                  Command="{Binding BuildCommand}"
+                  IsEnabled="{Binding CanBuild}"
+                  ToolTip.Tip="Requires a saved Profile and an existing Source ISO. Elevates via UAC." />
           <Button Classes="ghost"
                   Content="Back"
                   Command="{Binding BackCommand}"

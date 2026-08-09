@@ -16,6 +16,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     private readonly int _hostWimDefault = HostEdition.DefaultWimIndex();
     private readonly IWimIndexSource? _wimIndexSource;
     private byte[]? _lastProfileUtf8;
+    private bool _lastRequiresNetwork;
     private string? _savedProfilePath;
     private CancellationTokenSource? _buildCts;
     private CancellationTokenSource? _probeCts;
@@ -84,6 +85,10 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _canGoBack;
     [ObservableProperty] private bool _canGoNext = true;
     [ObservableProperty] private string _nextLabel = "Continue";
+    [ObservableProperty] private bool _canGoToMedia = true;
+    [ObservableProperty] private bool _canGoToYou;
+    [ObservableProperty] private bool _canGoToTaste;
+    [ObservableProperty] private bool _canGoToIncluded;
 
     [ObservableProperty] private string _sourceIsoPath = "";
     [ObservableProperty] private string _imageQuality = "Test";
@@ -278,6 +283,38 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         }
 
         StepIndex++;
+    }
+
+    // Stage scrub — status-bar Media/You/Taste/Included labels jump directly via WizardStageGates.CanGoTo.
+    [RelayCommand] private void GoToMedia() => GoToStage(WizardStageGates.Media);
+    [RelayCommand] private void GoToYou() => GoToStage(WizardStageGates.You);
+    [RelayCommand] private void GoToTaste() => GoToStage(WizardStageGates.Taste);
+    [RelayCommand] private void GoToIncluded() => GoToStage(WizardStageGates.Included);
+
+    private void GoToStage(int targetIndex)
+    {
+        if (targetIndex == StepIndex)
+        {
+            return;
+        }
+
+        if (!WizardStageGates.CanGoTo(targetIndex, SourceIsoReady(), IdentityReadyNow()))
+        {
+            Status = targetIndex == WizardStageGates.Included
+                ? "Add a password on You to continue."
+                : "Choose an existing Source ISO to continue.";
+            StatusIsError = true;
+            return;
+        }
+
+        if (targetIndex == WizardStageGates.Included)
+        {
+            // Jumping straight to Included composes the receipt, same as Next from Taste.
+            TryEnterIncluded();
+            return;
+        }
+
+        StepIndex = targetIndex;
     }
 
     /// <summary>Taste skip — host `recommended` + product defaults, keeps/packages untouched (spec §Taste skip).</summary>
@@ -483,6 +520,11 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsYouStep));
         OnPropertyChanged(nameof(IsTasteStep));
         OnPropertyChanged(nameof(IsIncludedStep));
+
+        CanGoToMedia = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.Media, sourceReady, identityReady);
+        CanGoToYou = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.You, sourceReady, identityReady);
+        CanGoToTaste = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.Taste, sourceReady, identityReady);
+        CanGoToIncluded = !IsBusy && WizardStageGates.CanGoTo(WizardStageGates.Included, sourceReady, identityReady);
     }
 
     private bool SourceIsoReady() => WizardStageGates.SourceReady(SourceIsoPath);
@@ -567,6 +609,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         }
 
         _lastProfileUtf8 = result.ProfileUtf8;
+        _lastRequiresNetwork = result.RequiresNetwork;
         PreviewJson = result.ProfileJson ?? "";
         PlanSummary = result.Message;
         RefreshReceipt();
@@ -578,7 +621,8 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     {
         QuietBlockText = IncludedReceipt.FormatQuietBlock(KeepCopilot, IsBraveSelected());
         PickStripText = IncludedReceipt.FormatPickStrip(SelectedPickLabels());
-        PlanMetaText = $"{ImageQuality} lane · DMA {(DmaEnabled ? "on" : "off")} · {Locale}";
+        PlanMetaText =
+            $"requiresNetwork {(_lastRequiresNetwork ? "yes" : "no")} · DMA {(DmaEnabled ? "on" : "off")} · {ImageQuality} lane";
 
         Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(Preset, KeepGaming, KeepCopilot);
         if (!expanded.IsOk)

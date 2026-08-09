@@ -60,9 +60,10 @@ public class WizardStageGatesTests
     }
 
     [Fact]
-    public void CanAdvance_from_Taste_requires_identity()
+    public void CanAdvance_from_Taste_requires_source_and_identity()
     {
         Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Taste, sourceReady: true, identityReady: false));
+        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Taste, sourceReady: false, identityReady: true));
         Assert.True(WizardStageGates.CanAdvance(WizardStageGates.Taste, sourceReady: true, identityReady: true));
     }
 

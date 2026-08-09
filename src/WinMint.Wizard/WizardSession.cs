@@ -95,7 +95,7 @@ internal static class WizardSession
             $"Plan OK. Lane={planned.Value.Manifest.ImageQuality}; removeProvisionedAppx={removeSummary}; jobs={planned.Value.Jobs.Jobs.Count}."
             + Environment.NewLine
             + honesty;
-        return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8));
+        return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8), planned.Value.Manifest.RequiresNetwork);
     }
 
     /// <summary>Honest Phase A handoff — no process spawn. Work dir is a conventional placeholder.</summary>
@@ -213,10 +213,11 @@ internal sealed record WizardSessionInput(
     string ImageQualityText = "Test",
     int? WimIndex = null);
 
-internal sealed record WizardSessionResult(bool Succeeded, string Message, byte[]? ProfileUtf8, string? ProfileJson)
+/// <summary>Plan-derived (not authored) — <see cref="RequiresNetwork"/> mirrors <see cref="BuildManifest.RequiresNetwork"/>.</summary>
+internal sealed record WizardSessionResult(bool Succeeded, string Message, byte[]? ProfileUtf8, string? ProfileJson, bool RequiresNetwork = false)
 {
-    public static WizardSessionResult Ok(string message, byte[] utf8, string json) =>
-        new(true, message, utf8, json);
+    public static WizardSessionResult Ok(string message, byte[] utf8, string json, bool requiresNetwork) =>
+        new(true, message, utf8, json, requiresNetwork);
 
     public static WizardSessionResult Fail(string message) =>
         new(false, message, null, null);
