@@ -12,7 +12,7 @@ Official `.wslconfig` still has **two sections only**: `[wsl2]` (main / stable-i
 
 **Minimal WinMint-owned file:** create-if-absent only when Profile selects any WSL distro; set **`defaultVhdSize=256GB`** only; **omit** `memory`/`processors`/`swap` (WSL already scales those to the booted machine). Leave experimental/sparse/Dev Drive alone.
 
-**Recommended full (personal) file:** pin the **stable modern networking suite** + `defaultVhdSize=256GB`; still no RAM/CPU pins and no experimental keys (see §11-B). Many of those networking keys already default on Win11 22H2+ — setting them documents intent and survives doc/default drift.
+**Recommended full (personal) file:** pin only **non-defaults** — `defaultVhdSize=256GB` + `networkingMode=mirrored`. Do not rewrite keys that already default on (`dnsTunneling`, `autoProxy`, `firewall`, `guiApplications`, `nestedVirtualization`, …).
 
 **Experimental caveats (Aug 2026):** `sparseVhd` is quality-blocked / needs `--allow-unsafe`; `autoMemoryReclaim=gradual` has hang history with systemd/Docker; mirrored companions (`hostAddressLoopback`, `ignoredPorts`) must stay under `[experimental]` and only with `networkingMode=mirrored`. Full dive: §10; files: §11.
 
@@ -218,7 +218,7 @@ defaultVhdSize=256GB
 
 ### 9. Sane “human laptop” profile (not product-owned)
 
-See **§11-B** — explicit modern networking + WSLg/nestedVirt pins + `defaultVhdSize=256GB`. Still omit RAM/CPU/swap and all experimental keys.
+See **§11-B**: only **`defaultVhdSize=256GB`** + **`networkingMode=mirrored`**. No default-restating lines; no RAM/CPU/swap; no experimental keys.
 
 ## Implications for WinMint
 
@@ -290,118 +290,62 @@ Not experimental anymore, but couples to experimental helpers:
 
 ## 11. Full recommended files
 
-**Two bars:**
+**Rule:** write a key only if it **changes** engine behavior. Do not restate defaults (`dnsTunneling`, `autoProxy`, `firewall`, `guiApplications`, `nestedVirtualization`, …).
 
-| Bar | Goal | How “full” |
-| --- | --- | --- |
-| **A — WinMint product** | Deterministic FirstLogon staging; create-if-absent; don’t clobber taste | Pin **only** what the engine won’t do for you: VHD ceiling |
-| **B — Modern recommended** | WSL-primary laptop / maintainer recipe | Explicitly set **stable** modern options (even when they match defaults); still omit device-relative + experimental |
-
-Leaving keys out is not “ignoring modern WSL.” On Win11 22H2+ the engine already defaults `dnsTunneling`, `autoProxy`, and `firewall` to `true`, and `memory`/`processors`/`swap` already scale to the host. The interesting choices are: **VHD ceiling** (must pin — default is 1 TiB), **mirrored vs NAT** (default NAT; Learn recommends trying mirrored), and **experimental** (mostly don’t).
+| Bar | Pins (non-default only) |
+| --- | --- |
+| **A — WinMint product** | `defaultVhdSize=256GB` |
+| **B — Modern recommended** | `defaultVhdSize=256GB` + `networkingMode=mirrored` (Learn upgrade; engine default is still NAT) |
 
 ### A) WinMint product-owned (create-if-absent when Profile has WSL)
 
 ```ini
 # WinMint — only when packages.wsl is non-empty. Create-if-absent; never overwrite.
-# Intentionally minimal: do not pin networking/memory (user may already have .wslconfig;
-# create-if-absent means first writer wins — keep product surface tiny).
 [wsl2]
 defaultVhdSize=256GB
 ```
 
-### B) Modern recommended (portable, explicit)
-
-Full stable surface worth considering. Apply with `wsl --shutdown`. Smoke-test mirrored on your VPN; if it breaks, set `networkingMode=nat` (or delete that line).
+### B) Modern recommended (portable)
 
 ```ini
-# Modern recommended .wslconfig — Win11 22H2+, current Store WSL
-# Portable: no memory/processors/swap pins (engine ≈ 50% RAM / all CPUs / ≈25% swap).
-# Experimental keys omitted on purpose — see §10.
+# Only non-defaults. Engine already: dnsTunneling/autoProxy/firewall/gui/nestedVirt;
+# memory≈50% RAM, processors=all, swap≈25% RAM.
+# Apply: wsl --shutdown. If mirrored breaks VPN → networkingMode=nat or remove it.
 
 [wsl2]
-# --- Storage (create-time ceiling; 1024-based GB) ---
 defaultVhdSize=256GB
-
-# --- Networking (stable; Learn “modern” path) ---
-# Default engine mode is NAT. Mirrored is the recommended upgrade for
-# IPv6, VPN compatibility, LAN reachability, localhost Host↔WSL.
 networkingMode=mirrored
-dnsTunneling=true          # default true on 22H2+; set explicitly
-autoProxy=true             # inherit Windows HTTP proxy into WSL
-firewall=true              # Hyper-V / Windows Firewall integration
-# localhostForwarding=true # default true; IGNORED when networkingMode=mirrored
-
-# --- VM / desktop (defaults are already true; pin for clarity) ---
-guiApplications=true       # WSLg
-nestedVirtualization=true  # nested VMs inside WSL2 (ARM64 SKU-dependent)
-
-# --- Leave unset (device-relative) ---
-# memory=
-# processors=
-# swap=
-# swapFile=
-
-# --- Leave unset unless diagnosing ---
-# debugConsole=true
-# safeMode=true
-# kernel=C:\\path\\to\\customKernel
-# vmIdleTimeout=60000
-
-# --- Experimental: do NOT enable in a “recommended” baseline (§10) ---
-# [experimental]
-# autoMemoryReclaim=disabled   # only if dropCache/gradual causes stalls
-# sparseVhd=true               # blocked / --allow-unsafe; corruption risk
-# hostAddressLoopback=true     # mirrored only; must be under [experimental]
-# ignoredPorts=53,3000         # mirrored only; Docker/port conflicts
-# bestEffortDnsParsing=true    # niche DNS with tunneling
 ```
 
-**Why this isn’t longer:** every other official `[wsl2]` key is either host-specific (`memory`, `kernel`, `swapFile`), recover/debug (`safeMode`, `debugConsole`), deprecated (`networkingMode=bridged`), or already covered above. Experimental keys are listed as comments so they’re considered — and rejected for baseline — with citations in §10.
-
-### C) Explicit “safe experimental off” (reclaim pinned; still no RAM pin)
+### C) Explicit “safe experimental off” (only if reclaim hurts)
 
 ```ini
 [wsl2]
 defaultVhdSize=256GB
 networkingMode=mirrored
-dnsTunneling=true
-autoProxy=true
-firewall=true
-guiApplications=true
-nestedVirtualization=true
 
 [experimental]
 autoMemoryReclaim=disabled
 ```
 
-### D) One-off personal override (not a template)
-
-Only if you *know* this host and want more than the 50% RAM default — never ship from WinMint:
+### D) One-off personal RAM override (not a template)
 
 ```ini
 [wsl2]
 defaultVhdSize=256GB
 networkingMode=mirrored
-dnsTunneling=true
-autoProxy=true
-firewall=true
-guiApplications=true
-nestedVirtualization=true
-memory=24GB    # example only: 32GB host; retune or delete when moving machines
+memory=24GB    # example only: known host; never ship from WinMint
 ```
 
-### What was considered and left out of B
+### Considered, not written
 
-| Option | Why not in baseline B |
+| Option | Why absent from B |
 | --- | --- |
-| `sparseVhd=true` | Runtime corruption gate / `--allow-unsafe`; docs ≠ product behavior (§10) |
-| `autoMemoryReclaim=gradual` | Hang history with systemd / Docker Resource Saver |
-| `autoMemoryReclaim=dropCache` | Already docs default — pinning adds no value; use `disabled` only when hurt (C) |
-| `hostAddressLoopback` / `ignoredPorts` | Mirrored companions; niche; wrong section breaks parse |
-| `bestEffortDnsParsing` / custom DNS tunnel IP | Debug knobs for broken VPN DNS |
-| `memory` / `processors` / `swap` | Device-relative; engine already scales |
-| `networkingMode=nat` explicit | Fine as fallback; mirrored is the “modern try” Learn pushes |
-| Promoting B’s networking into **A** | Product create-if-absent would freeze mirrored for users who never had a file; keep A tiny until a Profile flag exists |
+| `dnsTunneling` / `autoProxy` / `firewall` / `guiApplications` / `nestedVirtualization` | Already default `true` on Win11 22H2+ |
+| `localhostForwarding=true` | Default; ignored under mirrored anyway |
+| `memory` / `processors` / `swap` | Device-relative engine defaults |
+| `sparseVhd` / `autoMemoryReclaim=gradual` / mirrored companions | Experimental caveats (§10) |
+| Promoting `mirrored` into **A** | Product create-if-absent freezes taste; keep A to VHD ceiling unless a Profile flag exists |
 
 ## Open / watch
 
