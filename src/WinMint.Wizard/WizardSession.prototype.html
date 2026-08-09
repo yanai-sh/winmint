@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — WizardSession interface</title>
+  <style>
+    :root { color-scheme: light; --ink:#17202a; --muted:#64748b; --line:#dbe4ee; --paper:#f7f9fc; --card:#fff; --accent:#2463eb; --good:#087f5b; --bad:#c92a2a; --warn:#b78103; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px/1.5 "Segoe UI",system-ui,sans-serif; color:var(--ink); background:var(--paper); }
+    main { width:min(1120px,calc(100% - 32px)); margin:32px auto 64px; }
+    h1,h2,h3 { line-height:1.2; }
+    h1 { margin-bottom:4px; }
+    h2 { margin-top:36px; }
+    .kicker { color:var(--bad); font-weight:700; letter-spacing:.08em; }
+    .lead,.muted { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; box-shadow:0 2px 10px #17202a0a; }
+    .selected { border-color:var(--accent); box-shadow:0 0 0 2px #2463eb22; }
+    button { border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); padding:9px 12px; cursor:pointer; font:inherit; }
+    button:hover,button.active { border-color:var(--accent); color:var(--accent); }
+    button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .buttons { display:flex; flex-wrap:wrap; gap:8px; }
+    code,pre { font:13px/1.45 Consolas,monospace; }
+    pre { margin:10px 0 0; padding:12px; border-radius:8px; background:#111827; color:#e5edf7; overflow:auto; }
+    dl { display:grid; grid-template-columns:200px 1fr; gap:8px 14px; margin:0; }
+    dt { color:var(--muted); }
+    dd { margin:0; font-weight:600; }
+    ol.trace { padding-left:22px; }
+    .good { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+    .tabs { display:flex; gap:6px; border-bottom:1px solid var(--line); margin-bottom:14px; flex-wrap:wrap; }
+    .tabs button { border:0; border-radius:7px 7px 0 0; background:transparent; }
+    .tabs button.active { background:#eaf0ff; }
+    .walkthrough { display:none; } .walkthrough.active { display:block; }
+    .step { margin-right:6px; margin-bottom:6px; }
+    .verdict { border-left:4px solid var(--accent); }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--muted); font-weight:600; }
+    .changed { background:#fff7db; border-radius:4px; padding:0 4px; }
+    @media (max-width:700px) { dl { grid-template-columns:1fr; gap:2px; } dd { margin-bottom:8px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="kicker">THROWAWAY PROTOTYPE — NOT PRODUCTION</div>
+  <h1>What interface should WizardSession expose?</h1>
+  <p class="lead">Given <strong>stateful WizardSession</strong> is accepted, which shape owns authored-session transitions and derived state — while BuildPlan stays the sole planner, Avalonia stays thin, and tests never need a Window?</p>
+  <p class="muted">Fixed from <a href="https://github.com/yanai-sh/winmint/issues/85">#85</a>: file SoT after Save; unsaved Preview never Builds; demote FormatBuildRecipe; no new ports; interface smaller than today’s 23-field <code>WizardSessionInput</code>; durable seam = session instance + existing WIM fake.</p>
+
+  <h2>Choose an interface</h2>
+  <div id="designs" class="grid"></div>
+
+  <h2>Free-play (Living Draft hybrid — liftable module)</h2>
+  <p class="muted">Buttons drive the recommended pure session below. Switch designs above to compare ownership tables; free-play always uses the hybrid.</p>
+  <div class="buttons" id="freeplay"></div>
+
+  <section class="card" style="margin-top:14px">
+    <h3>Current state</h3>
+    <dl id="state"></dl>
+    <h3>Last change</h3>
+    <p id="delta" class="muted">—</p>
+    <h3>Caller / owner trace</h3>
+    <ol class="trace" id="trace"></ol>
+    <h3>Ownership under selected design</h3>
+    <div id="ownership"></div>
+    <h3>Liftable session snapshot (JSON)</h3>
+    <pre id="snapshot"></pre>
+  </section>
+
+  <h2>Guided walkthroughs</h2>
+  <section class="card">
+    <div class="tabs" id="tabs"></div>
+    <div id="walkthroughs"></div>
+  </section>
+
+  <h2>Prototype verdict</h2>
+  <section class="card verdict">
+    <p><strong>Living Draft ∩ closed verbs</strong> — properties for authored/run fields, <code>SessionView</code> projection, and four verbs: <code>SettleProbeAsync</code>, <code>Plan</code>, <code>AcknowledgeSave</code>, <code>TryGetApplyFacts</code>.</p>
+    <ul>
+      <li>Matches how Avalonia already binds (common-caller depth) without packing a 23-field bag on every edit.</li>
+      <li>Probe generation / cancel / user-chose stay <em>inside</em> the session — not a Begin/Complete lease on the Interface.</li>
+      <li>File SoT: Build uses <code>ApplyFacts.ProfilePath</code> only; Preview bytes never Apply.</li>
+      <li>Rejects flexibility’s public probe lease (host would re-own races) and pure command-dispatch alone (forces SetIntent bag for a binding-heavy host).</li>
+      <li>Demotes <code>FormatBuildRecipe</code>; no new ports.</li>
+    </ul>
+  </section>
+</main>
+<script>
+/* ============================================================
+ * LIFTABLE MODULE — Living Draft hybrid (recommended)
+ * Pure session logic; page shell only reads Snapshot / calls verbs.
+ * ============================================================ */
+const HybridSession = (() => {
+  function create() {
+    return {
+      // authored / run
+      sourceIsoPath: "",
+      imageQuality: "Test",
+      preset: "recommended",
+      keepGaming: false,
+      keepCopilot: false,
+      username: "winmint",
+      chips: { browser: ["zen-browser"], editor: ["cursor"], shell: ["windhawk"], wsl: [] },
+      selectedWimIndex: null, // null = policy picks; number = user chose
+      // probe
+      probeGeneration: 0,
+      probeBusy: false,
+      probeFailed: false,
+      probeMessage: "",
+      wimIndexes: [],
+      effectiveWimIndex: 3,
+      userChoseWim: false,
+      // derived
+      planOk: false,
+      planSummary: "",
+      previewJson: "",
+      profileUtf8: null,
+      dirty: true,
+      savedProfilePath: null,
+      lastError: "",
+      // bookkeeping for demo fake ISO probe
+      _isoExists: false,
+      _pendingProbeGen: 0,
+    };
+  }
+
+  function view(s) {
+    const sourceIsoReady = s._isoExists && !!s.sourceIsoPath.trim();
+    const canBuild = !s.dirty
+      && !!s.savedProfilePath
+      && sourceIsoReady
+      && !s.probeBusy
+      && (s.imageQuality === "Test" || s.imageQuality === "Release");
+    return {
+      sourceIsoReady,
+      isProbeBusy: s.probeBusy,
+      probeFailed: s.probeFailed,
+      probeMessage: s.probeMessage,
+      wimIndexes: s.wimIndexes.slice(),
+      effectiveWimIndex: s.effectiveWimIndex,
+      userChoseWim: s.userChoseWim,
+      isDirty: s.dirty,
+      hasPreview: s.planOk && !!s.profileUtf8,
+      previewJson: s.previewJson,
+      planSummary: s.planSummary,
+      lastError: s.lastError,
+      canBuild,
+      savedProfilePath: s.savedProfilePath,
+      profileUtf8: s.profileUtf8,
+      imageQuality: s.imageQuality,
+      preset: s.preset,
+      username: s.username,
+      keepCopilot: s.keepCopilot,
+    };
+  }
+
+  function markDirty(s) {
+    s.dirty = true;
+    // file may still exist; Apply must not use preview — CanBuild goes false via dirty
+  }
+
+  function setSourceIso(s, path, exists) {
+    s.sourceIsoPath = path;
+    s._isoExists = !!exists;
+    s.userChoseWim = false;
+    s.selectedWimIndex = null;
+    s.wimIndexes = [];
+    s.probeFailed = false;
+    s.probeMessage = "";
+    markDirty(s);
+    // bump generation / cancel prior (policy)
+    s.probeGeneration += 1;
+    s._pendingProbeGen = s.probeGeneration;
+    s.probeBusy = exists;
+    if (!exists) {
+      s.probeBusy = false;
+      s.effectiveWimIndex = 3;
+    }
+    return { kind: "setSourceIso", generation: s.probeGeneration };
+  }
+
+  function settleProbe(s, { generation, ok, rows, message }) {
+    if (generation !== s.probeGeneration) {
+      return { applied: false, reason: "stale generation" };
+    }
+    s.probeBusy = false;
+    if (!ok) {
+      s.probeFailed = true;
+      s.probeMessage = message || "wim.probe.failed";
+      s.wimIndexes = [];
+      s.userChoseWim = false;
+      s.effectiveWimIndex = 3; // fail-open host default
+      return { applied: true, reason: "fail-open default" };
+    }
+    s.probeFailed = false;
+    s.probeMessage = "";
+    s.wimIndexes = rows.slice();
+    const hostDefault = 3;
+    if (s.userChoseWim && rows.some(r => r.index === s.effectiveWimIndex)) {
+      // keep deliberate pick
+    } else if (rows.some(r => r.index === hostDefault)) {
+      s.effectiveWimIndex = hostDefault;
+      s.userChoseWim = false;
+    } else {
+      s.effectiveWimIndex = rows[0]?.index ?? hostDefault;
+      s.userChoseWim = false;
+    }
+    return { applied: true, reason: "selection resolved" };
+  }
+
+  function chooseWim(s, index) {
+    if (!s.wimIndexes.some(r => r.index === index)) {
+      s.lastError = "WIM index not in probe list";
+      return false;
+    }
+    s.selectedWimIndex = index;
+    s.effectiveWimIndex = index;
+    s.userChoseWim = true;
+    s.lastError = "";
+    // run-host only — does not dirty Profile SoT by itself in this prototype
+    return true;
+  }
+
+  function setPreset(s, preset) {
+    s.preset = preset;
+    markDirty(s);
+  }
+
+  function setUsername(s, name) {
+    s.username = name;
+    markDirty(s);
+  }
+
+  function setKeepCopilot(s, v) {
+    s.keepCopilot = !!v;
+    markDirty(s);
+  }
+
+  function setLane(s, lane) {
+    s.imageQuality = lane;
+    // lane is run-host; Build facts change but Profile file content may be unchanged.
+    // #85: eligibility cares about ISO + saved path + dirty-vs-profile. Lane change
+    // does not require re-save of Profile bytes, but ApplyFacts must reflect new lane.
+    s.lastError = (lane === "Test" || lane === "Release") ? "" : "run.imageQuality: must be Test or Release.";
+  }
+
+  function plan(s) {
+    if (s.imageQuality !== "Test" && s.imageQuality !== "Release") {
+      s.planOk = false;
+      s.profileUtf8 = null;
+      s.previewJson = "";
+      s.planSummary = "";
+      s.lastError = "run.imageQuality: must be Test or Release.";
+      return { succeeded: false, message: s.lastError };
+    }
+    // pretend expand + BuildPlan.Plan
+    const profile = {
+      account: { username: s.username },
+      policies: { keepCopilot: s.keepCopilot },
+      packages: { note: "chips expanded host-side; preset name omitted" },
+      presetNeverInJson: true,
+      expandedFrom: s.preset,
+    };
+    const json = JSON.stringify(profile, null, 2);
+    s.planOk = true;
+    s.previewJson = json;
+    s.profileUtf8 = json; // stand-in for bytes
+    s.planSummary = `Plan OK. Lane=${s.imageQuality}; wim=${s.effectiveWimIndex}; preset→lists only.`;
+    s.lastError = "";
+    s.dirty = true; // new preview ≠ saved file until AcknowledgeSave
+    // If previously saved, still dirty until re-save of these bytes
+    return { succeeded: true, message: s.planSummary };
+  }
+
+  function acknowledgeSave(s, path) {
+    if (!s.planOk || !s.profileUtf8) {
+      s.lastError = "Cannot save: no successful Plan bytes.";
+      return false;
+    }
+    s.savedProfilePath = path;
+    s.dirty = false;
+    s.lastError = "";
+    return true;
+  }
+
+  function tryGetApplyFacts(s) {
+    const v = view(s);
+    if (!v.canBuild) return null;
+    return {
+      profilePath: s.savedProfilePath,
+      sourceIsoPath: s.sourceIsoPath,
+      imageQuality: s.imageQuality,
+      wimIndex: s.effectiveWimIndex,
+      // never include previewUtf8
+    };
+  }
+
+  return {
+    create, view, setSourceIso, settleProbe, chooseWim,
+    setPreset, setUsername, setKeepCopilot, setLane,
+    plan, acknowledgeSave, tryGetApplyFacts,
+  };
+})();
+
+/* ============================================================
+ * Design cards (comparison surface)
+ * ============================================================ */
+const designs = {
+  hybrid: {
+    id: "hybrid",
+    name: "Living Draft ∩ closed verbs",
+    tag: "RECOMMENDED",
+    signature: "fields + View + SettleProbe / Plan / AcknowledgeSave / TryGetApplyFacts",
+    depth: "High for Avalonia + session tests",
+    seam: "WizardSession instance (Avalonia-free)",
+    callerLearns: "Draft fields, SessionView, four verbs",
+    hides: "chip/preset expand, dirty/CanBuild, probe generation & user-chose, Profile construction before BuildPlan",
+    rejects: "BeginProbe lease on Interface; FormatBuildRecipe; 23-field bag; Build inside session",
+    ownership: [
+      ["WizardSession", "authored + run host + derived + eligibility + WIM probe policy"],
+      ["Avalonia VM", "step chrome, bindings, storage picker, Window, IsBusy, wire Apply + poll"],
+      ["BuildPlan", "sole Plan / Serialize"],
+      ["WizardBuild", "elevated Apply from ApplyFacts (file SoT)"],
+    ],
+  },
+  minimize: {
+    id: "minimize",
+    name: "Command + Snapshot (1 method)",
+    tag: "minimize",
+    signature: "ApplyAsync(WizardCommand) + Snapshot",
+    depth: "Highest depth-per-method; SetIntent still a mid-size bag",
+    seam: "WizardSession instance",
+    callerLearns: "Closed command set (SetIntent / ChooseWim / Plan / NoteSaved)",
+    hides: "Same policy cluster behind one verb",
+    rejects: "Many public Set* methods",
+    ownership: [
+      ["WizardSession", "all commands + Snapshot policy"],
+      ["Avalonia VM", "coalesce observables → SetIntent; paint Snapshot; Save I/O; Apply"],
+      ["BuildPlan", "called only from Plan command"],
+      ["WizardBuild", "Apply from Snapshot facts after NoteSaved"],
+    ],
+  },
+  flexible: {
+    id: "flexible",
+    name: "Patch commands + ProbeLease",
+    tag: "flexibility",
+    signature: "many Set*/Patch* + BeginProbe / CompleteProbe + Preview",
+    depth: "High behaviour, larger Interface; probe lease leaks race policy outward",
+    seam: "WizardSession instance (but CompleteProbe is host-coupled)",
+    callerLearns: "Many methods + ProbeLease discipline",
+    hides: "Expand/dirty inside; race correctness depends on host calling CompleteProbe",
+    rejects: "1–3 method capsule",
+    ownership: [
+      ["WizardSession", "patches, Snapshot, lease validation"],
+      ["Avalonia VM", "schedule Task.Run probe; must CompleteProbe correctly"],
+      ["BuildPlan", "Preview() only"],
+      ["WizardBuild", "ApplyFacts"],
+    ],
+  },
+};
+
+/* ============================================================
+ * Page shell
+ * ============================================================ */
+let designId = "hybrid";
+let session = HybridSession.create();
+let lastDelta = "—";
+let lastTrace = ["Session created with lab defaults."];
+let prevView = null;
+
+const freeplayActions = [
+  { id: "iso-ok", label: "Choose Source ISO (exists)", run: () => {
+    const g = HybridSession.setSourceIso(session, "D:\\\\Win11_arm64.iso", true);
+    lastDelta = `ISO set; probe gen=${g.generation} busy`;
+    lastTrace = ["VM sets SourceIsoPath", "Session bumps generation / cancels prior", "Host awaits SettleProbe"];
+    // simulate successful probe for this gen
+    const settled = HybridSession.settleProbe(session, {
+      generation: g.generation,
+      ok: true,
+      rows: [{ index: 1, name: "Home" }, { index: 3, name: "Pro" }],
+    });
+    lastDelta += ` → probe ${settled.reason}`;
+    lastTrace.push("Session ResolveSelection → Pro (3)");
+  }},
+  { id: "iso-missing", label: "Choose missing ISO path", run: () => {
+    HybridSession.setSourceIso(session, "D:\\\\missing.iso", false);
+    lastDelta = "ISO not ready; probe skipped";
+    lastTrace = ["Session: SourceIsoReady=false", "CanBuild stays false"];
+  }},
+  { id: "probe-stale", label: "Stale probe arrives", run: () => {
+    const oldGen = session.probeGeneration;
+    HybridSession.setSourceIso(session, "D:\\\\Win11_arm64.iso", true);
+    const newGen = session.probeGeneration;
+    const stale = HybridSession.settleProbe(session, {
+      generation: oldGen,
+      ok: true,
+      rows: [{ index: 99, name: "STALE" }],
+    });
+    HybridSession.settleProbe(session, {
+      generation: newGen,
+      ok: true,
+      rows: [{ index: 1, name: "Home" }, { index: 3, name: "Pro" }],
+    });
+    lastDelta = `Stale gen ${oldGen} applied=${stale.applied} (${stale.reason}); fresh gen ${newGen} kept`;
+    lastTrace = ["Two ISO changes race", "Session ignores stale Complete", "Snapshot.WimIndexes never shows STALE"];
+  }},
+  { id: "choose-home", label: "Author picks Home (1)", run: () => {
+    if (!session.wimIndexes.length) {
+      const g = HybridSession.setSourceIso(session, "D:\\\\Win11_arm64.iso", true);
+      HybridSession.settleProbe(session, { generation: g.generation, ok: true, rows: [{ index: 1, name: "Home" }, { index: 3, name: "Pro" }] });
+    }
+    HybridSession.chooseWim(session, 1);
+    lastDelta = "UserChoseWim=true; effective=1";
+    lastTrace = ["ChooseWim is run-host only", "Does not clear Saved SoT by itself"];
+  }},
+  { id: "edit-user", label: "Edit username → dirty", run: () => {
+    HybridSession.setUsername(session, session.username === "winmint" ? "alice" : "winmint");
+    lastDelta = `Username=${session.username}; Dirty=true; CanBuild=false`;
+    lastTrace = ["Authored mutation marks dirty", "Unsaved / stale file cannot Build"];
+  }},
+  { id: "toggle-copilot", label: "Toggle Keep Copilot", run: () => {
+    HybridSession.setKeepCopilot(session, !session.keepCopilot);
+    lastDelta = `KeepCopilot=${session.keepCopilot}; dirty`;
+    lastTrace = ["Preset/chip/policy intent is session-owned", "BuildPlan sees expanded Profile only at Plan()"];
+  }},
+  { id: "plan", label: "Plan (Preview)", run: () => {
+    const r = HybridSession.plan(session);
+    lastDelta = r.message;
+    lastTrace = ["Session expands chips/preset", "Calls BuildPlan.Plan (sole planner)", "Caches PreviewUtf8 — still !CanBuild until Save"];
+  }},
+  { id: "save", label: "AcknowledgeSave (after write)", run: () => {
+    const ok = HybridSession.acknowledgeSave(session, "C:\\\\profiles\\\\winmint.profile.json");
+    lastDelta = ok ? `Saved SoT → ${session.savedProfilePath}; Dirty=false` : session.lastError;
+    lastTrace = ok
+      ? ["Avalonia wrote ProfileUtf8 to disk", "Session.AcknowledgeSave(path)", "CanBuild may become true"]
+      : ["Save rejected — Plan first"];
+  }},
+  { id: "build", label: "TryGetApplyFacts → Build", run: () => {
+    const facts = HybridSession.tryGetApplyFacts(session);
+    if (!facts) {
+      lastDelta = "CanBuild=false — no ApplyFacts (unsaved Preview never Builds)";
+      lastTrace = ["Session gates eligibility", "WizardBuild not called"];
+    } else {
+      lastDelta = `ApplyFacts ${JSON.stringify(facts)}`;
+      lastTrace = ["VM calls WizardBuild.TryApply(facts)", "Apply loads file → Plan → ImageServicing", "No second ComposeAndPlan dialect"];
+    }
+  }},
+  { id: "lane-release", label: "Switch lane to Release", run: () => {
+    HybridSession.setLane(session, "Release");
+    lastDelta = "Lane=Release (run-host; Profile file unchanged)";
+    lastTrace = ["ApplyFacts.imageQuality updates", "No FormatBuildRecipe"];
+  }},
+  { id: "reset", label: "Reset session", run: () => {
+    session = HybridSession.create();
+    prevView = null;
+    lastDelta = "Fresh session";
+    lastTrace = ["New WizardSession instance"];
+  }},
+];
+
+const walkthroughs = [
+  {
+    id: "happy",
+    title: "Happy path",
+    blurb: "Source → Configure → Plan → Save → Build. Watch CanBuild stay false until AcknowledgeSave.",
+    steps: ["iso-ok", "plan", "build", "save", "build"],
+  },
+  {
+    id: "dirty",
+    title: "Dirty after Save",
+    blurb: "Save, then edit username. CanBuild must drop until Plan + re-save — file SoT cannot lie.",
+    steps: ["iso-ok", "plan", "save", "edit-user", "build", "plan", "save", "build"],
+  },
+  {
+    id: "race",
+    title: "Stale WIM probe",
+    blurb: "Two ISO picks race. Snapshot must never show the stale edition list.",
+    steps: ["probe-stale", "choose-home", "plan"],
+  },
+  {
+    id: "unsaved",
+    title: "Unsaved Preview cannot Build",
+    blurb: "Plan alone must not unlock ApplyFacts.",
+    steps: ["iso-ok", "plan", "build"],
+  },
+];
+
+function renderDesigns() {
+  const root = document.getElementById("designs");
+  root.innerHTML = "";
+  Object.values(designs).forEach(d => {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "card" + (d.id === designId ? " selected" : "");
+    el.style.textAlign = "left";
+    el.innerHTML = `<div class="muted">${d.tag}</div><h3 style="margin:6px 0">${d.name}</h3>
+      <code>${d.signature}</code>
+      <p class="muted" style="margin:10px 0 0">${d.depth}</p>`;
+    el.onclick = () => { designId = d.id; render(); };
+    root.appendChild(el);
+  });
+}
+
+function renderFreeplay() {
+  const root = document.getElementById("freeplay");
+  root.innerHTML = "";
+  freeplayActions.forEach(a => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = a.label;
+    b.onclick = () => { a.run(); render(); };
+    root.appendChild(b);
+  });
+}
+
+function renderWalkthroughs() {
+  const tabs = document.getElementById("tabs");
+  const host = document.getElementById("walkthroughs");
+  tabs.innerHTML = "";
+  host.innerHTML = "";
+  let active = walkthroughs[0].id;
+  walkthroughs.forEach(w => {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.textContent = w.title;
+    tab.dataset.id = w.id;
+    tabs.appendChild(tab);
+
+    const pane = document.createElement("div");
+    pane.className = "walkthrough";
+    pane.dataset.id = w.id;
+    pane.innerHTML = `<p>${w.blurb}</p><div class="buttons" data-steps></div>`;
+    const steps = pane.querySelector("[data-steps]");
+    w.steps.forEach((sid, i) => {
+      const action = freeplayActions.find(a => a.id === sid);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "step";
+      b.textContent = `${i + 1}. ${action.label}`;
+      b.onclick = () => {
+        if (i === 0) { session = HybridSession.create(); prevView = null; }
+        action.run();
+        render();
+      };
+      steps.appendChild(b);
+    });
+    host.appendChild(pane);
+
+    tab.onclick = () => {
+      active = w.id;
+      tabs.querySelectorAll("button").forEach(t => t.classList.toggle("active", t.dataset.id === active));
+      host.querySelectorAll(".walkthrough").forEach(p => p.classList.toggle("active", p.dataset.id === active));
+    };
+  });
+  tabs.querySelector(`button[data-id="${active}"]`)?.click();
+}
+
+function flag(v) {
+  return v ? `<span class="good">yes</span>` : `<span class="bad">no</span>`;
+}
+
+function renderState() {
+  const v = HybridSession.view(session);
+  const d = designs[designId];
+  const rows = [
+    ["Design", d.name],
+    ["Source ISO ready", flag(v.sourceIsoReady)],
+    ["Probe busy", flag(v.isProbeBusy)],
+    ["Probe failed", flag(v.probeFailed)],
+    ["Effective WIM", `${v.effectiveWimIndex}${v.userChoseWim ? " (user)" : " (policy)"}`],
+    ["Wim indexes", v.wimIndexes.map(r => r.name).join(", ") || "—"],
+    ["Dirty", flag(v.isDirty)],
+    ["Has Preview", flag(v.hasPreview)],
+    ["Saved path", v.savedProfilePath || "—"],
+    ["CanBuild", flag(v.canBuild)],
+    ["Plan summary", v.planSummary || "—"],
+    ["Last error", v.lastError || "—"],
+    ["ApplyFacts", (() => {
+      const f = HybridSession.tryGetApplyFacts(session);
+      return f ? `<code>${JSON.stringify(f)}</code>` : "<span class=\"bad\">null</span>";
+    })()],
+  ];
+
+  const changed = new Set();
+  if (prevView) {
+    for (const [k] of rows) {
+      // soft highlight via JSON compare of view
+    }
+    const keys = ["sourceIsoReady","isProbeBusy","effectiveWimIndex","isDirty","hasPreview","canBuild","savedProfilePath","planSummary"];
+    keys.forEach(k => { if (JSON.stringify(prevView[k]) !== JSON.stringify(v[k])) changed.add(k); });
+  }
+  prevView = { ...v };
+
+  const labelMap = {
+    sourceIsoReady: "Source ISO ready",
+    isProbeBusy: "Probe busy",
+    effectiveWimIndex: "Effective WIM",
+    isDirty: "Dirty",
+    hasPreview: "Has Preview",
+    canBuild: "CanBuild",
+    savedProfilePath: "Saved path",
+    planSummary: "Plan summary",
+  };
+
+  document.getElementById("state").innerHTML = rows.map(([k, val]) => {
+    const key = Object.entries(labelMap).find(([, lab]) => lab === k)?.[0];
+    const cls = key && changed.has(key) ? "changed" : "";
+    return `<dt>${k}</dt><dd class="${cls}">${val}</dd>`;
+  }).join("");
+
+  document.getElementById("delta").textContent = lastDelta;
+  document.getElementById("trace").innerHTML = lastTrace.map(t => `<li>${t}</li>`).join("");
+  document.getElementById("ownership").innerHTML =
+    `<table><thead><tr><th>Owner</th><th>Owns</th></tr></thead><tbody>` +
+    d.ownership.map(([o, owns]) => `<tr><td>${o}</td><td>${owns}</td></tr>`).join("") +
+    `</tbody></table>
+     <p class="muted" style="margin-top:12px"><strong>Caller learns:</strong> ${d.callerLearns}<br>
+     <strong>Hides:</strong> ${d.hides}<br>
+     <strong>Rejects:</strong> ${d.rejects}</p>`;
+  document.getElementById("snapshot").textContent = JSON.stringify(v, null, 2);
+}
+
+function render() {
+  renderDesigns();
+  renderState();
+}
+
+renderFreeplay();
+renderWalkthroughs();
+render();
+</script>
+</body>
+</html>
