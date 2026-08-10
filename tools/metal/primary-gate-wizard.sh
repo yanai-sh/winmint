@@ -189,7 +189,7 @@ ENV_FILE="${ENV_FILE:-.scratch/primary-gate.env}"
 
 # Run this from the repo root, via Git Bash or WSL (not plain cmd.exe/pwsh).
 
-banner "WinMint Primary gate (#96)"
+banner "WinMint Primary wipe path"
 
 # ── Stage 1: Restore path ──────────────────────────────────────────────────
 stage "Restore path"
@@ -239,17 +239,17 @@ fi
 # ── Stage 4: Gate B + wipe ISO (one Release + package-strict Apply) ─────────
 stage "Gate B + wipe ISO"
 say "From the repo root, run Primary once (Release + package-strict; WORK defaults to"
-say "  .scratch/sl7-build). Day-to-day metal stays Test and does not use --package-strict."
+say "  .scratch/sl7-primary). Day-to-day metal stays Test under .scratch/sl7-build."
 step "just primary-gate ISO=$SOURCE_ISO"
 note "This drives tools/metal/Invoke-MetalApply.ps1 and can take a while — one build only."
 pause "Press Enter once that command has finished"
-if confirm "Does .scratch/sl7-build/metal-acceptance.json exist (Gate B green)?"; then
+if confirm "Does .scratch/sl7-primary/metal-acceptance.json exist (Gate B green)?"; then
   printf '  %s✓%s Gate B acceptance evidence present\n' "$GREEN" "$RESET"
 else
   warn "no Gate B evidence — do not proceed to a destructive install without it."
   exit 1
 fi
-WIPE_ISO=".scratch/sl7-build/out.iso"
+WIPE_ISO=".scratch/sl7-primary/out.iso"
 if [[ -f "$WIPE_ISO" ]]; then
   printf '  %s✓%s %s exists\n' "$GREEN" "$RESET" "$WIPE_ISO"
   write_env WIPE_ISO "$WIPE_ISO"
@@ -298,9 +298,9 @@ say "Eyeball packages.evidence.json in the copied evidence and confirm it shows"
 say "the curated packages (Cursor, Zen, WSL Fedora) green with no failures."
 note "A small assert script for this evidence may be a follow-up — not required today."
 if confirm "packages.evidence.json shows curated packages green?"; then
-  printf '  %s✓%s Primary gate looks met — remember to close #96 once you'\''re sure.\n' "$GREEN" "$RESET"
+  printf '  %s✓%s Primary wipe path looks met — commit or attach evidence in-repo when ready.\n' "$GREEN" "$RESET"
 else
-  warn "not green yet — do not consider the Primary gate met."
+  warn "not green yet — do not treat Primary as proven without install evidence."
 fi
 
 finish

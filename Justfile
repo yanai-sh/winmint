@@ -6,7 +6,7 @@ default:
     @just --list
 
 wizard:
-    dotnet run --project src/WinMint.Wizard/WinMint.Wizard.csproj
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintWizard.ps1'
 
 restore:
     dotnet restore
@@ -15,7 +15,11 @@ build: restore
     dotnet build --no-restore
 
 plan PROFILE="samples/smoke.profile.json" OUT=".scratch/plan":
-    dotnet run --project src/WinMint.Cli -- plan '{{PROFILE}}' --out '{{OUT}}'
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- plan '{{PROFILE}}' --out '{{OUT}}'
+
+# Pack no-clone toolkit zip + sha256 (win-arm64). Example: just pack-release v0.1.0
+pack-release TAG:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/release/Pack-WinMintRelease.ps1' -Tag '{{TAG}}'
 
 format-check:
     dotnet format --verify-no-changes
@@ -23,6 +27,10 @@ format-check:
 check: format-check build
     dotnet test --no-build -- --filter-not-trait "Category=S4" --filter-not-trait "Category=Metal"
     just analyze-servicing
+    just bootstrap-contract
+
+bootstrap-contract:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-BootstrapContract.ps1'
 
 # Host-only: STACK promised PSScriptAnalyzer once servicing/ exists. Not a product NuGet.
 # Install once: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser
@@ -55,7 +63,7 @@ watch-apply WORK=".scratch/sl7-build":
 # ponytail: recipe keeps Apply name (DISM loop); Cli verb is build only.
 # INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs (Smoke/acceptance only).
 apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STUBS="false":
-    Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $marker = Join-Path '{{WORK}}' 'media\sources\.winmint-single-index'; $reuse = @(); if (Test-Path -LiteralPath $marker) { Write-Host 'Found single-image marker — passing --reuse-media'; $reuse = @('--reuse-media') }; $stubs = @(); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $stubs = @('--include-smoke-stubs') }; Set-Location '{{justfile_directory()}}'; & dotnet run --project src/WinMint.Cli -- build '{{PROFILE}}' --iso '{{ISO}}' --work '{{WORK}}' @stubs @reuse; exit $LASTEXITCODE
+    Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $marker = Join-Path '{{WORK}}' 'media\sources\.winmint-single-index'; $reuse = @(); if (Test-Path -LiteralPath $marker) { Write-Host 'Found single-image marker — passing --reuse-media'; $reuse = @('--reuse-media') }; $stubs = @(); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $stubs = @('--include-smoke-stubs') }; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}') + $stubs + $reuse; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
 
 # S4 Hyper-V Smoke — not part of `just check`. Needs admin + Hyper-V + user ISO.
 # Assert-only (no VM): just smoke-assert tests/fixtures/smoke-evidence
@@ -75,10 +83,14 @@ smoke-assert EVIDENCE:
 metal ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="Test":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality '{{QUALITY}}'
 
-# Primary Gate B + wipe ISO: Release + package-strict. Not day-to-day metal.
-# After success: flash WORK\out.iso (UEFI USB); check evidence.json digests.outputIso.sha256; expect WinPE LaunchApply.
-primary-gate ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json":
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality Release -PackageStrict -ExpectDrivers
+# Primary Gate B + wipe ISO: Release + package-strict. Separate WORK from Test metal (do not share sl7-build).
+# After success: flash WORK\out.iso (UEFI USB); check digests outputIso.sha256 in evidence.json; expect WinPE LaunchApply.
+primary-gate ISO WORK=".scratch/sl7-primary" PROFILE="samples/sl7.profile.json":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality Release -PackageStrict -ExpectDrivers -RequireLane Release
 
 metal-assert WORK=".scratch/sl7-build":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -AssertOnly -WorkDirectory '{{WORK}}' -ExpectDrivers
+
+# Wipe-lane assert only (fails on Test evidence).
+primary-gate-assert WORK=".scratch/sl7-primary":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -AssertOnly -WorkDirectory '{{WORK}}' -ExpectDrivers -RequireLane Release

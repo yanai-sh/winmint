@@ -41,7 +41,7 @@ Cross-cuts (reference, not a frozen file set): [CONTRACTS](design/CONTRACTS.md) 
 
 **Smoke:** Pro Hyper-V; Local+autoLogon; DMA on; splash before Explorer; DMA hard-field evidence; `Test` lane; reboot keeps Shell; pinned acceptance remove-list exercised. Maintainer `just smoke` on a real Source ISO — fixture S4 alone is not exit. Same Supervisor/settle/job executor as production. Detail: [Smoke](specs/2026-07-27-smoke.md).
 
-**Primary:** Release-lane ISO from frozen `samples/sl7.profile.json` safe to wipe primary Surface Laptop 7 — Gate B → destructive install → FirstLogon + `--package-strict` green + evidence. Restore = operator hygiene, not a WinMint download.
+**Primary:** Release-lane ISO from frozen `samples/sl7.profile.json` safe to wipe primary Surface Laptop 7 — Gate B (`just primary-gate` / `metal-acceptance.json`) → destructive install → FirstLogon + `--package-strict` green + evidence copied off-box. **Gate B alone does not meet Primary**; record wipe results in-repo when you have them. Do not gate Primary on a tracking issue. Restore = operator hygiene, not a WinMint download.
 
 ## Cold history
 

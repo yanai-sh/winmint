@@ -47,8 +47,8 @@ _Avoid_: sticky intermediate failures as authoritative
 **Smoke** — Hyper-V plumbing acceptance (`Test` lane, Local+autoLogon, Pro).  
 _Avoid_: treating Smoke alone as Primary wipe confidence
 
-**Primary gate** — Release `samples/sl7.profile.json` safe to wipe primary SL7. Details: [DESIGN](docs/DESIGN.md#acceptance).  
-_Avoid_: shipping recovery images
+**Primary** — Release `samples/sl7.profile.json` safe to wipe primary SL7 after Gate B + real install evidence in-repo. Details: [DESIGN](docs/DESIGN.md#acceptance).  
+_Avoid_: shipping recovery images; treating Gate B alone as wipe-proven; gating Primary on a tracking issue
 
 **Image quality** — Run override `Test` | `Release` (not Profile).
 

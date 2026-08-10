@@ -41,6 +41,9 @@ param(
     [Parameter(ParameterSetName = 'AssertOnly')]
     [string] $WorkDirectory = '',
 
+    [ValidateSet('Test', 'Release')]
+    [string] $RequireLane = '',
+
     [switch] $ExpectDrivers,
 
     [switch] $ExpectNativePackageAuditJobs,
@@ -57,11 +60,18 @@ Set-Location $repoRoot
 $assertScript = Join-Path $PSScriptRoot 'Assert-MetalEvidence.ps1'
 
 function Invoke-MetalAssert {
-    param([string] $Dir, [switch] $Drivers, [switch] $NativeAuditJobs, [switch] $WingetImport)
+    param(
+        [string] $Dir,
+        [string] $Lane = '',
+        [switch] $Drivers,
+        [switch] $NativeAuditJobs,
+        [switch] $WingetImport
+    )
     $assertParams = @{
         WorkDirectory    = $Dir
         RequireOutputIso = $true
     }
+    if (-not [string]::IsNullOrWhiteSpace($Lane)) { $assertParams['RequireLane'] = $Lane }
     if ($Drivers) { $assertParams['ExpectDrivers'] = $true }
     if ($NativeAuditJobs) { $assertParams['ExpectNativePackageAuditJobs'] = $true }
     if ($WingetImport) { $assertParams['ExpectWingetImport'] = $true }
@@ -71,7 +81,7 @@ function Invoke-MetalAssert {
 
 if ($AssertOnly) {
     $dir = if ([string]::IsNullOrWhiteSpace($WorkDirectory)) { $Work } else { $WorkDirectory }
-    Invoke-MetalAssert -Dir $dir -Drivers:$ExpectDrivers -NativeAuditJobs:$ExpectNativePackageAuditJobs -WingetImport:$ExpectWingetImport
+    Invoke-MetalAssert -Dir $dir -Lane $RequireLane -Drivers:$ExpectDrivers -NativeAuditJobs:$ExpectNativePackageAuditJobs -WingetImport:$ExpectWingetImport
     exit 0
 }
 
@@ -112,10 +122,24 @@ catch {
     Write-Warning "Could not read Profile packages.winget: $($_.Exception.Message)"
 }
 
+function Resolve-WinMintCliExe {
+    $published = Join-Path $repoRoot 'bin\cli\WinMint.Cli.exe'
+    if (Test-Path -LiteralPath $published -PathType Leaf) {
+        return $published
+    }
+    return $null
+}
+
 if (-not $SkipApply) {
-    Write-Host 'Publishing Supervisor (Release AOT)…'
-    & just publish-provisioning
-    if ($LASTEXITCODE -ne 0) { throw "just publish-provisioning failed: $LASTEXITCODE" }
+    $supervisor = Join-Path $repoRoot 'artifacts\provisioning\WinMint.Provisioning.exe'
+    if (-not (Test-Path -LiteralPath $supervisor -PathType Leaf)) {
+        Write-Host 'Publishing Supervisor (Release AOT)…'
+        & just publish-provisioning
+        if ($LASTEXITCODE -ne 0) { throw "just publish-provisioning failed: $LASTEXITCODE" }
+    }
+    else {
+        Write-Host "Using packaged Supervisor: $supervisor"
+    }
 
     $reuseArgs = @()
     $marker = Join-Path $Work 'media\sources\.winmint-single-index'
@@ -129,11 +153,37 @@ if (-not $SkipApply) {
 
     Write-Host "Metal Apply Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality…"
     Write-Host 'Pre-wipe only: mutates offline WIM from Source ISO — does not install to this device.'
-    & dotnet run --project src/WinMint.Cli -- build $Profile --iso $Iso --work $Work --image-quality $ImageQuality --package-audit-strict @strictArgs @reuseArgs
+    $cliExe = Resolve-WinMintCliExe
+    $buildArgs = @('build', $Profile, '--iso', $Iso, '--work', $Work, '--image-quality', $ImageQuality, '--package-audit-strict') + $strictArgs + $reuseArgs
+    if ($cliExe) {
+        & $cliExe @buildArgs
+    }
+    else {
+        & dotnet run --project src/WinMint.Cli -- @buildArgs
+    }
     if ($LASTEXITCODE -ne 0) { throw "Metal Apply failed: $LASTEXITCODE" }
 }
 
-Invoke-MetalAssert -Dir $Work -Drivers:$expectDrivers -NativeAuditJobs:$expectNativeAuditJobs -WingetImport:$expectWingetImport
-Write-Host "Metal gate OK. Work preserved: $Work"
+$assertLane = if (-not [string]::IsNullOrWhiteSpace($RequireLane)) { $RequireLane } else { $ImageQuality }
+Invoke-MetalAssert -Dir $Work -Lane $assertLane -Drivers:$expectDrivers -NativeAuditJobs:$expectNativeAuditJobs -WingetImport:$expectWingetImport
+
+$outIso = Join-Path $Work 'out.iso'
+$sha = $null
+$evidencePath = Join-Path $Work 'evidence.json'
+if (Test-Path -LiteralPath $evidencePath) {
+    $ev = Get-Content -LiteralPath $evidencePath -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($ev.PSObject.Properties.Name -contains 'digests' -and $null -ne $ev.digests) {
+        foreach ($p in $ev.digests.PSObject.Properties) {
+            if ([string]$p.Name -eq 'outputIso.sha256') { $sha = [string]$p.Value; break }
+        }
+    }
+}
+Write-Host "Metal gate OK. Work=$Work lane=$assertLane"
+if ($sha) { Write-Host "outputIso.sha256=$sha" }
+if ($assertLane -eq 'Release') {
+    Write-Host "Flash only this workdir's out.iso ($outIso). Do not flash a Test metal workdir (.scratch/sl7-build)."
+} else {
+    Write-Host 'Test lane — not the Primary wipe ISO. Use just primary-gate for Release wipe media.'
+}
 Write-Host 'Next step (manual, destructive): write out.iso to USB and bare-metal install — not run by this harness.'
 exit 0

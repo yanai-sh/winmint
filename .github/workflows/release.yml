@@ -1,0 +1,42 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pack:
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET 11 (latest preview on channel)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "11.0.x"
+
+      - name: Pack toolkit zip
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          pwsh -NoProfile -File tools/release/Pack-WinMintRelease.ps1 -Tag $tag -OutDir .scratch/release
+          Get-ChildItem .scratch/release | Format-Table Name, Length
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            .scratch/release/WinMint-${{ github.ref_name }}.zip
+            .scratch/release/WinMint-${{ github.ref_name }}.zip.sha256
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

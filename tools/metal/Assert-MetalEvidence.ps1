@@ -27,7 +27,11 @@ param(
 
     [switch] $ExpectNativePackageAuditJobs,
 
-    [switch] $ExpectWingetImport
+    [switch] $ExpectWingetImport,
+
+    # When set (e.g. wipe assert), evidence.lane must match — blocks greening a Test tree as Primary.
+    [ValidateSet('Test', 'Release')]
+    [string] $RequireLane = ''
 )
 
 Set-StrictMode -Version Latest
@@ -56,6 +60,9 @@ if (-not $lane) {
 }
 if ($lane -notin @('Test', 'Release')) {
     throw "lane marker must be Test|Release, got '$lane'"
+}
+if (-not [string]::IsNullOrWhiteSpace($RequireLane) -and $lane -ne $RequireLane) {
+    throw "lane must be $RequireLane for this assert, got '$lane' (do not flash a Test workdir as Primary)"
 }
 
 $digestMap = @{}

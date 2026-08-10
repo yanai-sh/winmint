@@ -13,52 +13,62 @@ You supply the official Microsoft ISO. WinMint does not download or redistribute
 
 - Start with a profile that describes the Windows install you want
 - Turn that profile into a bootable Windows ISO
-- Service the ISO offline, then finish live-user setup with the FirstLogon Provisioning Supervisor
+- Service the ISO offline, then finish live-user setup on first sign-in
 - Supply your own [Windows 11 ISO from Microsoft](https://www.microsoft.com/software-download/windows11)
 - Browse [sample profiles and their wipe risk](samples/README.md) before you build
 
 ## Status
 
-WinMint is Alpha. Hyper-V Smoke runs against a real source ISO. The command-line interface is primary; `just wizard` is optional. Primary wipe is a maintainer gate in [#96](https://github.com/yanai-sh/winmint/issues/96), not general availability.
+WinMint is Alpha. You can plan and build ISOs today. A full wipe install (USB → WinPE → OOBE → FirstLogon) is something you run on your own hardware; land the results in the repo when you have them. Gate B (`just primary-gate`) is pre-wipe ISO evidence only — it is not the same as a completed install.
 
-## Try in 5 minutes
+## Quickstart
 
-You can explore WinMint without a source ISO. Start the Wizard, or validate and plan the smoke sample:
+No git clone and no source zip. On Windows (ARM64 recommended), in PowerShell:
 
 ```powershell
-just wizard
-# Or validate and plan the default smoke sample:
-just plan
+irm https://winmint.yanai.sh | iex
 ```
 
-## Build later
-
-Building needs a [Windows 11 ISO from Microsoft](https://www.microsoft.com/software-download/windows11), an administrator session, .NET 11 preview SDK, and `pwsh` 7.6+.
-Offline Deployment Image Servicing and Management (DISM) work takes multiple hours.
-
-Wipe path (Primary / maintainer gate [#96](https://github.com/yanai-sh/winmint/issues/96)):
+That downloads a **verified toolkit** release (SHA-256 checked), then opens the Wizard. Headless Cli:
 
 ```powershell
-# Lab password for samples/sl7.profile.json — see docs/design/SECRETS.md
+irm https://winmint.yanai.sh/cli | iex
+```
+
+Needs network once, plus PowerShell 7.6+ and [Just](https://github.com/casey/just#installation) (the bootstrap installs them via winget when missing). Building an ISO later still needs a Microsoft Source ISO, an administrator session, and several hours of offline image servicing.
+
+## Build a wipe ISO
+
+From a toolkit session (or a contributor checkout), use `samples/sl7.profile.json`. It expects a lab password and shows the OOBE Wi‑Fi page — stay nearby for network setup ([SECRETS](docs/design/SECRETS.md)).
+
+```powershell
 Set-Content -Path .scratch/sl7.password -Value 'your-lab-password' -NoNewline
 just primary-gate ISO=path\to\source.iso
-# Flash WORK\out.iso (default WORK=.scratch/sl7-build) to UEFI USB with any reliable flasher.
-# Verify ISO SHA-256 against evidence.json digests.outputIso.sha256 before wipe.
-# Boot expects WinPE LaunchApply, not Setup.
+# Watch progress in another terminal (stages can sit for a long time with no % complete):
+just watch-apply WORK=.scratch/sl7-primary
 ```
 
-`primary-gate` creates the wipe ISO with `Release` quality and package-strict checks. Use `just metal ISO=path\to\source.iso` for iterative Test Gate B work; it stays `Test` and does not replace the primary wipe gate.
+When it finishes, flash `.scratch/sl7-primary\out.iso` to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `.scratch/sl7-primary\evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup.
+
+`just primary-gate` builds the wipe ISO (`Release`, package-strict). Keep it in `.scratch/sl7-primary` — do not flash a Test build from `.scratch/sl7-build`.
+
+For iterative Test builds only: `just metal ISO=path\to\source.iso` (default workdir `.scratch/sl7-build`). That path is not the wipe gate.
 
 Before you wipe a machine, prepare a restore path for that PC: OEM recovery when available, or a Windows recovery drive. WinMint does not download or ship recovery images.
 
 <details>
-<summary>Maintainer</summary>
+<summary>From source (contributors)</summary>
 
-- Run `just check` for unit tests, the fake elevated runner, and servicing analysis. It does not use an ISO or DISM.
-- Watch an active Apply with `just watch-apply WORK=.scratch/sl7-build`. `STALL_SUSPECT` belongs to Smoke VM evidence only, never Apply.
-- Run `just exclude-scratch` from an administrator session to exclude `.scratch` and servicing work from Defender scanning.
-- Use `just clean-artifacts` after Apply or Smoke campaigns. It keeps one work directory and two ISOs under `.scratch`; `just wipe-scratch` removes all scratch artifacts. Do not run either during Apply or Smoke.
+```powershell
+git clone https://github.com/yanai-sh/winmint.git
+cd winmint
+winget install Casey.Just
+# .NET 11 preview SDK — see global.json
+just wizard
+just plan
+just pack-release v0.0.0-local
+```
 
 </details>
 
-[Design](docs/DESIGN.md) · [Issues](https://github.com/yanai-sh/winmint/issues) · [GPL-3.0-or-later](LICENSE)
+[Issues](https://github.com/yanai-sh/winmint/issues) · [GPL-3.0-or-later](LICENSE)
