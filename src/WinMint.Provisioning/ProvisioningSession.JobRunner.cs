@@ -8,7 +8,7 @@ public static partial class ProvisioningSession
 {
     private static class JobRunner
     {
-        public static JobsPhaseResult Execute(
+        public static async Task<JobsPhaseResult> ExecuteAsync(
             ProvisioningBundle bundle,
             SessionEnvironment env,
             List<string> phases,
@@ -42,7 +42,8 @@ public static partial class ProvisioningSession
                     return FailJob(code, message);
                 }
 
-                packageFailures.Add(new PackageFailureEntry(failingJob.Id, failingJob.Kind, exitCode, message));
+                packageFailures.Add(
+                    new PackageFailureEntry(failingJob.Id, failingJob.Kind.ToWire(), exitCode, message));
                 return null;
             }
 
@@ -56,307 +57,331 @@ public static partial class ProvisioningSession
 
                 ct.ThrowIfCancellationRequested();
 
-                if (string.Equals(job.Kind, "appx.safetyNet", StringComparison.OrdinalIgnoreCase))
-                {
-                    JobsPhaseResult? appxResult = RunAppxSafetyNetJob(bundle, env, phases, job);
-                    if (appxResult is not null)
-                    {
-                        return appxResult.Value;
-                    }
-
-                    continue;
-                }
-
-                if (string.Equals(job.Kind, "onedrive.uninstall", StringComparison.OrdinalIgnoreCase))
-                {
-                    JobsPhaseResult? od = RunOneDriveUninstallJob(env, phases, job, ct);
-                    if (od is not null)
-                    {
-                        return od.Value;
-                    }
-
-                    continue;
-                }
-
-                if (string.Equals(job.Kind, "reservedStorage.disable", StringComparison.OrdinalIgnoreCase))
-                {
-                    JobsPhaseResult? rs = RunReservedStorageDisableJob(env, phases, job, ct);
-                    if (rs is not null)
-                    {
-                        return rs.Value;
-                    }
-
-                    continue;
-                }
-
-                if (string.Equals(job.Kind, "doh.set", StringComparison.OrdinalIgnoreCase))
-                {
-                    JobsPhaseResult? doh = RunDohSetJob(env, phases, job, ct);
-                    if (doh is not null)
-                    {
-                        return doh.Value;
-                    }
-
-                    continue;
-                }
-
-                if (string.Equals(job.Kind, "package.auditNative", StringComparison.OrdinalIgnoreCase))
-                {
-                    JobsPhaseResult? audit = RunNativePackageAuditJob(env, phases, job, ct);
-                    if (audit is not null)
-                    {
-                        return audit.Value;
-                    }
-
-                    continue;
-                }
-
                 string fileName;
                 IReadOnlyList<string> arguments;
-                if (string.Equals(job.Kind, "stub", StringComparison.OrdinalIgnoreCase))
+                switch (job.Kind)
                 {
-                    fileName = "cmd.exe";
-                    arguments = ["/c", "exit", "0"];
-                }
-                else if (string.Equals(job.Kind, "winget", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(job.Kind, "winget.import", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (string.Equals(job.Kind, "winget", StringComparison.OrdinalIgnoreCase)
-                        && string.IsNullOrWhiteSpace(job.PackageId))
-                    {
-                        return FailJob("jobs.failed", $"Job '{job.Id}' kind winget requires packageId.");
-                    }
-
-                    if (env.Appx is null)
-                    {
-                        return FailJob("jobs.failed", $"Job '{job.Id}' requires IAppxPackageManager.");
-                    }
-
-                    try
-                    {
-                        env.Appx.RegisterPackageFamilyForCurrentUser(DesktopAppInstallerFamilyName);
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        JobsPhaseResult? regFail = RecordPackageFailure(
-                            job,
-                            "jobs.winget.register_failed",
-                            $"{job.Id}: register {DesktopAppInstallerFamilyName}: {ex.Message}");
-                        if (regFail is not null)
+                    case ProvisionJobKind.AppxSafetyNet:
                         {
-                            return regFail.Value;
-                        }
-
-                        continue;
-                    }
-
-                    string? resolvedWinget = env.Appx.TryResolveWingetExecutablePath();
-                    if (string.IsNullOrWhiteSpace(resolvedWinget))
-                    {
-                        JobsPhaseResult? pathFail = RecordPackageFailure(
-                            job,
-                            "jobs.winget.path_missing",
-                            $"{job.Id}: winget.exe not found after registering {DesktopAppInstallerFamilyName}.");
-                        if (pathFail is not null)
-                        {
-                            return pathFail.Value;
-                        }
-
-                        continue;
-                    }
-
-                    fileName = resolvedWinget;
-
-                    if (string.Equals(job.Kind, "winget.import", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (!File.Exists(BundleLoader.DefaultGuestWingetImportPath))
-                        {
-                            JobsPhaseResult? importFail = RecordPackageFailure(
-                                job,
-                                "jobs.winget.import_missing",
-                                $"{job.Id}: winget-import.json missing at {BundleLoader.DefaultGuestWingetImportPath}.");
-                            if (importFail is not null)
+                            JobsPhaseResult? appxResult = await RunAppxSafetyNetJobAsync(bundle, env, phases, job, ct)
+                                .ConfigureAwait(false);
+                            if (appxResult is not null)
                             {
-                                return importFail.Value;
+                                return appxResult.Value;
                             }
 
                             continue;
                         }
 
-                        arguments =
-                        [
-                            "import",
-                            "--import-file",
-                            BundleLoader.DefaultGuestWingetImportPath,
-                            "--accept-package-agreements",
-                            "--accept-source-agreements",
-                            "--disable-interactivity",
-                        ];
-                    }
-                    else
-                    {
-                        arguments =
-                        [
-                            "install",
-                            "--id",
-                            job.PackageId!,
-                            "--exact",
-                            "--silent",
-                            "--accept-package-agreements",
-                            "--accept-source-agreements",
-                            "--disable-interactivity",
-                        ];
-                        if (!string.IsNullOrWhiteSpace(job.WingetArchitecture))
+                    case ProvisionJobKind.OneDriveUninstall:
                         {
-                            arguments = [.. arguments, "--architecture", job.WingetArchitecture];
+                            JobsPhaseResult? od = RunOneDriveUninstallJob(env, phases, job, ct);
+                            if (od is not null)
+                            {
+                                return od.Value;
+                            }
+
+                            continue;
                         }
-                    }
-                }
-                else if (string.Equals(job.Kind, "scoop", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(job.Kind, "scoop.batch", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (string.Equals(job.Kind, "scoop", StringComparison.OrdinalIgnoreCase)
-                        && string.IsNullOrWhiteSpace(job.PackageId))
-                    {
-                        return FailJob("jobs.failed", $"Job '{job.Id}' kind scoop requires packageId.");
-                    }
 
-                    if (string.Equals(job.Kind, "scoop.batch", StringComparison.OrdinalIgnoreCase)
-                        && string.IsNullOrWhiteSpace(job.PackageId))
-                    {
-                        return FailJob("jobs.failed", $"Job '{job.Id}' kind scoop.batch requires packageId.");
-                    }
-
-                    if (env.ResolveScoopCmd is null)
-                    {
-                        return FailJob("jobs.failed", $"Job '{job.Id}' requires ResolveScoopCmd.");
-                    }
-
-                    JobsPhaseResult? scoopReady = EnsureScoopReady(env, job, RecordPackageFailure, ct, out string? scoopCmd);
-                    if (scoopReady is not null)
-                    {
-                        return scoopReady.Value;
-                    }
-
-                    if (scoopCmd is null)
-                    {
-                        continue;
-                    }
-
-                    if (job.ScoopBuckets is { Count: > 0 })
-                    {
-                        foreach (string bucket in job.ScoopBuckets)
+                    case ProvisionJobKind.ReservedStorageDisable:
                         {
-                            if (string.IsNullOrWhiteSpace(bucket)
-                                || string.Equals(bucket, "main", StringComparison.OrdinalIgnoreCase))
+                            JobsPhaseResult? rs = RunReservedStorageDisableJob(env, phases, job, ct);
+                            if (rs is not null)
+                            {
+                                return rs.Value;
+                            }
+
+                            continue;
+                        }
+
+                    case ProvisionJobKind.WorkstationQuiet:
+                        {
+                            JobsPhaseResult? quiet = RunWorkstationQuietJob(env, phases, job);
+                            if (quiet is not null)
+                            {
+                                return quiet.Value;
+                            }
+
+                            continue;
+                        }
+
+                    case ProvisionJobKind.DohSet:
+                        {
+                            JobsPhaseResult? doh = RunDohSetJob(env, phases, job, ct);
+                            if (doh is not null)
+                            {
+                                return doh.Value;
+                            }
+
+                            continue;
+                        }
+
+                    case ProvisionJobKind.PackageAuditNative:
+                        {
+                            JobsPhaseResult? audit = RunNativePackageAuditJob(env, phases, job, ct);
+                            if (audit is not null)
+                            {
+                                return audit.Value;
+                            }
+
+                            continue;
+                        }
+
+                    case ProvisionJobKind.Stub:
+                        fileName = "cmd.exe";
+                        arguments = ["/c", "exit", "0"];
+                        break;
+
+                    case ProvisionJobKind.Winget:
+                    case ProvisionJobKind.WingetImport:
+                        {
+                            if (job.Kind is ProvisionJobKind.Winget && string.IsNullOrWhiteSpace(job.PackageId))
+                            {
+                                return FailJob("jobs.failed", $"Job '{job.Id}' kind winget requires packageId.");
+                            }
+
+                            if (env.Appx is null)
+                            {
+                                return FailJob("jobs.failed", $"Job '{job.Id}' requires IAppxPackageManager.");
+                            }
+
+                            try
+                            {
+                                await env.Appx.RegisterPackageFamilyForCurrentUserAsync(
+                                        DesktopAppInstallerFamilyName,
+                                        ct)
+                                    .ConfigureAwait(false);
+                            }
+                            catch (Exception ex) when (ex is not OperationCanceledException)
+                            {
+                                JobsPhaseResult? regFail = RecordPackageFailure(
+                                    job,
+                                    "jobs.winget.register_failed",
+                                    $"{job.Id}: register {DesktopAppInstallerFamilyName}: {ex.Message}");
+                                if (regFail is not null)
+                                {
+                                    return regFail.Value;
+                                }
+
+                                continue;
+                            }
+
+                            string? resolvedWinget = env.Appx.TryResolveWingetExecutablePath();
+                            if (string.IsNullOrWhiteSpace(resolvedWinget))
+                            {
+                                JobsPhaseResult? pathFail = RecordPackageFailure(
+                                    job,
+                                    "jobs.winget.path_missing",
+                                    $"{job.Id}: winget.exe not found after registering {DesktopAppInstallerFamilyName}.");
+                                if (pathFail is not null)
+                                {
+                                    return pathFail.Value;
+                                }
+
+                                continue;
+                            }
+
+                            fileName = resolvedWinget;
+
+                            if (job.Kind is ProvisionJobKind.WingetImport)
+                            {
+                                if (!File.Exists(BundleLoader.DefaultGuestWingetImportPath))
+                                {
+                                    JobsPhaseResult? importFail = RecordPackageFailure(
+                                        job,
+                                        "jobs.winget.import_missing",
+                                        $"{job.Id}: winget-import.json missing at {BundleLoader.DefaultGuestWingetImportPath}.");
+                                    if (importFail is not null)
+                                    {
+                                        return importFail.Value;
+                                    }
+
+                                    continue;
+                                }
+
+                                arguments =
+                                [
+                                    "import",
+                                "--import-file",
+                                BundleLoader.DefaultGuestWingetImportPath,
+                                "--accept-package-agreements",
+                                "--accept-source-agreements",
+                                "--disable-interactivity",
+                            ];
+                            }
+                            else
+                            {
+                                arguments =
+                                [
+                                    "install",
+                                "--id",
+                                job.PackageId!,
+                                "--exact",
+                                "--silent",
+                                "--accept-package-agreements",
+                                "--accept-source-agreements",
+                                "--disable-interactivity",
+                            ];
+                                if (!string.IsNullOrWhiteSpace(job.WingetArchitecture))
+                                {
+                                    arguments = [.. arguments, "--architecture", job.WingetArchitecture];
+                                }
+                            }
+
+                            break;
+                        }
+
+                    case ProvisionJobKind.Scoop:
+                    case ProvisionJobKind.ScoopBatch:
+                        {
+                            if (string.IsNullOrWhiteSpace(job.PackageId))
+                            {
+                                string kindWire = job.Kind.ToWire();
+                                return FailJob(
+                                    "jobs.failed",
+                                    $"Job '{job.Id}' kind {kindWire} requires packageId.");
+                            }
+
+                            if (env.ResolveScoopCmd is null)
+                            {
+                                return FailJob("jobs.failed", $"Job '{job.Id}' requires ResolveScoopCmd.");
+                            }
+
+                            JobsPhaseResult? scoopReady = EnsureScoopReady(env, job, RecordPackageFailure, ct, out string? scoopCmd);
+                            if (scoopReady is not null)
+                            {
+                                return scoopReady.Value;
+                            }
+
+                            if (scoopCmd is null)
                             {
                                 continue;
                             }
 
-                            ProcessStartResult bucketAdd;
-                            try
+                            if (job.ScoopBuckets is { Count: > 0 })
                             {
-                                bucketAdd = env.Processes.Run(scoopCmd, ["bucket", "add", bucket], ct);
-                            }
-                            catch (Exception ex) when (ex is not OperationCanceledException)
-                            {
-                                JobsPhaseResult? bucketFail = RecordPackageFailure(
-                                    job,
-                                    "jobs.scoop.bucket_failed",
-                                    $"{job.Id}: scoop bucket add {bucket}: {ex.Message}");
-                                if (bucketFail is not null)
+                                bool bucketsFailed = false;
+                                foreach (string bucket in job.ScoopBuckets)
                                 {
-                                    return bucketFail.Value;
+                                    if (string.IsNullOrWhiteSpace(bucket)
+                                        || string.Equals(bucket, "main", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        continue;
+                                    }
+
+                                    ProcessStartResult bucketAdd;
+                                    try
+                                    {
+                                        bucketAdd = env.Processes.Run(scoopCmd, ["bucket", "add", bucket], ct);
+                                    }
+                                    catch (Exception ex) when (ex is not OperationCanceledException)
+                                    {
+                                        JobsPhaseResult? bucketFail = RecordPackageFailure(
+                                            job,
+                                            "jobs.scoop.bucket_failed",
+                                            $"{job.Id}: scoop bucket add {bucket}: {ex.Message}");
+                                        if (bucketFail is not null)
+                                        {
+                                            return bucketFail.Value;
+                                        }
+
+                                        bucketsFailed = true;
+                                        break;
+                                    }
+
+                                    if (bucketAdd.ExitCode != 0)
+                                    {
+                                        JobsPhaseResult? bucketFail = RecordPackageFailure(
+                                            job,
+                                            "jobs.scoop.bucket_failed",
+                                            $"{job.Id}: scoop bucket add {bucket} exited {bucketAdd.ExitCode}.");
+                                        if (bucketFail is not null)
+                                        {
+                                            return bucketFail.Value;
+                                        }
+
+                                        bucketsFailed = true;
+                                        break;
+                                    }
                                 }
 
-                                goto ScoopBucketsFailed;
-                            }
-
-                            if (bucketAdd.ExitCode != 0)
-                            {
-                                JobsPhaseResult? bucketFail = RecordPackageFailure(
-                                    job,
-                                    "jobs.scoop.bucket_failed",
-                                    $"{job.Id}: scoop bucket add {bucket} exited {bucketAdd.ExitCode}.");
-                                if (bucketFail is not null)
+                                if (bucketsFailed)
                                 {
-                                    return bucketFail.Value;
+                                    continue;
                                 }
-
-                                goto ScoopBucketsFailed;
                             }
+
+                            fileName = scoopCmd;
+                            if (job.Kind is ProvisionJobKind.ScoopBatch)
+                            {
+                                string[] ids = job.PackageId.Split(
+                                    ';',
+                                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                arguments = ["install", .. ids];
+                            }
+                            else
+                            {
+                                arguments = ["install", job.PackageId];
+                            }
+
+                            break;
                         }
-                    }
 
-                    fileName = scoopCmd;
-                    if (string.Equals(job.Kind, "scoop.batch", StringComparison.OrdinalIgnoreCase))
-                    {
-                        string[] ids = job.PackageId!.Split(
-                            ';',
-                            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                        arguments = ["install", .. ids];
-                    }
-                    else
-                    {
-                        arguments = ["install", job.PackageId!];
-                    }
+                    case ProvisionJobKind.Wsl:
+                        {
+                            if (string.IsNullOrWhiteSpace(job.PackageId))
+                            {
+                                return FailJob(
+                                    "jobs.failed",
+                                    $"Job '{job.Id}' kind wsl requires packageId (distro name).");
+                            }
 
-                    goto ScoopRun;
+                            if (string.Equals(job.WslInstallKind, "fromFile", StringComparison.OrdinalIgnoreCase))
+                            {
+                                JobsPhaseResult? fromFile = await RunWslFromFileInstallAsync(env, phases, job, ct)
+                                    .ConfigureAwait(false);
+                                if (fromFile is not null)
+                                {
+                                    return fromFile.Value;
+                                }
 
-                ScoopBucketsFailed:
-                    continue;
+                                if (job.NeedsReboot)
+                                {
+                                    return RequestJobReboot(env, phases, job, i + 1);
+                                }
 
-                ScoopRun:
-                    ;
-                }
-                else if (string.Equals(job.Kind, "wsl", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (string.IsNullOrWhiteSpace(job.PackageId))
-                    {
+                                continue;
+                            }
+
+                            SuppressWslOobe(env);
+
+                            fileName = "wsl.exe";
+                            arguments =
+                            [
+                                "--install",
+                                "-d",
+                                job.PackageId,
+                                "--no-launch",
+                            ];
+                            break;
+                        }
+
+                    case ProvisionJobKind.WslPlatform:
+                        {
+                            JobsPhaseResult? platform = RunWslPlatformJob(env, phases, job, i, ct);
+                            if (platform is not null)
+                            {
+                                return platform.Value;
+                            }
+
+                            continue;
+                        }
+
+                    default:
                         return FailJob(
-                            "jobs.failed",
-                            $"Job '{job.Id}' kind wsl requires packageId (distro name).");
-                    }
-
-                    if (string.Equals(job.WslInstallKind, "fromFile", StringComparison.OrdinalIgnoreCase))
-                    {
-                        JobsPhaseResult? fromFile = RunWslFromFileInstall(env, phases, job, ct);
-                        if (fromFile is not null)
-                        {
-                            return fromFile.Value;
-                        }
-
-                        if (job.NeedsReboot)
-                        {
-                            int nextIndex = i + 1;
-                            CheckpointState checkpoint = new($"jobs:{nextIndex}");
-                            env.Checkpoints.WriteCheckpoint(checkpoint);
-                            env.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
-                            SessionStatus reboot = new(
-                                "jobs.reboot",
-                                $"Job '{job.Id}' requires reboot; checkpoint {checkpoint.Phase}.");
-                            env.Splash.SetStatus(reboot);
-                            phases.Add(reboot.Code);
-                            return new JobsPhaseResult(SessionOutcome.Reboot, reboot, TimedOut: false);
-                        }
-
-                        continue;
-                    }
-
-                    fileName = "wsl.exe";
-                    arguments =
-                    [
-                        "--install",
-                        "-d",
-                        job.PackageId,
-                        "--no-launch",
-                    ];
-                }
-                else
-                {
-                    return FailJob(
-                        "jobs.kind.unsupported",
-                        $"Unsupported job kind '{job.Kind}' for id '{job.Id}'.");
+                            "jobs.kind.unsupported",
+                            $"Unsupported job kind '{job.Kind.ToWire()}' for id '{job.Id}'.");
                 }
 
                 ProcessStartResult started;
@@ -380,6 +405,13 @@ public static partial class ProvisioningSession
 
                 if (started.ExitCode != 0)
                 {
+                    // Microsoft Dev Config: ERROR_SUCCESS_REBOOT_REQUIRED (3010) / ERROR_SUCCESS_REBOOT_INITIATED (1641).
+                    if (job.Kind is ProvisionJobKind.Wsl
+                        && Win32WslPlatform.IsRebootRequiredExitCode(started.ExitCode))
+                    {
+                        return RequestJobReboot(env, phases, job, i + 1);
+                    }
+
                     JobsPhaseResult? runFail = RecordPackageFailure(
                         job,
                         "jobs.failed",
@@ -395,16 +427,7 @@ public static partial class ProvisioningSession
 
                 if (job.NeedsReboot)
                 {
-                    int nextIndex = i + 1;
-                    CheckpointState checkpoint = new($"jobs:{nextIndex}");
-                    env.Checkpoints.WriteCheckpoint(checkpoint);
-                    env.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
-                    SessionStatus reboot = new(
-                        "jobs.reboot",
-                        $"Job '{job.Id}' requires reboot; checkpoint {checkpoint.Phase}.");
-                    env.Splash.SetStatus(reboot);
-                    phases.Add(reboot.Code);
-                    return new JobsPhaseResult(SessionOutcome.Reboot, reboot, TimedOut: false);
+                    return RequestJobReboot(env, phases, job, i + 1);
                 }
             }
 
@@ -456,6 +479,110 @@ public static partial class ProvisioningSession
                 phases.Add(failed.Code);
                 return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
             }
+        }
+
+        private static JobsPhaseResult? RunWorkstationQuietJob(
+            SessionEnvironment env,
+            List<string> phases,
+            ProvisionJob job)
+        {
+            try
+            {
+                (env.ApplyWorkstationQuiet ?? Win32WorkstationQuiet.Apply)();
+                SessionStatus ok = new("jobs.workstation.quiet", "Dark theme and quiet user defaults applied.");
+                env.Splash.SetStatus(ok);
+                phases.Add(ok.Code);
+                return null;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
+                env.Splash.SetStatus(failed);
+                phases.Add(failed.Code);
+                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+            }
+        }
+
+        /// <summary>
+        /// Microsoft Dev Config WSL Phase 1–2: enable platform via <c>wsl --install --no-distribution</c>,
+        /// reboot when VMP was not yet ready (exit 0 / 3010 / 1641).
+        /// </summary>
+        private static JobsPhaseResult? RunWslPlatformJob(
+            SessionEnvironment env,
+            List<string> phases,
+            ProvisionJob job,
+            int jobIndex,
+            CancellationToken ct)
+        {
+            bool ready = env.IsWslPlatformReady?.Invoke()
+                ?? (OperatingSystem.IsWindows() && Win32WslPlatform.IsVirtualMachinePlatformReady());
+            if (ready)
+            {
+                SessionStatus skip = new("jobs.wsl.platform.ready", "WSL / Virtual Machine Platform already active.");
+                env.Splash.SetStatus(skip);
+                phases.Add(skip.Code);
+                return null;
+            }
+
+            try
+            {
+                ProcessStartResult started = env.Processes.Run(
+                    "wsl.exe",
+                    ["--install", "--no-distribution"],
+                    ct);
+
+                // 0 = enabled (reboot still required for VMP); 3010/1641 = explicit reboot-needed.
+                if (started.ExitCode is 0
+                    || Win32WslPlatform.IsRebootRequiredExitCode(started.ExitCode))
+                {
+                    return RequestJobReboot(env, phases, job, jobIndex + 1);
+                }
+
+                SessionStatus failed = new(
+                    "jobs.failed",
+                    $"{job.Id}: wsl --install --no-distribution exited {started.ExitCode}.");
+                env.Splash.SetStatus(failed);
+                phases.Add(failed.Code);
+                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
+                env.Splash.SetStatus(failed);
+                phases.Add(failed.Code);
+                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+            }
+        }
+
+        private static void SuppressWslOobe(SessionEnvironment env)
+        {
+            if (env.SuppressWslOobe is not null)
+            {
+                env.SuppressWslOobe();
+                return;
+            }
+
+            if (OperatingSystem.IsWindows())
+            {
+                Win32WslPlatform.SuppressDistroOobe();
+            }
+        }
+
+        private static JobsPhaseResult RequestJobReboot(
+            SessionEnvironment env,
+            List<string> phases,
+            ProvisionJob job,
+            int nextJobIndex)
+        {
+            CheckpointState checkpoint = new($"jobs:{nextJobIndex}");
+            env.Checkpoints.WriteCheckpoint(checkpoint);
+            env.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
+            SessionStatus reboot = new(
+                "jobs.reboot",
+                $"Job '{job.Id}' requires reboot; checkpoint {checkpoint.Phase}.");
+            env.Splash.SetStatus(reboot);
+            phases.Add(reboot.Code);
+            return new JobsPhaseResult(SessionOutcome.Reboot, reboot, TimedOut: false);
         }
 
         private static JobsPhaseResult? RunReservedStorageDisableJob(
@@ -549,11 +676,12 @@ public static partial class ProvisioningSession
             }
         }
 
-        private static JobsPhaseResult? RunAppxSafetyNetJob(
+        private static async Task<JobsPhaseResult?> RunAppxSafetyNetJobAsync(
             ProvisioningBundle bundle,
             SessionEnvironment env,
             List<string> phases,
-            ProvisionJob job)
+            ProvisionJob job,
+            CancellationToken ct)
         {
             if (env.Appx is null)
             {
@@ -577,12 +705,13 @@ public static partial class ProvisioningSession
 
                     foreach (AppxPackageInfo registered in env.Appx.FindRegisteredByCatalogId(catalogId))
                     {
-                        env.Appx.RemovePackage(registered.PackageFullName);
+                        await env.Appx.RemovePackageAsync(registered.PackageFullName, ct).ConfigureAwait(false);
                     }
 
                     foreach (AppxPackageInfo provisioned in env.Appx.FindProvisionedByCatalogId(catalogId))
                     {
-                        env.Appx.DeprovisionPackageFamily(provisioned.PackageFamilyName);
+                        await env.Appx.DeprovisionPackageFamilyAsync(provisioned.PackageFamilyName, ct)
+                            .ConfigureAwait(false);
                     }
 
                     phases.Add($"removed.appx.online.{catalogId}");
@@ -599,12 +728,14 @@ public static partial class ProvisioningSession
             return null;
         }
 
-        public static JobsPhaseResult? EnsureNetworkAvailable(
+        public static async Task<JobsPhaseResult?> EnsureNetworkAvailableAsync(
             ProvisioningBundle bundle,
             SessionEnvironment env,
-            List<string> phases)
+            List<string> phases,
+            CancellationToken ct)
         {
-            if (env.Connectivity?.HasOutboundNetwork() == true)
+            if (env.Connectivity is not null
+                && await env.Connectivity.HasOutboundNetworkAsync(ct).ConfigureAwait(false))
             {
                 SessionStatus ok = new("network.ok", "Outbound connectivity available.");
                 env.Splash.SetStatus(ok);
@@ -619,7 +750,8 @@ public static partial class ProvisioningSession
             phases.Add(failed.Code);
             return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
         }
-        private static JobsPhaseResult? RunWslFromFileInstall(
+
+        private static async Task<JobsPhaseResult?> RunWslFromFileInstallAsync(
             SessionEnvironment env,
             List<string> phases,
             ProvisionJob job,
@@ -637,7 +769,8 @@ public static partial class ProvisioningSession
             string? assetPath;
             try
             {
-                assetPath = DownloadWslFromFileAsset(job.WslFromFileRepo, job.WslFromFileAssetNames, ct);
+                assetPath = await DownloadWslFromFileAssetAsync(job.WslFromFileRepo, job.WslFromFileAssetNames, ct)
+                    .ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -682,7 +815,7 @@ public static partial class ProvisioningSession
             }
         }
 
-        private static string? DownloadWslFromFileAsset(
+        private static async Task<string?> DownloadWslFromFileAssetAsync(
             string repo,
             IReadOnlyList<string> assetNameHints,
             CancellationToken ct)
@@ -690,11 +823,11 @@ public static partial class ProvisioningSession
             using HttpClient client = new();
             client.DefaultRequestHeaders.UserAgent.ParseAdd("WinMint-Provisioning/1.0");
             string url = $"https://api.github.com/repos/{repo}/releases/latest";
-            using HttpResponseMessage response = client.GetAsync(url, ct).GetAwaiter().GetResult();
+            using HttpResponseMessage response = await client.GetAsync(url, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            GitHubRelease? release = response.Content.ReadFromJsonAsync(
+            GitHubRelease? release = await response.Content.ReadFromJsonAsync(
                 GitHubReleaseJsonContext.Default.GitHubRelease,
-                ct).GetAwaiter().GetResult();
+                ct).ConfigureAwait(false);
             if (release?.Assets is null)
             {
                 return null;
@@ -712,21 +845,22 @@ public static partial class ProvisioningSession
                 string tempDir = Path.Combine(Path.GetTempPath(), "WinMint", "wsl");
                 Directory.CreateDirectory(tempDir);
                 string dest = Path.Combine(tempDir, asset.Name);
-                using HttpResponseMessage assetResponse = client.GetAsync(asset.BrowserDownloadUrl, ct).GetAwaiter().GetResult();
+                using HttpResponseMessage assetResponse = await client.GetAsync(asset.BrowserDownloadUrl, ct)
+                    .ConfigureAwait(false);
                 assetResponse.EnsureSuccessStatusCode();
-                using FileStream stream = File.Create(dest);
-                assetResponse.Content.CopyToAsync(stream, ct).GetAwaiter().GetResult();
+                await using FileStream stream = File.Create(dest);
+                await assetResponse.Content.CopyToAsync(stream, ct).ConfigureAwait(false);
                 return dest;
             }
 
             return null;
         }
 
-        private static bool IsPackageKind(string kind) =>
-            string.Equals(kind, "winget", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(kind, "winget.import", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(kind, "scoop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(kind, "scoop.batch", StringComparison.OrdinalIgnoreCase);
+        private static bool IsPackageKind(ProvisionJobKind kind) => kind is
+            ProvisionJobKind.Winget
+            or ProvisionJobKind.WingetImport
+            or ProvisionJobKind.Scoop
+            or ProvisionJobKind.ScoopBatch;
 
         private static JobsPhaseResult? EnsureScoopReady(
             SessionEnvironment env,

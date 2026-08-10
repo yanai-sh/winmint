@@ -20,7 +20,7 @@ public sealed record SessionResult(
     SessionStatus FinalStatus,
     IReadOnlyList<EvidenceSnapshot> EvidenceEmitted);
 
-public sealed record SessionStatus(string Code, string Message);
+public readonly record struct SessionStatus(string Code, string Message);
 
 public sealed record EvidenceSnapshot(string SchemaVersion, string Path);
 
@@ -46,7 +46,7 @@ public sealed record DmaSettleTarget(
 
 public sealed record ProvisionJob(
     string Id,
-    string Kind,
+    ProvisionJobKind Kind,
     bool NeedsReboot = false,
     string? PackageId = null,
     string? WingetArchitecture = null,
@@ -79,7 +79,7 @@ public sealed record SessionPolicy(
 
 public interface IConnectivityProbe
 {
-    bool HasOutboundNetwork();
+    Task<bool> HasOutboundNetworkAsync(CancellationToken ct = default);
 }
 
 public sealed record SessionEnvironment(
@@ -97,7 +97,10 @@ public sealed record SessionEnvironment(
     Func<string?>? ResolveScoopCmd = null,
     IResidueCleaner? ResidueCleaner = null,
     IConnectivityProbe? Connectivity = null,
-    string? EvidenceDirectory = null);
+    string? EvidenceDirectory = null,
+    Func<bool>? IsWslPlatformReady = null,
+    Action? ApplyWorkstationQuiet = null,
+    Action? SuppressWslOobe = null);
 
 /// <summary>OS reboot after NeedsReboot checkpoint (ticket 16). Nullable in tests; production wires Win32.</summary>
 public interface ISystemReboot
@@ -125,14 +128,14 @@ public interface IAppxPackageManager
 
     IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId);
 
-    void RemovePackage(string packageFullName);
+    Task RemovePackageAsync(string packageFullName, CancellationToken ct = default);
 
-    void DeprovisionPackageFamily(string packageFamilyName);
+    Task DeprovisionPackageFamilyAsync(string packageFamilyName, CancellationToken ct = default);
 
     /// <summary>
     /// Register a provisioned package family for the current user (winget / App Installer FirstLogon).
     /// </summary>
-    void RegisterPackageFamilyForCurrentUser(string packageFamilyName);
+    Task RegisterPackageFamilyForCurrentUserAsync(string packageFamilyName, CancellationToken ct = default);
 
     /// <summary>
     /// SetupComplete/SYSTEM: grant LocalSystem FullControl on staged App Installer framework

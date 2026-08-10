@@ -81,7 +81,8 @@ public static class PlanDiff
     }
 
     private static bool JobAlways(JobDescriptor job) =>
-        job.Kind is "onedrive.uninstall" or "reservedStorage.disable" or "appx.safetyNet" or "winget.import"
+        job.Kind is "onedrive.uninstall" or "reservedStorage.disable" or "workstation.quiet"
+            or "appx.safetyNet" or "winget.import"
         || (job.Kind == "winget" && ProductPosture.WingetIdSet.Contains(job.PackageId ?? ""));
 
     private static string JobLabel(JobDescriptor job) =>
@@ -89,6 +90,8 @@ public static class PlanDiff
         {
             "onedrive.uninstall" => "OneDrive uninstall",
             "reservedStorage.disable" => "Reserved Storage off",
+            "workstation.quiet" => "Dark theme / Do Not Disturb",
+            "wsl.platform" => "WSL platform",
             "appx.safetyNet" => "AppX safety net",
             "doh.set" => $"DNS over HTTPS ({job.PackageId})",
             "winget.import" => "Winget import",

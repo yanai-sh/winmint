@@ -12,6 +12,7 @@ public static class BuildPlan
     public const string IrelandSetupLocale = "en-IE";
     public const int IrelandSetupGeoId = 68;
 
+    /// <summary>Parse and validate a <c>winmint.profile/v1</c> UTF-8 document into a <see cref="Profile"/>.</summary>
     public static Result<Profile, IReadOnlyList<DocumentError>> TryParseProfile(ReadOnlySpan<byte> utf8Json)
     {
         if (utf8Json.IsEmpty)
@@ -462,6 +463,7 @@ public static class BuildPlan
             + "Warning: FirstLogon needs outbound network (packages and/or online AppX removes).";
     }
 
+    /// <summary>Compose plan artifacts (jobs, stages, unattend, manifest) from a validated <see cref="Profile"/>.</summary>
     public static Result<BuildArtifacts, Failure> Plan(Profile profile, RunOptions? run = null)
     {
         RunOptions options = run ?? new RunOptions();
@@ -514,7 +516,7 @@ public static class BuildPlan
             "packages.winget");
         if (needsRebootFail is not null)
         {
-            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail);
+            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail.Value);
         }
 
         needsRebootFail = ValidateNeedsRebootSubset(
@@ -525,7 +527,7 @@ public static class BuildPlan
             "packages.scoop");
         if (needsRebootFail is not null)
         {
-            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail);
+            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail.Value);
         }
 
         needsRebootFail = ValidateNeedsRebootSubset(
@@ -536,7 +538,7 @@ public static class BuildPlan
             "packages.wsl");
         if (needsRebootFail is not null)
         {
-            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail);
+            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail.Value);
         }
 
         if (profile.Drivers is not null)
@@ -544,7 +546,7 @@ public static class BuildPlan
             Failure? driverFail = ValidateDrivers(profile.Drivers, options);
             if (driverFail is not null)
             {
-                return Result.Fail<BuildArtifacts, Failure>(driverFail);
+                return Result.Fail<BuildArtifacts, Failure>(driverFail.Value);
             }
         }
 
@@ -558,7 +560,7 @@ public static class BuildPlan
             out Failure? catalogFail);
         if (catalogFail is not null)
         {
-            return Result.Fail<BuildArtifacts, Failure>(catalogFail);
+            return Result.Fail<BuildArtifacts, Failure>(catalogFail.Value);
         }
 
         byte[]? wingetImportJson = null;
@@ -598,6 +600,7 @@ public static class BuildPlan
 
         jobList.Add(new JobDescriptor("onedrive.uninstall", "onedrive.uninstall"));
         jobList.Add(new JobDescriptor("reservedStorage.disable", "reservedStorage.disable"));
+        jobList.Add(new JobDescriptor("workstation.quiet", "workstation.quiet"));
         if (dohProvider is not null)
         {
             DohProviderSpec? doh = ProductPosture.ResolveDoh(dohProvider);
@@ -659,6 +662,12 @@ public static class BuildPlan
                 PackageId: string.Join(';', profile.ScoopPackages),
                 NeedsReboot: batchReboot,
                 ScoopBuckets: scoopBuckets.OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToArray()));
+        }
+
+        if (profile.WslDistros.Count > 0)
+        {
+            // Microsoft Dev Config: enable VMP/WSL platform before distro install (reboot between).
+            jobList.Add(new JobDescriptor("wsl.platform", "wsl.platform"));
         }
 
         foreach (string distroToken in profile.WslDistros)

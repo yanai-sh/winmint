@@ -6,19 +6,19 @@ namespace WinMint.Tests;
 public class CheckpointRebootTests
 {
     [Fact]
-    public void Shell_needsReboot_writes_checkpoint_and_keeps_Shell()
+    public async Task Shell_needsReboot_writes_checkpoint_and_keeps_Shell()
     {
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
         RecordingCheckpoints checkpoints = new();
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             BundleFastSettle(
             [
-                new ProvisionJob("smoke.stub.reboot", "stub", NeedsReboot: true),
-                new ProvisionJob("smoke.stub.complete", "stub"),
+                new ProvisionJob("smoke.stub.reboot", ProvisionJobKind.Stub, NeedsReboot: true),
+                new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub),
             ]),
             Env(winlogon, checkpoints, splash, evidence),
             TestContext.Current.CancellationToken);
@@ -36,7 +36,7 @@ public class CheckpointRebootTests
     }
 
     [Fact]
-    public void Shell_resume_after_reboot_continues_jobs_then_unlocks()
+    public async Task Shell_resume_after_reboot_continues_jobs_then_unlocks()
     {
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
         RecordingCheckpoints checkpoints = new();
@@ -46,12 +46,12 @@ public class CheckpointRebootTests
 
         SessionEnvironment env = Env(winlogon, checkpoints, splash, evidence, processes);
 
-        SessionResult first = ProvisioningSession.Run(
+        SessionResult first = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             BundleFastSettle(
             [
-                new ProvisionJob("smoke.stub.reboot", "stub", NeedsReboot: true),
-                new ProvisionJob("smoke.stub.complete", "stub"),
+                new ProvisionJob("smoke.stub.reboot", ProvisionJobKind.Stub, NeedsReboot: true),
+                new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub),
             ]),
             env,
             TestContext.Current.CancellationToken);
@@ -61,12 +61,12 @@ public class CheckpointRebootTests
         Assert.Equal(SupervisorPath, winlogon.Shell);
         Assert.Single(processes.Starts);
 
-        SessionResult second = ProvisioningSession.Run(
+        SessionResult second = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             BundleFastSettle(
             [
-                new ProvisionJob("smoke.stub.reboot", "stub", NeedsReboot: true),
-                new ProvisionJob("smoke.stub.complete", "stub"),
+                new ProvisionJob("smoke.stub.reboot", ProvisionJobKind.Stub, NeedsReboot: true),
+                new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub),
             ]),
             env,
             TestContext.Current.CancellationToken);

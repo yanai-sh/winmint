@@ -8,7 +8,7 @@ namespace WinMint.Tests;
 public class DebloatAppxSafetyNetTests
 {
     [Fact]
-    public void Shell_appx_safetyNet_removes_registered_packages_matching_catalog_ids()
+    public async Task Shell_appx_safetyNet_removes_registered_packages_matching_catalog_ids()
     {
         RecordingAppx appx = new();
         appx.Registered.Add(new AppxPackageInfo(
@@ -21,10 +21,10 @@ public class DebloatAppxSafetyNetTests
             "Microsoft.Other"));
 
         RecordingSplashPresenter splash = new();
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(
-                jobs: [new ProvisionJob("debloat.appx.safetyNet", "appx.safetyNet")],
+                jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
                 removeProvisionedAppx: ["Microsoft.BingNews"]),
             Env(appx, splash),
             TestContext.Current.CancellationToken);
@@ -38,7 +38,7 @@ public class DebloatAppxSafetyNetTests
     }
 
     [Fact]
-    public void Shell_appx_safetyNet_deprovisions_only_when_still_provisioned()
+    public async Task Shell_appx_safetyNet_deprovisions_only_when_still_provisioned()
     {
         RecordingAppx appx = new();
         appx.Registered.Add(new AppxPackageInfo(
@@ -55,10 +55,10 @@ public class DebloatAppxSafetyNetTests
             "Microsoft.BingNews_8wekyb3d8bbwe",
             "Microsoft.BingNews"));
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(
-                jobs: [new ProvisionJob("debloat.appx.safetyNet", "appx.safetyNet")],
+                jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
                 removeProvisionedAppx: ["Microsoft.GamingApp", "Microsoft.BingNews"]),
             Env(appx, new RecordingSplashPresenter()),
             TestContext.Current.CancellationToken);

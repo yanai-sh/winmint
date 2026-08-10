@@ -48,15 +48,15 @@ public class ScoopJobsTests
     }
 
     [Fact]
-    public void Shell_scoop_installs_when_ResolveScoopCmd_returns_path()
+    public async Task Shell_scoop_installs_when_ResolveScoopCmd_returns_path()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
         string scoopPath = @"C:\Users\lab\scoop\shims\scoop.cmd";
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]),
+            Bundle(jobs: [new ProvisionJob("scoop.curl", ProvisionJobKind.Scoop, PackageId: "curl")]),
             Env(processes, evidence, resolveScoopCmd: () => scoopPath),
             TestContext.Current.CancellationToken);
 
@@ -71,7 +71,7 @@ public class ScoopJobsTests
     }
 
     [Fact]
-    public void Shell_scoop_bootstraps_then_installs_when_resolve_returns_path_after()
+    public async Task Shell_scoop_bootstraps_then_installs_when_resolve_returns_path_after()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
@@ -83,9 +83,9 @@ public class ScoopJobsTests
             return resolveCalls == 1 ? null : scoopPath;
         }
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]),
+            Bundle(jobs: [new ProvisionJob("scoop.curl", ProvisionJobKind.Scoop, PackageId: "curl")]),
             Env(processes, evidence, resolveScoopCmd: Resolve),
             TestContext.Current.CancellationToken);
 
@@ -100,14 +100,14 @@ public class ScoopJobsTests
     }
 
     [Fact]
-    public void Shell_scoop_bootstraps_then_fails_when_still_missing()
+    public async Task Shell_scoop_bootstraps_then_fails_when_still_missing()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]) with { PackageStrict = true },
+            Bundle(jobs: [new ProvisionJob("scoop.curl", ProvisionJobKind.Scoop, PackageId: "curl")]) with { PackageStrict = true },
             Env(processes, evidence, resolveScoopCmd: () => null),
             TestContext.Current.CancellationToken);
 
@@ -120,14 +120,14 @@ public class ScoopJobsTests
     }
 
     [Fact]
-    public void Shell_scoop_fails_when_ResolveScoopCmd_missing()
+    public async Task Shell_scoop_fails_when_ResolveScoopCmd_missing()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]),
+            Bundle(jobs: [new ProvisionJob("scoop.curl", ProvisionJobKind.Scoop, PackageId: "curl")]),
             Env(processes, evidence),
             TestContext.Current.CancellationToken);
 
@@ -137,22 +137,6 @@ public class ScoopJobsTests
         Assert.Empty(processes.Starts);
     }
 
-    [Fact]
-    public void Shell_unknown_job_kind_still_unsupported()
-    {
-        RecordingProcessHost processes = new();
-        RecordingEvidenceSink evidence = new();
-
-        SessionResult result = ProvisioningSession.Run(
-            SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("metal.browser", "browser")]),
-            Env(processes, evidence),
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("jobs.kind.unsupported", result.FinalStatus.Code);
-        Assert.Empty(processes.Starts);
-    }
 
     private static Profile Parse(string json)
     {

@@ -113,14 +113,14 @@ public class OnlineDebloatPlanTests
 public class OnlineDebloatSessionTests
 {
     [Fact]
-    public void Shell_network_required_offline_fails_after_settle_with_evidence()
+    public async Task Shell_network_required_offline_fails_after_settle_with_evidence()
     {
         RecordingAppx appx = new();
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            BundleFastSettle([new ProvisionJob("debloat.appx.safetyNet", "appx.safetyNet")]) with
+            BundleFastSettle([new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)]) with
             {
                 RemoveProvisionedAppx = ["Microsoft.BingNews"],
                 RequiresNetwork = true,
@@ -138,7 +138,7 @@ public class OnlineDebloatSessionTests
     }
 
     [Fact]
-    public void Shell_online_appx_job_emits_removed_phase_per_catalog_id()
+    public async Task Shell_online_appx_job_emits_removed_phase_per_catalog_id()
     {
         RecordingAppx appx = new();
         appx.Registered.Add(new AppxPackageInfo(
@@ -147,9 +147,9 @@ public class OnlineDebloatSessionTests
             "Microsoft.BingNews"));
 
         RecordingEvidenceSink evidence = new();
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            BundleFastSettle([new ProvisionJob("debloat.appx.safetyNet", "appx.safetyNet")]) with
+            BundleFastSettle([new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)]) with
             {
                 RemoveProvisionedAppx = ["Microsoft.BingNews"],
             },
@@ -162,6 +162,7 @@ public class OnlineDebloatSessionTests
 
     private sealed class OfflineConnectivityProbe : IConnectivityProbe
     {
-        public bool HasOutboundNetwork() => false;
+        public Task<bool> HasOutboundNetworkAsync(CancellationToken ct = default) =>
+            Task.FromResult(false);
     }
 }

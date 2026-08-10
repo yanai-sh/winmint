@@ -17,8 +17,7 @@ namespace WinMint.Provisioning;
 
 public static class ProvisioningSession
 {
-    // Direction: RunAsync when the session owns awaits; sync Run only if the whole path is sync I/O.
-    public static SessionResult Run(
+    public static Task<SessionResult> RunAsync(
         SessionMode mode,
         ProvisioningBundle bundle,
         SessionEnvironment env,
@@ -40,6 +39,14 @@ public sealed record ProvisioningBundle(
     SessionPolicy Policy,
     string SupervisorShellPath,
     CheckpointState? Resume = null);
+
+public sealed record ProvisionJob(string Id, ProvisionJobKind Kind, ...);
+
+public enum ProvisionJobKind
+{
+    AppxSafetyNet, OneDriveUninstall, ReservedStorageDisable, WorkstationQuiet, DohSet,
+    PackageAuditNative, Stub, Winget, WingetImport, Scoop, ScoopBatch, WslPlatform, Wsl,
+}
 
 public sealed record SessionPolicy(
     TimeSpan WallClockTimeout,
@@ -96,10 +103,12 @@ Thin adapters are part of the module interface; production Win32/WinRT live in-p
 | SettlePollInterval | 2 s |
 | StaleTenureThreshold | 15 min |
 
+FirstLogon job order (product constants first): `onedrive.uninstall` → `reservedStorage.disable` → `workstation.quiet` → … → `wsl.platform?` → `wsl.*`. WSL follows Microsoft Dev Config: enable platform (`wsl --install --no-distribution`), reboot on 0/3010/1641 when VMP was missing, then distro install with `Lxss\OOBEComplete`.
+
 Durable: `%ProgramData%\WinMint\`. MachineSetup failure ⇒ non-zero exit.
 
 ## Outside / rejected
 
 Outside: `Program.cs` arg parse, SetupComplete.cmd, Winlogon launch.  
-Bundle load / job-kind parse are module concerns — expected failures → typed status/`Result`, not throw-and-hope.  
+Bundle load / job-kind parse are module concerns — expected failures → `BundleLoadResult` / typed status, not throw-and-hope.  
 Rejected: MediatR; AutoMapper; peer Splash; guest pwsh product runtime; file mailbox control plane; RunOnce/PreLock; Hyper-V-only executor; public phase plugin API; sync-over-async bridges.

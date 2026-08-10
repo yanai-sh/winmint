@@ -56,7 +56,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 ## Shared types (logical)
 
 - Settle: locale, GeoId, timeZoneId, location posture. Host Profile settle is required; staged bundle settle may be nullable — map explicitly at the stage boundary (twin records OK; drift ⇒ consolidate).
-- `ServicingOpcode` and provisioning **job `Kind`** are closed sets (enum or equivalent) with the same touch-point discipline as opcodes. Wire JSON may use strings; parse once at the load boundary.
+- `ServicingOpcode` and provisioning **job `Kind`** are closed sets (`ServicingOpcode` / `ProvisionJobKind`) with the same touch-point discipline. Wire JSON may use strings; parse once at the load boundary (`BundleLoader` → enum). Unknown kind ⇒ `Result` failure (`jobs.kind.unknown`).
 - `ProvisioningBundle.SupervisorShellPath` (`supervisorPath`) must match offline Shell stamp and Machine setup verify.
 
 ## Interchange DTO naming
