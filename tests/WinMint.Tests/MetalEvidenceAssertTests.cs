@@ -104,6 +104,24 @@ public class MetalEvidenceAssertTests
         }
     }
 
+    [Fact]
+    [Trait("Category", "Metal")]
+    public void Assert_metal_evidence_fails_when_RequireLane_mismatches()
+    {
+        string repo = FindRepoRoot();
+        string work = CopyFixtureToTemp(repo);
+        try
+        {
+            int exit = RunAssert(repo, work, expectDrivers: true, out _, out string stderr, requireLane: "Release");
+            Assert.NotEqual(0, exit);
+            Assert.Contains("lane must be Release", stderr, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
     private static string CopyFixtureToTemp(string repo)
     {
         string fixture = Path.Combine(repo, "tests", "fixtures", "metal-evidence");
@@ -117,7 +135,8 @@ public class MetalEvidenceAssertTests
         string workDirectory,
         bool expectDrivers,
         out string stdout,
-        out string stderr)
+        out string stderr,
+        string? requireLane = null)
     {
         string script = Path.Combine(repo, "tools", "metal", "Assert-MetalEvidence.ps1");
         Assert.True(File.Exists(script), script);
@@ -137,6 +156,12 @@ public class MetalEvidenceAssertTests
         if (expectDrivers)
         {
             psi.ArgumentList.Add("-ExpectDrivers");
+        }
+
+        if (!string.IsNullOrWhiteSpace(requireLane))
+        {
+            psi.ArgumentList.Add("-RequireLane");
+            psi.ArgumentList.Add(requireLane);
         }
 
         using Process p = Process.Start(psi) ?? throw new InvalidOperationException("pwsh failed to start");
