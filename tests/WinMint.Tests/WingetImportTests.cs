@@ -37,14 +37,19 @@ public class WingetImportTests
     [Fact]
     public void Import_json_includes_arm64_override_arguments()
     {
-        byte[] json = WingetImportBuilder.BuildUtf8Json(
-            ["Anysphere.Cursor"],
-            PackageCatalog.Default,
-            "arm64");
-        using JsonDocument doc = JsonDocument.Parse(json);
-        JsonElement pkg = doc.RootElement.GetProperty("Sources")[0].GetProperty("Packages")[0];
-        Assert.Equal("Anysphere.Cursor", pkg.GetProperty("PackageIdentifier").GetString());
-        Assert.Equal("--architecture arm64", pkg.GetProperty("InitialOverrideArguments").GetString());
+        Profile profile = LabProfile(winget: ["Anysphere.Cursor"]);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { ImageArchitecture = "arm64" });
+
+        Assert.True(result.IsOk);
+        Assert.NotNull(result.Value.WingetImportJson);
+        using JsonDocument doc = JsonDocument.Parse(result.Value.WingetImportJson);
+        JsonElement packages = doc.RootElement.GetProperty("Sources")[0].GetProperty("Packages");
+        Assert.Contains(
+            packages.EnumerateArray(),
+            pkg => pkg.GetProperty("PackageIdentifier").GetString() == "Anysphere.Cursor"
+                && pkg.GetProperty("InitialOverrideArguments").GetString() == "--architecture arm64");
     }
 
     private static Profile LabProfile(IReadOnlyList<string> winget) =>
