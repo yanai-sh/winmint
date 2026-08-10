@@ -40,8 +40,12 @@ clean-artifacts root=".scratch" keep="2" workdirs="1" days="14":
 wipe-scratch:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-ArtifactHygiene.ps1' -Root (Join-Path '{{justfile_directory()}}' '.scratch') -Wipe
 
+# Tail Apply progress (stage=opcode|done|failed:*). STALL_SUSPECT is Smoke-only (tools/vm).
+watch-apply WORK=".scratch/sl7-build":
+    Get-Content (Join-Path '{{WORK}}' 'apply-status.txt') -Wait
+
 # Multi-hour DISM Apply. Cold first; later runs auto --reuse-media when marker exists.
-# Prereq: just publish-provisioning. Watch: Get-Content <WORK>\apply-status.txt -Wait
+# Prereq: just publish-provisioning. Watch: just watch-apply WORK=<dir>
 # ponytail: recipe keeps Apply name (DISM loop); Cli verb is build only.
 # INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs (Smoke/acceptance only).
 apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STUBS="false":
