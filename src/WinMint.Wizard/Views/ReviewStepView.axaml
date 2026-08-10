@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
              x:Class="WinMint.Wizard.Views.ReviewStepView"
-             x:DataType="vm:WizardShellViewModel">
+             x:DataType="vm:WizardViewModel">
   <StackPanel Spacing="18" MaxWidth="760" HorizontalAlignment="Center" VerticalAlignment="Center">
     <TextBlock Classes="hero-title" Text="Review" />
     <TextBlock Classes="hero-sub" Text="{Binding QuietSummaryText}" />

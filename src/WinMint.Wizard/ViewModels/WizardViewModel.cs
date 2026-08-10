@@ -7,8 +7,8 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Wizard.ViewModels;
 
-/// <summary>v1-shaped host shell — curated chips, silent account/DMA defaults, no catalog dump.</summary>
-public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
+/// <summary>v1-shaped wizard host — curated chips, silent account/DMA defaults, no catalog dump.</summary>
+public sealed partial class WizardViewModel : ObservableObject, IDisposable
 {
     private static readonly string[] StepNames = ["Source", "Account", "Software", "Review"];
 
@@ -26,12 +26,12 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     private bool _userChoseWimIndex;
     private int _probeGeneration;
 
-    public WizardShellViewModel(Window window)
+    public WizardViewModel(Window window)
         : this(window, wimIndexSource: null)
     {
     }
 
-    internal WizardShellViewModel(Window window, IWimIndexSource? wimIndexSource)
+    internal WizardViewModel(Window window, IWimIndexSource? wimIndexSource)
     {
         _window = window;
         _wimIndexSource = wimIndexSource;

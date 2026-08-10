@@ -3,7 +3,7 @@
              xmlns:vm="using:WinMint.Wizard.ViewModels"
              xmlns:wizard="using:WinMint.Wizard"
              x:Class="WinMint.Wizard.Views.SourceStepView"
-             x:DataType="vm:WizardShellViewModel">
+             x:DataType="vm:WizardViewModel">
   <StackPanel Spacing="22" MaxWidth="720" HorizontalAlignment="Center" VerticalAlignment="Center">
     <!-- Brand: v1 winmint_hero_ui.png (= wordmark lockup UI raster); SVG lockups kept in Assets for later. -->
     <Image Source="avares://WinMint.Wizard/Assets/lockup_ui.png"
