@@ -8,7 +8,7 @@ Smoke accounts: **Local + autoLogon** (password required). Lab-grade — not ent
 
 | Rule | Detail |
 |------|--------|
-| Plan-time | Local+autoLogon without password ⇒ `PlanFailure` |
+| Plan-time | Local+autoLogon without password ⇒ `Failure` |
 | Transport | Prefer `passwordPath` (`ProfileFile`) or Wizard prompt; fixtures may inline test secrets |
 | Sources | Both non-empty `password` and `passwordPath` ⇒ `account.password.sources.conflict` |
 | Materialize | `ProfileFile` reads file, strips trailing CR/LF only; keeps authored path for serialize |

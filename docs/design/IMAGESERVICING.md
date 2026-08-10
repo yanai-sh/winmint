@@ -14,7 +14,7 @@ namespace WinMint.Orchestrator;
 
 public static class ImageServicing
 {
-    public static Result<ImageEvidence, ServicingFailure> Apply(
+    public static Result<ImageEvidence, Failure> Apply(
         BuildArtifacts plan,
         ServicingRun run,
         CancellationToken ct = default);

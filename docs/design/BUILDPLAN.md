@@ -20,7 +20,7 @@ public static class BuildPlan
     public static byte[] SerializeProfile(Profile profile);
     // When PasswordPath is set, emit passwordPath and omit in-memory password.
 
-    public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null);
+    public static Result<BuildArtifacts, Failure> Plan(Profile profile, RunOptions? run = null);
     // run null ⇒ ImageQuality.Test; IncludeSmokeStubs false unless harness passes true
 }
 
@@ -54,7 +54,7 @@ Stages: opcodes + params; ImageServicing maps opcode → `servicing/*.ps1`. See 
 3. Failure ⇒ no partial artifacts.
 4. Image quality only from `RunOptions` (into `ExportWim` params).
 5. DMA enabled ⇒ Ireland latch in unattend **and** settle targets in `DmaContract`.
-6. Local+autoLogon ⇒ non-empty password or `PlanFailure` ([SECRETS](SECRETS.md)).
+6. Local+autoLogon ⇒ non-empty password or `Failure` ([SECRETS](SECRETS.md)).
 7. Host order: materialize Profile → `Plan` → optional serialize → ImageServicing.Apply.
 8. No repo-relative script paths in artifacts.
 
