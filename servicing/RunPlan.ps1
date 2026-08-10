@@ -167,4 +167,7 @@ if (Test-Path -LiteralPath $sidePath) {
     digests               = $digests
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'evidence.json') -Encoding utf8
 
+# Success clears prior stage failure crumbs (operators read failure.json as current).
+Remove-Item -LiteralPath (Join-Path $WorkDirectory 'failure.json') -Force -ErrorAction SilentlyContinue
+
 exit 0

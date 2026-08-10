@@ -214,9 +214,10 @@ public static class ImageServicing
                     parameters[StageParams.MediaDir] = mediaDir;
                     break;
                 case ServicingOpcode.PatchBootWimApply:
+                    // Single-image install.wim apply target is always index 1 (Patch-BootWimApply.ps1).
+                    // Do not pass source-edition wimIndex — that previously poisoned LaunchApply.cmd.
                     parameters[StageParams.MediaDir] = mediaDir;
                     parameters[StageParams.MountDir] = mountDir;
-                    parameters[StageParams.WimIndex] = wimIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     break;
                 case ServicingOpcode.StampOfflineShell:
                     parameters[StageParams.ShellTarget] = ShellStampGuestPath;

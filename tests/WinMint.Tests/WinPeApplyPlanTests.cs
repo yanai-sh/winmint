@@ -67,9 +67,13 @@ public class WinPeApplyPlanTests
                     && mount == ImageServicing.HostMountDir);
             Assert.Contains(
                 runner.Stages,
+                s => s.Opcode == ServicingOpcode.MountInstallWim
+                    && s.Parameters.TryGetValue(StageParams.WimIndex, out string? sourceIndex)
+                    && sourceIndex == "3");
+            Assert.Contains(
+                runner.Stages,
                 s => s.Opcode == ServicingOpcode.PatchBootWimApply
-                    && s.Parameters.TryGetValue(StageParams.WimIndex, out string? index)
-                    && index == "3"
+                    && !s.Parameters.ContainsKey(StageParams.WimIndex)
                     && s.Parameters.TryGetValue(StageParams.MediaDir, out string? media)
                     && media.EndsWith("media", StringComparison.OrdinalIgnoreCase));
             string written = File.ReadAllText(Path.Combine(work, "unattend.xml"));
@@ -86,6 +90,10 @@ public class WinPeApplyPlanTests
     {
         string script = File.ReadAllText(FindPatchBootScript());
         Assert.Contains("$bootWim = Join-Path $mediaDir", script, StringComparison.Ordinal);
+        Assert.Contains("$applyWimIndex = 1", script, StringComparison.Ordinal);
+        Assert.Contains("/Index:$applyWimIndex", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("/Index:$wimIndex", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("$wimIndex = [int]$Parameters['wimIndex']", script, StringComparison.Ordinal);
         Assert.Contains("LaunchApply.cmd", script, StringComparison.Ordinal);
         Assert.Contains("diskpart", script, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Apply-Image", script, StringComparison.Ordinal);
@@ -94,6 +102,20 @@ public class WinPeApplyPlanTests
         Assert.Contains("LabConfig", script, StringComparison.Ordinal);
         Assert.DoesNotContain("setup.exe", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("/legacy", script, StringComparison.Ordinal);
+        // Skip path must verify LaunchApply content — marker alone hid Index:3 after code fix.
+        Assert.Contains("Test-LaunchApplyPatched", script, StringComparison.Ordinal);
+        Assert.Contains("LaunchApply Index:1 verified", script, StringComparison.Ordinal);
+        Assert.Contains(".winmint-boot-legacy", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildIso_script_refreshes_outputIso_digest_in_evidence()
+    {
+        string script = File.ReadAllText(FindServicingScript("Build-Iso.ps1"));
+        Assert.Contains("outputIso.sha256", script, StringComparison.Ordinal);
+        Assert.Contains("evidence.json", script, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
+        Assert.Contains("failure.json", script, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -130,7 +152,9 @@ public class WinPeApplyPlanTests
         return parsed.Value;
     }
 
-    private static string FindPatchBootScript()
+    private static string FindPatchBootScript() => FindServicingScript("Patch-BootWimApply.ps1");
+
+    private static string FindServicingScript(string fileName)
     {
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "WinMint.slnx")))
@@ -139,7 +163,7 @@ public class WinPeApplyPlanTests
         }
 
         Assert.NotNull(dir);
-        return Path.Combine(dir.FullName, "servicing", "Patch-BootWimApply.ps1");
+        return Path.Combine(dir.FullName, "servicing", fileName);
     }
 
     private static string NewTempDir()

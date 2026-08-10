@@ -1,10 +1,10 @@
-{
+﻿{
   "schemaVersion": "winmint.image.evidence/v1",
   "outputIsoPath": "out.iso",
   "shellStampTargetPath": "C:\\Windows\\WinMint\\Supervisor.exe",
   "lane": "Test",
   "digests": {
-    "outputIso.sha256": "abc123",
+    "outputIso.sha256": "73709ada5fa0d025ef7218f72ef79694abe10c9aa153a2fcbd988008f516d254",
     "drivers.deviceId": "surface-laptop-7",
     "drivers.includedCount": "12",
     "drivers.excludedCount": "8",

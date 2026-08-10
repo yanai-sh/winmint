@@ -80,6 +80,30 @@ public class MetalEvidenceAssertTests
         }
     }
 
+    [Fact]
+    [Trait("Category", "Metal")]
+    public void Assert_metal_evidence_fails_when_outputIso_digest_stale()
+    {
+        string repo = FindRepoRoot();
+        string work = CopyFixtureToTemp(repo);
+        try
+        {
+            string evidencePath = Path.Combine(work, "evidence.json");
+            JsonNode doc = JsonNode.Parse(File.ReadAllText(evidencePath))
+                ?? throw new InvalidOperationException("evidence parse failed");
+            doc["digests"]!["outputIso.sha256"] = "deadbeef";
+            File.WriteAllText(evidencePath, doc.ToJsonString());
+
+            int exit = RunAssert(repo, work, expectDrivers: true, out _, out string stderr);
+            Assert.NotEqual(0, exit);
+            Assert.Contains("outputIso.sha256 mismatch", stderr, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
     private static string CopyFixtureToTemp(string repo)
     {
         string fixture = Path.Combine(repo, "tests", "fixtures", "metal-evidence");
