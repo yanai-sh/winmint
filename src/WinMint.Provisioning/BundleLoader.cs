@@ -49,7 +49,7 @@ public static class BundleLoader
                 dto.Settle?.LocationServicesEnabled),
             Jobs: jobs,
             Policy: SessionPolicy.SmokeDefaults,
-            Supervisor: new SupervisorIdentity(dto.SupervisorPath),
+            SupervisorShellPath: dto.SupervisorPath,
             RemoveProvisionedAppx: dto.RemoveProvisionedAppx ?? [],
             RequiresNetwork: dto.RequiresNetwork,
             PackageStrict: dto.PackageStrict);

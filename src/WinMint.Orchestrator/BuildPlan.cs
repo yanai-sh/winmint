@@ -12,11 +12,11 @@ public static class BuildPlan
     public const string IrelandSetupLocale = "en-IE";
     public const int IrelandSetupGeoId = 68;
 
-    public static Result<Profile, DocumentErrors> TryParseProfile(ReadOnlySpan<byte> utf8Json)
+    public static Result<Profile, IReadOnlyList<DocumentError>> TryParseProfile(ReadOnlySpan<byte> utf8Json)
     {
         if (utf8Json.IsEmpty)
         {
-            return Result.Fail<Profile, DocumentErrors>(InvalidJson("Document is empty."));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(InvalidJson("Document is empty."));
         }
 
         ProfileDocument? doc;
@@ -26,12 +26,12 @@ public static class BuildPlan
         }
         catch (JsonException ex)
         {
-            return Result.Fail<Profile, DocumentErrors>(InvalidJson(ex.Message));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(InvalidJson(ex.Message));
         }
 
         if (doc is null)
         {
-            return Result.Fail<Profile, DocumentErrors>(InvalidJson("Document deserialized to null."));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(InvalidJson("Document deserialized to null."));
         }
 
         List<DocumentError> issues = [];
@@ -84,7 +84,7 @@ public static class BuildPlan
 
         if (issues.Count > 0)
         {
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(issues));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(issues);
         }
 
         DmaSettleDocument settle = doc.Dma!.Settle!;
@@ -97,7 +97,7 @@ public static class BuildPlan
                 "dma.settle.incomplete",
                 "dma.settle requires locale, geoId, timeZoneId, and locationServicesEnabled.",
                 "dma.settle"));
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(issues));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(issues);
         }
 
         // Default true: metal contract shows OOBE Network; Smoke Profiles set false explicitly.
@@ -110,21 +110,21 @@ public static class BuildPlan
         // Host materializes passwordPath via ProfileFile; BuildPlan stays pure (issue 91).
         if (!string.IsNullOrEmpty(password) && passwordPath is not null)
         {
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
             [
                 new DocumentError(
                     "account.password.sources.conflict",
                     "account.password and account.passwordPath cannot both be set.",
                     "account"),
-            ]));
+            ]);
         }
 
         if (!ProductPosture.TryNormalizeDohProvider(doc.Policies?.DohProvider, out string? doh, out string? dohError))
         {
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
             [
                 new DocumentError("policies.dohProvider.unsupported", dohError!, "policies.dohProvider"),
-            ]));
+            ]);
         }
 
         PoliciesProfile? policies = null;
@@ -138,18 +138,18 @@ public static class BuildPlan
         {
             if (string.IsNullOrWhiteSpace(doc.Drivers.Source))
             {
-                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+                return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
                 [
                     new DocumentError("drivers.source.missing", "drivers.source is required.", "drivers.source"),
-                ]));
+                ]);
             }
 
             if (string.IsNullOrWhiteSpace(doc.Drivers.DeviceId))
             {
-                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+                return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
                 [
                     new DocumentError("drivers.deviceId.missing", "drivers.deviceId is required.", "drivers.deviceId"),
-                ]));
+                ]);
             }
 
             drivers = new DriversProfile(doc.Drivers.Source.Trim(), doc.Drivers.DeviceId.Trim());
@@ -168,13 +168,13 @@ public static class BuildPlan
             }
             else
             {
-                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+                return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
                 [
                     new DocumentError(
                         "debloat.mode.unsupported",
                         $"Unsupported debloat.mode '{doc.Debloat.Mode}'. Expected online|offline.",
                         "debloat.mode"),
-                ]));
+                ]);
             }
         }
 
@@ -200,7 +200,7 @@ public static class BuildPlan
             policies,
             drivers);
 
-        return Result.Ok<Profile, DocumentErrors>(profile);
+        return Result.Ok<Profile, IReadOnlyList<DocumentError>>(profile);
     }
 
     /// <summary>Inverse of <see cref="TryParseProfile"/> — omit empty packages/debloat objects (same as former host composer).</summary>
@@ -895,8 +895,8 @@ public static class BuildPlan
     private static string XmlEscape(string value) =>
         System.Security.SecurityElement.Escape(value) ?? string.Empty;
 
-    private static DocumentErrors InvalidJson(string message) =>
-        new([new DocumentError("document.invalidJson", message)]);
+    private static IReadOnlyList<DocumentError> InvalidJson(string message) =>
+        [new DocumentError("document.invalidJson", message)];
 }
 
 internal sealed record ProfileDocument(

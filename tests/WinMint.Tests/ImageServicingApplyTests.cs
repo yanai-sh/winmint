@@ -162,7 +162,7 @@ public class ImageServicingApplyTests
 
     private static BuildArtifacts MinimalPlan()
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {

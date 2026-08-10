@@ -178,7 +178,7 @@ public class DebloatAppxSafetyNetTests
 
     private static Profile ParseProfile(string json)
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(
             System.Text.Encoding.UTF8.GetBytes(json));
         Assert.True(parsed.IsOk);
         return parsed.Value;

@@ -85,7 +85,7 @@ public class BrowserPolicyPlanTests
         Assert.Equal("quad9", doc.RootElement.GetProperty("policies").GetProperty("dohProvider").GetString());
         Assert.False(doc.RootElement.GetProperty("policies").TryGetProperty("keepCopilot", out _));
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
         Assert.True(parsed.IsOk);
         Assert.Equal("quad9", parsed.Value.EffectivePolicies.DohProvider);
     }
@@ -117,8 +117,8 @@ public class BrowserPolicyPlanTests
             }
             """u8.ToArray();
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
-        Assert.True(parsed.IsOk, parsed.IsOk ? null : parsed.Error.Issues[0].Message);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : parsed.Error[0].Message);
         Assert.Equal("google", parsed.Value.EffectivePolicies.DohProvider);
     }
 

@@ -58,7 +58,7 @@ public class DebloatServicingTests
     private static BuildArtifacts PlanWithRemove(IReadOnlyList<string> ids)
     {
         string array = "[" + string.Join(",", ids.Select(id => $"\"{id}\"")) + "]";
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
@@ -81,7 +81,7 @@ public class DebloatServicingTests
               }
             }
             """));
-        Assert.True(parsed.IsOk, string.Join("; ", parsed.IsOk ? [] : parsed.Error.Issues.Select(i => i.Message)));
+        Assert.True(parsed.IsOk, string.Join("; ", parsed.IsOk ? [] : parsed.Error.Select(i => i.Message)));
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         return planned.Value;

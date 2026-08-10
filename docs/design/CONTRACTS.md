@@ -59,7 +59,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 - Orchestrator `DmaSettleTarget` (required settle fields on Profile) and Provisioning `DmaSettleTarget` (nullable settle on staged bundle) are **intentional** cross-process shapes — do not merge via a shared Contracts project.
 - `ServicingOpcode` enum owned with BuildPlan stages + ImageServicing catalog (three touch points on add — acceptable).
 - Provisioning job `Kind` stays a **string** across BuildPlan → guest jobs JSON → ProvisioningSession `RunJobs` (not an enum yet). **Defer** a Kind catalog / CONTRACTS touch-point rule until the next job kind lands — same cost class as ServicingOpcode, no drift incident yet.
-- `SupervisorIdentity.ShellPath` (bundle JSON `supervisorPath`) must match offline Shell stamp and Machine setup verify.
+- `ProvisioningBundle.SupervisorShellPath` (bundle JSON `supervisorPath`) must match offline Shell stamp and Machine setup verify.
 
 ## Interchange DTO naming
 

@@ -29,7 +29,7 @@ public sealed record ProvisioningBundle(
     DmaSettleTarget Dma,
     IReadOnlyList<ProvisionJob> Jobs,
     SessionPolicy Policy,
-    SupervisorIdentity Supervisor,
+    string SupervisorShellPath,
     CheckpointState? Resume = null,
     IReadOnlyList<string>? RemoveProvisionedAppx = null,
     bool RequiresNetwork = false,
@@ -58,8 +58,6 @@ public sealed record ProvisionJob(
     string? DohPrimary = null,
     string? DohSecondary = null,
     string? DohTemplate = null);
-
-public sealed record SupervisorIdentity(string ShellPath);
 
 public sealed record CheckpointState(string Phase);
 

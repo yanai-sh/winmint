@@ -92,7 +92,7 @@ public class ExportLaneTests
 
     private static BuildArtifacts Plan(ImageQualityLane lane)
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {

@@ -13,7 +13,7 @@ public class ProfileFileTests
         using TempProfileDir dir = new();
         string path = dir.WriteProfile(MinimalProfile(password: "lab-only"));
 
-        Result<Profile, DocumentErrors> loaded = ProfileFile.TryLoad(path);
+        Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(path);
 
         Assert.True(loaded.IsOk, Format(loaded));
         Assert.Equal("lab-only", loaded.Value.Account.Password);
@@ -28,7 +28,7 @@ public class ProfileFileTests
         File.WriteAllText(pwFile, "from-abs\n");
         string path = dir.WriteProfile(MinimalProfile(passwordPath: pwFile));
 
-        Result<Profile, DocumentErrors> loaded = ProfileFile.TryLoad(path);
+        Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(path);
 
         Assert.True(loaded.IsOk, Format(loaded));
         Assert.Equal("from-abs", loaded.Value.Account.Password);
@@ -57,7 +57,7 @@ public class ProfileFileTests
         try
         {
             Directory.SetCurrentDirectory(other);
-            Result<Profile, DocumentErrors> loaded = ProfileFile.TryLoad(path);
+            Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(path);
 
             Assert.True(loaded.IsOk, Format(loaded));
             Assert.Equal("from-rel", loaded.Value.Account.Password);
@@ -77,10 +77,10 @@ public class ProfileFileTests
         // Ambient drive-current form — must not depend on process drive state.
         string path = dir.WriteProfile(MinimalProfile(passwordPath: @"C:ambient-secret.txt"));
 
-        Result<Profile, DocumentErrors> loaded = ProfileFile.TryLoad(path);
+        Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(path);
 
         Assert.False(loaded.IsOk);
-        Assert.Contains(loaded.Error.Issues, i => i.Code == "account.passwordPath.unreadable");
+        Assert.Contains(loaded.Error, i => i.Code == "account.passwordPath.unreadable");
     }
 
     [Fact]
@@ -89,10 +89,10 @@ public class ProfileFileTests
         using TempProfileDir dir = new();
         string path = dir.WriteProfile(MinimalProfile(passwordPath: @"\Windows\never.txt"));
 
-        Result<Profile, DocumentErrors> loaded = ProfileFile.TryLoad(path);
+        Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(path);
 
         Assert.False(loaded.IsOk);
-        Assert.Contains(loaded.Error.Issues, i => i.Code == "account.passwordPath.unreadable");
+        Assert.Contains(loaded.Error, i => i.Code == "account.passwordPath.unreadable");
     }
 
     [Fact]
@@ -100,10 +100,10 @@ public class ProfileFileTests
     {
         string missing = Path.Combine(Path.GetTempPath(), "winmint-missing-" + Guid.NewGuid().ToString("N") + ".json");
 
-        Result<Profile, DocumentErrors> loaded = ProfileFile.TryLoad(missing);
+        Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(missing);
 
         Assert.False(loaded.IsOk);
-        Assert.Contains(loaded.Error.Issues, i => i.Code == "document.unreadable");
+        Assert.Contains(loaded.Error, i => i.Code == "document.unreadable");
     }
 
     [Fact]
@@ -113,10 +113,10 @@ public class ProfileFileTests
         string missingPw = Path.Combine(dir.Root, "gone.txt");
         string path = dir.WriteProfile(MinimalProfile(passwordPath: missingPw));
 
-        Result<Profile, DocumentErrors> loaded = ProfileFile.TryLoad(path);
+        Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(path);
 
         Assert.False(loaded.IsOk);
-        Assert.Contains(loaded.Error.Issues, i => i.Code == "account.passwordPath.unreadable");
+        Assert.Contains(loaded.Error, i => i.Code == "account.passwordPath.unreadable");
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class ProfileFileTests
         File.WriteAllText(pwFile, "\r\n");
         string path = dir.WriteProfile(MinimalProfile(passwordPath: "empty.txt"));
 
-        Result<Profile, DocumentErrors> loaded = ProfileFile.TryLoad(path);
+        Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(path);
         Assert.True(loaded.IsOk, Format(loaded));
         Assert.Equal("", loaded.Value.Account.Password);
 
@@ -144,12 +144,12 @@ public class ProfileFileTests
         File.WriteAllText(pwFile, "SHOULD-NOT-READ");
         string path = dir.WriteProfile(MinimalProfile(password: "inline", passwordPath: pwFile));
 
-        Result<Profile, DocumentErrors> loaded = ProfileFile.TryLoad(path);
+        Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(path);
 
         Assert.False(loaded.IsOk);
-        Assert.Contains(loaded.Error.Issues, i => i.Code == "account.password.sources.conflict");
+        Assert.Contains(loaded.Error, i => i.Code == "account.password.sources.conflict");
         Assert.All(
-            loaded.Error.Issues,
+            loaded.Error,
             i => Assert.DoesNotContain("SHOULD-NOT-READ", i.Message, StringComparison.Ordinal));
     }
 
@@ -159,15 +159,15 @@ public class ProfileFileTests
         using TempProfileDir dir = new();
         string path = dir.WriteProfile(MinimalProfile(password: "lab-only", passwordPathRaw: "   "));
 
-        Result<Profile, DocumentErrors> loaded = ProfileFile.TryLoad(path);
+        Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(path);
 
         Assert.True(loaded.IsOk, Format(loaded));
         Assert.Equal("lab-only", loaded.Value.Account.Password);
         Assert.Null(loaded.Value.Account.PasswordPath);
     }
 
-    private static string Format(Result<Profile, DocumentErrors> loaded) =>
-        loaded.IsOk ? null! : string.Join("; ", loaded.Error.Issues.Select(i => $"{i.Code}: {i.Message}"));
+    private static string Format(Result<Profile, IReadOnlyList<DocumentError>> loaded) =>
+        loaded.IsOk ? null! : string.Join("; ", loaded.Error.Select(i => $"{i.Code}: {i.Message}"));
 
     private static string MinimalProfile(
         string? password = null,

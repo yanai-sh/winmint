@@ -592,7 +592,7 @@ public static partial class ProvisioningSession
             Account = new AccountStamp(username, ""),
         };
 
-        string expectedShell = scrubbedView.Supervisor.ShellPath;
+        string expectedShell = scrubbedView.SupervisorShellPath;
         SessionResult? shellFailure = null;
         try
         {

@@ -6,14 +6,14 @@ namespace WinMint.Orchestrator;
 /// </summary>
 public static class ProfileFile
 {
-    public static Result<Profile, DocumentErrors> TryLoad(string profilePath)
+    public static Result<Profile, IReadOnlyList<DocumentError>> TryLoad(string profilePath)
     {
         if (string.IsNullOrWhiteSpace(profilePath))
         {
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
             [
                 new DocumentError("document.unreadable", "Profile path is empty.", "profile"),
-            ]));
+            ]);
         }
 
         string fullProfilePath;
@@ -24,13 +24,13 @@ public static class ProfileFile
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
             _ = ex;
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
             [
                 new DocumentError(
                     "document.unreadable",
                     $"Cannot resolve Profile path '{profilePath}'.",
                     "profile"),
-            ]));
+            ]);
         }
 
         byte[] utf8;
@@ -41,16 +41,16 @@ public static class ProfileFile
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             _ = ex;
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
             [
                 new DocumentError(
                     "document.unreadable",
                     $"Cannot read Profile '{fullProfilePath}'.",
                     "profile"),
-            ]));
+            ]);
         }
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
         if (!parsed.IsOk)
         {
             return parsed;
@@ -60,12 +60,12 @@ public static class ProfileFile
         string? authoredPath = profile.Account.PasswordPath;
         if (authoredPath is null || !string.IsNullOrEmpty(profile.Account.Password))
         {
-            return Result.Ok<Profile, DocumentErrors>(profile);
+            return Result.Ok<Profile, IReadOnlyList<DocumentError>>(profile);
         }
 
         if (!TryResolvePasswordPath(fullProfilePath, authoredPath, out string resolved, out DocumentError? pathError))
         {
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors([pathError!]));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>([pathError!]);
         }
 
         string password;
@@ -76,20 +76,20 @@ public static class ProfileFile
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             _ = ex;
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
             [
                 new DocumentError(
                     "account.passwordPath.unreadable",
                     $"Cannot read account.passwordPath '{authoredPath}'.",
                     "account.passwordPath"),
-            ]));
+            ]);
         }
 
         Profile materialized = profile with
         {
             Account = profile.Account with { Password = password },
         };
-        return Result.Ok<Profile, DocumentErrors>(materialized);
+        return Result.Ok<Profile, IReadOnlyList<DocumentError>>(materialized);
     }
 
     private static bool TryResolvePasswordPath(

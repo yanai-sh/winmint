@@ -346,10 +346,10 @@ internal static class Program
             return false;
         }
 
-        Result<Profile, DocumentErrors> parsed = ProfileFile.TryLoad(profilePath.FullName);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(profilePath.FullName);
         if (!parsed.IsOk)
         {
-            foreach (DocumentError issue in parsed.Error.Issues)
+            foreach (DocumentError issue in parsed.Error)
             {
                 Console.Error.WriteLine($"{issue.Code}: {issue.Message}" + (issue.Path is null ? "" : $" ({issue.Path})"));
             }

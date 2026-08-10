@@ -12,9 +12,9 @@ public class BuildPlanPasswordPathTests
         string missing = Path.Combine(Path.GetTempPath(), "winmint-never-" + Guid.NewGuid().ToString("N") + ".txt");
         string json = MinimalProfile(passwordPath: missing);
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
 
-        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
         Assert.Null(parsed.Value.Account.Password);
         Assert.Equal(missing, parsed.Value.Account.PasswordPath);
     }
@@ -30,9 +30,9 @@ public class BuildPlanPasswordPathTests
         Directory.CreateDirectory(other);
         try
         {
-            Result<Profile, DocumentErrors> a = BuildPlan.TryParseProfile(utf8);
+            Result<Profile, IReadOnlyList<DocumentError>> a = BuildPlan.TryParseProfile(utf8);
             Directory.SetCurrentDirectory(other);
-            Result<Profile, DocumentErrors> b = BuildPlan.TryParseProfile(utf8);
+            Result<Profile, IReadOnlyList<DocumentError>> b = BuildPlan.TryParseProfile(utf8);
 
             Assert.True(a.IsOk);
             Assert.True(b.IsOk);
@@ -51,10 +51,10 @@ public class BuildPlanPasswordPathTests
     {
         string json = MinimalProfile(password: "inline", passwordPath: "secret.txt");
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
 
         Assert.False(parsed.IsOk);
-        Assert.Contains(parsed.Error.Issues, i => i.Code == "account.password.sources.conflict");
+        Assert.Contains(parsed.Error, i => i.Code == "account.password.sources.conflict");
     }
 
     [Fact]

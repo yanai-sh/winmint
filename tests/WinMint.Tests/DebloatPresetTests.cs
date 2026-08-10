@@ -135,8 +135,8 @@ public class DebloatPresetTests
         Assert.DoesNotContain("\"preset\"", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("acceptance", json, StringComparison.OrdinalIgnoreCase);
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
-        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
         Assert.Equal(["Microsoft.BingNews", "Microsoft.BingWeather"], parsed.Value.RemoveProvisionedAppx);
         Assert.Equal(
             ["App.StepsRecorder~~~~0.0.1.0", "WMIC~~~~"],
@@ -208,7 +208,7 @@ public class DebloatPresetTests
 
         byte[] utf8 = BuildPlan.SerializeProfile(profile);
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
         Assert.True(parsed.IsOk);
         Assert.Empty(parsed.Value.RemoveProvisionedAppx);
 
@@ -230,8 +230,8 @@ public class DebloatPresetTests
         string json = Encoding.UTF8.GetString(utf8);
         Assert.DoesNotContain("\"preset\"", json, StringComparison.OrdinalIgnoreCase);
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
-        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
 
         Assert.Equal(expanded.Value.RemoveProvisionedAppx, parsed.Value.RemoveProvisionedAppx);
         Assert.Equal(expanded.Value.RemoveCapabilities, parsed.Value.RemoveCapabilities);
@@ -258,8 +258,8 @@ public class DebloatPresetTests
         Assert.DoesNotContain("\"password\"", json, StringComparison.Ordinal);
         Assert.Contains("../.scratch/sl7.password", json, StringComparison.Ordinal);
 
-        Result<Profile, DocumentErrors> parsed = ProfileFile.TryLoad(samplePath);
-        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(samplePath);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
         Assert.Equal("yanai", parsed.Value.Account.Username);
         Assert.Equal("lab-only-sl7", parsed.Value.Account.Password);
         Assert.Equal(

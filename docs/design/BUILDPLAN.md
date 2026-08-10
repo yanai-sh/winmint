@@ -14,7 +14,7 @@ namespace WinMint.Orchestrator;
 
 public static class BuildPlan
 {
-    public static Result<Profile, DocumentErrors> TryParseProfile(ReadOnlySpan<byte> utf8Json);
+    public static Result<Profile, IReadOnlyList<DocumentError>> TryParseProfile(ReadOnlySpan<byte> utf8Json);
     // Pure: retains authored passwordPath; does not read files.
 
     public static byte[] SerializeProfile(Profile profile);
@@ -26,7 +26,7 @@ public static class BuildPlan
 
 public static class ProfileFile
 {
-    public static Result<Profile, DocumentErrors> TryLoad(string profilePath);
+    public static Result<Profile, IReadOnlyList<DocumentError>> TryLoad(string profilePath);
     // Host load: read → TryParseProfile → materialize path-backed password.
 }
 

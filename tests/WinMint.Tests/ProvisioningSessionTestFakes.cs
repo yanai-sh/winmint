@@ -15,7 +15,7 @@ internal static class ProvisioningSessionTestFakes
             Dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
             Jobs: jobs,
             Policy: SessionPolicy.SmokeDefaults,
-            Supervisor: new SupervisorIdentity(SupervisorPath));
+            SupervisorShellPath: SupervisorPath);
 
     internal static ProvisioningBundle Bundle(
         IReadOnlyList<ProvisionJob> jobs,

@@ -35,10 +35,10 @@ internal static class WizardBuild
             return WizardBuildResult.Fail("wizard.build.imageQuality", laneError!);
         }
 
-        Result<Profile, DocumentErrors> parsed = ProfileFile.TryLoad(input.ProfilePath);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(input.ProfilePath);
         if (!parsed.IsOk)
         {
-            string detail = string.Join("; ", parsed.Error.Issues.Select(static i => $"{i.Code}: {i.Message}"));
+            string detail = string.Join("; ", parsed.Error.Select(static i => $"{i.Code}: {i.Message}"));
             return WizardBuildResult.Fail("wizard.build.profile.invalid", detail);
         }
 

@@ -120,7 +120,7 @@ public class DmaSettleTests
             Dma: dma,
             Jobs: [new ProvisionJob("smoke.stub.ready", "stub")],
             Policy: policy ?? TightSettlePolicy(),
-            Supervisor: new SupervisorIdentity(SupervisorPath));
+            SupervisorShellPath: SupervisorPath);
 
     private static SessionEnvironment Env(
         TimeProvider time,

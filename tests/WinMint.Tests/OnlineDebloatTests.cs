@@ -104,7 +104,7 @@ public class OnlineDebloatPlanTests
 
     private static Profile Parse(string json)
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
         Assert.True(parsed.IsOk);
         return parsed.Value;
     }

@@ -44,8 +44,8 @@ public class WizardPackagesTests
         Assert.Equal("curl", packages.GetProperty("scoop")[0].GetString());
         Assert.False(packages.TryGetProperty("scoopNeedsReboot", out _));
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
-        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(
             parsed.Value,
@@ -101,7 +101,7 @@ public class WizardPackagesTests
     {
         Profile profile = LabProfile(winget: ["jqlang.jq"], scoop: ["curl"]);
         byte[] utf8 = BuildPlan.SerializeProfile(profile);
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
         Assert.True(parsed.IsOk);
         Assert.Equal(profile.WingetPackages, parsed.Value.WingetPackages);
         Assert.Equal(profile.ScoopPackages, parsed.Value.ScoopPackages);

@@ -35,7 +35,7 @@ public sealed record ProvisioningBundle(
     DmaSettleTarget Dma,
     IReadOnlyList<ProvisionJob> Jobs,
     SessionPolicy Policy,
-    SupervisorIdentity Supervisor,
+    string SupervisorShellPath,
     CheckpointState? Resume = null);
 
 public sealed record SessionPolicy(

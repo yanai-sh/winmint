@@ -627,7 +627,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         PlanSummary = result.Message;
         if (_lastProfileUtf8 is not null)
         {
-            Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(_lastProfileUtf8);
+            Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(_lastProfileUtf8);
             _lastProfile = parsed.IsOk ? parsed.Value : null;
         }
 
