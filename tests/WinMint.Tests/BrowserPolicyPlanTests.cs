@@ -18,15 +18,21 @@ public class BrowserPolicyPlanTests
             s => s.Opcode == ServicingOpcode.StampOfflinePolicies);
         string specs = policies.Parameters[StageParams.PolicySpecs];
         Assert.Contains("HideFirstRunExperience", specs, StringComparison.Ordinal);
+        Assert.Contains("NewTabPageLocation", specs, StringComparison.Ordinal);
+        Assert.Contains("LongPathsEnabled", specs, StringComparison.Ordinal);
+        Assert.Contains("AllowNewsAndInterests", specs, StringComparison.Ordinal);
+        Assert.Contains("AllowDevelopmentWithoutDevLicense", specs, StringComparison.Ordinal);
         Assert.Contains("DisableFileSyncNGSC", specs, StringComparison.Ordinal);
         Assert.Contains("PreventDeviceMetadataFromNetwork", specs, StringComparison.Ordinal);
         Assert.Contains("DisableWpbtExecution", specs, StringComparison.Ordinal);
         Assert.DoesNotContain("HubsSidebarEnabled", specs, StringComparison.Ordinal);
         Assert.DoesNotContain("TurnOffWindowsCopilot", specs, StringComparison.Ordinal);
         Assert.DoesNotContain("BraveRewardsDisabled", specs, StringComparison.Ordinal);
+        Assert.DoesNotContain("fDenyTSConnections", specs, StringComparison.Ordinal);
 
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "workstation.quiet");
         Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "doh.set");
 
         Assert.Equal(

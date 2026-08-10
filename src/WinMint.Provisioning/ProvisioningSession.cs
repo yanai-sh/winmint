@@ -12,7 +12,8 @@ public static partial class ProvisioningSession
     /// <summary>App Installer / winget package family (Microsoft-documented FirstLogon register target).</summary>
     public const string DesktopAppInstallerFamilyName = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe";
 
-    public static SessionResult Run(
+    /// <summary>Run MachineSetup or Shell tenure for a provisioning bundle against the live guest environment.</summary>
+    public static async Task<SessionResult> RunAsync(
         SessionMode mode,
         ProvisioningBundle bundle,
         SessionEnvironment env,
@@ -23,8 +24,8 @@ public static partial class ProvisioningSession
 
         return mode switch
         {
-            SessionMode.MachineSetup => RunMachineSetup(bundle, env, ct),
-            SessionMode.Shell => RunShell(bundle, env, ct),
+            SessionMode.MachineSetup => await RunMachineSetupAsync(bundle, env, ct).ConfigureAwait(false),
+            SessionMode.Shell => await RunShellAsync(bundle, env, ct).ConfigureAwait(false),
             _ => new SessionResult(
                 SessionOutcome.Failed,
                 new SessionStatus("session.mode.unknown", $"Unknown mode: {mode}"),
@@ -32,7 +33,7 @@ public static partial class ProvisioningSession
         };
     }
 
-    private static SessionResult RunShell(
+    private static async Task<SessionResult> RunShellAsync(
         ProvisioningBundle bundle,
         SessionEnvironment env,
         CancellationToken ct)
@@ -46,26 +47,26 @@ public static partial class ProvisioningSession
 
         if (ct.IsCancellationRequested)
         {
-            return FailOpen(
+            return await FailOpenAsync(
                 bundle,
                 env,
                 phases,
                 emitted,
                 new SessionStatus("shell.cancelled", "Shell tenure cancelled."),
                 dwell: false,
-                firstPaintMs);
+                firstPaintMs).ConfigureAwait(false);
         }
 
         if (env.Evidence is null)
         {
-            return FailOpen(
+            return await FailOpenAsync(
                 bundle,
                 env,
                 phases,
                 emitted,
                 new SessionStatus("shell.evidence.required", "Shell tenure requires a write-only evidence sink."),
                 dwell: false,
-                firstPaintMs);
+                firstPaintMs).ConfigureAwait(false);
         }
 
         // Bootstrap: in-progress checkpoint + missing/stale heartbeat ⇒ fail-open.
@@ -74,7 +75,7 @@ public static partial class ProvisioningSession
         if (tenure.CheckpointInProgress && IsStaleHeartbeat(bundle, env, tenure))
         {
             env.Checkpoints.ClearCheckpoint();
-            return FailOpen(
+            return await FailOpenAsync(
                 bundle,
                 env,
                 phases,
@@ -83,13 +84,13 @@ public static partial class ProvisioningSession
                     "shell.stale",
                     "In-progress checkpoint with missing or stale heartbeat; fail-open unlock."),
                 dwell: false,
-                firstPaintMs);
+                firstPaintMs).ConfigureAwait(false);
         }
 
         if (tenure.CheckpointInProgress && storedCheckpoint is null)
         {
             env.Checkpoints.ClearCheckpoint();
-            return FailOpen(
+            return await FailOpenAsync(
                 bundle,
                 env,
                 phases,
@@ -98,7 +99,7 @@ public static partial class ProvisioningSession
                     "shell.checkpoint.invalid",
                     "In-progress checkpoint missing or empty; fail-closed."),
                 dwell: false,
-                firstPaintMs);
+                firstPaintMs).ConfigureAwait(false);
         }
 
         CheckpointState? resume = storedCheckpoint ?? bundle.Resume;
@@ -136,60 +137,77 @@ public static partial class ProvisioningSession
         {
             if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
             {
-                return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
+                return await FailOpenAsync(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs)
+                    .ConfigureAwait(false);
             }
 
-            SettlePhaseResult settle = RunSettle(bundle, env, phases, tenureStartTs, ct);
+            SettlePhaseResult settle = await RunSettleAsync(bundle, env, phases, tenureStartTs, ct)
+                .ConfigureAwait(false);
             if (settle.TimedOut)
             {
-                return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
+                return await FailOpenAsync(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs)
+                    .ConfigureAwait(false);
             }
 
             if (settle.HardFailed)
             {
-                return FailOpen(bundle, env, phases, emitted, settle.Status, dwell: true, firstPaintMs);
+                return await FailOpenAsync(bundle, env, phases, emitted, settle.Status, dwell: true, firstPaintMs)
+                    .ConfigureAwait(false);
             }
         }
 
         if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
         {
-            return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
+            return await FailOpenAsync(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs)
+                .ConfigureAwait(false);
         }
 
         if (bundle.RequiresNetwork)
         {
-            JobsPhaseResult? network = JobRunner.EnsureNetworkAvailable(bundle, env, phases);
+            JobsPhaseResult? network = await JobRunner.EnsureNetworkAvailableAsync(bundle, env, phases, ct)
+                .ConfigureAwait(false);
             if (network is not null)
             {
-                return FailOpen(bundle, env, phases, emitted, network.Value.Status, dwell: true, firstPaintMs);
+                return await FailOpenAsync(
+                        bundle,
+                        env,
+                        phases,
+                        emitted,
+                        network.Value.Status,
+                        dwell: true,
+                        firstPaintMs)
+                    .ConfigureAwait(false);
             }
         }
 
         JobsPhaseResult jobs;
         try
         {
-            jobs = JobRunner.Execute(bundle, env, phases, tenureStartTs, jobStartIndex, ct);
+            jobs = await JobRunner.ExecuteAsync(bundle, env, phases, tenureStartTs, jobStartIndex, ct)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            return FailOpen(
+            return await FailOpenAsync(
                 bundle,
                 env,
                 phases,
                 emitted,
                 new SessionStatus("shell.cancelled", "Shell tenure cancelled."),
                 dwell: false,
-                firstPaintMs);
+                firstPaintMs).ConfigureAwait(false);
         }
 
         if (jobs.TimedOut)
         {
-            return FailOpen(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs);
+            return await FailOpenAsync(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs)
+                .ConfigureAwait(false);
         }
 
         if (jobs.Outcome == SessionOutcome.Failed)
         {
-            return FailOpen(bundle, env, phases, emitted, jobs.Status, dwell: true, firstPaintMs);
+            return await FailOpenAsync(bundle, env, phases, emitted, jobs.Status, dwell: true, firstPaintMs)
+                .ConfigureAwait(false);
         }
 
         if (jobs.Outcome == SessionOutcome.Reboot)
@@ -214,7 +232,7 @@ public static partial class ProvisioningSession
         // Unlock before Complete evidence so S4 never claims green while Shell is still Supervisor.
         if (!TryUnlock(env) || !IsExplorerShell(env.Winlogon.GetShell()))
         {
-            return FailOpen(
+            return await FailOpenAsync(
                 bundle,
                 env,
                 phases,
@@ -223,7 +241,7 @@ public static partial class ProvisioningSession
                     "shell.unlock_failed",
                     "Winlogon Shell was not restored to explorer.exe after jobs."),
                 dwell: true,
-                firstPaintMs);
+                firstPaintMs).ConfigureAwait(false);
         }
 
         EvidenceSnapshot snap = env.Evidence.Write(
@@ -284,7 +302,7 @@ public static partial class ProvisioningSession
     private static void Unlock(IWinlogonRegistry winlogon) =>
         winlogon.SetShell(ExplorerShell);
 
-    private static SessionResult FailOpen(
+    private static async Task<SessionResult> FailOpenAsync(
         ProvisioningBundle bundle,
         SessionEnvironment env,
         List<string> phases,
@@ -303,9 +321,8 @@ public static partial class ProvisioningSession
         {
             try
             {
-                Task.Delay(bundle.Policy.FailedDwell, env.Time, CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
+                await Task.Delay(bundle.Policy.FailedDwell, env.Time, CancellationToken.None)
+                    .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -374,7 +391,7 @@ public static partial class ProvisioningSession
     /// Bounded restore + poll; only the final snapshot gates hard locale / GeoID / TZ.
     /// Soft location-services mismatch warns and continues.
     /// </summary>
-    private static SettlePhaseResult RunSettle(
+    private static async Task<SettlePhaseResult> RunSettleAsync(
         ProvisioningBundle bundle,
         SessionEnvironment env,
         List<string> phases,
@@ -478,8 +495,7 @@ public static partial class ProvisioningSession
 
             try
             {
-                // ponytail: sync settle loop — ConfigureAwait(false) while IAppx/session stay sync
-                Task.Delay(wait, env.Time, ct).ConfigureAwait(false).GetAwaiter().GetResult();
+                await Task.Delay(wait, env.Time, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -541,28 +557,28 @@ public static partial class ProvisioningSession
         && actual.GeoId == target.GeoId
         && string.Equals(actual.TimeZoneId, target.TimeZoneId, StringComparison.OrdinalIgnoreCase);
 
-    private static SessionResult RunMachineSetup(
+    private static Task<SessionResult> RunMachineSetupAsync(
         ProvisioningBundle bundle,
         SessionEnvironment env,
         CancellationToken ct)
     {
         if (ct.IsCancellationRequested)
         {
-            return Fail("machineSetup.cancelled", "Machine setup cancelled.");
+            return Task.FromResult(Fail("machineSetup.cancelled", "Machine setup cancelled."));
         }
 
         string username = bundle.Account.Username.Trim();
         string password = bundle.Account.Password;
         if (string.IsNullOrWhiteSpace(username))
         {
-            return Fail("machineSetup.account.empty", "Account username is required.");
+            return Task.FromResult(Fail("machineSetup.account.empty", "Account username is required."));
         }
 
         if (string.Equals(username, ForbiddenAutologonUser, StringComparison.OrdinalIgnoreCase))
         {
-            return Fail(
+            return Task.FromResult(Fail(
                 "machineSetup.account.forbidden",
-                $"Refusing AutoAdminLogon for forbidden user '{ForbiddenAutologonUser}'.");
+                $"Refusing AutoAdminLogon for forbidden user '{ForbiddenAutologonUser}'."));
         }
 
         try
@@ -575,14 +591,14 @@ public static partial class ProvisioningSession
                     ForbiddenAutologonUser,
                     StringComparison.OrdinalIgnoreCase))
             {
-                return Fail(
+                return Task.FromResult(Fail(
                     "machineSetup.account.forbidden",
-                    $"Refusing to leave '{ForbiddenAutologonUser}' with AutoAdminLogon enabled.");
+                    $"Refusing to leave '{ForbiddenAutologonUser}' with AutoAdminLogon enabled."));
             }
         }
         catch (Exception ex)
         {
-            return Fail("machineSetup.autologon.stamp_failed", ex.Message);
+            return Task.FromResult(Fail("machineSetup.autologon.stamp_failed", ex.Message));
         }
 
         // No further use of stamp password in this phase (disk wipe next; string GC lifetime remains).
@@ -623,13 +639,13 @@ public static partial class ProvisioningSession
             }
             catch (Exception ex)
             {
-                return Fail("machineSetup.secret_wipe_failed", ex.Message);
+                return Task.FromResult(Fail("machineSetup.secret_wipe_failed", ex.Message));
             }
         }
 
         if (shellFailure is not null)
         {
-            return shellFailure;
+            return Task.FromResult(shellFailure);
         }
 
         // SetupComplete runs as SYSTEM — only elevated window before FirstLogon medium-IL Shell.
@@ -661,10 +677,10 @@ public static partial class ProvisioningSession
             }
         }
 
-        return new SessionResult(
+        return Task.FromResult(new SessionResult(
             SessionOutcome.Complete,
             new SessionStatus("machineSetup.ok", "Autologon stamped; Shell verified; secrets wiped."),
-            []);
+            []));
     }
 
     private static bool ShellEquals(string? actual, string expected) =>

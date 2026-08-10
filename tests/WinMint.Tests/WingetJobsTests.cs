@@ -190,15 +190,15 @@ public class WingetJobsTests
     }
 
     [Fact]
-    public void Shell_winget_job_invokes_expected_argv()
+    public async Task Shell_winget_job_invokes_expected_argv()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
         RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git", WingetArchitecture: "arm64")]),
+            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git", WingetArchitecture: "arm64")]),
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
@@ -224,14 +224,14 @@ public class WingetJobsTests
     }
 
     [Fact]
-    public void Shell_winget_job_fails_closed_when_Appx_missing()
+    public async Task Shell_winget_job_fails_closed_when_Appx_missing()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git")]),
+            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]),
             Env(processes, evidence),
             TestContext.Current.CancellationToken);
 
@@ -242,15 +242,15 @@ public class WingetJobsTests
     }
 
     [Fact]
-    public void Shell_winget_job_fails_closed_when_resolve_returns_null_and_strict()
+    public async Task Shell_winget_job_fails_closed_when_resolve_returns_null_and_strict()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
         RecordingAppx appx = new() { WingetPath = null };
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git")]) with { PackageStrict = true },
+            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]) with { PackageStrict = true },
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
@@ -261,15 +261,15 @@ public class WingetJobsTests
     }
 
     [Fact]
-    public void Shell_winget_job_best_effort_when_resolve_returns_null()
+    public async Task Shell_winget_job_best_effort_when_resolve_returns_null()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
         RecordingAppx appx = new() { WingetPath = null };
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git")]),
+            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]),
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
@@ -278,7 +278,7 @@ public class WingetJobsTests
     }
 
     [Fact]
-    public void Shell_winget_job_registers_app_installer_before_spawn()
+    public async Task Shell_winget_job_registers_app_installer_before_spawn()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
@@ -287,9 +287,9 @@ public class WingetJobsTests
             WingetPath = @"C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_1.0_arm64__8wekyb3d8bbwe\winget.exe",
         };
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", "winget", PackageId: "jqlang.jq")]),
+            Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", ProvisionJobKind.Winget, PackageId: "jqlang.jq")]),
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
@@ -301,35 +301,18 @@ public class WingetJobsTests
         Assert.Equal(appx.WingetPath, processes.Starts[0].FileName);
     }
 
-    [Fact]
-    public void Shell_unknown_job_kind_still_unsupported()
-    {
-        RecordingProcessHost processes = new();
-        RecordingEvidenceSink evidence = new();
-
-        SessionResult result = ProvisioningSession.Run(
-            SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("metal.browser", "browser")]),
-            Env(processes, evidence),
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("jobs.kind.unsupported", result.FinalStatus.Code);
-        Assert.Empty(processes.Starts);
-        Assert.Contains("jobs.kind.unsupported", evidence.Documents[0].Phases);
-    }
 
     [Fact]
-    public void Shell_needsReboot_requests_os_reboot_after_checkpoint()
+    public async Task Shell_needsReboot_requests_os_reboot_after_checkpoint()
     {
         RecordingProcessHost processes = new();
         RecordingCheckpoints checkpoints = new();
         RecordingSystemReboot reboot = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("smoke.stub.reboot", "stub", NeedsReboot: true)]),
+            Bundle(jobs: [new ProvisionJob("smoke.stub.reboot", ProvisionJobKind.Stub, NeedsReboot: true)]),
             Env(processes, evidence, checkpoints, reboot),
             TestContext.Current.CancellationToken);
 

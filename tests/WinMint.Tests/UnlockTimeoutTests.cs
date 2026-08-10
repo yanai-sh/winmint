@@ -9,7 +9,7 @@ public class UnlockTimeoutTests
     private const string ExplorerShell = "explorer.exe";
 
     [Fact]
-    public void Shell_wall_clock_timeout_unlocks()
+    public async Task Shell_wall_clock_timeout_unlocks()
     {
         ManualTimeProvider time = new();
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
@@ -18,7 +18,7 @@ public class UnlockTimeoutTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
@@ -42,7 +42,7 @@ public class UnlockTimeoutTests
     }
 
     [Fact]
-    public void Shell_wall_clock_jump_during_settle_does_not_false_timeout()
+    public async Task Shell_wall_clock_jump_during_settle_does_not_false_timeout()
     {
         // Hyper-V IC/NTP can jump guest UTC ~+3h mid-settle; tenure deadlines must be monotonic.
         ManualTimeProvider time = new();
@@ -53,7 +53,7 @@ public class UnlockTimeoutTests
             onFirstMismatch: () => time.JumpWallClock(TimeSpan.FromHours(3)));
         RecordingSplashPresenter splash = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
@@ -74,7 +74,7 @@ public class UnlockTimeoutTests
     }
 
     [Fact]
-    public void Shell_stale_tenure_fails_open_and_unlocks()
+    public async Task Shell_stale_tenure_fails_open_and_unlocks()
     {
         ManualTimeProvider time = new();
         time.Advance(TimeSpan.FromMinutes(20));
@@ -86,7 +86,7 @@ public class UnlockTimeoutTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
@@ -108,14 +108,14 @@ public class UnlockTimeoutTests
     }
 
     [Fact]
-    public void Shell_missing_heartbeat_with_checkpoint_fails_open()
+    public async Task Shell_missing_heartbeat_with_checkpoint_fails_open()
     {
         ManualTimeProvider time = new();
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
         StaleCheckpoints checkpoints = new(
             new TenureState(CheckpointInProgress: true, HeartbeatUtc: null));
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(
                 dma: new DmaSettleTarget(Enabled: false, null, null, null, null),
@@ -129,14 +129,14 @@ public class UnlockTimeoutTests
     }
 
     [Fact]
-    public void Shell_success_unlocks_after_jobs()
+    public async Task Shell_success_unlocks_after_jobs()
     {
         ManualTimeProvider time = new();
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
@@ -162,7 +162,7 @@ public class UnlockTimeoutTests
         new(
             Account: new AccountStamp("winmint", ""),
             Dma: dma,
-            Jobs: [new ProvisionJob("smoke.stub.ready", "stub")],
+            Jobs: [new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub)],
             Policy: policy,
             SupervisorShellPath: SupervisorPath);
 

@@ -6,15 +6,15 @@ namespace WinMint.Tests;
 public class StubJobsTests
 {
     [Fact]
-    public void Shell_invokes_stub_job_as_child_process_after_green_settle()
+    public async Task Shell_invokes_stub_job_as_child_process_after_green_settle()
     {
         RecordingProcessHost processes = new();
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("smoke.stub.ready", "stub")]),
+            Bundle(jobs: [new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub)]),
             Env(processes, evidence, splash: splash),
             TestContext.Current.CancellationToken);
 
@@ -32,18 +32,18 @@ public class StubJobsTests
     }
 
     [Fact]
-    public void Shell_runs_smoke_stub_catalog_in_order()
+    public async Task Shell_runs_smoke_stub_catalog_in_order()
     {
         RecordingProcessHost processes = new();
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(jobs:
             [
-                new ProvisionJob("smoke.stub.ready", "stub"),
-                new ProvisionJob("smoke.stub.complete", "stub"),
+                new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub),
+                new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub),
             ]),
             Env(processes, evidence, splash: splash),
             TestContext.Current.CancellationToken);
@@ -61,18 +61,18 @@ public class StubJobsTests
     }
 
     [Fact]
-    public void Shell_job_nonzero_exit_fails_without_further_jobs()
+    public async Task Shell_job_nonzero_exit_fails_without_further_jobs()
     {
         RecordingProcessHost processes = new() { ExitCode = 7 };
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(jobs:
             [
-                new ProvisionJob("smoke.stub.ready", "stub"),
-                new ProvisionJob("smoke.stub.complete", "stub"),
+                new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub),
+                new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub),
             ]),
             Env(processes, evidence, splash: splash),
             TestContext.Current.CancellationToken);
@@ -84,21 +84,4 @@ public class StubJobsTests
         Assert.DoesNotContain("jobs.ok", evidence.Documents[0].Phases);
     }
 
-    [Fact]
-    public void Shell_unsupported_job_kind_fails_without_spawn()
-    {
-        RecordingProcessHost processes = new();
-        RecordingEvidenceSink evidence = new();
-
-        SessionResult result = ProvisioningSession.Run(
-            SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("metal.browser", "browser")]),
-            Env(processes, evidence, splash: new RecordingSplashPresenter()),
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("jobs.kind.unsupported", result.FinalStatus.Code);
-        Assert.Empty(processes.Starts);
-        Assert.Contains("jobs.kind.unsupported", evidence.Documents[0].Phases);
-    }
 }

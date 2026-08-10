@@ -36,6 +36,10 @@ public static class ProductPosture
         "OneDrive",
         "device metadata",
         "WPBT",
+        "long paths",
+        "Widgets off",
+        "Developer Mode",
+        "dark theme / DND",
         "Reserved Storage",
         "MinGit",
         "Nilesoft Shell",
@@ -59,7 +63,14 @@ public static class ProductPosture
         bool includeBraveDebloat,
         bool includeDriverHygiene = false)
     {
-        List<OfflinePolicyRow> rows = [.. EdgeDebloat, .. OneDriveDisable, .. DeviceMetadata, .. WpbtDisable];
+        List<OfflinePolicyRow> rows =
+        [
+            .. EdgeDebloat,
+            .. OneDriveDisable,
+            .. DeviceMetadata,
+            .. WpbtDisable,
+            .. WorkstationMachine,
+        ];
         if (includeBraveDebloat)
         {
             rows.AddRange(BraveDebloat);
@@ -124,6 +135,7 @@ public static class ProductPosture
         SoftString("Policies\\Microsoft\\Edge\\ExtensionInstallBlocklist", "1", "ofefcgjbeghpigppfmkologfjadafddi"),
         Soft("Policies\\Microsoft\\Edge", "ShowRecommendationsEnabled", "0"),
         Soft("Policies\\Microsoft\\Edge", "HideFirstRunExperience", "1"),
+        SoftString("Policies\\Microsoft\\Edge", "NewTabPageLocation", "about:blank"),
         Soft("Policies\\Microsoft\\Edge", "UserFeedbackAllowed", "0"),
         Soft("Policies\\Microsoft\\Edge", "ConfigureDoNotTrack", "1"),
         Soft("Policies\\Microsoft\\Edge", "AlternateErrorPagesEnabled", "0"),
@@ -136,6 +148,24 @@ public static class ProductPosture
         Soft("Policies\\Microsoft\\Edge", "EdgeAssetDeliveryServiceEnabled", "0"),
         Soft("Policies\\Microsoft\\Edge", "WalletDonationEnabled", "0"),
         Soft("Policies\\Microsoft\\Edge", "DefaultBrowserSettingsCampaignEnabled", "0"),
+    ];
+
+    /// <summary>
+    /// Machine posture aligned with Microsoft Windows Developer Config (HKLM only).
+    /// Skip RDP enable — widens attack surface on wipe-ready workstations.
+    /// </summary>
+    private static readonly OfflinePolicyRow[] WorkstationMachine =
+    [
+        Soft("Policies\\Microsoft\\Dsh", "AllowNewsAndInterests", "0"),
+        Soft(@"Microsoft\Windows\CurrentVersion\AppModelUnlock", "AllowDevelopmentWithoutDevLicense", "1"),
+        Soft(@"Microsoft\Windows\CurrentVersion\Sudo", "Enabled", "3"),
+        new(
+            "SYSTEM",
+            "ControlSet001\\Control\\FileSystem",
+            "LongPathsEnabled",
+            "REG_DWORD",
+            "1",
+            "policy.filesystem.LongPathsEnabled"),
     ];
 
     private static readonly OfflinePolicyRow[] OneDriveDisable =
@@ -207,6 +237,23 @@ public static class ProductPosture
         if (subKey.Contains("Device Metadata", StringComparison.OrdinalIgnoreCase))
         {
             return "device";
+        }
+
+        if (subKey.Contains("\\Dsh", StringComparison.OrdinalIgnoreCase)
+            || subKey.EndsWith("Dsh", StringComparison.OrdinalIgnoreCase))
+        {
+            return "widgets";
+        }
+
+        if (subKey.Contains("AppModelUnlock", StringComparison.OrdinalIgnoreCase))
+        {
+            return "developer";
+        }
+
+        if (subKey.Contains("\\Sudo", StringComparison.OrdinalIgnoreCase)
+            || subKey.EndsWith("Sudo", StringComparison.OrdinalIgnoreCase))
+        {
+            return "sudo";
         }
 
         if (subKey.Contains("\\Edge", StringComparison.OrdinalIgnoreCase)

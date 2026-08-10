@@ -5,22 +5,28 @@ using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
-/// <summary>Ticket 23 — metal wsl job at S1 (Plan) + S3 (Run).</summary>
+/// <summary>WSL jobs — Microsoft Dev Config platform → reboot → distro semantics.</summary>
 public class WslJobsTests
 {
     [Fact]
-    public void Plan_emits_wsl_jobs_from_packages_wsl()
+    public void Plan_emits_wsl_platform_before_distro_jobs()
     {
         Profile profile = Parse(MinimalJson(wsl: ["Ubuntu"]));
 
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        JobDescriptor ubuntu = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "wsl");
-        Assert.Equal("wsl.Ubuntu", ubuntu.Id);
-        Assert.Equal("Ubuntu", ubuntu.PackageId);
-        Assert.Equal("store", ubuntu.WslInstallKind);
-        Assert.False(ubuntu.NeedsReboot);
+        JobDescriptor[] wslJobs = result.Value.Jobs.Jobs
+            .Where(j => j.Kind is "wsl" or "wsl.platform")
+            .ToArray();
+        Assert.Equal(2, wslJobs.Length);
+        Assert.Equal("wsl.platform", wslJobs[0].Kind);
+        Assert.Equal("wsl.platform", wslJobs[0].Id);
+        Assert.Equal("wsl", wslJobs[1].Kind);
+        Assert.Equal("wsl.Ubuntu", wslJobs[1].Id);
+        Assert.Equal("Ubuntu", wslJobs[1].PackageId);
+        Assert.Equal("store", wslJobs[1].WslInstallKind);
+        Assert.False(wslJobs[1].NeedsReboot);
     }
 
     [Fact]
@@ -31,6 +37,7 @@ public class WslJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "wsl.platform");
         JobDescriptor nix = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "wsl");
         Assert.Equal("NixOS", nix.PackageId);
         Assert.Equal("fromFile", nix.WslInstallKind);
@@ -61,23 +68,102 @@ public class WslJobsTests
     }
 
     [Fact]
-    public void Shell_wsl_runs_install_distro_argv()
+    public async Task Shell_wsl_platform_ready_skips_install()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("wsl.Ubuntu", "wsl", PackageId: "Ubuntu")]),
-            Env(processes, evidence),
+            Bundle(jobs: [new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform)]),
+            Env(processes, evidence, isWslPlatformReady: static () => true),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.DoesNotContain(
+            processes.Starts,
+            s => s.FileName.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("jobs.wsl.platform.ready", evidence.Documents[^1].Phases);
+    }
+
+    [Fact]
+    public async Task Shell_wsl_platform_missing_installs_and_reboots_on_3010()
+    {
+        RecordingProcessHost processes = new()
+        {
+            OnRun = static (file, args) =>
+            {
+                if (file.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase)
+                    && args is ["--install", "--no-distribution"])
+                {
+                    return new ProcessStartResult(3010);
+                }
+
+                return new ProcessStartResult(0);
+            },
+        };
+        RecordingEvidenceSink evidence = new();
+        RecordingCheckpoints checkpoints = new();
+
+        SessionResult result = await ProvisioningSession.RunAsync(
+            SessionMode.Shell,
+            BundleFastSettle(jobs: [new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform)]),
+            Env(processes, evidence, checkpoints: checkpoints, isWslPlatformReady: static () => false),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Reboot, result.Outcome);
+        Assert.Equal("jobs.reboot", result.FinalStatus.Code);
+        Assert.Equal("jobs:1", checkpoints.LastWritten!.Phase);
+        Assert.Contains(
+            processes.Starts,
+            s => s.FileName.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase)
+                && s.Arguments is ["--install", "--no-distribution"]);
+    }
+
+    [Fact]
+    public async Task Shell_wsl_runs_install_distro_argv_and_suppresses_oobe()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+        bool oobeSuppressed = false;
+
+        SessionResult result = await ProvisioningSession.RunAsync(
+            SessionMode.Shell,
+            Bundle(jobs: [new ProvisionJob("wsl.Ubuntu", ProvisionJobKind.Wsl, PackageId: "Ubuntu")]),
+            Env(
+                processes,
+                evidence,
+                suppressWslOobe: () => oobeSuppressed = true),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Equal("jobs.ok", result.FinalStatus.Code);
+        Assert.True(oobeSuppressed);
         Assert.Contains(
             processes.Starts,
             s => s.FileName.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase)
                 && s.Arguments is ["--install", "-d", "Ubuntu", "--no-launch"]);
+    }
+
+    [Fact]
+    public async Task Shell_wsl_distro_exit_3010_requests_reboot()
+    {
+        RecordingProcessHost processes = new()
+        {
+            OnRun = static (_, _) => new ProcessStartResult(3010),
+        };
+        RecordingEvidenceSink evidence = new();
+        RecordingCheckpoints checkpoints = new();
+
+        SessionResult result = await ProvisioningSession.RunAsync(
+            SessionMode.Shell,
+            BundleFastSettle(
+                jobs: [new ProvisionJob("wsl.Ubuntu", ProvisionJobKind.Wsl, PackageId: "Ubuntu")]),
+            Env(processes, evidence, checkpoints: checkpoints, suppressWslOobe: static () => { }),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Reboot, result.Outcome);
+        Assert.Equal("jobs:1", checkpoints.LastWritten!.Phase);
     }
 
     private static Profile Parse(string json)

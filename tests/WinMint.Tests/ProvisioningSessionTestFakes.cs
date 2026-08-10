@@ -39,7 +39,10 @@ internal static class ProvisioningSessionTestFakes
         ISystemReboot? reboot = null,
         IAppxPackageManager? appx = null,
         ISplashPresenter? splash = null,
-        Func<string?>? resolveScoopCmd = null) =>
+        Func<string?>? resolveScoopCmd = null,
+        Func<bool>? isWslPlatformReady = null,
+        Action? applyWorkstationQuiet = null,
+        Action? suppressWslOobe = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: new NoopWinlogon(),
@@ -50,7 +53,10 @@ internal static class ProvisioningSessionTestFakes
             Evidence: evidence,
             Reboot: reboot,
             Appx: appx,
-            ResolveScoopCmd: resolveScoopCmd);
+            ResolveScoopCmd: resolveScoopCmd,
+            IsWslPlatformReady: isWslPlatformReady,
+            ApplyWorkstationQuiet: applyWorkstationQuiet,
+            SuppressWslOobe: suppressWslOobe);
 
     internal static SessionEnvironment Env(
         IWinlogonRegistry winlogon,
@@ -134,13 +140,25 @@ internal static class ProvisioningSessionTestFakes
         public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) =>
             Provisioned.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId)).ToArray();
 
-        public void RemovePackage(string packageFullName) => RemovedFullNames.Add(packageFullName);
+        public Task RemovePackageAsync(string packageFullName, CancellationToken ct = default)
+        {
+            RemovedFullNames.Add(packageFullName);
+            return Task.CompletedTask;
+        }
 
-        public void DeprovisionPackageFamily(string packageFamilyName) =>
+        public Task DeprovisionPackageFamilyAsync(string packageFamilyName, CancellationToken ct = default)
+        {
             DeprovisionedFamilyNames.Add(packageFamilyName);
+            return Task.CompletedTask;
+        }
 
-        public void RegisterPackageFamilyForCurrentUser(string packageFamilyName) =>
+        public Task RegisterPackageFamilyForCurrentUserAsync(
+            string packageFamilyName,
+            CancellationToken ct = default)
+        {
             RegisteredFamilyNames.Add(packageFamilyName);
+            return Task.CompletedTask;
+        }
 
         public void EnsureSystemFullControlOnWingetFrameworkPackages() => EnsureSystemFullControlCalls++;
 

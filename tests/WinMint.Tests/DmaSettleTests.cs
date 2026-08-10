@@ -7,7 +7,7 @@ namespace WinMint.Tests;
 public class DmaSettleTests
 {
     [Fact]
-    public void Shell_final_hard_GeoId_mismatch_fails_and_skips_jobs()
+    public async Task Shell_final_hard_GeoId_mismatch_fails_and_skips_jobs()
     {
         ManualTimeProvider time = new();
         ScriptedRegionSnapshot region = new(
@@ -17,7 +17,7 @@ public class DmaSettleTests
         RecordingProcessHost processes = new();
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
@@ -38,7 +38,7 @@ public class DmaSettleTests
     }
 
     [Fact]
-    public void Shell_intermediate_probe_failures_are_non_authoritative()
+    public async Task Shell_intermediate_probe_failures_are_non_authoritative()
     {
         ManualTimeProvider time = new();
         ScriptedRegionSnapshot region = new(
@@ -47,7 +47,7 @@ public class DmaSettleTests
             new RegionRead.ValueRead(new RegionState("en-GB", 242, "GMT Standard Time", true)));
         RecordingSplashPresenter splash = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
@@ -62,7 +62,7 @@ public class DmaSettleTests
     }
 
     [Fact]
-    public void Shell_soft_location_mismatch_warns_and_continues()
+    public async Task Shell_soft_location_mismatch_warns_and_continues()
     {
         ManualTimeProvider time = new();
         ScriptedRegionSnapshot region = new(
@@ -70,7 +70,7 @@ public class DmaSettleTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
@@ -90,13 +90,13 @@ public class DmaSettleTests
     }
 
     [Fact]
-    public void Shell_dma_disabled_skips_settle_without_region_apply()
+    public async Task Shell_dma_disabled_skips_settle_without_region_apply()
     {
         ManualTimeProvider time = new();
         ScriptedRegionSnapshot region = new();
         RecordingSplashPresenter splash = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(dma: new DmaSettleTarget(Enabled: false, null, null, null, null)),
             Env(time, region, splash, new RecordingEvidenceSink()),
@@ -118,7 +118,7 @@ public class DmaSettleTests
         new(
             Account: new AccountStamp("winmint", ""),
             Dma: dma,
-            Jobs: [new ProvisionJob("smoke.stub.ready", "stub")],
+            Jobs: [new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub)],
             Policy: policy ?? TightSettlePolicy(),
             SupervisorShellPath: SupervisorPath);
 

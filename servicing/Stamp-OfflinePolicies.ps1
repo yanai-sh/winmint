@@ -70,6 +70,10 @@ foreach ($group in $byHive) {
             } elseif ($row.SubKey -match 'Device Metadata') { 'device'
             } elseif ($row.SubKey -match 'WindowsCopilot') { 'copilot'
             } elseif ($row.SubKey -match 'Session Manager') { 'wpbt'
+            } elseif ($row.SubKey -match 'FileSystem' -or $row.Name -eq 'LongPathsEnabled') { 'filesystem'
+            } elseif ($row.SubKey -match '\\Dsh' -or $row.SubKey -match 'AllowNewsAndInterests') { 'widgets'
+            } elseif ($row.SubKey -match 'AppModelUnlock') { 'developer'
+            } elseif ($row.SubKey -match '\\Sudo') { 'sudo'
             } else { 'edge' }
             $digests["policy.$family.$($row.Name)"] = [string]$row.Data
             Write-Output "policy ok: $family.$($row.Name)=$($row.Data)"

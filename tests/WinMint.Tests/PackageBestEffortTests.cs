@@ -6,16 +6,16 @@ namespace WinMint.Tests;
 public class PackageBestEffortTests
 {
     [Fact]
-    public void Shell_winget_failure_continues_when_not_strict()
+    public async Task Shell_winget_failure_continues_when_not_strict()
     {
         RecordingProcessHost processes = new() { ExitCode = 1 };
         RecordingEvidenceSink evidence = new();
         RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
         string evidenceDir = Path.Combine(Path.GetTempPath(), "WinMintTests", Guid.NewGuid().ToString("N"));
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git")]),
+            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]),
             Env(processes, evidence, appx: appx) with { EvidenceDirectory = evidenceDir },
             TestContext.Current.CancellationToken);
 
@@ -26,15 +26,15 @@ public class PackageBestEffortTests
     }
 
     [Fact]
-    public void Shell_winget_failure_fails_closed_when_strict()
+    public async Task Shell_winget_failure_fails_closed_when_strict()
     {
         RecordingProcessHost processes = new() { ExitCode = 1 };
         RecordingEvidenceSink evidence = new();
         RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git")]) with { PackageStrict = true },
+            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]) with { PackageStrict = true },
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
