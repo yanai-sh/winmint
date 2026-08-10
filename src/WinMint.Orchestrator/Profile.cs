@@ -32,6 +32,18 @@ public sealed record Profile(
     public PoliciesProfile EffectivePolicies => Policies ?? PoliciesProfile.Defaults;
 }
 
+/// <summary>
+/// Optional Profile <c>policies</c> object (winmint.profile/v1). Omit ⇒ product defaults.
+/// AppX Copilot/gaming strip, OneDrive / EdgeDebloat / DeviceMetadata / WPBT / ReservedStorage /
+/// MinGit / Nilesoft are product posture (<see cref="ProductPosture"/>), not fields here.
+/// </summary>
+public sealed record PoliciesProfile(
+    /// <summary>Optional DoH provider id (<c>cloudflare</c>, <c>google</c>, <c>quad9</c>). Null/omit ⇒ no DoH job.</summary>
+    string? DohProvider = null)
+{
+    public static PoliciesProfile Defaults { get; } = new();
+}
+
 /// <summary>Surface Catalog driver selection (winmint.profile/v1 drivers block).</summary>
 public sealed record DriversProfile(string Source, string DeviceId);
 
@@ -45,12 +57,10 @@ public sealed record AccountProfile(
     /// </summary>
     bool RequireWifiDuringOobe,
     /// <summary>Authored host path to password file (issue 56). Materialized by ProfileFile; never an environment variable.</summary>
-    string? PasswordPath = null);
-
-/// <summary>Wire form of account.mode in profile JSON. Only localAutoLogon is supported.</summary>
-public static class AccountModeWire
+    string? PasswordPath = null)
 {
-    public const string LocalAutoLogon = "localAutoLogon";
+    /// <summary>Only supported wire form of account.mode in Profile JSON.</summary>
+    public const string LocalAutoLogonMode = "localAutoLogon";
 }
 
 public sealed record DmaProfile(

@@ -7,7 +7,7 @@ public class PackageCatalogValidatorTests
     [Fact]
     public void Default_embedded_catalog_passes_validator()
     {
-        IReadOnlyList<string> errors = PackageCatalogValidator.Validate(PackageCatalog.Default);
+        IReadOnlyList<string> errors = PackageCatalog.Default.Validate();
         Assert.Empty(errors);
     }
 
@@ -16,7 +16,7 @@ public class PackageCatalogValidatorTests
     {
         string path = Path.Combine(FindRepoRoot(), "config", "packages.json");
         PackageCatalog catalog = PackageCatalog.LoadFromFile(path);
-        IReadOnlyList<string> errors = PackageCatalogValidator.Validate(catalog);
+        IReadOnlyList<string> errors = catalog.Validate();
         Assert.Empty(errors);
     }
 

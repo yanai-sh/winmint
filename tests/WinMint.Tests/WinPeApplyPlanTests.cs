@@ -133,7 +133,7 @@ public class WinPeApplyPlanTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },

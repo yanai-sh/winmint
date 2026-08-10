@@ -68,11 +68,11 @@ public static class BuildPlan
             {
                 issues.Add(new DocumentError("account.mode.missing", "account.mode is required.", "account.mode"));
             }
-            else if (!string.Equals(doc.Account.Mode, AccountModeWire.LocalAutoLogon, StringComparison.Ordinal))
+            else if (!string.Equals(doc.Account.Mode, AccountProfile.LocalAutoLogonMode, StringComparison.Ordinal))
             {
                 issues.Add(new DocumentError(
                     "account.mode.unsupported",
-                    $"Unsupported account.mode '{doc.Account.Mode}'. Smoke supports {AccountModeWire.LocalAutoLogon} only.",
+                    $"Unsupported account.mode '{doc.Account.Mode}'. Smoke supports {AccountProfile.LocalAutoLogonMode} only.",
                     "account.mode"));
             }
 
@@ -245,7 +245,7 @@ public static class BuildPlan
         ProfileDocument doc = new(
             ProfileSchemaVersion,
             new AccountDocument(
-                AccountModeWire.LocalAutoLogon,
+                AccountProfile.LocalAutoLogonMode,
                 profile.Account.Username,
                 profile.Account.PasswordPath is null ? profile.Account.Password : null,
                 profile.Account.RequireWifiDuringOobe,
@@ -564,7 +564,7 @@ public static class BuildPlan
         byte[]? wingetImportJson = null;
         if (packagePhase == PackagePhase.WingetImport && wingetPackages.Count > 0)
         {
-            wingetImportJson = WingetImportBuilder.BuildUtf8Json(
+            wingetImportJson = BuildWingetImportUtf8Json(
                 wingetPackages,
                 catalog,
                 imageArchitecture);
@@ -897,6 +897,48 @@ public static class BuildPlan
 
     private static IReadOnlyList<DocumentError> InvalidJson(string message) =>
         [new DocumentError("document.invalidJson", message)];
+
+    /// <summary>Build winget export/import JSON from Profile winget ids + catalog.</summary>
+    private static byte[] BuildWingetImportUtf8Json(
+        IReadOnlyList<string> wingetInstallIds,
+        PackageCatalog catalog,
+        string imageArchitecture)
+    {
+        const string schema = "https://aka.ms/winget-packages.schema.2.0.json";
+        List<WingetImportPackageDto> packages = [];
+        foreach (string installId in wingetInstallIds)
+        {
+            if (!catalog.TryGetToolByInstallId(installId, out PackageToolEntry? tool))
+            {
+                continue;
+            }
+
+            string? archFlag = PackageCatalog.ResolveWingetArchitectureFlag(tool, imageArchitecture);
+            packages.Add(new WingetImportPackageDto(
+                installId,
+                string.IsNullOrWhiteSpace(archFlag) ? null : $"--architecture {archFlag}"));
+        }
+
+        if (packages.Count == 0)
+        {
+            return [];
+        }
+
+        WingetImportFile file = new(
+            schema,
+            DateTimeOffset.UtcNow,
+            [
+                new WingetImportSourceDto(
+                    new WingetSourceDetailsDto(
+                        "winget",
+                        "8wekyb3d8bbwe",
+                        "https://cdn.winget.microsoft.com/cache",
+                        "Microsoft.PreIndexed.Package"),
+                    packages),
+            ]);
+
+        return JsonSerializer.SerializeToUtf8Bytes(file, WingetImportJsonContext.Default.WingetImportFile);
+    }
 }
 
 internal sealed record ProfileDocument(
@@ -952,3 +994,26 @@ internal sealed record DmaSettleDocument(
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class BuildPlanJsonContext : JsonSerializerContext;
+
+internal sealed record WingetImportFile(
+    [property: JsonPropertyName("$schema")] string Schema,
+    [property: JsonPropertyName("CreationDate")] DateTimeOffset CreationDate,
+    [property: JsonPropertyName("Sources")] WingetImportSourceDto[] Sources);
+
+internal sealed record WingetImportSourceDto(
+    [property: JsonPropertyName("SourceDetails")] WingetSourceDetailsDto SourceDetails,
+    [property: JsonPropertyName("Packages")] IReadOnlyList<WingetImportPackageDto> Packages);
+
+internal sealed record WingetSourceDetailsDto(
+    [property: JsonPropertyName("Name")] string Name,
+    [property: JsonPropertyName("Identifier")] string Identifier,
+    [property: JsonPropertyName("Argument")] string Argument,
+    [property: JsonPropertyName("Type")] string Type);
+
+internal sealed record WingetImportPackageDto(
+    [property: JsonPropertyName("PackageIdentifier")] string PackageIdentifier,
+    [property: JsonPropertyName("InitialOverrideArguments")] string? InitialOverrideArguments);
+
+[JsonSerializable(typeof(WingetImportFile))]
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]
+internal sealed partial class WingetImportJsonContext : JsonSerializerContext;

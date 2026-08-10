@@ -15,7 +15,7 @@ public class WingetJobsTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -58,7 +58,7 @@ public class WingetJobsTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -91,7 +91,7 @@ public class WingetJobsTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -125,7 +125,7 @@ public class WingetJobsTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -163,7 +163,7 @@ public class WingetJobsTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },

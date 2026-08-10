@@ -51,7 +51,7 @@ public static class ImageServicing
                 new Failure("servicing.workdir.missing", "WorkDirectory is required."));
         }
 
-        if (PwshHostGuard.IsStoreMsixPwsh(PwshHostGuard.CurrentProcessPath()))
+        if (IsStoreMsixPwsh(CurrentProcessPath()))
         {
             return Result.Fail<ImageEvidence, Failure>(
                 new Failure(
@@ -339,6 +339,31 @@ public static class ImageServicing
         }
 
         return Directory.GetCurrentDirectory();
+    }
+
+    /// <summary>Store MSIX pwsh breaks DISM/AppX offline servicing; fail closed on Apply.</summary>
+    private static bool IsStoreMsixPwsh(string? processPath)
+    {
+        if (string.IsNullOrWhiteSpace(processPath))
+        {
+            return false;
+        }
+
+        string path = processPath.Replace('/', '\\');
+        return path.Contains(@"\WindowsApps\Microsoft.PowerShell", StringComparison.OrdinalIgnoreCase)
+            || path.Contains(@"\WindowsApps\Microsoft.PowerShellPreview", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? CurrentProcessPath()
+    {
+        try
+        {
+            return Environment.ProcessPath;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
 

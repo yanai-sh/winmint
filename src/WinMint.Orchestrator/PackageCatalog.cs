@@ -178,6 +178,41 @@ public sealed class PackageCatalog
 
     public IReadOnlyList<string> ToolCatalogKeys => _toolsByKey.Keys.ToList();
 
+    /// <summary>Validate maintainer invariants for the shipped package catalog.</summary>
+    public IReadOnlyList<string> Validate()
+    {
+        List<string> errors = [];
+        foreach (string key in ToolCatalogKeys)
+        {
+            if (!TryGetToolByKey(key, out PackageToolEntry? tool))
+            {
+                continue;
+            }
+
+            if (tool.Architectures.Count == 0
+                || !tool.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add($"Tool '{key}' ({tool.InstallId}) missing arm64 in catalog architectures.");
+            }
+
+            if (string.Equals(tool.Source, "scoop", StringComparison.OrdinalIgnoreCase))
+            {
+                string bucket = tool.ScoopBucket ?? "main";
+                if (bucket is not ("main" or "extras"))
+                {
+                    errors.Add($"Tool '{key}' has unsupported scoopBucket '{bucket}'.");
+                }
+
+                if ((tool.InstallId is "komorebi" or "whkd") && bucket != "extras")
+                {
+                    errors.Add($"Tool '{key}' must declare scoopBucket extras.");
+                }
+            }
+        }
+
+        return errors;
+    }
+
     public IReadOnlySet<string> ScoopBucketsForInstallIds(IEnumerable<string> installIds)
     {
         HashSet<string> buckets = new(StringComparer.OrdinalIgnoreCase);

@@ -112,7 +112,7 @@ public class WslJobsTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
