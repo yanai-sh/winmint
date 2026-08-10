@@ -36,8 +36,15 @@ just plan
 Building needs a [Windows 11 ISO from Microsoft](https://www.microsoft.com/software-download/windows11), an administrator session, .NET 11 preview SDK, and `pwsh` 7.6+.
 Offline Deployment Image Servicing and Management (DISM) work takes multiple hours.
 
+Wipe path (Primary / maintainer gate [#96](https://github.com/yanai-sh/winmint/issues/96)):
+
 ```powershell
+# Lab password for samples/sl7.profile.json — see docs/design/SECRETS.md
+Set-Content -Path .scratch/sl7.password -Value 'your-lab-password' -NoNewline
 just primary-gate ISO=path\to\source.iso
+# Flash WORK\out.iso (default WORK=.scratch/sl7-build) to UEFI USB with any reliable flasher.
+# Verify ISO SHA-256 against evidence.json digests.outputIso.sha256 before wipe.
+# Boot expects WinPE LaunchApply, not Setup.
 ```
 
 `primary-gate` creates the wipe ISO with `Release` quality and package-strict checks. Use `just metal ISO=path\to\source.iso` for iterative Test Gate B work; it stays `Test` and does not replace the primary wipe gate.

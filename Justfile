@@ -76,6 +76,7 @@ metal ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality '{{QUALITY}}'
 
 # Primary Gate B + wipe ISO: Release + package-strict. Not day-to-day metal.
+# After success: flash WORK\out.iso (UEFI USB); check evidence.json digests.outputIso.sha256; expect WinPE LaunchApply.
 primary-gate ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality Release -PackageStrict -ExpectDrivers
 
