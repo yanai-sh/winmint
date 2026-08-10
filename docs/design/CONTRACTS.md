@@ -41,7 +41,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 |----------|------------|---------|
 | Profile | Human / Wizard | ProfileFile / BuildPlan; Smoke harness (guest creds only) |
 | BuildArtifacts | BuildPlan | ImageServicing; Cli dump |
-| Servicing stages (`stages.json`) | ImageServicing Materialize | Elevated `RunPlan.ps1`; Smoke harness (keep-flag pin lists) |
+| Servicing stages (`stages.json`) | ImageServicing Materialize | Elevated `RunPlan.ps1`; Smoke harness (Debloat pin lists) |
 | Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [SECRETS](SECRETS.md) |
 | Evidence JSON | ProvisioningSession (projection) | Smoke harness (S4) — **never** session control |
 | Checkpoint | ProvisioningSession (`ICheckpointStore`) | Next Shell `Run` via store (optional `bundle.Resume` inject) |
