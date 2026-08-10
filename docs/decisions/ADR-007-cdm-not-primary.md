@@ -6,7 +6,7 @@
 
 ### Context
 
-Keep-flag vertical is **remove-list only** on `winmint.profile/v1` ([ADR-005](ADR-005-keep-flag-matrix.md), [KEEPFLAG](../design/KEEPFLAG.md)). Consumer/CDM paths are a separate failure mode from offline provisioned-package removal (per-user Store suggestions / ContentDeliveryManager — not the same as still-provisioned registration). Community HKCU `ContentDeliveryManager` DWORD lists are reset-prone and not edition-guaranteed on Pro. Leftover-confidence *product* cleanup is out of this product era.
+Debloat vertical is **remove-list only** on `winmint.profile/v1` ([ADR-005](ADR-005-keep-flag-matrix.md), [DEBLOAT](../design/DEBLOAT.md)). Consumer/CDM paths are a separate failure mode from offline provisioned-package removal (per-user Store suggestions / ContentDeliveryManager — not the same as still-provisioned registration). Community HKCU `ContentDeliveryManager` DWORD lists are reset-prone and not edition-guaranteed on Pro. Leftover-confidence *product* cleanup is out of this product era.
 
 ### Decision
 

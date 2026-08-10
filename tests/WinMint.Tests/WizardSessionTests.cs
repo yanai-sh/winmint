@@ -6,7 +6,7 @@ namespace WinMint.Tests;
 public class WizardSessionTests
 {
     private static WizardSessionInput Lab(
-        string preset = KeepFlagPresets.Recommended,
+        string preset = DebloatPresets.Recommended,
         string winget = "",
         string appx = "",
         string caps = "",
@@ -46,7 +46,7 @@ public class WizardSessionTests
     [Fact]
     public void ComposeAndPlan_always_unions_product_required_appx()
     {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(preset: KeepFlagPresets.Empty));
+        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(preset: DebloatPresets.Empty));
         Assert.True(result.Succeeded, result.Message);
         Assert.Contains("Microsoft.GamingApp", result.ProfileJson!, StringComparison.Ordinal);
         Assert.Contains("Microsoft.Copilot", result.ProfileJson!, StringComparison.Ordinal);
@@ -66,7 +66,7 @@ public class WizardSessionTests
     [Fact]
     public void ComposeAndPlan_acceptance_ok()
     {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(preset: KeepFlagPresets.Acceptance));
+        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(preset: DebloatPresets.Acceptance));
         Assert.True(result.Succeeded, result.Message);
         Assert.NotNull(result.ProfileUtf8);
         Assert.Contains("Microsoft.BingNews", result.ProfileJson!, StringComparison.Ordinal);

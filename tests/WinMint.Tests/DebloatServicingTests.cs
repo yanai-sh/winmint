@@ -5,7 +5,7 @@ using static WinMint.Tests.ImageServicingTestFakes;
 namespace WinMint.Tests;
 
 /// <summary>Ticket 12 — RemoveProvisionedAppx at S2 (ImageServicing Materialize / Apply).</summary>
-public class KeepFlagServicingTests
+public class DebloatServicingTests
 {
     [Fact]
     public void Apply_injects_mountDir_for_RemoveProvisionedAppx_and_keeps_packageFamilyNames()

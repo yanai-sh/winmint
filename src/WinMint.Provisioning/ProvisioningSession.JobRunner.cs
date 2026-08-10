@@ -420,7 +420,7 @@ public static partial class ProvisioningSession
         }
 
         /// <summary>
-        /// KEEPFLAG safety net: RemovePackage for registered matches; Deprovision only if still provisioned.
+        /// Debloat safety net: RemovePackage for registered matches; Deprovision only if still provisioned.
         /// </summary>
         /// <returns>Failure result, or null when the job succeeded (caller continues the loop).</returns>
         private static JobsPhaseResult? RunOneDriveUninstallJob(

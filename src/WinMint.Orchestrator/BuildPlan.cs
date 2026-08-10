@@ -620,7 +620,7 @@ public static class BuildPlan
 
         if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Online)
         {
-            jobList.Add(new JobDescriptor("keepflag.appx.safetyNet", "appx.safetyNet"));
+            jobList.Add(new JobDescriptor("debloat.appx.safetyNet", "appx.safetyNet"));
         }
 
         if (wingetImportJson is { Length: > 0 })

@@ -4,7 +4,7 @@ using WinMint.Orchestrator;
 namespace WinMint.Tests;
 
 /// <summary>Ticket 11 — keep-flag remove-list at S1 (BuildPlan).</summary>
-public class KeepFlagPlanTests
+public class DebloatPlanTests
 {
     [Fact]
     public void Plan_empty_remove_list_emits_no_remove_stages()

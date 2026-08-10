@@ -5,7 +5,7 @@ using static WinMint.Tests.ProvisioningSessionTestFakes;
 namespace WinMint.Tests;
 
 /// <summary>Ticket 13 — FirstLogon AppX safety-net job at S3 (fake PackageManager).</summary>
-public class KeepFlagAppxSafetyNetTests
+public class DebloatAppxSafetyNetTests
 {
     [Fact]
     public void Shell_appx_safetyNet_removes_registered_packages_matching_catalog_ids()
@@ -24,7 +24,7 @@ public class KeepFlagAppxSafetyNetTests
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
             Bundle(
-                jobs: [new ProvisionJob("keepflag.appx.safetyNet", "appx.safetyNet")],
+                jobs: [new ProvisionJob("debloat.appx.safetyNet", "appx.safetyNet")],
                 removeProvisionedAppx: ["Microsoft.BingNews"]),
             Env(appx, splash),
             TestContext.Current.CancellationToken);
@@ -58,7 +58,7 @@ public class KeepFlagAppxSafetyNetTests
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
             Bundle(
-                jobs: [new ProvisionJob("keepflag.appx.safetyNet", "appx.safetyNet")],
+                jobs: [new ProvisionJob("debloat.appx.safetyNet", "appx.safetyNet")],
                 removeProvisionedAppx: ["Microsoft.GamingApp", "Microsoft.BingNews"]),
             Env(appx, new RecordingSplashPresenter()),
             TestContext.Current.CancellationToken);
@@ -103,7 +103,7 @@ public class KeepFlagAppxSafetyNetTests
         JobDescriptor safety = Assert.Single(
             planned.Value.Jobs.Jobs,
             j => j.Kind == "appx.safetyNet");
-        Assert.Equal("keepflag.appx.safetyNet", safety.Id);
+        Assert.Equal("debloat.appx.safetyNet", safety.Id);
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
         Assert.DoesNotContain(
             planned.Value.Stages.Stages,
@@ -173,7 +173,7 @@ public class KeepFlagAppxSafetyNetTests
         JobDescriptor safety = Assert.Single(
             planned.Value.Jobs.Jobs,
             j => j.Kind == "appx.safetyNet");
-        Assert.Equal("keepflag.appx.safetyNet", safety.Id);
+        Assert.Equal("debloat.appx.safetyNet", safety.Id);
     }
 
     private static Profile ParseProfile(string json)

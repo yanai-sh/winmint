@@ -3,13 +3,13 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
 
-/// <summary>Ticket 15 / 25 / issue 56 — host-side keep-flag presets expand to debloat lists (not in Profile JSON).</summary>
-public class KeepFlagPresetTests
+/// <summary>Ticket 15 / 25 / issue 56 — host-side Debloat presets expand to remove-lists (not in Profile JSON).</summary>
+public class DebloatPresetTests
 {
     [Fact]
     public void Expand_acceptance_returns_pinned_acceptance_ids()
     {
-        Result<KeepFlagExpansion, PlanFailure> result = KeepFlagPresets.TryExpand("acceptance");
+        Result<DebloatExpansion, PlanFailure> result = DebloatPresets.TryExpand("acceptance");
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
         Assert.Equal(
@@ -24,7 +24,7 @@ public class KeepFlagPresetTests
     [Fact]
     public void Expand_empty_returns_no_ids()
     {
-        Result<KeepFlagExpansion, PlanFailure> result = KeepFlagPresets.TryExpand("empty");
+        Result<DebloatExpansion, PlanFailure> result = DebloatPresets.TryExpand("empty");
 
         Assert.True(result.IsOk);
         Assert.Empty(result.Value.RemoveProvisionedAppx);
@@ -35,17 +35,17 @@ public class KeepFlagPresetTests
     [Fact]
     public void Expand_unknown_preset_fails()
     {
-        Result<KeepFlagExpansion, PlanFailure> result = KeepFlagPresets.TryExpand("not-a-preset");
+        Result<DebloatExpansion, PlanFailure> result = DebloatPresets.TryExpand("not-a-preset");
 
         Assert.False(result.IsOk);
-        Assert.Equal("keepflag.preset.unknown", result.Error.Code);
+        Assert.Equal("debloat.preset.unknown", result.Error.Code);
         Assert.Contains("not-a-preset", result.Error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Expand_recommended_returns_curated_ids()
     {
-        Result<KeepFlagExpansion, PlanFailure> result = KeepFlagPresets.TryExpand(KeepFlagPresets.Recommended);
+        Result<DebloatExpansion, PlanFailure> result = DebloatPresets.TryExpand(DebloatPresets.Recommended);
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
         Assert.Equal(
@@ -95,8 +95,8 @@ public class KeepFlagPresetTests
     [Fact]
     public void Expand_recommended_leaves_product_required_appx_to_posture()
     {
-        Result<KeepFlagExpansion, PlanFailure> result =
-            KeepFlagPresets.TryExpand(KeepFlagPresets.Recommended);
+        Result<DebloatExpansion, PlanFailure> result =
+            DebloatPresets.TryExpand(DebloatPresets.Recommended);
 
         Assert.True(result.IsOk);
         Assert.DoesNotContain("Microsoft.GamingApp", result.Value.RemoveProvisionedAppx);
@@ -111,7 +111,7 @@ public class KeepFlagPresetTests
     [Fact]
     public void Compose_acceptance_preset_parses_and_plans()
     {
-        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Acceptance);
+        Result<DebloatExpansion, PlanFailure> expanded = DebloatPresets.TryExpand(DebloatPresets.Acceptance);
         Assert.True(expanded.IsOk);
 
         Profile profile = new(
@@ -160,8 +160,8 @@ public class KeepFlagPresetTests
     [Fact]
     public void Compose_recommended_serialize_has_no_preset_name()
     {
-        Result<KeepFlagExpansion, PlanFailure> expanded =
-            KeepFlagPresets.TryExpand(KeepFlagPresets.Recommended);
+        Result<DebloatExpansion, PlanFailure> expanded =
+            DebloatPresets.TryExpand(DebloatPresets.Recommended);
         Assert.True(expanded.IsOk);
 
         Profile profile = new(
@@ -189,7 +189,7 @@ public class KeepFlagPresetTests
     [Fact]
     public void Compose_empty_preset_plans_without_remove_stage()
     {
-        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Empty);
+        Result<DebloatExpansion, PlanFailure> expanded = DebloatPresets.TryExpand(DebloatPresets.Empty);
         Assert.True(expanded.IsOk);
 
         Profile profile = new(
@@ -220,9 +220,9 @@ public class KeepFlagPresetTests
     }
 
     [Fact]
-    public void Acceptance_sample_profile_debloat_matches_KeepFlagPresets_Acceptance()
+    public void Acceptance_sample_profile_debloat_matches_DebloatPresets_Acceptance()
     {
-        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(KeepFlagPresets.Acceptance);
+        Result<DebloatExpansion, PlanFailure> expanded = DebloatPresets.TryExpand(DebloatPresets.Acceptance);
         Assert.True(expanded.IsOk, expanded.IsOk ? null : $"{expanded.Error.Code}: {expanded.Error.Message}");
 
         string samplePath = Path.Combine(FindRepoRoot(), "samples", "acceptance.profile.json");
@@ -241,8 +241,8 @@ public class KeepFlagPresetTests
     [Fact]
     public void Sl7_sample_matches_recommended_and_plans_packages()
     {
-        Result<KeepFlagExpansion, PlanFailure> expanded =
-            KeepFlagPresets.TryExpand(KeepFlagPresets.Recommended);
+        Result<DebloatExpansion, PlanFailure> expanded =
+            DebloatPresets.TryExpand(DebloatPresets.Recommended);
         Assert.True(expanded.IsOk);
 
         string root = FindRepoRoot();

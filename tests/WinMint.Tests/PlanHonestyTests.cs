@@ -73,7 +73,7 @@ public class PlanHonestyTests
     {
         WizardSessionResult result = WizardSession.ComposeAndPlan(
             new WizardSessionInput(
-                KeepFlagPresets.Empty,
+                DebloatPresets.Empty,
                 "winmint",
                 "lab-only",
                 RequireWifiDuringOobe: true,
@@ -97,7 +97,7 @@ public class PlanHonestyTests
     {
         WizardSessionResult result = WizardSession.ComposeAndPlan(
             new WizardSessionInput(
-                KeepFlagPresets.Empty,
+                DebloatPresets.Empty,
                 "winmint",
                 "lab-only",
                 RequireWifiDuringOobe: false,

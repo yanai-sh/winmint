@@ -94,7 +94,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] private string _sourceIsoPath = "";
     [ObservableProperty] private string _imageQuality = "Test";
-    [ObservableProperty] private string _preset = KeepFlagPresets.Recommended;
+    [ObservableProperty] private string _preset = DebloatPresets.Recommended;
 
     public ObservableCollection<WimIndexInfo> WimIndexes { get; } = [];
     [ObservableProperty] private WimIndexInfo? _selectedWimIndex;
@@ -139,9 +139,9 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     public bool IsSoftwareStep => StepIndex == WizardStageGates.Software;
     public bool IsReviewStep => StepIndex == WizardStageGates.Review;
 
-    public bool IsEmptyPreset => string.Equals(Preset, KeepFlagPresets.Empty, StringComparison.OrdinalIgnoreCase);
-    public bool IsAcceptancePreset => string.Equals(Preset, KeepFlagPresets.Acceptance, StringComparison.OrdinalIgnoreCase);
-    public bool IsRecommendedPreset => string.Equals(Preset, KeepFlagPresets.Recommended, StringComparison.OrdinalIgnoreCase);
+    public bool IsEmptyPreset => string.Equals(Preset, DebloatPresets.Empty, StringComparison.OrdinalIgnoreCase);
+    public bool IsAcceptancePreset => string.Equals(Preset, DebloatPresets.Acceptance, StringComparison.OrdinalIgnoreCase);
+    public bool IsRecommendedPreset => string.Equals(Preset, DebloatPresets.Recommended, StringComparison.OrdinalIgnoreCase);
     public bool IsTestLane => string.Equals(ImageQuality, "Test", StringComparison.OrdinalIgnoreCase);
     public bool IsReleaseLane => string.Equals(ImageQuality, "Release", StringComparison.OrdinalIgnoreCase);
 
@@ -201,9 +201,9 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsReleaseLane));
     }
 
-    [RelayCommand] private void SelectEmptyPreset() => Preset = KeepFlagPresets.Empty;
-    [RelayCommand] private void SelectAcceptancePreset() => Preset = KeepFlagPresets.Acceptance;
-    [RelayCommand] private void SelectRecommendedPreset() => Preset = KeepFlagPresets.Recommended;
+    [RelayCommand] private void SelectEmptyPreset() => Preset = DebloatPresets.Empty;
+    [RelayCommand] private void SelectAcceptancePreset() => Preset = DebloatPresets.Acceptance;
+    [RelayCommand] private void SelectRecommendedPreset() => Preset = DebloatPresets.Recommended;
 
     [RelayCommand]
     private void UseHostDma() => ApplyHostDmaDefaults();
@@ -322,7 +322,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void UseDefaults()
     {
-        Preset = KeepFlagPresets.Recommended;
+        Preset = DebloatPresets.Recommended;
         foreach (ChipItem chip in BrowserChips.Concat(EditorChips).Concat(ShellChips).Concat(WslChips))
         {
             chip.IsSelected = false;
@@ -653,7 +653,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             return;
         }
 
-        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(Preset);
+        Result<DebloatExpansion, PlanFailure> expanded = DebloatPresets.TryExpand(Preset);
         if (!expanded.IsOk)
         {
             return;

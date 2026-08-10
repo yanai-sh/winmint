@@ -14,14 +14,14 @@
 | ImageServicing | [IMAGESERVICING](design/IMAGESERVICING.md) |
 | ProvisioningSession | [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md) |
 
-Cross-cuts (reference, not a frozen file set): [CONTRACTS](design/CONTRACTS.md) · [SECRETS](design/SECRETS.md) · [SPLASH](design/SPLASH.md) · [KEEPFLAG](design/KEEPFLAG.md)
+Cross-cuts (reference, not a frozen file set): [CONTRACTS](design/CONTRACTS.md) · [SECRETS](design/SECRETS.md) · [SPLASH](design/SPLASH.md) · [DEBLOAT](design/DEBLOAT.md)
 
 ## Invariants
 
 1. User-supplied Source ISO only — no bundling or silent Windows media download
 2. Provisioning Supervisor owns FirstLogon: splash-before-Explorer, DMA settle, unlock/reboot checkpoint, in-process splash — no guest **pwsh product runtime**, no peer Splash.exe, no v1 `WinMint.ps1`
 3. Host Servicing: elevated `pwsh -File` kernels only (not in-process DISM from Cli/Wizard)
-4. Keep-flag: remove-list only; no Profile preset names in JSON; CDM not primary
+4. Debloat: remove-list only; no Profile preset names in JSON; CDM not primary
 5. Residual self-erase after green Shell Complete; no dual `$OEM$` SetupScripts; tenure-only branded payload under `%WINDIR%\WinMint\`
 6. Machine setup failure → non-zero exit (fail closed)
 7. WIM: single-image commit; snapshot/assert Name/Arch/(Edition|Build) across export/commit

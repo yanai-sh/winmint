@@ -2,10 +2,10 @@ namespace WinMint.Orchestrator;
 
 /// <summary>
 /// Host-side named presets that expand to debloat remove-lists.
-/// Preset names never appear in Profile JSON ([KEEPFLAG] / ADR-005 / issue 56).
+/// Preset names never appear in Profile JSON ([DEBLOAT] / ADR-005 / issue 56).
 /// Copilot/gaming AppX are product-required via <see cref="ProductPosture"/> — not preset overlays.
 /// </summary>
-public static class KeepFlagPresets
+public static class DebloatPresets
 {
     public const string Empty = "empty";
     public const string Acceptance = "acceptance";
@@ -71,42 +71,42 @@ public static class KeepFlagPresets
         "SimpleTCP",
     ];
 
-    public static Result<KeepFlagExpansion, PlanFailure> TryExpand(string name)
+    public static Result<DebloatExpansion, PlanFailure> TryExpand(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return Result.Fail<KeepFlagExpansion, PlanFailure>(
-                new PlanFailure("keepflag.preset.unknown", "Preset name is required."));
+            return Result.Fail<DebloatExpansion, PlanFailure>(
+                new PlanFailure("debloat.preset.unknown", "Preset name is required."));
         }
 
         string key = name.Trim();
         if (string.Equals(key, Empty, StringComparison.OrdinalIgnoreCase))
         {
-            return Result.Ok<KeepFlagExpansion, PlanFailure>(KeepFlagExpansion.Empty);
+            return Result.Ok<DebloatExpansion, PlanFailure>(DebloatExpansion.Empty);
         }
 
         if (string.Equals(key, Acceptance, StringComparison.OrdinalIgnoreCase))
         {
-            return Result.Ok<KeepFlagExpansion, PlanFailure>(
-                new KeepFlagExpansion(AcceptanceAppx, AcceptanceCapabilities, AcceptanceFeatures));
+            return Result.Ok<DebloatExpansion, PlanFailure>(
+                new DebloatExpansion(AcceptanceAppx, AcceptanceCapabilities, AcceptanceFeatures));
         }
 
         if (string.Equals(key, Recommended, StringComparison.OrdinalIgnoreCase))
         {
-            return Result.Ok<KeepFlagExpansion, PlanFailure>(
-                new KeepFlagExpansion(RecommendedAppx, RecommendedCapabilities, RecommendedFeatures));
+            return Result.Ok<DebloatExpansion, PlanFailure>(
+                new DebloatExpansion(RecommendedAppx, RecommendedCapabilities, RecommendedFeatures));
         }
 
-        return Result.Fail<KeepFlagExpansion, PlanFailure>(
-            new PlanFailure("keepflag.preset.unknown", $"Unknown keep-flag preset '{key}'."));
+        return Result.Fail<DebloatExpansion, PlanFailure>(
+            new PlanFailure("debloat.preset.unknown", $"Unknown debloat preset '{key}'."));
     }
 }
 
 /// <summary>Host-expanded debloat lists (never serialized as a preset name).</summary>
-public sealed record KeepFlagExpansion(
+public sealed record DebloatExpansion(
     IReadOnlyList<string> RemoveProvisionedAppx,
     IReadOnlyList<string> RemoveCapabilities,
     IReadOnlyList<string> DisableOptionalFeatures)
 {
-    public static KeepFlagExpansion Empty { get; } = new([], [], []);
+    public static DebloatExpansion Empty { get; } = new([], [], []);
 }

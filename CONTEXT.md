@@ -54,8 +54,11 @@ _Avoid_: shipping recovery images
 
 **Install engine** — WinPE apply only (no Setup `/legacy`).
 
-**Debloat venue / Keep-flag** — AppX online by default; caps/features offline when listed; remove-list polarity; host **`recommended`** expands → ids; CDM not primary.  
-_Avoid_: presets-in-JSON; CDM-as-primary
+**Debloat** — Remove-list posture for AppX / capabilities / optional features. Profile fields are `debloat.*`. Host presets (`recommended`, Acceptance, empty) expand to lists; never write preset names into JSON.  
+_Avoid_: Keep-flag (retired name); keep-list polarity; BCU; CDM as primary; Profile preset names
+
+**Shell** — Winlogon replacement during Provisioning tenure only.  
+_Avoid_: calling Wizard UI chrome “Shell”
 
 **Wizard** — Avalonia BuildPlan host: Source → Account → Software → Review; Phase B elevated Apply.
 _Avoid_: DISM or second planner in UI

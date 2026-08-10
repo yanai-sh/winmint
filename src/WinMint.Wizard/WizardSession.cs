@@ -9,7 +9,7 @@ internal static class WizardSession
 {
     public static WizardSessionResult ComposeAndPlan(WizardSessionInput input)
     {
-        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(input.Preset);
+        Result<DebloatExpansion, PlanFailure> expanded = DebloatPresets.TryExpand(input.Preset);
         if (!expanded.IsOk)
         {
             return WizardSessionResult.Fail($"{expanded.Error.Code}: {expanded.Error.Message}");

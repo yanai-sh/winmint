@@ -120,7 +120,7 @@ public class OnlineDebloatSessionTests
         RecordingEvidenceSink evidence = new();
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
-            BundleFastSettle([new ProvisionJob("keepflag.appx.safetyNet", "appx.safetyNet")]) with
+            BundleFastSettle([new ProvisionJob("debloat.appx.safetyNet", "appx.safetyNet")]) with
             {
                 RemoveProvisionedAppx = ["Microsoft.BingNews"],
                 RequiresNetwork = true,
@@ -149,7 +149,7 @@ public class OnlineDebloatSessionTests
         RecordingEvidenceSink evidence = new();
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
-            BundleFastSettle([new ProvisionJob("keepflag.appx.safetyNet", "appx.safetyNet")]) with
+            BundleFastSettle([new ProvisionJob("debloat.appx.safetyNet", "appx.safetyNet")]) with
             {
                 RemoveProvisionedAppx = ["Microsoft.BingNews"],
             },

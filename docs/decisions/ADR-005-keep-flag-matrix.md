@@ -31,3 +31,7 @@ Debloat / keep-flag is a post-M1 vertical ([ADR-002](ADR-002-v2-architecture.md)
 ### Review trigger
 
 Microsoft changes provisioned-AppX / capability / feature offline remove semantics; or Pro gains a supported RemoveDefault-equivalent policy; or maintainer overturns remove-list / no-recommended-set polarity.
+
+### Naming supersession (2026-08-10)
+
+Living vocabulary is **Debloat** (Profile `debloat.*`, host `DebloatPresets`). “Keep-flag” in this ADR’s title is historical. Policy §§1–2, 4–7 unchanged.

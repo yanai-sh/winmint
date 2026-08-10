@@ -8,7 +8,7 @@ Ordered M1 Smoke → Wizard → metal jobs → caps/features. That order is **do
 
 ## Lasting policy (still true)
 
-- Remove-list only; no Profile preset names in JSON
+- Debloat: remove-list only; no Profile preset names in JSON ([DEBLOAT](../design/DEBLOAT.md))
 - Product-default host preset **`recommended`** expands → ids
 - Stay on `winmint.profile/v1` until a real breaking change
 - CDM not primary

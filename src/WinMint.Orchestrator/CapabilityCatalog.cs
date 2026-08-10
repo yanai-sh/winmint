@@ -2,13 +2,13 @@ namespace WinMint.Orchestrator;
 
 /// <summary>
 /// Static catalog of legal capability ids for <c>debloat.removeCapabilities</c> (ticket 20).
-/// Inventory pin: 25H2 ARM64 English — thin acceptance pins in [KEEPFLAG](../../docs/design/KEEPFLAG.md).
+/// Inventory pin: 25H2 ARM64 English — thin acceptance pins in [DEBLOAT](../../docs/design/DEBLOAT.md).
 /// </summary>
 public static class CapabilityCatalog
 {
     public static IReadOnlySet<string> Ids { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        // Thin acceptance pins + legal siblings from Installed inventory; recommended set lives in KeepFlagPresets (issue 56).
+        // Thin acceptance pins + legal siblings from Installed inventory; recommended set lives in DebloatPresets (issue 56).
         "App.StepsRecorder~~~~0.0.1.0",
         "WMIC~~~~",
         "VBSCRIPT~~~~",
