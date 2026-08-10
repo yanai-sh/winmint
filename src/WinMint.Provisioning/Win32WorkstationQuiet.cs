@@ -42,6 +42,7 @@ public static class Win32WorkstationQuiet
             return;
         }
 
+        // Shell-open .theme (UseShellExecute) — Process.Run rejects shell execute, same as UAC runas.
         using Process? process = Process.Start(
             new ProcessStartInfo
             {

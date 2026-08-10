@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using WinMint.Contracts;
 using WinMint.Orchestrator;
 
 namespace WinMint.Wizard;
@@ -65,7 +66,7 @@ public static class PlanDiff
 
         foreach (JobDescriptor job in artifacts.Jobs.Jobs)
         {
-            if (job.Kind == "winget.import")
+            if (job.Kind is ProvisionJobKind.WingetImport)
             {
                 AppendWingetImport(sb, artifacts, profile);
                 continue;
@@ -73,7 +74,7 @@ public static class PlanDiff
 
             string mark = JobAlways(job) ? "always" : "you chose";
             Line(sb, JobLabel(job), mark);
-            if (job.Kind == "appx.safetyNet")
+            if (job.Kind is ProvisionJobKind.AppxSafetyNet)
             {
                 AppendAppx(sb, artifacts.RemoveProvisionedAppx);
             }
@@ -81,24 +82,27 @@ public static class PlanDiff
     }
 
     private static bool JobAlways(JobDescriptor job) =>
-        job.Kind is "onedrive.uninstall" or "reservedStorage.disable" or "workstation.quiet"
-            or "appx.safetyNet" or "winget.import"
-        || (job.Kind == "winget" && ProductPosture.WingetIdSet.Contains(job.PackageId ?? ""));
+        job.Kind is ProvisionJobKind.OneDriveUninstall
+            or ProvisionJobKind.ReservedStorageDisable
+            or ProvisionJobKind.WorkstationQuiet
+            or ProvisionJobKind.AppxSafetyNet
+            or ProvisionJobKind.WingetImport
+        || (job.Kind is ProvisionJobKind.Winget && ProductPosture.WingetIdSet.Contains(job.PackageId ?? ""));
 
     private static string JobLabel(JobDescriptor job) =>
         job.Kind switch
         {
-            "onedrive.uninstall" => "OneDrive uninstall",
-            "reservedStorage.disable" => "Reserved Storage off",
-            "workstation.quiet" => "Dark theme / Do Not Disturb",
-            "wsl.platform" => "WSL platform",
-            "appx.safetyNet" => "AppX safety net",
-            "doh.set" => $"DNS over HTTPS ({job.PackageId})",
-            "winget.import" => "Winget import",
-            "winget" => $"Winget {job.PackageId}",
-            "scoop" => $"Scoop {job.PackageId}",
-            "wsl" => $"WSL {job.PackageId}",
-            _ => job.Kind,
+            ProvisionJobKind.OneDriveUninstall => "OneDrive uninstall",
+            ProvisionJobKind.ReservedStorageDisable => "Reserved Storage off",
+            ProvisionJobKind.WorkstationQuiet => "Dark theme / Do Not Disturb",
+            ProvisionJobKind.WslPlatform => "WSL platform",
+            ProvisionJobKind.AppxSafetyNet => "AppX safety net",
+            ProvisionJobKind.DohSet => $"DNS over HTTPS ({job.PackageId})",
+            ProvisionJobKind.WingetImport => "Winget import",
+            ProvisionJobKind.Winget => $"Winget {job.PackageId}",
+            ProvisionJobKind.Scoop => $"Scoop {job.PackageId}",
+            ProvisionJobKind.Wsl => $"WSL {job.PackageId}",
+            _ => job.Kind.ToWire(),
         };
 
     private static void AppendAppx(StringBuilder sb, IReadOnlyList<string> appx)

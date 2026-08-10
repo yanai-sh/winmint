@@ -1,6 +1,6 @@
 using WinMint.Orchestrator;
 using WinMint.Provisioning;
-using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
+using DmaSettleTarget = WinMint.Contracts.DmaSettleTarget;
 
 namespace WinMint.Tests;
 
@@ -100,6 +100,12 @@ internal static class ProvisioningSessionTestFakes
             Starts.Add((fileName, arguments));
             return OnRun?.Invoke(fileName, arguments) ?? new ProcessStartResult(ExitCode);
         }
+
+        public Task<ProcessStartResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            CancellationToken ct = default) =>
+            Task.FromResult(Run(fileName, arguments, ct));
     }
 
     internal sealed class RecordingSplashPresenter : ISplashPresenter
@@ -253,6 +259,12 @@ internal static class ProvisioningSessionTestFakes
             IReadOnlyList<string> arguments,
             CancellationToken ct = default) =>
             new(0);
+
+        public Task<ProcessStartResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            CancellationToken ct = default) =>
+            Task.FromResult(Run(fileName, arguments, ct));
     }
 
     internal sealed class NoopCheckpoints : ICheckpointStore

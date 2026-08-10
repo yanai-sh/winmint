@@ -9,7 +9,7 @@ namespace WinMint.Tests;
 public class DriverServicingTests
 {
     [Fact]
-    public void Apply_injects_mountDir_mediaDir_for_InjectDrivers_and_keeps_deviceId()
+    public async Task Apply_injects_mountDir_mediaDir_for_InjectDrivers_and_keeps_deviceId()
     {
         BuildArtifacts plan = PlanWithDrivers("surface-laptop-7");
         string work = NewTempDir();
@@ -22,7 +22,7 @@ public class DriverServicingTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
                 plan,
                 run,
                 runner,

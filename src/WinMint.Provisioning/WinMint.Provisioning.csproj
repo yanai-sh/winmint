@@ -11,6 +11,9 @@
     <DisableRuntimeMarshalling>true</DisableRuntimeMarshalling>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\WinMint.Contracts\WinMint.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="WinMint.Tests" />
   </ItemGroup>
   <ItemGroup>

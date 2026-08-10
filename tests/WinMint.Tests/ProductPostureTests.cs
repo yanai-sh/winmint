@@ -1,5 +1,6 @@
 using System.Text.Json;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 
 namespace WinMint.Tests;
 
@@ -73,7 +74,7 @@ public class ProductPostureTests
 
         Assert.True(result.IsOk, result.IsOk ? null : result.Error.Message);
         Assert.NotNull(result.Value.WingetImportJson);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
         Assert.True(result.Value.Manifest.RequiresNetwork);
 
         using JsonDocument doc = JsonDocument.Parse(result.Value.WingetImportJson!);
@@ -87,7 +88,7 @@ public class ProductPostureTests
     private static Profile Lab(IReadOnlyList<string>? winget = null) =>
         new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
             winget ?? [],

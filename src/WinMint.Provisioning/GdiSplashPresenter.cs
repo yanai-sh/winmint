@@ -79,28 +79,38 @@ public sealed class GdiSplashPresenter : ISplashPresenter, IDisposable
             height = 600;
         }
 
-        using FreeLibrarySafeHandle module = PInvoke.GetModuleHandle((string?)null);
-        HWND created = PInvoke.CreateWindowEx(
-            WINDOW_EX_STYLE.WS_EX_TOPMOST,
-            "STATIC",
-            "WinMint",
-            WINDOW_STYLE.WS_POPUP | WINDOW_STYLE.WS_VISIBLE,
-            0,
-            0,
-            width,
-            height,
-            HWND.Null,
-            null,
-            module,
-            null);
-
-        if (created.IsNull)
+        // GetModuleHandle does not bump the module refcount — FreeLibrarySafeHandle must not FreeLibrary it.
+        // https://learn.microsoft.com/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlew
+        FreeLibrarySafeHandle module = PInvoke.GetModuleHandle((string?)null);
+        try
         {
-            throw new InvalidOperationException($"CreateWindowExW failed: {Marshal.GetLastPInvokeError()}");
-        }
+            HWND created = PInvoke.CreateWindowEx(
+                WINDOW_EX_STYLE.WS_EX_TOPMOST,
+                "STATIC",
+                "WinMint",
+                WINDOW_STYLE.WS_POPUP | WINDOW_STYLE.WS_VISIBLE,
+                0,
+                0,
+                width,
+                height,
+                HWND.Null,
+                null,
+                module,
+                null);
 
-        _hwnd = new SafeHwnd(created);
-        PaintOpaque(created);
+            if (created.IsNull)
+            {
+                throw new InvalidOperationException($"CreateWindowExW failed: {Marshal.GetLastPInvokeError()}");
+            }
+
+            _hwnd = new SafeHwnd(created);
+            PaintOpaque(created);
+        }
+        finally
+        {
+            module.SetHandleAsInvalid();
+            module.Dispose();
+        }
     }
 
     private void PaintOpaque(HWND hwnd)

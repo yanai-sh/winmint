@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Security.Principal;
+using Microsoft.Extensions.Logging;
 using Windows.ApplicationModel;
 using Windows.Management.Deployment;
 
@@ -8,10 +9,10 @@ namespace WinMint.Provisioning;
 
 /// <summary>Production PackageManager adapter for FirstLogon AppX safety net (ticket 13).</summary>
 [SupportedOSPlatform("windows10.0.19041.0")]
-public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxPackageManager
+public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPackageManager
 {
     private readonly PackageManager _manager = new();
-    private readonly Action<string>? _log = log;
+    private readonly ILogger? _logger = logger;
 
     private static string WindowsAppsRoot =>
         Path.Combine(
@@ -46,7 +47,7 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
             return [];
         }
 
-        return hits;
+        return hits.ToArray();
     }
 
     public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId)
@@ -70,7 +71,7 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
             return [];
         }
 
-        return hits;
+        return hits.ToArray();
     }
 
     public async Task RemovePackageAsync(string packageFullName, CancellationToken ct = default)
@@ -139,17 +140,28 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
         // FirstLogon Shell is medium-IL — cannot takeown TrustedInstaller WindowsApps trees.
         if (!WindowsIdentity.GetCurrent().IsSystem)
         {
-            _log?.Invoke("winget.acl: skip — not SYSTEM");
+            if (_logger is not null)
+            {
+                GuestLog.WingetAclSkip(_logger);
+            }
+
             return;
         }
 
         string root = WindowsAppsRoot;
         string[] dirs = FindWingetFrameworkPackageDirectories(root).ToArray();
-        _log?.Invoke($"winget.acl: found {dirs.Length} under {root}");
+        if (_logger is not null)
+        {
+            GuestLog.WingetAclFound(_logger, dirs.Length, root);
+        }
+
         if (dirs.Length == 0)
         {
-            _log?.Invoke(
-                "winget.acl: none matched Microsoft.UI.Xaml.2.8_* / Microsoft.VCLibs.140.00_*");
+            if (_logger is not null)
+            {
+                GuestLog.WingetAclNoneMatched(_logger);
+            }
+
             return;
         }
 
@@ -157,12 +169,15 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
         {
             try
             {
-                GrantSystemFullControlTree(dir, _log);
+                GrantSystemFullControlTree(dir, _logger);
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or SystemException)
             {
                 // Breadcrumb only — MachineSetup must not fail closed; FirstLogon register surfaces fail.
-                _log?.Invoke($"winget.acl: FAILED {dir}: {ex.Message}");
+                if (_logger is not null)
+                {
+                    GuestLog.WingetAclFailed(_logger, dir, ex.Message);
+                }
             }
         }
     }
@@ -189,12 +204,16 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
     /// takeown + icacls /grant:r — .NET SetAccessRule leaves explicit SYSTEM=RX ACEs (logo.png) untouched.
     /// Throws when either tool exits non-zero (caller logs; MachineSetup stays best-effort).
     /// </summary>
-    private static void GrantSystemFullControlTree(string packageDirectory, Action<string>? log = null)
+    private static void GrantSystemFullControlTree(string packageDirectory, ILogger? logger = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageDirectory);
         if (!Directory.Exists(packageDirectory))
         {
-            log?.Invoke($"winget.acl: skip missing {packageDirectory}");
+            if (logger is not null)
+            {
+                GuestLog.WingetAclSkipMissing(logger, packageDirectory);
+            }
+
             return;
         }
 
@@ -204,15 +223,22 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
 
         // SetupComplete is SYSTEM; takeown still needed so icacls can replace TrustedInstaller ACEs.
         // (F) + /T — not (OI)(CI)(F): inherit-only grants leave explicit SYSTEM=RX on files (logo.png).
-        RunAclTool(takeown, ["/F", packageDirectory, "/R", "/D", "Y"], log);
+        // Sync Process.Run: EnsureSystemFullControl is a sync MachineSetup port; cancel is fail-open via catch.
+        RunAclTool(takeown, ["/F", packageDirectory, "/R", "/D", "Y"], logger);
         RunAclTool(
             icacls,
             [packageDirectory, "/grant:r", @"NT AUTHORITY\SYSTEM:(F)", "/T", "/C", "/Q"],
-            log);
-        log?.Invoke($"winget.acl: granted SYSTEM FullControl on {packageDirectory}");
+            logger);
+        if (logger is not null)
+        {
+            GuestLog.WingetAclGranted(logger, packageDirectory);
+        }
     }
 
-    private static void RunAclTool(string fileName, IReadOnlyList<string> arguments, Action<string>? log)
+    private static void RunAclTool(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        ILogger? logger)
     {
         if (!File.Exists(fileName))
         {
@@ -235,7 +261,11 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
         {
             string detail =
                 $"{Path.GetFileName(fileName)} exit {status.ExitCode} args=[{string.Join(' ', arguments)}]";
-            log?.Invoke($"winget.acl: FAILED {detail}");
+            if (logger is not null)
+            {
+                GuestLog.WingetAclFailed(logger, detail, string.Empty);
+            }
+
             throw new InvalidOperationException(detail);
         }
     }

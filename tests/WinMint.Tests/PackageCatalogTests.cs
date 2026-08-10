@@ -1,4 +1,5 @@
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 
 namespace WinMint.Tests;
 
@@ -17,7 +18,7 @@ public class PackageCatalogTests
     public void Catalog_contains_fancywm_stub()
     {
         Assert.True(PackageCatalog.Default.TryGetToolByKey("fancywm", out PackageToolEntry? tool));
-        Assert.Equal("winget", tool!.Source);
+        Assert.Equal(PackageToolSource.Winget, tool!.Source);
         Assert.False(string.IsNullOrWhiteSpace(tool.InstallId));
     }
 
@@ -64,9 +65,9 @@ public class PackageCatalogTests
             new RunOptions { ImageArchitecture = "arm64" });
         Assert.True(result.IsOk);
         Assert.NotNull(result.Value.WingetImportJson);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
-        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "winget");
-        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "package.auditNative");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Winget);
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.PackageAuditNative);
         using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(result.Value.WingetImportJson);
         System.Text.Json.JsonElement pkg = doc.RootElement.GetProperty("Sources")[0].GetProperty("Packages")[0];
         Assert.Equal("--architecture arm64", pkg.GetProperty("InitialOverrideArguments").GetString());
@@ -91,7 +92,9 @@ public class PackageCatalogTests
         string path = Path.Combine(FindRepoRoot(), "config", "packages.json");
         Assert.True(File.Exists(path), $"Missing repo manifest: {path}");
 
-        PackageCatalog fromDisk = PackageCatalog.LoadFromFile(path);
+        Result<PackageCatalog, Failure> diskLoad = PackageCatalog.TryLoadFromFile(path);
+        Assert.True(diskLoad.IsOk);
+        PackageCatalog fromDisk = diskLoad.Value;
         Result<PackageSelection, Failure> diskZen = fromDisk.ResolveToolKeys(["zen-browser"]);
         Result<PackageSelection, Failure> embeddedZen = PackageCatalog.Default.ResolveToolKeys(["zen-browser"]);
         Assert.True(diskZen.IsOk);
@@ -108,15 +111,15 @@ public class PackageCatalogTests
             profile,
             new RunOptions { ImageArchitecture = "arm64", PackageAuditStrict = true });
         Assert.True(result.IsOk);
-        JobDescriptor audit = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "package.auditNative");
+        JobDescriptor audit = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.PackageAuditNative);
         Assert.True(audit.AuditStrict);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
     }
 
     private static Profile LabProfile(IReadOnlyList<string>? winget = null) =>
         new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
             winget ?? [],

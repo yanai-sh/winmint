@@ -3,6 +3,9 @@
     <EmbeddedResource Include="..\..\config\packages.json" Link="packages.json" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\WinMint.Contracts\WinMint.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="WinMint.Tests" />
   </ItemGroup>
 </Project>

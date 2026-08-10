@@ -122,7 +122,6 @@ internal static class Program
             ? new Win32WinlogonRegistry()
             : throw new PlatformNotSupportedException("Provisioning requires Windows.");
 
-        Action<string> lineLog = log.AsAction();
         return new SessionEnvironment(
             Time: TimeProvider.System,
             Winlogon: winlogon,
@@ -130,13 +129,13 @@ internal static class Program
             Processes: new Win32ProcessHost(),
             Splash: splash ?? new NoopSplashPresenter(),
             Checkpoints: checkpoints ?? new FileCheckpointStore(ProgramDataRoot()),
-            WipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(bundlePath, lineLog),
+            WipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(bundlePath, logger: log),
             Evidence: evidence,
-            Appx: new WinRTAppxPackageManager(lineLog),
+            Appx: new WinRTAppxPackageManager(logger: log),
             Reboot: new Win32SystemReboot(),
             LocalAccounts: new Win32LocalAccounts(),
             ResolveScoopCmd: TryResolveScoopShim,
-            ResidueCleaner: new Win32ResidueCleaner(winlogon, lineLog),
+            ResidueCleaner: new Win32ResidueCleaner(winlogon, logger: log),
             Connectivity: new WindowsConnectivityProbe(),
             EvidenceDirectory: evidenceDirectory);
     }

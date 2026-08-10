@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 using WinMint.Wizard;
 
 namespace WinMint.Tests;
@@ -28,7 +29,7 @@ public class PlanHonestyTests
                 [
                     new JobDescriptor(
                         "scoop.batch",
-                        "scoop.batch",
+                        ProvisionJobKind.ScoopBatch,
                         PackageId: "curl komorebi",
                         ScoopBuckets: ["extras", "main"]),
                 ]));

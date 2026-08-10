@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security;
 using Microsoft.Win32;
 using Windows.Win32;
 using Windows.Win32.Globalization;
+using WinMint.Contracts;
 
 namespace WinMint.Provisioning;
 
@@ -34,7 +36,8 @@ public sealed class Win32RegionSnapshot : IRegionSnapshot
 
         if (!PInvoke.SetUserGeoID(target.GeoId.Value))
         {
-            throw new InvalidOperationException($"SetUserGeoID({target.GeoId.Value}) failed.");
+            throw new InvalidOperationException(
+                $"SetUserGeoID({target.GeoId.Value}) failed: {Marshal.GetLastPInvokeError()}");
         }
 
         if (!TrySetTimeZone(target.TimeZoneId))
@@ -83,6 +86,7 @@ public sealed class Win32RegionSnapshot : IRegionSnapshot
         }
 
         // Escape single quotes for -Command '…'
+        // Sync Process.Run: IRegionSnapshot.Apply is sync (settle fail-open); cancel between probes only.
         string escaped = culture.Name.Replace("'", "''", StringComparison.Ordinal);
         ProcessExitStatus status = Process.Run(
             powershell,
@@ -148,6 +152,7 @@ public sealed class Win32RegionSnapshot : IRegionSnapshot
     private static bool TrySetTimeZone(string timeZoneId)
     {
         // ponytail: TZUtil is the supported user-mode setter; P/Invoke DYNAMIC_TIME_ZONE is larger.
+        // Sync Process.Run: same sync Apply contract as Set-Culture (see SetUserLocaleName).
         string tzutil = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.System),
             "tzutil.exe");

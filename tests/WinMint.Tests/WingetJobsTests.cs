@@ -1,5 +1,6 @@
 using System.Text;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 using WinMint.Provisioning;
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
@@ -40,15 +41,15 @@ public class WingetJobsTests
 
         Assert.True(result.IsOk);
         IReadOnlyList<JobDescriptor> jobs = result.Value.Jobs.Jobs;
-        Assert.Contains(jobs, j => j is { Kind: "stub", Id: "smoke.stub.ready" });
-        Assert.Contains(jobs, j => j is { Kind: "stub", Id: "smoke.stub.complete" });
-        JobDescriptor git = Assert.Single(jobs, j => j.Kind == "winget" && j.PackageId == "Git.Git");
+        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.ready" });
+        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.complete" });
+        JobDescriptor git = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "Git.Git");
         Assert.Equal("winget.Git.Git", git.Id);
-        JobDescriptor vscode = Assert.Single(jobs, j => j.Kind == "winget" && j.PackageId == "Microsoft.VisualStudioCode");
+        JobDescriptor vscode = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "Microsoft.VisualStudioCode");
         Assert.Equal("winget.Microsoft.VisualStudioCode", vscode.Id);
-        Assert.Contains(jobs, j => j is { Kind: "winget", PackageId: "Git.MinGit" });
-        Assert.Contains(jobs, j => j is { Kind: "winget", PackageId: "Nilesoft.Shell" });
-        Assert.Equal(4, jobs.Count(j => j.Kind == "winget"));
+        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Git.MinGit" });
+        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Nilesoft.Shell" });
+        Assert.Equal(4, jobs.Count(j => j.Kind == ProvisionJobKind.Winget));
     }
 
     [Fact]
@@ -77,10 +78,10 @@ public class WingetJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
-        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "stub");
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Stub);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.OneDriveUninstall);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ReservedStorageDisable);
         Assert.True(result.Value.Manifest.RequiresNetwork);
     }
 
@@ -114,7 +115,7 @@ public class WingetJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        JobDescriptor importJob = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        JobDescriptor importJob = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
         Assert.True(importJob.NeedsReboot);
     }
 

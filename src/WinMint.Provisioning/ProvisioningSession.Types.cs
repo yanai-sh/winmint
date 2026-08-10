@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using WinMint.Contracts;
 
 namespace WinMint.Provisioning;
 
@@ -37,20 +38,13 @@ public sealed record ProvisioningBundle(
 
 public sealed record AccountStamp(string Username, string Password);
 
-public sealed record DmaSettleTarget(
-    bool Enabled,
-    string? Locale,
-    int? GeoId,
-    string? TimeZoneId,
-    bool? LocationServicesEnabled);
-
 public sealed record ProvisionJob(
     string Id,
     ProvisionJobKind Kind,
     bool NeedsReboot = false,
     string? PackageId = null,
     string? WingetArchitecture = null,
-    string? WslInstallKind = null,
+    WslInstallKind? WslInstallKind = null,
     string? WslFromFileRepo = null,
     IReadOnlyList<string>? WslFromFileAssetNames = null,
     bool AuditStrict = false,
@@ -189,11 +183,16 @@ public interface IRegionSnapshot
     RegionState Read();
 }
 
-public sealed record ProcessStartResult(int ExitCode);
+public readonly record struct ProcessStartResult(int ExitCode);
 
 public interface IProcessHost
 {
     ProcessStartResult Run(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        CancellationToken ct = default);
+
+    Task<ProcessStartResult> RunAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         CancellationToken ct = default);

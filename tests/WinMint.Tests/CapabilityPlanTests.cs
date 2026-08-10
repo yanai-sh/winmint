@@ -60,7 +60,7 @@ public class CapabilityPlanTests
     }
 
     [Fact]
-    public void Apply_injects_mountDir_for_capability_and_feature_stages()
+    public async Task Apply_injects_mountDir_for_capability_and_feature_stages()
     {
         BuildArtifacts plan = PlanWith(
             capabilities: ["App.StepsRecorder~~~~0.0.1.0"],
@@ -76,7 +76,7 @@ public class CapabilityPlanTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
                 plan,
                 run,
                 runner,

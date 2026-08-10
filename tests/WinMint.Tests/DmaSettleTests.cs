@@ -1,5 +1,6 @@
 using WinMint.Provisioning;
-using DmaSettleTarget = WinMint.Provisioning.DmaSettleTarget;
+using WinMint.Contracts;
+using DmaSettleTarget = WinMint.Contracts.DmaSettleTarget;
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;

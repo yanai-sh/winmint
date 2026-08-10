@@ -1,4 +1,5 @@
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 using WinMint.Provisioning;
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
@@ -102,9 +103,9 @@ public class DebloatAppxSafetyNetTests
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         JobDescriptor safety = Assert.Single(
             planned.Value.Jobs.Jobs,
-            j => j.Kind == "appx.safetyNet");
+            j => j.Kind == ProvisionJobKind.AppxSafetyNet);
         Assert.Equal("debloat.appx.safetyNet", safety.Id);
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.AppxSafetyNet);
         Assert.DoesNotContain(
             planned.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
@@ -142,7 +143,7 @@ public class DebloatAppxSafetyNetTests
         Assert.Contains(
             planned.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
-        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
+        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.AppxSafetyNet);
     }
 
     [Fact]
@@ -172,7 +173,7 @@ public class DebloatAppxSafetyNetTests
         Assert.True(planned.IsOk);
         JobDescriptor safety = Assert.Single(
             planned.Value.Jobs.Jobs,
-            j => j.Kind == "appx.safetyNet");
+            j => j.Kind == ProvisionJobKind.AppxSafetyNet);
         Assert.Equal("debloat.appx.safetyNet", safety.Id);
     }
 

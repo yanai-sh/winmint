@@ -1,6 +1,8 @@
 using System.Reflection;
+using System.Collections.Frozen;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
 
@@ -28,19 +30,51 @@ public sealed class PackageCatalog
 
     public static PackageCatalog Default => Embedded.Value;
 
-    public static PackageCatalog LoadFromJson(ReadOnlySpan<byte> utf8)
+    public static Result<PackageCatalog, Failure> TryLoadFromJson(ReadOnlySpan<byte> utf8)
     {
-        PackageCatalogFile? file = JsonSerializer.Deserialize(utf8, PackageCatalogJsonContext.Default.PackageCatalogFile);
-        if (file is null)
+        PackageCatalogFile? file;
+        try
         {
-            throw new InvalidOperationException("Package catalog JSON did not deserialize.");
+            file = JsonSerializer.Deserialize(utf8, PackageCatalogJsonContext.Default.PackageCatalogFile);
+        }
+        catch (JsonException ex)
+        {
+            return Result.Fail<PackageCatalog, Failure>(
+                new Failure("packages.catalog.invalidJson", ex.Message));
         }
 
-        return Build(file);
+        if (file is null)
+        {
+            return Result.Fail<PackageCatalog, Failure>(
+                new Failure("packages.catalog.invalidJson", "Package catalog JSON did not deserialize."));
+        }
+
+        try
+        {
+            return Result.Ok<PackageCatalog, Failure>(Build(file));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Fail<PackageCatalog, Failure>(
+                new Failure("packages.catalog.invalid", ex.Message));
+        }
     }
 
-    public static PackageCatalog LoadFromFile(string path) =>
-        LoadFromJson(File.ReadAllBytes(path));
+    public static Result<PackageCatalog, Failure> TryLoadFromFile(string path)
+    {
+        byte[] bytes;
+        try
+        {
+            bytes = File.ReadAllBytes(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Result.Fail<PackageCatalog, Failure>(
+                new Failure("packages.catalog.readFailed", ex.Message));
+        }
+
+        return TryLoadFromJson(bytes);
+    }
 
     public bool TryGetToolByKey(string key, out PackageToolEntry entry) =>
         _toolsByKey.TryGetValue(key, out entry!);
@@ -82,15 +116,14 @@ public sealed class PackageCatalog
                         $"Unknown package catalog tool key '{key}'."));
             }
 
-            if (string.Equals(tool.Source, "winget", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(tool.Source, "store", StringComparison.OrdinalIgnoreCase))
+            if (tool.Source is PackageToolSource.Winget or PackageToolSource.Store)
             {
                 if (seenWinget.Add(tool.InstallId))
                 {
                     winget.Add(tool.InstallId);
                 }
             }
-            else if (string.Equals(tool.Source, "scoop", StringComparison.OrdinalIgnoreCase))
+            else if (tool.Source is PackageToolSource.Scoop)
             {
                 if (seenScoop.Add(tool.InstallId))
                 {
@@ -102,7 +135,7 @@ public sealed class PackageCatalog
                 return Result.Fail<PackageSelection, Failure>(
                     new Failure(
                         "packages.catalog.unsupportedSource",
-                        $"Tool '{key}' uses unsupported source '{tool.Source}'."));
+                        $"Tool '{key}' uses unsupported source '{tool.Source.ToWire()}'."));
             }
         }
 
@@ -204,7 +237,7 @@ public sealed class PackageCatalog
                 errors.Add($"Tool '{key}' ({tool.InstallId}) missing arm64 in catalog architectures.");
             }
 
-            if (string.Equals(tool.Source, "scoop", StringComparison.OrdinalIgnoreCase))
+            if (tool.Source is PackageToolSource.Scoop)
             {
                 string bucket = tool.ScoopBucket ?? "main";
                 if (bucket is not ("main" or "extras"))
@@ -219,7 +252,7 @@ public sealed class PackageCatalog
             }
         }
 
-        return errors;
+        return errors.ToArray();
     }
 
     public IReadOnlySet<string> ScoopBucketsForInstallIds(IEnumerable<string> installIds)
@@ -228,13 +261,13 @@ public sealed class PackageCatalog
         foreach (string installId in installIds)
         {
             if (_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
-                && string.Equals(tool.Source, "scoop", StringComparison.OrdinalIgnoreCase))
+                && tool.Source is PackageToolSource.Scoop)
             {
                 buckets.Add(tool.ScoopBucket ?? "main");
             }
         }
 
-        return buckets;
+        return buckets.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
     }
 
     public IReadOnlyList<string> ValidateProfilePackages(
@@ -250,8 +283,7 @@ public sealed class PackageCatalog
         foreach (string installId in wingetIds)
         {
             if (!_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
-                || !string.Equals(tool.Source, "winget", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(tool.Source, "store", StringComparison.OrdinalIgnoreCase))
+                || tool.Source is not (PackageToolSource.Winget or PackageToolSource.Store))
             {
                 failure = new Failure(
                     "packages.catalog.unknown",
@@ -274,7 +306,7 @@ public sealed class PackageCatalog
         foreach (string installId in profile.ScoopPackages)
         {
             if (!_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
-                || !string.Equals(tool.Source, "scoop", StringComparison.OrdinalIgnoreCase))
+                || tool.Source is not PackageToolSource.Scoop)
             {
                 failure = new Failure(
                     "packages.catalog.unknown",
@@ -341,7 +373,7 @@ public sealed class PackageCatalog
                     throw new InvalidOperationException($"Tool '{key}' is missing id.");
                 }
 
-                if (dto.Source is not ("winget" or "store" or "scoop"))
+                if (!PackageToolSourceWire.TryParse(dto.Source, out PackageToolSource source))
                 {
                     throw new InvalidOperationException(
                         $"Tool '{key}' must use winget, store, or scoop (got '{dto.Source}').");
@@ -351,7 +383,7 @@ public sealed class PackageCatalog
                 PackageToolEntry entry = new(
                     key,
                     dto.DisplayName ?? key,
-                    dto.Source,
+                    source,
                     dto.Id,
                     arch,
                     dto.ScoopBucket);
@@ -367,7 +399,12 @@ public sealed class PackageCatalog
             foreach ((string key, WslDistroDto dto) in file.WslDistros)
             {
                 string installId = dto.InstallId ?? key;
-                string installKind = dto.InstallKind ?? "store";
+                if (!WslInstallKindWire.TryParse(dto.InstallKind ?? WslInstallKindWire.Store, out WslInstallKind installKind))
+                {
+                    throw new InvalidOperationException(
+                        $"WSL '{key}' must use fromFile or store (got '{dto.InstallKind}').");
+                }
+
                 WslDistroEntry entry = new(
                     key,
                     dto.DisplayName ?? key,
@@ -389,7 +426,7 @@ public sealed class PackageCatalog
 public sealed record PackageToolEntry(
     string CatalogKey,
     string DisplayName,
-    string Source,
+    PackageToolSource Source,
     string InstallId,
     IReadOnlyList<string> Architectures,
     string? ScoopBucket = null);
@@ -397,7 +434,7 @@ public sealed record PackageToolEntry(
 public sealed record WslDistroEntry(
     string ProfileToken,
     string DisplayName,
-    string InstallKind,
+    WslInstallKind InstallKind,
     string InstallId,
     string? FromFileRepo,
     IReadOnlyList<string>? FromFileAssetNamesArm64,

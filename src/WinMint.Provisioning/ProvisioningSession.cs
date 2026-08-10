@@ -1,6 +1,7 @@
 namespace WinMint.Provisioning;
 
 using System.Text.Json.Serialization;
+using WinMint.Contracts;
 
 public static partial class ProvisioningSession
 {

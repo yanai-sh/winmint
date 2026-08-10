@@ -15,14 +15,32 @@ public sealed class Win32ProcessHost : IProcessHost
         ArgumentNullException.ThrowIfNull(arguments);
 
         // Sync Process.Run has timeout but no mid-flight CancellationToken (RunAsync does).
-        // Check before start only — callers that need kill-on-cancel must go async later.
+        // Check before start only — JobRunner and other cancel-sensitive callers use RunAsync.
         ct.ThrowIfCancellationRequested();
 
         ProcessExitStatus status = Process.Run(
             fileName,
-            arguments as IList<string> ?? [.. arguments],
+            [.. arguments],
             silent: true,
             timeout: null);
+
+        return new ProcessStartResult(status.ExitCode);
+    }
+
+    public async Task<ProcessStartResult> RunAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        ProcessExitStatus status = await Process.RunAsync(
+                fileName,
+                [.. arguments],
+                silent: true,
+                cancellationToken: ct)
+            .ConfigureAwait(false);
 
         return new ProcessStartResult(status.ExitCode);
     }

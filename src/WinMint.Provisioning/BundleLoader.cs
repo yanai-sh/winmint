@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using WinMint.Contracts;
 
 namespace WinMint.Provisioning;
 
@@ -175,6 +176,20 @@ public static class BundleLoader
                 return false;
             }
 
+            WslInstallKind? wslKind = null;
+            if (j.WslInstallKind is not null)
+            {
+                if (!WslInstallKindWire.TryParse(j.WslInstallKind, out WslInstallKind parsed))
+                {
+                    error = new BundleLoadError(
+                        "jobs.wslInstallKind.unknown",
+                        $"Unsupported wslInstallKind '{j.WslInstallKind}' for id '{j.Id}'.");
+                    return false;
+                }
+
+                wslKind = parsed;
+            }
+
             list.Add(
                 new ProvisionJob(
                     j.Id,
@@ -182,7 +197,7 @@ public static class BundleLoader
                     j.NeedsReboot,
                     j.PackageId,
                     j.WingetArchitecture,
-                    j.WslInstallKind,
+                    wslKind,
                     j.WslFromFileRepo,
                     j.WslFromFileAssetNames,
                     j.AuditStrict,
@@ -192,27 +207,10 @@ public static class BundleLoader
                     j.DohTemplate));
         }
 
-        jobs = list;
+        jobs = list.ToArray();
         return true;
     }
 }
-
-internal sealed record BundleFile(
-    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
-    [property: JsonPropertyName("supervisorPath")] string SupervisorPath,
-    [property: JsonPropertyName("username")] string Username,
-    [property: JsonPropertyName("password")] string? Password,
-    [property: JsonPropertyName("dmaEnabled")] bool DmaEnabled,
-    [property: JsonPropertyName("settle")] SettleFile? Settle,
-    [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx,
-    [property: JsonPropertyName("requiresNetwork")] bool RequiresNetwork = false,
-    [property: JsonPropertyName("packageStrict")] bool PackageStrict = false);
-
-internal sealed record SettleFile(
-    [property: JsonPropertyName("locale")] string Locale,
-    [property: JsonPropertyName("geoId")] int GeoId,
-    [property: JsonPropertyName("timeZoneId")] string TimeZoneId,
-    [property: JsonPropertyName("locationServicesEnabled")] bool LocationServicesEnabled);
 
 internal sealed record JobsFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,

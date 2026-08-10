@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
 
@@ -56,11 +57,11 @@ public sealed record JobsArtifact(string SchemaVersion, IReadOnlyList<JobDescrip
 
 public sealed record JobDescriptor(
     string Id,
-    string Kind,
+    ProvisionJobKind Kind,
     string? PackageId = null,
     bool NeedsReboot = false,
     string? WingetArchitecture = null,
-    string? WslInstallKind = null,
+    WslInstallKind? WslInstallKind = null,
     string? WslFromFileRepo = null,
     IReadOnlyList<string>? WslFromFileAssetNames = null,
     bool AuditStrict = false,

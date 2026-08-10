@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using WinMint.Contracts;
 
 namespace WinMint.Provisioning;
 
@@ -9,7 +11,7 @@ namespace WinMint.Provisioning;
 /// </summary>
 internal static class BundlePasswordWipe
 {
-    internal static void WipeBundlePassword(string bundlePath, Action<string>? log)
+    internal static void WipeBundlePassword(string bundlePath, ILogger? logger = null)
     {
         if (!File.Exists(bundlePath))
         {
@@ -27,6 +29,9 @@ internal static class BundlePasswordWipe
         byte[] outBytes = JsonSerializer.SerializeToUtf8Bytes(redacted, ProvisioningJsonContext.Default.BundleFile);
         // ponytail: full DPAPI host→guest staging channel stays future if Smoke plaintext+wipe remains lab-ok
         File.WriteAllBytes(bundlePath, outBytes);
-        log?.Invoke($"Secret wipe: redacted password in {bundlePath}");
+        if (logger is not null)
+        {
+            GuestLog.SecretWiped(logger, bundlePath);
+        }
     }
 }

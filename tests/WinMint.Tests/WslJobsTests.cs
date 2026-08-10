@@ -1,5 +1,6 @@
 using System.Text;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 using WinMint.Provisioning;
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
@@ -17,15 +18,15 @@ public class WslJobsTests
 
         Assert.True(result.IsOk);
         JobDescriptor[] wslJobs = result.Value.Jobs.Jobs
-            .Where(j => j.Kind is "wsl" or "wsl.platform")
+            .Where(j => j.Kind is ProvisionJobKind.Wsl or ProvisionJobKind.WslPlatform)
             .ToArray();
         Assert.Equal(2, wslJobs.Length);
-        Assert.Equal("wsl.platform", wslJobs[0].Kind);
+        Assert.Equal(ProvisionJobKind.WslPlatform, wslJobs[0].Kind);
         Assert.Equal("wsl.platform", wslJobs[0].Id);
-        Assert.Equal("wsl", wslJobs[1].Kind);
+        Assert.Equal(ProvisionJobKind.Wsl, wslJobs[1].Kind);
         Assert.Equal("wsl.Ubuntu", wslJobs[1].Id);
         Assert.Equal("Ubuntu", wslJobs[1].PackageId);
-        Assert.Equal("store", wslJobs[1].WslInstallKind);
+        Assert.Equal(WslInstallKind.Store, wslJobs[1].WslInstallKind);
         Assert.False(wslJobs[1].NeedsReboot);
     }
 
@@ -37,10 +38,10 @@ public class WslJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "wsl.platform");
-        JobDescriptor nix = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "wsl");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WslPlatform);
+        JobDescriptor nix = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
         Assert.Equal("NixOS", nix.PackageId);
-        Assert.Equal("fromFile", nix.WslInstallKind);
+        Assert.Equal(WslInstallKind.FromFile, nix.WslInstallKind);
         Assert.Equal("nix-community/NixOS-WSL", nix.WslFromFileRepo);
         Assert.Contains("nixos.aarch64.wsl", nix.WslFromFileAssetNames!);
     }
@@ -53,7 +54,7 @@ public class WslJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.True(Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "wsl").NeedsReboot);
+        Assert.True(Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl).NeedsReboot);
     }
 
     [Fact]

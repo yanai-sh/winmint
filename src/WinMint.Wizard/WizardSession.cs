@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using WinMint.Contracts;
 using WinMint.Orchestrator;
 
 namespace WinMint.Wizard;
@@ -54,6 +55,7 @@ internal static class WizardSession
             new DmaProfile(
                 input.DmaEnabled,
                 new DmaSettleTarget(
+                    input.DmaEnabled,
                     input.Locale.Trim(),
                     geoId,
                     input.TimeZoneId.Trim(),

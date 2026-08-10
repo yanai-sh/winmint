@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace WinMint.Orchestrator;
 
 /// <summary>
@@ -18,7 +20,7 @@ public static class ProductPosture
     ];
 
     public static IReadOnlySet<string> WingetIdSet { get; } =
-        new HashSet<string>(WingetIds, StringComparer.OrdinalIgnoreCase);
+        WingetIds.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     public static IReadOnlyList<string> AppxIds { get; } =
     [
@@ -81,7 +83,7 @@ public static class ProductPosture
             rows.AddRange(DriverHygiene);
         }
 
-        return rows;
+        return rows.ToArray();
     }
 
     public static string EncodePolicySpecs(IReadOnlyList<OfflinePolicyRow> rows) =>

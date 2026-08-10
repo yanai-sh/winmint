@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 using WinMint.Provisioning;
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
@@ -48,7 +49,7 @@ public class OnlineDebloatPlanTests
         BuildArtifacts artifacts = planned.Value;
 
         Assert.Equal(expectRequiresNetwork, artifacts.Manifest.RequiresNetwork);
-        Assert.Equal(expectSafetyNet, artifacts.Jobs.Jobs.Any(j => j.Kind == "appx.safetyNet"));
+        Assert.Equal(expectSafetyNet, artifacts.Jobs.Jobs.Any(j => j.Kind == ProvisionJobKind.AppxSafetyNet));
         Assert.Equal(
             expectOfflineStage,
             artifacts.Stages.Stages.Any(s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx));

@@ -1,5 +1,6 @@
 using System.Text;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 using WinMint.Provisioning;
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
@@ -16,7 +17,7 @@ public class ScoopJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "scoop.batch");
+        JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
         Assert.Equal("scoop.batch", batch.Id);
         Assert.False(batch.NeedsReboot);
         Assert.Contains("curl", batch.PackageId);
@@ -32,7 +33,7 @@ public class ScoopJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "scoop.batch");
+        JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
         Assert.True(batch.NeedsReboot);
     }
 

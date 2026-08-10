@@ -8,7 +8,7 @@ namespace WinMint.Tests;
 public class DebloatServicingTests
 {
     [Fact]
-    public void Apply_injects_mountDir_for_RemoveProvisionedAppx_and_keeps_packageFamilyNames()
+    public async Task Apply_injects_mountDir_for_RemoveProvisionedAppx_and_keeps_packageFamilyNames()
     {
         BuildArtifacts plan = PlanWithRemove(["Microsoft.BingNews", "Microsoft.GamingApp"]);
         string work = NewTempDir();
@@ -21,7 +21,7 @@ public class DebloatServicingTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
                 plan,
                 run,
                 runner,

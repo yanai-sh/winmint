@@ -1,3 +1,5 @@
+using WinMint.Contracts;
+
 namespace WinMint.Orchestrator;
 
 /// <summary>AppX remove-list execution venue (issue 71). Absent in Profile JSON ⇒ online.</summary>
@@ -66,9 +68,3 @@ public sealed record AccountProfile(
 public sealed record DmaProfile(
     bool Enabled,
     DmaSettleTarget Settle);
-
-public sealed record DmaSettleTarget(
-    string Locale,
-    int GeoId,
-    string TimeZoneId,
-    bool LocationServicesEnabled);

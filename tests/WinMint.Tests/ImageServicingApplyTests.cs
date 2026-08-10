@@ -7,7 +7,7 @@ namespace WinMint.Tests;
 public class ImageServicingApplyTests
 {
     [Fact]
-    public void Apply_runs_stages_in_plan_order_with_shell_stamp_param()
+    public async Task Apply_runs_stages_in_plan_order_with_shell_stamp_param()
     {
         BuildArtifacts plan = MinimalPlan();
         string work = NewTempDir();
@@ -20,7 +20,7 @@ public class ImageServicingApplyTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
                 plan,
                 run,
                 runner,
@@ -96,7 +96,7 @@ public class ImageServicingApplyTests
     }
 
     [Fact]
-    public void Apply_passes_reuseMedia_true_on_MountInstallWim_when_requested()
+    public async Task Apply_passes_reuseMedia_true_on_MountInstallWim_when_requested()
     {
         BuildArtifacts plan = MinimalPlan();
         string work = NewTempDir();
@@ -110,7 +110,7 @@ public class ImageServicingApplyTests
                 ReuseMedia: true);
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
                 plan,
                 run,
                 runner,
@@ -130,7 +130,7 @@ public class ImageServicingApplyTests
     }
 
     [Fact]
-    public void Apply_preserves_workdir_on_runner_failure()
+    public async Task Apply_preserves_workdir_on_runner_failure()
     {
         BuildArtifacts plan = MinimalPlan();
         string work = NewTempDir();
@@ -143,7 +143,7 @@ public class ImageServicingApplyTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
                 plan,
                 run,
                 runner,

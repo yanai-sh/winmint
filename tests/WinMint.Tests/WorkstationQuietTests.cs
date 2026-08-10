@@ -1,4 +1,5 @@
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 using WinMint.Provisioning;
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
@@ -11,7 +12,7 @@ public class WorkstationQuietTests
     {
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(Lab());
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Id == "workstation.quiet" && j.Kind == "workstation.quiet");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Id == "workstation.quiet" && j.Kind == ProvisionJobKind.WorkstationQuiet);
     }
 
     [Fact]
@@ -35,7 +36,7 @@ public class WorkstationQuietTests
     private static Profile Lab() =>
         new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new Orchestrator.DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
             [],

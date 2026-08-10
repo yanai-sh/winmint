@@ -1,9 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
 
-public static class BuildPlan
+public static partial class BuildPlan
 {
     public const string ProfileSchemaVersion = "winmint.profile/v1";
     public const string JobsSchemaVersion = "winmint.jobs/v1";
@@ -184,10 +185,11 @@ public static class BuildPlan
             new DmaProfile(
                 doc.Dma.Enabled ?? true,
                 new DmaSettleTarget(
+                    doc.Dma.Enabled ?? true,
                     settle.Locale,
-                    settle.GeoId.Value,
+                    settle.GeoId,
                     settle.TimeZoneId,
-                    settle.LocationServicesEnabled.Value)),
+                    settle.LocationServicesEnabled)),
             debloatMode,
             NormalizeRemoveList(doc.Debloat?.RemoveProvisionedAppx),
             NormalizeRemoveList(doc.Packages?.Winget),
@@ -341,108 +343,6 @@ public static class BuildPlan
     /// <summary>FirstLogon always needs outbound network (product-constant MinGit + Nilesoft winget). Not authored in Profile JSON.</summary>
     public static bool PlanRequiresNetwork() => true;
 
-    /// <summary>Cli plan-dump shape for <c>manifest.json</c> (includes RequiresNetwork — #90 honesty).</summary>
-    public static string SerializeManifestDump(BuildManifest manifest)
-    {
-        var node = new System.Text.Json.Nodes.JsonObject
-        {
-            ["imageQuality"] = manifest.ImageQuality.ToString(),
-            ["requiresNetwork"] = manifest.RequiresNetwork,
-        };
-        return node.ToJsonString(DumpJsonOptions);
-    }
-
-    public static string SerializeJobsDump(JobsArtifact jobs)
-    {
-        var node = new System.Text.Json.Nodes.JsonObject
-        {
-            ["schemaVersion"] = jobs.SchemaVersion,
-            ["jobs"] = new System.Text.Json.Nodes.JsonArray(
-                jobs.Jobs.Select(static j =>
-                {
-                    var obj = new System.Text.Json.Nodes.JsonObject
-                    {
-                        ["id"] = j.Id,
-                        ["kind"] = j.Kind,
-                        ["needsReboot"] = j.NeedsReboot,
-                    };
-                    if (j.PackageId is not null)
-                    {
-                        obj["packageId"] = j.PackageId;
-                    }
-
-                    if (j.WingetArchitecture is not null)
-                    {
-                        obj["wingetArchitecture"] = j.WingetArchitecture;
-                    }
-
-                    if (j.WslInstallKind is not null)
-                    {
-                        obj["wslInstallKind"] = j.WslInstallKind;
-                    }
-
-                    if (j.WslFromFileRepo is not null)
-                    {
-                        obj["wslFromFileRepo"] = j.WslFromFileRepo;
-                    }
-
-                    if (j.WslFromFileAssetNames is { Count: > 0 })
-                    {
-                        obj["wslFromFileAssetNames"] = new System.Text.Json.Nodes.JsonArray(
-                            j.WslFromFileAssetNames.Select(static n => (System.Text.Json.Nodes.JsonNode)n).ToArray());
-                    }
-
-                    if (j.AuditStrict)
-                    {
-                        obj["auditStrict"] = true;
-                    }
-
-                    if (j.ScoopBuckets is { Count: > 0 })
-                    {
-                        obj["scoopBuckets"] = new System.Text.Json.Nodes.JsonArray(
-                            j.ScoopBuckets.Select(static b => (System.Text.Json.Nodes.JsonNode)b).ToArray());
-                    }
-
-                    if (j.DohPrimary is not null)
-                    {
-                        obj["dohPrimary"] = j.DohPrimary;
-                    }
-
-                    if (j.DohSecondary is not null)
-                    {
-                        obj["dohSecondary"] = j.DohSecondary;
-                    }
-
-                    if (j.DohTemplate is not null)
-                    {
-                        obj["dohTemplate"] = j.DohTemplate;
-                    }
-
-                    return (System.Text.Json.Nodes.JsonNode)obj;
-                }).ToArray()),
-        };
-        return node.ToJsonString(DumpJsonOptions);
-    }
-
-    public static string SerializeStagesDump(ServicingStageList stages)
-    {
-        var node = new System.Text.Json.Nodes.JsonObject
-        {
-            ["schemaVersion"] = StagesSchemaVersion,
-            ["stages"] = new System.Text.Json.Nodes.JsonArray(
-                stages.Stages.Select(static s => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
-                {
-                    ["opcode"] = s.Opcode.ToString(),
-                    ["parameters"] = new System.Text.Json.Nodes.JsonObject(
-                        s.Parameters.Select(static kv =>
-                            KeyValuePair.Create<string, System.Text.Json.Nodes.JsonNode?>(kv.Key, kv.Value))),
-                }).ToArray()),
-        };
-        return node.ToJsonString(DumpJsonOptions);
-    }
-
-    private static readonly JsonSerializerOptions DumpJsonOptions = new() { WriteIndented = true };
-
     /// <summary>
     /// Host-facing plan honesty (Cli + Wizard). Warns when FirstLogon needs network; never a Failure.
     /// </summary>
@@ -594,13 +494,13 @@ public static class BuildPlan
         List<JobDescriptor> jobList = [];
         if (options.IncludeSmokeStubs)
         {
-            jobList.Add(new JobDescriptor("smoke.stub.ready", "stub"));
-            jobList.Add(new JobDescriptor("smoke.stub.complete", "stub"));
+            jobList.Add(new JobDescriptor("smoke.stub.ready", ProvisionJobKind.Stub));
+            jobList.Add(new JobDescriptor("smoke.stub.complete", ProvisionJobKind.Stub));
         }
 
-        jobList.Add(new JobDescriptor("onedrive.uninstall", "onedrive.uninstall"));
-        jobList.Add(new JobDescriptor("reservedStorage.disable", "reservedStorage.disable"));
-        jobList.Add(new JobDescriptor("workstation.quiet", "workstation.quiet"));
+        jobList.Add(new JobDescriptor("onedrive.uninstall", ProvisionJobKind.OneDriveUninstall));
+        jobList.Add(new JobDescriptor("reservedStorage.disable", ProvisionJobKind.ReservedStorageDisable));
+        jobList.Add(new JobDescriptor("workstation.quiet", ProvisionJobKind.WorkstationQuiet));
         if (dohProvider is not null)
         {
             DohProviderSpec? doh = ProductPosture.ResolveDoh(dohProvider);
@@ -614,7 +514,7 @@ public static class BuildPlan
 
             jobList.Add(new JobDescriptor(
                 $"doh.{dohProvider}",
-                "doh.set",
+                ProvisionJobKind.DohSet,
                 PackageId: dohProvider,
                 DohPrimary: doh.Primary,
                 DohSecondary: doh.Secondary,
@@ -623,7 +523,7 @@ public static class BuildPlan
 
         if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Online)
         {
-            jobList.Add(new JobDescriptor("debloat.appx.safetyNet", "appx.safetyNet"));
+            jobList.Add(new JobDescriptor("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet));
         }
 
         if (wingetImportJson is { Length: > 0 })
@@ -631,7 +531,7 @@ public static class BuildPlan
             bool importReboot = wingetPackages.Any(id => wingetNeedsReboot.Contains(id));
             jobList.Add(new JobDescriptor(
                 "winget.import",
-                "winget.import",
+                ProvisionJobKind.WingetImport,
                 PackageId: "winget-import.json",
                 NeedsReboot: importReboot));
         }
@@ -645,7 +545,7 @@ public static class BuildPlan
                     : PackageCatalog.ResolveWingetArchitectureFlag(wingetTool, imageArchitecture);
                 jobList.Add(new JobDescriptor(
                     $"winget.{packageId}",
-                    "winget",
+                    ProvisionJobKind.Winget,
                     PackageId: packageId,
                     NeedsReboot: wingetNeedsReboot.Contains(packageId),
                     WingetArchitecture: wingetArch));
@@ -658,7 +558,7 @@ public static class BuildPlan
             bool batchReboot = profile.ScoopPackages.Any(id => scoopNeedsReboot.Contains(id));
             jobList.Add(new JobDescriptor(
                 "scoop.batch",
-                "scoop.batch",
+                ProvisionJobKind.ScoopBatch,
                 PackageId: string.Join(';', profile.ScoopPackages),
                 NeedsReboot: batchReboot,
                 ScoopBuckets: scoopBuckets.OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToArray()));
@@ -667,18 +567,18 @@ public static class BuildPlan
         if (profile.WslDistros.Count > 0)
         {
             // Microsoft Dev Config: enable VMP/WSL platform before distro install (reboot between).
-            jobList.Add(new JobDescriptor("wsl.platform", "wsl.platform"));
+            jobList.Add(new JobDescriptor("wsl.platform", ProvisionJobKind.WslPlatform));
         }
 
         foreach (string distroToken in profile.WslDistros)
         {
             catalog.TryGetWslByProfileToken(distroToken, out WslDistroEntry? wslEntry);
             string installId = wslEntry?.InstallId ?? distroToken;
-            string? installKind = wslEntry?.InstallKind;
+            WslInstallKind? installKind = wslEntry?.InstallKind;
             IReadOnlyList<string>? assetNames = wslEntry?.FromFileAssetNamesFor(imageArchitecture);
             jobList.Add(new JobDescriptor(
                 $"wsl.{installId}",
-                "wsl",
+                ProvisionJobKind.Wsl,
                 PackageId: installId,
                 NeedsReboot: wslNeedsReboot.Contains(distroToken),
                 WslInstallKind: installKind,
@@ -692,7 +592,7 @@ public static class BuildPlan
         {
             jobList.Add(new JobDescriptor(
                 "package.auditNative",
-                "package.auditNative",
+                ProvisionJobKind.PackageAuditNative,
                 PackageId: string.Join(';', wingetAuditTargets),
                 AuditStrict: true));
         }

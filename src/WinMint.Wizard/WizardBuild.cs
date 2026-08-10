@@ -2,7 +2,7 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Wizard;
 
-/// <summary>Avalonia-free build glue — Plan + ImageServicing.Apply (same path as Cli).</summary>
+/// <summary>Avalonia-free build glue — Plan + ImageServicing.ApplyAsync (same path as Cli).</summary>
 internal static class WizardBuild
 {
     public static string DefaultWorkDirectory { get; } =
@@ -11,7 +11,7 @@ internal static class WizardBuild
             "WinMint",
             "work");
 
-    public static WizardBuildResult TryApply(
+    public static async Task<WizardBuildResult> TryApplyAsync(
         WizardBuildInput input,
         IElevatedPlanRunner? runner = null,
         CancellationToken cancellationToken = default)
@@ -73,7 +73,8 @@ internal static class WizardBuild
 
         IElevatedPlanRunner effective = runner ?? new PwshElevatedPlanRunner();
         Result<ImageEvidence, Failure> applied =
-            ImageServicing.Apply(planned.Value, run, effective, cancellationToken);
+            await ImageServicing.ApplyAsync(planned.Value, run, effective, cancellationToken)
+                .ConfigureAwait(false);
 
         if (!applied.IsOk)
         {

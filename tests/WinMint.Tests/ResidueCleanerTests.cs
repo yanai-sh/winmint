@@ -59,7 +59,7 @@ public class ResidueCleanerTests
 
         try
         {
-            Win32ResidueCleaner cleaner = new(winlogon, log: null, windowsDirectory: windir);
+            Win32ResidueCleaner cleaner = new(winlogon, windowsDirectory: windir);
             cleaner.TryEraseAfterComplete();
 
             Assert.False(winlogon.AutoAdminLogon);

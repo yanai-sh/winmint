@@ -28,6 +28,7 @@ No guest **pwsh product runtime**. Inbox `powershell.exe` for Scoop bootstrap / 
 | Path | Owns |
 |------|------|
 | `src/WinMint.Cli` | Thin CLI → Orchestrator |
+| `src/WinMint.Contracts` | Tiny shared wire enums + `DmaSettleTarget` + guest bundle DTOs |
 | `src/WinMint.Orchestrator` | BuildPlan; drives Servicing |
 | `src/WinMint.Provisioning` | ProvisioningSession (AOT Supervisor) |
 | `src/WinMint.Wizard` | Avalonia BuildPlan host |
@@ -35,7 +36,7 @@ No guest **pwsh product runtime**. Inbox `powershell.exe` for Scoop bootstrap / 
 | `payload/scripts/` | `SetupComplete.cmd` |
 | `tools/` | Smoke / metal harness |
 
-No MediatR / Generic Host / AutoMapper. Shared contract types when twin shapes drift — not a fourth “Contracts” product module for theater.
+No MediatR / Generic Host / AutoMapper. Shared wire types live in `WinMint.Contracts` only — not a product module with behavior.
 
 ## Coding
 

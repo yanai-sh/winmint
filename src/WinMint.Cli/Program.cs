@@ -133,7 +133,7 @@ internal static class Program
             packageStrictOption,
             includeSmokeStubsOption,
         };
-        buildCommand.SetAction(parseResult =>
+        buildCommand.SetAction(async parseResult =>
         {
             FileInfo profilePath = parseResult.GetValue(profileArgument)!;
             FileInfo iso = parseResult.GetValue(isoOption)!;
@@ -141,7 +141,7 @@ internal static class Program
             FileInfo? outIso = parseResult.GetValue(outIsoOption);
             int? wimIndex = parseResult.GetValue(wimIndexOption);
             bool reuseMedia = parseResult.GetValue(reuseMediaOption);
-            return RunBuild(
+            return await RunBuildAsync(
                 profilePath,
                 iso,
                 work,
@@ -227,7 +227,7 @@ internal static class Program
         return 0;
     }
 
-    private static int RunBuild(
+    private static async Task<int> RunBuildAsync(
         FileInfo profilePath,
         FileInfo iso,
         DirectoryInfo work,
@@ -279,7 +279,8 @@ internal static class Program
             WimIndex: wimIndex,
             ReuseMedia: reuseMedia);
 
-        Result<ImageEvidence, Failure> applied = ImageServicing.Apply(artifacts!, servicingRun);
+        Result<ImageEvidence, Failure> applied =
+            await ImageServicing.ApplyAsync(artifacts!, servicingRun).ConfigureAwait(false);
         if (!applied.IsOk)
         {
             CliLog.Failure(Log, applied.Error.Code, applied.Error.Message);

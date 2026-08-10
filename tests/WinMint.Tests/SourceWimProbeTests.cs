@@ -26,10 +26,10 @@ public class SourceWimProbeTests
         """;
 
     [Fact]
-    public void TryProbeIso_missing_path_fails_closed()
+    public async Task TryProbeIso_missing_path_fails_closed()
     {
         Result<IReadOnlyList<WimIndexInfo>, Failure> result =
-            SourceWimProbe.TryProbeIso(
+            await SourceWimProbe.TryProbeIsoAsync(
                 @"C:\winmint-missing-" + Guid.NewGuid().ToString("N") + ".iso",
                 cancellationToken: TestContext.Current.CancellationToken);
 
@@ -38,7 +38,7 @@ public class SourceWimProbeTests
     }
 
     [Fact]
-    public void TryProbeIso_uses_injected_source()
+    public async Task TryProbeIso_uses_injected_source()
     {
         WimIndexInfo[] rows =
         [
@@ -51,7 +51,7 @@ public class SourceWimProbeTests
         try
         {
             Result<IReadOnlyList<WimIndexInfo>, Failure> result =
-                SourceWimProbe.TryProbeIso(tempIso, fake, TestContext.Current.CancellationToken);
+                await SourceWimProbe.TryProbeIsoAsync(tempIso, fake, TestContext.Current.CancellationToken);
 
             Assert.True(result.IsOk);
             Assert.Equal(2, result.Value.Count);
@@ -122,7 +122,7 @@ public class SourceWimProbeTests
     }
 
     [Fact]
-    public void TryProbeIso_unreadable_media_surfaces_code()
+    public async Task TryProbeIso_unreadable_media_surfaces_code()
     {
         string tempIso = Path.Combine(Path.GetTempPath(), "winmint-bad-" + Guid.NewGuid().ToString("N") + ".iso");
         File.WriteAllBytes(tempIso, [0]);
@@ -132,7 +132,7 @@ public class SourceWimProbeTests
         try
         {
             Result<IReadOnlyList<WimIndexInfo>, Failure> result =
-                SourceWimProbe.TryProbeIso(tempIso, fake, TestContext.Current.CancellationToken);
+                await SourceWimProbe.TryProbeIsoAsync(tempIso, fake, TestContext.Current.CancellationToken);
             Assert.False(result.IsOk);
             Assert.Equal("wim.probe.unreadable", result.Error.Code);
         }
@@ -223,8 +223,9 @@ public class SourceWimProbeTests
 
     private sealed class FixedWimIndexSource(Result<IReadOnlyList<WimIndexInfo>, Failure> result) : IWimIndexSource
     {
-        public Result<IReadOnlyList<WimIndexInfo>, Failure> ListFromIso(
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListFromIsoAsync(
             string isoPath,
-            CancellationToken cancellationToken = default) => result;
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(result);
     }
 }

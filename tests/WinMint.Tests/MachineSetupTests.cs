@@ -1,5 +1,6 @@
 using System.Text.Json;
 using WinMint.Provisioning;
+using WinMint.Contracts;
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
@@ -183,7 +184,7 @@ public class MachineSetupTests
                 bundle,
                 Env(
                     winlogon,
-                    wipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(path, null)),
+                    wipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(path)),
                 TestContext.Current.CancellationToken);
 
             Assert.Equal(SessionOutcome.Complete, result.Outcome);

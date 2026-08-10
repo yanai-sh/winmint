@@ -1,4 +1,5 @@
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 using WinMint.Wizard;
 
 namespace WinMint.Tests;
@@ -58,7 +59,7 @@ public class PlanDiffTests
     private static Profile Lab() =>
         new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             ["Microsoft.BingNews"],
             [],

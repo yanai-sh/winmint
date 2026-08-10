@@ -1,5 +1,6 @@
 using System.Text.Json;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 
 namespace WinMint.Tests;
 
@@ -15,9 +16,9 @@ public class WingetImportTests
 
         Assert.True(result.IsOk);
         Assert.NotNull(result.Value.WingetImportJson);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
-        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "winget");
-        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "package.auditNative");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Winget);
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.PackageAuditNative);
     }
 
     [Fact]
@@ -30,8 +31,8 @@ public class WingetImportTests
 
         Assert.True(result.IsOk);
         Assert.Null(result.Value.WingetImportJson);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: "winget", PackageId: "Git.Git" });
-        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Git.Git" });
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
     }
 
     [Fact]
@@ -55,7 +56,7 @@ public class WingetImportTests
     private static Profile LabProfile(IReadOnlyList<string> winget) =>
         new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
             winget,

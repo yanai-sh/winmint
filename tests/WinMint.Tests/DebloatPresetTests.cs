@@ -1,5 +1,6 @@
 using System.Text;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 
 namespace WinMint.Tests;
 
@@ -116,7 +117,7 @@ public class DebloatPresetTests
 
         Profile profile = new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             expanded.Value.RemoveProvisionedAppx,
             [],
@@ -145,7 +146,7 @@ public class DebloatPresetTests
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.AppxSafetyNet);
         Assert.DoesNotContain(
             planned.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
@@ -166,7 +167,7 @@ public class DebloatPresetTests
 
         Profile profile = new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             expanded.Value.RemoveProvisionedAppx,
             [],
@@ -194,7 +195,7 @@ public class DebloatPresetTests
 
         Profile profile = new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             expanded.Value.RemoveProvisionedAppx,
             [],
@@ -277,9 +278,9 @@ public class DebloatPresetTests
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "winget.import");
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "wsl");
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.AppxSafetyNet);
         Assert.DoesNotContain(
             planned.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);

@@ -34,7 +34,4 @@ internal sealed class GuestFileLogger(string logPath) : ILogger
             // ponytail: best-effort ProgramData log
         }
     }
-
-    /// <summary>Adapter for seams that still take <see cref="Action{String}"/>.</summary>
-    public Action<string> AsAction() => line => GuestLog.Line(this, line);
 }

@@ -1,4 +1,5 @@
 using WinMint.Provisioning;
+using WinMint.Contracts;
 
 namespace WinMint.Tests;
 

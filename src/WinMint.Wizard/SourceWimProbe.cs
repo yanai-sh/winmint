@@ -8,7 +8,7 @@ namespace WinMint.Wizard;
 /// <summary>Unelevated Source ISO → install.wim index list (Avalonia-free). Parser lives in Wim-Metadata.ps1.</summary>
 internal static class SourceWimProbe
 {
-    public static Result<IReadOnlyList<WimIndexInfo>, Failure> TryProbeIso(
+    public static async Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> TryProbeIsoAsync(
         string isoPath,
         IWimIndexSource? source = null,
         CancellationToken cancellationToken = default)
@@ -20,7 +20,7 @@ internal static class SourceWimProbe
         }
 
         IWimIndexSource adapter = source ?? PwshWimIndexSource.Instance;
-        return adapter.ListFromIso(isoPath.Trim(), cancellationToken);
+        return await adapter.ListFromIsoAsync(isoPath.Trim(), cancellationToken).ConfigureAwait(true);
     }
 
     public static Result<IReadOnlyList<WimIndexInfo>, Failure> ParseListJson(string json)
@@ -54,7 +54,7 @@ internal static class SourceWimProbe
                     NullIfEmpty(row.Build)));
             }
 
-            return Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(rows);
+            return Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(rows.ToArray());
         }
         catch (JsonException ex)
         {
@@ -174,7 +174,7 @@ public sealed record WimIndexInfo(
 /// <summary>Port for ISO → WIM index list. Real adapter shells to Wim-Metadata.ps1; tests ship a fake.</summary>
 internal interface IWimIndexSource
 {
-    Result<IReadOnlyList<WimIndexInfo>, Failure> ListFromIso(
+    Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListFromIsoAsync(
         string isoPath,
         CancellationToken cancellationToken = default);
 }
@@ -183,7 +183,7 @@ internal sealed class PwshWimIndexSource : IWimIndexSource
 {
     public static PwshWimIndexSource Instance { get; } = new();
 
-    public Result<IReadOnlyList<WimIndexInfo>, Failure> ListFromIso(
+    public async Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListFromIsoAsync(
         string isoPath,
         CancellationToken cancellationToken = default)
     {
@@ -207,27 +207,24 @@ internal sealed class PwshWimIndexSource : IWimIndexSource
 
         try
         {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
-                    new Failure("wim.probe.unreadable", "WIM probe cancelled."));
-            }
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(120));
 
-            // Sync capture: timeout via RunAndCaptureText (Canceled). Mid-flight CT not supported without GetResult.
-            ProcessTextOutput captured = Process.RunAndCaptureText(psi, TimeSpan.FromSeconds(120));
+            ProcessTextOutput captured = await Process.RunAndCaptureTextAsync(psi, timeoutCts.Token)
+                .ConfigureAwait(false);
             string stdout = captured.StandardOutput;
             string stderr = captured.StandardError;
 
-            if (captured.ExitStatus.Canceled)
+            if (captured.ExitStatus.Canceled || timeoutCts.IsCancellationRequested)
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                        new Failure("wim.probe.unreadable", "WIM probe cancelled."));
+                }
+
                 return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
                     new Failure("wim.probe.unreadable", "WIM probe timed out."));
-            }
-
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
-                    new Failure("wim.probe.unreadable", "WIM probe cancelled."));
             }
 
             if (captured.ExitStatus.ExitCode != 0)
@@ -242,6 +239,11 @@ internal sealed class PwshWimIndexSource : IWimIndexSource
             }
 
             return SourceWimProbe.ParseListJson(stdout.Trim());
+        }
+        catch (OperationCanceledException)
+        {
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.unreadable", "WIM probe cancelled."));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

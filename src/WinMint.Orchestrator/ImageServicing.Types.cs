@@ -16,7 +16,7 @@ public sealed record ImageEvidence(
 /// <summary>Elevated plan runner port — real pwsh adapter and test fake ship together (ticket 02).</summary>
 public interface IElevatedPlanRunner
 {
-    Result<ImageEvidence, Failure> Execute(
+    Task<Result<ImageEvidence, Failure>> ExecuteAsync(
         string workDirectory,
         IReadOnlyList<ServicingStage> stages,
         ServicingRun run,

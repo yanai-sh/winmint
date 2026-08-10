@@ -1,6 +1,6 @@
-namespace WinMint.Provisioning;
+namespace WinMint.Contracts;
 
-/// <summary>Closed provisioning job kinds. Wire JSON uses dotted strings; parse once at <see cref="BundleLoader"/>.</summary>
+/// <summary>Closed provisioning job kinds. Wire JSON uses dotted strings; parse once at the load boundary.</summary>
 public enum ProvisionJobKind
 {
     AppxSafetyNet,

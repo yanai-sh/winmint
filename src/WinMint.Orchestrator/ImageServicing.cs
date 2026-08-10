@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
 
@@ -30,14 +31,14 @@ public static class ImageServicing
     public const int DefaultProWimIndex = 3;
 
     /// <summary>Materialize stages and run elevated ImageServicing against a Source ISO (default pwsh runner).</summary>
-    public static Result<ImageEvidence, Failure> Apply(
+    public static Task<Result<ImageEvidence, Failure>> ApplyAsync(
         BuildArtifacts plan,
         ServicingRun run,
         CancellationToken ct = default) =>
-        Apply(plan, run, new PwshElevatedPlanRunner(), ct);
+        ApplyAsync(plan, run, new PwshElevatedPlanRunner(), ct);
 
     /// <summary>Materialize stages and run elevated ImageServicing against a Source ISO.</summary>
-    public static Result<ImageEvidence, Failure> Apply(
+    public static async Task<Result<ImageEvidence, Failure>> ApplyAsync(
         BuildArtifacts plan,
         ServicingRun run,
         IElevatedPlanRunner runner,
@@ -83,12 +84,13 @@ public static class ImageServicing
             return Result.Fail<ImageEvidence, Failure>(laneError);
         }
 
-        Result<ImageEvidence, Failure> outcome = runner.Execute(
-            run.WorkDirectory,
-            materialized.Value,
-            run,
-            plan,
-            ct);
+        Result<ImageEvidence, Failure> outcome = await runner.ExecuteAsync(
+                run.WorkDirectory,
+                materialized.Value,
+                run,
+                plan,
+                ct)
+            .ConfigureAwait(false);
         // Invariant: never delete workdir on failure (or success) — caller owns lifetime.
         return outcome;
     }
@@ -169,10 +171,10 @@ public static class ImageServicing
             plan.Dma.Settle is null
                 ? null
                 : new SettleFile(
-                    plan.Dma.Settle.Locale,
-                    plan.Dma.Settle.GeoId,
-                    plan.Dma.Settle.TimeZoneId,
-                    plan.Dma.Settle.LocationServicesEnabled),
+                    plan.Dma.Settle.Locale!,
+                    plan.Dma.Settle.GeoId!.Value,
+                    plan.Dma.Settle.TimeZoneId!,
+                    plan.Dma.Settle.LocationServicesEnabled!.Value),
             removeProvisionedAppx,
             plan.Manifest.RequiresNetwork,
             plan.PackageStrict);
@@ -368,23 +370,6 @@ public static class ImageServicing
         }
     }
 }
-
-internal sealed record BundleFile(
-    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
-    [property: JsonPropertyName("supervisorPath")] string SupervisorPath,
-    [property: JsonPropertyName("username")] string Username,
-    [property: JsonPropertyName("password")] string Password,
-    [property: JsonPropertyName("dmaEnabled")] bool DmaEnabled,
-    [property: JsonPropertyName("settle")] SettleFile? Settle,
-    [property: JsonPropertyName("removeProvisionedAppx")] string[] RemoveProvisionedAppx,
-    [property: JsonPropertyName("requiresNetwork")] bool RequiresNetwork = false,
-    [property: JsonPropertyName("packageStrict")] bool PackageStrict = false);
-
-internal sealed record SettleFile(
-    [property: JsonPropertyName("locale")] string Locale,
-    [property: JsonPropertyName("geoId")] int GeoId,
-    [property: JsonPropertyName("timeZoneId")] string TimeZoneId,
-    [property: JsonPropertyName("locationServicesEnabled")] bool LocationServicesEnabled);
 
 [JsonSerializable(typeof(BundleFile))]
 [JsonSerializable(typeof(EvidenceFile))]

@@ -8,7 +8,7 @@ namespace WinMint.Tests;
 public class ExportLaneTests
 {
     [Fact]
-    public void Apply_release_lane_export_params_differ_from_test_and_manifest_lane_matches()
+    public async Task Apply_release_lane_export_params_differ_from_test_and_manifest_lane_matches()
     {
         BuildArtifacts plan = Plan(ImageQualityLane.Release);
         string work = NewTempDir();
@@ -21,7 +21,7 @@ public class ExportLaneTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
                 plan,
                 run,
                 runner,
@@ -44,7 +44,7 @@ public class ExportLaneTests
     }
 
     [Fact]
-    public void Apply_rejects_mismatched_export_params_for_release_lane()
+    public async Task Apply_rejects_mismatched_export_params_for_release_lane()
     {
         BuildArtifacts good = Plan(ImageQualityLane.Release);
         // Corrupt ExportWim params after plan — Materialize must fail closed.
@@ -74,7 +74,7 @@ public class ExportLaneTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
                 corrupted,
                 run,
                 runner,

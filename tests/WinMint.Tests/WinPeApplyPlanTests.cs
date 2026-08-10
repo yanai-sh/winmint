@@ -34,7 +34,7 @@ public class WinPeApplyPlanTests
     }
 
     [Fact]
-    public void Apply_materializes_winpe_opcode_params()
+    public async Task Apply_materializes_winpe_opcode_params()
     {
         Profile profile = ParseProfile();
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
@@ -51,7 +51,7 @@ public class WinPeApplyPlanTests
                 WimIndex: 3);
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
                 planned.Value,
                 run,
                 runner,

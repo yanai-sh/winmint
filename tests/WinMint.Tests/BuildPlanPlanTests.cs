@@ -1,5 +1,6 @@
 using System.Text;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 
 namespace WinMint.Tests;
 
@@ -139,7 +140,7 @@ public class BuildPlanPlanTests
         BuildArtifacts artifacts = result.Value;
         Assert.Equal(ImageQualityLane.Test, artifacts.Manifest.ImageQuality);
         Assert.Equal(BuildPlan.JobsSchemaVersion, artifacts.Jobs.SchemaVersion);
-        Assert.DoesNotContain(artifacts.Jobs.Jobs, j => j.Kind == "stub");
+        Assert.DoesNotContain(artifacts.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Stub);
         Assert.NotEmpty(artifacts.Stages.Stages);
         Assert.Equal(
             [
@@ -153,8 +154,8 @@ public class BuildPlanPlanTests
                 ServicingOpcode.BuildIso,
             ],
             artifacts.Stages.Stages.Select(s => s.Opcode).ToArray());
-        Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
-        Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
+        Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == ProvisionJobKind.OneDriveUninstall);
+        Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ReservedStorageDisable);
         Assert.All(
             artifacts.Stages.Stages,
             stage => Assert.DoesNotContain(".ps1", string.Join('\0', stage.Parameters.Values), StringComparison.OrdinalIgnoreCase));
@@ -194,8 +195,8 @@ public class BuildPlanPlanTests
             new RunOptions { IncludeSmokeStubs = true });
 
         Assert.True(result.IsOk);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: "stub", Id: "smoke.stub.ready" });
-        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: "stub", Id: "smoke.stub.complete" });
+        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.ready" });
+        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.complete" });
     }
 
     [Fact]

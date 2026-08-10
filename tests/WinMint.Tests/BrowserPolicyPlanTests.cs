@@ -1,5 +1,6 @@
 using System.Text.Json;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 
 namespace WinMint.Tests;
 
@@ -30,10 +31,10 @@ public class BrowserPolicyPlanTests
         Assert.DoesNotContain("BraveRewardsDisabled", specs, StringComparison.Ordinal);
         Assert.DoesNotContain("fDenyTSConnections", specs, StringComparison.Ordinal);
 
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "workstation.quiet");
-        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "doh.set");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.OneDriveUninstall);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ReservedStorageDisable);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WorkstationQuiet);
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.DohSet);
 
         Assert.Equal(
             [
@@ -67,7 +68,7 @@ public class BrowserPolicyPlanTests
         Result<BuildArtifacts, Failure> result =
             BuildPlan.Plan(Lab(policies: new PoliciesProfile(DohProvider: "cloudflare")));
         Assert.True(result.IsOk);
-        JobDescriptor job = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "doh.set");
+        JobDescriptor job = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.DohSet);
         Assert.Equal("cloudflare", job.PackageId);
         Assert.Equal("1.1.1.1", job.DohPrimary);
         Assert.Equal("1.0.0.1", job.DohSecondary);
@@ -150,7 +151,7 @@ public class BrowserPolicyPlanTests
         PoliciesProfile? policies = null) =>
         new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
             winget ?? [],

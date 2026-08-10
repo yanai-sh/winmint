@@ -15,8 +15,9 @@ public class PackageCatalogValidatorTests
     public void Repo_packages_json_passes_validator()
     {
         string path = Path.Combine(FindRepoRoot(), "config", "packages.json");
-        PackageCatalog catalog = PackageCatalog.LoadFromFile(path);
-        IReadOnlyList<string> errors = catalog.Validate();
+        Result<PackageCatalog, Failure> loaded = PackageCatalog.TryLoadFromFile(path);
+        Assert.True(loaded.IsOk);
+        IReadOnlyList<string> errors = loaded.Value.Validate();
         Assert.Empty(errors);
     }
 

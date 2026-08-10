@@ -1,20 +1,22 @@
+using Microsoft.Extensions.Logging;
+
 namespace WinMint.Provisioning;
 
 /// <summary>Best-effort guest self-erase after Shell Complete (ADR-008).</summary>
 public sealed class Win32ResidueCleaner : IResidueCleaner
 {
     private readonly IWinlogonRegistry _winlogon;
-    private readonly Action<string>? _log;
+    private readonly ILogger? _logger;
     private readonly string _winMintDir;
     private readonly string _setupCompletePath;
 
     public Win32ResidueCleaner(
         IWinlogonRegistry winlogon,
-        Action<string>? log = null,
+        ILogger? logger = null,
         string? windowsDirectory = null)
     {
         _winlogon = winlogon;
-        _log = log;
+        _logger = logger;
         string windir = windowsDirectory
             ?? Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         if (string.IsNullOrWhiteSpace(windir))
@@ -31,11 +33,17 @@ public sealed class Win32ResidueCleaner : IResidueCleaner
         try
         {
             _winlogon.ClearAutoLogon();
-            _log?.Invoke("residue: cleared AutoAdminLogon stamps");
+            if (_logger is not null)
+            {
+                GuestLog.ResidueCleared(_logger);
+            }
         }
         catch (Exception ex)
         {
-            _log?.Invoke($"residue: ClearAutoLogon failed: {ex.Message}");
+            if (_logger is not null)
+            {
+                GuestLog.ResidueClearFailed(_logger, ex.Message);
+            }
         }
 
         TryDeleteFile(_setupCompletePath);
@@ -49,12 +57,12 @@ public sealed class Win32ResidueCleaner : IResidueCleaner
             if (File.Exists(path))
             {
                 File.Delete(path);
-                _log?.Invoke($"residue: deleted {path}");
+                LogDeleted(path);
             }
         }
         catch (Exception ex)
         {
-            _log?.Invoke($"residue: delete file failed ({path}): {ex.Message}");
+            LogDeleteFailed(path, ex.Message);
         }
     }
 
@@ -77,23 +85,39 @@ public sealed class Win32ResidueCleaner : IResidueCleaner
                 catch (Exception ex)
                 {
                     // ponytail: Supervisor.exe may still be locked while this process runs
-                    _log?.Invoke($"residue: delete file failed ({file}): {ex.Message}");
+                    LogDeleteFailed(file, ex.Message);
                 }
             }
 
             try
             {
                 Directory.Delete(path, recursive: true);
-                _log?.Invoke($"residue: deleted {path}");
+                LogDeleted(path);
             }
             catch (Exception ex)
             {
-                _log?.Invoke($"residue: delete tree failed ({path}): {ex.Message}");
+                LogDeleteFailed(path, ex.Message);
             }
         }
         catch (Exception ex)
         {
-            _log?.Invoke($"residue: delete tree failed ({path}): {ex.Message}");
+            LogDeleteFailed(path, ex.Message);
+        }
+    }
+
+    private void LogDeleted(string path)
+    {
+        if (_logger is not null)
+        {
+            GuestLog.ResidueDeleted(_logger, path);
+        }
+    }
+
+    private void LogDeleteFailed(string path, string message)
+    {
+        if (_logger is not null)
+        {
+            GuestLog.ResidueDeleteFailed(_logger, path, message);
         }
     }
 }

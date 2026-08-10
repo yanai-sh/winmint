@@ -1,4 +1,5 @@
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 using WinMint.Wizard;
 
 namespace WinMint.Tests;
@@ -6,9 +7,9 @@ namespace WinMint.Tests;
 public class WizardBuildTests
 {
     [Fact]
-    public void TryApply_missing_profile_fails_closed()
+    public async Task TryApply_missing_profile_fails_closed()
     {
-        WizardBuildResult result = WizardBuild.TryApply(
+        WizardBuildResult result = await WizardBuild.TryApplyAsync(
             new WizardBuildInput(
                 ProfilePath: Path.Combine(Path.GetTempPath(), "winmint-no-such-profile.json"),
                 SourceIsoPath: Path.GetTempFileName()),
@@ -20,12 +21,12 @@ public class WizardBuildTests
     }
 
     [Fact]
-    public void TryApply_missing_iso_fails_closed()
+    public async Task TryApply_missing_iso_fails_closed()
     {
         string profile = WriteTempProfile();
         try
         {
-            WizardBuildResult result = WizardBuild.TryApply(
+            WizardBuildResult result = await WizardBuild.TryApplyAsync(
                 new WizardBuildInput(
                     profile,
                     SourceIsoPath: Path.Combine(Path.GetTempPath(), "no-such.iso")),
@@ -42,7 +43,7 @@ public class WizardBuildTests
     }
 
     [Fact]
-    public void TryApply_with_fake_runner_succeeds()
+    public async Task TryApply_with_fake_runner_succeeds()
     {
         string profile = WriteTempProfile();
         string iso = Path.GetTempFileName();
@@ -50,7 +51,7 @@ public class WizardBuildTests
         try
         {
             File.WriteAllText(iso, "iso-stub");
-            WizardBuildResult result = WizardBuild.TryApply(
+            WizardBuildResult result = await WizardBuild.TryApplyAsync(
                 new WizardBuildInput(
                     profile,
                     iso,
@@ -77,7 +78,7 @@ public class WizardBuildTests
     }
 
     [Fact]
-    public void TryApply_propagates_runner_failure()
+    public async Task TryApply_propagates_runner_failure()
     {
         string profile = WriteTempProfile();
         string iso = Path.GetTempFileName();
@@ -85,7 +86,7 @@ public class WizardBuildTests
         try
         {
             File.WriteAllText(iso, "iso-stub");
-            WizardBuildResult result = WizardBuild.TryApply(
+            WizardBuildResult result = await WizardBuild.TryApplyAsync(
                 new WizardBuildInput(profile, iso, WorkDirectory: work),
                 new ImageServicingTestFakes.FailingElevatedPlanRunner(),
                 TestContext.Current.CancellationToken);
@@ -109,7 +110,7 @@ public class WizardBuildTests
     {
         Profile profile = new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
             [],

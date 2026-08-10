@@ -234,7 +234,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             Title = "Choose Source ISO",
             AllowMultiple = false,
             FileTypeFilter = [new FilePickerFileType("ISO") { Patterns = ["*.iso"] }],
-        });
+        }).ConfigureAwait(true);
 
         if (files.Count > 0)
         {
@@ -378,7 +378,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             Title = "Save WinMint Profile",
             SuggestedFileName = "winmint.profile.json",
             FileTypeChoices = [new FilePickerFileType("Profile JSON") { Patterns = ["*.json"] }],
-        });
+        }).ConfigureAwait(true);
 
         if (file is null)
         {
@@ -395,7 +395,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             return;
         }
 
-        await File.WriteAllBytesAsync(path, _lastProfileUtf8, cancellationToken);
+        await File.WriteAllBytesAsync(path, _lastProfileUtf8, cancellationToken).ConfigureAwait(true);
         _savedProfilePath = path;
         SaveStatus = $"Saved → {path}";
         Status = SaveStatus;
@@ -436,7 +436,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         WizardBuildResult result;
         try
         {
-            result = await Task.Run(() => WizardBuild.TryApply(input, cancellationToken: ct), ct)
+            result = await WizardBuild.TryApplyAsync(input, cancellationToken: ct)
                 .ConfigureAwait(true);
         }
         finally
@@ -563,9 +563,8 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         IsWimProbeBusy = true;
         string path = SourceIsoPath.Trim();
         IWimIndexSource? source = _wimIndexSource;
-        Result<IReadOnlyList<WimIndexInfo>, Failure> result = await Task.Run(
-                () => SourceWimProbe.TryProbeIso(path, source, ct), ct)
-            .ConfigureAwait(true);
+        Result<IReadOnlyList<WimIndexInfo>, Failure> result =
+            await SourceWimProbe.TryProbeIsoAsync(path, source, ct).ConfigureAwait(true);
 
         if (generation != _probeGeneration || ct.IsCancellationRequested)
         {

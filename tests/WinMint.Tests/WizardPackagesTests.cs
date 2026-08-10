@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using WinMint.Orchestrator;
+using WinMint.Contracts;
 
 namespace WinMint.Tests;
 
@@ -14,7 +15,7 @@ public class WizardPackagesTests
         IReadOnlyList<string>? scoopNeedsReboot = null) =>
         new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
             winget ?? [],
@@ -53,10 +54,10 @@ public class WizardPackagesTests
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         Assert.Contains(
             planned.Value.Jobs.Jobs,
-            j => j.Kind == "winget" && j.PackageId == "jqlang.jq" && j.NeedsReboot);
+            j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "jqlang.jq" && j.NeedsReboot);
         Assert.Contains(
             planned.Value.Jobs.Jobs,
-            j => j.Kind == "scoop.batch" && j.PackageId!.Contains("curl") && !j.NeedsReboot);
+            j => j.Kind == ProvisionJobKind.ScoopBatch && j.PackageId!.Contains("curl") && !j.NeedsReboot);
     }
 
     [Fact]
@@ -69,11 +70,11 @@ public class WizardPackagesTests
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(BuildPlan.TryParseProfile(utf8).Value);
         Assert.True(planned.IsOk);
-        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == "stub");
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "winget.import");
-        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind is "scoop" or "wsl");
+        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Stub);
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.OneDriveUninstall);
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ReservedStorageDisable);
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
+        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind is ProvisionJobKind.Scoop or ProvisionJobKind.Wsl);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Security.Principal;
 using System.Text.Json;
@@ -8,7 +9,7 @@ namespace WinMint.Orchestrator;
 /// <summary>One elevated <c>pwsh -File servicing/RunPlan.ps1</c> invocation per Apply (single UAC).</summary>
 public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 {
-    public Result<ImageEvidence, Failure> Execute(
+    public async Task<Result<ImageEvidence, Failure>> ExecuteAsync(
         string workDirectory,
         IReadOnlyList<ServicingStage> stages,
         ServicingRun run,
@@ -40,6 +41,7 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         };
         if (!elevated)
         {
+            // UAC Verb=runas requires UseShellExecute; Process.Run / RunAsync reject UseShellExecute.
             psi.Verb = "runas";
         }
 
@@ -50,13 +52,15 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
             int exitCode;
             if (elevated)
             {
-                // Process.Run rejects UseShellExecute — already-elevated path only.
-                ProcessExitStatus status = Process.Run(psi, timeout: null);
+                // Already elevated: Process.RunAsync honors CancellationToken (kills child on cancel).
+                // Process.Run / RunAsync reject UseShellExecute — elevated path only.
+                ProcessExitStatus status = await Process.RunAsync(psi, ct).ConfigureAwait(false);
                 exitCode = status.ExitCode;
             }
             else
             {
-                // UAC Verb=runas requires UseShellExecute — keep Start + WaitForExit.
+                // UAC Verb=runas requires UseShellExecute — Process.Run rejects that, so Start + WaitForExit.
+                // ct.Register kills the child on cancel (WaitForExit itself is not cancelable).
                 using Process process = Process.Start(psi)
                     ?? throw new InvalidOperationException("Failed to start elevated pwsh.");
                 using (ct.Register(() =>
@@ -158,7 +162,8 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
                 file.OutputIsoPath ?? run.OutputIsoPath ?? Path.Combine(workDirectory, "out.iso"),
                 plan.Manifest.ImageQuality,
                 file.ShellStampTargetPath ?? shellTarget,
-                file.Digests ?? new Dictionary<string, string>(StringComparer.Ordinal)));
+                file.Digests?.ToFrozenDictionary(StringComparer.Ordinal)
+                    ?? (IReadOnlyDictionary<string, string>)FrozenDictionary<string, string>.Empty));
     }
 
     private static string? ReadFailureMessage(string workDirectory)
