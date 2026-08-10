@@ -10,11 +10,14 @@ One AOT process for Machine setup + Shell tenure. In-process splash; in-memory s
 
 ## Interface
 
+Prefer async I/O and .NET 11 `Process.Run*` on adapters. Do not keep a sync façade that calls `GetAwaiter().GetResult()` on HTTP/WinRT/`Task.Delay`.
+
 ```csharp
 namespace WinMint.Provisioning;
 
 public static class ProvisioningSession
 {
+    // Direction: RunAsync when the session owns awaits; sync Run only if the whole path is sync I/O.
     public static SessionResult Run(
         SessionMode mode,
         ProvisioningBundle bundle,
@@ -97,5 +100,6 @@ Durable: `%ProgramData%\WinMint\`. MachineSetup failure ⇒ non-zero exit.
 
 ## Outside / rejected
 
-Outside: `Program.cs` arg parse, bundle JSON loader, SetupComplete.cmd, Winlogon launch.  
-Rejected: MediatR; peer Splash; guest pwsh product runtime; file mailbox control plane; RunOnce/PreLock; Hyper-V-only executor; public phase plugin API.
+Outside: `Program.cs` arg parse, SetupComplete.cmd, Winlogon launch.  
+Bundle load / job-kind parse are module concerns — expected failures → typed status/`Result`, not throw-and-hope.  
+Rejected: MediatR; AutoMapper; peer Splash; guest pwsh product runtime; file mailbox control plane; RunOnce/PreLock; Hyper-V-only executor; public phase plugin API; sync-over-async bridges.

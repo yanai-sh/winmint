@@ -10,7 +10,7 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <!-- AOT-friendly graph; PublishAot is per-project (Provisioning Release). -->
     <IsAotCompatible>true</IsAotCompatible>
-    <!-- ponytail: no EnforceCodeStyleInBuild / GenerateDocumentationFile until public API exists — those turn IDE/CS1591 into hard fails on first types. -->
+    <!-- CS1591 / GenerateDocumentationFile off — still document BuildPlan / ImageServicing.Apply / ProvisioningSession entrypoints in source. -->
   </PropertyGroup>
   <PropertyGroup Condition="'$(CI)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>

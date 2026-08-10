@@ -13,9 +13,9 @@ Greenfield product repo [`yanai-sh/winmint`](https://github.com/yanai-sh/winmint
 | **Pipeline / orchestrator** | Unelevated C# sequences validate → plan → emit job/unattend → invoke Servicing → collect evidence |
 | **Port** | “Run elevated imaging job” — only when prod `pwsh -File` and a test fake share a shape |
 | **Adapter** | Thin `pwsh -File` kernels under `servicing/`; filesystem staging |
-| **Deep modules** | Fat behaviour behind small interfaces — below |
+| **Deep modules** | Small interfaces; split fat files by kind/phase when they resist change — below |
 
-**Do not use as the backbone:** Clean Architecture onion, tactical DDD packing, or microservices. One batch imaging pipeline + elevated Servicing helper. Do not pre-split Orchestrator into Authoring / Planning / Contracts projects.
+**Do not use as the backbone:** Clean Architecture onion, tactical DDD packing, microservices, MediatR, or AutoMapper. One batch imaging pipeline + elevated Servicing helper. Do not invent Authoring / Planning product splits for ceremony.
 
 ## Deep modules
 
@@ -32,7 +32,8 @@ Greenfield product repo [`yanai-sh/winmint`](https://github.com/yanai-sh/winmint
 - One adapter = call through directly. Two adapters (prod + test fake) = real port type.
 - Imaging **stages** Provisioning bits; it must not call live Provisioning APIs. Provisioning never mounts WIMs.
 - Evidence JSON is a **projection** of in-memory Supervisor status — not a control-plane mailbox.
-- If a new type does not sit behind one of these three modules, question it (YAGNI).
+- If a new type does not sit behind one of these three modules, question it.
+- “Deep module” means clear ownership — not one god file. Prefer thin files behind the module entrypoint.
 
 **Test surfaces:** (1) BuildPlan contracts, (2) ProvisioningSession phase machine, (3) Hyper-V Smoke acceptance evidence.
 

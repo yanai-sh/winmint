@@ -55,41 +55,24 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 
 ## Shared types (logical)
 
-- `DmaSettleTarget` / `DmaContract` settle side: locale, GeoId, timeZoneId, location posture.
-- Orchestrator `DmaSettleTarget` (required settle fields on Profile) and Provisioning `DmaSettleTarget` (nullable settle on staged bundle) are **intentional** cross-process shapes — do not merge via a shared Contracts project.
-- `ServicingOpcode` enum owned with BuildPlan stages + ImageServicing catalog (three touch points on add — acceptable).
-- Provisioning job `Kind` stays a **string** across BuildPlan → guest jobs JSON → ProvisioningSession `RunJobs` (not an enum yet). **Defer** a Kind catalog / CONTRACTS touch-point rule until the next job kind lands — same cost class as ServicingOpcode, no drift incident yet.
-- `ProvisioningBundle.SupervisorShellPath` (bundle JSON `supervisorPath`) must match offline Shell stamp and Machine setup verify.
+- Settle: locale, GeoId, timeZoneId, location posture. Host Profile settle is required; staged bundle settle may be nullable — map explicitly at the stage boundary (twin records OK; drift ⇒ consolidate).
+- `ServicingOpcode` and provisioning **job `Kind`** are closed sets (enum or equivalent) with the same touch-point discipline as opcodes. Wire JSON may use strings; parse once at the load boundary.
+- `ProvisioningBundle.SupervisorShellPath` (`supervisorPath`) must match offline Shell stamp and Machine setup verify.
 
 ## Interchange DTO naming
 
 | Suffix | Use |
 |--------|-----|
-| `*Document` | Authored / parse input (e.g. Profile JSON DTOs, `ProvisioningEvidenceDocument`) |
-| `*File` | Workdir or guest interchange on disk (e.g. `JobsFile`, `BundleFile`, evidence on disk) |
+| `*Document` | Authored / parse input |
+| `*File` | Workdir or guest interchange on disk |
 
-Prefer `*File` over new `*Dump` / `*Dto` when touching those types; no rename campaign required.
+Prefer `*File` over new `*Dump` / `*Dto` when touching those types.
 
 ## Status codes & evidence phases
 
-Form: lowercase dotted `area.token` segments (product area first).
+Lowercase dotted `area.token`. Evidence `Phases` use the **same** strings (no parallel vocabulary). Areas: `machineSetup`, `shell`, `settle`, `jobs`, `checkpoint`, `session`, `servicing`, plus BuildPlan `account` / `document` / `dma` / `debloat`.
 
-| Area | Examples |
-|------|----------|
-| `machineSetup` | `machineSetup.ok`, `machineSetup.account.forbidden`, `machineSetup.shell.verify_failed` |
-| `shell` | `shell.first_paint`, `shell.evidence.required`, `shell.timeout`, `shell.stale`, `shell.cancelled`, `shell.checkpoint.invalid` |
-| `settle` | `settle.begin`, `settle.ok`, `settle.skipped`, `settle.resume_skip`, `settle.hard_mismatch`, `settle.location_warn`, `settle.apply_failed`, `settle.read_failed`, `settle.target_incomplete`, `settle.cancelled` |
-| `jobs` | `jobs.begin`, `jobs.ok`, `jobs.failed`, `jobs.spawn_failed`, `jobs.kind.unsupported`, `jobs.reboot`, `jobs.winget.register_failed`, `jobs.scoop.bootstrap_failed` |
-| `checkpoint` | `checkpoint.resume` |
-| `session` | `session.mode.unknown` |
-| `servicing` | `servicing.runPlan.failed`, `servicing.sourceIso.missing`, `servicing.export.missing`, `servicing.export.lane_mismatch`, `servicing.evidence.lane_mismatch` |
-| `account` / `document` / `dma` / `debloat` | BuildPlan validation (`account.mode.missing`, `document.schemaVersion.unsupported`, `debloat.removeProvisionedAppx.unknown`) |
-
-**Evidence `Phases`:** use the **same** strings as the status codes they record (e.g. `shell.first_paint`, `settle.begin`) — not a parallel short vocabulary.
-
-Prose stays “Machine setup”; types/flags stay `MachineSetup` / `--machine-setup`. Status codes are the third surface and follow this table only.
-
-Cli product verb for ImageServicing is `build` only (`apply` removed as identical twin).
+Cli product verb for ImageServicing is `build` only.
 
 ## Explicit non-contracts
 

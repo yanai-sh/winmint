@@ -76,4 +76,4 @@ just smoke          # S4 Hyper-V
 - File mailbox control-plane assertions.
 - Whole-unattend snapshots without Ireland/autologon targets.
 - Horizontal “write all tests then code.”
-- MediatR/Generic Host for testability theater.
+- MediatR / Generic Host / AutoMapper for testability theater (xUnit + fakes stay fine; better asserts OK when they pay rent).
