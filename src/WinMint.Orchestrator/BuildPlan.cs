@@ -587,7 +587,7 @@ public static class BuildPlan
                 new Failure("policies.dohProvider.unsupported", dohPlanError!));
         }
 
-        // Product-constant FirstLogon jobs (ADR-009) + keep-flag safety net when remove-list non-empty.
+        // Product-constant FirstLogon jobs (ADR-009) + debloat safety net when remove-list non-empty.
         // smoke.stub.* only when RunOptions.IncludeSmokeStubs (Smoke/acceptance harness).
         List<JobDescriptor> jobList = [];
         if (options.IncludeSmokeStubs)

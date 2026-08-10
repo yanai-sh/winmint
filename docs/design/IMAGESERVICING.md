@@ -39,7 +39,7 @@ public enum ServicingOpcode
 }
 ```
 
-(Other keep-flag opcodes as Plan emits.) Evidence: output ISO path, lane, Shell stamp path, digests.
+(Other Debloat opcodes as Plan emits.) Evidence: output ISO path, lane, Shell stamp path, digests.
 
 ## Invariants
 
@@ -56,7 +56,7 @@ public enum ServicingOpcode
 
 ## Typical stage order (Test)
 
-`MountInstallWim` → keep-flag removes? → `StampOfflinePolicies` → `StagePayload` → `StageOobeUnattend` → `StampOfflineShell` → `PatchBootWimApply` → `ExportWim` → `BuildIso`  
+`MountInstallWim` → Debloat removes? → `StampOfflinePolicies` → `StagePayload` → `StageOobeUnattend` → `StampOfflineShell` → `PatchBootWimApply` → `ExportWim` → `BuildIso`  
 WinPE apply lane only. Release differs in `ExportWim` compression/cleanup params.
 
 ## Outside / rejected
