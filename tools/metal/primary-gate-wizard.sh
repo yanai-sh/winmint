@@ -184,7 +184,7 @@ finish() {
 # Replace the example below. Set TOTAL_STAGES to match the stages you write.
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=10
+TOTAL_STAGES=9
 ENV_FILE="${ENV_FILE:-.scratch/primary-gate.env}"
 
 # Run this from the repo root, via Git Bash or WSL (not plain cmd.exe/pwsh).
@@ -236,12 +236,12 @@ else
   warn "couldn't find that path from the current directory — double-check before Gate B."
 fi
 
-# ── Stage 4: Gate B Release ─────────────────────────────────────────────────
-stage "Gate B Release"
-say "From the repo root, run Gate B on the Release lane (WORK defaults to"
-say "  .scratch/sl7-build):"
-step "just metal ISO=$SOURCE_ISO QUALITY=Release"
-note "This drives tools/metal/Invoke-MetalApply.ps1 and can take a while."
+# ── Stage 4: Gate B + wipe ISO (one Release + package-strict Apply) ─────────
+stage "Gate B + wipe ISO"
+say "From the repo root, run Primary once (Release + package-strict; WORK defaults to"
+say "  .scratch/sl7-build). Day-to-day metal stays Test and does not use --package-strict."
+step "just primary-gate ISO=$SOURCE_ISO"
+note "This drives tools/metal/Invoke-MetalApply.ps1 and can take a while — one build only."
 pause "Press Enter once that command has finished"
 if confirm "Does .scratch/sl7-build/metal-acceptance.json exist (Gate B green)?"; then
   printf '  %s✓%s Gate B acceptance evidence present\n' "$GREEN" "$RESET"
@@ -249,12 +249,6 @@ else
   warn "no Gate B evidence — do not proceed to a destructive install without it."
   exit 1
 fi
-
-# ── Stage 5: Wipe ISO build ─────────────────────────────────────────────────
-stage "Wipe ISO build"
-say "Build the Release-lane wipe ISO with strict curated packages:"
-step "dotnet run --project src/WinMint.Cli -- build samples/sl7.profile.json --iso $SOURCE_ISO --work .scratch/sl7-build --image-quality Release --package-strict"
-pause "Press Enter once that build has finished"
 WIPE_ISO=".scratch/sl7-build/out.iso"
 if [[ -f "$WIPE_ISO" ]]; then
   printf '  %s✓%s %s exists\n' "$GREEN" "$RESET" "$WIPE_ISO"
@@ -264,13 +258,13 @@ else
   exit 1
 fi
 
-# ── Stage 6: USB write ──────────────────────────────────────────────────────
+# ── Stage 5: USB write ──────────────────────────────────────────────────────
 stage "USB write"
 say "Flash $WIPE_ISO to a USB drive with whatever tool you normally use."
 note "No brand requirement here — any reliable ISO-to-USB flasher is fine."
 pause "Press Enter once the USB is flashed and ready"
 
-# ── Stage 7: Destructive install ────────────────────────────────────────────
+# ── Stage 6: Destructive install ────────────────────────────────────────────
 stage "Destructive install"
 warn "This step WIPES the primary Surface Laptop 7. It is irreversible."
 if ! confirm "Restore path confirmed AND you intend to wipe this PC now?"; then
@@ -282,7 +276,7 @@ if ! confirm "Apply completed and the machine rebooted into OOBE/FirstLogon?"; t
   warn "apply did not complete cleanly — investigate before calling this gate met."
 fi
 
-# ── Stage 8: FirstLogon watch ───────────────────────────────────────────────
+# ── Stage 7: FirstLogon watch ───────────────────────────────────────────────
 stage "FirstLogon watch"
 say "Watch FirstLogon on the SL7 and confirm each of these in order:"
 step "splash appears"
@@ -292,13 +286,13 @@ step "curated packages install under --package-strict: Cursor, Zen, WSL Fedora"
 step "Explorer unlock happens"
 pause "Press Enter once you've watched FirstLogon through to Explorer unlock"
 
-# ── Stage 9: Evidence copy-off ──────────────────────────────────────────────
+# ── Stage 8: Evidence copy-off ──────────────────────────────────────────────
 stage "Evidence copy-off"
 say "Copy %ProgramData%\\WinMint\\evidence\\ off the SL7 before doing anything else."
 ask EVIDENCE_DIR "Where did you copy the evidence to (path on this machine):"
 write_env EVIDENCE_DIR "$EVIDENCE_DIR"
 
-# ── Stage 10: Checklist assert ──────────────────────────────────────────────
+# ── Stage 9: Checklist assert ──────────────────────────────────────────────
 stage "Checklist assert"
 say "Eyeball packages.evidence.json in the copied evidence and confirm it shows"
 say "the curated packages (Cursor, Zen, WSL Fedora) green with no failures."

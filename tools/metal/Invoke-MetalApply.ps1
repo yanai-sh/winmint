@@ -30,6 +30,9 @@ param(
     [string] $ImageQuality = 'Test',
 
     [Parameter(ParameterSetName = 'Run')]
+    [switch] $PackageStrict,
+
+    [Parameter(ParameterSetName = 'Run')]
     [switch] $SkipApply,
 
     [Parameter(Mandatory, ParameterSetName = 'AssertOnly')]
@@ -121,9 +124,12 @@ if (-not $SkipApply) {
         $reuseArgs = @('--reuse-media')
     }
 
+    $strictArgs = @()
+    if ($PackageStrict) { $strictArgs = @('--package-strict') }
+
     Write-Host "Metal Apply Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality…"
     Write-Host 'Pre-wipe only: mutates offline WIM from Source ISO — does not install to this device.'
-    & dotnet run --project src/WinMint.Cli -- build $Profile --iso $Iso --work $Work --image-quality $ImageQuality --package-audit-strict @reuseArgs
+    & dotnet run --project src/WinMint.Cli -- build $Profile --iso $Iso --work $Work --image-quality $ImageQuality --package-audit-strict @strictArgs @reuseArgs
     if ($LASTEXITCODE -ne 0) { throw "Metal Apply failed: $LASTEXITCODE" }
 }
 

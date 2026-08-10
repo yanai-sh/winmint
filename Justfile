@@ -58,11 +58,16 @@ smoke-assert EVIDENCE:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'
 
 # S5 Metal — on-device Apply evidence (pre-wipe). No Hyper-V, no bare-metal install.
+# Test metal ≠ Primary. Wipe ISO: just primary-gate ISO=…
 # Full gate: just metal ISO=<source.iso>
 # Reuse prior Apply: pwsh tools/metal/Invoke-MetalApply.ps1 -Iso … -SkipApply
 # Assert only: just metal-assert .scratch/sl7-build
 metal ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="Test":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality '{{QUALITY}}'
+
+# Primary Gate B + wipe ISO: Release + package-strict. Not day-to-day metal.
+primary-gate ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality Release -PackageStrict -ExpectDrivers
 
 metal-assert WORK=".scratch/sl7-build":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -AssertOnly -WorkDirectory '{{WORK}}' -ExpectDrivers
