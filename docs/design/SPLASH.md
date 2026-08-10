@@ -23,4 +23,4 @@ Splash was Shell UI before Explorer. Warn if paint > 2.0 s; **fail** if Explorer
 
 ## Harness notes (cold)
 
-Prefer `efisys_noprompt.bin`; Pro generic setup key in unattend when needed; LabConfig if no vTPM; Hyper-V media ACL `NT VIRTUAL MACHINE\Virtual Machines:(R)`; Gen2 DVD attach; Autounattend at ISO root; ARM64 oscdimg UEFI-only bootdata.
+Prefer `efisys_noprompt.bin`; Pro generic setup key in unattend when needed; LabConfig if no vTPM; Hyper-V media ACL `NT VIRTUAL MACHINE\Virtual Machines:(R)`; Gen2 DVD attach; `OobeUnattend.xml` at ISO root (fallback) with primary copy to `Windows\Panther\unattend.xml` via StageOobeUnattend / LaunchApply; ARM64 oscdimg UEFI-only bootdata.

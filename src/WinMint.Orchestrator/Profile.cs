@@ -39,7 +39,7 @@ public sealed record AccountProfile(
     string Username,
     string? Password,
     /// <summary>
-    /// When true, Autounattend leaves the OOBE Network page visible (<c>HideWirelessSetupInOOBE=false</c>).
+    /// When true, OobeUnattend leaves the OOBE Network page visible (<c>HideWirelessSetupInOOBE=false</c>).
     /// Local account + <c>HideOnlineAccountScreens</c> still come from the ISO. Default true (metal);
     /// Smoke Profiles set false for headless Hyper‑V.
     /// </summary>
