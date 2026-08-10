@@ -10,7 +10,7 @@ public class BrowserPolicyPlanTests
     {
         Profile profile = Lab();
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
 
         ServicingStage policies = Assert.Single(
@@ -46,7 +46,7 @@ public class BrowserPolicyPlanTests
     [Fact]
     public void Plan_brave_winget_adds_brave_debloat_rows()
     {
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(Lab(winget: ["Brave.Brave"]));
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(Lab(winget: ["Brave.Brave"]));
         Assert.True(result.IsOk);
         string specs = Assert.Single(
             result.Value.Stages.Stages,
@@ -58,7 +58,7 @@ public class BrowserPolicyPlanTests
     [Fact]
     public void Plan_doh_provider_emits_doh_job_with_resolved_params()
     {
-        Result<BuildArtifacts, PlanFailure> result =
+        Result<BuildArtifacts, Failure> result =
             BuildPlan.Plan(Lab(policies: new PoliciesProfile(DohProvider: "cloudflare")));
         Assert.True(result.IsOk);
         JobDescriptor job = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "doh.set");

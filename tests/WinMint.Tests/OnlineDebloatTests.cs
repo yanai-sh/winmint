@@ -43,7 +43,7 @@ public class OnlineDebloatPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
         BuildArtifacts artifacts = planned.Value;
 

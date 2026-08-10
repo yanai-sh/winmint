@@ -47,7 +47,7 @@ public class WizardPackagesTests
         Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
         Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(
             parsed.Value,
             new RunOptions { ImageArchitecture = "amd64" });
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
@@ -67,7 +67,7 @@ public class WizardPackagesTests
         string json = Encoding.UTF8.GetString(utf8);
         Assert.DoesNotContain("\"packages\"", json, StringComparison.Ordinal);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(BuildPlan.TryParseProfile(utf8).Value);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(BuildPlan.TryParseProfile(utf8).Value);
         Assert.True(planned.IsOk);
         Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == "stub");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
@@ -81,7 +81,7 @@ public class WizardPackagesTests
     {
         Profile profile = LabProfile(winget: ["jqlang.jq"], wingetNeedsReboot: ["Git.Git"]);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.False(planned.IsOk);
         Assert.Equal("packages.wingetNeedsReboot.unknown", planned.Error.Code);
     }
@@ -91,7 +91,7 @@ public class WizardPackagesTests
     {
         Profile profile = LabProfile(scoop: ["curl"], scoopNeedsReboot: ["7zip"]);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.False(planned.IsOk);
         Assert.Equal("packages.scoopNeedsReboot.unknown", planned.Error.Code);
     }

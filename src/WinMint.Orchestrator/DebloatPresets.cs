@@ -71,34 +71,34 @@ public static class DebloatPresets
         "SimpleTCP",
     ];
 
-    public static Result<DebloatExpansion, PlanFailure> TryExpand(string name)
+    public static Result<DebloatExpansion, Failure> TryExpand(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return Result.Fail<DebloatExpansion, PlanFailure>(
-                new PlanFailure("debloat.preset.unknown", "Preset name is required."));
+            return Result.Fail<DebloatExpansion, Failure>(
+                new Failure("debloat.preset.unknown", "Preset name is required."));
         }
 
         string key = name.Trim();
         if (string.Equals(key, Empty, StringComparison.OrdinalIgnoreCase))
         {
-            return Result.Ok<DebloatExpansion, PlanFailure>(DebloatExpansion.Empty);
+            return Result.Ok<DebloatExpansion, Failure>(DebloatExpansion.Empty);
         }
 
         if (string.Equals(key, Acceptance, StringComparison.OrdinalIgnoreCase))
         {
-            return Result.Ok<DebloatExpansion, PlanFailure>(
+            return Result.Ok<DebloatExpansion, Failure>(
                 new DebloatExpansion(AcceptanceAppx, AcceptanceCapabilities, AcceptanceFeatures));
         }
 
         if (string.Equals(key, Recommended, StringComparison.OrdinalIgnoreCase))
         {
-            return Result.Ok<DebloatExpansion, PlanFailure>(
+            return Result.Ok<DebloatExpansion, Failure>(
                 new DebloatExpansion(RecommendedAppx, RecommendedCapabilities, RecommendedFeatures));
         }
 
-        return Result.Fail<DebloatExpansion, PlanFailure>(
-            new PlanFailure("debloat.preset.unknown", $"Unknown debloat preset '{key}'."));
+        return Result.Fail<DebloatExpansion, Failure>(
+            new Failure("debloat.preset.unknown", $"Unknown debloat preset '{key}'."));
     }
 }
 

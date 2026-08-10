@@ -49,7 +49,7 @@ internal static class WizardBuild
             OutputIsoPath = string.IsNullOrWhiteSpace(input.OutputIsoPath) ? null : input.OutputIsoPath.Trim(),
         };
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value, runOptions);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value, runOptions);
         if (!planned.IsOk)
         {
             return WizardBuildResult.Fail(planned.Error.Code, planned.Error.Message);
@@ -72,7 +72,7 @@ internal static class WizardBuild
             ReuseMedia: input.ReuseMedia);
 
         IElevatedPlanRunner effective = runner ?? new PwshElevatedPlanRunner();
-        Result<ImageEvidence, ServicingFailure> applied =
+        Result<ImageEvidence, Failure> applied =
             ImageServicing.Apply(planned.Value, run, effective, cancellationToken);
 
         if (!applied.IsOk)

@@ -28,7 +28,7 @@ public class SourceWimProbeTests
     [Fact]
     public void TryProbeIso_missing_path_fails_closed()
     {
-        Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> result =
+        Result<IReadOnlyList<WimIndexInfo>, Failure> result =
             SourceWimProbe.TryProbeIso(
                 @"C:\winmint-missing-" + Guid.NewGuid().ToString("N") + ".iso",
                 cancellationToken: TestContext.Current.CancellationToken);
@@ -45,12 +45,12 @@ public class SourceWimProbeTests
             new(1, "Windows 11 Home", "ARM64", "Core", "10.0.26100.1", "26100"),
             new(3, "Windows 11 Pro", "ARM64", "Professional", "10.0.26100.1", "26100"),
         ];
-        IWimIndexSource fake = new FixedWimIndexSource(Result.Ok<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(rows));
+        IWimIndexSource fake = new FixedWimIndexSource(Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(rows));
         string tempIso = Path.Combine(Path.GetTempPath(), "winmint-fake-" + Guid.NewGuid().ToString("N") + ".iso");
         File.WriteAllBytes(tempIso, [0]);
         try
         {
-            Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> result =
+            Result<IReadOnlyList<WimIndexInfo>, Failure> result =
                 SourceWimProbe.TryProbeIso(tempIso, fake, TestContext.Current.CancellationToken);
 
             Assert.True(result.IsOk);
@@ -71,7 +71,7 @@ public class SourceWimProbeTests
     public void ListFromGoldenText_via_WimMetadata_returns_ordered_rows()
     {
         string json = RunListFromText(MultiEditionGolden);
-        Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> parsed = SourceWimProbe.ParseListJson(json);
+        Result<IReadOnlyList<WimIndexInfo>, Failure> parsed = SourceWimProbe.ParseListJson(json);
 
         Assert.True(parsed.IsOk, parsed.IsOk ? null : $"{parsed.Error.Code}: {parsed.Error.Message}");
         Assert.Equal(2, parsed.Value.Count);
@@ -103,7 +103,7 @@ public class SourceWimProbeTests
     [Fact]
     public void ParseListJson_empty_indexes_fails()
     {
-        Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> parsed =
+        Result<IReadOnlyList<WimIndexInfo>, Failure> parsed =
             SourceWimProbe.ParseListJson("""{"indexes":[]}""");
         Assert.False(parsed.IsOk);
         Assert.Equal("wim.probe.empty", parsed.Error.Code);
@@ -116,7 +116,7 @@ public class SourceWimProbeTests
     public void ParseListJson_refuses_undefined_Name(string name)
     {
         string json = $$"""{"indexes":[{"index":1,"name":"{{name}}","architecture":"ARM64"}]}""";
-        Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> parsed = SourceWimProbe.ParseListJson(json);
+        Result<IReadOnlyList<WimIndexInfo>, Failure> parsed = SourceWimProbe.ParseListJson(json);
         Assert.False(parsed.IsOk);
         Assert.Equal("wim.probe.incompleteName", parsed.Error.Code);
     }
@@ -127,11 +127,11 @@ public class SourceWimProbeTests
         string tempIso = Path.Combine(Path.GetTempPath(), "winmint-bad-" + Guid.NewGuid().ToString("N") + ".iso");
         File.WriteAllBytes(tempIso, [0]);
         IWimIndexSource fake = new FixedWimIndexSource(
-            Result.Fail<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(
-                new WimProbeFailure("wim.probe.unreadable", "ISO mounted but no drive letter")));
+            Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.unreadable", "ISO mounted but no drive letter")));
         try
         {
-            Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> result =
+            Result<IReadOnlyList<WimIndexInfo>, Failure> result =
                 SourceWimProbe.TryProbeIso(tempIso, fake, TestContext.Current.CancellationToken);
             Assert.False(result.IsOk);
             Assert.Equal("wim.probe.unreadable", result.Error.Code);
@@ -221,9 +221,9 @@ public class SourceWimProbeTests
 
     private sealed record ProcessResult(int ExitCode, string Stdout, string Stderr);
 
-    private sealed class FixedWimIndexSource(Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> result) : IWimIndexSource
+    private sealed class FixedWimIndexSource(Result<IReadOnlyList<WimIndexInfo>, Failure> result) : IWimIndexSource
     {
-        public Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> ListFromIso(
+        public Result<IReadOnlyList<WimIndexInfo>, Failure> ListFromIso(
             string isoPath,
             CancellationToken cancellationToken = default) => result;
     }

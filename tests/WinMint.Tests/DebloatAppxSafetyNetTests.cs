@@ -98,7 +98,7 @@ public class DebloatAppxSafetyNetTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         JobDescriptor safety = Assert.Single(
             planned.Value.Jobs.Jobs,
@@ -137,7 +137,7 @@ public class DebloatAppxSafetyNetTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
         Assert.Contains(
             planned.Value.Stages.Stages,
@@ -168,7 +168,7 @@ public class DebloatAppxSafetyNetTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
         JobDescriptor safety = Assert.Single(
             planned.Value.Jobs.Jobs,

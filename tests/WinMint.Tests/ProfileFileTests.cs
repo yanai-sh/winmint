@@ -131,7 +131,7 @@ public class ProfileFileTests
         Assert.True(loaded.IsOk, Format(loaded));
         Assert.Equal("", loaded.Value.Account.Password);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(loaded.Value);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(loaded.Value);
         Assert.False(planned.IsOk);
         Assert.Equal("account.password.required", planned.Error.Code);
     }

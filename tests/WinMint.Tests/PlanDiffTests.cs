@@ -9,7 +9,7 @@ public class PlanDiffTests
     public void Format_online_appx_removals_are_after_sign_in_with_safety_net()
     {
         Profile profile = Lab();
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
 
         string text = PlanDiff.Format(planned.Value, profile);
@@ -27,7 +27,7 @@ public class PlanDiffTests
     public void Format_offline_appx_removals_are_during_image_build()
     {
         Profile profile = Lab() with { DebloatMode = DebloatMode.Offline };
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
 
         string text = PlanDiff.Format(planned.Value, profile);
@@ -44,7 +44,7 @@ public class PlanDiffTests
     public void Format_expands_winget_import_and_marks_constants()
     {
         Profile profile = Lab() with { WingetPackages = ["Anysphere.Cursor"] };
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
 
         string text = PlanDiff.Format(planned.Value, profile);

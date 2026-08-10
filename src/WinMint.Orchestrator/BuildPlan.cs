@@ -265,18 +265,18 @@ public static class BuildPlan
         return JsonSerializer.SerializeToUtf8Bytes(doc, BuildPlanJsonContext.Default.ProfileDocument);
     }
 
-    private static PlanFailure? ValidateDrivers(DriversProfile drivers, RunOptions options)
+    private static Failure? ValidateDrivers(DriversProfile drivers, RunOptions options)
     {
         if (!string.Equals(drivers.Source, SurfaceDriverCatalog.SourceSurfaceCatalog, StringComparison.OrdinalIgnoreCase))
         {
-            return new PlanFailure(
+            return new Failure(
                 "drivers.source.unsupported",
                 $"drivers.source '{drivers.Source}' is unsupported (only '{SurfaceDriverCatalog.SourceSurfaceCatalog}' in this vertical).");
         }
 
         if (!SurfaceDriverCatalog.TryGet(drivers.DeviceId, out SurfaceDriverDevice? device) || device is null)
         {
-            return new PlanFailure(
+            return new Failure(
                 "drivers.deviceId.unknown",
                 $"drivers.deviceId '{drivers.DeviceId}' is not in the Surface driver catalog.");
         }
@@ -286,7 +286,7 @@ public static class BuildPlan
             string imageArch = SurfaceDriverCatalog.NormalizeArchitecture(options.ImageArchitecture);
             if (!string.Equals(imageArch, device.Architecture, StringComparison.OrdinalIgnoreCase))
             {
-                return new PlanFailure(
+                return new Failure(
                     "drivers.architecture.mismatch",
                     $"drivers.deviceId '{device.Id}' targets {device.Architecture}, but the image architecture is {options.ImageArchitecture}.");
             }
@@ -294,7 +294,7 @@ public static class BuildPlan
 
         if (options.WindowsBuild is int build && build < device.MinimumWindowsBuild)
         {
-            return new PlanFailure(
+            return new Failure(
                 "drivers.windowsBuild.tooLow",
                 $"drivers.deviceId '{device.Id}' requires Windows build {device.MinimumWindowsBuild} or later; source build is {build}.");
         }
@@ -316,7 +316,7 @@ public static class BuildPlan
             .ToArray();
     }
 
-    private static PlanFailure? ValidateNeedsRebootSubset(
+    private static Failure? ValidateNeedsRebootSubset(
         IReadOnlyList<string> packages,
         IReadOnlyList<string> needsReboot,
         string code,
@@ -328,7 +328,7 @@ public static class BuildPlan
         {
             if (!set.Contains(id))
             {
-                return new PlanFailure(
+                return new Failure(
                     code,
                     $"{needsName} id '{id}' is not in {packagesName}.");
             }
@@ -443,7 +443,7 @@ public static class BuildPlan
     private static readonly JsonSerializerOptions DumpJsonOptions = new() { WriteIndented = true };
 
     /// <summary>
-    /// Host-facing plan honesty (Cli + Wizard). Warns when FirstLogon needs network; never a PlanFailure.
+    /// Host-facing plan honesty (Cli + Wizard). Warns when FirstLogon needs network; never a Failure.
     /// </summary>
     public static string FormatPlanHonesty(BuildManifest manifest, bool requireWifiDuringOobe)
     {
@@ -462,14 +462,14 @@ public static class BuildPlan
             + "Warning: FirstLogon needs outbound network (packages and/or online AppX removes).";
     }
 
-    public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null)
+    public static Result<BuildArtifacts, Failure> Plan(Profile profile, RunOptions? run = null)
     {
         RunOptions options = run ?? new RunOptions();
 
         if (string.IsNullOrEmpty(profile.Account.Password))
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(
-                new PlanFailure("account.password.required", "Local autoLogon requires a non-empty password."));
+            return Result.Fail<BuildArtifacts, Failure>(
+                new Failure("account.password.required", "Local autoLogon requires a non-empty password."));
         }
 
         IReadOnlyList<string> appx = ProductPosture.UnionAppx(profile.RemoveProvisionedAppx);
@@ -477,8 +477,8 @@ public static class BuildPlan
         {
             if (!ProvisionedAppxCatalog.Ids.Contains(id))
             {
-                return Result.Fail<BuildArtifacts, PlanFailure>(
-                    new PlanFailure(
+                return Result.Fail<BuildArtifacts, Failure>(
+                    new Failure(
                         "debloat.removeProvisionedAppx.unknown",
                         $"removeProvisionedAppx id '{id}' is not in the shipped provisioned AppX catalog."));
             }
@@ -488,8 +488,8 @@ public static class BuildPlan
         {
             if (!CapabilityCatalog.Ids.Contains(id))
             {
-                return Result.Fail<BuildArtifacts, PlanFailure>(
-                    new PlanFailure(
+                return Result.Fail<BuildArtifacts, Failure>(
+                    new Failure(
                         "debloat.removeCapabilities.unknown",
                         $"removeCapabilities id '{id}' is not in the shipped capability catalog."));
             }
@@ -499,14 +499,14 @@ public static class BuildPlan
         {
             if (!OptionalFeatureCatalog.Ids.Contains(id))
             {
-                return Result.Fail<BuildArtifacts, PlanFailure>(
-                    new PlanFailure(
+                return Result.Fail<BuildArtifacts, Failure>(
+                    new Failure(
                         "debloat.disableOptionalFeatures.unknown",
                         $"disableOptionalFeatures id '{id}' is not in the shipped optional-feature catalog."));
             }
         }
 
-        PlanFailure? needsRebootFail = ValidateNeedsRebootSubset(
+        Failure? needsRebootFail = ValidateNeedsRebootSubset(
             profile.WingetPackages,
             profile.WingetNeedsReboot,
             "packages.wingetNeedsReboot.unknown",
@@ -514,7 +514,7 @@ public static class BuildPlan
             "packages.winget");
         if (needsRebootFail is not null)
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(needsRebootFail);
+            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail);
         }
 
         needsRebootFail = ValidateNeedsRebootSubset(
@@ -525,7 +525,7 @@ public static class BuildPlan
             "packages.scoop");
         if (needsRebootFail is not null)
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(needsRebootFail);
+            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail);
         }
 
         needsRebootFail = ValidateNeedsRebootSubset(
@@ -536,15 +536,15 @@ public static class BuildPlan
             "packages.wsl");
         if (needsRebootFail is not null)
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(needsRebootFail);
+            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail);
         }
 
         if (profile.Drivers is not null)
         {
-            PlanFailure? driverFail = ValidateDrivers(profile.Drivers, options);
+            Failure? driverFail = ValidateDrivers(profile.Drivers, options);
             if (driverFail is not null)
             {
-                return Result.Fail<BuildArtifacts, PlanFailure>(driverFail);
+                return Result.Fail<BuildArtifacts, Failure>(driverFail);
             }
         }
 
@@ -555,10 +555,10 @@ public static class BuildPlan
         IReadOnlyList<string> wingetAuditTargets = catalog.ValidateProfilePackages(
             profile,
             imageArchitecture,
-            out PlanFailure? catalogFail);
+            out Failure? catalogFail);
         if (catalogFail is not null)
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(catalogFail);
+            return Result.Fail<BuildArtifacts, Failure>(catalogFail);
         }
 
         byte[]? wingetImportJson = null;
@@ -583,8 +583,8 @@ public static class BuildPlan
         PoliciesProfile policies = profile.EffectivePolicies;
         if (!ProductPosture.TryNormalizeDohProvider(policies.DohProvider, out string? dohProvider, out string? dohPlanError))
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(
-                new PlanFailure("policies.dohProvider.unsupported", dohPlanError!));
+            return Result.Fail<BuildArtifacts, Failure>(
+                new Failure("policies.dohProvider.unsupported", dohPlanError!));
         }
 
         // Product-constant FirstLogon jobs (ADR-009) + keep-flag safety net when remove-list non-empty.
@@ -603,8 +603,8 @@ public static class BuildPlan
             DohProviderSpec? doh = ProductPosture.ResolveDoh(dohProvider);
             if (doh is null)
             {
-                return Result.Fail<BuildArtifacts, PlanFailure>(
-                    new PlanFailure(
+                return Result.Fail<BuildArtifacts, Failure>(
+                    new Failure(
                         "policies.dohProvider.unsupported",
                         $"policies.dohProvider '{dohProvider}' is unsupported (use cloudflare, google, or quad9)."));
             }
@@ -817,7 +817,7 @@ public static class BuildPlan
             wingetImportJson,
             options.PackageStrict);
 
-        return Result.Ok<BuildArtifacts, PlanFailure>(artifacts);
+        return Result.Ok<BuildArtifacts, Failure>(artifacts);
     }
 
     /// <summary>OOBE-phase unattend (specialize + oobeSystem) for WinPE apply — no windowsPE disk/ImageInstall.</summary>

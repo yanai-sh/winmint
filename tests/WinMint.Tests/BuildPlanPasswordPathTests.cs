@@ -63,7 +63,7 @@ public class BuildPlanPasswordPathTests
         Profile profile = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(
             MinimalProfile(passwordPath: @"C:\never\reads\this.txt"))).Value;
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
 
         Assert.False(planned.IsOk);
         Assert.Equal("account.password.required", planned.Error.Code);

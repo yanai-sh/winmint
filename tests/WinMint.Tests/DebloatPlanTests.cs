@@ -11,7 +11,7 @@ public class DebloatPlanTests
     {
         Profile profile = Parse(MinimalProfileJson());
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         Assert.DoesNotContain(
@@ -25,7 +25,7 @@ public class DebloatPlanTests
     {
         Profile profile = Parse(MinimalProfileJson(includeDebloat: false));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         Assert.DoesNotContain(
@@ -38,7 +38,7 @@ public class DebloatPlanTests
     {
         Profile profile = Parse(MinimalProfileJson(removeIds: ["NotAReal.Package.Family"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("debloat.removeProvisionedAppx.unknown", result.Error.Code);
@@ -54,7 +54,7 @@ public class DebloatPlanTests
             "Microsoft.GamingApp",
         ], debloatMode: "offline"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
         ServicingStage remove = Assert.Single(

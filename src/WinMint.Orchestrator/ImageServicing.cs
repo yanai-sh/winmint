@@ -29,13 +29,13 @@ public static class ImageServicing
     /// MountInstallWim exports this index to a single-image WIM before mount (IMAGESERVICING invariant 8).</summary>
     public const int DefaultProWimIndex = 3;
 
-    public static Result<ImageEvidence, ServicingFailure> Apply(
+    public static Result<ImageEvidence, Failure> Apply(
         BuildArtifacts plan,
         ServicingRun run,
         CancellationToken ct = default) =>
         Apply(plan, run, new PwshElevatedPlanRunner(), ct);
 
-    public static Result<ImageEvidence, ServicingFailure> Apply(
+    public static Result<ImageEvidence, Failure> Apply(
         BuildArtifacts plan,
         ServicingRun run,
         IElevatedPlanRunner runner,
@@ -47,22 +47,22 @@ public static class ImageServicing
 
         if (string.IsNullOrWhiteSpace(run.WorkDirectory))
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure("servicing.workdir.missing", "WorkDirectory is required."));
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.workdir.missing", "WorkDirectory is required."));
         }
 
         if (PwshHostGuard.IsStoreMsixPwsh(PwshHostGuard.CurrentProcessPath()))
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure(
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
                     "servicing.pwsh.storeMsix",
                     "Host PowerShell is Microsoft Store MSIX; DISM/AppX offline servicing requires WinPS 5.1 or non-Store pwsh (install from GitHub)."));
         }
 
         if (string.IsNullOrWhiteSpace(run.SourceIsoPath) || !File.Exists(run.SourceIsoPath))
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure("servicing.sourceIso.missing", $"Source ISO not found: {run.SourceIsoPath}"));
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.sourceIso.missing", $"Source ISO not found: {run.SourceIsoPath}"));
         }
 
         Directory.CreateDirectory(run.WorkDirectory);
@@ -70,18 +70,18 @@ public static class ImageServicing
         Directory.CreateDirectory(Path.Combine(run.WorkDirectory, "payload"));
         Directory.CreateDirectory(HostServicingRoot);
 
-        Result<List<ServicingStage>, ServicingFailure> materialized = Materialize(plan, run);
+        Result<List<ServicingStage>, Failure> materialized = Materialize(plan, run);
         if (!materialized.IsOk)
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(materialized.Error);
+            return Result.Fail<ImageEvidence, Failure>(materialized.Error);
         }
 
         if (ValidateExportLaneParams(plan, materialized.Value) is { } laneError)
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(laneError);
+            return Result.Fail<ImageEvidence, Failure>(laneError);
         }
 
-        Result<ImageEvidence, ServicingFailure> outcome = runner.Execute(
+        Result<ImageEvidence, Failure> outcome = runner.Execute(
             run.WorkDirectory,
             materialized.Value,
             run,
@@ -94,14 +94,14 @@ public static class ImageServicing
     /// <summary>
     /// Ticket 09: ExportWim compression/cleanup must match manifest lane (Test vs Release).
     /// </summary>
-    private static ServicingFailure? ValidateExportLaneParams(
+    private static Failure? ValidateExportLaneParams(
         BuildArtifacts plan,
         IReadOnlyList<ServicingStage> stages)
     {
         ServicingStage? export = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.ExportWim);
         if (export is null)
         {
-            return new ServicingFailure("servicing.export.missing", "Plan is missing ExportWim stage.");
+            return new Failure("servicing.export.missing", "Plan is missing ExportWim stage.");
         }
 
         string expectedLane;
@@ -127,7 +127,7 @@ public static class ImageServicing
             || !string.Equals(compression, expectedCompression, StringComparison.Ordinal)
             || !string.Equals(cleanup, expectedCleanup, StringComparison.Ordinal))
         {
-            return new ServicingFailure(
+            return new Failure(
                 "servicing.export.lane_mismatch",
                 $"ExportWim params must be lane={expectedLane} compression={expectedCompression} cleanup={expectedCleanup} for ImageQuality={plan.Manifest.ImageQuality}.");
         }
@@ -135,7 +135,7 @@ public static class ImageServicing
         return null;
     }
 
-    private static Result<List<ServicingStage>, ServicingFailure> Materialize(BuildArtifacts plan, ServicingRun run)
+    private static Result<List<ServicingStage>, Failure> Materialize(BuildArtifacts plan, ServicingRun run)
     {
         string payloadDir = Path.Combine(run.WorkDirectory, "payload");
         string mediaDir = Path.Combine(run.WorkDirectory, "media");
@@ -178,16 +178,16 @@ public static class ImageServicing
             Path.Combine(payloadDir, "bundle.json"),
             JsonSerializer.SerializeToUtf8Bytes(bundle, ServicingJsonContext.Default.BundleFile));
 
-        Result<string, ServicingFailure> setupComplete = StageSetupCompleteScript(payloadDir);
+        Result<string, Failure> setupComplete = StageSetupCompleteScript(payloadDir);
         if (!setupComplete.IsOk)
         {
-            return Result.Fail<List<ServicingStage>, ServicingFailure>(setupComplete.Error);
+            return Result.Fail<List<ServicingStage>, Failure>(setupComplete.Error);
         }
 
-        Result<string, ServicingFailure> supervisor = StageSupervisorBinary(payloadDir);
+        Result<string, Failure> supervisor = StageSupervisorBinary(payloadDir);
         if (!supervisor.IsOk)
         {
-            return Result.Fail<List<ServicingStage>, ServicingFailure>(supervisor.Error);
+            return Result.Fail<List<ServicingStage>, Failure>(supervisor.Error);
         }
 
         List<ServicingStage> resolved = new(plan.Stages.Stages.Count);
@@ -267,39 +267,39 @@ public static class ImageServicing
             Path.Combine(run.WorkDirectory, "stages.json"),
             BuildPlan.SerializeStagesDump(new ServicingStageList(resolved)));
 
-        return Result.Ok<List<ServicingStage>, ServicingFailure>(resolved);
+        return Result.Ok<List<ServicingStage>, Failure>(resolved);
     }
 
-    private static Result<string, ServicingFailure> StageSetupCompleteScript(string payloadDir)
+    private static Result<string, Failure> StageSetupCompleteScript(string payloadDir)
     {
         string dest = Path.Combine(payloadDir, "SetupComplete.cmd");
         string? source = FindSetupCompleteScript();
         if (source is null)
         {
-            return Result.Fail<string, ServicingFailure>(
-                new ServicingFailure(
+            return Result.Fail<string, Failure>(
+                new Failure(
                     "servicing.setupComplete.missing",
                     "payload/scripts/SetupComplete.cmd not found."));
         }
 
         File.Copy(source, dest, overwrite: true);
-        return Result.Ok<string, ServicingFailure>(dest);
+        return Result.Ok<string, Failure>(dest);
     }
 
-    private static Result<string, ServicingFailure> StageSupervisorBinary(string payloadDir)
+    private static Result<string, Failure> StageSupervisorBinary(string payloadDir)
     {
         string dest = Path.Combine(payloadDir, "Supervisor.exe");
         string? published = FindPublishedSupervisor();
         if (published is null)
         {
-            return Result.Fail<string, ServicingFailure>(
-                new ServicingFailure(
+            return Result.Fail<string, Failure>(
+                new Failure(
                     "servicing.supervisor.missing",
                     "Published Supervisor not found. Run: just publish-provisioning"));
         }
 
         File.Copy(published, dest, overwrite: true);
-        return Result.Ok<string, ServicingFailure>(dest);
+        return Result.Ok<string, Failure>(dest);
     }
 
     private static string? FindSetupCompleteScript()

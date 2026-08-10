@@ -34,7 +34,7 @@ public class WingetJobsTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "amd64", IncludeSmokeStubs = true });
 
@@ -74,7 +74,7 @@ public class WingetJobsTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
@@ -111,7 +111,7 @@ public class WingetJobsTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         JobDescriptor importJob = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
@@ -145,7 +145,7 @@ public class WingetJobsTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "amd64" });
 
@@ -183,7 +183,7 @@ public class WingetJobsTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("packages.wingetNeedsReboot.unknown", result.Error.Code);

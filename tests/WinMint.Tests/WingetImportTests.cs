@@ -9,7 +9,7 @@ public class WingetImportTests
     public void Plan_arm64_winget_emits_import_job_and_json_not_per_id_jobs()
     {
         Profile profile = LabProfile(winget: ["Anysphere.Cursor", "jqlang.jq"]);
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "arm64" });
 
@@ -24,7 +24,7 @@ public class WingetImportTests
     public void Plan_non_arm64_emits_individual_winget_jobs()
     {
         Profile profile = LabProfile(winget: ["Git.Git"]);
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "amd64" });
 

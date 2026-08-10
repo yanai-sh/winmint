@@ -6,7 +6,7 @@ public enum PackagePhase
     WingetImport,
 }
 
-public sealed record PlanFailure(string Code, string Message);
+public sealed record Failure(string Code, string Message);
 
 public sealed record RunOptions
 {

@@ -277,7 +277,7 @@ internal static class Program
             WimIndex: wimIndex,
             ReuseMedia: reuseMedia);
 
-        Result<ImageEvidence, ServicingFailure> applied = ImageServicing.Apply(artifacts!, servicingRun);
+        Result<ImageEvidence, Failure> applied = ImageServicing.Apply(artifacts!, servicingRun);
         if (!applied.IsOk)
         {
             Console.Error.WriteLine($"{applied.Error.Code}: {applied.Error.Message}");
@@ -358,7 +358,7 @@ internal static class Program
             return false;
         }
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value, run);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value, run);
         if (!planned.IsOk)
         {
             Console.Error.WriteLine($"{planned.Error.Code}: {planned.Error.Message}");

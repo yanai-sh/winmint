@@ -13,7 +13,7 @@ public class CapabilityPlanTests
     {
         Profile profile = Parse(MinimalJson(capabilities: ["Not.A.Real.Capability~~~~0.0.1.0"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("debloat.removeCapabilities.unknown", result.Error.Code);
@@ -24,7 +24,7 @@ public class CapabilityPlanTests
     {
         Profile profile = Parse(MinimalJson(features: ["NotARealFeature"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("debloat.disableOptionalFeatures.unknown", result.Error.Code);
@@ -37,7 +37,7 @@ public class CapabilityPlanTests
             capabilities: ["App.StepsRecorder~~~~0.0.1.0", "WMIC~~~~"],
             features: ["WorkFolders-Client"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
         ServicingStage caps = Assert.Single(
@@ -76,7 +76,7 @@ public class CapabilityPlanTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, ServicingFailure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
                 plan,
                 run,
                 runner,
@@ -185,7 +185,7 @@ public class CapabilityPlanTests
     private static BuildArtifacts PlanWith(string[] capabilities, string[] features)
     {
         Profile profile = Parse(MinimalJson(capabilities, features));
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         return planned.Value;
     }

@@ -9,7 +9,7 @@ public class DebloatPresetTests
     [Fact]
     public void Expand_acceptance_returns_pinned_acceptance_ids()
     {
-        Result<DebloatExpansion, PlanFailure> result = DebloatPresets.TryExpand("acceptance");
+        Result<DebloatExpansion, Failure> result = DebloatPresets.TryExpand("acceptance");
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
         Assert.Equal(
@@ -24,7 +24,7 @@ public class DebloatPresetTests
     [Fact]
     public void Expand_empty_returns_no_ids()
     {
-        Result<DebloatExpansion, PlanFailure> result = DebloatPresets.TryExpand("empty");
+        Result<DebloatExpansion, Failure> result = DebloatPresets.TryExpand("empty");
 
         Assert.True(result.IsOk);
         Assert.Empty(result.Value.RemoveProvisionedAppx);
@@ -35,7 +35,7 @@ public class DebloatPresetTests
     [Fact]
     public void Expand_unknown_preset_fails()
     {
-        Result<DebloatExpansion, PlanFailure> result = DebloatPresets.TryExpand("not-a-preset");
+        Result<DebloatExpansion, Failure> result = DebloatPresets.TryExpand("not-a-preset");
 
         Assert.False(result.IsOk);
         Assert.Equal("debloat.preset.unknown", result.Error.Code);
@@ -45,7 +45,7 @@ public class DebloatPresetTests
     [Fact]
     public void Expand_recommended_returns_curated_ids()
     {
-        Result<DebloatExpansion, PlanFailure> result = DebloatPresets.TryExpand(DebloatPresets.Recommended);
+        Result<DebloatExpansion, Failure> result = DebloatPresets.TryExpand(DebloatPresets.Recommended);
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
         Assert.Equal(
@@ -95,7 +95,7 @@ public class DebloatPresetTests
     [Fact]
     public void Expand_recommended_leaves_product_required_appx_to_posture()
     {
-        Result<DebloatExpansion, PlanFailure> result =
+        Result<DebloatExpansion, Failure> result =
             DebloatPresets.TryExpand(DebloatPresets.Recommended);
 
         Assert.True(result.IsOk);
@@ -111,7 +111,7 @@ public class DebloatPresetTests
     [Fact]
     public void Compose_acceptance_preset_parses_and_plans()
     {
-        Result<DebloatExpansion, PlanFailure> expanded = DebloatPresets.TryExpand(DebloatPresets.Acceptance);
+        Result<DebloatExpansion, Failure> expanded = DebloatPresets.TryExpand(DebloatPresets.Acceptance);
         Assert.True(expanded.IsOk);
 
         Profile profile = new(
@@ -143,7 +143,7 @@ public class DebloatPresetTests
             parsed.Value.RemoveCapabilities);
         Assert.Equal(["WorkFolders-Client"], parsed.Value.DisableOptionalFeatures);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "appx.safetyNet");
         Assert.DoesNotContain(
@@ -160,7 +160,7 @@ public class DebloatPresetTests
     [Fact]
     public void Compose_recommended_serialize_has_no_preset_name()
     {
-        Result<DebloatExpansion, PlanFailure> expanded =
+        Result<DebloatExpansion, Failure> expanded =
             DebloatPresets.TryExpand(DebloatPresets.Recommended);
         Assert.True(expanded.IsOk);
 
@@ -182,14 +182,14 @@ public class DebloatPresetTests
         Assert.DoesNotContain("\"preset\"", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("recommended", json, StringComparison.OrdinalIgnoreCase);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
     }
 
     [Fact]
     public void Compose_empty_preset_plans_without_remove_stage()
     {
-        Result<DebloatExpansion, PlanFailure> expanded = DebloatPresets.TryExpand(DebloatPresets.Empty);
+        Result<DebloatExpansion, Failure> expanded = DebloatPresets.TryExpand(DebloatPresets.Empty);
         Assert.True(expanded.IsOk);
 
         Profile profile = new(
@@ -212,7 +212,7 @@ public class DebloatPresetTests
         Assert.True(parsed.IsOk);
         Assert.Empty(parsed.Value.RemoveProvisionedAppx);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk);
         Assert.DoesNotContain(
             planned.Value.Stages.Stages,
@@ -222,7 +222,7 @@ public class DebloatPresetTests
     [Fact]
     public void Acceptance_sample_profile_debloat_matches_DebloatPresets_Acceptance()
     {
-        Result<DebloatExpansion, PlanFailure> expanded = DebloatPresets.TryExpand(DebloatPresets.Acceptance);
+        Result<DebloatExpansion, Failure> expanded = DebloatPresets.TryExpand(DebloatPresets.Acceptance);
         Assert.True(expanded.IsOk, expanded.IsOk ? null : $"{expanded.Error.Code}: {expanded.Error.Message}");
 
         string samplePath = Path.Combine(FindRepoRoot(), "samples", "acceptance.profile.json");
@@ -241,7 +241,7 @@ public class DebloatPresetTests
     [Fact]
     public void Sl7_sample_matches_recommended_and_plans_packages()
     {
-        Result<DebloatExpansion, PlanFailure> expanded =
+        Result<DebloatExpansion, Failure> expanded =
             DebloatPresets.TryExpand(DebloatPresets.Recommended);
         Assert.True(expanded.IsOk);
 
@@ -275,7 +275,7 @@ public class DebloatPresetTests
             ProductPosture.MergeWinget(parsed.Value.WingetPackages));
         Assert.Equal(["FedoraLinux"], parsed.Value.WslDistros);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "winget.import");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "wsl");

@@ -10,7 +10,7 @@ public class WinPeApplyPlanTests
     public void Plan_emits_oobe_unattend_stages_without_windowsPE()
     {
         Profile profile = ParseProfile();
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
@@ -37,7 +37,7 @@ public class WinPeApplyPlanTests
     public void Apply_materializes_winpe_opcode_params()
     {
         Profile profile = ParseProfile();
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
 
         string work = NewTempDir();
@@ -51,7 +51,7 @@ public class WinPeApplyPlanTests
                 WimIndex: 3);
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, ServicingFailure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
                 planned.Value,
                 run,
                 runner,
@@ -121,7 +121,7 @@ public class WinPeApplyPlanTests
     [Fact]
     public void Plan_emits_winpe_stages_only()
     {
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(ParseProfile());
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(ParseProfile());
         Assert.True(result.IsOk);
         Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.StageOobeUnattend);
         Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.PatchBootWimApply);

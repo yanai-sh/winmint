@@ -13,7 +13,7 @@ public class ScoopJobsTests
     {
         Profile profile = Parse(MinimalJson(scoop: ["curl", "komorebi"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "scoop.batch");
@@ -29,7 +29,7 @@ public class ScoopJobsTests
     {
         Profile profile = Parse(MinimalJson(scoop: ["curl"], scoopNeedsReboot: ["curl"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "scoop.batch");
@@ -41,7 +41,7 @@ public class ScoopJobsTests
     {
         Profile profile = Parse(MinimalJson(scoop: ["curl"], scoopNeedsReboot: ["jq"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("packages.scoopNeedsReboot.unknown", result.Error.Code);

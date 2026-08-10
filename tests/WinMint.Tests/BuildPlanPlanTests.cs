@@ -27,7 +27,7 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("account.password.required", result.Error.Code);
@@ -56,7 +56,7 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
@@ -101,7 +101,7 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
@@ -133,7 +133,7 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
@@ -189,7 +189,7 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { IncludeSmokeStubs = true });
 
@@ -221,7 +221,7 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageQuality = ImageQualityLane.Release });
 

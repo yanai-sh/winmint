@@ -53,7 +53,7 @@ public class ProductPostureTests
     {
         Profile profile = Lab();
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
 
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         string specs = Assert.Single(
@@ -67,7 +67,7 @@ public class ProductPostureTests
     public void Plan_empty_winget_still_emits_mingit_and_nilesoft_import_on_arm64()
     {
         Profile profile = Lab(winget: []);
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "arm64" });
 

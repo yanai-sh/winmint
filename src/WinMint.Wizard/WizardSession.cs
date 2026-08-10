@@ -9,7 +9,7 @@ internal static class WizardSession
 {
     public static WizardSessionResult ComposeAndPlan(WizardSessionInput input)
     {
-        Result<DebloatExpansion, PlanFailure> expanded = DebloatPresets.TryExpand(input.Preset);
+        Result<DebloatExpansion, Failure> expanded = DebloatPresets.TryExpand(input.Preset);
         if (!expanded.IsOk)
         {
             return WizardSessionResult.Fail($"{expanded.Error.Code}: {expanded.Error.Message}");
@@ -76,7 +76,7 @@ internal static class WizardSession
             ImageArchitecture = PackageCatalog.DefaultImageArchitecture,
         };
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile, run);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile, run);
         if (!planned.IsOk)
         {
             return WizardSessionResult.Fail($"{planned.Error.Code}: {planned.Error.Message}");

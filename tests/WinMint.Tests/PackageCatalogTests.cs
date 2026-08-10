@@ -32,7 +32,7 @@ public class PackageCatalogTests
     public void Plan_fails_closed_on_unknown_winget_id()
     {
         Profile profile = LabProfile(winget: ["Not.In.Catalog"]);
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
         Assert.False(result.IsOk);
         Assert.Equal("packages.catalog.unknown", result.Error.Code);
     }
@@ -41,7 +41,7 @@ public class PackageCatalogTests
     public void Plan_emits_winget_arch_arm64_on_arm64_image()
     {
         Profile profile = LabProfile(winget: ["Anysphere.Cursor"]);
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "arm64" });
         Assert.True(result.IsOk);
@@ -83,7 +83,7 @@ public class PackageCatalogTests
     {
         Profile profile = LabProfile(winget: ["Anysphere.Cursor", "Zen-Team.Zen-Browser"]);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "arm64", PackageAuditStrict = true });
         Assert.True(result.IsOk);

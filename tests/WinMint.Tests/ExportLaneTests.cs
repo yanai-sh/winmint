@@ -21,7 +21,7 @@ public class ExportLaneTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, ServicingFailure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
                 plan,
                 run,
                 runner,
@@ -74,7 +74,7 @@ public class ExportLaneTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, ServicingFailure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
                 corrupted,
                 run,
                 runner,
@@ -112,7 +112,7 @@ public class ExportLaneTests
             }
             """));
         Assert.True(parsed.IsOk);
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(
             parsed.Value,
             new RunOptions { ImageQuality = lane });
         Assert.True(planned.IsOk);

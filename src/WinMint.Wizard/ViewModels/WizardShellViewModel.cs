@@ -561,7 +561,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
         IsWimProbeBusy = true;
         string path = SourceIsoPath.Trim();
         IWimIndexSource? source = _wimIndexSource;
-        Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> result = await Task.Run(
+        Result<IReadOnlyList<WimIndexInfo>, Failure> result = await Task.Run(
                 () => SourceWimProbe.TryProbeIso(path, source, ct), ct)
             .ConfigureAwait(true);
 
@@ -653,7 +653,7 @@ public sealed partial class WizardShellViewModel : ObservableObject, IDisposable
             return;
         }
 
-        Result<DebloatExpansion, PlanFailure> expanded = DebloatPresets.TryExpand(Preset);
+        Result<DebloatExpansion, Failure> expanded = DebloatPresets.TryExpand(Preset);
         if (!expanded.IsOk)
         {
             return;

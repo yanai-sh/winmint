@@ -9,7 +9,7 @@ internal static class ImageServicingTestFakes
         public List<ServicingStage> Stages { get; } = [];
         public IEnumerable<ServicingOpcode> Opcodes => Stages.Select(s => s.Opcode);
 
-        public Result<ImageEvidence, ServicingFailure> Execute(
+        public Result<ImageEvidence, Failure> Execute(
             string workDirectory,
             IReadOnlyList<ServicingStage> stages,
             ServicingRun run,
@@ -22,13 +22,13 @@ internal static class ImageServicingTestFakes
                 || !stamp.Parameters.TryGetValue(StageParams.ShellTarget, out string? shellTarget)
                 || string.IsNullOrWhiteSpace(shellTarget))
             {
-                return Result.Fail<ImageEvidence, ServicingFailure>(
-                    new ServicingFailure(
+                return Result.Fail<ImageEvidence, Failure>(
+                    new Failure(
                         "servicing.shellStamp.missing",
                         "StampOfflineShell stage missing or incomplete."));
             }
 
-            return Result.Ok<ImageEvidence, ServicingFailure>(
+            return Result.Ok<ImageEvidence, Failure>(
                 new ImageEvidence(
                     run.OutputIsoPath ?? Path.Combine(workDirectory, "out.iso"),
                     plan.Manifest.ImageQuality,
@@ -39,7 +39,7 @@ internal static class ImageServicingTestFakes
 
     internal sealed class FailingElevatedPlanRunner : IElevatedPlanRunner
     {
-        public Result<ImageEvidence, ServicingFailure> Execute(
+        public Result<ImageEvidence, Failure> Execute(
             string workDirectory,
             IReadOnlyList<ServicingStage> stages,
             ServicingRun run,
@@ -50,8 +50,8 @@ internal static class ImageServicingTestFakes
             File.WriteAllText(
                 Path.Combine(workDirectory, "failure.json"),
                 """{"schemaVersion":"winmint.image.evidence/v1","failed":true}""");
-            return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure("servicing.stage.failed", "StageOobeUnattend failed (test)."));
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.stage.failed", "StageOobeUnattend failed (test)."));
         }
     }
 }

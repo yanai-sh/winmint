@@ -11,7 +11,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson());
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         Assert.DoesNotContain(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.InjectDrivers);
@@ -22,7 +22,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "not-a-real-device"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("drivers.deviceId.unknown", result.Error.Code);
@@ -33,7 +33,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-pro-11-snapdragon"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("drivers.deviceId.unknown", result.Error.Code);
@@ -44,7 +44,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(source: "customMsi", deviceId: "surface-laptop-7"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("drivers.source.unsupported", result.Error.Code);
@@ -55,7 +55,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-laptop-7"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
         ServicingStage inject = Assert.Single(
@@ -80,7 +80,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-laptop-7"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "amd64" });
 
@@ -93,7 +93,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-laptop-7"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { WindowsBuild = 22631 });
 
@@ -106,7 +106,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-laptop-7"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         ServicingStage policies = Assert.Single(
@@ -120,7 +120,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson());
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         ServicingStage policies = Assert.Single(

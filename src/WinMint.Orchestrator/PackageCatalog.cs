@@ -196,7 +196,7 @@ public sealed class PackageCatalog
     public IReadOnlyList<string> ValidateProfilePackages(
         Profile profile,
         string imageArchitecture,
-        out PlanFailure? failure)
+        out Failure? failure)
     {
         failure = null;
         string imageArch = NormalizeArch(imageArchitecture);
@@ -209,7 +209,7 @@ public sealed class PackageCatalog
                 || !string.Equals(tool.Source, "winget", StringComparison.OrdinalIgnoreCase)
                     && !string.Equals(tool.Source, "store", StringComparison.OrdinalIgnoreCase))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unknown",
                     $"packages.winget id '{installId}' is not in the shipped package catalog.");
                 return [];
@@ -218,7 +218,7 @@ public sealed class PackageCatalog
             if (imageArch == "arm64"
                 && !tool.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unsupportedArch",
                     $"{tool.DisplayName} ({installId}) does not support arm64 in the package catalog.");
                 return [];
@@ -232,7 +232,7 @@ public sealed class PackageCatalog
             if (!_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
                 || !string.Equals(tool.Source, "scoop", StringComparison.OrdinalIgnoreCase))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unknown",
                     $"packages.scoop id '{installId}' is not in the shipped package catalog.");
                 return [];
@@ -241,7 +241,7 @@ public sealed class PackageCatalog
             if (imageArch == "arm64"
                 && !tool.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unsupportedArch",
                     $"{tool.DisplayName} ({installId}) does not support arm64 in the package catalog.");
                 return [];
@@ -252,7 +252,7 @@ public sealed class PackageCatalog
         {
             if (!TryGetWslByProfileToken(token, out WslDistroEntry? entry))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unknown",
                     $"packages.wsl token '{token}' is not in the shipped WSL catalog.");
                 return [];
@@ -261,7 +261,7 @@ public sealed class PackageCatalog
             if (imageArch == "arm64"
                 && !entry.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unsupportedArch",
                     $"{entry.DisplayName} ({token}) does not support arm64 in the WSL catalog.");
                 return [];

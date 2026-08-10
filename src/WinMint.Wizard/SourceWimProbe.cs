@@ -12,30 +12,30 @@ internal static class SourceWimProbe
         PropertyNameCaseInsensitive = true,
     };
 
-    public static Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> TryProbeIso(
+    public static Result<IReadOnlyList<WimIndexInfo>, Failure> TryProbeIso(
         string isoPath,
         IWimIndexSource? source = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(isoPath) || !File.Exists(isoPath.Trim()))
         {
-            return Result.Fail<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(
-                new WimProbeFailure("wim.probe.isoMissing", $"Source ISO not found: {isoPath}"));
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.isoMissing", $"Source ISO not found: {isoPath}"));
         }
 
         IWimIndexSource adapter = source ?? PwshWimIndexSource.Instance;
         return adapter.ListFromIso(isoPath.Trim(), cancellationToken);
     }
 
-    public static Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> ParseListJson(string json)
+    public static Result<IReadOnlyList<WimIndexInfo>, Failure> ParseListJson(string json)
     {
         try
         {
             WimIndexListDto? dto = JsonSerializer.Deserialize<WimIndexListDto>(json, JsonOptions);
             if (dto?.Indexes is null || dto.Indexes.Count == 0)
             {
-                return Result.Fail<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(
-                    new WimProbeFailure("wim.probe.empty", "Get-WimInfo returned no indexes."));
+                return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                    new Failure("wim.probe.empty", "Get-WimInfo returned no indexes."));
             }
 
             List<WimIndexInfo> rows = [];
@@ -43,8 +43,8 @@ internal static class SourceWimProbe
             {
                 if (row.Index <= 0 || IsUndefinedName(row.Name))
                 {
-                    return Result.Fail<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(
-                        new WimProbeFailure(
+                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                        new Failure(
                             "wim.probe.incompleteName",
                             $"Index {row.Index} Name is missing or undefined."));
                 }
@@ -58,12 +58,12 @@ internal static class SourceWimProbe
                     NullIfEmpty(row.Build)));
             }
 
-            return Result.Ok<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(rows);
+            return Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(rows);
         }
         catch (JsonException ex)
         {
-            return Result.Fail<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(
-                new WimProbeFailure("wim.probe.unreadable", ex.Message));
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.unreadable", ex.Message));
         }
     }
 
@@ -168,12 +168,10 @@ public sealed record WimIndexInfo(
     }
 }
 
-internal sealed record WimProbeFailure(string Code, string Message);
-
 /// <summary>Port for ISO → WIM index list. Real adapter shells to Wim-Metadata.ps1; tests ship a fake.</summary>
 internal interface IWimIndexSource
 {
-    Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> ListFromIso(
+    Result<IReadOnlyList<WimIndexInfo>, Failure> ListFromIso(
         string isoPath,
         CancellationToken cancellationToken = default);
 }
@@ -182,15 +180,15 @@ internal sealed class PwshWimIndexSource : IWimIndexSource
 {
     public static PwshWimIndexSource Instance { get; } = new();
 
-    public Result<IReadOnlyList<WimIndexInfo>, WimProbeFailure> ListFromIso(
+    public Result<IReadOnlyList<WimIndexInfo>, Failure> ListFromIso(
         string isoPath,
         CancellationToken cancellationToken = default)
     {
         string? script = FindWimMetadataScript();
         if (script is null)
         {
-            return Result.Fail<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(
-                new WimProbeFailure("wim.probe.unreadable", "servicing/Wim-Metadata.ps1 not found."));
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.unreadable", "servicing/Wim-Metadata.ps1 not found."));
         }
 
         ProcessStartInfo psi = new()
@@ -228,14 +226,14 @@ internal sealed class PwshWimIndexSource : IWimIndexSource
                 if (!process.WaitForExit(120_000))
                 {
                     try { process.Kill(entireProcessTree: true); } catch { /* ponytail: probe timeout */ }
-                    return Result.Fail<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(
-                        new WimProbeFailure("wim.probe.unreadable", "WIM probe timed out."));
+                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                        new Failure("wim.probe.unreadable", "WIM probe timed out."));
                 }
 
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    return Result.Fail<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(
-                        new WimProbeFailure("wim.probe.unreadable", "WIM probe cancelled."));
+                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                        new Failure("wim.probe.unreadable", "WIM probe cancelled."));
                 }
 
                 if (process.ExitCode != 0)
@@ -245,8 +243,8 @@ internal sealed class PwshWimIndexSource : IWimIndexSource
                     string message = string.IsNullOrWhiteSpace(combined)
                         ? $"WIM probe exited {process.ExitCode}."
                         : combined;
-                    return Result.Fail<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(
-                        new WimProbeFailure(code, message));
+                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                        new Failure(code, message));
                 }
 
                 return SourceWimProbe.ParseListJson(stdout.Trim());
@@ -254,8 +252,8 @@ internal sealed class PwshWimIndexSource : IWimIndexSource
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            return Result.Fail<IReadOnlyList<WimIndexInfo>, WimProbeFailure>(
-                new WimProbeFailure("wim.probe.unreadable", ex.Message));
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.unreadable", ex.Message));
         }
     }
 
