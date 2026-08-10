@@ -14,6 +14,9 @@ restore:
 build: restore
     dotnet build --no-restore
 
+plan PROFILE="samples/smoke.profile.json" OUT=".scratch/plan":
+    dotnet run --project src/WinMint.Cli -- plan '{{PROFILE}}' --out '{{OUT}}'
+
 format-check:
     dotnet format --verify-no-changes
 
