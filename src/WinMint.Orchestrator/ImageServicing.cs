@@ -342,7 +342,7 @@ public static class ImageServicing
     }
 
     /// <summary>Store MSIX pwsh breaks DISM/AppX offline servicing; fail closed on Apply.</summary>
-    private static bool IsStoreMsixPwsh(string? processPath)
+    internal static bool IsStoreMsixPwsh(string? processPath)
     {
         if (string.IsNullOrWhiteSpace(processPath))
         {
