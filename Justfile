@@ -5,6 +5,9 @@ set windows-shell := ["pwsh.exe", "-NoProfile", "-Command"]
 default:
     @just --list
 
+wizard:
+    dotnet run --project src/WinMint.Wizard/WinMint.Wizard.csproj
+
 restore:
     dotnet restore
 
