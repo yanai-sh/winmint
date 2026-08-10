@@ -6,13 +6,13 @@ namespace WinMint.Tests;
 public class ShellTenureTests
 {
     [Fact]
-    public void Shell_Show_is_recorded_before_settle_begins()
+    public async Task Shell_Show_is_recorded_before_settle_begins()
     {
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
         ProvisioningBundle bundle = MinimalBundle();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             bundle,
             Env(splash, evidence),
@@ -29,7 +29,7 @@ public class ShellTenureTests
     }
 
     [Fact]
-    public void Shell_emits_write_only_evidence_projection_shape()
+    public async Task Shell_emits_write_only_evidence_projection_shape()
     {
         string dir = Path.Combine(Path.GetTempPath(), "winmint-evidence-" + Guid.NewGuid().ToString("N"));
         try
@@ -37,7 +37,7 @@ public class ShellTenureTests
             FileEvidenceSink sink = new(dir);
             RecordingSplashPresenter splash = new();
 
-            SessionResult result = ProvisioningSession.Run(
+            SessionResult result = await ProvisioningSession.RunAsync(
                 SessionMode.Shell,
                 MinimalBundle(),
                 Env(splash, sink),
@@ -67,11 +67,11 @@ public class ShellTenureTests
     }
 
     [Fact]
-    public void Shell_pushes_in_memory_status_updates_to_presenter()
+    public async Task Shell_pushes_in_memory_status_updates_to_presenter()
     {
         RecordingSplashPresenter splash = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             MinimalBundle(),
             Env(splash, new RecordingEvidenceSink()),
@@ -86,12 +86,12 @@ public class ShellTenureTests
     }
 
     [Fact]
-    public void Shell_fails_open_when_Evidence_sink_missing()
+    public async Task Shell_fails_open_when_Evidence_sink_missing()
     {
         RecordingSplashPresenter splash = new();
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             MinimalBundle(),
             Env(splash, evidence: null, winlogon),

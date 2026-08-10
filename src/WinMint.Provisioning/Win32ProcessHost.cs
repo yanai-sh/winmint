@@ -14,38 +14,16 @@ public sealed class Win32ProcessHost : IProcessHost
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
         ArgumentNullException.ThrowIfNull(arguments);
 
-        ProcessStartInfo psi = new()
-        {
-            FileName = fileName,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (string arg in arguments)
-        {
-            psi.ArgumentList.Add(arg);
-        }
+        // Sync Process.Run has timeout but no mid-flight CancellationToken (RunAsync does).
+        // Check before start only — callers that need kill-on-cancel must go async later.
+        ct.ThrowIfCancellationRequested();
 
-        using Process process = Process.Start(psi)
-            ?? throw new InvalidOperationException($"Failed to start process '{fileName}'.");
+        ProcessExitStatus status = Process.Run(
+            fileName,
+            arguments as IList<string> ?? [.. arguments],
+            silent: true,
+            timeout: null);
 
-        using (ct.Register(() =>
-        {
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-            }
-            catch
-            {
-                // ponytail: best-effort cancel kill
-            }
-        }))
-        {
-            process.WaitForExit();
-        }
-
-        return new ProcessStartResult(process.ExitCode);
+        return new ProcessStartResult(status.ExitCode);
     }
 }

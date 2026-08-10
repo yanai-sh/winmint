@@ -73,12 +73,13 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
         return hits;
     }
 
-    public void RemovePackage(string packageFullName)
+    public async Task RemovePackageAsync(string packageFullName, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFullName);
         try
         {
-            DeploymentResult result = AwaitWinRt(_manager.RemovePackageAsync(packageFullName).AsTask());
+            DeploymentResult result = await _manager.RemovePackageAsync(packageFullName).AsTask(ct)
+                .ConfigureAwait(false);
             if (!string.IsNullOrEmpty(result.ErrorText))
             {
                 throw new InvalidOperationException($"RemovePackageAsync({packageFullName}): {result.ErrorText}");
@@ -90,13 +91,15 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
         }
     }
 
-    public void DeprovisionPackageFamily(string packageFamilyName)
+    public async Task DeprovisionPackageFamilyAsync(string packageFamilyName, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
         try
         {
-            DeploymentResult result = AwaitWinRt(
-                _manager.DeprovisionPackageForAllUsersAsync(packageFamilyName).AsTask());
+            DeploymentResult result = await _manager
+                .DeprovisionPackageForAllUsersAsync(packageFamilyName)
+                .AsTask(ct)
+                .ConfigureAwait(false);
             if (!string.IsNullOrEmpty(result.ErrorText))
             {
                 throw new InvalidOperationException(
@@ -109,28 +112,27 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
         }
     }
 
-    public void RegisterPackageFamilyForCurrentUser(string packageFamilyName)
+    public async Task RegisterPackageFamilyForCurrentUserAsync(
+        string packageFamilyName,
+        CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
 
         // CsWinRT: null IIterable args — string[] fails CCW cast (IID IIterable<HSTRING>).
-        DeploymentResult result = AwaitWinRt(
-            _manager.RegisterPackageByFamilyNameAsync(
+        DeploymentResult result = await _manager.RegisterPackageByFamilyNameAsync(
                 packageFamilyName,
                 dependencyPackageFamilyNames: null,
                 DeploymentOptions.None,
                 appDataVolume: null,
-                optionalPackageFamilyNames: null).AsTask());
+                optionalPackageFamilyNames: null)
+            .AsTask(ct)
+            .ConfigureAwait(false);
         if (!string.IsNullOrEmpty(result.ErrorText))
         {
             throw new InvalidOperationException(
                 $"RegisterPackageByFamilyNameAsync({packageFamilyName}): {result.ErrorText}");
         }
     }
-
-    // ponytail: sync IAppxPackageManager — ConfigureAwait(false) avoids sync-context deadlock; full async if Shell gains a pump
-    private static DeploymentResult AwaitWinRt(Task<DeploymentResult> operation) =>
-        operation.ConfigureAwait(false).GetAwaiter().GetResult();
 
     public void EnsureSystemFullControlOnWingetFrameworkPackages()
     {
@@ -217,41 +219,22 @@ public sealed class WinRTAppxPackageManager(Action<string>? log = null) : IAppxP
             throw new InvalidOperationException($"ACL helper missing: {fileName}");
         }
 
-        // ponytail: local spawn — Win32ProcessHost is CT/no-timeout; ACL needs 180s + no-redirect (pipe flood)
-        using Process process = new()
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = fileName,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                // ponytail: no redirect — recursive takeown floods pipes and deadlocks ReadToEnd.
-            },
-        };
-        foreach (string arg in arguments)
-        {
-            process.StartInfo.ArgumentList.Add(arg);
-        }
+        // silent → null stdin/stdout/stderr (no pipe flood / deadlock from recursive takeown).
+        ProcessExitStatus status = Process.Run(
+            fileName,
+            arguments as IList<string> ?? [.. arguments],
+            silent: true,
+            timeout: TimeSpan.FromSeconds(180));
 
-        process.Start();
-        if (!process.WaitForExit(180_000))
+        if (status.Canceled)
         {
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch
-            {
-                // ponytail: best-effort kill on ACL helper hang
-            }
-
             throw new TimeoutException($"{Path.GetFileName(fileName)} timed out on {arguments[0]}");
         }
 
-        if (process.ExitCode != 0)
+        if (status.ExitCode != 0)
         {
             string detail =
-                $"{Path.GetFileName(fileName)} exit {process.ExitCode} args=[{string.Join(' ', arguments)}]";
+                $"{Path.GetFileName(fileName)} exit {status.ExitCode} args=[{string.Join(' ', arguments)}]";
             log?.Invoke($"winget.acl: FAILED {detail}");
             throw new InvalidOperationException(detail);
         }

@@ -65,7 +65,7 @@ public static class ProfileFile
 
         if (!TryResolvePasswordPath(fullProfilePath, authoredPath, out string resolved, out DocumentError? pathError))
         {
-            return Result.Fail<Profile, IReadOnlyList<DocumentError>>([pathError!]);
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>([pathError!.Value]);
         }
 
         string password;

@@ -141,7 +141,7 @@ internal static class WizardSession
     }
 
     /// <summary>Resolve curated chip keys to Profile install ids via <see cref="PackageCatalog"/>.</summary>
-    public static PackageSelection ResolvePackageChips(
+    public static Result<PackageSelection, Failure> ResolvePackageChips(
         IEnumerable<string> browserChipKeys,
         IEnumerable<string> editorChipKeys,
         IEnumerable<string> shellChipKeys,
@@ -154,9 +154,20 @@ internal static class WizardSession
             .Where(static key =>
                 !string.Equals(key, "edge", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(key, "fancywm", StringComparison.OrdinalIgnoreCase));
-        PackageSelection tools = catalog.ResolveToolKeys(toolKeys);
-        IReadOnlyList<string> wsl = catalog.ResolveWslTokens(wslChipKeys);
-        return new PackageSelection(tools.WingetInstallIds, tools.ScoopInstallIds, wsl);
+        Result<PackageSelection, Failure> tools = catalog.ResolveToolKeys(toolKeys);
+        if (!tools.IsOk)
+        {
+            return tools;
+        }
+
+        Result<IReadOnlyList<string>, Failure> wsl = catalog.ResolveWslTokens(wslChipKeys);
+        if (!wsl.IsOk)
+        {
+            return Result.Fail<PackageSelection, Failure>(wsl.Error);
+        }
+
+        return Result.Ok<PackageSelection, Failure>(
+            new PackageSelection(tools.Value.WingetInstallIds, tools.Value.ScoopInstallIds, wsl.Value));
     }
 
     /// <summary>Advanced multiline wins when non-empty; else selected chip ids; else empty (preset fills).</summary>

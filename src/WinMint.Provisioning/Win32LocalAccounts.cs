@@ -1,16 +1,16 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Principal;
 using Microsoft.Win32;
+using Windows.Win32;
 
 namespace WinMint.Provisioning;
 
 /// <summary>
 /// Deletes a local user + profile (OOBE <c>defaultuser0</c> leftover). SetupComplete/SYSTEM only.
 /// </summary>
-[SupportedOSPlatform("windows")]
-public sealed partial class Win32LocalAccounts : ILocalAccounts
+[SupportedOSPlatform("windows10.0.19041.0")]
+public sealed class Win32LocalAccounts : ILocalAccounts
 {
     private const uint NerrSuccess = 0;
     private const uint NerrUserNotFound = 2221;
@@ -25,7 +25,7 @@ public sealed partial class Win32LocalAccounts : ILocalAccounts
 
         string trimmed = username.Trim();
         string? sid = TryFindProfileSid(trimmed);
-        uint result = NetUserDel(null, trimmed);
+        uint result = PInvoke.NetUserDel(null, trimmed);
         if (result is not NerrSuccess and not NerrUserNotFound)
         {
             // ponytail: still attempt profile + deferred; account may appear after OOBE
@@ -33,7 +33,7 @@ public sealed partial class Win32LocalAccounts : ILocalAccounts
 
         if (sid is not null)
         {
-            _ = DeleteProfileW(sid, null, null);
+            _ = PInvoke.DeleteProfile(sid, null, null);
         }
 
         TryDeleteProfileDirectory(trimmed);
@@ -111,13 +111,12 @@ public sealed partial class Win32LocalAccounts : ILocalAccounts
 
         try
         {
-            using Process? proc = Process.Start(new ProcessStartInfo
-            {
-                FileName = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.System),
-                    "schtasks.exe"),
-                ArgumentList =
-                {
+            string schtasks = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System),
+                "schtasks.exe");
+            _ = Process.Run(
+                schtasks,
+                [
                     "/Create",
                     "/TN",
                     DeferredTaskName,
@@ -130,25 +129,13 @@ public sealed partial class Win32LocalAccounts : ILocalAccounts
                     "/F",
                     "/TR",
                     tr,
-                },
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            });
-            proc?.WaitForExit(15_000);
+                ],
+                silent: true,
+                timeout: TimeSpan.FromSeconds(15));
         }
         catch
         {
             // ponytail: immediate delete may still have worked
         }
     }
-
-    [LibraryImport("netapi32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial uint NetUserDel(string? servername, string username);
-
-    [LibraryImport("userenv.dll", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DeleteProfileW(
-        string lpSidString,
-        string? lpProfilePath,
-        string? lpComputerName);
 }

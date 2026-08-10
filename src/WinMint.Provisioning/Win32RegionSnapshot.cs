@@ -1,16 +1,18 @@
+using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security;
 using Microsoft.Win32;
+using Windows.Win32;
+using Windows.Win32.Globalization;
 
 namespace WinMint.Provisioning;
 
 /// <summary>
 /// Restores visible region via Win32 NLS / Geo / time zone + location-services consent registry.
 /// </summary>
-[SupportedOSPlatform("windows")]
-public sealed partial class Win32RegionSnapshot : IRegionSnapshot
+[SupportedOSPlatform("windows10.0.19041.0")]
+public sealed class Win32RegionSnapshot : IRegionSnapshot
 {
     private const string LocationConsentSubKey =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location";
@@ -30,7 +32,7 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
 
         SetUserLocaleName(target.Locale);
 
-        if (!SetUserGeoID(target.GeoId.Value))
+        if (!PInvoke.SetUserGeoID(target.GeoId.Value))
         {
             throw new InvalidOperationException($"SetUserGeoID({target.GeoId.Value}) failed.");
         }
@@ -58,7 +60,7 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
     public RegionState Read()
     {
         string? locale = GetUserDefaultLocaleName();
-        int geoId = GetUserGeoID(GEOCLASS_NATION);
+        int geoId = PInvoke.GetUserGeoID(SYSGEOCLASS.GEOCLASS_NATION);
         string? tz = TimeZoneInfo.Local.Id;
         bool? location = ReadLocationServices();
         return new RegionState(locale, geoId, tz, location);
@@ -82,41 +84,26 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
 
         // Escape single quotes for -Command '…'
         string escaped = culture.Name.Replace("'", "''", StringComparison.Ordinal);
-        using var process = new System.Diagnostics.Process
-        {
-            StartInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = powershell,
-                ArgumentList =
-                {
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-Command",
-                    $"Set-Culture -CultureInfo '{escaped}'",
-                },
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            },
-        };
-        process.Start();
-        if (!process.WaitForExit(60_000))
-        {
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch
-            {
-                // best-effort
-            }
+        ProcessExitStatus status = Process.Run(
+            powershell,
+            [
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                $"Set-Culture -CultureInfo '{escaped}'",
+            ],
+            silent: true,
+            timeout: TimeSpan.FromSeconds(60));
 
+        if (status.Canceled)
+        {
             throw new InvalidOperationException($"Set-Culture '{culture.Name}' timed out.");
         }
 
-        if (process.ExitCode != 0)
+        if (status.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"Set-Culture '{culture.Name}' exited {process.ExitCode}.");
+                $"Set-Culture '{culture.Name}' exited {status.ExitCode}.");
         }
 
         string? read = GetUserDefaultLocaleName();
@@ -130,7 +117,7 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
     private static string? GetUserDefaultLocaleName()
     {
         Span<char> buffer = stackalloc char[85];
-        int written = GetUserDefaultLocaleName(buffer, buffer.Length);
+        int written = PInvoke.GetUserDefaultLocaleName(buffer);
         if (written <= 0)
         {
             return null;
@@ -161,34 +148,21 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
     private static bool TrySetTimeZone(string timeZoneId)
     {
         // ponytail: TZUtil is the supported user-mode setter; P/Invoke DYNAMIC_TIME_ZONE is larger.
-        using var process = new System.Diagnostics.Process
+        string tzutil = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            "tzutil.exe");
+        if (!File.Exists(tzutil))
         {
-            StartInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.System),
-                    "tzutil.exe"),
-                ArgumentList = { "/s", timeZoneId },
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            },
-        };
-        process.Start();
-        if (!process.WaitForExit(30_000))
-        {
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch
-            {
-                // best-effort; timeout already means Apply failed
-            }
-
             return false;
         }
 
-        if (process.ExitCode != 0)
+        ProcessExitStatus status = Process.Run(
+            tzutil,
+            ["/s", timeZoneId],
+            silent: true,
+            timeout: TimeSpan.FromSeconds(30));
+
+        if (status.Canceled || status.ExitCode != 0)
         {
             return false;
         }
@@ -197,16 +171,4 @@ public sealed partial class Win32RegionSnapshot : IRegionSnapshot
         TimeZoneInfo.ClearCachedData();
         return true;
     }
-
-    private const int GEOCLASS_NATION = 16;
-
-    [LibraryImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetUserGeoID(int geoId);
-
-    [LibraryImport("kernel32.dll")]
-    private static partial int GetUserGeoID(int geoClass);
-
-    [LibraryImport("kernel32.dll", EntryPoint = "GetUserDefaultLocaleName", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial int GetUserDefaultLocaleName(Span<char> localeName, int cchLocaleName);
 }

@@ -5,12 +5,12 @@ internal sealed class WindowsConnectivityProbe : IConnectivityProbe
 {
     private static readonly Uri ProbeUri = new("http://www.msftconnecttest.com/connecttest.txt");
 
-    public bool HasOutboundNetwork()
+    public async Task<bool> HasOutboundNetworkAsync(CancellationToken ct = default)
     {
         try
         {
             using HttpClient client = new() { Timeout = TimeSpan.FromSeconds(5) };
-            using HttpResponseMessage response = client.GetAsync(ProbeUri).GetAwaiter().GetResult();
+            using HttpResponseMessage response = await client.GetAsync(ProbeUri, ct).ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
         catch

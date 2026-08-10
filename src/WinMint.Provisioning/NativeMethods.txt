@@ -1,0 +1,35 @@
+// GdiSplashPresenter
+CreateWindowExW
+DestroyWindow
+ShowWindow
+UpdateWindow
+GetSystemMetrics
+GetDC
+ReleaseDC
+GetClientRect
+FillRect
+CreateSolidBrush
+DeleteObject
+SetBkMode
+SetTextColor
+SelectObject
+GetStockObject
+TextOutW
+GetModuleHandleW
+
+// Win32SystemReboot
+ExitWindowsEx
+OpenProcessToken
+LookupPrivilegeValueW
+AdjustTokenPrivileges
+GetCurrentProcess
+CloseHandle
+
+// Win32RegionSnapshot
+SetUserGeoID
+GetUserGeoID
+GetUserDefaultLocaleName
+
+// Win32LocalAccounts
+NetUserDel
+DeleteProfileW

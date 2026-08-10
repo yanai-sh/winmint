@@ -10,6 +10,8 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <!-- AOT-friendly graph; PublishAot is per-project (Provisioning Release). -->
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- Learn .NET 11 Runtime Async (NativeAOT-supported). -->
+    <Features>runtime-async=on</Features>
     <!-- CS1591 / GenerateDocumentationFile off — still document BuildPlan / ImageServicing.Apply / ProvisioningSession entrypoints in source. -->
   </PropertyGroup>
   <PropertyGroup Condition="'$(CI)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">

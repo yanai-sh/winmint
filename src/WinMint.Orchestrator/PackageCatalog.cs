@@ -59,7 +59,7 @@ public sealed class PackageCatalog
     }
 
     /// <summary>Resolve curated chip keys to Profile install ids grouped by package manager source.</summary>
-    public PackageSelection ResolveToolKeys(IEnumerable<string> keys)
+    public Result<PackageSelection, Failure> ResolveToolKeys(IEnumerable<string> keys)
     {
         List<string> winget = [];
         List<string> scoop = [];
@@ -76,7 +76,10 @@ public sealed class PackageCatalog
 
             if (!_toolsByKey.TryGetValue(key, out PackageToolEntry? tool))
             {
-                throw new InvalidOperationException($"Unknown package catalog tool key '{key}'.");
+                return Result.Fail<PackageSelection, Failure>(
+                    new Failure(
+                        "packages.catalog.unknown",
+                        $"Unknown package catalog tool key '{key}'."));
             }
 
             if (string.Equals(tool.Source, "winget", StringComparison.OrdinalIgnoreCase)
@@ -96,16 +99,19 @@ public sealed class PackageCatalog
             }
             else
             {
-                throw new InvalidOperationException(
-                    $"Tool '{key}' uses unsupported source '{tool.Source}'.");
+                return Result.Fail<PackageSelection, Failure>(
+                    new Failure(
+                        "packages.catalog.unsupportedSource",
+                        $"Tool '{key}' uses unsupported source '{tool.Source}'."));
             }
         }
 
-        return new PackageSelection(winget, scoop, []);
+        return Result.Ok<PackageSelection, Failure>(
+            new PackageSelection(winget.ToArray(), scoop.ToArray(), []));
     }
 
     /// <summary>Resolve WSL chip keys / profile tokens to catalog profile tokens for <c>packages.wsl</c>.</summary>
-    public IReadOnlyList<string> ResolveWslTokens(IEnumerable<string> tokens)
+    public Result<IReadOnlyList<string>, Failure> ResolveWslTokens(IEnumerable<string> tokens)
     {
         List<string> distros = [];
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
@@ -119,7 +125,10 @@ public sealed class PackageCatalog
 
             if (!TryGetWslByProfileToken(token, out WslDistroEntry? entry))
             {
-                throw new InvalidOperationException($"Unknown WSL catalog token '{token}'.");
+                return Result.Fail<IReadOnlyList<string>, Failure>(
+                    new Failure(
+                        "packages.catalog.unknown",
+                        $"Unknown WSL catalog token '{token}'."));
             }
 
             if (seen.Add(entry.ProfileToken))
@@ -128,7 +137,7 @@ public sealed class PackageCatalog
             }
         }
 
-        return distros;
+        return Result.Ok<IReadOnlyList<string>, Failure>(distros.ToArray());
     }
 
     public static string? ResolveWingetArchitectureFlag(PackageToolEntry tool, string imageArchitecture)
@@ -176,7 +185,7 @@ public sealed class PackageCatalog
             ? PackagePhase.WingetImport
             : PackagePhase.PerJob;
 
-    public IReadOnlyList<string> ToolCatalogKeys => _toolsByKey.Keys.ToList();
+    public IReadOnlyList<string> ToolCatalogKeys => _toolsByKey.Keys.ToArray();
 
     /// <summary>Validate maintainer invariants for the shipped package catalog.</summary>
     public IReadOnlyList<string> Validate()
@@ -314,9 +323,9 @@ public sealed class PackageCatalog
             ?? throw new InvalidOperationException("Embedded package catalog resource not found.");
         using Stream stream = assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException($"Failed to open embedded catalog: {resourceName}");
-        using MemoryStream buffer = new();
-        stream.CopyTo(buffer);
-        return LoadFromJson(buffer.ToArray());
+        PackageCatalogFile? file = JsonSerializer.Deserialize(stream, PackageCatalogJsonContext.Default.PackageCatalogFile)
+            ?? throw new InvalidOperationException("Embedded package catalog deserialized to null.");
+        return Build(file);
     }
 
     private static PackageCatalog Build(PackageCatalogFile file)

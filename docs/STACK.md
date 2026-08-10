@@ -18,6 +18,7 @@ No guest **pwsh product runtime**. Inbox `powershell.exe` for Scoop bootstrap / 
 | TFM | `net11.0` |
 | SDK | Rolling .NET 11 preview (`global.json` floor + `latestFeature` + `allowPrerelease`) |
 | LangVersion | `preview` |
+| Runtime Async | Opt in with `<Features>runtime-async=on</Features>` (Learn .NET 11; NativeAOT-supported) |
 | AOT | `PublishAot` on Provisioning (Release); `IsAotCompatible` graph-wide |
 | Build | Deterministic; `ContinuousIntegrationBuild` under GITHUB_ACTIONS |
 | Host / CI | **ARM64** first (`windows-11-arm`) |
@@ -40,7 +41,7 @@ No MediatR / Generic Host / AutoMapper. Shared contract types when twin shapes d
 
 - File-scoped namespaces, primary constructors, `required`, collection expressions, patterns. Prefer BCL / .NET 11 APIs (`Process.Run` / `RunAndCaptureText*`, stream adapters) over hand-rolled equivalents.
 - `System.Text.Json` **source generation** for contracts (AOT-safe), including Wizard probe JSON.
-- Win32: `LibraryImport` only. Time: `TimeProvider`.
+- Win32: `LibraryImport` only (hand-written or **CsWin32** from official win32metadata). Prefer `SafeHandle` over raw `HWND`/`HANDLE` `IntPtr`. Time: `TimeProvider`. WinRT AppX via projected `Windows.Management.Deployment.PackageManager` (async — no `GetResult`).
 - **Async:** `CancellationToken` on I/O and process waits. Do not bridge with `GetAwaiter().GetResult()` — make the path async or use sync I/O end-to-end.
 - **Errors:** expected validation / parse / unknown-key → typed `Result` (or session status) at **every** seam (Profile, catalog, bundle, plan, apply). Exceptions for bugs and true invariants only.
 - **Job kinds:** closed set at the load boundary (enum today; C# 15 `union` after PublishAot/STJ spike). Wire JSON may stay string.

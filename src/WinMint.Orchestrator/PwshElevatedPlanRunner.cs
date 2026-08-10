@@ -45,24 +45,39 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 
         try
         {
-            using Process process = Process.Start(psi)
-                ?? throw new InvalidOperationException("Failed to start elevated pwsh.");
-            using (ct.Register(() =>
+            ct.ThrowIfCancellationRequested();
+
+            int exitCode;
+            if (elevated)
             {
-                try
+                // Process.Run rejects UseShellExecute — already-elevated path only.
+                ProcessExitStatus status = Process.Run(psi, timeout: null);
+                exitCode = status.ExitCode;
+            }
+            else
+            {
+                // UAC Verb=runas requires UseShellExecute — keep Start + WaitForExit.
+                using Process process = Process.Start(psi)
+                    ?? throw new InvalidOperationException("Failed to start elevated pwsh.");
+                using (ct.Register(() =>
                 {
-                    if (!process.HasExited)
+                    try
                     {
-                        process.Kill(entireProcessTree: true);
+                        if (!process.HasExited)
+                        {
+                            process.Kill(entireProcessTree: true);
+                        }
                     }
-                }
-                catch
+                    catch
+                    {
+                        // ponytail: best-effort cancel of elevated child
+                    }
+                }))
                 {
-                    // ponytail: best-effort cancel of elevated child
+                    process.WaitForExit();
                 }
-            }))
-            {
-                process.WaitForExit();
+
+                exitCode = process.ExitCode;
             }
 
             if (ct.IsCancellationRequested)
@@ -71,12 +86,17 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
                     new Failure("servicing.cancelled", "Apply was cancelled."));
             }
 
-            if (process.ExitCode != 0)
+            if (exitCode != 0)
             {
-                string message = ReadFailureMessage(workDirectory) ?? $"RunPlan exited {process.ExitCode}.";
+                string message = ReadFailureMessage(workDirectory) ?? $"RunPlan exited {exitCode}.";
                 return Result.Fail<ImageEvidence, Failure>(
                     new Failure("servicing.runPlan.failed", message));
             }
+        }
+        catch (OperationCanceledException)
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.cancelled", "Apply was cancelled."));
         }
         catch (System.ComponentModel.Win32Exception ex)
         {

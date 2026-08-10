@@ -105,14 +105,15 @@ public class WizardSessionTests
     [Fact]
     public void ResolvePackageChips_zen_and_cursor_emit_catalog_install_ids()
     {
-        PackageSelection selection = WizardSession.ResolvePackageChips(
+        Result<PackageSelection, Failure> selection = WizardSession.ResolvePackageChips(
             ["zen-browser"],
             ["cursor"],
             [],
             ["FedoraLinux"]);
-        Assert.Contains("Zen-Team.Zen-Browser", selection.WingetInstallIds);
-        Assert.Contains("Anysphere.Cursor", selection.WingetInstallIds);
-        Assert.Equal("FedoraLinux", Assert.Single(selection.WslProfileTokens));
+        Assert.True(selection.IsOk);
+        Assert.Contains("Zen-Team.Zen-Browser", selection.Value.WingetInstallIds);
+        Assert.Contains("Anysphere.Cursor", selection.Value.WingetInstallIds);
+        Assert.Equal("FedoraLinux", Assert.Single(selection.Value.WslProfileTokens));
     }
 
     [Fact]

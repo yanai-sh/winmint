@@ -1,10 +1,13 @@
 using System.CommandLine;
+using Microsoft.Extensions.Logging;
 using WinMint.Orchestrator;
 
 namespace WinMint.Cli;
 
 internal static class Program
 {
+    private static readonly ILogger Log = ConsoleCliLogger.Instance;
+
     private static int Main(string[] args)
     {
         Argument<FileInfo> profileArgument = new("profile")
@@ -187,7 +190,7 @@ internal static class Program
             return exit;
         }
 
-        Console.WriteLine("Profile OK; plan OK.");
+        CliLog.ProfileOk(Log);
         return 0;
     }
 
@@ -219,7 +222,7 @@ internal static class Program
 
         Directory.CreateDirectory(outDir.FullName);
         WritePlanArtifacts(outDir.FullName, artifacts!);
-        Console.WriteLine($"Wrote plan artifacts to {outDir.FullName}");
+        CliLog.WrotePlanArtifacts(Log, outDir.FullName);
         WritePlanHonesty(artifacts!);
         return 0;
     }
@@ -264,8 +267,7 @@ internal static class Program
 
         if (artifacts!.Manifest.ImageQuality == ImageQualityLane.Release)
         {
-            Console.Error.WriteLine(
-                "Warning: ImageQuality=Release uses compression=max + cleanup=full — prefer Test for iterative builds.");
+            CliLog.ReleaseLaneWarning(Log);
         }
 
         WritePlanHonesty(artifacts!);
@@ -280,14 +282,14 @@ internal static class Program
         Result<ImageEvidence, Failure> applied = ImageServicing.Apply(artifacts!, servicingRun);
         if (!applied.IsOk)
         {
-            Console.Error.WriteLine($"{applied.Error.Code}: {applied.Error.Message}");
-            Console.Error.WriteLine($"Work directory preserved: {work.FullName}");
+            CliLog.Failure(Log, applied.Error.Code, applied.Error.Message);
+            CliLog.WorkPreserved(Log, work.FullName);
             return 1;
         }
 
-        Console.WriteLine($"Image OK: {applied.Value.OutputIsoPath}");
-        Console.WriteLine($"Shell stamp: {applied.Value.ShellStampTargetPath}");
-        Console.WriteLine($"Lane: {applied.Value.Lane}");
+        CliLog.ImageOk(Log, applied.Value.OutputIsoPath);
+        CliLog.ShellStamp(Log, applied.Value.ShellStampTargetPath);
+        CliLog.Lane(Log, applied.Value.Lane);
         return 0;
     }
 
@@ -326,7 +328,7 @@ internal static class Program
             return true;
         }
 
-        Console.Error.WriteLine($"Unsupported --image-quality '{raw}' (expected Test|Release).");
+        CliLog.UnsupportedImageQuality(Log, raw);
         lane = ImageQualityLane.Test;
         exitCode = 1;
         return false;
@@ -341,7 +343,7 @@ internal static class Program
         artifacts = null;
         if (!profilePath.Exists)
         {
-            Console.Error.WriteLine($"Profile not found: {profilePath.FullName}");
+            CliLog.ProfileNotFound(Log, profilePath.FullName);
             exitCode = 1;
             return false;
         }
@@ -351,7 +353,8 @@ internal static class Program
         {
             foreach (DocumentError issue in parsed.Error)
             {
-                Console.Error.WriteLine($"{issue.Code}: {issue.Message}" + (issue.Path is null ? "" : $" ({issue.Path})"));
+                string pathSuffix = issue.Path is null ? "" : $" ({issue.Path})";
+                CliLog.DocumentIssue(Log, issue.Code, issue.Message, pathSuffix);
             }
 
             exitCode = 1;
@@ -361,7 +364,7 @@ internal static class Program
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value, run);
         if (!planned.IsOk)
         {
-            Console.Error.WriteLine($"{planned.Error.Code}: {planned.Error.Message}");
+            CliLog.Failure(Log, planned.Error.Code, planned.Error.Message);
             exitCode = 1;
             return false;
         }
@@ -388,7 +391,7 @@ internal static class Program
 
     private static void WritePlanHonesty(BuildArtifacts artifacts)
     {
-        Console.WriteLine($"Lane: {artifacts.Manifest.ImageQuality}");
+        CliLog.Lane(Log, artifacts.Manifest.ImageQuality);
         string honesty = BuildPlan.FormatPlanHonesty(
             artifacts.Manifest,
             artifacts.Account.RequireWifiDuringOobe);
@@ -396,11 +399,11 @@ internal static class Program
         {
             if (line.StartsWith("Warning:", StringComparison.Ordinal))
             {
-                Console.Error.WriteLine(line);
+                CliLog.HonestyWarning(Log, line);
             }
             else if (line.Length > 0)
             {
-                Console.WriteLine(line);
+                CliLog.HonestyLine(Log, line);
             }
         }
     }

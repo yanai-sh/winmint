@@ -8,8 +8,9 @@ public class PackageCatalogTests
     public void Default_catalog_resolves_zen_browser_chip_to_winget_id()
     {
         PackageCatalog catalog = PackageCatalog.Default;
-        PackageSelection selection = catalog.ResolveToolKeys(["zen-browser"]);
-        Assert.Equal("Zen-Team.Zen-Browser", Assert.Single(selection.WingetInstallIds));
+        Result<PackageSelection, Failure> selection = catalog.ResolveToolKeys(["zen-browser"]);
+        Assert.True(selection.IsOk);
+        Assert.Equal("Zen-Team.Zen-Browser", Assert.Single(selection.Value.WingetInstallIds));
     }
 
     [Fact]
@@ -23,9 +24,26 @@ public class PackageCatalogTests
     [Fact]
     public void Default_catalog_splits_winget_and_scoop_shell_tools()
     {
-        PackageSelection selection = PackageCatalog.Default.ResolveToolKeys(["windhawk", "komorebi"]);
-        Assert.Contains("RamenSoftware.Windhawk", selection.WingetInstallIds);
-        Assert.Contains("komorebi", selection.ScoopInstallIds);
+        Result<PackageSelection, Failure> selection = PackageCatalog.Default.ResolveToolKeys(["windhawk", "komorebi"]);
+        Assert.True(selection.IsOk);
+        Assert.Contains("RamenSoftware.Windhawk", selection.Value.WingetInstallIds);
+        Assert.Contains("komorebi", selection.Value.ScoopInstallIds);
+    }
+
+    [Fact]
+    public void ResolveToolKeys_unknown_key_returns_failure()
+    {
+        Result<PackageSelection, Failure> result = PackageCatalog.Default.ResolveToolKeys(["not-a-real-chip"]);
+        Assert.False(result.IsOk);
+        Assert.Equal("packages.catalog.unknown", result.Error.Code);
+    }
+
+    [Fact]
+    public void ResolveWslTokens_unknown_token_returns_failure()
+    {
+        Result<IReadOnlyList<string>, Failure> result = PackageCatalog.Default.ResolveWslTokens(["NotADistro"]);
+        Assert.False(result.IsOk);
+        Assert.Equal("packages.catalog.unknown", result.Error.Code);
     }
 
     [Fact]
@@ -57,13 +75,14 @@ public class PackageCatalogTests
     [Fact]
     public void Wizard_resolve_maps_cursor_and_fedora()
     {
-        PackageSelection selection = Wizard.WizardSession.ResolvePackageChips(
+        Result<PackageSelection, Failure> selection = Wizard.WizardSession.ResolvePackageChips(
             [],
             ["cursor"],
             [],
             ["FedoraLinux"]);
-        Assert.Equal("Anysphere.Cursor", Assert.Single(selection.WingetInstallIds));
-        Assert.Equal("FedoraLinux", Assert.Single(selection.WslProfileTokens));
+        Assert.True(selection.IsOk);
+        Assert.Equal("Anysphere.Cursor", Assert.Single(selection.Value.WingetInstallIds));
+        Assert.Equal("FedoraLinux", Assert.Single(selection.Value.WslProfileTokens));
     }
 
     [Fact]
@@ -73,9 +92,11 @@ public class PackageCatalogTests
         Assert.True(File.Exists(path), $"Missing repo manifest: {path}");
 
         PackageCatalog fromDisk = PackageCatalog.LoadFromFile(path);
-        PackageSelection diskZen = fromDisk.ResolveToolKeys(["zen-browser"]);
-        PackageSelection embeddedZen = PackageCatalog.Default.ResolveToolKeys(["zen-browser"]);
-        Assert.Equal(embeddedZen.WingetInstallIds, diskZen.WingetInstallIds);
+        Result<PackageSelection, Failure> diskZen = fromDisk.ResolveToolKeys(["zen-browser"]);
+        Result<PackageSelection, Failure> embeddedZen = PackageCatalog.Default.ResolveToolKeys(["zen-browser"]);
+        Assert.True(diskZen.IsOk);
+        Assert.True(embeddedZen.IsOk);
+        Assert.Equal(embeddedZen.Value.WingetInstallIds, diskZen.Value.WingetInstallIds);
     }
 
     [Fact]

@@ -2,54 +2,58 @@ namespace WinMint.Provisioning;
 
 internal static class Program
 {
-    private static int Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         if (args is ["--machine-setup", ..])
         {
-            return RunMachineSetup();
+            return await RunMachineSetupAsync().ConfigureAwait(false);
         }
 
-        return RunShell();
+        return await RunShellAsync().ConfigureAwait(false);
     }
 
-    private static int RunMachineSetup()
+    private static async Task<int> RunMachineSetupAsync()
     {
         string programData = ProgramDataRoot();
         Directory.CreateDirectory(programData);
-        string logPath = Path.Combine(programData, "machine-setup.log");
-
-        void Log(string line) => AppendLog(logPath, line);
+        GuestFileLogger log = new(Path.Combine(programData, "machine-setup.log"));
 
         try
         {
             string bundlePath = BundleLoader.DefaultGuestBundlePath;
             if (!File.Exists(bundlePath))
             {
-                Log($"Bundle missing: {bundlePath}");
+                GuestLog.BundleMissing(log, bundlePath);
                 return 1;
             }
 
-            ProvisioningBundle bundle = BundleLoader.LoadFromFile(bundlePath);
-            SessionEnvironment env = CreateEnvironment(bundlePath, Log, splash: null);
-            SessionResult result = ProvisioningSession.Run(SessionMode.MachineSetup, bundle, env);
-            Log($"{result.FinalStatus.Code}: {result.FinalStatus.Message}");
+            BundleLoadResult loaded = BundleLoader.LoadFromFile(bundlePath);
+            if (!loaded.IsOk)
+            {
+                GuestLog.Failure(log, loaded.Error.Code, loaded.Error.Message);
+                return 1;
+            }
+
+            ProvisioningBundle bundle = loaded.Value;
+            SessionEnvironment env = CreateEnvironment(bundlePath, log, splash: null);
+            SessionResult result = await ProvisioningSession.RunAsync(SessionMode.MachineSetup, bundle, env)
+                .ConfigureAwait(false);
+            GuestLog.SessionStatus(log, result.FinalStatus.Code, result.FinalStatus.Message);
             return result.Outcome == SessionOutcome.Complete ? 0 : 1;
         }
         catch (Exception ex)
         {
-            Log($"machineSetup.crash: {ex}");
+            GuestLog.MachineSetupCrash(log, ex);
             return 1;
         }
     }
 
-    private static int RunShell()
+    private static async Task<int> RunShellAsync()
     {
         string programData = ProgramDataRoot();
         Directory.CreateDirectory(programData);
-        string logPath = Path.Combine(programData, "shell.log");
+        GuestFileLogger log = new(Path.Combine(programData, "shell.log"));
         string evidenceDir = Path.Combine(programData, "evidence");
-
-        void Log(string line) => AppendLog(logPath, line);
 
         GdiSplashPresenter? splash = null;
         try
@@ -57,7 +61,7 @@ internal static class Program
             string bundlePath = BundleLoader.DefaultGuestBundlePath;
             if (!File.Exists(bundlePath))
             {
-                Log($"Bundle missing: {bundlePath}");
+                GuestLog.BundleMissing(log, bundlePath);
                 return 1;
             }
 
@@ -67,26 +71,34 @@ internal static class Program
             }
 
             splash = new GdiSplashPresenter();
-            ProvisioningBundle bundle = BundleLoader.LoadFromFile(bundlePath);
+            BundleLoadResult loaded = BundleLoader.LoadFromFile(bundlePath);
+            if (!loaded.IsOk)
+            {
+                GuestLog.Failure(log, loaded.Error.Code, loaded.Error.Message);
+                return 1;
+            }
+
+            ProvisioningBundle bundle = loaded.Value;
             SessionEnvironment env = CreateEnvironment(
                 bundlePath,
-                Log,
+                log,
                 splash,
                 new FileEvidenceSink(evidenceDir),
                 new FileCheckpointStore(programData),
                 evidenceDirectory: evidenceDir);
-            SessionResult result = ProvisioningSession.Run(SessionMode.Shell, bundle, env);
-            Log($"{result.FinalStatus.Code}: {result.FinalStatus.Message}");
+            SessionResult result = await ProvisioningSession.RunAsync(SessionMode.Shell, bundle, env)
+                .ConfigureAwait(false);
+            GuestLog.SessionStatus(log, result.FinalStatus.Code, result.FinalStatus.Message);
             foreach (EvidenceSnapshot snap in result.EvidenceEmitted)
             {
-                Log($"evidence: {snap.SchemaVersion} -> {snap.Path}");
+                GuestLog.Evidence(log, snap.SchemaVersion, snap.Path);
             }
 
             return result.Outcome == SessionOutcome.Complete ? 0 : 1;
         }
         catch (Exception ex)
         {
-            Log($"shell.crash: {ex}");
+            GuestLog.ShellCrash(log, ex);
             return 1;
         }
         finally
@@ -98,23 +110,9 @@ internal static class Program
     private static string ProgramDataRoot() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "WinMint");
 
-    private static void AppendLog(string logPath, string line)
-    {
-        string stamped = $"{DateTimeOffset.UtcNow:o} {line}";
-        Console.Error.WriteLine(stamped);
-        try
-        {
-            File.AppendAllText(logPath, stamped + Environment.NewLine);
-        }
-        catch
-        {
-            // ponytail: best-effort ProgramData log
-        }
-    }
-
     private static SessionEnvironment CreateEnvironment(
         string bundlePath,
-        Action<string> log,
+        GuestFileLogger log,
         ISplashPresenter? splash,
         IEvidenceSink? evidence = null,
         ICheckpointStore? checkpoints = null,
@@ -124,6 +122,7 @@ internal static class Program
             ? new Win32WinlogonRegistry()
             : throw new PlatformNotSupportedException("Provisioning requires Windows.");
 
+        Action<string> lineLog = log.AsAction();
         return new SessionEnvironment(
             Time: TimeProvider.System,
             Winlogon: winlogon,
@@ -131,13 +130,13 @@ internal static class Program
             Processes: new Win32ProcessHost(),
             Splash: splash ?? new NoopSplashPresenter(),
             Checkpoints: checkpoints ?? new FileCheckpointStore(ProgramDataRoot()),
-            WipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(bundlePath, log),
+            WipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(bundlePath, lineLog),
             Evidence: evidence,
-            Appx: new WinRTAppxPackageManager(log),
+            Appx: new WinRTAppxPackageManager(lineLog),
             Reboot: new Win32SystemReboot(),
             LocalAccounts: new Win32LocalAccounts(),
             ResolveScoopCmd: TryResolveScoopShim,
-            ResidueCleaner: new Win32ResidueCleaner(winlogon, log),
+            ResidueCleaner: new Win32ResidueCleaner(winlogon, lineLog),
             Connectivity: new WindowsConnectivityProbe(),
             EvidenceDirectory: evidenceDirectory);
     }

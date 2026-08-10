@@ -29,12 +29,14 @@ public static class ImageServicing
     /// MountInstallWim exports this index to a single-image WIM before mount (IMAGESERVICING invariant 8).</summary>
     public const int DefaultProWimIndex = 3;
 
+    /// <summary>Materialize stages and run elevated ImageServicing against a Source ISO (default pwsh runner).</summary>
     public static Result<ImageEvidence, Failure> Apply(
         BuildArtifacts plan,
         ServicingRun run,
         CancellationToken ct = default) =>
         Apply(plan, run, new PwshElevatedPlanRunner(), ct);
 
+    /// <summary>Materialize stages and run elevated ImageServicing against a Source ISO.</summary>
     public static Result<ImageEvidence, Failure> Apply(
         BuildArtifacts plan,
         ServicingRun run,
@@ -70,7 +72,7 @@ public static class ImageServicing
         Directory.CreateDirectory(Path.Combine(run.WorkDirectory, "payload"));
         Directory.CreateDirectory(HostServicingRoot);
 
-        Result<List<ServicingStage>, Failure> materialized = Materialize(plan, run);
+        Result<IReadOnlyList<ServicingStage>, Failure> materialized = Materialize(plan, run);
         if (!materialized.IsOk)
         {
             return Result.Fail<ImageEvidence, Failure>(materialized.Error);
@@ -135,7 +137,7 @@ public static class ImageServicing
         return null;
     }
 
-    private static Result<List<ServicingStage>, Failure> Materialize(BuildArtifacts plan, ServicingRun run)
+    private static Result<IReadOnlyList<ServicingStage>, Failure> Materialize(BuildArtifacts plan, ServicingRun run)
     {
         string payloadDir = Path.Combine(run.WorkDirectory, "payload");
         string mediaDir = Path.Combine(run.WorkDirectory, "media");
@@ -181,13 +183,13 @@ public static class ImageServicing
         Result<string, Failure> setupComplete = StageSetupCompleteScript(payloadDir);
         if (!setupComplete.IsOk)
         {
-            return Result.Fail<List<ServicingStage>, Failure>(setupComplete.Error);
+            return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(setupComplete.Error);
         }
 
         Result<string, Failure> supervisor = StageSupervisorBinary(payloadDir);
         if (!supervisor.IsOk)
         {
-            return Result.Fail<List<ServicingStage>, Failure>(supervisor.Error);
+            return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(supervisor.Error);
         }
 
         List<ServicingStage> resolved = new(plan.Stages.Stages.Count);
@@ -267,7 +269,7 @@ public static class ImageServicing
             Path.Combine(run.WorkDirectory, "stages.json"),
             BuildPlan.SerializeStagesDump(new ServicingStageList(resolved)));
 
-        return Result.Ok<List<ServicingStage>, Failure>(resolved);
+        return Result.Ok<IReadOnlyList<ServicingStage>, Failure>(resolved.ToArray());
     }
 
     private static Result<string, Failure> StageSetupCompleteScript(string payloadDir)

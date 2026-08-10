@@ -7,13 +7,13 @@ namespace WinMint.Tests;
 public class MachineSetupTests
 {
     [Fact]
-    public void MachineSetup_rejects_defaultuser0_with_AutoAdminLogon()
+    public async Task MachineSetup_rejects_defaultuser0_with_AutoAdminLogon()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
         RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle(ProvisioningSession.ForbiddenAutologonUser, "lab-only");
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.MachineSetup,
             bundle,
             Env(winlogon, secrets),
@@ -27,13 +27,13 @@ public class MachineSetupTests
     }
 
     [Fact]
-    public void MachineSetup_stamps_autologon_and_wipes_secrets_when_Shell_ok()
+    public async Task MachineSetup_stamps_autologon_and_wipes_secrets_when_Shell_ok()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
         RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.MachineSetup,
             bundle,
             Env(winlogon, secrets),
@@ -49,13 +49,13 @@ public class MachineSetupTests
     }
 
     [Fact]
-    public void MachineSetup_restamps_Shell_when_mismatched_then_succeeds()
+    public async Task MachineSetup_restamps_Shell_when_mismatched_then_succeeds()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = "explorer.exe" };
         RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.MachineSetup,
             bundle,
             Env(winlogon, secrets),
@@ -67,7 +67,7 @@ public class MachineSetupTests
     }
 
     [Fact]
-    public void MachineSetup_fails_closed_when_Shell_restamp_does_not_stick()
+    public async Task MachineSetup_fails_closed_when_Shell_restamp_does_not_stick()
     {
         FakeWinlogonRegistry winlogon = new()
         {
@@ -77,7 +77,7 @@ public class MachineSetupTests
         RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.MachineSetup,
             bundle,
             Env(winlogon, secrets),
@@ -90,14 +90,14 @@ public class MachineSetupTests
     }
 
     [Fact]
-    public void MachineSetup_cancelled_returns_Failed_not_throw()
+    public async Task MachineSetup_cancelled_returns_Failed_not_throw()
     {
         using CancellationTokenSource cts = new();
         cts.Cancel();
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
         RecordingWipeSecrets secrets = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.MachineSetup,
             MinimalBundle("winmint", "lab-only"),
             Env(winlogon, secrets),
@@ -109,14 +109,14 @@ public class MachineSetupTests
     }
 
     [Fact]
-    public void MachineSetup_repairs_winget_framework_acls_when_Appx_present()
+    public async Task MachineSetup_repairs_winget_framework_acls_when_Appx_present()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
         RecordingWipeSecrets secrets = new();
         RecordingAppx appx = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.MachineSetup,
             bundle,
             Env(winlogon, secrets, appx: appx),
@@ -127,13 +127,13 @@ public class MachineSetupTests
     }
 
     [Fact]
-    public void MachineSetup_removes_defaultuser0_via_LocalAccounts()
+    public async Task MachineSetup_removes_defaultuser0_via_LocalAccounts()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
         RecordingWipeSecrets secrets = new();
         RecordingLocalAccounts accounts = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.MachineSetup,
             MinimalBundle("winmint", "lab-only"),
             Env(winlogon, secrets, localAccounts: accounts),
@@ -144,7 +144,7 @@ public class MachineSetupTests
     }
 
     [Fact]
-    public void MachineSetup_wipes_bundle_password_on_disk()
+    public async Task MachineSetup_wipes_bundle_password_on_disk()
     {
         string dir = Path.Combine(Path.GetTempPath(), "winmint-wipe-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -172,11 +172,13 @@ public class MachineSetupTests
                 }
                 """);
 
-            ProvisioningBundle bundle = BundleLoader.LoadFromFile(path);
+            BundleLoadResult loaded = BundleLoader.LoadFromFile(path);
+            Assert.True(loaded.IsOk, loaded.IsOk ? null : $"{loaded.Error.Code}: {loaded.Error.Message}");
+            ProvisioningBundle bundle = loaded.Value;
             Assert.Equal("lab-secret", bundle.Account.Password);
 
             FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
-            SessionResult result = ProvisioningSession.Run(
+            SessionResult result = await ProvisioningSession.RunAsync(
                 SessionMode.MachineSetup,
                 bundle,
                 Env(
@@ -193,8 +195,9 @@ public class MachineSetupTests
             Assert.Equal("", doc.RootElement.GetProperty("password").GetString());
             Assert.Equal("winmint", doc.RootElement.GetProperty("username").GetString());
 
-            ProvisioningBundle reloaded = BundleLoader.LoadFromFile(path);
-            Assert.Equal("", reloaded.Account.Password);
+            BundleLoadResult reloadedResult = BundleLoader.LoadFromFile(path);
+            Assert.True(reloadedResult.IsOk);
+            Assert.Equal("", reloadedResult.Value.Account.Password);
         }
         finally
         {
@@ -210,13 +213,13 @@ public class MachineSetupTests
     }
 
     [Fact]
-    public void MachineSetup_completes_when_LocalAccounts_delete_throws()
+    public async Task MachineSetup_completes_when_LocalAccounts_delete_throws()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
         RecordingWipeSecrets secrets = new();
         ThrowingLocalAccounts accounts = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.MachineSetup,
             MinimalBundle("winmint", "lab-only"),
             Env(winlogon, secrets, localAccounts: accounts),

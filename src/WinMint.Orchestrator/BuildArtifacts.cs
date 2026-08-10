@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace WinMint.Orchestrator;
 
 public enum PackagePhase
@@ -6,7 +8,7 @@ public enum PackagePhase
     WingetImport,
 }
 
-public sealed record Failure(string Code, string Message);
+public readonly record struct Failure(string Code, string Message);
 
 public sealed record RunOptions
 {
@@ -71,7 +73,16 @@ public sealed record ServicingStageList(IReadOnlyList<ServicingStage> Stages);
 
 public sealed record ServicingStage(
     ServicingOpcode Opcode,
-    IReadOnlyDictionary<string, string> Parameters);
+    IReadOnlyDictionary<string, string> Parameters)
+{
+    /// <summary>Freeze a mutable parameter bag so later callers cannot mutate published stages.</summary>
+    public ServicingStage(ServicingOpcode opcode, Dictionary<string, string> parameters)
+        : this(
+            opcode,
+            (IReadOnlyDictionary<string, string>)parameters.ToFrozenDictionary(StringComparer.Ordinal))
+    {
+    }
+}
 
 /// <summary>C#↔PS1 stage parameter keys (stages.json / RunPlan hashtable).</summary>
 public static class StageParams

@@ -357,8 +357,8 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Replan() => RunPlan();
 
-    [RelayCommand]
-    private async Task SaveProfileAsync()
+    [RelayCommand(IncludeCancelCommand = true)]
+    private async Task SaveProfileAsync(CancellationToken cancellationToken)
     {
         if (!RunPlan() || _lastProfileUtf8 is null)
         {
@@ -385,6 +385,8 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             return;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         string? path = file.TryGetLocalPath();
         if (string.IsNullOrEmpty(path))
         {
@@ -393,7 +395,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             return;
         }
 
-        await File.WriteAllBytesAsync(path, _lastProfileUtf8);
+        await File.WriteAllBytesAsync(path, _lastProfileUtf8, cancellationToken);
         _savedProfilePath = path;
         SaveStatus = $"Saved → {path}";
         Status = SaveStatus;
@@ -689,11 +691,18 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
     private WizardSessionInput BuildInput()
     {
-        PackageSelection packages = WizardSession.ResolvePackageChips(
+        Result<PackageSelection, Failure> packagesResult = WizardSession.ResolvePackageChips(
             SelectedIds(BrowserChips),
             SelectedIds(EditorChips),
             SelectedIds(ShellChips),
             SelectedIds(WslChips));
+        if (!packagesResult.IsOk)
+        {
+            throw new InvalidOperationException(
+                $"{packagesResult.Error.Code}: {packagesResult.Error.Message}");
+        }
+
+        PackageSelection packages = packagesResult.Value;
 
         return new WizardSessionInput(
             Preset,

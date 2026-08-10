@@ -6,13 +6,13 @@ namespace WinMint.Tests;
 public class ResidueCleanerTests
 {
     [Fact]
-    public void Shell_Complete_invokes_ResidueCleaner_once()
+    public async Task Shell_Complete_invokes_ResidueCleaner_once()
     {
         RecordingResidueCleaner cleaner = new();
         RecordingEvidenceSink evidence = new();
         RecordingWinlogon winlogon = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle([]),
             ShellEnv(winlogon, evidence, cleaner),
@@ -24,12 +24,12 @@ public class ResidueCleanerTests
     }
 
     [Fact]
-    public void Shell_Failed_does_not_invoke_ResidueCleaner()
+    public async Task Shell_Failed_does_not_invoke_ResidueCleaner()
     {
         RecordingResidueCleaner cleaner = new();
         RecordingWinlogon winlogon = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle([]),
             ShellEnv(winlogon, evidence: null, cleaner),
@@ -77,12 +77,12 @@ public class ResidueCleanerTests
     }
 
     [Fact]
-    public void Shell_Complete_swallows_ResidueCleaner_throw()
+    public async Task Shell_Complete_swallows_ResidueCleaner_throw()
     {
         RecordingEvidenceSink evidence = new();
         RecordingWinlogon winlogon = new();
 
-        SessionResult result = ProvisioningSession.Run(
+        SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle([]),
             ShellEnv(winlogon, evidence, new ThrowingResidueCleaner()),

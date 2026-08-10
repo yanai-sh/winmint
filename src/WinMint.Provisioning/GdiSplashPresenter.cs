@@ -1,5 +1,10 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Microsoft.Win32.SafeHandles;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.Graphics.Gdi;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace WinMint.Provisioning;
 
@@ -7,13 +12,13 @@ namespace WinMint.Provisioning;
 /// In-process opaque splash frame via GDI (full ID2D1Factory path only if first opaque frame still fails after status TextOutW).
 /// Status is held in-memory; pixels are not a control plane.
 /// </summary>
-[SupportedOSPlatform("windows")]
-public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
+[SupportedOSPlatform("windows10.0.19041.0")]
+public sealed class GdiSplashPresenter : ISplashPresenter, IDisposable
 {
     // ponytail: solid fill + status TextOutW for first opaque frame; full D2D only if that path still fails
-    private const uint FillColorRef = 0x00281810; // BGR: 16,24,40
+    private static readonly COLORREF FillColor = new(0x00281810); // BGR: 16,24,40
 
-    private IntPtr _hwnd;
+    private SafeHwnd? _hwnd;
     private SessionStatus _status = new("shell.idle", "");
     private bool _shown;
 
@@ -28,47 +33,42 @@ public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
         }
 
         EnsureWindow();
-        if (!ShowWindow(_hwnd, SW_SHOW))
-        {
-            // ShowWindow returns false when already visible; still paint.
-        }
+        HWND hwnd = _hwnd!.Hwnd;
+        _ = PInvoke.ShowWindow(hwnd, SHOW_WINDOW_CMD.SW_SHOW);
 
-        if (!UpdateWindow(_hwnd))
+        if (!PInvoke.UpdateWindow(hwnd))
         {
             throw new InvalidOperationException($"UpdateWindow failed: {Marshal.GetLastPInvokeError()}");
         }
 
-        PaintOpaque(_hwnd);
+        PaintOpaque(hwnd);
         _shown = true;
     }
 
     public void SetStatus(SessionStatus status)
     {
         _status = status;
-        if (_hwnd != IntPtr.Zero)
+        if (_hwnd is { IsInvalid: false })
         {
-            PaintOpaque(_hwnd);
+            PaintOpaque(_hwnd.Hwnd);
         }
     }
 
     public void Dispose()
     {
-        if (_hwnd != IntPtr.Zero)
-        {
-            DestroyWindow(_hwnd);
-            _hwnd = IntPtr.Zero;
-        }
+        _hwnd?.Dispose();
+        _hwnd = null;
     }
 
     private void EnsureWindow()
     {
-        if (_hwnd != IntPtr.Zero)
+        if (_hwnd is { IsInvalid: false })
         {
             return;
         }
 
-        int width = GetSystemMetrics(SM_CXSCREEN);
-        int height = GetSystemMetrics(SM_CYSCREEN);
+        int width = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXSCREEN);
+        int height = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYSCREEN);
         if (width <= 0)
         {
             width = 800;
@@ -79,76 +79,65 @@ public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
             height = 600;
         }
 
-        _hwnd = CreateWindowExW(
-            WS_EX_TOPMOST,
+        using FreeLibrarySafeHandle module = PInvoke.GetModuleHandle((string?)null);
+        HWND created = PInvoke.CreateWindowEx(
+            WINDOW_EX_STYLE.WS_EX_TOPMOST,
             "STATIC",
             "WinMint",
-            WS_POPUP | WS_VISIBLE,
+            WINDOW_STYLE.WS_POPUP | WINDOW_STYLE.WS_VISIBLE,
             0,
             0,
             width,
             height,
-            IntPtr.Zero,
-            IntPtr.Zero,
-            GetModuleHandleW(null),
-            IntPtr.Zero);
+            HWND.Null,
+            null,
+            module,
+            null);
 
-        if (_hwnd == IntPtr.Zero)
+        if (created.IsNull)
         {
             throw new InvalidOperationException($"CreateWindowExW failed: {Marshal.GetLastPInvokeError()}");
         }
 
-        PaintOpaque(_hwnd);
+        _hwnd = new SafeHwnd(created);
+        PaintOpaque(created);
     }
 
-    private void PaintOpaque(IntPtr hwnd)
+    private void PaintOpaque(HWND hwnd)
     {
-        IntPtr hdc = GetDC(hwnd);
-        if (hdc == IntPtr.Zero)
+        HDC hdc = PInvoke.GetDC(hwnd);
+        if (hdc.IsNull)
         {
             return;
         }
 
         try
         {
-            if (!GetClientRect(hwnd, out RECT rect))
+            if (!PInvoke.GetClientRect(hwnd, out RECT rect))
             {
                 return;
             }
 
-            IntPtr brush = CreateSolidBrush(FillColorRef);
-            if (brush == IntPtr.Zero)
+            using DeleteObjectSafeHandle brush = PInvoke.CreateSolidBrush_SafeHandle(FillColor);
+            if (brush.IsInvalid)
             {
                 return;
             }
 
-            try
+            if (PInvoke.FillRect(hdc, in rect, brush) == 0)
             {
-                if (FillRect(hdc, ref rect, brush) == 0)
-                {
-                    throw new InvalidOperationException($"FillRect failed: {Marshal.GetLastPInvokeError()}");
-                }
-            }
-            finally
-            {
-                if (!DeleteObject(brush))
-                {
-                    // best-effort cleanup
-                }
+                throw new InvalidOperationException($"FillRect failed: {Marshal.GetLastPInvokeError()}");
             }
 
-            DrawStatusText(hdc, rect);
+            DrawStatusText(hdc);
         }
         finally
         {
-            if (ReleaseDC(hwnd, hdc) != 1)
-            {
-                // best-effort cleanup
-            }
+            _ = PInvoke.ReleaseDC(hwnd, hdc);
         }
     }
 
-    private void DrawStatusText(IntPtr hdc, RECT rect)
+    private void DrawStatusText(HDC hdc)
     {
         string label = string.IsNullOrWhiteSpace(_status.Message) ? _status.Code : _status.Message;
         if (string.IsNullOrWhiteSpace(label))
@@ -156,121 +145,47 @@ public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
             return;
         }
 
-        IntPtr font = GetStockObject(StockGuiFont);
-        if (font == IntPtr.Zero)
+        HGDIOBJ font = PInvoke.GetStockObject(GET_STOCK_OBJECT_FLAGS.DEFAULT_GUI_FONT);
+        if (font.IsNull)
         {
             return;
         }
 
-        IntPtr oldFont = SelectObject(hdc, font);
+        HGDIOBJ oldFont = PInvoke.SelectObject(hdc, font);
         try
         {
-            if (SetBkMode(hdc, BkModeTransparent) == 0)
+            if (PInvoke.SetBkMode(hdc, BACKGROUND_MODE.TRANSPARENT) == 0)
             {
                 return;
             }
 
-            if (SetTextColor(hdc, 0x00FFFFFF) == 0xFFFFFFFF)
+            if (PInvoke.SetTextColor(hdc, new COLORREF(0x00FFFFFF)) == new COLORREF(0xFFFFFFFF))
             {
                 return;
             }
 
-            TextOutW(hdc, 48, 48, label, label.Length);
+            _ = PInvoke.TextOut(hdc, 48, 48, label, label.Length);
         }
         finally
         {
-            if (oldFont != IntPtr.Zero)
+            if (!oldFont.IsNull)
             {
-                SelectObject(hdc, oldFont);
+                _ = PInvoke.SelectObject(hdc, oldFont);
             }
         }
     }
 
-    private const int BkModeTransparent = 1;
-    private const int StockGuiFont = 17;
-
-    private const int SW_SHOW = 5;
-    private const int SM_CXSCREEN = 0;
-    private const int SM_CYSCREEN = 1;
-    private const int WS_POPUP = unchecked((int)0x80000000);
-    private const int WS_VISIBLE = 0x10000000;
-    private const int WS_EX_TOPMOST = 0x00000008;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
+    /// <summary>Owns an HWND; <see cref="ReleaseHandle"/> calls DestroyWindow.</summary>
+    private sealed class SafeHwnd : SafeHandleZeroOrMinusOneIsInvalid
     {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
+        public SafeHwnd(HWND hwnd)
+            : base(ownsHandle: true)
+        {
+            SetHandle(hwnd);
+        }
+
+        public HWND Hwnd => (HWND)handle;
+
+        protected override bool ReleaseHandle() => PInvoke.DestroyWindow((HWND)handle);
     }
-
-    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    private static partial IntPtr CreateWindowExW(
-        int dwExStyle,
-        string lpClassName,
-        string lpWindowName,
-        int dwStyle,
-        int x,
-        int y,
-        int nWidth,
-        int nHeight,
-        IntPtr hWndParent,
-        IntPtr hMenu,
-        IntPtr hInstance,
-        IntPtr lpParam);
-
-    [LibraryImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DestroyWindow(IntPtr hWnd);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    [LibraryImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool UpdateWindow(IntPtr hWnd);
-
-    [LibraryImport("user32.dll")]
-    private static partial int GetSystemMetrics(int nIndex);
-
-    [LibraryImport("user32.dll", SetLastError = true)]
-    private static partial IntPtr GetDC(IntPtr hWnd);
-
-    [LibraryImport("user32.dll")]
-    private static partial int ReleaseDC(IntPtr hWnd, IntPtr hDC);
-
-    [LibraryImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetClientRect(IntPtr hWnd, out RECT lpRect);
-
-    [LibraryImport("user32.dll", SetLastError = true)]
-    private static partial int FillRect(IntPtr hDC, ref RECT lprc, IntPtr hbr);
-
-    [LibraryImport("gdi32.dll", SetLastError = true)]
-    private static partial IntPtr CreateSolidBrush(uint crColor);
-
-    [LibraryImport("gdi32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DeleteObject(IntPtr ho);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial int SetBkMode(IntPtr hdc, int mode);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial uint SetTextColor(IntPtr hdc, uint color);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial IntPtr SelectObject(IntPtr hdc, IntPtr hgdiobj);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial IntPtr GetStockObject(int i);
-
-    [LibraryImport("gdi32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool TextOutW(IntPtr hdc, int x, int y, string lpString, int c);
-
-    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial IntPtr GetModuleHandleW(string? lpModuleName);
 }
