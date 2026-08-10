@@ -1,6 +1,12 @@
 namespace WinMint.Orchestrator;
 
-public sealed record PlanFailure(string Code, string Message);
+public enum PackagePhase
+{
+    PerJob,
+    WingetImport,
+}
+
+public sealed record Failure(string Code, string Message);
 
 public sealed record RunOptions
 {
@@ -15,17 +21,14 @@ public sealed record RunOptions
     /// <summary>When true, native ARM64 audit job fails closed on emulated/x64 binaries (SL7/metal).</summary>
     public bool PackageAuditStrict { get; init; }
 
+    /// <summary>When true, package install failures fail the session (harness/metal). Default best-effort.</summary>
+    public bool PackageStrict { get; init; }
+
+    /// <summary>When true, Plan emits smoke.stub.* jobs (Smoke/acceptance harness). Default false.</summary>
+    public bool IncludeSmokeStubs { get; init; }
+
     /// <summary>Override embedded package catalog (tests); null uses <see cref="PackageCatalog.Default"/>.</summary>
     public PackageCatalog? PackageCatalog { get; init; }
-
-    /// <summary>Install lane: WinPE diskpart+DISM apply (default) or legacy Setup.exe /legacy opt-in.</summary>
-    public InstallEngine InstallEngine { get; init; } = InstallEngine.WinPeApply;
-}
-
-public enum InstallEngine
-{
-    Legacy,
-    WinPeApply,
 }
 
 public enum ImageQualityLane
@@ -41,7 +44,9 @@ public sealed record BuildArtifacts(
     DmaContract Dma,
     BuildManifest Manifest,
     AccountProfile Account,
-    IReadOnlyList<string> RemoveProvisionedAppx);
+    IReadOnlyList<string> RemoveProvisionedAppx,
+    byte[]? WingetImportJson = null,
+    bool PackageStrict = false);
 
 public sealed record UnattendArtifact(string Xml);
 
@@ -56,7 +61,11 @@ public sealed record JobDescriptor(
     string? WslInstallKind = null,
     string? WslFromFileRepo = null,
     IReadOnlyList<string>? WslFromFileAssetNames = null,
-    bool AuditStrict = false);
+    bool AuditStrict = false,
+    IReadOnlyList<string>? ScoopBuckets = null,
+    string? DohPrimary = null,
+    string? DohSecondary = null,
+    string? DohTemplate = null);
 
 public sealed record ServicingStageList(IReadOnlyList<ServicingStage> Stages);
 
@@ -97,7 +106,6 @@ public enum ServicingOpcode
 {
     MountInstallWim,
     StagePayload,
-    InjectUnattend,
     StageOobeUnattend,
     PatchBootWimApply,
     StampOfflineShell,

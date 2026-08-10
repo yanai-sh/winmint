@@ -25,7 +25,9 @@ param(
 
     [switch] $RequireOutputIso,
 
-    [switch] $ExpectNativePackageAuditJobs
+    [switch] $ExpectNativePackageAuditJobs,
+
+    [switch] $ExpectWingetImport
 )
 
 Set-StrictMode -Version Latest
@@ -68,8 +70,61 @@ if ($RequireOutputIso) {
     if (-not (Test-Path -LiteralPath $outIso)) {
         throw "Output ISO missing: $outIso"
     }
-    if ($digestMap.ContainsKey('outputIso.sha256') -and [string]::IsNullOrWhiteSpace($digestMap['outputIso.sha256'])) {
-        throw 'outputIso.sha256 digest empty'
+    if (-not $digestMap.ContainsKey('outputIso.sha256') -or [string]::IsNullOrWhiteSpace($digestMap['outputIso.sha256'])) {
+        throw 'outputIso.sha256 digest missing/empty in evidence.json'
+    }
+    $liveIsoSha = (Get-FileHash -LiteralPath $outIso -Algorithm SHA256).Hash.ToLowerInvariant()
+    $claimedIsoSha = $digestMap['outputIso.sha256'].ToLowerInvariant()
+    if ($liveIsoSha -ne $claimedIsoSha) {
+        throw "outputIso.sha256 mismatch: evidence=$claimedIsoSha live=$liveIsoSha (re-run BuildIso or refresh evidence)"
+    }
+}
+
+# Single-image apply: LaunchApply must target index 1 (not source Pro index 3).
+$bootMarker = Join-Path $WorkDirectory 'media\sources\.winmint-boot-apply'
+$bootWim = Join-Path $WorkDirectory 'media\sources\boot.wim'
+if (Test-Path -LiteralPath $bootWim) {
+    if (-not (Test-Path -LiteralPath $bootMarker)) {
+        throw "WinPE apply marker missing: $bootMarker"
+    }
+    $markerText = (Get-Content -LiteralPath $bootMarker -Raw -Encoding utf8).Trim()
+    if ($markerText -ne 'apply+wimIndex=1') {
+        throw "WinPE apply marker must be apply+wimIndex=1 (got '$markerText')"
+    }
+
+    # Marker alone is not enough — verify LaunchApply.cmd inside boot.wim index 1.
+    $bootMount = Join-Path $WorkDirectory '_metal-boot-assert'
+    if (Test-Path -LiteralPath $bootMount) {
+        & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
+        Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
+    try {
+        & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:1 /MountDir:$bootMount /ReadOnly
+        if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:1 for metal assert failed: $LASTEXITCODE" }
+        $launchPath = Join-Path $bootMount 'Windows\System32\LaunchApply.cmd'
+        if (-not (Test-Path -LiteralPath $launchPath)) {
+            throw 'LaunchApply.cmd missing inside boot.wim index 1'
+        }
+        $launchBody = Get-Content -LiteralPath $launchPath -Raw -Encoding utf8
+        if ($launchBody -notmatch '/Index:1\b') {
+            throw 'LaunchApply.cmd must Apply-Image /Index:1 (single-image export)'
+        }
+        if ($launchBody -match '/Index:(\d+)' -and [int]$Matches[1] -ne 1) {
+            throw "LaunchApply.cmd has wrong /Index:$($Matches[1]) (need 1)"
+        }
+        $winpeshlPath = Join-Path $bootMount 'Windows\System32\winpeshl.ini'
+        if (-not (Test-Path -LiteralPath $winpeshlPath)) {
+            throw 'winpeshl.ini missing inside boot.wim index 1'
+        }
+        $winpeshlBody = Get-Content -LiteralPath $winpeshlPath -Raw -Encoding utf8
+        if ($winpeshlBody -notmatch 'LaunchApply\.cmd') {
+            throw 'winpeshl.ini must launch LaunchApply.cmd'
+        }
+    }
+    finally {
+        & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
+        Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -123,13 +178,27 @@ if ($ExpectNativePackageAuditJobs) {
     $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
     $auditJobs = @($jobsDoc.jobs | Where-Object { [string]$_.kind -eq 'package.auditNative' })
     if ($auditJobs.Count -eq 0) {
-        throw 'payload/jobs.json must include package.auditNative when Profile lists winget packages'
+        throw 'payload/jobs.json must include package.auditNative when -ExpectNativePackageAuditJobs'
     }
-    $wingetJobs = @($jobsDoc.jobs | Where-Object {
-            [string]$_.kind -eq 'winget' -and -not [string]::IsNullOrWhiteSpace([string]$_.wingetArchitecture)
-        })
-    if ($wingetJobs.Count -eq 0) {
-        throw 'payload/jobs.json must include winget jobs with wingetArchitecture for ARM64 metal profiles'
+}
+
+if ($ExpectWingetImport) {
+    $importPath = Join-Path $WorkDirectory 'payload\winget-import.json'
+    if (-not (Test-Path -LiteralPath $importPath)) {
+        throw "payload/winget-import.json missing: $importPath (ExpectWingetImport)"
+    }
+    $importDoc = Get-Content -LiteralPath $importPath -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($null -eq $importDoc.Sources -or @($importDoc.Sources).Count -eq 0) {
+        throw 'winget-import.json must include Sources[]'
+    }
+    $jobsPath = Join-Path $WorkDirectory 'payload\jobs.json'
+    if (-not (Test-Path -LiteralPath $jobsPath)) {
+        throw "payload/jobs.json missing: $jobsPath (ExpectWingetImport)"
+    }
+    $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+    $importJobs = @($jobsDoc.jobs | Where-Object { [string]$_.kind -eq 'winget.import' })
+    if ($importJobs.Count -eq 0) {
+        throw 'payload/jobs.json must include winget.import when -ExpectWingetImport'
     }
 }
 

@@ -2,23 +2,64 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
              x:Class="WinMint.Wizard.Views.ReviewStepView"
-             x:DataType="vm:WizardShellViewModel">
-  <StackPanel Spacing="20" MaxWidth="720" HorizontalAlignment="Center" VerticalAlignment="Center">
-    <TextBlock Classes="hero-title" Text="Review output" />
-    <TextBlock Classes="hero-sub"
-               Text="Save the Profile, then build. Build elevates once (UAC) and runs the same ImageServicing path as Cli." />
+             x:DataType="vm:WizardViewModel">
+  <StackPanel Spacing="18" MaxWidth="760" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <TextBlock Classes="hero-title" Text="Review" />
+    <TextBlock Classes="hero-sub" Text="{Binding QuietSummaryText}" />
 
     <Border Classes="iso-stage">
       <StackPanel Spacing="14">
-        <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
+        <TextBlock Text="{Binding PickStripText}"
+                   TextWrapping="Wrap"
+                   FontWeight="Medium"
+                   IsVisible="{Binding PickStripText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Text="{Binding QuietBlockText}"
+                   TextWrapping="Wrap"
+                   Opacity="0.7"
+                   FontSize="13" />
+        <TextBlock Text="{Binding PlanMetaText}"
+                   TextWrapping="Wrap"
+                   Opacity="0.55"
+                   FontSize="12" />
+
+        <Expander Header="What's included" IsExpanded="False"
+                   IsVisible="{Binding WhatsIncludedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding WhatsIncludedText}" TextWrapping="Wrap" Opacity="0.75" Margin="0,8,0,0" />
+        </Expander>
+
+        <Expander Header="Show full plan" IsExpanded="False"
+                   IsVisible="{Binding FullPlanText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding FullPlanText}"
+                     TextWrapping="Wrap"
+                     Opacity="0.8"
+                     Margin="0,8,0,0"
+                     FontFamily="Cascadia Mono, Consolas, monospace"
+                     FontSize="12" />
+        </Expander>
+
+        <Expander Header="Plan detail" IsExpanded="False">
+          <StackPanel Spacing="8" Margin="0,8,0,0">
+            <TextBlock Text="{Binding PlanSummary}" TextWrapping="Wrap" Opacity="0.75" />
+            <Button Classes="ghost" Content="Re-run Plan" HorizontalAlignment="Left" Command="{Binding ReplanCommand}" />
+            <TextBox Text="{Binding PreviewJson}"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="NoWrap"
+                     MinHeight="160"
+                     FontFamily="Cascadia Mono, Consolas, monospace"
+                     PlaceholderText="Profile JSON" />
+          </StackPanel>
+        </Expander>
+      </StackPanel>
+    </Border>
+
+    <Border Classes="panel-card" HorizontalAlignment="Stretch">
+      <StackPanel Spacing="14">
+        <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto" RowSpacing="8">
           <TextBlock Text="Source" Opacity="0.55" />
           <TextBlock Grid.Column="1" Text="{Binding SourceIsoPath}" TextWrapping="Wrap" TextAlignment="Right" />
-          <TextBlock Grid.Row="1" Text="Lane" Opacity="0.55" />
-          <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ImageQuality}" TextAlignment="Right" />
-          <TextBlock Grid.Row="2" Text="Plan" Opacity="0.55" />
-          <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PlanSummary}" TextWrapping="Wrap" TextAlignment="Right" />
-          <TextBlock Grid.Row="3" Text="Output" Opacity="0.55" />
-          <TextBlock Grid.Row="3" Grid.Column="1"
+          <TextBlock Grid.Row="1" Text="Output" Opacity="0.55" />
+          <TextBlock Grid.Row="1" Grid.Column="1"
                      Text="{Binding OutputIsoPath}"
                      TextWrapping="Wrap"
                      TextAlignment="Right" />
@@ -51,5 +92,10 @@
                  FontFamily="Cascadia Mono, Consolas, monospace" />
       </StackPanel>
     </Border>
+
+    <TextBlock Text="{Binding Status}"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource SystemErrorTextColor}"
+               IsVisible="{Binding StatusIsError}" />
   </StackPanel>
 </UserControl>

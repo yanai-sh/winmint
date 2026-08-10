@@ -170,22 +170,81 @@ public sealed class PackageCatalog
             ? DefaultImageArchitecture
             : NormalizeArch(run.ImageArchitecture);
 
+    // ponytail: product-constant winget always non-empty (ADR-009); phase is arch-only until constants become optional.
+    public static PackagePhase EffectivePackagePhase(string imageArchitecture) =>
+        string.Equals(NormalizeArch(imageArchitecture), "arm64", StringComparison.OrdinalIgnoreCase)
+            ? PackagePhase.WingetImport
+            : PackagePhase.PerJob;
+
+    public IReadOnlyList<string> ToolCatalogKeys => _toolsByKey.Keys.ToList();
+
+    /// <summary>Validate maintainer invariants for the shipped package catalog.</summary>
+    public IReadOnlyList<string> Validate()
+    {
+        List<string> errors = [];
+        foreach (string key in ToolCatalogKeys)
+        {
+            if (!TryGetToolByKey(key, out PackageToolEntry? tool))
+            {
+                continue;
+            }
+
+            if (tool.Architectures.Count == 0
+                || !tool.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add($"Tool '{key}' ({tool.InstallId}) missing arm64 in catalog architectures.");
+            }
+
+            if (string.Equals(tool.Source, "scoop", StringComparison.OrdinalIgnoreCase))
+            {
+                string bucket = tool.ScoopBucket ?? "main";
+                if (bucket is not ("main" or "extras"))
+                {
+                    errors.Add($"Tool '{key}' has unsupported scoopBucket '{bucket}'.");
+                }
+
+                if ((tool.InstallId is "komorebi" or "whkd") && bucket != "extras")
+                {
+                    errors.Add($"Tool '{key}' must declare scoopBucket extras.");
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    public IReadOnlySet<string> ScoopBucketsForInstallIds(IEnumerable<string> installIds)
+    {
+        HashSet<string> buckets = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string installId in installIds)
+        {
+            if (_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
+                && string.Equals(tool.Source, "scoop", StringComparison.OrdinalIgnoreCase))
+            {
+                buckets.Add(tool.ScoopBucket ?? "main");
+            }
+        }
+
+        return buckets;
+    }
+
     public IReadOnlyList<string> ValidateProfilePackages(
         Profile profile,
         string imageArchitecture,
-        out PlanFailure? failure)
+        out Failure? failure)
     {
         failure = null;
         string imageArch = NormalizeArch(imageArchitecture);
         List<string> wingetAuditTargets = [];
+        IReadOnlyList<string> wingetIds = ProductPosture.MergeWinget(profile.WingetPackages);
 
-        foreach (string installId in profile.WingetPackages)
+        foreach (string installId in wingetIds)
         {
             if (!_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
                 || !string.Equals(tool.Source, "winget", StringComparison.OrdinalIgnoreCase)
                     && !string.Equals(tool.Source, "store", StringComparison.OrdinalIgnoreCase))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unknown",
                     $"packages.winget id '{installId}' is not in the shipped package catalog.");
                 return [];
@@ -194,7 +253,7 @@ public sealed class PackageCatalog
             if (imageArch == "arm64"
                 && !tool.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unsupportedArch",
                     $"{tool.DisplayName} ({installId}) does not support arm64 in the package catalog.");
                 return [];
@@ -208,7 +267,7 @@ public sealed class PackageCatalog
             if (!_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
                 || !string.Equals(tool.Source, "scoop", StringComparison.OrdinalIgnoreCase))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unknown",
                     $"packages.scoop id '{installId}' is not in the shipped package catalog.");
                 return [];
@@ -217,7 +276,7 @@ public sealed class PackageCatalog
             if (imageArch == "arm64"
                 && !tool.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unsupportedArch",
                     $"{tool.DisplayName} ({installId}) does not support arm64 in the package catalog.");
                 return [];
@@ -228,7 +287,7 @@ public sealed class PackageCatalog
         {
             if (!TryGetWslByProfileToken(token, out WslDistroEntry? entry))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unknown",
                     $"packages.wsl token '{token}' is not in the shipped WSL catalog.");
                 return [];
@@ -237,7 +296,7 @@ public sealed class PackageCatalog
             if (imageArch == "arm64"
                 && !entry.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
             {
-                failure = new PlanFailure(
+                failure = new Failure(
                     "packages.catalog.unsupportedArch",
                     $"{entry.DisplayName} ({token}) does not support arm64 in the WSL catalog.");
                 return [];
@@ -285,7 +344,8 @@ public sealed class PackageCatalog
                     dto.DisplayName ?? key,
                     dto.Source,
                     dto.Id,
-                    arch);
+                    arch,
+                    dto.ScoopBucket);
                 toolsByKey[key] = entry;
                 toolsByInstallId[dto.Id] = entry;
             }
@@ -322,7 +382,8 @@ public sealed record PackageToolEntry(
     string DisplayName,
     string Source,
     string InstallId,
-    IReadOnlyList<string> Architectures);
+    IReadOnlyList<string> Architectures,
+    string? ScoopBucket = null);
 
 public sealed record WslDistroEntry(
     string ProfileToken,
@@ -373,6 +434,9 @@ internal sealed class PackageToolDto
 
     [JsonPropertyName("architectures")]
     public string[]? Architectures { get; set; }
+
+    [JsonPropertyName("scoopBucket")]
+    public string? ScoopBucket { get; set; }
 }
 
 internal sealed class WslDistroDto

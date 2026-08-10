@@ -7,12 +7,10 @@ namespace WinMint.Tests;
 public class WinPeApplyPlanTests
 {
     [Fact]
-    public void Plan_winpeApply_emits_oobe_unattend_stages_without_windowsPE()
+    public void Plan_emits_oobe_unattend_stages_without_windowsPE()
     {
         Profile profile = ParseProfile();
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
-            profile,
-            new RunOptions { InstallEngine = InstallEngine.WinPeApply });
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
@@ -36,27 +34,10 @@ public class WinPeApplyPlanTests
     }
 
     [Fact]
-    public void Plan_legacy_still_emits_InjectUnattend_with_windowsPE()
+    public void Apply_materializes_winpe_opcode_params()
     {
         Profile profile = ParseProfile();
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
-            profile,
-            new RunOptions { InstallEngine = InstallEngine.Legacy });
-
-        Assert.True(result.IsOk);
-        Assert.Contains("windowsPE", result.Value.Unattend.Xml, StringComparison.Ordinal);
-        Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.InjectUnattend);
-        Assert.DoesNotContain(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.StageOobeUnattend);
-        Assert.DoesNotContain(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.PatchBootWimApply);
-    }
-
-    [Fact]
-    public void Apply_winpeApply_materializes_new_opcode_params()
-    {
-        Profile profile = ParseProfile();
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(
-            profile,
-            new RunOptions { InstallEngine = InstallEngine.WinPeApply });
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
 
         string work = NewTempDir();
@@ -70,7 +51,7 @@ public class WinPeApplyPlanTests
                 WimIndex: 3);
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, ServicingFailure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
                 planned.Value,
                 run,
                 runner,
@@ -86,9 +67,13 @@ public class WinPeApplyPlanTests
                     && mount == ImageServicing.HostMountDir);
             Assert.Contains(
                 runner.Stages,
+                s => s.Opcode == ServicingOpcode.MountInstallWim
+                    && s.Parameters.TryGetValue(StageParams.WimIndex, out string? sourceIndex)
+                    && sourceIndex == "3");
+            Assert.Contains(
+                runner.Stages,
                 s => s.Opcode == ServicingOpcode.PatchBootWimApply
-                    && s.Parameters.TryGetValue(StageParams.WimIndex, out string? index)
-                    && index == "3"
+                    && !s.Parameters.ContainsKey(StageParams.WimIndex)
                     && s.Parameters.TryGetValue(StageParams.MediaDir, out string? media)
                     && media.EndsWith("media", StringComparison.OrdinalIgnoreCase));
             string written = File.ReadAllText(Path.Combine(work, "unattend.xml"));
@@ -104,6 +89,11 @@ public class WinPeApplyPlanTests
     public void PatchBootWimApply_script_contains_apply_lane_steps_not_legacy_setup()
     {
         string script = File.ReadAllText(FindPatchBootScript());
+        Assert.Contains("$bootWim = Join-Path $mediaDir", script, StringComparison.Ordinal);
+        Assert.Contains("$applyWimIndex = 1", script, StringComparison.Ordinal);
+        Assert.Contains("/Index:$applyWimIndex", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("/Index:$wimIndex", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("$wimIndex = [int]$Parameters['wimIndex']", script, StringComparison.Ordinal);
         Assert.Contains("LaunchApply.cmd", script, StringComparison.Ordinal);
         Assert.Contains("diskpart", script, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Apply-Image", script, StringComparison.Ordinal);
@@ -112,24 +102,38 @@ public class WinPeApplyPlanTests
         Assert.Contains("LabConfig", script, StringComparison.Ordinal);
         Assert.DoesNotContain("setup.exe", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("/legacy", script, StringComparison.Ordinal);
+        // Skip path must verify LaunchApply content — marker alone hid Index:3 after code fix.
+        Assert.Contains("Test-LaunchApplyPatched", script, StringComparison.Ordinal);
+        Assert.Contains("LaunchApply Index:1 verified", script, StringComparison.Ordinal);
+        Assert.Contains(".winmint-boot-legacy", script, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Plan_default_install_engine_is_winpeApply()
+    public void BuildIso_script_refreshes_outputIso_digest_in_evidence()
     {
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(ParseProfile());
+        string script = File.ReadAllText(FindServicingScript("Build-Iso.ps1"));
+        Assert.Contains("outputIso.sha256", script, StringComparison.Ordinal);
+        Assert.Contains("evidence.json", script, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
+        Assert.Contains("failure.json", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_emits_winpe_stages_only()
+    {
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(ParseProfile());
         Assert.True(result.IsOk);
+        Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.StageOobeUnattend);
         Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.PatchBootWimApply);
-        Assert.DoesNotContain(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.InjectUnattend);
     }
 
     private static Profile ParseProfile()
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -148,7 +152,9 @@ public class WinPeApplyPlanTests
         return parsed.Value;
     }
 
-    private static string FindPatchBootScript()
+    private static string FindPatchBootScript() => FindServicingScript("Patch-BootWimApply.ps1");
+
+    private static string FindServicingScript(string fileName)
     {
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "WinMint.slnx")))
@@ -157,7 +163,7 @@ public class WinPeApplyPlanTests
         }
 
         Assert.NotNull(dir);
-        return Path.Combine(dir.FullName, "servicing", "Patch-BootWimApply.ps1");
+        return Path.Combine(dir.FullName, "servicing", fileName);
     }
 
     private static string NewTempDir()

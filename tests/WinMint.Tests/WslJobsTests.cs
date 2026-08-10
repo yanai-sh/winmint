@@ -13,7 +13,7 @@ public class WslJobsTests
     {
         Profile profile = Parse(MinimalJson(wsl: ["Ubuntu"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         JobDescriptor ubuntu = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "wsl");
@@ -28,7 +28,7 @@ public class WslJobsTests
     {
         Profile profile = Parse(MinimalJson(wsl: ["NixOS-WSL"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         JobDescriptor nix = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "wsl");
@@ -43,7 +43,7 @@ public class WslJobsTests
     {
         Profile profile = Parse(MinimalJson(wsl: ["Ubuntu"], wslNeedsReboot: ["Ubuntu"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         Assert.True(Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "wsl").NeedsReboot);
@@ -54,7 +54,7 @@ public class WslJobsTests
     {
         Profile profile = Parse(MinimalJson(wsl: ["Ubuntu"], wslNeedsReboot: ["Debian"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("packages.wslNeedsReboot.unknown", result.Error.Code);
@@ -82,10 +82,10 @@ public class WslJobsTests
 
     private static Profile Parse(string json)
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
         if (!parsed.IsOk)
         {
-            Assert.Fail(string.Join("; ", parsed.Error.Issues.Select(i => $"{i.Code}: {i.Message}")));
+            Assert.Fail(string.Join("; ", parsed.Error.Select(i => $"{i.Code}: {i.Message}")));
         }
 
         return parsed.Value;
@@ -112,7 +112,7 @@ public class WslJobsTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },

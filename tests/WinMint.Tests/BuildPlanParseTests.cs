@@ -11,10 +11,10 @@ public class BuildPlanParseTests
     [InlineData("not-json")]
     public void TryParseProfile_invalid_json_returns_document_error(string json)
     {
-        Result<Profile, DocumentErrors> result = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
+        Result<Profile, IReadOnlyList<DocumentError>> result = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
 
         Assert.False(result.IsOk);
-        Assert.NotEmpty(result.Error.Issues);
-        Assert.Contains(result.Error.Issues, i => i.Code == "document.invalidJson");
+        Assert.NotEmpty(result.Error);
+        Assert.Contains(result.Error, i => i.Code == "document.invalidJson");
     }
 }

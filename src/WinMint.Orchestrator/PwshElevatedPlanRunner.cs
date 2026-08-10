@@ -8,7 +8,7 @@ namespace WinMint.Orchestrator;
 /// <summary>One elevated <c>pwsh -File servicing/RunPlan.ps1</c> invocation per Apply (single UAC).</summary>
 public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 {
-    public Result<ImageEvidence, ServicingFailure> Execute(
+    public Result<ImageEvidence, Failure> Execute(
         string workDirectory,
         IReadOnlyList<ServicingStage> stages,
         ServicingRun run,
@@ -18,8 +18,8 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         string? runPlan = FindRunPlanScript();
         if (runPlan is null)
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure("servicing.runPlan.missing", "servicing/RunPlan.ps1 not found."));
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.runPlan.missing", "servicing/RunPlan.ps1 not found."));
         }
 
         string pwsh = ResolvePwsh();
@@ -67,27 +67,27 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 
             if (ct.IsCancellationRequested)
             {
-                return Result.Fail<ImageEvidence, ServicingFailure>(
-                    new ServicingFailure("servicing.cancelled", "Apply was cancelled."));
+                return Result.Fail<ImageEvidence, Failure>(
+                    new Failure("servicing.cancelled", "Apply was cancelled."));
             }
 
             if (process.ExitCode != 0)
             {
                 string message = ReadFailureMessage(workDirectory) ?? $"RunPlan exited {process.ExitCode}.";
-                return Result.Fail<ImageEvidence, ServicingFailure>(
-                    new ServicingFailure("servicing.runPlan.failed", message));
+                return Result.Fail<ImageEvidence, Failure>(
+                    new Failure("servicing.runPlan.failed", message));
             }
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure("servicing.elevation.failed", ex.Message));
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.elevation.failed", ex.Message));
         }
 
         return ReadEvidence(workDirectory, plan, run, stages);
     }
 
-    private static Result<ImageEvidence, ServicingFailure> ReadEvidence(
+    private static Result<ImageEvidence, Failure> ReadEvidence(
         string workDirectory,
         BuildArtifacts plan,
         ServicingRun run,
@@ -96,8 +96,8 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         string evidencePath = Path.Combine(workDirectory, "evidence.json");
         if (!File.Exists(evidencePath))
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure("servicing.evidence.missing", "RunPlan succeeded but evidence.json is missing."));
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.evidence.missing", "RunPlan succeeded but evidence.json is missing."));
         }
 
         EvidenceFile? file;
@@ -109,15 +109,15 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         }
         catch (JsonException ex)
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure("servicing.evidence.invalid", ex.Message));
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.evidence.invalid", ex.Message));
         }
 
         if (file is null
             || !string.Equals(file.SchemaVersion, ImageServicing.EvidenceSchemaVersion, StringComparison.Ordinal))
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure(
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
                     "servicing.evidence.schema",
                     $"Expected {ImageServicing.EvidenceSchemaVersion}."));
         }
@@ -127,13 +127,13 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
             || !stamp.Parameters.TryGetValue(StageParams.ShellTarget, out string? shellTarget)
             || string.IsNullOrWhiteSpace(shellTarget))
         {
-            return Result.Fail<ImageEvidence, ServicingFailure>(
-                new ServicingFailure(
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
                     "servicing.shellStamp.missing",
                     "StampOfflineShell stage missing or incomplete."));
         }
 
-        return Result.Ok<ImageEvidence, ServicingFailure>(
+        return Result.Ok<ImageEvidence, Failure>(
             new ImageEvidence(
                 file.OutputIsoPath ?? run.OutputIsoPath ?? Path.Combine(workDirectory, "out.iso"),
                 plan.Manifest.ImageQuality,

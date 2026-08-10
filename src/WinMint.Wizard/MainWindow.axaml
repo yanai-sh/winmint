@@ -3,7 +3,7 @@
         xmlns:vm="using:WinMint.Wizard.ViewModels"
         xmlns:views="using:WinMint.Wizard.Views"
         x:Class="WinMint.Wizard.MainWindow"
-        x:DataType="vm:WizardShellViewModel"
+        x:DataType="vm:WizardViewModel"
         Title="WinMint"
         Width="1280"
         Height="860"
@@ -42,8 +42,8 @@
     <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
       <Panel Margin="56,28,56,24">
         <views:SourceStepView IsVisible="{Binding IsSourceStep}" />
-        <views:ConfigureStepView IsVisible="{Binding IsConfigureStep}" />
-        <views:PreviewStepView IsVisible="{Binding IsPreviewStep}" />
+        <views:AccountStepView IsVisible="{Binding IsAccountStep}" />
+        <views:SoftwareStepView IsVisible="{Binding IsSoftwareStep}" />
         <views:ReviewStepView IsVisible="{Binding IsReviewStep}" />
       </Panel>
     </ScrollViewer>
@@ -55,17 +55,32 @@
             BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
             Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
       <DockPanel>
-        <TextBlock Text="{Binding StageLabel}"
-                   VerticalAlignment="Center"
-                   FontSize="12"
-                   FontWeight="Medium"
-                   Opacity="0.55"
-                   LetterSpacing="1" />
+        <!-- Stage scrub — click Source/Account/Software/Review to jump directly (moodboard intent, no pixel morph). -->
+        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Classes="stage-scrub" Classes.active="{Binding IsSourceStep}"
+                  Content="1 Source" Command="{Binding GoToSourceCommand}" IsEnabled="{Binding CanGoToSource}" />
+          <Button Classes="stage-scrub" Classes.active="{Binding IsAccountStep}"
+                  Content="2 Account" Command="{Binding GoToAccountCommand}" IsEnabled="{Binding CanGoToAccount}" />
+          <Button Classes="stage-scrub" Classes.active="{Binding IsSoftwareStep}"
+                  Content="3 Software" Command="{Binding GoToSoftwareCommand}" IsEnabled="{Binding CanGoToSoftware}" />
+          <Button Classes="stage-scrub" Classes.active="{Binding IsReviewStep}"
+                  Content="4 Review" Command="{Binding GoToReviewCommand}" IsEnabled="{Binding CanGoToReview}" />
+        </StackPanel>
         <StackPanel DockPanel.Dock="Right"
                     Orientation="Horizontal"
                     Spacing="10"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Center">
+          <!-- Build/Cancel live here (status bar) so they're reachable from any stage, not just Included (US#11/#28). -->
+          <Button Classes="ghost"
+                  Content="Cancel"
+                  Command="{Binding CancelBuildCommand}"
+                  IsVisible="{Binding IsBusy}" />
+          <Button Classes="primary"
+                  Content="Build"
+                  Command="{Binding BuildCommand}"
+                  IsEnabled="{Binding CanBuild}"
+                  ToolTip.Tip="Requires a saved Profile and an existing Source ISO. Elevates via UAC." />
           <Button Classes="ghost"
                   Content="Back"
                   Command="{Binding BackCommand}"

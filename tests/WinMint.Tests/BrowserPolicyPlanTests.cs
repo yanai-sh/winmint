@@ -10,7 +10,7 @@ public class BrowserPolicyPlanTests
     {
         Profile profile = Lab();
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
 
         ServicingStage policies = Assert.Single(
@@ -21,7 +21,8 @@ public class BrowserPolicyPlanTests
         Assert.Contains("DisableFileSyncNGSC", specs, StringComparison.Ordinal);
         Assert.Contains("PreventDeviceMetadataFromNetwork", specs, StringComparison.Ordinal);
         Assert.Contains("DisableWpbtExecution", specs, StringComparison.Ordinal);
-        Assert.Contains("HubsSidebarEnabled", specs, StringComparison.Ordinal);
+        Assert.DoesNotContain("HubsSidebarEnabled", specs, StringComparison.Ordinal);
+        Assert.DoesNotContain("TurnOffWindowsCopilot", specs, StringComparison.Ordinal);
         Assert.DoesNotContain("BraveRewardsDisabled", specs, StringComparison.Ordinal);
 
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
@@ -45,7 +46,7 @@ public class BrowserPolicyPlanTests
     [Fact]
     public void Plan_brave_winget_adds_brave_debloat_rows()
     {
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(Lab(winget: ["Brave.Brave"]));
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(Lab(winget: ["Brave.Brave"]));
         Assert.True(result.IsOk);
         string specs = Assert.Single(
             result.Value.Stages.Stages,
@@ -55,41 +56,70 @@ public class BrowserPolicyPlanTests
     }
 
     [Fact]
-    public void Plan_keep_copilot_omits_copilot_kill_rows()
+    public void Plan_doh_provider_emits_doh_job_with_resolved_params()
     {
-        Result<BuildArtifacts, PlanFailure> result =
-            BuildPlan.Plan(Lab(policies: new PoliciesProfile(KeepCopilot: true)));
-        Assert.True(result.IsOk);
-        string specs = Assert.Single(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.StampOfflinePolicies).Parameters[StageParams.PolicySpecs];
-        Assert.DoesNotContain("HubsSidebarEnabled", specs, StringComparison.Ordinal);
-        Assert.DoesNotContain("TurnOffWindowsCopilot", specs, StringComparison.Ordinal);
-        Assert.Contains("HideFirstRunExperience", specs, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Plan_doh_provider_emits_doh_job()
-    {
-        Result<BuildArtifacts, PlanFailure> result =
+        Result<BuildArtifacts, Failure> result =
             BuildPlan.Plan(Lab(policies: new PoliciesProfile(DohProvider: "cloudflare")));
         Assert.True(result.IsOk);
-        Assert.Contains(
-            result.Value.Jobs.Jobs,
-            j => j.Kind == "doh.set" && j.PackageId == "cloudflare");
+        JobDescriptor job = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "doh.set");
+        Assert.Equal("cloudflare", job.PackageId);
+        Assert.Equal("1.1.1.1", job.DohPrimary);
+        Assert.Equal("1.0.0.1", job.DohSecondary);
+        Assert.Equal("https://cloudflare-dns.com/dns-query", job.DohTemplate);
+
+        using JsonDocument doc = JsonDocument.Parse(BuildPlan.SerializeJobsDump(result.Value.Jobs));
+        JsonElement dumped = Assert.Single(
+            doc.RootElement.GetProperty("jobs").EnumerateArray(),
+            e => e.GetProperty("kind").GetString() == "doh.set");
+        Assert.Equal("1.1.1.1", dumped.GetProperty("dohPrimary").GetString());
+        Assert.Equal("1.0.0.1", dumped.GetProperty("dohSecondary").GetString());
+        Assert.Equal("https://cloudflare-dns.com/dns-query", dumped.GetProperty("dohTemplate").GetString());
     }
 
     [Fact]
-    public void Serialize_keep_copilot_round_trips()
+    public void Serialize_doh_round_trips_without_keep_copilot()
     {
-        Profile profile = Lab(policies: new PoliciesProfile(KeepCopilot: true));
+        Profile profile = Lab(policies: new PoliciesProfile(DohProvider: "quad9"));
         byte[] utf8 = BuildPlan.SerializeProfile(profile);
         using JsonDocument doc = JsonDocument.Parse(utf8);
-        Assert.True(doc.RootElement.GetProperty("policies").GetProperty("keepCopilot").GetBoolean());
+        Assert.Equal("quad9", doc.RootElement.GetProperty("policies").GetProperty("dohProvider").GetString());
+        Assert.False(doc.RootElement.GetProperty("policies").TryGetProperty("keepCopilot", out _));
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
         Assert.True(parsed.IsOk);
-        Assert.True(parsed.Value.EffectivePolicies.KeepCopilot);
+        Assert.Equal("quad9", parsed.Value.EffectivePolicies.DohProvider);
+    }
+
+    [Fact]
+    public void Parse_ignores_legacy_keep_copilot_json()
+    {
+        byte[] utf8 = """
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "localAutoLogon",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              },
+              "policies": {
+                "keepCopilot": true,
+                "dohProvider": "google"
+              }
+            }
+            """u8.ToArray();
+
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : parsed.Error[0].Message);
+        Assert.Equal("google", parsed.Value.EffectivePolicies.DohProvider);
     }
 
     [Fact]
@@ -101,9 +131,11 @@ public class BrowserPolicyPlanTests
     [Fact]
     public void Pwsh_store_path_detected()
     {
-        Assert.True(PwshHostGuard.IsStoreMsixPwsh(
+        Assert.True(ImageServicing.IsStoreMsixPwsh(
             @"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.4.0.0_arm64__8wekyb3d8bbwe\pwsh.exe"));
-        Assert.False(PwshHostGuard.IsStoreMsixPwsh(
+        Assert.True(ImageServicing.IsStoreMsixPwsh(
+            @"C:/Program Files/WindowsApps/Microsoft.PowerShellPreview_7.5.0.0_arm64__8wekyb3d8bbwe/pwsh.exe"));
+        Assert.False(ImageServicing.IsStoreMsixPwsh(
             @"C:\Program Files\PowerShell\7\pwsh.exe"));
     }
 

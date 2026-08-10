@@ -8,6 +8,7 @@ public static class BundleLoader
     public const string SchemaVersion = "winmint.provisioning.bundle/v1";
     public const string JobsSchemaVersion = "winmint.jobs/v1";
     public const string DefaultGuestBundlePath = @"C:\Windows\WinMint\bundle.json";
+    public const string DefaultGuestWingetImportPath = @"C:\Windows\WinMint\winget-import.json";
 
     public static ProvisioningBundle LoadFromFile(string path)
     {
@@ -48,9 +49,10 @@ public static class BundleLoader
                 dto.Settle?.LocationServicesEnabled),
             Jobs: jobs,
             Policy: SessionPolicy.SmokeDefaults,
-            Supervisor: new SupervisorIdentity(dto.SupervisorPath),
+            SupervisorShellPath: dto.SupervisorPath,
             RemoveProvisionedAppx: dto.RemoveProvisionedAppx ?? [],
-            RequiresNetwork: dto.RequiresNetwork);
+            RequiresNetwork: dto.RequiresNetwork,
+            PackageStrict: dto.PackageStrict);
     }
 
     private static ProvisionJob[] LoadJobs(string jobsPath)
@@ -83,7 +85,11 @@ public static class BundleLoader
                 j.WslInstallKind,
                 j.WslFromFileRepo,
                 j.WslFromFileAssetNames,
-                j.AuditStrict))
+                j.AuditStrict,
+                j.ScoopBuckets,
+                j.DohPrimary,
+                j.DohSecondary,
+                j.DohTemplate))
             .ToArray();
     }
 }
@@ -96,7 +102,8 @@ internal sealed record BundleFile(
     [property: JsonPropertyName("dmaEnabled")] bool DmaEnabled,
     [property: JsonPropertyName("settle")] SettleFile? Settle,
     [property: JsonPropertyName("removeProvisionedAppx")] string[]? RemoveProvisionedAppx,
-    [property: JsonPropertyName("requiresNetwork")] bool RequiresNetwork = false);
+    [property: JsonPropertyName("requiresNetwork")] bool RequiresNetwork = false,
+    [property: JsonPropertyName("packageStrict")] bool PackageStrict = false);
 
 internal sealed record SettleFile(
     [property: JsonPropertyName("locale")] string Locale,
@@ -117,10 +124,15 @@ internal sealed record JobFile(
     [property: JsonPropertyName("wslInstallKind")] string? WslInstallKind = null,
     [property: JsonPropertyName("wslFromFileRepo")] string? WslFromFileRepo = null,
     [property: JsonPropertyName("wslFromFileAssetNames")] string[]? WslFromFileAssetNames = null,
-    [property: JsonPropertyName("auditStrict")] bool AuditStrict = false);
+    [property: JsonPropertyName("auditStrict")] bool AuditStrict = false,
+    [property: JsonPropertyName("scoopBuckets")] string[]? ScoopBuckets = null,
+    [property: JsonPropertyName("dohPrimary")] string? DohPrimary = null,
+    [property: JsonPropertyName("dohSecondary")] string? DohSecondary = null,
+    [property: JsonPropertyName("dohTemplate")] string? DohTemplate = null);
 
 [JsonSerializable(typeof(BundleFile))]
 [JsonSerializable(typeof(JobsFile))]
 [JsonSerializable(typeof(ProvisioningEvidenceDocument))]
+[JsonSerializable(typeof(PackagesEvidenceDocument))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class ProvisioningJsonContext : JsonSerializerContext;

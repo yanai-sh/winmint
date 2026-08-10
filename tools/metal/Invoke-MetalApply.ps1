@@ -30,6 +30,9 @@ param(
     [string] $ImageQuality = 'Test',
 
     [Parameter(ParameterSetName = 'Run')]
+    [switch] $PackageStrict,
+
+    [Parameter(ParameterSetName = 'Run')]
     [switch] $SkipApply,
 
     [Parameter(Mandatory, ParameterSetName = 'AssertOnly')]
@@ -40,7 +43,9 @@ param(
 
     [switch] $ExpectDrivers,
 
-    [switch] $ExpectNativePackageAuditJobs
+    [switch] $ExpectNativePackageAuditJobs,
+
+    [switch] $ExpectWingetImport
 )
 
 Set-StrictMode -Version Latest
@@ -52,20 +57,21 @@ Set-Location $repoRoot
 $assertScript = Join-Path $PSScriptRoot 'Assert-MetalEvidence.ps1'
 
 function Invoke-MetalAssert {
-    param([string] $Dir, [switch] $Drivers, [switch] $NativeAuditJobs)
+    param([string] $Dir, [switch] $Drivers, [switch] $NativeAuditJobs, [switch] $WingetImport)
     $assertParams = @{
         WorkDirectory    = $Dir
         RequireOutputIso = $true
     }
     if ($Drivers) { $assertParams['ExpectDrivers'] = $true }
     if ($NativeAuditJobs) { $assertParams['ExpectNativePackageAuditJobs'] = $true }
+    if ($WingetImport) { $assertParams['ExpectWingetImport'] = $true }
     & $assertScript @assertParams
     if ($LASTEXITCODE -ne 0) { throw "Metal assert failed: $LASTEXITCODE" }
 }
 
 if ($AssertOnly) {
     $dir = if ([string]::IsNullOrWhiteSpace($WorkDirectory)) { $Work } else { $WorkDirectory }
-    Invoke-MetalAssert -Dir $dir -Drivers:$ExpectDrivers -NativeAuditJobs:$ExpectNativePackageAuditJobs
+    Invoke-MetalAssert -Dir $dir -Drivers:$ExpectDrivers -NativeAuditJobs:$ExpectNativePackageAuditJobs -WingetImport:$ExpectWingetImport
     exit 0
 }
 
@@ -80,7 +86,8 @@ if (-not (Test-Path -LiteralPath $Profile)) {
 }
 
 $expectDrivers = $ExpectDrivers
-$expectNativeAuditJobs = $false
+$expectNativeAuditJobs = $ExpectNativePackageAuditJobs
+$expectWingetImport = $ExpectWingetImport
 if (-not $expectDrivers) {
     try {
         $doc = Get-Content -LiteralPath $Profile -Raw -Encoding utf8 | ConvertFrom-Json
@@ -96,7 +103,9 @@ try {
     }
     if ($null -ne $doc.packages -and $null -ne $doc.packages.winget) {
         $wingetIds = @($doc.packages.winget | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
-        $expectNativeAuditJobs = $wingetIds.Count -gt 0
+        if ($wingetIds.Count -gt 0 -and -not $expectNativeAuditJobs) {
+            $expectWingetImport = $true
+        }
     }
 }
 catch {
@@ -115,13 +124,16 @@ if (-not $SkipApply) {
         $reuseArgs = @('--reuse-media')
     }
 
+    $strictArgs = @()
+    if ($PackageStrict) { $strictArgs = @('--package-strict') }
+
     Write-Host "Metal Apply Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality…"
     Write-Host 'Pre-wipe only: mutates offline WIM from Source ISO — does not install to this device.'
-    & dotnet run --project src/WinMint.Cli -- build $Profile --iso $Iso --work $Work --image-quality $ImageQuality --package-audit-strict @reuseArgs
+    & dotnet run --project src/WinMint.Cli -- build $Profile --iso $Iso --work $Work --image-quality $ImageQuality --package-audit-strict @strictArgs @reuseArgs
     if ($LASTEXITCODE -ne 0) { throw "Metal Apply failed: $LASTEXITCODE" }
 }
 
-Invoke-MetalAssert -Dir $Work -Drivers:$expectDrivers -NativeAuditJobs:$expectNativeAuditJobs
+Invoke-MetalAssert -Dir $Work -Drivers:$expectDrivers -NativeAuditJobs:$expectNativeAuditJobs -WingetImport:$expectWingetImport
 Write-Host "Metal gate OK. Work preserved: $Work"
 Write-Host 'Next step (manual, destructive): write out.iso to USB and bare-metal install — not run by this harness.'
 exit 0

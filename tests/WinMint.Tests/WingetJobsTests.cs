@@ -15,7 +15,7 @@ public class WingetJobsTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -34,7 +34,9 @@ public class WingetJobsTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { ImageArchitecture = "amd64", IncludeSmokeStubs = true });
 
         Assert.True(result.IsOk);
         IReadOnlyList<JobDescriptor> jobs = result.Value.Jobs.Jobs;
@@ -44,17 +46,19 @@ public class WingetJobsTests
         Assert.Equal("winget.Git.Git", git.Id);
         JobDescriptor vscode = Assert.Single(jobs, j => j.Kind == "winget" && j.PackageId == "Microsoft.VisualStudioCode");
         Assert.Equal("winget.Microsoft.VisualStudioCode", vscode.Id);
-        Assert.Equal(2, jobs.Count(j => j.Kind == "winget"));
+        Assert.Contains(jobs, j => j is { Kind: "winget", PackageId: "Git.MinGit" });
+        Assert.Contains(jobs, j => j is { Kind: "winget", PackageId: "Nilesoft.Shell" });
+        Assert.Equal(4, jobs.Count(j => j.Kind == "winget"));
     }
 
     [Fact]
-    public void Plan_without_packages_emits_stubs_only()
+    public void Plan_without_packages_still_emits_product_constant_winget()
     {
         Profile profile = Parse($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -70,23 +74,24 @@ public class WingetJobsTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "winget");
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "stub");
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "stub");
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
+        Assert.True(result.Value.Manifest.RequiresNetwork);
     }
 
     [Fact]
-    public void Plan_wingetNeedsReboot_subset_emits_needsReboot_on_matching_jobs()
+    public void Plan_wingetNeedsReboot_subset_sets_import_job_needsReboot()
     {
         Profile profile = Parse($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -106,7 +111,43 @@ public class WingetJobsTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk);
+        JobDescriptor importJob = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        Assert.True(importJob.NeedsReboot);
+    }
+
+    [Fact]
+    public void Plan_wingetNeedsReboot_subset_emits_needsReboot_on_matching_jobs()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              },
+              "packages": {
+                "winget": ["jqlang.jq", "Git.Git"],
+                "wingetNeedsReboot": ["jqlang.jq"]
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { ImageArchitecture = "amd64" });
 
         Assert.True(result.IsOk);
         JobDescriptor jq = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "jqlang.jq");
@@ -122,7 +163,7 @@ public class WingetJobsTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -142,7 +183,7 @@ public class WingetJobsTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("packages.wingetNeedsReboot.unknown", result.Error.Code);
@@ -201,7 +242,26 @@ public class WingetJobsTests
     }
 
     [Fact]
-    public void Shell_winget_job_fails_closed_when_resolve_returns_null()
+    public void Shell_winget_job_fails_closed_when_resolve_returns_null_and_strict()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+        RecordingAppx appx = new() { WingetPath = null };
+
+        SessionResult result = ProvisioningSession.Run(
+            SessionMode.Shell,
+            Bundle(jobs: [new ProvisionJob("winget.Git.Git", "winget", PackageId: "Git.Git")]) with { PackageStrict = true },
+            Env(processes, evidence, appx: appx),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.winget.path_missing", result.FinalStatus.Code);
+        Assert.Empty(processes.Starts);
+        Assert.Contains(ProvisioningSession.DesktopAppInstallerFamilyName, appx.RegisteredFamilyNames);
+    }
+
+    [Fact]
+    public void Shell_winget_job_best_effort_when_resolve_returns_null()
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
@@ -213,10 +273,8 @@ public class WingetJobsTests
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("jobs.winget.path_missing", result.FinalStatus.Code);
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Empty(processes.Starts);
-        Assert.Contains(ProvisioningSession.DesktopAppInstallerFamilyName, appx.RegisteredFamilyNames);
     }
 
     [Fact]
@@ -283,10 +341,10 @@ public class WingetJobsTests
 
     private static Profile Parse(string json)
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
         if (!parsed.IsOk)
         {
-            Assert.Fail(string.Join("; ", parsed.Error.Issues.Select(i => $"{i.Code}: {i.Message}")));
+            Assert.Fail(string.Join("; ", parsed.Error.Select(i => $"{i.Code}: {i.Message}")));
         }
 
         return parsed.Value;

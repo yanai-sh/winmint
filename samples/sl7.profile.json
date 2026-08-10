@@ -3,7 +3,7 @@
   "account": {
     "mode": "localAutoLogon",
     "username": "yanai",
-    "passwordPath": ".scratch/sl7.password",
+    "passwordPath": "../.scratch/sl7.password",
     "requireWifiDuringOobe": true
   },
   "dma": {
@@ -33,11 +33,11 @@
       "Microsoft.ZuneMusic",
       "Microsoft.ZuneVideo",
       "MicrosoftCorporationII.QuickAssist",
+      "Microsoft.Copilot",
       "Microsoft.GamingApp",
       "Microsoft.Xbox.TCUI",
       "Microsoft.XboxGamingOverlay",
-      "Microsoft.XboxSpeechToTextOverlay",
-      "Microsoft.Copilot"
+      "Microsoft.XboxSpeechToTextOverlay"
     ],
     "removeCapabilities": [
       "App.StepsRecorder~~~~0.0.1.0",

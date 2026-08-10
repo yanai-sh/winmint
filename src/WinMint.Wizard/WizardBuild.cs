@@ -35,11 +35,10 @@ internal static class WizardBuild
             return WizardBuildResult.Fail("wizard.build.imageQuality", laneError!);
         }
 
-        byte[] utf8 = File.ReadAllBytes(input.ProfilePath);
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(input.ProfilePath);
         if (!parsed.IsOk)
         {
-            string detail = string.Join("; ", parsed.Error.Issues.Select(static i => $"{i.Code}: {i.Message}"));
+            string detail = string.Join("; ", parsed.Error.Select(static i => $"{i.Code}: {i.Message}"));
             return WizardBuildResult.Fail("wizard.build.profile.invalid", detail);
         }
 
@@ -50,7 +49,7 @@ internal static class WizardBuild
             OutputIsoPath = string.IsNullOrWhiteSpace(input.OutputIsoPath) ? null : input.OutputIsoPath.Trim(),
         };
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value, runOptions);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value, runOptions);
         if (!planned.IsOk)
         {
             return WizardBuildResult.Fail(planned.Error.Code, planned.Error.Message);
@@ -73,7 +72,7 @@ internal static class WizardBuild
             ReuseMedia: input.ReuseMedia);
 
         IElevatedPlanRunner effective = runner ?? new PwshElevatedPlanRunner();
-        Result<ImageEvidence, ServicingFailure> applied =
+        Result<ImageEvidence, Failure> applied =
             ImageServicing.Apply(planned.Value, run, effective, cancellationToken);
 
         if (!applied.IsOk)

@@ -57,7 +57,6 @@ function Resolve-KernelScript {
     switch ($Opcode) {
         'MountInstallWim' { return Join-Path $scriptRoot 'Mount-InstallWim.ps1' }
         'StagePayload' { return Join-Path $scriptRoot 'Stage-Payload.ps1' }
-        'InjectUnattend' { return Join-Path $scriptRoot 'Inject-Unattend.ps1' }
         'StageOobeUnattend' { return Join-Path $scriptRoot 'Stage-OobeUnattend.ps1' }
         'PatchBootWimApply' { return Join-Path $scriptRoot 'Patch-BootWimApply.ps1' }
         'StampOfflineShell' { return Join-Path $scriptRoot 'Stamp-OfflineShell.ps1' }
@@ -167,5 +166,8 @@ if (Test-Path -LiteralPath $sidePath) {
     lane                  = $lane
     digests               = $digests
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'evidence.json') -Encoding utf8
+
+# Success clears prior stage failure crumbs (operators read failure.json as current).
+Remove-Item -LiteralPath (Join-Path $WorkDirectory 'failure.json') -Force -ErrorAction SilentlyContinue
 
 exit 0

@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WinMint.Wizard.ViewModels"
+             x:Class="WinMint.Wizard.Views.AccountStepView"
+             x:DataType="vm:WizardViewModel">
+  <StackPanel Spacing="22" MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <TextBlock Classes="hero-title" Text="Account" />
+    <TextBlock Classes="hero-sub"
+               Text="Local account for first sign-in. Password required — Windows autologon never accepts a blank one." />
+
+    <Border Classes="panel-card" HorizontalAlignment="Stretch">
+      <StackPanel Spacing="14">
+        <StackPanel Spacing="6">
+          <TextBlock Classes="panel-label" Text="USERNAME" />
+          <TextBox Text="{Binding Username}" PlaceholderText="winmint" />
+        </StackPanel>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="panel-label" Text="PASSWORD" />
+          <TextBox Text="{Binding Password}" PasswordChar="•" PlaceholderText="Required" />
+        </StackPanel>
+        <CheckBox Content="Require Wi-Fi during OOBE" IsChecked="{Binding RequireWifi}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="panel-card" HorizontalAlignment="Stretch">
+      <StackPanel Spacing="14">
+        <TextBlock Classes="panel-label" Text="REGION AFTER FIRST SIGN-IN" />
+        <TextBlock Classes="hero-sub"
+                   Text="DMA uses Ireland during Setup, then restores these settings after it settles." />
+        <StackPanel Spacing="6">
+          <TextBlock Classes="panel-label" Text="LOCALE" />
+          <TextBox Text="{Binding Locale}" PlaceholderText="en-GB" />
+        </StackPanel>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="panel-label" Text="GEO ID" />
+          <TextBox Text="{Binding GeoId}" PlaceholderText="242" />
+        </StackPanel>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="panel-label" Text="TIME ZONE" />
+          <TextBox Text="{Binding TimeZone}" PlaceholderText="GMT Standard Time" />
+        </StackPanel>
+        <CheckBox Content="Enable location services" IsChecked="{Binding LocationServices}" />
+        <Button Classes="ghost"
+                Content="Use this PC region"
+                HorizontalAlignment="Left"
+                Command="{Binding UseHostDmaCommand}" />
+      </StackPanel>
+    </Border>
+
+    <TextBlock Text="{Binding Status}"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource SystemErrorTextColor}"
+               IsVisible="{Binding StatusIsError}" />
+  </StackPanel>
+</UserControl>

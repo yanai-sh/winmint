@@ -20,7 +20,7 @@ public class ImageServicingApplyTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, ServicingFailure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
                 plan,
                 run,
                 runner,
@@ -110,7 +110,7 @@ public class ImageServicingApplyTests
                 ReuseMedia: true);
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, ServicingFailure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
                 plan,
                 run,
                 runner,
@@ -143,7 +143,7 @@ public class ImageServicingApplyTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
-            Result<ImageEvidence, ServicingFailure> result = ImageServicing.Apply(
+            Result<ImageEvidence, Failure> result = ImageServicing.Apply(
                 plan,
                 run,
                 runner,
@@ -162,11 +162,11 @@ public class ImageServicingApplyTests
 
     private static BuildArtifacts MinimalPlan()
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -182,7 +182,7 @@ public class ImageServicingApplyTests
             }
             """));
         Assert.True(parsed.IsOk);
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk);
         return planned.Value;
     }

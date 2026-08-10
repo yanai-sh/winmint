@@ -11,7 +11,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson());
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         Assert.DoesNotContain(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.InjectDrivers);
@@ -22,21 +22,21 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "not-a-real-device"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("drivers.deviceId.unknown", result.Error.Code);
     }
 
     [Fact]
-    public void Plan_catalog_device_not_wired_fails()
+    public void Plan_unknown_deviceId_outside_catalog_fails()
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-pro-11-snapdragon"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
-        Assert.Equal("drivers.deviceId.notWired", result.Error.Code);
+        Assert.Equal("drivers.deviceId.unknown", result.Error.Code);
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(source: "customMsi", deviceId: "surface-laptop-7"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("drivers.source.unsupported", result.Error.Code);
@@ -55,7 +55,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-laptop-7"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
         ServicingStage inject = Assert.Single(
@@ -80,7 +80,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-laptop-7"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "amd64" });
 
@@ -93,7 +93,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-laptop-7"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { WindowsBuild = 22631 });
 
@@ -106,7 +106,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-laptop-7"));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         ServicingStage policies = Assert.Single(
@@ -120,7 +120,7 @@ public class DriverPlanTests
     {
         Profile profile = Parse(MinimalJson());
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         ServicingStage policies = Assert.Single(
@@ -148,7 +148,7 @@ public class DriverPlanTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -167,10 +167,10 @@ public class DriverPlanTests
 
     private static Profile Parse(string json)
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
         if (!parsed.IsOk)
         {
-            Assert.Fail(string.Join("; ", parsed.Error.Issues.Select(i => $"{i.Code}: {i.Message}")));
+            Assert.Fail(string.Join("; ", parsed.Error.Select(i => $"{i.Code}: {i.Message}")));
         }
 
         return parsed.Value;

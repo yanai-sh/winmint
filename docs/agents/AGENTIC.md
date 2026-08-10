@@ -1,20 +1,28 @@
 # Agentic playbook
 
-**Phase:** Product backlog **01–30** closed ([TICKETS](../TICKETS.md)). Next card: maintainer pick or new issue (grill / to-spec). Lasting locks: [DESIGN](../DESIGN.md#decisions-locked-grill).
+Living rules: [DESIGN](../DESIGN.md). Glossary: [CONTEXT](../../CONTEXT.md). Contract: [AGENTS](../../AGENTS.md).
 
-**Read:** [DESIGN](../DESIGN.md) · [TICKETS](../TICKETS.md) · [CONTEXT](../../CONTEXT.md) · [TDD](../TDD.md) · [AGENTS](../../AGENTS.md)
+## Hot path
 
-## Session rules
+1. CONTEXT → DESIGN  
+2. The one module design for the seam you touch  
+3. ARCHITECTURE / STACK only when shape or pins matter  
+4. Cold: `decisions/`, `specs/`, `research/` — not status
 
-One issue per session. Apply `ready-for-agent` only when starting that work; remove it when the issue closes. TDD at the issue’s seam. Keep grill locks intact — do not reopen settled decisions silently.
+Prefer module names BuildPlan / ImageServicing / ProvisioningSession over “engine.”
 
-Before `/implement` or a ticket code review: working tree clean **or** non-ticket WIP committed/stashed. Review `git diff <ticket-base>...HEAD` for that work’s commit(s) only — do not mix imaging/docs drive-bys into the review base.
+## Session
 
-```
-Implement issue #N only. Design: docs/design/...
-TDD seam S#. just check. See docs/TICKETS.md (closed index). No drive-bys.
-```
+Prefer one issue. Adjacent one-line fixes in code you already touch are OK. Do not refuse a clear bugfix because it was not pre-labeled.
+
+TDD at a module interface (see [TDD](../TDD.md)). Invariants bind; defaults move with spike evidence. Spent ticket sequencing is not law.
+
+Before a focused review: prefer a clean tree or stash unrelated WIP. Review that work’s commits — not the whole branch noise.
+
+## ADR conflicts
+
+DESIGN wins. Say so if an ADR disagrees; don’t silently override either without saying it.
 
 ## Anti-patterns
 
-v1 `runtime/` copy; peer Splash/JSON mailbox; guest pwsh; script paths in BuildPlan; Profile `if` in kernels; Profile presets-in-JSON; casual schema `v2`; CDM-as-primary; commit unless asked; treating spent research notes or session specs as living status.
+v1 `runtime/` copy; peer Splash/JSON mailbox; guest pwsh product runtime; script paths in BuildPlan; Profile `if` in kernels; presets-in-JSON; CDM-as-primary; treating research as living status; committing unless asked.

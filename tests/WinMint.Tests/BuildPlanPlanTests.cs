@@ -12,7 +12,7 @@ public class BuildPlanPlanTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint"
               },
               "dma": {
@@ -27,7 +27,7 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("account.password.required", result.Error.Code);
@@ -40,7 +40,7 @@ public class BuildPlanPlanTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -56,7 +56,7 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
@@ -84,7 +84,7 @@ public class BuildPlanPlanTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only",
                 "requireWifiDuringOobe": false
@@ -101,7 +101,7 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
@@ -111,13 +111,13 @@ public class BuildPlanPlanTests
     }
 
     [Fact]
-    public void Plan_default_emits_test_lane_stub_jobs_and_opcodes()
+    public void Plan_default_emits_test_lane_opcodes_without_smoke_stubs()
     {
         Profile profile = Parse($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -133,13 +133,13 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
         Assert.Equal(ImageQualityLane.Test, artifacts.Manifest.ImageQuality);
         Assert.Equal(BuildPlan.JobsSchemaVersion, artifacts.Jobs.SchemaVersion);
-        Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == "stub");
+        Assert.DoesNotContain(artifacts.Jobs.Jobs, j => j.Kind == "stub");
         Assert.NotEmpty(artifacts.Stages.Stages);
         Assert.Equal(
             [
@@ -167,13 +167,13 @@ public class BuildPlanPlanTests
     }
 
     [Fact]
-    public void Plan_release_lane_export_params_differ_from_test()
+    public void Plan_includeSmokeStubs_emits_stub_jobs()
     {
         Profile profile = Parse($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },
@@ -189,7 +189,39 @@ public class BuildPlanPlanTests
             }
             """);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { IncludeSmokeStubs = true });
+
+        Assert.True(result.IsOk);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: "stub", Id: "smoke.stub.ready" });
+        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: "stub", Id: "smoke.stub.complete" });
+    }
+
+    [Fact]
+    public void Plan_release_lane_export_params_differ_from_test()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageQuality = ImageQualityLane.Release });
 
@@ -206,10 +238,10 @@ public class BuildPlanPlanTests
 
     private static Profile Parse(string json)
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
         if (!parsed.IsOk)
         {
-            Assert.Fail(string.Join("; ", parsed.Error.Issues.Select(i => $"{i.Code}: {i.Message}")));
+            Assert.Fail(string.Join("; ", parsed.Error.Select(i => $"{i.Code}: {i.Message}")));
         }
 
         return parsed.Value;

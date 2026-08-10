@@ -6,7 +6,7 @@
 
 ### Context
 
-Debloat / keep-flag is a post-M1 vertical ([TICKETS](../TICKETS.md) closed index, [ADR-002](ADR-002-v2-architecture.md)). BCU (live uninstaller) suggested declarative lists and multi-source catalogs but is live-only and must not ship. Microsoft offline surfaces are DISM `/Image` removes for provisioned AppX, capabilities, and optional features; FirstLogon “rehydrate” is usually still-provisioned registration or consumer/CDM installs — ownership split below (see [KEEPFLAG](../design/KEEPFLAG.md)).
+Debloat / keep-flag is a post-M1 vertical ([ADR-002](ADR-002-v2-architecture.md)). BCU (live uninstaller) suggested declarative lists and multi-source catalogs but is live-only and must not ship. Microsoft offline surfaces are DISM `/Image` removes for provisioned AppX, capabilities, and optional features; FirstLogon “rehydrate” is usually still-provisioned registration or consumer/CDM installs — ownership split below (see [KEEPFLAG](../design/KEEPFLAG.md)).
 
 ### Decision
 
@@ -31,3 +31,7 @@ Debloat / keep-flag is a post-M1 vertical ([TICKETS](../TICKETS.md) closed index
 ### Review trigger
 
 Microsoft changes provisioned-AppX / capability / feature offline remove semantics; or Pro gains a supported RemoveDefault-equivalent policy; or maintainer overturns remove-list / no-recommended-set polarity.
+
+### Naming supersession (2026-08-10)
+
+Living vocabulary is **Debloat** (Profile `debloat.*`, host `DebloatPresets`). “Keep-flag” in this ADR’s title is historical. Policy §§1–2, 4–7 unchanged.

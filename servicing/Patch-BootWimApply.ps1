@@ -5,21 +5,60 @@ param(
 )
 $mediaDir = $Parameters['mediaDir']
 $mountDir = $Parameters['mountDir']
-$wimIndex = [int]$Parameters['wimIndex']
+# Source-ISO edition index is unrelated: after single-image export, apply target is always index 1.
 if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
 if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
-if ($wimIndex -lt 1) { throw "wimIndex must be >= 1 (got $wimIndex)" }
+$applyWimIndex = 1
+$expectedMarker = "apply+wimIndex=$applyWimIndex"
+$indexToken = "/Index:$applyWimIndex"
 
-# Spike #70: 3-partition GPT (EFI 100 MB, MSR 16 MB, primary) — ports BuildAutounattendXml disk intent.
+# Spike #70: 3-partition GPT (EFI 100 MB, MSR 16 MB, primary) — WinPE apply disk layout.
 # LabConfig on applied-image SYSTEM hive (not boot.wim) — Hyper-V no-vTPM VMs read it at first boot.
-# ponytail: boot.wim mount loop mirrors Inject-Unattend.ps1; extract shared helper if a third lane appears.
+$bootWim = Join-Path $mediaDir 'sources\boot.wim'
 $bootMarker = Join-Path $mediaDir 'sources\.winmint-boot-apply'
+$legacyMarker = Join-Path $mediaDir 'sources\.winmint-boot-legacy'
 if (-not (Test-Path -LiteralPath $bootWim)) {
     throw "boot.wim missing under media (expected $bootWim)"
 }
+
+function Test-LaunchApplyPatched {
+    param([string] $Wim, [string] $Mount, [int] $Index, [string] $Token)
+    & dism.exe /English /Mount-Image /ImageFile:$Wim /Index:$Index /MountDir:$Mount /ReadOnly
+    if ($LASTEXITCODE -ne 0) { return $false }
+    try {
+        $launch = Join-Path $Mount 'Windows\System32\LaunchApply.cmd'
+        $winpeshl = Join-Path $Mount 'Windows\System32\winpeshl.ini'
+        if (-not (Test-Path -LiteralPath $launch)) { return $false }
+        if (-not (Test-Path -LiteralPath $winpeshl)) { return $false }
+        $body = Get-Content -LiteralPath $launch -Raw -Encoding ascii
+        if ($body -notlike "*$Token*") { return $false }
+        if ($body -match '/Index:(\d+)' -and [int]$Matches[1] -ne $applyWimIndex) { return $false }
+        $ini = Get-Content -LiteralPath $winpeshl -Raw -Encoding ascii
+        return ($ini -match 'LaunchApply\.cmd')
+    }
+    finally {
+        & dism.exe /English /Unmount-Image /MountDir:$Mount /Discard | Out-Null
+    }
+}
+
+$bootMount = Join-Path (Split-Path -Parent $mountDir) 'boot-mount'
+if (Test-Path -LiteralPath $bootMount) {
+    & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
+    Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
+}
+New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
+
+# ponytail: skip only when marker + index-1 LaunchApply both prove apply+wimIndex=1 (stale marker hid Index:3).
 if (Test-Path -LiteralPath $bootMarker) {
-    Write-Output 'PatchBootWimApply skipped (already patched)'
-    exit 0
+    $markerText = (Get-Content -LiteralPath $bootMarker -Raw -Encoding utf8).Trim()
+    if ($markerText -eq $expectedMarker -and (Test-LaunchApplyPatched -Wim $bootWim -Mount $bootMount -Index 1 -Token $indexToken)) {
+        Remove-Item -LiteralPath $legacyMarker -Force -ErrorAction SilentlyContinue
+        Write-Output 'PatchBootWimApply skipped (already patched; LaunchApply Index:1 verified)'
+        Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
+        exit 0
+    }
+    Write-Output "PatchBootWimApply re-patch (marker='$markerText' or LaunchApply mismatch)"
+    Remove-Item -LiteralPath $bootMarker -Force -ErrorAction SilentlyContinue
 }
 
 $launchApply = @"
@@ -50,7 +89,7 @@ set DP=%TEMP%\winmint-diskpart.txt
 )
 diskpart /s "%DP%"
 if errorlevel 1 exit /b 1
-dism /English /Apply-Image /ImageFile:%INSTALL%:\sources\install.wim /Index:$wimIndex /ApplyDir:W:\
+dism /English /Apply-Image /ImageFile:%INSTALL%:\sources\install.wim /Index:$applyWimIndex /ApplyDir:W:\
 if errorlevel 1 exit /b 1
 bcdboot W:\Windows /s S: /f UEFI
 if errorlevel 1 exit /b 1
@@ -70,12 +109,6 @@ exit /b 0
 
 $bootItem = Get-Item -LiteralPath $bootWim
 if ($bootItem.IsReadOnly) { $bootItem.IsReadOnly = $false }
-$bootMount = Join-Path (Split-Path -Parent $mountDir) 'boot-mount'
-if (Test-Path -LiteralPath $bootMount) {
-    & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
-    Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
-}
-New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
 $info = & dism.exe /English /Get-WimInfo /WimFile:$bootWim 2>&1 | Out-String
 $indexes = @([regex]::Matches($info, '(?m)^Index : (\d+)\s*$') | ForEach-Object { [int]$_.Groups[1].Value })
 if ($indexes.Count -eq 0) { throw 'boot.wim has no indexes' }
@@ -99,7 +132,9 @@ foreach ($index in $indexes) {
     }
 }
 
-Set-Content -LiteralPath $bootMarker -Value "apply+wimIndex=$wimIndex" -Encoding utf8
+Set-Content -LiteralPath $bootMarker -Value $expectedMarker -Encoding utf8
+# Apply lane supersedes legacy LabConfig-in-boot.wim marker; leave no ambiguous dual story.
+Remove-Item -LiteralPath $legacyMarker -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
 Write-Output 'PatchBootWimApply ok'
 exit 0

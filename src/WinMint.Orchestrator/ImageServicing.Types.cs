@@ -7,8 +7,6 @@ public sealed record ServicingRun(
     int? WimIndex = null,
     bool ReuseMedia = false);
 
-public sealed record ServicingFailure(string Code, string Message);
-
 public sealed record ImageEvidence(
     string OutputIsoPath,
     ImageQualityLane Lane,
@@ -18,7 +16,7 @@ public sealed record ImageEvidence(
 /// <summary>Elevated plan runner port — real pwsh adapter and test fake ship together (ticket 02).</summary>
 public interface IElevatedPlanRunner
 {
-    Result<ImageEvidence, ServicingFailure> Execute(
+    Result<ImageEvidence, Failure> Execute(
         string workDirectory,
         IReadOnlyList<ServicingStage> stages,
         ServicingRun run,

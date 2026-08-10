@@ -41,3 +41,7 @@ BenchmarkDotNet.Artifacts/
 # Local planning scratch (gitignored; not product)
 .scratch/
 .superpowers/
+
+# Cursor agent skill installs (vendor copies + lockfile; not product)
+.agents/
+skills-lock.json

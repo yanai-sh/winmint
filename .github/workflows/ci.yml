@@ -49,7 +49,7 @@ jobs:
           }
           Write-Output 'PSScriptAnalyzer: clean'
 
-      # De-risk NativeAOT win-arm64 toolchain before Smoke tickets 02–03 depend on it.
+      # NativeAOT win-arm64 publish smoke for Provisioning Supervisor.
       - name: AOT publish (Provisioning Supervisor)
         shell: pwsh
         run: dotnet publish src/WinMint.Provisioning/WinMint.Provisioning.csproj -c Release -o artifacts/provisioning

@@ -9,17 +9,19 @@ namespace WinMint.Tests;
 public class ScoopJobsTests
 {
     [Fact]
-    public void Plan_emits_scoop_jobs_from_packages_scoop()
+    public void Plan_emits_scoop_batch_job_from_packages_scoop()
     {
         Profile profile = Parse(MinimalJson(scoop: ["curl", "komorebi"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        JobDescriptor curl = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "scoop" && j.PackageId == "curl");
-        Assert.Equal("scoop.curl", curl.Id);
-        Assert.False(curl.NeedsReboot);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "scoop" && j.PackageId == "komorebi");
+        JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "scoop.batch");
+        Assert.Equal("scoop.batch", batch.Id);
+        Assert.False(batch.NeedsReboot);
+        Assert.Contains("curl", batch.PackageId);
+        Assert.Contains("komorebi", batch.PackageId);
+        Assert.Contains("extras", batch.ScoopBuckets!);
     }
 
     [Fact]
@@ -27,11 +29,11 @@ public class ScoopJobsTests
     {
         Profile profile = Parse(MinimalJson(scoop: ["curl"], scoopNeedsReboot: ["curl"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        JobDescriptor curl = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "curl");
-        Assert.True(curl.NeedsReboot);
+        JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "scoop.batch");
+        Assert.True(batch.NeedsReboot);
     }
 
     [Fact]
@@ -39,7 +41,7 @@ public class ScoopJobsTests
     {
         Profile profile = Parse(MinimalJson(scoop: ["curl"], scoopNeedsReboot: ["jq"]));
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.False(result.IsOk);
         Assert.Equal("packages.scoopNeedsReboot.unknown", result.Error.Code);
@@ -105,7 +107,7 @@ public class ScoopJobsTests
 
         SessionResult result = ProvisioningSession.Run(
             SessionMode.Shell,
-            Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]),
+            Bundle(jobs: [new ProvisionJob("scoop.curl", "scoop", PackageId: "curl")]) with { PackageStrict = true },
             Env(processes, evidence, resolveScoopCmd: () => null),
             TestContext.Current.CancellationToken);
 
@@ -154,10 +156,10 @@ public class ScoopJobsTests
 
     private static Profile Parse(string json)
     {
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
         if (!parsed.IsOk)
         {
-            Assert.Fail(string.Join("; ", parsed.Error.Issues.Select(i => $"{i.Code}: {i.Message}")));
+            Assert.Fail(string.Join("; ", parsed.Error.Select(i => $"{i.Code}: {i.Message}")));
         }
 
         return parsed.Value;
@@ -184,7 +186,7 @@ public class ScoopJobsTests
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountModeWire.LocalAutoLogon}}",
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
                 "password": "lab-only"
               },

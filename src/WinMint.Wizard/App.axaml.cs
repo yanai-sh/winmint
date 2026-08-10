@@ -17,7 +17,7 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             MainWindow window = new();
-            WizardShellViewModel vm = new(window);
+            WizardViewModel vm = new(window);
             window.DataContext = vm;
             window.Closed += (_, _) => vm.Dispose();
             desktop.MainWindow = window;

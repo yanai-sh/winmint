@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WinMint — Media · You · Taste · Included</title>
+  <!--
+    PROTOTYPE — modern Win11 take (Fluent cues: Mica-ish layers, accent, NavigationView rail).
+    Stage lock: Media → You → Taste → Included. Not product UI.
+  -->
+  <style>
+    :root {
+      --accent: #0078d4;
+      --accent-hover: #106ebe;
+      --accent-soft: rgba(0, 120, 212, 0.12);
+      --mint: #0f7b0f;
+      --text: #1a1a1a;
+      --text-sec: #5d5d5d;
+      --text-ter: #8a8a8a;
+      --stroke: rgba(0, 0, 0, 0.08);
+      --stroke-card: rgba(0, 0, 0, 0.06);
+      --card: rgba(255, 255, 255, 0.72);
+      --card-solid: #ffffff;
+      --layer: rgba(255, 255, 255, 0.55);
+      --smoke: #f3f3f3;
+      --ctrl: #ffffff;
+      --ctrl-hover: #f5f5f5;
+      --danger: #c42b1c;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+      --mono: "Cascadia Mono", "Consolas", monospace;
+      --nav: 220px;
+      --titlebar: 32px;
+      --footer: 56px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --text: #ffffff;
+        --text-sec: #c5c5c5;
+        --text-ter: #9a9a9a;
+        --stroke: rgba(255, 255, 255, 0.09);
+        --stroke-card: rgba(255, 255, 255, 0.08);
+        --card: rgba(32, 32, 32, 0.72);
+        --card-solid: #2c2c2c;
+        --layer: rgba(44, 44, 44, 0.55);
+        --smoke: #202020;
+        --ctrl: #2c2c2c;
+        --ctrl-hover: #383838;
+        --accent-soft: rgba(96, 205, 255, 0.14);
+        --accent: #60cdff;
+        --accent-hover: #6cb8ff;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: var(--font); color: var(--text);
+      background: var(--smoke);
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Mica-ish desktop behind the window */
+    body::before {
+      content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background:
+        radial-gradient(ellipse 70% 55% at 15% 20%, rgba(0, 120, 212, 0.22), transparent 55%),
+        radial-gradient(ellipse 55% 45% at 85% 75%, rgba(15, 123, 15, 0.12), transparent 50%),
+        linear-gradient(145deg, #dbe7f3 0%, #e8e4ef 42%, #d5e6dc 100%);
+    }
+    @media (prefers-color-scheme: dark) {
+      body::before {
+        background:
+          radial-gradient(ellipse 70% 55% at 20% 15%, rgba(0, 120, 212, 0.28), transparent 55%),
+          radial-gradient(ellipse 50% 40% at 80% 80%, rgba(15, 123, 15, 0.14), transparent 50%),
+          linear-gradient(160deg, #0c1118, #121820 50%, #0e1410);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    .window {
+      width: min(1080px, 96vw); height: min(720px, 92dvh);
+      margin: 4dvh auto; display: flex; flex-direction: column;
+      border-radius: var(--radius-lg); overflow: hidden;
+      background: color-mix(in srgb, var(--smoke) 82%, transparent);
+      backdrop-filter: blur(40px) saturate(1.4);
+      -webkit-backdrop-filter: blur(40px) saturate(1.4);
+      box-shadow:
+        0 0 0 1px var(--stroke),
+        0 16px 48px rgba(0, 0, 0, 0.18);
+    }
+
+    .titlebar {
+      flex: 0 0 var(--titlebar); display: flex; align-items: center;
+      justify-content: space-between; padding-left: 14px;
+      font-size: 12px; color: var(--text-sec);
+      border-bottom: 1px solid var(--stroke);
+      background: var(--layer);
+    }
+    .titlebar-leading { display: flex; align-items: center; gap: 8px; }
+    .titlebar-leading img { width: 16px; height: 16px; border-radius: 3px; }
+    .win-controls { display: flex; height: 100%; }
+    .win-btn {
+      width: 46px; height: 100%; border: 0; background: transparent;
+      color: var(--text-sec); display: grid; place-items: center; cursor: default;
+    }
+    .win-btn svg { width: 10px; height: 10px; }
+    .win-btn:hover { background: rgba(128, 128, 128, 0.12); color: var(--text); }
+    .win-btn.close:hover { background: var(--danger); color: #fff; }
+
+    .shell {
+      flex: 1; min-height: 0; display: grid;
+      grid-template-columns: var(--nav) 1fr;
+    }
+
+    /* NavigationView-style rail */
+    .nav {
+      padding: 12px 8px; border-right: 1px solid var(--stroke);
+      background: var(--layer); display: flex; flex-direction: column; gap: 4px;
+    }
+    .nav .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px 16px; font-family: var(--font-display);
+      font-weight: 600; font-size: 1.05rem; letter-spacing: -0.02em;
+    }
+    .nav .brand img { width: 28px; height: 28px; border-radius: 6px; }
+    .nav button {
+      appearance: none; border: 0; background: transparent; text-align: left;
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 6px; cursor: pointer;
+      color: var(--text); font: 400 0.9rem/1.2 var(--font);
+    }
+    .nav button .glyph {
+      width: 20px; text-align: center; font-size: 0.85rem; color: var(--text-sec);
+    }
+    .nav button[aria-current="true"] {
+      background: var(--accent-soft); font-weight: 600;
+    }
+    .nav button[aria-current="true"] .glyph { color: var(--accent); }
+    .nav button:disabled { opacity: 0.38; cursor: default; }
+    .nav button:hover:not(:disabled):not([aria-current="true"]) {
+      background: rgba(128, 128, 128, 0.1);
+    }
+    .nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .nav .hint {
+      margin-top: auto; padding: 12px; font-size: 0.72rem; color: var(--text-ter);
+      line-height: 1.35;
+    }
+
+    .content {
+      display: flex; flex-direction: column; min-width: 0; min-height: 0;
+      background: transparent;
+    }
+    .page {
+      flex: 1; min-height: 0; overflow: auto;
+      padding: 28px 32px 16px;
+      animation: page-in 220ms ease both;
+    }
+    @keyframes page-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+    .page h1 {
+      margin: 0 0 6px; font-family: var(--font-display);
+      font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em;
+    }
+    .page .lede {
+      margin: 0 0 22px; color: var(--text-sec); font-size: 0.92rem;
+      max-width: 48ch; line-height: 1.45;
+    }
+
+    .card {
+      background: var(--card); border: 1px solid var(--stroke-card);
+      border-radius: var(--radius-lg); padding: 16px 18px;
+      backdrop-filter: blur(20px);
+    }
+
+    .iso-pick {
+      appearance: none; width: 100%; border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--stroke));
+      background: var(--accent-soft); border-radius: var(--radius-lg);
+      padding: 36px 20px; font: inherit; color: var(--text-sec); cursor: pointer; text-align: center;
+    }
+    .iso-pick:hover { border-color: var(--accent); color: var(--text); }
+    .iso-pick strong { display: block; color: var(--text); font-weight: 600; font-size: 1rem; margin-bottom: 6px; }
+    .iso-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .iso-ready { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .iso-ready .badge {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem;
+      font-weight: 600; color: var(--mint); margin-bottom: 4px;
+    }
+    .iso-ready .badge i {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--mint);
+    }
+    .iso-ready strong { display: block; font-size: 0.95rem; }
+    .iso-ready code {
+      font-family: var(--mono); font-size: 0.72rem; color: var(--text-ter);
+      display: block; max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    .editions, .keep { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .editions button, .keep button {
+      appearance: none; border: 1px solid var(--stroke); background: var(--ctrl);
+      border-radius: 999px; padding: 8px 14px; font: 500 0.82rem var(--font);
+      color: var(--text-sec); cursor: pointer;
+    }
+    .editions button:hover, .keep button:hover { background: var(--ctrl-hover); }
+    .editions button[aria-pressed="true"], .keep button[aria-pressed="true"] {
+      border-color: transparent; background: var(--accent); color: #fff;
+    }
+    @media (prefers-color-scheme: dark) {
+      .editions button[aria-pressed="true"], .keep button[aria-pressed="true"] {
+        color: #000;
+      }
+    }
+
+    .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 640px) {
+      .shell { grid-template-columns: 1fr; }
+      .nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--stroke); }
+      .nav .brand { width: 100%; padding-bottom: 8px; }
+      .nav .hint { display: none; }
+      .fields { grid-template-columns: 1fr; }
+    }
+    label {
+      display: flex; flex-direction: column; gap: 6px;
+      font-size: 0.78rem; font-weight: 500; color: var(--text-sec);
+    }
+    input {
+      appearance: none; border: 1px solid var(--stroke); border-radius: var(--radius);
+      padding: 10px 12px; font: 400 0.95rem var(--font); color: var(--text);
+      background: var(--ctrl);
+    }
+    input:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .block { margin-bottom: 20px; }
+    .block h2 {
+      margin: 0 0 10px; font-size: 0.78rem; font-weight: 600; color: var(--text-sec);
+    }
+    .tiles { display: flex; flex-wrap: wrap; gap: 10px; }
+    .tile {
+      appearance: none; width: 88px; min-height: 88px; border: 1px solid var(--stroke);
+      background: var(--card-solid); border-radius: var(--radius-lg); padding: 12px 6px 8px;
+      cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      transition: transform 120ms ease, border-color 120ms, background 120ms;
+    }
+    .tile:hover { transform: translateY(-1px); background: var(--ctrl-hover); }
+    .tile[aria-pressed="true"] {
+      border-color: var(--accent); background: var(--accent-soft);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+    .tile img { width: 32px; height: 32px; object-fit: contain; }
+    .tile .g {
+      width: 32px; height: 32px; display: grid; place-items: center;
+      font: 600 0.85rem var(--mono); color: var(--text-sec);
+    }
+    .tile span {
+      font-size: 0.68rem; color: var(--text-sec); text-align: center;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .skip {
+      appearance: none; border: 0; background: transparent; color: var(--accent);
+      font: 600 0.88rem var(--font); cursor: pointer; padding: 4px 0;
+    }
+    .skip:hover { text-decoration: underline; }
+
+    .rows { display: flex; flex-direction: column; }
+    .row {
+      display: flex; justify-content: space-between; gap: 16px;
+      padding: 12px 0; border-bottom: 1px solid var(--stroke); font-size: 0.9rem;
+    }
+    .row:last-child { border-bottom: 0; }
+    .row span:first-child { color: var(--text-sec); }
+    .row span:last-child { font-weight: 500; text-align: right; word-break: break-all; }
+
+    .picks { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 4px; }
+    .picks img { width: 28px; height: 28px; }
+    .picks .mini {
+      width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--stroke);
+      display: grid; place-items: center; font: 600 0.65rem var(--mono); color: var(--text-sec);
+      background: var(--ctrl);
+    }
+
+    .quiet {
+      margin: 12px 0; padding: 12px 14px; border-radius: var(--radius);
+      background: var(--accent-soft); color: var(--text); font-size: 0.84rem; line-height: 1.4;
+      border-left: 3px solid var(--accent);
+    }
+    .more {
+      appearance: none; border: 0; background: transparent; color: var(--accent);
+      font: 600 0.88rem var(--font); cursor: pointer; padding: 0;
+    }
+    .details {
+      margin-top: 14px; display: flex; flex-direction: column; gap: 12px;
+      padding-top: 14px; border-top: 1px solid var(--stroke);
+    }
+    .details h3 { margin: 0 0 2px; font-size: 0.82rem; font-weight: 600; }
+    .details p { margin: 0; font-size: 0.82rem; color: var(--text-sec); line-height: 1.4; }
+
+    .statusbar {
+      flex: 0 0 var(--footer); display: flex; align-items: center; gap: 10px;
+      padding: 0 16px 0 20px; border-top: 1px solid var(--stroke);
+      background: var(--layer);
+    }
+    .status {
+      flex: 1; min-width: 0; font: 400 0.75rem/1.35 var(--mono); color: var(--text-ter);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .status .dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--text-ter); flex-shrink: 0;
+    }
+    .status .dot.ok { background: var(--mint); }
+    .status .dot.warn { background: #fce100; }
+
+    .btn {
+      appearance: none; border-radius: var(--radius); padding: 8px 16px;
+      font: 600 0.86rem var(--font); cursor: pointer;
+    }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .btn-ghost {
+      border: 1px solid var(--stroke); background: var(--ctrl); color: var(--text);
+    }
+    .btn-ghost:hover:not(:disabled) { background: var(--ctrl-hover); }
+    .btn-accent {
+      border: 0; background: var(--accent); color: #fff;
+    }
+    @media (prefers-color-scheme: dark) {
+      .btn-accent { color: #000; }
+    }
+    .btn-accent:hover:not(:disabled) { background: var(--accent-hover); }
+
+    .toast {
+      position: absolute; left: 50%; bottom: calc(var(--footer) + 12px);
+      transform: translateX(-50%); background: var(--card-solid); color: var(--text);
+      border: 1px solid var(--stroke); font-size: 0.84rem; padding: 10px 14px;
+      border-radius: var(--radius); opacity: 0; pointer-events: none;
+      transition: opacity 180ms; max-width: 80%; text-align: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+    .toast.on { opacity: 1; }
+
+    .client { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .proto {
+      position: fixed; left: 12px; bottom: 10px; margin: 0;
+      font: 400 0.65rem/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
+      color: rgba(0,0,0,0.28); pointer-events: none;
+    }
+    @media (prefers-color-scheme: dark) {
+      .proto { color: rgba(255,255,255,0.25); }
+    }
+  </style>
+</head>
+<body>
+  <div class="window" role="application" aria-label="WinMint prototype">
+    <header class="titlebar">
+      <div class="titlebar-leading">
+        <img src="assets/mark_ui_132.png" alt="" width="16" height="16" />
+        <span>WinMint</span>
+      </div>
+      <div class="win-controls" aria-hidden="true">
+        <button type="button" class="win-btn" tabindex="-1"><svg viewBox="0 0 12 12"><rect x="1" y="5.5" width="10" height="1" fill="currentColor"/></svg></button>
+        <button type="button" class="win-btn" tabindex="-1"><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/></svg></button>
+        <button type="button" class="win-btn close" tabindex="-1"><svg viewBox="0 0 12 12"><path d="M1 1 L11 11 M11 1 L1 11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>
+      </div>
+    </header>
+    <div class="client" id="client"></div>
+  </div>
+  <p class="proto">Prototype · Win11 Fluent take · not product</p>
+
+  <script>
+    const STAGES = [
+      { id: "media", label: "Media", glyph: "▣", title: "Media", lede: "Pick the official Windows ISO on this PC. WinMint does not download media." },
+      { id: "you", label: "You", glyph: "☺", title: "You", lede: "One local account for first sign-in. Password is required for autologon." },
+      { id: "taste", label: "Taste", glyph: "✦", title: "Taste", lede: "Editors, browsers, desktop, and WSL. Or skip and use recommended defaults." },
+      { id: "included", label: "Included", glyph: "✓", title: "Included", lede: "Compose receipt — your picks plus what WinMint applies quietly." },
+    ];
+
+    const catalog = {
+      editors: [
+        { id: "cursor", name: "Cursor", src: "assets/cursor.svg" },
+        { id: "neovim", name: "Neovim", src: "assets/neovim.svg" },
+        { id: "zed", name: "Zed", src: "assets/zed.svg" },
+        { id: "vscodium", name: "VSCodium", src: "assets/vscodium.svg" },
+      ],
+      browsers: [
+        { id: "zen-browser", name: "Zen", glyph: "Z" },
+        { id: "firefox-developer-edition", name: "Firefox Dev", glyph: "Ff" },
+        { id: "brave", name: "Brave", glyph: "B" },
+        { id: "edge", name: "Edge", glyph: "Ed" },
+      ],
+      desktop: [
+        { id: "komorebi", name: "Komorebi", src: "assets/komorebi.svg" },
+        { id: "yasb", name: "YASB", src: "assets/yasb.svg" },
+        { id: "windhawk", name: "Windhawk", src: "assets/windhawk.svg" },
+      ],
+      wsl: [
+        { id: "ubuntu", name: "Ubuntu", src: "assets/ubuntu.svg" },
+        { id: "archlinux", name: "Arch", src: "assets/archlinux.svg" },
+        { id: "fedora", name: "Fedora", src: "assets/fedora.svg" },
+      ],
+      keep: [
+        { id: "gaming", name: "Xbox & gaming" },
+        { id: "copilot", name: "Copilot" },
+      ],
+    };
+
+    const DEFAULTS = {
+      editors: ["neovim", "zed"],
+      browsers: [],
+      desktop: ["komorebi", "yasb", "windhawk"],
+      wsl: ["ubuntu"],
+      keep: [],
+    };
+
+    const RECOMMENDED_NAMES = [
+      "Bing News", "Bing Weather", "Get Help", "Get Started", "Office Hub", "Solitaire",
+      "People", "Power Automate", "To Do", "Alarms", "Feedback Hub", "Maps", "Phone Link",
+      "Zune Music", "Movies & TV", "Quick Assist",
+    ];
+
+    const state = {
+      index: 0,
+      isoPath: "",
+      edition: "Windows 11 Pro",
+      editions: ["Windows 11 Pro", "Windows 11 Home"],
+      username: "yanai",
+      password: "",
+      picks: {
+        editors: new Set(DEFAULTS.editors),
+        browsers: new Set(DEFAULTS.browsers),
+        desktop: new Set(DEFAULTS.desktop),
+        wsl: new Set(DEFAULTS.wsl),
+        keep: new Set(DEFAULTS.keep),
+      },
+      detailsOpen: false,
+      building: false,
+      lane: "Test",
+    };
+
+    let toastTimer = 0;
+    const client = document.getElementById("client");
+
+    function sourceReady() { return Boolean(state.isoPath); }
+    function identityReady() { return Boolean(state.username.trim() && state.password); }
+    function canBuild() { return sourceReady() && identityReady() && !state.building; }
+
+    function statusMessage() {
+      if (state.building) return "Building image… (demo)";
+      if (!state.isoPath) return "Select a Windows ISO to begin.";
+      if (!identityReady()) return "Source ready · set a password on You";
+      return "Ready · " + state.edition.replace("Windows 11 ", "") + " · " + state.username + " · " + state.lane;
+    }
+
+    function statusDot() {
+      if (!state.isoPath) return "";
+      if (!identityReady()) return "warn";
+      return "ok";
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      if (!t) return;
+      t.textContent = msg;
+      t.classList.add("on");
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => t.classList.remove("on"), 2400);
+    }
+
+    function toggle(group, id) {
+      const set = state.picks[group];
+      if (set.has(id)) set.delete(id); else set.add(id);
+    }
+
+    function pickIso() {
+      state.isoPath = "D:\\\\ISOs\\\\Win11_25H2_Arm64.iso";
+      state.edition = "Windows 11 Pro";
+      render();
+    }
+
+    function clearIso() {
+      state.isoPath = "";
+      state.index = 0;
+      render();
+    }
+
+    function useDefaults() {
+      Object.keys(DEFAULTS).forEach((k) => { state.picks[k] = new Set(DEFAULTS[k]); });
+      go(3);
+      showToast("Using recommended defaults — review on Included.");
+    }
+
+    function doBuild() {
+      if (!sourceReady()) { pickIso(); return; }
+      if (!identityReady()) { go(1); showToast("Password required on You."); return; }
+      if (!canBuild()) return;
+      state.building = true;
+      render();
+      window.setTimeout(() => {
+        state.building = false;
+        render();
+        showToast("Demo only — product Build elevates ImageServicing.Apply.");
+      }, 900);
+    }
+
+    function canGo(i) {
+      if (i < 0 || i >= STAGES.length) return false;
+      if (i === 0) return true;
+      if (!sourceReady()) return false;
+      if (i >= 3 && !identityReady()) return false;
+      return true;
+    }
+
+    function go(i) {
+      if (!canGo(i)) {
+        if (!sourceReady()) showToast("Choose an ISO on Media first.");
+        else if (!identityReady()) { state.index = 1; showToast("Password required before Included."); render(); }
+        return;
+      }
+      state.index = i;
+      render();
+    }
+
+    function namesIn(group) {
+      return catalog[group].filter((i) => state.picks[group].has(i.id)).map((i) => i.name);
+    }
+
+    function allPicked() {
+      const out = [];
+      ["editors", "browsers", "desktop", "wsl"].forEach((g) => {
+        catalog[g].forEach((item) => {
+          if (state.picks[g].has(item.id)) out.push(item);
+        });
+      });
+      return out;
+    }
+
+    function quietText() {
+      let t = "Also applied quietly: Edge policies · OneDrive · device metadata · WPBT · Reserved Storage";
+      if (!state.picks.keep.has("copilot")) t += " · Copilot off";
+      return t;
+    }
+
+    function el(tag, cls, text) {
+      const n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text != null) n.textContent = text;
+      return n;
+    }
+
+    function tile(item, pressed, onClick) {
+      const b = el("button", "tile");
+      b.type = "button";
+      b.setAttribute("aria-pressed", pressed ? "true" : "false");
+      b.title = item.name;
+      if (item.src) {
+        const img = document.createElement("img");
+        img.src = item.src; img.alt = "";
+        b.appendChild(img);
+      } else {
+        b.appendChild(el("span", "g", item.glyph || item.name.slice(0, 1)));
+      }
+      b.appendChild(el("span", null, item.name));
+      b.addEventListener("click", onClick);
+      return b;
+    }
+
+    function renderPage() {
+      const page = el("div", "page");
+      const stage = STAGES[state.index];
+      page.append(el("h1", null, stage.title), el("p", "lede", stage.lede));
+
+      if (state.index === 0) {
+        if (!state.isoPath) {
+          const pick = el("button", "iso-pick");
+          pick.type = "button";
+          pick.innerHTML = "<strong>Drop or choose Windows ISO</strong>Browse for official media on this PC";
+          pick.addEventListener("click", pickIso);
+          page.appendChild(pick);
+        } else {
+          const card = el("div", "card");
+          const ready = el("div", "iso-ready");
+          const left = document.createElement("div");
+          left.innerHTML = '<div class="badge"><i></i>Ready</div>';
+          left.append(el("strong", null, "Source selected"), el("code", null, state.isoPath));
+          const change = el("button", "btn btn-ghost", "Change");
+          change.type = "button";
+          change.addEventListener("click", clearIso);
+          ready.append(left, change);
+          card.appendChild(ready);
+          const eds = el("div", "editions");
+          state.editions.forEach((name) => {
+            const b = el("button", null, name.replace("Windows 11 ", ""));
+            b.type = "button";
+            b.setAttribute("aria-pressed", state.edition === name ? "true" : "false");
+            b.addEventListener("click", () => { state.edition = name; render(); });
+            eds.appendChild(b);
+          });
+          card.appendChild(eds);
+          page.appendChild(card);
+        }
+      } else if (state.index === 1) {
+        const card = el("div", "card fields");
+        const u = el("label", null, "Username");
+        const ui = document.createElement("input");
+        ui.value = state.username;
+        ui.addEventListener("input", () => { state.username = ui.value; syncStatus(); });
+        u.appendChild(ui);
+        const p = el("label", null, "Password");
+        const pi = document.createElement("input");
+        pi.type = "password"; pi.value = state.password; pi.placeholder = "Required for autologon";
+        pi.addEventListener("input", () => { state.password = pi.value; syncStatus(); });
+        p.appendChild(pi);
+        card.append(u, p);
+        page.appendChild(card);
+      } else if (state.index === 2) {
+        [["Editors", "editors"], ["Browsers", "browsers"], ["Desktop", "desktop"], ["Linux · WSL", "wsl"]].forEach(([label, group]) => {
+          const block = el("div", "block");
+          block.appendChild(el("h2", null, label));
+          const tiles = el("div", "tiles");
+          catalog[group].forEach((item) => {
+            tiles.appendChild(tile(item, state.picks[group].has(item.id), () => {
+              toggle(group, item.id); render();
+            }));
+          });
+          block.appendChild(tiles);
+          page.appendChild(block);
+        });
+        const keepBlock = el("div", "block");
+        keepBlock.appendChild(el("h2", null, "Keep in the image"));
+        const keep = el("div", "keep");
+        catalog.keep.forEach((item) => {
+          const b = el("button", null, item.name);
+          b.type = "button";
+          b.setAttribute("aria-pressed", state.picks.keep.has(item.id) ? "true" : "false");
+          b.addEventListener("click", () => { toggle("keep", item.id); render(); });
+          keep.appendChild(b);
+        });
+        keepBlock.appendChild(keep);
+        page.appendChild(keepBlock);
+        const skip = el("button", "skip", "Use defaults → Included");
+        skip.type = "button";
+        skip.addEventListener("click", useDefaults);
+        page.appendChild(skip);
+      } else {
+        const card = el("div", "card");
+        const rows = el("div", "rows");
+        [
+          ["Source", state.isoPath || "—"],
+          ["Edition", state.edition],
+          ["Account", state.username || "—"],
+          ["Lane", state.lane],
+          ["Meta", "DMA on · network may be needed at FirstLogon"],
+        ].forEach(([k, v]) => {
+          const row = el("div", "row");
+          row.append(el("span", null, k), el("span", null, v));
+          rows.appendChild(row);
+        });
+        card.appendChild(rows);
+
+        const picks = allPicked();
+        if (picks.length) {
+          const strip = el("div", "picks");
+          picks.forEach((item) => {
+            if (item.src) {
+              const img = document.createElement("img");
+              img.src = item.src; img.alt = item.name; img.title = item.name;
+              strip.appendChild(img);
+            } else {
+              const m = el("span", "mini", item.glyph || item.name.slice(0, 1));
+              m.title = item.name;
+              strip.appendChild(m);
+            }
+          });
+          card.appendChild(strip);
+        }
+
+        card.appendChild(el("p", "quiet", quietText()));
+        const more = el("button", "more", state.detailsOpen ? "Hide what’s included" : "What’s included");
+        more.type = "button";
+        more.addEventListener("click", () => { state.detailsOpen = !state.detailsOpen; render(); });
+        card.appendChild(more);
+
+        if (state.detailsOpen) {
+          const keep = namesIn("keep");
+          const d = el("div", "details");
+          [
+            { title: "Debloat", body: "Recommended remove-list. " + (keep.length ? "Keeping: " + keep.join(", ") + "." : "No Keep overrides.") },
+            { title: "Stripped (friendly names)", body: RECOMMENDED_NAMES.join(" · ") },
+            { title: "Packages", body: ["editors", "browsers", "desktop", "wsl"].map((g) => {
+              const n = namesIn(g);
+              return n.length ? g + ": " + n.join(", ") : null;
+            }).filter(Boolean).join(" · ") || "Defaults only" },
+            { title: "Product constants", body: "EdgeDebloat, OneDrive, device metadata, WPBT, Reserved Storage; Copilot kill unless kept." },
+          ].forEach((g) => {
+            const block = document.createElement("div");
+            block.append(el("h3", null, g.title), el("p", null, g.body));
+            d.appendChild(block);
+          });
+          card.appendChild(d);
+        }
+        page.appendChild(card);
+      }
+      return page;
+    }
+
+    function syncStatus() {
+      const msg = document.getElementById("statusMsg");
+      const dot = document.getElementById("statusDot");
+      const primary = document.getElementById("primary");
+      const next = document.getElementById("next");
+      if (msg) msg.textContent = statusMessage();
+      if (dot) dot.className = "dot " + statusDot();
+      if (primary) {
+        primary.textContent = !state.isoPath ? "Choose ISO" : state.building ? "Building…" : "Build";
+        primary.disabled = state.isoPath ? !canBuild() : false;
+      }
+      if (next && state.index === 1) next.disabled = !identityReady();
+    }
+
+    function render() {
+      const shell = el("div", "shell");
+
+      const nav = el("nav", "nav");
+      nav.setAttribute("aria-label", "Stages");
+      const brand = el("div", "brand");
+      const logo = document.createElement("img");
+      logo.src = "assets/mark_ui_132.png"; logo.alt = "";
+      brand.append(logo, document.createTextNode("WinMint"));
+      nav.appendChild(brand);
+      STAGES.forEach((s, i) => {
+        const b = el("button", null);
+        b.type = "button";
+        b.append(el("span", "glyph", s.glyph), document.createTextNode(s.label));
+        if (i === state.index) b.setAttribute("aria-current", "true");
+        b.disabled = !canGo(i) && i !== state.index;
+        b.addEventListener("click", () => go(i));
+        nav.appendChild(b);
+      });
+      nav.appendChild(el("p", "hint", "Host builds the ISO. Guest finishes setup with the Provisioning Supervisor."));
+
+      const content = el("div", "content");
+      content.appendChild(renderPage());
+
+      const bar = el("footer", "statusbar");
+      const status = el("div", "status");
+      const dot = el("span", "dot " + statusDot());
+      dot.id = "statusDot";
+      const msg = el("span", null, statusMessage());
+      msg.id = "statusMsg";
+      status.append(dot, msg);
+
+      const back = el("button", "btn btn-ghost", "Back");
+      back.type = "button";
+      back.disabled = state.index === 0;
+      back.addEventListener("click", () => go(state.index - 1));
+
+      const next = el("button", "btn btn-ghost", "Next");
+      next.type = "button";
+      next.id = "next";
+      if (state.index >= 3) next.hidden = true;
+      else {
+        next.disabled = state.index === 0 ? !sourceReady() : state.index === 1 ? !identityReady() : false;
+        next.addEventListener("click", () => go(state.index + 1));
+      }
+
+      const primary = el("button", "btn btn-accent");
+      primary.type = "button";
+      primary.id = "primary";
+      primary.textContent = !state.isoPath ? "Choose ISO" : state.building ? "Building…" : "Build";
+      primary.disabled = state.isoPath ? !canBuild() : false;
+      primary.addEventListener("click", () => state.isoPath ? doBuild() : pickIso());
+
+      bar.append(status, back, next, primary);
+      content.appendChild(bar);
+
+      shell.append(nav, content);
+
+      const toast = el("div", "toast");
+      toast.id = "toast";
+
+      const root = document.createElement("div");
+      root.style.cssText = "flex:1;min-height:0;display:flex;flex-direction:column;position:relative";
+      root.append(shell, toast);
+      client.replaceChildren(root);
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.target instanceof HTMLInputElement) return;
+      if (e.key === "ArrowLeft") { e.preventDefault(); go(state.index - 1); }
+      if (e.key === "ArrowRight") { e.preventDefault(); if (state.index < 3) go(state.index + 1); }
+    });
+
+    render();
+  </script>
+</body>
+</html>

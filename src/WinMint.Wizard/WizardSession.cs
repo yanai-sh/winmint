@@ -9,10 +9,7 @@ internal static class WizardSession
 {
     public static WizardSessionResult ComposeAndPlan(WizardSessionInput input)
     {
-        Result<KeepFlagExpansion, PlanFailure> expanded = KeepFlagPresets.TryExpand(
-            input.Preset,
-            input.KeepGaming,
-            input.KeepCopilot);
+        Result<DebloatExpansion, Failure> expanded = DebloatPresets.TryExpand(input.Preset);
         if (!expanded.IsOk)
         {
             return WizardSessionResult.Fail($"{expanded.Error.Code}: {expanded.Error.Message}");
@@ -33,6 +30,8 @@ internal static class WizardSession
         {
             appx = expanded.Value.RemoveProvisionedAppx;
         }
+
+        appx = ProductPosture.UnionAppx(appx);
 
         // UI lists override empty; when non-empty they replace preset pins for that field (union would surprise).
         IReadOnlyList<string> caps = IdList.FromMultiline(input.RemoveCapabilitiesText);
@@ -68,8 +67,7 @@ internal static class WizardSession
             IdList.FromMultiline(input.WslText),
             IdList.FromMultiline(input.WslNeedsRebootText),
             caps,
-            feats,
-            new PoliciesProfile(KeepCopilot: input.KeepCopilot));
+            feats);
 
         RunOptions run = new()
         {
@@ -78,7 +76,7 @@ internal static class WizardSession
             ImageArchitecture = PackageCatalog.DefaultImageArchitecture,
         };
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile, run);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile, run);
         if (!planned.IsOk)
         {
             return WizardSessionResult.Fail($"{planned.Error.Code}: {planned.Error.Message}");
@@ -88,9 +86,14 @@ internal static class WizardSession
         string removeSummary = appx.Count == 0
             ? "(none)"
             : string.Join(", ", appx);
+        string honesty = BuildPlan.FormatPlanHonesty(
+            planned.Value.Manifest,
+            profile.Account.RequireWifiDuringOobe);
         string ok =
-            $"Plan OK. Lane={planned.Value.Manifest.ImageQuality}; removeProvisionedAppx={removeSummary}; jobs={planned.Value.Jobs.Jobs.Count}.";
-        return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8));
+            $"Plan OK. Lane={planned.Value.Manifest.ImageQuality}; removeProvisionedAppx={removeSummary}; jobs={planned.Value.Jobs.Jobs.Count}."
+            + Environment.NewLine
+            + honesty;
+        return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8), planned.Value.Manifest.RequiresNetwork, planned.Value);
     }
 
     /// <summary>Honest Phase A handoff — no process spawn. Work dir is a conventional placeholder.</summary>
@@ -148,7 +151,9 @@ internal static class WizardSession
         IEnumerable<string> toolKeys = browserChipKeys
             .Concat(editorChipKeys)
             .Concat(shellChipKeys)
-            .Where(static key => !string.Equals(key, "edge", StringComparison.OrdinalIgnoreCase));
+            .Where(static key =>
+                !string.Equals(key, "edge", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(key, "fancywm", StringComparison.OrdinalIgnoreCase));
         PackageSelection tools = catalog.ResolveToolKeys(toolKeys);
         IReadOnlyList<string> wsl = catalog.ResolveWslTokens(wslChipKeys);
         return new PackageSelection(tools.WingetInstallIds, tools.ScoopInstallIds, wsl);
@@ -193,8 +198,6 @@ internal sealed record WizardSessionInput(
     string GeoIdText,
     string TimeZoneId,
     bool LocationServicesEnabled,
-    bool KeepGaming = false,
-    bool KeepCopilot = false,
     string WingetText = "",
     string WingetNeedsRebootText = "",
     string ScoopText = "",
@@ -208,10 +211,22 @@ internal sealed record WizardSessionInput(
     string ImageQualityText = "Test",
     int? WimIndex = null);
 
-internal sealed record WizardSessionResult(bool Succeeded, string Message, byte[]? ProfileUtf8, string? ProfileJson)
+/// <summary>Plan-derived (not authored) — <see cref="RequiresNetwork"/> mirrors <see cref="BuildManifest.RequiresNetwork"/>.</summary>
+internal sealed record WizardSessionResult(
+    bool Succeeded,
+    string Message,
+    byte[]? ProfileUtf8,
+    string? ProfileJson,
+    bool RequiresNetwork = false,
+    BuildArtifacts? Artifacts = null)
 {
-    public static WizardSessionResult Ok(string message, byte[] utf8, string json) =>
-        new(true, message, utf8, json);
+    public static WizardSessionResult Ok(
+        string message,
+        byte[] utf8,
+        string json,
+        bool requiresNetwork,
+        BuildArtifacts artifacts) =>
+        new(true, message, utf8, json, requiresNetwork, artifacts);
 
     public static WizardSessionResult Fail(string message) =>
         new(false, message, null, null);

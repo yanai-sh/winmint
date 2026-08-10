@@ -1,0 +1,302 @@
+using System.Diagnostics;
+using System.Text.Json;
+using WinMint.Orchestrator;
+
+namespace WinMint.Wizard;
+
+/// <summary>Unelevated Source ISO → install.wim index list (Avalonia-free). Parser lives in Wim-Metadata.ps1.</summary>
+internal static class SourceWimProbe
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    public static Result<IReadOnlyList<WimIndexInfo>, Failure> TryProbeIso(
+        string isoPath,
+        IWimIndexSource? source = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(isoPath) || !File.Exists(isoPath.Trim()))
+        {
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.isoMissing", $"Source ISO not found: {isoPath}"));
+        }
+
+        IWimIndexSource adapter = source ?? PwshWimIndexSource.Instance;
+        return adapter.ListFromIso(isoPath.Trim(), cancellationToken);
+    }
+
+    public static Result<IReadOnlyList<WimIndexInfo>, Failure> ParseListJson(string json)
+    {
+        try
+        {
+            WimIndexListDto? dto = JsonSerializer.Deserialize<WimIndexListDto>(json, JsonOptions);
+            if (dto?.Indexes is null || dto.Indexes.Count == 0)
+            {
+                return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                    new Failure("wim.probe.empty", "Get-WimInfo returned no indexes."));
+            }
+
+            List<WimIndexInfo> rows = [];
+            foreach (WimIndexDto row in dto.Indexes)
+            {
+                if (row.Index <= 0 || IsUndefinedName(row.Name))
+                {
+                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                        new Failure(
+                            "wim.probe.incompleteName",
+                            $"Index {row.Index} Name is missing or undefined."));
+                }
+
+                rows.Add(new WimIndexInfo(
+                    row.Index,
+                    row.Name!.Trim(),
+                    NullIfEmpty(row.Architecture),
+                    NullIfEmpty(row.Edition),
+                    NullIfEmpty(row.Version),
+                    NullIfEmpty(row.Build)));
+            }
+
+            return Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(rows);
+        }
+        catch (JsonException ex)
+        {
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.unreadable", ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Host default until the author picks; deliberate picks survive re-probe when still listed.
+    /// Does not invent a substitute index when the host default is absent from the media.
+    /// </summary>
+    public static int ResolveSelection(
+        IReadOnlyList<WimIndexInfo> rows,
+        int currentIndex,
+        bool userChose,
+        int hostDefault)
+    {
+        if (userChose && Contains(rows, currentIndex))
+        {
+            return currentIndex;
+        }
+
+        return hostDefault;
+    }
+
+    /// <summary>Mirrors Wim-Metadata <c>Test-WimMetadataUndefined</c>.</summary>
+    internal static bool IsUndefinedName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        string t = value.Trim();
+        return t.Equals("undefined", StringComparison.OrdinalIgnoreCase)
+            || t.Equals("<undefined>", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool Contains(IReadOnlyList<WimIndexInfo> rows, int index)
+    {
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Index == index)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? NullIfEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed class WimIndexListDto
+    {
+        public List<WimIndexDto>? Indexes { get; set; }
+    }
+
+    private sealed class WimIndexDto
+    {
+        public int Index { get; set; }
+        public string? Name { get; set; }
+        public string? Architecture { get; set; }
+        public string? Edition { get; set; }
+        public string? Version { get; set; }
+        public string? Build { get; set; }
+    }
+}
+
+public sealed record WimIndexInfo(
+    int Index,
+    string Name,
+    string? Architecture,
+    string? Edition,
+    string? Version,
+    string? Build)
+{
+    public string DisplayLabel
+    {
+        get
+        {
+            List<string> bits = [];
+            if (!string.IsNullOrWhiteSpace(Architecture))
+            {
+                bits.Add(Architecture);
+            }
+
+            if (!string.IsNullOrWhiteSpace(Edition))
+            {
+                bits.Add(Edition);
+            }
+
+            if (!string.IsNullOrWhiteSpace(Build))
+            {
+                bits.Add(Build);
+            }
+            else if (!string.IsNullOrWhiteSpace(Version))
+            {
+                bits.Add(Version);
+            }
+
+            string suffix = bits.Count == 0 ? "" : $" ({string.Join(", ", bits)})";
+            return $"{Index} — {Name}{suffix}";
+        }
+    }
+}
+
+/// <summary>Port for ISO → WIM index list. Real adapter shells to Wim-Metadata.ps1; tests ship a fake.</summary>
+internal interface IWimIndexSource
+{
+    Result<IReadOnlyList<WimIndexInfo>, Failure> ListFromIso(
+        string isoPath,
+        CancellationToken cancellationToken = default);
+}
+
+internal sealed class PwshWimIndexSource : IWimIndexSource
+{
+    public static PwshWimIndexSource Instance { get; } = new();
+
+    public Result<IReadOnlyList<WimIndexInfo>, Failure> ListFromIso(
+        string isoPath,
+        CancellationToken cancellationToken = default)
+    {
+        string? script = FindWimMetadataScript();
+        if (script is null)
+        {
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.unreadable", "servicing/Wim-Metadata.ps1 not found."));
+        }
+
+        ProcessStartInfo psi = new()
+        {
+            FileName = "pwsh",
+            ArgumentList = { "-NoProfile", "-File", script, "-ListFromIso", isoPath },
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = Path.GetDirectoryName(script)!,
+        };
+
+        try
+        {
+            using Process process = Process.Start(psi)
+                ?? throw new InvalidOperationException("Failed to start pwsh for WIM probe.");
+            using (cancellationToken.Register(() =>
+            {
+                try
+                {
+                    if (!process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                }
+                catch
+                {
+                    // ponytail: best-effort cancel of unelevated probe
+                }
+            }))
+            {
+                string stdout = process.StandardOutput.ReadToEnd();
+                string stderr = process.StandardError.ReadToEnd();
+                if (!process.WaitForExit(120_000))
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { /* ponytail: probe timeout */ }
+                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                        new Failure("wim.probe.unreadable", "WIM probe timed out."));
+                }
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                        new Failure("wim.probe.unreadable", "WIM probe cancelled."));
+                }
+
+                if (process.ExitCode != 0)
+                {
+                    string combined = (stdout + "\n" + stderr).Trim();
+                    string code = ExtractProbeCode(combined) ?? "wim.probe.unreadable";
+                    string message = string.IsNullOrWhiteSpace(combined)
+                        ? $"WIM probe exited {process.ExitCode}."
+                        : combined;
+                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                        new Failure(code, message));
+                }
+
+                return SourceWimProbe.ParseListJson(stdout.Trim());
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.unreadable", ex.Message));
+        }
+    }
+
+    private static string? ExtractProbeCode(string text)
+    {
+        const string prefix = "wim.probe.";
+        int at = text.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+        if (at < 0)
+        {
+            return null;
+        }
+
+        int end = at;
+        while (end < text.Length)
+        {
+            char c = text[end];
+            if (char.IsLetterOrDigit(c) || c is '.' or '_')
+            {
+                end++;
+                continue;
+            }
+
+            break;
+        }
+
+        return text[at..end];
+    }
+
+    private static string? FindWimMetadataScript()
+    {
+        string? dir = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(dir))
+        {
+            string candidate = Path.Combine(dir, "servicing", "Wim-Metadata.ps1");
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            dir = Path.GetDirectoryName(dir);
+        }
+
+        string cwd = Path.Combine(Directory.GetCurrentDirectory(), "servicing", "Wim-Metadata.ps1");
+        return File.Exists(cwd) ? cwd : null;
+    }
+}

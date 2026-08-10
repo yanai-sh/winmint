@@ -1,8 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
+             xmlns:wizard="using:WinMint.Wizard"
              x:Class="WinMint.Wizard.Views.SourceStepView"
-             x:DataType="vm:WizardShellViewModel">
+             x:DataType="vm:WizardViewModel">
   <StackPanel Spacing="22" MaxWidth="720" HorizontalAlignment="Center" VerticalAlignment="Center">
     <!-- Brand: v1 winmint_hero_ui.png (= wordmark lockup UI raster); SVG lockups kept in Assets for later. -->
     <Image Source="avares://WinMint.Wizard/Assets/lockup_ui.png"
@@ -33,6 +34,30 @@
                 Command="{Binding BrowseIsoCommand}" />
       </StackPanel>
     </Border>
+
+    <Border Classes="panel-card" HorizontalAlignment="Stretch"
+            IsVisible="{Binding IsWimPickerVisible}">
+      <StackPanel Spacing="10">
+        <TextBlock Classes="panel-label" Text="SOURCE EDITION" />
+        <ComboBox ItemsSource="{Binding WimIndexes}"
+                  SelectedItem="{Binding SelectedWimIndex}"
+                  HorizontalAlignment="Stretch"
+                  MinWidth="280">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="wizard:WimIndexInfo">
+              <TextBlock Text="{Binding DisplayLabel}" TextWrapping="Wrap" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Text="Index Apply will export from this ISO (single-image media after build)."
+                   Opacity="0.55"
+                   FontSize="12"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+    <TextBlock Text="Reading editions from ISO…"
+               Opacity="0.55"
+               IsVisible="{Binding IsWimProbeBusy}" />
 
     <Border Classes="panel-card" HorizontalAlignment="Left" MinWidth="280">
       <StackPanel>

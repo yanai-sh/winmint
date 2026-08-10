@@ -13,10 +13,10 @@ WinMint v2 is a new repository with no v1 contract back-compat. Empirical pain i
 1. **Orchestrator-first:** typed C# (`net11.0`, rolling .NET 11 preview SDK) owns Profile validation, planning, and the public **C# CLI**; unelevated by default. Deep module: **BuildPlan**.
 2. **Elevated PowerShell** runs thin **host Servicing** kernels only — not guest FirstLogon, not a v1 `WinMint.ps1` subprocess. Deep module: **ImageServicing** (port type only when a second adapter needs it).
 3. **Clean-sheet JSON contracts** — no migration target for v1 BuildProfile / InstallPlan.
-4. **Dual hosts (authoring vs ISO):** Avalonia wizard later on the **build host**; ISO guest UI is the Provisioning Supervisor’s in-process splash — not Avalonia. Both authoring hosts call BuildPlan — not a second imaging stack.
+4. **Dual hosts:** Avalonia Wizard on the **build host**; ISO guest UI is the Supervisor splash — not Avalonia. Both call BuildPlan.
 5. **Guest control plane (ADR-004):** one Native AOT Provisioning Supervisor (`--machine-setup` + Winlogon Shell); deep module **ProvisioningSession**; DMA settle; C# provisioning jobs; in-memory status + evidence snapshots; Shell-tenure lock; checkpoint reboot.
 6. **First vertical = Smoke:** Profile → ISO → Hyper-V unattend → FirstLogon with splash + DMA hard-field evidence ([ADR-003](ADR-003-dma-interop.md)); plumbing only; password-required local account; Hyper-V smoke SKU = Pro.
-7. **CLI-first Smoke** — wizard after the path is green. Day-one: Cli ProjectReferences Orchestrator; BuildPlan types land with Smoke ticket 01.
+7. **CLI + Wizard** both host BuildPlan; Smoke path proved first historically.
 8. **Pre-planned git history** via `/to-spec` → `/to-tickets` → `/implement` (see [AGENTIC](../agents/AGENTIC.md)).
 9. **Image quality lanes** (run override, not Profile): public names **`Test`** (Smoke/fast) and **`Release`** (hard recompress + WinSxS cleanup). See [ARCHITECTURE.md](../ARCHITECTURE.md#image-quality-run-override-not-profile).
 10. **v1 harvest:** invariants and evidence ideas only — not `runtime/` topology, peer Splash, or file control planes ([ARCHITECTURE harvest rule](../ARCHITECTURE.md#v1-harvest-rule)).
@@ -24,10 +24,10 @@ WinMint v2 is a new repository with no v1 contract back-compat. Empirical pain i
 
 ### Consequences
 
-- Debloat, BitLocker policy, Avalonia, hard input lockdown, and hardware acceptance are later verticals.
+- Debloat / Wizard / metal jobs shipped; BitLocker and hard input lockdown remain issue-scoped.
 - Do not expect C# orchestration to shorten DISM-bound ISO builds.
-- Do not reintroduce guest pwsh or peer Splash.exe as Shell.
-- Do not reserve empty `servicing/` / `schemas/` / `tools/` or invent Servicing ports before a second adapter.
+- Do not reintroduce guest pwsh product runtime or peer Splash.exe as Shell.
+- Do not invent Servicing ports before a second adapter exists.
 
 ### Review trigger
 

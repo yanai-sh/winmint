@@ -110,7 +110,7 @@ public class ShellTenureTests
             Dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
             Jobs: [],
             Policy: SessionPolicy.SmokeDefaults,
-            Supervisor: new SupervisorIdentity(SupervisorPath));
+            SupervisorShellPath: SupervisorPath);
 
     private static SessionEnvironment Env(
         ISplashPresenter splash,

@@ -164,7 +164,7 @@ public class UnlockTimeoutTests
             Dma: dma,
             Jobs: [new ProvisionJob("smoke.stub.ready", "stub")],
             Policy: policy,
-            Supervisor: new SupervisorIdentity(SupervisorPath));
+            SupervisorShellPath: SupervisorPath);
 
     private static SessionEnvironment Env(
         TimeProvider time,

@@ -12,14 +12,11 @@ public static class BuildPlan
     public const string IrelandSetupLocale = "en-IE";
     public const int IrelandSetupGeoId = 68;
 
-    /// <summary>Generic Win11 Pro setup key — skips product-key page; does not activate (SPLASH).</summary>
-    public const string ProSetupProductKey = "VK7JG-NPHTM-C97JM-9MPGT-3V66T";
-
-    public static Result<Profile, DocumentErrors> TryParseProfile(ReadOnlySpan<byte> utf8Json)
+    public static Result<Profile, IReadOnlyList<DocumentError>> TryParseProfile(ReadOnlySpan<byte> utf8Json)
     {
         if (utf8Json.IsEmpty)
         {
-            return Result.Fail<Profile, DocumentErrors>(InvalidJson("Document is empty."));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(InvalidJson("Document is empty."));
         }
 
         ProfileDocument? doc;
@@ -29,12 +26,12 @@ public static class BuildPlan
         }
         catch (JsonException ex)
         {
-            return Result.Fail<Profile, DocumentErrors>(InvalidJson(ex.Message));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(InvalidJson(ex.Message));
         }
 
         if (doc is null)
         {
-            return Result.Fail<Profile, DocumentErrors>(InvalidJson("Document deserialized to null."));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(InvalidJson("Document deserialized to null."));
         }
 
         List<DocumentError> issues = [];
@@ -71,11 +68,11 @@ public static class BuildPlan
             {
                 issues.Add(new DocumentError("account.mode.missing", "account.mode is required.", "account.mode"));
             }
-            else if (!string.Equals(doc.Account.Mode, AccountModeWire.LocalAutoLogon, StringComparison.Ordinal))
+            else if (!string.Equals(doc.Account.Mode, AccountProfile.LocalAutoLogonMode, StringComparison.Ordinal))
             {
                 issues.Add(new DocumentError(
                     "account.mode.unsupported",
-                    $"Unsupported account.mode '{doc.Account.Mode}'. Smoke supports {AccountModeWire.LocalAutoLogon} only.",
+                    $"Unsupported account.mode '{doc.Account.Mode}'. Smoke supports {AccountProfile.LocalAutoLogonMode} only.",
                     "account.mode"));
             }
 
@@ -87,7 +84,7 @@ public static class BuildPlan
 
         if (issues.Count > 0)
         {
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(issues));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(issues);
         }
 
         DmaSettleDocument settle = doc.Dma!.Settle!;
@@ -100,7 +97,7 @@ public static class BuildPlan
                 "dma.settle.incomplete",
                 "dma.settle requires locale, geoId, timeZoneId, and locationServicesEnabled.",
                 "dma.settle"));
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(issues));
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(issues);
         }
 
         // Default true: metal contract shows OOBE Network; Smoke Profiles set false explicitly.
@@ -110,42 +107,30 @@ public static class BuildPlan
         string? passwordPath = string.IsNullOrWhiteSpace(doc.Account.PasswordPath)
             ? null
             : doc.Account.PasswordPath.Trim();
-        if (string.IsNullOrEmpty(password) && passwordPath is not null)
+        // Host materializes passwordPath via ProfileFile; BuildPlan stays pure (issue 91).
+        if (!string.IsNullOrEmpty(password) && passwordPath is not null)
         {
-            try
-            {
-                password = File.ReadAllText(passwordPath).TrimEnd('\r', '\n');
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-            {
-                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
-                [
-                    new DocumentError(
-                        "account.passwordPath.unreadable",
-                        $"Cannot read account.passwordPath '{passwordPath}': {ex.Message}",
-                        "account.passwordPath"),
-                ]));
-            }
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
+            [
+                new DocumentError(
+                    "account.password.sources.conflict",
+                    "account.password and account.passwordPath cannot both be set.",
+                    "account"),
+            ]);
         }
 
-        if (!ProductOfflinePolicies.TryNormalizeDohProvider(doc.Policies?.DohProvider, out string? doh, out string? dohError))
+        if (!ProductPosture.TryNormalizeDohProvider(doc.Policies?.DohProvider, out string? doh, out string? dohError))
         {
-            return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
             [
                 new DocumentError("policies.dohProvider.unsupported", dohError!, "policies.dohProvider"),
-            ]));
+            ]);
         }
 
         PoliciesProfile? policies = null;
-        if (doc.Policies is not null)
+        if (doc.Policies is not null || doh is not null)
         {
-            policies = new PoliciesProfile(
-                doc.Policies.KeepCopilot ?? false,
-                doh);
-        }
-        else if (doh is not null)
-        {
-            policies = new PoliciesProfile(KeepCopilot: false, DohProvider: doh);
+            policies = new PoliciesProfile(DohProvider: doh);
         }
 
         DriversProfile? drivers = null;
@@ -153,18 +138,18 @@ public static class BuildPlan
         {
             if (string.IsNullOrWhiteSpace(doc.Drivers.Source))
             {
-                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+                return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
                 [
                     new DocumentError("drivers.source.missing", "drivers.source is required.", "drivers.source"),
-                ]));
+                ]);
             }
 
             if (string.IsNullOrWhiteSpace(doc.Drivers.DeviceId))
             {
-                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+                return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
                 [
                     new DocumentError("drivers.deviceId.missing", "drivers.deviceId is required.", "drivers.deviceId"),
-                ]));
+                ]);
             }
 
             drivers = new DriversProfile(doc.Drivers.Source.Trim(), doc.Drivers.DeviceId.Trim());
@@ -183,13 +168,13 @@ public static class BuildPlan
             }
             else
             {
-                return Result.Fail<Profile, DocumentErrors>(new DocumentErrors(
+                return Result.Fail<Profile, IReadOnlyList<DocumentError>>(
                 [
                     new DocumentError(
                         "debloat.mode.unsupported",
                         $"Unsupported debloat.mode '{doc.Debloat.Mode}'. Expected online|offline.",
                         "debloat.mode"),
-                ]));
+                ]);
             }
         }
 
@@ -215,7 +200,7 @@ public static class BuildPlan
             policies,
             drivers);
 
-        return Result.Ok<Profile, DocumentErrors>(profile);
+        return Result.Ok<Profile, IReadOnlyList<DocumentError>>(profile);
     }
 
     /// <summary>Inverse of <see cref="TryParseProfile"/> — omit empty packages/debloat objects (same as former host composer).</summary>
@@ -249,13 +234,9 @@ public static class BuildPlan
         }
 
         PoliciesProfile effective = profile.EffectivePolicies;
-        PoliciesDocument? policies = null;
-        if (effective.KeepCopilot || !string.IsNullOrWhiteSpace(effective.DohProvider))
-        {
-            policies = new PoliciesDocument(
-                effective.KeepCopilot ? true : null,
-                string.IsNullOrWhiteSpace(effective.DohProvider) ? null : effective.DohProvider);
-        }
+        PoliciesDocument? policies = string.IsNullOrWhiteSpace(effective.DohProvider)
+            ? null
+            : new PoliciesDocument(effective.DohProvider);
 
         DriversDocument? drivers = profile.Drivers is null
             ? null
@@ -264,7 +245,7 @@ public static class BuildPlan
         ProfileDocument doc = new(
             ProfileSchemaVersion,
             new AccountDocument(
-                AccountModeWire.LocalAutoLogon,
+                AccountProfile.LocalAutoLogonMode,
                 profile.Account.Username,
                 profile.Account.PasswordPath is null ? profile.Account.Password : null,
                 profile.Account.RequireWifiDuringOobe,
@@ -284,27 +265,20 @@ public static class BuildPlan
         return JsonSerializer.SerializeToUtf8Bytes(doc, BuildPlanJsonContext.Default.ProfileDocument);
     }
 
-    private static PlanFailure? ValidateDrivers(DriversProfile drivers, RunOptions options)
+    private static Failure? ValidateDrivers(DriversProfile drivers, RunOptions options)
     {
         if (!string.Equals(drivers.Source, SurfaceDriverCatalog.SourceSurfaceCatalog, StringComparison.OrdinalIgnoreCase))
         {
-            return new PlanFailure(
+            return new Failure(
                 "drivers.source.unsupported",
                 $"drivers.source '{drivers.Source}' is unsupported (only '{SurfaceDriverCatalog.SourceSurfaceCatalog}' in this vertical).");
         }
 
         if (!SurfaceDriverCatalog.TryGet(drivers.DeviceId, out SurfaceDriverDevice? device) || device is null)
         {
-            return new PlanFailure(
+            return new Failure(
                 "drivers.deviceId.unknown",
                 $"drivers.deviceId '{drivers.DeviceId}' is not in the Surface driver catalog.");
-        }
-
-        if (!SurfaceDriverCatalog.WiredDeviceIds.Contains(device.Id))
-        {
-            return new PlanFailure(
-                "drivers.deviceId.notWired",
-                $"drivers.deviceId '{device.Id}' is in the catalog but not wired for build yet (SL7-only this release).");
         }
 
         if (!string.IsNullOrWhiteSpace(options.ImageArchitecture))
@@ -312,7 +286,7 @@ public static class BuildPlan
             string imageArch = SurfaceDriverCatalog.NormalizeArchitecture(options.ImageArchitecture);
             if (!string.Equals(imageArch, device.Architecture, StringComparison.OrdinalIgnoreCase))
             {
-                return new PlanFailure(
+                return new Failure(
                     "drivers.architecture.mismatch",
                     $"drivers.deviceId '{device.Id}' targets {device.Architecture}, but the image architecture is {options.ImageArchitecture}.");
             }
@@ -320,7 +294,7 @@ public static class BuildPlan
 
         if (options.WindowsBuild is int build && build < device.MinimumWindowsBuild)
         {
-            return new PlanFailure(
+            return new Failure(
                 "drivers.windowsBuild.tooLow",
                 $"drivers.deviceId '{device.Id}' requires Windows build {device.MinimumWindowsBuild} or later; source build is {build}.");
         }
@@ -342,7 +316,7 @@ public static class BuildPlan
             .ToArray();
     }
 
-    private static PlanFailure? ValidateNeedsRebootSubset(
+    private static Failure? ValidateNeedsRebootSubset(
         IReadOnlyList<string> packages,
         IReadOnlyList<string> needsReboot,
         string code,
@@ -354,7 +328,7 @@ public static class BuildPlan
         {
             if (!set.Contains(id))
             {
-                return new PlanFailure(
+                return new Failure(
                     code,
                     $"{needsName} id '{id}' is not in {packagesName}.");
             }
@@ -363,29 +337,148 @@ public static class BuildPlan
         return null;
     }
 
-    /// <summary>Derived network requirement — not authored in Profile JSON (issue 71).</summary>
-    public static bool PlanRequiresNetwork(Profile profile) =>
-        (profile.DebloatMode == DebloatMode.Online && profile.RemoveProvisionedAppx.Count > 0)
-        || profile.WingetPackages.Count > 0
-        || profile.ScoopPackages.Count > 0
-        || profile.WslDistros.Count > 0;
+    /// <summary>FirstLogon always needs outbound network (product-constant MinGit + Nilesoft winget). Not authored in Profile JSON.</summary>
+    public static bool PlanRequiresNetwork() => true;
 
-    public static Result<BuildArtifacts, PlanFailure> Plan(Profile profile, RunOptions? run = null)
+    /// <summary>Cli plan-dump shape for <c>manifest.json</c> (includes RequiresNetwork — #90 honesty).</summary>
+    public static string SerializeManifestDump(BuildManifest manifest)
+    {
+        var node = new System.Text.Json.Nodes.JsonObject
+        {
+            ["imageQuality"] = manifest.ImageQuality.ToString(),
+            ["requiresNetwork"] = manifest.RequiresNetwork,
+        };
+        return node.ToJsonString(DumpJsonOptions);
+    }
+
+    public static string SerializeJobsDump(JobsArtifact jobs)
+    {
+        var node = new System.Text.Json.Nodes.JsonObject
+        {
+            ["schemaVersion"] = jobs.SchemaVersion,
+            ["jobs"] = new System.Text.Json.Nodes.JsonArray(
+                jobs.Jobs.Select(static j =>
+                {
+                    var obj = new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["id"] = j.Id,
+                        ["kind"] = j.Kind,
+                        ["needsReboot"] = j.NeedsReboot,
+                    };
+                    if (j.PackageId is not null)
+                    {
+                        obj["packageId"] = j.PackageId;
+                    }
+
+                    if (j.WingetArchitecture is not null)
+                    {
+                        obj["wingetArchitecture"] = j.WingetArchitecture;
+                    }
+
+                    if (j.WslInstallKind is not null)
+                    {
+                        obj["wslInstallKind"] = j.WslInstallKind;
+                    }
+
+                    if (j.WslFromFileRepo is not null)
+                    {
+                        obj["wslFromFileRepo"] = j.WslFromFileRepo;
+                    }
+
+                    if (j.WslFromFileAssetNames is { Count: > 0 })
+                    {
+                        obj["wslFromFileAssetNames"] = new System.Text.Json.Nodes.JsonArray(
+                            j.WslFromFileAssetNames.Select(static n => (System.Text.Json.Nodes.JsonNode)n).ToArray());
+                    }
+
+                    if (j.AuditStrict)
+                    {
+                        obj["auditStrict"] = true;
+                    }
+
+                    if (j.ScoopBuckets is { Count: > 0 })
+                    {
+                        obj["scoopBuckets"] = new System.Text.Json.Nodes.JsonArray(
+                            j.ScoopBuckets.Select(static b => (System.Text.Json.Nodes.JsonNode)b).ToArray());
+                    }
+
+                    if (j.DohPrimary is not null)
+                    {
+                        obj["dohPrimary"] = j.DohPrimary;
+                    }
+
+                    if (j.DohSecondary is not null)
+                    {
+                        obj["dohSecondary"] = j.DohSecondary;
+                    }
+
+                    if (j.DohTemplate is not null)
+                    {
+                        obj["dohTemplate"] = j.DohTemplate;
+                    }
+
+                    return (System.Text.Json.Nodes.JsonNode)obj;
+                }).ToArray()),
+        };
+        return node.ToJsonString(DumpJsonOptions);
+    }
+
+    public static string SerializeStagesDump(ServicingStageList stages)
+    {
+        var node = new System.Text.Json.Nodes.JsonObject
+        {
+            ["schemaVersion"] = StagesSchemaVersion,
+            ["stages"] = new System.Text.Json.Nodes.JsonArray(
+                stages.Stages.Select(static s => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
+                {
+                    ["opcode"] = s.Opcode.ToString(),
+                    ["parameters"] = new System.Text.Json.Nodes.JsonObject(
+                        s.Parameters.Select(static kv =>
+                            KeyValuePair.Create<string, System.Text.Json.Nodes.JsonNode?>(kv.Key, kv.Value))),
+                }).ToArray()),
+        };
+        return node.ToJsonString(DumpJsonOptions);
+    }
+
+    private static readonly JsonSerializerOptions DumpJsonOptions = new() { WriteIndented = true };
+
+    /// <summary>
+    /// Host-facing plan honesty (Cli + Wizard). Warns when FirstLogon needs network; never a Failure.
+    /// </summary>
+    public static string FormatPlanHonesty(BuildManifest manifest, bool requireWifiDuringOobe)
+    {
+        string wifi = requireWifiDuringOobe
+            ? "requireWifiDuringOobe=true (OOBE may show Network page)"
+            : "requireWifiDuringOobe=false (OOBE Network page hidden)";
+        string head =
+            $"requiresNetwork={(manifest.RequiresNetwork ? "true" : "false")}; {wifi}";
+        if (!manifest.RequiresNetwork)
+        {
+            return head;
+        }
+
+        return head
+            + Environment.NewLine
+            + "Warning: FirstLogon needs outbound network (packages and/or online AppX removes).";
+    }
+
+    public static Result<BuildArtifacts, Failure> Plan(Profile profile, RunOptions? run = null)
     {
         RunOptions options = run ?? new RunOptions();
 
         if (string.IsNullOrEmpty(profile.Account.Password))
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(
-                new PlanFailure("account.password.required", "Local autoLogon requires a non-empty password."));
+            return Result.Fail<BuildArtifacts, Failure>(
+                new Failure("account.password.required", "Local autoLogon requires a non-empty password."));
         }
 
-        foreach (string id in profile.RemoveProvisionedAppx)
+        IReadOnlyList<string> appx = ProductPosture.UnionAppx(profile.RemoveProvisionedAppx);
+        foreach (string id in appx)
         {
             if (!ProvisionedAppxCatalog.Ids.Contains(id))
             {
-                return Result.Fail<BuildArtifacts, PlanFailure>(
-                    new PlanFailure(
+                return Result.Fail<BuildArtifacts, Failure>(
+                    new Failure(
                         "debloat.removeProvisionedAppx.unknown",
                         $"removeProvisionedAppx id '{id}' is not in the shipped provisioned AppX catalog."));
             }
@@ -395,8 +488,8 @@ public static class BuildPlan
         {
             if (!CapabilityCatalog.Ids.Contains(id))
             {
-                return Result.Fail<BuildArtifacts, PlanFailure>(
-                    new PlanFailure(
+                return Result.Fail<BuildArtifacts, Failure>(
+                    new Failure(
                         "debloat.removeCapabilities.unknown",
                         $"removeCapabilities id '{id}' is not in the shipped capability catalog."));
             }
@@ -406,14 +499,14 @@ public static class BuildPlan
         {
             if (!OptionalFeatureCatalog.Ids.Contains(id))
             {
-                return Result.Fail<BuildArtifacts, PlanFailure>(
-                    new PlanFailure(
+                return Result.Fail<BuildArtifacts, Failure>(
+                    new Failure(
                         "debloat.disableOptionalFeatures.unknown",
                         $"disableOptionalFeatures id '{id}' is not in the shipped optional-feature catalog."));
             }
         }
 
-        PlanFailure? needsRebootFail = ValidateNeedsRebootSubset(
+        Failure? needsRebootFail = ValidateNeedsRebootSubset(
             profile.WingetPackages,
             profile.WingetNeedsReboot,
             "packages.wingetNeedsReboot.unknown",
@@ -421,7 +514,7 @@ public static class BuildPlan
             "packages.winget");
         if (needsRebootFail is not null)
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(needsRebootFail);
+            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail);
         }
 
         needsRebootFail = ValidateNeedsRebootSubset(
@@ -432,7 +525,7 @@ public static class BuildPlan
             "packages.scoop");
         if (needsRebootFail is not null)
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(needsRebootFail);
+            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail);
         }
 
         needsRebootFail = ValidateNeedsRebootSubset(
@@ -443,84 +536,129 @@ public static class BuildPlan
             "packages.wsl");
         if (needsRebootFail is not null)
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(needsRebootFail);
+            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail);
         }
 
         if (profile.Drivers is not null)
         {
-            PlanFailure? driverFail = ValidateDrivers(profile.Drivers, options);
+            Failure? driverFail = ValidateDrivers(profile.Drivers, options);
             if (driverFail is not null)
             {
-                return Result.Fail<BuildArtifacts, PlanFailure>(driverFail);
+                return Result.Fail<BuildArtifacts, Failure>(driverFail);
             }
         }
 
         PackageCatalog catalog = options.PackageCatalog ?? PackageCatalog.Default;
         string imageArchitecture = PackageCatalog.EffectiveImageArchitecture(options);
+        IReadOnlyList<string> wingetPackages = ProductPosture.MergeWinget(profile.WingetPackages);
+        PackagePhase packagePhase = PackageCatalog.EffectivePackagePhase(imageArchitecture);
         IReadOnlyList<string> wingetAuditTargets = catalog.ValidateProfilePackages(
             profile,
             imageArchitecture,
-            out PlanFailure? catalogFail);
+            out Failure? catalogFail);
         if (catalogFail is not null)
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(catalogFail);
+            return Result.Fail<BuildArtifacts, Failure>(catalogFail);
+        }
+
+        byte[]? wingetImportJson = null;
+        if (packagePhase == PackagePhase.WingetImport && wingetPackages.Count > 0)
+        {
+            wingetImportJson = BuildWingetImportUtf8Json(
+                wingetPackages,
+                catalog,
+                imageArchitecture);
+            if (wingetImportJson.Length == 0)
+            {
+                wingetImportJson = null;
+            }
         }
 
         HashSet<string> wingetNeedsReboot = new(profile.WingetNeedsReboot, StringComparer.OrdinalIgnoreCase);
         HashSet<string> scoopNeedsReboot = new(profile.ScoopNeedsReboot, StringComparer.OrdinalIgnoreCase);
         HashSet<string> wslNeedsReboot = new(profile.WslNeedsReboot, StringComparer.OrdinalIgnoreCase);
 
-        string unattendXml = options.InstallEngine == InstallEngine.WinPeApply
-            ? BuildOobeUnattendXml(profile)
-            : BuildAutounattendXml(profile);
+        string unattendXml = BuildOobeUnattendXml(profile);
 
         PoliciesProfile policies = profile.EffectivePolicies;
-        if (!ProductOfflinePolicies.TryNormalizeDohProvider(policies.DohProvider, out string? dohProvider, out string? dohPlanError))
+        if (!ProductPosture.TryNormalizeDohProvider(policies.DohProvider, out string? dohProvider, out string? dohPlanError))
         {
-            return Result.Fail<BuildArtifacts, PlanFailure>(
-                new PlanFailure("policies.dohProvider.unsupported", dohPlanError!));
+            return Result.Fail<BuildArtifacts, Failure>(
+                new Failure("policies.dohProvider.unsupported", dohPlanError!));
         }
 
-        // Stub Smoke job set — real installs from packages.winget / packages.scoop / packages.wsl; executor shared.
-        // Product-constant FirstLogon jobs (ADR-009) + keep-flag safety net when remove-list non-empty.
-        List<JobDescriptor> jobList =
-        [
-            new JobDescriptor("smoke.stub.ready", "stub"),
-            new JobDescriptor("smoke.stub.complete", "stub"),
-            new JobDescriptor("onedrive.uninstall", "onedrive.uninstall"),
-            new JobDescriptor("reservedStorage.disable", "reservedStorage.disable"),
-        ];
+        // Product-constant FirstLogon jobs (ADR-009) + debloat safety net when remove-list non-empty.
+        // smoke.stub.* only when RunOptions.IncludeSmokeStubs (Smoke/acceptance harness).
+        List<JobDescriptor> jobList = [];
+        if (options.IncludeSmokeStubs)
+        {
+            jobList.Add(new JobDescriptor("smoke.stub.ready", "stub"));
+            jobList.Add(new JobDescriptor("smoke.stub.complete", "stub"));
+        }
+
+        jobList.Add(new JobDescriptor("onedrive.uninstall", "onedrive.uninstall"));
+        jobList.Add(new JobDescriptor("reservedStorage.disable", "reservedStorage.disable"));
         if (dohProvider is not null)
         {
-            jobList.Add(new JobDescriptor($"doh.{dohProvider}", "doh.set", PackageId: dohProvider));
-        }
+            DohProviderSpec? doh = ProductPosture.ResolveDoh(dohProvider);
+            if (doh is null)
+            {
+                return Result.Fail<BuildArtifacts, Failure>(
+                    new Failure(
+                        "policies.dohProvider.unsupported",
+                        $"policies.dohProvider '{dohProvider}' is unsupported (use cloudflare, google, or quad9)."));
+            }
 
-        if (profile.RemoveProvisionedAppx.Count > 0 && profile.DebloatMode == DebloatMode.Online)
-        {
-            jobList.Add(new JobDescriptor("keepflag.appx.safetyNet", "appx.safetyNet"));
-        }
-
-        foreach (string packageId in profile.WingetPackages)
-        {
-            catalog.TryGetToolByInstallId(packageId, out PackageToolEntry? wingetTool);
-            string? wingetArch = wingetTool is null
-                ? null
-                : PackageCatalog.ResolveWingetArchitectureFlag(wingetTool, imageArchitecture);
             jobList.Add(new JobDescriptor(
-                $"winget.{packageId}",
-                "winget",
-                PackageId: packageId,
-                NeedsReboot: wingetNeedsReboot.Contains(packageId),
-                WingetArchitecture: wingetArch));
+                $"doh.{dohProvider}",
+                "doh.set",
+                PackageId: dohProvider,
+                DohPrimary: doh.Primary,
+                DohSecondary: doh.Secondary,
+                DohTemplate: doh.DohTemplate));
         }
 
-        foreach (string packageId in profile.ScoopPackages)
+        if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Online)
         {
+            jobList.Add(new JobDescriptor("debloat.appx.safetyNet", "appx.safetyNet"));
+        }
+
+        if (wingetImportJson is { Length: > 0 })
+        {
+            bool importReboot = wingetPackages.Any(id => wingetNeedsReboot.Contains(id));
             jobList.Add(new JobDescriptor(
-                $"scoop.{packageId}",
-                "scoop",
-                PackageId: packageId,
-                NeedsReboot: scoopNeedsReboot.Contains(packageId)));
+                "winget.import",
+                "winget.import",
+                PackageId: "winget-import.json",
+                NeedsReboot: importReboot));
+        }
+        else
+        {
+            foreach (string packageId in wingetPackages)
+            {
+                catalog.TryGetToolByInstallId(packageId, out PackageToolEntry? wingetTool);
+                string? wingetArch = wingetTool is null
+                    ? null
+                    : PackageCatalog.ResolveWingetArchitectureFlag(wingetTool, imageArchitecture);
+                jobList.Add(new JobDescriptor(
+                    $"winget.{packageId}",
+                    "winget",
+                    PackageId: packageId,
+                    NeedsReboot: wingetNeedsReboot.Contains(packageId),
+                    WingetArchitecture: wingetArch));
+            }
+        }
+
+        if (profile.ScoopPackages.Count > 0)
+        {
+            IReadOnlySet<string> scoopBuckets = catalog.ScoopBucketsForInstallIds(profile.ScoopPackages);
+            bool batchReboot = profile.ScoopPackages.Any(id => scoopNeedsReboot.Contains(id));
+            jobList.Add(new JobDescriptor(
+                "scoop.batch",
+                "scoop.batch",
+                PackageId: string.Join(';', profile.ScoopPackages),
+                NeedsReboot: batchReboot,
+                ScoopBuckets: scoopBuckets.OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToArray()));
         }
 
         foreach (string distroToken in profile.WslDistros)
@@ -539,14 +677,15 @@ public static class BuildPlan
                 WslFromFileAssetNames: assetNames is { Count: > 0 } ? assetNames : null));
         }
 
-        if (wingetAuditTargets.Count > 0
+        if (options.PackageAuditStrict
+            && wingetAuditTargets.Count > 0
             && string.Equals(imageArchitecture, "arm64", StringComparison.OrdinalIgnoreCase))
         {
             jobList.Add(new JobDescriptor(
                 "package.auditNative",
                 "package.auditNative",
                 PackageId: string.Join(';', wingetAuditTargets),
-                AuditStrict: options.PackageAuditStrict));
+                AuditStrict: true));
         }
 
         JobsArtifact jobs = new(JobsSchemaVersion, jobList);
@@ -577,13 +716,13 @@ public static class BuildPlan
                 }),
         ];
 
-        if (profile.RemoveProvisionedAppx.Count > 0 && profile.DebloatMode == DebloatMode.Offline)
+        if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Offline)
         {
             stageList.Add(new ServicingStage(
                 ServicingOpcode.RemoveProvisionedAppx,
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    [StageParams.PackageFamilyNames] = string.Join(';', profile.RemoveProvisionedAppx),
+                    [StageParams.PackageFamilyNames] = string.Join(';', appx),
                 }));
         }
 
@@ -624,28 +763,19 @@ public static class BuildPlan
         }
 
         bool braveSelected = profile.WingetPackages.Any(
-            id => string.Equals(id, ProductOfflinePolicies.BraveWingetId, StringComparison.OrdinalIgnoreCase));
-        IReadOnlyList<OfflinePolicyRow> policyRows = ProductOfflinePolicies.Compose(
-            keepCopilot: policies.KeepCopilot,
+            id => string.Equals(id, ProductPosture.BraveWingetId, StringComparison.OrdinalIgnoreCase));
+        IReadOnlyList<OfflinePolicyRow> policyRows = ProductPosture.ComposePolicies(
             includeBraveDebloat: braveSelected,
             includeDriverHygiene: injectDrivers);
         stageList.Add(new ServicingStage(
             ServicingOpcode.StampOfflinePolicies,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                [StageParams.PolicySpecs] = ProductOfflinePolicies.EncodeSpecs(policyRows),
+                [StageParams.PolicySpecs] = ProductPosture.EncodePolicySpecs(policyRows),
             }));
 
         stageList.Add(new ServicingStage(ServicingOpcode.StagePayload, new Dictionary<string, string>(StringComparer.Ordinal)));
-
-        if (options.InstallEngine == InstallEngine.WinPeApply)
-        {
-            stageList.Add(new ServicingStage(ServicingOpcode.StageOobeUnattend, new Dictionary<string, string>(StringComparer.Ordinal)));
-        }
-        else
-        {
-            stageList.Add(new ServicingStage(ServicingOpcode.InjectUnattend, new Dictionary<string, string>(StringComparer.Ordinal)));
-        }
+        stageList.Add(new ServicingStage(ServicingOpcode.StageOobeUnattend, new Dictionary<string, string>(StringComparer.Ordinal)));
 
         stageList.Add(new ServicingStage(
             ServicingOpcode.StampOfflineShell,
@@ -654,10 +784,7 @@ public static class BuildPlan
                 [StageParams.ShellTarget] = "Supervisor.exe",
             }));
 
-        if (options.InstallEngine == InstallEngine.WinPeApply)
-        {
-            stageList.Add(new ServicingStage(ServicingOpcode.PatchBootWimApply, new Dictionary<string, string>(StringComparer.Ordinal)));
-        }
+        stageList.Add(new ServicingStage(ServicingOpcode.PatchBootWimApply, new Dictionary<string, string>(StringComparer.Ordinal)));
 
         stageList.AddRange(
         [
@@ -684,25 +811,17 @@ public static class BuildPlan
             jobs,
             stages,
             new DmaContract(profile.Dma.Enabled, profile.Dma.Enabled ? profile.Dma.Settle : null),
-            new BuildManifest(options.ImageQuality, PlanRequiresNetwork(profile)),
+            new BuildManifest(options.ImageQuality, PlanRequiresNetwork()),
             profile.Account,
-            profile.RemoveProvisionedAppx);
+            appx,
+            wingetImportJson,
+            options.PackageStrict);
 
-        return Result.Ok<BuildArtifacts, PlanFailure>(artifacts);
+        return Result.Ok<BuildArtifacts, Failure>(artifacts);
     }
 
     /// <summary>OOBE-phase unattend (specialize + oobeSystem) for WinPE apply — no windowsPE disk/ImageInstall.</summary>
-    internal static string BuildOobeUnattendXml(Profile profile) =>
-        ComposeUnattendXml(profile, includeWindowsPe: false);
-
-    /// <summary>
-    /// ISO-root Autounattend (windowsPE + oobeSystem) plus optional specialize DMA latch.
-    /// Panther copy alone cannot drive WinPE — 25H2 ConX shows "Select setup option" without this.
-    /// </summary>
-    internal static string BuildAutounattendXml(Profile profile) =>
-        ComposeUnattendXml(profile, includeWindowsPe: true);
-
-    private static string ComposeUnattendXml(Profile profile, bool includeWindowsPe)
+    internal static string BuildOobeUnattendXml(Profile profile)
     {
         string user = XmlEscape(profile.Account.Username);
         string pass = XmlEscape(profile.Account.Password ?? "");
@@ -710,90 +829,10 @@ public static class BuildPlan
         string hideWireless = profile.Account.RequireWifiDuringOobe ? "false" : "true";
         string specialize = BuildSpecializeXml(profile);
 
-        string windowsPe = includeWindowsPe
-            ? $$"""
-              <settings pass="windowsPE">
-                <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-                  <SetupUILanguage>
-                    <UILanguage>en-US</UILanguage>
-                  </SetupUILanguage>
-                  <InputLocale>en-US</InputLocale>
-                  <SystemLocale>en-US</SystemLocale>
-                  <UILanguage>en-US</UILanguage>
-                  <UserLocale>en-US</UserLocale>
-                </component>
-                <component name="Microsoft-Windows-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-                  <UserData>
-                    <AcceptEula>true</AcceptEula>
-                    <ProductKey>
-                      <Key>{{ProSetupProductKey}}</Key>
-                    </ProductKey>
-                  </UserData>
-                  <DiskConfiguration>
-                    <Disk wcm:action="add">
-                      <DiskID>0</DiskID>
-                      <WillWipeDisk>true</WillWipeDisk>
-                      <CreatePartitions>
-                        <CreatePartition wcm:action="add">
-                          <Order>1</Order>
-                          <Type>EFI</Type>
-                          <Size>100</Size>
-                        </CreatePartition>
-                        <CreatePartition wcm:action="add">
-                          <Order>2</Order>
-                          <Type>MSR</Type>
-                          <Size>16</Size>
-                        </CreatePartition>
-                        <CreatePartition wcm:action="add">
-                          <Order>3</Order>
-                          <Type>Primary</Type>
-                          <Extend>true</Extend>
-                        </CreatePartition>
-                      </CreatePartitions>
-                      <ModifyPartitions>
-                        <ModifyPartition wcm:action="add">
-                          <Order>1</Order>
-                          <PartitionID>1</PartitionID>
-                          <Format>FAT32</Format>
-                          <Label>System</Label>
-                        </ModifyPartition>
-                        <ModifyPartition wcm:action="add">
-                          <Order>2</Order>
-                          <PartitionID>2</PartitionID>
-                        </ModifyPartition>
-                        <ModifyPartition wcm:action="add">
-                          <Order>3</Order>
-                          <PartitionID>3</PartitionID>
-                          <Format>NTFS</Format>
-                          <Label>Windows</Label>
-                          <Letter>C</Letter>
-                        </ModifyPartition>
-                      </ModifyPartitions>
-                    </Disk>
-                  </DiskConfiguration>
-                  <ImageInstall>
-                    <OSImage>
-                      <InstallFrom>
-                        <MetaData wcm:action="add">
-                          <Key>/IMAGE/INDEX</Key>
-                          <Value>1</Value>
-                        </MetaData>
-                      </InstallFrom>
-                      <InstallTo>
-                        <DiskID>0</DiskID>
-                        <PartitionID>3</PartitionID>
-                      </InstallTo>
-                    </OSImage>
-                  </ImageInstall>
-                </component>
-              </settings>
-              """
-            : string.Empty;
-
         return $$"""
             <?xml version="1.0" encoding="utf-8"?>
             <unattend xmlns="urn:schemas-microsoft-com:unattend">
-              {{windowsPe}}{{specialize}}
+              {{specialize}}
               <settings pass="oobeSystem">
                 <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
                   <OOBE>
@@ -856,8 +895,50 @@ public static class BuildPlan
     private static string XmlEscape(string value) =>
         System.Security.SecurityElement.Escape(value) ?? string.Empty;
 
-    private static DocumentErrors InvalidJson(string message) =>
-        new([new DocumentError("document.invalidJson", message)]);
+    private static IReadOnlyList<DocumentError> InvalidJson(string message) =>
+        [new DocumentError("document.invalidJson", message)];
+
+    /// <summary>Build winget export/import JSON from Profile winget ids + catalog.</summary>
+    private static byte[] BuildWingetImportUtf8Json(
+        IReadOnlyList<string> wingetInstallIds,
+        PackageCatalog catalog,
+        string imageArchitecture)
+    {
+        const string schema = "https://aka.ms/winget-packages.schema.2.0.json";
+        List<WingetImportPackageDto> packages = [];
+        foreach (string installId in wingetInstallIds)
+        {
+            if (!catalog.TryGetToolByInstallId(installId, out PackageToolEntry? tool))
+            {
+                continue;
+            }
+
+            string? archFlag = PackageCatalog.ResolveWingetArchitectureFlag(tool, imageArchitecture);
+            packages.Add(new WingetImportPackageDto(
+                installId,
+                string.IsNullOrWhiteSpace(archFlag) ? null : $"--architecture {archFlag}"));
+        }
+
+        if (packages.Count == 0)
+        {
+            return [];
+        }
+
+        WingetImportFile file = new(
+            schema,
+            DateTimeOffset.UtcNow,
+            [
+                new WingetImportSourceDto(
+                    new WingetSourceDetailsDto(
+                        "winget",
+                        "8wekyb3d8bbwe",
+                        "https://cdn.winget.microsoft.com/cache",
+                        "Microsoft.PreIndexed.Package"),
+                    packages),
+            ]);
+
+        return JsonSerializer.SerializeToUtf8Bytes(file, WingetImportJsonContext.Default.WingetImportFile);
+    }
 }
 
 internal sealed record ProfileDocument(
@@ -874,7 +955,6 @@ internal sealed record DriversDocument(
     [property: JsonPropertyName("deviceId")] string? DeviceId);
 
 internal sealed record PoliciesDocument(
-    [property: JsonPropertyName("keepCopilot")] bool? KeepCopilot,
     [property: JsonPropertyName("dohProvider")] string? DohProvider);
 
 internal sealed record PackagesDocument(
@@ -914,3 +994,26 @@ internal sealed record DmaSettleDocument(
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class BuildPlanJsonContext : JsonSerializerContext;
+
+internal sealed record WingetImportFile(
+    [property: JsonPropertyName("$schema")] string Schema,
+    [property: JsonPropertyName("CreationDate")] DateTimeOffset CreationDate,
+    [property: JsonPropertyName("Sources")] WingetImportSourceDto[] Sources);
+
+internal sealed record WingetImportSourceDto(
+    [property: JsonPropertyName("SourceDetails")] WingetSourceDetailsDto SourceDetails,
+    [property: JsonPropertyName("Packages")] IReadOnlyList<WingetImportPackageDto> Packages);
+
+internal sealed record WingetSourceDetailsDto(
+    [property: JsonPropertyName("Name")] string Name,
+    [property: JsonPropertyName("Identifier")] string Identifier,
+    [property: JsonPropertyName("Argument")] string Argument,
+    [property: JsonPropertyName("Type")] string Type);
+
+internal sealed record WingetImportPackageDto(
+    [property: JsonPropertyName("PackageIdentifier")] string PackageIdentifier,
+    [property: JsonPropertyName("InitialOverrideArguments")] string? InitialOverrideArguments);
+
+[JsonSerializable(typeof(WingetImportFile))]
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]
+internal sealed partial class WingetImportJsonContext : JsonSerializerContext;

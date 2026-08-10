@@ -1,34 +1,32 @@
 # Secrets lifecycle (Smoke)
 
-**Status:** Accepted (batch-grill 2026-07-28) — lab / Smoke honesty  
-**Authority:** ADR-002 (password-required local), ProvisioningSession Machine setup, [DESIGN grill locks](../DESIGN.md#decisions-locked-grill)
+**Authority:** [DESIGN](../DESIGN.md) · ProvisioningSession Machine setup
 
-## Smoke stance (explicit)
-
-Smoke accounts: **Local + autoLogon only** (password required). Other account modes fail closed at BuildPlan.
-
-Password may appear in:
-
-1. Profile on the **build host** — fixtures may **inline** lab secrets; metal Cli prefers `passwordPath`; Wizard uses a password prompt. **No** `PasswordEnvVar`.
-2. Autologon material stamped into the offline image / Machine setup (Windows requirements).
-
-**Lab-grade only** — not enterprise secret management. No BitLocker/TPM-sealed secrets in Smoke.
+Smoke accounts: **Local + autoLogon** (password required). Lab-grade — not enterprise secret management.
 
 ## Rules
 
 | Rule | Detail |
 |------|--------|
-| Plan-time | Local+autoLogon without password ⇒ BuildPlan `PlanFailure` |
-| Transport | Prefer `passwordPath` (Cli) or Wizard prompt over inline password; fixtures may inline test-only secrets; **no** `PasswordEnvVar` |
-| Machine setup | After successful autologon stamp, **wipe** staged bundle password on disk via `WipeSecrets` Action (JSON redact + rewrite; no `FileSecretScrubber` / `ISecretScrubber` class) |
-| Evidence | Harness must **redact** passwords from pulled logs/evidence; never commit real passwords |
+| Plan-time | Local+autoLogon without password ⇒ `Failure` |
+| Transport | Prefer `passwordPath` (`ProfileFile`) or Wizard prompt; fixtures may inline test secrets |
+| Sources | Both non-empty `password` and `passwordPath` ⇒ `account.password.sources.conflict` |
+| Materialize | `ProfileFile` reads file, strips trailing CR/LF only; keeps authored path for serialize |
+| Relative path | Resolve against Profile directory; ambient drive/root-relative forms fail closed |
+| Machine setup | After stamp, wipe staged bundle password on disk (`WipeSecrets`) |
+| Evidence | Redact passwords from pulled logs; never commit real passwords |
 | Guest jobs JSON | Must not round-trip cleartext password |
-| defaultuser0 | Never leave `DefaultUserName=defaultuser0` with `AutoAdminLogon` |
+| defaultuser0 | Never leave with AutoAdminLogon |
 
-## Out of Smoke
+Logging or shipping passwords in evidence is a **spec violation**, not a debug convenience.
 
-Credential managers, LSA secrets hardening, rotating autologon off after first login — later verticals / ADRs.
+## Primary metal (sl7)
 
-## Agent rule
+Create the lab password file (no trailing newline required beyond `-NoNewline`):
 
-If an implementation “temporarily” logs passwords or ships them in evidence JSON, that is a **spec violation**, not a debug convenience.
+```powershell
+Set-Content -Path .scratch/sl7.password -Value 'your-lab-password' -NoNewline
+```
+
+Profile field: `passwordPath` → `../.scratch/sl7.password` from `samples/`.  
+`samples/sl7.profile.json` sets `requireWifiDuringOobe: true` → OOBE **Network** page is expected; do not treat that as “walk away from Wi‑Fi.”

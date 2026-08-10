@@ -1,14 +1,10 @@
 using System.CommandLine;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using WinMint.Orchestrator;
 
 namespace WinMint.Cli;
 
 internal static class Program
 {
-    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
-
     private static int Main(string[] args)
     {
         Argument<FileInfo> profileArgument = new("profile")
@@ -65,10 +61,14 @@ internal static class Program
             Description = "Fail closed when native ARM64 audit finds x64/emulated winget GUI binaries.",
         };
 
-        Option<string> installEngineOption = new("--install-engine")
+        Option<bool> packageStrictOption = new("--package-strict")
         {
-            Description = "Install lane: winpeApply (default) or legacy opt-in.",
-            DefaultValueFactory = _ => "winpeApply",
+            Description = "Fail closed when winget/scoop package jobs fail (harness/metal). Default best-effort.",
+        };
+
+        Option<bool> includeSmokeStubsOption = new("--include-smoke-stubs")
+        {
+            Description = "Include smoke.stub.* FirstLogon jobs (Smoke/acceptance harness). Default off.",
         };
 
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")
@@ -77,7 +77,8 @@ internal static class Program
             imageQualityOption,
             imageArchitectureOption,
             packageAuditStrictOption,
-            installEngineOption,
+            packageStrictOption,
+            includeSmokeStubsOption,
         };
         validateCommand.SetAction(parseResult =>
         {
@@ -87,7 +88,8 @@ internal static class Program
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
-                parseResult.GetValue(installEngineOption)!);
+                parseResult.GetValue(packageStrictOption),
+                parseResult.GetValue(includeSmokeStubsOption));
         });
 
         Command planCommand = new("plan", "Parse and plan a Profile; emit plan artifacts.")
@@ -97,7 +99,8 @@ internal static class Program
             imageQualityOption,
             imageArchitectureOption,
             packageAuditStrictOption,
-            installEngineOption,
+            packageStrictOption,
+            includeSmokeStubsOption,
         };
         planCommand.SetAction(parseResult =>
         {
@@ -109,7 +112,8 @@ internal static class Program
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
-                parseResult.GetValue(installEngineOption)!);
+                parseResult.GetValue(packageStrictOption),
+                parseResult.GetValue(includeSmokeStubsOption));
         });
 
         Command buildCommand = new("build", "Plan a Profile and apply ImageServicing (one elevated RunPlan).")
@@ -123,7 +127,8 @@ internal static class Program
             imageQualityOption,
             imageArchitectureOption,
             packageAuditStrictOption,
-            installEngineOption,
+            packageStrictOption,
+            includeSmokeStubsOption,
         };
         buildCommand.SetAction(parseResult =>
         {
@@ -143,7 +148,8 @@ internal static class Program
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
-                parseResult.GetValue(installEngineOption)!);
+                parseResult.GetValue(packageStrictOption),
+                parseResult.GetValue(includeSmokeStubsOption));
         });
 
         RootCommand root = new("WinMint — Profile plan and ImageServicing build")
@@ -161,9 +167,17 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
-        string installEngine)
+        bool packageStrict,
+        bool includeSmokeStubs)
     {
-        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, installEngine, out RunOptions run, out int exit))
+        if (!TryBuildRunOptions(
+                imageQuality,
+                imageArchitecture,
+                packageAuditStrict,
+                packageStrict,
+                includeSmokeStubs,
+                out RunOptions run,
+                out int exit))
         {
             return exit;
         }
@@ -183,9 +197,17 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
-        string installEngine)
+        bool packageStrict,
+        bool includeSmokeStubs)
     {
-        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, installEngine, out RunOptions run, out int exit))
+        if (!TryBuildRunOptions(
+                imageQuality,
+                imageArchitecture,
+                packageAuditStrict,
+                packageStrict,
+                includeSmokeStubs,
+                out RunOptions run,
+                out int exit))
         {
             return exit;
         }
@@ -198,7 +220,7 @@ internal static class Program
         Directory.CreateDirectory(outDir.FullName);
         WritePlanArtifacts(outDir.FullName, artifacts!);
         Console.WriteLine($"Wrote plan artifacts to {outDir.FullName}");
-        Console.WriteLine($"Lane: {artifacts!.Manifest.ImageQuality}");
+        WritePlanHonesty(artifacts!);
         return 0;
     }
 
@@ -212,9 +234,17 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
-        string installEngine)
+        bool packageStrict,
+        bool includeSmokeStubs)
     {
-        if (!TryBuildRunOptions(imageQuality, imageArchitecture, packageAuditStrict, installEngine, out RunOptions planRun, out int exit))
+        if (!TryBuildRunOptions(
+                imageQuality,
+                imageArchitecture,
+                packageAuditStrict,
+                packageStrict,
+                includeSmokeStubs,
+                out RunOptions planRun,
+                out int exit))
         {
             return exit;
         }
@@ -238,6 +268,8 @@ internal static class Program
                 "Warning: ImageQuality=Release uses compression=max + cleanup=full — prefer Test for iterative builds.");
         }
 
+        WritePlanHonesty(artifacts!);
+
         ServicingRun servicingRun = new(
             SourceIsoPath: iso.FullName,
             WorkDirectory: work.FullName,
@@ -245,7 +277,7 @@ internal static class Program
             WimIndex: wimIndex,
             ReuseMedia: reuseMedia);
 
-        Result<ImageEvidence, ServicingFailure> applied = ImageServicing.Apply(artifacts!, servicingRun);
+        Result<ImageEvidence, Failure> applied = ImageServicing.Apply(artifacts!, servicingRun);
         if (!applied.IsOk)
         {
             Console.Error.WriteLine($"{applied.Error.Code}: {applied.Error.Message}");
@@ -263,17 +295,12 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
-        string installEngine,
+        bool packageStrict,
+        bool includeSmokeStubs,
         out RunOptions run,
         out int exitCode)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out exitCode))
-        {
-            run = new RunOptions();
-            return false;
-        }
-
-        if (!TryParseInstallEngine(installEngine, out InstallEngine engine, out exitCode))
         {
             run = new RunOptions();
             return false;
@@ -284,32 +311,11 @@ internal static class Program
             ImageQuality = lane,
             ImageArchitecture = imageArchitecture,
             PackageAuditStrict = packageAuditStrict,
-            InstallEngine = engine,
+            PackageStrict = packageStrict,
+            IncludeSmokeStubs = includeSmokeStubs,
         };
         exitCode = 0;
         return true;
-    }
-
-    private static bool TryParseInstallEngine(string raw, out InstallEngine engine, out int exitCode)
-    {
-        if (string.Equals(raw, "legacy", StringComparison.OrdinalIgnoreCase))
-        {
-            engine = InstallEngine.Legacy;
-            exitCode = 0;
-            return true;
-        }
-
-        if (string.Equals(raw, "winpeApply", StringComparison.OrdinalIgnoreCase))
-        {
-            engine = InstallEngine.WinPeApply;
-            exitCode = 0;
-            return true;
-        }
-
-        Console.Error.WriteLine($"Unsupported --install-engine '{raw}' (expected legacy|winpeApply).");
-        engine = InstallEngine.Legacy;
-        exitCode = 1;
-        return false;
     }
 
     private static bool TryParseImageQuality(string raw, out ImageQualityLane lane, out int exitCode)
@@ -340,11 +346,10 @@ internal static class Program
             return false;
         }
 
-        byte[] utf8 = File.ReadAllBytes(profilePath.FullName);
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(profilePath.FullName);
         if (!parsed.IsOk)
         {
-            foreach (DocumentError issue in parsed.Error.Issues)
+            foreach (DocumentError issue in parsed.Error)
             {
                 Console.Error.WriteLine($"{issue.Code}: {issue.Message}" + (issue.Path is null ? "" : $" ({issue.Path})"));
             }
@@ -353,7 +358,7 @@ internal static class Program
             return false;
         }
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value, run);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value, run);
         if (!planned.IsOk)
         {
             Console.Error.WriteLine($"{planned.Error.Code}: {planned.Error.Message}");
@@ -370,80 +375,33 @@ internal static class Program
     {
         File.WriteAllText(Path.Combine(directory, "unattend.xml"), artifacts.Unattend.Xml);
 
-        WriteJson(
-            directory,
-            "jobs.json",
-            new JsonObject
-            {
-                ["schemaVersion"] = artifacts.Jobs.SchemaVersion,
-                ["jobs"] = new JsonArray(
-                    artifacts.Jobs.Jobs.Select(static j =>
-                    {
-                        JsonObject obj = new()
-                        {
-                            ["id"] = j.Id,
-                            ["kind"] = j.Kind,
-                            ["needsReboot"] = j.NeedsReboot,
-                        };
-                        if (j.PackageId is not null)
-                        {
-                            obj["packageId"] = j.PackageId;
-                        }
-
-                        if (j.WingetArchitecture is not null)
-                        {
-                            obj["wingetArchitecture"] = j.WingetArchitecture;
-                        }
-
-                        if (j.WslInstallKind is not null)
-                        {
-                            obj["wslInstallKind"] = j.WslInstallKind;
-                        }
-
-                        if (j.WslFromFileRepo is not null)
-                        {
-                            obj["wslFromFileRepo"] = j.WslFromFileRepo;
-                        }
-
-                        if (j.WslFromFileAssetNames is { Count: > 0 })
-                        {
-                            obj["wslFromFileAssetNames"] = new JsonArray(
-                                j.WslFromFileAssetNames.Select(static n => (JsonNode)n).ToArray());
-                        }
-
-                        if (j.AuditStrict)
-                        {
-                            obj["auditStrict"] = true;
-                        }
-
-                        return (JsonNode)obj;
-                    }).ToArray()),
-            });
-
-        WriteJson(
-            directory,
-            "stages.json",
-            new JsonObject
-            {
-                ["schemaVersion"] = BuildPlan.StagesSchemaVersion,
-                ["stages"] = new JsonArray(
-                    artifacts.Stages.Stages.Select(static s => (JsonNode)new JsonObject
-                    {
-                        ["opcode"] = s.Opcode.ToString(),
-                        ["parameters"] = new JsonObject(
-                            s.Parameters.Select(static kv =>
-                                KeyValuePair.Create<string, JsonNode?>(kv.Key, kv.Value))),
-                    }).ToArray()),
-            });
-
-        WriteJson(
-            directory,
-            "manifest.json",
-            new JsonObject { ["imageQuality"] = artifacts.Manifest.ImageQuality.ToString() });
+        File.WriteAllText(
+            Path.Combine(directory, "jobs.json"),
+            BuildPlan.SerializeJobsDump(artifacts.Jobs));
+        File.WriteAllText(
+            Path.Combine(directory, "stages.json"),
+            BuildPlan.SerializeStagesDump(artifacts.Stages));
+        File.WriteAllText(
+            Path.Combine(directory, "manifest.json"),
+            BuildPlan.SerializeManifestDump(artifacts.Manifest));
     }
 
-    private static void WriteJson(string directory, string name, JsonNode node) =>
-        File.WriteAllBytes(
-            Path.Combine(directory, name),
-            System.Text.Encoding.UTF8.GetBytes(node.ToJsonString(IndentedJson)));
+    private static void WritePlanHonesty(BuildArtifacts artifacts)
+    {
+        Console.WriteLine($"Lane: {artifacts.Manifest.ImageQuality}");
+        string honesty = BuildPlan.FormatPlanHonesty(
+            artifacts.Manifest,
+            artifacts.Account.RequireWifiDuringOobe);
+        foreach (string line in honesty.Split(["\r\n", "\n"], StringSplitOptions.None))
+        {
+            if (line.StartsWith("Warning:", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine(line);
+            }
+            else if (line.Length > 0)
+            {
+                Console.WriteLine(line);
+            }
+        }
+    }
 }

@@ -29,10 +29,11 @@ public sealed record ProvisioningBundle(
     DmaSettleTarget Dma,
     IReadOnlyList<ProvisionJob> Jobs,
     SessionPolicy Policy,
-    SupervisorIdentity Supervisor,
+    string SupervisorShellPath,
     CheckpointState? Resume = null,
     IReadOnlyList<string>? RemoveProvisionedAppx = null,
-    bool RequiresNetwork = false);
+    bool RequiresNetwork = false,
+    bool PackageStrict = false);
 
 public sealed record AccountStamp(string Username, string Password);
 
@@ -52,9 +53,11 @@ public sealed record ProvisionJob(
     string? WslInstallKind = null,
     string? WslFromFileRepo = null,
     IReadOnlyList<string>? WslFromFileAssetNames = null,
-    bool AuditStrict = false);
-
-public sealed record SupervisorIdentity(string ShellPath);
+    bool AuditStrict = false,
+    IReadOnlyList<string>? ScoopBuckets = null,
+    string? DohPrimary = null,
+    string? DohSecondary = null,
+    string? DohTemplate = null);
 
 public sealed record CheckpointState(string Phase);
 
@@ -93,7 +96,8 @@ public sealed record SessionEnvironment(
     ILocalAccounts? LocalAccounts = null,
     Func<string?>? ResolveScoopCmd = null,
     IResidueCleaner? ResidueCleaner = null,
-    IConnectivityProbe? Connectivity = null);
+    IConnectivityProbe? Connectivity = null,
+    string? EvidenceDirectory = null);
 
 /// <summary>OS reboot after NeedsReboot checkpoint (ticket 16). Nullable in tests; production wires Win32.</summary>
 public interface ISystemReboot
@@ -231,3 +235,13 @@ public sealed record ProvisioningEvidenceDocument(
     [property: JsonPropertyName("statusMessage")] string StatusMessage,
     [property: JsonPropertyName("phases")] IReadOnlyList<string> Phases,
     [property: JsonPropertyName("firstPaintMs")] long? FirstPaintMs = null);
+
+public sealed record PackageFailureEntry(
+    [property: JsonPropertyName("jobId")] string JobId,
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("exitCode")] int ExitCode,
+    [property: JsonPropertyName("message")] string? Message = null);
+
+public sealed record PackagesEvidenceDocument(
+    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
+    [property: JsonPropertyName("failures")] IReadOnlyList<PackageFailureEntry> Failures);

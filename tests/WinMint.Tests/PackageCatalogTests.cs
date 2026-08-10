@@ -13,6 +13,14 @@ public class PackageCatalogTests
     }
 
     [Fact]
+    public void Catalog_contains_fancywm_stub()
+    {
+        Assert.True(PackageCatalog.Default.TryGetToolByKey("fancywm", out PackageToolEntry? tool));
+        Assert.Equal("winget", tool!.Source);
+        Assert.False(string.IsNullOrWhiteSpace(tool.InstallId));
+    }
+
+    [Fact]
     public void Default_catalog_splits_winget_and_scoop_shell_tools()
     {
         PackageSelection selection = PackageCatalog.Default.ResolveToolKeys(["windhawk", "komorebi"]);
@@ -24,7 +32,7 @@ public class PackageCatalogTests
     public void Plan_fails_closed_on_unknown_winget_id()
     {
         Profile profile = LabProfile(winget: ["Not.In.Catalog"]);
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
         Assert.False(result.IsOk);
         Assert.Equal("packages.catalog.unknown", result.Error.Code);
     }
@@ -33,13 +41,17 @@ public class PackageCatalogTests
     public void Plan_emits_winget_arch_arm64_on_arm64_image()
     {
         Profile profile = LabProfile(winget: ["Anysphere.Cursor"]);
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "arm64" });
         Assert.True(result.IsOk);
-        JobDescriptor job = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "winget");
-        Assert.Equal("arm64", job.WingetArchitecture);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "package.auditNative");
+        Assert.NotNull(result.Value.WingetImportJson);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "winget");
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == "package.auditNative");
+        using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(result.Value.WingetImportJson);
+        System.Text.Json.JsonElement pkg = doc.RootElement.GetProperty("Sources")[0].GetProperty("Packages")[0];
+        Assert.Equal("--architecture arm64", pkg.GetProperty("InitialOverrideArguments").GetString());
     }
 
     [Fact]
@@ -71,15 +83,13 @@ public class PackageCatalogTests
     {
         Profile profile = LabProfile(winget: ["Anysphere.Cursor", "Zen-Team.Zen-Browser"]);
 
-        Result<BuildArtifacts, PlanFailure> result = BuildPlan.Plan(
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "arm64", PackageAuditStrict = true });
         Assert.True(result.IsOk);
         JobDescriptor audit = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == "package.auditNative");
         Assert.True(audit.AuditStrict);
-        Assert.All(
-            result.Value.Jobs.Jobs.Where(j => j.Kind == "winget"),
-            j => Assert.Equal("arm64", j.WingetArchitecture));
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == "winget.import");
     }
 
     private static Profile LabProfile(IReadOnlyList<string>? winget = null) =>

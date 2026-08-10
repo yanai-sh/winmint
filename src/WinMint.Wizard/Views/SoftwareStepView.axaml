@@ -1,0 +1,143 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WinMint.Wizard.ViewModels"
+             x:Class="WinMint.Wizard.Views.SoftwareStepView"
+             x:DataType="vm:WizardViewModel">
+  <StackPanel Spacing="20" MaxWidth="900" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <TextBlock Classes="hero-title" Text="Software" />
+    <TextBlock Classes="hero-sub"
+               Text="Apps, desktop shell, WSL, and cleanup — or continue with recommended defaults." />
+
+    <Button Classes="ghost"
+            Content="Use defaults → Review"
+            HorizontalAlignment="Left"
+            Command="{Binding UseDefaultsCommand}" />
+
+    <!-- v1 wizard-columns: curated panels only -->
+    <UniformGrid Columns="2" Rows="3">
+      <Border Classes="panel-card" Margin="0,0,8,8">
+        <StackPanel>
+          <TextBlock Classes="panel-label" Text="CLEANUP" />
+          <ToggleButton Classes="chip" Content="Recommended" IsChecked="{Binding IsRecommendedPreset}" Command="{Binding SelectRecommendedPresetCommand}" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="panel-card" Margin="8,0,0,8">
+        <StackPanel>
+          <TextBlock Classes="panel-label" Text="BROWSERS" />
+          <ItemsControl ItemsSource="{Binding BrowserChips}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChipItem">
+                <ToggleButton Classes="chip"
+                              Content="{Binding Label}"
+                              IsChecked="{Binding IsSelected}"
+                              IsEnabled="{Binding IsEnabled}"
+                              ToolTip.Tip="{Binding ToolTip}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="panel-card" Margin="0,0,8,8">
+        <StackPanel>
+          <TextBlock Classes="panel-label" Text="EDITORS" />
+          <ItemsControl ItemsSource="{Binding EditorChips}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChipItem">
+                <ToggleButton Classes="chip"
+                              Content="{Binding Label}"
+                              IsChecked="{Binding IsSelected}"
+                              IsEnabled="{Binding IsEnabled}"
+                              ToolTip.Tip="{Binding ToolTip}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="panel-card" Margin="8,0,0,8">
+        <StackPanel>
+          <TextBlock Classes="panel-label" Text="SHELL" />
+          <ItemsControl ItemsSource="{Binding ShellChips}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChipItem">
+                <ToggleButton Classes="chip"
+                              Content="{Binding Label}"
+                              IsChecked="{Binding IsSelected}"
+                              IsEnabled="{Binding IsEnabled}"
+                              ToolTip.Tip="{Binding ToolTip}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="panel-card" Margin="0,0,8,0">
+        <StackPanel>
+          <TextBlock Classes="panel-label" Text="WSL" />
+          <ItemsControl ItemsSource="{Binding WslChips}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChipItem">
+                <ToggleButton Classes="chip"
+                              Content="{Binding Label}"
+                              IsChecked="{Binding IsSelected}"
+                              IsEnabled="{Binding IsEnabled}"
+                              ToolTip.Tip="{Binding ToolTip}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </UniformGrid>
+
+    <Expander Header="Advanced packages (optional)" IsExpanded="False">
+      <StackPanel Spacing="8" Margin="0,8,0,0">
+        <TextBlock Classes="panel-label" Text="PRESET OVERRIDE" />
+        <StackPanel Orientation="Horizontal">
+          <ToggleButton Classes="chip" Content="Acceptance" IsChecked="{Binding IsAcceptancePreset}" Command="{Binding SelectAcceptancePresetCommand}" />
+          <ToggleButton Classes="chip" Content="Empty" IsChecked="{Binding IsEmptyPreset}" Command="{Binding SelectEmptyPresetCommand}" />
+        </StackPanel>
+        <TextBlock Classes="hero-sub"
+                   Text="One install id or WSL token per line. When non-empty, overrides chip selections for that source. MinGit and Nilesoft Shell are always installed — not listed here and cannot be turned off." />
+        <TextBlock Classes="panel-label" Text="WINGET INSTALL IDS" />
+        <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
+                 PlaceholderText="Anysphere.Cursor&#x0a;Zen-Team.Zen-Browser"
+                 Text="{Binding AdvancedWingetText}" />
+        <TextBlock Classes="panel-label" Text="SCOOP IDS" />
+        <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
+                 PlaceholderText="curl&#x0a;komorebi"
+                 Text="{Binding AdvancedScoopText}" />
+        <TextBlock Classes="panel-label" Text="WSL TOKENS" />
+        <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
+                 PlaceholderText="FedoraLinux&#x0a;NixOS-WSL"
+                 Text="{Binding AdvancedWslText}" />
+      </StackPanel>
+    </Expander>
+
+    <TextBlock Text="{Binding Status}"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource SystemErrorTextColor}"
+               IsVisible="{Binding StatusIsError}" />
+  </StackPanel>
+</UserControl>

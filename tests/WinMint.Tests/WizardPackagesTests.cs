@@ -44,17 +44,19 @@ public class WizardPackagesTests
         Assert.Equal("curl", packages.GetProperty("scoop")[0].GetString());
         Assert.False(packages.TryGetProperty("scoopNeedsReboot", out _));
 
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
-        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Issues.Select(i => i.Code)));
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(
+            parsed.Value,
+            new RunOptions { ImageArchitecture = "amd64" });
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         Assert.Contains(
             planned.Value.Jobs.Jobs,
             j => j.Kind == "winget" && j.PackageId == "jqlang.jq" && j.NeedsReboot);
         Assert.Contains(
             planned.Value.Jobs.Jobs,
-            j => j.Kind == "scoop" && j.PackageId == "curl" && !j.NeedsReboot);
+            j => j.Kind == "scoop.batch" && j.PackageId!.Contains("curl") && !j.NeedsReboot);
     }
 
     [Fact]
@@ -65,12 +67,13 @@ public class WizardPackagesTests
         string json = Encoding.UTF8.GetString(utf8);
         Assert.DoesNotContain("\"packages\"", json, StringComparison.Ordinal);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(BuildPlan.TryParseProfile(utf8).Value);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(BuildPlan.TryParseProfile(utf8).Value);
         Assert.True(planned.IsOk);
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "stub");
+        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == "stub");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "onedrive.uninstall");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "reservedStorage.disable");
-        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind is "winget" or "scoop" or "wsl");
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == "winget.import");
+        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind is "scoop" or "wsl");
     }
 
     [Fact]
@@ -78,7 +81,7 @@ public class WizardPackagesTests
     {
         Profile profile = LabProfile(winget: ["jqlang.jq"], wingetNeedsReboot: ["Git.Git"]);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.False(planned.IsOk);
         Assert.Equal("packages.wingetNeedsReboot.unknown", planned.Error.Code);
     }
@@ -88,7 +91,7 @@ public class WizardPackagesTests
     {
         Profile profile = LabProfile(scoop: ["curl"], scoopNeedsReboot: ["7zip"]);
 
-        Result<BuildArtifacts, PlanFailure> planned = BuildPlan.Plan(profile);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.False(planned.IsOk);
         Assert.Equal("packages.scoopNeedsReboot.unknown", planned.Error.Code);
     }
@@ -98,7 +101,7 @@ public class WizardPackagesTests
     {
         Profile profile = LabProfile(winget: ["jqlang.jq"], scoop: ["curl"]);
         byte[] utf8 = BuildPlan.SerializeProfile(profile);
-        Result<Profile, DocumentErrors> parsed = BuildPlan.TryParseProfile(utf8);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(utf8);
         Assert.True(parsed.IsOk);
         Assert.Equal(profile.WingetPackages, parsed.Value.WingetPackages);
         Assert.Equal(profile.ScoopPackages, parsed.Value.ScoopPackages);
