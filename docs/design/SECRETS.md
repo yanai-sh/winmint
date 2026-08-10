@@ -19,3 +19,14 @@ Smoke accounts: **Local + autoLogon** (password required). Lab-grade — not ent
 | defaultuser0 | Never leave with AutoAdminLogon |
 
 Logging or shipping passwords in evidence is a **spec violation**, not a debug convenience.
+
+## Primary metal (sl7)
+
+Create the lab password file (no trailing newline required beyond `-NoNewline`):
+
+```powershell
+Set-Content -Path .scratch/sl7.password -Value 'your-lab-password' -NoNewline
+```
+
+Profile field: `passwordPath` → `../.scratch/sl7.password` from `samples/`.  
+`samples/sl7.profile.json` sets `requireWifiDuringOobe: true` → OOBE **Network** page is expected; do not treat that as “walk away from Wi‑Fi.”
