@@ -43,9 +43,7 @@ public sealed record SessionPolicy(
     TimeSpan SettleDeadline,
     TimeSpan SettlePollInterval,
     TimeSpan FailedDwell,
-    TimeSpan FirstPaintBudget,
-    TimeSpan StaleTenureThreshold,
-    InputLockMode InputLock = InputLockMode.None);
+    TimeSpan StaleTenureThreshold);
 
 public sealed record SessionEnvironment(
     TimeProvider Time,
@@ -92,9 +90,8 @@ Thin adapters are part of the module interface; production Win32/WinRT live in-p
 | WallClockTimeout | 90 min (monotonic for tenure) |
 | FailedDwell | 5 s |
 | SettleDeadline | 120 s |
-| FirstPaintBudget | 2.0 s (S3 = order; S4 = measure) |
+| SettlePollInterval | 2 s |
 | StaleTenureThreshold | 15 min |
-| InputLock | None |
 
 Durable: `%ProgramData%\WinMint\`. MachineSetup failure ⇒ non-zero exit.
 

@@ -4,13 +4,13 @@ using System.Runtime.Versioning;
 namespace WinMint.Provisioning;
 
 /// <summary>
-/// In-process opaque splash frame via GDI (full ID2D1Factory path only if S4 FirstPaintBudget still fails after status TextOutW).
+/// In-process opaque splash frame via GDI (full ID2D1Factory path only if first opaque frame still fails after status TextOutW).
 /// Status is held in-memory; pixels are not a control plane.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed partial class GdiSplashPresenter : ISplashPresenter, IDisposable
 {
-    // ponytail: solid fill + status TextOutW for first opaque frame; full D2D only if S4 FirstPaintBudget still fails
+    // ponytail: solid fill + status TextOutW for first opaque frame; full D2D only if that path still fails
     private const uint FillColorRef = 0x00281810; // BGR: 16,24,40
 
     private IntPtr _hwnd;
