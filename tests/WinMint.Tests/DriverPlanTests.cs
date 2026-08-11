@@ -51,7 +51,7 @@ public class DriverPlanTests
     }
 
     [Fact]
-    public void Plan_surface_laptop_7_emits_InjectDrivers_before_StampOfflinePolicies()
+    public void Plan_surface_laptop_7_emits_StampOfflinePolicies_before_InjectDrivers()
     {
         Profile profile = Parse(MinimalJson(deviceId: "surface-laptop-7"));
 
@@ -72,7 +72,7 @@ public class DriverPlanTests
         int injectAt = opcodes.ToList().IndexOf(ServicingOpcode.InjectDrivers);
         int policiesAt = opcodes.ToList().IndexOf(ServicingOpcode.StampOfflinePolicies);
         int payloadAt = opcodes.ToList().IndexOf(ServicingOpcode.StagePayload);
-        Assert.True(mountAt >= 0 && injectAt > mountAt && injectAt < policiesAt && policiesAt < payloadAt);
+        Assert.True(mountAt >= 0 && policiesAt > mountAt && policiesAt < injectAt && injectAt < payloadAt);
     }
 
     [Fact]

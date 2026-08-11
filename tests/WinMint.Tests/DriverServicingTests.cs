@@ -45,7 +45,7 @@ public class DriverServicingTests
             int injectAt = opcodes.ToList().IndexOf(ServicingOpcode.InjectDrivers);
             int policiesAt = opcodes.ToList().IndexOf(ServicingOpcode.StampOfflinePolicies);
             int payloadAt = opcodes.ToList().IndexOf(ServicingOpcode.StagePayload);
-            Assert.True(injectAt >= 0 && injectAt < policiesAt && policiesAt < payloadAt);
+            Assert.True(policiesAt >= 0 && policiesAt < injectAt && injectAt < payloadAt);
         }
         finally
         {

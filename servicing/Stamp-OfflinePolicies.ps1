@@ -57,7 +57,6 @@ function Invoke-OfflineHiveValueWrite {
         [Parameter(Mandatory)][string] $Type,
         [Parameter(Mandatory)][string] $Data
     )
-    # HiveMountName e.g. WinMintPol_SOFTWARE (under HKLM)
     $root = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($HiveMountName, $true)
     if ($null -eq $root) { throw "cannot open HKLM\$HiveMountName writable" }
     try {
@@ -103,7 +102,6 @@ function Invoke-OfflineRegAdd {
         [Parameter(Mandatory)][string] $Data,
         [string] $Context = ''
     )
-    # HiveKey = HKLM\WinMintPol_SOFTWARE → mount name WinMintPol_SOFTWARE
     $mountName = $HiveKey -replace '^HKLM\\', ''
     $max = 8
     for ($i = 1; $i -le $max; $i++) {

@@ -628,6 +628,21 @@ public static partial class BuildPlan
                 }),
         ];
 
+        // Stamp HKLM policies before AppX/capability/driver DISM mutations. Creating new
+        // Policies\Microsoft\* keys (Widgets Dsh) flakes Unauthorized on a heavily-serviced mount.
+        bool injectDrivers = profile.Drivers is not null;
+        bool braveSelected = profile.WingetPackages.Any(
+            id => string.Equals(id, ProductPosture.BraveWingetId, StringComparison.OrdinalIgnoreCase));
+        IReadOnlyList<OfflinePolicyRow> policyRows = ProductPosture.ComposePolicies(
+            includeBraveDebloat: braveSelected,
+            includeDriverHygiene: injectDrivers);
+        stageList.Add(new ServicingStage(
+            ServicingOpcode.StampOfflinePolicies,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [StageParams.PolicySpecs] = ProductPosture.EncodePolicySpecs(policyRows),
+            }));
+
         if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Offline)
         {
             stageList.Add(new ServicingStage(
@@ -658,7 +673,6 @@ public static partial class BuildPlan
                 }));
         }
 
-        bool injectDrivers = profile.Drivers is not null;
         if (injectDrivers)
         {
             SurfaceDriverDevice device = SurfaceDriverCatalog.Devices[profile.Drivers!.DeviceId];
@@ -673,18 +687,6 @@ public static partial class BuildPlan
                     [StageParams.Architecture] = device.Architecture,
                 }));
         }
-
-        bool braveSelected = profile.WingetPackages.Any(
-            id => string.Equals(id, ProductPosture.BraveWingetId, StringComparison.OrdinalIgnoreCase));
-        IReadOnlyList<OfflinePolicyRow> policyRows = ProductPosture.ComposePolicies(
-            includeBraveDebloat: braveSelected,
-            includeDriverHygiene: injectDrivers);
-        stageList.Add(new ServicingStage(
-            ServicingOpcode.StampOfflinePolicies,
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [StageParams.PolicySpecs] = ProductPosture.EncodePolicySpecs(policyRows),
-            }));
 
         stageList.Add(new ServicingStage(ServicingOpcode.StagePayload, new Dictionary<string, string>(StringComparer.Ordinal)));
         stageList.Add(new ServicingStage(ServicingOpcode.StageOobeUnattend, new Dictionary<string, string>(StringComparer.Ordinal)));
