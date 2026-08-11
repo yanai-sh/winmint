@@ -54,6 +54,7 @@ public static class WizardStageGates
         };
     }
 
-    public static bool CanBuild(bool sourceReady, bool identityReady, bool savedProfileReady, bool isBusy) =>
-        sourceReady && identityReady && savedProfileReady && !isBusy;
+    /// <param name="profileReady">Saved profile path or in-memory Plan bytes (Build auto-saves to the workdir).</param>
+    public static bool CanBuild(bool sourceReady, bool identityReady, bool profileReady, bool isBusy) =>
+        sourceReady && identityReady && profileReady && !isBusy;
 }

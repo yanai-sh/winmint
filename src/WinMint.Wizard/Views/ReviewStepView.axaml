@@ -74,22 +74,46 @@
                   Content="Build"
                   Command="{Binding BuildCommand}"
                   IsEnabled="{Binding CanBuild}"
-                  ToolTip.Tip="Requires a saved Profile and an existing Source ISO. Elevates via UAC." />
+                  ToolTip.Tip="Plans if needed, saves the profile into the workdir, then elevates Apply (UAC)." />
           <Button Classes="ghost"
                   Content="Cancel"
                   Command="{Binding CancelBuildCommand}"
                   IsVisible="{Binding IsBusy}" />
         </StackPanel>
 
+        <ProgressBar IsIndeterminate="True"
+                     Height="4"
+                     IsVisible="{Binding IsBusy}"
+                     Margin="0,4,0,0" />
+        <TextBlock Text="{Binding BuildWaitHint}"
+                   TextWrapping="Wrap"
+                   Opacity="0.65"
+                   FontSize="12"
+                   IsVisible="{Binding IsBusy}" />
         <TextBlock Text="{Binding BuildStatus}" TextWrapping="Wrap" Opacity="0.85" />
         <TextBlock Text="{Binding SaveStatus}" Opacity="0.75" TextWrapping="Wrap" />
-        <TextBlock Classes="panel-label" Text="CLI RECIPE" Margin="0,8,0,4" />
-        <TextBox Text="{Binding BuildRecipe}"
-                 IsReadOnly="True"
-                 AcceptsReturn="True"
-                 TextWrapping="Wrap"
-                 MinHeight="64"
-                 FontFamily="Cascadia Mono, Consolas, monospace" />
+
+        <Border Classes="iso-stage"
+                IsVisible="{Binding FlashGuidanceText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                Margin="0,8,0,0"
+                Padding="12">
+          <StackPanel Spacing="6">
+            <TextBlock Classes="panel-label" Text="FLASH" />
+            <TextBlock Text="{Binding FlashGuidanceText}"
+                       TextWrapping="Wrap"
+                       FontSize="13" />
+          </StackPanel>
+        </Border>
+
+        <Expander Header="CLI equivalent" IsExpanded="False" Margin="0,8,0,0">
+          <TextBox Text="{Binding BuildRecipe}"
+                   IsReadOnly="True"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   MinHeight="64"
+                   Margin="0,8,0,0"
+                   FontFamily="Cascadia Mono, Consolas, monospace" />
+        </Expander>
       </StackPanel>
     </Border>
 

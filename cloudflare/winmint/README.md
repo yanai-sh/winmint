@@ -5,7 +5,7 @@ Short launcher for users (no git clone, no source zip):
 ```powershell
 irm https://winmint.yanai.sh | iex
 irm https://winmint.yanai.sh/cli | iex
-irm 'https://winmint.yanai.sh/validate?ProfilePath=samples\smoke.profile.json' | iex
+irm https://winmint.yanai.sh/validate | iex
 irm 'https://winmint.yanai.sh/primary-gate?SourceIso=C:\path\to\source.iso&ProfilePath=samples\sl7.profile.json' | iex
 ```
 

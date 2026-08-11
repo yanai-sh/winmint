@@ -19,7 +19,7 @@ You supply the official Microsoft ISO. WinMint does not download or redistribute
 
 ## Status
 
-WinMint is Alpha. You can plan and build ISOs today. A full wipe install (USB → WinPE → OOBE → FirstLogon) is something you run on your own hardware; land the results in the repo when you have them. Gate B (`just primary-gate`) is pre-wipe ISO evidence only — it is not the same as a completed install.
+WinMint is Alpha. You can plan and build ISOs today. A full wipe install (USB → WinPE → OOBE → FirstLogon) is something you run on your own hardware; land the results in the repo when you have them. Gate B (`just primary-gate` / Wizard **Release → Build**) is pre-wipe ISO evidence only — it is not the same as a completed install.
 
 ## Quickstart
 
@@ -31,7 +31,15 @@ irm https://winmint.yanai.sh | iex
 
 That downloads a **verified toolkit** (SHA-256 checked) into a **temporary session**, opens the Wizard, and removes the TEMP toolkit when the Wizard exits. That ephemerality is intentional — WinMint is session-shaped, not a standing install. ISO workdirs and `out.iso` still live on disk (they have to).
 
-While the Wizard is open: select **Release** and **Build** for a Gate B wipe ISO (workdir `%LOCALAPPDATA%\WinMint\work\sl7-primary`), or in a second terminal at the printed toolkit root run `just plan` / `just primary-gate`.
+**First win without a Source ISO** (validate profile only — Alpha / ephemeral / no wipe):
+
+```powershell
+irm https://winmint.yanai.sh/validate | iex
+```
+
+Expect a clear validate result. Defaults to `samples/smoke.profile.json` (override with `?ProfilePath=…` if you want).
+
+While the Wizard is open: select **Release** and **Build** to run Gate B wipe-media apply **in the Wizard** (workdir `%LOCALAPPDATA%\WinMint\work\sl7-primary`). Progress and Rufus DD / SHA flash guidance appear on Review when `out.iso` is ready.
 
 **One-shot Gate B wipe ISO** (re-fetch toolkit, build Release+package-strict, delete TEMP toolkit, keep workdir):
 
@@ -41,19 +49,18 @@ irm 'https://winmint.yanai.sh/primary-gate?SourceIso=C:\path\to\source.iso&Profi
 # URL-encode spaces in paths if needed.
 ```
 
-First win without a Source ISO (validate profile only):
-
-```powershell
-irm 'https://winmint.yanai.sh/validate?ProfilePath=samples\smoke.profile.json' | iex
-```
-
 Optional: `-CacheRelease` / `-InstallRoot` keep a reusable toolkit under `%LOCALAPPDATA%\WinMint\versions\<tag>` (power-user; not required).
 
-Needs network once, plus PowerShell 7.6+ and [Just](https://github.com/casey/just#installation) (the bootstrap installs them via winget when missing). Building an ISO needs a Microsoft Source ISO, an administrator session, and several hours of offline image servicing.
+<details>
+<summary>Host prerequisites</summary>
+
+Needs network once. Bootstrap installs PowerShell 7.6+ and [Just](https://github.com/casey/just#installation) via winget when missing. Building an ISO needs a Microsoft Source ISO, an administrator session, and several hours of offline image servicing.
+
+</details>
 
 ## Build a wipe ISO
 
-Prefer **Wizard Release → Build**, **one-shot** `/primary-gate` above, or live `just primary-gate`. Use `samples/sl7.profile.json`. It expects a lab password and shows the OOBE Wi‑Fi page — stay nearby for network setup ([SECRETS](docs/design/SECRETS.md)).
+Prefer **Wizard Release → Build** (in-app Apply), **one-shot** `/primary-gate` above, or live `just primary-gate`. Use `samples/sl7.profile.json`. It expects a lab password and shows the OOBE Wi‑Fi page — stay nearby for network setup ([SECRETS](docs/design/SECRETS.md)).
 
 ```powershell
 # From the live toolkit root (or after -NoLaunch left a TEMP toolkit folder):
@@ -68,7 +75,7 @@ just watch-apply
 
 Gate B workdir defaults to `%LOCALAPPDATA%\WinMint\work\sl7-primary` (same as `/primary-gate` and Wizard Release Build) so TEMP toolkit cleanup cannot delete `out.iso`. Flash that folder’s `out.iso`.
 
-When it finishes, flash `out.iso` to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup.
+When it finishes, flash `out.iso` to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup. Gate B is still not a completed Primary install.
 
 `just primary-gate` / `/primary-gate` / Wizard Release Build builds the wipe ISO (`Release`, package-strict). Soft `just metal QUALITY=Release` is rejected; wipe media is that Gate B path only.
 

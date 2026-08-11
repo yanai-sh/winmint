@@ -97,8 +97,8 @@ internal static class WizardBuild
         }
 
         string gateHint = packageStrict
-            ? " Gate B wipe media — flash with Rufus DD; check digests.outputIso.sha256."
-            : string.Empty;
+            ? " Gate B wipe media (pre-wipe ISO evidence — not Primary install proven)."
+            : " Test lane (not the wipe gate).";
         string ok =
             $"Image OK: {applied.Value.OutputIsoPath}; Lane={applied.Value.Lane}; Shell={applied.Value.ShellStampTargetPath}; Work={work}.{gateHint}";
         return WizardBuildResult.Ok(ok, applied.Value.OutputIsoPath, work);

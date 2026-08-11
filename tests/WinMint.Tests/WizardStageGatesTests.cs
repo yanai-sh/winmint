@@ -60,6 +60,14 @@ public class WizardStageGatesTests
     }
 
     [Fact]
+    public void CanBuild_profileReady_means_planned_or_saved_not_only_disk_path()
+    {
+        // Gate takes a bool — callers pass (_lastProfileUtf8 != null || saved path).
+        Assert.True(WizardStageGates.CanBuild(true, true, profileReady: true, isBusy: false));
+        Assert.False(WizardStageGates.CanBuild(true, true, profileReady: false, isBusy: false));
+    }
+
+    [Fact]
     public void CanAdvance_from_Software_requires_source_and_identity()
     {
         Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Software, sourceReady: true, identityReady: false));

@@ -133,6 +133,10 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _buildStatus = "";
     [ObservableProperty] private string? _outputIsoPath;
+    [ObservableProperty] private string _flashGuidanceText = "";
+    [ObservableProperty]
+    private string _buildWaitHint =
+        "Offline servicing can take several hours. Status updates are normal — not a stall.";
 
     public bool IsSourceStep => StepIndex == WizardStageGates.Source;
     public bool IsAccountStep => StepIndex == WizardStageGates.Account;
@@ -407,10 +411,40 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task BuildAsync()
     {
-        if (!CanBuild || _savedProfilePath is null)
+        if (!CanBuild)
         {
             return;
         }
+
+        if (_lastProfileUtf8 is null && !RunPlan())
+        {
+            return;
+        }
+
+        if (_lastProfileUtf8 is null)
+        {
+            BuildStatus = "Plan a profile before building.";
+            Status = BuildStatus;
+            StatusIsError = true;
+            return;
+        }
+
+        if (!WizardSession.TryParseLane(ImageQuality, out ImageQualityLane lane, out string? laneError))
+        {
+            BuildStatus = laneError ?? "Invalid image quality.";
+            Status = BuildStatus;
+            StatusIsError = true;
+            return;
+        }
+
+        string work = WizardBuild.ResolveWorkDirectory(lane);
+        Directory.CreateDirectory(work);
+        string profilePath = _savedProfilePath ?? Path.Combine(work, "winmint.profile.json");
+        await File.WriteAllBytesAsync(profilePath, _lastProfileUtf8, CancellationToken.None).ConfigureAwait(true);
+        _savedProfilePath = profilePath;
+        SaveStatus = $"Saved → {profilePath}";
+        RefreshRecipe();
+        RefreshCanBuild();
 
         _buildCts?.Cancel();
         _buildCts?.Dispose();
@@ -418,23 +452,14 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         CancellationToken ct = _buildCts.Token;
 
         IsBusy = true;
+        FlashGuidanceText = "";
         BuildStatus = "Building… (approve UAC if prompted)";
         Status = BuildStatus;
         StatusIsError = false;
         OutputIsoPath = null;
 
-        if (!WizardSession.TryParseLane(ImageQuality, out ImageQualityLane lane, out string? laneError))
-        {
-            BuildStatus = laneError ?? "Invalid image quality.";
-            Status = BuildStatus;
-            StatusIsError = true;
-            IsBusy = false;
-            return;
-        }
-
-        string work = WizardBuild.ResolveWorkDirectory(lane);
         WizardBuildInput input = new(
-            _savedProfilePath,
+            profilePath,
             SourceIsoPath.Trim(),
             ImageQuality,
             WorkDirectory: null,
@@ -467,6 +492,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             BuildStatus = "Build cancelled.";
             Status = BuildStatus;
             StatusIsError = true;
+            FlashGuidanceText = "";
             return;
         }
 
@@ -478,6 +504,15 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         {
             OutputIsoPath = result.OutputIsoPath;
             SaveStatus = $"Saved → {_savedProfilePath}\n{result.Message}";
+            bool gateB = lane == ImageQualityLane.Release;
+            FlashGuidanceText = FlashGuidance.Format(
+                result.OutputIsoPath ?? Path.Combine(work, "out.iso"),
+                result.WorkDirectory ?? work,
+                gateB);
+        }
+        else
+        {
+            FlashGuidanceText = "";
         }
     }
 
@@ -516,7 +551,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         CanBuild = WizardStageGates.CanBuild(
             SourceIsoReady(),
             IdentityReadyNow(),
-            !string.IsNullOrEmpty(_savedProfilePath),
+            _lastProfileUtf8 is not null || !string.IsNullOrEmpty(_savedProfilePath),
             IsBusy);
 
     private void RefreshNav()
@@ -642,6 +677,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
 
         RefreshReceipt();
+        RefreshCanBuild();
         return true;
     }
 

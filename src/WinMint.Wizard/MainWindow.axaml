@@ -80,7 +80,7 @@
                   Content="Build"
                   Command="{Binding BuildCommand}"
                   IsEnabled="{Binding CanBuild}"
-                  ToolTip.Tip="Requires a saved Profile and an existing Source ISO. Elevates via UAC." />
+                  ToolTip.Tip="Plans if needed, saves the profile into the workdir, then elevates Apply (UAC)." />
           <Button Classes="ghost"
                   Content="Back"
                   Command="{Binding BackCommand}"

@@ -98,7 +98,7 @@ internal static class WizardSession
         return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8), planned.Value.Manifest.RequiresNetwork, planned.Value);
     }
 
-    /// <summary>Honest Phase A handoff — no process spawn. Release recipe is Gate B (LocalAppData + package-strict).</summary>
+    /// <summary>CLI equivalent of Wizard Build. Release = Gate B (LocalAppData + package-strict). Wizard Apply does not need this.</summary>
     public static string FormatBuildRecipe(
         string profilePath,
         string sourceIsoPath,
