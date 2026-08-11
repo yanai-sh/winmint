@@ -35,7 +35,8 @@ Keep a durable toolkit for ISO builds (opt-in cache under `%LOCALAPPDATA%\WinMin
 
 ```powershell
 & ([scriptblock]::Create((irm https://winmint.yanai.sh))) -CacheRelease -NoLaunch
-cd $env:LOCALAPPDATA\WinMint\versions\v0.1.0   # use the tag you installed
+# -NoLaunch prints the toolkit root — cd there (or use -InstallRoot you chose):
+cd $env:LOCALAPPDATA\WinMint\versions\<tag>
 just plan   # optional minutes-scale first win (no Source ISO)
 ```
 
@@ -54,7 +55,7 @@ Needs network once, plus PowerShell 7.6+ and [Just](https://github.com/casey/jus
 From a **durable** toolkit (`-CacheRelease` / `-InstallRoot` above) or a contributor checkout, use `samples/sl7.profile.json`. It expects a lab password and shows the OOBE Wi‑Fi page — stay nearby for network setup ([SECRETS](docs/design/SECRETS.md)).
 
 ```powershell
-cd $env:LOCALAPPDATA\WinMint\versions\v0.1.0   # or your InstallRoot / clone
+cd <toolkit-root-from-NoLaunch>   # e.g. %LOCALAPPDATA%\WinMint\versions\<tag>
 New-Item -ItemType Directory -Force -Path .scratch | Out-Null
 Set-Content -Path .scratch/sl7.password -Value 'your-lab-password' -NoNewline
 just primary-gate ISO=path\to\source.iso

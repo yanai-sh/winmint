@@ -187,8 +187,8 @@ Write-Host "Metal gate OK. Work=$Work lane=$assertLane"
 if ($sha) { Write-Host "outputIso.sha256=$sha" }
 if ($assertLane -eq 'Release' -and $PackageStrict) {
     Write-Host "Flash only this workdir's out.iso ($outIso). Do not flash a Test metal workdir (.scratch/sl7-build)."
+    Write-Host 'Next step (manual, destructive): write out.iso to USB and bare-metal install — not run by this harness.'
 } else {
     Write-Host 'Test lane — not the Primary wipe ISO. Use just primary-gate for Release wipe media.'
 }
-Write-Host 'Next step (manual, destructive): write out.iso to USB and bare-metal install — not run by this harness.'
 exit 0
