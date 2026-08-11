@@ -24,9 +24,10 @@ if (Test-Path -LiteralPath $wingetImport) {
 
 $shellSkel = Join-Path $payloadDir 'shell-skel'
 if (Test-Path -LiteralPath $shellSkel) {
+    # -Path (not -LiteralPath): '*' must expand. LiteralPath looks for a file named '*'.
     $guestSkel = Join-Path $guestWinMint 'shell-skel'
     New-Item -ItemType Directory -Force -Path $guestSkel | Out-Null
-    Copy-Item -LiteralPath (Join-Path $shellSkel '*') -Destination $guestSkel -Recurse -Force
+    Copy-Item -Path (Join-Path $shellSkel '*') -Destination $guestSkel -Recurse -Force
 }
 
 Write-Output "StagePayload ok"
