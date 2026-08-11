@@ -94,11 +94,11 @@ metal ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="
 # Workdir stays outside TEMP toolkit (survives ephemeral session cleanup).
 # After success: flash WORK\out.iso (UEFI USB); check digests outputIso.sha256 in evidence.json; expect WinPE LaunchApply.
 primary-gate ISO WORK="" PROFILE="samples/sl7.profile.json":
-    pwsh -NoProfile -Command "$w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary' }; New-Item -ItemType Directory -Force -Path $w | Out-Null; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work $w -Profile '{{PROFILE}}' -ImageQuality Release -PackageStrict -ExpectDrivers -RequireLane Release"
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-PrimaryGate.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}'
 
 metal-assert WORK=".scratch/sl7-build":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -AssertOnly -WorkDirectory '{{WORK}}' -ExpectDrivers
 
 # Wipe-lane assert only (fails on Test evidence).
 primary-gate-assert WORK="":
-    pwsh -NoProfile -Command "$w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary' }; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -AssertOnly -WorkDirectory $w -ExpectDrivers -RequireLane Release"
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-PrimaryGate.ps1' -AssertOnly -Work '{{WORK}}'
