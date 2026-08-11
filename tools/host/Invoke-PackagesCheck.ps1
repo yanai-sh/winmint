@@ -181,8 +181,16 @@ function Write-PackagesProofReceipt {
     )
     $receiptPath = Join-Path $repoRoot 'config\packages.proof.json'
     $wingetVer = (& winget --version 2>$null | Out-String).Trim()
+    $sorted = [System.Collections.Generic.List[object]]::new()
+    if ($null -ne $Entries) { foreach ($e in $Entries) { $sorted.Add($e) } }
+    $sorted.Sort([Comparison[object]] {
+        param($a, $b)
+        $c = [string]::Compare([string]$a.Source, [string]$b.Source, [StringComparison]::Ordinal)
+        if ($c -ne 0) { return $c }
+        return [string]::Compare([string]$a.Id, [string]$b.Id, [StringComparison]::Ordinal)
+    })
     $entryRows = @(
-        foreach ($e in ($Entries | Sort-Object @{ Expression = { $_.Source }; Ascending = $true }, @{ Expression = { $_.Id }; Ascending = $true })) {
+        foreach ($e in $sorted) {
             $row = [ordered]@{
                 source = $e.Source
                 id     = $e.Id
@@ -240,7 +248,7 @@ function Invoke-PackagesCheck {
     Write-Output 'winget source update…'
     & winget source update --disable-interactivity 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Output "WARN winget source update exit $LASTEXITCODE — continuing; winget show must still pass"
+        Write-Output "WARN winget source update exit $LASTEXITCODE — continuing; winget download must still pass"
     }
 
     $doc = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json

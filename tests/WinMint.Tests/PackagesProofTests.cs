@@ -7,7 +7,7 @@ namespace WinMint.Tests;
 public class PackagesProofTests
 {
     [Fact]
-    public void BuildProveSet_skips_stubs_and_requires_product_constants()
+    public void BuildProveSet_skips_stubs()
     {
         string dir = NewTemp();
         try

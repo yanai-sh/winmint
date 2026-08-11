@@ -32,7 +32,7 @@ Maintainers may adopt a net-positive alternative without treating every grill li
 
 - **Package install shape:** per-job `winget` / `scoop` / `wsl` vs batch/delegated install (below)
 - **Fail-closed scope:** all jobs vs **invariants fail-closed, packages best-effort + evidence**
-- **Architecture truth:** runtime PE audit vs **catalog-time verification** (winget show, scoop manifest) in maintainer CI
+- **Architecture truth:** runtime PE audit vs **catalog-time verification** (`just packages-check` / `packages.proof.json` — winget download + scoop manifest download) in maintainer CI
 - Job granularity, metal evidence strictness, Wizard UX details
 
 **Guidelines:** NuGet choices, doc wording, harness switches, `*Dto` rename timing.
