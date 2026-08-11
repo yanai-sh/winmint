@@ -15,6 +15,8 @@ param(
     [string]$SourceIso = '',
     [string]$Work = '',
     [switch]$ValidateOnly,
+    # Gate B wipe ISO: Release + --package-strict (same bar as just primary-gate).
+    [switch]$PrimaryGate,
     [switch]$NoLaunch,
     [switch]$Force
 )
@@ -259,10 +261,18 @@ try {
         $toolkitRoot = Find-WinMintToolkitRoot -ExtractRoot $extractTo
     }
 
+    if ($PrimaryGate) {
+        $Mode = 'Headless'
+        if ($ValidateOnly) { throw 'Use only one of -PrimaryGate or -ValidateOnly.' }
+    }
+
     if ($NoLaunch) {
         Write-WinMintBootstrapLog 'NoLaunch requested; not starting WinMint.'
         Write-Host $toolkitRoot
-        if ($sessionRoot) { Remove-WinMintBootstrapSessionRoot -Path $sessionRoot }
+        if ($sessionRoot) {
+            # Leave TEMP toolkit for this job (live-session / disposable path). Not a durable install.
+            Write-WinMintBootstrapLog "Ephemeral toolkit left at '$toolkitRoot' — run just primary-gate from there, then delete the folder." 'WARN'
+        }
         exit 0
     }
 
@@ -274,7 +284,8 @@ try {
         }
         Write-WinMintBootstrapLog "Launching Wizard: $wizard"
         if ($null -ne $sessionRoot) {
-            Write-WinMintBootstrapLog 'Ephemeral session: wipe ISO builds need -CacheRelease or -InstallRoot (see README).' 'WARN'
+            Write-WinMintBootstrapLog "Ephemeral session toolkit: $toolkitRoot"
+            Write-WinMintBootstrapLog 'Wipe ISO while Wizard is open: second terminal → cd to toolkit root → just primary-gate. Or one-shot: -Headless -PrimaryGate (see README).' 'WARN'
         }
         $p = Start-Process -FilePath $wizard -WorkingDirectory $toolkitRoot -PassThru -Wait
         $code = $p.ExitCode
@@ -293,17 +304,35 @@ try {
         else {
             if ([string]::IsNullOrWhiteSpace($ProfilePath)) { throw '-ProfilePath is required for -Headless build.' }
             if ([string]::IsNullOrWhiteSpace($SourceIso)) { throw '-SourceIso is required for -Headless build.' }
-            if ([string]::IsNullOrWhiteSpace($Work)) { $Work = Join-Path $toolkitRoot '.scratch\work' }
+            # Keep Apply workdir outside TEMP toolkit so out.iso survives ephemeral cleanup.
+            if ([string]::IsNullOrWhiteSpace($Work)) {
+                if ($PrimaryGate) {
+                    $Work = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary'
+                }
+                else {
+                    $Work = Join-Path $env:LOCALAPPDATA 'WinMint\work\scratch'
+                }
+            }
+            New-Item -ItemType Directory -Force -Path $Work | Out-Null
             $cliArgs.Add('build')
             $cliArgs.Add($ProfilePath)
             $cliArgs.Add('--iso')
             $cliArgs.Add($SourceIso)
             $cliArgs.Add('--work')
             $cliArgs.Add($Work)
+            if ($PrimaryGate) {
+                $cliArgs.Add('--image-quality')
+                $cliArgs.Add('Release')
+                $cliArgs.Add('--package-strict')
+                $cliArgs.Add('--package-audit-strict')
+            }
         }
         Write-WinMintBootstrapLog "Launching Cli: $cli $($cliArgs -join ' ')"
         & $cli @cliArgs
         $code = $LASTEXITCODE
+        if ($PrimaryGate -and $code -eq 0) {
+            Write-WinMintBootstrapLog "Gate B workdir: $Work (out.iso + evidence). Toolkit session may be deleted next; workdir is kept."
+        }
     }
 
     if ($sessionRoot) { Remove-WinMintBootstrapSessionRoot -Path $sessionRoot }

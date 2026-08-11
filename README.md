@@ -29,43 +29,44 @@ No git clone and no source zip. On Windows (ARM64 recommended), in PowerShell:
 irm https://winmint.yanai.sh | iex
 ```
 
-That downloads a **verified toolkit** release (SHA-256 checked), then opens the Wizard. The default session is temporary and is deleted when the Wizard exits.
+That downloads a **verified toolkit** (SHA-256 checked) into a **temporary session**, opens the Wizard, and removes the TEMP toolkit when the Wizard exits. That ephemerality is intentional — WinMint is session-shaped, not a standing install. ISO workdirs and `out.iso` still live on disk (they have to).
 
-Keep a durable toolkit for ISO builds (opt-in cache under `%LOCALAPPDATA%\WinMint\versions\<tag>`, or pass `-InstallRoot`):
+While the Wizard is open, the bootstrap prints the toolkit root. In a second terminal you can `cd` there and run `just plan` or `just primary-gate` (live session).
 
-```powershell
-& ([scriptblock]::Create((irm https://winmint.yanai.sh))) -CacheRelease -NoLaunch
-# -NoLaunch prints the toolkit root — cd there (or use -InstallRoot you chose):
-cd $env:LOCALAPPDATA\WinMint\versions\<tag>
-just plan   # optional minutes-scale first win (no Source ISO)
-```
-
-Headless Cli needs a profile (and a Source ISO for builds). First win without an ISO:
+**One-shot Gate B wipe ISO** (re-fetch toolkit, build Release+package-strict, delete TEMP toolkit, keep workdir):
 
 ```powershell
-& ([scriptblock]::Create((irm https://winmint.yanai.sh))) -Headless -ValidateOnly -ProfilePath samples\smoke.profile.json -CacheRelease
+& ([scriptblock]::Create((irm https://winmint.yanai.sh))) -PrimaryGate -ProfilePath samples\sl7.profile.json -SourceIso path\to\source.iso
+# Default workdir: %LOCALAPPDATA%\WinMint\work\sl7-primary
 ```
 
-Bare `irm https://winmint.yanai.sh/cli | iex` forwards to headless build and requires `-ProfilePath` and `-SourceIso`.
+First win without a Source ISO (validate profile only):
 
-Needs network once, plus PowerShell 7.6+ and [Just](https://github.com/casey/just#installation) (the bootstrap installs them via winget when missing). Building an ISO later still needs a Microsoft Source ISO, an administrator session, and several hours of offline image servicing.
+```powershell
+& ([scriptblock]::Create((irm https://winmint.yanai.sh))) -Headless -ValidateOnly -ProfilePath samples\smoke.profile.json
+```
+
+Optional: `-CacheRelease` / `-InstallRoot` keep a reusable toolkit under `%LOCALAPPDATA%\WinMint\versions\<tag>` (power-user; not required).
+
+Needs network once, plus PowerShell 7.6+ and [Just](https://github.com/casey/just#installation) (the bootstrap installs them via winget when missing). Building an ISO needs a Microsoft Source ISO, an administrator session, and several hours of offline image servicing.
 
 ## Build a wipe ISO
 
-From a **durable** toolkit (`-CacheRelease` / `-InstallRoot` above) or a contributor checkout, use `samples/sl7.profile.json`. It expects a lab password and shows the OOBE Wi‑Fi page — stay nearby for network setup ([SECRETS](docs/design/SECRETS.md)).
+Prefer **live session** (Wizard still open → second terminal at the printed toolkit root) or **one-shot** `-PrimaryGate` above. Use `samples/sl7.profile.json`. It expects a lab password and shows the OOBE Wi‑Fi page — stay nearby for network setup ([SECRETS](docs/design/SECRETS.md)).
 
 ```powershell
-cd <toolkit-root-from-NoLaunch>   # e.g. %LOCALAPPDATA%\WinMint\versions\<tag>
+# From the live toolkit root (or after -NoLaunch left a TEMP toolkit folder):
 New-Item -ItemType Directory -Force -Path .scratch | Out-Null
 Set-Content -Path .scratch/sl7.password -Value 'your-lab-password' -NoNewline
 just primary-gate ISO=path\to\source.iso
-# Watch progress in another terminal (stages can sit for a long time with no % complete):
 just watch-apply WORK=.scratch/sl7-primary
 ```
 
-When it finishes, flash `.scratch/sl7-primary\out.iso` to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `.scratch/sl7-primary\evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup.
+One-shot workdir defaults to `%LOCALAPPDATA%\WinMint\work\sl7-primary` (survives TEMP toolkit cleanup). Flash that folder’s `out.iso`.
 
-`just primary-gate` builds the wipe ISO (`Release`, package-strict). Keep it in `.scratch/sl7-primary` — do not flash a Test build from `.scratch/sl7-build`. Soft `just metal QUALITY=Release` is rejected; wipe media is primary-gate only.
+When it finishes, flash `out.iso` to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup.
+
+`just primary-gate` / `-PrimaryGate` builds the wipe ISO (`Release`, package-strict). Soft `just metal QUALITY=Release` is rejected; wipe media is that Gate B path only.
 
 For iterative Test builds only: `just metal ISO=path\to\source.iso` (default workdir `.scratch/sl7-build`). That path is not the wipe gate.
 

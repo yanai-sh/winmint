@@ -16,6 +16,7 @@ param(
     [string]$SourceIso = '',
     [string]$Work = '',
     [switch]$ValidateOnly,
+    [switch]$PrimaryGate,
     [switch]$NoLaunch,
     [switch]$Force,
     [switch]$CacheRelease
@@ -27,7 +28,11 @@ $forward = @{}
 foreach ($key in $PSBoundParameters.Keys) {
     $forward[$key] = $PSBoundParameters[$key]
 }
-& ([scriptblock]::Create($bootstrap)) -Headless @forward
+if ($PrimaryGate) {
+    & ([scriptblock]::Create($bootstrap)) @forward
+} else {
+    & ([scriptblock]::Create($bootstrap)) -Headless @forward
+}
 `;
 }
 
