@@ -56,7 +56,7 @@ Generated from Profile + catalog. Schema: winget packages export v2. Per-package
 
 - Plan tests: import JSON emitted; scoop batch job; no default audit job.
 - ProvisioningSession fakes: import argv; scoop batch; best-effort continues.
-- Catalog validator: embedded JSON in `just check`; live scoop/winget source truth via `just packages-check` (HTTP scoop manifests + `winget show`; not in day-to-day `just check`).
+- Catalog validator: embedded JSON in `just check`; live winget/scoop download prove via `just packages-check` writes `config/packages.proof.json`; offline receipt gate in `just check` (content-hash; not in day-to-day prove).
 - Harness: optional `-ExpectWingetImport` / package evidence paths.
 
 ## Tickets

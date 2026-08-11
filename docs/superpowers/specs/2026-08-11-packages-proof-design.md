@@ -34,12 +34,13 @@ Rules:
 - `stub: true` rows are **skipped** (tentative / future only; not part of live Plan/Wizard product paths)
 - `store` (and any non-winget/scoop source): skip for v1 of this gate
 - Default prove architecture: `arm64`
+- `proveSetSha256` hashes sorted `source:id` lines with **Ordinal** order (C# `StringComparer.Ordinal` ↔ PS `[StringComparer]::Ordinal`) — both sides must agree
 
 ## Proof bar (mandatory — not opt-in)
 
 | Source | Method | Receipt `method` |
 |--------|--------|------------------|
-| winget | `winget install --id <id> --exact --architecture <arch> --dry-run` (refresh sources as needed) | `winget-install-dry-run` |
+| winget | `winget download --id <id> --exact --architecture <arch>` into a temp dir (refresh sources as needed). App Installer has no `install --dry-run`; download proves arch resolution + installer fetch without installing. | `winget-download` |
 | scoop | Fetch bucket manifest; require arm64/aarch64 or universal `url`; **download** archive to a temp dir (do not install into the user Scoop root) | `scoop-manifest-download` |
 
 Host requirements: native ARM64 Windows host with App Installer (`winget` on PATH) and network. Wrong arch / missing winget → hard fail.
@@ -57,7 +58,7 @@ Committed path: `config/packages.proof.json`
   "provenAtUtc": "<ISO-8601>",
   "host": { "winget": "<version or path>", "osArch": "ARM64" },
   "entries": [
-    { "source": "winget", "id": "Anysphere.Cursor", "method": "winget-install-dry-run" },
+    { "source": "winget", "id": "Anysphere.Cursor", "method": "winget-download" },
     { "source": "scoop", "id": "starship", "method": "scoop-manifest-download", "bucket": "main" }
   ]
 }
@@ -72,7 +73,7 @@ Committed path: `config/packages.proof.json`
 1. **`tools/host/Invoke-PackagesCheck.ps1`** — upgrade from show-only to the proof bar above; emit/replace receipt; keep offline `-SelfCheck` for URI/manifest helper logic
 2. **`just packages-check`** — always full prove (remove optional “probe only” as the weak default); still **not** inlined into the `just check` recipe body
 3. **Offline unit test** — load catalog + `ProductPosture`; recompute hashes; assert receipt schema, arch, hash match, and every required id present in `entries`; message points at `just packages-check`
-4. **Docs** — amend ADR-010 / package catalog notes: catalog-time truth = dry-run prove + receipt, not `winget show` alone
+4. **Docs** — amend ADR-010 / package catalog notes: catalog-time truth = download prove + receipt, not `winget show` alone
 
 ## Maintainer workflow
 
@@ -85,7 +86,7 @@ Committed path: `config/packages.proof.json`
 
 | Case | Behavior |
 |------|----------|
-| Dry-run / download fails for any id | Exit non-zero; leave prior receipt untouched |
+| Winget/scoop download fails for any id | Exit non-zero; leave prior receipt untouched |
 | Transient CDN / source flake | Rerun `just packages-check`; no soft-pass |
 | Receipt missing / hash mismatch / missing entry | `just check` fails: run `just packages-check` |
 | Stub referenced by live product path | Out of band: keep stubs out of Plan defaults and ProductPosture (catalog stub flag alone is not enough if code selects the id) |

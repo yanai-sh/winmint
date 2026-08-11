@@ -23,7 +23,7 @@
 
 ## Catalog maintenance
 
-- Verify arm64 via `winget show` / scoop manifest when adding entries; run `just packages-check` after catalog edits (host dry-run; not part of `just check`).
+- When editing `packages.json`: run `just packages-check` on native ARM64 (winget download + scoop manifest/archive download prove); commit the updated `config/packages.proof.json` receipt with the catalog change. `just check` validates that receipt offline (content-hash; not part of the day-to-day prove).
 - Scoop: declare **`scoopBucket`** where needed (`extras` for komorebi/whkd); bootstrap adds buckets before install.
 
 ## Wizard
