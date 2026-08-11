@@ -1,6 +1,7 @@
 # Spec: Packages proof (catalog-time source validity)
 
 **Date:** 2026-08-11  
+**Plan:** [2026-08-11-packages-proof.md](../plans/2026-08-11-packages-proof.md)  
 **Authority:** [ADR-010](../../decisions/ADR-010-arm64-package-policy.md) · [ADR-011](../../decisions/ADR-011-alpha-posture-and-package-delegation.md) · [package catalog](../../specs/2026-08-05-package-catalog-arm64.md) · [TDD](../../TDD.md)
 
 ## Problem
