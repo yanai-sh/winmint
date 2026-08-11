@@ -1,10 +1,11 @@
 #requires -Version 7.6
 <#
 .SYNOPSIS
-  Prove live winget/scoop catalog ids (dry-run / archive download) and write config/packages.proof.json.
+  Prove live winget/scoop catalog ids (winget download / scoop archive download) and write config/packages.proof.json.
 .NOTES
   Maintainer gate only — never part of `just check`. Needs network + native ARM64 + winget.
-  Offline receipt test in just check enforces freshness. Validity = installability prove + receipt.
+  Offline receipt test in just check enforces freshness. Validity = download prove + receipt.
+  Winget: `winget download` (App Installer has no install --dry-run). Scoop: manifest + archive download.
 #>
 param(
     [string] $CatalogPath = '',
@@ -92,9 +93,10 @@ function Get-ProveSetSha256Hex {
         $bytes = [byte[]]@()
     }
     else {
-        $lines = $Entries |
-            Sort-Object @{ Expression = { $_.Source }; Ascending = $true }, @{ Expression = { $_.Id }; Ascending = $true } |
-            ForEach-Object { "$($_.Source):$($_.Id)" }
+        [string[]]$lines = @(
+            $Entries | ForEach-Object { "$($_.Source):$($_.Id)" }
+        )
+        [Array]::Sort($lines, [StringComparer]::Ordinal)
         $text = ($lines -join "`n") + "`n"
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
     }
@@ -117,13 +119,26 @@ function Test-WingetId {
     if ($null -eq $winget) {
         throw 'winget not on PATH (install App Installer / use an ARM64 host with winget)'
     }
-    $out = & winget install --id $Id --exact --architecture $Architecture --dry-run `
-        --disable-interactivity --accept-package-agreements --accept-source-agreements 2>&1
-    $code = $LASTEXITCODE
-    if ($code -ne 0) {
-        $tail = ($out | Out-String).Trim()
-        if ($tail.Length -gt 240) { $tail = $tail.Substring(0, 240) + '…' }
-        throw "winget install --dry-run failed (exit $code): $tail"
+    # App Installer has no install --dry-run; download proves arch + installer fetch without installing.
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("winmint-winget-" + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $tmp | Out-Null
+    try {
+        $out = & winget download --id $Id --exact --architecture $Architecture `
+            --download-directory $tmp `
+            --disable-interactivity --accept-package-agreements --accept-source-agreements 2>&1
+        $code = $LASTEXITCODE
+        if ($code -ne 0) {
+            $tail = ($out | Out-String).Trim()
+            if ($tail.Length -gt 240) { $tail = $tail.Substring(0, 240) + '…' }
+            throw "winget download failed (exit $code): $tail"
+        }
+        $files = @(Get-ChildItem -LiteralPath $tmp -File -Recurse -ErrorAction SilentlyContinue)
+        if ($files.Count -eq 0 -or ($files | Measure-Object -Property Length -Sum).Sum -le 0) {
+            throw "winget download produced no files for $Id"
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -225,7 +240,7 @@ function Invoke-PackagesCheck {
     Write-Output 'winget source update…'
     & winget source update --disable-interactivity 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Output "WARN winget source update exit $LASTEXITCODE — continuing; dry-runs must still pass"
+        Write-Output "WARN winget source update exit $LASTEXITCODE — continuing; winget show must still pass"
     }
 
     $doc = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
@@ -262,10 +277,10 @@ function Invoke-PackagesCheck {
                     $script:ProveEntries.Add([pscustomobject]@{
                             Source = 'winget'
                             Id     = $id
-                            Method = 'winget-install-dry-run'
+                            Method = 'winget-download'
                             Bucket = $null
                         })
-                    Write-Output "ok    winget $key ($id) $arch dry-run"
+                    Write-Output "ok    winget $key ($id) $arch download"
                     $ok++
                 }
                 'scoop' {
