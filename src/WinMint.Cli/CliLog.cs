@@ -11,7 +11,7 @@ internal static partial class CliLog
     [LoggerMessage(EventId = 2, Level = LogLevel.Information, Message = "Wrote plan artifacts to {OutDir}")]
     public static partial void WrotePlanArtifacts(ILogger logger, string outDir);
 
-    [LoggerMessage(EventId = 3, Level = LogLevel.Warning, Message = "ImageQuality=Release uses compression=max + cleanup=full — prefer Test for iterative builds.")]
+    [LoggerMessage(EventId = 3, Level = LogLevel.Warning, Message = "ImageQuality=Release uses compression=max + cleanup=full — prefer Test for iterative builds. Without --package-strict this is not Gate B wipe media; use just primary-gate (or pass --package-strict) before flashing for Primary.")]
     public static partial void ReleaseLaneWarning(ILogger logger);
 
     [LoggerMessage(EventId = 4, Level = LogLevel.Error, Message = "{Code}: {Message}")]
