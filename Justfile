@@ -84,14 +84,15 @@ smoke-assert EVIDENCE:
 metal ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="Test":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality '{{QUALITY}}'
 
-# Primary Gate B + wipe ISO: Release + package-strict. Separate WORK from Test metal (do not share sl7-build).
+# Primary Gate B + wipe ISO: Release + package-strict.
+# Workdir stays outside TEMP toolkit (survives ephemeral session cleanup).
 # After success: flash WORK\out.iso (UEFI USB); check digests outputIso.sha256 in evidence.json; expect WinPE LaunchApply.
-primary-gate ISO WORK=".scratch/sl7-primary" PROFILE="samples/sl7.profile.json":
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality Release -PackageStrict -ExpectDrivers -RequireLane Release
+primary-gate ISO WORK="" PROFILE="samples/sl7.profile.json":
+    pwsh -NoProfile -Command "$w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary' }; New-Item -ItemType Directory -Force -Path $w | Out-Null; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work $w -Profile '{{PROFILE}}' -ImageQuality Release -PackageStrict -ExpectDrivers -RequireLane Release"
 
 metal-assert WORK=".scratch/sl7-build":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -AssertOnly -WorkDirectory '{{WORK}}' -ExpectDrivers
 
 # Wipe-lane assert only (fails on Test evidence).
-primary-gate-assert WORK=".scratch/sl7-primary":
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -AssertOnly -WorkDirectory '{{WORK}}' -ExpectDrivers -RequireLane Release
+primary-gate-assert WORK="":
+    pwsh -NoProfile -Command "$w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary' }; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -AssertOnly -WorkDirectory $w -ExpectDrivers -RequireLane Release"

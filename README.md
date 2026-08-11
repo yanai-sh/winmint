@@ -56,13 +56,15 @@ Prefer **live session** (Wizard still open → second terminal at the printed to
 
 ```powershell
 # From the live toolkit root (or after -NoLaunch left a TEMP toolkit folder):
-New-Item -ItemType Directory -Force -Path .scratch | Out-Null
+# Password for samples/sl7 — create beside the workdir or under toolkit .scratch as SECRETS describes.
+$work = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary'
+New-Item -ItemType Directory -Force -Path $work, .scratch | Out-Null
 Set-Content -Path .scratch/sl7.password -Value 'your-lab-password' -NoNewline
 just primary-gate ISO=path\to\source.iso
-just watch-apply WORK=.scratch/sl7-primary
+just watch-apply WORK=$work
 ```
 
-One-shot workdir defaults to `%LOCALAPPDATA%\WinMint\work\sl7-primary` (survives TEMP toolkit cleanup). Flash that folder’s `out.iso`.
+Gate B workdir defaults to `%LOCALAPPDATA%\WinMint\work\sl7-primary` (same as `-PrimaryGate`) so TEMP toolkit cleanup cannot delete `out.iso`. Flash that folder’s `out.iso`.
 
 When it finishes, flash `out.iso` to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup.
 
