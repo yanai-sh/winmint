@@ -159,11 +159,21 @@ if (Test-Path -LiteralPath $sidePath) {
     }
 }
 
+$packageStrict = $false
+$bundlePath = Join-Path $WorkDirectory 'payload\bundle.json'
+if (Test-Path -LiteralPath $bundlePath) {
+    $bundle = Get-Content -LiteralPath $bundlePath -Raw | ConvertFrom-Json
+    if ($bundle.PSObject.Properties.Name -contains 'packageStrict') {
+        $packageStrict = [bool]$bundle.packageStrict
+    }
+}
+
 @{
     schemaVersion         = 'winmint.image.evidence/v1'
     outputIsoPath         = $outputIso
     shellStampTargetPath  = $shellTarget
     lane                  = $lane
+    packageStrict         = $packageStrict
     digests               = $digests
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'evidence.json') -Encoding utf8
 

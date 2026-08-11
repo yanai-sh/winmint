@@ -11,6 +11,19 @@ internal static class WizardBuild
             "WinMint",
             "work");
 
+    /// <summary>Gate B wipe ISO workdir — same as just primary-gate / -PrimaryGate.</summary>
+    public static string GateBWorkDirectory { get; } =
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "WinMint",
+            "work",
+            "sl7-primary");
+
+    public static string ResolveWorkDirectory(ImageQualityLane lane, string? workDirectory = null) =>
+        string.IsNullOrWhiteSpace(workDirectory)
+            ? lane == ImageQualityLane.Release ? GateBWorkDirectory : DefaultWorkDirectory
+            : workDirectory.Trim();
+
     public static async Task<WizardBuildResult> TryApplyAsync(
         WizardBuildInput input,
         IElevatedPlanRunner? runner = null,
@@ -42,11 +55,13 @@ internal static class WizardBuild
             return WizardBuildResult.Fail("wizard.build.profile.invalid", detail);
         }
 
+        bool packageStrict = lane == ImageQualityLane.Release;
         RunOptions runOptions = new()
         {
             ImageQuality = lane,
             SourceIsoPath = input.SourceIsoPath.Trim(),
             OutputIsoPath = string.IsNullOrWhiteSpace(input.OutputIsoPath) ? null : input.OutputIsoPath.Trim(),
+            PackageStrict = packageStrict,
         };
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value, runOptions);
@@ -55,9 +70,7 @@ internal static class WizardBuild
             return WizardBuildResult.Fail(planned.Error.Code, planned.Error.Message);
         }
 
-        string work = string.IsNullOrWhiteSpace(input.WorkDirectory)
-            ? DefaultWorkDirectory
-            : input.WorkDirectory.Trim();
+        string work = ResolveWorkDirectory(lane, input.WorkDirectory);
         Directory.CreateDirectory(work);
 
         string outIso = string.IsNullOrWhiteSpace(input.OutputIsoPath)
@@ -83,8 +96,11 @@ internal static class WizardBuild
                 $"{applied.Error.Message} Work directory preserved: {work}");
         }
 
+        string gateHint = packageStrict
+            ? " Gate B wipe media — flash with Rufus DD; check digests.outputIso.sha256."
+            : string.Empty;
         string ok =
-            $"Image OK: {applied.Value.OutputIsoPath}; Lane={applied.Value.Lane}; Shell={applied.Value.ShellStampTargetPath}";
+            $"Image OK: {applied.Value.OutputIsoPath}; Lane={applied.Value.Lane}; Shell={applied.Value.ShellStampTargetPath}; Work={work}.{gateHint}";
         return WizardBuildResult.Ok(ok, applied.Value.OutputIsoPath, work);
     }
 }

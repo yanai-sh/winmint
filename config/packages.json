@@ -65,6 +65,7 @@
       "displayName": "FancyWM",
       "source": "winget",
       "id": "FancyWM.FancyWM",
+      "stub": true,
       "architectures": ["amd64", "arm64"]
     },
     "nilesoft": {
@@ -96,6 +97,72 @@
       "displayName": "MinGit",
       "source": "winget",
       "id": "Git.MinGit",
+      "architectures": ["amd64", "arm64"]
+    },
+    "powershell": {
+      "displayName": "PowerShell 7",
+      "source": "winget",
+      "id": "Microsoft.PowerShell",
+      "architectures": ["amd64", "arm64"]
+    },
+    "windows-terminal": {
+      "displayName": "Windows Terminal",
+      "source": "winget",
+      "id": "Microsoft.WindowsTerminal",
+      "architectures": ["amd64", "arm64"]
+    },
+    "starship": {
+      "displayName": "Starship",
+      "source": "scoop",
+      "id": "starship",
+      "architectures": ["amd64", "arm64"]
+    },
+    "fzf": {
+      "displayName": "fzf",
+      "source": "scoop",
+      "id": "fzf",
+      "architectures": ["amd64", "arm64"]
+    },
+    "fd": {
+      "displayName": "fd",
+      "source": "scoop",
+      "id": "fd",
+      "architectures": ["amd64", "arm64"]
+    },
+    "ripgrep": {
+      "displayName": "ripgrep",
+      "source": "scoop",
+      "id": "ripgrep",
+      "architectures": ["amd64", "arm64"]
+    },
+    "bat": {
+      "displayName": "bat",
+      "source": "scoop",
+      "id": "bat",
+      "architectures": ["amd64", "arm64"]
+    },
+    "eza": {
+      "displayName": "eza",
+      "source": "winget",
+      "id": "eza-community.eza",
+      "architectures": ["amd64", "arm64"]
+    },
+    "zoxide": {
+      "displayName": "zoxide",
+      "source": "scoop",
+      "id": "zoxide",
+      "architectures": ["amd64", "arm64"]
+    },
+    "jq": {
+      "displayName": "jq",
+      "source": "scoop",
+      "id": "jq",
+      "architectures": ["amd64", "arm64"]
+    },
+    "chezmoi": {
+      "displayName": "chezmoi",
+      "source": "scoop",
+      "id": "chezmoi",
       "architectures": ["amd64", "arm64"]
     },
     "curl": {

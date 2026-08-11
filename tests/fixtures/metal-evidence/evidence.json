@@ -3,6 +3,7 @@
   "outputIsoPath": "out.iso",
   "shellStampTargetPath": "C:\\Windows\\WinMint\\Supervisor.exe",
   "lane": "Test",
+  "packageStrict": false,
   "digests": {
     "outputIso.sha256": "73709ada5fa0d025ef7218f72ef79694abe10c9aa153a2fcbd988008f516d254",
     "drivers.deviceId": "surface-laptop-7",

@@ -194,6 +194,12 @@ public static class ImageServicing
             return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(supervisor.Error);
         }
 
+        Result<string, Failure> shellSkel = StageShellSkel(payloadDir);
+        if (!shellSkel.IsOk)
+        {
+            return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(shellSkel.Error);
+        }
+
         List<ServicingStage> resolved = new(plan.Stages.Stages.Count);
         foreach (ServicingStage stage in plan.Stages.Stages)
         {
@@ -304,6 +310,42 @@ public static class ImageServicing
 
         File.Copy(published, dest, overwrite: true);
         return Result.Ok<string, Failure>(dest);
+    }
+
+    private static Result<string, Failure> StageShellSkel(string payloadDir)
+    {
+        string? source = FindShellSkelDirectory();
+        if (source is null)
+        {
+            return Result.Fail<string, Failure>(
+                new Failure(
+                    "servicing.shellSkel.missing",
+                    "payload/shell-skel not found."));
+        }
+
+        string dest = Path.Combine(payloadDir, "shell-skel");
+        CopyDirectory(source, dest);
+        return Result.Ok<string, Failure>(dest);
+    }
+
+    private static void CopyDirectory(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+        foreach (string file in Directory.EnumerateFiles(sourceDir))
+        {
+            File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), overwrite: true);
+        }
+
+        foreach (string dir in Directory.EnumerateDirectories(sourceDir))
+        {
+            CopyDirectory(dir, Path.Combine(destDir, Path.GetFileName(dir)));
+        }
+    }
+
+    private static string? FindShellSkelDirectory()
+    {
+        string candidate = Path.Combine(RepoRootGuess(), "payload", "shell-skel");
+        return Directory.Exists(candidate) ? candidate : null;
     }
 
     private static string? FindSetupCompleteScript()

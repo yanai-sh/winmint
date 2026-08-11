@@ -303,7 +303,7 @@ public sealed class PackageCatalog
             wingetAuditTargets.Add(installId);
         }
 
-        foreach (string installId in profile.ScoopPackages)
+        foreach (string installId in ProductPosture.MergeScoop(profile.ScoopPackages))
         {
             if (!_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
                 || tool.Source is not PackageToolSource.Scoop)

@@ -139,9 +139,24 @@ public class WizardSessionTests
             "Release",
             wimIndex: 5);
         Assert.Contains("--image-quality Release", recipe, StringComparison.Ordinal);
+        Assert.Contains("--package-strict", recipe, StringComparison.Ordinal);
+        Assert.Contains("%LOCALAPPDATA%\\WinMint\\work\\sl7-primary", recipe, StringComparison.Ordinal);
         Assert.Contains("--wim-index 5", recipe, StringComparison.Ordinal);
         Assert.Contains("--iso \"E:\\Win11.iso\"", recipe, StringComparison.Ordinal);
         Assert.StartsWith("winmint build ", recipe, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatBuildRecipe_test_uses_programdata_without_package_strict()
+    {
+        string recipe = WizardSession.FormatBuildRecipe(
+            @"D:\p.json",
+            @"E:\a.iso",
+            "Test",
+            ImageServicing.DefaultProWimIndex);
+        Assert.Contains("%ProgramData%\\WinMint\\work", recipe, StringComparison.Ordinal);
+        Assert.DoesNotContain("--package-strict", recipe, StringComparison.Ordinal);
+        Assert.DoesNotContain("sl7-primary", recipe, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -153,6 +168,17 @@ public class WizardSessionTests
             "Test",
             ImageServicing.DefaultProWimIndex);
         Assert.DoesNotContain("--wim-index", recipe, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResolveWorkDirectory_release_defaults_to_gate_b()
+    {
+        Assert.Equal(
+            WizardBuild.GateBWorkDirectory,
+            WizardBuild.ResolveWorkDirectory(ImageQualityLane.Release));
+        Assert.Equal(
+            WizardBuild.DefaultWorkDirectory,
+            WizardBuild.ResolveWorkDirectory(ImageQualityLane.Test));
     }
 
     [Fact]

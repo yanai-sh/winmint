@@ -13,10 +13,16 @@ public class IncludedReceiptTests
         Assert.Contains("Edge policies", text, StringComparison.Ordinal);
         Assert.Contains("OneDrive", text, StringComparison.Ordinal);
         Assert.Contains("device metadata", text, StringComparison.Ordinal);
-        Assert.Contains("WPBT", text, StringComparison.Ordinal);
+        Assert.Contains("Widgets off", text, StringComparison.Ordinal);
+        Assert.Contains("consumer features off", text, StringComparison.Ordinal);
+        Assert.Contains("Store suggested apps off", text, StringComparison.Ordinal);
         Assert.Contains("Reserved Storage", text, StringComparison.Ordinal);
         Assert.Contains("MinGit", text, StringComparison.Ordinal);
+        Assert.Contains("PowerShell 7", text, StringComparison.Ordinal);
+        Assert.Contains("Windows Terminal", text, StringComparison.Ordinal);
         Assert.Contains("Nilesoft Shell", text, StringComparison.Ordinal);
+        Assert.Contains("Starship + scoop CLI", text, StringComparison.Ordinal);
+        Assert.Contains("shell skel stamp", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Copilot off", text, StringComparison.Ordinal);
     }
 

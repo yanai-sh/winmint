@@ -134,6 +134,7 @@ internal static class ProvisioningSessionTestFakes
         public List<AppxPackageInfo> Provisioned { get; } = [];
         public List<string> RemovedFullNames { get; } = [];
         public List<string> DeprovisionedFamilyNames { get; } = [];
+        public List<string> EnsuredDeprovisionedMarks { get; } = [];
         public List<string> RegisteredFamilyNames { get; } = [];
 
         public string? WingetPath { get; init; }
@@ -157,6 +158,9 @@ internal static class ProvisioningSessionTestFakes
             DeprovisionedFamilyNames.Add(packageFamilyName);
             return Task.CompletedTask;
         }
+
+        public void EnsureDeprovisionedMark(string packageFamilyName) =>
+            EnsuredDeprovisionedMarks.Add(packageFamilyName);
 
         public Task RegisterPackageFamilyForCurrentUserAsync(
             string packageFamilyName,

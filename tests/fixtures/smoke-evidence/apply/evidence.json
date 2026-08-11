@@ -3,6 +3,7 @@
   "outputIsoPath": "C:\\scratch\\out.iso",
   "shellStampTargetPath": "C:\\Windows\\WinMint\\Supervisor.exe",
   "lane": "Test",
+  "packageStrict": false,
   "digests": {
     "removed.appx.Microsoft.BingNews": "absent",
     "removed.appx.Microsoft.BingWeather": "absent",

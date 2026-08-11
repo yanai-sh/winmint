@@ -31,7 +31,10 @@ param(
 
     # When set (e.g. wipe assert), evidence.lane must match — blocks greening a Test tree as Primary.
     [ValidateSet('Test', 'Release')]
-    [string] $RequireLane = ''
+    [string] $RequireLane = '',
+
+    # FU-durable offline posture (ADR-009). Defaults on when -RequireLane Release.
+    [switch] $ExpectFuPosture
 )
 
 Set-StrictMode -Version Latest
@@ -63,6 +66,16 @@ if ($lane -notin @('Test', 'Release')) {
 }
 if (-not [string]::IsNullOrWhiteSpace($RequireLane) -and $lane -ne $RequireLane) {
     throw "lane must be $RequireLane for this assert, got '$lane' (do not flash a Test workdir as Primary)"
+}
+
+if ($RequireLane -eq 'Release') {
+    $packageStrict = $false
+    if ($evidence.PSObject.Properties.Name -contains 'packageStrict') {
+        $packageStrict = [bool]$evidence.packageStrict
+    }
+    if (-not $packageStrict) {
+        throw 'packageStrict must be true for Release Gate B assert (soft Release evidence is not wipe media)'
+    }
 }
 
 $digestMap = @{}
@@ -209,10 +222,66 @@ if ($ExpectWingetImport) {
     }
 }
 
+$expectFu = $ExpectFuPosture -or ($RequireLane -eq 'Release')
+if ($expectFu) {
+    $fuDigests = [ordered]@{
+        'policy.cloudContent.DisableWindowsConsumerFeatures' = '1'
+        'policy.cloudContent.DisableSoftLanding'              = '1'
+        'policy.store.AutoDownload'                          = '2'
+    }
+    foreach ($key in $fuDigests.Keys) {
+        if (-not $digestMap.ContainsKey($key) -or [string]::IsNullOrWhiteSpace($digestMap[$key])) {
+            throw "FU posture digest missing in evidence.json: $key"
+        }
+        if ($digestMap[$key] -ne $fuDigests[$key]) {
+            throw "FU posture digest $key expected $($fuDigests[$key]), got '$($digestMap[$key])'"
+        }
+    }
+
+    $jobsPath = Join-Path $WorkDirectory 'payload\jobs.json'
+    if (-not (Test-Path -LiteralPath $jobsPath)) {
+        throw "payload/jobs.json missing: $jobsPath (ExpectFuPosture / Release)"
+    }
+    $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+    $kinds = @($jobsDoc.jobs | ForEach-Object { [string]$_.kind })
+    foreach ($need in @('scoop.batch', 'shell.stamp')) {
+        if ($kinds -notcontains $need) {
+            throw "payload/jobs.json must include $need for Release FU/shell posture"
+        }
+    }
+
+    $importPath = Join-Path $WorkDirectory 'payload\winget-import.json'
+    if (-not (Test-Path -LiteralPath $importPath)) {
+        throw "payload/winget-import.json missing: $importPath (ExpectFuPosture / Release)"
+    }
+    $importDoc = Get-Content -LiteralPath $importPath -Raw -Encoding utf8 | ConvertFrom-Json
+    $ids = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($src in @($importDoc.Sources)) {
+        foreach ($pkg in @($src.Packages)) {
+            $pkgId = [string]$pkg.PackageIdentifier
+            if (-not [string]::IsNullOrWhiteSpace($pkgId)) { [void]$ids.Add($pkgId) }
+        }
+    }
+    foreach ($needId in @(
+            'Git.MinGit',
+            'Microsoft.PowerShell',
+            'Microsoft.WindowsTerminal',
+            'eza-community.eza',
+            'Nilesoft.Shell'
+        )) {
+        if (-not $ids.Contains($needId)) {
+            throw "winget-import.json missing shell-core id '$needId' (Release)"
+        }
+    }
+}
+
 $acceptance = [ordered]@{
     schemaVersion = 'winmint.metal.acceptance/v1'
     lane          = $lane
     preWipeOnly   = $true
+}
+if ($expectFu) {
+    $acceptance.fuPosture = $true
 }
 if ($null -ne $driverIncluded) {
     $acceptance.driverIncludedCount = $driverIncluded

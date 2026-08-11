@@ -72,6 +72,12 @@ public static class PlanDiff
                 continue;
             }
 
+            if (job.Kind is ProvisionJobKind.ScoopBatch)
+            {
+                AppendScoopBatch(sb, job, profile);
+                continue;
+            }
+
             string mark = JobAlways(job) ? "always" : "you chose";
             Line(sb, JobLabel(job), mark);
             if (job.Kind is ProvisionJobKind.AppxSafetyNet)
@@ -87,7 +93,9 @@ public static class PlanDiff
             or ProvisionJobKind.WorkstationQuiet
             or ProvisionJobKind.AppxSafetyNet
             or ProvisionJobKind.WingetImport
-        || (job.Kind is ProvisionJobKind.Winget && ProductPosture.WingetIdSet.Contains(job.PackageId ?? ""));
+            or ProvisionJobKind.ShellStamp
+        || (job.Kind is ProvisionJobKind.Winget && ProductPosture.WingetIdSet.Contains(job.PackageId ?? ""))
+        || (job.Kind is ProvisionJobKind.Scoop && ProductPosture.ScoopIdSet.Contains(job.PackageId ?? ""));
 
     private static string JobLabel(JobDescriptor job) =>
         job.Kind switch
@@ -101,6 +109,8 @@ public static class PlanDiff
             ProvisionJobKind.WingetImport => "Winget import",
             ProvisionJobKind.Winget => $"Winget {job.PackageId}",
             ProvisionJobKind.Scoop => $"Scoop {job.PackageId}",
+            ProvisionJobKind.ScoopBatch => "Scoop batch",
+            ProvisionJobKind.ShellStamp => "Shell skel stamp",
             ProvisionJobKind.Wsl => $"WSL {job.PackageId}",
             _ => job.Kind.ToWire(),
         };
@@ -122,6 +132,19 @@ public static class PlanDiff
         {
             string mark = ProductPosture.WingetIdSet.Contains(id) ? "always" : "you chose";
             Line(sb, $"Winget {id}", mark);
+        }
+    }
+
+    private static void AppendScoopBatch(StringBuilder sb, JobDescriptor job, Profile profile)
+    {
+        IEnumerable<string> ids = string.IsNullOrWhiteSpace(job.PackageId)
+            ? ProductPosture.MergeScoop(profile.ScoopPackages)
+            : job.PackageId.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        foreach (string id in ids)
+        {
+            string mark = ProductPosture.ScoopIdSet.Contains(id) ? "always" : "you chose";
+            Line(sb, $"Scoop {id}", mark);
         }
     }
 

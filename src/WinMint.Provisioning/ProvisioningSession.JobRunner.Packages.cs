@@ -175,6 +175,7 @@ public static partial class ProvisioningSession
             IReadOnlyList<string> ids = bundle.RemoveProvisionedAppx ?? [];
             try
             {
+                HashSet<string> families = new(StringComparer.OrdinalIgnoreCase);
                 foreach (string catalogId in ids)
                 {
                     if (string.IsNullOrWhiteSpace(catalogId))
@@ -185,15 +186,29 @@ public static partial class ProvisioningSession
                     foreach (AppxPackageInfo registered in env.Appx.FindRegisteredByCatalogId(catalogId))
                     {
                         await env.Appx.RemovePackageAsync(registered.PackageFullName, ct).ConfigureAwait(false);
+                        if (!string.IsNullOrWhiteSpace(registered.PackageFamilyName))
+                        {
+                            families.Add(registered.PackageFamilyName);
+                        }
                     }
 
                     foreach (AppxPackageInfo provisioned in env.Appx.FindProvisionedByCatalogId(catalogId))
                     {
                         await env.Appx.DeprovisionPackageFamilyAsync(provisioned.PackageFamilyName, ct)
                             .ConfigureAwait(false);
+                        if (!string.IsNullOrWhiteSpace(provisioned.PackageFamilyName))
+                        {
+                            families.Add(provisioned.PackageFamilyName);
+                        }
                     }
 
                     phases.Add($"removed.appx.online.{catalogId}");
+                }
+
+                foreach (string pfn in families)
+                {
+                    env.Appx.EnsureDeprovisionedMark(pfn);
+                    phases.Add($"deprovisioned.appx.{pfn}");
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

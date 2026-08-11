@@ -103,7 +103,7 @@ Thin adapters are part of the module interface; production Win32/WinRT live in-p
 | SettlePollInterval | 2 s |
 | StaleTenureThreshold | 15 min |
 
-FirstLogon job order (product constants first): `onedrive.uninstall` → `reservedStorage.disable` → `workstation.quiet` → … → `wsl.platform?` → `wsl.*`. WSL follows Microsoft Dev Config: enable platform (`wsl --install --no-distribution`), reboot on 0/3010/1641 when VMP was missing, then distro install with `Lxss\OOBEComplete`.
+FirstLogon job order (product constants first): `onedrive.uninstall` → `reservedStorage.disable` → `workstation.quiet` → … → `winget.import` / per-id winget → `scoop.batch` → **`shell.stamp`** → `wsl.platform?` → `wsl.*`. Shell stamp is one-shot (write-if-missing skel + Cascadia NF + chezmoi seed); not `winget configure`. WSL follows Microsoft Dev Config: enable platform (`wsl --install --no-distribution`), reboot on 0/3010/1641 when VMP was missing, then distro install with `Lxss\OOBEComplete`.
 
 Durable: `%ProgramData%\WinMint\`. MachineSetup failure ⇒ non-zero exit.
 

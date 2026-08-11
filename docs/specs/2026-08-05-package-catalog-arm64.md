@@ -23,7 +23,7 @@
 
 ## Catalog maintenance
 
-- Verify arm64 via `winget show` / scoop manifest when adding entries; CI validator on `packages.json` changes.
+- Verify arm64 via `winget show` / scoop manifest when adding entries; run `just packages-check` after catalog edits (host dry-run; not part of `just check`).
 - Scoop: declare **`scoopBucket`** where needed (`extras` for komorebi/whkd); bootstrap adds buckets before install.
 
 ## Wizard

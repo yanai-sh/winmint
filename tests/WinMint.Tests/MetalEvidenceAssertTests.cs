@@ -122,6 +122,136 @@ public class MetalEvidenceAssertTests
         }
     }
 
+    [Fact]
+    [Trait("Category", "Metal")]
+    public void Assert_metal_evidence_fails_when_Release_packageStrict_missing()
+    {
+        string repo = FindRepoRoot();
+        string work = CopyFixtureToTemp(repo);
+        try
+        {
+            string evidencePath = Path.Combine(work, "evidence.json");
+            JsonNode doc = JsonNode.Parse(File.ReadAllText(evidencePath))
+                ?? throw new InvalidOperationException("evidence parse failed");
+            doc["lane"] = "Release";
+            doc.AsObject().Remove("packageStrict");
+            File.WriteAllText(evidencePath, doc.ToJsonString());
+
+            int exit = RunAssert(repo, work, expectDrivers: true, out _, out string stderr, requireLane: "Release");
+            Assert.NotEqual(0, exit);
+            Assert.Contains("packageStrict", stderr, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Metal")]
+    public void Assert_metal_evidence_fails_when_Release_packageStrict_false()
+    {
+        string repo = FindRepoRoot();
+        string work = CopyFixtureToTemp(repo);
+        try
+        {
+            string evidencePath = Path.Combine(work, "evidence.json");
+            JsonNode doc = JsonNode.Parse(File.ReadAllText(evidencePath))
+                ?? throw new InvalidOperationException("evidence parse failed");
+            doc["lane"] = "Release";
+            doc["packageStrict"] = false;
+            File.WriteAllText(evidencePath, doc.ToJsonString());
+
+            int exit = RunAssert(repo, work, expectDrivers: true, out _, out string stderr, requireLane: "Release");
+            Assert.NotEqual(0, exit);
+            Assert.Contains("packageStrict must be true", stderr, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Metal")]
+    public void Assert_metal_evidence_fails_when_fu_digest_missing_on_ExpectFuPosture()
+    {
+        string repo = FindRepoRoot();
+        string work = CopyFixtureToTemp(repo);
+        try
+        {
+            int exit = RunAssert(
+                repo,
+                work,
+                expectDrivers: true,
+                out _,
+                out string stderr,
+                expectFuPosture: true);
+            Assert.NotEqual(0, exit);
+            Assert.Contains("FU posture digest missing", stderr, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Metal")]
+    public void Assert_metal_evidence_passes_release_fu_posture_when_payload_complete()
+    {
+        string repo = FindRepoRoot();
+        string work = CopyFixtureToTemp(repo);
+        try
+        {
+            string evidencePath = Path.Combine(work, "evidence.json");
+            JsonNode doc = JsonNode.Parse(File.ReadAllText(evidencePath))
+                ?? throw new InvalidOperationException("evidence parse failed");
+            doc["lane"] = "Release";
+            doc["packageStrict"] = true;
+            JsonObject digests = doc["digests"]!.AsObject();
+            digests["policy.cloudContent.DisableWindowsConsumerFeatures"] = "1";
+            digests["policy.cloudContent.DisableSoftLanding"] = "1";
+            digests["policy.store.AutoDownload"] = "2";
+            File.WriteAllText(evidencePath, doc.ToJsonString());
+
+            string payload = Path.Combine(work, "payload");
+            Directory.CreateDirectory(payload);
+            File.WriteAllText(
+                Path.Combine(payload, "jobs.json"),
+                """
+                {"jobs":[{"id":"winget.import","kind":"winget.import"},{"id":"scoop.batch","kind":"scoop.batch","packageId":"starship"},{"id":"shell.stamp","kind":"shell.stamp"}]}
+                """);
+            File.WriteAllText(
+                Path.Combine(payload, "winget-import.json"),
+                """
+                {"Sources":[{"Packages":[
+                  {"PackageIdentifier":"Git.MinGit"},
+                  {"PackageIdentifier":"Microsoft.PowerShell"},
+                  {"PackageIdentifier":"Microsoft.WindowsTerminal"},
+                  {"PackageIdentifier":"eza-community.eza"},
+                  {"PackageIdentifier":"Nilesoft.Shell"}
+                ]}]}
+                """);
+
+            int exit = RunAssert(
+                repo,
+                work,
+                expectDrivers: true,
+                out string stdout,
+                out string stderr,
+                requireLane: "Release");
+            Assert.True(exit == 0, $"exit={exit}\nstdout={stdout}\nstderr={stderr}");
+            string acceptance = File.ReadAllText(Path.Combine(work, "metal-acceptance.json"));
+            Assert.Contains("\"fuPosture\": true", acceptance, StringComparison.Ordinal);
+            Assert.Contains("\"lane\": \"Release\"", acceptance, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
     private static string CopyFixtureToTemp(string repo)
     {
         string fixture = Path.Combine(repo, "tests", "fixtures", "metal-evidence");
@@ -136,7 +266,8 @@ public class MetalEvidenceAssertTests
         bool expectDrivers,
         out string stdout,
         out string stderr,
-        string? requireLane = null)
+        string? requireLane = null,
+        bool expectFuPosture = false)
     {
         string script = Path.Combine(repo, "tools", "metal", "Assert-MetalEvidence.ps1");
         Assert.True(File.Exists(script), script);
@@ -162,6 +293,11 @@ public class MetalEvidenceAssertTests
         {
             psi.ArgumentList.Add("-RequireLane");
             psi.ArgumentList.Add(requireLane);
+        }
+
+        if (expectFuPosture)
+        {
+            psi.ArgumentList.Add("-ExpectFuPosture");
         }
 
         using Process p = Process.Start(psi) ?? throw new InvalidOperationException("pwsh failed to start");

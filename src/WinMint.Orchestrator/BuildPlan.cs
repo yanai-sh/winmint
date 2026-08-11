@@ -552,17 +552,20 @@ public static partial class BuildPlan
             }
         }
 
-        if (profile.ScoopPackages.Count > 0)
+        IReadOnlyList<string> scoopPackages = ProductPosture.MergeScoop(profile.ScoopPackages);
+        if (scoopPackages.Count > 0)
         {
-            IReadOnlySet<string> scoopBuckets = catalog.ScoopBucketsForInstallIds(profile.ScoopPackages);
-            bool batchReboot = profile.ScoopPackages.Any(id => scoopNeedsReboot.Contains(id));
+            IReadOnlySet<string> scoopBuckets = catalog.ScoopBucketsForInstallIds(scoopPackages);
+            bool batchReboot = scoopPackages.Any(id => scoopNeedsReboot.Contains(id));
             jobList.Add(new JobDescriptor(
                 "scoop.batch",
                 ProvisionJobKind.ScoopBatch,
-                PackageId: string.Join(';', profile.ScoopPackages),
+                PackageId: string.Join(';', scoopPackages),
                 NeedsReboot: batchReboot,
                 ScoopBuckets: scoopBuckets.OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToArray()));
         }
+
+        jobList.Add(new JobDescriptor("shell.stamp", ProvisionJobKind.ShellStamp));
 
         if (profile.WslDistros.Count > 0)
         {

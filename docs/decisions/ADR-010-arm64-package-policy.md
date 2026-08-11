@@ -10,7 +10,7 @@
 2. `BuildPlan.Plan` fail-closed: `packages.catalog.unknown`, `packages.catalog.unsupportedArch` on arm64 (default when unset).
 3. Winget jobs on arm64 images carry `--architecture arm64` when catalog supports arm64 (or equivalent in generated import JSON).
 4. WSL `fromFile` for NixOS-WSL (GitHub release → `wsl --install --from-file`).
-5. **Architecture truth at catalog time:** maintainer verifies winget/scoop manifests when editing `packages.json` (CI validator preferred). **`package.auditNative`** is optional metal/regression evidence — not default FirstLogon policy ([ADR-011](ADR-011-alpha-posture-and-package-delegation.md)).
+5. **Architecture truth at catalog time:** maintainer verifies winget/scoop manifests when editing `packages.json`. Host dry-run: `just packages-check` (`tools/host/Invoke-PackagesCheck.ps1` — winget show + scoop manifest arm64 URL; not in day-to-day `just check`). **`package.auditNative`** is optional metal/regression evidence — not default FirstLogon policy ([ADR-011](ADR-011-alpha-posture-and-package-delegation.md)).
 6. Scoop: prefer official **main** / **extras** manifests with `architecture.arm64`; optional catalog field **`scoopBucket`**. Do **not** depend on third-party `scoop-aarch64` for catalog entries unless explicitly grilled.
 
 Out of scope unchanged: live winget search in Wizard, guest pwsh product runtime, Profile preset names in JSON.

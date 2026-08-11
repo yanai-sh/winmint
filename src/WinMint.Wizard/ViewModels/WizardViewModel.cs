@@ -423,12 +423,21 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         StatusIsError = false;
         OutputIsoPath = null;
 
-        string work = WizardBuild.DefaultWorkDirectory;
+        if (!WizardSession.TryParseLane(ImageQuality, out ImageQualityLane lane, out string? laneError))
+        {
+            BuildStatus = laneError ?? "Invalid image quality.";
+            Status = BuildStatus;
+            StatusIsError = true;
+            IsBusy = false;
+            return;
+        }
+
+        string work = WizardBuild.ResolveWorkDirectory(lane);
         WizardBuildInput input = new(
             _savedProfilePath,
             SourceIsoPath.Trim(),
             ImageQuality,
-            WorkDirectory: work,
+            WorkDirectory: null,
             WimIndex: _wimIndex);
 
         using CancellationTokenSource pollCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -715,7 +724,8 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             LocationServices,
             WingetText: ProductPosture.StripWingetFromAuthored(
                 WizardSession.MergeChipAndAdvanced(packages.WingetInstallIds, AdvancedWingetText)),
-            ScoopText: WizardSession.MergeChipAndAdvanced(packages.ScoopInstallIds, AdvancedScoopText),
+            ScoopText: ProductPosture.StripScoopFromAuthored(
+                WizardSession.MergeChipAndAdvanced(packages.ScoopInstallIds, AdvancedScoopText)),
             WslText: WizardSession.MergeChipAndAdvanced(packages.WslProfileTokens, AdvancedWslText),
             SourceIsoPath: SourceIsoPath,
             ImageQualityText: ImageQuality,

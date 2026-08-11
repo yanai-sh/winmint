@@ -98,7 +98,7 @@ internal static class WizardSession
         return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8), planned.Value.Manifest.RequiresNetwork, planned.Value);
     }
 
-    /// <summary>Honest Phase A handoff — no process spawn. Work dir is a conventional placeholder.</summary>
+    /// <summary>Honest Phase A handoff — no process spawn. Release recipe is Gate B (LocalAppData + package-strict).</summary>
     public static string FormatBuildRecipe(
         string profilePath,
         string sourceIsoPath,
@@ -108,8 +108,17 @@ internal static class WizardSession
         string profile = QuoteArg(profilePath);
         string iso = QuoteArg(sourceIsoPath);
         string lane = string.IsNullOrWhiteSpace(imageQualityText) ? "Test" : imageQualityText.Trim();
+        bool gateB = lane.Equals("Release", StringComparison.OrdinalIgnoreCase);
+        string work = gateB
+            ? "\"%LOCALAPPDATA%\\WinMint\\work\\sl7-primary\""
+            : "\"%ProgramData%\\WinMint\\work\"";
         StringBuilder sb = new();
-        sb.Append(CultureInfo.InvariantCulture, $"winmint build {profile} --iso {iso} --work \"%ProgramData%\\WinMint\\work\" --image-quality {lane}");
+        sb.Append(CultureInfo.InvariantCulture, $"winmint build {profile} --iso {iso} --work {work} --image-quality {lane}");
+        if (gateB)
+        {
+            sb.Append(" --package-strict");
+        }
+
         // Cli defaults WIM index to Pro when omitted — always emit Home (and any non-Pro) so the recipe matches Wizard intent.
         if (wimIndex is int index)
         {

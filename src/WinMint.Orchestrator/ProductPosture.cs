@@ -3,24 +3,46 @@ using System.Collections.Frozen;
 namespace WinMint.Orchestrator;
 
 /// <summary>
-/// Always-on WinMint posture: AppX strip, winget constants, offline HKLM rows, DoH catalog.
+/// Always-on WinMint posture: AppX strip, winget/scoop shell-core constants, offline HKLM rows, DoH catalog.
 /// Plan and Wizard consume effective lists from here — one locality for product locks.
 /// </summary>
 public static class ProductPosture
 {
     public const string BraveWingetId = "Brave.Brave";
     public const string MinGitWingetId = "Git.MinGit";
+    public const string PowerShellWingetId = "Microsoft.PowerShell";
+    public const string WindowsTerminalWingetId = "Microsoft.WindowsTerminal";
+    public const string EzaWingetId = "eza-community.eza";
     public const string NilesoftShellWingetId = "Nilesoft.Shell";
 
-    /// <summary>Install order: MinGit, then Nilesoft Shell.</summary>
+    /// <summary>Install order: MinGit, pwsh, Terminal, eza, Nilesoft Shell.</summary>
     public static IReadOnlyList<string> WingetIds { get; } =
     [
         MinGitWingetId,
+        PowerShellWingetId,
+        WindowsTerminalWingetId,
+        EzaWingetId,
         NilesoftShellWingetId,
     ];
 
     public static IReadOnlySet<string> WingetIdSet { get; } =
         WingetIds.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Opinionated scoop CLI toolbox (Starship + Comfort-like tools + chezmoi).</summary>
+    public static IReadOnlyList<string> ScoopIds { get; } =
+    [
+        "starship",
+        "fzf",
+        "fd",
+        "ripgrep",
+        "bat",
+        "zoxide",
+        "jq",
+        "chezmoi",
+    ];
+
+    public static IReadOnlySet<string> ScoopIdSet { get; } =
+        ScoopIds.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     public static IReadOnlyList<string> AppxIds { get; } =
     [
@@ -40,11 +62,17 @@ public static class ProductPosture
         "WPBT",
         "long paths",
         "Widgets off",
+        "consumer features off",
+        "Store suggested apps off",
         "Developer Mode",
         "dark theme / DND",
         "Reserved Storage",
         "MinGit",
+        "PowerShell 7",
+        "Windows Terminal",
         "Nilesoft Shell",
+        "Starship + scoop CLI",
+        "shell skel stamp",
     ];
 
     /// <summary>Profile appx first, then product-required; case-insensitive dedupe.</summary>
@@ -55,12 +83,21 @@ public static class ProductPosture
     public static IReadOnlyList<string> MergeWinget(IReadOnlyList<string> profileWinget) =>
         IdList.UnionOrdered(WingetIds, profileWinget);
 
+    /// <summary>Constants first, then Profile scoop ids; case-insensitive dedupe.</summary>
+    public static IReadOnlyList<string> MergeScoop(IReadOnlyList<string> profileScoop) =>
+        IdList.UnionOrdered(ScoopIds, profileScoop);
+
     /// <summary>Drop product-constant winget ids from authored Profile text.</summary>
     public static string StripWingetFromAuthored(string? wingetMultiline) =>
         string.Join(
             Environment.NewLine,
             IdList.FromMultiline(wingetMultiline).Where(static id => !WingetIdSet.Contains(id)));
 
+    /// <summary>Drop product-constant scoop ids from authored Profile text.</summary>
+    public static string StripScoopFromAuthored(string? scoopMultiline) =>
+        string.Join(
+            Environment.NewLine,
+            IdList.FromMultiline(scoopMultiline).Where(static id => !ScoopIdSet.Contains(id)));
     public static IReadOnlyList<OfflinePolicyRow> ComposePolicies(
         bool includeBraveDebloat,
         bool includeDriverHygiene = false)
@@ -159,6 +196,9 @@ public static class ProductPosture
     private static readonly OfflinePolicyRow[] WorkstationMachine =
     [
         Soft("Policies\\Microsoft\\Dsh", "AllowNewsAndInterests", "0"),
+        Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableWindowsConsumerFeatures", "1"),
+        Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableSoftLanding", "1"),
+        Soft("Policies\\Microsoft\\WindowsStore", "AutoDownload", "2"),
         Soft(@"Microsoft\Windows\CurrentVersion\AppModelUnlock", "AllowDevelopmentWithoutDevLicense", "1"),
         Soft(@"Microsoft\Windows\CurrentVersion\Sudo", "Enabled", "3"),
         new(
@@ -245,6 +285,16 @@ public static class ProductPosture
             || subKey.EndsWith("Dsh", StringComparison.OrdinalIgnoreCase))
         {
             return "widgets";
+        }
+
+        if (subKey.Contains("CloudContent", StringComparison.OrdinalIgnoreCase))
+        {
+            return "cloudContent";
+        }
+
+        if (subKey.Contains("WindowsStore", StringComparison.OrdinalIgnoreCase))
+        {
+            return "store";
         }
 
         if (subKey.Contains("AppModelUnlock", StringComparison.OrdinalIgnoreCase))

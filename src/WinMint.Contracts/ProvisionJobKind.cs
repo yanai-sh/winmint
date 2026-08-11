@@ -14,6 +14,7 @@ public enum ProvisionJobKind
     WingetImport,
     Scoop,
     ScoopBatch,
+    ShellStamp,
     WslPlatform,
     Wsl,
 }
@@ -31,6 +32,7 @@ public static class ProvisionJobKindWire
     public const string WingetImport = "winget.import";
     public const string Scoop = "scoop";
     public const string ScoopBatch = "scoop.batch";
+    public const string ShellStamp = "shell.stamp";
     public const string WslPlatform = "wsl.platform";
     public const string Wsl = "wsl";
 
@@ -108,6 +110,12 @@ public static class ProvisionJobKindWire
             return true;
         }
 
+        if (wire.Equals(ShellStamp, StringComparison.OrdinalIgnoreCase))
+        {
+            kind = ProvisionJobKind.ShellStamp;
+            return true;
+        }
+
         if (wire.Equals(WslPlatform, StringComparison.OrdinalIgnoreCase))
         {
             kind = ProvisionJobKind.WslPlatform;
@@ -137,6 +145,7 @@ public static class ProvisionJobKindWire
         ProvisionJobKind.WingetImport => WingetImport,
         ProvisionJobKind.Scoop => Scoop,
         ProvisionJobKind.ScoopBatch => ScoopBatch,
+        ProvisionJobKind.ShellStamp => ShellStamp,
         ProvisionJobKind.WslPlatform => WslPlatform,
         ProvisionJobKind.Wsl => Wsl,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown ProvisionJobKind."),

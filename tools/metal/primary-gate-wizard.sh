@@ -238,18 +238,19 @@ fi
 
 # ── Stage 4: Gate B + wipe ISO (one Release + package-strict Apply) ─────────
 stage "Gate B + wipe ISO"
-say "From the repo root, run Primary once (Release + package-strict; WORK defaults to"
-say "  .scratch/sl7-primary). Day-to-day metal stays Test under .scratch/sl7-build."
+say "From the repo root, run Primary once (Release + package-strict)."
+say "Workdir defaults to %LOCALAPPDATA%\\WinMint\\work\\sl7-primary (survives TEMP toolkit cleanup)."
 step "just primary-gate ISO=$SOURCE_ISO"
-note "This drives tools/metal/Invoke-MetalApply.ps1 and can take a while — one build only."
+note "This drives tools/metal/Invoke-MetalApply.ps1 and can take multiple hours — one build only."
 pause "Press Enter once that command has finished"
-if confirm "Does .scratch/sl7-primary/metal-acceptance.json exist (Gate B green)?"; then
+GATE_WORK="${LOCALAPPDATA:-$HOME/AppData/Local}/WinMint/work/sl7-primary"
+if confirm "Does $GATE_WORK/metal-acceptance.json exist (Gate B green)?"; then
   printf '  %s✓%s Gate B acceptance evidence present\n' "$GREEN" "$RESET"
 else
   warn "no Gate B evidence — do not proceed to a destructive install without it."
   exit 1
 fi
-WIPE_ISO=".scratch/sl7-primary/out.iso"
+WIPE_ISO="$GATE_WORK/out.iso"
 if [[ -f "$WIPE_ISO" ]]; then
   printf '  %s✓%s %s exists\n' "$GREEN" "$RESET" "$WIPE_ISO"
   write_env WIPE_ISO "$WIPE_ISO"
@@ -260,8 +261,8 @@ fi
 
 # ── Stage 5: USB write ──────────────────────────────────────────────────────
 stage "USB write"
-say "Flash $WIPE_ISO to a USB drive with whatever tool you normally use."
-note "No brand requirement here — any reliable ISO-to-USB flasher is fine."
+say "Flash $WIPE_ISO to a USB drive with Rufus DD (or another honest ISO writer)."
+note "Check digests: evidence.json outputIso.sha256 must match Get-FileHash on out.iso."
 pause "Press Enter once the USB is flashed and ready"
 
 # ── Stage 6: Destructive install ────────────────────────────────────────────
@@ -282,7 +283,9 @@ say "Watch FirstLogon on the SL7 and confirm each of these in order:"
 step "splash appears"
 step "DMA settle reaches green (hard fields)"
 step "AppX safetyNet completes online (session not Failed)"
+step "Deprovisioned marks present for remove-list AppX (safetyNet / AppxAllUserStore)"
 step "curated packages install under --package-strict: Cursor, Zen, WSL Fedora"
+step "shell core: pwsh + Terminal + scoop toolbox + shell.stamp"
 step "Explorer unlock happens"
 pause "Press Enter once you've watched FirstLogon through to Explorer unlock"
 
@@ -296,8 +299,12 @@ write_env EVIDENCE_DIR "$EVIDENCE_DIR"
 stage "Checklist assert"
 say "Eyeball packages.evidence.json in the copied evidence and confirm it shows"
 say "the curated packages (Cursor, Zen, WSL Fedora) green with no failures."
-note "A small assert script for this evidence may be a follow-up — not required today."
-if confirm "packages.evidence.json shows curated packages green?"; then
+say "Also confirm (reg query / evidence digests) FU posture still present after FirstLogon:"
+step "HKLM ...\\CloudContent\\DisableWindowsConsumerFeatures = 1"
+step "HKLM ...\\CloudContent\\DisableSoftLanding = 1"
+step "HKLM ...\\WindowsStore\\AutoDownload = 2"
+note "True FU survival needs a later Feature Update + re-check — record FirstLogon baseline now."
+if confirm "packages.evidence.json green AND FU HKLM baseline present?"; then
   printf '  %s✓%s Primary wipe path looks met — commit or attach evidence in-repo when ready.\n' "$GREEN" "$RESET"
 else
   warn "not green yet — do not treat Primary as proven without install evidence."

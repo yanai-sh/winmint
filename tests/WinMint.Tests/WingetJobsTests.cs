@@ -48,8 +48,11 @@ public class WingetJobsTests
         JobDescriptor vscode = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "Microsoft.VisualStudioCode");
         Assert.Equal("winget.Microsoft.VisualStudioCode", vscode.Id);
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Git.MinGit" });
+        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Microsoft.PowerShell" });
+        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Microsoft.WindowsTerminal" });
+        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "eza-community.eza" });
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Nilesoft.Shell" });
-        Assert.Equal(4, jobs.Count(j => j.Kind == ProvisionJobKind.Winget));
+        Assert.Equal(7, jobs.Count(j => j.Kind == ProvisionJobKind.Winget));
     }
 
     [Fact]

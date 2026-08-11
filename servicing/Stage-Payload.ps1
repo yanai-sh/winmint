@@ -22,5 +22,12 @@ if (Test-Path -LiteralPath $wingetImport) {
     Copy-Item -LiteralPath $wingetImport -Destination (Join-Path $guestWinMint 'winget-import.json') -Force
 }
 
+$shellSkel = Join-Path $payloadDir 'shell-skel'
+if (Test-Path -LiteralPath $shellSkel) {
+    $guestSkel = Join-Path $guestWinMint 'shell-skel'
+    New-Item -ItemType Directory -Force -Path $guestSkel | Out-Null
+    Copy-Item -LiteralPath (Join-Path $shellSkel '*') -Destination $guestSkel -Recurse -Force
+}
+
 Write-Output "StagePayload ok"
 exit 0

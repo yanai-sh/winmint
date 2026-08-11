@@ -31,13 +31,14 @@ irm https://winmint.yanai.sh | iex
 
 That downloads a **verified toolkit** (SHA-256 checked) into a **temporary session**, opens the Wizard, and removes the TEMP toolkit when the Wizard exits. That ephemerality is intentional — WinMint is session-shaped, not a standing install. ISO workdirs and `out.iso` still live on disk (they have to).
 
-While the Wizard is open, the bootstrap prints the toolkit root. In a second terminal you can `cd` there and run `just plan` or `just primary-gate` (live session).
+While the Wizard is open: select **Release** and **Build** for a Gate B wipe ISO (workdir `%LOCALAPPDATA%\WinMint\work\sl7-primary`), or in a second terminal at the printed toolkit root run `just plan` / `just primary-gate`.
 
 **One-shot Gate B wipe ISO** (re-fetch toolkit, build Release+package-strict, delete TEMP toolkit, keep workdir):
 
 ```powershell
-& ([scriptblock]::Create((irm https://winmint.yanai.sh))) -PrimaryGate -ProfilePath samples\sl7.profile.json -SourceIso path\to\source.iso
+irm 'https://winmint.yanai.sh/primary-gate?SourceIso=C:\path\to\source.iso&ProfilePath=samples\sl7.profile.json' | iex
 # Default workdir: %LOCALAPPDATA%\WinMint\work\sl7-primary
+# URL-encode spaces in paths if needed.
 ```
 
 First win without a Source ISO (validate profile only):
@@ -52,7 +53,7 @@ Needs network once, plus PowerShell 7.6+ and [Just](https://github.com/casey/jus
 
 ## Build a wipe ISO
 
-Prefer **live session** (Wizard still open → second terminal at the printed toolkit root) or **one-shot** `-PrimaryGate` above. Use `samples/sl7.profile.json`. It expects a lab password and shows the OOBE Wi‑Fi page — stay nearby for network setup ([SECRETS](docs/design/SECRETS.md)).
+Prefer **Wizard Release → Build**, **one-shot** `/primary-gate` above, or live `just primary-gate`. Use `samples/sl7.profile.json`. It expects a lab password and shows the OOBE Wi‑Fi page — stay nearby for network setup ([SECRETS](docs/design/SECRETS.md)).
 
 ```powershell
 # From the live toolkit root (or after -NoLaunch left a TEMP toolkit folder):
@@ -61,10 +62,11 @@ $work = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary'
 New-Item -ItemType Directory -Force -Path $work, .scratch | Out-Null
 Set-Content -Path .scratch/sl7.password -Value 'your-lab-password' -NoNewline
 just primary-gate ISO=path\to\source.iso
-just watch-apply WORK=$work
+just watch-apply
+# Default watch-apply workdir is Gate B ($work). Test metal: just watch-apply WORK=.scratch/sl7-build
 ```
 
-Gate B workdir defaults to `%LOCALAPPDATA%\WinMint\work\sl7-primary` (same as `-PrimaryGate`) so TEMP toolkit cleanup cannot delete `out.iso`. Flash that folder’s `out.iso`.
+Gate B workdir defaults to `%LOCALAPPDATA%\WinMint\work\sl7-primary` (same as `/primary-gate` and Wizard Release Build) so TEMP toolkit cleanup cannot delete `out.iso`. Flash that folder’s `out.iso`.
 
 When it finishes, flash `out.iso` to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup.
 

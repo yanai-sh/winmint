@@ -51,8 +51,11 @@ public class PlanDiffTests
         string text = PlanDiff.Format(planned.Value, profile);
 
         Assert.Contains("Winget Git.MinGit — always", text, StringComparison.Ordinal);
+        Assert.Contains("Winget Microsoft.PowerShell — always", text, StringComparison.Ordinal);
+        Assert.Contains("Winget Microsoft.WindowsTerminal — always", text, StringComparison.Ordinal);
         Assert.Contains("Winget Nilesoft.Shell — always", text, StringComparison.Ordinal);
         Assert.Contains("Winget Anysphere.Cursor — you chose", text, StringComparison.Ordinal);
+        Assert.Contains("Scoop starship — always", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Winget import", text, StringComparison.OrdinalIgnoreCase);
     }
 

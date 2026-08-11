@@ -36,6 +36,9 @@ public class DebloatAppxSafetyNetTests
             ["Microsoft.BingNews_1.0.0.0_neutral__8wekyb3d8bbwe"],
             appx.RemovedFullNames);
         Assert.Empty(appx.DeprovisionedFamilyNames);
+        Assert.Equal(
+            ["Microsoft.BingNews_8wekyb3d8bbwe"],
+            appx.EnsuredDeprovisionedMarks);
     }
 
     [Fact]
@@ -71,6 +74,18 @@ public class DebloatAppxSafetyNetTests
         Assert.Equal(
             ["Microsoft.GamingApp_8wekyb3d8bbwe", "Microsoft.BingNews_8wekyb3d8bbwe"],
             appx.DeprovisionedFamilyNames);
+        Assert.Equal(
+            ["Microsoft.BingNews_8wekyb3d8bbwe", "Microsoft.GamingApp_8wekyb3d8bbwe"],
+            appx.EnsuredDeprovisionedMarks.OrderBy(s => s, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public void AppxDeprovisionedMarks_path_is_under_appx_all_user_store()
+    {
+        Assert.Contains(
+            "AppxAllUserStore\\Deprovisioned",
+            AppxDeprovisionedMarks.DeprovisionedRoot,
+            StringComparison.Ordinal);
     }
 
     [Fact]

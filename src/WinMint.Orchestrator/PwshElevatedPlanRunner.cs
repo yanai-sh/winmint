@@ -231,6 +231,7 @@ internal sealed record EvidenceFile(
     [property: JsonPropertyName("outputIsoPath")] string? OutputIsoPath,
     [property: JsonPropertyName("shellStampTargetPath")] string? ShellStampTargetPath,
     [property: JsonPropertyName("lane")] string? Lane,
+    [property: JsonPropertyName("packageStrict")] bool PackageStrict,
     [property: JsonPropertyName("digests")] Dictionary<string, string>? Digests);
 
 internal sealed record FailureFile(

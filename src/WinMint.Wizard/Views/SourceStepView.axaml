@@ -66,6 +66,11 @@
           <ToggleButton Classes="chip" Content="Test" IsChecked="{Binding IsTestLane}" Command="{Binding SelectTestLaneCommand}" />
           <ToggleButton Classes="chip" Content="Release" IsChecked="{Binding IsReleaseLane}" Command="{Binding SelectReleaseLaneCommand}" />
         </StackPanel>
+        <TextBlock Text="Release Build writes Gate B wipe media under %LOCALAPPDATA%\WinMint\work\sl7-primary (package-strict)."
+                   Opacity="0.55"
+                   FontSize="12"
+                   TextWrapping="Wrap"
+                   Margin="0,8,0,0" />
       </StackPanel>
     </Border>
 

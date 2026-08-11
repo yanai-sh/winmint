@@ -113,6 +113,17 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
         }
     }
 
+    public void EnsureDeprovisionedMark(string packageFamilyName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
+        if (AppxDeprovisionedMarks.Exists(packageFamilyName))
+        {
+            return;
+        }
+
+        _ = AppxDeprovisionedMarks.Ensure(packageFamilyName);
+    }
+
     public async Task RegisterPackageFamilyForCurrentUserAsync(
         string packageFamilyName,
         CancellationToken ct = default)

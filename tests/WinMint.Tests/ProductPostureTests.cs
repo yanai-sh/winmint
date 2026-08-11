@@ -13,7 +13,14 @@ public class ProductPostureTests
             ["Anysphere.Cursor", "Git.MinGit", "Nilesoft.Shell"]);
 
         Assert.Equal(
-            ["Git.MinGit", "Nilesoft.Shell", "Anysphere.Cursor"],
+            [
+                "Git.MinGit",
+                "Microsoft.PowerShell",
+                "Microsoft.WindowsTerminal",
+                "eza-community.eza",
+                "Nilesoft.Shell",
+                "Anysphere.Cursor",
+            ],
             merged);
     }
 
@@ -21,9 +28,27 @@ public class ProductPostureTests
     public void StripWingetFromAuthored_drops_product_constants()
     {
         string stripped = ProductPosture.StripWingetFromAuthored(
-            "Git.MinGit\nAnysphere.Cursor\nNilesoft.Shell\njqlang.jq");
+            "Git.MinGit\nAnysphere.Cursor\nMicrosoft.PowerShell\nNilesoft.Shell\njqlang.jq");
 
         Assert.Equal($"Anysphere.Cursor{Environment.NewLine}jqlang.jq", stripped);
+    }
+
+    [Fact]
+    public void MergeScoop_constants_first_then_profile_deduped()
+    {
+        IReadOnlyList<string> merged = ProductPosture.MergeScoop(["neovim", "starship", "fzf"]);
+
+        Assert.Equal(
+            ["starship", "fzf", "fd", "ripgrep", "bat", "zoxide", "jq", "chezmoi", "neovim"],
+            merged);
+    }
+
+    [Fact]
+    public void StripScoopFromAuthored_drops_product_constants()
+    {
+        string stripped = ProductPosture.StripScoopFromAuthored("starship\nneovim\nfzf");
+
+        Assert.Equal("neovim", stripped);
     }
 
     [Fact]
@@ -82,7 +107,31 @@ public class ProductPostureTests
             .EnumerateArray()
             .Select(p => p.GetProperty("PackageIdentifier").GetString()!)
             .ToArray();
-        Assert.Equal(["Git.MinGit", "Nilesoft.Shell"], ids);
+        Assert.Equal(
+            [
+                "Git.MinGit",
+                "Microsoft.PowerShell",
+                "Microsoft.WindowsTerminal",
+                "eza-community.eza",
+                "Nilesoft.Shell",
+            ],
+            ids);
+    }
+
+    [Fact]
+    public void Plan_empty_scoop_still_emits_shell_core_scoop_batch()
+    {
+        Profile profile = Lab(winget: []);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { ImageArchitecture = "arm64" });
+
+        Assert.True(result.IsOk, result.IsOk ? null : result.Error.Message);
+        JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
+        foreach (string id in ProductPosture.ScoopIds)
+        {
+            Assert.Contains(id, batch.PackageId!, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private static Profile Lab(IReadOnlyList<string>? winget = null) =>

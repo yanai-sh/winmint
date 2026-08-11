@@ -1,0 +1,217 @@
+#requires -Version 7.6
+<#
+.SYNOPSIS
+  Host dry-run: catalog winget ids resolve for arch; scoop manifests expose arm64 (or universal) URLs.
+.NOTES
+  Maintainer gate only — never part of `just check`. Needs network + winget for winget rows.
+  Validity = ADR-010 catalog-time truth (exists + arch), not guest install.
+#>
+param(
+    [string] $CatalogPath = '',
+    [string] $Architecture = 'arm64',
+    [switch] $ProbeScoopUrls,
+    [switch] $SelfCheck
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+if ([string]::IsNullOrWhiteSpace($CatalogPath)) {
+    $CatalogPath = Join-Path $repoRoot 'config\packages.json'
+}
+
+$script:ScoopBucketRaw = @{
+    main   = 'https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket'
+    extras = 'https://raw.githubusercontent.com/ScoopInstaller/Extras/master/bucket'
+}
+
+function Get-ScoopManifestUri {
+    param(
+        [Parameter(Mandatory)][string] $Id,
+        [string] $Bucket
+    )
+    $b = if ([string]::IsNullOrWhiteSpace($Bucket)) { 'main' } else { $Bucket.Trim().ToLowerInvariant() }
+    if (-not $script:ScoopBucketRaw.ContainsKey($b)) {
+        throw "unknown scoop bucket '$Bucket' (supported: $($script:ScoopBucketRaw.Keys -join ', '))"
+    }
+    return "$($script:ScoopBucketRaw[$b])/$Id.json"
+}
+
+function Get-JsonProp {
+    param(
+        [Parameter(Mandatory)][psobject] $Object,
+        [Parameter(Mandatory)][string] $Name
+    )
+    $p = $Object.PSObject.Properties[$Name]
+    if ($null -eq $p) { return $null }
+    return $p.Value
+}
+
+function Test-ScoopArm64Url {
+    param([Parameter(Mandatory)][psobject] $Manifest)
+    $arch = Get-JsonProp -Object $Manifest -Name 'architecture'
+    if ($null -ne $arch) {
+        foreach ($name in @('arm64', 'aarch64')) {
+            $node = Get-JsonProp -Object $arch -Name $name
+            if ($null -ne $node) {
+                $url = Get-JsonProp -Object $node -Name 'url'
+                if (-not [string]::IsNullOrWhiteSpace([string]$url)) {
+                    return [string]$url
+                }
+            }
+        }
+        return $null
+    }
+    $universal = Get-JsonProp -Object $Manifest -Name 'url'
+    if (-not [string]::IsNullOrWhiteSpace([string]$universal)) {
+        return [string]$universal
+    }
+    return $null
+}
+
+function Test-WingetId {
+    param(
+        [Parameter(Mandatory)][string] $Id,
+        [Parameter(Mandatory)][string] $Architecture
+    )
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($null -eq $winget) {
+        throw 'winget not on PATH (install App Installer / use an ARM64 host with winget)'
+    }
+    $out = & winget show --id $Id --exact --architecture $Architecture --disable-interactivity 2>&1
+    $code = $LASTEXITCODE
+    if ($code -ne 0) {
+        $tail = ($out | Out-String).Trim()
+        if ($tail.Length -gt 240) { $tail = $tail.Substring(0, 240) + '…' }
+        throw "winget show failed (exit $code): $tail"
+    }
+}
+
+function Invoke-PackagesCheck {
+    param(
+        [Parameter(Mandatory)][string] $CatalogPath,
+        [Parameter(Mandatory)][string] $Architecture,
+        [switch] $ProbeScoopUrls
+    )
+
+    $arch = $Architecture.Trim().ToLowerInvariant()
+    if ($arch -notin @('arm64', 'amd64', 'x64')) {
+        throw "Architecture must be arm64 or amd64 (got '$Architecture')"
+    }
+    if ($arch -eq 'x64') { $arch = 'amd64' }
+
+    if (-not (Test-Path -LiteralPath $CatalogPath)) {
+        throw "catalog missing: $CatalogPath"
+    }
+
+    $doc = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
+    if ($null -eq $doc.tools) {
+        throw 'catalog has no tools object'
+    }
+
+    $failures = [System.Collections.Generic.List[string]]::new()
+    $ok = 0
+    $skipped = 0
+
+    foreach ($prop in $doc.tools.PSObject.Properties) {
+        $key = $prop.Name
+        $row = $prop.Value
+        $source = [string]$row.source
+        $id = [string]$row.id
+        $arches = @($row.architectures | ForEach-Object { [string]$_ })
+        if ($true -eq (Get-JsonProp -Object $row -Name 'stub')) {
+            $skipped++
+            Write-Output "skip  $key ($id) — catalog stub (not published)"
+            continue
+        }
+        if ($arches.Count -gt 0 -and ($arches -notcontains $arch)) {
+            $skipped++
+            Write-Output "skip  $key ($id) — no $arch in architectures"
+            continue
+        }
+
+        try {
+            switch ($source.ToLowerInvariant()) {
+                'winget' {
+                    Test-WingetId -Id $id -Architecture $arch
+                    Write-Output "ok    winget $key ($id) $arch"
+                    $ok++
+                }
+                'scoop' {
+                    $bucket = [string](Get-JsonProp -Object $row -Name 'scoopBucket')
+                    $uri = Get-ScoopManifestUri -Id $id -Bucket $bucket
+                    $manifest = Invoke-RestMethod -Uri $uri -Method Get
+                    $url = Test-ScoopArm64Url -Manifest $manifest
+                    if ($arch -eq 'arm64' -and [string]::IsNullOrWhiteSpace($url)) {
+                        throw "scoop manifest has no arm64/aarch64 (or universal) url: $uri"
+                    }
+                    if ($ProbeScoopUrls -and -not [string]::IsNullOrWhiteSpace($url)) {
+                        $head = Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5
+                        if ([int]$head.StatusCode -lt 200 -or [int]$head.StatusCode -ge 400) {
+                            throw "scoop url probe HTTP $($head.StatusCode): $url"
+                        }
+                    }
+                    $bucketLabel = if ([string]::IsNullOrWhiteSpace($bucket)) { 'main' } else { $bucket }
+                    Write-Output "ok    scoop  $key ($id) bucket=$bucketLabel"
+                    $ok++
+                }
+                'store' {
+                    $skipped++
+                    Write-Output "skip  $key ($id) — store (not winget/scoop dry-run)"
+                }
+                default {
+                    throw "unknown source '$source'"
+                }
+            }
+        }
+        catch {
+            $msg = "FAIL  $key ($id) [$source]: $($_.Exception.Message)"
+            $failures.Add($msg)
+            Write-Output $msg
+        }
+    }
+
+    Write-Output "packages-check: ok=$ok skipped=$skipped fail=$($failures.Count) arch=$arch catalog=$CatalogPath"
+    if ($failures.Count -gt 0) {
+        throw "packages-check failed ($($failures.Count))"
+    }
+}
+
+if ($SelfCheck) {
+    # Offline: URI + arm64 URL extraction only (no network / winget).
+    $uri = Get-ScoopManifestUri -Id 'starship' -Bucket 'main'
+    if ($uri -notmatch '/starship\.json$') { throw "SelfCheck uri: $uri" }
+    $extras = Get-ScoopManifestUri -Id 'komorebi' -Bucket 'extras'
+    if ($extras -notmatch 'Extras/master/bucket/komorebi\.json$') { throw "SelfCheck extras: $extras" }
+
+    $withArm = [pscustomobject]@{
+        architecture = [pscustomobject]@{
+            arm64 = [pscustomobject]@{ url = 'https://example.test/arm64.zip' }
+        }
+    }
+    if ((Test-ScoopArm64Url -Manifest $withArm) -ne 'https://example.test/arm64.zip') {
+        throw 'SelfCheck arm64 url miss'
+    }
+    $universal = [pscustomobject]@{ url = 'https://example.test/any.zip' }
+    if ((Test-ScoopArm64Url -Manifest $universal) -ne 'https://example.test/any.zip') {
+        throw 'SelfCheck universal url miss'
+    }
+    $amdOnly = [pscustomobject]@{
+        architecture = [pscustomobject]@{
+            '64bit' = [pscustomobject]@{ url = 'https://example.test/x64.zip' }
+        }
+    }
+    if ($null -ne (Test-ScoopArm64Url -Manifest $amdOnly)) {
+        throw 'SelfCheck should reject amd64-only'
+    }
+
+    if (-not (Test-Path -LiteralPath $CatalogPath)) {
+        throw "SelfCheck catalog missing: $CatalogPath"
+    }
+    $null = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
+    Write-Output 'SelfCheck ok'
+    exit 0
+}
+
+Invoke-PackagesCheck -CatalogPath $CatalogPath -Architecture $Architecture -ProbeScoopUrls:$ProbeScoopUrls

@@ -339,6 +339,30 @@ public static partial class ProvisioningSession
                             break;
                         }
 
+                    case ProvisionJobKind.ShellStamp:
+                        {
+                            (bool stampOk, string message) = await ShellStamp.ApplyAsync(httpHandler: null, ct)
+                                .ConfigureAwait(false);
+                            if (!stampOk)
+                            {
+                                JobsPhaseResult? stampFail = RecordPackageFailure(
+                                    job,
+                                    "jobs.shell.stamp_failed",
+                                    $"{job.Id}: {message}");
+                                if (stampFail is not null)
+                                {
+                                    return stampFail.Value;
+                                }
+
+                                continue;
+                            }
+
+                            SessionStatus stamped = new("jobs.shell.stamp", message);
+                            env.Splash.SetStatus(stamped);
+                            phases.Add(stamped.Code);
+                            continue;
+                        }
+
                     case ProvisionJobKind.Wsl:
                         {
                             if (string.IsNullOrWhiteSpace(job.PackageId))
@@ -504,7 +528,8 @@ public static partial class ProvisioningSession
             ProvisionJobKind.Winget
             or ProvisionJobKind.WingetImport
             or ProvisionJobKind.Scoop
-            or ProvisionJobKind.ScoopBatch;
+            or ProvisionJobKind.ScoopBatch
+            or ProvisionJobKind.ShellStamp;
 
 
 

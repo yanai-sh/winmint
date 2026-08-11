@@ -55,7 +55,7 @@ Do demerit for:
 
 **Means:** Seams, integrity, recipe honesty — would you trust the host pipeline without a new framework?
 
-**9 means:** Mandatory release `.sha256`; Gate B = Release + package-strict (`primary-gate`); soft Release metal cannot green a Primary flash path; Index/digest hardening; Gate B ≠ completed install stated honestly.
+**9 means:** Mandatory release `.sha256`; Gate B = Release + package-strict (`primary-gate` / evidence `packageStrict`); soft Release metal cannot green a Primary flash path; Index/digest hardening; Gate B ≠ completed install stated honestly. Cli Release without `--package-strict` is warn-only by design; Gate B assert requires evidence `packageStrict`.
 
 **Does not mean:** Feature completeness or wipe proven.
 

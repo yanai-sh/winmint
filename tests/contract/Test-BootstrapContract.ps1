@@ -56,4 +56,16 @@ Assert-BootstrapText -Pattern 'Failure kind:' -Description 'bootstrap failure ou
 Assert-BootstrapText -Pattern 'Safe to retry:' -Description 'bootstrap failure output explains retry safety'
 Assert-BootstrapTextAbsent -Pattern 'hash verification skipped' -Description 'bootstrap must not downgrade to unverified release installs'
 
+$workerPath = Join-Path $root 'cloudflare\winmint\src\index.js'
+if (-not (Test-Path -LiteralPath $workerPath)) {
+    throw "Worker source missing: $workerPath"
+}
+$worker = Get-Content -LiteralPath $workerPath -Raw
+if ($worker -notmatch '/primary-gate') {
+    throw 'Worker contract missing: /primary-gate route'
+}
+if ($worker -notmatch 'PrimaryGate') {
+    throw 'Worker contract missing: PrimaryGate invoke in /primary-gate wrapper'
+}
+
 Write-Host 'Bootstrap contract tests passed.'

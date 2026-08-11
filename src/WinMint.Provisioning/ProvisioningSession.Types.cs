@@ -127,6 +127,12 @@ public interface IAppxPackageManager
     Task DeprovisionPackageFamilyAsync(string packageFamilyName, CancellationToken ct = default);
 
     /// <summary>
+    /// Ensure <c>HKLM\...\AppxAllUserStore\Deprovisioned\&lt;PFN&gt;</c> exists (FU rehydrate survival).
+    /// Idempotent; best-effort when not elevated.
+    /// </summary>
+    void EnsureDeprovisionedMark(string packageFamilyName);
+
+    /// <summary>
     /// Register a provisioned package family for the current user (winget / App Installer FirstLogon).
     /// </summary>
     Task RegisterPackageFamilyForCurrentUserAsync(string packageFamilyName, CancellationToken ct = default);

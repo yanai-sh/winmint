@@ -129,6 +129,9 @@ if ($removed.Count -gt 0) {
             $keyPath = "$deprovRoot\$pfn"
             & reg.exe add $keyPath /f
             if ($LASTEXITCODE -ne 0) { throw "reg add Deprovisioned\$pfn failed: $LASTEXITCODE" }
+            # Readback assert — FU survival requires the mark to exist after write.
+            & reg.exe query $keyPath > $null 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Deprovisioned stamp missing after write: $pfn" }
             Write-Output "Deprovisioned=$pfn"
         }
     }

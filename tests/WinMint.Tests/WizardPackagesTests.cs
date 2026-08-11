@@ -74,6 +74,8 @@ public class WizardPackagesTests
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.OneDriveUninstall);
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ReservedStorageDisable);
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
+        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ShellStamp);
         Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind is ProvisionJobKind.Scoop or ProvisionJobKind.Wsl);
     }
 

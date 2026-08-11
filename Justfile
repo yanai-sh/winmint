@@ -29,6 +29,11 @@ check: format-check build
     just analyze-servicing
     just bootstrap-contract
 
+# Maintainer: catalog source truth (winget show + scoop manifest arm64). Network. Not part of `just check`.
+# Optional URL HEAD for scoop: just packages-check PROBE=true
+packages-check ARCH="arm64" PROBE="false":
+    $probe = @(); if ('{{PROBE}}' -eq 'true') { $probe = @('-ProbeScoopUrls') }; pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-PackagesCheck.ps1' -Architecture '{{ARCH}}' @probe
+
 bootstrap-contract:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-BootstrapContract.ps1'
 
@@ -55,11 +60,12 @@ wipe-scratch:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-ArtifactHygiene.ps1' -Root (Join-Path '{{justfile_directory()}}' '.scratch') -Wipe
 
 # Tail Apply progress (stage=opcode|done|failed:*). STALL_SUSPECT is Smoke-only (tools/vm).
-watch-apply WORK=".scratch/sl7-build":
-    Get-Content (Join-Path '{{WORK}}' 'apply-status.txt') -Wait
+# Default WORK = Gate B (%LOCALAPPDATA%\WinMint\work\sl7-primary). Test metal: WORK=.scratch/sl7-build
+watch-apply WORK="":
+    pwsh -NoProfile -Command "$w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary' }; Get-Content -LiteralPath (Join-Path $w 'apply-status.txt') -Wait -Tail 40"
 
 # Multi-hour DISM Apply. Cold first; later runs auto --reuse-media when marker exists.
-# Prereq: just publish-provisioning. Watch: just watch-apply WORK=<dir>
+# Prereq: just publish-provisioning. Watch Gate B: just watch-apply; Test: just watch-apply WORK=.scratch/sl7-build
 # ponytail: recipe keeps Apply name (DISM loop); Cli verb is build only.
 # INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs (Smoke/acceptance only).
 apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STUBS="false":

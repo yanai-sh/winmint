@@ -1,0 +1,23 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+
+add_newline = false
+format = "$shell$username$directory$git_branch$git_commit$git_status$cmd_duration$character"
+
+[shell]
+disabled = false
+powershell_indicator = 'pwsh'
+style = 'white'
+
+[username]
+format = '[$user]($style) '
+
+[directory]
+format = '[$read_only]($read_only_style)[$path]($style) '
+read_only = 'RO '
+
+[git_branch]
+format = '[\($branch\)](bold purple) '
+
+[cmd_duration]
+min_time = 3_000
+format = '[$duration]($style) '
