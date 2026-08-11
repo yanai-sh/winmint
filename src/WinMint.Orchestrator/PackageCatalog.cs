@@ -386,7 +386,8 @@ public sealed class PackageCatalog
                     source,
                     dto.Id,
                     arch,
-                    dto.ScoopBucket);
+                    dto.ScoopBucket,
+                    dto.Stub);
                 toolsByKey[key] = entry;
                 toolsByInstallId[dto.Id] = entry;
             }
@@ -429,7 +430,8 @@ public sealed record PackageToolEntry(
     PackageToolSource Source,
     string InstallId,
     IReadOnlyList<string> Architectures,
-    string? ScoopBucket = null);
+    string? ScoopBucket = null,
+    bool IsStub = false);
 
 public sealed record WslDistroEntry(
     string ProfileToken,
@@ -483,6 +485,9 @@ internal sealed class PackageToolDto
 
     [JsonPropertyName("scoopBucket")]
     public string? ScoopBucket { get; set; }
+
+    [JsonPropertyName("stub")]
+    public bool Stub { get; set; }
 }
 
 internal sealed class WslDistroDto

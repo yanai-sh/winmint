@@ -30,6 +30,13 @@ public class PackageCatalogValidatorTests
         Assert.Equal("extras", whkd!.ScoopBucket);
     }
 
+    [Fact]
+    public void FancyWM_is_stub()
+    {
+        Assert.True(PackageCatalog.Default.TryGetToolByKey("fancywm", out PackageToolEntry? fancywm));
+        Assert.True(fancywm!.IsStub);
+    }
+
     private static string FindRepoRoot()
     {
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
