@@ -29,10 +29,10 @@ check: format-check build
     just analyze-servicing
     just bootstrap-contract
 
-# Maintainer: catalog source truth (winget show + scoop manifest arm64). Network. Not part of `just check`.
-# Optional URL HEAD for scoop: just packages-check PROBE=true
-packages-check ARCH="arm64" PROBE="false":
-    $probe = @(); if ('{{PROBE}}' -eq 'true') { $probe = @('-ProbeScoopUrls') }; pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-PackagesCheck.ps1' -Architecture '{{ARCH}}' @probe
+# Maintainer: prove live winget/scoop ids (dry-run / download) + write config/packages.proof.json.
+# Network + native ARM64 + winget. Not inlined into `just check` (offline receipt test enforces freshness).
+packages-check ARCH="arm64":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-PackagesCheck.ps1' -Architecture '{{ARCH}}'
 
 bootstrap-contract:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-BootstrapContract.ps1'
