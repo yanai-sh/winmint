@@ -1,160 +1,160 @@
 {
-  "schema": "winmint.packages.proof/v1",
-  "architecture": "arm64",
-  "catalogSha256": "4d43d6f3e0e90061b3cad822dc447a85fe79554c4ac2051c56998b888639453b",
-  "proveSetSha256": "224378ba47904552678e160645c9b82e81f6745b211af8e2b3298fdf880cddc6",
-  "provenAtUtc": "2026-08-11T14:29:57.8732971Z",
-  "host": {
-    "winget": "v1.29.280",
-    "osArch": "Arm64"
-  },
-  "entries": [
-    {
-      "source": "scoop",
-      "id": "bat",
-      "method": "scoop-manifest-download",
-      "bucket": "main"
-    },
-    {
-      "source": "scoop",
-      "id": "chezmoi",
-      "method": "scoop-manifest-download",
-      "bucket": "main"
-    },
-    {
-      "source": "scoop",
-      "id": "curl",
-      "method": "scoop-manifest-download",
-      "bucket": "main"
-    },
-    {
-      "source": "scoop",
-      "id": "fd",
-      "method": "scoop-manifest-download",
-      "bucket": "main"
-    },
-    {
-      "source": "scoop",
-      "id": "fzf",
-      "method": "scoop-manifest-download",
-      "bucket": "main"
-    },
-    {
-      "source": "scoop",
-      "id": "jq",
-      "method": "scoop-manifest-download",
-      "bucket": "main"
-    },
-    {
-      "source": "scoop",
-      "id": "komorebi",
-      "method": "scoop-manifest-download",
-      "bucket": "extras"
-    },
-    {
-      "source": "scoop",
-      "id": "neovim",
-      "method": "scoop-manifest-download",
-      "bucket": "main"
-    },
-    {
-      "source": "scoop",
-      "id": "ripgrep",
-      "method": "scoop-manifest-download",
-      "bucket": "main"
-    },
-    {
-      "source": "scoop",
-      "id": "starship",
-      "method": "scoop-manifest-download",
-      "bucket": "main"
-    },
-    {
-      "source": "scoop",
-      "id": "whkd",
-      "method": "scoop-manifest-download",
-      "bucket": "extras"
-    },
-    {
-      "source": "scoop",
-      "id": "zoxide",
-      "method": "scoop-manifest-download",
-      "bucket": "main"
-    },
-    {
-      "source": "winget",
-      "id": "AmN.yasb",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "Anysphere.Cursor",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "Brave.Brave",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "eza-community.eza",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "Git.Git",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "Git.MinGit",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "jqlang.jq",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "Microsoft.PowerShell",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "Microsoft.VisualStudioCode",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "Microsoft.WindowsTerminal",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "Mozilla.Firefox.DeveloperEdition",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "Nilesoft.Shell",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "RamenSoftware.Windhawk",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "ZedIndustries.Zed",
-      "method": "winget-download"
-    },
-    {
-      "source": "winget",
-      "id": "Zen-Team.Zen-Browser",
-      "method": "winget-download"
-    }
-  ]
+    "schema":  "winmint.packages.proof/v1",
+    "architecture":  "arm64",
+    "catalogSha256":  "4d43d6f3e0e90061b3cad822dc447a85fe79554c4ac2051c56998b888639453b",
+    "proveSetSha256":  "224378ba47904552678e160645c9b82e81f6745b211af8e2b3298fdf880cddc6",
+    "provenAtUtc":  "2026-08-11T14:29:57.8732971Z",
+    "host":  {
+                 "winget":  "v1.29.280",
+                 "osArch":  "Arm64"
+             },
+    "entries":  [
+                    {
+                        "source":  "scoop",
+                        "id":  "bat",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "main"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "chezmoi",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "main"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "curl",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "main"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "fd",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "main"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "fzf",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "main"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "jq",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "main"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "komorebi",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "extras"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "neovim",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "main"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "ripgrep",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "main"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "starship",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "main"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "whkd",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "extras"
+                    },
+                    {
+                        "source":  "scoop",
+                        "id":  "zoxide",
+                        "method":  "scoop-manifest-download",
+                        "bucket":  "main"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "AmN.yasb",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "Anysphere.Cursor",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "Brave.Brave",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "eza-community.eza",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "Git.Git",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "Git.MinGit",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "jqlang.jq",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "Microsoft.PowerShell",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "Microsoft.VisualStudioCode",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "Microsoft.WindowsTerminal",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "Mozilla.Firefox.DeveloperEdition",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "Nilesoft.Shell",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "RamenSoftware.Windhawk",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "ZedIndustries.Zed",
+                        "method":  "winget-download"
+                    },
+                    {
+                        "source":  "winget",
+                        "id":  "Zen-Team.Zen-Browser",
+                        "method":  "winget-download"
+                    }
+                ]
 }

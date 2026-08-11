@@ -29,7 +29,7 @@ check: format-check build
     just analyze-servicing
     just bootstrap-contract
 
-# Maintainer: prove live winget/scoop ids (dry-run / download) + write config/packages.proof.json.
+# Maintainer: prove live winget/scoop ids (winget download / scoop archive) + write config/packages.proof.json.
 # Network + native ARM64 + winget. Not inlined into `just check` (offline receipt test enforces freshness).
 packages-check ARCH="arm64":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-PackagesCheck.ps1' -Architecture '{{ARCH}}'

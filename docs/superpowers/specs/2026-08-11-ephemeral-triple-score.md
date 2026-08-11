@@ -1,11 +1,22 @@
 # Ephemeral triple score — 2026-08-11
 
-**Rubric:** [2026-08-11-ephemeral-score-rubric.md](../specs/2026-08-11-ephemeral-score-rubric.md)
+**Rubric:** [2026-08-11-ephemeral-score-rubric.md](2026-08-11-ephemeral-score-rubric.md)
 
-| Lens | Score | Notes |
-|------|-------|--------|
-| Prospect | **9**/10 | Live-session + `-PrimaryGate` one-shot; TEMP delete intentional; durable opt-in only |
-| Full-flow | **9**/10 | Shared Gate B workdir `%LOCALAPPDATA%\WinMint\work\sl7-primary`; metal ≠ Primary |
-| Architect | **9**/10 | Gate B fail-close; mandatory `.sha256`; Primary wipe still unproven (not a demerit for 9) |
+## Ship status (score raise)
 
-**Product implication:** Do **not** chase durable LocalAppData default. Next host leverage is catalog source validity (`just packages-check`), then Primary FU evidence on metal.
+| Work | Status |
+|------|--------|
+| `/primary-gate` + `/validate` Worker routes | in tree |
+| Wizard Release = Gate B | in tree |
+| `packageStrict` evidence + assert | in tree |
+| Deploy Worker + land bootstrap on `main` | in progress this session |
+
+## Target after deploy
+
+| Lens | Target |
+|------|--------|
+| Prospect | **9** (plain `/validate` + live routes match docs) |
+| Full-flow | **9** live (plain `/primary-gate`; workdir LocalAppData) |
+| Architect | **9** (unchanged) |
+
+Durable-default advice still applies?: **no**

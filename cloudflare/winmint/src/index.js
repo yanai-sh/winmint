@@ -3,6 +3,57 @@ const DEFAULT_BOOTSTRAP_URL =
 
 const BOOTSTRAP_PATHS = new Set(["/", "/winmint", "/winmint.ps1"]);
 const CLI_PATHS = new Set(["/cli", "/cli.ps1"]);
+const PRIMARY_GATE_PATHS = new Set(["/primary-gate", "/primary-gate.ps1"]);
+const VALIDATE_PATHS = new Set(["/validate", "/validate.ps1"]);
+
+function escapePsSingleQuoted(value) {
+  return String(value).replace(/'/g, "''");
+}
+
+function queryString(searchParams, key) {
+  if (!searchParams.has(key)) {
+    return null;
+  }
+  const raw = searchParams.get(key);
+  if (raw == null || /[\r\n\0]/.test(raw)) {
+    throw new Error(`Invalid query value for ${key}`);
+  }
+  return raw;
+}
+
+function bakedForwardArgs(searchParams, extras) {
+  const work = queryString(searchParams, "Work");
+  const repository = queryString(searchParams, "Repository");
+  const version = queryString(searchParams, "Version");
+  const force = searchParams.has("Force");
+  const cacheRelease = searchParams.has("CacheRelease");
+  const lines = [];
+  for (const [key, value] of Object.entries(extras)) {
+    if (typeof value === "boolean") {
+      if (value) {
+        lines.push(`  ${key} = $true`);
+      }
+    } else {
+      lines.push(`  ${key} = '${escapePsSingleQuoted(value)}'`);
+    }
+  }
+  if (work) {
+    lines.push(`  Work = '${escapePsSingleQuoted(work)}'`);
+  }
+  if (repository) {
+    lines.push(`  Repository = '${escapePsSingleQuoted(repository)}'`);
+  }
+  if (version) {
+    lines.push(`  Version = '${escapePsSingleQuoted(version)}'`);
+  }
+  if (force) {
+    lines.push("  Force = $true");
+  }
+  if (cacheRelease) {
+    lines.push("  CacheRelease = $true");
+  }
+  return lines;
+}
 
 function cliWrapper(origin) {
   const bootstrapUrl = `${origin}/`;
@@ -36,6 +87,54 @@ if ($PrimaryGate) {
 `;
 }
 
+function primaryGateWrapper(origin, searchParams) {
+  const bootstrapUrl = `${origin}/`;
+  const sourceIso = queryString(searchParams, "SourceIso");
+  const profilePath =
+    queryString(searchParams, "ProfilePath") ?? "samples/sl7.profile.json";
+
+  const lines = [
+    "#Requires -Version 5.1",
+    "$ErrorActionPreference = 'Stop'",
+    `if ([string]::IsNullOrWhiteSpace('${escapePsSingleQuoted(sourceIso ?? "")}')) {`,
+    "  throw 'Usage: irm ''https://winmint.yanai.sh/primary-gate?SourceIso=C:\\path\\to\\source.iso&ProfilePath=samples\\sl7.profile.json'' | iex'",
+    "}",
+    `$bootstrap = Invoke-RestMethod -UseBasicParsing -Uri '${bootstrapUrl}'`,
+    "$args = @{",
+    ...bakedForwardArgs(searchParams, {
+      PrimaryGate: true,
+      SourceIso: sourceIso ?? "",
+      ProfilePath: profilePath,
+    }),
+    "}",
+    "& ([scriptblock]::Create($bootstrap)) @args",
+    "",
+  ];
+  return lines.join("\n");
+}
+
+function validateWrapper(origin, searchParams) {
+  const bootstrapUrl = `${origin}/`;
+  const profilePath =
+    queryString(searchParams, "ProfilePath") ?? "samples/smoke.profile.json";
+
+  const lines = [
+    "#Requires -Version 5.1",
+    "$ErrorActionPreference = 'Stop'",
+    `$bootstrap = Invoke-RestMethod -UseBasicParsing -Uri '${bootstrapUrl}'`,
+    "$args = @{",
+    ...bakedForwardArgs(searchParams, {
+      Headless: true,
+      ValidateOnly: true,
+      ProfilePath: profilePath,
+    }),
+    "}",
+    "& ([scriptblock]::Create($bootstrap)) @args",
+    "",
+  ];
+  return lines.join("\n");
+}
+
 function textResponse(body, status = 200, extraHeaders = {}) {
   return new Response(body, {
     status,
@@ -52,11 +151,21 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (url.pathname === "/winmint/" || url.pathname === "/cli/") {
+    if (
+      url.pathname === "/winmint/" ||
+      url.pathname === "/cli/" ||
+      url.pathname === "/primary-gate/" ||
+      url.pathname === "/validate/"
+    ) {
       return Response.redirect(`${url.origin}${url.pathname.slice(0, -1)}`, 308);
     }
 
-    if (!BOOTSTRAP_PATHS.has(url.pathname) && !CLI_PATHS.has(url.pathname)) {
+    if (
+      !BOOTSTRAP_PATHS.has(url.pathname) &&
+      !CLI_PATHS.has(url.pathname) &&
+      !PRIMARY_GATE_PATHS.has(url.pathname) &&
+      !VALIDATE_PATHS.has(url.pathname)
+    ) {
       return textResponse("Not found\n", 404);
     }
 
@@ -76,6 +185,28 @@ export default {
 
     if (CLI_PATHS.has(url.pathname)) {
       return new Response(cliWrapper(url.origin), { status: 200, headers });
+    }
+
+    if (PRIMARY_GATE_PATHS.has(url.pathname)) {
+      try {
+        return new Response(primaryGateWrapper(url.origin, url.searchParams), {
+          status: 200,
+          headers,
+        });
+      } catch (err) {
+        return textResponse(`${err.message || err}\n`, 400);
+      }
+    }
+
+    if (VALIDATE_PATHS.has(url.pathname)) {
+      try {
+        return new Response(validateWrapper(url.origin, url.searchParams), {
+          status: 200,
+          headers,
+        });
+      } catch (err) {
+        return textResponse(`${err.message || err}\n`, 400);
+      }
     }
 
     const bootstrapUrl = env.BOOTSTRAP_URL || DEFAULT_BOOTSTRAP_URL;

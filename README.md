@@ -44,7 +44,7 @@ irm 'https://winmint.yanai.sh/primary-gate?SourceIso=C:\path\to\source.iso&Profi
 First win without a Source ISO (validate profile only):
 
 ```powershell
-& ([scriptblock]::Create((irm https://winmint.yanai.sh))) -Headless -ValidateOnly -ProfilePath samples\smoke.profile.json
+irm 'https://winmint.yanai.sh/validate?ProfilePath=samples\smoke.profile.json' | iex
 ```
 
 Optional: `-CacheRelease` / `-InstallRoot` keep a reusable toolkit under `%LOCALAPPDATA%\WinMint\versions\<tag>` (power-user; not required).
@@ -70,7 +70,7 @@ Gate B workdir defaults to `%LOCALAPPDATA%\WinMint\work\sl7-primary` (same as `/
 
 When it finishes, flash `out.iso` to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup.
 
-`just primary-gate` / `-PrimaryGate` builds the wipe ISO (`Release`, package-strict). Soft `just metal QUALITY=Release` is rejected; wipe media is that Gate B path only.
+`just primary-gate` / `/primary-gate` / Wizard Release Build builds the wipe ISO (`Release`, package-strict). Soft `just metal QUALITY=Release` is rejected; wipe media is that Gate B path only.
 
 For iterative Test builds only: `just metal ISO=path\to\source.iso` (default workdir `.scratch/sl7-build`). That path is not the wipe gate.
 

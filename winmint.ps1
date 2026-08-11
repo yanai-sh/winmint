@@ -285,7 +285,7 @@ try {
         Write-WinMintBootstrapLog "Launching Wizard: $wizard"
         if ($null -ne $sessionRoot) {
             Write-WinMintBootstrapLog "Ephemeral session toolkit: $toolkitRoot"
-            Write-WinMintBootstrapLog 'Wipe ISO while Wizard is open: second terminal → cd to toolkit root → just primary-gate. Or one-shot: -Headless -PrimaryGate (see README).' 'WARN'
+            Write-WinMintBootstrapLog 'Wipe ISO while Wizard is open: second terminal → cd to toolkit root → just primary-gate. Or one-shot: irm …/primary-gate?SourceIso=… | iex (see README).' 'WARN'
         }
         $p = Start-Process -FilePath $wizard -WorkingDirectory $toolkitRoot -PassThru -Wait
         $code = $p.ExitCode

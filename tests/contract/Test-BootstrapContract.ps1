@@ -67,5 +67,11 @@ if ($worker -notmatch '/primary-gate') {
 if ($worker -notmatch 'PrimaryGate') {
     throw 'Worker contract missing: PrimaryGate invoke in /primary-gate wrapper'
 }
+if ($worker -notmatch '/validate') {
+    throw 'Worker contract missing: /validate route'
+}
+if ($worker -notmatch 'ValidateOnly') {
+    throw 'Worker contract missing: ValidateOnly invoke in /validate wrapper'
+}
 
 Write-Host 'Bootstrap contract tests passed.'
