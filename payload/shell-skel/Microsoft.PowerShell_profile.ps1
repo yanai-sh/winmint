@@ -29,11 +29,15 @@ Set-PSReadLineKeyHandler -Chord 'Ctrl+Backspace' -Function BackwardDeleteWord
 Set-PSReadLineKeyHandler -Chord 'Ctrl+LeftArrow' -Function BackwardWord
 Set-PSReadLineKeyHandler -Chord 'Ctrl+RightArrow' -Function ForwardWord
 
-if (Test-CommandExists eza) {
+# Prefer Microsoft Coreutils ls (native arm64/x64) over PowerShell's Get-ChildItem alias.
+$coreutilsLs = Get-Command ls.exe -CommandType Application -ErrorAction SilentlyContinue |
+    Where-Object { $_.Source -match '[\\/]coreutils[\\/]' } |
+    Select-Object -First 1
+if ($null -ne $coreutilsLs) {
     Remove-Alias ls -ErrorAction SilentlyContinue
-    function ls { eza --group-directories-first -F @args }
-    function ll { eza --group-directories-first -lhF @args }
-    function la { eza --group-directories-first -lahF @args }
+    function ls { & $coreutilsLs.Source @args }
+    function ll { & $coreutilsLs.Source -lh @args }
+    function la { & $coreutilsLs.Source -lah @args }
 }
 
 if (Test-CommandExists bat) {

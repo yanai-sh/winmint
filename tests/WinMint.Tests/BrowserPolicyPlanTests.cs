@@ -21,7 +21,7 @@ public class BrowserPolicyPlanTests
         Assert.Contains("HideFirstRunExperience", specs, StringComparison.Ordinal);
         Assert.Contains("NewTabPageLocation", specs, StringComparison.Ordinal);
         Assert.Contains("LongPathsEnabled", specs, StringComparison.Ordinal);
-        Assert.Contains("AllowNewsAndInterests", specs, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllowNewsAndInterests", specs, StringComparison.Ordinal);
         Assert.Contains("DisableWindowsConsumerFeatures", specs, StringComparison.Ordinal);
         Assert.Contains("DisableSoftLanding", specs, StringComparison.Ordinal);
         Assert.Contains("AutoDownload", specs, StringComparison.Ordinal);

@@ -12,8 +12,8 @@ WinMint ships quiet OS posture and MinGit/Nilesoft, but does not stamp a modern 
 
 Always-on **shell core** via `ProductPosture` constants:
 
-1. **Winget** (Plan → `winget import`): `Microsoft.PowerShell`, `Microsoft.WindowsTerminal`, `eza-community.eza` (+ existing MinGit, Nilesoft).
-2. **Scoop** (Plan → `scoop.batch`): `starship`, `fzf`, `fd`, `ripgrep`, `bat`, `zoxide`, `jq`, `chezmoi`. (**`eza`** is winget — Scoop Main has no arm64 URL; ADR-010.)
+1. **Winget** (Plan → `winget import`): `Microsoft.PowerShell`, `Microsoft.WindowsTerminal`, `Microsoft.Coreutils` (+ existing MinGit, Nilesoft).
+2. **Scoop** (Plan → `scoop.batch`): `starship`, `fzf`, `fd`, `ripgrep`, `bat`, `zoxide`, `jq`, `chezmoi`.
 3. **FirstLogon `shell.stamp`** after packages: Cascadia NF fonts; one-shot skel (`$PROFILE`, `powershell.config.json`, `starship.toml`, WT `settings.json` if missing); light chezmoi seed + apply once.
 
 Keep `winget import` (not `winget configure`) as the winget batch API. No Profile redesign. FU-durable quiet expansion is out of scope.
@@ -50,7 +50,7 @@ Existing product jobs → winget import / scoop.batch → **`shell.stamp`** → 
 - `winget configure` as default
 - Autopilot / PPKG / Intune
 - Profile `packages.wingetConfigure` path pointers
-- Oh My Posh, Terminal-Icons, Coreutils-via-winget
+- Oh My Posh, Terminal-Icons, eza (no Windows ARM64 binary)
 - Inside-WSL Comfort bootstrap
 - FU-durable quiet policy expansion (separate track)
 

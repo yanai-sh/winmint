@@ -50,7 +50,7 @@ public class WingetJobsTests
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Git.MinGit" });
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Microsoft.PowerShell" });
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Microsoft.WindowsTerminal" });
-        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "eza-community.eza" });
+        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Microsoft.Coreutils" });
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Nilesoft.Shell" });
         Assert.Equal(7, jobs.Count(j => j.Kind == ProvisionJobKind.Winget));
     }

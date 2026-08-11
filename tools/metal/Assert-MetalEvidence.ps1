@@ -266,7 +266,7 @@ if ($expectFu) {
             'Git.MinGit',
             'Microsoft.PowerShell',
             'Microsoft.WindowsTerminal',
-            'eza-community.eza',
+            'Microsoft.Coreutils',
             'Nilesoft.Shell'
         )) {
         if (-not $ids.Contains($needId)) {

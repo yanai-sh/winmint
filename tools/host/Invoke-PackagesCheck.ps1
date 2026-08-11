@@ -110,29 +110,77 @@ function Get-ProveSetSha256Hex {
     return ([System.BitConverter]::ToString($hash) -replace '-', '').ToLowerInvariant()
 }
 
+function Invoke-WingetDownload {
+    param(
+        [Parameter(Mandatory)][System.Management.Automation.CommandInfo] $WingetCmd,
+        [Parameter(Mandatory)][string] $Id,
+        [Parameter(Mandatory)][string] $Tmp,
+        [Parameter(Mandatory)][string] $Stdout,
+        [Parameter(Mandatory)][string] $Stderr,
+        [string] $Architecture,
+        [Parameter(Mandatory)][int] $TimeoutSec
+    )
+    $argList = [System.Collections.Generic.List[string]]::new()
+    $argList.AddRange([string[]]@(
+            'download', '--id', $Id, '--exact',
+            '--download-directory', $Tmp,
+            '--disable-interactivity', '--accept-package-agreements', '--accept-source-agreements'
+        ))
+    if (-not [string]::IsNullOrWhiteSpace($Architecture)) {
+        $argList.Add('--architecture')
+        $argList.Add($Architecture)
+    }
+    $p = Start-Process -FilePath $WingetCmd.Source -ArgumentList $argList.ToArray() `
+        -NoNewWindow -PassThru -Wait:$false `
+        -RedirectStandardOutput $Stdout -RedirectStandardError $Stderr
+    if (-not $p.WaitForExit($TimeoutSec * 1000)) {
+        try { $p.Kill($true) } catch { }
+        throw "winget download timed out after ${TimeoutSec}s for $Id"
+    }
+    return $p.ExitCode
+}
+
 function Test-WingetId {
     param(
         [Parameter(Mandatory)][string] $Id,
-        [Parameter(Mandatory)][string] $Architecture
+        [Parameter(Mandatory)][string] $Architecture,
+        [int] $TimeoutSec = 600
     )
-    $winget = Get-Command winget -ErrorAction SilentlyContinue
-    if ($null -eq $winget) {
+    $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
+    if ($null -eq $wingetCmd) {
         throw 'winget not on PATH (install App Installer / use an ARM64 host with winget)'
     }
-    # App Installer has no install --dry-run; download proves arch + installer fetch without installing.
+    # App Installer has no install --dry-run; download proves installer fetch without installing.
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("winmint-winget-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tmp | Out-Null
+    $stdout = Join-Path $tmp 'winget.out.txt'
+    $stderr = Join-Path $tmp 'winget.err.txt'
     try {
-        $out = & winget download --id $Id --exact --architecture $Architecture `
-            --download-directory $tmp `
-            --disable-interactivity --accept-package-agreements --accept-source-agreements 2>&1
-        $code = $LASTEXITCODE
+        $code = Invoke-WingetDownload -WingetCmd $wingetCmd -Id $Id -Tmp $tmp `
+            -Stdout $stdout -Stderr $stderr -Architecture $Architecture -TimeoutSec $TimeoutSec
         if ($code -ne 0) {
-            $tail = ($out | Out-String).Trim()
+            # Neutral multi-arch setups (e.g. Windhawk NSIS) often lack an arm64 installer row in
+            # the winget manifest but still install native ARM64 on WoA. Retry without --architecture.
+            $tail = (@(Get-Content -LiteralPath $stdout -ErrorAction SilentlyContinue) + @(Get-Content -LiteralPath $stderr -ErrorAction SilentlyContinue) | Out-String).Trim()
+            if ($tail -match 'No applicable installer') {
+                Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
+                Get-ChildItem -LiteralPath $tmp -File -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -notin @('winget.out.txt', 'winget.err.txt') } |
+                    Remove-Item -Force -ErrorAction SilentlyContinue
+                $code = Invoke-WingetDownload -WingetCmd $wingetCmd -Id $Id -Tmp $tmp `
+                    -Stdout $stdout -Stderr $stderr -Architecture '' -TimeoutSec $TimeoutSec
+                if ($code -eq 0) {
+                    Write-Output "note  winget ${Id}: proved via neutral installer (no --architecture $Architecture row)"
+                }
+            }
+        }
+        if ($code -ne 0) {
+            $tail = (@(Get-Content -LiteralPath $stdout -ErrorAction SilentlyContinue) + @(Get-Content -LiteralPath $stderr -ErrorAction SilentlyContinue) | Out-String).Trim()
             if ($tail.Length -gt 240) { $tail = $tail.Substring(0, 240) + '…' }
             throw "winget download failed (exit $code): $tail"
         }
-        $files = @(Get-ChildItem -LiteralPath $tmp -File -Recurse -ErrorAction SilentlyContinue)
+        $files = @(Get-ChildItem -LiteralPath $tmp -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notin @('winget.out.txt', 'winget.err.txt') })
         if ($files.Count -eq 0 -or ($files | Measure-Object -Property Length -Sum).Sum -le 0) {
             throw "winget download produced no files for $Id"
         }

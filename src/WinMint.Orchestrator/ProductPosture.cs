@@ -12,16 +12,16 @@ public static class ProductPosture
     public const string MinGitWingetId = "Git.MinGit";
     public const string PowerShellWingetId = "Microsoft.PowerShell";
     public const string WindowsTerminalWingetId = "Microsoft.WindowsTerminal";
-    public const string EzaWingetId = "eza-community.eza";
+    public const string CoreutilsWingetId = "Microsoft.Coreutils";
     public const string NilesoftShellWingetId = "Nilesoft.Shell";
 
-    /// <summary>Install order: MinGit, pwsh, Terminal, eza, Nilesoft Shell.</summary>
+    /// <summary>Install order: MinGit, pwsh, Terminal, Coreutils, Nilesoft Shell.</summary>
     public static IReadOnlyList<string> WingetIds { get; } =
     [
         MinGitWingetId,
         PowerShellWingetId,
         WindowsTerminalWingetId,
-        EzaWingetId,
+        CoreutilsWingetId,
         NilesoftShellWingetId,
     ];
 
@@ -197,7 +197,8 @@ public static class ProductPosture
     /// </summary>
     private static readonly OfflinePolicyRow[] WorkstationMachine =
     [
-        Soft("Policies\\Microsoft\\Dsh", "AllowNewsAndInterests", "0"),
+        // Widgets AllowNewsAndInterests: FirstLogon HKLM (offline Policies\Microsoft\Dsh create/set
+        // flakes Unauthorized on this host's DISM-mounted SOFTWARE hive).
         Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableWindowsConsumerFeatures", "1"),
         Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableSoftLanding", "1"),
         Soft("Policies\\Microsoft\\WindowsStore", "AutoDownload", "2"),

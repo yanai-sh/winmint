@@ -272,7 +272,7 @@ public class DebloatPresetTests
             ["Anysphere.Cursor", "Zen-Team.Zen-Browser"],
             parsed.Value.WingetPackages);
         Assert.Equal(
-            ["Git.MinGit", "Microsoft.PowerShell", "Microsoft.WindowsTerminal", "eza-community.eza", "Nilesoft.Shell", "Anysphere.Cursor", "Zen-Team.Zen-Browser"],
+            ["Git.MinGit", "Microsoft.PowerShell", "Microsoft.WindowsTerminal", "Microsoft.Coreutils", "Nilesoft.Shell", "Anysphere.Cursor", "Zen-Team.Zen-Browser"],
             ProductPosture.MergeWinget(parsed.Value.WingetPackages));
         Assert.Equal(["FedoraLinux"], parsed.Value.WslDistros);
 

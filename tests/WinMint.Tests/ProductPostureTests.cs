@@ -17,7 +17,7 @@ public class ProductPostureTests
                 "Git.MinGit",
                 "Microsoft.PowerShell",
                 "Microsoft.WindowsTerminal",
-                "eza-community.eza",
+                "Microsoft.Coreutils",
                 "Nilesoft.Shell",
                 "Anysphere.Cursor",
             ],
@@ -112,7 +112,7 @@ public class ProductPostureTests
                 "Git.MinGit",
                 "Microsoft.PowerShell",
                 "Microsoft.WindowsTerminal",
-                "eza-community.eza",
+                "Microsoft.Coreutils",
                 "Nilesoft.Shell",
             ],
             ids);

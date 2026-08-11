@@ -20,8 +20,8 @@ CDM spray remains out as primary ([ADR-007](ADR-007-cdm-not-primary.md)); HKLM C
    - Offline: FU-durable consumer policies — `CloudContent\DisableWindowsConsumerFeatures=1`, `CloudContent\DisableSoftLanding=1`, `WindowsStore\AutoDownload=2` (suggested Store apps off; **not** a Windows Update block).
    - FirstLogon: `onedrive.uninstall` (`OneDriveSetup.exe /uninstall`, best-effort).
    - FirstLogon: `reservedStorage.disable` (`dism /Online /Set-ReservedStorageState /State:Disabled`).
-   - FirstLogon: winget **`Git.MinGit`**, **`Microsoft.PowerShell`**, **`Microsoft.WindowsTerminal`**, **`eza-community.eza`**, and **`Nilesoft.Shell`** (unioned into effective winget set; Profile may list them too; no opt-out).
-   - FirstLogon: scoop shell-core toolbox (**`starship`**, **`fzf`**, **`fd`**, **`ripgrep`**, **`bat`**, **`zoxide`**, **`jq`**, **`chezmoi`**) via `scoop.batch`; then **`shell.stamp`** (Cascadia NF + one-shot skel + light chezmoi seed). (`eza` is winget — Scoop Main has no arm64 URL.)
+   - FirstLogon: winget **`Git.MinGit`**, **`Microsoft.PowerShell`**, **`Microsoft.WindowsTerminal`**, **`Microsoft.Coreutils`**, and **`Nilesoft.Shell`** (unioned into effective winget set; Profile may list them too; no opt-out).
+   - FirstLogon: scoop shell-core toolbox (**`starship`**, **`fzf`**, **`fd`**, **`ripgrep`**, **`bat`**, **`zoxide`**, **`jq`**, **`chezmoi`**) via `scoop.batch`; then **`shell.stamp`** (Cascadia NF + one-shot skel + light chezmoi seed). (`ls`/`ll`/`la` prefer Coreutils when present — not eza; eza has no Windows ARM64 binary.)
    - AppX: `Microsoft.Copilot`, `Microsoft.GamingApp`, `Microsoft.Xbox.TCUI`, `Microsoft.XboxGamingOverlay`, and `Microsoft.XboxSpeechToTextOverlay` are unioned into the effective remove-list; no opt-out.
 2. **Optional Profile `policies`** on `winmint.profile/v1` (omit = defaults):
    - `dohProvider` (`cloudflare` \| `google` \| `quad9` \| null) — optional FirstLogon `doh.set` job; Smoke default off.

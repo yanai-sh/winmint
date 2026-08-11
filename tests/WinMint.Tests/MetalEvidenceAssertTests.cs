@@ -229,7 +229,7 @@ public class MetalEvidenceAssertTests
                   {"PackageIdentifier":"Git.MinGit"},
                   {"PackageIdentifier":"Microsoft.PowerShell"},
                   {"PackageIdentifier":"Microsoft.WindowsTerminal"},
-                  {"PackageIdentifier":"eza-community.eza"},
+                  {"PackageIdentifier":"Microsoft.Coreutils"},
                   {"PackageIdentifier":"Nilesoft.Shell"}
                 ]}]}
                 """);

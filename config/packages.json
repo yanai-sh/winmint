@@ -141,10 +141,10 @@
       "id": "bat",
       "architectures": ["amd64", "arm64"]
     },
-    "eza": {
-      "displayName": "eza",
+    "coreutils": {
+      "displayName": "Coreutils for Windows",
       "source": "winget",
-      "id": "eza-community.eza",
+      "id": "Microsoft.Coreutils",
       "architectures": ["amd64", "arm64"]
     },
     "zoxide": {
