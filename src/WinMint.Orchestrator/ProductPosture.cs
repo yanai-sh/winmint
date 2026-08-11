@@ -104,11 +104,13 @@ public static class ProductPosture
     {
         List<OfflinePolicyRow> rows =
         [
+            // Widgets/CloudContent before long Edge spray — creating Policies\Microsoft\Dsh
+            // flakes Unauthorized after many offline reg writes on a DISM-mounted hive.
+            .. WorkstationMachine,
             .. EdgeDebloat,
             .. OneDriveDisable,
             .. DeviceMetadata,
             .. WpbtDisable,
-            .. WorkstationMachine,
         ];
         if (includeBraveDebloat)
         {
