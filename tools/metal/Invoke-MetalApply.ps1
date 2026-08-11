@@ -85,6 +85,11 @@ if ($AssertOnly) {
     exit 0
 }
 
+# Gate B wipe media = Release + PackageStrict (just primary-gate). Soft Release metal must not print flash guidance.
+if ($ImageQuality -eq 'Release' -and -not $PackageStrict) {
+    throw 'Release metal without -PackageStrict is not Gate B. Use: just primary-gate ISO=...'
+}
+
 if ([string]::IsNullOrWhiteSpace($Iso)) {
     throw 'Iso is required for a full Metal Apply run (user-supplied Source ISO).'
 }
@@ -180,7 +185,7 @@ if (Test-Path -LiteralPath $evidencePath) {
 }
 Write-Host "Metal gate OK. Work=$Work lane=$assertLane"
 if ($sha) { Write-Host "outputIso.sha256=$sha" }
-if ($assertLane -eq 'Release') {
+if ($assertLane -eq 'Release' -and $PackageStrict) {
     Write-Host "Flash only this workdir's out.iso ($outIso). Do not flash a Test metal workdir (.scratch/sl7-build)."
 } else {
     Write-Host 'Test lane — not the Primary wipe ISO. Use just primary-gate for Release wipe media.'

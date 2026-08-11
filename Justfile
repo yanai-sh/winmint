@@ -77,6 +77,7 @@ smoke-assert EVIDENCE:
 
 # S5 Metal — on-device Apply evidence (pre-wipe). No Hyper-V, no bare-metal install.
 # Test metal ≠ Primary. Wipe ISO: just primary-gate ISO=…
+# QUALITY=Release without PackageStrict is rejected — use primary-gate only.
 # Full gate: just metal ISO=<source.iso>
 # Reuse prior Apply: pwsh tools/metal/Invoke-MetalApply.ps1 -Iso … -SkipApply
 # Assert only: just metal-assert .scratch/sl7-build
