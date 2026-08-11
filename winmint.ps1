@@ -273,6 +273,9 @@ try {
             throw "WinMint.Wizard.exe was not found at '$wizard'."
         }
         Write-WinMintBootstrapLog "Launching Wizard: $wizard"
+        if ($null -ne $sessionRoot) {
+            Write-WinMintBootstrapLog 'Ephemeral session: wipe ISO builds need -CacheRelease or -InstallRoot (see README).' 'WARN'
+        }
         $p = Start-Process -FilePath $wizard -WorkingDirectory $toolkitRoot -PassThru -Wait
         $code = $p.ExitCode
     }

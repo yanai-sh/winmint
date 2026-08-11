@@ -43,6 +43,7 @@ Assert-BootstrapText -Pattern "\[ValidateSet\('Gui', 'Headless'\)\]" -Descriptio
 Assert-BootstrapText -Pattern '\[switch\]\$Gui' -Description 'primary GUI launcher switch'
 Assert-BootstrapText -Pattern '\[switch\]\$Headless' -Description 'headless launcher switch'
 Assert-BootstrapText -Pattern '\[switch\]\$CacheRelease' -Description 'durable release caching is explicit opt-in'
+Assert-BootstrapText -Pattern 'wipe ISO builds need -CacheRelease or -InstallRoot' -Description 'ephemeral Wizard hints durable cache for wipe builds'
 Assert-BootstrapText -Pattern 'bin\\wizard\\WinMint\.Wizard\.exe' -Description 'Wizard toolkit path'
 Assert-BootstrapText -Pattern 'bin\\cli\\WinMint\.Cli\.exe' -Description 'Cli toolkit path'
 Assert-BootstrapText -Pattern 'missing required checksum asset' -Description 'release checksum asset is mandatory'
