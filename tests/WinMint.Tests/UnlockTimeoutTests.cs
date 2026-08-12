@@ -169,15 +169,16 @@ public class UnlockTimeoutTests
         ISplashPresenter splash,
         IEvidenceSink evidence,
         ICheckpointStore? checkpoints = null) =>
-        new(
-            Time: time,
-            Winlogon: winlogon,
-            Region: region,
-            Processes: new NoopProcesses(),
-            Splash: splash,
-            Checkpoints: checkpoints ?? new NoopCheckpoints(),
-            Evidence: evidence,
-            DmaSetup: new OkDmaSetupRegion());
+        ProvisioningSessionTestFakes.Env(
+            new FakeGuestMachine
+            {
+                Winlogon = winlogon,
+                Region = region,
+                Checkpoints = checkpoints ?? new NoopCheckpoints(),
+            },
+            evidence,
+            time,
+            splash);
 
     private sealed class StickyRegion(RegionState state) : IRegionSnapshot
     {

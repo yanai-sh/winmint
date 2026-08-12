@@ -5,115 +5,110 @@ using WinMint.Contracts;
 using System.Reflection.PortableExecutable;
 using System.Text.Json;
 
-public static partial class ProvisioningSession
+internal static partial class ProvisioningJobRunner
 {
-    private static partial class JobRunner
+    private static JobsRunResult? RunNativePackageAuditJob(
+        JobRunnerEnv env,
+        ProvisionJob job,
+        CancellationToken ct)
     {
-        private static JobsPhaseResult? RunNativePackageAuditJob(
-            ShellEnvironment env,
-            List<string> phases,
-            ProvisionJob job,
-            CancellationToken ct)
+        _ = ct;
+        if (string.IsNullOrWhiteSpace(job.PackageId))
         {
-            _ = ct;
-            if (string.IsNullOrWhiteSpace(job.PackageId))
-            {
-                return FailJob(env, phases, "jobs.failed", $"{job.Id}: audit requires packageId list.");
-            }
-
-            List<NativePackageAuditEntryFile> entries = [];
-            bool anyNonNative = false;
-            foreach (string installId in job.PackageId.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                bool found = false;
-                foreach (string path in GuessGuiBinaryPaths(installId))
-                {
-                    if (!File.Exists(path))
-                    {
-                        continue;
-                    }
-
-                    found = true;
-                    bool native = IsArm64NativeBinary(path);
-                    entries.Add(new NativePackageAuditEntryFile(installId, path, native));
-                    if (!native)
-                    {
-                        anyNonNative = true;
-                    }
-
-                    break;
-                }
-
-                if (!found)
-                {
-                    entries.Add(new NativePackageAuditEntryFile(installId, null, null));
-                }
-            }
-
-            string evidenceDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "WinMint",
-                "evidence");
-            Directory.CreateDirectory(evidenceDir);
-            string evidencePath = Path.Combine(evidenceDir, "native-packages.json");
-            NativePackageAuditFile doc = new("winmint.native-packages/v1", entries);
-            File.WriteAllText(
-                evidencePath,
-                JsonSerializer.Serialize(doc, NativePackageAuditJsonContext.Default.NativePackageAuditFile));
-
-            if (job.AuditStrict && anyNonNative)
-            {
-                return FailJob(
-                    env,
-                    phases,
-                    "jobs.package.auditNonNative",
-                    $"{job.Id}: one or more winget GUI binaries are not native ARM64 (see {evidencePath}).");
-            }
-
-            return null;
+            return FailJob(env, "jobs.failed", $"{job.Id}: audit requires packageId list.");
         }
 
-        private static IEnumerable<string> GuessGuiBinaryPaths(string wingetId)
+        List<NativePackageAuditEntryFile> entries = [];
+        bool anyNonNative = false;
+        foreach (string installId in job.PackageId.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            return wingetId switch
+            bool found = false;
+            foreach (string path in GuessGuiBinaryPaths(installId))
             {
-                "Anysphere.Cursor" =>
-                [
-                    Path.Combine(localAppData, "Programs", "cursor", "Cursor.exe"),
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                found = true;
+                bool native = IsArm64NativeBinary(path);
+                entries.Add(new NativePackageAuditEntryFile(installId, path, native));
+                if (!native)
+                {
+                    anyNonNative = true;
+                }
+
+                break;
+            }
+
+            if (!found)
+            {
+                entries.Add(new NativePackageAuditEntryFile(installId, null, null));
+            }
+        }
+
+        string evidenceDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "WinMint",
+            "evidence");
+        Directory.CreateDirectory(evidenceDir);
+        string evidencePath = Path.Combine(evidenceDir, "native-packages.json");
+        NativePackageAuditFile doc = new("winmint.native-packages/v1", entries);
+        File.WriteAllText(
+            evidencePath,
+            JsonSerializer.Serialize(doc, NativePackageAuditJsonContext.Default.NativePackageAuditFile));
+
+        if (job.AuditStrict && anyNonNative)
+        {
+            return FailJob(
+                env,
+                "jobs.package.auditNonNative",
+                $"{job.Id}: one or more winget GUI binaries are not native ARM64 (see {evidencePath}).");
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GuessGuiBinaryPaths(string wingetId)
+    {
+        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        return wingetId switch
+        {
+            "Anysphere.Cursor" =>
+            [
+                Path.Combine(localAppData, "Programs", "cursor", "Cursor.exe"),
                     Path.Combine(localAppData, "Programs", "Cursor", "Cursor.exe"),
                 ],
-                "Zen-Team.Zen-Browser" =>
-                [
-                    Path.Combine(programFiles, "Zen Browser", "zen.exe"),
+            "Zen-Team.Zen-Browser" =>
+            [
+                Path.Combine(programFiles, "Zen Browser", "zen.exe"),
                     Path.Combine(localAppData, "Zen Browser", "zen.exe"),
                 ],
-                "Brave.Brave" =>
-                [
-                    Path.Combine(programFiles, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+            "Brave.Brave" =>
+            [
+                Path.Combine(programFiles, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
                     Path.Combine(localAppData, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
                 ],
-                "Microsoft.VisualStudioCode" =>
-                [
-                    Path.Combine(localAppData, "Programs", "Microsoft VS Code", "Code.exe"),
+            "Microsoft.VisualStudioCode" =>
+            [
+                Path.Combine(localAppData, "Programs", "Microsoft VS Code", "Code.exe"),
                     Path.Combine(programFiles, "Microsoft VS Code", "Code.exe"),
                 ],
-                "ZedIndustries.Zed" =>
-                [
-                    Path.Combine(localAppData, "Programs", "Zed", "Zed.exe"),
+            "ZedIndustries.Zed" =>
+            [
+                Path.Combine(localAppData, "Programs", "Zed", "Zed.exe"),
                     Path.Combine(programFiles, "Zed", "Zed.exe"),
                 ],
-                _ => [],
-            };
-        }
+            _ => [],
+        };
+    }
 
-        private static bool IsArm64NativeBinary(string path)
-        {
-            using FileStream stream = File.OpenRead(path);
-            PEReader reader = new(stream);
-            return reader.PEHeaders.CoffHeader.Machine == Machine.Arm64;
-        }
+    private static bool IsArm64NativeBinary(string path)
+    {
+        using FileStream stream = File.OpenRead(path);
+        PEReader reader = new(stream);
+        return reader.PEHeaders.CoffHeader.Machine == Machine.Arm64;
     }
 }
 

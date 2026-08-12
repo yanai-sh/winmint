@@ -67,21 +67,40 @@ public sealed record MachineSetupEnvironment(
 
 public sealed record ShellEnvironment(
     TimeProvider Time,
-    IWinlogonRegistry Winlogon,
-    IRegionSnapshot Region,
-    IProcessHost Processes,
+    IGuestMachine Guest,
     ISplashPresenter Splash,
-    ICheckpointStore Checkpoints,
-    IEvidenceSink Evidence,
-    IAppxPackageManager? Appx = null,
-    ISystemReboot? Reboot = null,
-    Func<string?>? ResolveScoopCmd = null,
-    ...);
+    IEvidenceSink Evidence);
+
+public interface IGuestMachine
+{
+    IWinlogonRegistry Winlogon { get; }
+    IRegionSnapshot Region { get; }
+    IProcessHost Processes { get; }
+    ICheckpointStore Checkpoints { get; }
+    IAssetDownload? AssetDownload { get; }
+    // AppX, reboot, residue erase, connectivity, DMA setup, and guest product operations.
+}
 ```
 
 One environment per entrypoint: a caller is never asked for a port its pass does not read, and Shell's `Evidence` is required by the type rather than by a runtime status code.
 
-Thin adapters are part of the module interface; production Win32/WinRT live in-project; tests supply fakes. Winget path via `IAppxPackageManager`; Scoop via `ResolveScoopCmd`. Jobs may be per-id or batch/delegated; Supervisor owns splash/checkpoints/evidence. Curated packages: best-effort + evidence by default.
+Shell crosses one guest seam. `Win32GuestMachine` privately assembles the in-project Win32/WinRT adapters; tests provide one configurable guest fake. `Time`, splash, and write-only evidence remain explicit because they are phase-machine inputs and outputs, not guest capabilities. Winget path runs through the guest's `IAppxPackageManager`; Scoop through its resolver; WSL from-file assets through the guest's `IAssetDownload`. Curated packages are best-effort + evidence by default, and both session and package evidence go through `IEvidenceSink`.
+
+Job interpretation and effects are concentrated behind one internal seam:
+
+```csharp
+internal static class ProvisioningJobRunner
+{
+    internal static Task<JobsRunResult> Run(
+        IReadOnlyList<ProvisionJob> jobs,
+        JobRunnerEnv env,
+        CancellationToken ct = default);
+}
+```
+
+`JobRunnerEnv` projects only job dependencies from the guest seam: processes, AppX, asset download, Scoop resolution, WSL/product actions, monotonic time, package policy/evidence, and a status callback. The callback is wired to the Session's established `Note` path so every emitted phase reaches both splash and evidence. It deliberately has no checkpoint store, reboot adapter, Winlogon, settle region, connectivity, or residue cleaner.
+
+`ProvisioningSession` owns phase orchestration and the tenure protocol: network gate, `jobs:N` resume parsing/progression, checkpoint + heartbeat writes after `NeedsReboot`, OS reboot request, unlock, and `SessionResult` mapping. The runner returns `Completed`, `Failed`, `NeedsReboot(nextJobIndex)`, or `TimedOut`; it cannot checkpoint, reboot, or unlock.
 
 ## Phase machine
 
@@ -102,7 +121,8 @@ Thin adapters are part of the module interface; production Win32/WinRT live in-p
 6. Never stamp `defaultuser0` + AutoAdminLogon; Machine setup best-effort deletes leftover `defaultuser0`.
 7. Stale tenure past threshold ⇒ fail-open Failed.
 8. Same settle + job executor on Smoke and Primary; only Jobs list differs.
-9. Residual erase on Shell Complete only (`%WINDIR%\WinMint\` + SetupComplete); ProgramData may remain for harness.
+9. Residual erase on Shell Complete only (clear autologon, `%WINDIR%\WinMint\` + SetupComplete); ProgramData may remain for harness.
+10. S3 observes job behavior only through `ProvisioningSession.Run` + environment fakes; the internal runner is not a second test surface.
 
 ## Smoke defaults
 

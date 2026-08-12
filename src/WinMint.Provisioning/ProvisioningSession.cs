@@ -42,11 +42,11 @@ public static partial class ProvisioningSession
         }
 
         // Bootstrap: in-progress checkpoint + missing/stale heartbeat ⇒ fail-open.
-        TenureState tenure = env.Checkpoints.ReadTenure();
-        CheckpointState? storedCheckpoint = env.Checkpoints.TryReadCheckpoint();
+        TenureState tenure = env.Guest.Checkpoints.ReadTenure();
+        CheckpointState? storedCheckpoint = env.Guest.Checkpoints.TryReadCheckpoint();
         if (tenure.CheckpointInProgress && IsStaleHeartbeat(bundle, env, tenure))
         {
-            env.Checkpoints.ClearCheckpoint();
+            env.Guest.Checkpoints.ClearCheckpoint();
             return await FailOpenAsync(
                 bundle,
                 env,
@@ -61,7 +61,7 @@ public static partial class ProvisioningSession
 
         if (tenure.CheckpointInProgress && storedCheckpoint is null)
         {
-            env.Checkpoints.ClearCheckpoint();
+            env.Guest.Checkpoints.ClearCheckpoint();
             return await FailOpenAsync(
                 bundle,
                 env,
@@ -82,7 +82,7 @@ public static partial class ProvisioningSession
             jobStartIndex = resumeJobIndex;
         }
 
-        env.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
+        env.Guest.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
 
         // FirstPaint — opaque frame before any settle work (S3 order; S4 measures latency).
         env.Splash.Show();
@@ -148,7 +148,7 @@ public static partial class ProvisioningSession
 
         if (bundle.RequiresNetwork)
         {
-            JobsPhaseResult? network = await JobRunner.EnsureNetworkAvailableAsync(bundle, env, phases, ct)
+            SessionStatus? network = await EnsureNetworkAvailableAsync(env, phases, ct)
                 .ConfigureAwait(false);
             if (network is not null)
             {
@@ -157,17 +157,33 @@ public static partial class ProvisioningSession
                         env,
                         phases,
                         emitted,
-                        network.Value.Status,
+                        network.Value,
                         dwell: true,
                         firstPaintMs)
                     .ConfigureAwait(false);
             }
         }
 
-        JobsPhaseResult jobs;
+        JobsRunResult jobs;
         try
         {
-            jobs = await JobRunner.ExecuteAsync(bundle, env, phases, tenureStartTs, jobStartIndex, ct)
+            JobRunnerEnv runnerEnv = new(
+                RemoveProvisionedAppx: bundle.RemoveProvisionedAppx ?? [],
+                Processes: env.Guest.Processes,
+                Time: env.Time,
+                ReportStatus: status => Note(env, phases, status),
+                Evidence: env.Evidence,
+                PackageStrict: bundle.PackageStrict,
+                WallClockTimeout: bundle.Policy.WallClockTimeout,
+                TenureStartTimestamp: tenureStartTs,
+                StartIndex: jobStartIndex,
+                Appx: env.Guest.Appx,
+                ResolveScoopCmd: env.Guest.ResolveScoopCmd,
+                AssetDownload: env.Guest.AssetDownload,
+                IsWslPlatformReady: env.Guest.IsWslPlatformReady,
+                ApplyWorkstationQuiet: env.Guest.ApplyWorkstationQuiet,
+                SuppressWslOobe: env.Guest.SuppressWslOobe);
+            jobs = await ProvisioningJobRunner.Run(bundle.Jobs, runnerEnv, ct)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -182,21 +198,37 @@ public static partial class ProvisioningSession
                 firstPaintMs).ConfigureAwait(false);
         }
 
-        if (jobs.TimedOut)
+        if (jobs.Kind == JobsRunKind.TimedOut)
         {
             return await FailOpenAsync(bundle, env, phases, emitted, TimeoutStatus(), dwell: true, firstPaintMs)
                 .ConfigureAwait(false);
         }
 
-        if (jobs.Outcome == SessionOutcome.Failed)
+        if (jobs.Kind == JobsRunKind.Failed)
         {
             return await FailOpenAsync(bundle, env, phases, emitted, jobs.Status, dwell: true, firstPaintMs)
                 .ConfigureAwait(false);
         }
 
-        if (jobs.Outcome == SessionOutcome.Reboot)
+        if (jobs.Kind == JobsRunKind.NeedsReboot)
         {
+            if (jobs.NextJobIndex is not int nextJobIndex)
+            {
+                return await FailOpenAsync(
+                        bundle,
+                        env,
+                        phases,
+                        emitted,
+                        new SessionStatus("jobs.checkpoint.invalid", "Job runner omitted the reboot checkpoint index."),
+                        dwell: true,
+                        firstPaintMs)
+                    .ConfigureAwait(false);
+            }
+
             // Keep Supervisor as Shell — do not unlock.
+            env.Guest.Checkpoints.WriteCheckpoint(new CheckpointState($"jobs:{nextJobIndex}"));
+            env.Guest.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
+            Note(env, phases, jobs.Status);
             EvidenceSnapshot rebootSnap = env.Evidence.Write(
                 new ProvisioningEvidenceFile(
                     SchemaVersion: EvidenceSchemaVersion,
@@ -206,15 +238,15 @@ public static partial class ProvisioningSession
                     Phases: phases,
                     FirstPaintMs: firstPaintMs));
             emitted.Add(rebootSnap);
-            env.Reboot?.RequestReboot();
+            env.Guest.Reboot?.RequestReboot();
             return new SessionResult(SessionOutcome.Reboot, jobs.Status, emitted);
         }
 
         // Finishing: unlock → Complete. (No AppearanceOnce until Profile appearance grilled.)
-        env.Checkpoints.ClearCheckpoint();
+        env.Guest.Checkpoints.ClearCheckpoint();
 
         // Unlock before Complete evidence so S4 never claims green while Shell is still Supervisor.
-        if (!TryUnlock(env) || !IsExplorerShell(env.Winlogon.GetShell()))
+        if (!TryUnlock(env) || !IsExplorerShell(env.Guest.Winlogon.GetShell()))
         {
             return await FailOpenAsync(
                 bundle,
@@ -255,14 +287,14 @@ public static partial class ProvisioningSession
 
     private static void TryEraseResidue(ShellEnvironment env)
     {
-        if (env.ResidueCleaner is null)
+        if (env.Guest.ResidueCleaner is null)
         {
             return;
         }
 
         try
         {
-            env.ResidueCleaner.TryEraseAfterComplete();
+            env.Guest.ResidueCleaner.TryEraseAfterComplete();
         }
         catch (Exception)
         {
@@ -324,7 +356,7 @@ public static partial class ProvisioningSession
             }
         }
 
-        env.Checkpoints.ClearCheckpoint();
+        env.Guest.Checkpoints.ClearCheckpoint();
 
         emitted.Add(env.Evidence.Write(
             new ProvisioningEvidenceFile(
@@ -346,7 +378,7 @@ public static partial class ProvisioningSession
     {
         try
         {
-            Unlock(env.Winlogon);
+            Unlock(env.Guest.Winlogon);
             return true;
         }
         catch (Exception)
@@ -356,10 +388,25 @@ public static partial class ProvisioningSession
         }
     }
 
-    private readonly record struct JobsPhaseResult(
-        SessionOutcome Outcome,
-        SessionStatus Status,
-        bool TimedOut);
+    private static async Task<SessionStatus?> EnsureNetworkAvailableAsync(
+        ShellEnvironment env,
+        List<string> phases,
+        CancellationToken ct)
+    {
+        if (env.Guest.Connectivity is not null
+            && await env.Guest.Connectivity.HasOutboundNetworkAsync(ct).ConfigureAwait(false))
+        {
+            SessionStatus ok = new("network.ok", "Outbound connectivity available.");
+            Note(env, phases, ok);
+            return null;
+        }
+
+        SessionStatus offline = new(
+            "network.required.offline",
+            "Plan requires network but outbound connectivity probe failed.");
+        Note(env, phases, offline);
+        return offline;
+    }
 
     private static bool TryParseJobsPhase(string phase, out int jobIndex)
     {
@@ -414,7 +461,7 @@ public static partial class ProvisioningSession
 
         try
         {
-            env.Region.Apply(bundle.Dma);
+            env.Guest.Region.Apply(bundle.Dma);
         }
         catch (Exception ex)
         {
@@ -442,7 +489,7 @@ public static partial class ProvisioningSession
 
             try
             {
-                RegionState snap = env.Region.Read();
+                RegionState snap = env.Guest.Region.Read();
                 if (HardFieldsMatch(snap, bundle.Dma))
                 {
                     // Still take an authoritative final snapshot after the loop.
@@ -502,7 +549,7 @@ public static partial class ProvisioningSession
         RegionState final;
         try
         {
-            final = env.Region.Read();
+            final = env.Guest.Region.Read();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -574,7 +621,7 @@ public static partial class ProvisioningSession
             return null;
         }
 
-        if (env.DmaSetup is null)
+        if (env.Guest.DmaSetup is null)
         {
             SessionStatus missing = new(
                 "settle.deviceRegionFailed",
@@ -585,7 +632,7 @@ public static partial class ProvisioningSession
 
         try
         {
-            DmaSetupRegionEnsureResult result = env.DmaSetup.EnsureIreland();
+            DmaSetupRegionEnsureResult result = env.Guest.DmaSetup.EnsureIreland();
             SessionStatus status = result == DmaSetupRegionEnsureResult.Repaired
                 ? new("settle.deviceRegionRepaired", "DeviceRegion repaired to Ireland (68).")
                 : new("settle.deviceRegionOk", "DeviceRegion already Ireland (68).");
@@ -751,16 +798,6 @@ public static partial class ProvisioningSession
     private static SessionResult Fail(string code, string message) =>
         new(SessionOutcome.Failed, new SessionStatus(code, message), []);
 }
-
-internal sealed record GitHubRelease(
-    [property: JsonPropertyName("assets")] GitHubAsset[]? Assets);
-
-internal sealed record GitHubAsset(
-    [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("browser_download_url")] string? BrowserDownloadUrl);
-
-[JsonSerializable(typeof(GitHubRelease))]
-internal sealed partial class GitHubReleaseJsonContext : JsonSerializerContext;
 
 internal sealed record NativePackageAuditFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,

@@ -144,6 +144,67 @@ public class WslJobsTests
     }
 
     [Fact]
+    public async Task Shell_wsl_fromFile_downloads_asset_and_installs_it()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+        FakeAssetDownload download = new() { ResultPath = @"C:\Temp\nixos.wsl" };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(
+                jobs:
+                [
+                    new ProvisionJob(
+                        "wsl.NixOS",
+                        ProvisionJobKind.Wsl,
+                        PackageId: "NixOS",
+                        WslInstallKind: WslInstallKind.FromFile,
+                        WslFromFileRepo: "nix-community/NixOS-WSL",
+                        WslFromFileAssetNames: ["nixos.aarch64.wsl"]),
+                ]),
+            Env(processes, evidence, assetDownload: download),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        (string repo, IReadOnlyList<string> names) = Assert.Single(download.Requests);
+        Assert.Equal("nix-community/NixOS-WSL", repo);
+        Assert.Equal(["nixos.aarch64.wsl"], names);
+        Assert.Contains(
+            processes.Starts,
+            s => s.FileName.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase)
+                && s.Arguments is ["--install", "--from-file", @"C:\Temp\nixos.wsl", "--no-launch"]);
+    }
+
+    [Fact]
+    public async Task Shell_wsl_fromFile_download_failure_fails_open()
+    {
+        RecordingProcessHost processes = new();
+        FakeAssetDownload download = new()
+        {
+            Exception = new HttpRequestException("simulated download failure"),
+        };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(
+                jobs:
+                [
+                    new ProvisionJob(
+                        "wsl.NixOS",
+                        ProvisionJobKind.Wsl,
+                        PackageId: "NixOS",
+                        WslInstallKind: WslInstallKind.FromFile,
+                        WslFromFileRepo: "nix-community/NixOS-WSL",
+                        WslFromFileAssetNames: ["nixos.aarch64.wsl"]),
+                ]),
+            Env(processes, new NoopEvidence(), assetDownload: download),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.wsl.fromFileDownloadFailed", result.FinalStatus.Code);
+        Assert.Empty(processes.Starts);
+    }
+
+    [Fact]
     public async Task Shell_wsl_distro_exit_3010_requests_reboot()
     {
         RecordingProcessHost processes = new()

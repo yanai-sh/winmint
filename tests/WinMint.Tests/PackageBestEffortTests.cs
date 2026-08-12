@@ -12,17 +12,16 @@ public class PackageBestEffortTests
         RecordingProcessHost processes = new() { ExitCode = 1 };
         RecordingEvidenceSink evidence = new();
         RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
-        string evidenceDir = Path.Combine(Path.GetTempPath(), "WinMintTests", Guid.NewGuid().ToString("N"));
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", ProvisionJobKind.Winget, PackageId: "jqlang.jq")]),
-            Env(processes, evidence, appx: appx) with { EvidenceDirectory = evidenceDir },
+            Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Contains("package failure", result.FinalStatus.Message, StringComparison.OrdinalIgnoreCase);
-        string packagesEvidence = Path.Combine(evidenceDir, "packages.evidence.json");
-        Assert.True(File.Exists(packagesEvidence));
+        PackagesEvidenceFile packagesEvidence = Assert.Single(evidence.PackageDocuments);
+        Assert.Equal("winget.jqlang.jq", Assert.Single(packagesEvidence.Failures).JobId);
     }
 
     [Fact]

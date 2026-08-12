@@ -19,7 +19,7 @@ public sealed class Win32DmaSetupRegion : IDmaSetupRegion
     private const string DefaultUserGeoSubKey =
         @".DEFAULT\Control Panel\International\Geo";
 
-    public int? ReadDeviceRegion()
+    private static int? ReadDeviceRegion()
     {
         using RegistryKey? key = Registry.LocalMachine.OpenSubKey(DeviceRegionSubKey, writable: false);
         object? raw = key?.GetValue("DeviceRegion");

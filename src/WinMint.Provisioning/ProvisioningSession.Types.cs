@@ -67,27 +67,49 @@ public sealed record MachineSetupEnvironment(
     IDmaSetupRegion? DmaSetup = null);
 
 /// <summary>
-/// Ports the FirstLogon Shell tenure reaches for. <see cref="Evidence"/> is required: the tenure has
-/// no honest outcome without a durable record, so the type says so instead of a runtime status code.
+/// Live guest capabilities used during Shell tenure. Production groups the Win32/WinRT adapters;
+/// tests provide one fake guest instead of assembling each capability independently.
+/// </summary>
+public interface IGuestMachine
+{
+    IWinlogonRegistry Winlogon { get; }
+
+    IRegionSnapshot Region { get; }
+
+    IProcessHost Processes { get; }
+
+    ICheckpointStore Checkpoints { get; }
+
+    IAppxPackageManager? Appx { get; }
+
+    ISystemReboot? Reboot { get; }
+
+    IResidueCleaner? ResidueCleaner { get; }
+
+    IConnectivityProbe? Connectivity { get; }
+
+    IDmaSetupRegion? DmaSetup { get; }
+
+    IAssetDownload? AssetDownload { get; }
+
+    Func<string?>? ResolveScoopCmd { get; }
+
+    bool IsWslPlatformReady();
+
+    void ApplyWorkstationQuiet();
+
+    void SuppressWslOobe();
+}
+
+/// <summary>
+/// Shell tenure inputs. <see cref="Evidence"/> is required because no honest outcome exists without
+/// a durable record.
 /// </summary>
 public sealed record ShellEnvironment(
     TimeProvider Time,
-    IWinlogonRegistry Winlogon,
-    IRegionSnapshot Region,
-    IProcessHost Processes,
+    IGuestMachine Guest,
     ISplashPresenter Splash,
-    ICheckpointStore Checkpoints,
-    IEvidenceSink Evidence,
-    IAppxPackageManager? Appx = null,
-    ISystemReboot? Reboot = null,
-    Func<string?>? ResolveScoopCmd = null,
-    IResidueCleaner? ResidueCleaner = null,
-    IConnectivityProbe? Connectivity = null,
-    string? EvidenceDirectory = null,
-    Func<bool>? IsWslPlatformReady = null,
-    Action? ApplyWorkstationQuiet = null,
-    Action? SuppressWslOobe = null,
-    IDmaSetupRegion? DmaSetup = null);
+    IEvidenceSink Evidence);
 
 /// <summary>OS reboot after NeedsReboot checkpoint (ticket 16). Nullable in tests; production wires Win32.</summary>
 public interface ISystemReboot
@@ -147,9 +169,6 @@ public interface IWinlogonRegistry
 {
     void SetAutoLogon(string username, string password);
 
-    /// <summary>Clear AutoAdminLogon / DefaultPassword (and related stamps) after successful provisioning.</summary>
-    void ClearAutoLogon();
-
     string? GetDefaultUserName();
 
     bool GetAutoAdminLogon();
@@ -185,8 +204,6 @@ public enum DmaSetupRegionEnsureResult
 /// <summary>Setup region port. DMA = EU Digital Markets Act (<see cref="WinMint.Contracts.DmaInterop"/>).</summary>
 public interface IDmaSetupRegion
 {
-    int? ReadDeviceRegion();
-
     /// <summary>
     /// Ensure sticky setup region is Ireland. Returns AlreadyOk or Repaired.
     /// Throws when post-write verify still fails.
@@ -205,14 +222,18 @@ public readonly record struct ProcessStartResult(int ExitCode);
 
 public interface IProcessHost
 {
-    ProcessStartResult Run(
-        string fileName,
-        IReadOnlyList<string> arguments,
-        CancellationToken ct = default);
-
     Task<ProcessStartResult> RunAsync(
         string fileName,
         IReadOnlyList<string> arguments,
+        CancellationToken ct = default);
+}
+
+/// <summary>External HTTP boundary for downloading a selected GitHub release asset.</summary>
+public interface IAssetDownload
+{
+    Task<string?> TryDownloadGitHubReleaseAssetAsync(
+        string repo,
+        IReadOnlyList<string> assetNameCandidates,
         CancellationToken ct = default);
 }
 
@@ -245,6 +266,8 @@ public interface ICheckpointStore
 public interface IEvidenceSink
 {
     EvidenceSnapshot Write(ProvisioningEvidenceFile document);
+
+    EvidenceSnapshot Write(PackagesEvidenceFile document);
 }
 
 /// <summary>Write-only projection for S4 harness — never read by the session phase machine.</summary>

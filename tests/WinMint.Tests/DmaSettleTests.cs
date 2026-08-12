@@ -202,15 +202,17 @@ public class DmaSettleTests
         IProcessHost? processes = null,
         IWinlogonRegistry? winlogon = null,
         IDmaSetupRegion? dmaSetup = null) =>
-        new(
-            Time: time,
-            Winlogon: winlogon ?? new NoopWinlogon(),
-            Region: region,
-            Processes: processes ?? new RecordingProcessHost(),
-            Splash: splash,
-            Checkpoints: new NoopCheckpoints(),
-            Evidence: evidence,
-            DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
+        ProvisioningSessionTestFakes.Env(
+            new FakeGuestMachine
+            {
+                Winlogon = winlogon ?? new NoopWinlogon(),
+                Region = region,
+                Processes = processes ?? new RecordingProcessHost(),
+                DmaSetup = dmaSetup ?? new OkDmaSetupRegion(),
+            },
+            evidence,
+            time,
+            splash);
 
     private abstract record RegionRead
     {

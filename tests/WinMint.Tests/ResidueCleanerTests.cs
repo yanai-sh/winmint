@@ -51,17 +51,16 @@ public class ResidueCleanerTests
         string setupComplete = Path.Combine(scripts, "SetupComplete.cmd");
         File.WriteAllText(setupComplete, "@echo off");
 
-        FakeWinlogonRegistry winlogon = new();
-        winlogon.SetAutoLogon("winmint", "secret");
-        winlogon.Shell = SupervisorPath;
+        bool autologonCleared = false;
 
         try
         {
-            Win32ResidueCleaner cleaner = new(winlogon, windowsDirectory: windir);
+            Win32ResidueCleaner cleaner = new(
+                () => autologonCleared = true,
+                windowsDirectory: windir);
             cleaner.TryEraseAfterComplete();
 
-            Assert.False(winlogon.AutoAdminLogon);
-            Assert.Null(winlogon.DefaultPassword);
+            Assert.True(autologonCleared);
             Assert.False(File.Exists(setupComplete));
             Assert.False(Directory.Exists(winMint));
         }
@@ -94,16 +93,14 @@ public class ResidueCleanerTests
         IEvidenceSink evidence,
         IResidueCleaner cleaner,
         IRegionSnapshot? region = null) =>
-        new(
-            Time: TimeProvider.System,
-            Winlogon: winlogon,
-            Region: region ?? new MatchingRegion(),
-            Processes: new NoopProcesses(),
-            Splash: new RecordingSplashPresenter(),
-            Checkpoints: new NoopCheckpoints(),
-            Evidence: evidence,
-            ResidueCleaner: cleaner,
-            DmaSetup: new OkDmaSetupRegion());
+        ProvisioningSessionTestFakes.Env(
+            new FakeGuestMachine
+            {
+                Winlogon = winlogon,
+                Region = region ?? new MatchingRegion(),
+                ResidueCleaner = cleaner,
+            },
+            evidence);
 
     private sealed class RecordingResidueCleaner : IResidueCleaner
     {

@@ -33,6 +33,17 @@ internal static class ProvisioningSessionTestFakes
         };
 
     internal static ShellEnvironment Env(
+        FakeGuestMachine guest,
+        IEvidenceSink evidence,
+        TimeProvider? time = null,
+        ISplashPresenter? splash = null) =>
+        new(
+            Time: time ?? TimeProvider.System,
+            Guest: guest,
+            Splash: splash ?? new RecordingSplashPresenter(),
+            Evidence: evidence);
+
+    internal static ShellEnvironment Env(
         IProcessHost processes,
         IEvidenceSink evidence,
         ICheckpointStore? checkpoints = null,
@@ -43,22 +54,24 @@ internal static class ProvisioningSessionTestFakes
         Func<bool>? isWslPlatformReady = null,
         Action? applyWorkstationQuiet = null,
         Action? suppressWslOobe = null,
+        IAssetDownload? assetDownload = null,
         IDmaSetupRegion? dmaSetup = null) =>
-        new(
-            Time: TimeProvider.System,
-            Winlogon: new NoopWinlogon(),
-            Region: new MatchingRegion(),
-            Processes: processes,
-            Splash: splash ?? new RecordingSplashPresenter(),
-            Checkpoints: checkpoints ?? new NoopCheckpoints(),
-            Evidence: evidence,
-            Reboot: reboot,
-            Appx: appx,
-            ResolveScoopCmd: resolveScoopCmd,
-            IsWslPlatformReady: isWslPlatformReady,
-            ApplyWorkstationQuiet: applyWorkstationQuiet,
-            SuppressWslOobe: suppressWslOobe,
-            DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
+        Env(
+            new FakeGuestMachine
+            {
+                Processes = processes,
+                Checkpoints = checkpoints ?? new NoopCheckpoints(),
+                Appx = appx,
+                Reboot = reboot,
+                ResolveScoopCmd = resolveScoopCmd,
+                IsWslPlatformReadyCallback = isWslPlatformReady ?? (() => false),
+                ApplyWorkstationQuietCallback = applyWorkstationQuiet ?? (() => { }),
+                SuppressWslOobeCallback = suppressWslOobe ?? (() => { }),
+                AssetDownload = assetDownload,
+                DmaSetup = dmaSetup ?? new OkDmaSetupRegion(),
+            },
+            evidence,
+            splash: splash);
 
     internal static ShellEnvironment Env(
         IWinlogonRegistry winlogon,
@@ -67,36 +80,90 @@ internal static class ProvisioningSessionTestFakes
         IEvidenceSink evidence,
         IProcessHost? processes = null,
         IDmaSetupRegion? dmaSetup = null) =>
-        new(
-            Time: TimeProvider.System,
-            Winlogon: winlogon,
-            Region: new MatchingRegion(),
-            Processes: processes ?? new NoopProcesses(),
-            Splash: splash,
-            Checkpoints: checkpoints,
-            Evidence: evidence,
-            DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
+        Env(
+            new FakeGuestMachine
+            {
+                Winlogon = winlogon,
+                Processes = processes ?? new NoopProcesses(),
+                Checkpoints = checkpoints,
+                DmaSetup = dmaSetup ?? new OkDmaSetupRegion(),
+            },
+            evidence,
+            splash: splash);
 
     internal static ShellEnvironment Env(
         IAppxPackageManager appx,
         ISplashPresenter splash,
         IDmaSetupRegion? dmaSetup = null) =>
-        new(
-            Time: TimeProvider.System,
-            Winlogon: new NoopWinlogon(),
-            Region: new MatchingRegion(),
-            Processes: new NoopProcesses(),
-            Splash: splash,
-            Checkpoints: new NoopCheckpoints(),
-            Evidence: new NoopEvidence(),
-            Appx: appx,
-            DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
+        Env(
+            new FakeGuestMachine
+            {
+                Appx = appx,
+                DmaSetup = dmaSetup ?? new OkDmaSetupRegion(),
+            },
+            new NoopEvidence(),
+            splash: splash);
+
+    internal sealed record FakeGuestMachine : IGuestMachine
+    {
+        public IWinlogonRegistry Winlogon { get; init; } = new NoopWinlogon();
+
+        public IRegionSnapshot Region { get; init; } = new MatchingRegion();
+
+        public IProcessHost Processes { get; init; } = new NoopProcesses();
+
+        public ICheckpointStore Checkpoints { get; init; } = new NoopCheckpoints();
+
+        public IAppxPackageManager? Appx { get; init; }
+
+        public ISystemReboot? Reboot { get; init; }
+
+        public IResidueCleaner? ResidueCleaner { get; init; }
+
+        public IConnectivityProbe? Connectivity { get; init; }
+
+        public IDmaSetupRegion? DmaSetup { get; init; } = new OkDmaSetupRegion();
+
+        public IAssetDownload? AssetDownload { get; init; }
+
+        public Func<string?>? ResolveScoopCmd { get; init; }
+
+        public Func<bool> IsWslPlatformReadyCallback { get; init; } = () => false;
+
+        public Action ApplyWorkstationQuietCallback { get; init; } = () => { };
+
+        public Action SuppressWslOobeCallback { get; init; } = () => { };
+
+        public bool IsWslPlatformReady() => IsWslPlatformReadyCallback();
+
+        public void ApplyWorkstationQuiet() => ApplyWorkstationQuietCallback();
+
+        public void SuppressWslOobe() => SuppressWslOobeCallback();
+    }
+
+    internal sealed class FakeAssetDownload : IAssetDownload
+    {
+        public string? ResultPath { get; init; }
+
+        public Exception? Exception { get; init; }
+
+        public List<(string Repo, IReadOnlyList<string> AssetNameCandidates)> Requests { get; } = [];
+
+        public Task<string?> TryDownloadGitHubReleaseAssetAsync(
+            string repo,
+            IReadOnlyList<string> assetNameCandidates,
+            CancellationToken ct = default)
+        {
+            Requests.Add((repo, assetNameCandidates));
+            return Exception is null
+                ? Task.FromResult(ResultPath)
+                : Task.FromException<string?>(Exception);
+        }
+    }
 
     internal sealed class OkDmaSetupRegion : IDmaSetupRegion
     {
         public int EnsureCalls { get; private set; }
-
-        public int? ReadDeviceRegion() => WinMint.Contracts.DmaInterop.IrelandGeoId;
 
         public DmaSetupRegionEnsureResult EnsureIreland()
         {
@@ -113,8 +180,6 @@ internal static class ProvisioningSessionTestFakes
             _steps = new Queue<DmaSetupStep>(steps);
 
         public int EnsureCalls { get; private set; }
-
-        public int? ReadDeviceRegion() => WinMint.Contracts.DmaInterop.IrelandGeoId;
 
         public DmaSetupRegionEnsureResult EnsureIreland()
         {
@@ -157,20 +222,14 @@ internal static class ProvisioningSessionTestFakes
 
         public Func<string, IReadOnlyList<string>, ProcessStartResult>? OnRun { get; init; }
 
-        public ProcessStartResult Run(
+        public Task<ProcessStartResult> RunAsync(
             string fileName,
             IReadOnlyList<string> arguments,
             CancellationToken ct = default)
         {
             Starts.Add((fileName, arguments));
-            return OnRun?.Invoke(fileName, arguments) ?? new ProcessStartResult(ExitCode);
+            return Task.FromResult(OnRun?.Invoke(fileName, arguments) ?? new ProcessStartResult(ExitCode));
         }
-
-        public Task<ProcessStartResult> RunAsync(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default) =>
-            Task.FromResult(Run(fileName, arguments, ct));
     }
 
     internal sealed class RecordingSplashPresenter : ISplashPresenter
@@ -185,11 +244,18 @@ internal static class ProvisioningSessionTestFakes
     internal sealed class RecordingEvidenceSink : IEvidenceSink
     {
         public List<ProvisioningEvidenceFile> Documents { get; } = [];
+        public List<PackagesEvidenceFile> PackageDocuments { get; } = [];
 
         public EvidenceSnapshot Write(ProvisioningEvidenceFile document)
         {
             Documents.Add(document);
             return new EvidenceSnapshot(document.SchemaVersion, $"memory:{Documents.Count}");
+        }
+
+        public EvidenceSnapshot Write(PackagesEvidenceFile document)
+        {
+            PackageDocuments.Add(document);
+            return new EvidenceSnapshot(document.SchemaVersion, $"memory:packages:{PackageDocuments.Count}");
         }
     }
 
@@ -271,8 +337,6 @@ internal static class ProvisioningSessionTestFakes
 
         public void SetAutoLogon(string username, string password) { }
 
-        public void ClearAutoLogon() { }
-
         public string? GetDefaultUserName() => null;
 
         public bool GetAutoAdminLogon() => false;
@@ -308,8 +372,6 @@ internal static class ProvisioningSessionTestFakes
 
         public void SetAutoLogon(string username, string password) { }
 
-        public void ClearAutoLogon() { }
-
         public string? GetDefaultUserName() => null;
 
         public bool GetAutoAdminLogon() => false;
@@ -323,17 +385,11 @@ internal static class ProvisioningSessionTestFakes
 
     internal sealed class NoopProcesses : IProcessHost
     {
-        public ProcessStartResult Run(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            CancellationToken ct = default) =>
-            new(0);
-
         public Task<ProcessStartResult> RunAsync(
             string fileName,
             IReadOnlyList<string> arguments,
             CancellationToken ct = default) =>
-            Task.FromResult(Run(fileName, arguments, ct));
+            Task.FromResult(new ProcessStartResult(0));
     }
 
     internal sealed class NoopCheckpoints : ICheckpointStore
@@ -360,6 +416,9 @@ internal static class ProvisioningSessionTestFakes
     {
         public EvidenceSnapshot Write(ProvisioningEvidenceFile document) =>
             new(document.SchemaVersion, "memory:1");
+
+        public EvidenceSnapshot Write(PackagesEvidenceFile document) =>
+            new(document.SchemaVersion, "memory:packages:1");
     }
 
     internal sealed class RecordingLocalAccounts : ILocalAccounts
@@ -389,13 +448,6 @@ internal static class ProvisioningSessionTestFakes
             DefaultUserName = username;
             DefaultPassword = password;
             AutoAdminLogon = true;
-        }
-
-        public void ClearAutoLogon()
-        {
-            AutoAdminLogon = false;
-            DefaultPassword = null;
-            DefaultUserName = null;
         }
 
         public string? GetDefaultUserName() => DefaultUserName;

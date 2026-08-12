@@ -87,19 +87,9 @@ internal static class Program
             Win32WinlogonRegistry winlogon = Winlogon();
             ShellEnvironment env = new(
                 Time: TimeProvider.System,
-                Winlogon: winlogon,
-                Region: new Win32RegionSnapshot(),
-                Processes: new Win32ProcessHost(),
+                Guest: new Win32GuestMachine(programData, winlogon, log),
                 Splash: splash,
-                Checkpoints: new FileCheckpointStore(programData),
-                Evidence: new FileEvidenceSink(evidenceDir),
-                Appx: new WinRTAppxPackageManager(logger: log),
-                Reboot: new Win32SystemReboot(),
-                ResolveScoopCmd: TryResolveScoopShim,
-                ResidueCleaner: new Win32ResidueCleaner(winlogon, logger: log),
-                Connectivity: new WindowsConnectivityProbe(),
-                EvidenceDirectory: evidenceDir,
-                DmaSetup: new Win32DmaSetupRegion());
+                Evidence: new FileEvidenceSink(evidenceDir));
             SessionResult result = await ProvisioningSession.RunShellAsync(bundle, env)
                 .ConfigureAwait(false);
             GuestLog.SessionStatus(log, result.FinalStatus.Code, result.FinalStatus.Message);
@@ -157,14 +147,4 @@ internal static class Program
             ? new Win32WinlogonRegistry()
             : throw new PlatformNotSupportedException("Provisioning requires Windows.");
 
-    /// <summary>Default Scoop shim after official bootstrap (PROVISIONINGSESSION). Host-owned File.Exists.</summary>
-    private static string? TryResolveScoopShim()
-    {
-        string candidate = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "scoop",
-            "shims",
-            "scoop.cmd");
-        return File.Exists(candidate) ? candidate : null;
-    }
 }

@@ -5,17 +5,25 @@ namespace WinMint.Provisioning;
 /// <summary>Best-effort guest self-erase after Shell Complete (ADR-008).</summary>
 public sealed class Win32ResidueCleaner : IResidueCleaner
 {
-    private readonly IWinlogonRegistry _winlogon;
+    private readonly Action _clearAutoLogon;
     private readonly ILogger? _logger;
     private readonly string _winMintDir;
     private readonly string _setupCompletePath;
 
     public Win32ResidueCleaner(
-        IWinlogonRegistry winlogon,
+        ILogger? logger = null,
+        string? windowsDirectory = null)
+        : this(Win32WinlogonRegistry.ClearAutoLogon, logger, windowsDirectory)
+    {
+    }
+
+    internal Win32ResidueCleaner(
+        Action clearAutoLogon,
         ILogger? logger = null,
         string? windowsDirectory = null)
     {
-        _winlogon = winlogon;
+        ArgumentNullException.ThrowIfNull(clearAutoLogon);
+        _clearAutoLogon = clearAutoLogon;
         _logger = logger;
         string windir = windowsDirectory
             ?? Environment.GetFolderPath(Environment.SpecialFolder.Windows);
@@ -32,7 +40,7 @@ public sealed class Win32ResidueCleaner : IResidueCleaner
     {
         try
         {
-            _winlogon.ClearAutoLogon();
+            _clearAutoLogon();
             if (_logger is not null)
             {
                 GuestLog.ResidueCleared(_logger);

@@ -125,11 +125,14 @@ public class OnlineDebloatSessionTests
                 RemoveProvisionedAppx = ["Microsoft.BingNews"],
                 RequiresNetwork = true,
             },
-            Env(appx, splash) with
-            {
-                Evidence = evidence,
-                Connectivity = new OfflineConnectivityProbe(),
-            },
+            Env(
+                new FakeGuestMachine
+                {
+                    Appx = appx,
+                    Connectivity = new OfflineConnectivityProbe(),
+                },
+                evidence,
+                splash: splash),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);

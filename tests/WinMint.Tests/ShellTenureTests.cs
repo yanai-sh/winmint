@@ -116,13 +116,11 @@ public class ShellTenureTests
         ISplashPresenter splash,
         IEvidenceSink evidence,
         IWinlogonRegistry? winlogon = null) =>
-        new(
-            Time: TimeProvider.System,
-            Winlogon: winlogon ?? new NoopWinlogon(),
-            Region: new MatchingRegion(),
-            Processes: new NoopProcesses(),
-            Splash: splash,
-            Checkpoints: new NoopCheckpoints(),
-            Evidence: evidence,
-            DmaSetup: new OkDmaSetupRegion());
+        ProvisioningSessionTestFakes.Env(
+            new FakeGuestMachine
+            {
+                Winlogon = winlogon ?? new NoopWinlogon(),
+            },
+            evidence,
+            splash: splash);
 }

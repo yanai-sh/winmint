@@ -22,11 +22,12 @@ public class DebloatAppxSafetyNetTests
             "Microsoft.Other"));
 
         RecordingSplashPresenter splash = new();
+        RecordingEvidenceSink evidence = new();
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
                 removeProvisionedAppx: ["Microsoft.BingNews"]),
-            Env(appx, splash),
+            Env(new FakeGuestMachine { Appx = appx }, evidence, splash: splash),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
@@ -38,6 +39,13 @@ public class DebloatAppxSafetyNetTests
         Assert.Equal(
             ["Microsoft.BingNews_8wekyb3d8bbwe"],
             appx.EnsuredDeprovisionedMarks);
+        string[] effectPhases =
+        [
+            "removed.appx.online.Microsoft.BingNews",
+            "deprovisioned.appx.Microsoft.BingNews_8wekyb3d8bbwe",
+        ];
+        Assert.All(effectPhases, phase => Assert.Contains($"Status:{phase}", splash.Events));
+        Assert.All(effectPhases, phase => Assert.Contains(phase, evidence.Documents[^1].Phases));
     }
 
     [Fact]

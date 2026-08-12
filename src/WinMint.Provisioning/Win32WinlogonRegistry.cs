@@ -22,7 +22,7 @@ public sealed class Win32WinlogonRegistry : IWinlogonRegistry
         key.SetValue("AutoAdminLogon", "1", RegistryValueKind.String);
     }
 
-    public void ClearAutoLogon()
+    internal static void ClearAutoLogon()
     {
         using RegistryKey key = OpenWritable();
         key.SetValue("AutoAdminLogon", "0", RegistryValueKind.String);

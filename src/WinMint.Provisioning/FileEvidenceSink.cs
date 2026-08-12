@@ -35,4 +35,25 @@ public sealed class FileEvidenceSink(string directory) : IEvidenceSink
         File.WriteAllBytes(path, bytes);
         return new EvidenceSnapshot(SchemaVersion, path);
     }
+
+    public EvidenceSnapshot Write(PackagesEvidenceFile document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (!string.Equals(
+                document.SchemaVersion,
+                ProvisioningSession.PackagesEvidenceSchemaVersion,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Package evidence schema '{document.SchemaVersion}' must be '{ProvisioningSession.PackagesEvidenceSchemaVersion}'.");
+        }
+
+        Directory.CreateDirectory(_directory);
+        string path = Path.Combine(_directory, "packages.evidence.json");
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(
+            document,
+            ProvisioningJsonContext.Default.PackagesEvidenceFile);
+        File.WriteAllBytes(path, bytes);
+        return new EvidenceSnapshot(document.SchemaVersion, path);
+    }
 }
