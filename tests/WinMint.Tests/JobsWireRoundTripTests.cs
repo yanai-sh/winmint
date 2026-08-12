@@ -65,7 +65,16 @@ public class JobsWireRoundTripTests
                   "settle": null
                 }
                 """);
-            string written = BuildPlan.SerializeJobsFile(authored);
+            string written = JobsWire.Write(authored.Jobs);
+            Assert.True(
+                JobsWire.TryParse(
+                    System.Text.Encoding.UTF8.GetBytes(written),
+                    out JobsFile? parsed,
+                    out JobsWireError parseError),
+                $"{parseError.Code}: {parseError.Message}");
+            Assert.Equal(
+                ["extras", "main"],
+                Assert.IsType<string[]>(parsed!.Jobs![2].ScoopBuckets));
             File.WriteAllText(Path.Combine(dir, "jobs.json"), written);
 
             BundleLoadResult loaded = BundleLoader.LoadFromFile(bundlePath);
@@ -74,7 +83,7 @@ public class JobsWireRoundTripTests
             // Re-serialize rather than compare records: the job's list members are reference-equal only.
             Assert.Equal(
                 written,
-                BuildPlan.SerializeJobsFile(new JobsArtifact(JobsWire.SchemaVersion, loaded.Value.Jobs)));
+                JobsWire.Write(loaded.Value.Jobs));
         }
         finally
         {

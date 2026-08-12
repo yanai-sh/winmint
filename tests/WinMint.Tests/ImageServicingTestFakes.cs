@@ -110,7 +110,7 @@ internal static class ImageServicingTestFakes
             Path.Combine(workDirectory, "stages.json"),
             JsonSerializer.Serialize(new
             {
-                schemaVersion = BuildPlan.StagesSchemaVersion,
+                schemaVersion = BuildPlan.ServicingStagesSchemaVersion,
                 stages = new object[]
                 {
                     new
@@ -142,7 +142,7 @@ internal static class ImageServicingTestFakes
         using JsonDocument doc = JsonDocument.Parse(
             File.ReadAllBytes(Path.Combine(workDirectory, "stages.json")));
         Assert.Equal(
-            BuildPlan.StagesSchemaVersion,
+            BuildPlan.ServicingStagesSchemaVersion,
             doc.RootElement.GetProperty("schemaVersion").GetString());
 
         List<ServicingStage> stages = [];

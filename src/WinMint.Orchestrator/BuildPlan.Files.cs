@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
 
@@ -12,16 +11,16 @@ public static partial class BuildPlan
             new ManifestFile(manifest.ImageQuality.ToString(), manifest.RequiresNetwork),
             PlanFileJsonContext.Default.ManifestFile);
 
-    /// <summary>Write guest <c>jobs.json</c> — the file BundleLoader reads back in the guest.</summary>
-    public static string SerializeJobsFile(JobsArtifact jobs) =>
-        JsonSerializer.Serialize(
-            new JobsFile(jobs.SchemaVersion, [.. jobs.Jobs.Select(static j => j.ToWire())]),
-            PlanFileJsonContext.Default.JobsFile);
+    public static string SerializePlanStagesFile(ServicingStageList stages) =>
+        SerializeStagesFile(stages, PlanStagesSchemaVersion);
 
-    public static string SerializeStagesFile(ServicingStageList stages) =>
+    public static string SerializeServicingStagesFile(ServicingStageList stages) =>
+        SerializeStagesFile(stages, ServicingStagesSchemaVersion);
+
+    private static string SerializeStagesFile(ServicingStageList stages, string schemaVersion) =>
         JsonSerializer.Serialize(
             new StagesFile(
-                StagesSchemaVersion,
+                schemaVersion,
                 stages.Stages.Select(static s => new StageFile(
                     s.Opcode.ToString(),
                     s.Parameters.ToDictionary(static kv => kv.Key, static kv => kv.Value, StringComparer.Ordinal)))
@@ -42,7 +41,6 @@ internal sealed record StageFile(
     [property: JsonPropertyName("parameters")] Dictionary<string, string> Parameters);
 
 [JsonSerializable(typeof(ManifestFile))]
-[JsonSerializable(typeof(JobsFile))]
 [JsonSerializable(typeof(StagesFile))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,

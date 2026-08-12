@@ -93,6 +93,8 @@ winget install Casey.Just
 # .NET 11 preview SDK — see global.json
 just wizard
 just plan
+# Inspect the diagnostic plan files under .scratch/plan.
+# jobs.json is the real guest wire; stages.json is a plan dump, not Apply input.
 just pack-release v0.0.0-local
 ```
 

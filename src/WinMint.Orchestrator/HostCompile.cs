@@ -40,8 +40,10 @@ public static class HostCompile
             Directory.CreateDirectory(destination);
             BuildArtifacts artifacts = plan.Artifacts;
             File.WriteAllText(Path.Combine(destination, "unattend.xml"), artifacts.Unattend.Xml);
-            File.WriteAllText(Path.Combine(destination, "jobs.json"), BuildPlan.SerializeJobsFile(artifacts.Jobs));
-            File.WriteAllText(Path.Combine(destination, "stages.json"), BuildPlan.SerializeStagesFile(artifacts.Stages));
+            File.WriteAllText(Path.Combine(destination, "jobs.json"), JobsWire.Write(artifacts.Jobs.Jobs));
+            File.WriteAllText(
+                Path.Combine(destination, "stages.json"),
+                BuildPlan.SerializePlanStagesFile(artifacts.Stages));
             File.WriteAllText(Path.Combine(destination, "manifest.json"), BuildPlan.SerializeManifestFile(artifacts.Manifest));
             return Result.Ok<Unit, Failure>(default);
         }

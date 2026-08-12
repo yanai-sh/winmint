@@ -19,18 +19,16 @@ public class PlanHonestyTests
     }
 
     [Fact]
-    public void SerializeJobsFile_includes_scoopBuckets()
+    public void JobsWire_includes_scoopBuckets()
     {
-        string json = BuildPlan.SerializeJobsFile(
-            new JobsArtifact(
-                BuildPlan.JobsSchemaVersion,
-                [
-                    new ProvisionJob(
-                        "scoop.batch",
-                        ProvisionJobKind.ScoopBatch,
-                        PackageId: "curl komorebi",
-                        ScoopBuckets: ["extras", "main"]),
-                ]));
+        string json = JobsWire.Write(
+            [
+                new ProvisionJob(
+                    "scoop.batch",
+                    ProvisionJobKind.ScoopBatch,
+                    PackageId: "curl komorebi",
+                    ScoopBuckets: ["extras", "main"]),
+            ]);
 
         using JsonDocument doc = JsonDocument.Parse(json);
         JsonElement job = doc.RootElement.GetProperty("jobs")[0];

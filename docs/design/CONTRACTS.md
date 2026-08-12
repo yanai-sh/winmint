@@ -31,6 +31,7 @@ Profile JSON
 | Checkpoint | `winmint.provisioning.checkpoint/v1` |
 | Smoke acceptance summary | `winmint.smoke.acceptance/v1` |
 | Host Apply acceptance summary | `winmint.apply.acceptance/v1` |
+| Plan-dump stages (diagnostic) | `winmint.plan.stages/v1` |
 | Servicing stages (workdir) | `winmint.servicing.stages/v1` |
 | Image evidence | `winmint.image.evidence/v1` |
 | Packages proof | `winmint.packages.proof/v1` |
@@ -48,6 +49,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 |----------|------------|---------|
 | Profile | Human / Wizard | ProfileFile / BuildPlan; Smoke harness (guest creds only) |
 | BuildArtifacts | BuildPlan | ImageServicing; Cli plan files |
+| Plan-dump stages (`plan` output) | Cli via BuildPlan serializer | Human / diagnostic tooling; never Apply |
 | Servicing stages (`stages.json`) | ImageServicing Materialize | Elevated `Invoke-ServicingPlan.ps1`; Smoke harness (Debloat pin lists) |
 | Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [SECRETS](SECRETS.md) |
 | Evidence JSON | ProvisioningSession (projection) | Smoke harness (S4) — **never** session control |
@@ -71,7 +73,7 @@ Transient packages-check files live under `.scratch/packages-check/{run}/` durin
 ## Shared types (logical)
 
 - Settle: locale, GeoId, timeZoneId, location posture. Host Profile settle is required; staged bundle settle may be nullable — map explicitly at the stage boundary (twin records OK; drift ⇒ consolidate).
-- Jobs: `ProvisionJob` (domain) and `JobsFile` / `JobFile` (wire) live once in `WinMint.Contracts` (`JobsWire`), with `JobsWire.SchemaVersion` the only `winmint.jobs/v1` literal. BuildPlan projects via `ProvisionJob.ToWire()`; `BundleLoader` maps back. A new job field is one edit there plus the two mappers.
+- Jobs: `ProvisionJob` (domain) and `JobsFile` / `JobFile` (wire) live once in `WinMint.Contracts` (`JobsWire`), with `JobsWire.SchemaVersion` the only `winmint.jobs/v1` literal. `JobsWire.Write` is the only writer used by Cli and ImageServicing; `JobsWire.TryParse` validates the wire before BundleLoader maps closed kinds. A new job field is one edit there plus the two mappers.
 - `ServicingOpcode` and provisioning **job `Kind`** are closed sets (`ServicingOpcode` / `ProvisionJobKind`) with the same touch-point discipline. Wire JSON may use strings; parse once at the load boundary (`BundleLoader` → enum). Unknown kind ⇒ `Result` failure (`jobs.kind.unknown`).
 - `ProvisioningBundle.SupervisorShellPath` (`supervisorPath`) must match offline Shell stamp and Machine setup verify.
 
@@ -82,7 +84,7 @@ Transient packages-check files live under `.scratch/packages-check/{run}/` durin
 | `*Document` | Authored / parse input — a human or the Wizard wrote it |
 | `*File` | Anything WinMint itself writes or reads as interchange, **including nested members** (`JobsFile` → `JobFile`) |
 
-Two suffixes, no others: `*Dump` and `*Dto` are gone and must not come back. Emitted evidence is a `*File`, not a `*Document` — nobody authored it. A serializer is named for the type it returns (`SerializeJobsFile` → `JobsFile`).
+Two suffixes, no others: `*Dump` and `*Dto` are gone and must not come back. Emitted evidence is a `*File`, not a `*Document` — nobody authored it. Wire owners are named for the contract (`JobsWire.Write` / `TryParse`), not for a caller.
 
 ## Status codes & evidence phases
 

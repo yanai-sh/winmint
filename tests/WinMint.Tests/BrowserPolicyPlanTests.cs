@@ -77,7 +77,7 @@ public class BrowserPolicyPlanTests
         Assert.Equal("1.0.0.1", job.DohSecondary);
         Assert.Equal("https://cloudflare-dns.com/dns-query", job.DohTemplate);
 
-        using JsonDocument doc = JsonDocument.Parse(BuildPlan.SerializeJobsFile(result.Value.Jobs));
+        using JsonDocument doc = JsonDocument.Parse(JobsWire.Write(result.Value.Jobs.Jobs));
         JsonElement dumped = Assert.Single(
             doc.RootElement.GetProperty("jobs").EnumerateArray(),
             e => e.GetProperty("kind").GetString() == "doh.set");

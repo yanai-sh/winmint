@@ -22,6 +22,9 @@ public static class BuildPlan
 
     public static Result<BuildArtifacts, Failure> Plan(Profile profile, RunOptions? run = null);
     // run null ⇒ ImageQuality.Test; IncludeSmokeStubs false unless harness passes true
+
+    public static string SerializePlanStagesFile(ServicingStageList stages);
+    public static string SerializeServicingStagesFile(ServicingStageList stages);
 }
 
 public static class ProfileFile
@@ -54,7 +57,7 @@ public sealed record BuildArtifacts(
 
 `BuildArtifacts` is BuildPlan's internal result vocabulary. Front ends enter through HostCompile: document-only `validate` / `plan` receive `HostPlan`, while build flows receive an immutable `HostComposition` with a secret-free `HostReview`. HostCompile deep-snapshots the approved artifacts and keeps them private through Apply.
 
-Stages: opcodes + params; ImageServicing maps opcode → `servicing/*.ps1`. See [CONTRACTS](CONTRACTS.md).
+Stages: opcodes + params; ImageServicing maps opcode → `servicing/*.ps1`. Cli diagnostic dumps use `winmint.plan.stages/v1`; only ImageServicing materialization emits `winmint.servicing.stages/v1`. Jobs JSON is owned by `JobsWire.Write` / `TryParse` in Contracts. See [CONTRACTS](CONTRACTS.md).
 
 Package planning is one internal operation over Profile, PackageCatalog, effective image architecture, and audit strictness. It returns the complete package-job slice, deterministic winget import bytes, and typed `EffectivePackageFact` rows (source, resolved install id, ProductPosture/Profile origin, reboot requirement). Wizard Review consumes those facts from the same `Plan` call; it does not re-plan packages. Execution consumes `Jobs` and `WingetImportJson`. HostCompile resolves `PackageStrictOverride` once: Test defaults false, Release defaults true, and explicit Force/Suppress overrides the lane. The resolved bool is stamped into the guest bundle.
 
@@ -75,7 +78,7 @@ Document errors: schema/JSON/shape; `account.password.sources.conflict` when bot
 
 ## Outside this seam
 
-File I/O of artifacts (except shared serialize helpers for jobs/stages/manifest dumps), Source ISO existence, elevated DISM, splash/settle/jobs execution, multiline UI helpers (`IdList.FromMultiline`).
+File I/O of artifacts (except stage/manifest dump serializers), Source ISO existence, elevated DISM, splash/settle/jobs execution, multiline UI helpers (`IdList.FromMultiline`). Jobs wire serialization is not a BuildPlan responsibility; both Cli and ImageServicing call `JobsWire`.
 
 ## Profile surface
 

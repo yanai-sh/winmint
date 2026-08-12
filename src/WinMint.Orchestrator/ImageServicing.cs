@@ -264,7 +264,7 @@ public static class ImageServicing
 
         File.WriteAllText(
             Path.Combine(payloadDir, "jobs.json"),
-            BuildPlan.SerializeJobsFile(plan.Jobs));
+            JobsWire.Write(plan.Jobs.Jobs));
 
         if (plan.WingetImportJson is { Length: > 0 })
         {
@@ -395,7 +395,7 @@ public static class ImageServicing
 
         File.WriteAllText(
             Path.Combine(run.WorkDirectory, "stages.json"),
-            BuildPlan.SerializeStagesFile(new ServicingStageList(resolved)));
+            BuildPlan.SerializeServicingStagesFile(new ServicingStageList(resolved)));
 
         return Result.Ok<IReadOnlyList<ServicingStage>, Failure>(resolved.ToArray());
     }

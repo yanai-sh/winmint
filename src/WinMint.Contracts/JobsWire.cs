@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace WinMint.Contracts;
@@ -10,7 +12,51 @@ namespace WinMint.Contracts;
 public static class JobsWire
 {
     public const string SchemaVersion = "winmint.jobs/v1";
+
+    public static string Write(IReadOnlyList<ProvisionJob> jobs)
+    {
+        ArgumentNullException.ThrowIfNull(jobs);
+        return JsonSerializer.Serialize(
+            new JobsFile(SchemaVersion, [.. jobs.Select(static job => job.ToWire())]),
+            JobsWireJsonContext.Default.JobsFile);
+    }
+
+    public static bool TryParse(
+        ReadOnlySpan<byte> utf8,
+        [NotNullWhen(true)] out JobsFile? file,
+        out JobsWireError error)
+    {
+        try
+        {
+            file = JsonSerializer.Deserialize(utf8, JobsWireJsonContext.Default.JobsFile);
+        }
+        catch (JsonException ex)
+        {
+            file = null;
+            error = new JobsWireError("jobs.parse", $"Failed to parse jobs: {ex.Message}");
+            return false;
+        }
+
+        if (file is null)
+        {
+            error = new JobsWireError("jobs.parse", "Failed to parse jobs.");
+            return false;
+        }
+
+        if (!string.Equals(file.SchemaVersion, SchemaVersion, StringComparison.Ordinal))
+        {
+            error = new JobsWireError(
+                "jobs.schema",
+                $"Unsupported jobs schema '{file.SchemaVersion}' (need {SchemaVersion}).");
+            return false;
+        }
+
+        error = default;
+        return true;
+    }
 }
+
+public readonly record struct JobsWireError(string Code, string Message);
 
 public sealed record JobsFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
@@ -68,3 +114,10 @@ public sealed record ProvisionJob(
             DohSecondary,
             DohTemplate);
 }
+
+[JsonSerializable(typeof(JobsFile))]
+[JsonSourceGenerationOptions(
+    WriteIndented = true,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+internal sealed partial class JobsWireJsonContext : JsonSerializerContext;

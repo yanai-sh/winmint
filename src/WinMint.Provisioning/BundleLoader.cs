@@ -140,28 +140,9 @@ public static class BundleLoader
             return false;
         }
 
-        JobsFile? jobsFile;
-        try
+        if (!JobsWire.TryParse(bytes, out JobsFile? jobsFile, out JobsWireError wireError))
         {
-            jobsFile = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.JobsFile);
-        }
-        catch (JsonException ex)
-        {
-            error = new BundleLoadError("jobs.parse", $"Failed to parse jobs: {jobsPath}: {ex.Message}");
-            return false;
-        }
-
-        if (jobsFile is null)
-        {
-            error = new BundleLoadError("jobs.parse", $"Failed to parse jobs: {jobsPath}");
-            return false;
-        }
-
-        if (!string.Equals(jobsFile.SchemaVersion, JobsSchemaVersion, StringComparison.Ordinal))
-        {
-            error = new BundleLoadError(
-                "jobs.schema",
-                $"Unsupported jobs schema '{jobsFile.SchemaVersion}' (need {JobsSchemaVersion}).");
+            error = new BundleLoadError(wireError.Code, $"{wireError.Message} ({jobsPath})");
             return false;
         }
 
@@ -214,7 +195,6 @@ public static class BundleLoader
 
 
 [JsonSerializable(typeof(BundleFile))]
-[JsonSerializable(typeof(JobsFile))]
 [JsonSerializable(typeof(ProvisioningEvidenceFile))]
 [JsonSerializable(typeof(PackagesEvidenceFile))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]

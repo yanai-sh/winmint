@@ -151,7 +151,7 @@ public class BuildPlanPlanTests
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
         Assert.Equal(ImageQualityLane.Test, artifacts.Manifest.ImageQuality);
-        Assert.Equal(BuildPlan.JobsSchemaVersion, artifacts.Jobs.SchemaVersion);
+        Assert.Equal(JobsWire.SchemaVersion, artifacts.Jobs.SchemaVersion);
         Assert.DoesNotContain(artifacts.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Stub);
         Assert.NotEmpty(artifacts.Stages.Stages);
         Assert.Equal(

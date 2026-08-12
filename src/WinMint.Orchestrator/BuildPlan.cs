@@ -7,8 +7,8 @@ namespace WinMint.Orchestrator;
 public static partial class BuildPlan
 {
     public const string ProfileSchemaVersion = "winmint.profile/v1";
-    public const string JobsSchemaVersion = JobsWire.SchemaVersion;
-    public const string StagesSchemaVersion = "winmint.servicing.stages/v1";
+    public const string PlanStagesSchemaVersion = "winmint.plan.stages/v1";
+    public const string ServicingStagesSchemaVersion = "winmint.servicing.stages/v1";
 
     public const string IrelandSetupLocale = DmaInterop.IrelandLocale;
     public const int IrelandSetupGeoId = DmaInterop.IrelandGeoId;
@@ -481,7 +481,7 @@ public static partial class BuildPlan
 
         jobList.AddRange(packageSlice.Jobs);
 
-        JobsArtifact jobs = new(JobsSchemaVersion, jobList);
+        JobsArtifact jobs = new(JobsWire.SchemaVersion, jobList);
 
         ExportLane exportLane = ExportLane.For(options.ImageQuality);
 
