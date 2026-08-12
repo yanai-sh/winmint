@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using WinMint.Contracts;
 using WinMint.Orchestrator;
 
@@ -6,21 +7,24 @@ namespace WinMint.Tests;
 
 public class HostCompileLaneTests
 {
-    [Fact]
-    public async Task Apply_Release_defaults_package_strict_false()
+    [Theory]
+    [InlineData(ImageQualityLane.Test, PackageStrictOverride.FromLane, false)]
+    [InlineData(ImageQualityLane.Release, PackageStrictOverride.FromLane, true)]
+    [InlineData(ImageQualityLane.Test, PackageStrictOverride.Force, true)]
+    [InlineData(ImageQualityLane.Release, PackageStrictOverride.Force, true)]
+    [InlineData(ImageQualityLane.Test, PackageStrictOverride.Suppress, false)]
+    [InlineData(ImageQualityLane.Release, PackageStrictOverride.Suppress, false)]
+    public async Task Apply_resolves_package_strict_once_for_the_staged_bundle(
+        ImageQualityLane lane,
+        PackageStrictOverride packageStrict,
+        bool expected)
     {
-        await AssertPackageStrictAsync(ImageQualityLane.Release, packageStrict: false, expected: false);
-    }
-
-    [Fact]
-    public async Task Apply_explicit_package_strict_true()
-    {
-        await AssertPackageStrictAsync(ImageQualityLane.Test, packageStrict: true, expected: true);
+        await AssertPackageStrictAsync(lane, packageStrict, expected);
     }
 
     private static async Task AssertPackageStrictAsync(
         ImageQualityLane lane,
-        bool packageStrict,
+        PackageStrictOverride packageStrict,
         bool expected)
     {
         string root = Path.Combine(Path.GetTempPath(), "winmint-host-lane-" + Guid.NewGuid().ToString("N"));
@@ -33,19 +37,23 @@ public class HostCompileLaneTests
             File.WriteAllBytes(profile, BuildPlan.SerializeProfile(Profile()));
             File.WriteAllText(iso, "iso-stub");
 
-            Result<HostCompileResult, Failure> result = await HostCompile.ApplyAsync(
-                new HostCompileRequest(
-                    profile,
+            Result<HostComposition, HostComposeError> composed = await HostCompile.ComposeFileAsync(
+                profile,
+                new HostComposeOptions(
                     iso,
-                    ImageQuality: lane,
-                    WorkDirectory: work,
+                    lane,
+                    work,
+                    WimIndex: 1,
                     PackageStrict: packageStrict),
+                new FixedProbe(),
+                cancellationToken: TestContext.Current.CancellationToken);
+            Assert.True(composed.IsOk, composed.IsOk ? null : $"{composed.Error.Code}: {composed.Error.Message}");
+            Assert.Equal(expected, composed.Value.Review.PackageStrict);
+            Result<ImageEvidence, Failure> result = await HostCompile.ApplyAsync(
+                composed.Value,
                 new ImageServicingTestFakes.RecordingElevatedPlanRunner(),
                 TestContext.Current.CancellationToken);
-
             Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
-            Assert.True(result.Value.Succeeded);
-            Assert.Equal(expected, result.Value.Plan.PackageStrict);
             using JsonDocument bundle = JsonDocument.Parse(
                 File.ReadAllBytes(Path.Combine(work, "payload", "bundle.json")));
             Assert.Equal(expected, bundle.RootElement.GetProperty("packageStrict").GetBoolean());
@@ -73,4 +81,22 @@ public class HostCompileLaneTests
             [],
             [],
             []);
+
+    private sealed class FixedProbe : ISourceMediaProbe
+    {
+        public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
+            string sourceIsoPath,
+            int wimIndex,
+            CancellationToken cancellationToken = default)
+        {
+            string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(sourceIsoPath)));
+            WimIndexInfo row = new(wimIndex, "Windows 11 Home", "ARM64", "Core", null, "26100");
+            return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(
+                new SourceMediaReview(
+                    Path.GetFullPath(sourceIsoPath),
+                    hash,
+                    Array.AsReadOnly([row]),
+                    new SelectedWim(wimIndex, row.Name, row.Architecture, row.Edition, row.Version, row.Build))));
+        }
+    }
 }

@@ -21,13 +21,13 @@ _Avoid_: BuildConfig (user-facing); preset names in JSON
 **Orchestrator** — Validates Profile, plans, drives elevated Servicing. Front ends: Cli + Avalonia Wizard, both thin over **HostCompile**.  
 _Avoid_: second planning brain in Cli/Wizard
 
-**HostCompile** — Orchestrator entry: Profile + run options → Plan → ImageServicing → `ImageEvidence`. Cli/Wizard are thin adapters.  
+**HostCompile** — Orchestrator entry: Profile + compose options → immutable `HostComposition` approval → ImageServicing → `ImageEvidence`; document-only commands use `HostPlan`. Cli/Wizard are thin adapters.
 _Avoid_: second Plan/Apply brain in Cli or Wizard; conflating with Flash
 
 **BuildPlan** — Profile + run options → plan artifacts.  
 _Avoid_: DISM at the flag layer; ports before a second adapter
 
-**Servicing / ImageServicing** — Offline WIM/ISO work via elevated `pwsh -File` kernels. Owns default Output ISO leaf when unset.  
+**Servicing / ImageServicing** — Offline WIM/ISO work via elevated `pwsh -File` kernels. Consumes the Output ISO path and source-media identity frozen by HostCompile.
 _Avoid_: in-process DISM from Wizard; guest FirstLogon Servicing; hosts inventing a second default Output ISO name
 
 **Payload** — Staged SetupComplete, Supervisor, jobs/media. `%WINDIR%\WinMint\` tenure-only; `%ProgramData%\WinMint\` may remain for evidence.  

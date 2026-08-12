@@ -1,31 +1,59 @@
 using System.Globalization;
 using System.Text;
 using WinMint.Contracts;
-using WinMint.Orchestrator;
 
-namespace WinMint.Wizard;
+namespace WinMint.Orchestrator;
 
-/// <summary>Avalonia-free vanilla→WinMint diff text from Plan artifacts.</summary>
+/// <summary>Vanilla-to-WinMint diff text projected only from an approved, secret-free review.</summary>
 public static class PlanDiff
 {
-    public static string Format(BuildArtifacts artifacts, Profile profile)
+    private static readonly Dictionary<string, string> AppxLabels =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Microsoft.BingNews"] = "Bing News",
+            ["Microsoft.BingWeather"] = "Bing Weather",
+            ["Microsoft.GetHelp"] = "Get Help",
+            ["Microsoft.Getstarted"] = "Get Started",
+            ["Microsoft.MicrosoftOfficeHub"] = "Office Hub",
+            ["Microsoft.MicrosoftSolitaireCollection"] = "Solitaire",
+            ["Microsoft.People"] = "People",
+            ["Microsoft.PowerAutomateDesktop"] = "Power Automate",
+            ["Microsoft.Todos"] = "To Do",
+            ["Microsoft.WindowsAlarms"] = "Alarms",
+            ["Microsoft.WindowsFeedbackHub"] = "Feedback Hub",
+            ["Microsoft.WindowsMaps"] = "Maps",
+            ["Microsoft.YourPhone"] = "Phone Link",
+            ["Microsoft.ZuneMusic"] = "Zune Music",
+            ["Microsoft.ZuneVideo"] = "Movies & TV",
+            ["MicrosoftCorporationII.QuickAssist"] = "Quick Assist",
+            ["Microsoft.GamingApp"] = "Xbox app",
+            ["Microsoft.Xbox.TCUI"] = "Xbox TCUI",
+            ["Microsoft.XboxGamingOverlay"] = "Game Bar",
+            ["Microsoft.XboxSpeechToTextOverlay"] = "Xbox speech overlay",
+            ["Microsoft.Copilot"] = "Copilot",
+        };
+
+    public static string Format(HostReview review)
     {
+        ArgumentNullException.ThrowIfNull(review);
         StringBuilder sb = new();
         sb.AppendLine("During image build");
-        AppendOffline(sb, artifacts, profile);
+        AppendOffline(sb, review);
         sb.AppendLine();
         sb.AppendLine("After first sign-in");
-        AppendLive(sb, artifacts, profile);
+        AppendLive(sb, review);
         return sb.ToString().TrimEnd();
     }
 
-    private static void AppendOffline(StringBuilder sb, BuildArtifacts artifacts, Profile profile)
+    public static IReadOnlyList<string> FriendlyRemoveNames(IEnumerable<string> appxFamilyIds) =>
+        appxFamilyIds.Select(FriendlyRemoveName).ToArray();
+
+    private static void AppendOffline(StringBuilder sb, HostReview review)
     {
-        bool removesAppxOffline = artifacts.Stages.Stages
-            .Any(s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
-        if (removesAppxOffline)
+        Profile profile = review.AuthoredProfile;
+        if (review.Stages.Any(static stage => stage.Opcode == ServicingOpcode.RemoveProvisionedAppx))
         {
-            AppendAppx(sb, artifacts.RemoveProvisionedAppx);
+            AppendAppx(sb, review.RemoveProvisionedAppx);
         }
 
         foreach (string id in profile.RemoveCapabilities)
@@ -38,43 +66,39 @@ public static class PlanDiff
             Line(sb, $"Optional feature {id}", "you chose");
         }
 
-        if (artifacts.Stages.Stages.Any(s => s.Opcode == ServicingOpcode.StampOfflinePolicies))
+        if (review.Stages.Any(static stage => stage.Opcode == ServicingOpcode.StampOfflinePolicies))
         {
             Line(sb, "Edge / OneDrive / device metadata / WPBT policies", "always");
-            if (artifacts.EffectivePackages.Any(
-                package => package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store
-                    && string.Equals(
-                        package.ResolvedInstallId,
-                        ProductPosture.BraveWingetId,
-                        StringComparison.OrdinalIgnoreCase)))
+            if (review.BraveSelected)
             {
                 Line(sb, "Brave policies", "you chose");
             }
         }
 
-        if (artifacts.Stages.Stages.Any(s => s.Opcode == ServicingOpcode.InjectDrivers))
+        if (review.Stages.Any(static stage => stage.Opcode == ServicingOpcode.InjectDrivers))
         {
             Line(sb, "Surface drivers", "you chose");
         }
 
-        Line(sb, $"Export WIM ({artifacts.Manifest.ImageQuality} lane)", "you chose");
+        Line(sb, $"Export WIM ({review.ImageQuality} lane)", "you chose");
     }
 
-    private static void AppendLive(StringBuilder sb, BuildArtifacts artifacts, Profile profile)
+    private static void AppendLive(StringBuilder sb, HostReview review)
     {
+        Profile profile = review.AuthoredProfile;
         if (profile.Dma.Enabled)
         {
             Line(sb, $"DMA settle {profile.Dma.Settle.Locale} / {profile.Dma.Settle.TimeZoneId}", "you chose");
         }
 
-        foreach (ProvisionJob job in artifacts.Jobs.Jobs)
+        foreach (ProvisionJob job in review.Jobs)
         {
             if (job.Kind is ProvisionJobKind.WingetImport)
             {
                 AppendPackages(
                     sb,
-                    artifacts.EffectivePackages.Where(
-                        package => package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store));
+                    review.EffectivePackages.Where(static package =>
+                        package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store));
                 continue;
             }
 
@@ -82,18 +106,17 @@ public static class PlanDiff
             {
                 AppendPackages(
                     sb,
-                    artifacts.EffectivePackages.Where(package => package.Source == EffectivePackageSource.Scoop));
+                    review.EffectivePackages.Where(static package =>
+                        package.Source == EffectivePackageSource.Scoop));
                 continue;
             }
 
             if (job.Kind is ProvisionJobKind.Winget or ProvisionJobKind.Wsl)
             {
-                EffectivePackageSource source = job.Kind switch
-                {
-                    ProvisionJobKind.Winget => EffectivePackageSource.Winget,
-                    _ => EffectivePackageSource.Wsl,
-                };
-                EffectivePackageFact[] packages = artifacts.EffectivePackages.Where(
+                EffectivePackageSource source = job.Kind == ProvisionJobKind.Winget
+                    ? EffectivePackageSource.Winget
+                    : EffectivePackageSource.Wsl;
+                EffectivePackageFact[] packages = review.EffectivePackages.Where(
                     package => (package.Source == source
                             || (source == EffectivePackageSource.Winget
                                 && package.Source == EffectivePackageSource.Store))
@@ -112,11 +135,10 @@ public static class PlanDiff
                 continue;
             }
 
-            string mark = JobAlways(job) ? "always" : "you chose";
-            Line(sb, JobLabel(job), mark);
+            Line(sb, JobLabel(job), JobAlways(job) ? "always" : "you chose");
             if (job.Kind is ProvisionJobKind.AppxSafetyNet)
             {
-                AppendAppx(sb, artifacts.RemoveProvisionedAppx);
+                AppendAppx(sb, review.RemoveProvisionedAppx);
             }
         }
     }
@@ -149,15 +171,12 @@ public static class PlanDiff
     {
         foreach (string id in appx)
         {
-            string label = IncludedSummary.FriendlyRemoveNames([id])[0];
             bool always = ProductPosture.AppxIds.Contains(id, StringComparer.OrdinalIgnoreCase);
-            Line(sb, $"{label} ({id})", always ? "always" : "you chose");
+            Line(sb, $"{FriendlyRemoveName(id)} ({id})", always ? "always" : "you chose");
         }
     }
 
-    private static void AppendPackages(
-        StringBuilder sb,
-        IEnumerable<EffectivePackageFact> packages)
+    private static void AppendPackages(StringBuilder sb, IEnumerable<EffectivePackageFact> packages)
     {
         foreach (EffectivePackageFact package in packages)
         {
@@ -171,6 +190,19 @@ public static class PlanDiff
             string mark = package.Origin == EffectivePackageOrigin.ProductPosture ? "always" : "you chose";
             Line(sb, $"{manager} {package.ResolvedInstallId}", mark);
         }
+    }
+
+    private static string FriendlyRemoveName(string appxFamilyId)
+    {
+        if (AppxLabels.TryGetValue(appxFamilyId, out string? label))
+        {
+            return label;
+        }
+
+        int dot = appxFamilyId.LastIndexOf('.');
+        return dot >= 0 && dot < appxFamilyId.Length - 1
+            ? appxFamilyId[(dot + 1)..]
+            : appxFamilyId;
     }
 
     private static void Line(StringBuilder sb, string label, string mark) =>

@@ -27,7 +27,9 @@ public sealed record ServicingRun(
     string? OutputIsoPath = null,
     string? ProfilePath = null,
     int? WimIndex = null,
-    bool ReuseMedia = false);
+    bool ReuseMedia = false,
+    string? SourceIsoSha256 = null,
+    SelectedWim? SelectedImage = null);
 
 /// <summary>Elevation only — evidence read is ImageServicing implementation.</summary>
 public interface IElevatedPlanRunner
@@ -40,7 +42,9 @@ public interface IElevatedPlanRunner
 
 The stage list crosses this seam as `{workDirectory}/stages.json` — Materialize writes it, `Invoke-ServicingPlan.ps1` reads it. An adapter that also took stages in-process would be a second, unenforced copy of the contract.
 
-When `OutputIsoPath` is unset, ImageServicing resolves the default leaf once from `ProfilePath` + lane + timestamp before Materialize. Materialize and evidence never invent a stemless name. Elevated `Invoke-ServicingPlan.ps1` is the hard seam; reading `evidence.json` into `ImageEvidence` stays inside ImageServicing.
+HostCompile resolves and freezes the build Output ISO path before Apply. The lower-level ImageServicing entry retains its default-name fallback for direct S2 callers, but HostCompile composition never relies on it. Materialize and evidence use the supplied path unchanged. Elevated `Invoke-ServicingPlan.ps1` is the hard seam; reading `evidence.json` into `ImageEvidence` stays inside ImageServicing.
+
+`MountInstallWim` receives the frozen Source ISO hash and selected-image metadata. `ReuseMedia=false` always recreates staged media. `ReuseMedia=true` requires an exact `winmint.media-identity/v1` marker plus matching staged single-image WIM metadata; absent, malformed, or mismatched identity takes the cold recreate path and writes the marker atomically after validation.
 
 **Elevated plan loop:** opcode kernels mutate media only. The loop alone finalizes host Apply state — `Write-PlanEvidence` after all kernels succeed, `Write-PlanFailure` on any throw or non-zero kernel exit. Kernels do not write `evidence.json` or `failure.json`. **`BuildIso`** runs `oscdimg` and emits the **Output ISO** only; digest and evidence assembly happen in the loop after `BuildIso` returns.
 

@@ -1,156 +1,80 @@
-using WinMint.Orchestrator;
+using System.Security.Cryptography;
 using WinMint.Contracts;
+using WinMint.Orchestrator;
 using WinMint.Wizard;
 
 namespace WinMint.Tests;
 
 public class WizardBuildTests
 {
-    [Fact]
-    public async Task TryApply_missing_profile_fails_closed()
-    {
-        WizardBuildResult result = await WizardBuild.TryApplyAsync(
-            new WizardBuildInput(
-                ProfilePath: Path.Combine(Path.GetTempPath(), "winmint-no-such-profile.json"),
-                SourceIsoPath: Path.GetTempFileName()),
-            new ImageServicingTestFakes.RecordingElevatedPlanRunner(),
-            TestContext.Current.CancellationToken);
-
-        Assert.False(result.Succeeded);
-        Assert.Equal("wizard.build.profile.missing", result.Code);
-    }
-
-    [Fact]
-    public async Task TryApply_missing_iso_fails_closed()
-    {
-        string profile = WriteTempProfile();
-        try
-        {
-            WizardBuildResult result = await WizardBuild.TryApplyAsync(
-                new WizardBuildInput(
-                    profile,
-                    SourceIsoPath: Path.Combine(Path.GetTempPath(), "no-such.iso")),
-                new ImageServicingTestFakes.RecordingElevatedPlanRunner(),
-                TestContext.Current.CancellationToken);
-
-            Assert.False(result.Succeeded);
-            Assert.Equal("wizard.build.sourceIso.missing", result.Code);
-        }
-        finally
-        {
-            File.Delete(profile);
-        }
-    }
-
     [Theory]
-    [InlineData("Test", "Test lane (not the wipe gate).", false)]
-    [InlineData("Release", "Gate B wipe media", true)]
-    public async Task TryApply_sets_package_strict_from_lane(
-        string laneText,
-        string expectedGateHint,
-        bool expectedStrict)
+    [InlineData(ImageQualityLane.Test, "Test lane (not the wipe gate).")]
+    [InlineData(ImageQualityLane.Release, "Gate B wipe media")]
+    public async Task Apply_uses_the_approved_composition(
+        ImageQualityLane lane,
+        string expectedHint)
     {
-        string profile = WriteTempProfile();
-        string iso = Path.GetTempFileName();
-        string work = Path.Combine(Path.GetTempPath(), "winmint-wizard-lane-" + Guid.NewGuid().ToString("N"));
+        string root = NewRoot();
         try
         {
-            File.WriteAllText(iso, "iso-stub");
+            HostComposition composition = await Compose(root, lane);
             WizardBuildResult result = await WizardBuild.TryApplyAsync(
-                new WizardBuildInput(
-                    profile,
-                    iso,
-                    ImageQualityText: laneText,
-                    WorkDirectory: work,
-                    WimIndex: BuildMachineEdition.HomeWimIndex),
+                composition,
                 new ImageServicingTestFakes.RecordingElevatedPlanRunner(),
                 TestContext.Current.CancellationToken);
 
             Assert.True(result.Succeeded, $"{result.Code}: {result.Message}");
-            Assert.Contains(expectedGateHint, result.Message, StringComparison.Ordinal);
-            using System.Text.Json.JsonDocument bundle = System.Text.Json.JsonDocument.Parse(
-                File.ReadAllBytes(Path.Combine(work, "payload", "bundle.json")));
-            Assert.Equal(expectedStrict, bundle.RootElement.GetProperty("packageStrict").GetBoolean());
+            Assert.Contains(expectedHint, result.Message, StringComparison.Ordinal);
+            Assert.Equal(composition.OutputIsoPath, result.OutputIsoPath);
         }
         finally
         {
-            File.Delete(profile);
-            File.Delete(iso);
-            if (Directory.Exists(work))
-            {
-                Directory.Delete(work, recursive: true);
-            }
+            Directory.Delete(root, true);
         }
     }
 
     [Fact]
-    public async Task TryApply_with_fake_runner_succeeds()
+    public async Task Apply_failure_preserves_work_and_surfaces_failure()
     {
-        string profile = WriteTempProfile();
-        string iso = Path.GetTempFileName();
-        string work = Path.Combine(Path.GetTempPath(), "winmint-wizard-build-" + Guid.NewGuid().ToString("N"));
+        string root = NewRoot();
         try
         {
-            File.WriteAllText(iso, "iso-stub");
+            HostComposition composition = await Compose(root, ImageQualityLane.Test);
             WizardBuildResult result = await WizardBuild.TryApplyAsync(
-                new WizardBuildInput(
-                    profile,
-                    iso,
-                    ImageQualityText: "Test",
-                    WorkDirectory: work,
-                    WimIndex: BuildMachineEdition.HomeWimIndex),
-                new ImageServicingTestFakes.RecordingElevatedPlanRunner(),
-                TestContext.Current.CancellationToken);
-
-            Assert.True(result.Succeeded, $"{result.Code}: {result.Message}");
-            Assert.NotNull(result.OutputIsoPath);
-            Assert.Equal(work, result.WorkDirectory);
-            Assert.Contains("Image OK:", result.Message, StringComparison.Ordinal);
-        }
-        finally
-        {
-            File.Delete(profile);
-            File.Delete(iso);
-            if (Directory.Exists(work))
-            {
-                Directory.Delete(work, recursive: true);
-            }
-        }
-    }
-
-    [Fact]
-    public async Task TryApply_propagates_runner_failure()
-    {
-        string profile = WriteTempProfile();
-        string iso = Path.GetTempFileName();
-        string work = Path.Combine(Path.GetTempPath(), "winmint-wizard-build-fail-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            File.WriteAllText(iso, "iso-stub");
-            WizardBuildResult result = await WizardBuild.TryApplyAsync(
-                new WizardBuildInput(profile, iso, WorkDirectory: work),
+                composition,
                 new ImageServicingTestFakes.FailingElevatedPlanRunner(),
                 TestContext.Current.CancellationToken);
 
             Assert.False(result.Succeeded);
             Assert.Equal("servicing.stage.failed", result.Code);
-            Assert.Contains(work, result.Message, StringComparison.Ordinal);
+            Assert.Contains(composition.WorkDirectory, result.Message, StringComparison.Ordinal);
         }
         finally
         {
-            File.Delete(profile);
-            File.Delete(iso);
-            if (Directory.Exists(work))
-            {
-                Directory.Delete(work, recursive: true);
-            }
+            Directory.Delete(root, true);
         }
     }
 
-    private static string WriteTempProfile()
+    private static async Task<HostComposition> Compose(string root, ImageQualityLane lane)
     {
-        Profile profile = new(
-            new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
+        string iso = Path.Combine(root, "source.iso");
+        File.WriteAllText(iso, "iso-stub");
+        Result<HostComposition, HostComposeError> result = await HostCompile.ComposeAsync(
+            Profile(),
+            new HostComposeOptions(
+                iso,
+                lane,
+                Path.Combine(root, "work"),
+                WimIndex: 1),
+            new FixedProbe(),
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(result.IsOk, result.IsOk ? null : result.Error.Message);
+        return result.Value;
+    }
+
+    private static Profile Profile() =>
+        new(
+            new AccountProfile("winmint", "lab-only", false),
             new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
@@ -162,8 +86,29 @@ public class WizardBuildTests
             [],
             [],
             []);
-        string path = Path.Combine(Path.GetTempPath(), "winmint-wizard-build-" + Guid.NewGuid().ToString("N") + ".json");
-        File.WriteAllBytes(path, BuildPlan.SerializeProfile(profile));
-        return path;
+
+    private static string NewRoot()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "winmint-wizard-build-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        return root;
+    }
+
+    private sealed class FixedProbe : ISourceMediaProbe
+    {
+        public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
+            string sourceIsoPath,
+            int wimIndex,
+            CancellationToken cancellationToken = default)
+        {
+            string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(sourceIsoPath)));
+            WimIndexInfo row = new(wimIndex, "Windows 11 Home", "ARM64", "Core", null, "26100");
+            return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(
+                new(
+                    Path.GetFullPath(sourceIsoPath),
+                    hash,
+                    Array.AsReadOnly([row]),
+                    new(wimIndex, row.Name, row.Architecture, row.Edition, row.Version, row.Build))));
+        }
     }
 }

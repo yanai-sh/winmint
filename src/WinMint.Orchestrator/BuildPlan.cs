@@ -601,7 +601,8 @@ public static partial class BuildPlan
             appx,
             packageSlice.EffectivePackages,
             packageSlice.WingetImportJson,
-            options.PackageStrict);
+            options.PackageStrict,
+            braveSelected);
 
         return Result.Ok<BuildArtifacts, Failure>(artifacts);
     }

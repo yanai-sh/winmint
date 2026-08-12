@@ -1,212 +1,247 @@
+using System.Security.Cryptography;
+using WinMint.Contracts;
 using WinMint.Orchestrator;
 using WinMint.Wizard;
+using WinMint.Wizard.ViewModels;
 
 namespace WinMint.Tests;
 
 public class WizardSessionTests
 {
-    private static WizardSessionInput Lab(
-        string preset = DebloatPresets.Recommended,
-        string winget = "",
-        string appx = "",
-        string caps = "",
-        string iso = @"C:\isos\Win11.iso",
-        string lane = "Test",
-        string locale = "en-GB",
-        string geoId = "242",
-        string timeZone = "GMT Standard Time") =>
-        new(
-            preset,
-            "winmint",
-            "lab-only",
-            RequireWifiDuringOobe: false,
-            DmaEnabled: true,
-            Locale: locale,
-            GeoIdText: geoId,
-            TimeZoneId: timeZone,
-            LocationServicesEnabled: true,
-            WingetText: winget,
-            RemoveCapabilitiesText: caps,
-            RemoveProvisionedAppxText: appx,
-            SourceIsoPath: iso,
-            ImageQualityText: lane);
-
     [Fact]
-    public void ComposeAndPlan_recommended_default_expands_debloat()
+    public async Task Living_draft_invalidates_and_only_exact_apply_success_clears_approval()
     {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab());
-        Assert.True(result.Succeeded, result.Message);
-        Assert.Contains("Microsoft.YourPhone", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.Contains("Microsoft.GamingApp", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.Contains("Microsoft.Copilot", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.DoesNotContain("recommended", result.ProfileJson!, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("\"keepCopilot\"", result.ProfileJson!, StringComparison.Ordinal);
+        string root = NewRoot();
+        try
+        {
+            string iso = WriteIso(root);
+            WizardSession session = new(new FixedProbe());
+            long first = session.UpdateDraft(
+                Profile(),
+                Options(root, iso) with { AuthoredSelectionLabels = ["Edge"] });
+            Assert.Equal(
+                first,
+                session.UpdateDraft(
+                    Profile(),
+                    Options(root, iso) with { AuthoredSelectionLabels = ["Edge"] }));
+
+            Result<HostReview, Failure> planned = await session.PlanAsync(TestContext.Current.CancellationToken);
+            Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
+            HostComposition approved = session.TryGetApplyComposition().Value;
+
+            long changed = session.UpdateDraft(
+                Profile() with { WingetPackages = ["jqlang.jq"] },
+                Options(root, iso));
+            Assert.True(changed > first);
+            Assert.False(session.TryGetApplyComposition().IsOk);
+            Assert.False(session.AcknowledgeApplySuccess(approved).IsOk);
+
+            Assert.True((await session.PlanAsync(TestContext.Current.CancellationToken)).IsOk);
+            HostComposition current = session.TryGetApplyComposition().Value;
+            Result<ImageEvidence, Failure> failedApply = await HostCompile.ApplyAsync(
+                current,
+                new ImageServicingTestFakes.FailingElevatedPlanRunner(),
+                TestContext.Current.CancellationToken);
+            Assert.False(failedApply.IsOk);
+            Assert.Same(current, session.TryGetApplyComposition().Value);
+            Assert.True(session.AcknowledgeApplySuccess(current).IsOk);
+            Assert.False(session.TryGetApplyComposition().IsOk);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
     }
 
     [Fact]
-    public void ComposeAndPlan_always_unions_product_required_appx()
+    public async Task Save_is_atomic_acknowledgement_and_apply_does_not_require_it()
     {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(preset: DebloatPresets.Empty));
-        Assert.True(result.Succeeded, result.Message);
-        Assert.Contains("Microsoft.GamingApp", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.Contains("Microsoft.Copilot", result.ProfileJson!, StringComparison.Ordinal);
+        string root = NewRoot();
+        try
+        {
+            string iso = WriteIso(root);
+            WizardSession session = new(new FixedProbe());
+            session.UpdateDraft(Profile(), Options(root, iso));
+            Assert.True((await session.PlanAsync(TestContext.Current.CancellationToken)).IsOk);
+            Assert.True(session.TryGetApplyComposition().IsOk);
+            Assert.Null(session.View.SavedPath);
+
+            string destination = Path.Combine(root, "saved.profile.json");
+            Assert.True(session.Save(destination).IsOk);
+            Assert.Equal(Path.GetFullPath(destination), session.View.SavedPath);
+            Assert.True(File.Exists(destination));
+            Assert.True(session.TryGetApplyComposition().IsOk);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
     }
 
     [Fact]
-    public void ComposeAndPlan_host_dma_settle_fields_round_trip()
+    public async Task Late_probe_and_compose_results_are_rejected()
     {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(
-            Lab(locale: "en-US", geoId: "117", timeZone: "Israel Standard Time"));
-        Assert.True(result.Succeeded, result.Message);
-        Assert.Contains("\"locale\": \"en-US\"", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.Contains("\"geoId\": 117", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.Contains("Israel Standard Time", result.ProfileJson!, StringComparison.Ordinal);
+        string root = NewRoot();
+        try
+        {
+            string iso = WriteIso(root);
+            ControlledProbe probe = new();
+            WizardSession session = new(probe);
+            session.UpdateDraft(Profile(), Options(root, iso));
+            Task<Result<SourceMediaReview, Failure>> pendingProbe =
+                session.SettleProbeAsync(TestContext.Current.CancellationToken);
+            session.UpdateDraft(Profile() with { RemoveCapabilities = ["OpenSSH.Client~~~~0.0.1.0"] }, Options(root, iso));
+            probe.Complete(iso);
+            Result<SourceMediaReview, Failure> staleProbe = await pendingProbe;
+            Assert.False(staleProbe.IsOk);
+            Assert.Equal("wizardSession.probe.stale", staleProbe.Error.Code);
+
+            ControlledProbe composeProbe = new();
+            WizardSession composeSession = new(composeProbe);
+            composeSession.UpdateDraft(Profile(), Options(root, iso));
+            Task<Result<HostReview, Failure>> pendingCompose =
+                composeSession.PlanAsync(TestContext.Current.CancellationToken);
+            composeSession.UpdateDraft(Profile() with { WingetPackages = ["jqlang.jq"] }, Options(root, iso));
+            composeProbe.Complete(iso);
+            Result<HostReview, Failure> staleCompose = await pendingCompose;
+            Assert.False(staleCompose.IsOk);
+            Assert.Equal("wizardSession.compose.stale", staleCompose.Error.Code);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
     }
 
     [Fact]
-    public void ComposeAndPlan_acceptance_ok()
+    public async Task Out_of_order_source_probe_completion_keeps_the_current_session_source()
     {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(preset: DebloatPresets.Acceptance));
-        Assert.True(result.Succeeded, result.Message);
-        Assert.NotNull(result.ProfileUtf8);
-        Assert.Contains("Microsoft.BingNews", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.Contains("Lane=Test", result.Message, StringComparison.Ordinal);
+        string root = NewRoot();
+        try
+        {
+            string firstIso = WriteIso(root);
+            string secondIso = Path.Combine(root, "second.iso");
+            File.WriteAllText(secondIso, "second-iso-stub");
+            QueuedProbe probe = new();
+            WizardSession session = new(probe);
+
+            session.UpdateDraft(Profile(), Options(root, firstIso));
+            Task<Result<SourceMediaReview, Failure>> first =
+                session.SettleProbeAsync(TestContext.Current.CancellationToken);
+            session.UpdateDraft(Profile(), Options(root, secondIso));
+            Task<Result<SourceMediaReview, Failure>> second =
+                session.SettleProbeAsync(TestContext.Current.CancellationToken);
+
+            probe.Complete(1, secondIso);
+            Assert.True((await second).IsOk);
+            probe.Complete(0, firstIso);
+            Result<SourceMediaReview, Failure> stale = await first;
+
+            Assert.False(stale.IsOk);
+            Assert.Equal("wizardSession.probe.stale", stale.Error.Code);
+            Assert.Equal(Path.GetFullPath(secondIso), session.View.SourceMedia!.SourceIsoPath);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
     }
 
     [Fact]
-    public void ComposeAndPlan_release_lane_in_summary()
+    public void Software_stage_resolves_curated_chip_keys_through_the_catalog()
     {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(lane: "Release"));
-        Assert.True(result.Succeeded, result.Message);
-        Assert.Contains("Lane=Release", result.Message, StringComparison.Ordinal);
-    }
+        SoftwareStageViewModel software = new(() => { }, () => Task.CompletedTask);
+        software.Chips.Browsers.Single(chip => chip.Id == "zen-browser").IsSelected = true;
+        software.Chips.Editors.Single(chip => chip.Id == "cursor").IsSelected = true;
+        software.Chips.Wsl.Single(chip => chip.Id == "FedoraLinux").IsSelected = true;
 
-    [Fact]
-    public void ComposeAndPlan_appx_override_replaces_preset()
-    {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(Lab(appx: "Microsoft.GetHelp"));
-        Assert.True(result.Succeeded, result.Message);
-        Assert.Contains("Microsoft.GetHelp", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.DoesNotContain("Microsoft.BingNews", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.Contains("Microsoft.Copilot", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.Contains("Microsoft.GamingApp", result.ProfileJson!, StringComparison.Ordinal);
-    }
+        Result<PackageSelection, Failure> selection = software.ResolvePackages();
 
-    [Fact]
-    public void ComposeAndPlan_advanced_winget_overrides_chip_resolution()
-    {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(
-            Lab(winget: "jqlang.jq"));
-        Assert.True(result.Succeeded, result.Message);
-        Assert.Contains("jqlang.jq", result.ProfileJson!, StringComparison.Ordinal);
-        Assert.DoesNotContain("Anysphere.Cursor", result.ProfileJson!, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ResolvePackageChips_zen_and_cursor_emit_catalog_install_ids()
-    {
-        Result<PackageSelection, Failure> selection = WizardSession.ResolvePackageChips(
-            ["zen-browser"],
-            ["cursor"],
-            [],
-            ["FedoraLinux"]);
         Assert.True(selection.IsOk);
         Assert.Contains("Zen-Team.Zen-Browser", selection.Value.WingetInstallIds);
         Assert.Contains("Anysphere.Cursor", selection.Value.WingetInstallIds);
-        Assert.Equal("FedoraLinux", Assert.Single(selection.Value.WslProfileTokens));
+        Assert.Contains("FedoraLinux", selection.Value.WslProfileTokens);
     }
 
-    [Fact]
-    public void MergeChipAndAdvanced_advanced_wins()
+    private static Profile Profile() =>
+        new(
+            new AccountProfile("winmint", "lab-only", false),
+            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
+            DebloatMode.Online,
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []);
+
+    private static HostComposeOptions Options(string root, string iso) =>
+        new(iso, WorkDirectory: Path.Combine(root, "work"), WimIndex: 1);
+
+    private static string NewRoot()
     {
-        string merged = WizardSession.MergeChipAndAdvanced(["a", "b"], "c\nd");
-        Assert.Equal($"c{Environment.NewLine}d", merged);
+        string root = Path.Combine(Path.GetTempPath(), "winmint-session-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        return root;
     }
 
-    [Fact]
-    public void MergeChipAndAdvanced_chips_when_advanced_empty()
+    private static string WriteIso(string root)
     {
-        string merged = WizardSession.MergeChipAndAdvanced(["Brave.Brave", "jqlang.jq"], "  \n ");
-        Assert.Equal($"Brave.Brave{Environment.NewLine}jqlang.jq", merged);
+        string path = Path.Combine(root, "source.iso");
+        File.WriteAllText(path, "iso-stub");
+        return path;
     }
 
-    [Fact]
-    public void FormatBuildRecipe_includes_lane_and_optional_wim()
+    private sealed class FixedProbe : ISourceMediaProbe
     {
-        string recipe = WizardSession.FormatBuildRecipe(
-            @"D:\out\winmint.profile.json",
-            @"E:\Win11.iso",
-            "Release",
-            wimIndex: 5);
-        Assert.Contains("--image-quality Release", recipe, StringComparison.Ordinal);
-        Assert.Contains("--package-strict", recipe, StringComparison.Ordinal);
-        Assert.Contains("%LOCALAPPDATA%\\WinMint\\work\\gate-b", recipe, StringComparison.Ordinal);
-        Assert.Contains("--wim-index 5", recipe, StringComparison.Ordinal);
-        Assert.Contains("--iso \"E:\\Win11.iso\"", recipe, StringComparison.Ordinal);
-        Assert.StartsWith("winmint build ", recipe, StringComparison.Ordinal);
+        public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
+            string sourceIsoPath,
+            int wimIndex,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result.Ok<SourceMediaReview, Failure>(Review(sourceIsoPath, wimIndex)));
     }
 
-    [Fact]
-    public void FormatBuildRecipe_test_uses_programdata_without_package_strict()
+    private sealed class ControlledProbe : ISourceMediaProbe
     {
-        string recipe = WizardSession.FormatBuildRecipe(
-            @"D:\p.json",
-            @"E:\a.iso",
-            "Test",
-            ImageServicing.DefaultProWimIndex);
-        Assert.Contains("%ProgramData%\\WinMint\\work", recipe, StringComparison.Ordinal);
-        Assert.DoesNotContain("--package-strict", recipe, StringComparison.Ordinal);
-        Assert.DoesNotContain("gate-b", recipe, StringComparison.Ordinal);
+        private readonly TaskCompletionSource<Result<SourceMediaReview, Failure>> _completion =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
+            string sourceIsoPath,
+            int wimIndex,
+            CancellationToken cancellationToken = default) =>
+            _completion.Task;
+
+        public void Complete(string iso) =>
+            _completion.SetResult(Result.Ok<SourceMediaReview, Failure>(Review(iso, 1)));
     }
 
-    [Fact]
-    public void FormatBuildRecipe_omits_pro_wim_index()
+    private sealed class QueuedProbe : ISourceMediaProbe
     {
-        string recipe = WizardSession.FormatBuildRecipe(
-            @"D:\p.json",
-            @"E:\a.iso",
-            "Test",
-            ImageServicing.DefaultProWimIndex);
-        Assert.DoesNotContain("--wim-index", recipe, StringComparison.Ordinal);
+        private readonly List<TaskCompletionSource<Result<SourceMediaReview, Failure>>> _pending = [];
+
+        public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
+            string sourceIsoPath,
+            int wimIndex,
+            CancellationToken cancellationToken = default)
+        {
+            TaskCompletionSource<Result<SourceMediaReview, Failure>> completion =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pending.Add(completion);
+            return completion.Task;
+        }
+
+        public void Complete(int call, string iso) =>
+            _pending[call].SetResult(Result.Ok<SourceMediaReview, Failure>(Review(iso, 1)));
     }
 
-    [Fact]
-    public void ResolveWorkDirectory_release_defaults_to_gate_b()
+    private static SourceMediaReview Review(string iso, int index)
     {
-        Assert.Equal(
-            HostDefaults.GateBWorkDirectory,
-            WizardBuild.GateBWorkDirectory);
-        Assert.Equal(
-            HostDefaults.DefaultWorkDirectory,
-            WizardBuild.DefaultWorkDirectory);
-        Assert.Equal(
-            WizardBuild.GateBWorkDirectory,
-            WizardBuild.ResolveWorkDirectory(ImageQualityLane.Release));
-        Assert.Equal(
-            WizardBuild.DefaultWorkDirectory,
-            WizardBuild.ResolveWorkDirectory(ImageQualityLane.Test));
+        string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(iso)));
+        WimIndexInfo row = new(index, "Windows 11 Home", "ARM64", "Core", "10.0.26100.1", "26100");
+        return new(Path.GetFullPath(iso), hash, Array.AsReadOnly([row]), new(index, row.Name, row.Architecture, row.Edition, row.Version, row.Build));
     }
-
-    [Fact]
-    public void FormatBuildRecipe_emits_home_wim_index()
-    {
-        string recipe = WizardSession.FormatBuildRecipe(
-            @"D:\p.json",
-            @"E:\a.iso",
-            "Test",
-            BuildMachineEdition.HomeWimIndex);
-        Assert.Contains("--wim-index 1", recipe, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData("Professional", ImageServicing.DefaultProWimIndex)]
-    [InlineData("ProfessionalN", ImageServicing.DefaultProWimIndex)]
-    [InlineData("ProfessionalWorkstation", ImageServicing.DefaultProWimIndex)]
-    [InlineData("Core", BuildMachineEdition.HomeWimIndex)]
-    [InlineData("CoreN", BuildMachineEdition.HomeWimIndex)]
-    [InlineData("Home", BuildMachineEdition.HomeWimIndex)]
-    [InlineData(null, BuildMachineEdition.HomeWimIndex)]
-    [InlineData("", BuildMachineEdition.HomeWimIndex)]
-    public void DefaultWimIndex_follows_host_edition(string? editionId, int expected) =>
-        Assert.Equal(expected, BuildMachineEdition.DefaultWimIndexForEditionId(editionId));
 }

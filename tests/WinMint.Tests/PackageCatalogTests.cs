@@ -112,16 +112,15 @@ public class PackageCatalogTests
     }
 
     [Fact]
-    public void Wizard_resolve_maps_cursor_and_fedora()
+    public void Catalog_maps_curated_cursor_and_fedora_keys()
     {
-        Result<PackageSelection, Failure> selection = Wizard.WizardSession.ResolvePackageChips(
-            [],
-            ["cursor"],
-            [],
-            ["FedoraLinux"]);
-        Assert.True(selection.IsOk);
-        Assert.Equal("Anysphere.Cursor", Assert.Single(selection.Value.WingetInstallIds));
-        Assert.Equal("FedoraLinux", Assert.Single(selection.Value.WslProfileTokens));
+        Result<PackageSelection, Failure> tools = PackageCatalog.Default.ResolveToolKeys(["cursor"]);
+        Result<IReadOnlyList<string>, Failure> wsl =
+            PackageCatalog.Default.ResolveWslTokens(["FedoraLinux"]);
+        Assert.True(tools.IsOk);
+        Assert.True(wsl.IsOk);
+        Assert.Equal("Anysphere.Cursor", Assert.Single(tools.Value.WingetInstallIds));
+        Assert.Equal("FedoraLinux", Assert.Single(wsl.Value));
     }
 
     [Fact]

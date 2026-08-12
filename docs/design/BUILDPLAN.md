@@ -35,7 +35,7 @@ public sealed record RunOptions
     public ImageQualityLane ImageQuality { get; init; } = ImageQualityLane.Test;
     public string? SourceIsoPath { get; init; }
     public string? OutputIsoPath { get; init; }
-    // + ImageArchitecture, WindowsBuild, PackageAuditStrict, PackageStrict (caller-owned; default false),
+    // + ImageArchitecture, WindowsBuild, PackageAuditStrict, resolved PackageStrict,
     //   IncludeSmokeStubs, PackageCatalog override — see BuildArtifacts.cs
 }
 
@@ -52,9 +52,11 @@ public sealed record BuildArtifacts(
     bool PackageStrict = false);
 ```
 
+`BuildArtifacts` is BuildPlan's internal result vocabulary. Front ends enter through HostCompile: document-only `validate` / `plan` receive `HostPlan`, while build flows receive an immutable `HostComposition` with a secret-free `HostReview`. HostCompile deep-snapshots the approved artifacts and keeps them private through Apply.
+
 Stages: opcodes + params; ImageServicing maps opcode → `servicing/*.ps1`. See [CONTRACTS](CONTRACTS.md).
 
-Package planning is one internal operation over Profile, PackageCatalog, effective image architecture, and audit strictness. It returns the complete package-job slice, deterministic winget import bytes, and typed `EffectivePackageFact` rows (source, resolved install id, ProductPosture/Profile origin, reboot requirement). Wizard Review consumes those facts from the same `Plan` call; it does not re-plan packages. Execution consumes `Jobs` and `WingetImportJson`. `PackageStrict` is stamped into the guest bundle but is not implied by Release lane — callers pass it explicitly (Wizard Release Build and Gate B do; Cli defaults false).
+Package planning is one internal operation over Profile, PackageCatalog, effective image architecture, and audit strictness. It returns the complete package-job slice, deterministic winget import bytes, and typed `EffectivePackageFact` rows (source, resolved install id, ProductPosture/Profile origin, reboot requirement). Wizard Review consumes those facts from the same `Plan` call; it does not re-plan packages. Execution consumes `Jobs` and `WingetImportJson`. HostCompile resolves `PackageStrictOverride` once: Test defaults false, Release defaults true, and explicit Force/Suppress overrides the lane. The resolved bool is stamped into the guest bundle.
 
 ## Invariants
 
@@ -64,7 +66,7 @@ Package planning is one internal operation over Profile, PackageCatalog, effecti
 4. Image quality only from `RunOptions` (into `ExportWim` params).
 5. DMA enabled ⇒ Ireland sticky setup region (`DeviceRegion` 68 + `.DEFAULT` Geo) in unattend **and** settle targets in `DmaContract`.
 6. Local+autoLogon ⇒ non-empty password or `Failure` ([SECRETS](SECRETS.md)).
-7. Host order: materialize Profile → `Plan` → optional serialize → ImageServicing.Apply.
+7. Host order: materialize Profile → HostCompile composition (serialize + one `Plan`) → immutable approval → ImageServicing.Apply; Apply never reloads or replans.
 8. No repo-relative script paths in artifacts.
 
 ## Errors

@@ -33,7 +33,7 @@ Cross-cuts (reference, not a frozen file set): [CONTRACTS](design/CONTRACTS.md) 
 
 - Lanes: `Test` | `Release` (run override). AppX debloat **online** by default; caps/features offline when listed. Install engine: WinPE apply only.
 - Smoke: Local+autoLogon; DMA on acceptance Profiles; soft location warn/continue; fail-open unlock; stale heartbeat ⇒ fail-open.
-- Packages: batch/delegate OK; `Test` curated installs are best-effort + evidence; `PackageStrict` is caller-owned (default false). Gate B requires Release **and** explicit `--package-strict`.
+- Packages: batch/delegate OK; `Test` curated installs are best-effort + evidence; `Release` is package-strict by default. `--package-strict` forces strictness for either lane.
 - Secrets: prefer `passwordPath` / Wizard prompt. Host preset **`recommended`** expands → remove-list ids (never written as preset names).
 - First paint: assert paint-before-settle order in S3; ≤2.0 s is a target, not a veto on GDI vs D2D.
 - Flash: operator **Rufus DD Image** + SHA vs `digests.outputIso.sha256`; WinMint emits **Output ISO** only ([ADR-012](decisions/ADR-012-flash-outside-product-seam.md)).

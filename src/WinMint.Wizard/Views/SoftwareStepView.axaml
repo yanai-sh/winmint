@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
              x:Class="WinMint.Wizard.Views.SoftwareStepView"
-             x:DataType="vm:WizardViewModel">
+             x:DataType="vm:ISoftwareStageViewModel">
   <StackPanel Spacing="20" MaxWidth="900" HorizontalAlignment="Center" VerticalAlignment="Center">
     <TextBlock Classes="hero-title" Text="Software" />
     <TextBlock Classes="hero-sub"
@@ -18,14 +18,15 @@
       <Border Classes="panel-card" Margin="0,0,8,8">
         <StackPanel>
           <TextBlock Classes="panel-label" Text="CLEANUP" />
-          <ToggleButton Classes="chip" Content="Recommended" IsChecked="{Binding IsRecommendedPreset}" Command="{Binding SelectRecommendedPresetCommand}" />
+          <ToggleButton Classes="chip" Content="Recommended" IsChecked="{Binding Presets.IsRecommended}"
+                        Command="{Binding Presets.SelectCommand}" CommandParameter="recommended" />
         </StackPanel>
       </Border>
 
       <Border Classes="panel-card" Margin="8,0,0,8">
         <StackPanel>
           <TextBlock Classes="panel-label" Text="BROWSERS" />
-          <ItemsControl ItemsSource="{Binding BrowserChips}">
+          <ItemsControl ItemsSource="{Binding Chips.Browsers}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <WrapPanel />
@@ -47,7 +48,7 @@
       <Border Classes="panel-card" Margin="0,0,8,8">
         <StackPanel>
           <TextBlock Classes="panel-label" Text="EDITORS" />
-          <ItemsControl ItemsSource="{Binding EditorChips}">
+          <ItemsControl ItemsSource="{Binding Chips.Editors}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <WrapPanel />
@@ -69,7 +70,7 @@
       <Border Classes="panel-card" Margin="8,0,0,8">
         <StackPanel>
           <TextBlock Classes="panel-label" Text="SHELL" />
-          <ItemsControl ItemsSource="{Binding ShellChips}">
+          <ItemsControl ItemsSource="{Binding Chips.Shells}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <WrapPanel />
@@ -91,7 +92,7 @@
       <Border Classes="panel-card" Margin="0,0,8,0">
         <StackPanel>
           <TextBlock Classes="panel-label" Text="WSL" />
-          <ItemsControl ItemsSource="{Binding WslChips}">
+          <ItemsControl ItemsSource="{Binding Chips.Wsl}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <WrapPanel />
@@ -115,29 +116,31 @@
       <StackPanel Spacing="8" Margin="0,8,0,0">
         <TextBlock Classes="panel-label" Text="PRESET OVERRIDE" />
         <StackPanel Orientation="Horizontal">
-          <ToggleButton Classes="chip" Content="Acceptance" IsChecked="{Binding IsAcceptancePreset}" Command="{Binding SelectAcceptancePresetCommand}" />
-          <ToggleButton Classes="chip" Content="Empty" IsChecked="{Binding IsEmptyPreset}" Command="{Binding SelectEmptyPresetCommand}" />
+          <ToggleButton Classes="chip" Content="Acceptance" IsChecked="{Binding Presets.IsAcceptance}"
+                        Command="{Binding Presets.SelectCommand}" CommandParameter="acceptance" />
+          <ToggleButton Classes="chip" Content="Empty" IsChecked="{Binding Presets.IsEmpty}"
+                        Command="{Binding Presets.SelectCommand}" CommandParameter="empty" />
         </StackPanel>
         <TextBlock Classes="hero-sub"
                    Text="One install id or WSL token per line. When non-empty, overrides chip selections for that source. MinGit and Nilesoft Shell are always installed — not listed here and cannot be turned off." />
         <TextBlock Classes="panel-label" Text="WINGET INSTALL IDS" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
                  PlaceholderText="Anysphere.Cursor&#x0a;Zen-Team.Zen-Browser"
-                 Text="{Binding AdvancedWingetText}" />
+                 Text="{Binding Advanced.Winget}" />
         <TextBlock Classes="panel-label" Text="SCOOP IDS" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
                  PlaceholderText="curl&#x0a;komorebi"
-                 Text="{Binding AdvancedScoopText}" />
+                 Text="{Binding Advanced.Scoop}" />
         <TextBlock Classes="panel-label" Text="WSL TOKENS" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
                  PlaceholderText="FedoraLinux&#x0a;NixOS-WSL"
-                 Text="{Binding AdvancedWslText}" />
+                 Text="{Binding Advanced.Wsl}" />
       </StackPanel>
     </Expander>
 
-    <TextBlock Text="{Binding Status}"
+    <TextBlock Text="{Binding Status.Message}"
                TextWrapping="Wrap"
                Foreground="{DynamicResource SystemErrorTextColor}"
-               IsVisible="{Binding StatusIsError}" />
+               IsVisible="{Binding Status.IsError}" />
   </StackPanel>
 </UserControl>

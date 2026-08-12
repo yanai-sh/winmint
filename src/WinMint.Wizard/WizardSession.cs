@@ -1,256 +1,284 @@
-using System.Globalization;
-using System.Text;
-using WinMint.Contracts;
 using WinMint.Orchestrator;
 
 namespace WinMint.Wizard;
 
-/// <summary>Thin BuildPlan host glue — no Avalonia. Presets expand here; Profile JSON never carries preset names.</summary>
-internal static class WizardSession
+/// <summary>Stateful Living Draft owner; composition remains HostCompile's job.</summary>
+internal sealed class WizardSession : IDisposable
 {
-    public static WizardSessionResult ComposeAndPlan(WizardSessionInput input)
+    private readonly ISourceMediaProbe? _sourceMedia;
+    private Profile? _profile;
+    private HostComposeOptions? _options;
+    private byte[]? _draftIdentity;
+    private HostComposition? _approved;
+    private long _approvedRevision = -1;
+    private SourceMediaReview? _probe;
+    private string? _savedPath;
+
+    public WizardSession(ISourceMediaProbe? sourceMedia = null)
     {
-        Result<DebloatExpansion, Failure> expanded = DebloatPresets.TryExpand(input.Preset);
-        if (!expanded.IsOk)
+        _sourceMedia = sourceMedia;
+    }
+
+    public SessionView View =>
+        new(
+            Revision,
+            _probe,
+            _approved?.Review,
+            _savedPath,
+            _approved is not null && _approvedRevision == Revision);
+
+    public long Revision { get; private set; }
+
+    public long UpdateDraft(Profile profile, HostComposeOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(options);
+        Profile owned = SnapshotProfile(profile);
+        HostComposeOptions ownedOptions = SnapshotOptions(options);
+        byte[] identity = BuildPlan.SerializeProfile(owned);
+        if (_draftIdentity is not null
+            && identity.AsSpan().SequenceEqual(_draftIdentity)
+            && _options is not null
+            && OptionsEqual(_options, ownedOptions))
         {
-            return WizardSessionResult.Fail($"{expanded.Error.Code}: {expanded.Error.Message}");
+            return Revision;
         }
 
-        if (!int.TryParse(input.GeoIdText.Trim(), out int geoId))
+        Revision++;
+        _profile = owned;
+        _options = ownedOptions;
+        _draftIdentity = identity;
+        _approved = null;
+        _approvedRevision = -1;
+        _probe = null;
+        _savedPath = null;
+        return Revision;
+    }
+
+    public long InvalidateDraft()
+    {
+        Revision++;
+        _profile = null;
+        _options = null;
+        _draftIdentity = null;
+        _approved = null;
+        _approvedRevision = -1;
+        _probe = null;
+        _savedPath = null;
+        return Revision;
+    }
+
+    public async Task<Result<SourceMediaReview, Failure>> SettleProbeAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_options is null)
         {
-            return WizardSessionResult.Fail("dma.settle.geoId: must be an integer.");
+            return Result.Fail<SourceMediaReview, Failure>(
+                new Failure("wizardSession.draft.missing", "Update the draft before probing."));
         }
 
-        if (!TryParseLane(input.ImageQualityText, out ImageQualityLane lane, out string? laneError))
+        long revision = Revision;
+        HostComposeOptions options = _options;
+        int index = options.WimIndex ?? ImageServicing.DefaultProWimIndex;
+        Result<SourceMediaReview, Failure> result = await (_sourceMedia ?? SourceMediaProbe.Instance)
+            .ProbeAsync(options.SourceIsoPath, index, cancellationToken)
+            .ConfigureAwait(false);
+        if (revision != Revision || !ReferenceEquals(options, _options))
         {
-            return WizardSessionResult.Fail(laneError!);
+            return Result.Fail<SourceMediaReview, Failure>(
+                new Failure("wizardSession.probe.stale", "Discarded source-media probe for an older draft."));
         }
 
-        IReadOnlyList<string> appx = IdList.FromMultiline(input.RemoveProvisionedAppxText);
-        if (appx.Count == 0)
+        if (result.IsOk)
         {
-            appx = expanded.Value.RemoveProvisionedAppx;
+            _probe = result.Value with
+            {
+                Indexes = Array.AsReadOnly(result.Value.Indexes.Select(static row => row with { }).ToArray()),
+                Selected = result.Value.Selected is null ? null : result.Value.Selected with { },
+                SelectionMismatch = result.Value.SelectionMismatch is null
+                    ? null
+                    : result.Value.SelectionMismatch with { },
+            };
+            return Result.Ok<SourceMediaReview, Failure>(_probe);
+        }
+        return result;
+    }
+
+    public async Task<Result<HostReview, Failure>> PlanAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_profile is null || _options is null)
+        {
+            return Result.Fail<HostReview, Failure>(
+                new Failure("wizardSession.draft.missing", "Update the draft before planning."));
         }
 
-        appx = ProductPosture.UnionAppx(appx);
-
-        // UI lists override empty; when non-empty they replace preset pins for that field (union would surprise).
-        IReadOnlyList<string> caps = IdList.FromMultiline(input.RemoveCapabilitiesText);
-        if (caps.Count == 0)
+        long revision = Revision;
+        Profile profile = _profile;
+        HostComposeOptions options = _options;
+        Result<HostComposition, HostComposeError> composed = await HostCompile.ComposeAsync(
+                profile,
+                options,
+                _sourceMedia,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (revision != Revision || !ReferenceEquals(profile, _profile) || !ReferenceEquals(options, _options))
         {
-            caps = expanded.Value.RemoveCapabilities;
+            return Result.Fail<HostReview, Failure>(
+                new Failure("wizardSession.compose.stale", "Discarded composition for an older draft."));
         }
 
-        IReadOnlyList<string> feats = IdList.FromMultiline(input.DisableOptionalFeaturesText);
-        if (feats.Count == 0)
+        if (!composed.IsOk)
         {
-            feats = expanded.Value.DisableOptionalFeatures;
+            return Result.Fail<HostReview, Failure>(
+                new Failure(composed.Error.Code, composed.Error.Message));
         }
 
-        Profile profile = new(
-            new AccountProfile(
-                input.Username.Trim(),
-                input.Password,
-                input.RequireWifiDuringOobe),
-            new DmaProfile(
-                input.DmaEnabled,
-                new DmaSettleTarget(
-                    input.DmaEnabled,
-                    input.Locale.Trim(),
-                    geoId,
-                    input.TimeZoneId.Trim(),
-                    input.LocationServicesEnabled)),
-            DebloatMode.Online,
-            appx,
-            IdList.FromMultiline(input.WingetText),
-            IdList.FromMultiline(input.WingetNeedsRebootText),
-            IdList.FromMultiline(input.ScoopText),
-            IdList.FromMultiline(input.ScoopNeedsRebootText),
-            IdList.FromMultiline(input.WslText),
-            IdList.FromMultiline(input.WslNeedsRebootText),
-            caps,
-            feats);
+        _approved = composed.Value;
+        _approvedRevision = revision;
+        _probe = composed.Value.Review.SourceMedia;
+        return Result.Ok<HostReview, Failure>(composed.Value.Review);
+    }
 
-        RunOptions run = new()
+    public Result<Unit, Failure> Save(string destinationPath)
+    {
+        if (_approved is null || _approvedRevision != Revision)
         {
-            ImageQuality = lane,
-            SourceIsoPath = string.IsNullOrWhiteSpace(input.SourceIsoPath) ? null : input.SourceIsoPath.Trim(),
-            ImageArchitecture = PackageCatalog.DefaultImageArchitecture,
+            return Result.Fail<Unit, Failure>(
+                new Failure("wizardSession.approval.missing", "Plan the current draft before saving."));
+        }
+
+        string destination;
+        try
+        {
+            destination = Path.GetFullPath(destinationPath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return Result.Fail<Unit, Failure>(new Failure("wizardSession.save.path", ex.Message));
+        }
+
+        string? passwordPath = _approved.Review.AuthoredProfile.Account.PasswordPath;
+        if (!string.IsNullOrWhiteSpace(passwordPath)
+            && !Path.IsPathFullyQualified(passwordPath)
+            && _approved.SourceProfileDirectory is { } sourceDirectory
+            && !PathsEqual(sourceDirectory, Path.GetDirectoryName(destination)))
+        {
+            return Result.Fail<Unit, Failure>(
+                new Failure(
+                    "account.passwordPath.relocation",
+                    "A Profile with a relative passwordPath can only be overwritten in its original directory."));
+        }
+
+        string? directory = Path.GetDirectoryName(destination);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return Result.Fail<Unit, Failure>(
+                new Failure("wizardSession.save.path", "Destination directory is required."));
+        }
+
+        string temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllBytes(temporary, _approved.GetProfileUtf8());
+            File.Move(temporary, destination, overwrite: true);
+            _savedPath = destination;
+            return Result.Ok<Unit, Failure>(default);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            try { File.Delete(temporary); } catch { }
+            return Result.Fail<Unit, Failure>(new Failure("wizardSession.save.failed", ex.Message));
+        }
+    }
+
+    public Result<HostComposition, Failure> TryGetApplyComposition() =>
+        _approved is not null && _approvedRevision == Revision
+            ? Result.Ok<HostComposition, Failure>(_approved)
+            : Result.Fail<HostComposition, Failure>(
+                new Failure("wizardSession.approval.missing", "Plan the current draft before Apply."));
+
+    public Result<Unit, Failure> AcknowledgeApplySuccess(HostComposition appliedComposition)
+    {
+        if (_approved is null
+            || _approvedRevision != Revision
+            || !ReferenceEquals(_approved, appliedComposition))
+        {
+            return Result.Fail<Unit, Failure>(
+                new Failure("wizardSession.apply.stale", "Apply result does not match the current approval."));
+        }
+
+        _approved = null;
+        _approvedRevision = -1;
+        return Result.Ok<Unit, Failure>(default);
+    }
+
+    public void Dispose()
+    {
+        _approved = null;
+        _approvedRevision = -1;
+        _profile = null;
+        _options = null;
+        _draftIdentity = null;
+        _probe = null;
+    }
+
+    private static Profile SnapshotProfile(Profile profile) =>
+        profile with
+        {
+            Account = profile.Account with { },
+            Dma = profile.Dma with { Settle = profile.Dma.Settle with { } },
+            RemoveProvisionedAppx = Array.AsReadOnly(profile.RemoveProvisionedAppx.ToArray()),
+            WingetPackages = Array.AsReadOnly(profile.WingetPackages.ToArray()),
+            WingetNeedsReboot = Array.AsReadOnly(profile.WingetNeedsReboot.ToArray()),
+            ScoopPackages = Array.AsReadOnly(profile.ScoopPackages.ToArray()),
+            ScoopNeedsReboot = Array.AsReadOnly(profile.ScoopNeedsReboot.ToArray()),
+            WslDistros = Array.AsReadOnly(profile.WslDistros.ToArray()),
+            WslNeedsReboot = Array.AsReadOnly(profile.WslNeedsReboot.ToArray()),
+            RemoveCapabilities = Array.AsReadOnly(profile.RemoveCapabilities.ToArray()),
+            DisableOptionalFeatures = Array.AsReadOnly(profile.DisableOptionalFeatures.ToArray()),
         };
 
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile, run);
-        if (!planned.IsOk)
+    private static HostComposeOptions SnapshotOptions(HostComposeOptions options) =>
+        options with
         {
-            return WizardSessionResult.Fail($"{planned.Error.Code}: {planned.Error.Message}");
-        }
+            AuthoredSelectionLabels = options.AuthoredSelectionLabels is null
+                ? null
+                : Array.AsReadOnly(options.AuthoredSelectionLabels.ToArray()),
+        };
 
-        byte[] utf8 = BuildPlan.SerializeProfile(profile);
-        string removeSummary = appx.Count == 0
-            ? "(none)"
-            : string.Join(", ", appx);
-        string honesty = BuildPlan.FormatPlanHonesty(
-            planned.Value.Manifest,
-            profile.Account.RequireWifiDuringOobe);
-        string ok =
-            $"Plan OK. Lane={planned.Value.Manifest.ImageQuality}; removeProvisionedAppx={removeSummary}; jobs={planned.Value.Jobs.Jobs.Count}."
-            + Environment.NewLine
-            + honesty;
-        return WizardSessionResult.Ok(ok, utf8, Encoding.UTF8.GetString(utf8), planned.Value.Manifest.RequiresNetwork, planned.Value);
-    }
+    private static bool OptionsEqual(HostComposeOptions left, HostComposeOptions right) =>
+        string.Equals(left.SourceIsoPath, right.SourceIsoPath, StringComparison.Ordinal)
+        && left.ImageQuality == right.ImageQuality
+        && string.Equals(left.WorkDirectory, right.WorkDirectory, StringComparison.Ordinal)
+        && string.Equals(left.OutputIsoPath, right.OutputIsoPath, StringComparison.Ordinal)
+        && left.WimIndex == right.WimIndex
+        && left.ReuseMedia == right.ReuseMedia
+        && left.PackageStrict == right.PackageStrict
+        && left.PackageAuditStrict == right.PackageAuditStrict
+        && left.IncludeSmokeStubs == right.IncludeSmokeStubs
+        && string.Equals(left.ImageArchitecture, right.ImageArchitecture, StringComparison.Ordinal)
+        && left.WindowsBuild == right.WindowsBuild
+        && string.Equals(left.ProfileName, right.ProfileName, StringComparison.Ordinal)
+        && ReferenceEquals(left.PackageCatalog, right.PackageCatalog)
+        && (left.AuthoredSelectionLabels ?? []).SequenceEqual(
+            right.AuthoredSelectionLabels ?? [],
+            StringComparer.Ordinal);
 
-    /// <summary>CLI equivalent of Wizard Build. Release = Gate B (LocalAppData + package-strict). Wizard Apply does not need this.</summary>
-    public static string FormatBuildRecipe(
-        string profilePath,
-        string sourceIsoPath,
-        string imageQualityText,
-        int? wimIndex)
+    private static bool PathsEqual(string? left, string? right)
     {
-        string profile = QuoteArg(profilePath);
-        string iso = QuoteArg(sourceIsoPath);
-        string lane = string.IsNullOrWhiteSpace(imageQualityText) ? "Test" : imageQualityText.Trim();
-        bool gateB = lane.Equals("Release", StringComparison.OrdinalIgnoreCase);
-        // Must match HostDefaults.GateBWorkDirectory / DefaultWorkDirectory (env-expanded form for copy-paste).
-        string work = gateB
-            ? "\"%LOCALAPPDATA%\\WinMint\\work\\gate-b\""
-            : "\"%ProgramData%\\WinMint\\work\"";
-        StringBuilder sb = new();
-        sb.Append(CultureInfo.InvariantCulture, $"winmint build {profile} --iso {iso} --work {work} --image-quality {lane}");
-        if (gateB)
-        {
-            sb.Append(" --package-strict");
-        }
-
-        // Cli defaults WIM index to Pro when omitted — always emit Home (and any non-Pro) so the recipe matches Wizard intent.
-        if (wimIndex is int index)
-        {
-            if (index != ImageServicing.DefaultProWimIndex)
-            {
-                sb.Append(CultureInfo.InvariantCulture, $" --wim-index {index}");
-            }
-        }
-
-        return sb.ToString();
-    }
-
-    public static bool TryParseLane(string? raw, out ImageQualityLane lane, out string? error)
-    {
-        lane = ImageQualityLane.Test;
-        error = null;
-        if (string.IsNullOrWhiteSpace(raw) ||
-            string.Equals(raw.Trim(), "Test", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (string.Equals(raw.Trim(), "Release", StringComparison.OrdinalIgnoreCase))
-        {
-            lane = ImageQualityLane.Release;
-            return true;
-        }
-
-        error = "run.imageQuality: must be Test or Release.";
-        return false;
-    }
-
-    /// <summary>Resolve curated chip keys to Profile install ids via <see cref="PackageCatalog"/>.</summary>
-    public static Result<PackageSelection, Failure> ResolvePackageChips(
-        IEnumerable<string> browserChipKeys,
-        IEnumerable<string> editorChipKeys,
-        IEnumerable<string> shellChipKeys,
-        IEnumerable<string> wslChipKeys)
-    {
-        PackageCatalog catalog = PackageCatalog.Default;
-        IEnumerable<string> toolKeys = browserChipKeys
-            .Concat(editorChipKeys)
-            .Concat(shellChipKeys)
-            .Where(static key =>
-                !string.Equals(key, "edge", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(key, "fancywm", StringComparison.OrdinalIgnoreCase));
-        Result<PackageSelection, Failure> tools = catalog.ResolveToolKeys(toolKeys);
-        if (!tools.IsOk)
-        {
-            return tools;
-        }
-
-        Result<IReadOnlyList<string>, Failure> wsl = catalog.ResolveWslTokens(wslChipKeys);
-        if (!wsl.IsOk)
-        {
-            return Result.Fail<PackageSelection, Failure>(wsl.Error);
-        }
-
-        return Result.Ok<PackageSelection, Failure>(
-            new PackageSelection(tools.Value.WingetInstallIds, tools.Value.ScoopInstallIds, wsl.Value));
-    }
-
-    /// <summary>Advanced multiline wins when non-empty; else selected chip ids; else empty (preset fills).</summary>
-    public static string MergeChipAndAdvanced(IEnumerable<string> selectedChipIds, string? advancedMultiline)
-    {
-        IReadOnlyList<string> advanced = IdList.FromMultiline(advancedMultiline);
-        if (advanced.Count > 0)
-        {
-            return string.Join(Environment.NewLine, advanced);
-        }
-
-        List<string> chips = selectedChipIds
-            .Where(static id => !string.IsNullOrWhiteSpace(id))
-            .Select(static id => id.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        return string.Join(Environment.NewLine, chips);
-    }
-
-    private static string QuoteArg(string path)
-    {
-        string trimmed = path.Trim();
-        if (trimmed.Contains('"', StringComparison.Ordinal))
-        {
-            trimmed = trimmed.Replace("\"", "\\\"", StringComparison.Ordinal);
-        }
-
-        return $"\"{trimmed}\"";
+        if (left is null || right is null) return false;
+        return string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
+            StringComparison.OrdinalIgnoreCase);
     }
 }
 
-internal sealed record WizardSessionInput(
-    string Preset,
-    string Username,
-    string Password,
-    bool RequireWifiDuringOobe,
-    bool DmaEnabled,
-    string Locale,
-    string GeoIdText,
-    string TimeZoneId,
-    bool LocationServicesEnabled,
-    string WingetText = "",
-    string WingetNeedsRebootText = "",
-    string ScoopText = "",
-    string ScoopNeedsRebootText = "",
-    string WslText = "",
-    string WslNeedsRebootText = "",
-    string RemoveCapabilitiesText = "",
-    string DisableOptionalFeaturesText = "",
-    string RemoveProvisionedAppxText = "",
-    string SourceIsoPath = "",
-    string ImageQualityText = "Test",
-    int? WimIndex = null);
-
-/// <summary>Plan-derived (not authored) — <see cref="RequiresNetwork"/> mirrors <see cref="BuildManifest.RequiresNetwork"/>.</summary>
-internal sealed record WizardSessionResult(
-    bool Succeeded,
-    string Message,
-    byte[]? ProfileUtf8,
-    string? ProfileJson,
-    bool RequiresNetwork = false,
-    BuildArtifacts? Artifacts = null)
-{
-    public static WizardSessionResult Ok(
-        string message,
-        byte[] utf8,
-        string json,
-        bool requiresNetwork,
-        BuildArtifacts artifacts) =>
-        new(true, message, utf8, json, requiresNetwork, artifacts);
-
-    public static WizardSessionResult Fail(string message) =>
-        new(false, message, null, null);
-}
+internal sealed record SessionView(
+    long Revision,
+    SourceMediaReview? SourceMedia,
+    HostReview? Review,
+    string? SavedPath,
+    bool CanApply);

@@ -2,34 +2,34 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
              x:Class="WinMint.Wizard.Views.ReviewStepView"
-             x:DataType="vm:WizardViewModel">
+             x:DataType="vm:IReviewStageViewModel">
   <StackPanel Spacing="18" MaxWidth="760" HorizontalAlignment="Center" VerticalAlignment="Center">
     <TextBlock Classes="hero-title" Text="Review" />
-    <TextBlock Classes="hero-sub" Text="{Binding QuietSummaryText}" />
+    <TextBlock Classes="hero-sub" Text="{Binding Summary.QuietSummaryText}" />
 
     <Border Classes="iso-stage">
       <StackPanel Spacing="14">
-        <TextBlock Text="{Binding PickStripText}"
+        <TextBlock Text="{Binding Summary.PickStripText}"
                    TextWrapping="Wrap"
                    FontWeight="Medium"
-                   IsVisible="{Binding PickStripText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <TextBlock Text="{Binding QuietBlockText}"
+                   IsVisible="{Binding Summary.PickStripText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Text="{Binding Summary.QuietBlockText}"
                    TextWrapping="Wrap"
                    Opacity="0.7"
                    FontSize="13" />
-        <TextBlock Text="{Binding PlanMetaText}"
+        <TextBlock Text="{Binding Summary.PlanMetaText}"
                    TextWrapping="Wrap"
                    Opacity="0.55"
                    FontSize="12" />
 
         <Expander Header="What's included" IsExpanded="False"
-                   IsVisible="{Binding WhatsIncludedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-          <TextBlock Text="{Binding WhatsIncludedText}" TextWrapping="Wrap" Opacity="0.75" Margin="0,8,0,0" />
+                   IsVisible="{Binding Summary.WhatsIncludedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding Summary.WhatsIncludedText}" TextWrapping="Wrap" Opacity="0.75" Margin="0,8,0,0" />
         </Expander>
 
         <Expander Header="Show full plan" IsExpanded="False"
-                   IsVisible="{Binding FullPlanText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-          <TextBlock Text="{Binding FullPlanText}"
+                   IsVisible="{Binding Summary.FullPlanText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding Summary.FullPlanText}"
                      TextWrapping="Wrap"
                      Opacity="0.8"
                      Margin="0,8,0,0"
@@ -39,9 +39,9 @@
 
         <Expander Header="Plan detail" IsExpanded="False">
           <StackPanel Spacing="8" Margin="0,8,0,0">
-            <TextBlock Text="{Binding PlanSummary}" TextWrapping="Wrap" Opacity="0.75" />
+            <TextBlock Text="{Binding Summary.PlanSummary}" TextWrapping="Wrap" Opacity="0.75" />
             <Button Classes="ghost" Content="Re-run Plan" HorizontalAlignment="Left" Command="{Binding ReplanCommand}" />
-            <TextBox Text="{Binding PreviewJson}"
+            <TextBox Text="{Binding Summary.PreviewJson}"
                      IsReadOnly="True"
                      AcceptsReturn="True"
                      TextWrapping="NoWrap"
@@ -57,10 +57,10 @@
       <StackPanel Spacing="14">
         <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto" RowSpacing="8">
           <TextBlock Text="Source" Opacity="0.55" />
-          <TextBlock Grid.Column="1" Text="{Binding SourceIsoPath}" TextWrapping="Wrap" TextAlignment="Right" />
+          <TextBlock Grid.Column="1" Text="{Binding Summary.SourceIsoPath}" TextWrapping="Wrap" TextAlignment="Right" />
           <TextBlock Grid.Row="1" Text="Output" Opacity="0.55" />
           <TextBlock Grid.Row="1" Grid.Column="1"
-                     Text="{Binding OutputIsoPath}"
+                     Text="{Binding Summary.OutputIsoPath}"
                      TextWrapping="Wrap"
                      TextAlignment="Right" />
         </Grid>
@@ -69,44 +69,44 @@
           <Button Classes="primary"
                   Content="Save Profile"
                   Command="{Binding SaveProfileCommand}"
-                  IsEnabled="{Binding !IsBusy}" />
+                  IsEnabled="{Binding !Build.IsBusy}" />
           <Button Classes="primary"
                   Content="Build"
                   Command="{Binding BuildCommand}"
-                  IsEnabled="{Binding CanBuild}"
+                  IsEnabled="{Binding Build.CanBuild}"
                   ToolTip.Tip="Plans if needed, saves the profile into the workdir, then elevates Apply (UAC)." />
           <Button Classes="ghost"
                   Content="Cancel"
                   Command="{Binding CancelBuildCommand}"
-                  IsVisible="{Binding IsBusy}" />
+                  IsVisible="{Binding Build.IsBusy}" />
         </StackPanel>
 
         <ProgressBar IsIndeterminate="True"
                      Height="4"
-                     IsVisible="{Binding IsBusy}"
+                     IsVisible="{Binding Build.IsBusy}"
                      Margin="0,4,0,0" />
-        <TextBlock Text="{Binding BuildWaitHint}"
+        <TextBlock Text="{Binding Build.BuildWaitHint}"
                    TextWrapping="Wrap"
                    Opacity="0.65"
                    FontSize="12"
-                   IsVisible="{Binding IsBusy}" />
-        <TextBlock Text="{Binding BuildStatus}" TextWrapping="Wrap" Opacity="0.85" />
-        <TextBlock Text="{Binding SaveStatus}" Opacity="0.75" TextWrapping="Wrap" />
+                   IsVisible="{Binding Build.IsBusy}" />
+        <TextBlock Text="{Binding Build.BuildStatus}" TextWrapping="Wrap" Opacity="0.85" />
+        <TextBlock Text="{Binding Build.SaveStatus}" Opacity="0.75" TextWrapping="Wrap" />
 
         <Border Classes="iso-stage"
-                IsVisible="{Binding FlashGuidanceText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                IsVisible="{Binding Build.FlashGuidanceText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                 Margin="0,8,0,0"
                 Padding="12">
           <StackPanel Spacing="6">
             <TextBlock Classes="panel-label" Text="FLASH" />
-            <TextBlock Text="{Binding FlashGuidanceText}"
+            <TextBlock Text="{Binding Build.FlashGuidanceText}"
                        TextWrapping="Wrap"
                        FontSize="13" />
           </StackPanel>
         </Border>
 
         <Expander Header="CLI equivalent" IsExpanded="False" Margin="0,8,0,0">
-          <TextBox Text="{Binding BuildRecipe}"
+          <TextBox Text="{Binding Summary.BuildRecipe}"
                    IsReadOnly="True"
                    AcceptsReturn="True"
                    TextWrapping="Wrap"
@@ -117,9 +117,9 @@
       </StackPanel>
     </Border>
 
-    <TextBlock Text="{Binding Status}"
+    <TextBlock Text="{Binding Status.Message}"
                TextWrapping="Wrap"
                Foreground="{DynamicResource SystemErrorTextColor}"
-               IsVisible="{Binding StatusIsError}" />
+               IsVisible="{Binding Status.IsError}" />
   </StackPanel>
 </UserControl>

@@ -372,6 +372,54 @@ public sealed record PackageSelection(
     IReadOnlyList<string> ScoopInstallIds,
     IReadOnlyList<string> WslProfileTokens);
 
+/// <summary>Wizard-curated chip vocabulary kept beside the catalog that resolves its keys.</summary>
+public static class CuratedPackageChips
+{
+    private static readonly HashSet<string> NonPackageToolKeys =
+        new(["edge", "fancywm"], StringComparer.OrdinalIgnoreCase);
+
+    public static IReadOnlyList<CuratedChipDefinition> Browsers { get; } =
+    [
+        new("zen-browser", "Zen"),
+        new("firefox-developer-edition", "Firefox Dev"),
+        new("brave", "Brave"),
+        new("edge", "Edge"),
+    ];
+
+    public static IReadOnlyList<CuratedChipDefinition> Editors { get; } =
+    [
+        new("cursor", "Cursor"),
+        new("vscode", "VS Code"),
+        new("zed", "Zed"),
+        new("neovim", "Neovim"),
+    ];
+
+    public static IReadOnlyList<CuratedChipDefinition> Shells { get; } =
+    [
+        new("windhawk", "Windhawk"),
+        new("yasb", "YASB"),
+        new("komorebi", "Komorebi"),
+        new("fancywm", "FancyWM", IsEnabled: false, ToolTip: "Coming soon"),
+    ];
+
+    public static IReadOnlyList<CuratedChipDefinition> Wsl { get; } =
+    [
+        new("Ubuntu", "Ubuntu"),
+        new("FedoraLinux", "Fedora"),
+        new("archlinux", "Arch"),
+        new("NixOS-WSL", "NixOS"),
+        new("pengwin", "Pengwin"),
+    ];
+
+    public static bool IsPackageTool(string key) => !NonPackageToolKeys.Contains(key);
+}
+
+public sealed record CuratedChipDefinition(
+    string Key,
+    string Label,
+    bool IsEnabled = true,
+    string? ToolTip = null);
+
 internal sealed class PackageCatalogFile
 {
     [JsonPropertyName("tools")]

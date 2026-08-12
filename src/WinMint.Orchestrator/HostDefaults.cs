@@ -1,6 +1,6 @@
 namespace WinMint.Orchestrator;
 
-/// <summary>Test vs Gate B work roots. Package strictness is caller-owned (Cli/Wizard).</summary>
+/// <summary>Test vs Gate B work roots and lane-implied package strictness.</summary>
 public static class HostDefaults
 {
     public static string DefaultWorkDirectory { get; } =
@@ -21,4 +21,18 @@ public static class HostDefaults
         string.IsNullOrWhiteSpace(workDirectory)
             ? lane == ImageQualityLane.Release ? GateBWorkDirectory : DefaultWorkDirectory
             : workDirectory.Trim();
+
+    public static bool ResolvePackageStrict(
+        ImageQualityLane lane,
+        PackageStrictOverride packageStrict) =>
+        packageStrict switch
+        {
+            PackageStrictOverride.FromLane => lane == ImageQualityLane.Release,
+            PackageStrictOverride.Force => true,
+            PackageStrictOverride.Suppress => false,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(packageStrict),
+                packageStrict,
+                "Unsupported package-strict override."),
+        };
 }

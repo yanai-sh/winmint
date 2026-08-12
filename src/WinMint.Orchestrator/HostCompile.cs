@@ -1,113 +1,520 @@
+using System.Collections.ObjectModel;
+using System.Security.Cryptography;
+using WinMint.Contracts;
+
 namespace WinMint.Orchestrator;
 
-/// <summary>Orchestrator Profile → Plan → ImageServicing entry. Cli/Wizard stay thin adapters.</summary>
+/// <summary>Orchestrator Profile → immutable approval → ImageServicing entry.</summary>
 public static class HostCompile
 {
-    /// <summary>
-    /// Profile/plan failures → <see cref="Result{TOk,TErr}.Error"/>.
-    /// Plan success always yields <see cref="HostCompileResult.Plan"/>; Apply failure is
-    /// <see cref="HostCompileResult.ApplyError"/> (so Cli can emit honesty without a second Plan).
-    /// </summary>
-    public static async Task<Result<HostCompileResult, Failure>> ApplyAsync(
-        HostCompileRequest request,
+    public static Result<HostPlan, HostComposeError> PlanDocument(
+        Profile profile,
+        RunOptions? run = null)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        Profile owned = SnapshotProfile(profile);
+        RunOptions normalized = SnapshotRun(run ?? new RunOptions());
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(owned, normalized);
+        if (!planned.IsOk)
+        {
+            return ComposeFail<HostPlan>(planned.Error);
+        }
+
+        BuildArtifacts snapshot = SnapshotArtifacts(planned.Value);
+        return Result.Ok<HostPlan, HostComposeError>(
+            new HostPlan(snapshot, CreateReview(owned, snapshot, null, null, null, false, "profile", null)));
+    }
+
+    public static Result<Unit, Failure> ExportPlan(HostPlan plan, string destinationDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (string.IsNullOrWhiteSpace(destinationDirectory))
+        {
+            return Result.Fail<Unit, Failure>(
+                new Failure("hostPlan.destination.missing", "Destination directory is required."));
+        }
+
+        try
+        {
+            string destination = Path.GetFullPath(destinationDirectory);
+            Directory.CreateDirectory(destination);
+            BuildArtifacts artifacts = plan.Artifacts;
+            File.WriteAllText(Path.Combine(destination, "unattend.xml"), artifacts.Unattend.Xml);
+            File.WriteAllText(Path.Combine(destination, "jobs.json"), BuildPlan.SerializeJobsFile(artifacts.Jobs));
+            File.WriteAllText(Path.Combine(destination, "stages.json"), BuildPlan.SerializeStagesFile(artifacts.Stages));
+            File.WriteAllText(Path.Combine(destination, "manifest.json"), BuildPlan.SerializeManifestFile(artifacts.Manifest));
+            return Result.Ok<Unit, Failure>(default);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return Result.Fail<Unit, Failure>(new Failure("hostPlan.export.failed", ex.Message));
+        }
+    }
+
+    public static Task<Result<HostComposition, HostComposeError>> ComposeAsync(
+        Profile profile,
+        HostComposeOptions options,
+        ISourceMediaProbe? sourceMedia = null,
+        TimeProvider? time = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            string? sourceDirectory = !string.IsNullOrWhiteSpace(options.ProfileName)
+                && Path.IsPathFullyQualified(options.ProfileName)
+                    ? Path.GetDirectoryName(Path.GetFullPath(options.ProfileName))
+                    : null;
+            return ComposeCoreAsync(profile, options, sourceDirectory, sourceMedia, time, cancellationToken);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return Task.FromResult(Result.Fail<HostComposition, HostComposeError>(
+                new HostComposeError("hostCompose.path.invalid", ex.Message)));
+        }
+    }
+
+    public static async Task<Result<HostComposition, HostComposeError>> ComposeFileAsync(
+        string profilePath,
+        HostComposeOptions options,
+        ISourceMediaProbe? sourceMedia = null,
+        TimeProvider? time = null,
+        CancellationToken cancellationToken = default)
+    {
+        Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(profilePath);
+        if (!loaded.IsOk)
+        {
+            IReadOnlyList<DocumentError> documents = Array.AsReadOnly(loaded.Error.ToArray());
+            return Result.Fail<HostComposition, HostComposeError>(
+                new HostComposeError(
+                    "hostCompose.profile.invalid",
+                    string.Join("; ", documents.Select(static item => $"{item.Code}: {item.Message}")),
+                    documents));
+        }
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(profilePath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return Result.Fail<HostComposition, HostComposeError>(
+                new HostComposeError("hostCompose.profile.invalid", ex.Message));
+        }
+
+        HostComposeOptions named = options with { ProfileName = fullPath };
+        return await ComposeCoreAsync(
+                loaded.Value,
+                named,
+                Path.GetDirectoryName(fullPath),
+                sourceMedia,
+                time,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public static async Task<Result<ImageEvidence, Failure>> ApplyAsync(
+        HostComposition composition,
         IElevatedPlanRunner? runner = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(composition);
 
-        if (string.IsNullOrWhiteSpace(request.ProfilePath) || !File.Exists(request.ProfilePath))
+        Result<string, Failure> currentHash =
+            await HashSourceAsync(composition.SourceIsoPath, cancellationToken).ConfigureAwait(false);
+        if (!currentHash.IsOk)
         {
-            return Result.Fail<HostCompileResult, Failure>(
+            return Result.Fail<ImageEvidence, Failure>(currentHash.Error);
+        }
+
+        if (!string.Equals(currentHash.Value, composition.Review.SourceMedia!.SourceIsoSha256, StringComparison.Ordinal))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
                 new Failure(
-                    "hostCompile.profile.missing",
-                    $"Profile not found: {request.ProfilePath}"));
+                    "hostCompile.sourceIso.changed",
+                    "Source ISO changed after composition; compose again before Apply."));
         }
 
-        if (string.IsNullOrWhiteSpace(request.SourceIsoPath) || !File.Exists(request.SourceIsoPath))
-        {
-            return Result.Fail<HostCompileResult, Failure>(
-                new Failure(
-                    "hostCompile.sourceIso.missing",
-                    $"Source ISO not found: {request.SourceIsoPath}"));
-        }
-
-        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(request.ProfilePath);
-        if (!parsed.IsOk)
-        {
-            string detail = string.Join("; ", parsed.Error.Select(static i => $"{i.Code}: {i.Message}"));
-            return Result.Fail<HostCompileResult, Failure>(
-                new Failure("hostCompile.profile.invalid", detail));
-        }
-
-        // Before any DISM work: a stale publish yields an ISO that boots guest code you no longer have.
-        // Only when a real elevated run follows — an injected runner produces no bootable media, so
-        // holding those callers to the publish state would just make the suite hostage to it.
         if (runner is null && ImageServicing.CheckSupervisorFreshness() is { } staleSupervisor)
         {
-            return Result.Fail<HostCompileResult, Failure>(staleSupervisor);
+            return Result.Fail<ImageEvidence, Failure>(staleSupervisor);
         }
 
-        RunOptions runOptions = new()
-        {
-            ImageQuality = request.ImageQuality,
-            SourceIsoPath = request.SourceIsoPath.Trim(),
-            OutputIsoPath = string.IsNullOrWhiteSpace(request.OutputIsoPath) ? null : request.OutputIsoPath.Trim(),
-            ImageArchitecture = request.ImageArchitecture,
-            PackageAuditStrict = request.PackageAuditStrict,
-            PackageStrict = request.PackageStrict,
-            IncludeSmokeStubs = request.IncludeSmokeStubs,
-        };
+        Directory.CreateDirectory(composition.WorkDirectory);
+        ServicingRun run = new(
+            composition.SourceIsoPath,
+            composition.WorkDirectory,
+            composition.OutputIsoPath,
+            ProfilePath: null,
+            composition.Review.SourceMedia.Selected!.Index,
+            composition.ReuseMedia,
+            composition.Review.SourceMedia.SourceIsoSha256,
+            composition.Review.SourceMedia.Selected);
+        return await ImageServicing.ApplyAsync(
+                composition.Artifacts,
+                run,
+                runner ?? new PwshElevatedPlanRunner(),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
 
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value, runOptions);
+    private static async Task<Result<HostComposition, HostComposeError>> ComposeCoreAsync(
+        Profile profile,
+        HostComposeOptions options,
+        string? sourceProfileDirectory,
+        ISourceMediaProbe? sourceMedia,
+        TimeProvider? time,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(options);
+        IReadOnlyList<string> authoredSelectionLabels = ReadOnly(
+            options.AuthoredSelectionLabels
+                ?.Where(static label => !string.IsNullOrWhiteSpace(label))
+                .Select(static label => label.Trim())
+            ?? []);
+        if (string.IsNullOrWhiteSpace(options.SourceIsoPath))
+        {
+            return Result.Fail<HostComposition, HostComposeError>(
+                new HostComposeError("hostCompose.sourceIso.missing", "Source ISO path is required."));
+        }
+
+        string source;
+        string work;
+        string output;
+        try
+        {
+            source = Path.GetFullPath(options.SourceIsoPath.Trim());
+            work = Path.GetFullPath(HostDefaults.ResolveWorkDirectory(options.ImageQuality, options.WorkDirectory));
+            string stem = OutputIsoNaming.ProfileStem(options.ProfileName);
+            output = string.IsNullOrWhiteSpace(options.OutputIsoPath)
+                ? OutputIsoNaming.DefaultPath(work, stem + ".profile.json", options.ImageQuality, time)
+                : Path.GetFullPath(options.OutputIsoPath.Trim());
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return Result.Fail<HostComposition, HostComposeError>(
+                new HostComposeError("hostCompose.path.invalid", ex.Message));
+        }
+
+        int selectedIndex = options.WimIndex ?? ImageServicing.DefaultProWimIndex;
+        Result<SourceMediaReview, Failure> probed = await (sourceMedia ?? SourceMediaProbe.Instance)
+            .ProbeAsync(source, selectedIndex, cancellationToken)
+            .ConfigureAwait(false);
+        if (!probed.IsOk)
+        {
+            return ComposeFail<HostComposition>(probed.Error);
+        }
+
+        SourceMediaReview media = SnapshotMedia(probed.Value);
+        if (media.Selected is null)
+        {
+            SourceMediaSelectionMismatch mismatch = media.SelectionMismatch
+                ?? new SourceMediaSelectionMismatch(
+                    selectedIndex,
+                    "wim.probe.indexMissing",
+                    $"Source ISO does not contain WIM index {selectedIndex}.");
+            return Result.Fail<HostComposition, HostComposeError>(
+                new HostComposeError(mismatch.Code, mismatch.Message));
+        }
+        if (string.IsNullOrWhiteSpace(media.Selected.Name)
+            || string.IsNullOrWhiteSpace(media.Selected.Architecture)
+            || string.IsNullOrWhiteSpace(media.Selected.Edition)
+            || string.IsNullOrWhiteSpace(media.Selected.Build))
+        {
+            return Result.Fail<HostComposition, HostComposeError>(
+                new HostComposeError(
+                    "hostCompose.sourceMedia.incomplete",
+                    "Selected WIM must report name, architecture, edition, and build."));
+        }
+        string selectedArchitecture = PackageCatalog.NormalizeArch(media.Selected.Architecture);
+        if (!string.IsNullOrWhiteSpace(options.ImageArchitecture)
+            && !string.Equals(
+                PackageCatalog.NormalizeArch(options.ImageArchitecture),
+                selectedArchitecture,
+                StringComparison.Ordinal))
+        {
+            return Result.Fail<HostComposition, HostComposeError>(
+                new HostComposeError(
+                    "hostCompose.imageArchitecture.mismatch",
+                    $"Selected WIM architecture '{media.Selected.Architecture}' does not match '{options.ImageArchitecture}'."));
+        }
+
+        int? selectedBuild = int.TryParse(media.Selected.Build, out int parsedBuild) ? parsedBuild : null;
+        if (options.WindowsBuild is int expectedBuild && selectedBuild != expectedBuild)
+        {
+            return Result.Fail<HostComposition, HostComposeError>(
+                new HostComposeError(
+                    "hostCompose.windowsBuild.mismatch",
+                    $"Selected WIM build '{media.Selected.Build}' does not match '{expectedBuild}'."));
+        }
+
+        Profile ownedProfile = SnapshotProfile(profile);
+        byte[] canonical = BuildPlan.SerializeProfile(ownedProfile);
+        RunOptions run = new()
+        {
+            ImageQuality = options.ImageQuality,
+            SourceIsoPath = source,
+            OutputIsoPath = output,
+            ImageArchitecture = selectedArchitecture,
+            WindowsBuild = selectedBuild ?? options.WindowsBuild,
+            PackageAuditStrict = options.PackageAuditStrict,
+            PackageStrict = HostDefaults.ResolvePackageStrict(options.ImageQuality, options.PackageStrict),
+            IncludeSmokeStubs = options.IncludeSmokeStubs,
+            PackageCatalog = options.PackageCatalog,
+        };
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(ownedProfile, run);
         if (!planned.IsOk)
         {
-            return Result.Fail<HostCompileResult, Failure>(planned.Error);
+            return ComposeFail<HostComposition>(planned.Error);
         }
 
-        string work = HostDefaults.ResolveWorkDirectory(request.ImageQuality, request.WorkDirectory);
-        Directory.CreateDirectory(work);
+        BuildArtifacts snapshot = SnapshotArtifacts(planned.Value);
+        string stemValue = OutputIsoNaming.ProfileStem(options.ProfileName);
+        HostReview review = CreateReview(
+            ownedProfile,
+            snapshot,
+            media,
+            work,
+            output,
+            options.ReuseMedia,
+            stemValue,
+            authoredSelectionLabels);
+        return Result.Ok<HostComposition, HostComposeError>(
+            new HostComposition(
+                snapshot,
+                review,
+                canonical,
+                sourceProfileDirectory,
+                source,
+                work,
+                output,
+                options.ReuseMedia));
+    }
 
-        ServicingRun run = new(
-            SourceIsoPath: request.SourceIsoPath.Trim(),
-            WorkDirectory: work,
-            OutputIsoPath: runOptions.OutputIsoPath,
-            ProfilePath: request.ProfilePath.Trim(),
-            WimIndex: request.WimIndex,
-            ReuseMedia: request.ReuseMedia);
+    private static HostReview CreateReview(
+        Profile profile,
+        BuildArtifacts artifacts,
+        SourceMediaReview? media,
+        string? work,
+        string? output,
+        bool reuseMedia,
+        string profileStem,
+        IEnumerable<string>? authoredSelectionLabels) =>
+        new(
+            SnapshotProfile(profile) with
+            {
+                Account = profile.Account with { Password = null },
+            },
+            System.Text.Encoding.UTF8.GetString(BuildPlan.SerializeProfile(
+                SnapshotProfile(profile) with
+                {
+                    Account = profile.Account with { Password = null },
+                })),
+            media,
+            work,
+            output,
+            reuseMedia,
+            profileStem,
+            artifacts.Manifest.ImageQuality,
+            artifacts.PackageStrict,
+            artifacts.Manifest.RequiresNetwork,
+            ReadOnly(artifacts.RemoveProvisionedAppx),
+            ReadOnly(artifacts.EffectivePackages),
+            ReadOnly(artifacts.Jobs.Jobs.Select(SnapshotJob)),
+            ReadOnly(artifacts.Stages.Stages.Select(SnapshotStage)),
+            artifacts.BraveSelected,
+            ReadOnly(artifacts.EffectivePackages
+                .Where(static package =>
+                    package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store)
+                .Select(static package => package.ResolvedInstallId)),
+            ReadOnly(artifacts.EffectivePackages
+                .Where(static package => package.Source == EffectivePackageSource.Scoop)
+                .Select(static package => package.ResolvedInstallId)),
+            ReadOnly(authoredSelectionLabels ?? []));
 
-        IElevatedPlanRunner effective = runner ?? new PwshElevatedPlanRunner();
-        Result<ImageEvidence, Failure> applied =
-            await ImageServicing.ApplyAsync(planned.Value, run, effective, cancellationToken)
-                .ConfigureAwait(false);
-        if (!applied.IsOk)
+    private static Profile SnapshotProfile(Profile profile) =>
+        profile with
         {
-            return Result.Ok<HostCompileResult, Failure>(
-                new HostCompileResult(planned.Value, Evidence: null, applied.Error));
-        }
+            Account = profile.Account with { },
+            Dma = profile.Dma with { Settle = profile.Dma.Settle with { } },
+            RemoveProvisionedAppx = ReadOnly(profile.RemoveProvisionedAppx),
+            WingetPackages = ReadOnly(profile.WingetPackages),
+            WingetNeedsReboot = ReadOnly(profile.WingetNeedsReboot),
+            ScoopPackages = ReadOnly(profile.ScoopPackages),
+            ScoopNeedsReboot = ReadOnly(profile.ScoopNeedsReboot),
+            WslDistros = ReadOnly(profile.WslDistros),
+            WslNeedsReboot = ReadOnly(profile.WslNeedsReboot),
+            RemoveCapabilities = ReadOnly(profile.RemoveCapabilities),
+            DisableOptionalFeatures = ReadOnly(profile.DisableOptionalFeatures),
+            Policies = profile.Policies is null ? null : profile.Policies with { },
+            Drivers = profile.Drivers is null ? null : profile.Drivers with { },
+        };
 
-        return Result.Ok<HostCompileResult, Failure>(
-            new HostCompileResult(planned.Value, applied.Value, ApplyError: null));
+    private static RunOptions SnapshotRun(RunOptions run) => new()
+    {
+        ImageQuality = run.ImageQuality,
+        SourceIsoPath = run.SourceIsoPath,
+        OutputIsoPath = run.OutputIsoPath,
+        ImageArchitecture = run.ImageArchitecture,
+        WindowsBuild = run.WindowsBuild,
+        PackageAuditStrict = run.PackageAuditStrict,
+        PackageStrict = run.PackageStrict,
+        IncludeSmokeStubs = run.IncludeSmokeStubs,
+        PackageCatalog = run.PackageCatalog,
+    };
+
+    private static BuildArtifacts SnapshotArtifacts(BuildArtifacts artifacts) =>
+        new(
+            artifacts.Unattend with { },
+            new JobsArtifact(artifacts.Jobs.SchemaVersion, ReadOnly(artifacts.Jobs.Jobs.Select(SnapshotJob))),
+            new ServicingStageList(ReadOnly(artifacts.Stages.Stages.Select(SnapshotStage))),
+            artifacts.Dma with
+            {
+                Settle = artifacts.Dma.Settle is null ? null : artifacts.Dma.Settle with { },
+            },
+            artifacts.Manifest with { },
+            artifacts.Account with { },
+            ReadOnly(artifacts.RemoveProvisionedAppx),
+            ReadOnly(artifacts.EffectivePackages),
+            artifacts.WingetImportJson?.ToArray(),
+            artifacts.PackageStrict,
+            artifacts.BraveSelected);
+
+    private static ProvisionJob SnapshotJob(ProvisionJob job) =>
+        job with
+        {
+            WslFromFileAssetNames = job.WslFromFileAssetNames is null ? null : ReadOnly(job.WslFromFileAssetNames),
+            ScoopBuckets = job.ScoopBuckets is null ? null : ReadOnly(job.ScoopBuckets),
+        };
+
+    private static ServicingStage SnapshotStage(ServicingStage stage) =>
+        new(stage.Opcode, new Dictionary<string, string>(stage.Parameters, StringComparer.Ordinal));
+
+    private static SourceMediaReview SnapshotMedia(SourceMediaReview media) =>
+        media with
+        {
+            Indexes = ReadOnly(media.Indexes.Select(static row => row with { })),
+            Selected = media.Selected is null ? null : media.Selected with { },
+            SelectionMismatch = media.SelectionMismatch is null ? null : media.SelectionMismatch with { },
+        };
+
+    private static ReadOnlyCollection<T> ReadOnly<T>(IEnumerable<T> values) =>
+        Array.AsReadOnly(values.ToArray());
+
+    private static Result<T, HostComposeError> ComposeFail<T>(Failure failure) =>
+        Result.Fail<T, HostComposeError>(new HostComposeError(failure.Code, failure.Message));
+
+    private static async Task<Result<string, Failure>> HashSourceAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using FileStream stream = new(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                1024 * 1024,
+                useAsync: true);
+            byte[] hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+            return Result.Ok<string, Failure>(Convert.ToHexStringLower(hash));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Result.Fail<string, Failure>(
+                new Failure("hostCompile.sourceIso.unreadable", ex.Message));
+        }
     }
 }
 
-/// <summary>One Plan; Evidence set when Apply succeeds. ApplyError set when Plan ok but Apply failed.</summary>
-public sealed record HostCompileResult(
-    BuildArtifacts Plan,
-    ImageEvidence? Evidence,
-    Failure? ApplyError)
-{
-    public bool Succeeded => Evidence is not null && ApplyError is null;
-}
-
-public sealed record HostCompileRequest(
-    string ProfilePath,
+public sealed record HostComposeOptions(
     string SourceIsoPath,
     ImageQualityLane ImageQuality = ImageQualityLane.Test,
     string? WorkDirectory = null,
     string? OutputIsoPath = null,
     int? WimIndex = null,
     bool ReuseMedia = false,
-    bool PackageStrict = false,
+    PackageStrictOverride PackageStrict = PackageStrictOverride.FromLane,
     bool PackageAuditStrict = false,
     bool IncludeSmokeStubs = false,
-    string? ImageArchitecture = null);
+    string? ImageArchitecture = null,
+    int? WindowsBuild = null,
+    string? ProfileName = null,
+    PackageCatalog? PackageCatalog = null,
+    IReadOnlyList<string>? AuthoredSelectionLabels = null);
+
+public sealed record HostComposeError(
+    string Code,
+    string Message,
+    IReadOnlyList<DocumentError>? Documents = null);
+
+public sealed record HostReview(
+    Profile AuthoredProfile,
+    string AuthoredProfileJson,
+    SourceMediaReview? SourceMedia,
+    string? WorkDirectory,
+    string? OutputIsoPath,
+    bool ReuseMedia,
+    string ProfileStem,
+    ImageQualityLane ImageQuality,
+    bool PackageStrict,
+    bool RequiresNetwork,
+    IReadOnlyList<string> RemoveProvisionedAppx,
+    IReadOnlyList<EffectivePackageFact> EffectivePackages,
+    IReadOnlyList<ProvisionJob> Jobs,
+    IReadOnlyList<ServicingStage> Stages,
+    bool BraveSelected,
+    IReadOnlyList<string> EffectiveWinget,
+    IReadOnlyList<string> EffectiveScoop,
+    IReadOnlyList<string> AuthoredSelectionLabels);
+
+public sealed class HostComposition
+{
+    private readonly BuildArtifacts _artifacts;
+    private readonly byte[] _profileUtf8;
+
+    internal HostComposition(
+        BuildArtifacts artifacts,
+        HostReview review,
+        byte[] profileUtf8,
+        string? sourceProfileDirectory,
+        string sourceIsoPath,
+        string workDirectory,
+        string outputIsoPath,
+        bool reuseMedia)
+    {
+        _artifacts = artifacts;
+        Review = review;
+        _profileUtf8 = profileUtf8.ToArray();
+        SourceProfileDirectory = sourceProfileDirectory;
+        SourceIsoPath = sourceIsoPath;
+        WorkDirectory = workDirectory;
+        OutputIsoPath = outputIsoPath;
+        ReuseMedia = reuseMedia;
+    }
+
+    public HostReview Review { get; }
+    public string SourceIsoPath { get; }
+    public string WorkDirectory { get; }
+    public string OutputIsoPath { get; }
+    public bool ReuseMedia { get; }
+    public byte[] GetProfileUtf8() => _profileUtf8.ToArray();
+    internal BuildArtifacts Artifacts => _artifacts;
+    public string? SourceProfileDirectory { get; }
+}
+
+public sealed class HostPlan
+{
+    internal HostPlan(BuildArtifacts artifacts, HostReview review)
+    {
+        Artifacts = artifacts;
+        Review = review;
+    }
+
+    public HostReview Review { get; }
+    internal BuildArtifacts Artifacts { get; }
+}
+
+public readonly record struct Unit;

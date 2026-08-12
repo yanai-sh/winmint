@@ -18,6 +18,7 @@
 | **S1** | BuildPlan (`TryParseProfile`, `SerializeProfile`, `Plan`) | In-process |
 | **S1b** | Host DebloatPresets + Wizard packages → Profile → Plan/Serialize | In-process |
 | **S1c** | `ProfileFile.TryLoad` | Local temp dirs |
+| **S1d** | HostCompile (`PlanDocument`, `ComposeAsync`, `ComposeFileAsync`, `ApplyAsync`) + WizardSession command sequences | Source-media probe / elevated-runner fakes |
 | **S2** | ImageServicing (`Apply`) | DISM (fake when port exists) |
 | **S3** | ProvisioningSession (`Run` + env adapters) | Local-substitutable OS |
 | **S4** | Hyper-V Smoke acceptance | Harness + VM |
@@ -43,6 +44,10 @@ Bad JSON → document errors. No password + Local+autoLogon → Plan failure. DM
 ### S1c — ProfileFile
 
 Real temporary directories only. Assert absolute + Profile-relative resolution, ambient drive/root-relative fail closed, missing files, CR/LF strip, empty → Plan `account.password.required`.
+
+### S1d — Host composition / Living Draft
+
+Assert immutable review and private approved-plan behavior through HostCompile and WizardSession. Drive Wizard navigation gates through `WizardShellViewModel`, and stage behavior through the Source, Account, Software, and Review binding interfaces—not private formatting helpers. A fake `ISourceMediaProbe` supplies Source ISO hash and selected-WIM metadata; observe materialized servicing facts through `IElevatedPlanRunner`. Cover source changes before elevation, deterministic output naming, structured document errors, relative-`passwordPath` Save relocation, dirty invalidation, out-of-order async result rejection, retry after Apply failure, and exact-handle success acknowledgement. Do not add an `IImageServicing` port.
 
 ### S2 — ImageServicing
 

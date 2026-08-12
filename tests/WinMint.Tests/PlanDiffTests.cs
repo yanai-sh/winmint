@@ -1,19 +1,56 @@
 using WinMint.Orchestrator;
 using WinMint.Contracts;
-using WinMint.Wizard;
 
 namespace WinMint.Tests;
 
 public class PlanDiffTests
 {
     [Fact]
+    public void Host_review_projects_curated_package_facts_for_single_argument_diff()
+    {
+        Profile profile = Lab() with
+        {
+            WingetPackages = [ProductPosture.BraveWingetId, "Anysphere.Cursor"],
+            ScoopPackages = ["curl"],
+        };
+        Result<BuildArtifacts, Failure> artifacts = BuildPlan.Plan(profile);
+        Assert.True(artifacts.IsOk, artifacts.IsOk ? null : artifacts.Error.Message);
+        Assert.True(artifacts.Value.BraveSelected);
+
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(profile);
+        Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
+
+        HostReview review = planned.Value.Review;
+        Assert.True(review.BraveSelected);
+        Assert.Contains("Anysphere.Cursor", review.EffectiveWinget);
+        Assert.Contains("curl", review.EffectiveScoop);
+
+        string text = PlanDiff.Format(review);
+        Assert.Contains("Brave policies — you chose", text, StringComparison.Ordinal);
+        Assert.Contains("Winget Anysphere.Cursor — you chose", text, StringComparison.Ordinal);
+        Assert.Contains("Scoop curl — you chose", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildPlan_is_the_authority_for_Brave_selection()
+    {
+        Result<BuildArtifacts, Failure> artifacts = BuildPlan.Plan(Lab());
+        Assert.True(artifacts.IsOk);
+        Assert.False(artifacts.Value.BraveSelected);
+
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(Lab());
+        Assert.True(host.IsOk);
+        Assert.Equal(artifacts.Value.BraveSelected, host.Value.Review.BraveSelected);
+    }
+
+    [Fact]
     public void Format_online_appx_removals_are_after_sign_in_with_safety_net()
     {
         Profile profile = Lab();
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(profile);
         Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
 
-        string text = PlanDiff.Format(planned.Value, profile);
+        string text = PlanDiff.Format(planned.Value.Review);
         int duringBuild = text.IndexOf("During image build", StringComparison.OrdinalIgnoreCase);
         int afterSignIn = text.IndexOf("After first sign-in", StringComparison.OrdinalIgnoreCase);
         int safetyNet = text.IndexOf("AppX safety net — always", StringComparison.OrdinalIgnoreCase);
@@ -28,10 +65,10 @@ public class PlanDiffTests
     public void Format_offline_appx_removals_are_during_image_build()
     {
         Profile profile = Lab() with { DebloatMode = DebloatMode.Offline };
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(profile);
         Assert.True(planned.IsOk);
 
-        string text = PlanDiff.Format(planned.Value, profile);
+        string text = PlanDiff.Format(planned.Value.Review);
         int duringBuild = text.IndexOf("During image build", StringComparison.OrdinalIgnoreCase);
         int afterSignIn = text.IndexOf("After first sign-in", StringComparison.OrdinalIgnoreCase);
         int bingNews = text.IndexOf("Microsoft.BingNews", StringComparison.OrdinalIgnoreCase);
@@ -45,10 +82,10 @@ public class PlanDiffTests
     public void Format_expands_winget_import_and_marks_constants()
     {
         Profile profile = Lab() with { WingetPackages = ["Anysphere.Cursor"] };
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(profile);
         Assert.True(planned.IsOk);
 
-        string text = PlanDiff.Format(planned.Value, profile);
+        string text = PlanDiff.Format(planned.Value.Review);
 
         Assert.Contains("Winget Git.MinGit — always", text, StringComparison.Ordinal);
         Assert.Contains("Winget Microsoft.PowerShell — always", text, StringComparison.Ordinal);
@@ -59,20 +96,14 @@ public class PlanDiffTests
         Assert.DoesNotContain("Winget import", text, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("not-json")]
-    public void Format_uses_effective_facts_when_import_json_is_unavailable(string? importJson)
+    [Fact]
+    public void Format_uses_effective_facts_without_generated_package_json()
     {
         Profile profile = Lab() with { WingetPackages = ["Anysphere.Cursor"] };
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(profile);
         Assert.True(planned.IsOk);
-        BuildArtifacts artifacts = planned.Value with
-        {
-            WingetImportJson = importJson is null ? null : System.Text.Encoding.UTF8.GetBytes(importJson),
-        };
 
-        string text = PlanDiff.Format(artifacts, profile);
+        string text = PlanDiff.Format(planned.Value.Review);
 
         Assert.Contains("Winget Git.MinGit — always", text, StringComparison.Ordinal);
         Assert.Contains("Winget Anysphere.Cursor — you chose", text, StringComparison.Ordinal);
@@ -86,17 +117,17 @@ public class PlanDiffTests
         string expected)
     {
         Profile profile = Lab();
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(profile);
         Assert.True(planned.IsOk);
-        BuildArtifacts artifacts = planned.Value with
+        HostReview review = planned.Value.Review with
         {
-            Jobs = new JobsArtifact(
-                planned.Value.Jobs.SchemaVersion,
-                [new ProvisionJob("missing.package", kind, PackageId: "Missing.Package")]),
+            Jobs = [new ProvisionJob("missing.package", kind, PackageId: "Missing.Package")],
             EffectivePackages = [],
+            EffectiveWinget = [],
+            EffectiveScoop = [],
         };
 
-        string text = PlanDiff.Format(artifacts, profile);
+        string text = PlanDiff.Format(review);
 
         Assert.Contains(expected, text, StringComparison.Ordinal);
     }

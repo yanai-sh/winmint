@@ -32,7 +32,7 @@ public sealed record RunOptions
     /// <summary>When true, native ARM64 audit job fails closed on emulated/x64 binaries (SL7/Primary).</summary>
     public bool PackageAuditStrict { get; init; }
 
-    /// <summary>When true, package install failures fail the session (harness/Primary). Caller-owned; default best-effort.</summary>
+    /// <summary>Resolved host policy: when true, package install failures fail the session.</summary>
     public bool PackageStrict { get; init; }
 
     /// <summary>When true, Plan emits smoke.stub.* jobs (Smoke/acceptance harness). Default false.</summary>
@@ -46,6 +46,13 @@ public enum ImageQualityLane
 {
     Test,
     Release,
+}
+
+public enum PackageStrictOverride
+{
+    FromLane,
+    Force,
+    Suppress,
 }
 
 public sealed record ExportLane(string Name, string Compression, string Cleanup)
@@ -69,7 +76,8 @@ public sealed record BuildArtifacts(
     IReadOnlyList<string> RemoveProvisionedAppx,
     IReadOnlyList<EffectivePackageFact> EffectivePackages,
     byte[]? WingetImportJson = null,
-    bool PackageStrict = false);
+    bool PackageStrict = false,
+    bool BraveSelected = false);
 
 public sealed record EffectivePackageFact(
     EffectivePackageSource Source,
@@ -104,6 +112,10 @@ public static class StageParams
     public const string MediaDir = "mediaDir";
     public const string WimIndex = "wimIndex";
     public const string ReuseMedia = "reuseMedia";
+    public const string SourceIsoSha256 = "sourceIsoSha256";
+    public const string ImageName = "imageName";
+    public const string ImageEdition = "imageEdition";
+    public const string ImageBuild = "imageBuild";
     public const string PayloadDir = "payloadDir";
     public const string UnattendPath = "unattendPath";
     public const string ShellTarget = "shellTarget";

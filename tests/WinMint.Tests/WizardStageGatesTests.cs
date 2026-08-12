@@ -1,105 +1,234 @@
+using System.Security.Cryptography;
+using WinMint.Orchestrator;
 using WinMint.Wizard;
+using WinMint.Wizard.ViewModels;
 
 namespace WinMint.Tests;
 
 public class WizardStageGatesTests
 {
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public void CanGoTo_Source_always_true(bool sourceReady, bool identityReady)
+    [Fact]
+    public void Stage_views_bind_through_single_digit_interfaces()
     {
-        Assert.True(WizardStageGates.CanGoTo(WizardStageGates.Source, sourceReady, identityReady));
-    }
-
-    [Theory]
-    [InlineData(WizardStageGates.Account)]
-    [InlineData(WizardStageGates.Software)]
-    public void CanGoTo_Account_or_Software_requires_source(int target)
-    {
-        Assert.False(WizardStageGates.CanGoTo(target, sourceReady: false, identityReady: true));
-        Assert.True(WizardStageGates.CanGoTo(target, sourceReady: true, identityReady: false));
+        Assert.InRange(typeof(ISourceStageViewModel).GetProperties().Length, 1, 9);
+        Assert.InRange(typeof(IAccountStageViewModel).GetProperties().Length, 1, 9);
+        Assert.InRange(typeof(ISoftwareStageViewModel).GetProperties().Length, 1, 9);
+        Assert.InRange(typeof(IReviewStageViewModel).GetProperties().Length, 1, 9);
     }
 
     [Fact]
-    public void CanGoTo_Review_requires_source_and_identity()
+    public async Task Shell_navigation_enforces_source_then_identity()
     {
-        Assert.False(WizardStageGates.CanGoTo(WizardStageGates.Review, false, false));
-        Assert.False(WizardStageGates.CanGoTo(WizardStageGates.Review, true, false));
-        Assert.False(WizardStageGates.CanGoTo(WizardStageGates.Review, false, true));
-        Assert.True(WizardStageGates.CanGoTo(WizardStageGates.Review, true, true));
-    }
+        string iso = WriteIso();
+        try
+        {
+            using WizardShellViewModel shell = new(null, null, new FixedProbe());
+            Assert.False(shell.CanGoToAccount);
+            Assert.False(shell.CanGoToReview);
 
-    [Theory]
-    [InlineData(null, "secret")]
-    [InlineData("", "secret")]
-    [InlineData("   ", "secret")]
-    [InlineData("winmint", null)]
-    [InlineData("winmint", "")]
-    public void IdentityReady_false_when_username_blank_or_password_empty(string? username, string? password)
-    {
-        Assert.False(WizardStageGates.IdentityReady(username, password));
-    }
+            shell.Source.SourceIsoPath = iso;
+            Assert.True(shell.CanGoToAccount);
+            Assert.True(shell.CanGoToSoftware);
+            Assert.False(shell.CanGoToReview);
 
-    [Fact]
-    public void IdentityReady_true_when_trimmed_username_and_password_set()
-    {
-        Assert.True(WizardStageGates.IdentityReady(" winmint ", "lab-only"));
-    }
+            await shell.GoToAccountCommand.ExecuteAsync(null);
+            Assert.True(shell.IsAccountStep);
+            shell.Account.Password = "lab-only";
+            Assert.True(shell.CanGoToReview);
 
-    [Fact]
-    public void CanBuild_requires_all_ready_and_not_busy()
-    {
-        Assert.False(WizardStageGates.CanBuild(false, true, true, false));
-        Assert.False(WizardStageGates.CanBuild(true, false, true, false));
-        Assert.False(WizardStageGates.CanBuild(true, true, false, false));
-        Assert.False(WizardStageGates.CanBuild(true, true, true, true));
-        Assert.True(WizardStageGates.CanBuild(true, true, true, false));
+            await shell.GoToReviewCommand.ExecuteAsync(null);
+            Assert.True(shell.IsReviewStep);
+            Assert.NotNull(shell.Review);
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
     }
 
     [Fact]
-    public void CanBuild_profileReady_means_planned_or_saved_not_only_disk_path()
+    public async Task Shell_build_gate_tracks_only_current_session_approval()
     {
-        // Gate takes a bool — callers pass (_lastProfileUtf8 != null || saved path).
-        Assert.True(WizardStageGates.CanBuild(true, true, profileReady: true, isBusy: false));
-        Assert.False(WizardStageGates.CanBuild(true, true, profileReady: false, isBusy: false));
+        string iso = WriteIso();
+        try
+        {
+            using WizardShellViewModel shell = new(null, null, new FixedProbe());
+            shell.Source.SourceIsoPath = iso;
+            shell.Account.Password = "lab-only";
+            Assert.False(shell.CanBuild);
+
+            await shell.ReplanAsync();
+            Assert.True(shell.CanBuild);
+
+            shell.Account.Username = "changed";
+            Assert.False(shell.CanBuild);
+            Assert.Null(shell.Review);
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
     }
 
     [Fact]
-    public void CanAdvance_from_Software_requires_source_and_identity()
+    public async Task Empty_authored_preset_leaves_effective_appx_to_HostReview()
     {
-        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Software, sourceReady: true, identityReady: false));
-        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Software, sourceReady: false, identityReady: true));
-        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.Software, sourceReady: true, identityReady: true));
+        string iso = WriteIso();
+        try
+        {
+            using WizardShellViewModel shell = new(null, null, new FixedProbe());
+            shell.Source.SourceIsoPath = iso;
+            shell.Account.Password = "lab-only";
+            shell.Software.Presets.Value = DebloatPresets.Empty;
+
+            await shell.ReplanAsync();
+
+            string postureApp = ProductPosture.AppxIds[0];
+            Assert.DoesNotContain(postureApp, shell.Review!.Summary.PreviewJson, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(postureApp, shell.Review.Summary.FullPlanText, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
     }
 
     [Fact]
-    public void CanAdvance_from_Source_requires_source()
+    public async Task Replan_command_is_disabled_during_apply_and_cannot_replace_approval()
     {
-        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Source, sourceReady: false, identityReady: true));
-        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.Source, sourceReady: true, identityReady: false));
+        string iso = WriteIso();
+        try
+        {
+            TaskCompletionSource enteredApply = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource releaseApply = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            using WizardShellViewModel shell = new(
+                null,
+                null,
+                new FixedProbe(),
+                async (composition, cancellationToken) =>
+                {
+                    enteredApply.SetResult();
+                    await releaseApply.Task.WaitAsync(cancellationToken);
+                    return WizardBuildResult.Ok(
+                        "Image OK",
+                        composition.OutputIsoPath,
+                        composition.WorkDirectory,
+                        new Dictionary<string, string>());
+                });
+            shell.Source.SourceIsoPath = iso;
+            shell.Account.Password = "lab-only";
+            await shell.ReplanAsync();
+            IReviewStageViewModel review = shell.Review!;
+
+            Task build = shell.BuildCommand.ExecuteAsync(null);
+            await enteredApply.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+            Assert.True(shell.IsBusy);
+            Assert.False(review.ReplanCommand.CanExecute(null));
+            await review.ReplanCommand.ExecuteAsync(null);
+            Assert.Same(review, shell.Review);
+
+            releaseApply.SetResult();
+            await build;
+            Assert.False(shell.CanBuild);
+            Assert.False(review.Status.IsError);
+            Assert.True(review.ReplanCommand.CanExecute(null));
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
     }
 
     [Fact]
-    public void CanAdvance_from_Account_requires_source_only()
+    public async Task Unexpected_apply_success_acknowledgement_failure_is_reported()
     {
-        Assert.False(WizardStageGates.CanAdvance(WizardStageGates.Account, sourceReady: false, identityReady: true));
-        Assert.True(WizardStageGates.CanAdvance(WizardStageGates.Account, sourceReady: true, identityReady: false));
+        string iso = WriteIso();
+        try
+        {
+            WizardShellViewModel? shell = null;
+            shell = new(
+                null,
+                null,
+                new FixedProbe(),
+                (composition, _) =>
+                {
+                    shell!.Account.Username = "changed-during-apply";
+                    return Task.FromResult(WizardBuildResult.Ok(
+                        "Image OK",
+                        composition.OutputIsoPath,
+                        composition.WorkDirectory,
+                        new Dictionary<string, string>()));
+                });
+            using (shell)
+            {
+                shell.Source.SourceIsoPath = iso;
+                shell.Account.Password = "lab-only";
+                await shell.ReplanAsync();
+
+                await shell.BuildCommand.ExecuteAsync(null);
+
+                Assert.NotNull(shell.Review);
+                Assert.True(shell.Review.Status.IsError);
+                Assert.Contains("wizardSession.apply.stale", shell.Review.Status.Message, StringComparison.Ordinal);
+                Assert.Equal("", shell.Review.Build.FlashGuidanceText);
+            }
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
     }
 
     [Fact]
-    public void CanGoTo_skips_Software_when_source_and_identity_ready()
+    public async Task Review_preserves_authored_Edge_chip_label_without_install_job_inference()
     {
-        Assert.True(WizardStageGates.CanGoTo(WizardStageGates.Review, sourceReady: true, identityReady: true));
+        string iso = WriteIso();
+        try
+        {
+            using WizardShellViewModel shell = new(null, null, new FixedProbe());
+            shell.Source.SourceIsoPath = iso;
+            shell.Account.Password = "lab-only";
+            shell.Software.Chips.Browsers.Single(chip => chip.Id == "edge").IsSelected = true;
+
+            await shell.ReplanAsync();
+
+            Assert.Contains("Edge", shell.Review!.Summary.PickStripText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
     }
 
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(4)]
-    public void CanGoTo_out_of_range_is_false(int target)
+    private static string WriteIso()
     {
-        Assert.False(WizardStageGates.CanGoTo(target, sourceReady: true, identityReady: true));
+        string path = Path.Combine(Path.GetTempPath(), "winmint-shell-" + Guid.NewGuid().ToString("N") + ".iso");
+        File.WriteAllText(path, "iso-stub");
+        return path;
+    }
+
+    private sealed class FixedProbe : ISourceMediaProbe
+    {
+        public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
+            string sourceIsoPath,
+            int wimIndex,
+            CancellationToken cancellationToken = default)
+        {
+            string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(sourceIsoPath)));
+            WimIndexInfo row = new(
+                wimIndex,
+                "Windows 11 Pro",
+                "arm64",
+                "Professional",
+                "10.0.26100.1",
+                "26100");
+            return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(
+                new(
+                    Path.GetFullPath(sourceIsoPath),
+                    hash,
+                    [row],
+                    new(row.Index, row.Name, row.Architecture, row.Edition, row.Version, row.Build))));
+        }
     }
 }

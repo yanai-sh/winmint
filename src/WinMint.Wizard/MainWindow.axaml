@@ -3,7 +3,7 @@
         xmlns:vm="using:WinMint.Wizard.ViewModels"
         xmlns:views="using:WinMint.Wizard.Views"
         x:Class="WinMint.Wizard.MainWindow"
-        x:DataType="vm:WizardViewModel"
+        x:DataType="vm:WizardShellViewModel"
         Title="WinMint"
         Width="1280"
         Height="860"
@@ -41,10 +41,18 @@
 
     <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
       <Panel Margin="56,28,56,24">
-        <views:SourceStepView IsVisible="{Binding IsSourceStep}" />
-        <views:AccountStepView IsVisible="{Binding IsAccountStep}" />
-        <views:SoftwareStepView IsVisible="{Binding IsSoftwareStep}" />
-        <views:ReviewStepView IsVisible="{Binding IsReviewStep}" />
+        <Panel IsVisible="{Binding IsSourceStep}">
+          <views:SourceStepView DataContext="{Binding Source}" />
+        </Panel>
+        <Panel IsVisible="{Binding IsAccountStep}">
+          <views:AccountStepView DataContext="{Binding Account}" />
+        </Panel>
+        <Panel IsVisible="{Binding IsSoftwareStep}">
+          <views:SoftwareStepView DataContext="{Binding Software}" />
+        </Panel>
+        <Panel IsVisible="{Binding IsReviewStep}">
+          <views:ReviewStepView DataContext="{Binding Review}" />
+        </Panel>
       </Panel>
     </ScrollViewer>
 

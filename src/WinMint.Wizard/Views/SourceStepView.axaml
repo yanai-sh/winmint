@@ -1,9 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
-             xmlns:wizard="using:WinMint.Wizard"
+             xmlns:orchestrator="using:WinMint.Orchestrator"
              x:Class="WinMint.Wizard.Views.SourceStepView"
-             x:DataType="vm:WizardViewModel">
+             x:DataType="vm:ISourceStageViewModel">
   <StackPanel Spacing="22" MaxWidth="720" HorizontalAlignment="Center" VerticalAlignment="Center">
     <!-- Brand: v1 winmint_hero_ui.png (= wordmark lockup UI raster); SVG lockups kept in Assets for later. -->
     <Image Source="avares://WinMint.Wizard/Assets/lockup_ui.png"
@@ -44,7 +44,7 @@
                   HorizontalAlignment="Stretch"
                   MinWidth="280">
           <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="wizard:WimIndexInfo">
+            <DataTemplate x:DataType="orchestrator:WimIndexInfo">
               <TextBlock Text="{Binding DisplayLabel}" TextWrapping="Wrap" />
             </DataTemplate>
           </ComboBox.ItemTemplate>
@@ -63,8 +63,10 @@
       <StackPanel>
         <TextBlock Classes="panel-label" Text="IMAGE QUALITY" />
         <StackPanel Orientation="Horizontal">
-          <ToggleButton Classes="chip" Content="Test" IsChecked="{Binding IsTestLane}" Command="{Binding SelectTestLaneCommand}" />
-          <ToggleButton Classes="chip" Content="Release" IsChecked="{Binding IsReleaseLane}" Command="{Binding SelectReleaseLaneCommand}" />
+          <ToggleButton Classes="chip" Content="Test" IsChecked="{Binding Lane.IsTest}"
+                        Command="{Binding SelectLaneCommand}" CommandParameter="Test" />
+          <ToggleButton Classes="chip" Content="Release" IsChecked="{Binding Lane.IsRelease}"
+                        Command="{Binding SelectLaneCommand}" CommandParameter="Release" />
         </StackPanel>
         <TextBlock Text="Release → Build runs Gate B wipe-media apply in this Wizard (workdir %LOCALAPPDATA%\WinMint\work\gate-b, package-strict). That is pre-wipe ISO evidence — not a completed Primary install."
                    Opacity="0.55"
@@ -74,9 +76,9 @@
       </StackPanel>
     </Border>
 
-    <TextBlock Text="{Binding Status}"
+    <TextBlock Text="{Binding Status.Message}"
                TextWrapping="Wrap"
                Foreground="{DynamicResource SystemErrorTextColor}"
-               IsVisible="{Binding StatusIsError}" />
+               IsVisible="{Binding Status.IsError}" />
   </StackPanel>
 </UserControl>

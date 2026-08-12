@@ -6,7 +6,9 @@ public sealed record ServicingRun(
     string? OutputIsoPath = null,
     string? ProfilePath = null,
     int? WimIndex = null,
-    bool ReuseMedia = false);
+    bool ReuseMedia = false,
+    string? SourceIsoSha256 = null,
+    SelectedWim? SelectedImage = null);
 
 public sealed record ImageEvidence(
     string OutputIsoPath,

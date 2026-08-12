@@ -45,7 +45,7 @@ Generated from Profile + catalog. Schema: winget packages export v2. Per-package
 ### Best-effort
 
 - `ProvisioningSession`: winget/scoop/wsl batch failures append to evidence; do not return Failed unless `RunOptions.PackageStrict` (CLI `--package-strict`).
-- Product default: not strict. Metal may pass `--package-strict` or keep audit via `--package-audit-strict`.
+- Lane default: Test is not strict; Release is strict. Metal may pass `--package-strict` to force strictness or keep native-binary audit via `--package-audit-strict`.
 
 ### Audit
 

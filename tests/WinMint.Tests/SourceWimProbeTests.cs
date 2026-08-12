@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text;
 using WinMint.Orchestrator;
-using WinMint.Wizard;
 
 namespace WinMint.Tests;
 
@@ -45,7 +44,7 @@ public class SourceWimProbeTests
             new(1, "Windows 11 Home", "ARM64", "Core", "10.0.26100.1", "26100"),
             new(3, "Windows 11 Pro", "ARM64", "Professional", "10.0.26100.1", "26100"),
         ];
-        IWimIndexSource fake = new FixedWimIndexSource(Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(rows));
+        ISourceMediaProbe fake = new FixedSourceMediaProbe(Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(rows));
         string tempIso = Path.Combine(Path.GetTempPath(), "winmint-fake-" + Guid.NewGuid().ToString("N") + ".iso");
         File.WriteAllBytes(tempIso, [0]);
         try
@@ -64,6 +63,31 @@ public class SourceWimProbeTests
         finally
         {
             try { File.Delete(tempIso); } catch { /* ponytail: temp cleanup */ }
+        }
+    }
+
+    [Fact]
+    public async Task TryProbeIso_returns_indexes_when_default_selection_is_missing()
+    {
+        WimIndexInfo[] rows =
+        [
+            new(1, "Windows 11 Home", "ARM64", "Core", "10.0.26100.1", "26100"),
+        ];
+        ISourceMediaProbe fake =
+            new FixedSourceMediaProbe(Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(rows));
+        string tempIso = Path.Combine(Path.GetTempPath(), "winmint-no-default-" + Guid.NewGuid().ToString("N") + ".iso");
+        File.WriteAllBytes(tempIso, [0]);
+        try
+        {
+            Result<IReadOnlyList<WimIndexInfo>, Failure> result =
+                await SourceWimProbe.TryProbeIsoAsync(tempIso, fake, TestContext.Current.CancellationToken);
+
+            Assert.True(result.IsOk);
+            Assert.Equal(1, Assert.Single(result.Value).Index);
+        }
+        finally
+        {
+            File.Delete(tempIso);
         }
     }
 
@@ -126,7 +150,7 @@ public class SourceWimProbeTests
     {
         string tempIso = Path.Combine(Path.GetTempPath(), "winmint-bad-" + Guid.NewGuid().ToString("N") + ".iso");
         File.WriteAllBytes(tempIso, [0]);
-        IWimIndexSource fake = new FixedWimIndexSource(
+        ISourceMediaProbe fake = new FixedSourceMediaProbe(
             Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
                 new Failure("wim.probe.unreadable", "ISO mounted but no drive letter")));
         try
@@ -205,11 +229,40 @@ public class SourceWimProbeTests
 
     private sealed record ProcessResult(int ExitCode, string Stdout, string Stderr);
 
-    private sealed class FixedWimIndexSource(Result<IReadOnlyList<WimIndexInfo>, Failure> result) : IWimIndexSource
+    private sealed class FixedSourceMediaProbe(
+        Result<IReadOnlyList<WimIndexInfo>, Failure> result) : ISourceMediaProbe
     {
-        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListFromIsoAsync(
-            string isoPath,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(result);
+        public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
+            string sourceIsoPath,
+            int wimIndex,
+            CancellationToken cancellationToken = default)
+        {
+            if (!result.IsOk)
+            {
+                return Task.FromResult(Result.Fail<SourceMediaReview, Failure>(result.Error));
+            }
+
+            WimIndexInfo? selected = result.Value.FirstOrDefault(row => row.Index == wimIndex);
+            return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(
+                new(
+                    sourceIsoPath,
+                    new string('a', 64),
+                    result.Value,
+                    selected is null
+                        ? null
+                        : new(
+                            selected.Index,
+                            selected.Name,
+                            selected.Architecture,
+                            selected.Edition,
+                            selected.Version,
+                            selected.Build),
+                    selected is null
+                        ? new(
+                            wimIndex,
+                            "wim.probe.indexMissing",
+                            $"Source ISO does not contain WIM index {wimIndex}.")
+                        : null)));
+        }
     }
 }

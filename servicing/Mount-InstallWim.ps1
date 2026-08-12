@@ -13,6 +13,11 @@ $mediaDir = $Parameters['mediaDir']
 $wimIndex = $Parameters['wimIndex']
 $workDir = $Parameters['workDirectory']
 $reuseMedia = ($Parameters['reuseMedia'] -eq 'true')
+$sourceIsoSha256 = $Parameters['sourceIsoSha256']
+$imageName = $Parameters['imageName']
+$imageArchitecture = $Parameters['architecture']
+$imageEdition = $Parameters['imageEdition']
+$imageBuild = $Parameters['imageBuild']
 if ([string]::IsNullOrWhiteSpace($sourceIso)) { throw 'sourceIso required' }
 if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
 if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
@@ -21,59 +26,69 @@ if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
 if (-not $reuseMedia -and -not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sourceIso" }
 
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
+. (Join-Path $PSScriptRoot 'Test-MediaIdentity.ps1')
 
 New-Item -ItemType Directory -Force -Path $mountDir, $mediaDir | Out-Null
 
 $wimFile = Join-Path $mediaDir 'sources\install.wim'
-$marker = Join-Path $mediaDir 'sources\.winmint-single-index'
+$marker = Join-Path $mediaDir '.winmint-media-identity.json'
+$expectedIdentity = [ordered]@{
+    sourceIsoSha256 = $sourceIsoSha256
+    wimIndex = [int]$wimIndex
+    imageName = $imageName
+    architecture = $imageArchitecture
+    edition = $imageEdition
+    build = $imageBuild
+}
+$reuseSnapshot = $null
+$identityMatches = $false
+if ($reuseMedia -and (Test-Path -LiteralPath $wimFile -PathType Leaf)) {
+    try {
+        Clear-WimReadOnly -WimFile $wimFile
+        $reuseSnapshot = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
+        $identityMatches = Test-WinMintMediaIdentity `
+            -MarkerPath $marker `
+            -ExpectedIdentity $expectedIdentity `
+            -Snapshot $reuseSnapshot
+    }
+    catch {
+        $identityMatches = $false
+    }
+}
 
-if ($reuseMedia) {
-    if (-not (Test-Path -LiteralPath $wimFile)) {
-        throw "reuse-media: install.wim missing at $wimFile — re-run without --reuse-media"
-    }
-    if (-not (Test-Path -LiteralPath $marker)) {
-        throw "reuse-media: marker missing at $marker — re-run without --reuse-media"
-    }
-    Clear-WimReadOnly -WimFile $wimFile
-    $snap = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
-    if ([int]$snap.IndexCount -ne 1) {
-        throw "reuse-media: install.wim has $($snap.IndexCount) indexes (need 1) — re-run without --reuse-media"
-    }
-    Assert-WimMetadataPresent -Snapshot $snap -Context 'MountInstallWim reuse-media'
-    Write-WinMintEditionConfig -MediaDir $mediaDir -Snapshot $snap
-    Write-Output "reuse-media: mounting single-image WIM index 1 ($($snap.Name))"
+if ($identityMatches) {
+    Assert-WimMetadataPresent -Snapshot $reuseSnapshot -Context 'MountInstallWim reuse-media'
+    Write-WinMintEditionConfig -MediaDir $mediaDir -Snapshot $reuseSnapshot
+    Write-Output "reuse-media: mounting matching single-image WIM index 1 ($($reuseSnapshot.Name))"
     & dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:1 /MountDir:$mountDir
     if ($LASTEXITCODE -ne 0) { throw "DISM Mount-Image failed: $LASTEXITCODE" }
-    Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{ phase = 'MountInstallWim.reuse'; final = $snap }
+    Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{ phase = 'MountInstallWim.reuse'; final = $reuseSnapshot }
     Write-Output "MountInstallWim ok"
     exit 0
 }
 
-$needCopy = -not (Test-Path -LiteralPath $wimFile)
-if (-not $needCopy) {
-    Clear-WimReadOnly -WimFile $wimFile
-    Write-Output "Reusing media WIM at $wimFile"
+if (Test-Path -LiteralPath $mediaDir) {
+    Remove-Item -LiteralPath $mediaDir -Recurse -Force
 }
-else {
-    Write-Output "Mounting ISO $sourceIso"
-    $disk = Mount-DiskImage -ImagePath $sourceIso -PassThru
-    try {
-        Start-Sleep -Seconds 2
-        $letter = ($disk | Get-Volume | Select-Object -First 1).DriveLetter
-        if ([string]::IsNullOrWhiteSpace($letter)) { throw 'ISO mounted but no drive letter' }
-        $isoRoot = "${letter}:"
-        Write-Output "ISO at $isoRoot — copying media to $mediaDir"
-        & robocopy.exe $isoRoot $mediaDir /E /COPY:DAT /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Host
-        $rc = $LASTEXITCODE
-        if ($rc -ge 8) { throw "robocopy failed with exit $rc" }
-    }
-    finally {
-        Dismount-DiskImage -ImagePath $sourceIso | Out-Null
-    }
+New-Item -ItemType Directory -Force -Path $mediaDir | Out-Null
+Write-Output "Mounting ISO $sourceIso"
+$disk = Mount-DiskImage -ImagePath $sourceIso -PassThru
+try {
+    Start-Sleep -Seconds 2
+    $letter = ($disk | Get-Volume | Select-Object -First 1).DriveLetter
+    if ([string]::IsNullOrWhiteSpace($letter)) { throw 'ISO mounted but no drive letter' }
+    $isoRoot = "${letter}:"
+    Write-Output "ISO at $isoRoot — copying media to $mediaDir"
+    & robocopy.exe $isoRoot $mediaDir /E /COPY:DAT /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Host
+    $rc = $LASTEXITCODE
+    if ($rc -ge 8) { throw "robocopy failed with exit $rc" }
+}
+finally {
+    Dismount-DiskImage -ImagePath $sourceIso | Out-Null
+}
 
-    Get-ChildItem -LiteralPath $mediaDir -Recurse -Force -File | ForEach-Object {
-        if ($_.IsReadOnly) { $_.IsReadOnly = $false }
-    }
+Get-ChildItem -LiteralPath $mediaDir -Recurse -Force -File | ForEach-Object {
+    if ($_.IsReadOnly) { $_.IsReadOnly = $false }
 }
 
 if (-not (Test-Path -LiteralPath $wimFile)) {
@@ -103,7 +118,6 @@ if ($indexCount -gt 1) {
     Remove-Item -LiteralPath $wimFile -Force
     Move-Item -LiteralPath $tmp -Destination $wimFile -Force
     Clear-WimReadOnly -WimFile $wimFile
-    Set-Content -LiteralPath $marker -Value "sourceIndex=$wimIndex" -Encoding utf8
     $mountIndex = 1
     $afterExport = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
     if ([int]$afterExport.IndexCount -ne 1) {
@@ -116,15 +130,6 @@ if ($indexCount -gt 1) {
     }
     Write-Output "Single-image WIM ready (mount index 1); size=$((Get-Item -LiteralPath $wimFile).Length)"
 }
-elseif (Test-Path -LiteralPath $marker) {
-    $mountIndex = 1
-    Clear-WimReadOnly -WimFile $wimFile
-    $snap = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
-    Assert-WimMetadataPresent -Snapshot $snap -Context 'MountInstallWim marker'
-    Write-WinMintEditionConfig -MediaDir $mediaDir -Snapshot $snap
-    Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{ phase = 'MountInstallWim.marker'; final = $snap }
-    Write-Output "Reusing single-image WIM (marker); mount index 1 ($($snap.Name))"
-}
 else {
     if ($indexCount -ne 1) {
         throw "Expected single-image WIM or multi-index export; indexCount=$indexCount"
@@ -135,6 +140,12 @@ else {
     Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{ phase = 'MountInstallWim.single'; final = $beforeExport }
     Write-Output "WIM already single-image; mount index $mountIndex ($($beforeExport.Name))"
 }
+
+$finalSnapshot = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
+if (-not (Test-WinMintSelectedImage -Snapshot $finalSnapshot -ExpectedIdentity $expectedIdentity)) {
+    throw 'Staged install.wim does not match the approved selected-image metadata.'
+}
+Write-WinMintMediaIdentity -MarkerPath $marker -ExpectedIdentity $expectedIdentity
 
 Write-Output "DISM Mount-Image index=$mountIndex → $mountDir"
 & dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:$mountIndex /MountDir:$mountDir

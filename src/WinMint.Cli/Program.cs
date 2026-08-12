@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.CommandLine.Parsing;
 using Microsoft.Extensions.Logging;
 using WinMint.Orchestrator;
 
@@ -66,7 +67,7 @@ internal static class Program
 
         Option<bool> packageStrictOption = new("--package-strict")
         {
-            Description = "Fail closed when winget/scoop package jobs fail (harness/Primary). Default best-effort for Test and Release; pass for Gate B / Primary.",
+            Description = "Force package jobs fail closed; otherwise Test is best-effort and Release is strict.",
         };
 
         Option<bool> includeSmokeStubsOption = new("--include-smoke-stubs")
@@ -91,7 +92,7 @@ internal static class Program
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
-                parseResult.GetValue(packageStrictOption),
+                ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption));
         });
 
@@ -115,7 +116,7 @@ internal static class Program
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
-                parseResult.GetValue(packageStrictOption),
+                ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption));
         });
 
@@ -151,7 +152,7 @@ internal static class Program
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
-                parseResult.GetValue(packageStrictOption),
+                ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption));
         });
 
@@ -205,7 +206,7 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
-        bool packageStrict,
+        PackageStrictOverride packageStrict,
         bool includeSmokeStubs)
     {
         if (!TryBuildRunOptions(
@@ -220,7 +221,7 @@ internal static class Program
             return exit;
         }
 
-        if (!TryLoadArtifacts(profilePath, out _, out exit, run))
+        if (!TryLoadPlan(profilePath, out _, out exit, run))
         {
             return exit;
         }
@@ -235,7 +236,7 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
-        bool packageStrict,
+        PackageStrictOverride packageStrict,
         bool includeSmokeStubs)
     {
         if (!TryBuildRunOptions(
@@ -250,15 +251,19 @@ internal static class Program
             return exit;
         }
 
-        if (!TryLoadArtifacts(profilePath, out BuildArtifacts? artifacts, out exit, run))
+        if (!TryLoadPlan(profilePath, out HostPlan? plan, out exit, run))
         {
             return exit;
         }
 
-        Directory.CreateDirectory(outDir.FullName);
-        WritePlanArtifacts(outDir.FullName, artifacts!);
+        Result<Unit, Failure> exported = HostCompile.ExportPlan(plan!, outDir.FullName);
+        if (!exported.IsOk)
+        {
+            CliLog.Failure(Log, exported.Error.Code, exported.Error.Message);
+            return 1;
+        }
         CliLog.WrotePlanArtifacts(Log, outDir.FullName);
-        WritePlanHonesty(artifacts!);
+        WritePlanHonesty(plan!.Review);
         return 0;
     }
 
@@ -272,7 +277,7 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
-        bool packageStrict,
+        PackageStrictOverride packageStrict,
         bool includeSmokeStubs)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
@@ -280,20 +285,48 @@ internal static class Program
             return exit;
         }
 
-        Result<HostCompileResult, Failure> applied = await HostCompile.ApplyAsync(
-                new HostCompileRequest(
-                    ProfilePath: profilePath.FullName,
-                    SourceIsoPath: iso.FullName,
-                    ImageQuality: lane,
-                    WorkDirectory: work.FullName,
-                    OutputIsoPath: outIso?.FullName,
-                    WimIndex: wimIndex,
-                    ReuseMedia: reuseMedia,
-                    PackageStrict: packageStrict,
-                    PackageAuditStrict: packageAuditStrict,
-                    IncludeSmokeStubs: includeSmokeStubs,
-                    ImageArchitecture: imageArchitecture))
+        Result<HostComposition, HostComposeError> composed = await HostCompile.ComposeFileAsync(
+                profilePath.FullName,
+                new HostComposeOptions(
+                    iso.FullName,
+                    lane,
+                    work.FullName,
+                    outIso?.FullName,
+                    wimIndex,
+                    reuseMedia,
+                    packageStrict,
+                    packageAuditStrict,
+                    includeSmokeStubs,
+                    imageArchitecture))
             .ConfigureAwait(false);
+        if (!composed.IsOk)
+        {
+            if (composed.Error.Documents is { } documents)
+            {
+                foreach (DocumentError issue in documents)
+                {
+                    string pathSuffix = issue.Path is null ? "" : $" ({issue.Path})";
+                    CliLog.DocumentIssue(Log, issue.Code, issue.Message, pathSuffix);
+                }
+            }
+            else
+            {
+                CliLog.Failure(Log, composed.Error.Code, composed.Error.Message);
+            }
+            CliLog.WorkPreserved(Log, work.FullName);
+            return 1;
+        }
+
+        HostComposition composition = composed.Value;
+        if (composition.Review.ImageQuality == ImageQualityLane.Release)
+        {
+            CliLog.ReleaseLaneWarning(Log);
+        }
+
+        WritePlanHonesty(composition.Review);
+
+        Result<ImageEvidence, Failure> applied =
+            await HostCompile.ApplyAsync(composition).ConfigureAwait(false);
         if (!applied.IsOk)
         {
             CliLog.Failure(Log, applied.Error.Code, applied.Error.Message);
@@ -301,26 +334,9 @@ internal static class Program
             return 1;
         }
 
-        HostCompileResult compiled = applied.Value;
-        if (compiled.Plan.Manifest.ImageQuality == ImageQualityLane.Release)
-        {
-            CliLog.ReleaseLaneWarning(Log);
-        }
-
-        WritePlanHonesty(compiled.Plan);
-
-        if (!compiled.Succeeded)
-        {
-            Failure err = compiled.ApplyError
-                ?? new Failure("hostCompile.apply.unknown", "Apply failed without an error.");
-            CliLog.Failure(Log, err.Code, err.Message);
-            CliLog.WorkPreserved(Log, work.FullName);
-            return 1;
-        }
-
-        CliLog.ImageOk(Log, compiled.Evidence!.OutputIsoPath);
-        CliLog.ShellStamp(Log, compiled.Evidence.ShellStampTargetPath);
-        CliLog.Lane(Log, compiled.Evidence.Lane);
+        CliLog.ImageOk(Log, applied.Value.OutputIsoPath);
+        CliLog.ShellStamp(Log, applied.Value.ShellStampTargetPath);
+        CliLog.Lane(Log, applied.Value.Lane);
         return 0;
     }
 
@@ -328,7 +344,7 @@ internal static class Program
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
-        bool packageStrict,
+        PackageStrictOverride packageStrict,
         bool includeSmokeStubs,
         out RunOptions run,
         out int exitCode)
@@ -344,11 +360,26 @@ internal static class Program
             ImageQuality = lane,
             ImageArchitecture = imageArchitecture,
             PackageAuditStrict = packageAuditStrict,
-            PackageStrict = packageStrict,
+            PackageStrict = HostDefaults.ResolvePackageStrict(lane, packageStrict),
             IncludeSmokeStubs = includeSmokeStubs,
         };
         exitCode = 0;
         return true;
+    }
+
+    internal static PackageStrictOverride ParsePackageStrictOverride(
+        ParseResult parseResult,
+        Option<bool> option)
+    {
+        OptionResult? result = parseResult.GetResult(option);
+        if (result is null || result.Implicit)
+        {
+            return PackageStrictOverride.FromLane;
+        }
+
+        return result.GetValueOrDefault<bool>()
+            ? PackageStrictOverride.Force
+            : PackageStrictOverride.Suppress;
     }
 
     private static bool TryParseImageQuality(string raw, out ImageQualityLane lane, out int exitCode)
@@ -365,13 +396,13 @@ internal static class Program
         return false;
     }
 
-    private static bool TryLoadArtifacts(
+    private static bool TryLoadPlan(
         FileInfo profilePath,
-        out BuildArtifacts? artifacts,
+        out HostPlan? plan,
         out int exitCode,
         RunOptions? run = null)
     {
-        artifacts = null;
+        plan = null;
         if (!profilePath.Exists)
         {
             CliLog.ProfileNotFound(Log, profilePath.FullName);
@@ -392,7 +423,7 @@ internal static class Program
             return false;
         }
 
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value, run);
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(parsed.Value, run);
         if (!planned.IsOk)
         {
             CliLog.Failure(Log, planned.Error.Code, planned.Error.Message);
@@ -400,32 +431,17 @@ internal static class Program
             return false;
         }
 
-        artifacts = planned.Value;
+        plan = planned.Value;
         exitCode = 0;
         return true;
     }
 
-    private static void WritePlanArtifacts(string directory, BuildArtifacts artifacts)
+    private static void WritePlanHonesty(HostReview review)
     {
-        File.WriteAllText(Path.Combine(directory, "unattend.xml"), artifacts.Unattend.Xml);
-
-        File.WriteAllText(
-            Path.Combine(directory, "jobs.json"),
-            BuildPlan.SerializeJobsFile(artifacts.Jobs));
-        File.WriteAllText(
-            Path.Combine(directory, "stages.json"),
-            BuildPlan.SerializeStagesFile(artifacts.Stages));
-        File.WriteAllText(
-            Path.Combine(directory, "manifest.json"),
-            BuildPlan.SerializeManifestFile(artifacts.Manifest));
-    }
-
-    private static void WritePlanHonesty(BuildArtifacts artifacts)
-    {
-        CliLog.Lane(Log, artifacts.Manifest.ImageQuality);
+        CliLog.Lane(Log, review.ImageQuality);
         string honesty = BuildPlan.FormatPlanHonesty(
-            artifacts.Manifest,
-            artifacts.Account.RequireWifiDuringOobe);
+            new BuildManifest(review.ImageQuality, review.RequiresNetwork),
+            review.AuthoredProfile.Account.RequireWifiDuringOobe);
         foreach (string line in honesty.Split(["\r\n", "\n"], StringSplitOptions.None))
         {
             if (line.StartsWith("Warning:", StringComparison.Ordinal))

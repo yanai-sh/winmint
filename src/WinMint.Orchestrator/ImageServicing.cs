@@ -82,11 +82,6 @@ public static class ImageServicing
             return Result.Fail<ImageEvidence, Failure>(materialized.Error);
         }
 
-        if (ValidateExportWim(plan, materialized.Value) is { } exportError)
-        {
-            return Result.Fail<ImageEvidence, Failure>(exportError);
-        }
-
         // Materialize already wrote stages.json; that file is the seam (Invoke-ServicingPlan.ps1 reads it).
         Result<ElevatedRunOk, Failure> elevated = await runner.ExecuteAsync(normalized.WorkDirectory, ct)
             .ConfigureAwait(false);
@@ -253,38 +248,6 @@ public static class ImageServicing
         value is { Length: 64 }
         && value.All(static c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
 
-    private static Failure? ValidateExportWim(
-        BuildArtifacts plan,
-        IReadOnlyList<ServicingStage> stages)
-    {
-        ServicingStage[] exports = stages
-            .Where(static stage => stage.Opcode == ServicingOpcode.ExportWim)
-            .ToArray();
-        if (exports.Length != 1)
-        {
-            return new Failure(
-                "servicing.export.invalid",
-                $"Materialized plan must contain exactly one ExportWim stage (got {exports.Length}).");
-        }
-
-        ExportLane expected = ExportLane.For(plan.Manifest.ImageQuality);
-        ServicingStage export = exports[0];
-        if (!export.Parameters.TryGetValue(StageParams.Lane, out string? lane)
-            || !export.Parameters.TryGetValue(StageParams.Compression, out string? compression)
-            || !export.Parameters.TryGetValue(StageParams.Cleanup, out string? cleanup)
-            || !string.Equals(lane, expected.Name, StringComparison.Ordinal)
-            || !string.Equals(compression, expected.Compression, StringComparison.Ordinal)
-            || !string.Equals(cleanup, expected.Cleanup, StringComparison.Ordinal))
-        {
-            return new Failure(
-                "servicing.export.invalid",
-                $"ExportWim must be lane={expected.Name}, compression={expected.Compression}, "
-                + $"cleanup={expected.Cleanup} for ImageQuality={plan.Manifest.ImageQuality}.");
-        }
-
-        return null;
-    }
-
     private static Result<IReadOnlyList<ServicingStage>, Failure> Materialize(BuildArtifacts plan, ServicingRun run)
     {
         string payloadDir = Path.Combine(run.WorkDirectory, "payload");
@@ -361,6 +324,15 @@ public static class ImageServicing
                     parameters[StageParams.WimIndex] = wimIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     parameters[StageParams.ReuseMedia] = run.ReuseMedia ? "true" : "false";
                     parameters[StageParams.WorkDirectory] = run.WorkDirectory;
+                    if (run.SelectedImage is { } selected
+                        && !string.IsNullOrWhiteSpace(run.SourceIsoSha256))
+                    {
+                        parameters[StageParams.SourceIsoSha256] = run.SourceIsoSha256;
+                        parameters[StageParams.ImageName] = selected.Name;
+                        parameters[StageParams.Architecture] = selected.Architecture ?? "";
+                        parameters[StageParams.ImageEdition] = selected.Edition ?? "";
+                        parameters[StageParams.ImageBuild] = selected.Build ?? "";
+                    }
                     break;
                 case ServicingOpcode.StagePayload:
                     parameters[StageParams.PayloadDir] = payloadDir;

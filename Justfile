@@ -29,6 +29,7 @@ check: format-check build
     just analyze-servicing
     just bootstrap-contract
     just disk-guard-contract
+    just media-identity-contract
     just packages-check-contract
 
 # Live winget/scoop prove → config/packages.proof.json. Not in `just check` (offline proof enforces freshness).
@@ -44,6 +45,9 @@ disk-guard-contract:
 
 packages-check-contract:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-PackagesCheckContract.ps1'
+
+media-identity-contract:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-MediaIdentityContract.ps1'
 
 # Install once: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser
 analyze-servicing:
@@ -70,7 +74,7 @@ watch-apply WORK="":
 # Maintainer Apply (DISM hours). Cli verb is build. Auto --reuse-media when marker exists.
 # Prereq: just publish-provisioning. INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs.
 apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STUBS="false":
-    Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $marker = Join-Path '{{WORK}}' 'media\sources\.winmint-single-index'; $reuse = @(); if (Test-Path -LiteralPath $marker) { Write-Host 'Found single-image marker — passing --reuse-media'; $reuse = @('--reuse-media') }; $stubs = @(); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $stubs = @('--include-smoke-stubs') }; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}') + $stubs + $reuse; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
+    Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $marker = Join-Path '{{WORK}}' 'media\.winmint-media-identity.json'; $reuse = @(); if (Test-Path -LiteralPath $marker) { Write-Host 'Found media identity marker — passing --reuse-media'; $reuse = @('--reuse-media') }; $stubs = @(); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $stubs = @('--include-smoke-stubs') }; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}') + $stubs + $reuse; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
 
 # S4 Hyper-V Smoke — not in `just check`. Assert-only: just smoke-assert tests/fixtures/smoke-evidence
 smoke ISO WORK=".scratch/smoke" PROFILE="samples/acceptance.profile.json":

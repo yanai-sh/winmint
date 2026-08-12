@@ -7,10 +7,12 @@
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.11" />
     <PackageReference Include="xunit.v3.mtp-v2" Version="3.2.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\WinMint.Contracts\WinMint.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\WinMint.Cli\WinMint.Cli.csproj" />
     <ProjectReference Include="..\..\src\WinMint.Orchestrator\WinMint.Orchestrator.csproj" />
     <ProjectReference Include="..\..\src\WinMint.Provisioning\WinMint.Provisioning.csproj" />
     <ProjectReference Include="..\..\src\WinMint.Wizard\WinMint.Wizard.csproj" />

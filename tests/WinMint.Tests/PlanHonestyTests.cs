@@ -1,12 +1,10 @@
-using System.Text;
 using System.Text.Json;
 using WinMint.Orchestrator;
 using WinMint.Contracts;
-using WinMint.Wizard;
 
 namespace WinMint.Tests;
 
-/// <summary>#90 plan/build honesty — S1 BuildPlan file/honesty helpers; S1b WizardSession summary.</summary>
+/// <summary>#90 plan/build honesty — S1 BuildPlan file/honesty helpers.</summary>
 public class PlanHonestyTests
 {
     [Fact]
@@ -69,49 +67,4 @@ public class PlanHonestyTests
         Assert.DoesNotContain("Warning:", text, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void ComposeAndPlan_summary_surfaces_network_honesty()
-    {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(
-            new WizardSessionInput(
-                DebloatPresets.Empty,
-                "winmint",
-                "lab-only",
-                RequireWifiDuringOobe: true,
-                DmaEnabled: true,
-                Locale: "en-GB",
-                GeoIdText: "242",
-                TimeZoneId: "GMT Standard Time",
-                LocationServicesEnabled: true,
-                WingetText: "jqlang.jq",
-                SourceIsoPath: @"C:\isos\Win11.iso",
-                ImageQualityText: "Test"));
-
-        Assert.True(result.Succeeded, result.Message);
-        Assert.Contains("requiresNetwork=true", result.Message, StringComparison.Ordinal);
-        Assert.Contains("requireWifiDuringOobe=true", result.Message, StringComparison.Ordinal);
-        Assert.Contains("Warning:", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ComposeAndPlan_network_warning_does_not_fail_plan()
-    {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(
-            new WizardSessionInput(
-                DebloatPresets.Empty,
-                "winmint",
-                "lab-only",
-                RequireWifiDuringOobe: false,
-                DmaEnabled: true,
-                Locale: "en-GB",
-                GeoIdText: "242",
-                TimeZoneId: "GMT Standard Time",
-                LocationServicesEnabled: true,
-                WingetText: "jqlang.jq",
-                SourceIsoPath: @"C:\isos\Win11.iso"));
-
-        Assert.True(result.Succeeded, result.Message);
-        Assert.NotNull(result.ProfileUtf8);
-        Assert.True(Encoding.UTF8.GetString(result.ProfileUtf8!).Length > 0);
-    }
 }

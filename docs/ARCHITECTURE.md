@@ -25,7 +25,7 @@ Greenfield product repo [`yanai-sh/winmint`](https://github.com/yanai-sh/winmint
 | **ImageServicing** | Orchestrator → `servicing/` | Apply plan to Source ISO → evidence — [design](design/IMAGESERVICING.md) | DISM/WIM/hive/oscdimg; opcode→script map |
 | **ProvisioningSession** | `WinMint.Provisioning` | `--machine-setup` *or* Shell → `SessionResult` — [design](design/PROVISIONINGSESSION.md) | Splash, stamps, DMA settle, jobs, checkpoint |
 
-**Front ends (not deep modules):** `WinMint.Cli` and Avalonia Wizard are thin clients of **HostCompile** (Profile → Plan → ImageServicing). `servicing/*.ps1` are ImageServicing adapters, not a second product CLI.
+**Front ends (not deep modules):** `WinMint.Cli` and Avalonia Wizard are thin clients of **HostCompile** (Profile → Plan → ImageServicing). The Wizard shell owns navigation and one `WizardSession`; Source, Account, Software, and Review views bind through stage-specific interfaces. Review is projected from one immutable `HostReview`, including effective package facts and Orchestrator-owned `PlanDiff`. `servicing/*.ps1` are ImageServicing adapters, not a second product CLI.
 
 **Seam discipline:**
 
@@ -86,7 +86,7 @@ Sibling archive [`winmint_v1`](https://github.com/yanai-sh/winmint_v1) is **arch
 | **Test** | Soft/no recompress; skip WinSxS cleanup | Smoke / iteration |
 | **Release** | Hard recompress + `StartComponentCleanup` | Published compression bar |
 
-**Package strictness is orthogonal:** `PackageStrict` is caller-owned (default false). **Gate B** wipe media requires **Release lane and explicit `--package-strict`** (`just primary-gate`, Wizard Release Build). Release alone is image quality only — not strict guest package failure.
+**Package strictness is resolved at HostCompile:** Test is best-effort by default; Release is strict. `PackageStrictOverride` lets hosts preserve the lane default or explicitly force/suppress it, and the resolved bool is stamped into the guest bundle.
 
 ## Payload
 

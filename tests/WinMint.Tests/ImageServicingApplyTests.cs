@@ -205,58 +205,6 @@ public class ImageServicingApplyTests
         }
     }
 
-    [Theory]
-    [InlineData(StageParams.Lane, "Test")]
-    [InlineData(StageParams.Compression, "fast")]
-    [InlineData(StageParams.Cleanup, "skip")]
-    public async Task Apply_rejects_wrong_release_export_contract_before_elevation(
-        string parameter,
-        string wrongValue)
-    {
-        BuildArtifacts planned = MinimalPlan(ImageQualityLane.Release);
-        BuildArtifacts plan = planned with
-        {
-            Stages = new ServicingStageList(
-                planned.Stages.Stages.Select(
-                    stage =>
-                    {
-                        if (stage.Opcode != ServicingOpcode.ExportWim)
-                        {
-                            return stage;
-                        }
-
-                        Dictionary<string, string> parameters =
-                            stage.Parameters.ToDictionary(StringComparer.Ordinal);
-                        parameters[parameter] = wrongValue;
-                        return new ServicingStage(stage.Opcode, parameters);
-                    }).ToArray()),
-        };
-        string work = NewTempDir();
-        try
-        {
-            RecordingElevatedPlanRunner runner = new();
-            ServicingRun run = new(
-                SourceIsoPath: Path.Combine(work, "source.iso"),
-                WorkDirectory: work,
-                OutputIsoPath: Path.Combine(work, "out.iso"));
-            File.WriteAllText(run.SourceIsoPath, "iso-stub");
-
-            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
-                plan,
-                run,
-                runner,
-                TestContext.Current.CancellationToken);
-
-            Assert.False(result.IsOk);
-            Assert.Equal("servicing.export.invalid", result.Error.Code);
-            Assert.Empty(runner.Stages);
-        }
-        finally
-        {
-            TryDelete(work);
-        }
-    }
-
     [Fact]
     public async Task Apply_preserves_workdir_on_runner_failure()
     {
