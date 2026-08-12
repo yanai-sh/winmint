@@ -31,15 +31,29 @@ function Write-ApplyStatus {
 }
 Write-ApplyStatus -Stage 'idle'
 
+function Write-PlanFailure {
+    # Elevated runs cannot redirect stdout (UAC needs UseShellExecute), so failure.json is the
+    # only channel back to C#. Every exit path that is not success writes one.
+    param(
+        [Parameter(Mandatory)]
+        [string] $Message,
+
+        [string] $Opcode
+    )
+    @{
+        schemaVersion = 'winmint.image.evidence/v1'
+        message       = $Message
+        opcode        = $Opcode
+    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'failure.json') -Encoding utf8
+    Write-ApplyStatus -Stage ('failed:' + ($Opcode ? $Opcode : 'plan'))
+}
+
 $stagesPath = Join-Path $WorkDirectory 'stages.json'
 if (-not (Test-Path -LiteralPath $stagesPath)) {
-    @{ schemaVersion = 'winmint.image.evidence/v1'; message = "stages.json missing"; opcode = $null } |
-        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'failure.json') -Encoding utf8
-    Write-ApplyStatus -Stage 'failed:stages'
+    Write-PlanFailure -Message 'stages.json missing' -Opcode 'stages'
     exit 1
 }
 
-$stagesDoc = Get-Content -LiteralPath $stagesPath -Raw | ConvertFrom-Json
 $scriptRoot = $PSScriptRoot
 
 function ConvertTo-ParamHashtable {
@@ -88,8 +102,81 @@ function Clear-LeftoverMount {
     }
 }
 
-$failed = $false
+function Write-PlanEvidence {
+    $shellTarget = $null
+    $outputIso = $null
+    $lane = $null
+    foreach ($stage in $stagesDoc.stages) {
+        if ($stage.opcode -eq 'StampOfflineShell' -and $stage.parameters.shellTarget) {
+            $shellTarget = [string]$stage.parameters.shellTarget
+        }
+        if ($stage.opcode -eq 'BuildIso' -and $stage.parameters.outputIso) {
+            $outputIso = [string]$stage.parameters.outputIso
+        }
+        if ($stage.opcode -eq 'ExportWim' -and $stage.parameters.lane) {
+            $lane = [string]$stage.parameters.lane
+        }
+    }
+
+    $digests = @{}
+    if ($outputIso -and (Test-Path -LiteralPath $outputIso)) {
+        $sha = Get-FileHash -LiteralPath $outputIso -Algorithm SHA256
+        $digests['outputIso.sha256'] = $sha.Hash.ToLowerInvariant()
+    }
+    $wimOut = Join-Path $WorkDirectory 'install.wim'
+    if (Test-Path -LiteralPath $wimOut) {
+        $shaWim = Get-FileHash -LiteralPath $wimOut -Algorithm SHA256
+        $digests['installWim.sha256'] = $shaWim.Hash.ToLowerInvariant()
+    }
+
+    $sidePath = Join-Path $logDir 'digests.json'
+    if (Test-Path -LiteralPath $sidePath) {
+        $side = Get-Content -LiteralPath $sidePath -Raw | ConvertFrom-Json
+        foreach ($p in $side.PSObject.Properties) {
+            $digests[[string]$p.Name] = [string]$p.Value
+        }
+    }
+
+    # InjectDrivers writes logs/WinMint-DriverInventory.json — require it before greening evidence.
+    $ranInjectDrivers = @($stagesDoc.stages | Where-Object { [string]$_.opcode -eq 'InjectDrivers' }).Count -gt 0
+    if ($ranInjectDrivers) {
+        $inventoryPath = Join-Path $logDir 'WinMint-DriverInventory.json'
+        if (-not (Test-Path -LiteralPath $inventoryPath)) {
+            throw "InjectDrivers ran but inventory missing at $inventoryPath (Host Apply ExpectDrivers would fail)"
+        }
+    }
+
+    $packageStrict = $false
+    $bundlePath = Join-Path $WorkDirectory 'payload\bundle.json'
+    if (Test-Path -LiteralPath $bundlePath) {
+        $bundle = Get-Content -LiteralPath $bundlePath -Raw | ConvertFrom-Json
+        if ($bundle.PSObject.Properties.Name -contains 'packageStrict') {
+            $packageStrict = [bool]$bundle.packageStrict
+        }
+    }
+
+    @{
+        schemaVersion         = 'winmint.image.evidence/v1'
+        outputIsoPath         = $outputIso
+        shellStampTargetPath  = $shellTarget
+        lane                  = $lane
+        packageStrict         = $packageStrict
+        digests               = $digests
+    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'evidence.json') -Encoding utf8
+
+    # Success clears prior stage failure crumbs (operators read failure.json as current).
+    Remove-Item -LiteralPath (Join-Path $WorkDirectory 'failure.json') -Force -ErrorAction SilentlyContinue
+}
+
+# Fail closed: $failed clears only after evidence is on disk, so a throw anywhere — an unknown
+# opcode, a malformed stages.json, a missing driver inventory — still writes failure.json and
+# still discards the mount. It used to report stage=done and leak the mount for anything thrown
+# outside the kernel call.
+$failed = $true
+$opcode = ''
 try {
+    $stagesDoc = Get-Content -LiteralPath $stagesPath -Raw | ConvertFrom-Json
+
     $index = 0
     foreach ($stage in $stagesDoc.stages) {
         $index++
@@ -98,95 +185,25 @@ try {
         $kernel = Resolve-KernelScript -Opcode $opcode
         $logFile = Join-Path $logDir ("{0:D2}-{1}.log" -f $index, $opcode)
         Write-ApplyStatus -Stage $opcode -Log $logFile
-        try {
-            & $kernel -Parameters $params *>&1 | Tee-Object -FilePath $logFile
-            if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-                throw "Kernel exited $LASTEXITCODE"
-            }
-        }
-        catch {
-            @{
-                schemaVersion = 'winmint.image.evidence/v1'
-                message       = "$_"
-                opcode        = $opcode
-            } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'failure.json') -Encoding utf8
-            Write-ApplyStatus -Stage "failed:$opcode"
-            $failed = $true
-            break
+        & $kernel -Parameters $params *>&1 | Tee-Object -FilePath $logFile
+        if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+            throw "Kernel exited $LASTEXITCODE"
         }
     }
+
+    $opcode = 'evidence'
+    Write-PlanEvidence
+    $failed = $false
+}
+catch {
+    Write-PlanFailure -Message "$_" -Opcode $opcode
 }
 finally {
-    if ($failed) { Clear-LeftoverMount }
-    if (-not $failed) { Write-ApplyStatus -Stage 'done' }
+    if ($failed) { Clear-LeftoverMount } else { Write-ApplyStatus -Stage 'done' }
 }
 
 if ($failed) {
     exit 1
 }
-
-$shellTarget = $null
-$outputIso = $null
-$lane = $null
-foreach ($stage in $stagesDoc.stages) {
-    if ($stage.opcode -eq 'StampOfflineShell' -and $stage.parameters.shellTarget) {
-        $shellTarget = [string]$stage.parameters.shellTarget
-    }
-    if ($stage.opcode -eq 'BuildIso' -and $stage.parameters.outputIso) {
-        $outputIso = [string]$stage.parameters.outputIso
-    }
-    if ($stage.opcode -eq 'ExportWim' -and $stage.parameters.lane) {
-        $lane = [string]$stage.parameters.lane
-    }
-}
-
-$digests = @{}
-if ($outputIso -and (Test-Path -LiteralPath $outputIso)) {
-    $sha = Get-FileHash -LiteralPath $outputIso -Algorithm SHA256
-    $digests['outputIso.sha256'] = $sha.Hash.ToLowerInvariant()
-}
-$wimOut = Join-Path $WorkDirectory 'install.wim'
-if (Test-Path -LiteralPath $wimOut) {
-    $shaWim = Get-FileHash -LiteralPath $wimOut -Algorithm SHA256
-    $digests['installWim.sha256'] = $shaWim.Hash.ToLowerInvariant()
-}
-
-$sidePath = Join-Path $logDir 'digests.json'
-if (Test-Path -LiteralPath $sidePath) {
-    $side = Get-Content -LiteralPath $sidePath -Raw | ConvertFrom-Json
-    foreach ($p in $side.PSObject.Properties) {
-        $digests[[string]$p.Name] = [string]$p.Value
-    }
-}
-
-# InjectDrivers writes logs/WinMint-DriverInventory.json — require it before greening evidence.
-$ranInjectDrivers = @($stagesDoc.stages | Where-Object { [string]$_.opcode -eq 'InjectDrivers' }).Count -gt 0
-if ($ranInjectDrivers) {
-    $inventoryPath = Join-Path $logDir 'WinMint-DriverInventory.json'
-    if (-not (Test-Path -LiteralPath $inventoryPath)) {
-        throw "InjectDrivers ran but inventory missing at $inventoryPath (Host Apply ExpectDrivers would fail)"
-    }
-}
-
-$packageStrict = $false
-$bundlePath = Join-Path $WorkDirectory 'payload\bundle.json'
-if (Test-Path -LiteralPath $bundlePath) {
-    $bundle = Get-Content -LiteralPath $bundlePath -Raw | ConvertFrom-Json
-    if ($bundle.PSObject.Properties.Name -contains 'packageStrict') {
-        $packageStrict = [bool]$bundle.packageStrict
-    }
-}
-
-@{
-    schemaVersion         = 'winmint.image.evidence/v1'
-    outputIsoPath         = $outputIso
-    shellStampTargetPath  = $shellTarget
-    lane                  = $lane
-    packageStrict         = $packageStrict
-    digests               = $digests
-} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'evidence.json') -Encoding utf8
-
-# Success clears prior stage failure crumbs (operators read failure.json as current).
-Remove-Item -LiteralPath (Join-Path $WorkDirectory 'failure.json') -Force -ErrorAction SilentlyContinue
 
 exit 0

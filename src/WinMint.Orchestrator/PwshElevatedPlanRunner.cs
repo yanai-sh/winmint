@@ -18,11 +18,10 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
                 new Failure("servicing.plan.missing", "servicing/Invoke-ServicingPlan.ps1 not found."));
         }
 
-        string pwsh = ResolvePwsh();
         bool elevated = IsProcessElevated();
         ProcessStartInfo psi = new()
         {
-            FileName = pwsh,
+            FileName = "pwsh",
             ArgumentList =
             {
                 "-NoProfile",
@@ -87,9 +86,14 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 
             if (exitCode != 0)
             {
-                string message = ReadFailureMessage(workDirectory) ?? $"Invoke-ServicingPlan exited {exitCode}.";
-                return Result.Fail<ElevatedRunOk, Failure>(
-                    new Failure("servicing.plan.failed", message));
+                // No failure.json means the plan runner died before it could say why — a distinct
+                // condition from a stage failing, and the elevated path has no stdout to fall back on.
+                string? message = ReadFailureMessage(workDirectory);
+                return Result.Fail<ElevatedRunOk, Failure>(message is null
+                    ? new Failure(
+                        "servicing.plan.crashed",
+                        $"Invoke-ServicingPlan exited {exitCode} without writing failure.json.")
+                    : new Failure("servicing.plan.failed", message));
             }
         }
         catch (OperationCanceledException)
@@ -128,8 +132,6 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
     }
 
     private static string? FindServicingPlanScript() => ToolkitRoot.TryFind("servicing", "Invoke-ServicingPlan.ps1");
-
-    private static string ResolvePwsh() => "pwsh";
 
     private static bool IsProcessElevated()
     {
