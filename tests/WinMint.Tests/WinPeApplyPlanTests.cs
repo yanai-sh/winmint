@@ -113,8 +113,14 @@ public class WinPeApplyPlanTests
         Assert.Contains("echo select disk %TARGET%", script, StringComparison.Ordinal);
         Assert.Contains(":winmint_pick", script, StringComparison.Ordinal);
         Assert.Contains("refusing to guess", script, StringComparison.Ordinal);
-        // Re-patch media whose LaunchApply predates the guard instead of trusting the marker.
-        Assert.Contains("$body -notmatch 'winmint_pick'", script, StringComparison.Ordinal);
+        // What "patched" means is executed by tests/contract/Test-DiskGuard.ps1. Pin only that the
+        // patcher and the pre-wipe gate read the one contract, so neither can be taught a rule alone.
+        string gate = File.ReadAllText(FindRepoFile("tools", "apply", "Assert-ApplyEvidence.ps1"));
+        foreach (string reader in new[] { script, gate })
+        {
+            Assert.Contains("WinPeApplyContract.ps1", reader, StringComparison.Ordinal);
+            Assert.Contains("Get-WinPeApplyDefect", reader, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -163,7 +169,9 @@ public class WinPeApplyPlanTests
 
     private static string FindPatchBootScript() => FindServicingScript("Patch-BootWimApply.ps1");
 
-    private static string FindServicingScript(string fileName)
+    private static string FindServicingScript(string fileName) => FindRepoFile("servicing", fileName);
+
+    private static string FindRepoFile(params string[] parts)
     {
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "WinMint.slnx")))
@@ -172,7 +180,7 @@ public class WinPeApplyPlanTests
         }
 
         Assert.NotNull(dir);
-        return Path.Combine(dir.FullName, "servicing", fileName);
+        return Path.Combine([dir.FullName, .. parts]);
     }
 
     private static string NewTempDir()

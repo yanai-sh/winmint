@@ -1,7 +1,8 @@
 #requires -Version 7.6
 <#
 .SYNOPSIS
-  Contract test for the WinPE target-disk guard baked into LaunchApply.cmd.
+  Contract test for the WinPE target-disk guard baked into LaunchApply.cmd, and for the patched-media
+  contract the pre-wipe gate reads.
 .NOTES
   LaunchApply runs `clean` on a disk with no operator present, so the decision of *which* disk is the
   most destructive line WinMint emits. It cannot be exercised in WinPE from a dev box, so this drives
@@ -84,6 +85,55 @@ finally {
     & subst Z: /D 2>&1 | Out-Null
     Remove-Item $usb, $work -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item $cmdPath -Force -ErrorAction SilentlyContinue
+}
+
+# The guard only protects a wipe if the pre-wipe gate refuses media that lacks it. Patcher and gate
+# both read servicing/WinPeApplyContract.ps1, so drive that contract directly — no DISM, no WinPE.
+. (Join-Path $repo 'servicing/WinPeApplyContract.ps1')
+
+$shipped = $lines -join "`r`n"
+$winpeshl = "[LaunchApps]`r`n%SYSTEMDRIVE%\Windows\System32\LaunchApply.cmd"
+# Never executed — written to a fake mount and read back. Media looked like this before commit 114adc7.
+$preGuard = @'
+@echo off
+call wpeinit
+echo select disk 0 > "%TEMP%\dp.txt"
+diskpart /s "%TEMP%\dp.txt"
+dism /English /Apply-Image /ImageFile:D:\sources\install.wim /Index:1 /ApplyDir:W:\
+'@
+$mount = Join-Path $env:TEMP 'winmint-applycontract'
+
+function Assert-Contract {
+    param([string] $Name, [string] $Launch, [string] $Winpeshl, [string] $Expect)
+
+    Remove-Item -LiteralPath $mount -Recurse -Force -ErrorAction SilentlyContinue
+    $system32 = Join-Path $mount 'Windows\System32'
+    New-Item -ItemType Directory -Force -Path $system32 | Out-Null
+    if (-not [string]::IsNullOrEmpty($Launch)) {
+        Set-Content -LiteralPath (Join-Path $system32 'LaunchApply.cmd') -Value $Launch -Encoding ascii
+    }
+    if (-not [string]::IsNullOrEmpty($Winpeshl)) {
+        Set-Content -LiteralPath (Join-Path $system32 'winpeshl.ini') -Value $Winpeshl -Encoding ascii
+    }
+
+    $defects = Get-WinPeApplyDefect -MountDir $mount
+    $actual = if ($defects.Count -eq 0) { 'none' } else { $defects -join '; ' }
+    if ($actual -notmatch [regex]::Escape($Expect)) {
+        $script:failures += "$Name`n    expected: $Expect`n    actual:   $actual"
+    }
+}
+
+try {
+    Assert-Contract 'shipped LaunchApply is apply media' $shipped $winpeshl 'none'
+    # The drift that mattered: pre-guard media satisfies /Index:1 and would erase disk 0 unattended.
+    Assert-Contract 'pre-guard media rejected' $preGuard $winpeshl 'predates the target-disk guard'
+    Assert-Contract 'source edition index rejected' ($shipped -replace '/Index:1', '/Index:3') $winpeshl 'wrong /Index:3'
+    Assert-Contract 'missing launcher rejected' '' $winpeshl 'LaunchApply.cmd missing'
+    Assert-Contract 'missing winpeshl rejected' $shipped '' 'winpeshl.ini missing'
+    Assert-Contract 'winpeshl not launching apply rejected' $shipped '[LaunchApps]' 'must launch LaunchApply.cmd'
+}
+finally {
+    Remove-Item -LiteralPath $mount -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 if ($failures.Count -gt 0) {

@@ -41,6 +41,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot '..\Resolve-OutputIso.ps1')
+# Same definition of "patched" the patcher uses — the gate must not certify media it would re-patch.
+. (Join-Path $PSScriptRoot '..\..\servicing\WinPeApplyContract.ps1')
 
 if (-not (Test-Path -LiteralPath $WorkDirectory)) {
     throw "Work directory missing: $WorkDirectory"
@@ -109,9 +111,10 @@ if (Test-Path -LiteralPath $bootWim) {
     if (-not (Test-Path -LiteralPath $bootMarker)) {
         throw "WinPE apply marker missing: $bootMarker"
     }
+    $expectedMarker = Get-WinPeApplyMarkerText
     $markerText = (Get-Content -LiteralPath $bootMarker -Raw -Encoding utf8).Trim()
-    if ($markerText -ne 'apply+wimIndex=1') {
-        throw "WinPE apply marker must be apply+wimIndex=1 (got '$markerText')"
+    if ($markerText -ne $expectedMarker) {
+        throw "WinPE apply marker must be $expectedMarker (got '$markerText')"
     }
 
     # Marker alone is not enough — verify LaunchApply.cmd inside boot.wim index 1.
@@ -124,24 +127,9 @@ if (Test-Path -LiteralPath $bootWim) {
     try {
         & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:1 /MountDir:$bootMount /ReadOnly
         if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:1 for apply assert failed: $LASTEXITCODE" }
-        $launchPath = Join-Path $bootMount 'Windows\System32\LaunchApply.cmd'
-        if (-not (Test-Path -LiteralPath $launchPath)) {
-            throw 'LaunchApply.cmd missing inside boot.wim index 1'
-        }
-        $launchBody = Get-Content -LiteralPath $launchPath -Raw -Encoding utf8
-        if ($launchBody -notmatch '/Index:1\b') {
-            throw 'LaunchApply.cmd must Apply-Image /Index:1 (single-image export)'
-        }
-        if ($launchBody -match '/Index:(\d+)' -and [int]$Matches[1] -ne 1) {
-            throw "LaunchApply.cmd has wrong /Index:$($Matches[1]) (need 1)"
-        }
-        $winpeshlPath = Join-Path $bootMount 'Windows\System32\winpeshl.ini'
-        if (-not (Test-Path -LiteralPath $winpeshlPath)) {
-            throw 'winpeshl.ini missing inside boot.wim index 1'
-        }
-        $winpeshlBody = Get-Content -LiteralPath $winpeshlPath -Raw -Encoding utf8
-        if ($winpeshlBody -notmatch 'LaunchApply\.cmd') {
-            throw 'winpeshl.ini must launch LaunchApply.cmd'
+        $defects = Get-WinPeApplyDefect -MountDir $bootMount
+        if ($defects.Count -gt 0) {
+            throw "boot.wim index 1 is not apply media: $($defects -join '; ')"
         }
     }
     finally {

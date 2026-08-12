@@ -8,9 +8,9 @@ $mountDir = $Parameters['mountDir']
 # Source-ISO edition index is unrelated: after single-image export, apply target is always index 1.
 if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
 if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
+. (Join-Path $PSScriptRoot 'WinPeApplyContract.ps1')
 $applyWimIndex = 1
-$expectedMarker = "apply+wimIndex=$applyWimIndex"
-$indexToken = "/Index:$applyWimIndex"
+$expectedMarker = Get-WinPeApplyMarkerText -ApplyWimIndex $applyWimIndex
 
 # Spike #70: 3-partition GPT (EFI 100 MB, MSR 16 MB, primary) — WinPE apply disk layout.
 # LabConfig on applied-image SYSTEM hive (not boot.wim) — Hyper-V no-vTPM VMs read it at first boot.
@@ -22,21 +22,11 @@ if (-not (Test-Path -LiteralPath $bootWim)) {
 }
 
 function Test-LaunchApplyPatched {
-    param([string] $Wim, [string] $Mount, [int] $Index, [string] $Token)
+    param([string] $Wim, [string] $Mount, [int] $Index)
     & dism.exe /English /Mount-Image /ImageFile:$Wim /Index:$Index /MountDir:$Mount /ReadOnly
     if ($LASTEXITCODE -ne 0) { return $false }
     try {
-        $launch = Join-Path $Mount 'Windows\System32\LaunchApply.cmd'
-        $winpeshl = Join-Path $Mount 'Windows\System32\winpeshl.ini'
-        if (-not (Test-Path -LiteralPath $launch)) { return $false }
-        if (-not (Test-Path -LiteralPath $winpeshl)) { return $false }
-        $body = Get-Content -LiteralPath $launch -Raw -Encoding ascii
-        if ($body -notlike "*$Token*") { return $false }
-        if ($body -match '/Index:(\d+)' -and [int]$Matches[1] -ne $applyWimIndex) { return $false }
-        # Media patched before the target-disk guard existed must be re-patched, not skipped.
-        if ($body -notmatch 'winmint_pick') { return $false }
-        $ini = Get-Content -LiteralPath $winpeshl -Raw -Encoding ascii
-        return ($ini -match 'LaunchApply\.cmd')
+        return (Get-WinPeApplyDefect -MountDir $Mount -ApplyWimIndex $applyWimIndex).Count -eq 0
     }
     finally {
         & dism.exe /English /Unmount-Image /MountDir:$Mount /Discard | Out-Null
@@ -53,7 +43,7 @@ New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
 # ponytail: skip only when marker + index-1 LaunchApply both prove apply+wimIndex=1 (stale marker hid Index:3).
 if (Test-Path -LiteralPath $bootMarker) {
     $markerText = (Get-Content -LiteralPath $bootMarker -Raw -Encoding utf8).Trim()
-    if ($markerText -eq $expectedMarker -and (Test-LaunchApplyPatched -Wim $bootWim -Mount $bootMount -Index 1 -Token $indexToken)) {
+    if ($markerText -eq $expectedMarker -and (Test-LaunchApplyPatched -Wim $bootWim -Mount $bootMount -Index 1)) {
         Remove-Item -LiteralPath $legacyMarker -Force -ErrorAction SilentlyContinue
         Write-Output 'PatchBootWimApply skipped (already patched; LaunchApply Index:1 verified)'
         Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
