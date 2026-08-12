@@ -1,433 +1,371 @@
 #requires -Version 7.6
 <#
 .SYNOPSIS
-  Prove live winget/scoop catalog ids (winget download / scoop archive download) and write config/packages.proof.json.
+  Execute a C#-authored package proof request and write a transient outcome.
 .NOTES
-  Maintainer gate only — never part of `just check`. Needs network + native ARM64 + winget.
-  Offline proof test in just check enforces freshness. Validity = download prove + proof.
-  Winget: `winget download` (App Installer has no install --dry-run). Scoop: manifest + archive download.
+  This script does not read the catalog, choose entries, calculate hashes, or write the proof.
 #>
 param(
-    [string] $CatalogPath = '',
-    [string] $Architecture = 'arm64',
-    [switch] $SelfCheck
+    [Parameter(Mandatory)]
+    [string] $RequestPath,
+
+    [Parameter(Mandatory)]
+    [string] $OutcomePath
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$DownloadTimeoutSeconds = 600
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-if ([string]::IsNullOrWhiteSpace($CatalogPath)) {
-    $CatalogPath = Join-Path $repoRoot 'config\packages.json'
-}
-
-$script:ScoopBucketRaw = @{
-    main   = 'https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket'
-    extras = 'https://raw.githubusercontent.com/ScoopInstaller/Extras/master/bucket'
-}
-
-$script:ProveEntries = [System.Collections.Generic.List[object]]::new()
-
-function Get-ScoopManifestUri {
+function Invoke-BoundedProcess {
     param(
-        [Parameter(Mandatory)][string] $Id,
-        [string] $Bucket
+        [Parameter(Mandatory)][string] $FileName,
+        [Parameter(Mandatory)][string[]] $ArgumentList,
+        [Parameter(Mandatory)][string] $Label
     )
-    $b = if ([string]::IsNullOrWhiteSpace($Bucket)) { 'main' } else { $Bucket.Trim().ToLowerInvariant() }
-    if (-not $script:ScoopBucketRaw.ContainsKey($b)) {
-        throw "unknown scoop bucket '$Bucket' (supported: $($script:ScoopBucketRaw.Keys -join ', '))"
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $FileName
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $ArgumentList) {
+        $startInfo.ArgumentList.Add($argument)
     }
-    return "$($script:ScoopBucketRaw[$b])/$Id.json"
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) {
+            throw "$Label failed to start"
+        }
+
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $timeout = [System.Threading.CancellationTokenSource]::new(
+            [TimeSpan]::FromSeconds($DownloadTimeoutSeconds))
+        try {
+            $null = $process.WaitForExitAsync($timeout.Token).GetAwaiter().GetResult()
+        }
+        catch [System.OperationCanceledException] {
+            if (-not $process.HasExited) {
+                try {
+                    $process.Kill($true)
+                }
+                catch [System.InvalidOperationException] {
+                    # Process exited between HasExited and Kill.
+                }
+            }
+            throw "$Label timed out after $DownloadTimeoutSeconds seconds"
+        }
+        finally {
+            $timeout.Dispose()
+        }
+
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        $output = (@($stdout, $stderr) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) `
+            -join [Environment]::NewLine
+        return [pscustomobject]@{
+            ExitCode = $process.ExitCode
+            Output   = $output.Trim()
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
 }
 
-function Get-JsonProp {
+function Get-JsonProperty {
     param(
         [Parameter(Mandatory)][psobject] $Object,
         [Parameter(Mandatory)][string] $Name
     )
-    $p = $Object.PSObject.Properties[$Name]
-    if ($null -eq $p) { return $null }
-    return $p.Value
-}
 
-function Test-ScoopArm64Url {
-    param([Parameter(Mandatory)][psobject] $Manifest)
-    $arch = Get-JsonProp -Object $Manifest -Name 'architecture'
-    if ($null -ne $arch) {
-        foreach ($name in @('arm64', 'aarch64')) {
-            $node = Get-JsonProp -Object $arch -Name $name
-            if ($null -ne $node) {
-                $url = Get-JsonProp -Object $node -Name 'url'
-                if (-not [string]::IsNullOrWhiteSpace([string]$url)) {
-                    return $url
-                }
-            }
-        }
-        return $null
-    }
-    $universal = Get-JsonProp -Object $Manifest -Name 'url'
-    if (-not [string]::IsNullOrWhiteSpace([string]$universal)) {
-        return $universal
-    }
-    return $null
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
 }
 
 function Get-FirstUrl {
-    param($Url)
-    if ($null -eq $Url) { return $null }
-    if ($Url -is [System.Array]) {
-        if ($Url.Count -eq 0) { return $null }
-        return [string]$Url[0]
+    param($Value)
+
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [System.Array]) {
+        if ($Value.Count -eq 0) { return $null }
+        return [string]$Value[0]
     }
-    return [string]$Url
+    return [string]$Value
 }
 
-function Get-FileSha256Hex {
-    param([Parameter(Mandatory)][string] $Path)
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+function Invoke-WingetTarget {
+    param(
+        [Parameter(Mandatory)][System.Management.Automation.CommandInfo] $Winget,
+        [Parameter(Mandatory)][string] $Id,
+        [Parameter(Mandatory)][string] $Architecture
+    )
+
+    $downloadDirectory = Join-Path ([System.IO.Path]::GetTempPath()) (
+        'winmint-winget-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
+    try {
+        [string[]] $arguments = @(
+            'download', '--id', $Id, '--exact',
+            '--download-directory', $downloadDirectory,
+            '--disable-interactivity', '--accept-package-agreements', '--accept-source-agreements',
+            '--architecture', $Architecture
+        )
+        $completed = Invoke-BoundedProcess `
+            -FileName $Winget.Source `
+            -ArgumentList $arguments `
+            -Label "winget download for '$Id'"
+        $output = $completed.Output
+        $exitCode = $completed.ExitCode
+
+        # Some architecture-neutral installers have no explicit ARM64 manifest row.
+        if ($exitCode -ne 0 -and $output -match 'No applicable installer') {
+            Get-ChildItem -LiteralPath $downloadDirectory -File -Recurse -ErrorAction SilentlyContinue |
+                Remove-Item -Force -ErrorAction SilentlyContinue
+            [string[]] $arguments = @(
+                'download', '--id', $Id, '--exact',
+                '--download-directory', $downloadDirectory,
+                '--disable-interactivity', '--accept-package-agreements', '--accept-source-agreements'
+            )
+            $completed = Invoke-BoundedProcess `
+                -FileName $Winget.Source `
+                -ArgumentList $arguments `
+                -Label "winget fallback download for '$Id'"
+            $output = $completed.Output
+            $exitCode = $completed.ExitCode
+        }
+
+        if ($exitCode -ne 0) {
+            if ($output.Length -gt 600) { $output = $output.Substring(0, 600) + '…' }
+            throw "winget download exited ${exitCode}: $output"
+        }
+
+        $files = @(Get-ChildItem -LiteralPath $downloadDirectory -File -Recurse)
+        if ($files.Count -eq 0 -or ($files | Measure-Object -Property Length -Sum).Sum -le 0) {
+            throw 'winget download produced no files'
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $downloadDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
-function Get-ProveSetSha256Hex {
-    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]] $Entries)
-    if ($null -eq $Entries -or $Entries.Count -eq 0) {
-        $bytes = [byte[]]@()
+function Invoke-ScoopTarget {
+    param(
+        [Parameter(Mandatory)][string] $Id,
+        [Parameter(Mandatory)][string] $Bucket
+    )
+
+    $bucketRoot = switch ($Bucket) {
+        'main' { 'https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket' }
+        'extras' { 'https://raw.githubusercontent.com/ScoopInstaller/Extras/master/bucket' }
+        default { throw "unsupported scoop bucket '$Bucket'" }
+    }
+    $manifestUri = "$bucketRoot/$Id.json"
+    try {
+        $manifest = Invoke-RestMethod `
+            -Uri $manifestUri `
+            -Method Get `
+            -TimeoutSec $DownloadTimeoutSeconds
+    }
+    catch {
+        throw "scoop manifest request failed (600-second timeout): $($_.Exception.Message)"
+    }
+    $architecture = Get-JsonProperty -Object $manifest -Name 'architecture'
+    $url = $null
+    if ($null -ne $architecture) {
+        foreach ($name in @('arm64', 'aarch64')) {
+            $node = Get-JsonProperty -Object $architecture -Name $name
+            if ($null -ne $node) {
+                $url = Get-FirstUrl (Get-JsonProperty -Object $node -Name 'url')
+                if (-not [string]::IsNullOrWhiteSpace($url)) { break }
+            }
+        }
     }
     else {
-        [string[]]$lines = @(
-            $Entries | ForEach-Object { "$($_.Source):$($_.Id)" }
-        )
-        [Array]::Sort($lines, [StringComparer]::Ordinal)
-        $text = ($lines -join "`n") + "`n"
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
+        $url = Get-FirstUrl (Get-JsonProperty -Object $manifest -Name 'url')
     }
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $hash = $sha.ComputeHash($bytes)
-    }
-    finally {
-        $sha.Dispose()
-    }
-    return ([System.BitConverter]::ToString($hash) -replace '-', '').ToLowerInvariant()
-}
 
-function Invoke-WingetDownload {
-    param(
-        [Parameter(Mandatory)][System.Management.Automation.CommandInfo] $WingetCmd,
-        [Parameter(Mandatory)][string] $Id,
-        [Parameter(Mandatory)][string] $Tmp,
-        [Parameter(Mandatory)][string] $Stdout,
-        [Parameter(Mandatory)][string] $Stderr,
-        [string] $Architecture,
-        [Parameter(Mandatory)][int] $TimeoutSec
-    )
-    $argList = [System.Collections.Generic.List[string]]::new()
-    $argList.AddRange([string[]]@(
-            'download', '--id', $Id, '--exact',
-            '--download-directory', $Tmp,
-            '--disable-interactivity', '--accept-package-agreements', '--accept-source-agreements'
-        ))
-    if (-not [string]::IsNullOrWhiteSpace($Architecture)) {
-        $argList.Add('--architecture')
-        $argList.Add($Architecture)
-    }
-    $p = Start-Process -FilePath $WingetCmd.Source -ArgumentList $argList.ToArray() `
-        -NoNewWindow -PassThru -Wait:$false `
-        -RedirectStandardOutput $Stdout -RedirectStandardError $Stderr
-    if (-not $p.WaitForExit($TimeoutSec * 1000)) {
-        try { $p.Kill($true) } catch { }
-        throw "winget download timed out after ${TimeoutSec}s for $Id"
-    }
-    return $p.ExitCode
-}
-
-function Test-WingetId {
-    param(
-        [Parameter(Mandatory)][string] $Id,
-        [Parameter(Mandatory)][string] $Architecture,
-        [int] $TimeoutSec = 600
-    )
-    $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
-    if ($null -eq $wingetCmd) {
-        throw 'winget not on PATH (install App Installer / use an ARM64 host with winget)'
-    }
-    # App Installer has no install --dry-run; download proves installer fetch without installing.
-    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("winmint-winget-" + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $tmp | Out-Null
-    $stdout = Join-Path $tmp 'winget.out.txt'
-    $stderr = Join-Path $tmp 'winget.err.txt'
-    try {
-        $code = Invoke-WingetDownload -WingetCmd $wingetCmd -Id $Id -Tmp $tmp `
-            -Stdout $stdout -Stderr $stderr -Architecture $Architecture -TimeoutSec $TimeoutSec
-        if ($code -ne 0) {
-            # Neutral multi-arch setups (e.g. Windhawk NSIS) often lack an arm64 installer row in
-            # the winget manifest but still install native ARM64 on WoA. Retry without --architecture.
-            $tail = (@(Get-Content -LiteralPath $stdout -ErrorAction SilentlyContinue) + @(Get-Content -LiteralPath $stderr -ErrorAction SilentlyContinue) | Out-String).Trim()
-            if ($tail -match 'No applicable installer') {
-                Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
-                Get-ChildItem -LiteralPath $tmp -File -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -notin @('winget.out.txt', 'winget.err.txt') } |
-                    Remove-Item -Force -ErrorAction SilentlyContinue
-                $code = Invoke-WingetDownload -WingetCmd $wingetCmd -Id $Id -Tmp $tmp `
-                    -Stdout $stdout -Stderr $stderr -Architecture '' -TimeoutSec $TimeoutSec
-                if ($code -eq 0) {
-                    Write-Output "note  winget ${Id}: proved via neutral installer (no --architecture $Architecture row)"
-                }
-            }
-        }
-        if ($code -ne 0) {
-            $tail = (@(Get-Content -LiteralPath $stdout -ErrorAction SilentlyContinue) + @(Get-Content -LiteralPath $stderr -ErrorAction SilentlyContinue) | Out-String).Trim()
-            if ($tail.Length -gt 240) { $tail = $tail.Substring(0, 240) + '…' }
-            throw "winget download failed (exit $code): $tail"
-        }
-        $files = @(Get-ChildItem -LiteralPath $tmp -File -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -notin @('winget.out.txt', 'winget.err.txt') })
-        if ($files.Count -eq 0 -or ($files | Measure-Object -Property Length -Sum).Sum -le 0) {
-            throw "winget download produced no files for $Id"
-        }
-    }
-    finally {
-        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
-    }
-}
-
-function Test-ScoopId {
-    param(
-        [Parameter(Mandatory)][string] $Id,
-        [string] $Bucket,
-        [Parameter(Mandatory)][string] $Architecture
-    )
-    $uri = Get-ScoopManifestUri -Id $Id -Bucket $Bucket
-    $manifest = Invoke-RestMethod -Uri $uri -Method Get
-    $urlRaw = Test-ScoopArm64Url -Manifest $manifest
-    $url = Get-FirstUrl -Url $urlRaw
-    if ($Architecture -eq 'arm64' -and [string]::IsNullOrWhiteSpace($url)) {
-        throw "scoop manifest has no arm64/aarch64 (or universal) url: $uri"
-    }
     if ([string]::IsNullOrWhiteSpace($url)) {
-        throw "scoop manifest has no download url: $uri"
+        throw "scoop manifest has no ARM64/aarch64 or universal URL: $manifestUri"
     }
-    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("winmint-scoop-" + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $tmp | Out-Null
+
+    $downloadDirectory = Join-Path ([System.IO.Path]::GetTempPath()) (
+        'winmint-scoop-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
     try {
-        $dest = Join-Path $tmp 'payload.bin'
-        Invoke-WebRequest -Uri $url -OutFile $dest -MaximumRedirection 5
-        if (-not (Test-Path -LiteralPath $dest) -or (Get-Item -LiteralPath $dest).Length -le 0) {
-            throw "scoop download empty: $url"
+        $destination = Join-Path $downloadDirectory 'payload.bin'
+        try {
+            Invoke-WebRequest `
+                -Uri $url `
+                -OutFile $destination `
+                -MaximumRedirection 5 `
+                -TimeoutSec $DownloadTimeoutSeconds
+        }
+        catch {
+            throw "scoop archive request failed (600-second timeout): $($_.Exception.Message)"
+        }
+        if (-not (Test-Path -LiteralPath $destination) -or
+            (Get-Item -LiteralPath $destination).Length -le 0) {
+            throw 'scoop archive download was empty'
         }
     }
     finally {
-        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $downloadDirectory -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
-function Write-PackagesProofFile {
+function Write-Outcome {
     param(
-        [Parameter(Mandatory)][string] $CatalogPath,
-        [Parameter(Mandatory)][string] $Architecture,
-        [Parameter(Mandatory)][string] $OsArch,
-        [Parameter(Mandatory)][AllowEmptyCollection()][object[]] $Entries
+        [Parameter(Mandatory)][string] $Path,
+        [Parameter(Mandatory)][System.Collections.IDictionary] $Outcome
     )
-    $proofPath = Join-Path $repoRoot 'config\packages.proof.json'
-    $wingetVer = (& winget --version 2>$null | Out-String).Trim()
-    $sorted = [System.Collections.Generic.List[object]]::new()
-    if ($null -ne $Entries) { foreach ($e in $Entries) { $sorted.Add($e) } }
-    $sorted.Sort([Comparison[object]] {
-        param($a, $b)
-        $c = [string]::Compare([string]$a.Source, [string]$b.Source, [StringComparison]::Ordinal)
-        if ($c -ne 0) { return $c }
-        return [string]::Compare([string]$a.Id, [string]$b.Id, [StringComparison]::Ordinal)
-    })
-    $entryRows = @(
-        foreach ($e in $sorted) {
-            $row = [ordered]@{
-                source = $e.Source
-                id     = $e.Id
-                method = $e.Method
+
+    $directory = Split-Path -Parent $Path
+    if ([string]::IsNullOrWhiteSpace($directory)) {
+        throw "OutcomePath must have a parent directory: $Path"
+    }
+    [System.IO.Directory]::CreateDirectory($directory) | Out-Null
+    $temporaryPath = Join-Path $directory (
+        ".$([System.IO.Path]::GetFileName($Path)).$([guid]::NewGuid().ToString('N')).tmp")
+    try {
+        $json = ($Outcome | ConvertTo-Json -Depth 8) + "`n"
+        [System.IO.File]::WriteAllText($temporaryPath, $json)
+        [System.IO.File]::Move($temporaryPath, $Path, $true)
+    }
+    finally {
+        Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+$osArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+$processArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+$hostDiagnostics = [ordered]@{
+    osArchitecture                 = $osArchitecture
+    processArchitecture            = $processArchitecture
+    processorArchitecture          = [Environment]::GetEnvironmentVariable('PROCESSOR_ARCHITECTURE')
+    processorArchitectureW6432     = [Environment]::GetEnvironmentVariable('PROCESSOR_ARCHITEW6432')
+    wingetVersion                  = $null
+}
+$architecture = $null
+$catalogSha256 = $null
+$entries = @()
+$results = [System.Collections.Generic.List[object]]::new()
+$fatalError = $null
+$targetFailed = $false
+
+try {
+    if (-not (Test-Path -LiteralPath $RequestPath -PathType Leaf)) {
+        throw "request missing: $RequestPath"
+    }
+    $request = Get-Content -LiteralPath $RequestPath -Raw | ConvertFrom-Json
+    if ([string](Get-JsonProperty -Object $request -Name 'schemaVersion') -ne
+        'winmint.packages.check.request/v1') {
+        throw 'unsupported request schemaVersion'
+    }
+
+    $architecture = [string](Get-JsonProperty -Object $request -Name 'architecture')
+    $catalogSha256 = [string](Get-JsonProperty -Object $request -Name 'catalogSha256')
+    $requestEntries = Get-JsonProperty -Object $request -Name 'entries'
+    if ($architecture -ne 'arm64') { throw "request architecture must be arm64 (got '$architecture')" }
+    if ($catalogSha256 -notmatch '^[0-9a-f]{64}$') { throw 'request catalogSha256 is malformed' }
+    if ($null -eq $requestEntries) { throw 'request entries must be an array' }
+    $entries = @($requestEntries)
+
+    foreach ($entry in $entries) {
+        $source = [string](Get-JsonProperty -Object $entry -Name 'source')
+        $id = [string](Get-JsonProperty -Object $entry -Name 'id')
+        $bucketValue = Get-JsonProperty -Object $entry -Name 'bucket'
+        $bucket = if ($null -eq $bucketValue) { $null } else { [string]$bucketValue }
+        if ($source -notin @('winget', 'scoop')) { throw "request source is invalid: '$source'" }
+        if ([string]::IsNullOrWhiteSpace($id)) { throw 'request entry id is empty' }
+        if ($source -eq 'winget' -and $null -ne $bucket) {
+            throw "winget request entry '$id' must not have a bucket"
+        }
+        if ($source -eq 'scoop' -and [string]::IsNullOrWhiteSpace($bucket)) {
+            throw "scoop request entry '$id' must have a bucket"
+        }
+
+        $results.Add([pscustomobject][ordered]@{
+            source    = $source
+            id        = $id
+            bucket    = $bucket
+            succeeded = $false
+            method    = if ($source -eq 'winget') {
+                'winget-download'
             }
-            if ($e.Source -eq 'scoop') { $row.bucket = $e.Bucket }
-            [pscustomobject]$row
-        }
-    )
-    $proof = [ordered]@{
-        schemaVersion  = 'winmint.packages.proof/v1'
-        architecture   = $Architecture
-        catalogSha256  = Get-FileSha256Hex -Path $CatalogPath
-        proveSetSha256 = Get-ProveSetSha256Hex -Entries $Entries
-        provenAtUtc    = [datetime]::UtcNow.ToString('o')
-        host           = @{
-            winget = $wingetVer
-            osArch = $OsArch
-        }
-        entries        = $entryRows
-    }
-    $tmpProof = Join-Path $repoRoot 'config\packages.proof.json.tmp'
-    $json = ($proof | ConvertTo-Json -Depth 6) + "`n"
-    [System.IO.File]::WriteAllText($tmpProof, $json)
-    Move-Item -LiteralPath $tmpProof -Destination $proofPath -Force
-    Write-Output "wrote $proofPath"
-}
-
-function Invoke-PackagesCheck {
-    param(
-        [Parameter(Mandatory)][string] $CatalogPath,
-        [Parameter(Mandatory)][string] $Architecture
-    )
-
-    $arch = $Architecture.Trim().ToLowerInvariant()
-    if ($arch -notin @('arm64', 'amd64', 'x64')) {
-        throw "Architecture must be arm64 or amd64 (got '$Architecture')"
-    }
-    if ($arch -eq 'x64') { $arch = 'amd64' }
-
-    $osArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
-    if ($arch -eq 'arm64' -and $osArch -ne 'Arm64') {
-        throw "packages-check for arm64 requires native ARM64 host (OSArchitecture=$osArch)"
+            else {
+                'scoop-manifest-download'
+            }
+            error     = 'not executed'
+        })
     }
 
-    if (-not (Test-Path -LiteralPath $CatalogPath)) {
-        throw "catalog missing: $CatalogPath"
+    if ($osArchitecture -ne 'Arm64' -or $processArchitecture -ne 'Arm64') {
+        throw (
+            'packages-check requires native ARM64 ' +
+            "(OSArchitecture=$osArchitecture, ProcessArchitecture=$processArchitecture, " +
+            "PROCESSOR_ARCHITECTURE=$($hostDiagnostics.processorArchitecture), " +
+            "PROCESSOR_ARCHITEW6432=$($hostDiagnostics.processorArchitectureW6432))")
     }
 
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($null -eq $winget) {
-        throw 'winget not on PATH (install App Installer / use an ARM64 host with winget)'
+        throw 'winget not on PATH (install App Installer on the native ARM64 host)'
+    }
+    $hostDiagnostics.wingetVersion = (& $winget.Source --version 2>$null | Out-String).Trim()
+    $sourceUpdate = Invoke-BoundedProcess `
+        -FileName $winget.Source `
+        -ArgumentList @('source', 'update', '--disable-interactivity') `
+        -Label 'winget source update'
+    if ($sourceUpdate.ExitCode -ne 0) {
+        throw "winget source update exited $($sourceUpdate.ExitCode): $($sourceUpdate.Output)"
     }
 
-    Write-Output 'winget source update…'
-    & winget source update --disable-interactivity 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Output "WARN winget source update exit $LASTEXITCODE — continuing; winget download must still pass"
-    }
-
-    $doc = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
-    if ($null -eq $doc.tools) {
-        throw 'catalog has no tools object'
-    }
-
-    $failures = [System.Collections.Generic.List[string]]::new()
-    $ok = 0
-    $skipped = 0
-    $script:ProveEntries.Clear()
-
-    foreach ($prop in $doc.tools.PSObject.Properties) {
-        $key = $prop.Name
-        $row = $prop.Value
-        $source = [string]$row.source
-        $id = [string]$row.id
-        $arches = @($row.architectures | ForEach-Object { [string]$_ })
-        if ($true -eq (Get-JsonProp -Object $row -Name 'stub')) {
-            $skipped++
-            Write-Output "skip  $key ($id) — catalog stub (not published)"
-            continue
-        }
-        if ($arches.Count -gt 0 -and ($arches -notcontains $arch)) {
-            $skipped++
-            Write-Output "skip  $key ($id) — no $arch in architectures"
-            continue
-        }
-
+    for ($i = 0; $i -lt $entries.Count; $i++) {
+        $result = $results[$i]
         try {
-            switch ($source.ToLowerInvariant()) {
-                'winget' {
-                    Test-WingetId -Id $id -Architecture $arch
-                    $script:ProveEntries.Add([pscustomobject]@{
-                            Source = 'winget'
-                            Id     = $id
-                            Method = 'winget-download'
-                            Bucket = $null
-                        })
-                    Write-Output "ok    winget $key ($id) $arch download"
-                    $ok++
-                }
-                'scoop' {
-                    $bucket = [string](Get-JsonProp -Object $row -Name 'scoopBucket')
-                    $bucketLabel = if ([string]::IsNullOrWhiteSpace($bucket)) { 'main' } else { $bucket }
-                    Test-ScoopId -Id $id -Bucket $bucket -Architecture $arch
-                    $script:ProveEntries.Add([pscustomobject]@{
-                            Source = 'scoop'
-                            Id     = $id
-                            Method = 'scoop-manifest-download'
-                            Bucket = $bucketLabel
-                        })
-                    Write-Output "ok    scoop  $key ($id) bucket=$bucketLabel download"
-                    $ok++
-                }
-                'store' {
-                    $skipped++
-                    Write-Output "skip  $key ($id) — store (not winget/scoop prove)"
-                }
-                default {
-                    throw "unknown source '$source'"
-                }
+            if ($result.source -eq 'winget') {
+                Invoke-WingetTarget -Winget $winget -Id $result.id -Architecture $architecture
             }
+            else {
+                Invoke-ScoopTarget -Id $result.id -Bucket $result.bucket
+            }
+            $result.succeeded = $true
+            $result.error = $null
+            Write-Output "ok $($result.source):$($result.id)"
         }
         catch {
-            $msg = "FAIL  $key ($id) [$source]: $($_.Exception.Message)"
-            $failures.Add($msg)
-            Write-Output $msg
+            $result.error = $_.Exception.Message
+            $targetFailed = $true
+            Write-Output "FAIL $($result.source):$($result.id): $($result.error)"
         }
     }
-
-    Write-Output "packages-check: ok=$ok skipped=$skipped fail=$($failures.Count) arch=$arch catalog=$CatalogPath"
-    if ($failures.Count -gt 0) {
-        throw "packages-check failed ($($failures.Count)) — proof not updated"
+}
+catch {
+    $fatalError = $_.Exception.Message
+    foreach ($result in $results) {
+        if ($result.error -eq 'not executed') {
+            $result.error = $fatalError
+        }
     }
-
-    Write-PackagesProofFile -CatalogPath $CatalogPath -Architecture $arch -OsArch $osArch -Entries @($script:ProveEntries)
+}
+finally {
+    $outcome = [ordered]@{
+        schemaVersion = 'winmint.packages.check.outcome/v1'
+        architecture  = $architecture
+        catalogSha256 = $catalogSha256
+        host           = $hostDiagnostics
+        completedAtUtc = [datetimeoffset]::UtcNow.ToString('o')
+        fatalError     = $fatalError
+        results        = @($results)
+    }
+    Write-Outcome -Path $OutcomePath -Outcome $outcome
 }
 
-if ($SelfCheck) {
-    # Offline: URI + arm64 URL extraction + prove-set hash (no network / winget).
-    $uri = Get-ScoopManifestUri -Id 'starship' -Bucket 'main'
-    if ($uri -notmatch '/starship\.json$') { throw "SelfCheck uri: $uri" }
-    $extras = Get-ScoopManifestUri -Id 'komorebi' -Bucket 'extras'
-    if ($extras -notmatch 'Extras/master/bucket/komorebi\.json$') { throw "SelfCheck extras: $extras" }
-
-    $withArm = [pscustomobject]@{
-        architecture = [pscustomobject]@{
-            arm64 = [pscustomobject]@{ url = 'https://example.test/arm64.zip' }
-        }
-    }
-    if ((Test-ScoopArm64Url -Manifest $withArm) -ne 'https://example.test/arm64.zip') {
-        throw 'SelfCheck arm64 url miss'
-    }
-    $universal = [pscustomobject]@{ url = 'https://example.test/any.zip' }
-    if ((Test-ScoopArm64Url -Manifest $universal) -ne 'https://example.test/any.zip') {
-        throw 'SelfCheck universal url miss'
-    }
-    $amdOnly = [pscustomobject]@{
-        architecture = [pscustomobject]@{
-            '64bit' = [pscustomobject]@{ url = 'https://example.test/x64.zip' }
-        }
-    }
-    if ($null -ne (Test-ScoopArm64Url -Manifest $amdOnly)) {
-        throw 'SelfCheck should reject amd64-only'
-    }
-
-    # Must match C# PackagesProof.ProveSetSha256 for unsorted scoop:starship + winget:Git.MinGit
-    $entries = @(
-        [pscustomobject]@{ Source = 'scoop'; Id = 'starship' },
-        [pscustomobject]@{ Source = 'winget'; Id = 'Git.MinGit' }
-    )
-    $hash = Get-ProveSetSha256Hex -Entries $entries
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $pinBytes = [System.Text.Encoding]::UTF8.GetBytes("scoop:starship`nwinget:Git.MinGit`n")
-        $expected = ([System.BitConverter]::ToString($sha.ComputeHash($pinBytes)) -replace '-', '').ToLowerInvariant()
-    }
-    finally {
-        $sha.Dispose()
-    }
-    if ($hash -ne $expected) {
-        throw "SelfCheck proveSetSha256 mismatch: got $hash expected $expected"
-    }
-
-    if (-not (Test-Path -LiteralPath $CatalogPath)) {
-        throw "SelfCheck catalog missing: $CatalogPath"
-    }
-    $null = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
-    Write-Output 'SelfCheck ok'
-    exit 0
-}
-
-Invoke-PackagesCheck -CatalogPath $CatalogPath -Architecture $Architecture
+if ($null -ne $fatalError -or $targetFailed) { exit 1 }
+exit 0

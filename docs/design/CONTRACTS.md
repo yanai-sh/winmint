@@ -34,6 +34,8 @@ Profile JSON
 | Servicing stages (workdir) | `winmint.servicing.stages/v1` |
 | Image evidence | `winmint.image.evidence/v1` |
 | Packages proof | `winmint.packages.proof/v1` |
+| Packages check request (transient) | `winmint.packages.check.request/v1` |
+| Packages check outcome (transient) | `winmint.packages.check.outcome/v1` |
 | Native package audit | `winmint.native-packages/v1` |
 
 The JSON key is `schemaVersion` and the C# constant is `SchemaVersion` — everywhere, no `schema` shorthand. Each id has **one** literal in C# (`JobsWire.SchemaVersion`, `GuestBundleWire.SchemaVersion`, …); a second spelling is a bug, not a style choice. PowerShell writers repeat the literal and are held honest by the C# reader that validates them.
@@ -52,6 +54,13 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 | Checkpoint | ProvisioningSession (`ICheckpointStore`) | Next Shell `Run` via store (optional `bundle.Resume` inject) |
 | Smoke acceptance summary | Host harness (`tools/vm/`) | Maintainer — `Assert-SmokeEvidence.ps1` |
 | Host Apply acceptance summary | Host harness (`tools/apply/`) | Maintainer — `Assert-ApplyEvidence.ps1` |
+| Image evidence (`evidence.json`) | Elevated `Invoke-ServicingPlan.ps1` | ImageServicing; host apply assert — **never** session control |
+| Image failure (`failure.json`) | Elevated `Invoke-ServicingPlan.ps1` | ImageServicing runner; removed on successful Apply |
+| Packages proof (`config/packages.proof.json`) | PackagesProof (C#) | PackagesProof.Validate; `just check` |
+| Packages check request (transient) | PackagesProof (C#) | `Invoke-PackagesCheck.ps1` |
+| Packages check outcome (transient) | `Invoke-PackagesCheck.ps1` | PackagesProof (C#) |
+
+Transient packages-check files live under `.scratch/packages-check/{run}/` during `packages-check` only; C# owns request write, reconciliation, and proof replace — not durable interchange.
 
 ## Compatibility
 

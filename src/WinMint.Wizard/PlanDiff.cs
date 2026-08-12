@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using WinMint.Contracts;
 using WinMint.Orchestrator;
 
@@ -42,8 +41,12 @@ public static class PlanDiff
         if (artifacts.Stages.Stages.Any(s => s.Opcode == ServicingOpcode.StampOfflinePolicies))
         {
             Line(sb, "Edge / OneDrive / device metadata / WPBT policies", "always");
-            if (ProductPosture.MergeWinget(profile.WingetPackages)
-                .Any(id => string.Equals(id, ProductPosture.BraveWingetId, StringComparison.OrdinalIgnoreCase)))
+            if (artifacts.EffectivePackages.Any(
+                package => package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store
+                    && string.Equals(
+                        package.ResolvedInstallId,
+                        ProductPosture.BraveWingetId,
+                        StringComparison.OrdinalIgnoreCase)))
             {
                 Line(sb, "Brave policies", "you chose");
             }
@@ -68,13 +71,44 @@ public static class PlanDiff
         {
             if (job.Kind is ProvisionJobKind.WingetImport)
             {
-                AppendWingetImport(sb, artifacts, profile);
+                AppendPackages(
+                    sb,
+                    artifacts.EffectivePackages.Where(
+                        package => package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store));
                 continue;
             }
 
             if (job.Kind is ProvisionJobKind.ScoopBatch)
             {
-                AppendScoopBatch(sb, job, profile);
+                AppendPackages(
+                    sb,
+                    artifacts.EffectivePackages.Where(package => package.Source == EffectivePackageSource.Scoop));
+                continue;
+            }
+
+            if (job.Kind is ProvisionJobKind.Winget or ProvisionJobKind.Wsl)
+            {
+                EffectivePackageSource source = job.Kind switch
+                {
+                    ProvisionJobKind.Winget => EffectivePackageSource.Winget,
+                    _ => EffectivePackageSource.Wsl,
+                };
+                EffectivePackageFact[] packages = artifacts.EffectivePackages.Where(
+                    package => (package.Source == source
+                            || (source == EffectivePackageSource.Winget
+                                && package.Source == EffectivePackageSource.Store))
+                        && string.Equals(
+                            package.ResolvedInstallId,
+                            job.PackageId,
+                            StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (packages.Length == 0)
+                {
+                    Line(sb, JobLabel(job), JobAlways(job) ? "always" : "you chose");
+                }
+                else
+                {
+                    AppendPackages(sb, packages);
+                }
                 continue;
             }
 
@@ -92,10 +126,7 @@ public static class PlanDiff
             or ProvisionJobKind.ReservedStorageDisable
             or ProvisionJobKind.WorkstationQuiet
             or ProvisionJobKind.AppxSafetyNet
-            or ProvisionJobKind.WingetImport
-            or ProvisionJobKind.ShellStamp
-        || (job.Kind is ProvisionJobKind.Winget && ProductPosture.WingetIdSet.Contains(job.PackageId ?? ""))
-        || (job.Kind is ProvisionJobKind.Scoop && ProductPosture.ScoopIdSet.Contains(job.PackageId ?? ""));
+            or ProvisionJobKind.ShellStamp;
 
     private static string JobLabel(ProvisionJob job) =>
         job.Kind switch
@@ -108,7 +139,6 @@ public static class PlanDiff
             ProvisionJobKind.DohSet => $"DNS over HTTPS ({job.PackageId})",
             ProvisionJobKind.WingetImport => "Winget import",
             ProvisionJobKind.Winget => $"Winget {job.PackageId}",
-            ProvisionJobKind.Scoop => $"Scoop {job.PackageId}",
             ProvisionJobKind.ScoopBatch => "Scoop batch",
             ProvisionJobKind.ShellStamp => "Shell skel stamp",
             ProvisionJobKind.Wsl => $"WSL {job.PackageId}",
@@ -125,44 +155,22 @@ public static class PlanDiff
         }
     }
 
-    private static void AppendWingetImport(StringBuilder sb, BuildArtifacts artifacts, Profile profile)
+    private static void AppendPackages(
+        StringBuilder sb,
+        IEnumerable<EffectivePackageFact> packages)
     {
-        foreach (string id in ImportPackageIds(artifacts.WingetImportJson)
-            ?? ProductPosture.MergeWinget(profile.WingetPackages))
+        foreach (EffectivePackageFact package in packages)
         {
-            string mark = ProductPosture.WingetIdSet.Contains(id) ? "always" : "you chose";
-            Line(sb, $"Winget {id}", mark);
+            string manager = package.Source switch
+            {
+                EffectivePackageSource.Winget or EffectivePackageSource.Store => "Winget",
+                EffectivePackageSource.Scoop => "Scoop",
+                EffectivePackageSource.Wsl => "WSL",
+                _ => throw new InvalidOperationException($"Unknown package source '{package.Source}'."),
+            };
+            string mark = package.Origin == EffectivePackageOrigin.ProductPosture ? "always" : "you chose";
+            Line(sb, $"{manager} {package.ResolvedInstallId}", mark);
         }
-    }
-
-    private static void AppendScoopBatch(StringBuilder sb, ProvisionJob job, Profile profile)
-    {
-        IEnumerable<string> ids = string.IsNullOrWhiteSpace(job.PackageId)
-            ? ProductPosture.MergeScoop(profile.ScoopPackages)
-            : job.PackageId.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        foreach (string id in ids)
-        {
-            string mark = ProductPosture.ScoopIdSet.Contains(id) ? "always" : "you chose";
-            Line(sb, $"Scoop {id}", mark);
-        }
-    }
-
-    private static string[]? ImportPackageIds(byte[]? json)
-    {
-        if (json is not { Length: > 0 })
-        {
-            return null;
-        }
-
-        using JsonDocument document = JsonDocument.Parse(json);
-        return document.RootElement
-            .GetProperty("Sources")[0]
-            .GetProperty("Packages")
-            .EnumerateArray()
-            .Select(package => package.GetProperty("PackageIdentifier").GetString())
-            .OfType<string>()
-            .ToArray();
     }
 
     private static void Line(StringBuilder sb, string label, string mark) =>

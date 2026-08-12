@@ -1,6 +1,6 @@
 namespace WinMint.Orchestrator;
 
-/// <summary>Test vs Gate B work roots and lane-implied package-strict. Cited by HostCompile / Wizard recipe.</summary>
+/// <summary>Test vs Gate B work roots. Package strictness is caller-owned (Cli/Wizard).</summary>
 public static class HostDefaults
 {
     public static string DefaultWorkDirectory { get; } =
@@ -21,6 +21,4 @@ public static class HostDefaults
         string.IsNullOrWhiteSpace(workDirectory)
             ? lane == ImageQualityLane.Release ? GateBWorkDirectory : DefaultWorkDirectory
             : workDirectory.Trim();
-
-    public static bool PackageStrictFor(ImageQualityLane lane) => lane == ImageQualityLane.Release;
 }

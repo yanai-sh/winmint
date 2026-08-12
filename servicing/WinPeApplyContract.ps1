@@ -9,9 +9,12 @@
   Not a kernel — no opcode maps here.
 #>
 
+function Get-WinPeApplyPayloadPath {
+    return Join-Path (Split-Path -Parent $PSScriptRoot) 'payload\winpe\LaunchApply.cmd'
+}
+
 function Get-WinPeApplyMarkerText {
-    param([int] $ApplyWimIndex = 1)
-    return "apply+wimIndex=$ApplyWimIndex"
+    return 'apply+wimIndex=1'
 }
 
 function Get-WinPeApplyDefect {
@@ -21,26 +24,37 @@ function Get-WinPeApplyDefect {
     #>
     param(
         [Parameter(Mandatory)]
-        [string] $MountDir,
-
-        [int] $ApplyWimIndex = 1
+        [string] $MountDir
     )
 
     $defects = @()
     $launch = Join-Path $MountDir 'Windows\System32\LaunchApply.cmd'
+    $payload = Get-WinPeApplyPayloadPath
     $winpeshl = Join-Path $MountDir 'Windows\System32\winpeshl.ini'
+    $payloadAvailable = Test-Path -LiteralPath $payload -PathType Leaf
+    if (-not $payloadAvailable) {
+        $defects += "authoritative payload/winpe/LaunchApply.cmd missing: $payload"
+    }
 
     if (-not (Test-Path -LiteralPath $launch)) {
         $defects += 'LaunchApply.cmd missing inside boot.wim'
     }
     else {
-        # Written -Encoding ascii by the patcher; read it back the same way.
-        $body = Get-Content -LiteralPath $launch -Raw -Encoding ascii
-        if ($body -notlike "*/Index:$ApplyWimIndex*") {
-            $defects += "LaunchApply.cmd must Apply-Image /Index:$ApplyWimIndex (single-image export)"
+        $mountedBytes = [IO.File]::ReadAllBytes($launch)
+        if ($payloadAvailable) {
+            $payloadBytes = [IO.File]::ReadAllBytes($payload)
+            if ([Convert]::ToBase64String($mountedBytes) -cne [Convert]::ToBase64String($payloadBytes)) {
+                $defects += 'LaunchApply.cmd bytes differ from authoritative payload/winpe/LaunchApply.cmd'
+            }
         }
-        if ($body -match '/Index:(\d+)' -and [int]$Matches[1] -ne $ApplyWimIndex) {
-            $defects += "LaunchApply.cmd has wrong /Index:$($Matches[1]) (need $ApplyWimIndex)"
+
+        # ASCII-compatible authoritative payload; semantic defects explain dangerous drift clearly.
+        $body = Get-Content -LiteralPath $launch -Raw -Encoding ascii
+        if ($body -notlike '*/Index:1*') {
+            $defects += 'LaunchApply.cmd must Apply-Image /Index:1 (single-image export)'
+        }
+        if ($body -match '/Index:(\d+)' -and [int]$Matches[1] -ne 1) {
+            $defects += "LaunchApply.cmd has wrong /Index:$($Matches[1]) (need 1)"
         }
         # Media patched before the target-disk guard existed picks no disk — it erases disk 0.
         if ($body -notmatch 'winmint_pick') {

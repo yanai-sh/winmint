@@ -6,20 +6,20 @@ using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
 
-public sealed record PackagesProofEntry(string Source, string Id, string? ScoopBucket);
+internal sealed record PackagesProofEntry(string Source, string Id, string? ScoopBucket);
 
-public static class PackagesProof
+public static partial class PackagesProof
 {
-    public const string SchemaVersion = "winmint.packages.proof/v1";
-    public const string DefaultArchitecture = "arm64";
+    internal const string SchemaVersion = "winmint.packages.proof/v1";
+    internal const string DefaultArchitecture = "arm64";
 
-    public static string CatalogSha256(string catalogPath)
+    internal static string CatalogSha256(string catalogPath)
     {
         byte[] bytes = File.ReadAllBytes(catalogPath);
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     }
 
-    public static IReadOnlyList<string> MissingProductConstants(PackageCatalog catalog)
+    internal static IReadOnlyList<string> MissingProductConstants(PackageCatalog catalog)
     {
         List<string> missing = [];
         foreach (string id in ProductPosture.WingetIds)
@@ -45,7 +45,7 @@ public static class PackagesProof
         return missing;
     }
 
-    public static IReadOnlyList<PackagesProofEntry> BuildProveSet(
+    internal static IReadOnlyList<PackagesProofEntry> BuildProveSet(
         PackageCatalog catalog,
         string architecture)
     {
@@ -58,8 +58,8 @@ public static class PackagesProof
                 continue;
             }
 
-            if (tool.Architectures.Count > 0
-                && !tool.Architectures.Any(a => string.Equals(a, arch, StringComparison.OrdinalIgnoreCase)))
+            if (tool.Architectures.Count == 0
+                || !tool.Architectures.Any(a => string.Equals(a, arch, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
@@ -84,7 +84,7 @@ public static class PackagesProof
             .ToArray();
     }
 
-    public static string ProveSetSha256(IReadOnlyList<PackagesProofEntry> entries)
+    internal static string ProveSetSha256(IReadOnlyList<PackagesProofEntry> entries)
     {
         IOrderedEnumerable<PackagesProofEntry> ordered = entries
             .OrderBy(e => e.Source, StringComparer.Ordinal)
@@ -148,34 +148,109 @@ public static class PackagesProof
         }
 
         IReadOnlyList<PackagesProofEntry> proveSet = BuildProveSet(catalog, arch);
+        foreach (string duplicate in DuplicateIdentities(proveSet))
+        {
+            errors.Add($"catalog prove set has duplicate identity {duplicate}");
+        }
+
         string proveHash = ProveSetSha256(proveSet);
         if (!string.Equals(doc?.ProveSetSha256, proveHash, StringComparison.OrdinalIgnoreCase))
         {
             errors.Add("proveSetSha256 mismatch — run: just packages-check");
         }
 
-        HashSet<string> provenIds = new(StringComparer.OrdinalIgnoreCase);
-        foreach (PackagesProofEntryFile? e in doc?.Entries ?? [])
+        if (doc?.ProvenAtUtc is null
+            || doc.ProvenAtUtc == default
+            || doc.ProvenAtUtc.Value.Offset != TimeSpan.Zero)
         {
-            if (e?.Source is null || e.Id is null)
+            errors.Add("packages.proof.json provenAtUtc must be a valid UTC timestamp");
+        }
+
+        PackagesProofHostFile? host = doc?.Host;
+        if (host is null
+            || !string.Equals(host.OsArchitecture, "Arm64", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(host.ProcessArchitecture, "Arm64", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add("packages.proof.json host must attest native Arm64 OS and process architecture");
+        }
+
+        if (host is null
+            || !string.Equals(host.ProcessorArchitecture, "ARM64", StringComparison.OrdinalIgnoreCase)
+            || !host.ProcessorArchitectureW6432Present
+            || (!string.IsNullOrWhiteSpace(host.ProcessorArchitectureW6432)
+                && !string.Equals(
+                    host.ProcessorArchitectureW6432,
+                    "ARM64",
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            errors.Add(
+                "packages.proof.json host environment diagnostics are missing or inconsistent with native ARM64");
+        }
+
+        if (string.IsNullOrWhiteSpace(host?.WingetVersion))
+        {
+            errors.Add("packages.proof.json host wingetVersion is required");
+        }
+
+        List<PackagesProofEntryFile?> actualEntries = doc?.Entries ?? [];
+        if (actualEntries.Count != proveSet.Count)
+        {
+            errors.Add(
+                $"proof entries count must be exactly {proveSet.Count} (got {actualEntries.Count}) — run: just packages-check");
+        }
+
+        int comparableCount = Math.Min(actualEntries.Count, proveSet.Count);
+        for (int i = 0; i < comparableCount; i++)
+        {
+            PackagesProofEntry required = proveSet[i];
+            PackagesProofEntryFile? actual = actualEntries[i];
+            string key = $"{required.Source}:{required.Id}";
+            string expectedMethod = ExpectedMethod(required.Source);
+            if (actual is null
+                || string.IsNullOrWhiteSpace(actual.Source)
+                || string.IsNullOrWhiteSpace(actual.Id))
             {
+                errors.Add($"proof entry {i} is malformed — run: just packages-check");
                 continue;
             }
 
-            provenIds.Add($"{e.Source.ToLowerInvariant()}:{e.Id}");
-        }
-
-        foreach (PackagesProofEntry required in proveSet)
-        {
-            string key = $"{required.Source}:{required.Id}";
-            if (!provenIds.Contains(key))
+            if (!string.Equals(actual.Source, required.Source, StringComparison.Ordinal)
+                || !string.Equals(actual.Id, required.Id, StringComparison.Ordinal))
             {
-                errors.Add($"proof missing entry {key} — run: just packages-check");
+                errors.Add(
+                    $"proof entry {i} must be {key} (got {actual.Source}:{actual.Id}) — run: just packages-check");
+            }
+
+            if (!string.Equals(actual.Bucket, required.ScoopBucket, StringComparison.Ordinal))
+            {
+                errors.Add($"proof entry {key} has wrong bucket — run: just packages-check");
+            }
+
+            if (!string.Equals(actual.Method, expectedMethod, StringComparison.Ordinal))
+            {
+                errors.Add(
+                    $"proof entry {key} method must be {expectedMethod} — run: just packages-check");
             }
         }
 
         return errors;
     }
+
+    internal static string ExpectedMethod(string source) => source switch
+    {
+        "winget" => "winget-download",
+        "scoop" => "scoop-manifest-download",
+        _ => throw new InvalidOperationException($"Unsupported proof source '{source}'."),
+    };
+
+    internal static IReadOnlyList<string> DuplicateIdentities(
+        IEnumerable<PackagesProofEntry> entries) =>
+        entries
+            .GroupBy(e => $"{e.Source}:{e.Id}", StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Skip(1).Any())
+            .Select(group => group.Key)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 }
 
 internal sealed class PackagesProofFile
@@ -192,8 +267,14 @@ internal sealed class PackagesProofFile
     [JsonPropertyName("proveSetSha256")]
     public string? ProveSetSha256 { get; set; }
 
+    [JsonPropertyName("provenAtUtc")]
+    public DateTimeOffset? ProvenAtUtc { get; set; }
+
+    [JsonPropertyName("host")]
+    public PackagesProofHostFile? Host { get; set; }
+
     [JsonPropertyName("entries")]
-    public List<PackagesProofEntryFile>? Entries { get; set; }
+    public List<PackagesProofEntryFile?>? Entries { get; set; }
 }
 
 internal sealed class PackagesProofEntryFile
@@ -203,8 +284,47 @@ internal sealed class PackagesProofEntryFile
 
     [JsonPropertyName("id")]
     public string? Id { get; set; }
+
+    [JsonPropertyName("method")]
+    public string? Method { get; set; }
+
+    [JsonPropertyName("bucket")]
+    public string? Bucket { get; set; }
+}
+
+internal sealed class PackagesProofHostFile
+{
+    private string? _processorArchitectureW6432;
+
+    [JsonPropertyName("osArchitecture")]
+    public string? OsArchitecture { get; set; }
+
+    [JsonPropertyName("processArchitecture")]
+    public string? ProcessArchitecture { get; set; }
+
+    [JsonPropertyName("processorArchitecture")]
+    public string? ProcessorArchitecture { get; set; }
+
+    [JsonPropertyName("processorArchitectureW6432")]
+    public string? ProcessorArchitectureW6432
+    {
+        get => _processorArchitectureW6432;
+        set
+        {
+            _processorArchitectureW6432 = value;
+            ProcessorArchitectureW6432Present = true;
+        }
+    }
+
+    [JsonIgnore]
+    public bool ProcessorArchitectureW6432Present { get; private set; }
+
+    [JsonPropertyName("wingetVersion")]
+    public string? WingetVersion { get; set; }
 }
 
 [JsonSerializable(typeof(PackagesProofFile))]
+[JsonSerializable(typeof(PackagesCheckRequestFile))]
+[JsonSerializable(typeof(PackagesCheckOutcomeFile))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class PackagesProofJsonContext : JsonSerializerContext;

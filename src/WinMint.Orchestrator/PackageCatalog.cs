@@ -207,17 +207,6 @@ public sealed class PackageCatalog
 
     public static string DefaultImageArchitecture => "arm64";
 
-    public static string EffectiveImageArchitecture(RunOptions? run) =>
-        string.IsNullOrWhiteSpace(run?.ImageArchitecture)
-            ? DefaultImageArchitecture
-            : NormalizeArch(run.ImageArchitecture);
-
-    // ponytail: product-constant winget always non-empty (ADR-009); phase is arch-only until constants become optional.
-    public static PackagePhase EffectivePackagePhase(string imageArchitecture) =>
-        string.Equals(NormalizeArch(imageArchitecture), "arm64", StringComparison.OrdinalIgnoreCase)
-            ? PackagePhase.WingetImport
-            : PackagePhase.PerJob;
-
     public IReadOnlyList<string> ToolCatalogKeys => _toolsByKey.Keys.ToArray();
 
     /// <summary>Validate maintainer invariants for the shipped package catalog.</summary>
@@ -268,83 +257,6 @@ public sealed class PackageCatalog
         }
 
         return buckets.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    public IReadOnlyList<string> ValidateProfilePackages(
-        Profile profile,
-        string imageArchitecture,
-        out Failure? failure)
-    {
-        failure = null;
-        string imageArch = NormalizeArch(imageArchitecture);
-        List<string> wingetAuditTargets = [];
-        IReadOnlyList<string> wingetIds = ProductPosture.MergeWinget(profile.WingetPackages);
-
-        foreach (string installId in wingetIds)
-        {
-            if (!_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
-                || tool.Source is not (PackageToolSource.Winget or PackageToolSource.Store))
-            {
-                failure = new Failure(
-                    "packages.catalog.unknown",
-                    $"packages.winget id '{installId}' is not in the shipped package catalog.");
-                return [];
-            }
-
-            if (imageArch == "arm64"
-                && !tool.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
-            {
-                failure = new Failure(
-                    "packages.catalog.unsupportedArch",
-                    $"{tool.DisplayName} ({installId}) does not support arm64 in the package catalog.");
-                return [];
-            }
-
-            wingetAuditTargets.Add(installId);
-        }
-
-        foreach (string installId in ProductPosture.MergeScoop(profile.ScoopPackages))
-        {
-            if (!_toolsByInstallId.TryGetValue(installId, out PackageToolEntry? tool)
-                || tool.Source is not PackageToolSource.Scoop)
-            {
-                failure = new Failure(
-                    "packages.catalog.unknown",
-                    $"packages.scoop id '{installId}' is not in the shipped package catalog.");
-                return [];
-            }
-
-            if (imageArch == "arm64"
-                && !tool.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
-            {
-                failure = new Failure(
-                    "packages.catalog.unsupportedArch",
-                    $"{tool.DisplayName} ({installId}) does not support arm64 in the package catalog.");
-                return [];
-            }
-        }
-
-        foreach (string token in profile.WslDistros)
-        {
-            if (!TryGetWslByProfileToken(token, out WslDistroEntry? entry))
-            {
-                failure = new Failure(
-                    "packages.catalog.unknown",
-                    $"packages.wsl token '{token}' is not in the shipped WSL catalog.");
-                return [];
-            }
-
-            if (imageArch == "arm64"
-                && !entry.Architectures.Any(a => string.Equals(a, "arm64", StringComparison.OrdinalIgnoreCase)))
-            {
-                failure = new Failure(
-                    "packages.catalog.unsupportedArch",
-                    $"{entry.DisplayName} ({token}) does not support arm64 in the WSL catalog.");
-                return [];
-            }
-        }
-
-        return wingetAuditTargets;
     }
 
     private static PackageCatalog LoadEmbedded()

@@ -33,8 +33,11 @@ No guest **pwsh product runtime**. Inbox `powershell.exe` for Scoop bootstrap / 
 | `src/WinMint.Provisioning` | ProvisioningSession (AOT Supervisor) |
 | `src/WinMint.Wizard` | Avalonia BuildPlan front end |
 | `servicing/` | ImageServicing `pwsh -File` adapters |
+| `payload/winpe/` | Authoritative WinPE apply launcher (`LaunchApply.cmd`; byte-copied into every `boot.wim` index) |
 | `payload/scripts/` | `SetupComplete.cmd` |
 | `tools/` | Smoke / apply harness |
+
+**Host maintenance (not guest runtime):** `PackagesProof` (C#) proves the shipped catalog — writes transient check request JSON, invokes native ARM64 `pwsh -File tools/host/Invoke-PackagesCheck.ps1`, reconciles outcome, atomically replaces `config/packages.proof.json`. `just check` validates that receipt offline.
 
 No MediatR / Generic Host / AutoMapper. Shared wire types live in `WinMint.Contracts` only — not a product module with behavior.
 

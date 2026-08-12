@@ -36,6 +36,7 @@ internal static class WizardBuild
             return WizardBuildResult.Fail("wizard.build.imageQuality", laneError!);
         }
 
+        bool packageStrict = lane == ImageQualityLane.Release;
         HostCompileRequest request = new(
             ProfilePath: input.ProfilePath,
             SourceIsoPath: input.SourceIsoPath.Trim(),
@@ -43,7 +44,8 @@ internal static class WizardBuild
             WorkDirectory: input.WorkDirectory,
             OutputIsoPath: string.IsNullOrWhiteSpace(input.OutputIsoPath) ? null : input.OutputIsoPath.Trim(),
             WimIndex: input.WimIndex,
-            ReuseMedia: input.ReuseMedia);
+            ReuseMedia: input.ReuseMedia,
+            PackageStrict: packageStrict);
 
         Result<HostCompileResult, Failure> applied =
             await HostCompile.ApplyAsync(request, runner, cancellationToken).ConfigureAwait(false);
@@ -74,7 +76,6 @@ internal static class WizardBuild
         }
 
         ImageEvidence evidence = compiled.Evidence!;
-        bool packageStrict = HostDefaults.PackageStrictFor(lane);
         string gateHint = packageStrict
             ? " Gate B wipe media (pre-wipe ISO evidence — not Primary install proven)."
             : " Test lane (not the wipe gate).";

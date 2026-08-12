@@ -114,18 +114,16 @@ public class CapabilityPlanTests
     [Fact]
     public void InvokeServicingPlan_merges_capability_and_feature_side_digests_into_evidence()
     {
-        string repo = TestRepo.Root;
         string work = Path.Combine(Path.GetTempPath(), "winmint-s2-cap-digests-" + Guid.NewGuid().ToString("N"));
         string logs = Path.Combine(work, "logs");
         Directory.CreateDirectory(logs);
         try
         {
-            File.WriteAllText(Path.Combine(work, "stages.json"), """{"stages":[]}""");
+            string runPlan = PrepareSuccessfulServicingFinalizer(work);
             File.WriteAllText(
                 Path.Combine(logs, "digests.json"),
                 """{"removed.capability.App.StepsRecorder~~~~0.0.1.0":"Absent","removed.capability.WMIC~~~~":"Absent","disabled.feature.WorkFolders-Client":"Disabled"}""");
 
-            string runPlan = Path.Combine(repo, "servicing", "Invoke-ServicingPlan.ps1");
             ProcessStartInfo psi = new()
             {
                 FileName = "pwsh",

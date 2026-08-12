@@ -50,31 +50,5 @@ Write-Output "oscdimg → $outputIso"
 if ($LASTEXITCODE -ne 0) { throw "oscdimg failed: $LASTEXITCODE" }
 if (-not (Test-Path -LiteralPath $outputIso)) { throw "oscdimg produced no file: $outputIso" }
 
-# Keep evidence digests honest when BuildIso is re-run alone (skip-marker / patch-then-iso loops).
-$sha = (Get-FileHash -LiteralPath $outputIso -Algorithm SHA256).Hash.ToLowerInvariant()
-$workDir = Split-Path -Parent $outputIso
-$evidencePath = Join-Path $workDir 'evidence.json'
-if (Test-Path -LiteralPath $evidencePath) {
-    $evidence = Get-Content -LiteralPath $evidencePath -Raw -Encoding utf8 | ConvertFrom-Json
-    if (-not $evidence.digests) { $evidence | Add-Member -NotePropertyName digests -NotePropertyValue ([pscustomobject]@{}) -Force }
-    $digestMap = @{}
-    foreach ($p in $evidence.digests.PSObject.Properties) { $digestMap[[string]$p.Name] = [string]$p.Value }
-    $digestMap['outputIso.sha256'] = $sha
-    $evidence.digests = [pscustomobject]$digestMap
-    $evidence.outputIsoPath = $outputIso
-    $evidence | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $evidencePath -Encoding utf8
-    Write-Output "BuildIso refreshed evidence outputIso.sha256=$sha"
-}
-$sidePath = Join-Path $workDir 'logs\digests.json'
-if (Test-Path -LiteralPath $sidePath) {
-    $side = Get-Content -LiteralPath $sidePath -Raw -Encoding utf8 | ConvertFrom-Json
-    $sideMap = @{}
-    foreach ($p in $side.PSObject.Properties) { $sideMap[[string]$p.Name] = [string]$p.Value }
-    $sideMap['outputIso.sha256'] = $sha
-    [pscustomobject]$sideMap | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $sidePath -Encoding utf8
-}
-# Stale failure.json from an earlier stage must not outlive a successful ISO rebuild.
-Remove-Item -LiteralPath (Join-Path $workDir 'failure.json') -Force -ErrorAction SilentlyContinue
-
 Write-Output "BuildIso ok outputIso=$outputIso"
 exit 0

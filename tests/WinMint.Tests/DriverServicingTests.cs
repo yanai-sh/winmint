@@ -56,18 +56,16 @@ public class DriverServicingTests
     [Fact]
     public void InvokeServicingPlan_merges_driver_side_digests_into_evidence()
     {
-        string repo = TestRepo.Root;
         string work = Path.Combine(Path.GetTempPath(), "winmint-s2-drv-digests-" + Guid.NewGuid().ToString("N"));
         string logs = Path.Combine(work, "logs");
         Directory.CreateDirectory(logs);
         try
         {
-            File.WriteAllText(Path.Combine(work, "stages.json"), """{"stages":[]}""");
+            string runPlan = PrepareSuccessfulServicingFinalizer(work);
             File.WriteAllText(
                 Path.Combine(logs, "digests.json"),
                 """{"drivers.deviceId":"surface-laptop-7","drivers.includedCount":"12","drivers.excludedCount":"8"}""");
 
-            string runPlan = Path.Combine(repo, "servicing", "Invoke-ServicingPlan.ps1");
             ProcessStartInfo psi = new()
             {
                 FileName = "pwsh",

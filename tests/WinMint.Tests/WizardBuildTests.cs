@@ -42,6 +42,47 @@ public class WizardBuildTests
         }
     }
 
+    [Theory]
+    [InlineData("Test", "Test lane (not the wipe gate).", false)]
+    [InlineData("Release", "Gate B wipe media", true)]
+    public async Task TryApply_sets_package_strict_from_lane(
+        string laneText,
+        string expectedGateHint,
+        bool expectedStrict)
+    {
+        string profile = WriteTempProfile();
+        string iso = Path.GetTempFileName();
+        string work = Path.Combine(Path.GetTempPath(), "winmint-wizard-lane-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            File.WriteAllText(iso, "iso-stub");
+            WizardBuildResult result = await WizardBuild.TryApplyAsync(
+                new WizardBuildInput(
+                    profile,
+                    iso,
+                    ImageQualityText: laneText,
+                    WorkDirectory: work,
+                    WimIndex: BuildMachineEdition.HomeWimIndex),
+                new ImageServicingTestFakes.RecordingElevatedPlanRunner(),
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.Succeeded, $"{result.Code}: {result.Message}");
+            Assert.Contains(expectedGateHint, result.Message, StringComparison.Ordinal);
+            using System.Text.Json.JsonDocument bundle = System.Text.Json.JsonDocument.Parse(
+                File.ReadAllBytes(Path.Combine(work, "payload", "bundle.json")));
+            Assert.Equal(expectedStrict, bundle.RootElement.GetProperty("packageStrict").GetBoolean());
+        }
+        finally
+        {
+            File.Delete(profile);
+            File.Delete(iso);
+            if (Directory.Exists(work))
+            {
+                Directory.Delete(work, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public async Task TryApply_with_fake_runner_succeeds()
     {

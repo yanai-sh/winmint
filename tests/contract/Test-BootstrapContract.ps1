@@ -56,6 +56,13 @@ Assert-BootstrapText -Pattern 'Failure kind:' -Description 'bootstrap failure ou
 Assert-BootstrapText -Pattern 'Safe to retry:' -Description 'bootstrap failure output explains retry safety'
 Assert-BootstrapTextAbsent -Pattern 'hash verification skipped' -Description 'bootstrap must not downgrade to unverified release installs'
 
+$releasePath = Join-Path $root 'tools\release\Compress-WinMintRelease.ps1'
+$release = Get-Content -LiteralPath $releasePath -Raw
+$payloadStage = "Copy-Item -LiteralPath (Join-Path `$repoRoot 'payload') -Destination (Join-Path `$stageRoot 'payload') -Recurse"
+if ($release -notlike "*$payloadStage*") {
+    throw 'Release contract missing: recursive staging of the complete payload directory'
+}
+
 $workerPath = Join-Path $root 'cloudflare\winmint\src\index.js'
 if (-not (Test-Path -LiteralPath $workerPath)) {
     throw "Worker source missing: $workerPath"

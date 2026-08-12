@@ -3,10 +3,18 @@ using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
 
-public enum PackagePhase
+public enum EffectivePackageSource
 {
-    PerJob,
-    WingetImport,
+    Winget,
+    Store,
+    Scoop,
+    Wsl,
+}
+
+public enum EffectivePackageOrigin
+{
+    ProductPosture,
+    Profile,
 }
 
 public readonly record struct Failure(string Code, string Message);
@@ -24,7 +32,7 @@ public sealed record RunOptions
     /// <summary>When true, native ARM64 audit job fails closed on emulated/x64 binaries (SL7/Primary).</summary>
     public bool PackageAuditStrict { get; init; }
 
-    /// <summary>When true, package install failures fail the session (harness/Primary). Default best-effort.</summary>
+    /// <summary>When true, package install failures fail the session (harness/Primary). Caller-owned; default best-effort.</summary>
     public bool PackageStrict { get; init; }
 
     /// <summary>When true, Plan emits smoke.stub.* jobs (Smoke/acceptance harness). Default false.</summary>
@@ -40,6 +48,17 @@ public enum ImageQualityLane
     Release,
 }
 
+public sealed record ExportLane(string Name, string Compression, string Cleanup)
+{
+    public static ExportLane For(ImageQualityLane lane) =>
+        lane switch
+        {
+            ImageQualityLane.Test => new("Test", "fast", "skip"),
+            ImageQualityLane.Release => new("Release", "max", "full"),
+            _ => throw new ArgumentOutOfRangeException(nameof(lane), lane, "Unsupported image-quality lane."),
+        };
+}
+
 public sealed record BuildArtifacts(
     UnattendArtifact Unattend,
     JobsArtifact Jobs,
@@ -48,8 +67,15 @@ public sealed record BuildArtifacts(
     BuildManifest Manifest,
     AccountProfile Account,
     IReadOnlyList<string> RemoveProvisionedAppx,
+    IReadOnlyList<EffectivePackageFact> EffectivePackages,
     byte[]? WingetImportJson = null,
     bool PackageStrict = false);
+
+public sealed record EffectivePackageFact(
+    EffectivePackageSource Source,
+    string ResolvedInstallId,
+    EffectivePackageOrigin Origin,
+    bool NeedsReboot);
 
 public sealed record UnattendArtifact(string Xml);
 

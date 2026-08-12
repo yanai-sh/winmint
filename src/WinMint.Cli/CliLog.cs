@@ -43,4 +43,7 @@ internal static partial class CliLog
 
     [LoggerMessage(EventId = 13, Level = LogLevel.Information, Message = "{Line}")]
     public static partial void HonestyLine(ILogger logger, string line);
+
+    [LoggerMessage(EventId = 14, Level = LogLevel.Information, Message = "Refreshed {Count} package proofs: {ProofPath}")]
+    public static partial void PackagesProofRefreshed(ILogger logger, int count, string proofPath);
 }

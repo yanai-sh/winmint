@@ -12,13 +12,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$patchScript = Join-Path $repo 'servicing/Patch-BootWimApply.ps1'
-$body = [regex]::Match(
-    (Get-Content -LiteralPath $patchScript -Raw),
-    '(?s)\$launchApply = @"\r?\n(.*?)\r?\n"@').Groups[1].Value
-if ([string]::IsNullOrWhiteSpace($body)) { throw 'cannot extract LaunchApply body — the scan is broken, not clean' }
+$payloadPath = Join-Path $repo 'payload/winpe/LaunchApply.cmd'
+$body = Get-Content -LiteralPath $payloadPath -Raw -Encoding ascii
 
-$lines = ($body -replace '\$applyWimIndex', '1') -split "\r?\n"
+$lines = $body -split "\r?\n"
 $start = [array]::IndexOf($lines, 'set WORK=%TEMP%\winmint')
 $stop = [array]::IndexOf($lines, 'echo WinMint: erasing disk %TARGET%')
 $sub = [array]::IndexOf($lines, ':winmint_pick')
@@ -90,8 +87,12 @@ finally {
 # The guard only protects a wipe if the pre-wipe gate refuses media that lacks it. Patcher and gate
 # both read servicing/WinPeApplyContract.ps1, so drive that contract directly — no DISM, no WinPE.
 . (Join-Path $repo 'servicing/WinPeApplyContract.ps1')
+$resolvedPayload = (Resolve-Path (Get-WinPeApplyPayloadPath)).Path
+if ($resolvedPayload -cne (Resolve-Path $payloadPath).Path) {
+    $failures += "repository payload resolution`n    expected: $payloadPath`n    actual:   $resolvedPayload"
+}
 
-$shipped = $lines -join "`r`n"
+$shipped = $body
 $winpeshl = "[LaunchApps]`r`n%SYSTEMDRIVE%\Windows\System32\LaunchApply.cmd"
 # Never executed — written to a fake mount and read back. Media looked like this before commit 114adc7.
 $preGuard = @'
@@ -110,7 +111,10 @@ function Assert-Contract {
     $system32 = Join-Path $mount 'Windows\System32'
     New-Item -ItemType Directory -Force -Path $system32 | Out-Null
     if (-not [string]::IsNullOrEmpty($Launch)) {
-        Set-Content -LiteralPath (Join-Path $system32 'LaunchApply.cmd') -Value $Launch -Encoding ascii
+        [IO.File]::WriteAllText(
+            (Join-Path $system32 'LaunchApply.cmd'),
+            $Launch,
+            [Text.Encoding]::ASCII)
     }
     if (-not [string]::IsNullOrEmpty($Winpeshl)) {
         Set-Content -LiteralPath (Join-Path $system32 'winpeshl.ini') -Value $Winpeshl -Encoding ascii
@@ -125,6 +129,7 @@ function Assert-Contract {
 
 try {
     Assert-Contract 'shipped LaunchApply is apply media' $shipped $winpeshl 'none'
+    Assert-Contract 'byte drift rejected' ($shipped + 'rem drift') $winpeshl 'bytes differ from authoritative payload'
     # The drift that mattered: pre-guard media satisfies /Index:1 and would erase disk 0 unattended.
     Assert-Contract 'pre-guard media rejected' $preGuard $winpeshl 'predates the target-disk guard'
     Assert-Contract 'source edition index rejected' ($shipped -replace '/Index:1', '/Index:3') $winpeshl 'wrong /Index:3'
@@ -134,6 +139,41 @@ try {
 }
 finally {
     Remove-Item -LiteralPath $mount -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+$packagedRoot = Join-Path $env:TEMP "winmint-packaged-root-$([guid]::NewGuid().ToString('N'))"
+try {
+    New-Item -ItemType Directory -Force -Path `
+        (Join-Path $packagedRoot 'servicing'), (Join-Path $packagedRoot 'payload\winpe') | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repo 'servicing/WinPeApplyContract.ps1') `
+        -Destination (Join-Path $packagedRoot 'servicing/WinPeApplyContract.ps1')
+    Copy-Item -LiteralPath $payloadPath `
+        -Destination (Join-Path $packagedRoot 'payload\winpe\LaunchApply.cmd')
+    . (Join-Path $packagedRoot 'servicing/WinPeApplyContract.ps1')
+    $expectedPackagedPayload = (Resolve-Path (Join-Path $packagedRoot 'payload\winpe\LaunchApply.cmd')).Path
+    $resolvedPackagedPayload = (Resolve-Path (Get-WinPeApplyPayloadPath)).Path
+    if ($resolvedPackagedPayload -cne $expectedPackagedPayload) {
+        $failures += "packaged payload resolution`n    expected: $expectedPackagedPayload`n    actual:   $resolvedPackagedPayload"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $packagedRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+$missingPayloadRoot = Join-Path $env:TEMP "winmint-missing-payload-$([guid]::NewGuid().ToString('N'))"
+try {
+    New-Item -ItemType Directory -Force -Path (Join-Path $missingPayloadRoot 'servicing') | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repo 'servicing/WinPeApplyContract.ps1') `
+        -Destination (Join-Path $missingPayloadRoot 'servicing/WinPeApplyContract.ps1')
+    . (Join-Path $missingPayloadRoot 'servicing/WinPeApplyContract.ps1')
+    Assert-Contract `
+        'missing authoritative payload returns a defect' `
+        $shipped `
+        $winpeshl `
+        'authoritative payload/winpe/LaunchApply.cmd missing'
+}
+finally {
+    Remove-Item -LiteralPath $missingPayloadRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 if ($failures.Count -gt 0) {

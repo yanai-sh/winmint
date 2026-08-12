@@ -82,9 +82,9 @@ public static class ImageServicing
             return Result.Fail<ImageEvidence, Failure>(materialized.Error);
         }
 
-        if (ValidateExportLaneParams(plan, materialized.Value) is { } laneError)
+        if (ValidateExportWim(plan, materialized.Value) is { } exportError)
         {
-            return Result.Fail<ImageEvidence, Failure>(laneError);
+            return Result.Fail<ImageEvidence, Failure>(exportError);
         }
 
         // Materialize already wrote stages.json; that file is the seam (Invoke-ServicingPlan.ps1 reads it).
@@ -133,7 +133,7 @@ public static class ImageServicing
                 File.ReadAllBytes(evidencePath),
                 ServicingJsonContext.Default.EvidenceFile);
         }
-        catch (JsonException ex)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             return Result.Fail<ImageEvidence, Failure>(
                 new Failure("servicing.evidence.invalid", ex.Message));
@@ -148,6 +148,43 @@ public static class ImageServicing
                     $"Expected {EvidenceSchemaVersion}."));
         }
 
+        if (string.IsNullOrWhiteSpace(run.OutputIsoPath))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.outputIso.missing",
+                    "OutputIsoPath was not normalized before evidence read."));
+        }
+
+        if (string.IsNullOrWhiteSpace(file.OutputIsoPath))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.evidence.outputIso.missing", "Evidence outputIsoPath is required."));
+        }
+
+        if (!WindowsPathsEqual(file.OutputIsoPath, run.OutputIsoPath))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.evidence.outputIso.mismatch",
+                    $"Evidence outputIsoPath does not match planned output: {file.OutputIsoPath}"));
+        }
+
+        string plannedLane = plan.Manifest.ImageQuality.ToString();
+        if (string.IsNullOrWhiteSpace(file.Lane))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.evidence.lane.missing", "Evidence lane is required."));
+        }
+
+        if (!string.Equals(file.Lane, plannedLane, StringComparison.Ordinal))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.evidence.lane.mismatch",
+                    $"Evidence lane '{file.Lane}' does not match planned lane '{plannedLane}'."));
+        }
+
         ServicingStage? stamp = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.StampOfflineShell);
         if (stamp is null
             || !stamp.Parameters.TryGetValue(StageParams.ShellTarget, out string? shellTarget)
@@ -159,62 +196,90 @@ public static class ImageServicing
                     "StampOfflineShell stage missing or incomplete."));
         }
 
-        if (string.IsNullOrWhiteSpace(run.OutputIsoPath))
+        if (string.IsNullOrWhiteSpace(file.ShellStampTargetPath))
         {
             return Result.Fail<ImageEvidence, Failure>(
                 new Failure(
-                    "servicing.outputIso.missing",
-                    "OutputIsoPath was not normalized before evidence read."));
+                    "servicing.evidence.shellStamp.missing",
+                    "Evidence shellStampTargetPath is required."));
+        }
+
+        if (!string.Equals(file.ShellStampTargetPath, shellTarget, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.evidence.shellStamp.mismatch",
+                    $"Evidence shell target '{file.ShellStampTargetPath}' does not match planned target '{shellTarget}'."));
+        }
+
+        if (file.Digests is null)
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.evidence.digests.missing", "Evidence digests are required."));
+        }
+
+        if (!file.Digests.TryGetValue("outputIso.sha256", out string? outputIsoSha256)
+            || !IsLowerSha256(outputIsoSha256))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.evidence.outputIsoDigest.invalid",
+                    "Evidence outputIso.sha256 must be a lowercase 64-character hexadecimal digest."));
         }
 
         return Result.Ok<ImageEvidence, Failure>(
             new ImageEvidence(
-                file.OutputIsoPath ?? run.OutputIsoPath,
+                run.OutputIsoPath,
                 plan.Manifest.ImageQuality,
-                file.ShellStampTargetPath ?? shellTarget,
-                file.Digests?.ToFrozenDictionary(StringComparer.Ordinal)
-                    ?? (IReadOnlyDictionary<string, string>)FrozenDictionary<string, string>.Empty));
+                shellTarget,
+                file.Digests.ToFrozenDictionary(StringComparer.Ordinal)));
     }
 
-    /// <summary>
-    /// Ticket 09: ExportWim compression/cleanup must match manifest lane (Test vs Release).
-    /// </summary>
-    private static Failure? ValidateExportLaneParams(
+    private static bool WindowsPathsEqual(string left, string right)
+    {
+        try
+        {
+            string normalizedLeft = Path.TrimEndingDirectorySeparator(Path.GetFullPath(left.Trim()));
+            string normalizedRight = Path.TrimEndingDirectorySeparator(Path.GetFullPath(right.Trim()));
+            return string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsLowerSha256(string? value) =>
+        value is { Length: 64 }
+        && value.All(static c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private static Failure? ValidateExportWim(
         BuildArtifacts plan,
         IReadOnlyList<ServicingStage> stages)
     {
-        ServicingStage? export = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.ExportWim);
-        if (export is null)
+        ServicingStage[] exports = stages
+            .Where(static stage => stage.Opcode == ServicingOpcode.ExportWim)
+            .ToArray();
+        if (exports.Length != 1)
         {
-            return new Failure("servicing.export.missing", "Plan is missing ExportWim stage.");
+            return new Failure(
+                "servicing.export.invalid",
+                $"Materialized plan must contain exactly one ExportWim stage (got {exports.Length}).");
         }
 
-        string expectedLane;
-        string expectedCompression;
-        string expectedCleanup;
-        if (plan.Manifest.ImageQuality == ImageQualityLane.Release)
-        {
-            expectedLane = "Release";
-            expectedCompression = "max";
-            expectedCleanup = "full";
-        }
-        else
-        {
-            expectedLane = "Test";
-            expectedCompression = "fast";
-            expectedCleanup = "skip";
-        }
-
+        ExportLane expected = ExportLane.For(plan.Manifest.ImageQuality);
+        ServicingStage export = exports[0];
         if (!export.Parameters.TryGetValue(StageParams.Lane, out string? lane)
             || !export.Parameters.TryGetValue(StageParams.Compression, out string? compression)
             || !export.Parameters.TryGetValue(StageParams.Cleanup, out string? cleanup)
-            || !string.Equals(lane, expectedLane, StringComparison.Ordinal)
-            || !string.Equals(compression, expectedCompression, StringComparison.Ordinal)
-            || !string.Equals(cleanup, expectedCleanup, StringComparison.Ordinal))
+            || !string.Equals(lane, expected.Name, StringComparison.Ordinal)
+            || !string.Equals(compression, expected.Compression, StringComparison.Ordinal)
+            || !string.Equals(cleanup, expected.Cleanup, StringComparison.Ordinal))
         {
             return new Failure(
-                "servicing.export.laneMismatch",
-                $"ExportWim params must be lane={expectedLane} compression={expectedCompression} cleanup={expectedCleanup} for ImageQuality={plan.Manifest.ImageQuality}.");
+                "servicing.export.invalid",
+                $"ExportWim must be lane={expected.Name}, compression={expected.Compression}, "
+                + $"cleanup={expected.Cleanup} for ImageQuality={plan.Manifest.ImageQuality}.");
         }
 
         return null;

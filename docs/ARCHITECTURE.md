@@ -84,7 +84,9 @@ Sibling archive [`winmint_v1`](https://github.com/yanai-sh/winmint_v1) is **arch
 | Lane | Export / cleanup | Use |
 |------|------------------|-----|
 | **Test** | Soft/no recompress; skip WinSxS cleanup | Smoke / iteration |
-| **Release** | Hard recompress + `StartComponentCleanup` | Published / Gate B / Primary |
+| **Release** | Hard recompress + `StartComponentCleanup` | Published compression bar |
+
+**Package strictness is orthogonal:** `PackageStrict` is caller-owned (default false). **Gate B** wipe media requires **Release lane and explicit `--package-strict`** (`just primary-gate`, Wizard Release Build). Release alone is image quality only — not strict guest package failure.
 
 ## Payload
 

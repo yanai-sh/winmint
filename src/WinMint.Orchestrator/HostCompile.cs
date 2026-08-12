@@ -47,7 +47,6 @@ public static class HostCompile
             return Result.Fail<HostCompileResult, Failure>(staleSupervisor);
         }
 
-        bool packageStrict = request.PackageStrict ?? HostDefaults.PackageStrictFor(request.ImageQuality);
         RunOptions runOptions = new()
         {
             ImageQuality = request.ImageQuality,
@@ -55,7 +54,7 @@ public static class HostCompile
             OutputIsoPath = string.IsNullOrWhiteSpace(request.OutputIsoPath) ? null : request.OutputIsoPath.Trim(),
             ImageArchitecture = request.ImageArchitecture,
             PackageAuditStrict = request.PackageAuditStrict,
-            PackageStrict = packageStrict,
+            PackageStrict = request.PackageStrict,
             IncludeSmokeStubs = request.IncludeSmokeStubs,
         };
 
@@ -108,7 +107,7 @@ public sealed record HostCompileRequest(
     string? OutputIsoPath = null,
     int? WimIndex = null,
     bool ReuseMedia = false,
-    bool? PackageStrict = null,
+    bool PackageStrict = false,
     bool PackageAuditStrict = false,
     bool IncludeSmokeStubs = false,
     string? ImageArchitecture = null);

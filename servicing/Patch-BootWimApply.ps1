@@ -9,8 +9,8 @@ $mountDir = $Parameters['mountDir']
 if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
 if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
 . (Join-Path $PSScriptRoot 'WinPeApplyContract.ps1')
-$applyWimIndex = 1
-$expectedMarker = Get-WinPeApplyMarkerText -ApplyWimIndex $applyWimIndex
+$launchApplyPayload = Get-WinPeApplyPayloadPath
+$expectedMarker = Get-WinPeApplyMarkerText
 
 # Spike #70: 3-partition GPT (EFI 100 MB, MSR 16 MB, primary) — WinPE apply disk layout.
 # LabConfig on applied-image SYSTEM hive (not boot.wim) — Hyper-V no-vTPM VMs read it at first boot.
@@ -24,13 +24,29 @@ if (-not (Test-Path -LiteralPath $bootWim)) {
 function Test-LaunchApplyPatched {
     param([string] $Wim, [string] $Mount, [int] $Index)
     & dism.exe /English /Mount-Image /ImageFile:$Wim /Index:$Index /MountDir:$Mount /ReadOnly
-    if ($LASTEXITCODE -ne 0) { return $false }
+    if ($LASTEXITCODE -ne 0) {
+        & dism.exe /English /Unmount-Image /MountDir:$Mount /Discard 2>$null | Out-Null
+        return $false
+    }
+    $clean = $false
+    $primaryError = $null
     try {
-        return (Get-WinPeApplyDefect -MountDir $Mount -ApplyWimIndex $applyWimIndex).Count -eq 0
+        $clean = (Get-WinPeApplyDefect -MountDir $Mount).Count -eq 0
+    }
+    catch {
+        $primaryError = $_
+        throw
     }
     finally {
         & dism.exe /English /Unmount-Image /MountDir:$Mount /Discard | Out-Null
+        $unmountExit = $LASTEXITCODE
+        if ($unmountExit -ne 0) {
+            $message = "Unmount boot.wim:$Index after apply check failed: $unmountExit"
+            if ($null -eq $primaryError) { throw $message }
+            Write-Warning "$message (preserving earlier error: $($primaryError.Exception.Message))"
+        }
     }
+    return $clean
 }
 
 $bootMount = Join-Path (Split-Path -Parent $mountDir) 'boot-mount'
@@ -40,12 +56,25 @@ if (Test-Path -LiteralPath $bootMount) {
 }
 New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
 
-# ponytail: skip only when marker + index-1 LaunchApply both prove apply+wimIndex=1 (stale marker hid Index:3).
+$info = & dism.exe /English /Get-WimInfo /WimFile:$bootWim 2>&1 | Out-String
+$indexes = @([regex]::Matches($info, '(?m)^Index : (\d+)\s*$') | ForEach-Object { [int]$_.Groups[1].Value })
+if ($indexes.Count -eq 0) { throw 'boot.wim has no indexes' }
+
+# Skip only when marker + every boot index proves the authoritative apply launcher contract.
 if (Test-Path -LiteralPath $bootMarker) {
     $markerText = (Get-Content -LiteralPath $bootMarker -Raw -Encoding utf8).Trim()
-    if ($markerText -eq $expectedMarker -and (Test-LaunchApplyPatched -Wim $bootWim -Mount $bootMount -Index 1)) {
+    $allIndexesPatched = $markerText -eq $expectedMarker
+    if ($allIndexesPatched) {
+        foreach ($index in $indexes) {
+            if (-not (Test-LaunchApplyPatched -Wim $bootWim -Mount $bootMount -Index $index)) {
+                $allIndexesPatched = $false
+                break
+            }
+        }
+    }
+    if ($allIndexesPatched) {
         Remove-Item -LiteralPath $legacyMarker -Force -ErrorAction SilentlyContinue
-        Write-Output 'PatchBootWimApply skipped (already patched; LaunchApply Index:1 verified)'
+        Write-Output 'PatchBootWimApply skipped (already patched; LaunchApply verified in every boot.wim index)'
         Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
         exit 0
     }
@@ -53,100 +82,8 @@ if (Test-Path -LiteralPath $bootMarker) {
     Remove-Item -LiteralPath $bootMarker -Force -ErrorAction SilentlyContinue
 }
 
-$launchApply = @"
-@echo off
-setlocal EnableExtensions
-call wpeinit
-set INSTALL=
-for %%d in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
-  if exist %%d:\sources\install.wim set INSTALL=%%d
-)
-if not defined INSTALL (
-  echo WinMint: install.wim not found on any drive
-  exit /b 1
-)
-set WORK=%TEMP%\winmint
-if not exist "%WORK%" mkdir "%WORK%"
-set LIST=%WORK%\disks.txt
-echo list disk | diskpart > "%LIST%"
-if errorlevel 1 (
-  echo WinMint: diskpart could not enumerate disks
-  exit /b 1
-)
-set OVERRIDE=
-if exist "%INSTALL%:\winmint-target-disk.txt" (
-  for /f "usebackq delims=" %%o in ("%INSTALL%:\winmint-target-disk.txt") do if not defined OVERRIDE set OVERRIDE=%%o
-)
-set TARGET=
-set EXTRA=
-for /f "tokens=2" %%n in ('findstr /r /c:"^  Disk [0-9]" "%LIST%"') do call :winmint_pick %%n
-if not defined TARGET (
-  echo WinMint: no fixed disk to erase - every disk reports USB, or none matched the override.
-  type "%LIST%"
-  exit /b 1
-)
-if defined EXTRA (
-  echo WinMint: more than one fixed disk - refusing to guess which one to erase.
-  type "%LIST%"
-  echo Put a unique model substring in %INSTALL%:\winmint-target-disk.txt and reboot.
-  exit /b 1
-)
-echo WinMint: erasing disk %TARGET%
-set DP=%WORK%\diskpart.txt
-> "%DP%" (
-  echo select disk %TARGET%
-  echo clean
-  echo convert gpt
-  echo create partition efi size=100
-  echo format quick fs=fat32 label=System
-  echo assign letter=S
-  echo create partition msr size=16
-  echo create partition primary
-  echo format quick fs=ntfs label=Windows
-  echo assign letter=W
-  echo exit
-)
-diskpart /s "%DP%"
-if errorlevel 1 exit /b 1
-dism /English /Apply-Image /ImageFile:%INSTALL%:\sources\install.wim /Index:$applyWimIndex /ApplyDir:W:\
-if errorlevel 1 exit /b 1
-bcdboot W:\Windows /s S: /f UEFI
-if errorlevel 1 exit /b 1
-if exist "%INSTALL%:\OobeUnattend.xml" (
-  if not exist W:\Windows\Panther mkdir W:\Windows\Panther
-  copy /Y "%INSTALL%:\OobeUnattend.xml" W:\Windows\Panther\unattend.xml
-)
-reg load HKLM\WinMintApply W:\Windows\System32\config\SYSTEM
-if errorlevel 1 exit /b 1
-reg add HKLM\WinMintApply\Setup\LabConfig /v BypassTPMCheck /t REG_DWORD /d 1 /f
-reg add HKLM\WinMintApply\Setup\LabConfig /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
-reg add HKLM\WinMintApply\Setup\LabConfig /v BypassRAMCheck /t REG_DWORD /d 1 /f
-reg unload HKLM\WinMintApply
-wpeutil reboot
-exit /b 0
-
-rem Keeps a fixed disk as a candidate. USB is excluded categorically, so the installer can never
-rem erase the media it booted from, and disk numbers stay discovered rather than configured.
-rem ponytail: parses English diskpart output - a localised WinPE finds no candidates and refuses,
-rem which is the safe direction. Match on localised headings if that ever needs to work.
-:winmint_pick
-set N=%1
-(echo select disk %N%&echo detail disk) | diskpart > "%WORK%\d%N%.txt"
-findstr /i /r /c:"^Type.*USB" "%WORK%\d%N%.txt" >nul
-if not errorlevel 1 goto :eof
-if defined OVERRIDE (
-  findstr /i /c:"%OVERRIDE%" "%WORK%\d%N%.txt" >nul
-  if errorlevel 1 goto :eof
-)
-if defined TARGET (set EXTRA=1) else (set TARGET=%N%)
-goto :eof
-"@
-
 $bootItem = Get-Item -LiteralPath $bootWim
 if ($bootItem.IsReadOnly) { $bootItem.IsReadOnly = $false }
-$info = & dism.exe /English /Get-WimInfo /WimFile:$bootWim 2>&1 | Out-String
-$indexes = @([regex]::Matches($info, '(?m)^Index : (\d+)\s*$') | ForEach-Object { [int]$_.Groups[1].Value })
-if ($indexes.Count -eq 0) { throw 'boot.wim has no indexes' }
 
 $winpeshl = @"
 [LaunchApps]
@@ -158,7 +95,8 @@ foreach ($index in $indexes) {
     & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:$index /MountDir:$bootMount
     if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:$index failed: $LASTEXITCODE" }
     try {
-        Set-Content -LiteralPath (Join-Path $bootMount 'Windows\System32\LaunchApply.cmd') -Value $launchApply -Encoding ascii
+        Copy-Item -LiteralPath $launchApplyPayload `
+            -Destination (Join-Path $bootMount 'Windows\System32\LaunchApply.cmd') -Force
         Set-Content -LiteralPath (Join-Path $bootMount 'Windows\System32\winpeshl.ini') -Value $winpeshl -Encoding ascii
     }
     finally {

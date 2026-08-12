@@ -73,10 +73,9 @@ dotnet publish (Join-Path $repoRoot 'src\WinMint.Provisioning\WinMint.Provisioni
 if ($LASTEXITCODE -ne 0) { throw "Provisioning publish failed: $LASTEXITCODE" }
 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'Justfile') -Destination $stageRoot
+Copy-Item -LiteralPath (Join-Path $repoRoot 'config') -Destination (Join-Path $stageRoot 'config') -Recurse
 Copy-Item -LiteralPath (Join-Path $repoRoot 'servicing') -Destination (Join-Path $stageRoot 'servicing') -Recurse
-New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot 'payload\scripts') | Out-Null
-Copy-Item -LiteralPath (Join-Path $repoRoot 'payload\scripts\SetupComplete.cmd') `
-    -Destination (Join-Path $stageRoot 'payload\scripts\SetupComplete.cmd')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'payload') -Destination (Join-Path $stageRoot 'payload') -Recurse
 Copy-Item -LiteralPath (Join-Path $repoRoot 'samples') -Destination (Join-Path $stageRoot 'samples') -Recurse
 New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot 'tools\apply') | Out-Null
 Copy-Item -Path (Join-Path $repoRoot 'tools\apply\*.ps1') -Destination (Join-Path $stageRoot 'tools\apply')
@@ -87,6 +86,8 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\Resolve-OutputIso.ps1') `
 New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot 'tools\host') | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\host\Invoke-WinMintCli.ps1') `
     -Destination (Join-Path $stageRoot 'tools\host\Invoke-WinMintCli.ps1')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\host\Invoke-PackagesCheck.ps1') `
+    -Destination (Join-Path $stageRoot 'tools\host\Invoke-PackagesCheck.ps1')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\host\Invoke-WinMintWizard.ps1') `
     -Destination (Join-Path $stageRoot 'tools\host\Invoke-WinMintWizard.ps1')
 

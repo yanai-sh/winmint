@@ -409,39 +409,6 @@ public static partial class BuildPlan
             }
         }
 
-        Failure? needsRebootFail = ValidateNeedsRebootSubset(
-            profile.WingetPackages,
-            profile.WingetNeedsReboot,
-            "packages.wingetNeedsReboot.unknown",
-            "wingetNeedsReboot",
-            "packages.winget");
-        if (needsRebootFail is not null)
-        {
-            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail.Value);
-        }
-
-        needsRebootFail = ValidateNeedsRebootSubset(
-            profile.ScoopPackages,
-            profile.ScoopNeedsReboot,
-            "packages.scoopNeedsReboot.unknown",
-            "scoopNeedsReboot",
-            "packages.scoop");
-        if (needsRebootFail is not null)
-        {
-            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail.Value);
-        }
-
-        needsRebootFail = ValidateNeedsRebootSubset(
-            profile.WslDistros,
-            profile.WslNeedsReboot,
-            "packages.wslNeedsReboot.unknown",
-            "wslNeedsReboot",
-            "packages.wsl");
-        if (needsRebootFail is not null)
-        {
-            return Result.Fail<BuildArtifacts, Failure>(needsRebootFail.Value);
-        }
-
         if (profile.Drivers is not null)
         {
             Failure? driverFail = ValidateDrivers(profile.Drivers, options);
@@ -452,34 +419,19 @@ public static partial class BuildPlan
         }
 
         PackageCatalog catalog = options.PackageCatalog ?? PackageCatalog.Default;
-        string imageArchitecture = PackageCatalog.EffectiveImageArchitecture(options);
-        IReadOnlyList<string> wingetPackages = ProductPosture.MergeWinget(profile.WingetPackages);
-        PackagePhase packagePhase = PackageCatalog.EffectivePackagePhase(imageArchitecture);
-        IReadOnlyList<string> wingetAuditTargets = catalog.ValidateProfilePackages(
+        string imageArchitecture = string.IsNullOrWhiteSpace(options.ImageArchitecture)
+            ? PackageCatalog.DefaultImageArchitecture
+            : PackageCatalog.NormalizeArch(options.ImageArchitecture);
+        Result<PackagePlanSlice, Failure> packages = PlanPackages(
             profile,
+            catalog,
             imageArchitecture,
-            out Failure? catalogFail);
-        if (catalogFail is not null)
+            options.PackageAuditStrict);
+        if (!packages.IsOk)
         {
-            return Result.Fail<BuildArtifacts, Failure>(catalogFail.Value);
+            return Result.Fail<BuildArtifacts, Failure>(packages.Error);
         }
-
-        byte[]? wingetImportJson = null;
-        if (packagePhase == PackagePhase.WingetImport && wingetPackages.Count > 0)
-        {
-            wingetImportJson = BuildWingetImportUtf8Json(
-                wingetPackages,
-                catalog,
-                imageArchitecture);
-            if (wingetImportJson.Length == 0)
-            {
-                wingetImportJson = null;
-            }
-        }
-
-        HashSet<string> wingetNeedsReboot = new(profile.WingetNeedsReboot, StringComparer.OrdinalIgnoreCase);
-        HashSet<string> scoopNeedsReboot = new(profile.ScoopNeedsReboot, StringComparer.OrdinalIgnoreCase);
-        HashSet<string> wslNeedsReboot = new(profile.WslNeedsReboot, StringComparer.OrdinalIgnoreCase);
+        PackagePlanSlice packageSlice = packages.Value;
 
         string unattendXml = BuildOobeUnattendXml(profile);
 
@@ -527,97 +479,11 @@ public static partial class BuildPlan
             jobList.Add(new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet));
         }
 
-        if (wingetImportJson is { Length: > 0 })
-        {
-            bool importReboot = wingetPackages.Any(id => wingetNeedsReboot.Contains(id));
-            jobList.Add(new ProvisionJob(
-                "winget.import",
-                ProvisionJobKind.WingetImport,
-                PackageId: "winget-import.json",
-                NeedsReboot: importReboot));
-        }
-        else
-        {
-            foreach (string packageId in wingetPackages)
-            {
-                catalog.TryGetToolByInstallId(packageId, out PackageToolEntry? wingetTool);
-                string? wingetArch = wingetTool is null
-                    ? null
-                    : PackageCatalog.ResolveWingetArchitectureFlag(wingetTool, imageArchitecture);
-                jobList.Add(new ProvisionJob(
-                    $"winget.{packageId}",
-                    ProvisionJobKind.Winget,
-                    PackageId: packageId,
-                    NeedsReboot: wingetNeedsReboot.Contains(packageId),
-                    WingetArchitecture: wingetArch));
-            }
-        }
-
-        IReadOnlyList<string> scoopPackages = ProductPosture.MergeScoop(profile.ScoopPackages);
-        if (scoopPackages.Count > 0)
-        {
-            IReadOnlySet<string> scoopBuckets = catalog.ScoopBucketsForInstallIds(scoopPackages);
-            bool batchReboot = scoopPackages.Any(id => scoopNeedsReboot.Contains(id));
-            jobList.Add(new ProvisionJob(
-                "scoop.batch",
-                ProvisionJobKind.ScoopBatch,
-                PackageId: string.Join(';', scoopPackages),
-                NeedsReboot: batchReboot,
-                ScoopBuckets: scoopBuckets.OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToArray()));
-        }
-
-        jobList.Add(new ProvisionJob("shell.stamp", ProvisionJobKind.ShellStamp));
-
-        if (profile.WslDistros.Count > 0)
-        {
-            // Microsoft Dev Config: enable VMP/WSL platform before distro install (reboot between).
-            jobList.Add(new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform));
-        }
-
-        foreach (string distroToken in profile.WslDistros)
-        {
-            catalog.TryGetWslByProfileToken(distroToken, out WslDistroEntry? wslEntry);
-            string installId = wslEntry?.InstallId ?? distroToken;
-            WslInstallKind? installKind = wslEntry?.InstallKind;
-            IReadOnlyList<string>? assetNames = wslEntry?.FromFileAssetNamesFor(imageArchitecture);
-            jobList.Add(new ProvisionJob(
-                $"wsl.{installId}",
-                ProvisionJobKind.Wsl,
-                PackageId: installId,
-                NeedsReboot: wslNeedsReboot.Contains(distroToken),
-                WslInstallKind: installKind,
-                WslFromFileRepo: wslEntry?.FromFileRepo,
-                WslFromFileAssetNames: assetNames is { Count: > 0 } ? assetNames : null));
-        }
-
-        if (options.PackageAuditStrict
-            && wingetAuditTargets.Count > 0
-            && string.Equals(imageArchitecture, "arm64", StringComparison.OrdinalIgnoreCase))
-        {
-            jobList.Add(new ProvisionJob(
-                "package.auditNative",
-                ProvisionJobKind.PackageAuditNative,
-                PackageId: string.Join(';', wingetAuditTargets),
-                AuditStrict: true));
-        }
+        jobList.AddRange(packageSlice.Jobs);
 
         JobsArtifact jobs = new(JobsSchemaVersion, jobList);
 
-        string laneName;
-        string compression;
-        string cleanup;
-        if (options.ImageQuality == ImageQualityLane.Release)
-        {
-            laneName = "Release";
-            compression = "max";
-            cleanup = "full";
-        }
-        else
-        {
-            laneName = "Test";
-            compression = "fast";
-            cleanup = "skip";
-        }
+        ExportLane exportLane = ExportLane.For(options.ImageQuality);
 
         List<ServicingStage> stageList =
         [
@@ -632,8 +498,12 @@ public static partial class BuildPlan
         // Stamp HKLM policies before AppX/capability/driver DISM mutations. Creating new
         // Policies\Microsoft\* keys (Widgets Dsh) flakes Unauthorized on a heavily-serviced mount.
         bool injectDrivers = profile.Drivers is not null;
-        bool braveSelected = profile.WingetPackages.Any(
-            id => string.Equals(id, ProductPosture.BraveWingetId, StringComparison.OrdinalIgnoreCase));
+        bool braveSelected = packageSlice.EffectivePackages.Any(
+            package => package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store
+                && string.Equals(
+                    package.ResolvedInstallId,
+                    ProductPosture.BraveWingetId,
+                    StringComparison.OrdinalIgnoreCase));
         IReadOnlyList<OfflinePolicyRow> policyRows = ProductPosture.ComposePolicies(
             includeBraveDebloat: braveSelected,
             includeDriverHygiene: injectDrivers);
@@ -707,9 +577,9 @@ public static partial class BuildPlan
                 ServicingOpcode.ExportWim,
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    [StageParams.Lane] = laneName,
-                    [StageParams.Compression] = compression,
-                    [StageParams.Cleanup] = cleanup,
+                    [StageParams.Lane] = exportLane.Name,
+                    [StageParams.Compression] = exportLane.Compression,
+                    [StageParams.Cleanup] = exportLane.Cleanup,
                 }),
             new ServicingStage(
                 ServicingOpcode.BuildIso,
@@ -729,7 +599,8 @@ public static partial class BuildPlan
             new BuildManifest(options.ImageQuality, PlanRequiresNetwork()),
             profile.Account,
             appx,
-            wingetImportJson,
+            packageSlice.EffectivePackages,
+            packageSlice.WingetImportJson,
             options.PackageStrict);
 
         return Result.Ok<BuildArtifacts, Failure>(artifacts);
@@ -823,47 +694,6 @@ public static partial class BuildPlan
     private static IReadOnlyList<DocumentError> InvalidJson(string message) =>
         [new DocumentError("document.invalidJson", message)];
 
-    /// <summary>Build winget export/import JSON from Profile winget ids + catalog.</summary>
-    private static byte[] BuildWingetImportUtf8Json(
-        IReadOnlyList<string> wingetInstallIds,
-        PackageCatalog catalog,
-        string imageArchitecture)
-    {
-        const string schema = "https://aka.ms/winget-packages.schema.2.0.json";
-        List<WingetImportPackageFile> packages = [];
-        foreach (string installId in wingetInstallIds)
-        {
-            if (!catalog.TryGetToolByInstallId(installId, out PackageToolEntry? tool))
-            {
-                continue;
-            }
-
-            string? archFlag = PackageCatalog.ResolveWingetArchitectureFlag(tool, imageArchitecture);
-            packages.Add(new WingetImportPackageFile(
-                installId,
-                string.IsNullOrWhiteSpace(archFlag) ? null : $"--architecture {archFlag}"));
-        }
-
-        if (packages.Count == 0)
-        {
-            return [];
-        }
-
-        WingetImportFile file = new(
-            schema,
-            DateTimeOffset.UtcNow,
-            [
-                new WingetImportSourceFile(
-                    new WingetSourceDetailsFile(
-                        "winget",
-                        "8wekyb3d8bbwe",
-                        "https://cdn.winget.microsoft.com/cache",
-                        "Microsoft.PreIndexed.Package"),
-                    packages),
-            ]);
-
-        return JsonSerializer.SerializeToUtf8Bytes(file, WingetImportJsonContext.Default.WingetImportFile);
-    }
 }
 
 internal sealed record ProfileDocument(

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using WinMint.Orchestrator;
 using static WinMint.Tests.ImageServicingTestFakes;
 
@@ -32,7 +33,7 @@ public class ImageServicingApplyTests
             Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
             Assert.Contains("winmint_sl7_Test_", result.Value.OutputIsoPath, StringComparison.Ordinal);
             Assert.DoesNotContain("winmint_profile_", result.Value.OutputIsoPath, StringComparison.Ordinal);
-            Assert.Equal("test-digest", result.Value.Digests["outputIso.sha256"]);
+            Assert.Equal(new string('a', 64), result.Value.Digests["outputIso.sha256"]);
         }
         finally
         {
@@ -163,6 +164,99 @@ public class ImageServicingApplyTests
         }
     }
 
+    [Theory]
+    [InlineData(ImageQualityLane.Test, "Test", "fast", "skip")]
+    [InlineData(ImageQualityLane.Release, "Release", "max", "full")]
+    public async Task Apply_accepts_materialized_export_contract(
+        ImageQualityLane quality,
+        string lane,
+        string compression,
+        string cleanup)
+    {
+        BuildArtifacts plan = MinimalPlan(quality);
+        string work = NewTempDir();
+        try
+        {
+            RecordingElevatedPlanRunner runner = new();
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: Path.Combine(work, "out.iso"));
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
+                plan,
+                run,
+                runner,
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
+            ServicingStage export = Assert.Single(
+                runner.Stages,
+                stage => stage.Opcode == ServicingOpcode.ExportWim);
+            Assert.Equal(lane, export.Parameters[StageParams.Lane]);
+            Assert.Equal(compression, export.Parameters[StageParams.Compression]);
+            Assert.Equal(cleanup, export.Parameters[StageParams.Cleanup]);
+            Assert.Equal(quality, result.Value.Lane);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Theory]
+    [InlineData(StageParams.Lane, "Test")]
+    [InlineData(StageParams.Compression, "fast")]
+    [InlineData(StageParams.Cleanup, "skip")]
+    public async Task Apply_rejects_wrong_release_export_contract_before_elevation(
+        string parameter,
+        string wrongValue)
+    {
+        BuildArtifacts planned = MinimalPlan(ImageQualityLane.Release);
+        BuildArtifacts plan = planned with
+        {
+            Stages = new ServicingStageList(
+                planned.Stages.Stages.Select(
+                    stage =>
+                    {
+                        if (stage.Opcode != ServicingOpcode.ExportWim)
+                        {
+                            return stage;
+                        }
+
+                        Dictionary<string, string> parameters =
+                            stage.Parameters.ToDictionary(StringComparer.Ordinal);
+                        parameters[parameter] = wrongValue;
+                        return new ServicingStage(stage.Opcode, parameters);
+                    }).ToArray()),
+        };
+        string work = NewTempDir();
+        try
+        {
+            RecordingElevatedPlanRunner runner = new();
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: Path.Combine(work, "out.iso"));
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
+                plan,
+                run,
+                runner,
+                TestContext.Current.CancellationToken);
+
+            Assert.False(result.IsOk);
+            Assert.Equal("servicing.export.invalid", result.Error.Code);
+            Assert.Empty(runner.Stages);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
     [Fact]
     public async Task Apply_preserves_workdir_on_runner_failure()
     {
@@ -194,7 +288,123 @@ public class ImageServicingApplyTests
         }
     }
 
-    private static BuildArtifacts MinimalPlan()
+    [Fact]
+    public async Task Apply_rejects_successful_runner_without_evidence()
+    {
+        BuildArtifacts plan = MinimalPlan();
+        string work = NewTempDir();
+        try
+        {
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: Path.Combine(work, "out.iso"));
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
+                plan,
+                run,
+                new SuccessfulElevatedPlanRunner(),
+                TestContext.Current.CancellationToken);
+
+            Assert.False(result.IsOk);
+            Assert.Equal("servicing.evidence.missing", result.Error.Code);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Theory]
+    [InlineData("missing-output", "servicing.evidence.outputIso.missing")]
+    [InlineData("mismatch-output", "servicing.evidence.outputIso.mismatch")]
+    [InlineData("missing-lane", "servicing.evidence.lane.missing")]
+    [InlineData("mismatch-lane", "servicing.evidence.lane.mismatch")]
+    [InlineData("missing-shell", "servicing.evidence.shellStamp.missing")]
+    [InlineData("mismatch-shell", "servicing.evidence.shellStamp.mismatch")]
+    [InlineData("host-normalized-shell", "servicing.evidence.shellStamp.mismatch")]
+    [InlineData("missing-digests", "servicing.evidence.digests.missing")]
+    [InlineData("malformed-digest", "servicing.evidence.outputIsoDigest.invalid")]
+    [InlineData("malformed-json", "servicing.evidence.invalid")]
+    public async Task Apply_rejects_incomplete_or_mismatched_evidence(string defect, string expectedCode)
+    {
+        BuildArtifacts plan = MinimalPlan();
+        string work = NewTempDir();
+        try
+        {
+            string outputIso = Path.Combine(work, "out.iso");
+            Dictionary<string, object?> evidence = new(StringComparer.Ordinal)
+            {
+                ["schemaVersion"] = ImageServicing.EvidenceSchemaVersion,
+                ["outputIsoPath"] = outputIso,
+                ["shellStampTargetPath"] = ImageServicing.ShellStampGuestPath,
+                ["lane"] = "Test",
+                ["packageStrict"] = false,
+                ["digests"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["outputIso.sha256"] = new string('a', 64),
+                },
+            };
+
+            switch (defect)
+            {
+                case "missing-output":
+                    evidence.Remove("outputIsoPath");
+                    break;
+                case "mismatch-output":
+                    evidence["outputIsoPath"] = Path.Combine(work, "other.iso");
+                    break;
+                case "missing-lane":
+                    evidence.Remove("lane");
+                    break;
+                case "mismatch-lane":
+                    evidence["lane"] = "Release";
+                    break;
+                case "missing-shell":
+                    evidence.Remove("shellStampTargetPath");
+                    break;
+                case "mismatch-shell":
+                    evidence["shellStampTargetPath"] = @"C:\Windows\Explorer.exe";
+                    break;
+                case "host-normalized-shell":
+                    evidence["shellStampTargetPath"] = "C:/Windows/WinMint/Supervisor.exe";
+                    break;
+                case "missing-digests":
+                    evidence.Remove("digests");
+                    break;
+                case "malformed-digest":
+                    evidence["digests"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["outputIso.sha256"] = new string('A', 64),
+                    };
+                    break;
+            }
+
+            string evidenceJson = defect == "malformed-json" ? "{" : JsonSerializer.Serialize(evidence);
+            EvidenceElevatedPlanRunner runner = new(evidenceJson);
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: outputIso);
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
+                plan,
+                run,
+                runner,
+                TestContext.Current.CancellationToken);
+
+            Assert.False(result.IsOk);
+            Assert.Equal(expectedCode, result.Error.Code);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    private static BuildArtifacts MinimalPlan(ImageQualityLane quality = ImageQualityLane.Test)
     {
         Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
             {
@@ -216,7 +426,9 @@ public class ImageServicingApplyTests
             }
             """));
         Assert.True(parsed.IsOk);
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(
+            parsed.Value,
+            new RunOptions { ImageQuality = quality });
         Assert.True(planned.IsOk);
         return planned.Value;
     }

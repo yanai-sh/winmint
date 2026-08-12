@@ -40,7 +40,11 @@ public interface IElevatedPlanRunner
 
 The stage list crosses this seam as `{workDirectory}/stages.json` — Materialize writes it, `Invoke-ServicingPlan.ps1` reads it. An adapter that also took stages in-process would be a second, unenforced copy of the contract.
 
-When `OutputIsoPath` is unset, ImageServicing resolves the default leaf once from `ProfilePath` + lane + timestamp before Materialize. Materialize and evidence never invent a stemless name. Elevated Invoke-ServicingPlan is the hard seam; reading `evidence.json` into `ImageEvidence` stays inside ImageServicing.
+When `OutputIsoPath` is unset, ImageServicing resolves the default leaf once from `ProfilePath` + lane + timestamp before Materialize. Materialize and evidence never invent a stemless name. Elevated `Invoke-ServicingPlan.ps1` is the hard seam; reading `evidence.json` into `ImageEvidence` stays inside ImageServicing.
+
+**Elevated plan loop:** opcode kernels mutate media only. The loop alone finalizes host Apply state — `Write-PlanEvidence` after all kernels succeed, `Write-PlanFailure` on any throw or non-zero kernel exit. Kernels do not write `evidence.json` or `failure.json`. **`BuildIso`** runs `oscdimg` and emits the **Output ISO** only; digest and evidence assembly happen in the loop after `BuildIso` returns.
+
+**Stale evidence / failure ordering:** each Apply run removes stale `evidence.json` at start (prior `failure.json` stays visible until overwritten or cleared). Reusing a workdir therefore clears prior green evidence when the new run starts; use a fresh workdir to retain certifiable prior output. On failure the loop removes stale evidence, writes current `failure.json`, and sets `apply-status.txt` to failed. On success it writes fresh `evidence.json` (Output ISO digest last), then removes `failure.json`. Evidence is not green while a stale failure file remains.
 
 ## Kernel naming
 
@@ -64,6 +68,10 @@ A kernel file is named for the opcode it serves: `ServicingOpcode.StampOfflinePo
 `MountInstallWim` → `StampOfflinePolicies` → Debloat removes? → capability/feature removes? → `InjectDrivers`? → `StagePayload` → `StageOobeUnattend` → `StampOfflineShell` → `PatchBootWimApply` → `ExportWim` → `BuildIso`  
 Policies stamp first: creating new `Policies\Microsoft\*` keys flakes Unauthorized on a heavily-serviced mount.
 WinPE apply lane only. Release differs in `ExportWim` compression/cleanup params.
+
+### WinPE apply launcher
+
+Authoritative launcher: `payload/winpe/LaunchApply.cmd`. `PatchBootWimApply` byte-copies it into `Windows\System32\LaunchApply.cmd` and stamps `winpeshl.ini` across **every** `boot.wim` index (skip only when marker + all indexes match). `WinPeApplyContract.ps1` is the single definition for patch skip/re-patch and Gate B assert — byte identity, `/Index:1` apply target, disk guard, and `winpeshl.ini` launch line. Do not embed launcher content in kernels; edit the payload file.
 
 ### Target disk
 

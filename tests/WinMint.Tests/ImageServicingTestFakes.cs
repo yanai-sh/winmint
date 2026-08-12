@@ -36,6 +36,15 @@ internal static class ImageServicingTestFakes
                     new Failure("servicing.outputIso.missing", "BuildIso stage missing outputIso.")));
             }
 
+            ServicingStage? exportWim = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.ExportWim);
+            if (exportWim is null
+                || !exportWim.Parameters.TryGetValue(StageParams.Lane, out string? lane)
+                || string.IsNullOrWhiteSpace(lane))
+            {
+                return Task.FromResult(Result.Fail<ElevatedRunOk, Failure>(
+                    new Failure("servicing.lane.missing", "ExportWim stage missing lane.")));
+            }
+
             // Minimal evidence fixture so ImageServicing.ReadEvidence can run (fake does not assemble ImageEvidence).
             string evidence = JsonSerializer.Serialize(
                 new
@@ -43,14 +52,88 @@ internal static class ImageServicingTestFakes
                     schemaVersion = ImageServicing.EvidenceSchemaVersion,
                     outputIsoPath = outputIso,
                     shellStampTargetPath = shellTarget,
+                    lane,
                     digests = new Dictionary<string, string>(StringComparer.Ordinal)
                     {
-                        ["outputIso.sha256"] = "test-digest",
+                        ["outputIso.sha256"] = new string('a', 64),
                     },
                 });
             File.WriteAllText(Path.Combine(workDirectory, "evidence.json"), evidence);
             return Task.FromResult(Result.Ok<ElevatedRunOk, Failure>(default));
         }
+    }
+
+    internal sealed class EvidenceElevatedPlanRunner(string evidence) : IElevatedPlanRunner
+    {
+        public Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
+            string workDirectory,
+            CancellationToken ct)
+        {
+            File.WriteAllText(Path.Combine(workDirectory, "evidence.json"), evidence);
+            return Task.FromResult(Result.Ok<ElevatedRunOk, Failure>(default));
+        }
+    }
+
+    internal sealed class SuccessfulElevatedPlanRunner : IElevatedPlanRunner
+    {
+        public Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
+            string workDirectory,
+            CancellationToken ct) =>
+            Task.FromResult(Result.Ok<ElevatedRunOk, Failure>(default));
+    }
+
+    internal static string PrepareSuccessfulServicingFinalizer(string workDirectory)
+    {
+        string servicing = Path.Combine(workDirectory, "fake-servicing");
+        Directory.CreateDirectory(servicing);
+        string runner = Path.Combine(servicing, "Invoke-ServicingPlan.ps1");
+        File.Copy(
+            Path.Combine(TestRepo.Root, "servicing", "Invoke-ServicingPlan.ps1"),
+            runner);
+
+        const string noOp = """
+            param([hashtable] $Parameters)
+            exit 0
+            """;
+        File.WriteAllText(Path.Combine(servicing, "Stamp-OfflineShell.ps1"), noOp);
+        File.WriteAllText(Path.Combine(servicing, "Export-Wim.ps1"), noOp);
+        File.WriteAllText(
+            Path.Combine(servicing, "Build-Iso.ps1"),
+            """
+            param([hashtable] $Parameters)
+            Set-Content -LiteralPath $Parameters['outputIso'] -Value 'fake-iso' -Encoding utf8
+            exit 0
+            """);
+
+        string outputIso = Path.Combine(workDirectory, "output.iso");
+        File.WriteAllText(
+            Path.Combine(workDirectory, "stages.json"),
+            JsonSerializer.Serialize(new
+            {
+                schemaVersion = BuildPlan.StagesSchemaVersion,
+                stages = new object[]
+                {
+                    new
+                    {
+                        opcode = "StampOfflineShell",
+                        parameters = new Dictionary<string, string>
+                        {
+                            [StageParams.ShellTarget] = ImageServicing.ShellStampGuestPath,
+                        },
+                    },
+                    new
+                    {
+                        opcode = "ExportWim",
+                        parameters = new Dictionary<string, string> { [StageParams.Lane] = "Test" },
+                    },
+                    new
+                    {
+                        opcode = "BuildIso",
+                        parameters = new Dictionary<string, string> { [StageParams.OutputIso] = outputIso },
+                    },
+                },
+            }));
+        return runner;
     }
 
     /// <summary>Parse <c>{work}/stages.json</c> the way Invoke-ServicingPlan.ps1 does, so the fake and pwsh share one contract.</summary>

@@ -35,7 +35,7 @@ public sealed record RunOptions
     public ImageQualityLane ImageQuality { get; init; } = ImageQualityLane.Test;
     public string? SourceIsoPath { get; init; }
     public string? OutputIsoPath { get; init; }
-    // + ImageArchitecture, WindowsBuild, PackageAuditStrict, PackageStrict,
+    // + ImageArchitecture, WindowsBuild, PackageAuditStrict, PackageStrict (caller-owned; default false),
     //   IncludeSmokeStubs, PackageCatalog override — see BuildArtifacts.cs
 }
 
@@ -47,11 +47,14 @@ public sealed record BuildArtifacts(
     BuildManifest Manifest,
     AccountProfile Account,
     IReadOnlyList<string> RemoveProvisionedAppx,
+    IReadOnlyList<EffectivePackageFact> EffectivePackages,
     byte[]? WingetImportJson = null,
     bool PackageStrict = false);
 ```
 
 Stages: opcodes + params; ImageServicing maps opcode → `servicing/*.ps1`. See [CONTRACTS](CONTRACTS.md).
+
+Package planning is one internal operation over Profile, PackageCatalog, effective image architecture, and audit strictness. It returns the complete package-job slice, deterministic winget import bytes, and typed `EffectivePackageFact` rows (source, resolved install id, ProductPosture/Profile origin, reboot requirement). Wizard Review consumes those facts from the same `Plan` call; it does not re-plan packages. Execution consumes `Jobs` and `WingetImportJson`. `PackageStrict` is stamped into the guest bundle but is not implied by Release lane — callers pass it explicitly (Wizard Release Build and Gate B do; Cli defaults false).
 
 ## Invariants
 

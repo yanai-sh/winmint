@@ -57,6 +57,44 @@ public class PackageCatalogTests
     }
 
     [Fact]
+    public void Plan_fails_closed_when_tool_does_not_support_amd64()
+    {
+        PackageCatalog catalog = CatalogWithArchitectures(
+            "\"id\": \"Anysphere.Cursor\"",
+            "[\"arm64\"]");
+        Profile profile = LabProfile(winget: ["Anysphere.Cursor"]);
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { ImageArchitecture = "amd64", PackageCatalog = catalog });
+
+        Assert.False(result.IsOk);
+        Assert.Equal("packages.catalog.unsupportedArch", result.Error.Code);
+        Assert.Equal(
+            "Cursor (Anysphere.Cursor) does not support amd64 in the package catalog.",
+            result.Error.Message);
+    }
+
+    [Fact]
+    public void Plan_fails_closed_when_wsl_distro_does_not_support_amd64()
+    {
+        PackageCatalog catalog = CatalogWithArchitectures(
+            "\"installId\": \"Ubuntu\"",
+            "[\"arm64\"]");
+        Profile profile = LabProfile() with { WslDistros = ["Ubuntu"] };
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { ImageArchitecture = "amd64", PackageCatalog = catalog });
+
+        Assert.False(result.IsOk);
+        Assert.Equal("packages.catalog.unsupportedArch", result.Error.Code);
+        Assert.Equal(
+            "Ubuntu (Ubuntu) does not support amd64 in the WSL catalog.",
+            result.Error.Message);
+    }
+
+    [Fact]
     public void Plan_emits_winget_arch_arm64_on_arm64_image()
     {
         Profile profile = LabProfile(winget: ["Anysphere.Cursor"]);
@@ -130,5 +168,21 @@ public class PackageCatalogTests
             [],
             [],
             []);
+
+    private static PackageCatalog CatalogWithArchitectures(string entryMarker, string architectures)
+    {
+        string path = Path.Combine(TestRepo.Root, "config", "packages.json");
+        string json = File.ReadAllText(path);
+        int marker = json.IndexOf(entryMarker, StringComparison.Ordinal);
+        int property = json.IndexOf("\"architectures\"", marker, StringComparison.Ordinal);
+        int start = json.IndexOf('[', property);
+        int end = json.IndexOf(']', start);
+        Assert.True(marker >= 0 && property >= 0 && start >= 0 && end >= 0);
+        string changed = string.Concat(json.AsSpan(0, start), architectures, json.AsSpan(end + 1));
+        Result<PackageCatalog, Failure> loaded =
+            PackageCatalog.TryLoadFromJson(System.Text.Encoding.UTF8.GetBytes(changed));
+        Assert.True(loaded.IsOk, loaded.IsOk ? null : loaded.Error.Message);
+        return loaded.Value;
+    }
 
 }

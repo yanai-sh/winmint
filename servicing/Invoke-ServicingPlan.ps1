@@ -13,10 +13,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$logDir = Join-Path $WorkDirectory 'logs'
-New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-
-$statusPath = Join-Path $WorkDirectory 'apply-status.txt'
+$logDir = $null
+$statusPath = $null
+$evidencePath = $null
+$failurePath = $null
+$stagesPath = $null
 $currentStage = 'idle'
 $currentLog = ''
 function Write-ApplyStatus {
@@ -29,7 +30,36 @@ function Write-ApplyStatus {
         "log=$script:currentLog"
     ) | Set-Content -LiteralPath $statusPath -Encoding utf8
 }
-Write-ApplyStatus -Stage 'idle'
+
+function Write-JsonAtomic {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Path,
+
+        [Parameter(Mandatory)]
+        $Value
+    )
+
+    $temporaryPath = "$Path.tmp"
+    try {
+        $Value | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $temporaryPath -Encoding utf8
+        Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
+    }
+    finally {
+        Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-FinalizerFileRemoval {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Path
+    )
+
+    if (Test-Path -LiteralPath $Path) {
+        Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+    }
+}
 
 function Write-PlanFailure {
     # Elevated runs cannot redirect stdout (UAC needs UseShellExecute), so failure.json is the
@@ -40,18 +70,40 @@ function Write-PlanFailure {
 
         [string] $Opcode
     )
-    @{
-        schemaVersion = 'winmint.image.evidence/v1'
-        message       = $Message
-        opcode        = $Opcode
-    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'failure.json') -Encoding utf8
-    Write-ApplyStatus -Stage ('failed:' + ($Opcode ? $Opcode : 'plan'))
-}
 
-$stagesPath = Join-Path $WorkDirectory 'stages.json'
-if (-not (Test-Path -LiteralPath $stagesPath)) {
-    Write-PlanFailure -Message 'stages.json missing' -Opcode 'stages'
-    exit 1
+    # Reporting is deliberately decomposed: stale evidence cleanup, current failure JSON, and
+    # current status each get an attempt even when another one fails.
+    $messages = [System.Collections.Generic.List[string]]::new()
+    $messages.Add($Message)
+    try {
+        Invoke-FinalizerFileRemoval -Path $evidencePath
+    }
+    catch {
+        $messages.Add("evidence cleanup failed: $_")
+    }
+
+    $reportingErrors = [System.Collections.Generic.List[string]]::new()
+    try {
+        Write-JsonAtomic -Path $failurePath -Value @{
+            schemaVersion = 'winmint.image.evidence/v1'
+            message       = ($messages -join '; ')
+            opcode        = $Opcode
+        }
+    }
+    catch {
+        $reportingErrors.Add("failure.json write failed: $_")
+    }
+
+    try {
+        Write-ApplyStatus -Stage ('failed:' + ($Opcode ? $Opcode : 'plan'))
+    }
+    catch {
+        $reportingErrors.Add("apply status write failed: $_")
+    }
+
+    foreach ($reportingError in $reportingErrors) {
+        [Console]::Error.WriteLine($reportingError)
+    }
 }
 
 $scriptRoot = $PSScriptRoot
@@ -118,17 +170,20 @@ function Write-PlanEvidence {
         }
     }
 
-    $digests = @{}
-    if ($outputIso -and (Test-Path -LiteralPath $outputIso)) {
-        $sha = Get-FileHash -LiteralPath $outputIso -Algorithm SHA256
-        $digests['outputIso.sha256'] = $sha.Hash.ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($outputIso)) {
+        throw 'BuildIso stage outputIso required'
     }
-    $wimOut = Join-Path $WorkDirectory 'install.wim'
-    if (Test-Path -LiteralPath $wimOut) {
-        $shaWim = Get-FileHash -LiteralPath $wimOut -Algorithm SHA256
-        $digests['installWim.sha256'] = $shaWim.Hash.ToLowerInvariant()
+    if (-not (Test-Path -LiteralPath $outputIso -PathType Leaf)) {
+        throw "BuildIso output missing: $outputIso"
+    }
+    if ([string]::IsNullOrWhiteSpace($lane)) {
+        throw 'ExportWim stage lane required'
+    }
+    if ([string]::IsNullOrWhiteSpace($shellTarget)) {
+        throw 'StampOfflineShell stage shellTarget required'
     }
 
+    $digests = @{}
     $sidePath = Join-Path $logDir 'digests.json'
     if (Test-Path -LiteralPath $sidePath) {
         $side = Get-Content -LiteralPath $sidePath -Raw | ConvertFrom-Json
@@ -136,6 +191,16 @@ function Write-PlanEvidence {
             $digests[[string]$p.Name] = [string]$p.Value
         }
     }
+
+    $wimOut = Join-Path $WorkDirectory 'install.wim'
+    if (Test-Path -LiteralPath $wimOut -PathType Leaf) {
+        $shaWim = Get-FileHash -LiteralPath $wimOut -Algorithm SHA256
+        $digests['installWim.sha256'] = $shaWim.Hash.ToLowerInvariant()
+    }
+
+    # Authoritative ISO digest is computed last so no stale sidecar can replace it.
+    $sha = Get-FileHash -LiteralPath $outputIso -Algorithm SHA256
+    $digests['outputIso.sha256'] = $sha.Hash.ToLowerInvariant()
 
     # InjectDrivers writes logs/WinMint-DriverInventory.json — require it before greening evidence.
     $ranInjectDrivers = @($stagesDoc.stages | Where-Object { [string]$_.opcode -eq 'InjectDrivers' }).Count -gt 0
@@ -155,17 +220,18 @@ function Write-PlanEvidence {
         }
     }
 
-    @{
+    Write-JsonAtomic -Path $evidencePath -Value @{
         schemaVersion         = 'winmint.image.evidence/v1'
         outputIsoPath         = $outputIso
         shellStampTargetPath  = $shellTarget
         lane                  = $lane
         packageStrict         = $packageStrict
         digests               = $digests
-    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $WorkDirectory 'evidence.json') -Encoding utf8
+    }
 
-    # Success clears prior stage failure crumbs (operators read failure.json as current).
-    Remove-Item -LiteralPath (Join-Path $WorkDirectory 'failure.json') -Force -ErrorAction SilentlyContinue
+    # Evidence is not green until stale failure state is gone. A deletion error returns to the
+    # outer fail-closed handler, which removes/quarantines this fresh evidence and reports failure.
+    Invoke-FinalizerFileRemoval -Path $failurePath
 }
 
 # Fail closed: $failed clears only after evidence is on disk, so a throw anywhere — an unknown
@@ -175,11 +241,43 @@ function Write-PlanEvidence {
 $failed = $true
 $opcode = ''
 try {
+    $logDir = Join-Path $WorkDirectory 'logs'
+    $statusPath = Join-Path $WorkDirectory 'apply-status.txt'
+    $evidencePath = Join-Path $WorkDirectory 'evidence.json'
+    $failurePath = Join-Path $WorkDirectory 'failure.json'
+    $stagesPath = Join-Path $WorkDirectory 'stages.json'
+
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+    # Remove stale green state, but keep the prior failure visible until this run either atomically
+    # overwrites it with a current failure or commits evidence and removes it on success.
+    Invoke-FinalizerFileRemoval -Path $evidencePath
+    Write-ApplyStatus -Stage 'idle'
+
+    if (-not (Test-Path -LiteralPath $stagesPath -PathType Leaf)) {
+        $opcode = 'stages'
+        throw 'stages.json missing'
+    }
+
+    $opcode = 'stages'
     $stagesDoc = Get-Content -LiteralPath $stagesPath -Raw | ConvertFrom-Json
+    if ($null -eq $stagesDoc -or
+        ([string]$stagesDoc.schemaVersion -ne 'winmint.servicing.stages/v1') -or
+        -not ($stagesDoc.PSObject.Properties.Name -contains 'stages') -or
+        $stagesDoc.stages -isnot [System.Array]) {
+        throw 'stages.json malformed'
+    }
 
     $index = 0
     foreach ($stage in $stagesDoc.stages) {
         $index++
+        if ($null -eq $stage -or
+            -not ($stage.PSObject.Properties.Name -contains 'opcode') -or
+            -not ($stage.PSObject.Properties.Name -contains 'parameters') -or
+            $null -eq $stage.parameters) {
+            $opcode = 'stages'
+            throw "stages.json malformed at stage $index"
+        }
         $opcode = [string]$stage.opcode
         $params = ConvertTo-ParamHashtable $stage.parameters
         $kernel = Resolve-KernelScript -Opcode $opcode
@@ -193,13 +291,14 @@ try {
 
     $opcode = 'evidence'
     Write-PlanEvidence
+    Write-ApplyStatus -Stage 'done'
     $failed = $false
 }
 catch {
     Write-PlanFailure -Message "$_" -Opcode $opcode
 }
 finally {
-    if ($failed) { Clear-LeftoverMount } else { Write-ApplyStatus -Stage 'done' }
+    if ($failed) { Clear-LeftoverMount }
 }
 
 if ($failed) {

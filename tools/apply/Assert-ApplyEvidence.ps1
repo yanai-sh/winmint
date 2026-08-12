@@ -117,24 +117,41 @@ if (Test-Path -LiteralPath $bootWim) {
         throw "WinPE apply marker must be $expectedMarker (got '$markerText')"
     }
 
-    # Marker alone is not enough — verify LaunchApply.cmd inside boot.wim index 1.
+    # Marker alone is not enough — verify LaunchApply.cmd inside every boot.wim index.
+    $info = & dism.exe /English /Get-WimInfo /WimFile:$bootWim 2>&1 | Out-String
+    $indexes = @([regex]::Matches($info, '(?m)^Index : (\d+)\s*$') | ForEach-Object { [int]$_.Groups[1].Value })
+    if ($indexes.Count -eq 0) { throw 'boot.wim has no indexes' }
+
     $bootMount = Join-Path $WorkDirectory '_apply-boot-assert'
     if (Test-Path -LiteralPath $bootMount) {
         & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
         Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
     }
-    New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
-    try {
-        & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:1 /MountDir:$bootMount /ReadOnly
-        if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:1 for apply assert failed: $LASTEXITCODE" }
-        $defects = Get-WinPeApplyDefect -MountDir $bootMount
-        if ($defects.Count -gt 0) {
-            throw "boot.wim index 1 is not apply media: $($defects -join '; ')"
+    foreach ($index in $indexes) {
+        New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
+        $primaryError = $null
+        try {
+            & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:$index /MountDir:$bootMount /ReadOnly
+            if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:$index for apply assert failed: $LASTEXITCODE" }
+            $defects = Get-WinPeApplyDefect -MountDir $bootMount
+            if ($defects.Count -gt 0) {
+                throw "boot.wim index $index is not apply media: $($defects -join '; ')"
+            }
         }
-    }
-    finally {
-        & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
-        Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
+        catch {
+            $primaryError = $_
+            throw
+        }
+        finally {
+            & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
+            $unmountExit = $LASTEXITCODE
+            Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
+            if ($unmountExit -ne 0) {
+                $message = "Unmount boot.wim:$index after apply assert failed: $unmountExit"
+                if ($null -eq $primaryError) { throw $message }
+                Write-Warning "$message (preserving earlier error: $($primaryError.Exception.Message))"
+            }
+        }
     }
 }
 

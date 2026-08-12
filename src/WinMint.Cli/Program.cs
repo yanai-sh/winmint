@@ -66,7 +66,7 @@ internal static class Program
 
         Option<bool> packageStrictOption = new("--package-strict")
         {
-            Description = "Fail closed when winget/scoop package jobs fail (harness/Primary). Default best-effort.",
+            Description = "Fail closed when winget/scoop package jobs fail (harness/Primary). Default best-effort for Test and Release; pass for Gate B / Primary.",
         };
 
         Option<bool> includeSmokeStubsOption = new("--include-smoke-stubs")
@@ -155,14 +155,49 @@ internal static class Program
                 parseResult.GetValue(includeSmokeStubsOption));
         });
 
+        Command packagesCheckCommand = new(
+            "packages-check",
+            "Refresh the live ARM64 package catalog proof.");
+        packagesCheckCommand.SetAction(
+            async (_, ct) => await RunPackagesCheckAsync(ct).ConfigureAwait(false));
+
         RootCommand root = new("WinMint — Profile plan and ImageServicing build")
         {
             validateCommand,
             planCommand,
             buildCommand,
+            packagesCheckCommand,
         };
 
         return root.Parse(args).Invoke();
+    }
+
+    private static async Task<int> RunPackagesCheckAsync(CancellationToken ct)
+    {
+        string toolkitRoot;
+        try
+        {
+            toolkitRoot = ToolkitRoot.FindRoot("config", "packages.json");
+        }
+        catch (DirectoryNotFoundException ex)
+        {
+            CliLog.Failure(Log, "packages.proof.toolkitMissing", ex.Message);
+            return 1;
+        }
+
+        Result<PackagesProofRefreshResult, Failure> refreshed =
+            await PackagesProof.RefreshAsync(toolkitRoot, ct).ConfigureAwait(false);
+        if (!refreshed.IsOk)
+        {
+            CliLog.Failure(Log, refreshed.Error.Code, refreshed.Error.Message);
+            return 1;
+        }
+
+        CliLog.PackagesProofRefreshed(
+            Log,
+            refreshed.Value.EntryCount,
+            refreshed.Value.ProofPath);
+        return 0;
     }
 
     private static int RunValidate(
