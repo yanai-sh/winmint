@@ -14,7 +14,7 @@ public class PackageCatalogValidatorTests
     [Fact]
     public void Repo_packages_json_passes_validator()
     {
-        string path = Path.Combine(FindRepoRoot(), "config", "packages.json");
+        string path = Path.Combine(TestRepo.Root, "config", "packages.json");
         Result<PackageCatalog, Failure> loaded = PackageCatalog.TryLoadFromFile(path);
         Assert.True(loaded.IsOk);
         IReadOnlyList<string> errors = loaded.Value.Validate();
@@ -37,19 +37,4 @@ public class PackageCatalogValidatorTests
         Assert.True(fancywm!.IsStub);
     }
 
-    private static string FindRepoRoot()
-    {
-        DirectoryInfo? dir = new(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "config", "packages.json")))
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException("repo root not found");
-    }
 }

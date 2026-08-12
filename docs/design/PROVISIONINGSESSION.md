@@ -17,14 +17,17 @@ namespace WinMint.Provisioning;
 
 public static class ProvisioningSession
 {
-    public static Task<SessionResult> RunAsync(
-        SessionMode mode,
+    public static Task<SessionResult> RunMachineSetupAsync(
         ProvisioningBundle bundle,
-        SessionEnvironment env,
+        MachineSetupEnvironment env,
+        CancellationToken ct = default);
+
+    public static Task<SessionResult> RunShellAsync(
+        ProvisioningBundle bundle,
+        ShellEnvironment env,
         CancellationToken ct = default);
 }
 
-public enum SessionMode { MachineSetup, Shell }
 public enum SessionOutcome { Complete, Failed, Reboot }
 
 public sealed record SessionResult(
@@ -55,20 +58,28 @@ public sealed record SessionPolicy(
     TimeSpan FailedDwell,
     TimeSpan StaleTenureThreshold);
 
-public sealed record SessionEnvironment(
+public sealed record MachineSetupEnvironment(
+    IWinlogonRegistry Winlogon,
+    Action<ProvisioningBundle>? WipeSecrets = null,
+    IAppxPackageManager? Appx = null,
+    ILocalAccounts? LocalAccounts = null,
+    IDmaSetupRegion? DmaSetup = null);
+
+public sealed record ShellEnvironment(
     TimeProvider Time,
     IWinlogonRegistry Winlogon,
     IRegionSnapshot Region,
     IProcessHost Processes,
     ISplashPresenter Splash,
     ICheckpointStore Checkpoints,
-    Action<ProvisioningBundle>? WipeSecrets = null,
-    IEvidenceSink? Evidence = null,
+    IEvidenceSink Evidence,
     IAppxPackageManager? Appx = null,
     ISystemReboot? Reboot = null,
-    ILocalAccounts? LocalAccounts = null,
-    Func<string?>? ResolveScoopCmd = null);
+    Func<string?>? ResolveScoopCmd = null,
+    ...);
 ```
+
+One environment per entrypoint: a caller is never asked for a port its pass does not read, and Shell's `Evidence` is required by the type rather than by a runtime status code.
 
 Thin adapters are part of the module interface; production Win32/WinRT live in-project; tests supply fakes. Winget path via `IAppxPackageManager`; Scoop via `ResolveScoopCmd`. Jobs may be per-id or batch/delegated; Supervisor owns splash/checkpoints/evidence. Curated packages: best-effort + evidence by default.
 
@@ -85,12 +96,12 @@ Thin adapters are part of the module interface; production Win32/WinRT live in-p
 
 1. Fail-open unlock on Complete / Failed / wall-clock timeout.
 2. Reboot does **not** unlock; checkpoint + keep Supervisor as Shell.
-3. DMA: final snapshot authoritative for hard visible gates (locale / GeoID / TZ); soft location warn/continue; sticky `DeviceRegion` Ireland repaired-then-verified (`settle.device_region_*`).
+3. DMA: final snapshot authoritative for hard visible gates (locale / GeoID / TZ); soft location warn/continue; sticky `DeviceRegion` Ireland repaired-then-verified (`settle.deviceRegion*`).
 4. Jobs never start if hard settle fails.
 5. Status in-memory; evidence JSON write-only projection.
 6. Never stamp `defaultuser0` + AutoAdminLogon; Machine setup best-effort deletes leftover `defaultuser0`.
 7. Stale tenure past threshold ⇒ fail-open Failed.
-8. Same settle + job executor on Smoke and metal; only Jobs list differs.
+8. Same settle + job executor on Smoke and Primary; only Jobs list differs.
 9. Residual erase on Shell Complete only (`%WINDIR%\WinMint\` + SetupComplete); ProgramData may remain for harness.
 
 ## Smoke defaults

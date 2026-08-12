@@ -7,8 +7,8 @@ public class WimMetadataSelfCheckTests
     [Fact]
     public void Wim_Metadata_ps1_SelfCheck_exits_zero()
     {
-        string repo = FindRepoRoot();
-        string script = Path.Combine(repo, "servicing", "Wim-Metadata.ps1");
+        string repo = TestRepo.Root;
+        string script = Path.Combine(repo, "servicing", "Get-WimMetadata.ps1");
         Assert.True(File.Exists(script), script);
 
         ProcessStartInfo psi = new()
@@ -26,23 +26,7 @@ public class WimMetadataSelfCheckTests
         string stderr = p.StandardError.ReadToEnd();
         Assert.True(p.WaitForExit(60_000), "SelfCheck timed out");
         Assert.True(p.ExitCode == 0, $"exit={p.ExitCode}\nstdout={stdout}\nstderr={stderr}");
-        Assert.Contains("Wim-Metadata SelfCheck ok", stdout, StringComparison.Ordinal);
+        Assert.Contains("Get-WimMetadata SelfCheck ok", stdout, StringComparison.Ordinal);
     }
 
-    private static string FindRepoRoot()
-    {
-        string dir = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(dir))
-        {
-            if (File.Exists(Path.Combine(dir, "justfile"))
-                && Directory.Exists(Path.Combine(dir, "servicing")))
-            {
-                return dir;
-            }
-
-            dir = Path.GetDirectoryName(dir) ?? "";
-        }
-
-        throw new InvalidOperationException("repo root not found from " + AppContext.BaseDirectory);
-    }
 }

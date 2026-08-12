@@ -3,7 +3,7 @@
 .SYNOPSIS
   Parse / assert DISM Get-WimInfo text for ImageServicing WIM metadata discipline (IMAGESERVICING §10).
 .NOTES
-  Dot-source from Mount-InstallWim / Export-Wim / Build-Iso. Self-check: pwsh -File Wim-Metadata.ps1 -SelfCheck
+  Dot-source from Mount-InstallWim / Export-Wim / Build-Iso. Self-check: pwsh -File Get-WimMetadata.ps1 -SelfCheck
 #>
 param(
     [switch] $SelfCheck,
@@ -545,6 +545,6 @@ Edition : Core
     $ws = Resolve-WimEditionId -Snapshot ([ordered]@{ Name = 'Windows 11 Pro for Workstations'; Edition = $null })
     if ($ws -ne 'ProfessionalWorkstation') { throw "SelfCheck: Pro for Workstations EditionId got '$ws'" }
 
-    Write-Output 'Wim-Metadata SelfCheck ok'
+    Write-Output 'Get-WimMetadata SelfCheck ok'
     exit 0
 }

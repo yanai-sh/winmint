@@ -1,7 +1,7 @@
 #requires -Version 7.6
 <#
 .SYNOPSIS
-  S5 Metal: real Apply on the build host → assert apply evidence. No Hyper-V, no bare-metal install.
+  S5 Host Apply: real Apply on the build host → assert apply evidence. No Hyper-V, no bare-metal install.
 
 .DESCRIPTION
   Runs elevated ImageServicing against a Source ISO offline WIM on this machine.
@@ -54,12 +54,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot '..\Resolve-OutputIso.ps1')
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 
-$assertScript = Join-Path $PSScriptRoot 'Assert-MetalEvidence.ps1'
+$assertScript = Join-Path $PSScriptRoot 'Assert-ApplyEvidence.ps1'
 
-function Invoke-MetalAssert {
+function Invoke-ApplyAssert {
     param(
         [string] $Dir,
         [string] $Lane = '',
@@ -76,22 +78,22 @@ function Invoke-MetalAssert {
     if ($NativeAuditJobs) { $assertParams['ExpectNativePackageAuditJobs'] = $true }
     if ($WingetImport) { $assertParams['ExpectWingetImport'] = $true }
     & $assertScript @assertParams
-    if ($LASTEXITCODE -ne 0) { throw "Metal assert failed: $LASTEXITCODE" }
+    if ($LASTEXITCODE -ne 0) { throw "Apply assert failed: $LASTEXITCODE" }
 }
 
 if ($AssertOnly) {
     $dir = if ([string]::IsNullOrWhiteSpace($WorkDirectory)) { $Work } else { $WorkDirectory }
-    Invoke-MetalAssert -Dir $dir -Lane $RequireLane -Drivers:$ExpectDrivers -NativeAuditJobs:$ExpectNativePackageAuditJobs -WingetImport:$ExpectWingetImport
+    Invoke-ApplyAssert -Dir $dir -Lane $RequireLane -Drivers:$ExpectDrivers -NativeAuditJobs:$ExpectNativePackageAuditJobs -WingetImport:$ExpectWingetImport
     exit 0
 }
 
-# Gate B wipe media = Release + PackageStrict (just primary-gate). Soft Release metal must not print flash guidance.
+# Gate B wipe media = Release + PackageStrict (just primary-gate). Soft Release Host Apply must not print flash guidance.
 if ($ImageQuality -eq 'Release' -and -not $PackageStrict) {
-    throw 'Release metal without -PackageStrict is not Gate B. Use: just primary-gate ISO=...'
+    throw 'Release Host Apply without -PackageStrict is not Gate B. Use: just primary-gate ISO=...'
 }
 
 if ([string]::IsNullOrWhiteSpace($Iso)) {
-    throw 'Iso is required for a full Metal Apply run (user-supplied Source ISO).'
+    throw 'Iso is required for a full Host Apply run (user-supplied Source ISO).'
 }
 if (-not (Test-Path -LiteralPath $Iso)) {
     throw "Source ISO not found: $Iso"
@@ -156,7 +158,7 @@ if (-not $SkipApply) {
     $strictArgs = @()
     if ($PackageStrict) { $strictArgs = @('--package-strict') }
 
-    Write-Host "Metal Apply Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality…"
+    Write-Host "Host Apply Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality…"
     Write-Host 'Pre-wipe only: mutates offline WIM from Source ISO — does not install to this device.'
     $cliExe = Resolve-WinMintCliExe
     $buildArgs = @('build', $Profile, '--iso', $Iso, '--work', $Work, '--image-quality', $ImageQuality, '--package-audit-strict') + $strictArgs + $reuseArgs
@@ -166,40 +168,29 @@ if (-not $SkipApply) {
     else {
         & dotnet run --project src/WinMint.Cli -- @buildArgs
     }
-    if ($LASTEXITCODE -ne 0) { throw "Metal Apply failed: $LASTEXITCODE" }
+    if ($LASTEXITCODE -ne 0) { throw "Host Apply failed: $LASTEXITCODE" }
 }
 
 $assertLane = if (-not [string]::IsNullOrWhiteSpace($RequireLane)) { $RequireLane } else { $ImageQuality }
-Invoke-MetalAssert -Dir $Work -Lane $assertLane -Drivers:$expectDrivers -NativeAuditJobs:$expectNativeAuditJobs -WingetImport:$expectWingetImport
+Invoke-ApplyAssert -Dir $Work -Lane $assertLane -Drivers:$expectDrivers -NativeAuditJobs:$expectNativeAuditJobs -WingetImport:$expectWingetImport
 
 $sha = $null
-$outIso = $null
 $evidencePath = Join-Path $Work 'evidence.json'
+$ev = $null
 if (Test-Path -LiteralPath $evidencePath) {
     $ev = Get-Content -LiteralPath $evidencePath -Raw -Encoding utf8 | ConvertFrom-Json
-    if ($ev.PSObject.Properties.Name -contains 'outputIsoPath' -and -not [string]::IsNullOrWhiteSpace([string]$ev.outputIsoPath)) {
-        $outIso = [string]$ev.outputIsoPath
-    }
     if ($ev.PSObject.Properties.Name -contains 'digests' -and $null -ne $ev.digests) {
         foreach ($p in $ev.digests.PSObject.Properties) {
             if ([string]$p.Name -eq 'outputIso.sha256') { $sha = [string]$p.Value; break }
         }
     }
 }
-if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outIso)) {
-    $named = @(Get-ChildItem -LiteralPath $Work -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending)
-    if ($named.Count -ge 1) { $outIso = $named[0].FullName }
-    else {
-        $legacy = Join-Path $Work 'out.iso'
-        if (Test-Path -LiteralPath $legacy) { $outIso = $legacy }
-    }
-}
-Write-Host "Metal gate OK. Work=$Work lane=$assertLane"
+$outIso = Resolve-WinMintOutputIso -WorkDirectory $Work -Evidence $ev
+Write-Host "Host Apply gate OK. Work=$Work lane=$assertLane"
 if ($sha) { Write-Host "outputIso.sha256=$sha" }
 if ($outIso) { Write-Host "Output ISO: $outIso" }
 if ($assertLane -eq 'Release' -and $PackageStrict) {
-    Write-Host "Flash only this workdir's Output ISO ($outIso). Do not flash a Test metal workdir (.scratch/sl7-build)."
+    Write-Host "Flash only this workdir's Output ISO ($outIso). Do not flash a Test-lane workdir (.scratch/sl7-build)."
     Write-Host 'Next step (manual, destructive): write that ISO to USB and bare-metal install — not run by this harness.'
 } else {
     Write-Host 'Test lane — not the Primary wipe ISO. Use just primary-gate for Release wipe media.'

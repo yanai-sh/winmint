@@ -1,11 +1,13 @@
 namespace WinMint.Provisioning;
 
+using WinMint.Contracts;
+
 public static partial class ProvisioningSession
 {
     private static partial class JobRunner
     {
         private static async Task<(JobsPhaseResult? Failure, string? ScoopCmd)> EnsureScoopReadyAsync(
-            SessionEnvironment env,
+            ShellEnvironment env,
             ProvisionJob job,
             Func<ProvisionJob, string, string, int, JobsPhaseResult?> recordFailure,
             CancellationToken ct)
@@ -35,7 +37,7 @@ public static partial class ProvisioningSession
             {
                 JobsPhaseResult? fail = recordFailure(
                     job,
-                    "jobs.scoop.bootstrap_failed",
+                    "jobs.scoop.bootstrapFailed",
                     $"{job.Id}: scoop bootstrap spawn: {ex.Message}",
                     1);
                 return (fail, null);
@@ -45,7 +47,7 @@ public static partial class ProvisioningSession
             {
                 JobsPhaseResult? fail = recordFailure(
                     job,
-                    "jobs.scoop.bootstrap_failed",
+                    "jobs.scoop.bootstrapFailed",
                     $"{job.Id}: scoop bootstrap exited {bootstrap.ExitCode} (network required).",
                     bootstrap.ExitCode);
                 return (fail, null);
@@ -56,7 +58,7 @@ public static partial class ProvisioningSession
             {
                 JobsPhaseResult? fail = recordFailure(
                     job,
-                    "jobs.scoop.bootstrap_failed",
+                    "jobs.scoop.bootstrapFailed",
                     $"{job.Id}: scoop.cmd missing after bootstrap.",
                     1);
                 return (fail, null);

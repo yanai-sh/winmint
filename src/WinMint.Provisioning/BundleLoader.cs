@@ -36,8 +36,8 @@ public readonly struct BundleLoadResult
 
 public static class BundleLoader
 {
-    public const string SchemaVersion = "winmint.provisioning.bundle/v1";
-    public const string JobsSchemaVersion = "winmint.jobs/v1";
+    public const string SchemaVersion = GuestBundleWire.SchemaVersion;
+    public const string JobsSchemaVersion = JobsWire.SchemaVersion;
     public const string DefaultGuestBundlePath = @"C:\Windows\WinMint\bundle.json";
     public const string DefaultGuestWingetImportPath = @"C:\Windows\WinMint\winget-import.json";
 
@@ -54,10 +54,10 @@ public static class BundleLoader
                 new BundleLoadError("bundle.read", $"Failed to read bundle: {path}: {ex.Message}"));
         }
 
-        BundleFile? dto;
+        BundleFile? file;
         try
         {
-            dto = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.BundleFile);
+            file = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.BundleFile);
         }
         catch (JsonException ex)
         {
@@ -65,27 +65,27 @@ public static class BundleLoader
                 new BundleLoadError("bundle.parse", $"Failed to parse bundle: {path}: {ex.Message}"));
         }
 
-        if (dto is null)
+        if (file is null)
         {
             return BundleLoadResult.Fail(
                 new BundleLoadError("bundle.parse", $"Failed to parse bundle: {path}"));
         }
 
-        if (!string.Equals(dto.SchemaVersion, SchemaVersion, StringComparison.Ordinal))
+        if (!string.Equals(file.SchemaVersion, SchemaVersion, StringComparison.Ordinal))
         {
             return BundleLoadResult.Fail(
                 new BundleLoadError(
                     "bundle.schema",
-                    $"Unsupported bundle schema '{dto.SchemaVersion}' (need {SchemaVersion})."));
+                    $"Unsupported bundle schema '{file.SchemaVersion}' (need {SchemaVersion})."));
         }
 
-        if (string.IsNullOrWhiteSpace(dto.SupervisorPath))
+        if (string.IsNullOrWhiteSpace(file.SupervisorPath))
         {
             return BundleLoadResult.Fail(
                 new BundleLoadError("bundle.required", "bundle.supervisorPath is required."));
         }
 
-        if (string.IsNullOrWhiteSpace(dto.Username))
+        if (string.IsNullOrWhiteSpace(file.Username))
         {
             return BundleLoadResult.Fail(
                 new BundleLoadError("bundle.required", "bundle.username is required."));
@@ -100,19 +100,19 @@ public static class BundleLoader
 
         return BundleLoadResult.Ok(
             new ProvisioningBundle(
-                Account: new AccountStamp(dto.Username, dto.Password ?? ""),
+                Account: new AccountStamp(file.Username, file.Password ?? ""),
                 Dma: new DmaSettleTarget(
-                    dto.DmaEnabled,
-                    dto.Settle?.Locale,
-                    dto.Settle?.GeoId,
-                    dto.Settle?.TimeZoneId,
-                    dto.Settle?.LocationServicesEnabled),
+                    file.DmaEnabled,
+                    file.Settle?.Locale,
+                    file.Settle?.GeoId,
+                    file.Settle?.TimeZoneId,
+                    file.Settle?.LocationServicesEnabled),
                 Jobs: jobs,
                 Policy: SessionPolicy.SmokeDefaults,
-                SupervisorShellPath: dto.SupervisorPath,
-                RemoveProvisionedAppx: dto.RemoveProvisionedAppx ?? [],
-                RequiresNetwork: dto.RequiresNetwork,
-                PackageStrict: dto.PackageStrict));
+                SupervisorShellPath: file.SupervisorPath,
+                RemoveProvisionedAppx: file.RemoveProvisionedAppx ?? [],
+                RequiresNetwork: file.RequiresNetwork,
+                PackageStrict: file.PackageStrict));
     }
 
     private static bool TryLoadJobs(
@@ -200,7 +200,7 @@ public static class BundleLoader
                     wslKind,
                     j.WslFromFileRepo,
                     j.WslFromFileAssetNames,
-                    j.AuditStrict,
+                    j.AuditStrict ?? false,
                     j.ScoopBuckets,
                     j.DohPrimary,
                     j.DohSecondary,
@@ -212,28 +212,10 @@ public static class BundleLoader
     }
 }
 
-internal sealed record JobsFile(
-    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
-    [property: JsonPropertyName("jobs")] JobFile[]? Jobs);
-
-internal sealed record JobFile(
-    [property: JsonPropertyName("id")] string Id,
-    [property: JsonPropertyName("kind")] string Kind,
-    [property: JsonPropertyName("needsReboot")] bool NeedsReboot = false,
-    [property: JsonPropertyName("packageId")] string? PackageId = null,
-    [property: JsonPropertyName("wingetArchitecture")] string? WingetArchitecture = null,
-    [property: JsonPropertyName("wslInstallKind")] string? WslInstallKind = null,
-    [property: JsonPropertyName("wslFromFileRepo")] string? WslFromFileRepo = null,
-    [property: JsonPropertyName("wslFromFileAssetNames")] string[]? WslFromFileAssetNames = null,
-    [property: JsonPropertyName("auditStrict")] bool AuditStrict = false,
-    [property: JsonPropertyName("scoopBuckets")] string[]? ScoopBuckets = null,
-    [property: JsonPropertyName("dohPrimary")] string? DohPrimary = null,
-    [property: JsonPropertyName("dohSecondary")] string? DohSecondary = null,
-    [property: JsonPropertyName("dohTemplate")] string? DohTemplate = null);
 
 [JsonSerializable(typeof(BundleFile))]
 [JsonSerializable(typeof(JobsFile))]
-[JsonSerializable(typeof(ProvisioningEvidenceDocument))]
-[JsonSerializable(typeof(PackagesEvidenceDocument))]
+[JsonSerializable(typeof(ProvisioningEvidenceFile))]
+[JsonSerializable(typeof(PackagesEvidenceFile))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class ProvisioningJsonContext : JsonSerializerContext;

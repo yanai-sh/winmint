@@ -7,7 +7,7 @@ namespace WinMint.Orchestrator;
 public static partial class BuildPlan
 {
     public const string ProfileSchemaVersion = "winmint.profile/v1";
-    public const string JobsSchemaVersion = "winmint.jobs/v1";
+    public const string JobsSchemaVersion = JobsWire.SchemaVersion;
     public const string StagesSchemaVersion = "winmint.servicing.stages/v1";
 
     public const string IrelandSetupLocale = DmaInterop.IrelandLocale;
@@ -103,7 +103,7 @@ public static partial class BuildPlan
             return Result.Fail<Profile, IReadOnlyList<DocumentError>>(issues);
         }
 
-        // Default true: metal contract shows OOBE Network; Smoke Profiles set false explicitly.
+        // Default true: real-hardware contract shows OOBE Network; Smoke Profiles set false explicitly.
         bool requireWifi = doc.Account!.RequireWifiDuringOobe ?? true;
 
         string? password = doc.Account.Password;
@@ -492,16 +492,16 @@ public static partial class BuildPlan
 
         // Product-constant FirstLogon jobs (ADR-009) + debloat safety net when remove-list non-empty.
         // smoke.stub.* only when RunOptions.IncludeSmokeStubs (Smoke/acceptance harness).
-        List<JobDescriptor> jobList = [];
+        List<ProvisionJob> jobList = [];
         if (options.IncludeSmokeStubs)
         {
-            jobList.Add(new JobDescriptor("smoke.stub.ready", ProvisionJobKind.Stub));
-            jobList.Add(new JobDescriptor("smoke.stub.complete", ProvisionJobKind.Stub));
+            jobList.Add(new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub));
+            jobList.Add(new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub));
         }
 
-        jobList.Add(new JobDescriptor("onedrive.uninstall", ProvisionJobKind.OneDriveUninstall));
-        jobList.Add(new JobDescriptor("reservedStorage.disable", ProvisionJobKind.ReservedStorageDisable));
-        jobList.Add(new JobDescriptor("workstation.quiet", ProvisionJobKind.WorkstationQuiet));
+        jobList.Add(new ProvisionJob("onedrive.uninstall", ProvisionJobKind.OneDriveUninstall));
+        jobList.Add(new ProvisionJob("reservedStorage.disable", ProvisionJobKind.ReservedStorageDisable));
+        jobList.Add(new ProvisionJob("workstation.quiet", ProvisionJobKind.WorkstationQuiet));
         if (dohProvider is not null)
         {
             DohProviderSpec? doh = ProductPosture.ResolveDoh(dohProvider);
@@ -513,7 +513,7 @@ public static partial class BuildPlan
                         $"policies.dohProvider '{dohProvider}' is unsupported (use cloudflare, google, or quad9)."));
             }
 
-            jobList.Add(new JobDescriptor(
+            jobList.Add(new ProvisionJob(
                 $"doh.{dohProvider}",
                 ProvisionJobKind.DohSet,
                 PackageId: dohProvider,
@@ -524,13 +524,13 @@ public static partial class BuildPlan
 
         if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Online)
         {
-            jobList.Add(new JobDescriptor("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet));
+            jobList.Add(new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet));
         }
 
         if (wingetImportJson is { Length: > 0 })
         {
             bool importReboot = wingetPackages.Any(id => wingetNeedsReboot.Contains(id));
-            jobList.Add(new JobDescriptor(
+            jobList.Add(new ProvisionJob(
                 "winget.import",
                 ProvisionJobKind.WingetImport,
                 PackageId: "winget-import.json",
@@ -544,7 +544,7 @@ public static partial class BuildPlan
                 string? wingetArch = wingetTool is null
                     ? null
                     : PackageCatalog.ResolveWingetArchitectureFlag(wingetTool, imageArchitecture);
-                jobList.Add(new JobDescriptor(
+                jobList.Add(new ProvisionJob(
                     $"winget.{packageId}",
                     ProvisionJobKind.Winget,
                     PackageId: packageId,
@@ -558,7 +558,7 @@ public static partial class BuildPlan
         {
             IReadOnlySet<string> scoopBuckets = catalog.ScoopBucketsForInstallIds(scoopPackages);
             bool batchReboot = scoopPackages.Any(id => scoopNeedsReboot.Contains(id));
-            jobList.Add(new JobDescriptor(
+            jobList.Add(new ProvisionJob(
                 "scoop.batch",
                 ProvisionJobKind.ScoopBatch,
                 PackageId: string.Join(';', scoopPackages),
@@ -566,12 +566,12 @@ public static partial class BuildPlan
                 ScoopBuckets: scoopBuckets.OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToArray()));
         }
 
-        jobList.Add(new JobDescriptor("shell.stamp", ProvisionJobKind.ShellStamp));
+        jobList.Add(new ProvisionJob("shell.stamp", ProvisionJobKind.ShellStamp));
 
         if (profile.WslDistros.Count > 0)
         {
             // Microsoft Dev Config: enable VMP/WSL platform before distro install (reboot between).
-            jobList.Add(new JobDescriptor("wsl.platform", ProvisionJobKind.WslPlatform));
+            jobList.Add(new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform));
         }
 
         foreach (string distroToken in profile.WslDistros)
@@ -580,7 +580,7 @@ public static partial class BuildPlan
             string installId = wslEntry?.InstallId ?? distroToken;
             WslInstallKind? installKind = wslEntry?.InstallKind;
             IReadOnlyList<string>? assetNames = wslEntry?.FromFileAssetNamesFor(imageArchitecture);
-            jobList.Add(new JobDescriptor(
+            jobList.Add(new ProvisionJob(
                 $"wsl.{installId}",
                 ProvisionJobKind.Wsl,
                 PackageId: installId,
@@ -594,7 +594,7 @@ public static partial class BuildPlan
             && wingetAuditTargets.Count > 0
             && string.Equals(imageArchitecture, "arm64", StringComparison.OrdinalIgnoreCase))
         {
-            jobList.Add(new JobDescriptor(
+            jobList.Add(new ProvisionJob(
                 "package.auditNative",
                 ProvisionJobKind.PackageAuditNative,
                 PackageId: string.Join(';', wingetAuditTargets),
@@ -830,7 +830,7 @@ public static partial class BuildPlan
         string imageArchitecture)
     {
         const string schema = "https://aka.ms/winget-packages.schema.2.0.json";
-        List<WingetImportPackageDto> packages = [];
+        List<WingetImportPackageFile> packages = [];
         foreach (string installId in wingetInstallIds)
         {
             if (!catalog.TryGetToolByInstallId(installId, out PackageToolEntry? tool))
@@ -839,7 +839,7 @@ public static partial class BuildPlan
             }
 
             string? archFlag = PackageCatalog.ResolveWingetArchitectureFlag(tool, imageArchitecture);
-            packages.Add(new WingetImportPackageDto(
+            packages.Add(new WingetImportPackageFile(
                 installId,
                 string.IsNullOrWhiteSpace(archFlag) ? null : $"--architecture {archFlag}"));
         }
@@ -853,8 +853,8 @@ public static partial class BuildPlan
             schema,
             DateTimeOffset.UtcNow,
             [
-                new WingetImportSourceDto(
-                    new WingetSourceDetailsDto(
+                new WingetImportSourceFile(
+                    new WingetSourceDetailsFile(
                         "winget",
                         "8wekyb3d8bbwe",
                         "https://cdn.winget.microsoft.com/cache",
@@ -923,19 +923,19 @@ internal sealed partial class BuildPlanJsonContext : JsonSerializerContext;
 internal sealed record WingetImportFile(
     [property: JsonPropertyName("$schema")] string Schema,
     [property: JsonPropertyName("CreationDate")] DateTimeOffset CreationDate,
-    [property: JsonPropertyName("Sources")] WingetImportSourceDto[] Sources);
+    [property: JsonPropertyName("Sources")] WingetImportSourceFile[] Sources);
 
-internal sealed record WingetImportSourceDto(
-    [property: JsonPropertyName("SourceDetails")] WingetSourceDetailsDto SourceDetails,
-    [property: JsonPropertyName("Packages")] IReadOnlyList<WingetImportPackageDto> Packages);
+internal sealed record WingetImportSourceFile(
+    [property: JsonPropertyName("SourceDetails")] WingetSourceDetailsFile SourceDetails,
+    [property: JsonPropertyName("Packages")] IReadOnlyList<WingetImportPackageFile> Packages);
 
-internal sealed record WingetSourceDetailsDto(
+internal sealed record WingetSourceDetailsFile(
     [property: JsonPropertyName("Name")] string Name,
     [property: JsonPropertyName("Identifier")] string Identifier,
     [property: JsonPropertyName("Argument")] string Argument,
     [property: JsonPropertyName("Type")] string Type);
 
-internal sealed record WingetImportPackageDto(
+internal sealed record WingetImportPackageFile(
     [property: JsonPropertyName("PackageIdentifier")] string PackageIdentifier,
     [property: JsonPropertyName("InitialOverrideArguments")] string? InitialOverrideArguments);
 

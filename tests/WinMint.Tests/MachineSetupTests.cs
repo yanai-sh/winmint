@@ -14,8 +14,7 @@ public class MachineSetupTests
         RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle(ProvisioningSession.ForbiddenAutologonUser, "lab-only");
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             bundle,
             Env(winlogon, secrets),
             TestContext.Current.CancellationToken);
@@ -34,8 +33,7 @@ public class MachineSetupTests
         RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             bundle,
             Env(winlogon, secrets),
             TestContext.Current.CancellationToken);
@@ -56,8 +54,7 @@ public class MachineSetupTests
         RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             bundle,
             Env(winlogon, secrets),
             TestContext.Current.CancellationToken);
@@ -78,14 +75,13 @@ public class MachineSetupTests
         RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             bundle,
             Env(winlogon, secrets),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("machineSetup.shell.verify_failed", result.FinalStatus.Code);
+        Assert.Equal("machineSetup.shell.verifyFailed", result.FinalStatus.Code);
         Assert.Equal(1, secrets.WipeCount);
         Assert.True(winlogon.AutoAdminLogon);
     }
@@ -98,8 +94,7 @@ public class MachineSetupTests
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
         RecordingWipeSecrets secrets = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             MinimalBundle("winmint", "lab-only"),
             Env(winlogon, secrets),
             cts.Token);
@@ -117,8 +112,7 @@ public class MachineSetupTests
         RecordingAppx appx = new();
         ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             bundle,
             Env(winlogon, secrets, appx: appx),
             TestContext.Current.CancellationToken);
@@ -134,8 +128,7 @@ public class MachineSetupTests
         RecordingWipeSecrets secrets = new();
         RecordingLocalAccounts accounts = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             MinimalBundle("winmint", "lab-only"),
             Env(winlogon, secrets, localAccounts: accounts),
             TestContext.Current.CancellationToken);
@@ -179,8 +172,7 @@ public class MachineSetupTests
             Assert.Equal("lab-secret", bundle.Account.Password);
 
             FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
-            SessionResult result = await ProvisioningSession.RunAsync(
-                SessionMode.MachineSetup,
+            SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
                 bundle,
                 Env(
                     winlogon,
@@ -220,8 +212,7 @@ public class MachineSetupTests
         RecordingWipeSecrets secrets = new();
         ThrowingLocalAccounts accounts = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             MinimalBundle("winmint", "lab-only"),
             Env(winlogon, secrets, localAccounts: accounts),
             TestContext.Current.CancellationToken);
@@ -238,8 +229,7 @@ public class MachineSetupTests
         RecordingWipeSecrets secrets = new();
         ScriptedDmaSetupRegion dmaSetup = new(ScriptedDmaSetupRegion.DmaSetupStep.Repaired);
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             MinimalBundle("winmint", "lab-only"),
             Env(winlogon, secrets, dmaSetup: dmaSetup),
             TestContext.Current.CancellationToken);
@@ -256,14 +246,13 @@ public class MachineSetupTests
         ScriptedDmaSetupRegion dmaSetup = new(
             ScriptedDmaSetupRegion.DmaSetupStep.Throw("DeviceRegion verify failed"));
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             MinimalBundle("winmint", "lab-only"),
             Env(winlogon, secrets, dmaSetup: dmaSetup),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("machineSetup.dma_setup_region_failed", result.FinalStatus.Code);
+        Assert.Equal("machineSetup.dmaSetupRegionFailed", result.FinalStatus.Code);
         Assert.Equal(1, secrets.WipeCount);
     }
 
@@ -272,24 +261,18 @@ public class MachineSetupTests
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
         RecordingWipeSecrets secrets = new();
-        SessionEnvironment env = new(
-            Time: TimeProvider.System,
+        MachineSetupEnvironment env = new(
             Winlogon: winlogon,
-            Region: new NoopRegion(),
-            Processes: new NoopProcesses(),
-            Splash: new NoopSplash(),
-            Checkpoints: new NoopCheckpoints(),
             WipeSecrets: secrets.Wipe,
             DmaSetup: null);
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.MachineSetup,
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             MinimalBundle("winmint", "lab-only"),
             env,
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("machineSetup.dma_setup_region_failed", result.FinalStatus.Code);
+        Assert.Equal("machineSetup.dmaSetupRegionFailed", result.FinalStatus.Code);
     }
 
     private static ProvisioningBundle MinimalBundle(string username, string password) =>
@@ -300,7 +283,7 @@ public class MachineSetupTests
             Policy: SessionPolicy.SmokeDefaults,
             SupervisorShellPath: SupervisorPath);
 
-    private static SessionEnvironment Env(
+    private static MachineSetupEnvironment Env(
         IWinlogonRegistry winlogon,
         RecordingWipeSecrets? secrets = null,
         Action<ProvisioningBundle>? wipeSecrets = null,
@@ -308,12 +291,7 @@ public class MachineSetupTests
         ILocalAccounts? localAccounts = null,
         IDmaSetupRegion? dmaSetup = null) =>
         new(
-            Time: TimeProvider.System,
             Winlogon: winlogon,
-            Region: new NoopRegion(),
-            Processes: new NoopProcesses(),
-            Splash: new NoopSplash(),
-            Checkpoints: new NoopCheckpoints(),
             WipeSecrets: wipeSecrets ?? secrets!.Wipe,
             Appx: appx,
             LocalAccounts: localAccounts,

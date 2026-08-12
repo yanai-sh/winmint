@@ -25,7 +25,7 @@ Missing or wrong `DeviceRegion` is **repaired then re-verified** in MachineSetup
 
 - Orchestrator unattend must stamp `DeviceRegion` + `.DEFAULT` Geo (not `Control\Nls\Geo`).
 - Provisioning `IDmaSetupRegion.EnsureIreland()` runs in MachineSetup and after visible settle (and on settle resume skip).
-- Smoke evidence must show visible settle **and** `settle.device_region_ok` or `settle.device_region_repaired`.
+- Smoke evidence must show visible settle **and** `settle.deviceRegionOk` or `settle.deviceRegionRepaired`.
 
 ### Review trigger
 

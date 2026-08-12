@@ -39,13 +39,13 @@ irm https://winmint.yanai.sh/validate | iex
 
 Expect a clear validate result. Defaults to `samples/smoke.profile.json` (override with `?ProfilePath=…` if you want).
 
-While the Wizard is open: select **Release** and **Build** to run Gate B wipe-media apply **in the Wizard** (workdir `%LOCALAPPDATA%\WinMint\work\sl7-primary`). Progress and Rufus DD / SHA flash guidance appear on Review when the Output ISO is ready.
+While the Wizard is open: select **Release** and **Build** to run Gate B wipe-media apply **in the Wizard** (workdir `%LOCALAPPDATA%\WinMint\work\gate-b`). Progress and Rufus DD / SHA flash guidance appear on Review when the Output ISO is ready.
 
 **One-shot Gate B wipe ISO** (re-fetch toolkit, build Release+package-strict, delete TEMP toolkit, keep workdir):
 
 ```powershell
 irm 'https://winmint.yanai.sh/primary-gate?SourceIso=C:\path\to\source.iso&ProfilePath=samples\sl7.profile.json' | iex
-# Default workdir: %LOCALAPPDATA%\WinMint\work\sl7-primary
+# Default workdir: %LOCALAPPDATA%\WinMint\work\gate-b
 # URL-encode spaces in paths if needed.
 ```
 
@@ -65,21 +65,21 @@ Prefer **Wizard Release → Build** (in-app Apply), **one-shot** `/primary-gate`
 ```powershell
 # From the live toolkit root (or after -NoLaunch left a TEMP toolkit folder):
 # Password for samples/sl7 — create beside the workdir or under toolkit .scratch as SECRETS describes.
-$work = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary'
+$work = Join-Path $env:LOCALAPPDATA 'WinMint\work\gate-b'
 New-Item -ItemType Directory -Force -Path $work, .scratch | Out-Null
 Set-Content -Path .scratch/sl7.password -Value 'your-lab-password' -NoNewline
 just primary-gate ISO=path\to\source.iso
 just watch-apply
-# Default watch-apply workdir is Gate B ($work). Test metal: just watch-apply WORK=.scratch/sl7-build
+# Default watch-apply workdir is Gate B ($work). Test lane: just watch-apply WORK=.scratch/sl7-build
 ```
 
-Gate B workdir defaults to `%LOCALAPPDATA%\WinMint\work\sl7-primary` (same as `/primary-gate` and Wizard Release Build) so TEMP toolkit cleanup cannot delete the Output ISO. Flash that folder’s `winmint_sl7_Release_*.iso` (see `evidence.json` → `outputIsoPath`).
+Gate B workdir defaults to `%LOCALAPPDATA%\WinMint\work\gate-b` (same as `/primary-gate` and Wizard Release Build) so TEMP toolkit cleanup cannot delete the Output ISO. Flash that folder’s `winmint_sl7_Release_*.iso` (see `evidence.json` → `outputIsoPath`).
 
 When it finishes, flash that Output ISO to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup. Gate B is still not a completed Primary install.
 
-`just primary-gate` / `/primary-gate` / Wizard Release Build builds the wipe ISO (`Release`, package-strict). Soft `just metal QUALITY=Release` is rejected; wipe media is that Gate B path only.
+`just primary-gate` / `/primary-gate` / Wizard Release Build builds the wipe ISO (`Release`, package-strict). Soft `just host-apply QUALITY=Release` is rejected; wipe media is that Gate B path only.
 
-For iterative Test builds only: `just metal ISO=path\to\source.iso` (default workdir `.scratch/sl7-build`). That path is not the wipe gate.
+For iterative Test builds only: `just host-apply ISO=path\to\source.iso` (default workdir `.scratch/sl7-build`). That path is not the wipe gate.
 
 Before you wipe a machine, prepare a restore path for that PC: OEM recovery when available, or a Windows recovery drive. WinMint does not download or ship recovery images.
 

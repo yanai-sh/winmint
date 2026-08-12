@@ -10,7 +10,7 @@ public class SmokeEvidenceAssertTests
     [Trait("Category", "S4")]
     public void Assert_smoke_evidence_returns_splash_before_explorer_marker()
     {
-        string repo = FindRepoRoot();
+        string repo = TestRepo.Root;
         string fixture = Path.Combine(repo, "tests", "fixtures", "smoke-evidence");
         string work = Path.Combine(Path.GetTempPath(), "winmint-s4-" + Guid.NewGuid().ToString("N"));
         try
@@ -37,7 +37,7 @@ public class SmokeEvidenceAssertTests
     [Trait("Category", "S4")]
     public void Assert_smoke_evidence_fails_without_pinned_keepflag_digests()
     {
-        string repo = FindRepoRoot();
+        string repo = TestRepo.Root;
         string fixture = Path.Combine(repo, "tests", "fixtures", "smoke-evidence");
         string work = Path.Combine(Path.GetTempPath(), "winmint-s4-nokeep-" + Guid.NewGuid().ToString("N"));
         try
@@ -73,7 +73,7 @@ public class SmokeEvidenceAssertTests
     [Trait("Category", "S4")]
     public void Assert_smoke_evidence_fails_without_first_paint_phase()
     {
-        string repo = FindRepoRoot();
+        string repo = TestRepo.Root;
         string fixture = Path.Combine(repo, "tests", "fixtures", "smoke-evidence");
         string work = Path.Combine(Path.GetTempPath(), "winmint-s4-bad-" + Guid.NewGuid().ToString("N"));
         try
@@ -125,17 +125,6 @@ public class SmokeEvidenceAssertTests
         return p.ExitCode;
     }
 
-    private static string FindRepoRoot()
-    {
-        DirectoryInfo? dir = new(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "WinMint.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        Assert.NotNull(dir);
-        return dir.FullName;
-    }
 
     private static void CopyTree(string source, string dest)
     {

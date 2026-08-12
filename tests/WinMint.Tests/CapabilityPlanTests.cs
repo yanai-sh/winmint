@@ -112,9 +112,9 @@ public class CapabilityPlanTests
     }
 
     [Fact]
-    public void RunPlan_merges_capability_and_feature_side_digests_into_evidence()
+    public void InvokeServicingPlan_merges_capability_and_feature_side_digests_into_evidence()
     {
-        string repo = FindRepoRoot();
+        string repo = TestRepo.Root;
         string work = Path.Combine(Path.GetTempPath(), "winmint-s2-cap-digests-" + Guid.NewGuid().ToString("N"));
         string logs = Path.Combine(work, "logs");
         Directory.CreateDirectory(logs);
@@ -125,7 +125,7 @@ public class CapabilityPlanTests
                 Path.Combine(logs, "digests.json"),
                 """{"removed.capability.App.StepsRecorder~~~~0.0.1.0":"Absent","removed.capability.WMIC~~~~":"Absent","disabled.feature.WorkFolders-Client":"Disabled"}""");
 
-            string runPlan = Path.Combine(repo, "servicing", "RunPlan.ps1");
+            string runPlan = Path.Combine(repo, "servicing", "Invoke-ServicingPlan.ps1");
             ProcessStartInfo psi = new()
             {
                 FileName = "pwsh",
@@ -137,7 +137,7 @@ public class CapabilityPlanTests
             using Process p = Process.Start(psi) ?? throw new InvalidOperationException("pwsh failed to start");
             string stdout = p.StandardOutput.ReadToEnd();
             string stderr = p.StandardError.ReadToEnd();
-            Assert.True(p.WaitForExit(60_000), "RunPlan timed out");
+            Assert.True(p.WaitForExit(60_000), "Invoke-ServicingPlan timed out");
             Assert.True(p.ExitCode == 0, $"exit={p.ExitCode}\nstdout={stdout}\nstderr={stderr}");
 
             string evidencePath = Path.Combine(work, "evidence.json");
@@ -155,17 +155,6 @@ public class CapabilityPlanTests
         }
     }
 
-    private static string FindRepoRoot()
-    {
-        DirectoryInfo? dir = new(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "WinMint.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        Assert.NotNull(dir);
-        return dir.FullName;
-    }
 
     private static void TryDelete(string path)
     {

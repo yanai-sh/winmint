@@ -1,11 +1,13 @@
 namespace WinMint.Provisioning;
 
+using WinMint.Contracts;
+
 public static partial class ProvisioningSession
 {
     private static partial class JobRunner
     {
         private static async Task<JobsPhaseResult?> RunOneDriveUninstallJobAsync(
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             ProvisionJob job,
             CancellationToken ct)
@@ -33,15 +35,12 @@ public static partial class ProvisioningSession
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                return FailJob(env, phases, "jobs.failed", $"{job.Id}: {ex.Message}");
             }
         }
 
         private static JobsPhaseResult? RunWorkstationQuietJob(
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             ProvisionJob job)
         {
@@ -49,21 +48,17 @@ public static partial class ProvisioningSession
             {
                 (env.ApplyWorkstationQuiet ?? Win32WorkstationQuiet.Apply)();
                 SessionStatus ok = new("jobs.workstation.quiet", "Dark theme and quiet user defaults applied.");
-                env.Splash.SetStatus(ok);
-                phases.Add(ok.Code);
+                Note(env, phases, ok);
                 return null;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                return FailJob(env, phases, "jobs.failed", $"{job.Id}: {ex.Message}");
             }
         }
 
         private static async Task<JobsPhaseResult?> RunReservedStorageDisableJobAsync(
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             ProvisionJob job,
             CancellationToken ct)
@@ -77,27 +72,23 @@ public static partial class ProvisioningSession
                     .ConfigureAwait(false);
                 if (started.ExitCode != 0)
                 {
-                    SessionStatus failed = new(
+                    return FailJob(
+                        env,
+                        phases,
                         "jobs.failed",
                         $"{job.Id}: dism Set-ReservedStorageState exited {started.ExitCode}.");
-                    env.Splash.SetStatus(failed);
-                    phases.Add(failed.Code);
-                    return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
                 }
 
                 return null;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                return FailJob(env, phases, "jobs.failed", $"{job.Id}: {ex.Message}");
             }
         }
 
         private static async Task<JobsPhaseResult?> RunDohSetJobAsync(
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             ProvisionJob job,
             CancellationToken ct)
@@ -107,12 +98,11 @@ public static partial class ProvisioningSession
                 || string.IsNullOrWhiteSpace(job.DohSecondary)
                 || string.IsNullOrWhiteSpace(job.DohTemplate))
             {
-                SessionStatus bad = new(
+                return FailJob(
+                    env,
+                    phases,
                     "jobs.failed",
                     $"Job '{job.Id}' kind doh.set requires dohPrimary/dohSecondary/dohTemplate from the plan.");
-                env.Splash.SetStatus(bad);
-                phases.Add(bad.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, bad, TimedOut: false);
             }
 
             string primary = job.DohPrimary;
@@ -136,40 +126,27 @@ public static partial class ProvisioningSession
                     .ConfigureAwait(false);
                 if (started.ExitCode != 0)
                 {
-                    SessionStatus failed = new(
-                        "jobs.failed",
-                        $"{job.Id}: DoH configure exited {started.ExitCode}.");
-                    env.Splash.SetStatus(failed);
-                    phases.Add(failed.Code);
-                    return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                    return FailJob(env, phases, "jobs.failed", $"{job.Id}: DoH configure exited {started.ExitCode}.");
                 }
 
                 return null;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                return FailJob(env, phases, "jobs.failed", $"{job.Id}: {ex.Message}");
             }
         }
 
         private static async Task<JobsPhaseResult?> RunAppxSafetyNetJobAsync(
             ProvisioningBundle bundle,
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             ProvisionJob job,
             CancellationToken ct)
         {
             if (env.Appx is null)
             {
-                SessionStatus missing = new(
-                    "jobs.failed",
-                    $"Job '{job.Id}' requires IAppxPackageManager.");
-                env.Splash.SetStatus(missing);
-                phases.Add(missing.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, missing, TimedOut: false);
+                return FailJob(env, phases, "jobs.failed", $"Job '{job.Id}' requires IAppxPackageManager.");
             }
 
             IReadOnlyList<string> ids = bundle.RemoveProvisionedAppx ?? [];
@@ -213,10 +190,7 @@ public static partial class ProvisioningSession
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                SessionStatus failed = new("jobs.failed", $"Job '{job.Id}': {ex.Message}");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                return FailJob(env, phases, "jobs.failed", $"Job '{job.Id}': {ex.Message}");
             }
 
             return null;

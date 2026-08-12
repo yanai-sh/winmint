@@ -75,6 +75,48 @@ public class ProductPostureTests
     }
 
     [Fact]
+    public void EncodePolicySpecs_ships_the_digest_key_so_pwsh_never_derives_a_family()
+    {
+        IReadOnlyList<OfflinePolicyRow> rows = ProductPosture.ComposePolicies(
+            includeBraveDebloat: true,
+            includeDriverHygiene: true);
+
+        string[] specs = ProductPosture.EncodePolicySpecs(rows).Split(';');
+        Assert.Equal(rows.Count, specs.Length);
+        Assert.All(specs, spec => Assert.Equal(6, spec.Split('|').Length));
+
+        string[] digestKeys = specs.Select(spec => spec.Split('|')[5]).ToArray();
+
+        // A new row falling through to the "edge" default shows up as a missing family here.
+        Assert.Equal(
+            [
+                "brave",
+                "cloudContent",
+                "developer",
+                "device",
+                "deviceInstaller",
+                "edge",
+                "filesystem",
+                "onedrive",
+                "store",
+                "sudo",
+                "wpbt",
+            ],
+            digestKeys.Select(key => key.Split('.')[1])
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+
+        // Keys the apply/smoke gates assert on by literal (tools/apply/Assert-ApplyEvidence.ps1).
+        Assert.Contains("policy.cloudContent.DisableWindowsConsumerFeatures", digestKeys);
+        Assert.Contains("policy.cloudContent.DisableSoftLanding", digestKeys);
+        Assert.Contains("policy.store.AutoDownload", digestKeys);
+        Assert.Contains("policy.wpbt.DisableWpbtExecution", digestKeys);
+        Assert.Contains("policy.filesystem.LongPathsEnabled", digestKeys);
+        Assert.Contains("policy.deviceInstaller.DisableCoInstallers", digestKeys);
+    }
+
+    [Fact]
     public void Plan_never_stamps_copilot_kill_policies()
     {
         Profile profile = Lab();
@@ -127,7 +169,7 @@ public class ProductPostureTests
             new RunOptions { ImageArchitecture = "arm64" });
 
         Assert.True(result.IsOk, result.IsOk ? null : result.Error.Message);
-        JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
+        ProvisionJob batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
         foreach (string id in ProductPosture.ScoopIds)
         {
             Assert.Contains(id, batch.PackageId!, StringComparison.OrdinalIgnoreCase);

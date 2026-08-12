@@ -1,6 +1,6 @@
 namespace WinMint.Wizard;
 
-/// <summary>Unelevated reader for RunPlan <c>{work}/apply-status.txt</c> (Avalonia-free).</summary>
+/// <summary>Unelevated reader for Invoke-ServicingPlan <c>{work}/apply-status.txt</c> (Avalonia-free).</summary>
 internal static class ApplyStatusReader
 {
     public const string FileName = "apply-status.txt";
@@ -20,7 +20,7 @@ internal static class ApplyStatusReader
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            // ponytail: small status file; Share ReadWrite so elevated RunPlan can rewrite while we poll
+            // ponytail: small status file; Share ReadWrite so the elevated kernel loop can rewrite while we poll
             using FileStream stream = new(
                 statusFilePath,
                 FileMode.Open,

@@ -19,8 +19,7 @@ public class UnlockTimeoutTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
@@ -54,8 +53,7 @@ public class UnlockTimeoutTests
             onFirstMismatch: () => time.JumpWallClock(TimeSpan.FromHours(3)));
         RecordingSplashPresenter splash = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
@@ -87,8 +85,7 @@ public class UnlockTimeoutTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
@@ -116,8 +113,7 @@ public class UnlockTimeoutTests
         StaleCheckpoints checkpoints = new(
             new TenureState(CheckpointInProgress: true, HeartbeatUtc: null));
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget(Enabled: false, null, null, null, null),
                 policy: SessionPolicy.SmokeDefaults with { FailedDwell = TimeSpan.Zero }),
@@ -137,8 +133,7 @@ public class UnlockTimeoutTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
@@ -167,7 +162,7 @@ public class UnlockTimeoutTests
             Policy: policy,
             SupervisorShellPath: SupervisorPath);
 
-    private static SessionEnvironment Env(
+    private static ShellEnvironment Env(
         TimeProvider time,
         IWinlogonRegistry winlogon,
         IRegionSnapshot region,

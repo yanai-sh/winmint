@@ -239,12 +239,12 @@ fi
 # ── Stage 4: Gate B + wipe ISO (one Release + package-strict Apply) ─────────
 stage "Gate B + wipe ISO"
 say "From the repo root, run Primary once (Release + package-strict)."
-say "Workdir defaults to %LOCALAPPDATA%\\WinMint\\work\\sl7-primary (survives TEMP toolkit cleanup)."
+say "Workdir defaults to %LOCALAPPDATA%\\WinMint\\work\\gate-b (survives TEMP toolkit cleanup)."
 step "just primary-gate ISO=$SOURCE_ISO"
-note "This drives tools/metal/Invoke-MetalApply.ps1 and can take multiple hours — one build only."
+note "This drives tools/apply/Invoke-HostApply.ps1 and can take multiple hours — one build only."
 pause "Press Enter once that command has finished"
-GATE_WORK="${LOCALAPPDATA:-$HOME/AppData/Local}/WinMint/work/sl7-primary"
-if confirm "Does $GATE_WORK/metal-acceptance.json exist (Gate B green)?"; then
+GATE_WORK="${LOCALAPPDATA:-$HOME/AppData/Local}/WinMint/work/gate-b"
+if confirm "Does $GATE_WORK/apply-acceptance.json exist (Gate B green)?"; then
   printf '  %s✓%s Gate B acceptance evidence present\n' "$GREEN" "$RESET"
 else
   warn "no Gate B evidence — do not proceed to a destructive install without it."

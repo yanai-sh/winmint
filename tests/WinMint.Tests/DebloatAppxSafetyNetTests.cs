@@ -22,8 +22,7 @@ public class DebloatAppxSafetyNetTests
             "Microsoft.Other"));
 
         RecordingSplashPresenter splash = new();
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
                 removeProvisionedAppx: ["Microsoft.BingNews"]),
@@ -59,8 +58,7 @@ public class DebloatAppxSafetyNetTests
             "Microsoft.BingNews_8wekyb3d8bbwe",
             "Microsoft.BingNews"));
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
                 removeProvisionedAppx: ["Microsoft.GamingApp", "Microsoft.BingNews"]),
@@ -116,7 +114,7 @@ public class DebloatAppxSafetyNetTests
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
-        JobDescriptor safety = Assert.Single(
+        ProvisionJob safety = Assert.Single(
             planned.Value.Jobs.Jobs,
             j => j.Kind == ProvisionJobKind.AppxSafetyNet);
         Assert.Equal("debloat.appx.safetyNet", safety.Id);
@@ -186,7 +184,7 @@ public class DebloatAppxSafetyNetTests
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
-        JobDescriptor safety = Assert.Single(
+        ProvisionJob safety = Assert.Single(
             planned.Value.Jobs.Jobs,
             j => j.Kind == ProvisionJobKind.AppxSafetyNet);
         Assert.Equal("debloat.appx.safetyNet", safety.Id);

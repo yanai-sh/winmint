@@ -64,7 +64,7 @@ public static class PlanDiff
             Line(sb, $"DMA settle {profile.Dma.Settle.Locale} / {profile.Dma.Settle.TimeZoneId}", "you chose");
         }
 
-        foreach (JobDescriptor job in artifacts.Jobs.Jobs)
+        foreach (ProvisionJob job in artifacts.Jobs.Jobs)
         {
             if (job.Kind is ProvisionJobKind.WingetImport)
             {
@@ -87,7 +87,7 @@ public static class PlanDiff
         }
     }
 
-    private static bool JobAlways(JobDescriptor job) =>
+    private static bool JobAlways(ProvisionJob job) =>
         job.Kind is ProvisionJobKind.OneDriveUninstall
             or ProvisionJobKind.ReservedStorageDisable
             or ProvisionJobKind.WorkstationQuiet
@@ -97,7 +97,7 @@ public static class PlanDiff
         || (job.Kind is ProvisionJobKind.Winget && ProductPosture.WingetIdSet.Contains(job.PackageId ?? ""))
         || (job.Kind is ProvisionJobKind.Scoop && ProductPosture.ScoopIdSet.Contains(job.PackageId ?? ""));
 
-    private static string JobLabel(JobDescriptor job) =>
+    private static string JobLabel(ProvisionJob job) =>
         job.Kind switch
         {
             ProvisionJobKind.OneDriveUninstall => "OneDrive uninstall",
@@ -119,7 +119,7 @@ public static class PlanDiff
     {
         foreach (string id in appx)
         {
-            string label = IncludedReceipt.FriendlyRemoveNames([id])[0];
+            string label = IncludedSummary.FriendlyRemoveNames([id])[0];
             bool always = ProductPosture.AppxIds.Contains(id, StringComparer.OrdinalIgnoreCase);
             Line(sb, $"{label} ({id})", always ? "always" : "you chose");
         }
@@ -135,7 +135,7 @@ public static class PlanDiff
         }
     }
 
-    private static void AppendScoopBatch(StringBuilder sb, JobDescriptor job, Profile profile)
+    private static void AppendScoopBatch(StringBuilder sb, ProvisionJob job, Profile profile)
     {
         IEnumerable<string> ids = string.IsNullOrWhiteSpace(job.PackageId)
             ? ProductPosture.MergeScoop(profile.ScoopPackages)

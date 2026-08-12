@@ -30,7 +30,7 @@ public class BundleLoaderTests
                 $$"""
                 {
                   "schemaVersion": "{{BundleLoader.JobsSchemaVersion}}",
-                  "jobs": [{ "id": "metal.browser", "kind": "browser" }]
+                  "jobs": [{ "id": "test.browser", "kind": "browser" }]
                 }
                 """);
 

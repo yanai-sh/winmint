@@ -1,5 +1,7 @@
 namespace WinMint.Provisioning;
 
+using WinMint.Contracts;
+
 using System.Reflection.PortableExecutable;
 using System.Text.Json;
 
@@ -8,7 +10,7 @@ public static partial class ProvisioningSession
     private static partial class JobRunner
     {
         private static JobsPhaseResult? RunNativePackageAuditJob(
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             ProvisionJob job,
             CancellationToken ct)
@@ -16,13 +18,10 @@ public static partial class ProvisioningSession
             _ = ct;
             if (string.IsNullOrWhiteSpace(job.PackageId))
             {
-                SessionStatus bad = new("jobs.failed", $"{job.Id}: audit requires packageId list.");
-                env.Splash.SetStatus(bad);
-                phases.Add(bad.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, bad, TimedOut: false);
+                return FailJob(env, phases, "jobs.failed", $"{job.Id}: audit requires packageId list.");
             }
 
-            List<NativePackageAuditEntry> entries = [];
+            List<NativePackageAuditEntryFile> entries = [];
             bool anyNonNative = false;
             foreach (string installId in job.PackageId.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
@@ -36,7 +35,7 @@ public static partial class ProvisioningSession
 
                     found = true;
                     bool native = IsArm64NativeBinary(path);
-                    entries.Add(new NativePackageAuditEntry(installId, path, native));
+                    entries.Add(new NativePackageAuditEntryFile(installId, path, native));
                     if (!native)
                     {
                         anyNonNative = true;
@@ -47,7 +46,7 @@ public static partial class ProvisioningSession
 
                 if (!found)
                 {
-                    entries.Add(new NativePackageAuditEntry(installId, null, null));
+                    entries.Add(new NativePackageAuditEntryFile(installId, null, null));
                 }
             }
 
@@ -57,19 +56,18 @@ public static partial class ProvisioningSession
                 "evidence");
             Directory.CreateDirectory(evidenceDir);
             string evidencePath = Path.Combine(evidenceDir, "native-packages.json");
-            NativePackageAuditDocument doc = new("winmint.native-packages/v1", entries);
+            NativePackageAuditFile doc = new("winmint.native-packages/v1", entries);
             File.WriteAllText(
                 evidencePath,
-                JsonSerializer.Serialize(doc, NativePackageAuditJsonContext.Default.NativePackageAuditDocument));
+                JsonSerializer.Serialize(doc, NativePackageAuditJsonContext.Default.NativePackageAuditFile));
 
             if (job.AuditStrict && anyNonNative)
             {
-                SessionStatus failed = new(
-                    "jobs.package.audit_non_native",
+                return FailJob(
+                    env,
+                    phases,
+                    "jobs.package.auditNonNative",
                     $"{job.Id}: one or more winget GUI binaries are not native ARM64 (see {evidencePath}).");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
             }
 
             return null;

@@ -2,7 +2,7 @@
 
 Greenfield product repo [`yanai-sh/winmint`](https://github.com/yanai-sh/winmint) — no WinMint v1 contract or CLI back-compat. Living rules: [DESIGN](DESIGN.md). Stack pins: [STACK](STACK.md). Glossary: [CONTEXT](../CONTEXT.md).
 
-**Design stance:** prefer modern elegant solutions over v1 when they conflict. Smoke and metal share Supervisor / settle / job executor / reboot / lock; differ in Profile job set and evidence bars only.
+**Design stance:** prefer modern elegant solutions over v1 when they conflict. Smoke and Primary share Supervisor / settle / job executor / reboot / lock; differ in Profile job set and evidence bars only.
 
 ## Architectural style
 
@@ -25,7 +25,7 @@ Greenfield product repo [`yanai-sh/winmint`](https://github.com/yanai-sh/winmint
 | **ImageServicing** | Orchestrator → `servicing/` | Apply plan to Source ISO → evidence — [design](design/IMAGESERVICING.md) | DISM/WIM/hive/oscdimg; opcode→script map |
 | **ProvisioningSession** | `WinMint.Provisioning` | `--machine-setup` *or* Shell → `SessionResult` — [design](design/PROVISIONINGSESSION.md) | Splash, stamps, DMA settle, jobs, checkpoint |
 
-**Hosts (not deep modules):** `WinMint.Cli` and Avalonia Wizard are thin clients of **HostCompile** (Profile → Plan → ImageServicing). `servicing/*.ps1` are ImageServicing adapters, not a second product CLI.
+**Front ends (not deep modules):** `WinMint.Cli` and Avalonia Wizard are thin clients of **HostCompile** (Profile → Plan → ImageServicing). `servicing/*.ps1` are ImageServicing adapters, not a second product CLI.
 
 **Seam discipline:**
 
@@ -84,7 +84,7 @@ Sibling archive [`winmint_v1`](https://github.com/yanai-sh/winmint_v1) is **arch
 | Lane | Export / cleanup | Use |
 |------|------------------|-----|
 | **Test** | Soft/no recompress; skip WinSxS cleanup | Smoke / iteration |
-| **Release** | Hard recompress + `StartComponentCleanup` | Published / metal / Primary |
+| **Release** | Hard recompress + `StartComponentCleanup` | Published / Gate B / Primary |
 
 ## Payload
 

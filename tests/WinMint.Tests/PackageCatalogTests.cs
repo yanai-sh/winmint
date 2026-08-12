@@ -89,7 +89,7 @@ public class PackageCatalogTests
     [Fact]
     public void Repo_packages_json_loads_and_matches_embedded_catalog()
     {
-        string path = Path.Combine(FindRepoRoot(), "config", "packages.json");
+        string path = Path.Combine(TestRepo.Root, "config", "packages.json");
         Assert.True(File.Exists(path), $"Missing repo manifest: {path}");
 
         Result<PackageCatalog, Failure> diskLoad = PackageCatalog.TryLoadFromFile(path);
@@ -111,7 +111,7 @@ public class PackageCatalogTests
             profile,
             new RunOptions { ImageArchitecture = "arm64", PackageAuditStrict = true });
         Assert.True(result.IsOk);
-        JobDescriptor audit = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.PackageAuditNative);
+        ProvisionJob audit = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.PackageAuditNative);
         Assert.True(audit.AuditStrict);
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
     }
@@ -131,19 +131,4 @@ public class PackageCatalogTests
             [],
             []);
 
-    private static string FindRepoRoot()
-    {
-        DirectoryInfo? dir = new(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "config", "packages.json")))
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException("repo root not found");
-    }
 }

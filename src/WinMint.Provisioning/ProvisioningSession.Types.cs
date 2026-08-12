@@ -3,12 +3,6 @@ using WinMint.Contracts;
 
 namespace WinMint.Provisioning;
 
-public enum SessionMode
-{
-    MachineSetup,
-    Shell,
-}
-
 public enum SessionOutcome
 {
     Complete,
@@ -38,21 +32,6 @@ public sealed record ProvisioningBundle(
 
 public sealed record AccountStamp(string Username, string Password);
 
-public sealed record ProvisionJob(
-    string Id,
-    ProvisionJobKind Kind,
-    bool NeedsReboot = false,
-    string? PackageId = null,
-    string? WingetArchitecture = null,
-    WslInstallKind? WslInstallKind = null,
-    string? WslFromFileRepo = null,
-    IReadOnlyList<string>? WslFromFileAssetNames = null,
-    bool AuditStrict = false,
-    IReadOnlyList<string>? ScoopBuckets = null,
-    string? DohPrimary = null,
-    string? DohSecondary = null,
-    string? DohTemplate = null);
-
 public sealed record CheckpointState(string Phase);
 
 public sealed record SessionPolicy(
@@ -76,18 +55,31 @@ public interface IConnectivityProbe
     Task<bool> HasOutboundNetworkAsync(CancellationToken ct = default);
 }
 
-public sealed record SessionEnvironment(
+/// <summary>
+/// Ports the SetupComplete/SYSTEM pass reaches for. Autologon, secret wipe, and the two best-effort
+/// repairs — nothing else, so a caller cannot be asked for a splash or a clock this pass never reads.
+/// </summary>
+public sealed record MachineSetupEnvironment(
+    IWinlogonRegistry Winlogon,
+    Action<ProvisioningBundle>? WipeSecrets = null,
+    IAppxPackageManager? Appx = null,
+    ILocalAccounts? LocalAccounts = null,
+    IDmaSetupRegion? DmaSetup = null);
+
+/// <summary>
+/// Ports the FirstLogon Shell tenure reaches for. <see cref="Evidence"/> is required: the tenure has
+/// no honest outcome without a durable record, so the type says so instead of a runtime status code.
+/// </summary>
+public sealed record ShellEnvironment(
     TimeProvider Time,
     IWinlogonRegistry Winlogon,
     IRegionSnapshot Region,
     IProcessHost Processes,
     ISplashPresenter Splash,
     ICheckpointStore Checkpoints,
-    Action<ProvisioningBundle>? WipeSecrets = null,
-    IEvidenceSink? Evidence = null,
+    IEvidenceSink Evidence,
     IAppxPackageManager? Appx = null,
     ISystemReboot? Reboot = null,
-    ILocalAccounts? LocalAccounts = null,
     Func<string?>? ResolveScoopCmd = null,
     IResidueCleaner? ResidueCleaner = null,
     IConnectivityProbe? Connectivity = null,
@@ -190,6 +182,7 @@ public enum DmaSetupRegionEnsureResult
     Repaired,
 }
 
+/// <summary>Setup region port. DMA = EU Digital Markets Act (<see cref="WinMint.Contracts.DmaInterop"/>).</summary>
 public interface IDmaSetupRegion
 {
     int? ReadDeviceRegion();
@@ -251,11 +244,11 @@ public interface ICheckpointStore
 
 public interface IEvidenceSink
 {
-    EvidenceSnapshot Write(ProvisioningEvidenceDocument document);
+    EvidenceSnapshot Write(ProvisioningEvidenceFile document);
 }
 
 /// <summary>Write-only projection for S4 harness — never read by the session phase machine.</summary>
-public sealed record ProvisioningEvidenceDocument(
+public sealed record ProvisioningEvidenceFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
     [property: JsonPropertyName("outcome")] string Outcome,
     [property: JsonPropertyName("statusCode")] string StatusCode,
@@ -269,6 +262,6 @@ public sealed record PackageFailureEntry(
     [property: JsonPropertyName("exitCode")] int ExitCode,
     [property: JsonPropertyName("message")] string? Message = null);
 
-public sealed record PackagesEvidenceDocument(
+public sealed record PackagesEvidenceFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
     [property: JsonPropertyName("failures")] IReadOnlyList<PackageFailureEntry> Failures);

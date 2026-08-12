@@ -1,10 +1,10 @@
+using WinMint.Contracts;
 using WinMint.Orchestrator;
 using WinMint.Provisioning;
-using DmaSettleTarget = WinMint.Contracts.DmaSettleTarget;
 
 namespace WinMint.Tests;
 
-/// <summary>Shared S3 fakes for ProvisioningSession metal / shell tenure tests.</summary>
+/// <summary>Shared S3 fakes for ProvisioningSession machine setup / shell tenure tests.</summary>
 internal static class ProvisioningSessionTestFakes
 {
     internal static string SupervisorPath => ImageServicing.ShellStampGuestPath;
@@ -32,7 +32,7 @@ internal static class ProvisioningSessionTestFakes
             },
         };
 
-    internal static SessionEnvironment Env(
+    internal static ShellEnvironment Env(
         IProcessHost processes,
         IEvidenceSink evidence,
         ICheckpointStore? checkpoints = null,
@@ -60,7 +60,7 @@ internal static class ProvisioningSessionTestFakes
             SuppressWslOobe: suppressWslOobe,
             DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
 
-    internal static SessionEnvironment Env(
+    internal static ShellEnvironment Env(
         IWinlogonRegistry winlogon,
         ICheckpointStore checkpoints,
         ISplashPresenter splash,
@@ -77,7 +77,7 @@ internal static class ProvisioningSessionTestFakes
             Evidence: evidence,
             DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
 
-    internal static SessionEnvironment Env(
+    internal static ShellEnvironment Env(
         IAppxPackageManager appx,
         ISplashPresenter splash,
         IDmaSetupRegion? dmaSetup = null) =>
@@ -184,9 +184,9 @@ internal static class ProvisioningSessionTestFakes
 
     internal sealed class RecordingEvidenceSink : IEvidenceSink
     {
-        public List<ProvisioningEvidenceDocument> Documents { get; } = [];
+        public List<ProvisioningEvidenceFile> Documents { get; } = [];
 
-        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)
+        public EvidenceSnapshot Write(ProvisioningEvidenceFile document)
         {
             Documents.Add(document);
             return new EvidenceSnapshot(document.SchemaVersion, $"memory:{Documents.Count}");
@@ -349,13 +349,6 @@ internal static class ProvisioningSessionTestFakes
         public void ClearCheckpoint() { }
     }
 
-    internal sealed class NoopSplash : ISplashPresenter
-    {
-        public void Show() { }
-
-        public void SetStatus(SessionStatus status) { }
-    }
-
     internal sealed class NoopRegion : IRegionSnapshot
     {
         public void Apply(DmaSettleTarget target) { }
@@ -365,7 +358,7 @@ internal static class ProvisioningSessionTestFakes
 
     internal sealed class NoopEvidence : IEvidenceSink
     {
-        public EvidenceSnapshot Write(ProvisioningEvidenceDocument document) =>
+        public EvidenceSnapshot Write(ProvisioningEvidenceFile document) =>
             new(document.SchemaVersion, "memory:1");
     }
 

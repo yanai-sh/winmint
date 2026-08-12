@@ -53,7 +53,7 @@ public static class ProductPosture
         "Microsoft.XboxSpeechToTextOverlay",
     ];
 
-    /// <summary>Quiet receipt labels for always-on offline/FirstLogon posture (not AppX).</summary>
+    /// <summary>Quiet summary labels for always-on offline/FirstLogon posture (not AppX).</summary>
     public static IReadOnlyList<string> QuietLabels { get; } =
     [
         "Edge policies",
@@ -125,8 +125,12 @@ public static class ProductPosture
         return rows.ToArray();
     }
 
+    /// <summary>
+    /// Encode rows for the <c>policySpecs</c> stage param. The digest key ships with the row so
+    /// Stamp-OfflinePolicies.ps1 writes the key it was handed instead of re-deriving the family.
+    /// </summary>
     public static string EncodePolicySpecs(IReadOnlyList<OfflinePolicyRow> rows) =>
-        string.Join(';', rows.Select(r => $"{r.Hive}|{r.SubKey}|{r.Name}|{r.RegType}|{r.Data}"));
+        string.Join(';', rows.Select(r => $"{r.Hive}|{r.SubKey}|{r.Name}|{r.RegType}|{r.Data}|{r.Digest}"));
 
     public static bool TryNormalizeDohProvider(string? raw, out string? provider, out string? error)
     {
@@ -204,13 +208,7 @@ public static class ProductPosture
         Soft("Policies\\Microsoft\\WindowsStore", "AutoDownload", "2"),
         Soft(@"Microsoft\Windows\CurrentVersion\AppModelUnlock", "AllowDevelopmentWithoutDevLicense", "1"),
         Soft(@"Microsoft\Windows\CurrentVersion\Sudo", "Enabled", "3"),
-        new(
-            "SYSTEM",
-            "ControlSet001\\Control\\FileSystem",
-            "LongPathsEnabled",
-            "REG_DWORD",
-            "1",
-            "policy.filesystem.LongPathsEnabled"),
+        Sys("ControlSet001\\Control\\FileSystem", "LongPathsEnabled", "1"),
     ];
 
     private static readonly OfflinePolicyRow[] OneDriveDisable =
@@ -225,24 +223,12 @@ public static class ProductPosture
 
     private static readonly OfflinePolicyRow[] WpbtDisable =
     [
-        new(
-            "SYSTEM",
-            "ControlSet001\\Control\\Session Manager",
-            "DisableWpbtExecution",
-            "REG_DWORD",
-            "1",
-            "policy.wpbt.DisableWpbtExecution"),
+        Sys("ControlSet001\\Control\\Session Manager", "DisableWpbtExecution", "1"),
     ];
 
     private static readonly OfflinePolicyRow[] DriverHygiene =
     [
-        new(
-            "SOFTWARE",
-            @"Microsoft\Windows\CurrentVersion\Device Installer",
-            "DisableCoInstallers",
-            "REG_DWORD",
-            "1",
-            "policy.deviceInstaller.DisableCoInstallers"),
+        Soft(@"Microsoft\Windows\CurrentVersion\Device Installer", "DisableCoInstallers", "1"),
     ];
 
     private static readonly OfflinePolicyRow[] BraveDebloat =
@@ -262,11 +248,21 @@ public static class ProductPosture
     ];
 
     private static OfflinePolicyRow Soft(string subKey, string name, string data) =>
-        new("SOFTWARE", subKey, name, "REG_DWORD", data, $"policy.{DigestFamily(subKey)}.{name}");
+        new("SOFTWARE", subKey, name, "REG_DWORD", data, DigestKey(subKey, name));
 
     private static OfflinePolicyRow SoftString(string subKey, string name, string data) =>
-        new("SOFTWARE", subKey, name, "REG_SZ", data, $"policy.{DigestFamily(subKey)}.{name}");
+        new("SOFTWARE", subKey, name, "REG_SZ", data, DigestKey(subKey, name));
 
+    private static OfflinePolicyRow Sys(string subKey, string name, string data) =>
+        new("SYSTEM", subKey, name, "REG_DWORD", data, DigestKey(subKey, name));
+
+    private static string DigestKey(string subKey, string name) =>
+        $"policy.{DigestFamily(subKey)}.{name}";
+
+    /// <summary>
+    /// Sole owner of the <c>policy.&lt;family&gt;.&lt;Name&gt;</c> digest vocabulary (ADR-009).
+    /// The key ships to Stamp-OfflinePolicies.ps1 in <c>policySpecs</c>; nothing re-derives it downstream.
+    /// </summary>
     private static string DigestFamily(string subKey)
     {
         if (subKey.Contains("BraveSoftware", StringComparison.OrdinalIgnoreCase))
@@ -279,9 +275,24 @@ public static class ProductPosture
             return "onedrive";
         }
 
+        if (subKey.Contains("Device Installer", StringComparison.OrdinalIgnoreCase))
+        {
+            return "deviceInstaller";
+        }
+
         if (subKey.Contains("Device Metadata", StringComparison.OrdinalIgnoreCase))
         {
             return "device";
+        }
+
+        if (subKey.Contains("Session Manager", StringComparison.OrdinalIgnoreCase))
+        {
+            return "wpbt";
+        }
+
+        if (subKey.Contains("FileSystem", StringComparison.OrdinalIgnoreCase))
+        {
+            return "filesystem";
         }
 
         if (subKey.Contains("\\Dsh", StringComparison.OrdinalIgnoreCase)
@@ -311,15 +322,7 @@ public static class ProductPosture
             return "sudo";
         }
 
-        if (subKey.Contains("\\Edge", StringComparison.OrdinalIgnoreCase)
-            || subKey.EndsWith("Edge", StringComparison.OrdinalIgnoreCase)
-            || subKey.Contains("EdgeUpdate", StringComparison.OrdinalIgnoreCase)
-            || subKey.Contains("Edge\\", StringComparison.OrdinalIgnoreCase))
-        {
-            return "edge";
-        }
-
-        return "policy";
+        return "edge";
     }
 }
 

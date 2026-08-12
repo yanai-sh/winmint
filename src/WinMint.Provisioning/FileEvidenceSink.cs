@@ -18,7 +18,7 @@ public sealed class FileEvidenceSink(string directory) : IEvidenceSink
         return directory;
     }
 
-    public EvidenceSnapshot Write(ProvisioningEvidenceDocument document)
+    public EvidenceSnapshot Write(ProvisioningEvidenceFile document)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (!string.Equals(document.SchemaVersion, SchemaVersion, StringComparison.Ordinal))
@@ -31,7 +31,7 @@ public sealed class FileEvidenceSink(string directory) : IEvidenceSink
         string path = Path.Combine(_directory, $"evidence-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}.json");
         byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(
             document,
-            ProvisioningJsonContext.Default.ProvisioningEvidenceDocument);
+            ProvisioningJsonContext.Default.ProvisioningEvidenceFile);
         File.WriteAllBytes(path, bytes);
         return new EvidenceSnapshot(SchemaVersion, path);
     }

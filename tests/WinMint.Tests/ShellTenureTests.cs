@@ -13,8 +13,7 @@ public class ShellTenureTests
         RecordingEvidenceSink evidence = new();
         ProvisioningBundle bundle = MinimalBundle();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             bundle,
             Env(splash, evidence),
             TestContext.Current.CancellationToken);
@@ -38,8 +37,7 @@ public class ShellTenureTests
             FileEvidenceSink sink = new(dir);
             RecordingSplashPresenter splash = new();
 
-            SessionResult result = await ProvisioningSession.RunAsync(
-                SessionMode.Shell,
+            SessionResult result = await ProvisioningSession.RunShellAsync(
                 MinimalBundle(),
                 Env(splash, sink),
                 TestContext.Current.CancellationToken);
@@ -53,7 +51,7 @@ public class ShellTenureTests
             string json = File.ReadAllText(snap.Path);
             Assert.Contains($"\"schemaVersion\": \"{ProvisioningSession.EvidenceSchemaVersion}\"", json, StringComparison.Ordinal);
             Assert.Contains("\"outcome\": \"Complete\"", json, StringComparison.Ordinal);
-            Assert.Contains("\"shell.first_paint\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"shell.firstPaint\"", json, StringComparison.Ordinal);
             Assert.Contains("\"settle.begin\"", json, StringComparison.Ordinal);
             Assert.DoesNotContain("setup-shell-control", json, StringComparison.Ordinal);
             Assert.DoesNotContain("setup-shell-status", json, StringComparison.Ordinal);
@@ -72,37 +70,17 @@ public class ShellTenureTests
     {
         RecordingSplashPresenter splash = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             MinimalBundle(),
             Env(splash, new RecordingEvidenceSink()),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
-        Assert.Contains("Status:shell.first_paint", splash.Events);
+        Assert.Contains("Status:shell.firstPaint", splash.Events);
         Assert.Contains("Status:settle.begin", splash.Events);
         Assert.Contains("Status:settle.ok", splash.Events);
         Assert.Contains("Status:jobs.ok", splash.Events);
         Assert.Equal("Show", splash.Events[0]);
-    }
-
-    [Fact]
-    public async Task Shell_fails_open_when_Evidence_sink_missing()
-    {
-        RecordingSplashPresenter splash = new();
-        RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
-
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
-            MinimalBundle(),
-            Env(splash, evidence: null, winlogon),
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("shell.evidence.required", result.FinalStatus.Code);
-        Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
-        Assert.Empty(result.EvidenceEmitted);
-        Assert.Contains("Status:shell.evidence.required", splash.Events);
     }
 
     private static ProvisioningBundle MinimalBundle() =>
@@ -113,9 +91,30 @@ public class ShellTenureTests
             Policy: SessionPolicy.SmokeDefaults,
             SupervisorShellPath: SupervisorPath);
 
-    private static SessionEnvironment Env(
+    /// <summary>
+    /// Winlogon launches the Supervisor as the shell, so a Shell-mode exit that skips the unlock leaves a
+    /// machine that logs on, runs nothing, exits, and logs on again — no desktop, recovery media only.
+    /// The session unlocks its own Complete and fail-open paths; exits that never reach it must route
+    /// through <c>FailShellTenure</c>, so a bare <c>return 1</c> in <c>RunShellAsync</c> is the bug.
+    /// </summary>
+    [Fact]
+    public void Shell_tenure_has_no_exit_that_skips_the_unlock()
+    {
+        string source = File.ReadAllText(
+            Path.Combine(TestRepo.Root, "src", "WinMint.Provisioning", "Program.cs"));
+
+        int start = source.IndexOf("private static async Task<int> RunShellAsync()", StringComparison.Ordinal);
+        int end = source.IndexOf("private static int FailShellTenure", StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start, "cannot locate RunShellAsync — the scan is broken, not clean");
+
+        string body = source[start..end];
+        Assert.DoesNotContain("return 1;", body, StringComparison.Ordinal);
+        Assert.Contains("FailShellTenure(log)", body, StringComparison.Ordinal);
+    }
+
+    private static ShellEnvironment Env(
         ISplashPresenter splash,
-        IEvidenceSink? evidence,
+        IEvidenceSink evidence,
         IWinlogonRegistry? winlogon = null) =>
         new(
             Time: TimeProvider.System,

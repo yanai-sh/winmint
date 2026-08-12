@@ -19,13 +19,13 @@ internal static class BundlePasswordWipe
         }
 
         byte[] bytes = File.ReadAllBytes(bundlePath);
-        BundleFile? dto = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.BundleFile);
-        if (dto is null)
+        BundleFile? file = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.BundleFile);
+        if (file is null)
         {
             throw new InvalidOperationException($"Secret wipe: failed to parse bundle {bundlePath}");
         }
 
-        BundleFile redacted = dto with { Password = "" };
+        BundleFile redacted = file with { Password = "" };
         byte[] outBytes = JsonSerializer.SerializeToUtf8Bytes(redacted, ProvisioningJsonContext.Default.BundleFile);
         // ponytail: full DPAPI host→guest staging channel stays future if Smoke plaintext+wipe remains lab-ok
         File.WriteAllBytes(bundlePath, outBytes);

@@ -15,8 +15,9 @@ public sealed class Win32DmaSetupRegion : IDmaSetupRegion
     private const string DeviceRegionSubKey =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Control Panel\DeviceRegion";
 
+    /// <summary>Relative to HKU — a leading backslash is ERROR_BAD_PATHNAME, not a root marker.</summary>
     private const string DefaultUserGeoSubKey =
-        @"\.DEFAULT\Control Panel\International\Geo";
+        @".DEFAULT\Control Panel\International\Geo";
 
     public int? ReadDeviceRegion()
     {
@@ -44,12 +45,10 @@ public sealed class Win32DmaSetupRegion : IDmaSetupRegion
         {
             SeedDefaultUserGeo(DmaInterop.IrelandGeoId, DmaInterop.IrelandGeoName);
         }
-        catch (UnauthorizedAccessException)
+        catch (Exception ex) when (ex is UnauthorizedAccessException or SecurityException or IOException)
         {
-            // ponytail: DeviceRegion is authoritative; .DEFAULT seed is belt-and-suspenders
-        }
-        catch (SecurityException)
-        {
+            // ponytail: DeviceRegion is authoritative; .DEFAULT seed is belt-and-suspenders.
+            // A medium-IL Shell hitting HKU\.DEFAULT raises IOException, not just access denied.
         }
 
         int? verified = ReadDeviceRegion();
@@ -72,8 +71,8 @@ public sealed class Win32DmaSetupRegion : IDmaSetupRegion
     private static void SeedDefaultUserGeo(int geoId, string geoName)
     {
         using RegistryKey key = Registry.Users.CreateSubKey(DefaultUserGeoSubKey, writable: true)
-            ?? throw new InvalidOperationException($"Cannot open HKU{DefaultUserGeoSubKey}.");
-        key.SetValue("Nation", geoId.ToString(System.Globalization.CultureInfo.InvariantCulture), RegistryValueKind.String);
+            ?? throw new InvalidOperationException($@"Cannot open HKU\{DefaultUserGeoSubKey}.");
+        key.SetValue("Nation", geoId.ToString(CultureInfo.InvariantCulture), RegistryValueKind.String);
         key.SetValue("Name", geoName, RegistryValueKind.String);
     }
 }

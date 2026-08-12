@@ -111,7 +111,7 @@ internal static class WizardSession
         bool gateB = lane.Equals("Release", StringComparison.OrdinalIgnoreCase);
         // Must match HostDefaults.GateBWorkDirectory / DefaultWorkDirectory (env-expanded form for copy-paste).
         string work = gateB
-            ? "\"%LOCALAPPDATA%\\WinMint\\work\\sl7-primary\""
+            ? "\"%LOCALAPPDATA%\\WinMint\\work\\gate-b\""
             : "\"%ProgramData%\\WinMint\\work\"";
         StringBuilder sb = new();
         sb.Append(CultureInfo.InvariantCulture, $"winmint build {profile} --iso {iso} --work {work} --image-quality {lane}");

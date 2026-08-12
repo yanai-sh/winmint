@@ -6,7 +6,7 @@ using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
-/// <summary>Ticket 18 — metal scoop job at S1 (Plan) + S3 (Run).</summary>
+/// <summary>Ticket 18 — scoop job at S1 (Plan) + S3 (Run).</summary>
 public class ScoopJobsTests
 {
     [Fact]
@@ -17,7 +17,7 @@ public class ScoopJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
+        ProvisionJob batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
         Assert.Equal("scoop.batch", batch.Id);
         Assert.False(batch.NeedsReboot);
         Assert.Contains("curl", batch.PackageId);
@@ -33,7 +33,7 @@ public class ScoopJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        JobDescriptor batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
+        ProvisionJob batch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
         Assert.True(batch.NeedsReboot);
     }
 
@@ -55,8 +55,7 @@ public class ScoopJobsTests
         RecordingEvidenceSink evidence = new();
         string scoopPath = @"C:\Users\lab\scoop\shims\scoop.cmd";
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("scoop.curl", ProvisionJobKind.Scoop, PackageId: "curl")]),
             Env(processes, evidence, resolveScoopCmd: () => scoopPath),
             TestContext.Current.CancellationToken);
@@ -84,8 +83,7 @@ public class ScoopJobsTests
             return resolveCalls == 1 ? null : scoopPath;
         }
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("scoop.curl", ProvisionJobKind.Scoop, PackageId: "curl")]),
             Env(processes, evidence, resolveScoopCmd: Resolve),
             TestContext.Current.CancellationToken);
@@ -106,14 +104,13 @@ public class ScoopJobsTests
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("scoop.curl", ProvisionJobKind.Scoop, PackageId: "curl")]) with { PackageStrict = true },
             Env(processes, evidence, resolveScoopCmd: () => null),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("jobs.scoop.bootstrap_failed", result.FinalStatus.Code);
+        Assert.Equal("jobs.scoop.bootstrapFailed", result.FinalStatus.Code);
         Assert.Single(processes.Starts);
         Assert.Equal("powershell.exe", processes.Starts[0].FileName, StringComparer.OrdinalIgnoreCase);
         Assert.Contains("get.scoop.sh", processes.Starts[0].Arguments[4]);
@@ -126,8 +123,7 @@ public class ScoopJobsTests
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("scoop.curl", ProvisionJobKind.Scoop, PackageId: "curl")]),
             Env(processes, evidence),
             TestContext.Current.CancellationToken);

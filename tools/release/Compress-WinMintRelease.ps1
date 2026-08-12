@@ -1,7 +1,7 @@
 #requires -Version 7.6
 <#
 .SYNOPSIS
-  Pack a no-clone WinMint toolkit zip (Cli + Wizard + servicing + samples + metal).
+  Pack a no-clone WinMint toolkit zip (Cli + Wizard + servicing + samples + apply harness).
 
 .DESCRIPTION
   Publishes win-arm64 self-contained Cli/Wizard, AOT Provisioning, stages release layout,
@@ -78,8 +78,11 @@ New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot 'payload\scripts
 Copy-Item -LiteralPath (Join-Path $repoRoot 'payload\scripts\SetupComplete.cmd') `
     -Destination (Join-Path $stageRoot 'payload\scripts\SetupComplete.cmd')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'samples') -Destination (Join-Path $stageRoot 'samples') -Recurse
-New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot 'tools\metal') | Out-Null
-Copy-Item -Path (Join-Path $repoRoot 'tools\metal\*.ps1') -Destination (Join-Path $stageRoot 'tools\metal')
+New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot 'tools\apply') | Out-Null
+Copy-Item -Path (Join-Path $repoRoot 'tools\apply\*.ps1') -Destination (Join-Path $stageRoot 'tools\apply')
+# Dot-sourced by tools\apply\*.ps1 as ..\Resolve-OutputIso.ps1
+Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\Resolve-OutputIso.ps1') `
+    -Destination (Join-Path $stageRoot 'tools\Resolve-OutputIso.ps1')
 # Host helpers used by Justfile from toolkit root
 New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot 'tools\host') | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\host\Invoke-WinMintCli.ps1') `

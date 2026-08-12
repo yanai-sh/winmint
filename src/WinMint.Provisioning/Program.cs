@@ -35,8 +35,13 @@ internal static class Program
             }
 
             ProvisioningBundle bundle = loaded.Value;
-            SessionEnvironment env = CreateEnvironment(bundlePath, log, splash: null);
-            SessionResult result = await ProvisioningSession.RunAsync(SessionMode.MachineSetup, bundle, env)
+            MachineSetupEnvironment env = new(
+                Winlogon: Winlogon(),
+                WipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(bundlePath, logger: log),
+                Appx: new WinRTAppxPackageManager(logger: log),
+                LocalAccounts: new Win32LocalAccounts(),
+                DmaSetup: new Win32DmaSetupRegion());
+            SessionResult result = await ProvisioningSession.RunMachineSetupAsync(bundle, env)
                 .ConfigureAwait(false);
             GuestLog.SessionStatus(log, result.FinalStatus.Code, result.FinalStatus.Message);
             return result.Outcome == SessionOutcome.Complete ? 0 : 1;
@@ -62,7 +67,7 @@ internal static class Program
             if (!File.Exists(bundlePath))
             {
                 GuestLog.BundleMissing(log, bundlePath);
-                return 1;
+                return FailShellTenure(log);
             }
 
             if (!OperatingSystem.IsWindows())
@@ -75,18 +80,27 @@ internal static class Program
             if (!loaded.IsOk)
             {
                 GuestLog.Failure(log, loaded.Error.Code, loaded.Error.Message);
-                return 1;
+                return FailShellTenure(log);
             }
 
             ProvisioningBundle bundle = loaded.Value;
-            SessionEnvironment env = CreateEnvironment(
-                bundlePath,
-                log,
-                splash,
-                new FileEvidenceSink(evidenceDir),
-                new FileCheckpointStore(programData),
-                evidenceDirectory: evidenceDir);
-            SessionResult result = await ProvisioningSession.RunAsync(SessionMode.Shell, bundle, env)
+            Win32WinlogonRegistry winlogon = Winlogon();
+            ShellEnvironment env = new(
+                Time: TimeProvider.System,
+                Winlogon: winlogon,
+                Region: new Win32RegionSnapshot(),
+                Processes: new Win32ProcessHost(),
+                Splash: splash,
+                Checkpoints: new FileCheckpointStore(programData),
+                Evidence: new FileEvidenceSink(evidenceDir),
+                Appx: new WinRTAppxPackageManager(logger: log),
+                Reboot: new Win32SystemReboot(),
+                ResolveScoopCmd: TryResolveScoopShim,
+                ResidueCleaner: new Win32ResidueCleaner(winlogon, logger: log),
+                Connectivity: new WindowsConnectivityProbe(),
+                EvidenceDirectory: evidenceDir,
+                DmaSetup: new Win32DmaSetupRegion());
+            SessionResult result = await ProvisioningSession.RunShellAsync(bundle, env)
                 .ConfigureAwait(false);
             GuestLog.SessionStatus(log, result.FinalStatus.Code, result.FinalStatus.Message);
             foreach (EvidenceSnapshot snap in result.EvidenceEmitted)
@@ -99,7 +113,7 @@ internal static class Program
         catch (Exception ex)
         {
             GuestLog.ShellCrash(log, ex);
-            return 1;
+            return FailShellTenure(log);
         }
         finally
         {
@@ -107,39 +121,41 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// Last-resort unlock for Shell exits that never reached the session, so a failed run cannot become a
+    /// machine with no desktop: Winlogon still points at the Supervisor, which exits, which logs on again.
+    /// <para>
+    /// Only for giving-up paths. The session owns its own unlock and deliberately withholds it on
+    /// <see cref="SessionOutcome.Reboot"/>, where the Supervisor must stay the shell to resume — so this
+    /// must never move into <c>finally</c>.
+    /// </para>
+    /// </summary>
+    private static int FailShellTenure(GuestFileLogger log)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                Winlogon().SetShell(ProvisioningSession.ExplorerShell);
+            }
+        }
+        catch (Exception ex)
+        {
+            // ponytail: nothing left to try — MachineSetup grants the unlock ACL (GrantShellUnlockAccess),
+            // so this only fails when that grant did not land, and the log is the operator's only clue.
+            GuestLog.ShellCrash(log, ex);
+        }
+
+        return 1;
+    }
+
     private static string ProgramDataRoot() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "WinMint");
 
-    private static SessionEnvironment CreateEnvironment(
-        string bundlePath,
-        GuestFileLogger log,
-        ISplashPresenter? splash,
-        IEvidenceSink? evidence = null,
-        ICheckpointStore? checkpoints = null,
-        string? evidenceDirectory = null)
-    {
-        IWinlogonRegistry winlogon = OperatingSystem.IsWindows()
+    private static Win32WinlogonRegistry Winlogon() =>
+        OperatingSystem.IsWindows()
             ? new Win32WinlogonRegistry()
             : throw new PlatformNotSupportedException("Provisioning requires Windows.");
-
-        return new SessionEnvironment(
-            Time: TimeProvider.System,
-            Winlogon: winlogon,
-            Region: new Win32RegionSnapshot(),
-            Processes: new Win32ProcessHost(),
-            Splash: splash ?? new NoopSplashPresenter(),
-            Checkpoints: checkpoints ?? new FileCheckpointStore(ProgramDataRoot()),
-            WipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(bundlePath, logger: log),
-            Evidence: evidence,
-            Appx: new WinRTAppxPackageManager(logger: log),
-            Reboot: new Win32SystemReboot(),
-            LocalAccounts: new Win32LocalAccounts(),
-            ResolveScoopCmd: TryResolveScoopShim,
-            ResidueCleaner: new Win32ResidueCleaner(winlogon, logger: log),
-            Connectivity: new WindowsConnectivityProbe(),
-            EvidenceDirectory: evidenceDirectory,
-            DmaSetup: new Win32DmaSetupRegion());
-    }
 
     /// <summary>Default Scoop shim after official bootstrap (PROVISIONINGSESSION). Host-owned File.Exists.</summary>
     private static string? TryResolveScoopShim()
@@ -151,12 +167,4 @@ internal static class Program
             "scoop.cmd");
         return File.Exists(candidate) ? candidate : null;
     }
-}
-
-/// <summary>Machine setup has no splash surface; Shell wires <see cref="GdiSplashPresenter"/>.</summary>
-internal sealed class NoopSplashPresenter : ISplashPresenter
-{
-    public void Show() { }
-
-    public void SetStatus(SessionStatus status) { }
 }

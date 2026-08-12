@@ -8,7 +8,7 @@ namespace WinMint.Orchestrator;
 public static class ImageServicing
 {
     public const string EvidenceSchemaVersion = "winmint.image.evidence/v1";
-    public const string BundleSchemaVersion = "winmint.provisioning.bundle/v1";
+    public const string BundleSchemaVersion = GuestBundleWire.SchemaVersion;
 
     /// <summary>Guest path stamped into Winlogon Shell (offline); Machine setup verifies the same path.</summary>
     public const string ShellStampGuestPath = @"C:\Windows\WinMint\Supervisor.exe";
@@ -87,10 +87,8 @@ public static class ImageServicing
             return Result.Fail<ImageEvidence, Failure>(laneError);
         }
 
-        Result<ElevatedRunOk, Failure> elevated = await runner.ExecuteAsync(
-                normalized.WorkDirectory,
-                materialized.Value,
-                ct)
+        // Materialize already wrote stages.json; that file is the seam (Invoke-ServicingPlan.ps1 reads it).
+        Result<ElevatedRunOk, Failure> elevated = await runner.ExecuteAsync(normalized.WorkDirectory, ct)
             .ConfigureAwait(false);
         if (!elevated.IsOk)
         {
@@ -125,7 +123,7 @@ public static class ImageServicing
         if (!File.Exists(evidencePath))
         {
             return Result.Fail<ImageEvidence, Failure>(
-                new Failure("servicing.evidence.missing", "RunPlan succeeded but evidence.json is missing."));
+                new Failure("servicing.evidence.missing", "Invoke-ServicingPlan succeeded but evidence.json is missing."));
         }
 
         EvidenceFile? file;
@@ -215,7 +213,7 @@ public static class ImageServicing
             || !string.Equals(cleanup, expectedCleanup, StringComparison.Ordinal))
         {
             return new Failure(
-                "servicing.export.lane_mismatch",
+                "servicing.export.laneMismatch",
                 $"ExportWim params must be lane={expectedLane} compression={expectedCompression} cleanup={expectedCleanup} for ImageQuality={plan.Manifest.ImageQuality}.");
         }
 
@@ -238,7 +236,7 @@ public static class ImageServicing
 
         File.WriteAllText(
             Path.Combine(payloadDir, "jobs.json"),
-            BuildPlan.SerializeJobsDump(plan.Jobs));
+            BuildPlan.SerializeJobsFile(plan.Jobs));
 
         if (plan.WingetImportJson is { Length: > 0 })
         {
@@ -360,7 +358,7 @@ public static class ImageServicing
 
         File.WriteAllText(
             Path.Combine(run.WorkDirectory, "stages.json"),
-            BuildPlan.SerializeStagesDump(new ServicingStageList(resolved)));
+            BuildPlan.SerializeStagesFile(new ServicingStageList(resolved)));
 
         return Result.Ok<IReadOnlyList<ServicingStage>, Failure>(resolved.ToArray());
     }
@@ -427,49 +425,17 @@ public static class ImageServicing
         }
     }
 
-    private static string? FindShellSkelDirectory()
-    {
-        string candidate = Path.Combine(RepoRootGuess(), "payload", "shell-skel");
-        return Directory.Exists(candidate) ? candidate : null;
-    }
+    private static string? FindShellSkelDirectory() =>
+        ToolkitRoot.TryFind("payload", "shell-skel");
 
-    private static string? FindSetupCompleteScript()
-    {
-        string candidate = Path.Combine(RepoRootGuess(), "payload", "scripts", "SetupComplete.cmd");
-        return File.Exists(candidate) ? candidate : null;
-    }
+    private static string? FindSetupCompleteScript() =>
+        ToolkitRoot.TryFind("payload", "scripts", "SetupComplete.cmd");
 
     private static string? FindPublishedSupervisor()
     {
-        string[] candidates =
-        [
-            Path.Combine(RepoRootGuess(), "artifacts", "provisioning", "WinMint.Provisioning.exe"),
-            Path.Combine(AppContext.BaseDirectory, "WinMint.Provisioning.exe"),
-        ];
-        return candidates.FirstOrDefault(File.Exists);
-    }
-
-    private static string RepoRootGuess()
-    {
-        string dir = AppContext.BaseDirectory;
-        for (int i = 0; i < 8; i++)
-        {
-            if (File.Exists(Path.Combine(dir, "justfile"))
-                || File.Exists(Path.Combine(dir, "Justfile")))
-            {
-                return dir;
-            }
-
-            DirectoryInfo? parent = Directory.GetParent(dir);
-            if (parent is null)
-            {
-                break;
-            }
-
-            dir = parent.FullName;
-        }
-
-        return Directory.GetCurrentDirectory();
+        string sideBySide = Path.Combine(AppContext.BaseDirectory, "WinMint.Provisioning.exe");
+        return ToolkitRoot.TryFind("artifacts", "provisioning", "WinMint.Provisioning.exe")
+            ?? (File.Exists(sideBySide) ? sideBySide : null);
     }
 
     /// <summary>Store MSIX pwsh breaks DISM/AppX offline servicing; fail closed on Apply.</summary>

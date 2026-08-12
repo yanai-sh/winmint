@@ -13,32 +13,15 @@ public static partial class ProvisioningSession
     /// <summary>App Installer / winget package family (Microsoft-documented FirstLogon register target).</summary>
     public const string DesktopAppInstallerFamilyName = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe";
 
-    /// <summary>Run MachineSetup or Shell tenure for a provisioning bundle against the live guest environment.</summary>
-    public static async Task<SessionResult> RunAsync(
-        SessionMode mode,
+    /// <summary>Run the FirstLogon Shell tenure for a provisioning bundle against the live guest.</summary>
+    public static async Task<SessionResult> RunShellAsync(
         ProvisioningBundle bundle,
-        SessionEnvironment env,
+        ShellEnvironment env,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bundle);
         ArgumentNullException.ThrowIfNull(env);
 
-        return mode switch
-        {
-            SessionMode.MachineSetup => await RunMachineSetupAsync(bundle, env, ct).ConfigureAwait(false),
-            SessionMode.Shell => await RunShellAsync(bundle, env, ct).ConfigureAwait(false),
-            _ => new SessionResult(
-                SessionOutcome.Failed,
-                new SessionStatus("session.mode.unknown", $"Unknown mode: {mode}"),
-                []),
-        };
-    }
-
-    private static async Task<SessionResult> RunShellAsync(
-        ProvisioningBundle bundle,
-        SessionEnvironment env,
-        CancellationToken ct)
-    {
         List<string> phases = [];
         List<EvidenceSnapshot> emitted = [];
         // Tenure deadlines are monotonic (survive Hyper-V IC/NTP UTC jumps); wall clock for evidence only.
@@ -54,18 +37,6 @@ public static partial class ProvisioningSession
                 phases,
                 emitted,
                 new SessionStatus("shell.cancelled", "Shell tenure cancelled."),
-                dwell: false,
-                firstPaintMs).ConfigureAwait(false);
-        }
-
-        if (env.Evidence is null)
-        {
-            return await FailOpenAsync(
-                bundle,
-                env,
-                phases,
-                emitted,
-                new SessionStatus("shell.evidence.required", "Shell tenure requires a write-only evidence sink."),
                 dwell: false,
                 firstPaintMs).ConfigureAwait(false);
         }
@@ -116,23 +87,20 @@ public static partial class ProvisioningSession
         // FirstPaint — opaque frame before any settle work (S3 order; S4 measures latency).
         env.Splash.Show();
         firstPaintMs = (long)(env.Time.GetUtcNow() - shellStartUtc).TotalMilliseconds;
-        SessionStatus paintStatus = new("shell.first_paint", "First opaque splash frame.");
-        env.Splash.SetStatus(paintStatus);
-        phases.Add(paintStatus.Code);
+        SessionStatus paintStatus = new("shell.firstPaint", "First opaque splash frame.");
+        Note(env, phases, paintStatus);
 
         if (jobStartIndex > 0 && resume is not null)
         {
             SessionStatus resumed = new("checkpoint.resume", $"Resuming from {resume.Phase}.");
-            env.Splash.SetStatus(resumed);
-            phases.Add(resumed.Code);
+            Note(env, phases, resumed);
 
             // Settle already ran before NeedsReboot. Skip re-settle on resume (idempotent restore;
             // also avoids re-entering TZ/location churn right after OS reboot).
             SessionStatus settleSkip = new(
-                "settle.resume_skip",
+                "settle.resumeSkip",
                 "DMA settle skipped on checkpoint resume.");
-            env.Splash.SetStatus(settleSkip);
-            phases.Add(settleSkip.Code);
+            Note(env, phases, settleSkip);
 
             // Sticky setup region is cheap and must survive reboot even when visible settle is skipped.
             SettlePhaseResult? setupOnResume = EnsureDmaSetupRegionForSettle(bundle, env, phases);
@@ -230,7 +198,7 @@ public static partial class ProvisioningSession
         {
             // Keep Supervisor as Shell — do not unlock.
             EvidenceSnapshot rebootSnap = env.Evidence.Write(
-                new ProvisioningEvidenceDocument(
+                new ProvisioningEvidenceFile(
                     SchemaVersion: EvidenceSchemaVersion,
                     Outcome: SessionOutcome.Reboot.ToString(),
                     StatusCode: jobs.Status.Code,
@@ -254,14 +222,14 @@ public static partial class ProvisioningSession
                 phases,
                 emitted,
                 new SessionStatus(
-                    "shell.unlock_failed",
+                    "shell.unlockFailed",
                     "Winlogon Shell was not restored to explorer.exe after jobs."),
                 dwell: true,
                 firstPaintMs).ConfigureAwait(false);
         }
 
         EvidenceSnapshot snap = env.Evidence.Write(
-            new ProvisioningEvidenceDocument(
+            new ProvisioningEvidenceFile(
                 SchemaVersion: EvidenceSchemaVersion,
                 Outcome: SessionOutcome.Complete.ToString(),
                 StatusCode: jobs.Status.Code,
@@ -275,7 +243,17 @@ public static partial class ProvisioningSession
         return new SessionResult(SessionOutcome.Complete, jobs.Status, emitted);
     }
 
-    private static void TryEraseResidue(SessionEnvironment env)
+    /// <summary>
+    /// Paint a status and append it to the ordered phase log. Every phase the session emits crosses
+    /// here, so the log the evidence document carries is the log the splash showed.
+    /// </summary>
+    private static void Note(ShellEnvironment env, List<string> phases, SessionStatus status)
+    {
+        env.Splash.SetStatus(status);
+        phases.Add(status.Code);
+    }
+
+    private static void TryEraseResidue(ShellEnvironment env)
     {
         if (env.ResidueCleaner is null)
         {
@@ -298,7 +276,7 @@ public static partial class ProvisioningSession
 
     private static bool IsStaleHeartbeat(
         ProvisioningBundle bundle,
-        SessionEnvironment env,
+        ShellEnvironment env,
         TenureState tenure)
     {
         if (tenure.HeartbeatUtc is null)
@@ -309,7 +287,7 @@ public static partial class ProvisioningSession
         return env.Time.GetUtcNow() - tenure.HeartbeatUtc.Value > bundle.Policy.StaleTenureThreshold;
     }
 
-    private static bool IsTimedOut(SessionEnvironment env, long startTimestamp, TimeSpan timeout) =>
+    private static bool IsTimedOut(ShellEnvironment env, long startTimestamp, TimeSpan timeout) =>
         env.Time.GetElapsedTime(startTimestamp) >= timeout;
 
     private static SessionStatus TimeoutStatus() =>
@@ -320,7 +298,7 @@ public static partial class ProvisioningSession
 
     private static async Task<SessionResult> FailOpenAsync(
         ProvisioningBundle bundle,
-        SessionEnvironment env,
+        ShellEnvironment env,
         List<string> phases,
         List<EvidenceSnapshot> emitted,
         SessionStatus status,
@@ -348,18 +326,14 @@ public static partial class ProvisioningSession
 
         env.Checkpoints.ClearCheckpoint();
 
-        if (env.Evidence is not null)
-        {
-            EvidenceSnapshot snap = env.Evidence.Write(
-                new ProvisioningEvidenceDocument(
-                    SchemaVersion: EvidenceSchemaVersion,
-                    Outcome: SessionOutcome.Failed.ToString(),
-                    StatusCode: status.Code,
-                    StatusMessage: status.Message,
-                    Phases: phases,
-                    FirstPaintMs: firstPaintMs));
-            emitted.Add(snap);
-        }
+        emitted.Add(env.Evidence.Write(
+            new ProvisioningEvidenceFile(
+                SchemaVersion: EvidenceSchemaVersion,
+                Outcome: SessionOutcome.Failed.ToString(),
+                StatusCode: status.Code,
+                StatusMessage: status.Message,
+                Phases: phases,
+                FirstPaintMs: firstPaintMs)));
 
         // Unlock after evidence — custom Shell is medium-IL and may lack HKLM write.
         _ = TryUnlock(env);
@@ -368,7 +342,7 @@ public static partial class ProvisioningSession
     }
 
     /// <returns>true when SetShell(explorer) did not throw.</returns>
-    private static bool TryUnlock(SessionEnvironment env)
+    private static bool TryUnlock(ShellEnvironment env)
     {
         try
         {
@@ -409,32 +383,32 @@ public static partial class ProvisioningSession
     /// </summary>
     private static async Task<SettlePhaseResult> RunSettleAsync(
         ProvisioningBundle bundle,
-        SessionEnvironment env,
+        ShellEnvironment env,
         List<string> phases,
         long tenureStartTs,
         CancellationToken ct)
     {
         SessionStatus begin = new("settle.begin", "DMA settle start.");
-        env.Splash.SetStatus(begin);
-        phases.Add(begin.Code);
+        Note(env, phases, begin);
 
         if (!bundle.Dma.Enabled)
         {
             SessionStatus skipped = new("settle.skipped", "DMA disabled; settle skipped.");
-            env.Splash.SetStatus(skipped);
-            phases.Add(skipped.Code);
+            Note(env, phases, skipped);
             return new SettlePhaseResult(HardFailed: false, TimedOut: false, skipped);
         }
 
+        // Same four fields Win32RegionSnapshot.Apply requires — a narrower gate here would
+        // surface a missing target as settle.applyFailed instead of settle.targetIncomplete.
         if (string.IsNullOrWhiteSpace(bundle.Dma.Locale)
             || bundle.Dma.GeoId is null
-            || string.IsNullOrWhiteSpace(bundle.Dma.TimeZoneId))
+            || string.IsNullOrWhiteSpace(bundle.Dma.TimeZoneId)
+            || bundle.Dma.LocationServicesEnabled is null)
         {
             SessionStatus incomplete = new(
-                "settle.target_incomplete",
-                "DMA settle requires locale, geoId, and timeZoneId.");
-            env.Splash.SetStatus(incomplete);
-            phases.Add(incomplete.Code);
+                "settle.targetIncomplete",
+                "DMA settle requires locale, geoId, timeZoneId, and locationServicesEnabled.");
+            Note(env, phases, incomplete);
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, incomplete);
         }
 
@@ -444,9 +418,8 @@ public static partial class ProvisioningSession
         }
         catch (Exception ex)
         {
-            SessionStatus applyFailed = new("settle.apply_failed", ex.Message);
-            env.Splash.SetStatus(applyFailed);
-            phases.Add(applyFailed.Code);
+            SessionStatus applyFailed = new("settle.applyFailed", ex.Message);
+            Note(env, phases, applyFailed);
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, applyFailed);
         }
 
@@ -458,8 +431,7 @@ public static partial class ProvisioningSession
             if (ct.IsCancellationRequested)
             {
                 SessionStatus cancelled = new("settle.cancelled", "DMA settle cancelled.");
-                env.Splash.SetStatus(cancelled);
-                phases.Add(cancelled.Code);
+                Note(env, phases, cancelled);
                 return new SettlePhaseResult(HardFailed: true, TimedOut: false, cancelled);
             }
 
@@ -516,8 +488,7 @@ public static partial class ProvisioningSession
             catch (OperationCanceledException)
             {
                 SessionStatus cancelled = new("settle.cancelled", "DMA settle cancelled.");
-                env.Splash.SetStatus(cancelled);
-                phases.Add(cancelled.Code);
+                Note(env, phases, cancelled);
                 return new SettlePhaseResult(HardFailed: true, TimedOut: false, cancelled);
             }
         }
@@ -535,19 +506,17 @@ public static partial class ProvisioningSession
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            SessionStatus readFailed = new("settle.read_failed", ex.Message);
-            env.Splash.SetStatus(readFailed);
-            phases.Add(readFailed.Code);
+            SessionStatus readFailed = new("settle.readFailed", ex.Message);
+            Note(env, phases, readFailed);
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, readFailed);
         }
 
         if (!HardFieldsMatch(final, bundle.Dma))
         {
             SessionStatus mismatch = new(
-                "settle.hard_mismatch",
+                "settle.hardMismatch",
                 $"Final snapshot hard fields mismatch (locale={final.Locale}, geoId={final.GeoId}, tz={final.TimeZoneId}).");
-            env.Splash.SetStatus(mismatch);
-            phases.Add(mismatch.Code);
+            Note(env, phases, mismatch);
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, mismatch);
         }
 
@@ -561,25 +530,23 @@ public static partial class ProvisioningSession
             && final.LocationServicesEnabled != expectedLocation)
         {
             SessionStatus warn = new(
-                "settle.location_warn",
+                "settle.locationWarn",
                 $"Location-services posture is {final.LocationServicesEnabled}; expected {expectedLocation}.");
-            env.Splash.SetStatus(warn);
-            phases.Add(warn.Code);
+            Note(env, phases, warn);
             return new SettlePhaseResult(HardFailed: false, TimedOut: false, warn);
         }
 
         SessionStatus ok = new("settle.ok", "DMA hard fields settled.");
-        env.Splash.SetStatus(ok);
-        phases.Add(ok.Code);
+        Note(env, phases, ok);
         return new SettlePhaseResult(HardFailed: false, TimedOut: false, ok);
     }
 
-    private static SessionResult? EnsureDmaSetupRegionForMachineSetup(SessionEnvironment env)
+    private static SessionResult? EnsureDmaSetupRegionForMachineSetup(MachineSetupEnvironment env)
     {
         if (env.DmaSetup is null)
         {
             return Fail(
-                "machineSetup.dma_setup_region_failed",
+                "machineSetup.dmaSetupRegionFailed",
                 "DmaSetup port required when DMA enabled.");
         }
 
@@ -590,7 +557,7 @@ public static partial class ProvisioningSession
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return Fail("machineSetup.dma_setup_region_failed", ex.Message);
+            return Fail("machineSetup.dmaSetupRegionFailed", ex.Message);
         }
     }
 
@@ -599,7 +566,7 @@ public static partial class ProvisioningSession
     /// </summary>
     private static SettlePhaseResult? EnsureDmaSetupRegionForSettle(
         ProvisioningBundle bundle,
-        SessionEnvironment env,
+        ShellEnvironment env,
         List<string> phases)
     {
         if (!bundle.Dma.Enabled)
@@ -610,10 +577,9 @@ public static partial class ProvisioningSession
         if (env.DmaSetup is null)
         {
             SessionStatus missing = new(
-                "settle.device_region_failed",
+                "settle.deviceRegionFailed",
                 "DmaSetup port required when DMA enabled.");
-            env.Splash.SetStatus(missing);
-            phases.Add(missing.Code);
+            Note(env, phases, missing);
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, missing);
         }
 
@@ -621,17 +587,15 @@ public static partial class ProvisioningSession
         {
             DmaSetupRegionEnsureResult result = env.DmaSetup.EnsureIreland();
             SessionStatus status = result == DmaSetupRegionEnsureResult.Repaired
-                ? new("settle.device_region_repaired", "DeviceRegion repaired to Ireland (68).")
-                : new("settle.device_region_ok", "DeviceRegion already Ireland (68).");
-            env.Splash.SetStatus(status);
-            phases.Add(status.Code);
+                ? new("settle.deviceRegionRepaired", "DeviceRegion repaired to Ireland (68).")
+                : new("settle.deviceRegionOk", "DeviceRegion already Ireland (68).");
+            Note(env, phases, status);
             return new SettlePhaseResult(HardFailed: false, TimedOut: false, status);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            SessionStatus failed = new("settle.device_region_failed", ex.Message);
-            env.Splash.SetStatus(failed);
-            phases.Add(failed.Code);
+            SessionStatus failed = new("settle.deviceRegionFailed", ex.Message);
+            Note(env, phases, failed);
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, failed);
         }
     }
@@ -641,11 +605,15 @@ public static partial class ProvisioningSession
         && actual.GeoId == target.GeoId
         && string.Equals(actual.TimeZoneId, target.TimeZoneId, StringComparison.OrdinalIgnoreCase);
 
-    private static Task<SessionResult> RunMachineSetupAsync(
+    /// <summary>Run the SetupComplete/SYSTEM pass: stamp autologon, verify Shell, wipe secrets.</summary>
+    public static Task<SessionResult> RunMachineSetupAsync(
         ProvisioningBundle bundle,
-        SessionEnvironment env,
-        CancellationToken ct)
+        MachineSetupEnvironment env,
+        CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(bundle);
+        ArgumentNullException.ThrowIfNull(env);
+
         if (ct.IsCancellationRequested)
         {
             return Task.FromResult(Fail("machineSetup.cancelled", "Machine setup cancelled."));
@@ -682,7 +650,7 @@ public static partial class ProvisioningSession
         }
         catch (Exception ex)
         {
-            return Task.FromResult(Fail("machineSetup.autologon.stamp_failed", ex.Message));
+            return Task.FromResult(Fail("machineSetup.autologon.stampFailed", ex.Message));
         }
 
         // No further use of stamp password in this phase (disk wipe next; string GC lifetime remains).
@@ -706,13 +674,13 @@ public static partial class ProvisioningSession
             if (!ShellEquals(shell, expectedShell))
             {
                 shellFailure = Fail(
-                    "machineSetup.shell.verify_failed",
+                    "machineSetup.shell.verifyFailed",
                     $"Winlogon Shell is '{shell ?? "<null>"}' after restamp; expected '{expectedShell}'.");
             }
         }
         catch (Exception ex)
         {
-            shellFailure = Fail("machineSetup.shell.verify_failed", ex.Message);
+            shellFailure = Fail("machineSetup.shell.verifyFailed", ex.Message);
         }
 
         if (env.WipeSecrets is not null)
@@ -723,7 +691,7 @@ public static partial class ProvisioningSession
             }
             catch (Exception ex)
             {
-                return Task.FromResult(Fail("machineSetup.secret_wipe_failed", ex.Message));
+                return Task.FromResult(Fail("machineSetup.secretWipeFailed", ex.Message));
             }
         }
 
@@ -794,15 +762,15 @@ internal sealed record GitHubAsset(
 [JsonSerializable(typeof(GitHubRelease))]
 internal sealed partial class GitHubReleaseJsonContext : JsonSerializerContext;
 
-internal sealed record NativePackageAuditDocument(
+internal sealed record NativePackageAuditFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
-    [property: JsonPropertyName("packages")] IReadOnlyList<NativePackageAuditEntry> Packages);
+    [property: JsonPropertyName("packages")] IReadOnlyList<NativePackageAuditEntryFile> Packages);
 
-internal sealed record NativePackageAuditEntry(
+internal sealed record NativePackageAuditEntryFile(
     [property: JsonPropertyName("wingetId")] string WingetId,
     [property: JsonPropertyName("binaryPath")] string? BinaryPath,
     [property: JsonPropertyName("isArm64Native")] bool? IsArm64Native);
 
-[JsonSerializable(typeof(NativePackageAuditDocument))]
+[JsonSerializable(typeof(NativePackageAuditFile))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class NativePackageAuditJsonContext : JsonSerializerContext;

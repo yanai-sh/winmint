@@ -1,7 +1,7 @@
 #requires -Version 7.6
 <#
 .SYNOPSIS
-  Assert ImageServicing Apply workdir evidence (S5 Metal). Pure — no Apply, no Hyper-V, no install.
+  Assert ImageServicing Apply workdir evidence (S5 Host Apply). Pure — no Apply, no Hyper-V, no install.
 
 .DESCRIPTION
   Pre-wipe gate: validates offline build output on the physical build host before any USB/destructive install.
@@ -11,7 +11,7 @@
     logs/WinMint-DriverInventory.json   (when -ExpectDrivers)
     out.iso / winmint_*.iso   (optional when -RequireOutputIso; prefer evidence.outputIsoPath)
 
-  Writes metal-acceptance.json on success.
+  Writes apply-acceptance.json on success.
 .NOTES
   Does not boot, mount USB, or modify the running OS — Apply mutates an offline WIM from Source ISO only.
 #>
@@ -40,28 +40,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Resolve-WinMintOutputIso {
-    param(
-        [Parameter(Mandatory)][string] $WorkDirectory,
-        $Evidence = $null
-    )
-    if ($null -ne $Evidence -and $Evidence.PSObject.Properties.Name -contains 'outputIsoPath') {
-        $claimed = [string]$Evidence.outputIsoPath
-        if (-not [string]::IsNullOrWhiteSpace($claimed) -and (Test-Path -LiteralPath $claimed)) {
-            return (Resolve-Path -LiteralPath $claimed).Path
-        }
-    }
-    $named = @(Get-ChildItem -LiteralPath $WorkDirectory -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending)
-    if ($named.Count -ge 1) {
-        return $named[0].FullName
-    }
-    $legacy = Join-Path $WorkDirectory 'out.iso'
-    if (Test-Path -LiteralPath $legacy) {
-        return (Resolve-Path -LiteralPath $legacy).Path
-    }
-    return $null
-}
+. (Join-Path $PSScriptRoot '..\Resolve-OutputIso.ps1')
 
 if (-not (Test-Path -LiteralPath $WorkDirectory)) {
     throw "Work directory missing: $WorkDirectory"
@@ -136,7 +115,7 @@ if (Test-Path -LiteralPath $bootWim) {
     }
 
     # Marker alone is not enough — verify LaunchApply.cmd inside boot.wim index 1.
-    $bootMount = Join-Path $WorkDirectory '_metal-boot-assert'
+    $bootMount = Join-Path $WorkDirectory '_apply-boot-assert'
     if (Test-Path -LiteralPath $bootMount) {
         & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
         Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
@@ -144,7 +123,7 @@ if (Test-Path -LiteralPath $bootWim) {
     New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
     try {
         & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:1 /MountDir:$bootMount /ReadOnly
-        if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:1 for metal assert failed: $LASTEXITCODE" }
+        if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:1 for apply assert failed: $LASTEXITCODE" }
         $launchPath = Join-Path $bootMount 'Windows\System32\LaunchApply.cmd'
         if (-not (Test-Path -LiteralPath $launchPath)) {
             throw 'LaunchApply.cmd missing inside boot.wim index 1'
@@ -299,7 +278,7 @@ if ($expectFu) {
 }
 
 $acceptance = [ordered]@{
-    schemaVersion = 'winmint.metal.acceptance/v1'
+    schemaVersion = 'winmint.apply.acceptance/v1'
     lane          = $lane
     preWipeOnly   = $true
 }
@@ -312,7 +291,7 @@ if ($null -ne $driverIncluded) {
     $acceptance.firmwareExcluded = $firmwareExcluded
 }
 
-$acceptancePath = Join-Path $WorkDirectory 'metal-acceptance.json'
+$acceptancePath = Join-Path $WorkDirectory 'apply-acceptance.json'
 $acceptance | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $acceptancePath -Encoding utf8
-Write-Output "Metal acceptance OK (lane=$lane pre-wipe-only)"
+Write-Output "Host Apply acceptance OK (lane=$lane pre-wipe-only)"
 exit 0

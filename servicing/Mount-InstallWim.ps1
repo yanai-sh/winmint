@@ -20,7 +20,7 @@ if ([string]::IsNullOrWhiteSpace($wimIndex)) { throw 'wimIndex required' }
 if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
 if (-not $reuseMedia -and -not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sourceIso" }
 
-. (Join-Path $PSScriptRoot 'Wim-Metadata.ps1')
+. (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
 
 New-Item -ItemType Directory -Force -Path $mountDir, $mediaDir | Out-Null
 

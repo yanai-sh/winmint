@@ -51,6 +51,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot '..\Resolve-OutputIso.ps1')
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 
@@ -78,20 +80,8 @@ if (Test-Path -LiteralPath $guestDir) {
 }
 New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 
-$outIso = $null
 $applyEvidence = Join-Path $Work 'evidence.json'
-if (Test-Path -LiteralPath $applyEvidence) {
-    $ev = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json
-    if ($ev.PSObject.Properties.Name -contains 'outputIsoPath' -and -not [string]::IsNullOrWhiteSpace([string]$ev.outputIsoPath)) {
-        $outIso = [string]$ev.outputIsoPath
-    }
-}
-if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outIso)) {
-    $named = @(Get-ChildItem -LiteralPath $Work -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending)
-    if ($named.Count -ge 1) { $outIso = $named[0].FullName }
-    else { $outIso = Join-Path $Work 'out.iso' }
-}
+$outIso = Resolve-WinMintOutputIso -WorkDirectory $Work
 if (-not $SkipApply) {
     Write-Host 'Publishing Supervisor (Release AOT)…'
     & just publish-provisioning
@@ -102,22 +92,10 @@ if (-not $SkipApply) {
     if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
 
     # Re-resolve after Apply (dynamic leaf).
-    $outIso = $null
-    if (Test-Path -LiteralPath $applyEvidence) {
-        $ev = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json
-        if ($ev.PSObject.Properties.Name -contains 'outputIsoPath' -and -not [string]::IsNullOrWhiteSpace([string]$ev.outputIsoPath)) {
-            $outIso = [string]$ev.outputIsoPath
-        }
-    }
-    if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outIso)) {
-        $named = @(Get-ChildItem -LiteralPath $Work -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime -Descending)
-        if ($named.Count -ge 1) { $outIso = $named[0].FullName }
-        else { $outIso = Join-Path $Work 'out.iso' }
-    }
+    $outIso = Resolve-WinMintOutputIso -WorkDirectory $Work
 }
 
-if (-not (Test-Path -LiteralPath $outIso)) {
+if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outIso)) {
     throw "Output ISO missing under $Work (run Apply or omit -SkipApply)"
 }
 

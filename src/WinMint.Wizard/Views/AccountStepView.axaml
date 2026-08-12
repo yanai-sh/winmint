@@ -43,7 +43,7 @@
         <Button Classes="ghost"
                 Content="Use this PC region"
                 HorizontalAlignment="Left"
-                Command="{Binding UseHostDmaCommand}" />
+                Command="{Binding UseBuildMachineDmaCommand}" />
       </StackPanel>
     </Border>
 

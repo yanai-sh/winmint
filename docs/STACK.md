@@ -31,10 +31,10 @@ No guest **pwsh product runtime**. Inbox `powershell.exe` for Scoop bootstrap / 
 | `src/WinMint.Contracts` | Tiny shared wire enums + `DmaSettleTarget` + guest bundle DTOs |
 | `src/WinMint.Orchestrator` | BuildPlan; drives Servicing |
 | `src/WinMint.Provisioning` | ProvisioningSession (AOT Supervisor) |
-| `src/WinMint.Wizard` | Avalonia BuildPlan host |
+| `src/WinMint.Wizard` | Avalonia BuildPlan front end |
 | `servicing/` | ImageServicing `pwsh -File` adapters |
 | `payload/scripts/` | `SetupComplete.cmd` |
-| `tools/` | Smoke / metal harness |
+| `tools/` | Smoke / apply harness |
 
 No MediatR / Generic Host / AutoMapper. Shared wire types live in `WinMint.Contracts` only — not a product module with behavior.
 
@@ -46,6 +46,6 @@ No MediatR / Generic Host / AutoMapper. Shared wire types live in `WinMint.Contr
 - **Async:** `CancellationToken` on I/O and process waits. Do not bridge with `GetAwaiter().GetResult()` — make the path async or use sync I/O end-to-end.
 - **Errors:** expected validation / parse / unknown-key → typed `Result` (or session status) at **every** seam (Profile, catalog, bundle, plan, apply). Exceptions for bugs and true invariants only.
 - **Job kinds:** closed set at the load boundary (enum today; C# 15 `union` after PublishAot/STJ spike). Wire JSON may stay string.
-- NuGet: justify every package (“why not BCL”). Avalonia **12.x** host Wizard. `xunit` v3 + MTP. Prefer `LoggerMessage` / const status codes over `.resx` i18n.
+- NuGet: justify every package (“why not BCL”). Avalonia **12.x** Wizard. `xunit` v3 + MTP. Prefer `LoggerMessage` / const status codes over `.resx` i18n.
 - Document deep-module entrypoints in source. Keep `GenerateDocumentationFile` / CS1591 off until a shipped public API needs it.
 - Warnings as errors + analyzers (`Directory.Build.props`).

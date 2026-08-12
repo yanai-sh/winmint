@@ -1,5 +1,7 @@
 namespace WinMint.Provisioning;
 
+using WinMint.Contracts;
+
 using System.Net.Http.Json;
 
 public static partial class ProvisioningSession
@@ -7,7 +9,7 @@ public static partial class ProvisioningSession
     private static partial class JobRunner
     {
         private static async Task<JobsPhaseResult?> RunWslPlatformJobAsync(
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             ProvisionJob job,
             int jobIndex,
@@ -18,8 +20,7 @@ public static partial class ProvisioningSession
             if (ready)
             {
                 SessionStatus skip = new("jobs.wsl.platform.ready", "WSL / Virtual Machine Platform already active.");
-                env.Splash.SetStatus(skip);
-                phases.Add(skip.Code);
+                Note(env, phases, skip);
                 return null;
             }
 
@@ -38,23 +39,19 @@ public static partial class ProvisioningSession
                     return RequestJobReboot(env, phases, job, jobIndex + 1);
                 }
 
-                SessionStatus failed = new(
+                return FailJob(
+                    env,
+                    phases,
                     "jobs.failed",
                     $"{job.Id}: wsl --install --no-distribution exited {started.ExitCode}.");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                return FailJob(env, phases, "jobs.failed", $"{job.Id}: {ex.Message}");
             }
         }
 
-        private static void SuppressWslOobe(SessionEnvironment env)
+        private static void SuppressWslOobe(ShellEnvironment env)
         {
             if (env.SuppressWslOobe is not null)
             {
@@ -69,7 +66,7 @@ public static partial class ProvisioningSession
         }
 
         private static async Task<JobsPhaseResult?> RunWslFromFileInstallAsync(
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             ProvisionJob job,
             CancellationToken ct)
@@ -77,10 +74,7 @@ public static partial class ProvisioningSession
             if (string.IsNullOrWhiteSpace(job.WslFromFileRepo)
                 || job.WslFromFileAssetNames is not { Count: > 0 })
             {
-                SessionStatus bad = new("jobs.failed", $"{job.Id}: fromFile WSL requires repo and asset names.");
-                env.Splash.SetStatus(bad);
-                phases.Add(bad.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, bad, TimedOut: false);
+                return FailJob(env, phases, "jobs.failed", $"{job.Id}: fromFile WSL requires repo and asset names.");
             }
 
             string? assetPath;
@@ -91,20 +85,16 @@ public static partial class ProvisioningSession
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                SessionStatus failed = new("jobs.wsl.fromFile_download_failed", $"{job.Id}: {ex.Message}");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                return FailJob(env, phases, "jobs.wsl.fromFileDownloadFailed", $"{job.Id}: {ex.Message}");
             }
 
             if (assetPath is null)
             {
-                SessionStatus failed = new(
-                    "jobs.wsl.fromFile_asset_missing",
+                return FailJob(
+                    env,
+                    phases,
+                    "jobs.wsl.fromFileAssetMissing",
                     $"{job.Id}: no matching GitHub release asset for {job.WslFromFileRepo}.");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
             }
 
             try
@@ -116,20 +106,18 @@ public static partial class ProvisioningSession
                     .ConfigureAwait(false);
                 if (started.ExitCode != 0)
                 {
-                    SessionStatus failed = new("jobs.failed", $"{job.Id}: wsl --from-file exited {started.ExitCode}.");
-                    env.Splash.SetStatus(failed);
-                    phases.Add(failed.Code);
-                    return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                    return FailJob(
+                        env,
+                        phases,
+                        "jobs.failed",
+                        $"{job.Id}: wsl --from-file exited {started.ExitCode}.");
                 }
 
                 return null;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                SessionStatus failed = new("jobs.failed", $"{job.Id}: {ex.Message}");
-                env.Splash.SetStatus(failed);
-                phases.Add(failed.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
+                return FailJob(env, phases, "jobs.failed", $"{job.Id}: {ex.Message}");
             }
         }
 

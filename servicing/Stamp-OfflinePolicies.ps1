@@ -27,23 +27,6 @@ function Save-DigestMap {
     $map | ConvertTo-Json | Set-Content -LiteralPath $digestPath -Encoding utf8
 }
 
-function Resolve-PolicyFamily {
-    param([Parameter(Mandatory)][string] $SubKey)
-    if ($SubKey -match 'BraveSoftware') { return 'brave' }
-    if ($SubKey -match 'OneDrive') { return 'onedrive' }
-    if ($SubKey -match 'Device Installer') { return 'deviceInstaller' }
-    if ($SubKey -match 'Device Metadata') { return 'device' }
-    if ($SubKey -match 'WindowsCopilot') { return 'copilot' }
-    if ($SubKey -match 'Session Manager') { return 'wpbt' }
-    if ($SubKey -match 'FileSystem') { return 'filesystem' }
-    if ($SubKey -match '\\Dsh' -or $SubKey -match 'AllowNewsAndInterests') { return 'widgets' }
-    if ($SubKey -match 'CloudContent') { return 'cloudContent' }
-    if ($SubKey -match 'WindowsStore') { return 'store' }
-    if ($SubKey -match 'AppModelUnlock') { return 'developer' }
-    if ($SubKey -match '\\Sudo') { return 'sudo' }
-    return 'edge'
-}
-
 function Test-TransientRegDenied {
     param([string] $Message)
     return $Message -match 'Access is denied|unauthorized|UnauthorizedAccess|denied'
@@ -123,17 +106,19 @@ function Invoke-OfflineRegAdd {
     }
 }
 
+# ProductPosture owns the digest key (6th field); no family derivation here.
 $rows = @()
 foreach ($raw in ($policySpecs -split ';')) {
     if ([string]::IsNullOrWhiteSpace($raw)) { continue }
-    $parts = $raw -split '\|', 5
-    if ($parts.Count -ne 5) { throw "malformed policySpecs row: $raw" }
+    $parts = $raw -split '\|', 6
+    if ($parts.Count -ne 6) { throw "malformed policySpecs row: $raw" }
     $rows += [pscustomobject]@{
         Hive   = $parts[0].Trim().ToUpperInvariant()
         SubKey = $parts[1]
         Name   = $parts[2]
         Type   = $parts[3]
         Data   = $parts[4]
+        Digest = $parts[5]
     }
 }
 
@@ -157,9 +142,8 @@ foreach ($group in $byHive) {
         foreach ($row in $group.Group) {
             $ctx = "hive=$hiveName sub=$($row.SubKey) name=$($row.Name)"
             Invoke-OfflineRegAdd -HiveKey $hiveKey -SubKey $row.SubKey -Name $row.Name -Type $row.Type -Data $row.Data -Context $ctx
-            $family = Resolve-PolicyFamily -SubKey $row.SubKey
-            $digests["policy.$family.$($row.Name)"] = [string]$row.Data
-            Write-Output "policy ok: $family.$($row.Name)=$($row.Data)"
+            $digests[$row.Digest] = [string]$row.Data
+            Write-Output "policy ok: $($row.Digest)=$($row.Data)"
         }
     }
     finally {

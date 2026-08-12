@@ -4,8 +4,9 @@
   "statusCode": "jobs.ok",
   "statusMessage": "Provisioning jobs completed.",
   "phases": [
-    "shell.first_paint",
+    "shell.firstPaint",
     "settle.begin",
+    "settle.deviceRegionOk",
     "settle.ok",
     "jobs.begin",
     "jobs.ok"

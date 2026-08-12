@@ -6,7 +6,7 @@ using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
 
-/// <summary>Shipped package manifest (<c>config/packages.json</c>). Debloat uses <see cref="CapabilityCatalog"/>; this catalog covers metal installs only.</summary>
+/// <summary>Shipped package manifest (<c>config/packages.json</c>). Debloat uses <see cref="CapabilityCatalog"/>; this catalog covers real package installs only.</summary>
 public sealed class PackageCatalog
 {
     private static readonly Lazy<PackageCatalog> Embedded = new(LoadEmbedded);
@@ -366,30 +366,30 @@ public sealed class PackageCatalog
         Dictionary<string, PackageToolEntry> toolsByInstallId = new(StringComparer.OrdinalIgnoreCase);
         if (file.Tools is not null)
         {
-            foreach ((string key, PackageToolDto dto) in file.Tools)
+            foreach ((string key, PackageToolFile row) in file.Tools)
             {
-                if (string.IsNullOrWhiteSpace(dto.Id))
+                if (string.IsNullOrWhiteSpace(row.Id))
                 {
                     throw new InvalidOperationException($"Tool '{key}' is missing id.");
                 }
 
-                if (!PackageToolSourceWire.TryParse(dto.Source, out PackageToolSource source))
+                if (!PackageToolSourceWire.TryParse(row.Source, out PackageToolSource source))
                 {
                     throw new InvalidOperationException(
-                        $"Tool '{key}' must use winget, store, or scoop (got '{dto.Source}').");
+                        $"Tool '{key}' must use winget, store, or scoop (got '{row.Source}').");
                 }
 
-                string[] arch = dto.Architectures ?? [];
+                string[] arch = row.Architectures ?? [];
                 PackageToolEntry entry = new(
                     key,
-                    dto.DisplayName ?? key,
+                    row.DisplayName ?? key,
                     source,
-                    dto.Id,
+                    row.Id,
                     arch,
-                    dto.ScoopBucket,
-                    dto.Stub);
+                    row.ScoopBucket,
+                    row.Stub);
                 toolsByKey[key] = entry;
-                toolsByInstallId[dto.Id] = entry;
+                toolsByInstallId[row.Id] = entry;
             }
         }
 
@@ -397,24 +397,24 @@ public sealed class PackageCatalog
         Dictionary<string, WslDistroEntry> wslByInstallId = new(StringComparer.OrdinalIgnoreCase);
         if (file.WslDistros is not null)
         {
-            foreach ((string key, WslDistroDto dto) in file.WslDistros)
+            foreach ((string key, WslDistroFile row) in file.WslDistros)
             {
-                string installId = dto.InstallId ?? key;
-                if (!WslInstallKindWire.TryParse(dto.InstallKind ?? WslInstallKindWire.Store, out WslInstallKind installKind))
+                string installId = row.InstallId ?? key;
+                if (!WslInstallKindWire.TryParse(row.InstallKind ?? WslInstallKindWire.Store, out WslInstallKind installKind))
                 {
                     throw new InvalidOperationException(
-                        $"WSL '{key}' must use fromFile or store (got '{dto.InstallKind}').");
+                        $"WSL '{key}' must use fromFile or store (got '{row.InstallKind}').");
                 }
 
                 WslDistroEntry entry = new(
                     key,
-                    dto.DisplayName ?? key,
+                    row.DisplayName ?? key,
                     installKind,
                     installId,
-                    dto.Repo,
-                    dto.Assets?.Arm64,
-                    dto.Assets?.Amd64,
-                    dto.Architectures ?? ["arm64", "amd64"]);
+                    row.Repo,
+                    row.Assets?.Arm64,
+                    row.Assets?.Amd64,
+                    row.Architectures ?? ["arm64", "amd64"]);
                 wslByKey[key] = entry;
                 wslByInstallId[installId] = entry;
             }
@@ -463,13 +463,13 @@ public sealed record PackageSelection(
 internal sealed class PackageCatalogFile
 {
     [JsonPropertyName("tools")]
-    public Dictionary<string, PackageToolDto>? Tools { get; set; }
+    public Dictionary<string, PackageToolFile>? Tools { get; set; }
 
     [JsonPropertyName("wslDistros")]
-    public Dictionary<string, WslDistroDto>? WslDistros { get; set; }
+    public Dictionary<string, WslDistroFile>? WslDistros { get; set; }
 }
 
-internal sealed class PackageToolDto
+internal sealed class PackageToolFile
 {
     [JsonPropertyName("displayName")]
     public string? DisplayName { get; set; }
@@ -490,7 +490,7 @@ internal sealed class PackageToolDto
     public bool Stub { get; set; }
 }
 
-internal sealed class WslDistroDto
+internal sealed class WslDistroFile
 {
     [JsonPropertyName("displayName")]
     public string? DisplayName { get; set; }
@@ -505,13 +505,13 @@ internal sealed class WslDistroDto
     public string? Repo { get; set; }
 
     [JsonPropertyName("assets")]
-    public WslAssetsDto? Assets { get; set; }
+    public WslAssetsFile? Assets { get; set; }
 
     [JsonPropertyName("architectures")]
     public string[]? Architectures { get; set; }
 }
 
-internal sealed class WslAssetsDto
+internal sealed class WslAssetsFile
 {
     [JsonPropertyName("arm64")]
     public string[]? Arm64 { get; set; }

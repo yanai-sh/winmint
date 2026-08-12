@@ -119,8 +119,7 @@ public class OnlineDebloatSessionTests
         RecordingAppx appx = new();
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             BundleFastSettle([new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)]) with
             {
                 RemoveProvisionedAppx = ["Microsoft.BingNews"],
@@ -148,8 +147,7 @@ public class OnlineDebloatSessionTests
             "Microsoft.BingNews"));
 
         RecordingEvidenceSink evidence = new();
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             BundleFastSettle([new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)]) with
             {
                 RemoveProvisionedAppx = ["Microsoft.BingNews"],

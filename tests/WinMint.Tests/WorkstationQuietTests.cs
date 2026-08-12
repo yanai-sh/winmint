@@ -22,8 +22,7 @@ public class WorkstationQuietTests
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("workstation.quiet", ProvisionJobKind.WorkstationQuiet)]),
             Env(processes, evidence, applyWorkstationQuiet: () => applied = true),
             TestContext.Current.CancellationToken);

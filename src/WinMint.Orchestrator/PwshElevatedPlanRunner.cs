@@ -4,20 +4,18 @@ using System.Text.Json;
 
 namespace WinMint.Orchestrator;
 
-/// <summary>One elevated <c>pwsh -File servicing/RunPlan.ps1</c> invocation per Apply (single UAC).</summary>
+/// <summary>One elevated <c>pwsh -File servicing/Invoke-ServicingPlan.ps1</c> invocation per Apply (single UAC).</summary>
 public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 {
     public async Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
         string workDirectory,
-        IReadOnlyList<ServicingStage> stages,
         CancellationToken ct)
     {
-        _ = stages;
-        string? runPlan = FindRunPlanScript();
-        if (runPlan is null)
+        string? planScript = FindServicingPlanScript();
+        if (planScript is null)
         {
             return Result.Fail<ElevatedRunOk, Failure>(
-                new Failure("servicing.runPlan.missing", "servicing/RunPlan.ps1 not found."));
+                new Failure("servicing.plan.missing", "servicing/Invoke-ServicingPlan.ps1 not found."));
         }
 
         string pwsh = ResolvePwsh();
@@ -29,11 +27,11 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
             {
                 "-NoProfile",
                 "-File",
-                runPlan,
+                planScript,
                 "-WorkDirectory",
                 workDirectory,
             },
-            WorkingDirectory = Path.GetDirectoryName(runPlan)!,
+            WorkingDirectory = Path.GetDirectoryName(planScript)!,
             UseShellExecute = !elevated,
         };
         if (!elevated)
@@ -89,9 +87,9 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 
             if (exitCode != 0)
             {
-                string message = ReadFailureMessage(workDirectory) ?? $"RunPlan exited {exitCode}.";
+                string message = ReadFailureMessage(workDirectory) ?? $"Invoke-ServicingPlan exited {exitCode}.";
                 return Result.Fail<ElevatedRunOk, Failure>(
-                    new Failure("servicing.runPlan.failed", message));
+                    new Failure("servicing.plan.failed", message));
             }
         }
         catch (OperationCanceledException)
@@ -129,29 +127,7 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         }
     }
 
-    private static string? FindRunPlanScript()
-    {
-        string dir = AppContext.BaseDirectory;
-        for (int i = 0; i < 8; i++)
-        {
-            string candidate = Path.Combine(dir, "servicing", "RunPlan.ps1");
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            DirectoryInfo? parent = Directory.GetParent(dir);
-            if (parent is null)
-            {
-                break;
-            }
-
-            dir = parent.FullName;
-        }
-
-        string cwd = Path.Combine(Directory.GetCurrentDirectory(), "servicing", "RunPlan.ps1");
-        return File.Exists(cwd) ? cwd : null;
-    }
+    private static string? FindServicingPlanScript() => ToolkitRoot.TryFind("servicing", "Invoke-ServicingPlan.ps1");
 
     private static string ResolvePwsh() => "pwsh";
 

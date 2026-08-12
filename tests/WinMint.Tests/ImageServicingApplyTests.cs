@@ -114,7 +114,7 @@ public class ImageServicingApplyTests
             Assert.True(File.Exists(Path.Combine(work, "payload", "SetupComplete.cmd")));
             string stagedSetup = File.ReadAllText(Path.Combine(work, "payload", "SetupComplete.cmd"));
             string repoSetup = File.ReadAllText(
-                Path.Combine(FindRepoRoot(), "payload", "scripts", "SetupComplete.cmd"));
+                Path.Combine(TestRepo.Root, "payload", "scripts", "SetupComplete.cmd"));
             Assert.Equal(repoSetup, stagedSetup);
             Assert.True(File.Exists(Path.Combine(work, "payload", "bundle.json")));
             Assert.True(File.Exists(Path.Combine(work, "payload", "Supervisor.exe")));
@@ -228,17 +228,6 @@ public class ImageServicingApplyTests
         return path;
     }
 
-    private static string FindRepoRoot()
-    {
-        DirectoryInfo? dir = new(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "WinMint.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        Assert.NotNull(dir);
-        return dir.FullName;
-    }
 
     private static void TryDelete(string path)
     {

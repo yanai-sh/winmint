@@ -19,7 +19,7 @@ if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
 if ([string]::IsNullOrWhiteSpace($compression)) { throw 'compression required' }
 if ([string]::IsNullOrWhiteSpace($cleanup)) { throw 'cleanup required' }
 
-. (Join-Path $PSScriptRoot 'Wim-Metadata.ps1')
+. (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
 
 $wimFile = Join-Path $mediaDir 'sources\install.wim'
 if (-not (Test-Path -LiteralPath $wimFile)) { throw "install.wim missing: $wimFile" }

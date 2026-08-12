@@ -2,6 +2,11 @@ namespace WinMint.Contracts;
 
 /// <summary>
 /// Sticky DMA setup-region literals (Ireland). Visible region comes from <see cref="DmaSettleTarget"/>.
+/// <para>
+/// <b>DMA here is the EU Digital Markets Act, not Direct Memory Access.</b> Windows Setup only offers the
+/// DMA choice screens in an EEA region, so every <c>Dma*</c> type in WinMint is about Setup region, never
+/// device memory or Kernel DMA Protection.
+/// </para>
 /// </summary>
 public static class DmaInterop
 {

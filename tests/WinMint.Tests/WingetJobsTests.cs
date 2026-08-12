@@ -6,7 +6,7 @@ using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
 
-/// <summary>Ticket 16 — metal winget job at S1 (Plan) + S3 (Run).</summary>
+/// <summary>Ticket 16 — winget job at S1 (Plan) + S3 (Run).</summary>
 public class WingetJobsTests
 {
     [Fact]
@@ -40,12 +40,12 @@ public class WingetJobsTests
             new RunOptions { ImageArchitecture = "amd64", IncludeSmokeStubs = true });
 
         Assert.True(result.IsOk);
-        IReadOnlyList<JobDescriptor> jobs = result.Value.Jobs.Jobs;
+        IReadOnlyList<ProvisionJob> jobs = result.Value.Jobs.Jobs;
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.ready" });
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.complete" });
-        JobDescriptor git = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "Git.Git");
+        ProvisionJob git = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "Git.Git");
         Assert.Equal("winget.Git.Git", git.Id);
-        JobDescriptor vscode = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "Microsoft.VisualStudioCode");
+        ProvisionJob vscode = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "Microsoft.VisualStudioCode");
         Assert.Equal("winget.Microsoft.VisualStudioCode", vscode.Id);
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Git.MinGit" });
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Microsoft.PowerShell" });
@@ -118,7 +118,7 @@ public class WingetJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        JobDescriptor importJob = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
+        ProvisionJob importJob = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
         Assert.True(importJob.NeedsReboot);
     }
 
@@ -154,9 +154,9 @@ public class WingetJobsTests
             new RunOptions { ImageArchitecture = "amd64" });
 
         Assert.True(result.IsOk);
-        JobDescriptor jq = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "jqlang.jq");
+        ProvisionJob jq = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "jqlang.jq");
         Assert.True(jq.NeedsReboot);
-        JobDescriptor git = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "Git.Git");
+        ProvisionJob git = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "Git.Git");
         Assert.False(git.NeedsReboot);
     }
 
@@ -200,8 +200,7 @@ public class WingetJobsTests
         RecordingEvidenceSink evidence = new();
         RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git", WingetArchitecture: "arm64")]),
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
@@ -233,8 +232,7 @@ public class WingetJobsTests
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]),
             Env(processes, evidence),
             TestContext.Current.CancellationToken);
@@ -252,14 +250,13 @@ public class WingetJobsTests
         RecordingEvidenceSink evidence = new();
         RecordingAppx appx = new() { WingetPath = null };
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]) with { PackageStrict = true },
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("jobs.winget.path_missing", result.FinalStatus.Code);
+        Assert.Equal("jobs.winget.pathMissing", result.FinalStatus.Code);
         Assert.Empty(processes.Starts);
         Assert.Contains(ProvisioningSession.DesktopAppInstallerFamilyName, appx.RegisteredFamilyNames);
     }
@@ -271,8 +268,7 @@ public class WingetJobsTests
         RecordingEvidenceSink evidence = new();
         RecordingAppx appx = new() { WingetPath = null };
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]),
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
@@ -291,8 +287,7 @@ public class WingetJobsTests
             WingetPath = @"C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_1.0_arm64__8wekyb3d8bbwe\winget.exe",
         };
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", ProvisionJobKind.Winget, PackageId: "jqlang.jq")]),
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
@@ -314,8 +309,7 @@ public class WingetJobsTests
         RecordingSystemReboot reboot = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("smoke.stub.reboot", ProvisionJobKind.Stub, NeedsReboot: true)]),
             Env(processes, evidence, checkpoints, reboot),
             TestContext.Current.CancellationToken);

@@ -6,13 +6,13 @@ using WinMint.Wizard;
 
 namespace WinMint.Tests;
 
-/// <summary>#90 plan/build honesty — S1 BuildPlan dump/honesty helpers; S1b WizardSession summary.</summary>
+/// <summary>#90 plan/build honesty — S1 BuildPlan file/honesty helpers; S1b WizardSession summary.</summary>
 public class PlanHonestyTests
 {
     [Fact]
-    public void SerializeManifestDump_includes_requiresNetwork()
+    public void SerializeManifestFile_includes_requiresNetwork()
     {
-        string json = BuildPlan.SerializeManifestDump(
+        string json = BuildPlan.SerializeManifestFile(
             new BuildManifest(ImageQualityLane.Test, RequiresNetwork: true));
 
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -21,13 +21,13 @@ public class PlanHonestyTests
     }
 
     [Fact]
-    public void SerializeJobsDump_includes_scoopBuckets()
+    public void SerializeJobsFile_includes_scoopBuckets()
     {
-        string json = BuildPlan.SerializeJobsDump(
+        string json = BuildPlan.SerializeJobsFile(
             new JobsArtifact(
                 BuildPlan.JobsSchemaVersion,
                 [
-                    new JobDescriptor(
+                    new ProvisionJob(
                         "scoop.batch",
                         ProvisionJobKind.ScoopBatch,
                         PackageId: "curl komorebi",

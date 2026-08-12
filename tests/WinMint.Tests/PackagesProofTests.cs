@@ -60,7 +60,7 @@ public class PackagesProofTests
     }
 
     [Fact]
-    public void ValidateReceipt_detects_catalog_hash_mismatch()
+    public void Validate_detects_catalog_hash_mismatch()
     {
         string dir = NewTemp();
         try
@@ -70,10 +70,10 @@ public class PackagesProofTests
                 {"tools":{"a":{"displayName":"A","source":"winget","id":"A.A","architectures":["arm64"]}}}
                 """);
             PackageCatalog catalog = PackageCatalog.TryLoadFromFile(catalogPath).Value;
-            string receiptPath = Path.Combine(dir, "packages.proof.json");
-            File.WriteAllText(receiptPath, """
+            string proofPath = Path.Combine(dir, "packages.proof.json");
+            File.WriteAllText(proofPath, """
                 {
-                  "schema": "winmint.packages.proof/v1",
+                  "schemaVersion": "winmint.packages.proof/v1",
                   "architecture": "arm64",
                   "catalogSha256": "deadbeef",
                   "proveSetSha256": "deadbeef",
@@ -83,8 +83,8 @@ public class PackagesProofTests
                 }
                 """);
 
-            IReadOnlyList<string> errors = PackagesProof.ValidateReceipt(
-                receiptPath, catalogPath, catalog, "arm64");
+            IReadOnlyList<string> errors = PackagesProof.Validate(
+                proofPath, catalogPath, catalog, "arm64");
             Assert.Contains(errors, e => e.Contains("catalogSha256", StringComparison.Ordinal));
         }
         finally
@@ -103,16 +103,16 @@ public class PackagesProofTests
     [Fact]
     public void Repo_packages_proof_matches_catalog()
     {
-        string root = FindRepoRoot();
+        string root = TestRepo.Root;
         string catalogPath = Path.Combine(root, "config", "packages.json");
-        string receiptPath = Path.Combine(root, "config", "packages.proof.json");
+        string proofPath = Path.Combine(root, "config", "packages.proof.json");
         Assert.True(
-            File.Exists(receiptPath),
+            File.Exists(proofPath),
             "Missing config/packages.proof.json — run: just packages-check");
 
         PackageCatalog catalog = PackageCatalog.TryLoadFromFile(catalogPath).Value;
-        IReadOnlyList<string> errors = PackagesProof.ValidateReceipt(
-            receiptPath, catalogPath, catalog, "arm64");
+        IReadOnlyList<string> errors = PackagesProof.Validate(
+            proofPath, catalogPath, catalog, "arm64");
         Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
     }
 
@@ -121,19 +121,4 @@ public class PackagesProofTests
             Path.Combine(Path.GetTempPath(), "winmint-proof-" + Guid.NewGuid().ToString("N")))
             .FullName;
 
-    private static string FindRepoRoot()
-    {
-        DirectoryInfo? dir = new(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "config", "packages.json")))
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException("repo root not found");
-    }
 }

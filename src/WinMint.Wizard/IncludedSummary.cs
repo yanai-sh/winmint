@@ -2,8 +2,8 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Wizard;
 
-/// <summary>Avalonia-free Included receipt text — quiet labels from <see cref="ProductPosture"/>; What's included from effective AppX.</summary>
-public static class IncludedReceipt
+/// <summary>Avalonia-free Included summary text — quiet labels from <see cref="ProductPosture"/>; What's included from effective AppX.</summary>
+public static class IncludedSummary
 {
     private const string QuietPrefix = "Also applied quietly: ";
     private const string QuietSeparator = " · ";

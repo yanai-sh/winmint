@@ -12,8 +12,7 @@ public class ResidueCleanerTests
         RecordingEvidenceSink evidence = new();
         RecordingWinlogon winlogon = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle([]),
             ShellEnv(winlogon, evidence, cleaner),
             TestContext.Current.CancellationToken);
@@ -29,10 +28,9 @@ public class ResidueCleanerTests
         RecordingResidueCleaner cleaner = new();
         RecordingWinlogon winlogon = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
-            Bundle([]),
-            ShellEnv(winlogon, evidence: null, cleaner),
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle([]),
+            ShellEnv(winlogon, new RecordingEvidenceSink(), cleaner, new NoopRegion()),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
@@ -82,8 +80,7 @@ public class ResidueCleanerTests
         RecordingEvidenceSink evidence = new();
         RecordingWinlogon winlogon = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle([]),
             ShellEnv(winlogon, evidence, new ThrowingResidueCleaner()),
             TestContext.Current.CancellationToken);
@@ -92,14 +89,15 @@ public class ResidueCleanerTests
         Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
     }
 
-    private static SessionEnvironment ShellEnv(
+    private static ShellEnvironment ShellEnv(
         IWinlogonRegistry winlogon,
-        IEvidenceSink? evidence,
-        IResidueCleaner cleaner) =>
+        IEvidenceSink evidence,
+        IResidueCleaner cleaner,
+        IRegionSnapshot? region = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: winlogon,
-            Region: new MatchingRegion(),
+            Region: region ?? new MatchingRegion(),
             Processes: new NoopProcesses(),
             Splash: new RecordingSplashPresenter(),
             Checkpoints: new NoopCheckpoints(),

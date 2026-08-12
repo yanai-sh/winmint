@@ -66,7 +66,7 @@ internal static class Program
 
         Option<bool> packageStrictOption = new("--package-strict")
         {
-            Description = "Fail closed when winget/scoop package jobs fail (harness/metal). Default best-effort.",
+            Description = "Fail closed when winget/scoop package jobs fail (harness/Primary). Default best-effort.",
         };
 
         Option<bool> includeSmokeStubsOption = new("--include-smoke-stubs")
@@ -119,7 +119,7 @@ internal static class Program
                 parseResult.GetValue(includeSmokeStubsOption));
         });
 
-        Command buildCommand = new("build", "Plan a Profile and apply ImageServicing (one elevated RunPlan).")
+        Command buildCommand = new("build", "Plan a Profile and apply ImageServicing (one elevated Invoke-ServicingPlan).")
         {
             profileArgument,
             isoOption,
@@ -376,13 +376,13 @@ internal static class Program
 
         File.WriteAllText(
             Path.Combine(directory, "jobs.json"),
-            BuildPlan.SerializeJobsDump(artifacts.Jobs));
+            BuildPlan.SerializeJobsFile(artifacts.Jobs));
         File.WriteAllText(
             Path.Combine(directory, "stages.json"),
-            BuildPlan.SerializeStagesDump(artifacts.Stages));
+            BuildPlan.SerializeStagesFile(artifacts.Stages));
         File.WriteAllText(
             Path.Combine(directory, "manifest.json"),
-            BuildPlan.SerializeManifestDump(artifacts.Manifest));
+            BuildPlan.SerializeManifestFile(artifacts.Manifest));
     }
 
     private static void WritePlanHonesty(BuildArtifacts artifacts)

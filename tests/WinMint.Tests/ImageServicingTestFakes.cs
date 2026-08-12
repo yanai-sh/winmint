@@ -12,10 +12,10 @@ internal static class ImageServicingTestFakes
 
         public Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
             string workDirectory,
-            IReadOnlyList<ServicingStage> stages,
             CancellationToken ct)
         {
-            Stages.AddRange(stages);
+            Stages.AddRange(ReadStagesJson(workDirectory));
+            IReadOnlyList<ServicingStage> stages = Stages;
             ServicingStage? stamp = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.StampOfflineShell);
             if (stamp is null
                 || !stamp.Parameters.TryGetValue(StageParams.ShellTarget, out string? shellTarget)
@@ -53,14 +53,38 @@ internal static class ImageServicingTestFakes
         }
     }
 
+    /// <summary>Parse <c>{work}/stages.json</c> the way Invoke-ServicingPlan.ps1 does, so the fake and pwsh share one contract.</summary>
+    private static List<ServicingStage> ReadStagesJson(string workDirectory)
+    {
+        using JsonDocument doc = JsonDocument.Parse(
+            File.ReadAllBytes(Path.Combine(workDirectory, "stages.json")));
+        Assert.Equal(
+            BuildPlan.StagesSchemaVersion,
+            doc.RootElement.GetProperty("schemaVersion").GetString());
+
+        List<ServicingStage> stages = [];
+        foreach (JsonElement stage in doc.RootElement.GetProperty("stages").EnumerateArray())
+        {
+            Dictionary<string, string> parameters = new(StringComparer.Ordinal);
+            foreach (JsonProperty p in stage.GetProperty("parameters").EnumerateObject())
+            {
+                parameters[p.Name] = p.Value.GetString()!;
+            }
+
+            stages.Add(new ServicingStage(
+                Enum.Parse<ServicingOpcode>(stage.GetProperty("opcode").GetString()!),
+                parameters));
+        }
+
+        return stages;
+    }
+
     internal sealed class FailingElevatedPlanRunner : IElevatedPlanRunner
     {
         public Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
             string workDirectory,
-            IReadOnlyList<ServicingStage> stages,
             CancellationToken ct)
         {
-            _ = stages;
             Directory.CreateDirectory(Path.Combine(workDirectory, "logs"));
             File.WriteAllText(
                 Path.Combine(workDirectory, "failure.json"),

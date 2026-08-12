@@ -12,7 +12,7 @@ Profile JSON
   → ProfileFile.TryLoad (host; materialize passwordPath)
   → BuildPlan.Plan
   → BuildArtifacts (in-memory)
-       ├─ (optional) plan dump for humans
+       ├─ (optional) plan files for humans
        └─ ImageServicing.Apply
             → stages ISO: Supervisor.exe, SetupComplete.cmd, bundle JSON, jobs, DmaSettleTarget
                  → Machine setup / Shell: host loads ProvisioningBundle → ProvisioningSession.Run
@@ -30,8 +30,13 @@ Profile JSON
 | Evidence snapshot | `winmint.provisioning.evidence/v1` |
 | Checkpoint | `winmint.provisioning.checkpoint/v1` |
 | Smoke acceptance summary | `winmint.smoke.acceptance/v1` |
+| Host Apply acceptance summary | `winmint.apply.acceptance/v1` |
 | Servicing stages (workdir) | `winmint.servicing.stages/v1` |
 | Image evidence | `winmint.image.evidence/v1` |
+| Packages proof | `winmint.packages.proof/v1` |
+| Native package audit | `winmint.native-packages/v1` |
+
+The JSON key is `schemaVersion` and the C# constant is `SchemaVersion` — everywhere, no `schema` shorthand. Each id has **one** literal in C# (`JobsWire.SchemaVersion`, `GuestBundleWire.SchemaVersion`, …); a second spelling is a bug, not a style choice. PowerShell writers repeat the literal and are held honest by the C# reader that validates them.
 
 Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 
@@ -40,12 +45,13 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 | Artifact | Written by | Read by |
 |----------|------------|---------|
 | Profile | Human / Wizard | ProfileFile / BuildPlan; Smoke harness (guest creds only) |
-| BuildArtifacts | BuildPlan | ImageServicing; Cli dump |
-| Servicing stages (`stages.json`) | ImageServicing Materialize | Elevated `RunPlan.ps1`; Smoke harness (Debloat pin lists) |
+| BuildArtifacts | BuildPlan | ImageServicing; Cli plan files |
+| Servicing stages (`stages.json`) | ImageServicing Materialize | Elevated `Invoke-ServicingPlan.ps1`; Smoke harness (Debloat pin lists) |
 | Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [SECRETS](SECRETS.md) |
 | Evidence JSON | ProvisioningSession (projection) | Smoke harness (S4) — **never** session control |
 | Checkpoint | ProvisioningSession (`ICheckpointStore`) | Next Shell `Run` via store (optional `bundle.Resume` inject) |
 | Smoke acceptance summary | Host harness (`tools/vm/`) | Maintainer — `Assert-SmokeEvidence.ps1` |
+| Host Apply acceptance summary | Host harness (`tools/apply/`) | Maintainer — `Assert-ApplyEvidence.ps1` |
 
 ## Compatibility
 
@@ -56,21 +62,24 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 ## Shared types (logical)
 
 - Settle: locale, GeoId, timeZoneId, location posture. Host Profile settle is required; staged bundle settle may be nullable — map explicitly at the stage boundary (twin records OK; drift ⇒ consolidate).
+- Jobs: `ProvisionJob` (domain) and `JobsFile` / `JobFile` (wire) live once in `WinMint.Contracts` (`JobsWire`), with `JobsWire.SchemaVersion` the only `winmint.jobs/v1` literal. BuildPlan projects via `ProvisionJob.ToWire()`; `BundleLoader` maps back. A new job field is one edit there plus the two mappers.
 - `ServicingOpcode` and provisioning **job `Kind`** are closed sets (`ServicingOpcode` / `ProvisionJobKind`) with the same touch-point discipline. Wire JSON may use strings; parse once at the load boundary (`BundleLoader` → enum). Unknown kind ⇒ `Result` failure (`jobs.kind.unknown`).
 - `ProvisioningBundle.SupervisorShellPath` (`supervisorPath`) must match offline Shell stamp and Machine setup verify.
 
-## Interchange DTO naming
+## Interchange type naming
 
 | Suffix | Use |
 |--------|-----|
-| `*Document` | Authored / parse input |
-| `*File` | Workdir or guest interchange on disk |
+| `*Document` | Authored / parse input — a human or the Wizard wrote it |
+| `*File` | Anything WinMint itself writes or reads as interchange, **including nested members** (`JobsFile` → `JobFile`) |
 
-Prefer `*File` over new `*Dump` / `*Dto` when touching those types.
+Two suffixes, no others: `*Dump` and `*Dto` are gone and must not come back. Emitted evidence is a `*File`, not a `*Document` — nobody authored it. A serializer is named for the type it returns (`SerializeJobsFile` → `JobsFile`).
 
 ## Status codes & evidence phases
 
-Lowercase dotted `area.token`. Evidence `Phases` use the **same** strings (no parallel vocabulary). Areas: `machineSetup`, `shell`, `settle`, `jobs`, `checkpoint`, `session`, `servicing`, plus BuildPlan `account` / `document` / `dma` / `debloat`.
+Dotted `area.token`, **every segment camelCase** — `settle.deviceRegionOk`, not `settle.device_region_ok`. Underscores are out; a multi-word segment runs the words together (`machineSetup.secretWipeFailed`). Evidence `Phases` use the **same** strings (no parallel vocabulary). Areas: `machineSetup`, `shell`, `settle`, `jobs`, `checkpoint`, `session`, `servicing`, plus BuildPlan `account` / `document` / `dma` / `debloat`.
+
+`StatusCodeVocabularyTests` scans the emitted codes and fails on a stray dialect — the rule is enforced, not just written down.
 
 Cli product verb for ImageServicing is `build` only.
 

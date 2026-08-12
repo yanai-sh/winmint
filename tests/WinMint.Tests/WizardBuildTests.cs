@@ -57,7 +57,7 @@ public class WizardBuildTests
                     iso,
                     ImageQualityText: "Test",
                     WorkDirectory: work,
-                    WimIndex: HostEdition.HomeWimIndex),
+                    WimIndex: BuildMachineEdition.HomeWimIndex),
                 new ImageServicingTestFakes.RecordingElevatedPlanRunner(),
                 TestContext.Current.CancellationToken);
 

@@ -51,7 +51,7 @@ public class ShellStampTests
             new RunOptions { ImageArchitecture = "arm64" });
 
         Assert.True(result.IsOk, result.IsOk ? null : result.Error.Message);
-        IReadOnlyList<JobDescriptor> jobs = result.Value.Jobs.Jobs;
+        IReadOnlyList<ProvisionJob> jobs = result.Value.Jobs.Jobs;
         int scoop = jobs.ToList().FindIndex(j => j.Kind == ProvisionJobKind.ScoopBatch);
         int stamp = jobs.ToList().FindIndex(j => j.Kind == ProvisionJobKind.ShellStamp);
         Assert.True(scoop >= 0);

@@ -17,7 +17,7 @@ public class WslJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        JobDescriptor[] wslJobs = result.Value.Jobs.Jobs
+        ProvisionJob[] wslJobs = result.Value.Jobs.Jobs
             .Where(j => j.Kind is ProvisionJobKind.Wsl or ProvisionJobKind.WslPlatform)
             .ToArray();
         Assert.Equal(2, wslJobs.Length);
@@ -39,7 +39,7 @@ public class WslJobsTests
 
         Assert.True(result.IsOk);
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WslPlatform);
-        JobDescriptor nix = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
+        ProvisionJob nix = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
         Assert.Equal("NixOS", nix.PackageId);
         Assert.Equal(WslInstallKind.FromFile, nix.WslInstallKind);
         Assert.Equal("nix-community/NixOS-WSL", nix.WslFromFileRepo);
@@ -74,8 +74,7 @@ public class WslJobsTests
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform)]),
             Env(processes, evidence, isWslPlatformReady: static () => true),
             TestContext.Current.CancellationToken);
@@ -106,8 +105,7 @@ public class WslJobsTests
         RecordingEvidenceSink evidence = new();
         RecordingCheckpoints checkpoints = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             BundleFastSettle(jobs: [new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform)]),
             Env(processes, evidence, checkpoints: checkpoints, isWslPlatformReady: static () => false),
             TestContext.Current.CancellationToken);
@@ -128,8 +126,7 @@ public class WslJobsTests
         RecordingEvidenceSink evidence = new();
         bool oobeSuppressed = false;
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("wsl.Ubuntu", ProvisionJobKind.Wsl, PackageId: "Ubuntu")]),
             Env(
                 processes,
@@ -156,8 +153,7 @@ public class WslJobsTests
         RecordingEvidenceSink evidence = new();
         RecordingCheckpoints checkpoints = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             BundleFastSettle(
                 jobs: [new ProvisionJob("wsl.Ubuntu", ProvisionJobKind.Wsl, PackageId: "Ubuntu")]),
             Env(processes, evidence, checkpoints: checkpoints, suppressWslOobe: static () => { }),

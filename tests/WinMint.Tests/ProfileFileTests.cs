@@ -48,7 +48,7 @@ public class ProfileFileTests
         File.WriteAllText(Path.Combine(scratch, "secret.txt"), "from-rel\r\n");
         string profiles = Path.Combine(dir.Root, "profiles");
         Directory.CreateDirectory(profiles);
-        string path = Path.Combine(profiles, "metal.profile.json");
+        string path = Path.Combine(profiles, "sample.profile.json");
         File.WriteAllText(path, MinimalProfile(passwordPath: @"..\scratch\secret.txt"));
 
         string cwd = Directory.GetCurrentDirectory();

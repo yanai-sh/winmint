@@ -28,7 +28,7 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
-          pwsh -NoProfile -File tools/release/Pack-WinMintRelease.ps1 -Tag $tag -OutDir .scratch/release
+          pwsh -NoProfile -File tools/release/Compress-WinMintRelease.ps1 -Tag $tag -OutDir .scratch/release
           Get-ChildItem .scratch/release | Format-Table Name, Length
 
       - name: Upload release assets

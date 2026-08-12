@@ -35,14 +35,20 @@ public sealed record RunOptions
     public ImageQualityLane ImageQuality { get; init; } = ImageQualityLane.Test;
     public string? SourceIsoPath { get; init; }
     public string? OutputIsoPath { get; init; }
+    // + ImageArchitecture, WindowsBuild, PackageAuditStrict, PackageStrict,
+    //   IncludeSmokeStubs, PackageCatalog override — see BuildArtifacts.cs
 }
 
 public sealed record BuildArtifacts(
     UnattendArtifact Unattend,
-    JobsArtifact Jobs,
+    JobsArtifact Jobs,           // IReadOnlyList<ProvisionJob> — WinMint.Contracts
     ServicingStageList Stages,   // ServicingOpcode + params — NOT .ps1 paths
     DmaContract Dma,
-    BuildManifest Manifest);
+    BuildManifest Manifest,
+    AccountProfile Account,
+    IReadOnlyList<string> RemoveProvisionedAppx,
+    byte[]? WingetImportJson = null,
+    bool PackageStrict = false);
 ```
 
 Stages: opcodes + params; ImageServicing maps opcode → `servicing/*.ps1`. See [CONTRACTS](CONTRACTS.md).

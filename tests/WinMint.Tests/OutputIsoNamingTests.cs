@@ -30,12 +30,12 @@ public class OutputIsoNamingTests
     {
         DateTimeOffset ts = new(2026, 8, 12, 9, 0, 0, TimeSpan.FromHours(3));
         string path = OutputIsoNaming.DefaultPath(
-            @"C:\work\sl7-primary",
+            @"C:\work\gate-b",
             "samples/sl7.profile.json",
             ImageQualityLane.Test,
             ts);
         Assert.Equal(
-            Path.Combine(@"C:\work\sl7-primary", "winmint_sl7_Test_20260812-090000.iso"),
+            Path.Combine(@"C:\work\gate-b", "winmint_sl7_Test_20260812-090000.iso"),
             path);
     }
 }

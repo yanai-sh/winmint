@@ -14,8 +14,7 @@ public class CheckpointRebootTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             BundleFastSettle(
             [
                 new ProvisionJob("smoke.stub.reboot", ProvisionJobKind.Stub, NeedsReboot: true),
@@ -45,10 +44,9 @@ public class CheckpointRebootTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionEnvironment env = Env(winlogon, checkpoints, splash, evidence, processes);
+        ShellEnvironment env = Env(winlogon, checkpoints, splash, evidence, processes);
 
-        SessionResult first = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult first = await ProvisioningSession.RunShellAsync(
             BundleFastSettle(
             [
                 new ProvisionJob("smoke.stub.reboot", ProvisionJobKind.Stub, NeedsReboot: true),
@@ -62,8 +60,7 @@ public class CheckpointRebootTests
         Assert.Equal(SupervisorPath, winlogon.Shell);
         Assert.Single(processes.Starts);
 
-        SessionResult second = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult second = await ProvisioningSession.RunShellAsync(
             BundleFastSettle(
             [
                 new ProvisionJob("smoke.stub.reboot", ProvisionJobKind.Stub, NeedsReboot: true),
@@ -77,12 +74,12 @@ public class CheckpointRebootTests
         Assert.Null(checkpoints.LastWritten);
         Assert.Equal(2, processes.Starts.Count);
         Assert.Contains("Status:checkpoint.resume", splash.Events);
-        Assert.Contains("Status:settle.resume_skip", splash.Events);
+        Assert.Contains("Status:settle.resumeSkip", splash.Events);
         int resumeAt = splash.Events.IndexOf("Status:checkpoint.resume");
         int settleAt = splash.Events.FindLastIndex(e => e == "Status:settle.begin");
         Assert.True(settleAt >= 0 && settleAt < resumeAt, "settle runs before reboot only; resume skips settle");
         Assert.Contains("checkpoint.resume", evidence.Documents[^1].Phases);
-        Assert.Contains("settle.resume_skip", evidence.Documents[^1].Phases);
+        Assert.Contains("settle.resumeSkip", evidence.Documents[^1].Phases);
         Assert.Equal("Complete", evidence.Documents[^1].Outcome);
     }
 

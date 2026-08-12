@@ -8,7 +8,7 @@ namespace WinMint.Wizard;
 /// (Home=1, Home SL=2, Pro=3). Wizard defaults to Home unless the host running
 /// the Wizard is a Pro SKU.
 /// </summary>
-internal static class HostEdition
+internal static class BuildMachineEdition
 {
     public const int HomeWimIndex = 1;
 

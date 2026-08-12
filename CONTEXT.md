@@ -18,7 +18,7 @@ _Avoid_: USB productization; in-process raw write; Rufus fork; “any flasher”
 **Profile** — Build intent for one ISO (`winmint.profile/v1`).  
 _Avoid_: BuildConfig (user-facing); preset names in JSON
 
-**Orchestrator** — Validates Profile, plans, drives elevated Servicing. Hosts: Cli + Avalonia Wizard (**HostCompile**).  
+**Orchestrator** — Validates Profile, plans, drives elevated Servicing. Front ends: Cli + Avalonia Wizard, both thin over **HostCompile**.  
 _Avoid_: second planning brain in Cli/Wizard
 
 **HostCompile** — Orchestrator entry: Profile + run options → Plan → ImageServicing → `ImageEvidence`. Cli/Wizard are thin adapters.  
@@ -47,17 +47,20 @@ _Avoid_: conflating with Machine setup
 
 **Provisioning lock** — Supervisor is Shell + splash; unlock = `explorer.exe` + exit.
 
-**Provisioning jobs / metal jobs** — Post hard-settle installs (per-id or batch). Same executor Smoke and metal.  
-_Avoid_: jobs before hard settle
+**Provisioning jobs** — Post hard-settle installs (per-id or batch). Same executor Smoke and Primary.  
+_Avoid_: jobs before hard settle; “metal jobs” (retired name)
 
-**DMA interop / settle** — Sticky Ireland setup region (`DeviceRegion` 68) during Setup; restore user visible region by **final snapshot**. Hard: locale/GeoID/TZ + DeviceRegion verify. Soft: location.  
-_Avoid_: sticky intermediate failures as authoritative
+**DMA interop / settle** — **DMA is the EU Digital Markets Act, not Direct Memory Access.** Sticky Ireland setup region (`DeviceRegion` 68) during Setup; restore user visible region by **final snapshot**. Hard: locale/GeoID/TZ + DeviceRegion verify. Soft: location. Rationale: [ADR-003](docs/decisions/ADR-003-dma-interop.md).  
+_Avoid_: reading `Dma*` types as device-memory or Kernel DMA Protection; sticky intermediate failures as authoritative
 
 **Smoke** — Hyper-V plumbing acceptance (`Test` lane, Local+autoLogon, Pro).  
 _Avoid_: treating Smoke alone as Primary wipe confidence
 
+**Host Apply (S5)** — Elevated Apply run on the build host, then assert the workdir evidence (`just host-apply`, `tools/apply/`). No Hyper-V and no hardware install — the destructive install is Primary, and it is manual.  
+_Avoid_: “metal” (retired name — it never touched hardware); treating a Test-lane Host Apply as wipe media
+
 **Gate B** — Pre-wipe host evidence that Release + package-strict Output ISO is ready to Flash. Not a completed Primary install.  
-_Avoid_: calling Gate B “Primary”; selling soft `metal` Release as wipe media
+_Avoid_: calling Gate B “Primary”; selling soft Host Apply Release as wipe media
 
 **Primary** — Release `samples/sl7.profile.json` safe to wipe primary SL7 after Gate B + real install evidence in-repo. Details: [DESIGN](docs/DESIGN.md#acceptance).  
 _Avoid_: shipping recovery images; treating Gate B alone as wipe-proven; gating Primary on a tracking issue; treating Flash as Primary proof
@@ -72,8 +75,42 @@ _Avoid_: Keep-flag (retired name); keep-list polarity; BCU; CDM as primary; Prof
 **Shell** — Winlogon replacement during Provisioning tenure only.  
 _Avoid_: calling Wizard UI chrome “Shell”
 
-**Wizard** — Avalonia HostCompile host: Source → Account → Software → Review; Phase B elevated Apply.  
+**Wizard** — Avalonia front end over HostCompile: Source → Account → Software → Review; Phase B elevated Apply.  
 _Avoid_: DISM or second planner in UI
 
-**Package catalog** — `config/packages.json`: chip key ≠ Profile install id.  
+**Package catalog** — `config/packages.json`: **chip** key ≠ Profile install id. A chip is one Wizard toggle (`ChipItem`); its key is UI vocabulary and never reaches JSON.  
 _Avoid_: live winget search in Wizard
+
+**Host** — the build machine, always: `tools/host/`, `HostDefaults`, host Servicing, **HostCompile** (compile an image on the host). Cli and Wizard are *front ends*, not hosts.  
+_Avoid_: “host” for a UI shell or a process that owns a window
+
+## Coined terms
+
+Short words that carry weight in type names. They are kept because no generic alternative says as much — but only if they mean one thing.
+
+**Evidence** — JSON WinMint emits so a harness can assert what happened (`IEvidenceSink`, `evidence.json`, S4/S5 bars). Never read back to decide the next phase.
+
+**Proof** — `config/packages.proof.json`: catalog ids verified against live winget/scoop, content-hashed so `just check` can enforce freshness offline. Attests to the *catalog*, not to a run.
+
+**Digest** — a sha256 of an artifact under `logs/digests.json`. Not a synonym for evidence or proof.  
+_Avoid_: “receipt” for any of these three
+
+**Posture** — product-constant settings applied with no Profile toggle (`ProductPosture`, [ADR-009](docs/decisions/ADR-009-product-constant-policies.md)).
+
+**Tenure** — the window in which Supervisor *is* the Shell, from first paint to unlock (`TenureState`).
+
+**Stamp** — write a durable setting into a hive or profile skeleton, offline or live (`Stamp-*.ps1`, `ShellStamp`, `AccountStamp`).
+
+**Kernel** — one elevated `servicing/*.ps1` doing exactly one opcode. Parameter hashtables only, never Profile JSON.
+
+**Lane** — the `Test` | `Release` image-quality run override, and the `ExportWim` params it implies.
+
+**Quiet** — the always-on noise removal a user did not ask for and cannot opt out of (`Win32WorkstationQuiet`, Wizard "quiet" copy).
+
+**Residue** — WinMint's own files left in the guest after a green FirstLogon; the cleaner erases them ([ADR-008](docs/decisions/ADR-008-residual-minimization.md)).
+
+**Skel** — `payload/shell-skel`: the one-shot profile skeleton copied into the user profile at `shell.stamp`.
+
+**Safety net** — a live re-check that repairs what the offline pass should already have done (`debloat.appx.safetyNet`).
+
+**Marks** — HKLM `Deprovisioned` keys that make an AppX removal survive a feature update.

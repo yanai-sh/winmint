@@ -226,7 +226,7 @@ public class DebloatPresetTests
         Result<DebloatExpansion, Failure> expanded = DebloatPresets.TryExpand(DebloatPresets.Acceptance);
         Assert.True(expanded.IsOk, expanded.IsOk ? null : $"{expanded.Error.Code}: {expanded.Error.Message}");
 
-        string samplePath = Path.Combine(FindRepoRoot(), "samples", "acceptance.profile.json");
+        string samplePath = Path.Combine(TestRepo.Root, "samples", "acceptance.profile.json");
         byte[] utf8 = File.ReadAllBytes(samplePath);
         string json = Encoding.UTF8.GetString(utf8);
         Assert.DoesNotContain("\"preset\"", json, StringComparison.OrdinalIgnoreCase);
@@ -246,7 +246,7 @@ public class DebloatPresetTests
             DebloatPresets.TryExpand(DebloatPresets.Recommended);
         Assert.True(expanded.IsOk);
 
-        string root = FindRepoRoot();
+        string root = TestRepo.Root;
         string scratch = Path.Combine(root, ".scratch");
         Directory.CreateDirectory(scratch);
         string pwFile = Path.Combine(scratch, "sl7.password");
@@ -294,20 +294,4 @@ public class DebloatPresetTests
             s => s.Opcode == ServicingOpcode.DisableOptionalFeatures);
     }
 
-    private static string FindRepoRoot()
-    {
-        string? dir = AppContext.BaseDirectory;
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir, "Justfile"))
-                && Directory.Exists(Path.Combine(dir, "samples")))
-            {
-                return dir;
-            }
-
-            dir = Directory.GetParent(dir)?.FullName;
-        }
-
-        throw new InvalidOperationException("Repo root not found from test BaseDirectory.");
-    }
 }

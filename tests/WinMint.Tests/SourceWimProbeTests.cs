@@ -174,8 +174,8 @@ public class SourceWimProbeTests
 
     private static ProcessResult RunListFromTextProcess(string text)
     {
-        string repo = FindRepoRoot();
-        string script = Path.Combine(repo, "servicing", "Wim-Metadata.ps1");
+        string repo = TestRepo.Root;
+        string script = Path.Combine(repo, "servicing", "Get-WimMetadata.ps1");
         string tmp = Path.Combine(Path.GetTempPath(), "winmint-wiminfo-" + Guid.NewGuid().ToString("N") + ".txt");
         File.WriteAllText(tmp, text, Encoding.UTF8);
         try
@@ -202,22 +202,6 @@ public class SourceWimProbeTests
         }
     }
 
-    private static string FindRepoRoot()
-    {
-        string dir = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(dir))
-        {
-            if (File.Exists(Path.Combine(dir, "justfile"))
-                && Directory.Exists(Path.Combine(dir, "servicing")))
-            {
-                return dir;
-            }
-
-            dir = Path.GetDirectoryName(dir) ?? "";
-        }
-
-        throw new InvalidOperationException("repo root not found from " + AppContext.BaseDirectory);
-    }
 
     private sealed record ProcessResult(int ExitCode, string Stdout, string Stderr);
 

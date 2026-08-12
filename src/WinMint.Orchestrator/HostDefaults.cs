@@ -15,7 +15,7 @@ public static class HostDefaults
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "WinMint",
             "work",
-            "sl7-primary");
+            "gate-b");
 
     public static string ResolveWorkDirectory(ImageQualityLane lane, string? workDirectory = null) =>
         string.IsNullOrWhiteSpace(workDirectory)

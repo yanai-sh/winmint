@@ -18,8 +18,7 @@ public class DmaSettleTests
         RecordingProcessHost processes = new();
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
                 policy: TightSettlePolicy()),
@@ -27,13 +26,13 @@ public class DmaSettleTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("settle.hard_mismatch", result.FinalStatus.Code);
+        Assert.Equal("settle.hardMismatch", result.FinalStatus.Code);
         Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
         Assert.DoesNotContain(splash.Events, e => e.StartsWith("Status:jobs.", StringComparison.Ordinal));
         Assert.Empty(processes.Starts);
         Assert.Single(region.Applied);
         Assert.Equal(242, region.Applied[0].GeoId);
-        Assert.Contains("settle.hard_mismatch", evidence.Documents[0].Phases);
+        Assert.Contains("settle.hardMismatch", evidence.Documents[0].Phases);
         Assert.DoesNotContain("jobs.begin", evidence.Documents[0].Phases);
         Assert.DoesNotContain("jobs.ok", evidence.Documents[0].Phases);
     }
@@ -48,8 +47,7 @@ public class DmaSettleTests
             new RegionRead.ValueRead(new RegionState("en-GB", 242, "GMT Standard Time", true)));
         RecordingSplashPresenter splash = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
                 policy: TightSettlePolicy()),
@@ -58,9 +56,9 @@ public class DmaSettleTests
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Contains("Status:settle.ok", splash.Events);
-        Assert.Contains("Status:settle.device_region_ok", splash.Events);
-        Assert.DoesNotContain(splash.Events, e => e.Contains("settle.hard_mismatch", StringComparison.Ordinal));
-        Assert.DoesNotContain(splash.Events, e => e.Contains("settle.read_failed", StringComparison.Ordinal));
+        Assert.Contains("Status:settle.deviceRegionOk", splash.Events);
+        Assert.DoesNotContain(splash.Events, e => e.Contains("settle.hardMismatch", StringComparison.Ordinal));
+        Assert.DoesNotContain(splash.Events, e => e.Contains("settle.readFailed", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -72,8 +70,7 @@ public class DmaSettleTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
@@ -85,11 +82,11 @@ public class DmaSettleTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
-        Assert.Contains("Status:settle.device_region_ok", splash.Events);
-        Assert.Contains("Status:settle.location_warn", splash.Events);
+        Assert.Contains("Status:settle.deviceRegionOk", splash.Events);
+        Assert.Contains("Status:settle.locationWarn", splash.Events);
         Assert.Contains("Status:jobs.ok", splash.Events);
-        Assert.Contains("settle.location_warn", evidence.Documents[0].Phases);
-        Assert.Contains("settle.device_region_ok", evidence.Documents[0].Phases);
+        Assert.Contains("settle.locationWarn", evidence.Documents[0].Phases);
+        Assert.Contains("settle.deviceRegionOk", evidence.Documents[0].Phases);
         Assert.Equal("Complete", evidence.Documents[0].Outcome);
     }
 
@@ -101,8 +98,7 @@ public class DmaSettleTests
         RecordingSplashPresenter splash = new();
         OkDmaSetupRegion dmaSetup = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(dma: new DmaSettleTarget(Enabled: false, null, null, null, null)),
             Env(time, region, splash, new RecordingEvidenceSink(), dmaSetup: dmaSetup),
             TestContext.Current.CancellationToken);
@@ -111,7 +107,7 @@ public class DmaSettleTests
         Assert.Empty(region.Applied);
         Assert.Equal(0, dmaSetup.EnsureCalls);
         Assert.Contains("Status:settle.skipped", splash.Events);
-        Assert.DoesNotContain(splash.Events, e => e.Contains("settle.device_region", StringComparison.Ordinal));
+        Assert.DoesNotContain(splash.Events, e => e.Contains("settle.deviceRegion", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -124,8 +120,7 @@ public class DmaSettleTests
         RecordingEvidenceSink evidence = new();
         ScriptedDmaSetupRegion dmaSetup = new(ScriptedDmaSetupRegion.DmaSetupStep.Repaired);
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
                 policy: TightSettlePolicy()),
@@ -134,9 +129,9 @@ public class DmaSettleTests
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Equal(1, dmaSetup.EnsureCalls);
-        Assert.Contains("Status:settle.device_region_repaired", splash.Events);
+        Assert.Contains("Status:settle.deviceRegionRepaired", splash.Events);
         Assert.Contains("Status:settle.ok", splash.Events);
-        Assert.Contains("settle.device_region_repaired", evidence.Documents[0].Phases);
+        Assert.Contains("settle.deviceRegionRepaired", evidence.Documents[0].Phases);
     }
 
     [Fact]
@@ -151,8 +146,7 @@ public class DmaSettleTests
         ScriptedDmaSetupRegion dmaSetup = new(
             ScriptedDmaSetupRegion.DmaSetupStep.Throw("DeviceRegion verify failed"));
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
                 policy: TightSettlePolicy()),
@@ -160,10 +154,29 @@ public class DmaSettleTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("settle.device_region_failed", result.FinalStatus.Code);
+        Assert.Equal("settle.deviceRegionFailed", result.FinalStatus.Code);
         Assert.Empty(processes.Starts);
-        Assert.Contains("settle.device_region_failed", evidence.Documents[0].Phases);
+        Assert.Contains("settle.deviceRegionFailed", evidence.Documents[0].Phases);
         Assert.DoesNotContain("jobs.begin", evidence.Documents[0].Phases);
+    }
+
+    [Fact]
+    public async Task Shell_settle_target_missing_locationServices_fails_before_region_apply()
+    {
+        ManualTimeProvider time = new();
+        ScriptedRegionSnapshot region = new();
+        RecordingSplashPresenter splash = new();
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", null)),
+            Env(time, region, splash, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("settle.targetIncomplete", result.FinalStatus.Code);
+        Assert.Empty(region.Applied);
+        Assert.Contains("settle.targetIncomplete", evidence.Documents[0].Phases);
     }
 
     private static SessionPolicy TightSettlePolicy() =>
@@ -181,7 +194,7 @@ public class DmaSettleTests
             Policy: policy ?? TightSettlePolicy(),
             SupervisorShellPath: SupervisorPath);
 
-    private static SessionEnvironment Env(
+    private static ShellEnvironment Env(
         TimeProvider time,
         IRegionSnapshot region,
         ISplashPresenter splash,

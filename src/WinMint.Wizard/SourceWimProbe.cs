@@ -5,7 +5,7 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Wizard;
 
-/// <summary>Unelevated Source ISO → install.wim index list (Avalonia-free). Parser lives in Wim-Metadata.ps1.</summary>
+/// <summary>Unelevated Source ISO → install.wim index list (Avalonia-free). Parser lives in Get-WimMetadata.ps1.</summary>
 internal static class SourceWimProbe
 {
     public static async Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> TryProbeIsoAsync(
@@ -27,15 +27,15 @@ internal static class SourceWimProbe
     {
         try
         {
-            WimIndexListDto? dto = JsonSerializer.Deserialize(json, WimIndexJsonContext.Default.WimIndexListDto);
-            if (dto?.Indexes is null || dto.Indexes.Count == 0)
+            WimIndexListFile? file = JsonSerializer.Deserialize(json, WimIndexJsonContext.Default.WimIndexListFile);
+            if (file?.Indexes is null || file.Indexes.Count == 0)
             {
                 return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
                     new Failure("wim.probe.empty", "Get-WimInfo returned no indexes."));
             }
 
             List<WimIndexInfo> rows = [];
-            foreach (WimIndexDto row in dto.Indexes)
+            foreach (WimIndexFile row in file.Indexes)
             {
                 if (row.Index <= 0 || IsUndefinedName(row.Name))
                 {
@@ -81,7 +81,7 @@ internal static class SourceWimProbe
         return hostDefault;
     }
 
-    /// <summary>Mirrors Wim-Metadata <c>Test-WimMetadataUndefined</c>.</summary>
+    /// <summary>Mirrors Get-WimMetadata <c>Test-WimMetadataUndefined</c>.</summary>
     internal static bool IsUndefinedName(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -111,12 +111,12 @@ internal static class SourceWimProbe
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
-internal sealed class WimIndexListDto
+internal sealed class WimIndexListFile
 {
-    public List<WimIndexDto>? Indexes { get; set; }
+    public List<WimIndexFile>? Indexes { get; set; }
 }
 
-internal sealed class WimIndexDto
+internal sealed class WimIndexFile
 {
     public int Index { get; set; }
     public string? Name { get; set; }
@@ -126,8 +126,8 @@ internal sealed class WimIndexDto
     public string? Build { get; set; }
 }
 
-[JsonSerializable(typeof(WimIndexListDto))]
-[JsonSerializable(typeof(WimIndexDto))]
+[JsonSerializable(typeof(WimIndexListFile))]
+[JsonSerializable(typeof(WimIndexFile))]
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true)]
@@ -171,7 +171,7 @@ public sealed record WimIndexInfo(
     }
 }
 
-/// <summary>Port for ISO → WIM index list. Real adapter shells to Wim-Metadata.ps1; tests ship a fake.</summary>
+/// <summary>Port for ISO → WIM index list. Real adapter shells to Get-WimMetadata.ps1; tests ship a fake.</summary>
 internal interface IWimIndexSource
 {
     Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListFromIsoAsync(
@@ -191,7 +191,7 @@ internal sealed class PwshWimIndexSource : IWimIndexSource
         if (script is null)
         {
             return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
-                new Failure("wim.probe.unreadable", "servicing/Wim-Metadata.ps1 not found."));
+                new Failure("wim.probe.unreadable", "servicing/Get-WimMetadata.ps1 not found."));
         }
 
         ProcessStartInfo psi = new()
@@ -277,21 +277,6 @@ internal sealed class PwshWimIndexSource : IWimIndexSource
         return text[at..end];
     }
 
-    private static string? FindWimMetadataScript()
-    {
-        string? dir = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(dir))
-        {
-            string candidate = Path.Combine(dir, "servicing", "Wim-Metadata.ps1");
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        string cwd = Path.Combine(Directory.GetCurrentDirectory(), "servicing", "Wim-Metadata.ps1");
-        return File.Exists(cwd) ? cwd : null;
-    }
+    private static string? FindWimMetadataScript() =>
+        ToolkitRoot.TryFind("servicing", "Get-WimMetadata.ps1");
 }

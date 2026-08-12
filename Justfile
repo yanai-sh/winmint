@@ -19,17 +19,17 @@ plan PROFILE="samples/smoke.profile.json" OUT=".scratch/plan":
 
 # Pack no-clone toolkit zip + sha256 (win-arm64). Example: just pack-release v0.1.0
 pack-release TAG:
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/release/Pack-WinMintRelease.ps1' -Tag '{{TAG}}'
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/release/Compress-WinMintRelease.ps1' -Tag '{{TAG}}'
 
 format-check:
     dotnet format --verify-no-changes
 
 check: format-check build
-    dotnet test --no-build -- --filter-not-trait "Category=S4" --filter-not-trait "Category=Metal"
+    dotnet test --no-build -- --filter-not-trait "Category=S4" --filter-not-trait "Category=S5"
     just analyze-servicing
     just bootstrap-contract
 
-# Live winget/scoop prove → config/packages.proof.json. Not in `just check` (offline receipt enforces freshness).
+# Live winget/scoop prove → config/packages.proof.json. Not in `just check` (offline proof enforces freshness).
 packages-check ARCH="arm64":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-PackagesCheck.ps1' -Architecture '{{ARCH}}'
 
@@ -54,9 +54,9 @@ clean-artifacts root=".scratch" keep="2" workdirs="1" days="14":
 wipe-scratch:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-ArtifactHygiene.ps1' -Root (Join-Path '{{justfile_directory()}}' '.scratch') -Wipe
 
-# Tail apply-status.txt. Default WORK = Gate B (%LOCALAPPDATA%\WinMint\work\sl7-primary).
+# Tail apply-status.txt. Default WORK = Gate B (%LOCALAPPDATA%\WinMint\work\gate-b).
 watch-apply WORK="":
-    pwsh -NoProfile -Command "$w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary' }; Get-Content -LiteralPath (Join-Path $w 'apply-status.txt') -Wait -Tail 40"
+    pwsh -NoProfile -Command "$w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Join-Path $env:LOCALAPPDATA 'WinMint\work\gate-b' }; Get-Content -LiteralPath (Join-Path $w 'apply-status.txt') -Wait -Tail 40"
 
 # Maintainer Apply (DISM hours). Cli verb is build. Auto --reuse-media when marker exists.
 # Prereq: just publish-provisioning. INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs.
@@ -70,17 +70,17 @@ smoke ISO WORK=".scratch/smoke" PROFILE="samples/acceptance.profile.json":
 smoke-assert EVIDENCE:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'
 
-# S5 Metal Apply (pre-wipe). Test metal ≠ Primary. Wipe ISO: just primary-gate ISO=…
-metal ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="Test":
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality '{{QUALITY}}'
+# S5 Host Apply (pre-wipe). Test lane ≠ Primary. Wipe ISO: just primary-gate ISO=…
+host-apply ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="Test":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-HostApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality '{{QUALITY}}'
 
 # Gate B wipe ISO: Release + package-strict. Workdir survives TEMP toolkit cleanup.
 primary-gate ISO WORK="" PROFILE="samples/sl7.profile.json":
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-PrimaryGate.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}'
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-PrimaryGate.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}'
 
-metal-assert WORK=".scratch/sl7-build":
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-MetalApply.ps1' -AssertOnly -WorkDirectory '{{WORK}}' -ExpectDrivers
+host-apply-assert WORK=".scratch/sl7-build":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-HostApply.ps1' -AssertOnly -WorkDirectory '{{WORK}}' -ExpectDrivers
 
 # Wipe-lane assert only (fails on Test evidence).
 primary-gate-assert WORK="":
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-PrimaryGate.ps1' -AssertOnly -Work '{{WORK}}'
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-PrimaryGate.ps1' -AssertOnly -Work '{{WORK}}'

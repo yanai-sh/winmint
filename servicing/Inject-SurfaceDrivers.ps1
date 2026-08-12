@@ -282,7 +282,7 @@ $inventoryPath = Join-Path $logDir 'WinMint-DriverInventory.json'
     bootSetupCriticalCount = $bootInfCount
     records = $inventory.records
 } | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $inventoryPath -Encoding utf8
-# Fail closed: metal assert expects this file; LocalAppData workdirs are not always Defender-excluded.
+# Fail closed: apply assert expects this file; LocalAppData workdirs are not always Defender-excluded.
 if (-not (Test-Path -LiteralPath $inventoryPath)) {
     throw "WinMint-DriverInventory.json missing after write: $inventoryPath"
 }

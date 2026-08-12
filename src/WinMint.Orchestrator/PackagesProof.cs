@@ -10,7 +10,7 @@ public sealed record PackagesProofEntry(string Source, string Id, string? ScoopB
 
 public static class PackagesProof
 {
-    public const string Schema = "winmint.packages.proof/v1";
+    public const string SchemaVersion = "winmint.packages.proof/v1";
     public const string DefaultArchitecture = "arm64";
 
     public static string CatalogSha256(string catalogPath)
@@ -99,8 +99,8 @@ public static class PackagesProof
             .ToLowerInvariant();
     }
 
-    public static IReadOnlyList<string> ValidateReceipt(
-        string receiptPath,
+    public static IReadOnlyList<string> Validate(
+        string proofPath,
         string catalogPath,
         PackageCatalog catalog,
         string architecture)
@@ -111,7 +111,7 @@ public static class PackagesProof
             errors.Add($"product constant missing or stub in catalog: {m}");
         }
 
-        if (!File.Exists(receiptPath))
+        if (!File.Exists(proofPath))
         {
             errors.Add("Missing config/packages.proof.json — run: just packages-check");
             return errors;
@@ -121,7 +121,7 @@ public static class PackagesProof
         try
         {
             doc = JsonSerializer.Deserialize(
-                File.ReadAllBytes(receiptPath),
+                File.ReadAllBytes(proofPath),
                 PackagesProofJsonContext.Default.PackagesProofFile);
         }
         catch (Exception ex)
@@ -130,9 +130,9 @@ public static class PackagesProof
             return errors;
         }
 
-        if (doc is null || !string.Equals(doc.Schema, Schema, StringComparison.Ordinal))
+        if (doc is null || !string.Equals(doc.SchemaVersion, SchemaVersion, StringComparison.Ordinal))
         {
-            errors.Add($"packages.proof.json schema must be {Schema}");
+            errors.Add($"packages.proof.json schemaVersion must be {SchemaVersion}");
         }
 
         string arch = PackageCatalog.NormalizeArch(architecture);
@@ -154,23 +154,23 @@ public static class PackagesProof
             errors.Add("proveSetSha256 mismatch — run: just packages-check");
         }
 
-        HashSet<string> receiptIds = new(StringComparer.OrdinalIgnoreCase);
-        foreach (PackagesProofEntryDto? e in doc?.Entries ?? [])
+        HashSet<string> provenIds = new(StringComparer.OrdinalIgnoreCase);
+        foreach (PackagesProofEntryFile? e in doc?.Entries ?? [])
         {
             if (e?.Source is null || e.Id is null)
             {
                 continue;
             }
 
-            receiptIds.Add($"{e.Source.ToLowerInvariant()}:{e.Id}");
+            provenIds.Add($"{e.Source.ToLowerInvariant()}:{e.Id}");
         }
 
         foreach (PackagesProofEntry required in proveSet)
         {
             string key = $"{required.Source}:{required.Id}";
-            if (!receiptIds.Contains(key))
+            if (!provenIds.Contains(key))
             {
-                errors.Add($"receipt missing entry {key} — run: just packages-check");
+                errors.Add($"proof missing entry {key} — run: just packages-check");
             }
         }
 
@@ -180,8 +180,8 @@ public static class PackagesProof
 
 internal sealed class PackagesProofFile
 {
-    [JsonPropertyName("schema")]
-    public string? Schema { get; set; }
+    [JsonPropertyName("schemaVersion")]
+    public string? SchemaVersion { get; set; }
 
     [JsonPropertyName("architecture")]
     public string? Architecture { get; set; }
@@ -193,10 +193,10 @@ internal sealed class PackagesProofFile
     public string? ProveSetSha256 { get; set; }
 
     [JsonPropertyName("entries")]
-    public List<PackagesProofEntryDto>? Entries { get; set; }
+    public List<PackagesProofEntryFile>? Entries { get; set; }
 }
 
-internal sealed class PackagesProofEntryDto
+internal sealed class PackagesProofEntryFile
 {
     [JsonPropertyName("source")]
     public string? Source { get; set; }

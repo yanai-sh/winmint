@@ -71,13 +71,13 @@ public class BrowserPolicyPlanTests
         Result<BuildArtifacts, Failure> result =
             BuildPlan.Plan(Lab(policies: new PoliciesProfile(DohProvider: "cloudflare")));
         Assert.True(result.IsOk);
-        JobDescriptor job = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.DohSet);
+        ProvisionJob job = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.DohSet);
         Assert.Equal("cloudflare", job.PackageId);
         Assert.Equal("1.1.1.1", job.DohPrimary);
         Assert.Equal("1.0.0.1", job.DohSecondary);
         Assert.Equal("https://cloudflare-dns.com/dns-query", job.DohTemplate);
 
-        using JsonDocument doc = JsonDocument.Parse(BuildPlan.SerializeJobsDump(result.Value.Jobs));
+        using JsonDocument doc = JsonDocument.Parse(BuildPlan.SerializeJobsFile(result.Value.Jobs));
         JsonElement dumped = Assert.Single(
             doc.RootElement.GetProperty("jobs").EnumerateArray(),
             e => e.GetProperty("kind").GetString() == "doh.set");

@@ -7,13 +7,14 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Wizard.ViewModels;
 
-/// <summary>v1-shaped wizard host — curated chips, silent account/DMA defaults, no catalog dump.</summary>
+/// <summary>v1-shaped wizard host — curated chips, silent account/DMA defaults, no raw catalog listing.</summary>
 public sealed partial class WizardViewModel : ObservableObject, IDisposable
 {
     private static readonly string[] StepNames = ["Source", "Account", "Software", "Review"];
 
-    private readonly Window _window;
-    private readonly int _hostWimDefault = HostEdition.DefaultWimIndex();
+    private readonly IStorageProvider? _storage;
+    private readonly Action? _close;
+    private readonly int _buildMachineWimDefault = BuildMachineEdition.DefaultWimIndex();
     private readonly IWimIndexSource? _wimIndexSource;
     private byte[]? _lastProfileUtf8;
     private bool _lastRequiresNetwork;
@@ -27,15 +28,20 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     private int _probeGeneration;
 
     public WizardViewModel(Window window)
-        : this(window, wimIndexSource: null)
+        : this(window.StorageProvider, window.Close, wimIndexSource: null)
     {
     }
 
-    internal WizardViewModel(Window window, IWimIndexSource? wimIndexSource)
+    /// <summary>
+    /// Everything the wizard needs from its host: a file picker and a way to close. Tests pass null
+    /// for both and drive the same coordination the window does.
+    /// </summary>
+    internal WizardViewModel(IStorageProvider? storage, Action? close, IWimIndexSource? wimIndexSource)
     {
-        _window = window;
+        _storage = storage;
+        _close = close;
         _wimIndexSource = wimIndexSource;
-        _wimIndex = _hostWimDefault;
+        _wimIndex = _buildMachineWimDefault;
 
         BrowserChips = ToChips(
         [
@@ -72,7 +78,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             ("pengwin", "Pengwin"),
         ]);
 
-        ApplyHostDmaDefaults();
+        ApplyBuildMachineDmaDefaults();
         RefreshNav();
     }
 
@@ -121,7 +127,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _planSummary = "";
     [ObservableProperty] private string _buildRecipe = "";
 
-    // Review receipt layers: quiet product defaults, selected picks, effective remove-list, and plan meta.
+    // Review summary layers: quiet product defaults, selected picks, effective remove-list, and plan meta.
     [ObservableProperty] private string _quietSummaryText = "";
     [ObservableProperty] private string _pickStripText = "";
     [ObservableProperty] private string _quietBlockText = "";
@@ -210,11 +216,11 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [RelayCommand] private void SelectRecommendedPreset() => Preset = DebloatPresets.Recommended;
 
     [RelayCommand]
-    private void UseHostDma() => ApplyHostDmaDefaults();
+    private void UseBuildMachineDma() => ApplyBuildMachineDmaDefaults();
 
-    private void ApplyHostDmaDefaults()
+    private void ApplyBuildMachineDmaDefaults()
     {
-        HostDmaSnapshot snap = HostDma.Capture();
+        BuildMachineDmaSnapshot snap = BuildMachineDma.Capture();
         Locale = snap.Locale;
         GeoId = snap.GeoId.ToString(System.Globalization.CultureInfo.InvariantCulture);
         TimeZone = snap.TimeZoneId;
@@ -227,7 +233,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task BrowseIsoAsync()
     {
-        IStorageProvider? storage = _window.StorageProvider;
+        IStorageProvider? storage = _storage;
         if (storage is null)
         {
             return;
@@ -314,7 +320,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         if (targetIndex == WizardStageGates.Review)
         {
-            // Entering Review from stage navigation composes the same receipt as Next.
+            // Entering Review from stage navigation composes the same summary as Next.
             TryEnterReview();
             return;
         }
@@ -369,7 +375,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             return;
         }
 
-        IStorageProvider? storage = _window.StorageProvider;
+        IStorageProvider? storage = _storage;
         if (storage is null)
         {
             Status = "Save failed: no storage provider.";
@@ -552,7 +558,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void CancelBuild() => _buildCts?.Cancel();
 
-    [RelayCommand] private void Close() => _window.Close();
+    [RelayCommand] private void Close() => _close?.Invoke();
 
     private void RefreshCanBuild() =>
         CanBuild = WizardStageGates.CanBuild(
@@ -627,7 +633,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         {
             // Fail open on probe UX — reset to host default so Save/Build still work.
             _userChoseWimIndex = false;
-            _wimIndex = _hostWimDefault;
+            _wimIndex = _buildMachineWimDefault;
             Status = $"{result.Error.Code}: {result.Error.Message}";
             StatusIsError = true;
             RefreshRecipe();
@@ -643,7 +649,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             result.Value,
             _wimIndex,
             _userChoseWimIndex,
-            _hostWimDefault);
+            _buildMachineWimDefault);
         _wimIndex = selected;
         SelectedWimIndex = WimIndexes.FirstOrDefault(r => r.Index == selected);
         IsWimPickerVisible = true;
@@ -658,7 +664,10 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
     private bool RunPlan()
     {
-        WizardSessionResult result = WizardSession.ComposeAndPlan(BuildInput());
+        Result<WizardSessionInput, Failure> input = BuildInput();
+        WizardSessionResult result = input.IsOk
+            ? WizardSession.ComposeAndPlan(input.Value)
+            : WizardSessionResult.Fail($"{input.Error.Code}: {input.Error.Message}");
         Status = result.Message;
         StatusIsError = !result.Succeeded;
         if (!result.Succeeded)
@@ -683,16 +692,16 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             _lastProfile = parsed.IsOk ? parsed.Value : null;
         }
 
-        RefreshReceipt();
+        RefreshSummary();
         RefreshCanBuild();
         return true;
     }
 
-    /// <summary>Review receipt — quiet labels from ProductPosture; What's included from Plan-effective AppX.</summary>
-    private void RefreshReceipt()
+    /// <summary>Review summary — quiet labels from ProductPosture; What's included from Plan-effective AppX.</summary>
+    private void RefreshSummary()
     {
-        QuietBlockText = IncludedReceipt.FormatQuietBlock(IsBraveSelected());
-        PickStripText = IncludedReceipt.FormatPickStrip(SelectedPickLabels());
+        QuietBlockText = IncludedSummary.FormatQuietBlock(IsBraveSelected());
+        PickStripText = IncludedSummary.FormatPickStrip(SelectedPickLabels());
         PlanMetaText =
             $"Account {Username.Trim()} · region {Locale} / {TimeZone} · network {(_lastRequiresNetwork ? "needed" : "not needed")} · DMA {(DmaEnabled ? "on" : "off")} · {ImageQuality} lane";
 
@@ -700,9 +709,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         {
             FullPlanText = PlanDiff.Format(_lastArtifacts, _lastProfile);
             WhatsIncludedText = IsRecommendedPreset
-                ? IncludedReceipt.FormatWhatsIncluded(_lastArtifacts.RemoveProvisionedAppx)
+                ? IncludedSummary.FormatWhatsIncluded(_lastArtifacts.RemoveProvisionedAppx)
                 : string.Empty;
-            QuietSummaryText = IncludedReceipt.FormatQuietSummary(_lastArtifacts.RemoveProvisionedAppx.Count);
+            QuietSummaryText = IncludedSummary.FormatQuietSummary(_lastArtifacts.RemoveProvisionedAppx.Count);
             return;
         }
 
@@ -714,9 +723,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         IReadOnlyList<string> effectiveAppx = ProductPosture.UnionAppx(expanded.Value.RemoveProvisionedAppx);
         WhatsIncludedText = IsRecommendedPreset
-            ? IncludedReceipt.FormatWhatsIncluded(effectiveAppx)
+            ? IncludedSummary.FormatWhatsIncluded(effectiveAppx)
             : string.Empty;
-        QuietSummaryText = IncludedReceipt.FormatQuietSummary(effectiveAppx.Count);
+        QuietSummaryText = IncludedSummary.FormatQuietSummary(effectiveAppx.Count);
         FullPlanText = "";
     }
 
@@ -740,7 +749,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         BuildRecipe = WizardSession.FormatBuildRecipe(profilePath, SourceIsoPath, ImageQuality, _wimIndex);
     }
 
-    private WizardSessionInput BuildInput()
+    private Result<WizardSessionInput, Failure> BuildInput()
     {
         Result<PackageSelection, Failure> packagesResult = WizardSession.ResolvePackageChips(
             SelectedIds(BrowserChips),
@@ -749,13 +758,12 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             SelectedIds(WslChips));
         if (!packagesResult.IsOk)
         {
-            throw new InvalidOperationException(
-                $"{packagesResult.Error.Code}: {packagesResult.Error.Message}");
+            return Result.Fail<WizardSessionInput, Failure>(packagesResult.Error);
         }
 
         PackageSelection packages = packagesResult.Value;
 
-        return new WizardSessionInput(
+        return Result.Ok<WizardSessionInput, Failure>(new WizardSessionInput(
             Preset,
             Username,
             Password,
@@ -772,7 +780,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             WslText: WizardSession.MergeChipAndAdvanced(packages.WslProfileTokens, AdvancedWslText),
             SourceIsoPath: SourceIsoPath,
             ImageQualityText: ImageQuality,
-            WimIndex: _wimIndex);
+            WimIndex: _wimIndex));
     }
 
     private static IEnumerable<string> SelectedIds(ObservableCollection<ChipItem> chips) =>

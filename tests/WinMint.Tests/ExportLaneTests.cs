@@ -81,7 +81,7 @@ public class ExportLaneTests
                 TestContext.Current.CancellationToken);
 
             Assert.False(result.IsOk);
-            Assert.Equal("servicing.export.lane_mismatch", result.Error.Code);
+            Assert.Equal("servicing.export.laneMismatch", result.Error.Code);
             Assert.Empty(runner.Stages);
         }
         finally

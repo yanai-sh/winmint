@@ -57,14 +57,14 @@ if ($guest.schemaVersion -ne 'winmint.provisioning.evidence/v1') {
 }
 
 $phases = @($guest.phases)
-if ($phases -notcontains 'shell.first_paint') {
-    throw 'splash-before-Explorer marker missing: phases must contain shell.first_paint'
+if ($phases -notcontains 'shell.firstPaint') {
+    throw 'splash-before-Explorer marker missing: phases must contain shell.firstPaint'
 }
 
-$paintIdx = [array]::IndexOf($phases, 'shell.first_paint')
+$paintIdx = [array]::IndexOf($phases, 'shell.firstPaint')
 $settleIdx = [array]::IndexOf($phases, 'settle.begin')
 if ($settleIdx -ge 0 -and $paintIdx -gt $settleIdx) {
-    throw 'splash-before-Explorer failed: shell.first_paint after settle.begin'
+    throw 'splash-before-Explorer failed: shell.firstPaint after settle.begin'
 }
 
 $outcome = [string]$guest.outcome
@@ -72,17 +72,17 @@ if ($outcome -ne 'Complete') {
     throw "Smoke acceptance requires outcome Complete, got '$outcome' (Failed/Reboot is not green)"
 }
 
-# DMA hard fields must succeed — apply_failed / hard_mismatch / device_region_failed are not acceptance-green.
-# resume_skip + checkpoint.resume also proves prior settle (ticket 17), including setup-region gate on resume.
-$dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn') -or
-    (($phases -contains 'settle.resume_skip') -and ($phases -contains 'checkpoint.resume'))
+# DMA hard fields must succeed — applyFailed / hardMismatch / deviceRegionFailed are not acceptance-green.
+# resumeSkip + checkpoint.resume also proves prior settle (ticket 17), including setup-region gate on resume.
+$dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.locationWarn') -or
+    (($phases -contains 'settle.resumeSkip') -and ($phases -contains 'checkpoint.resume'))
 if (-not $dmaOk) {
-    throw 'DMA hard fields missing: need settle.ok, settle.location_warn, or settle.resume_skip+checkpoint.resume'
+    throw 'DMA hard fields missing: need settle.ok, settle.locationWarn, or settle.resumeSkip+checkpoint.resume'
 }
 
-$setupRegionOk = ($phases -contains 'settle.device_region_ok') -or ($phases -contains 'settle.device_region_repaired')
+$setupRegionOk = ($phases -contains 'settle.deviceRegionOk') -or ($phases -contains 'settle.deviceRegionRepaired')
 if (-not $setupRegionOk) {
-    throw 'DMA setup region missing: need settle.device_region_ok or settle.device_region_repaired (DeviceRegion Ireland)'
+    throw 'DMA setup region missing: need settle.deviceRegionOk or settle.deviceRegionRepaired (DeviceRegion Ireland)'
 }
 
 # Unlock: Winlogon Shell must be Explorer, not Supervisor.

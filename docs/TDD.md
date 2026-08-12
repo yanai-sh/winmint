@@ -7,7 +7,7 @@
 
 | | Rule |
 |---|------|
-| **Should** | Day-to-day = S1–S3 (`just check` + fakes); Smoke = `Test` lane + stub jobs; metal jobs share S3 executor; CI = scaffold only (no VM / no ISO); S4 fail-fast on stalls |
+| **Should** | Day-to-day = S1–S3 (`just check` + fakes); Smoke = `Test` lane + stub jobs; provisioning jobs share S3 executor; CI = scaffold only (no VM / no ISO); S4 fail-fast on stalls |
 | **Could** | Diff VHD / digest-gated rebuild — harness-only |
 | **Don’t** | Skip S4 hard evidence; invent a Hyper-V-only settle/executor path “for speed” |
 
@@ -21,7 +21,7 @@
 | **S2** | ImageServicing (`Apply`) | DISM (fake when port exists) |
 | **S3** | ProvisioningSession (`Run` + env adapters) | Local-substitutable OS |
 | **S4** | Hyper-V Smoke acceptance | Harness + VM |
-| **S5** | Metal Apply acceptance (pre-wipe) | Harness on build host |
+| **S5** | Host Apply acceptance (pre-wipe) | Harness on build host |
 
 Do **not** test: private phase helpers, splash pixels (except status→presenter via `ISplashPresenter`), DISM internals, v1 scripts, evidence JSON as control plane.
 
@@ -50,23 +50,23 @@ Prefer fake elevated runner when introduced. Assert stage order, Shell stamp pat
 
 ### S3 — ProvisioningSession
 
-See [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md). Use `SessionEnvironment` fakes + `TimeProvider`. Assert paint-before-settle **order**; wall-clock paint budget is S4.
+See [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md). Use `ShellEnvironment` / `MachineSetupEnvironment` fakes + `TimeProvider`. Assert paint-before-settle **order**; wall-clock paint budget is S4.
 
 ### S4 — Hyper-V acceptance
 
 One harness entry → guest evidence (`tools/vm/`). Splash before Explorer; DMA hard fields; unlock; lane marker; time-to-first-paint. Acceptance pinned remove-list digests. Not part of `just check`.
 
-### S5 — Metal acceptance (pre-wipe)
+### S5 — Host Apply acceptance (pre-wipe)
 
-One harness entry → Apply workdir evidence (`tools/metal/`). Assert `evidence.json` lane + digests; driver inventory when Profile has `drivers`. `[Trait("Category", "Metal")]` excluded from `just check`. Destructive bare-metal install is **manual only** after S5 green.
+One harness entry → Apply workdir evidence (`tools/apply/`). Assert `evidence.json` lane + digests; driver inventory when Profile has `drivers`. `[Trait("Category", "S5")]` excluded from `just check`. Destructive bare-metal install is **manual only** after S5 green.
 
 ## Gate commands
 
 ```powershell
-just check          # S1–S3 (excludes Category=S4 and Category=Metal)
+just check          # S1–S3 (excludes Category=S4 and Category=S5)
 # maintainer:
-just metal ISO=…
-just metal-assert WORK=…
+just host-apply ISO=…
+just host-apply-assert WORK=…
 just smoke          # S4 Hyper-V
 ```
 

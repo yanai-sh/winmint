@@ -21,10 +21,10 @@ public sealed record RunOptions
     /// <summary>When set, catalog minimumWindowsBuild is checked at Plan.</summary>
     public int? WindowsBuild { get; init; }
 
-    /// <summary>When true, native ARM64 audit job fails closed on emulated/x64 binaries (SL7/metal).</summary>
+    /// <summary>When true, native ARM64 audit job fails closed on emulated/x64 binaries (SL7/Primary).</summary>
     public bool PackageAuditStrict { get; init; }
 
-    /// <summary>When true, package install failures fail the session (harness/metal). Default best-effort.</summary>
+    /// <summary>When true, package install failures fail the session (harness/Primary). Default best-effort.</summary>
     public bool PackageStrict { get; init; }
 
     /// <summary>When true, Plan emits smoke.stub.* jobs (Smoke/acceptance harness). Default false.</summary>
@@ -53,22 +53,7 @@ public sealed record BuildArtifacts(
 
 public sealed record UnattendArtifact(string Xml);
 
-public sealed record JobsArtifact(string SchemaVersion, IReadOnlyList<JobDescriptor> Jobs);
-
-public sealed record JobDescriptor(
-    string Id,
-    ProvisionJobKind Kind,
-    string? PackageId = null,
-    bool NeedsReboot = false,
-    string? WingetArchitecture = null,
-    WslInstallKind? WslInstallKind = null,
-    string? WslFromFileRepo = null,
-    IReadOnlyList<string>? WslFromFileAssetNames = null,
-    bool AuditStrict = false,
-    IReadOnlyList<string>? ScoopBuckets = null,
-    string? DohPrimary = null,
-    string? DohSecondary = null,
-    string? DohTemplate = null);
+public sealed record JobsArtifact(string SchemaVersion, IReadOnlyList<ProvisionJob> Jobs);
 
 public sealed record ServicingStageList(IReadOnlyList<ServicingStage> Stages);
 
@@ -85,7 +70,7 @@ public sealed record ServicingStage(
     }
 }
 
-/// <summary>C#↔PS1 stage parameter keys (stages.json / RunPlan hashtable).</summary>
+/// <summary>C#↔PS1 stage parameter keys (stages.json / Invoke-ServicingPlan hashtable).</summary>
 public static class StageParams
 {
     public const string SourceIso = "sourceIso";

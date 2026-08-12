@@ -2,7 +2,15 @@ using System.Text.Json.Serialization;
 
 namespace WinMint.Contracts;
 
-/// <summary>Guest <c>bundle.json</c> interchange (ImageServicing write / BundleLoader read).</summary>
+/// <summary>
+/// Guest <c>bundle.json</c> interchange (ImageServicing write / BundleLoader read). One schema constant,
+/// one wire record — the writer and the reader must not spell the version twice.
+/// </summary>
+public static class GuestBundleWire
+{
+    public const string SchemaVersion = "winmint.provisioning.bundle/v1";
+}
+
 public sealed record BundleFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
     [property: JsonPropertyName("supervisorPath")] string SupervisorPath,

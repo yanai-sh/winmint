@@ -13,8 +13,7 @@ public class StubJobsTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub)]),
             Env(processes, evidence, splash: splash),
             TestContext.Current.CancellationToken);
@@ -39,8 +38,7 @@ public class StubJobsTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs:
             [
                 new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub),
@@ -68,8 +66,7 @@ public class StubJobsTests
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
 
-        SessionResult result = await ProvisioningSession.RunAsync(
-            SessionMode.Shell,
+        SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs:
             [
                 new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub),

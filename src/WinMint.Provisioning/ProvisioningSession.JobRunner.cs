@@ -9,23 +9,14 @@ public static partial class ProvisioningSession
     {
         public static async Task<JobsPhaseResult> ExecuteAsync(
             ProvisioningBundle bundle,
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             long tenureStartTs,
             int startIndex,
             CancellationToken ct)
         {
-            JobsPhaseResult FailJob(string code, string message)
-            {
-                SessionStatus status = new(code, message);
-                env.Splash.SetStatus(status);
-                phases.Add(status.Code);
-                return new JobsPhaseResult(SessionOutcome.Failed, status, TimedOut: false);
-            }
-
             SessionStatus begin = new("jobs.begin", "Provisioning jobs start.");
-            env.Splash.SetStatus(begin);
-            phases.Add(begin.Code);
+            Note(env, phases, begin);
 
             List<PackageFailureEntry> packageFailures = [];
 
@@ -33,12 +24,12 @@ public static partial class ProvisioningSession
             {
                 if (!IsPackageKind(failingJob.Kind))
                 {
-                    return FailJob(code, message);
+                    return FailJob(env, phases, code, message);
                 }
 
                 if (bundle.PackageStrict)
                 {
-                    return FailJob(code, message);
+                    return FailJob(env, phases, code, message);
                 }
 
                 packageFailures.Add(
@@ -140,12 +131,20 @@ public static partial class ProvisioningSession
                         {
                             if (job.Kind is ProvisionJobKind.Winget && string.IsNullOrWhiteSpace(job.PackageId))
                             {
-                                return FailJob("jobs.failed", $"Job '{job.Id}' kind winget requires packageId.");
+                                return FailJob(
+                                    env,
+                                    phases,
+                                    "jobs.failed",
+                                    $"Job '{job.Id}' kind winget requires packageId.");
                             }
 
                             if (env.Appx is null)
                             {
-                                return FailJob("jobs.failed", $"Job '{job.Id}' requires IAppxPackageManager.");
+                                return FailJob(
+                                    env,
+                                    phases,
+                                    "jobs.failed",
+                                    $"Job '{job.Id}' requires IAppxPackageManager.");
                             }
 
                             try
@@ -159,7 +158,7 @@ public static partial class ProvisioningSession
                             {
                                 JobsPhaseResult? regFail = RecordPackageFailure(
                                     job,
-                                    "jobs.winget.register_failed",
+                                    "jobs.winget.registerFailed",
                                     $"{job.Id}: register {DesktopAppInstallerFamilyName}: {ex.Message}");
                                 if (regFail is not null)
                                 {
@@ -174,7 +173,7 @@ public static partial class ProvisioningSession
                             {
                                 JobsPhaseResult? pathFail = RecordPackageFailure(
                                     job,
-                                    "jobs.winget.path_missing",
+                                    "jobs.winget.pathMissing",
                                     $"{job.Id}: winget.exe not found after registering {DesktopAppInstallerFamilyName}.");
                                 if (pathFail is not null)
                                 {
@@ -192,7 +191,7 @@ public static partial class ProvisioningSession
                                 {
                                     JobsPhaseResult? importFail = RecordPackageFailure(
                                         job,
-                                        "jobs.winget.import_missing",
+                                        "jobs.winget.importMissing",
                                         $"{job.Id}: winget-import.json missing at {BundleLoader.DefaultGuestWingetImportPath}.");
                                     if (importFail is not null)
                                     {
@@ -241,13 +240,19 @@ public static partial class ProvisioningSession
                             {
                                 string kindWire = job.Kind.ToWire();
                                 return FailJob(
+                                    env,
+                                    phases,
                                     "jobs.failed",
                                     $"Job '{job.Id}' kind {kindWire} requires packageId.");
                             }
 
                             if (env.ResolveScoopCmd is null)
                             {
-                                return FailJob("jobs.failed", $"Job '{job.Id}' requires ResolveScoopCmd.");
+                                return FailJob(
+                                    env,
+                                    phases,
+                                    "jobs.failed",
+                                    $"Job '{job.Id}' requires ResolveScoopCmd.");
                             }
 
                             (JobsPhaseResult? scoopReady, string? scoopCmd) = await EnsureScoopReadyAsync(
@@ -290,7 +295,7 @@ public static partial class ProvisioningSession
                                     {
                                         JobsPhaseResult? bucketFail = RecordPackageFailure(
                                             job,
-                                            "jobs.scoop.bucket_failed",
+                                            "jobs.scoop.bucketFailed",
                                             $"{job.Id}: scoop bucket add {bucket}: {ex.Message}");
                                         if (bucketFail is not null)
                                         {
@@ -305,7 +310,7 @@ public static partial class ProvisioningSession
                                     {
                                         JobsPhaseResult? bucketFail = RecordPackageFailure(
                                             job,
-                                            "jobs.scoop.bucket_failed",
+                                            "jobs.scoop.bucketFailed",
                                             $"{job.Id}: scoop bucket add {bucket} exited {bucketAdd.ExitCode}.");
                                         if (bucketFail is not null)
                                         {
@@ -347,7 +352,7 @@ public static partial class ProvisioningSession
                             {
                                 JobsPhaseResult? stampFail = RecordPackageFailure(
                                     job,
-                                    "jobs.shell.stamp_failed",
+                                    "jobs.shell.stampFailed",
                                     $"{job.Id}: {message}");
                                 if (stampFail is not null)
                                 {
@@ -358,8 +363,7 @@ public static partial class ProvisioningSession
                             }
 
                             SessionStatus stamped = new("jobs.shell.stamp", message);
-                            env.Splash.SetStatus(stamped);
-                            phases.Add(stamped.Code);
+                            Note(env, phases, stamped);
                             continue;
                         }
 
@@ -368,6 +372,8 @@ public static partial class ProvisioningSession
                             if (string.IsNullOrWhiteSpace(job.PackageId))
                             {
                                 return FailJob(
+                                    env,
+                                    phases,
                                     "jobs.failed",
                                     $"Job '{job.Id}' kind wsl requires packageId (distro name).");
                             }
@@ -416,6 +422,8 @@ public static partial class ProvisioningSession
 
                     default:
                         return FailJob(
+                            env,
+                            phases,
                             "jobs.kind.unsupported",
                             $"Unsupported job kind '{job.Kind.ToWire()}' for id '{job.Id}'.");
                 }
@@ -429,7 +437,7 @@ public static partial class ProvisioningSession
                 {
                     JobsPhaseResult? spawnFail = RecordPackageFailure(
                         job,
-                        "jobs.spawn_failed",
+                        "jobs.spawnFailed",
                         $"{job.Id}: {ex.Message}");
                     if (spawnFail is not null)
                     {
@@ -473,15 +481,26 @@ public static partial class ProvisioningSession
                 ? $"Provisioning jobs completed with {packageFailures.Count} package failure(s)."
                 : "Provisioning jobs completed.";
             SessionStatus ok = new("jobs.ok", okMessage);
-            env.Splash.SetStatus(ok);
-            phases.Add(ok.Code);
+            Note(env, phases, ok);
             return new JobsPhaseResult(SessionOutcome.Complete, ok, TimedOut: false);
         }
 
 
 
+        /// <summary>Paint the failure, log the phase, and end the jobs phase — the only way a job fails.</summary>
+        private static JobsPhaseResult FailJob(
+            ShellEnvironment env,
+            List<string> phases,
+            string code,
+            string message)
+        {
+            SessionStatus status = new(code, message);
+            Note(env, phases, status);
+            return new JobsPhaseResult(SessionOutcome.Failed, status, TimedOut: false);
+        }
+
         private static JobsPhaseResult RequestJobReboot(
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             ProvisionJob job,
             int nextJobIndex)
@@ -492,8 +511,7 @@ public static partial class ProvisioningSession
             SessionStatus reboot = new(
                 "jobs.reboot",
                 $"Job '{job.Id}' requires reboot; checkpoint {checkpoint.Phase}.");
-            env.Splash.SetStatus(reboot);
-            phases.Add(reboot.Code);
+            Note(env, phases, reboot);
             return new JobsPhaseResult(SessionOutcome.Reboot, reboot, TimedOut: false);
         }
 
@@ -501,7 +519,7 @@ public static partial class ProvisioningSession
 
         public static async Task<JobsPhaseResult?> EnsureNetworkAvailableAsync(
             ProvisioningBundle bundle,
-            SessionEnvironment env,
+            ShellEnvironment env,
             List<string> phases,
             CancellationToken ct)
         {
@@ -509,17 +527,15 @@ public static partial class ProvisioningSession
                 && await env.Connectivity.HasOutboundNetworkAsync(ct).ConfigureAwait(false))
             {
                 SessionStatus ok = new("network.ok", "Outbound connectivity available.");
-                env.Splash.SetStatus(ok);
-                phases.Add(ok.Code);
+                Note(env, phases, ok);
                 return null;
             }
 
-            SessionStatus failed = new(
+            return FailJob(
+                env,
+                phases,
                 "network.required.offline",
                 "Plan requires network but outbound connectivity probe failed.");
-            env.Splash.SetStatus(failed);
-            phases.Add(failed.Code);
-            return new JobsPhaseResult(SessionOutcome.Failed, failed, TimedOut: false);
         }
 
 
@@ -542,8 +558,8 @@ public static partial class ProvisioningSession
 
             Directory.CreateDirectory(evidenceDirectory);
             string path = Path.Combine(evidenceDirectory, "packages.evidence.json");
-            PackagesEvidenceDocument doc = new(PackagesEvidenceSchemaVersion, failures);
-            byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(doc, ProvisioningJsonContext.Default.PackagesEvidenceDocument);
+            PackagesEvidenceFile doc = new(PackagesEvidenceSchemaVersion, failures);
+            byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(doc, ProvisioningJsonContext.Default.PackagesEvidenceFile);
             File.WriteAllBytes(path, bytes);
         }
     }

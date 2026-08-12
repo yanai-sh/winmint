@@ -1,5 +1,5 @@
 {
-  "schema": "winmint.packages.proof/v1",
+  "schemaVersion": "winmint.packages.proof/v1",
   "architecture": "arm64",
   "catalogSha256": "a4ef44f43c7b3ee40bc329f163e3a7414938fe3e7c7698fc2ddae31a1943c148",
   "proveSetSha256": "bd9762716186282628f9e364d5f5c0549896d805af652a0b8c4d23afbd5ef105",

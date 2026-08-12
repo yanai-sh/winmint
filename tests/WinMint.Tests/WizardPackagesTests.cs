@@ -28,7 +28,7 @@ public class WizardPackagesTests
             []);
 
     [Fact]
-    public void Serialize_winget_and_scoop_plans_metal_jobs()
+    public void Serialize_winget_and_scoop_plans_package_jobs()
     {
         Profile profile = LabProfile(
             winget: ["jqlang.jq"],

@@ -27,7 +27,7 @@ CDM spray remains out as primary ([ADR-007](ADR-007-cdm-not-primary.md)); HKLM C
    - `dohProvider` (`cloudflare` \| `google` \| `quad9` \| null) — optional FirstLogon `doh.set` job; Smoke default off.
    - Legacy `keepCopilot` in JSON is ignored (not serialized).
 3. **Derived (no Profile flag):** if `packages.winget` contains `Brave.Brave`, stamp winutil BraveDebloat (12 HKLM BraveSoftware policies).
-4. **Opcode:** `StampOfflinePolicies` after Debloat removes, before `StagePayload`. Param-only `policySpecs`; Plan owns branching.
+4. **Opcode:** `StampOfflinePolicies` first after `MountInstallWim` — before Debloat/capability/feature removes and driver injection. (Amended: originally "after Debloat removes"; creating new `Policies\Microsoft\*` keys flakes Unauthorized on a heavily-serviced mount.) Param-only `policySpecs`, digest key included per row so the kernel never derives a family; Plan owns branching.
 5. This does **not** make CDM primary and does **not** put AppX preset names in Profile JSON.
 
 ### Consequences

@@ -4,7 +4,7 @@
   Prove live winget/scoop catalog ids (winget download / scoop archive download) and write config/packages.proof.json.
 .NOTES
   Maintainer gate only — never part of `just check`. Needs network + native ARM64 + winget.
-  Offline receipt test in just check enforces freshness. Validity = download prove + receipt.
+  Offline proof test in just check enforces freshness. Validity = download prove + proof.
   Winget: `winget download` (App Installer has no install --dry-run). Scoop: manifest + archive download.
 #>
 param(
@@ -220,14 +220,14 @@ function Test-ScoopId {
     }
 }
 
-function Write-PackagesProofReceipt {
+function Write-PackagesProofFile {
     param(
         [Parameter(Mandatory)][string] $CatalogPath,
         [Parameter(Mandatory)][string] $Architecture,
         [Parameter(Mandatory)][string] $OsArch,
         [Parameter(Mandatory)][AllowEmptyCollection()][object[]] $Entries
     )
-    $receiptPath = Join-Path $repoRoot 'config\packages.proof.json'
+    $proofPath = Join-Path $repoRoot 'config\packages.proof.json'
     $wingetVer = (& winget --version 2>$null | Out-String).Trim()
     $sorted = [System.Collections.Generic.List[object]]::new()
     if ($null -ne $Entries) { foreach ($e in $Entries) { $sorted.Add($e) } }
@@ -248,8 +248,8 @@ function Write-PackagesProofReceipt {
             [pscustomobject]$row
         }
     )
-    $receipt = [ordered]@{
-        schema         = 'winmint.packages.proof/v1'
+    $proof = [ordered]@{
+        schemaVersion  = 'winmint.packages.proof/v1'
         architecture   = $Architecture
         catalogSha256  = Get-FileSha256Hex -Path $CatalogPath
         proveSetSha256 = Get-ProveSetSha256Hex -Entries $Entries
@@ -260,11 +260,11 @@ function Write-PackagesProofReceipt {
         }
         entries        = $entryRows
     }
-    $tmpReceipt = Join-Path $repoRoot 'config\packages.proof.json.tmp'
-    $json = ($receipt | ConvertTo-Json -Depth 6) + "`n"
-    [System.IO.File]::WriteAllText($tmpReceipt, $json)
-    Move-Item -LiteralPath $tmpReceipt -Destination $receiptPath -Force
-    Write-Output "wrote $receiptPath"
+    $tmpProof = Join-Path $repoRoot 'config\packages.proof.json.tmp'
+    $json = ($proof | ConvertTo-Json -Depth 6) + "`n"
+    [System.IO.File]::WriteAllText($tmpProof, $json)
+    Move-Item -LiteralPath $tmpProof -Destination $proofPath -Force
+    Write-Output "wrote $proofPath"
 }
 
 function Invoke-PackagesCheck {
@@ -370,10 +370,10 @@ function Invoke-PackagesCheck {
 
     Write-Output "packages-check: ok=$ok skipped=$skipped fail=$($failures.Count) arch=$arch catalog=$CatalogPath"
     if ($failures.Count -gt 0) {
-        throw "packages-check failed ($($failures.Count)) — receipt not updated"
+        throw "packages-check failed ($($failures.Count)) — proof not updated"
     }
 
-    Write-PackagesProofReceipt -CatalogPath $CatalogPath -Architecture $arch -OsArch $osArch -Entries @($script:ProveEntries)
+    Write-PackagesProofFile -CatalogPath $CatalogPath -Architecture $arch -OsArch $osArch -Entries @($script:ProveEntries)
 }
 
 if ($SelfCheck) {

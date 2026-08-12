@@ -140,7 +140,7 @@ public class WizardSessionTests
             wimIndex: 5);
         Assert.Contains("--image-quality Release", recipe, StringComparison.Ordinal);
         Assert.Contains("--package-strict", recipe, StringComparison.Ordinal);
-        Assert.Contains("%LOCALAPPDATA%\\WinMint\\work\\sl7-primary", recipe, StringComparison.Ordinal);
+        Assert.Contains("%LOCALAPPDATA%\\WinMint\\work\\gate-b", recipe, StringComparison.Ordinal);
         Assert.Contains("--wim-index 5", recipe, StringComparison.Ordinal);
         Assert.Contains("--iso \"E:\\Win11.iso\"", recipe, StringComparison.Ordinal);
         Assert.StartsWith("winmint build ", recipe, StringComparison.Ordinal);
@@ -156,7 +156,7 @@ public class WizardSessionTests
             ImageServicing.DefaultProWimIndex);
         Assert.Contains("%ProgramData%\\WinMint\\work", recipe, StringComparison.Ordinal);
         Assert.DoesNotContain("--package-strict", recipe, StringComparison.Ordinal);
-        Assert.DoesNotContain("sl7-primary", recipe, StringComparison.Ordinal);
+        Assert.DoesNotContain("gate-b", recipe, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public class WizardSessionTests
             @"D:\p.json",
             @"E:\a.iso",
             "Test",
-            HostEdition.HomeWimIndex);
+            BuildMachineEdition.HomeWimIndex);
         Assert.Contains("--wim-index 1", recipe, StringComparison.Ordinal);
     }
 
@@ -202,11 +202,11 @@ public class WizardSessionTests
     [InlineData("Professional", ImageServicing.DefaultProWimIndex)]
     [InlineData("ProfessionalN", ImageServicing.DefaultProWimIndex)]
     [InlineData("ProfessionalWorkstation", ImageServicing.DefaultProWimIndex)]
-    [InlineData("Core", HostEdition.HomeWimIndex)]
-    [InlineData("CoreN", HostEdition.HomeWimIndex)]
-    [InlineData("Home", HostEdition.HomeWimIndex)]
-    [InlineData(null, HostEdition.HomeWimIndex)]
-    [InlineData("", HostEdition.HomeWimIndex)]
+    [InlineData("Core", BuildMachineEdition.HomeWimIndex)]
+    [InlineData("CoreN", BuildMachineEdition.HomeWimIndex)]
+    [InlineData("Home", BuildMachineEdition.HomeWimIndex)]
+    [InlineData(null, BuildMachineEdition.HomeWimIndex)]
+    [InlineData("", BuildMachineEdition.HomeWimIndex)]
     public void DefaultWimIndex_follows_host_edition(string? editionId, int expected) =>
-        Assert.Equal(expected, HostEdition.DefaultWimIndexForEditionId(editionId));
+        Assert.Equal(expected, BuildMachineEdition.DefaultWimIndexForEditionId(editionId));
 }

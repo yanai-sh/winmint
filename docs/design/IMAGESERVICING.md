@@ -34,12 +34,17 @@ public interface IElevatedPlanRunner
 {
     Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
         string workDirectory,
-        IReadOnlyList<ServicingStage> stages,
         CancellationToken ct);
 }
 ```
 
-When `OutputIsoPath` is unset, ImageServicing resolves the default leaf once from `ProfilePath` + lane + timestamp before Materialize. Materialize and evidence never invent a stemless name. Elevated RunPlan is the hard seam; reading `evidence.json` into `ImageEvidence` stays inside ImageServicing.
+The stage list crosses this seam as `{workDirectory}/stages.json` — Materialize writes it, `Invoke-ServicingPlan.ps1` reads it. An adapter that also took stages in-process would be a second, unenforced copy of the contract.
+
+When `OutputIsoPath` is unset, ImageServicing resolves the default leaf once from `ProfilePath` + lane + timestamp before Materialize. Materialize and evidence never invent a stemless name. Elevated Invoke-ServicingPlan is the hard seam; reading `evidence.json` into `ImageEvidence` stays inside ImageServicing.
+
+## Kernel naming
+
+A kernel file is named for the opcode it serves: `ServicingOpcode.StampOfflinePolicies` → `servicing/Stamp-OfflinePolicies.ps1`. That one-to-one mapping outranks PowerShell's approved-verb list, so `Stamp-`, `Stage-`, `Patch-` and `Inject-` stay. Everything in `servicing/` that is **not** an opcode kernel is a helper and does take an approved verb — `Invoke-ServicingPlan.ps1` (the loop), `Get-WimMetadata.ps1` (dot-sourced parser). `Set-OfflineComponent.ps1` serves two opcodes (`RemoveCapabilities`, `DisableOptionalFeatures`) and so cannot take either name.
 
 ## Invariants
 
@@ -48,15 +53,16 @@ When `OutputIsoPath` is unset, ImageServicing resolves the default leaf once fro
 3. Kernels: parameter hashtables only — no Profile JSON.
 4. First kernel non-zero → typed failure; workdir preserved; leftover mounts discarded.
 5. Lane encoded in `ExportWim` params by BuildPlan.
-6. One elevated `servicing/RunPlan.ps1` dumb loop per Apply (single UAC).
-7. Materialize owns Mutate params (e.g. capability/feature `kind`) — not RunPlan.
+6. One elevated `servicing/Invoke-ServicingPlan.ps1` dumb loop per Apply (single UAC).
+7. Materialize owns Mutate params (e.g. capability/feature `kind`) — not the kernel loop.
 8. Single-image WIM before commit; ExportWim fail-closes if index count ≠ 1.
 9. Host mounts under `%ProgramData%\WinMint\Servicing\` — not under workdir.
 10. WIM metadata snapshot/assert across export/commit/max-export; `ei.cfg` / INDEX=1 discipline.
 
 ## Typical stage order (Test)
 
-`MountInstallWim` → Debloat removes? → `StampOfflinePolicies` → `StagePayload` → `StageOobeUnattend` → `StampOfflineShell` → `PatchBootWimApply` → `ExportWim` → `BuildIso`  
+`MountInstallWim` → `StampOfflinePolicies` → Debloat removes? → capability/feature removes? → `InjectDrivers`? → `StagePayload` → `StageOobeUnattend` → `StampOfflineShell` → `PatchBootWimApply` → `ExportWim` → `BuildIso`  
+Policies stamp first: creating new `Policies\Microsoft\*` keys flakes Unauthorized on a heavily-serviced mount.  
 WinPE apply lane only. Release differs in `ExportWim` compression/cleanup params.
 
 ## Outside / rejected
