@@ -39,6 +39,14 @@ public static class HostCompile
                 new Failure("hostCompile.profile.invalid", detail));
         }
 
+        // Before any DISM work: a stale publish yields an ISO that boots guest code you no longer have.
+        // Only when a real elevated run follows — an injected runner produces no bootable media, so
+        // holding those callers to the publish state would just make the suite hostage to it.
+        if (runner is null && ImageServicing.CheckSupervisorFreshness() is { } staleSupervisor)
+        {
+            return Result.Fail<HostCompileResult, Failure>(staleSupervisor);
+        }
+
         bool packageStrict = request.PackageStrict ?? HostDefaults.PackageStrictFor(request.ImageQuality);
         RunOptions runOptions = new()
         {

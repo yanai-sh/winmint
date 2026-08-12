@@ -438,6 +438,59 @@ public static class ImageServicing
             ?? (File.Exists(sideBySide) ? sideBySide : null);
     }
 
+    /// <summary>Guest code compiled into the Supervisor — Provisioning plus the contracts it links.</summary>
+    private static readonly string[] SupervisorSourceProjects =
+        ["WinMint.Provisioning", "WinMint.Contracts"];
+
+    /// <summary>
+    /// Refuses a compile whose published Supervisor predates guest source. Staging copies whatever it
+    /// finds, so a forgotten republish once shipped an ISO whose guest behaviour silently predated the
+    /// tree that built it — the machine then fails in ways the source no longer explains.
+    /// </summary>
+    /// <returns>Null when the publish is current, absent, or unverifiable.</returns>
+    public static Failure? CheckSupervisorFreshness()
+    {
+        string? published = FindPublishedSupervisor();
+        if (published is null)
+        {
+            return null; // Staging reports the missing publish with its own remedy.
+        }
+
+        string? staleSince = SupervisorSourceProjects
+            .Select(static project => ToolkitRoot.TryFind("src", project))
+            .Select(root => FindSourceNewerThan(published, root))
+            .FirstOrDefault(static hit => hit is not null);
+
+        return staleSince is null
+            ? null
+            : new Failure(
+                "hostCompile.supervisor.stale",
+                $"Published Supervisor predates '{staleSince}'. An ISO built now would ship guest code "
+                + "that no longer matches this tree. Run: just publish-provisioning");
+    }
+
+    /// <summary>
+    /// First <c>*.cs</c> under <paramref name="sourceRoot"/> newer than the published binary.
+    /// Null when source is absent — a packaged toolkit ships without <c>src/</c> and cannot check.
+    /// </summary>
+    internal static string? FindSourceNewerThan(string publishedExe, string? sourceRoot)
+    {
+        if (sourceRoot is null || !Directory.Exists(sourceRoot))
+        {
+            return null;
+        }
+
+        // ponytail: mtime, not content hash — a clock skew or a no-op touch gives a false "stale".
+        // That errs toward an extra publish; upgrade to hashing inputs only if that becomes noise.
+        DateTime published = File.GetLastWriteTimeUtc(publishedExe);
+        return Directory
+            .EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(static file =>
+                !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                && !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .FirstOrDefault(file => File.GetLastWriteTimeUtc(file) > published);
+    }
+
     /// <summary>Store MSIX pwsh breaks DISM/AppX offline servicing; fail closed on Apply.</summary>
     internal static bool IsStoreMsixPwsh(string? processPath)
     {
