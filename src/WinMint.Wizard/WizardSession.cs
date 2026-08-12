@@ -109,6 +109,7 @@ internal static class WizardSession
         string iso = QuoteArg(sourceIsoPath);
         string lane = string.IsNullOrWhiteSpace(imageQualityText) ? "Test" : imageQualityText.Trim();
         bool gateB = lane.Equals("Release", StringComparison.OrdinalIgnoreCase);
+        // Must match HostDefaults.GateBWorkDirectory / DefaultWorkDirectory (env-expanded form for copy-paste).
         string work = gateB
             ? "\"%LOCALAPPDATA%\\WinMint\\work\\sl7-primary\""
             : "\"%ProgramData%\\WinMint\\work\"";

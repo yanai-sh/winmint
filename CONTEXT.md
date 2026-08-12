@@ -18,17 +18,17 @@ _Avoid_: USB productization; in-process raw write; Rufus fork; “any flasher”
 **Profile** — Build intent for one ISO (`winmint.profile/v1`).  
 _Avoid_: BuildConfig (user-facing); preset names in JSON
 
-**Orchestrator** — Validates Profile, plans, drives elevated Servicing. Hosts: Cli + Avalonia Wizard (**BuildPlan**).  
+**Orchestrator** — Validates Profile, plans, drives elevated Servicing. Hosts: Cli + Avalonia Wizard (**HostCompile**).  
 _Avoid_: second planning brain in Cli/Wizard
 
-**Apply** — Elevated ImageServicing DISM loop (workdir → Output ISO). Product verb on Cli/Wizard is **`build`**; Just `apply-maintainer` is the same loop under a maintainer name.  
-_Avoid_: calling Flash “Apply”; treating `build` and Flash as the same step
+**HostCompile** — Orchestrator entry: Profile + run options → Plan → ImageServicing → `ImageEvidence`. Cli/Wizard are thin adapters.  
+_Avoid_: second Plan/Apply brain in Cli or Wizard; conflating with Flash
 
 **BuildPlan** — Profile + run options → plan artifacts.  
 _Avoid_: DISM at the flag layer; ports before a second adapter
 
-**Servicing / ImageServicing** — Offline WIM/ISO work via elevated `pwsh -File` kernels.  
-_Avoid_: in-process DISM from Wizard; guest FirstLogon Servicing
+**Servicing / ImageServicing** — Offline WIM/ISO work via elevated `pwsh -File` kernels. Owns default Output ISO leaf when unset.  
+_Avoid_: in-process DISM from Wizard; guest FirstLogon Servicing; hosts inventing a second default Output ISO name
 
 **Payload** — Staged SetupComplete, Supervisor, jobs/media. `%WINDIR%\WinMint\` tenure-only; `%ProgramData%\WinMint\` may remain for evidence.  
 _Avoid_: guest pwsh control plane; dual `$OEM$` SetupScripts
@@ -72,7 +72,7 @@ _Avoid_: Keep-flag (retired name); keep-list polarity; BCU; CDM as primary; Prof
 **Shell** — Winlogon replacement during Provisioning tenure only.  
 _Avoid_: calling Wizard UI chrome “Shell”
 
-**Wizard** — Avalonia BuildPlan host: Source → Account → Software → Review; Phase B elevated Apply.
+**Wizard** — Avalonia HostCompile host: Source → Account → Software → Review; Phase B elevated Apply.  
 _Avoid_: DISM or second planner in UI
 
 **Package catalog** — `config/packages.json`: chip key ≠ Profile install id.  

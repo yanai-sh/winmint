@@ -1,25 +1,22 @@
-using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Security.Principal;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace WinMint.Orchestrator;
 
 /// <summary>One elevated <c>pwsh -File servicing/RunPlan.ps1</c> invocation per Apply (single UAC).</summary>
 public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 {
-    public async Task<Result<ImageEvidence, Failure>> ExecuteAsync(
+    public async Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
         string workDirectory,
         IReadOnlyList<ServicingStage> stages,
-        ServicingRun run,
-        BuildArtifacts plan,
         CancellationToken ct)
     {
+        _ = stages;
         string? runPlan = FindRunPlanScript();
         if (runPlan is null)
         {
-            return Result.Fail<ImageEvidence, Failure>(
+            return Result.Fail<ElevatedRunOk, Failure>(
                 new Failure("servicing.runPlan.missing", "servicing/RunPlan.ps1 not found."));
         }
 
@@ -86,86 +83,29 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 
             if (ct.IsCancellationRequested)
             {
-                return Result.Fail<ImageEvidence, Failure>(
+                return Result.Fail<ElevatedRunOk, Failure>(
                     new Failure("servicing.cancelled", "Apply was cancelled."));
             }
 
             if (exitCode != 0)
             {
                 string message = ReadFailureMessage(workDirectory) ?? $"RunPlan exited {exitCode}.";
-                return Result.Fail<ImageEvidence, Failure>(
+                return Result.Fail<ElevatedRunOk, Failure>(
                     new Failure("servicing.runPlan.failed", message));
             }
         }
         catch (OperationCanceledException)
         {
-            return Result.Fail<ImageEvidence, Failure>(
+            return Result.Fail<ElevatedRunOk, Failure>(
                 new Failure("servicing.cancelled", "Apply was cancelled."));
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            return Result.Fail<ImageEvidence, Failure>(
+            return Result.Fail<ElevatedRunOk, Failure>(
                 new Failure("servicing.elevation.failed", ex.Message));
         }
 
-        return ReadEvidence(workDirectory, plan, run, stages);
-    }
-
-    private static Result<ImageEvidence, Failure> ReadEvidence(
-        string workDirectory,
-        BuildArtifacts plan,
-        ServicingRun run,
-        IReadOnlyList<ServicingStage> stages)
-    {
-        string evidencePath = Path.Combine(workDirectory, "evidence.json");
-        if (!File.Exists(evidencePath))
-        {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure("servicing.evidence.missing", "RunPlan succeeded but evidence.json is missing."));
-        }
-
-        EvidenceFile? file;
-        try
-        {
-            file = JsonSerializer.Deserialize(
-                File.ReadAllBytes(evidencePath),
-                ServicingJsonContext.Default.EvidenceFile);
-        }
-        catch (JsonException ex)
-        {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure("servicing.evidence.invalid", ex.Message));
-        }
-
-        if (file is null
-            || !string.Equals(file.SchemaVersion, ImageServicing.EvidenceSchemaVersion, StringComparison.Ordinal))
-        {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure(
-                    "servicing.evidence.schema",
-                    $"Expected {ImageServicing.EvidenceSchemaVersion}."));
-        }
-
-        ServicingStage? stamp = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.StampOfflineShell);
-        if (stamp is null
-            || !stamp.Parameters.TryGetValue(StageParams.ShellTarget, out string? shellTarget)
-            || string.IsNullOrWhiteSpace(shellTarget))
-        {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure(
-                    "servicing.shellStamp.missing",
-                    "StampOfflineShell stage missing or incomplete."));
-        }
-
-        return Result.Ok<ImageEvidence, Failure>(
-            new ImageEvidence(
-                file.OutputIsoPath
-                    ?? run.OutputIsoPath
-                    ?? OutputIsoNaming.DefaultPath(workDirectory, profilePath: null, plan.Manifest.ImageQuality),
-                plan.Manifest.ImageQuality,
-                file.ShellStampTargetPath ?? shellTarget,
-                file.Digests?.ToFrozenDictionary(StringComparer.Ordinal)
-                    ?? (IReadOnlyDictionary<string, string>)FrozenDictionary<string, string>.Empty));
+        return Result.Ok<ElevatedRunOk, Failure>(default);
     }
 
     private static string? ReadFailureMessage(string workDirectory)
@@ -229,14 +169,14 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 }
 
 internal sealed record EvidenceFile(
-    [property: JsonPropertyName("schemaVersion")] string? SchemaVersion,
-    [property: JsonPropertyName("outputIsoPath")] string? OutputIsoPath,
-    [property: JsonPropertyName("shellStampTargetPath")] string? ShellStampTargetPath,
-    [property: JsonPropertyName("lane")] string? Lane,
-    [property: JsonPropertyName("packageStrict")] bool PackageStrict,
-    [property: JsonPropertyName("digests")] Dictionary<string, string>? Digests);
+    [property: System.Text.Json.Serialization.JsonPropertyName("schemaVersion")] string? SchemaVersion,
+    [property: System.Text.Json.Serialization.JsonPropertyName("outputIsoPath")] string? OutputIsoPath,
+    [property: System.Text.Json.Serialization.JsonPropertyName("shellStampTargetPath")] string? ShellStampTargetPath,
+    [property: System.Text.Json.Serialization.JsonPropertyName("lane")] string? Lane,
+    [property: System.Text.Json.Serialization.JsonPropertyName("packageStrict")] bool PackageStrict,
+    [property: System.Text.Json.Serialization.JsonPropertyName("digests")] Dictionary<string, string>? Digests);
 
 internal sealed record FailureFile(
-    [property: JsonPropertyName("schemaVersion")] string? SchemaVersion,
-    [property: JsonPropertyName("message")] string? Message,
-    [property: JsonPropertyName("opcode")] string? Opcode);
+    [property: System.Text.Json.Serialization.JsonPropertyName("schemaVersion")] string? SchemaVersion,
+    [property: System.Text.Json.Serialization.JsonPropertyName("message")] string? Message,
+    [property: System.Text.Json.Serialization.JsonPropertyName("opcode")] string? Opcode);

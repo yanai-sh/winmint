@@ -174,6 +174,12 @@ public class WizardSessionTests
     public void ResolveWorkDirectory_release_defaults_to_gate_b()
     {
         Assert.Equal(
+            HostDefaults.GateBWorkDirectory,
+            WizardBuild.GateBWorkDirectory);
+        Assert.Equal(
+            HostDefaults.DefaultWorkDirectory,
+            WizardBuild.DefaultWorkDirectory);
+        Assert.Equal(
             WizardBuild.GateBWorkDirectory,
             WizardBuild.ResolveWorkDirectory(ImageQualityLane.Release));
         Assert.Equal(

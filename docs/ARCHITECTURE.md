@@ -71,9 +71,13 @@ Sibling archive [`winmint_v1`](https://github.com/yanai-sh/winmint_v1) is **arch
 | Evidence / VM acceptance *ideas* | Peer Splash.exe + JSON mailbox |
 | Behaviour notes mapped into BuildPlan / ProvisioningSession | Guest pwsh PreLock; `WinMint.ps1`; Shell↔RunOnce coupling |
 
-## Guest path
+## Standing invariants (guest path)
 
-Living invariants: [DESIGN](DESIGN.md#invariants). Topology above; do not restate the numbered list here.
+1. Servicing stamps Shell offline to Supervisor; Machine setup: autologon → fail-closed Shell verify/restamp → secret wipe. No jobs. Never `DefaultUserName=defaultuser0` with `AutoAdminLogon` for first interactive logon. MachineSetup Failed ⇒ non-zero exit.
+2. Supervisor as Shell + splash = lock. Unlock = `explorer.exe` + exit. Fail-open on complete/failed/timeout. Reboot keeps Shell + checkpoint. Durable state: `%ProgramData%\WinMint\`.
+3. DMA settle: final snapshot authoritative. Hard: locale / GeoID / TZ. Soft: location-services.
+4. Splash: in-process Direct2D/GDI; paint before settle. Status in-memory; JSON = evidence only.
+5. Jobs: child-process / delegated batch; `needsReboot` ⇒ checkpoint, keep Shell, reboot, resume. No guest pwsh product runtime.
 
 ## Image quality (run override)
 

@@ -505,11 +505,17 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             OutputIsoPath = result.OutputIsoPath;
             SaveStatus = $"Saved → {_savedProfilePath}\n{result.Message}";
             bool gateB = lane == ImageQualityLane.Release;
+            string? sha = null;
+            if (result.Digests is not null
+                && result.Digests.TryGetValue("outputIso.sha256", out string? digest))
+            {
+                sha = digest;
+            }
+
             FlashGuidanceText = FlashGuidance.Format(
-                result.OutputIsoPath
-                    ?? OutputIsoNaming.DefaultPath(work, _savedProfilePath, lane),
-                result.WorkDirectory ?? work,
-                gateB);
+                result.OutputIsoPath!,
+                gateB,
+                sha);
         }
         else
         {

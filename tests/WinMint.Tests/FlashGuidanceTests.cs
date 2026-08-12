@@ -9,7 +9,6 @@ public class FlashGuidanceTests
     {
         string text = FlashGuidance.Format(
             @"C:\work\out.iso",
-            @"C:\work",
             gateB: true,
             outputIsoSha256: "abc123");
 
@@ -24,26 +23,16 @@ public class FlashGuidanceTests
     [Fact]
     public void Format_test_lane_is_not_wipe_gate()
     {
-        string text = FlashGuidance.Format(@"D:\out.iso", @"D:\work", gateB: false);
+        string text = FlashGuidance.Format(@"D:\out.iso", gateB: false);
         Assert.Contains("not the wipe gate", text, StringComparison.Ordinal);
         Assert.Contains("evidence.json", text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void TryReadOutputIsoSha256_reads_digest()
+    public void Format_without_sha_points_at_evidence()
     {
-        string work = Path.Combine(Path.GetTempPath(), "winmint-flash-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(work);
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(work, "evidence.json"),
-                """{"digests":{"outputIso.sha256":"deadbeef"}}""");
-            Assert.Equal("deadbeef", FlashGuidance.TryReadOutputIsoSha256(work));
-        }
-        finally
-        {
-            Directory.Delete(work, recursive: true);
-        }
+        string text = FlashGuidance.Format(@"E:\iso.iso", gateB: true);
+        Assert.DoesNotContain("SHA-256 (digests.outputIso.sha256):", text, StringComparison.Ordinal);
+        Assert.Contains("digests.outputIso.sha256", text, StringComparison.Ordinal);
     }
 }

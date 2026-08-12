@@ -5,8 +5,8 @@
 
 ## Tasks
 
-1. **Helper** — `OutputIsoNaming` in Orchestrator: `ProfileStem`, `DefaultFileName`, `DefaultPath` (TimeProvider-friendly overload).
-2. **Wire defaults** — Cli `--out-iso` omit, Wizard omit, ImageServicing null fallback, PwshElevatedPlanRunner fallback.
+1. **Helper** — `OutputIsoNaming` in Orchestrator (now **internal**; ImageServicing owns resolve). Transitional public helper folded behind Apply.
+2. **Wire defaults** — ImageServicing normalizes once from `ServicingRun.ProfilePath`; hosts pass profile path / override only.
 3. **Resolve consumers** — Assert-MetalEvidence, Invoke-MetalApply, Invoke-Smoke, primary-gate-wizard, artifact hygiene: evidence `outputIsoPath` → single `winmint_*.iso` → legacy `out.iso`.
 4. **Docs** — CONTEXT Output ISO, ADR-012 leaf wording, Justfile/README/`Invoke-PrimaryGate` comments.
 5. **Tests** — unit helper; keep FlashGuidance path-agnostic; fixtures may keep legacy paths.

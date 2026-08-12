@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using WinMint.Contracts;
@@ -68,12 +69,14 @@ public static class ImageServicing
                 new Failure("servicing.sourceIso.missing", $"Source ISO not found: {run.SourceIsoPath}"));
         }
 
-        Directory.CreateDirectory(run.WorkDirectory);
-        Directory.CreateDirectory(Path.Combine(run.WorkDirectory, "logs"));
-        Directory.CreateDirectory(Path.Combine(run.WorkDirectory, "payload"));
+        ServicingRun normalized = NormalizeOutputIso(run, plan.Manifest.ImageQuality);
+
+        Directory.CreateDirectory(normalized.WorkDirectory);
+        Directory.CreateDirectory(Path.Combine(normalized.WorkDirectory, "logs"));
+        Directory.CreateDirectory(Path.Combine(normalized.WorkDirectory, "payload"));
         Directory.CreateDirectory(HostServicingRoot);
 
-        Result<IReadOnlyList<ServicingStage>, Failure> materialized = Materialize(plan, run);
+        Result<IReadOnlyList<ServicingStage>, Failure> materialized = Materialize(plan, normalized);
         if (!materialized.IsOk)
         {
             return Result.Fail<ImageEvidence, Failure>(materialized.Error);
@@ -84,15 +87,95 @@ public static class ImageServicing
             return Result.Fail<ImageEvidence, Failure>(laneError);
         }
 
-        Result<ImageEvidence, Failure> outcome = await runner.ExecuteAsync(
-                run.WorkDirectory,
+        Result<ElevatedRunOk, Failure> elevated = await runner.ExecuteAsync(
+                normalized.WorkDirectory,
                 materialized.Value,
-                run,
-                plan,
                 ct)
             .ConfigureAwait(false);
-        // Invariant: never delete workdir on failure (or success) — caller owns lifetime.
-        return outcome;
+        if (!elevated.IsOk)
+        {
+            // Invariant: never delete workdir on failure (or success) — caller owns lifetime.
+            return Result.Fail<ImageEvidence, Failure>(elevated.Error);
+        }
+
+        return ReadEvidence(normalized.WorkDirectory, plan, normalized, materialized.Value);
+    }
+
+    /// <summary>Resolve default Output ISO once; Materialize/evidence never invent a leaf.</summary>
+    private static ServicingRun NormalizeOutputIso(ServicingRun run, ImageQualityLane lane)
+    {
+        if (!string.IsNullOrWhiteSpace(run.OutputIsoPath))
+        {
+            return run with { OutputIsoPath = run.OutputIsoPath.Trim() };
+        }
+
+        return run with
+        {
+            OutputIsoPath = OutputIsoNaming.DefaultPath(run.WorkDirectory, run.ProfilePath, lane),
+        };
+    }
+
+    private static Result<ImageEvidence, Failure> ReadEvidence(
+        string workDirectory,
+        BuildArtifacts plan,
+        ServicingRun run,
+        IReadOnlyList<ServicingStage> stages)
+    {
+        string evidencePath = Path.Combine(workDirectory, "evidence.json");
+        if (!File.Exists(evidencePath))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.evidence.missing", "RunPlan succeeded but evidence.json is missing."));
+        }
+
+        EvidenceFile? file;
+        try
+        {
+            file = JsonSerializer.Deserialize(
+                File.ReadAllBytes(evidencePath),
+                ServicingJsonContext.Default.EvidenceFile);
+        }
+        catch (JsonException ex)
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.evidence.invalid", ex.Message));
+        }
+
+        if (file is null
+            || !string.Equals(file.SchemaVersion, EvidenceSchemaVersion, StringComparison.Ordinal))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.evidence.schema",
+                    $"Expected {EvidenceSchemaVersion}."));
+        }
+
+        ServicingStage? stamp = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.StampOfflineShell);
+        if (stamp is null
+            || !stamp.Parameters.TryGetValue(StageParams.ShellTarget, out string? shellTarget)
+            || string.IsNullOrWhiteSpace(shellTarget))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.shellStamp.missing",
+                    "StampOfflineShell stage missing or incomplete."));
+        }
+
+        if (string.IsNullOrWhiteSpace(run.OutputIsoPath))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.outputIso.missing",
+                    "OutputIsoPath was not normalized before evidence read."));
+        }
+
+        return Result.Ok<ImageEvidence, Failure>(
+            new ImageEvidence(
+                file.OutputIsoPath ?? run.OutputIsoPath,
+                plan.Manifest.ImageQuality,
+                file.ShellStampTargetPath ?? shellTarget,
+                file.Digests?.ToFrozenDictionary(StringComparer.Ordinal)
+                    ?? (IReadOnlyDictionary<string, string>)FrozenDictionary<string, string>.Empty));
     }
 
     /// <summary>
@@ -146,8 +229,9 @@ public static class ImageServicing
         string mountDir = HostMountDir;
         string unattendPath = Path.Combine(run.WorkDirectory, "unattend.xml");
         string wimOut = Path.Combine(run.WorkDirectory, "install.wim");
+        // NormalizeOutputIso already set OutputIsoPath before Materialize.
         string outputIso = run.OutputIsoPath
-            ?? OutputIsoNaming.DefaultPath(run.WorkDirectory, profilePath: null, plan.Manifest.ImageQuality);
+            ?? throw new InvalidOperationException("OutputIsoPath must be normalized before Materialize.");
         int wimIndex = run.WimIndex ?? DefaultProWimIndex;
 
         File.WriteAllText(unattendPath, plan.Unattend.Xml);

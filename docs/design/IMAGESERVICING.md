@@ -14,32 +14,32 @@ namespace WinMint.Orchestrator;
 
 public static class ImageServicing
 {
-    public static Result<ImageEvidence, Failure> Apply(
+    public static Task<Result<ImageEvidence, Failure>> ApplyAsync(
         BuildArtifacts plan,
         ServicingRun run,
+        IElevatedPlanRunner runner,
         CancellationToken ct = default);
 }
 
 public sealed record ServicingRun(
     string SourceIsoPath,
     string WorkDirectory,
-    string? OutputIsoPath = null);
+    string? OutputIsoPath = null,
+    string? ProfilePath = null,
+    int? WimIndex = null,
+    bool ReuseMedia = false);
 
-public enum ServicingOpcode
+/// <summary>Elevation only — evidence read is ImageServicing implementation.</summary>
+public interface IElevatedPlanRunner
 {
-    MountInstallWim,
-    StagePayload,
-    StageOobeUnattend,
-    PatchBootWimApply,
-    StampOfflineShell,
-    StampOfflinePolicies,
-    RemoveProvisionedAppx,
-    ExportWim,
-    BuildIso,
+    Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
+        string workDirectory,
+        IReadOnlyList<ServicingStage> stages,
+        CancellationToken ct);
 }
 ```
 
-(Other Debloat opcodes as Plan emits.) Evidence: output ISO path, lane, Shell stamp path, digests.
+When `OutputIsoPath` is unset, ImageServicing resolves the default leaf once from `ProfilePath` + lane + timestamp before Materialize. Materialize and evidence never invent a stemless name. Elevated RunPlan is the hard seam; reading `evidence.json` into `ImageEvidence` stays inside ImageServicing.
 
 ## Invariants
 

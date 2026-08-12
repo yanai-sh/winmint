@@ -272,21 +272,20 @@ internal static class Program
 
         WritePlanHonesty(artifacts!);
 
-        string resolvedOutIso = outIso?.FullName
-            ?? OutputIsoNaming.DefaultPath(
-                work.FullName,
-                profilePath.FullName,
-                artifacts!.Manifest.ImageQuality);
-
-        ServicingRun servicingRun = new(
-            SourceIsoPath: iso.FullName,
-            WorkDirectory: work.FullName,
-            OutputIsoPath: resolvedOutIso,
-            WimIndex: wimIndex,
-            ReuseMedia: reuseMedia);
-
-        Result<ImageEvidence, Failure> applied =
-            await ImageServicing.ApplyAsync(artifacts!, servicingRun).ConfigureAwait(false);
+        Result<ImageEvidence, Failure> applied = await HostCompile.ApplyAsync(
+                new HostCompileRequest(
+                    ProfilePath: profilePath.FullName,
+                    SourceIsoPath: iso.FullName,
+                    ImageQuality: artifacts!.Manifest.ImageQuality,
+                    WorkDirectory: work.FullName,
+                    OutputIsoPath: outIso?.FullName,
+                    WimIndex: wimIndex,
+                    ReuseMedia: reuseMedia,
+                    PackageStrict: packageStrict,
+                    PackageAuditStrict: packageAuditStrict,
+                    IncludeSmokeStubs: includeSmokeStubs,
+                    ImageArchitecture: imageArchitecture))
+            .ConfigureAwait(false);
         if (!applied.IsOk)
         {
             CliLog.Failure(Log, applied.Error.Code, applied.Error.Message);

@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 
 namespace WinMint.Wizard;
 
@@ -9,16 +8,11 @@ internal static class FlashGuidance
 {
     public static string Format(
         string outputIsoPath,
-        string workDirectory,
         bool gateB,
         string? outputIsoSha256 = null)
     {
         string iso = outputIsoPath.Trim();
-        string work = workDirectory.Trim();
-        string evidence = Path.Combine(work, "evidence.json");
-        string? sha = string.IsNullOrWhiteSpace(outputIsoSha256)
-            ? TryReadOutputIsoSha256(work)
-            : outputIsoSha256.Trim();
+        string? sha = string.IsNullOrWhiteSpace(outputIsoSha256) ? null : outputIsoSha256.Trim();
 
         StringBuilder sb = new();
         if (gateB)
@@ -38,51 +32,10 @@ internal static class FlashGuidance
         }
         else
         {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Check digests.outputIso.sha256 in: {evidence}");
+            sb.AppendLine("Check digests.outputIso.sha256 on ImageEvidence / evidence.json.");
         }
 
         sb.Append("Boot expects WinPE LaunchApply, not Setup.");
         return sb.ToString();
-    }
-
-    public static string? TryReadOutputIsoSha256(string workDirectory)
-    {
-        string evidencePath = Path.Combine(
-            workDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-            "evidence.json");
-        if (!File.Exists(evidencePath))
-        {
-            return null;
-        }
-
-        try
-        {
-            using FileStream stream = File.OpenRead(evidencePath);
-            using JsonDocument doc = JsonDocument.Parse(stream);
-            if (!doc.RootElement.TryGetProperty("digests", out JsonElement digests))
-            {
-                return null;
-            }
-
-            if (!digests.TryGetProperty("outputIso.sha256", out JsonElement shaEl))
-            {
-                return null;
-            }
-
-            string? sha = shaEl.GetString();
-            return string.IsNullOrWhiteSpace(sha) ? null : sha.Trim();
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
     }
 }

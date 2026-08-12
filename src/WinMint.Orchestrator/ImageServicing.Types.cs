@@ -4,6 +4,7 @@ public sealed record ServicingRun(
     string SourceIsoPath,
     string WorkDirectory,
     string? OutputIsoPath = null,
+    string? ProfilePath = null,
     int? WimIndex = null,
     bool ReuseMedia = false);
 
@@ -13,13 +14,14 @@ public sealed record ImageEvidence(
     string ShellStampTargetPath,
     IReadOnlyDictionary<string, string> Digests);
 
-/// <summary>Elevated plan runner port — real pwsh adapter and test fake ship together (ticket 02).</summary>
+/// <summary>Elevation succeeded — evidence is ImageServicing's job.</summary>
+public readonly record struct ElevatedRunOk;
+
+/// <summary>Elevated RunPlan port — pwsh adapter + test fake (elevation only).</summary>
 public interface IElevatedPlanRunner
 {
-    Task<Result<ImageEvidence, Failure>> ExecuteAsync(
+    Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
         string workDirectory,
         IReadOnlyList<ServicingStage> stages,
-        ServicingRun run,
-        BuildArtifacts plan,
         CancellationToken ct);
 }

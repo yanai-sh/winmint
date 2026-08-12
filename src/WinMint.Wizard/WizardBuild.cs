@@ -2,27 +2,15 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Wizard;
 
-/// <summary>Avalonia-free build glue — Plan + ImageServicing.ApplyAsync (same path as Cli).</summary>
+/// <summary>Avalonia-free build glue — thin HostCompile adapter (same path as Cli).</summary>
 internal static class WizardBuild
 {
-    public static string DefaultWorkDirectory { get; } =
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "WinMint",
-            "work");
+    public static string DefaultWorkDirectory => HostDefaults.DefaultWorkDirectory;
 
-    /// <summary>Gate B wipe ISO workdir — same as just primary-gate / -PrimaryGate.</summary>
-    public static string GateBWorkDirectory { get; } =
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "WinMint",
-            "work",
-            "sl7-primary");
+    public static string GateBWorkDirectory => HostDefaults.GateBWorkDirectory;
 
     public static string ResolveWorkDirectory(ImageQualityLane lane, string? workDirectory = null) =>
-        string.IsNullOrWhiteSpace(workDirectory)
-            ? lane == ImageQualityLane.Release ? GateBWorkDirectory : DefaultWorkDirectory
-            : workDirectory.Trim();
+        HostDefaults.ResolveWorkDirectory(lane, workDirectory);
 
     public static async Task<WizardBuildResult> TryApplyAsync(
         WizardBuildInput input,
@@ -48,60 +36,40 @@ internal static class WizardBuild
             return WizardBuildResult.Fail("wizard.build.imageQuality", laneError!);
         }
 
-        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(input.ProfilePath);
-        if (!parsed.IsOk)
-        {
-            string detail = string.Join("; ", parsed.Error.Select(static i => $"{i.Code}: {i.Message}"));
-            return WizardBuildResult.Fail("wizard.build.profile.invalid", detail);
-        }
-
-        bool packageStrict = lane == ImageQualityLane.Release;
-        RunOptions runOptions = new()
-        {
-            ImageQuality = lane,
-            SourceIsoPath = input.SourceIsoPath.Trim(),
-            OutputIsoPath = string.IsNullOrWhiteSpace(input.OutputIsoPath) ? null : input.OutputIsoPath.Trim(),
-            PackageStrict = packageStrict,
-        };
-
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value, runOptions);
-        if (!planned.IsOk)
-        {
-            return WizardBuildResult.Fail(planned.Error.Code, planned.Error.Message);
-        }
-
-        string work = ResolveWorkDirectory(lane, input.WorkDirectory);
-        Directory.CreateDirectory(work);
-
-        string outIso = string.IsNullOrWhiteSpace(input.OutputIsoPath)
-            ? OutputIsoNaming.DefaultPath(work, input.ProfilePath, lane)
-            : input.OutputIsoPath.Trim();
-
-        ServicingRun run = new(
+        HostCompileRequest request = new(
+            ProfilePath: input.ProfilePath,
             SourceIsoPath: input.SourceIsoPath.Trim(),
-            WorkDirectory: work,
-            OutputIsoPath: outIso,
+            ImageQuality: lane,
+            WorkDirectory: input.WorkDirectory,
+            OutputIsoPath: string.IsNullOrWhiteSpace(input.OutputIsoPath) ? null : input.OutputIsoPath.Trim(),
             WimIndex: input.WimIndex,
             ReuseMedia: input.ReuseMedia);
 
-        IElevatedPlanRunner effective = runner ?? new PwshElevatedPlanRunner();
         Result<ImageEvidence, Failure> applied =
-            await ImageServicing.ApplyAsync(planned.Value, run, effective, cancellationToken)
-                .ConfigureAwait(false);
+            await HostCompile.ApplyAsync(request, runner, cancellationToken).ConfigureAwait(false);
 
+        string work = HostDefaults.ResolveWorkDirectory(lane, input.WorkDirectory);
         if (!applied.IsOk)
         {
+            string code = applied.Error.Code switch
+            {
+                "hostCompile.profile.invalid" => "wizard.build.profile.invalid",
+                "hostCompile.profile.missing" => "wizard.build.profile.missing",
+                "hostCompile.sourceIso.missing" => "wizard.build.sourceIso.missing",
+                _ => applied.Error.Code,
+            };
             return WizardBuildResult.Fail(
-                applied.Error.Code,
+                code,
                 $"{applied.Error.Message} Work directory preserved: {work}");
         }
 
+        bool packageStrict = HostDefaults.PackageStrictFor(lane);
         string gateHint = packageStrict
             ? " Gate B wipe media (pre-wipe ISO evidence — not Primary install proven)."
             : " Test lane (not the wipe gate).";
         string ok =
             $"Image OK: {applied.Value.OutputIsoPath}; Lane={applied.Value.Lane}; Shell={applied.Value.ShellStampTargetPath}; Work={work}.{gateHint}";
-        return WizardBuildResult.Ok(ok, applied.Value.OutputIsoPath, work);
+        return WizardBuildResult.Ok(ok, applied.Value.OutputIsoPath, work, applied.Value.Digests);
     }
 }
 
@@ -119,11 +87,16 @@ internal sealed record WizardBuildResult(
     string Code,
     string Message,
     string? OutputIsoPath,
-    string? WorkDirectory)
+    string? WorkDirectory,
+    IReadOnlyDictionary<string, string>? Digests)
 {
-    public static WizardBuildResult Ok(string message, string outputIso, string work) =>
-        new(true, "ok", message, outputIso, work);
+    public static WizardBuildResult Ok(
+        string message,
+        string outputIso,
+        string work,
+        IReadOnlyDictionary<string, string> digests) =>
+        new(true, "ok", message, outputIso, work, digests);
 
     public static WizardBuildResult Fail(string code, string message) =>
-        new(false, code, message, null, null);
+        new(false, code, message, null, null, null);
 }

@@ -7,6 +7,40 @@ namespace WinMint.Tests;
 public class ImageServicingApplyTests
 {
     [Fact]
+    public async Task Apply_resolves_default_output_iso_from_profile_stem()
+    {
+        BuildArtifacts plan = MinimalPlan();
+        string work = NewTempDir();
+        try
+        {
+            RecordingElevatedPlanRunner runner = new();
+            string profilePath = Path.Combine(work, "sl7.profile.json");
+            File.WriteAllText(profilePath, "{}");
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: null,
+                ProfilePath: profilePath);
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
+                plan,
+                run,
+                runner,
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
+            Assert.Contains("winmint_sl7_Test_", result.Value.OutputIsoPath, StringComparison.Ordinal);
+            Assert.DoesNotContain("winmint_profile_", result.Value.OutputIsoPath, StringComparison.Ordinal);
+            Assert.Equal("test-digest", result.Value.Digests["outputIso.sha256"]);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
     public async Task Apply_runs_stages_in_plan_order_with_shell_stamp_param()
     {
         BuildArtifacts plan = MinimalPlan();

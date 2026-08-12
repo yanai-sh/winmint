@@ -4,8 +4,8 @@ using System.Text.RegularExpressions;
 
 namespace WinMint.Orchestrator;
 
-/// <summary>Default Output ISO leaf when <c>OutputIsoPath</c> / <c>--out-iso</c> is unset.</summary>
-public static partial class OutputIsoNaming
+/// <summary>Default Output ISO leaf when <c>OutputIsoPath</c> / <c>--out-iso</c> is unset. Owned by ImageServicing.</summary>
+internal static partial class OutputIsoNaming
 {
     /// <summary>Profile path → sanitized stem (<c>sl7.profile.json</c> → <c>sl7</c>).</summary>
     public static string ProfileStem(string? profilePath)
