@@ -106,6 +106,15 @@ public class WinPeApplyPlanTests
         Assert.Contains("Test-LaunchApplyPatched", script, StringComparison.Ordinal);
         Assert.Contains("LaunchApply Index:1 verified", script, StringComparison.Ordinal);
         Assert.Contains(".winmint-boot-legacy", script, StringComparison.Ordinal);
+
+        // The erase target is discovered, never hardcoded: disk 0 can be the USB we booted from.
+        // Branch behaviour lives in tests/contract/Test-DiskGuard.ps1 — this only pins the contract.
+        Assert.DoesNotContain("select disk 0", script, StringComparison.Ordinal);
+        Assert.Contains("echo select disk %TARGET%", script, StringComparison.Ordinal);
+        Assert.Contains(":winmint_pick", script, StringComparison.Ordinal);
+        Assert.Contains("refusing to guess", script, StringComparison.Ordinal);
+        // Re-patch media whose LaunchApply predates the guard instead of trusting the marker.
+        Assert.Contains("$body -notmatch 'winmint_pick'", script, StringComparison.Ordinal);
     }
 
     [Fact]

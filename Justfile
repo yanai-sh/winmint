@@ -28,6 +28,7 @@ check: format-check build
     dotnet test --no-build -- --filter-not-trait "Category=S4" --filter-not-trait "Category=S5"
     just analyze-servicing
     just bootstrap-contract
+    just disk-guard-contract
 
 # Live winget/scoop prove → config/packages.proof.json. Not in `just check` (offline proof enforces freshness).
 packages-check ARCH="arm64":
@@ -35,6 +36,10 @@ packages-check ARCH="arm64":
 
 bootstrap-contract:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-BootstrapContract.ps1'
+
+# WinPE decides which disk to erase with no operator present — prove every branch, including refusal.
+disk-guard-contract:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-DiskGuard.ps1'
 
 # Install once: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser
 analyze-servicing:

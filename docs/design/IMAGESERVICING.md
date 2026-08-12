@@ -62,8 +62,16 @@ A kernel file is named for the opcode it serves: `ServicingOpcode.StampOfflinePo
 ## Typical stage order (Test)
 
 `MountInstallWim` → `StampOfflinePolicies` → Debloat removes? → capability/feature removes? → `InjectDrivers`? → `StagePayload` → `StageOobeUnattend` → `StampOfflineShell` → `PatchBootWimApply` → `ExportWim` → `BuildIso`  
-Policies stamp first: creating new `Policies\Microsoft\*` keys flakes Unauthorized on a heavily-serviced mount.  
+Policies stamp first: creating new `Policies\Microsoft\*` keys flakes Unauthorized on a heavily-serviced mount.
 WinPE apply lane only. Release differs in `ExportWim` compression/cleanup params.
+
+### Target disk
+
+`LaunchApply.cmd` runs `clean` with no operator present, so the erase target is **discovered, never hardcoded** — disk 0 can be the USB it booted from. It keeps disks whose `detail disk` `Type` is not USB, then erases the single survivor. Two survivors is where a size heuristic guesses wrong, so it **refuses and prints the list** instead. So does zero survivors, or unparsable output.
+
+The escape hatch for a genuinely ambiguous machine is a unique model substring in `winmint-target-disk.txt` at the media root — operator hygiene on already-writable media, not a Profile field, since the value identifies one machine's hardware rather than a reusable build intent. It narrows candidates and cannot select a USB.
+
+Branches are proven in [Test-DiskGuard](../../tests/contract/Test-DiskGuard.ps1) against pre-seeded `diskpart` output, since WinPE cannot be exercised from a dev box.
 
 ## Outside / rejected
 
