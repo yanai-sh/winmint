@@ -498,6 +498,19 @@ public static class ImageServicing
     }
 }
 
+internal sealed record EvidenceFile(
+    [property: JsonPropertyName("schemaVersion")] string? SchemaVersion,
+    [property: JsonPropertyName("outputIsoPath")] string? OutputIsoPath,
+    [property: JsonPropertyName("shellStampTargetPath")] string? ShellStampTargetPath,
+    [property: JsonPropertyName("lane")] string? Lane,
+    [property: JsonPropertyName("packageStrict")] bool PackageStrict,
+    [property: JsonPropertyName("digests")] Dictionary<string, string>? Digests);
+
+internal sealed record FailureFile(
+    [property: JsonPropertyName("schemaVersion")] string? SchemaVersion,
+    [property: JsonPropertyName("message")] string? Message,
+    [property: JsonPropertyName("opcode")] string? Opcode);
+
 [JsonSerializable(typeof(BundleFile))]
 [JsonSerializable(typeof(EvidenceFile))]
 [JsonSerializable(typeof(FailureFile))]

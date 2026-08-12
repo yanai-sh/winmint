@@ -3,7 +3,12 @@ namespace WinMint.Orchestrator;
 /// <summary>Orchestrator Profile → Plan → ImageServicing entry. Cli/Wizard stay thin adapters.</summary>
 public static class HostCompile
 {
-    public static async Task<Result<ImageEvidence, Failure>> ApplyAsync(
+    /// <summary>
+    /// Profile/plan failures → <see cref="Result{TOk,TErr}.Error"/>.
+    /// Plan success always yields <see cref="HostCompileResult.Plan"/>; Apply failure is
+    /// <see cref="HostCompileResult.ApplyError"/> (so Cli can emit honesty without a second Plan).
+    /// </summary>
+    public static async Task<Result<HostCompileResult, Failure>> ApplyAsync(
         HostCompileRequest request,
         IElevatedPlanRunner? runner = null,
         CancellationToken cancellationToken = default)
@@ -12,7 +17,7 @@ public static class HostCompile
 
         if (string.IsNullOrWhiteSpace(request.ProfilePath) || !File.Exists(request.ProfilePath))
         {
-            return Result.Fail<ImageEvidence, Failure>(
+            return Result.Fail<HostCompileResult, Failure>(
                 new Failure(
                     "hostCompile.profile.missing",
                     $"Profile not found: {request.ProfilePath}"));
@@ -20,7 +25,7 @@ public static class HostCompile
 
         if (string.IsNullOrWhiteSpace(request.SourceIsoPath) || !File.Exists(request.SourceIsoPath))
         {
-            return Result.Fail<ImageEvidence, Failure>(
+            return Result.Fail<HostCompileResult, Failure>(
                 new Failure(
                     "hostCompile.sourceIso.missing",
                     $"Source ISO not found: {request.SourceIsoPath}"));
@@ -30,7 +35,7 @@ public static class HostCompile
         if (!parsed.IsOk)
         {
             string detail = string.Join("; ", parsed.Error.Select(static i => $"{i.Code}: {i.Message}"));
-            return Result.Fail<ImageEvidence, Failure>(
+            return Result.Fail<HostCompileResult, Failure>(
                 new Failure("hostCompile.profile.invalid", detail));
         }
 
@@ -49,7 +54,7 @@ public static class HostCompile
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value, runOptions);
         if (!planned.IsOk)
         {
-            return Result.Fail<ImageEvidence, Failure>(planned.Error);
+            return Result.Fail<HostCompileResult, Failure>(planned.Error);
         }
 
         string work = HostDefaults.ResolveWorkDirectory(request.ImageQuality, request.WorkDirectory);
@@ -64,9 +69,27 @@ public static class HostCompile
             ReuseMedia: request.ReuseMedia);
 
         IElevatedPlanRunner effective = runner ?? new PwshElevatedPlanRunner();
-        return await ImageServicing.ApplyAsync(planned.Value, run, effective, cancellationToken)
-            .ConfigureAwait(false);
+        Result<ImageEvidence, Failure> applied =
+            await ImageServicing.ApplyAsync(planned.Value, run, effective, cancellationToken)
+                .ConfigureAwait(false);
+        if (!applied.IsOk)
+        {
+            return Result.Ok<HostCompileResult, Failure>(
+                new HostCompileResult(planned.Value, Evidence: null, applied.Error));
+        }
+
+        return Result.Ok<HostCompileResult, Failure>(
+            new HostCompileResult(planned.Value, applied.Value, ApplyError: null));
     }
+}
+
+/// <summary>One Plan; Evidence set when Apply succeeds. ApplyError set when Plan ok but Apply failed.</summary>
+public sealed record HostCompileResult(
+    BuildArtifacts Plan,
+    ImageEvidence? Evidence,
+    Failure? ApplyError)
+{
+    public bool Succeeded => Evidence is not null && ApplyError is null;
 }
 
 public sealed record HostCompileRequest(

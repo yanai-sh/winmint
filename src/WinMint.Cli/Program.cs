@@ -240,43 +240,16 @@ internal static class Program
         bool packageStrict,
         bool includeSmokeStubs)
     {
-        if (!TryBuildRunOptions(
-                imageQuality,
-                imageArchitecture,
-                packageAuditStrict,
-                packageStrict,
-                includeSmokeStubs,
-                out RunOptions planRun,
-                out int exit))
+        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
             return exit;
         }
 
-        if (!TryLoadArtifacts(
-                profilePath,
-                out BuildArtifacts? artifacts,
-                out exit,
-                planRun with
-                {
-                    SourceIsoPath = iso.FullName,
-                    OutputIsoPath = outIso?.FullName,
-                }))
-        {
-            return exit;
-        }
-
-        if (artifacts!.Manifest.ImageQuality == ImageQualityLane.Release)
-        {
-            CliLog.ReleaseLaneWarning(Log);
-        }
-
-        WritePlanHonesty(artifacts!);
-
-        Result<ImageEvidence, Failure> applied = await HostCompile.ApplyAsync(
+        Result<HostCompileResult, Failure> applied = await HostCompile.ApplyAsync(
                 new HostCompileRequest(
                     ProfilePath: profilePath.FullName,
                     SourceIsoPath: iso.FullName,
-                    ImageQuality: artifacts!.Manifest.ImageQuality,
+                    ImageQuality: lane,
                     WorkDirectory: work.FullName,
                     OutputIsoPath: outIso?.FullName,
                     WimIndex: wimIndex,
@@ -293,9 +266,26 @@ internal static class Program
             return 1;
         }
 
-        CliLog.ImageOk(Log, applied.Value.OutputIsoPath);
-        CliLog.ShellStamp(Log, applied.Value.ShellStampTargetPath);
-        CliLog.Lane(Log, applied.Value.Lane);
+        HostCompileResult compiled = applied.Value;
+        if (compiled.Plan.Manifest.ImageQuality == ImageQualityLane.Release)
+        {
+            CliLog.ReleaseLaneWarning(Log);
+        }
+
+        WritePlanHonesty(compiled.Plan);
+
+        if (!compiled.Succeeded)
+        {
+            Failure err = compiled.ApplyError
+                ?? new Failure("hostCompile.apply.unknown", "Apply failed without an error.");
+            CliLog.Failure(Log, err.Code, err.Message);
+            CliLog.WorkPreserved(Log, work.FullName);
+            return 1;
+        }
+
+        CliLog.ImageOk(Log, compiled.Evidence!.OutputIsoPath);
+        CliLog.ShellStamp(Log, compiled.Evidence.ShellStampTargetPath);
+        CliLog.Lane(Log, compiled.Evidence.Lane);
         return 0;
     }
 

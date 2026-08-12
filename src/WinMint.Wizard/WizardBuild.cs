@@ -45,7 +45,7 @@ internal static class WizardBuild
             WimIndex: input.WimIndex,
             ReuseMedia: input.ReuseMedia);
 
-        Result<ImageEvidence, Failure> applied =
+        Result<HostCompileResult, Failure> applied =
             await HostCompile.ApplyAsync(request, runner, cancellationToken).ConfigureAwait(false);
 
         string work = HostDefaults.ResolveWorkDirectory(lane, input.WorkDirectory);
@@ -63,13 +63,24 @@ internal static class WizardBuild
                 $"{applied.Error.Message} Work directory preserved: {work}");
         }
 
+        HostCompileResult compiled = applied.Value;
+        if (!compiled.Succeeded)
+        {
+            Failure err = compiled.ApplyError
+                ?? new Failure("hostCompile.apply.unknown", "Apply failed without an error.");
+            return WizardBuildResult.Fail(
+                err.Code,
+                $"{err.Message} Work directory preserved: {work}");
+        }
+
+        ImageEvidence evidence = compiled.Evidence!;
         bool packageStrict = HostDefaults.PackageStrictFor(lane);
         string gateHint = packageStrict
             ? " Gate B wipe media (pre-wipe ISO evidence — not Primary install proven)."
             : " Test lane (not the wipe gate).";
         string ok =
-            $"Image OK: {applied.Value.OutputIsoPath}; Lane={applied.Value.Lane}; Shell={applied.Value.ShellStampTargetPath}; Work={work}.{gateHint}";
-        return WizardBuildResult.Ok(ok, applied.Value.OutputIsoPath, work, applied.Value.Digests);
+            $"Image OK: {evidence.OutputIsoPath}; Lane={evidence.Lane}; Shell={evidence.ShellStampTargetPath}; Work={work}.{gateHint}";
+        return WizardBuildResult.Ok(ok, evidence.OutputIsoPath, work, evidence.Digests);
     }
 }
 

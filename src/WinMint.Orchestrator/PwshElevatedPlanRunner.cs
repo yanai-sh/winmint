@@ -167,16 +167,3 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         return principal.IsInRole(WindowsBuiltInRole.Administrator);
     }
 }
-
-internal sealed record EvidenceFile(
-    [property: System.Text.Json.Serialization.JsonPropertyName("schemaVersion")] string? SchemaVersion,
-    [property: System.Text.Json.Serialization.JsonPropertyName("outputIsoPath")] string? OutputIsoPath,
-    [property: System.Text.Json.Serialization.JsonPropertyName("shellStampTargetPath")] string? ShellStampTargetPath,
-    [property: System.Text.Json.Serialization.JsonPropertyName("lane")] string? Lane,
-    [property: System.Text.Json.Serialization.JsonPropertyName("packageStrict")] bool PackageStrict,
-    [property: System.Text.Json.Serialization.JsonPropertyName("digests")] Dictionary<string, string>? Digests);
-
-internal sealed record FailureFile(
-    [property: System.Text.Json.Serialization.JsonPropertyName("schemaVersion")] string? SchemaVersion,
-    [property: System.Text.Json.Serialization.JsonPropertyName("message")] string? Message,
-    [property: System.Text.Json.Serialization.JsonPropertyName("opcode")] string? Opcode);
