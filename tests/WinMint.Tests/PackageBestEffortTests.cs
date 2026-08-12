@@ -15,7 +15,7 @@ public class PackageBestEffortTests
         string evidenceDir = Path.Combine(Path.GetTempPath(), "WinMintTests", Guid.NewGuid().ToString("N"));
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]),
+            Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", ProvisionJobKind.Winget, PackageId: "jqlang.jq")]),
             Env(processes, evidence, appx: appx) with { EvidenceDirectory = evidenceDir },
             TestContext.Current.CancellationToken);
 
@@ -33,7 +33,7 @@ public class PackageBestEffortTests
         RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]) with { PackageStrict = true },
+            Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", ProvisionJobKind.Winget, PackageId: "jqlang.jq")]) with { PackageStrict = true },
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 

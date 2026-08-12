@@ -75,7 +75,7 @@ smoke ISO WORK=".scratch/smoke" PROFILE="samples/acceptance.profile.json":
 smoke-assert EVIDENCE:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'
 
-# S5 Host Apply (pre-wipe). Test lane ≠ Primary. Wipe ISO: just primary-gate ISO=…
+# S5 Host Apply (pre-wipe). Test lane ≠ Primary. Wipe ISO: just primary-gate <iso> <work>
 host-apply ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="Test":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-HostApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality '{{QUALITY}}'
 
@@ -89,3 +89,7 @@ host-apply-assert WORK=".scratch/sl7-build":
 # Wipe-lane assert only (fails on Test evidence).
 primary-gate-assert WORK="":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-PrimaryGate.ps1' -AssertOnly -Work '{{WORK}}'
+
+# Operator walkthrough for the Primary wipe path. Elevate to let it drive the gate.
+primary-gate-wizard:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-PrimaryGateWizard.ps1'

@@ -126,8 +126,8 @@ public class WizardSessionTests
     [Fact]
     public void MergeChipAndAdvanced_chips_when_advanced_empty()
     {
-        string merged = WizardSession.MergeChipAndAdvanced(["Git.Git", "jqlang.jq"], "  \n ");
-        Assert.Equal($"Git.Git{Environment.NewLine}jqlang.jq", merged);
+        string merged = WizardSession.MergeChipAndAdvanced(["Brave.Brave", "jqlang.jq"], "  \n ");
+        Assert.Equal($"Brave.Brave{Environment.NewLine}jqlang.jq", merged);
     }
 
     [Fact]

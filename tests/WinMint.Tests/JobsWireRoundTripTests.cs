@@ -18,9 +18,9 @@ public class JobsWireRoundTripTests
             [
                 new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub, NeedsReboot: true),
                 new ProvisionJob(
-                    "winget.Git.Git",
+                    "winget.jqlang.jq",
                     ProvisionJobKind.Winget,
-                    PackageId: "Git.Git",
+                    PackageId: "jqlang.jq",
                     WingetArchitecture: "arm64"),
                 new ProvisionJob(
                     "scoop.batch",
@@ -44,7 +44,7 @@ public class JobsWireRoundTripTests
                 new ProvisionJob(
                     "package.auditNative",
                     ProvisionJobKind.PackageAuditNative,
-                    PackageId: "Git.Git",
+                    PackageId: "jqlang.jq",
                     AuditStrict: true),
             ]);
 

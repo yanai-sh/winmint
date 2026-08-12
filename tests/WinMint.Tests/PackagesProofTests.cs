@@ -116,6 +116,17 @@ public class PackagesProofTests
         Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
     }
 
+    /// <summary>
+    /// MinGit is the product constant; full Git for Windows carries an MSYS2 bash payload
+    /// we never install. Offering it in the catalog is enough for a Profile to opt in.
+    /// </summary>
+    [Fact]
+    public void Catalog_does_not_offer_a_git_that_ships_bash()
+    {
+        Assert.False(PackageCatalog.Default.TryGetToolByInstallId("Git.Git", out _));
+        Assert.True(PackageCatalog.Default.TryGetToolByInstallId(ProductPosture.MinGitWingetId, out _));
+    }
+
     private static string NewTemp() =>
         Directory.CreateDirectory(
             Path.Combine(Path.GetTempPath(), "winmint-proof-" + Guid.NewGuid().ToString("N")))

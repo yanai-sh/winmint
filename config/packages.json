@@ -87,12 +87,6 @@
       "id": "jqlang.jq",
       "architectures": ["amd64", "arm64"]
     },
-    "Git.Git": {
-      "displayName": "Git",
-      "source": "winget",
-      "id": "Git.Git",
-      "architectures": ["amd64", "arm64"]
-    },
     "mingit": {
       "displayName": "MinGit",
       "source": "winget",

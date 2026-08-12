@@ -30,7 +30,7 @@ public class WingetJobsTests
                 }
               },
               "packages": {
-                "winget": ["Git.Git", "Microsoft.VisualStudioCode"]
+                "winget": ["jqlang.jq", "Microsoft.VisualStudioCode"]
               }
             }
             """);
@@ -39,12 +39,12 @@ public class WingetJobsTests
             profile,
             new RunOptions { ImageArchitecture = "amd64", IncludeSmokeStubs = true });
 
-        Assert.True(result.IsOk);
+        Assert.True(result.IsOk, result.IsOk ? null : result.Error.Code);
         IReadOnlyList<ProvisionJob> jobs = result.Value.Jobs.Jobs;
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.ready" });
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.complete" });
-        ProvisionJob git = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "Git.Git");
-        Assert.Equal("winget.Git.Git", git.Id);
+        ProvisionJob jq = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "jqlang.jq");
+        Assert.Equal("winget.jqlang.jq", jq.Id);
         ProvisionJob vscode = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "Microsoft.VisualStudioCode");
         Assert.Equal("winget.Microsoft.VisualStudioCode", vscode.Id);
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Git.MinGit" });
@@ -80,7 +80,7 @@ public class WingetJobsTests
 
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
-        Assert.True(result.IsOk);
+        Assert.True(result.IsOk, result.IsOk ? null : result.Error.Code);
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
         Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Stub);
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.OneDriveUninstall);
@@ -109,7 +109,7 @@ public class WingetJobsTests
                 }
               },
               "packages": {
-                "winget": ["jqlang.jq", "Git.Git"],
+                "winget": ["jqlang.jq", "Microsoft.VisualStudioCode"],
                 "wingetNeedsReboot": ["jqlang.jq"]
               }
             }
@@ -117,7 +117,7 @@ public class WingetJobsTests
 
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
-        Assert.True(result.IsOk);
+        Assert.True(result.IsOk, result.IsOk ? null : result.Error.Code);
         ProvisionJob importJob = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
         Assert.True(importJob.NeedsReboot);
     }
@@ -143,7 +143,7 @@ public class WingetJobsTests
                 }
               },
               "packages": {
-                "winget": ["jqlang.jq", "Git.Git"],
+                "winget": ["jqlang.jq", "Microsoft.VisualStudioCode"],
                 "wingetNeedsReboot": ["jqlang.jq"]
               }
             }
@@ -153,11 +153,11 @@ public class WingetJobsTests
             profile,
             new RunOptions { ImageArchitecture = "amd64" });
 
-        Assert.True(result.IsOk);
+        Assert.True(result.IsOk, result.IsOk ? null : result.Error.Code);
         ProvisionJob jq = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "jqlang.jq");
         Assert.True(jq.NeedsReboot);
-        ProvisionJob git = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "Git.Git");
-        Assert.False(git.NeedsReboot);
+        ProvisionJob vscode = Assert.Single(result.Value.Jobs.Jobs, j => j.PackageId == "Microsoft.VisualStudioCode");
+        Assert.False(vscode.NeedsReboot);
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public class WingetJobsTests
               },
               "packages": {
                 "winget": ["jqlang.jq"],
-                "wingetNeedsReboot": ["Git.Git"]
+                "wingetNeedsReboot": ["Microsoft.VisualStudioCode"]
               }
             }
             """);
@@ -201,7 +201,7 @@ public class WingetJobsTests
         RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git", WingetArchitecture: "arm64")]),
+            Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", ProvisionJobKind.Winget, PackageId: "jqlang.jq", WingetArchitecture: "arm64")]),
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
@@ -213,7 +213,7 @@ public class WingetJobsTests
             [
                 "install",
                 "--id",
-                "Git.Git",
+                "jqlang.jq",
                 "--exact",
                 "--silent",
                 "--accept-package-agreements",
@@ -233,7 +233,7 @@ public class WingetJobsTests
         RecordingEvidenceSink evidence = new();
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]),
+            Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", ProvisionJobKind.Winget, PackageId: "jqlang.jq")]),
             Env(processes, evidence),
             TestContext.Current.CancellationToken);
 
@@ -251,7 +251,7 @@ public class WingetJobsTests
         RecordingAppx appx = new() { WingetPath = null };
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]) with { PackageStrict = true },
+            Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", ProvisionJobKind.Winget, PackageId: "jqlang.jq")]) with { PackageStrict = true },
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 
@@ -269,7 +269,7 @@ public class WingetJobsTests
         RecordingAppx appx = new() { WingetPath = null };
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
-            Bundle(jobs: [new ProvisionJob("winget.Git.Git", ProvisionJobKind.Winget, PackageId: "Git.Git")]),
+            Bundle(jobs: [new ProvisionJob("winget.jqlang.jq", ProvisionJobKind.Winget, PackageId: "jqlang.jq")]),
             Env(processes, evidence, appx: appx),
             TestContext.Current.CancellationToken);
 

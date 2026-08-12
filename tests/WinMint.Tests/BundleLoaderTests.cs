@@ -79,7 +79,7 @@ public class BundleLoaderTests
                   "schemaVersion": "{{BundleLoader.JobsSchemaVersion}}",
                   "jobs": [
                     { "id": "smoke.stub.ready", "kind": "stub" },
-                    { "id": "winget.Git.Git", "kind": "winget", "packageId": "Git.Git" },
+                    { "id": "winget.jqlang.jq", "kind": "winget", "packageId": "jqlang.jq" },
                     { "id": "scoop.curl", "kind": "scoop", "packageId": "curl" },
                     { "id": "wsl.Ubuntu", "kind": "wsl", "packageId": "Ubuntu" },
                     { "id": "debloat.appx.safetyNet", "kind": "appx.safetyNet" }

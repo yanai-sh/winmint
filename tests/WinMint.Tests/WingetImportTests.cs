@@ -14,7 +14,7 @@ public class WingetImportTests
             profile,
             new RunOptions { ImageArchitecture = "arm64" });
 
-        Assert.True(result.IsOk);
+        Assert.True(result.IsOk, result.IsOk ? null : result.Error.Code);
         Assert.NotNull(result.Value.WingetImportJson);
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
         Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Winget);
@@ -24,14 +24,14 @@ public class WingetImportTests
     [Fact]
     public void Plan_non_arm64_emits_individual_winget_jobs()
     {
-        Profile profile = LabProfile(winget: ["Git.Git"]);
+        Profile profile = LabProfile(winget: ["jqlang.jq"]);
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "amd64" });
 
-        Assert.True(result.IsOk);
+        Assert.True(result.IsOk, result.IsOk ? null : result.Error.Code);
         Assert.Null(result.Value.WingetImportJson);
-        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Git.Git" });
+        Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "jqlang.jq" });
         Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
     }
 
@@ -43,7 +43,7 @@ public class WingetImportTests
             profile,
             new RunOptions { ImageArchitecture = "arm64" });
 
-        Assert.True(result.IsOk);
+        Assert.True(result.IsOk, result.IsOk ? null : result.Error.Code);
         Assert.NotNull(result.Value.WingetImportJson);
         using JsonDocument doc = JsonDocument.Parse(result.Value.WingetImportJson);
         JsonElement packages = doc.RootElement.GetProperty("Sources")[0].GetProperty("Packages");

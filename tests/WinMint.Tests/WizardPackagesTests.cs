@@ -82,7 +82,7 @@ public class WizardPackagesTests
     [Fact]
     public void Serialize_wingetNeedsReboot_not_in_winget_fails_plan()
     {
-        Profile profile = LabProfile(winget: ["jqlang.jq"], wingetNeedsReboot: ["Git.Git"]);
+        Profile profile = LabProfile(winget: ["jqlang.jq"], wingetNeedsReboot: ["Microsoft.VisualStudioCode"]);
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.False(planned.IsOk);
