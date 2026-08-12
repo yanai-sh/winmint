@@ -304,7 +304,7 @@ try {
         else {
             if ([string]::IsNullOrWhiteSpace($ProfilePath)) { throw '-ProfilePath is required for -Headless build.' }
             if ([string]::IsNullOrWhiteSpace($SourceIso)) { throw '-SourceIso is required for -Headless build.' }
-            # Keep Apply workdir outside TEMP toolkit so out.iso survives ephemeral cleanup.
+            # Keep Apply workdir outside TEMP toolkit so Output ISO survives ephemeral cleanup.
             if ([string]::IsNullOrWhiteSpace($Work)) {
                 if ($PrimaryGate) {
                     $Work = Join-Path $env:LOCALAPPDATA 'WinMint\work\sl7-primary'
@@ -331,7 +331,7 @@ try {
         & $cli @cliArgs
         $code = $LASTEXITCODE
         if ($PrimaryGate -and $code -eq 0) {
-            Write-WinMintBootstrapLog "Gate B workdir: $Work (out.iso + evidence). Toolkit session may be deleted next; workdir is kept."
+            Write-WinMintBootstrapLog "Gate B workdir: $Work (Output ISO + evidence). Toolkit session may be deleted next; workdir is kept."
         }
     }
 

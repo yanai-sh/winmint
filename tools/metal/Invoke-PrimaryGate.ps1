@@ -3,7 +3,7 @@
 .SYNOPSIS
   Gate B wipe ISO: Release + package-strict Apply → metal assert (FU posture on Release).
 .NOTES
-  Workdir defaults to %LOCALAPPDATA%\WinMint\work\sl7-primary so TEMP toolkit cleanup cannot delete out.iso.
+  Workdir defaults to %LOCALAPPDATA%\WinMint\work\sl7-primary so TEMP toolkit cleanup cannot delete the Output ISO.
 #>
 param(
     # Required unless -AssertOnly (re-check existing Gate B workdir).

@@ -78,7 +78,20 @@ if (Test-Path -LiteralPath $guestDir) {
 }
 New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 
-$outIso = Join-Path $Work 'out.iso'
+$outIso = $null
+$applyEvidence = Join-Path $Work 'evidence.json'
+if (Test-Path -LiteralPath $applyEvidence) {
+    $ev = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($ev.PSObject.Properties.Name -contains 'outputIsoPath' -and -not [string]::IsNullOrWhiteSpace([string]$ev.outputIsoPath)) {
+        $outIso = [string]$ev.outputIsoPath
+    }
+}
+if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outIso)) {
+    $named = @(Get-ChildItem -LiteralPath $Work -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending)
+    if ($named.Count -ge 1) { $outIso = $named[0].FullName }
+    else { $outIso = Join-Path $Work 'out.iso' }
+}
 if (-not $SkipApply) {
     Write-Host 'Publishing Supervisor (Release AOT)…'
     & just publish-provisioning
@@ -87,14 +100,28 @@ if (-not $SkipApply) {
     Write-Host "Applying Profile=$Profile Iso=$Iso Work=$Work (Test lane, smoke stubs on)…"
     & just apply-maintainer $Iso $Work $Profile true
     if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
+
+    # Re-resolve after Apply (dynamic leaf).
+    $outIso = $null
+    if (Test-Path -LiteralPath $applyEvidence) {
+        $ev = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json
+        if ($ev.PSObject.Properties.Name -contains 'outputIsoPath' -and -not [string]::IsNullOrWhiteSpace([string]$ev.outputIsoPath)) {
+            $outIso = [string]$ev.outputIsoPath
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outIso)) {
+        $named = @(Get-ChildItem -LiteralPath $Work -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending)
+        if ($named.Count -ge 1) { $outIso = $named[0].FullName }
+        else { $outIso = Join-Path $Work 'out.iso' }
+    }
 }
 
 if (-not (Test-Path -LiteralPath $outIso)) {
-    throw "Output ISO missing: $outIso (run Apply or omit -SkipApply)"
+    throw "Output ISO missing under $Work (run Apply or omit -SkipApply)"
 }
 
 # Lane marker from Apply evidence (fail closed — do not invent).
-$applyEvidence = Join-Path $Work 'evidence.json'
 if (-not (Test-Path -LiteralPath $applyEvidence)) {
     throw "Apply evidence.json missing under $Work (lane marker required for S4)"
 }

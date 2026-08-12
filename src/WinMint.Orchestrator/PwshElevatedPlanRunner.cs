@@ -159,7 +159,9 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 
         return Result.Ok<ImageEvidence, Failure>(
             new ImageEvidence(
-                file.OutputIsoPath ?? run.OutputIsoPath ?? Path.Combine(workDirectory, "out.iso"),
+                file.OutputIsoPath
+                    ?? run.OutputIsoPath
+                    ?? OutputIsoNaming.DefaultPath(workDirectory, profilePath: null, plan.Manifest.ImageQuality),
                 plan.Manifest.ImageQuality,
                 file.ShellStampTargetPath ?? shellTarget,
                 file.Digests?.ToFrozenDictionary(StringComparer.Ordinal)

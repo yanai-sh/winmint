@@ -10,7 +10,7 @@ WinMint could treat a bootable USB stick as the compile output and write disks i
 
 ### Decision
 
-The delivery artifact is the **Output ISO** (`out.iso` + digests). **Flash** (writing that ISO to UEFI removable media) is **operator hygiene**, outside ImageServicing / Orchestrator / Wizard Apply — parallel to restore images, not a WinMint download or disk writer.
+The delivery artifact is the **Output ISO** (default `winmint_{profile}_{lane}_{timestamp}.iso` + digests). **Flash** (writing that ISO to UEFI removable media) is **operator hygiene**, outside ImageServicing / Orchestrator / Wizard Apply — parallel to restore images, not a WinMint download or disk writer.
 
 Product surfaces may show **guidance copy only**: Output ISO path, **Rufus** in **DD Image** mode (not ISO mode), `digests.outputIso.sha256`, boot expects WinPE LaunchApply. No disk enumeration, no raw write, no Rufus fork, no required launch of an external flasher.
 

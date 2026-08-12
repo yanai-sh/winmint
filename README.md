@@ -29,7 +29,7 @@ No git clone and no source zip. On Windows (ARM64 recommended), in PowerShell:
 irm https://winmint.yanai.sh | iex
 ```
 
-That downloads a **verified toolkit** (SHA-256 checked) into a **temporary session**, opens the Wizard, and removes the TEMP toolkit when the Wizard exits. That ephemerality is intentional — WinMint is session-shaped, not a standing install. ISO workdirs and `out.iso` still live on disk (they have to).
+That downloads a **verified toolkit** (SHA-256 checked) into a **temporary session**, opens the Wizard, and removes the TEMP toolkit when the Wizard exits. That ephemerality is intentional — WinMint is session-shaped, not a standing install. ISO workdirs and the Output ISO still live on disk (they have to).
 
 **First win without a Source ISO** (validate profile only — Alpha / ephemeral / no wipe):
 
@@ -39,7 +39,7 @@ irm https://winmint.yanai.sh/validate | iex
 
 Expect a clear validate result. Defaults to `samples/smoke.profile.json` (override with `?ProfilePath=…` if you want).
 
-While the Wizard is open: select **Release** and **Build** to run Gate B wipe-media apply **in the Wizard** (workdir `%LOCALAPPDATA%\WinMint\work\sl7-primary`). Progress and Rufus DD / SHA flash guidance appear on Review when `out.iso` is ready.
+While the Wizard is open: select **Release** and **Build** to run Gate B wipe-media apply **in the Wizard** (workdir `%LOCALAPPDATA%\WinMint\work\sl7-primary`). Progress and Rufus DD / SHA flash guidance appear on Review when the Output ISO is ready.
 
 **One-shot Gate B wipe ISO** (re-fetch toolkit, build Release+package-strict, delete TEMP toolkit, keep workdir):
 
@@ -73,9 +73,9 @@ just watch-apply
 # Default watch-apply workdir is Gate B ($work). Test metal: just watch-apply WORK=.scratch/sl7-build
 ```
 
-Gate B workdir defaults to `%LOCALAPPDATA%\WinMint\work\sl7-primary` (same as `/primary-gate` and Wizard Release Build) so TEMP toolkit cleanup cannot delete `out.iso`. Flash that folder’s `out.iso`.
+Gate B workdir defaults to `%LOCALAPPDATA%\WinMint\work\sl7-primary` (same as `/primary-gate` and Wizard Release Build) so TEMP toolkit cleanup cannot delete the Output ISO. Flash that folder’s `winmint_sl7_Release_*.iso` (see `evidence.json` → `outputIsoPath`).
 
-When it finishes, flash `out.iso` to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup. Gate B is still not a completed Primary install.
+When it finishes, flash that Output ISO to a UEFI USB with **Rufus** in **DD Image** mode (not ISO mode). Check the ISO SHA-256 against the `outputIso.sha256` entry under `digests` in `evidence.json` before you wipe. Boot expects WinPE LaunchApply, not Setup. Gate B is still not a completed Primary install.
 
 `just primary-gate` / `/primary-gate` / Wizard Release Build builds the wipe ISO (`Release`, package-strict). Soft `just metal QUALITY=Release` is rejected; wipe media is that Gate B path only.
 

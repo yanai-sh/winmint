@@ -30,7 +30,8 @@ internal static class ImageServicingTestFakes
 
             return Task.FromResult(Result.Ok<ImageEvidence, Failure>(
                 new ImageEvidence(
-                    run.OutputIsoPath ?? Path.Combine(workDirectory, "out.iso"),
+                    run.OutputIsoPath
+                        ?? OutputIsoNaming.DefaultPath(workDirectory, profilePath: null, plan.Manifest.ImageQuality),
                     plan.Manifest.ImageQuality,
                     shellTarget,
                     new Dictionary<string, string>(StringComparer.Ordinal))));

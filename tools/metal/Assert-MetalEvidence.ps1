@@ -9,7 +9,7 @@
   Expects under -WorkDirectory:
     evidence.json              (winmint.image.evidence/v1)
     logs/WinMint-DriverInventory.json   (when -ExpectDrivers)
-    out.iso                    (optional when -RequireOutputIso)
+    out.iso / winmint_*.iso   (optional when -RequireOutputIso; prefer evidence.outputIsoPath)
 
   Writes metal-acceptance.json on success.
 .NOTES
@@ -39,6 +39,29 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+function Resolve-WinMintOutputIso {
+    param(
+        [Parameter(Mandatory)][string] $WorkDirectory,
+        $Evidence = $null
+    )
+    if ($null -ne $Evidence -and $Evidence.PSObject.Properties.Name -contains 'outputIsoPath') {
+        $claimed = [string]$Evidence.outputIsoPath
+        if (-not [string]::IsNullOrWhiteSpace($claimed) -and (Test-Path -LiteralPath $claimed)) {
+            return (Resolve-Path -LiteralPath $claimed).Path
+        }
+    }
+    $named = @(Get-ChildItem -LiteralPath $WorkDirectory -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending)
+    if ($named.Count -ge 1) {
+        return $named[0].FullName
+    }
+    $legacy = Join-Path $WorkDirectory 'out.iso'
+    if (Test-Path -LiteralPath $legacy) {
+        return (Resolve-Path -LiteralPath $legacy).Path
+    }
+    return $null
+}
 
 if (-not (Test-Path -LiteralPath $WorkDirectory)) {
     throw "Work directory missing: $WorkDirectory"
@@ -86,9 +109,9 @@ if ($evidence.PSObject.Properties.Name -contains 'digests' -and $null -ne $evide
 }
 
 if ($RequireOutputIso) {
-    $outIso = Join-Path $WorkDirectory 'out.iso'
-    if (-not (Test-Path -LiteralPath $outIso)) {
-        throw "Output ISO missing: $outIso"
+    $outIso = Resolve-WinMintOutputIso -WorkDirectory $WorkDirectory -Evidence $evidence
+    if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outIso)) {
+        throw "Output ISO missing under $WorkDirectory (expected evidence.outputIsoPath, winmint_*.iso, or legacy out.iso)"
     }
     if (-not $digestMap.ContainsKey('outputIso.sha256') -or [string]::IsNullOrWhiteSpace($digestMap['outputIso.sha256'])) {
         throw 'outputIso.sha256 digest missing/empty in evidence.json'

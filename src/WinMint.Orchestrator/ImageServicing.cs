@@ -146,7 +146,8 @@ public static class ImageServicing
         string mountDir = HostMountDir;
         string unattendPath = Path.Combine(run.WorkDirectory, "unattend.xml");
         string wimOut = Path.Combine(run.WorkDirectory, "install.wim");
-        string outputIso = run.OutputIsoPath ?? Path.Combine(run.WorkDirectory, "out.iso");
+        string outputIso = run.OutputIsoPath
+            ?? OutputIsoNaming.DefaultPath(run.WorkDirectory, profilePath: null, plan.Manifest.ImageQuality);
         int wimIndex = run.WimIndex ?? DefaultProWimIndex;
 
         File.WriteAllText(unattendPath, plan.Unattend.Xml);

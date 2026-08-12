@@ -92,7 +92,7 @@ metal ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="
 
 # Primary Gate B + wipe ISO: Release + package-strict.
 # Workdir stays outside TEMP toolkit (survives ephemeral session cleanup).
-# After success: flash WORK\out.iso (UEFI USB); check digests outputIso.sha256 in evidence.json; expect WinPE LaunchApply.
+# After success: flash WORK's Output ISO (UEFI USB); check digests outputIso.sha256 in evidence.json; expect WinPE LaunchApply.
 primary-gate ISO WORK="" PROFILE="samples/sl7.profile.json":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/metal/Invoke-PrimaryGate.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}'
 

@@ -74,7 +74,7 @@ internal static class WizardBuild
         Directory.CreateDirectory(work);
 
         string outIso = string.IsNullOrWhiteSpace(input.OutputIsoPath)
-            ? Path.Combine(work, "out.iso")
+            ? OutputIsoNaming.DefaultPath(work, input.ProfilePath, lane)
             : input.OutputIsoPath.Trim();
 
         ServicingRun run = new(

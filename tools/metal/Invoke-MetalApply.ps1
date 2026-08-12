@@ -172,22 +172,35 @@ if (-not $SkipApply) {
 $assertLane = if (-not [string]::IsNullOrWhiteSpace($RequireLane)) { $RequireLane } else { $ImageQuality }
 Invoke-MetalAssert -Dir $Work -Lane $assertLane -Drivers:$expectDrivers -NativeAuditJobs:$expectNativeAuditJobs -WingetImport:$expectWingetImport
 
-$outIso = Join-Path $Work 'out.iso'
 $sha = $null
+$outIso = $null
 $evidencePath = Join-Path $Work 'evidence.json'
 if (Test-Path -LiteralPath $evidencePath) {
     $ev = Get-Content -LiteralPath $evidencePath -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($ev.PSObject.Properties.Name -contains 'outputIsoPath' -and -not [string]::IsNullOrWhiteSpace([string]$ev.outputIsoPath)) {
+        $outIso = [string]$ev.outputIsoPath
+    }
     if ($ev.PSObject.Properties.Name -contains 'digests' -and $null -ne $ev.digests) {
         foreach ($p in $ev.digests.PSObject.Properties) {
             if ([string]$p.Name -eq 'outputIso.sha256') { $sha = [string]$p.Value; break }
         }
     }
 }
+if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outIso)) {
+    $named = @(Get-ChildItem -LiteralPath $Work -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending)
+    if ($named.Count -ge 1) { $outIso = $named[0].FullName }
+    else {
+        $legacy = Join-Path $Work 'out.iso'
+        if (Test-Path -LiteralPath $legacy) { $outIso = $legacy }
+    }
+}
 Write-Host "Metal gate OK. Work=$Work lane=$assertLane"
 if ($sha) { Write-Host "outputIso.sha256=$sha" }
+if ($outIso) { Write-Host "Output ISO: $outIso" }
 if ($assertLane -eq 'Release' -and $PackageStrict) {
-    Write-Host "Flash only this workdir's out.iso ($outIso). Do not flash a Test metal workdir (.scratch/sl7-build)."
-    Write-Host 'Next step (manual, destructive): write out.iso to USB and bare-metal install — not run by this harness.'
+    Write-Host "Flash only this workdir's Output ISO ($outIso). Do not flash a Test metal workdir (.scratch/sl7-build)."
+    Write-Host 'Next step (manual, destructive): write that ISO to USB and bare-metal install — not run by this harness.'
 } else {
     Write-Host 'Test lane — not the Primary wipe ISO. Use just primary-gate for Release wipe media.'
 }

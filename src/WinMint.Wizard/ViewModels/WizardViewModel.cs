@@ -506,7 +506,8 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             SaveStatus = $"Saved → {_savedProfilePath}\n{result.Message}";
             bool gateB = lane == ImageQualityLane.Release;
             FlashGuidanceText = FlashGuidance.Format(
-                result.OutputIsoPath ?? Path.Combine(work, "out.iso"),
+                result.OutputIsoPath
+                    ?? OutputIsoNaming.DefaultPath(work, _savedProfilePath, lane),
                 result.WorkDirectory ?? work,
                 gateB);
         }

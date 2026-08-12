@@ -35,7 +35,7 @@ internal static class Program
 
         Option<FileInfo?> outIsoOption = new("--out-iso")
         {
-            Description = "Output ISO path (defaults to <work>/out.iso).",
+            Description = "Output ISO path (defaults to <work>/winmint_{profile}_{lane}_{yyyyMMdd-HHmmss}.iso).",
         };
 
         Option<int?> wimIndexOption = new("--wim-index")
@@ -272,10 +272,16 @@ internal static class Program
 
         WritePlanHonesty(artifacts!);
 
+        string resolvedOutIso = outIso?.FullName
+            ?? OutputIsoNaming.DefaultPath(
+                work.FullName,
+                profilePath.FullName,
+                artifacts!.Manifest.ImageQuality);
+
         ServicingRun servicingRun = new(
             SourceIsoPath: iso.FullName,
             WorkDirectory: work.FullName,
-            OutputIsoPath: outIso?.FullName ?? Path.Combine(work.FullName, "out.iso"),
+            OutputIsoPath: resolvedOutIso,
             WimIndex: wimIndex,
             ReuseMedia: reuseMedia);
 

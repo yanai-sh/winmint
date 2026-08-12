@@ -250,19 +250,29 @@ else
   warn "no Gate B evidence — do not proceed to a destructive install without it."
   exit 1
 fi
-WIPE_ISO="$GATE_WORK/out.iso"
+WIPE_ISO=""
+EVIDENCE="$GATE_WORK/evidence.json"
+if [[ -f "$EVIDENCE" ]]; then
+  WIPE_ISO=$(pwsh -NoProfile -Command "\$e = Get-Content -LiteralPath '$EVIDENCE' -Raw | ConvertFrom-Json; if (\$e.outputIsoPath) { \$e.outputIsoPath }" 2>/dev/null || true)
+fi
+if [[ -z "$WIPE_ISO" || ! -f "$WIPE_ISO" ]]; then
+  WIPE_ISO=$(ls -1t "$GATE_WORK"/winmint_*.iso 2>/dev/null | head -n1 || true)
+fi
+if [[ -z "$WIPE_ISO" || ! -f "$WIPE_ISO" ]]; then
+  WIPE_ISO="$GATE_WORK/out.iso"
+fi
 if [[ -f "$WIPE_ISO" ]]; then
   printf '  %s✓%s %s exists\n' "$GREEN" "$RESET" "$WIPE_ISO"
   write_env WIPE_ISO "$WIPE_ISO"
 else
-  warn "$WIPE_ISO not found — the build likely failed. Do not flash a USB yet."
+  warn "Output ISO not found under $GATE_WORK — the build likely failed. Do not flash a USB yet."
   exit 1
 fi
 
 # ── Stage 5: USB write ──────────────────────────────────────────────────────
 stage "USB write"
 say "Flash $WIPE_ISO to a USB drive with Rufus DD (or another honest ISO writer)."
-note "Check digests: evidence.json outputIso.sha256 must match Get-FileHash on out.iso."
+note "Check digests: evidence.json outputIso.sha256 must match Get-FileHash on the Output ISO."
 pause "Press Enter once the USB is flashed and ready"
 
 # ── Stage 6: Destructive install ────────────────────────────────────────────

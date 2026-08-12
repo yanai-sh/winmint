@@ -9,8 +9,8 @@ Policy / acceptance: [DESIGN](docs/DESIGN.md).
 **Source ISO** — Official Microsoft install media the user provides. No silent Windows download.  
 _Avoid_: golden ISO, UUP default source
 
-**Output ISO** — Host compile result (`out.iso` + digests): the delivery artifact ImageServicing emits.  
-_Avoid_: treating bootable USB as the compile output; calling Flash “Build”
+**Output ISO** — Host compile result (default leaf `winmint_{profile}_{lane}_{yyyyMMdd-HHmmss}.iso`, or explicit `--out-iso`) plus digests: the delivery artifact ImageServicing emits.  
+_Avoid_: treating bootable USB as the compile output; calling Flash “Build”; opaque `out.iso` as the product name
 
 **Flash** — Operator writes Output ISO to UEFI removable media with **Rufus** in **DD Image** mode (not ISO mode) and checks `digests.outputIso.sha256`. Outside WinMint’s product boundary — guidance copy only (path / Rufus DD / SHA / LaunchApply); no disk write, no Rufus launch.  
 _Avoid_: USB productization; in-process raw write; Rufus fork; “any flasher” as the named recipe; conflating Flash with Primary

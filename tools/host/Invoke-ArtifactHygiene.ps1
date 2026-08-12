@@ -24,6 +24,7 @@ $ErrorActionPreference = 'Stop'
 function Test-HeavyWorkDir {
     param([Parameter(Mandatory)][string] $Dir)
     if (Test-Path -LiteralPath (Join-Path $Dir 'out.iso')) { return $true }
+    if (@(Get-ChildItem -LiteralPath $Dir -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue).Count -gt 0) { return $true }
     if (Test-Path -LiteralPath (Join-Path $Dir 'install.wim')) { return $true }
     if (Test-Path -LiteralPath (Join-Path $Dir 'media\sources\install.wim')) { return $true }
     $disks = @(Get-ChildItem -LiteralPath $Dir -File -ErrorAction SilentlyContinue |
