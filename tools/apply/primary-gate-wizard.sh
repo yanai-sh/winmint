@@ -238,32 +238,44 @@ fi
 
 # ── Stage 4: Gate B + wipe ISO (one Release + package-strict Apply) ─────────
 stage "Gate B + wipe ISO"
-say "From the repo root, run Primary once (Release + package-strict)."
-say "Workdir defaults to %LOCALAPPDATA%\\WinMint\\work\\gate-b (survives TEMP toolkit cleanup)."
-step "just primary-gate ISO=$SOURCE_ISO"
-note "This drives tools/apply/Invoke-HostApply.ps1 and can take multiple hours — one build only."
+say "From the repo root, in an ELEVATED pwsh, run Primary once (Release + package-strict)."
+ask GATE_WORK "Gate B workdir (Enter for the default):"
+if [[ -z "$GATE_WORK" ]]; then
+  GATE_WORK="${LOCALAPPDATA:-$HOME/AppData/Local}/WinMint/work/gate-b"
+fi
+write_env GATE_WORK "$GATE_WORK"
+note "Arguments are positional — 'just primary-gate ISO=... WORK=...' passes the"
+note "NAME= prefix through as part of the value and the run fails on a bad path."
+step "just primary-gate \"$SOURCE_ISO\" \"$GATE_WORK\""
+note "Drives tools/apply/Invoke-HostApply.ps1: media copy, DISM stages, export, ISO."
 pause "Press Enter once that command has finished"
-GATE_WORK="${LOCALAPPDATA:-$HOME/AppData/Local}/WinMint/work/gate-b"
-if confirm "Does $GATE_WORK/apply-acceptance.json exist (Gate B green)?"; then
-  printf '  %s✓%s Gate B acceptance evidence present\n' "$GREEN" "$RESET"
+
+# A workdir full of evidence is not the same as a green gate: a build can carry a
+# complete apply-acceptance.json and still be media the assert refuses (pre-guard
+# LaunchApply.cmd erasing disk 0 is the case that motivated this). Ask the gate.
+say "Now let the gate decide. In that same elevated shell:"
+step "just primary-gate-assert \"$GATE_WORK\""
+if confirm "Did it print 'Host Apply acceptance OK' and exit 0?"; then
+  printf '  %s✓%s Gate B assert passed\n' "$GREEN" "$RESET"
 else
-  warn "no Gate B evidence — do not proceed to a destructive install without it."
+  warn "Gate B is not green — do not flash a USB. Fix the build, then re-run this wizard."
   exit 1
 fi
+
 WIPE_ISO=""
+WIPE_SHA=""
 EVIDENCE="$GATE_WORK/evidence.json"
 if [[ -f "$EVIDENCE" ]]; then
   WIPE_ISO=$(pwsh -NoProfile -Command "\$e = Get-Content -LiteralPath '$EVIDENCE' -Raw | ConvertFrom-Json; if (\$e.outputIsoPath) { \$e.outputIsoPath }" 2>/dev/null || true)
+  WIPE_SHA=$(pwsh -NoProfile -Command "\$e = Get-Content -LiteralPath '$EVIDENCE' -Raw | ConvertFrom-Json; \$e.digests.'outputIso.sha256'" 2>/dev/null || true)
 fi
 if [[ -z "$WIPE_ISO" || ! -f "$WIPE_ISO" ]]; then
   WIPE_ISO=$(ls -1t "$GATE_WORK"/winmint_*.iso 2>/dev/null | head -n1 || true)
 fi
-if [[ -z "$WIPE_ISO" || ! -f "$WIPE_ISO" ]]; then
-  WIPE_ISO="$GATE_WORK/out.iso"
-fi
 if [[ -f "$WIPE_ISO" ]]; then
   printf '  %s✓%s %s exists\n' "$GREEN" "$RESET" "$WIPE_ISO"
   write_env WIPE_ISO "$WIPE_ISO"
+  [[ -n "$WIPE_SHA" ]] && write_env WIPE_SHA "$WIPE_SHA"
 else
   warn "Output ISO not found under $GATE_WORK — the build likely failed. Do not flash a USB yet."
   exit 1
@@ -271,8 +283,13 @@ fi
 
 # ── Stage 5: USB write ──────────────────────────────────────────────────────
 stage "USB write"
-say "Flash $WIPE_ISO to a USB drive with Rufus DD (or another honest ISO writer)."
-note "Check digests: evidence.json outputIso.sha256 must match Get-FileHash on the Output ISO."
+say "Flash this ISO — and only this one — with Rufus DD (or another honest ISO writer):"
+step "$WIPE_ISO"
+if [[ -n "$WIPE_SHA" ]]; then
+  say "Verify the write against the digest the gate recorded:"
+  note "expected SHA-256  $WIPE_SHA"
+  step "Get-FileHash -Algorithm SHA256 \"$WIPE_ISO\""
+fi
 pause "Press Enter once the USB is flashed and ready"
 
 # ── Stage 6: Destructive install ────────────────────────────────────────────
