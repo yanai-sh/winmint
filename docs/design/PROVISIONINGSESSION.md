@@ -85,7 +85,7 @@ Thin adapters are part of the module interface; production Win32/WinRT live in-p
 
 1. Fail-open unlock on Complete / Failed / wall-clock timeout.
 2. Reboot does **not** unlock; checkpoint + keep Supervisor as Shell.
-3. DMA: final snapshot authoritative for hard gates (locale / GeoID / TZ); soft location warn/continue.
+3. DMA: final snapshot authoritative for hard visible gates (locale / GeoID / TZ); soft location warn/continue; sticky `DeviceRegion` Ireland repaired-then-verified (`settle.device_region_*`).
 4. Jobs never start if hard settle fails.
 5. Status in-memory; evidence JSON write-only projection.
 6. Never stamp `defaultuser0` + AutoAdminLogon; Machine setup best-effort deletes leftover `defaultuser0`.

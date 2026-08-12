@@ -42,7 +42,8 @@ internal static class ProvisioningSessionTestFakes
         Func<string?>? resolveScoopCmd = null,
         Func<bool>? isWslPlatformReady = null,
         Action? applyWorkstationQuiet = null,
-        Action? suppressWslOobe = null) =>
+        Action? suppressWslOobe = null,
+        IDmaSetupRegion? dmaSetup = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: new NoopWinlogon(),
@@ -56,14 +57,16 @@ internal static class ProvisioningSessionTestFakes
             ResolveScoopCmd: resolveScoopCmd,
             IsWslPlatformReady: isWslPlatformReady,
             ApplyWorkstationQuiet: applyWorkstationQuiet,
-            SuppressWslOobe: suppressWslOobe);
+            SuppressWslOobe: suppressWslOobe,
+            DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
 
     internal static SessionEnvironment Env(
         IWinlogonRegistry winlogon,
         ICheckpointStore checkpoints,
         ISplashPresenter splash,
         IEvidenceSink evidence,
-        IProcessHost? processes = null) =>
+        IProcessHost? processes = null,
+        IDmaSetupRegion? dmaSetup = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: winlogon,
@@ -71,9 +74,13 @@ internal static class ProvisioningSessionTestFakes
             Processes: processes ?? new NoopProcesses(),
             Splash: splash,
             Checkpoints: checkpoints,
-            Evidence: evidence);
+            Evidence: evidence,
+            DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
 
-    internal static SessionEnvironment Env(IAppxPackageManager appx, ISplashPresenter splash) =>
+    internal static SessionEnvironment Env(
+        IAppxPackageManager appx,
+        ISplashPresenter splash,
+        IDmaSetupRegion? dmaSetup = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: new NoopWinlogon(),
@@ -82,7 +89,65 @@ internal static class ProvisioningSessionTestFakes
             Splash: splash,
             Checkpoints: new NoopCheckpoints(),
             Evidence: new NoopEvidence(),
-            Appx: appx);
+            Appx: appx,
+            DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
+
+    internal sealed class OkDmaSetupRegion : IDmaSetupRegion
+    {
+        public int EnsureCalls { get; private set; }
+
+        public int? ReadDeviceRegion() => WinMint.Contracts.DmaInterop.IrelandGeoId;
+
+        public DmaSetupRegionEnsureResult EnsureIreland()
+        {
+            EnsureCalls++;
+            return DmaSetupRegionEnsureResult.AlreadyOk;
+        }
+    }
+
+    internal sealed class ScriptedDmaSetupRegion : IDmaSetupRegion
+    {
+        private readonly Queue<DmaSetupStep> _steps;
+
+        public ScriptedDmaSetupRegion(params DmaSetupStep[] steps) =>
+            _steps = new Queue<DmaSetupStep>(steps);
+
+        public int EnsureCalls { get; private set; }
+
+        public int? ReadDeviceRegion() => WinMint.Contracts.DmaInterop.IrelandGeoId;
+
+        public DmaSetupRegionEnsureResult EnsureIreland()
+        {
+            EnsureCalls++;
+            if (_steps.Count == 0)
+            {
+                return DmaSetupRegionEnsureResult.AlreadyOk;
+            }
+
+            return _steps.Dequeue() switch
+            {
+                DmaSetupStep.AlreadyOkStep => DmaSetupRegionEnsureResult.AlreadyOk,
+                DmaSetupStep.RepairedStep => DmaSetupRegionEnsureResult.Repaired,
+                DmaSetupStep.ThrowStep t => throw new InvalidOperationException(t.Message),
+                _ => throw new InvalidOperationException("Unknown DMA setup step."),
+            };
+        }
+
+        internal abstract record DmaSetupStep
+        {
+            public sealed record AlreadyOkStep : DmaSetupStep;
+
+            public sealed record RepairedStep : DmaSetupStep;
+
+            public sealed record ThrowStep(string Message) : DmaSetupStep;
+
+            public static DmaSetupStep AlreadyOk { get; } = new AlreadyOkStep();
+
+            public static DmaSetupStep Repaired { get; } = new RepairedStep();
+
+            public static DmaSetupStep Throw(string message) => new ThrowStep(message);
+        }
+    }
 
     internal sealed class RecordingProcessHost : IProcessHost
     {

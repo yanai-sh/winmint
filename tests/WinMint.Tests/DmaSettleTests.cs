@@ -58,6 +58,7 @@ public class DmaSettleTests
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Contains("Status:settle.ok", splash.Events);
+        Assert.Contains("Status:settle.device_region_ok", splash.Events);
         Assert.DoesNotContain(splash.Events, e => e.Contains("settle.hard_mismatch", StringComparison.Ordinal));
         Assert.DoesNotContain(splash.Events, e => e.Contains("settle.read_failed", StringComparison.Ordinal));
     }
@@ -84,9 +85,11 @@ public class DmaSettleTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Contains("Status:settle.device_region_ok", splash.Events);
         Assert.Contains("Status:settle.location_warn", splash.Events);
         Assert.Contains("Status:jobs.ok", splash.Events);
         Assert.Contains("settle.location_warn", evidence.Documents[0].Phases);
+        Assert.Contains("settle.device_region_ok", evidence.Documents[0].Phases);
         Assert.Equal("Complete", evidence.Documents[0].Outcome);
     }
 
@@ -96,16 +99,71 @@ public class DmaSettleTests
         ManualTimeProvider time = new();
         ScriptedRegionSnapshot region = new();
         RecordingSplashPresenter splash = new();
+        OkDmaSetupRegion dmaSetup = new();
 
         SessionResult result = await ProvisioningSession.RunAsync(
             SessionMode.Shell,
             Bundle(dma: new DmaSettleTarget(Enabled: false, null, null, null, null)),
-            Env(time, region, splash, new RecordingEvidenceSink()),
+            Env(time, region, splash, new RecordingEvidenceSink(), dmaSetup: dmaSetup),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Empty(region.Applied);
+        Assert.Equal(0, dmaSetup.EnsureCalls);
         Assert.Contains("Status:settle.skipped", splash.Events);
+        Assert.DoesNotContain(splash.Events, e => e.Contains("settle.device_region", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Shell_repairs_device_region_then_completes()
+    {
+        ManualTimeProvider time = new();
+        ScriptedRegionSnapshot region = new(
+            new RegionRead.ValueRead(new RegionState("en-GB", 242, "GMT Standard Time", true)));
+        RecordingSplashPresenter splash = new();
+        RecordingEvidenceSink evidence = new();
+        ScriptedDmaSetupRegion dmaSetup = new(ScriptedDmaSetupRegion.DmaSetupStep.Repaired);
+
+        SessionResult result = await ProvisioningSession.RunAsync(
+            SessionMode.Shell,
+            Bundle(
+                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                policy: TightSettlePolicy()),
+            Env(time, region, splash, evidence, dmaSetup: dmaSetup),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal(1, dmaSetup.EnsureCalls);
+        Assert.Contains("Status:settle.device_region_repaired", splash.Events);
+        Assert.Contains("Status:settle.ok", splash.Events);
+        Assert.Contains("settle.device_region_repaired", evidence.Documents[0].Phases);
+    }
+
+    [Fact]
+    public async Task Shell_device_region_irreparable_fails_and_skips_jobs()
+    {
+        ManualTimeProvider time = new();
+        ScriptedRegionSnapshot region = new(
+            new RegionRead.ValueRead(new RegionState("en-GB", 242, "GMT Standard Time", true)));
+        RecordingSplashPresenter splash = new();
+        RecordingEvidenceSink evidence = new();
+        RecordingProcessHost processes = new();
+        ScriptedDmaSetupRegion dmaSetup = new(
+            ScriptedDmaSetupRegion.DmaSetupStep.Throw("DeviceRegion verify failed"));
+
+        SessionResult result = await ProvisioningSession.RunAsync(
+            SessionMode.Shell,
+            Bundle(
+                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                policy: TightSettlePolicy()),
+            Env(time, region, splash, evidence, processes, dmaSetup: dmaSetup),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("settle.device_region_failed", result.FinalStatus.Code);
+        Assert.Empty(processes.Starts);
+        Assert.Contains("settle.device_region_failed", evidence.Documents[0].Phases);
+        Assert.DoesNotContain("jobs.begin", evidence.Documents[0].Phases);
     }
 
     private static SessionPolicy TightSettlePolicy() =>
@@ -129,7 +187,8 @@ public class DmaSettleTests
         ISplashPresenter splash,
         IEvidenceSink evidence,
         IProcessHost? processes = null,
-        IWinlogonRegistry? winlogon = null) =>
+        IWinlogonRegistry? winlogon = null,
+        IDmaSetupRegion? dmaSetup = null) =>
         new(
             Time: time,
             Winlogon: winlogon ?? new NoopWinlogon(),
@@ -137,7 +196,8 @@ public class DmaSettleTests
             Processes: processes ?? new RecordingProcessHost(),
             Splash: splash,
             Checkpoints: new NoopCheckpoints(),
-            Evidence: evidence);
+            Evidence: evidence,
+            DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
 
     private abstract record RegionRead
     {

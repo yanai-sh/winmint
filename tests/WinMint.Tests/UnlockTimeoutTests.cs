@@ -181,7 +181,8 @@ public class UnlockTimeoutTests
             Processes: new NoopProcesses(),
             Splash: splash,
             Checkpoints: checkpoints ?? new NoopCheckpoints(),
-            Evidence: evidence);
+            Evidence: evidence,
+            DmaSetup: new OkDmaSetupRegion());
 
     private sealed class StickyRegion(RegionState state) : IRegionSnapshot
     {

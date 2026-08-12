@@ -62,7 +62,19 @@ public class BuildPlanPlanTests
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
         Assert.Contains(BuildPlan.IrelandSetupLocale, artifacts.Unattend.Xml, StringComparison.Ordinal);
-        Assert.Contains($"/d {BuildPlan.IrelandSetupGeoId} ", artifacts.Unattend.Xml, StringComparison.Ordinal);
+        Assert.Contains(
+            @"Control Panel\DeviceRegion"" /v DeviceRegion /t REG_DWORD /d 68 ",
+            artifacts.Unattend.Xml,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            @"HKU\.DEFAULT\Control Panel\International\Geo"" /v Nation /t REG_SZ /d 68 ",
+            artifacts.Unattend.Xml,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            @"HKU\.DEFAULT\Control Panel\International\Geo"" /v Name /t REG_SZ /d IE ",
+            artifacts.Unattend.Xml,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(@"Control\Nls\Geo", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.DoesNotContain("windowsPE", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("oobeSystem", artifacts.Unattend.Xml, StringComparison.Ordinal);
         Assert.Contains("<Name>winmint</Name>", artifacts.Unattend.Xml, StringComparison.Ordinal);

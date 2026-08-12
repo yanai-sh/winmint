@@ -231,6 +231,67 @@ public class MachineSetupTests
         Assert.Equal(1, secrets.WipeCount);
     }
 
+    [Fact]
+    public async Task MachineSetup_repairs_device_region_when_dma_on()
+    {
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        RecordingWipeSecrets secrets = new();
+        ScriptedDmaSetupRegion dmaSetup = new(ScriptedDmaSetupRegion.DmaSetupStep.Repaired);
+
+        SessionResult result = await ProvisioningSession.RunAsync(
+            SessionMode.MachineSetup,
+            MinimalBundle("winmint", "lab-only"),
+            Env(winlogon, secrets, dmaSetup: dmaSetup),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal(1, dmaSetup.EnsureCalls);
+    }
+
+    [Fact]
+    public async Task MachineSetup_fails_when_device_region_verify_fails()
+    {
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        RecordingWipeSecrets secrets = new();
+        ScriptedDmaSetupRegion dmaSetup = new(
+            ScriptedDmaSetupRegion.DmaSetupStep.Throw("DeviceRegion verify failed"));
+
+        SessionResult result = await ProvisioningSession.RunAsync(
+            SessionMode.MachineSetup,
+            MinimalBundle("winmint", "lab-only"),
+            Env(winlogon, secrets, dmaSetup: dmaSetup),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("machineSetup.dma_setup_region_failed", result.FinalStatus.Code);
+        Assert.Equal(1, secrets.WipeCount);
+    }
+
+    [Fact]
+    public async Task MachineSetup_fails_closed_when_DmaSetup_is_null()
+    {
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        RecordingWipeSecrets secrets = new();
+        SessionEnvironment env = new(
+            Time: TimeProvider.System,
+            Winlogon: winlogon,
+            Region: new NoopRegion(),
+            Processes: new NoopProcesses(),
+            Splash: new NoopSplash(),
+            Checkpoints: new NoopCheckpoints(),
+            WipeSecrets: secrets.Wipe,
+            DmaSetup: null);
+
+        SessionResult result = await ProvisioningSession.RunAsync(
+            SessionMode.MachineSetup,
+            MinimalBundle("winmint", "lab-only"),
+            env,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("machineSetup.dma_setup_region_failed", result.FinalStatus.Code);
+    }
+
     private static ProvisioningBundle MinimalBundle(string username, string password) =>
         new(
             Account: new AccountStamp(username, password),
@@ -244,7 +305,8 @@ public class MachineSetupTests
         RecordingWipeSecrets? secrets = null,
         Action<ProvisioningBundle>? wipeSecrets = null,
         IAppxPackageManager? appx = null,
-        ILocalAccounts? localAccounts = null) =>
+        ILocalAccounts? localAccounts = null,
+        IDmaSetupRegion? dmaSetup = null) =>
         new(
             Time: TimeProvider.System,
             Winlogon: winlogon,
@@ -254,5 +316,6 @@ public class MachineSetupTests
             Checkpoints: new NoopCheckpoints(),
             WipeSecrets: wipeSecrets ?? secrets!.Wipe,
             Appx: appx,
-            LocalAccounts: localAccounts);
+            LocalAccounts: localAccounts,
+            DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
 }

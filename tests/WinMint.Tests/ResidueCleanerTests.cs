@@ -104,7 +104,8 @@ public class ResidueCleanerTests
             Splash: new RecordingSplashPresenter(),
             Checkpoints: new NoopCheckpoints(),
             Evidence: evidence,
-            ResidueCleaner: cleaner);
+            ResidueCleaner: cleaner,
+            DmaSetup: new OkDmaSetupRegion());
 
     private sealed class RecordingResidueCleaner : IResidueCleaner
     {

@@ -72,12 +72,17 @@ if ($outcome -ne 'Complete') {
     throw "Smoke acceptance requires outcome Complete, got '$outcome' (Failed/Reboot is not green)"
 }
 
-# DMA hard fields must succeed — apply_failed / hard_mismatch are not acceptance-green.
-# resume_skip + checkpoint.resume also proves prior settle (ticket 17).
+# DMA hard fields must succeed — apply_failed / hard_mismatch / device_region_failed are not acceptance-green.
+# resume_skip + checkpoint.resume also proves prior settle (ticket 17), including setup-region gate on resume.
 $dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.location_warn') -or
     (($phases -contains 'settle.resume_skip') -and ($phases -contains 'checkpoint.resume'))
 if (-not $dmaOk) {
     throw 'DMA hard fields missing: need settle.ok, settle.location_warn, or settle.resume_skip+checkpoint.resume'
+}
+
+$setupRegionOk = ($phases -contains 'settle.device_region_ok') -or ($phases -contains 'settle.device_region_repaired')
+if (-not $setupRegionOk) {
+    throw 'DMA setup region missing: need settle.device_region_ok or settle.device_region_repaired (DeviceRegion Ireland)'
 }
 
 # Unlock: Winlogon Shell must be Explorer, not Supervisor.

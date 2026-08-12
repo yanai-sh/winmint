@@ -53,7 +53,7 @@ Stages: opcodes + params; ImageServicing maps opcode → `servicing/*.ps1`. See 
 2. No I/O in `Plan` / `TryParseProfile` / `SerializeProfile` — password FS I/O in `ProfileFile.TryLoad`.
 3. Failure ⇒ no partial artifacts.
 4. Image quality only from `RunOptions` (into `ExportWim` params).
-5. DMA enabled ⇒ Ireland latch in unattend **and** settle targets in `DmaContract`.
+5. DMA enabled ⇒ Ireland sticky setup region (`DeviceRegion` 68 + `.DEFAULT` Geo) in unattend **and** settle targets in `DmaContract`.
 6. Local+autoLogon ⇒ non-empty password or `Failure` ([SECRETS](SECRETS.md)).
 7. Host order: materialize Profile → `Plan` → optional serialize → ImageServicing.Apply.
 8. No repo-relative script paths in artifacts.

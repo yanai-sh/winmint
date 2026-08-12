@@ -10,8 +10,9 @@ public static partial class BuildPlan
     public const string JobsSchemaVersion = "winmint.jobs/v1";
     public const string StagesSchemaVersion = "winmint.servicing.stages/v1";
 
-    public const string IrelandSetupLocale = "en-IE";
-    public const int IrelandSetupGeoId = 68;
+    public const string IrelandSetupLocale = DmaInterop.IrelandLocale;
+    public const int IrelandSetupGeoId = DmaInterop.IrelandGeoId;
+    public const string IrelandSetupGeoName = DmaInterop.IrelandGeoName;
 
     /// <summary>Parse and validate a <c>winmint.profile/v1</c> UTF-8 document into a <see cref="Profile"/>.</summary>
     public static Result<Profile, IReadOnlyList<DocumentError>> TryParseProfile(ReadOnlySpan<byte> utf8Json)
@@ -797,8 +798,18 @@ public static partial class BuildPlan
                   <RunSynchronous>
                     <RunSynchronousCommand wcm:action="add">
                       <Order>1</Order>
-                      <Description>WinMint DMA setup GeoID latch (Ireland {{IrelandSetupGeoId}})</Description>
-                      <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Control\Nls\Geo" /v Nation /t REG_SZ /d {{IrelandSetupGeoId}} /f</Path>
+                      <Description>WinMint DMA DeviceRegion latch (Ireland {{IrelandSetupGeoId}})</Description>
+                      <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Control Panel\DeviceRegion" /v DeviceRegion /t REG_DWORD /d {{IrelandSetupGeoId}} /f</Path>
+                    </RunSynchronousCommand>
+                    <RunSynchronousCommand wcm:action="add">
+                      <Order>2</Order>
+                      <Description>WinMint DMA .DEFAULT Geo Nation (Ireland {{IrelandSetupGeoId}})</Description>
+                      <Path>reg add "HKU\.DEFAULT\Control Panel\International\Geo" /v Nation /t REG_SZ /d {{IrelandSetupGeoId}} /f</Path>
+                    </RunSynchronousCommand>
+                    <RunSynchronousCommand wcm:action="add">
+                      <Order>3</Order>
+                      <Description>WinMint DMA .DEFAULT Geo Name ({{IrelandSetupGeoName}})</Description>
+                      <Path>reg add "HKU\.DEFAULT\Control Panel\International\Geo" /v Name /t REG_SZ /d {{IrelandSetupGeoName}} /f</Path>
                     </RunSynchronousCommand>
                   </RunSynchronous>
                 </component>

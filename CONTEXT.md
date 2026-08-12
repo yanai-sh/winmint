@@ -47,7 +47,7 @@ _Avoid_: conflating with Machine setup
 **Provisioning jobs / metal jobs** — Post hard-settle installs (per-id or batch). Same executor Smoke and metal.  
 _Avoid_: jobs before hard settle
 
-**DMA interop / settle** — Ireland during Setup; restore user region by **final snapshot**. Hard: locale/GeoID/TZ. Soft: location.  
+**DMA interop / settle** — Sticky Ireland setup region (`DeviceRegion` 68) during Setup; restore user visible region by **final snapshot**. Hard: locale/GeoID/TZ + DeviceRegion verify. Soft: location.  
 _Avoid_: sticky intermediate failures as authoritative
 
 **Smoke** — Hyper-V plumbing acceptance (`Test` lane, Local+autoLogon, Pro).  

@@ -124,5 +124,6 @@ public class ShellTenureTests
             Processes: new NoopProcesses(),
             Splash: splash,
             Checkpoints: new NoopCheckpoints(),
-            Evidence: evidence);
+            Evidence: evidence,
+            DmaSetup: new OkDmaSetupRegion());
 }

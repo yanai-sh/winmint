@@ -94,7 +94,8 @@ public sealed record SessionEnvironment(
     string? EvidenceDirectory = null,
     Func<bool>? IsWslPlatformReady = null,
     Action? ApplyWorkstationQuiet = null,
-    Action? SuppressWslOobe = null);
+    Action? SuppressWslOobe = null,
+    IDmaSetupRegion? DmaSetup = null);
 
 /// <summary>OS reboot after NeedsReboot checkpoint (ticket 16). Nullable in tests; production wires Win32.</summary>
 public interface ISystemReboot
@@ -181,6 +182,24 @@ public sealed record RegionState(
     int? GeoId,
     string? TimeZoneId,
     bool? LocationServicesEnabled);
+
+/// <summary>Sticky DMA setup region (<c>DeviceRegion</c>), distinct from visible user Geo.</summary>
+public enum DmaSetupRegionEnsureResult
+{
+    AlreadyOk,
+    Repaired,
+}
+
+public interface IDmaSetupRegion
+{
+    int? ReadDeviceRegion();
+
+    /// <summary>
+    /// Ensure sticky setup region is Ireland. Returns AlreadyOk or Repaired.
+    /// Throws when post-write verify still fails.
+    /// </summary>
+    DmaSetupRegionEnsureResult EnsureIreland();
+}
 
 public interface IRegionSnapshot
 {

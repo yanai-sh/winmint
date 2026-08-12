@@ -137,7 +137,8 @@ internal static class Program
             ResolveScoopCmd: TryResolveScoopShim,
             ResidueCleaner: new Win32ResidueCleaner(winlogon, logger: log),
             Connectivity: new WindowsConnectivityProbe(),
-            EvidenceDirectory: evidenceDirectory);
+            EvidenceDirectory: evidenceDirectory,
+            DmaSetup: new Win32DmaSetupRegion());
     }
 
     /// <summary>Default Scoop shim after official bootstrap (PROVISIONINGSESSION). Host-owned File.Exists.</summary>

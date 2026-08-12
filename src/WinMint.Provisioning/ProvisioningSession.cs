@@ -133,6 +133,21 @@ public static partial class ProvisioningSession
                 "DMA settle skipped on checkpoint resume.");
             env.Splash.SetStatus(settleSkip);
             phases.Add(settleSkip.Code);
+
+            // Sticky setup region is cheap and must survive reboot even when visible settle is skipped.
+            SettlePhaseResult? setupOnResume = EnsureDmaSetupRegionForSettle(bundle, env, phases);
+            if (setupOnResume is { HardFailed: true })
+            {
+                return await FailOpenAsync(
+                        bundle,
+                        env,
+                        phases,
+                        emitted,
+                        setupOnResume.Value.Status,
+                        dwell: true,
+                        firstPaintMs)
+                    .ConfigureAwait(false);
+            }
         }
         else
         {
@@ -536,6 +551,12 @@ public static partial class ProvisioningSession
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, mismatch);
         }
 
+        SettlePhaseResult? setup = EnsureDmaSetupRegionForSettle(bundle, env, phases);
+        if (setup is { HardFailed: true })
+        {
+            return setup.Value;
+        }
+
         if (bundle.Dma.LocationServicesEnabled is bool expectedLocation
             && final.LocationServicesEnabled != expectedLocation)
         {
@@ -551,6 +572,68 @@ public static partial class ProvisioningSession
         env.Splash.SetStatus(ok);
         phases.Add(ok.Code);
         return new SettlePhaseResult(HardFailed: false, TimedOut: false, ok);
+    }
+
+    private static SessionResult? EnsureDmaSetupRegionForMachineSetup(SessionEnvironment env)
+    {
+        if (env.DmaSetup is null)
+        {
+            return Fail(
+                "machineSetup.dma_setup_region_failed",
+                "DmaSetup port required when DMA enabled.");
+        }
+
+        try
+        {
+            _ = env.DmaSetup.EnsureIreland();
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Fail("machineSetup.dma_setup_region_failed", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Repair-then-verify sticky DeviceRegion Ireland after visible settle (or on resume skip).
+    /// </summary>
+    private static SettlePhaseResult? EnsureDmaSetupRegionForSettle(
+        ProvisioningBundle bundle,
+        SessionEnvironment env,
+        List<string> phases)
+    {
+        if (!bundle.Dma.Enabled)
+        {
+            return null;
+        }
+
+        if (env.DmaSetup is null)
+        {
+            SessionStatus missing = new(
+                "settle.device_region_failed",
+                "DmaSetup port required when DMA enabled.");
+            env.Splash.SetStatus(missing);
+            phases.Add(missing.Code);
+            return new SettlePhaseResult(HardFailed: true, TimedOut: false, missing);
+        }
+
+        try
+        {
+            DmaSetupRegionEnsureResult result = env.DmaSetup.EnsureIreland();
+            SessionStatus status = result == DmaSetupRegionEnsureResult.Repaired
+                ? new("settle.device_region_repaired", "DeviceRegion repaired to Ireland (68).")
+                : new("settle.device_region_ok", "DeviceRegion already Ireland (68).");
+            env.Splash.SetStatus(status);
+            phases.Add(status.Code);
+            return new SettlePhaseResult(HardFailed: false, TimedOut: false, status);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SessionStatus failed = new("settle.device_region_failed", ex.Message);
+            env.Splash.SetStatus(failed);
+            phases.Add(failed.Code);
+            return new SettlePhaseResult(HardFailed: true, TimedOut: false, failed);
+        }
     }
 
     private static bool HardFieldsMatch(RegionState actual, DmaSettleTarget target) =>
@@ -647,6 +730,15 @@ public static partial class ProvisioningSession
         if (shellFailure is not null)
         {
             return Task.FromResult(shellFailure);
+        }
+
+        if (bundle.Dma.Enabled)
+        {
+            SessionResult? dmaSetupFail = EnsureDmaSetupRegionForMachineSetup(env);
+            if (dmaSetupFail is not null)
+            {
+                return Task.FromResult(dmaSetupFail);
+            }
         }
 
         // SetupComplete runs as SYSTEM — only elevated window before FirstLogon medium-IL Shell.

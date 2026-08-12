@@ -38,7 +38,7 @@ Do **not** test: private phase helpers, splash pixels (except status→presenter
 
 ### S1 — BuildPlan
 
-Bad JSON → document errors. No password + Local+autoLogon → Plan failure. DMA on → Ireland latch + settle targets. Default Plan → Test lane + opcodes (not .ps1 paths); `smoke.stub.*` only when `IncludeSmokeStubs`. Release lane → different `ExportWim` params. `passwordPath` purity → path-only parse never reads; conflict fails; serialize omits inline password when path set.
+Bad JSON → document errors. No password + Local+autoLogon → Plan failure. DMA on → Ireland `DeviceRegion` latch + settle targets. Default Plan → Test lane + opcodes (not .ps1 paths); `smoke.stub.*` only when `IncludeSmokeStubs`. Release lane → different `ExportWim` params. `passwordPath` purity → path-only parse never reads; conflict fails; serialize omits inline password when path set.
 
 ### S1c — ProfileFile
 
