@@ -18,11 +18,7 @@ Revisable with spike evidence — [DESIGN](docs/DESIGN.md#defaults).
 
 ## Deep modules
 
-| Module | Design |
-|--------|--------|
-| BuildPlan | [BUILDPLAN](docs/design/BUILDPLAN.md) |
-| ImageServicing | [IMAGESERVICING](docs/design/IMAGESERVICING.md) |
-| ProvisioningSession | [PROVISIONINGSESSION](docs/design/PROVISIONINGSESSION.md) |
+BuildPlan · ImageServicing · ProvisioningSession — [docs/design/](docs/design/).
 
 ## Session
 

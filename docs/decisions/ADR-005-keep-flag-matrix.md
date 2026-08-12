@@ -6,7 +6,7 @@
 
 ### Context
 
-Debloat / keep-flag is a post-M1 vertical ([ADR-002](ADR-002-v2-architecture.md)). BCU (live uninstaller) suggested declarative lists and multi-source catalogs but is live-only and must not ship. Microsoft offline surfaces are DISM `/Image` removes for provisioned AppX, capabilities, and optional features; FirstLogon “rehydrate” is usually still-provisioned registration or consumer/CDM installs — ownership split below (see [KEEPFLAG](../design/KEEPFLAG.md)).
+Debloat / keep-flag is a post-M1 vertical ([ADR-002](ADR-002-v2-architecture.md)). BCU (live uninstaller) suggested declarative lists and multi-source catalogs but is live-only and must not ship. Microsoft offline surfaces are DISM `/Image` removes for provisioned AppX, capabilities, and optional features; FirstLogon “rehydrate” is usually still-provisioned registration or consumer/CDM installs — ownership split below (see [DEBLOAT](../design/DEBLOAT.md)).
 
 ### Decision
 
@@ -20,7 +20,7 @@ Debloat / keep-flag is a post-M1 vertical ([ADR-002](ADR-002-v2-architecture.md)
 
 ### Consequences
 
-- Design module: [KEEPFLAG](../design/KEEPFLAG.md). AppX **11–13**; capabilities/features **19–20**. Sequencing history: [ADR-006](ADR-006-post-keepflag-sequencing.md).
+- Design module: [DEBLOAT](../design/DEBLOAT.md). AppX **11–13**; capabilities/features **19–20**. Sequencing history: [ADR-006](ADR-006-post-keepflag-sequencing.md).
 - BuildPlan validates catalogs + emits servicing stage params; ImageServicing runs remove/disable opcodes; ProvisioningSession optional AppX safety-net — not a second debloat brain.
 
 ### Supersession

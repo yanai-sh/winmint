@@ -18,7 +18,7 @@ Unknown catalog id ⇒ Plan fail-closed. Absent/empty ⇒ no removes. Host/Wizar
 
 **FirstLogon (ProvisioningSession):** optional `appx.safetyNet` when AppX remove-list non-empty — PackageManager remove; deprovision only if still provisioned; **verify/stamp** `AppxAllUserStore\Deprovisioned\<PFN>` when missing (same FU-survival mark as offline). No guest pwsh; no UI Automation.
 
-**FU survival:** durable **HKLM** product policies (CloudContent / Store AutoDownload / Widgets / Edge / …) plus **Deprovisioned** marks — not live re-assert, not WU deferral, not HKCU CDM as primary ([ADR-007](../decisions/ADR-007-cdm-not-primary.md), [spec](../superpowers/specs/2026-08-11-fu-durable-posture-design.md)).
+**FU survival:** durable **HKLM** product policies (CloudContent / Store AutoDownload / Widgets / Edge / …) plus **Deprovisioned** marks — not live re-assert, not WU deferral, not HKCU CDM as primary ([ADR-007](../decisions/ADR-007-cdm-not-primary.md), [ADR-009](../decisions/ADR-009-product-constant-policies.md)).
 
 **Seam:** Profile list → BuildPlan validates + opcodes → ImageServicing offline → optional Shell safety-net.
 

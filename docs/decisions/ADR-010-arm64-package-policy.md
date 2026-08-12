@@ -21,4 +21,4 @@ Plan may emit derived **`winget import`** JSON (or configure YAML after spike) f
 
 ### Amended (2026-08-11)
 
-Catalog-time truth is download prove + committed `packages.proof.json` receipt gate (see [packages proof design](../superpowers/specs/2026-08-11-packages-proof-design.md)), not `winget show` / manifest URL alone.
+Catalog-time truth is download prove + committed `packages.proof.json` receipt gate (`just packages-check` → `just check` offline), not `winget show` / manifest URL alone.

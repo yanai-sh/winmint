@@ -16,7 +16,7 @@
 | Seam | Module interface | Dependency |
 |------|------------------|------------|
 | **S1** | BuildPlan (`TryParseProfile`, `SerializeProfile`, `Plan`) | In-process |
-| **S1b** | Host keep-flag presets + Wizard packages → Profile → Plan/Serialize | In-process |
+| **S1b** | Host DebloatPresets + Wizard packages → Profile → Plan/Serialize | In-process |
 | **S1c** | `ProfileFile.TryLoad` | Local temp dirs |
 | **S2** | ImageServicing (`Apply`) | DISM (fake when port exists) |
 | **S3** | ProvisioningSession (`Run` + env adapters) | Local-substitutable OS |

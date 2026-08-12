@@ -20,7 +20,7 @@ Smoke accounts: **Local + autoLogon** (password required). Lab-grade — not ent
 
 Logging or shipping passwords in evidence is a **spec violation**, not a debug convenience.
 
-## Primary metal (sl7)
+## Primary / Gate B (sl7)
 
 Create the lab password file (no trailing newline required beyond `-NoNewline`):
 

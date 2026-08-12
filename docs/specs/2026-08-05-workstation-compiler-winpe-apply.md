@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-05  
 **Status:** Approved (2026-08-06) — tickets filed from this spec  
-**Authority:** [CONTEXT](../../CONTEXT.md) · [ARCHITECTURE](../ARCHITECTURE.md) · [DESIGN](../DESIGN.md) · [Smoke](2026-07-27-smoke.md) · [PROVISIONINGSESSION](../design/PROVISIONINGSESSION.md) · [IMAGESERVICING](../design/IMAGESERVICING.md) · [KEEPFLAG](../design/KEEPFLAG.md)  
+**Authority:** [CONTEXT](../../CONTEXT.md) · [ARCHITECTURE](../ARCHITECTURE.md) · [DESIGN](../DESIGN.md) · [Smoke](2026-07-27-smoke.md) · [PROVISIONINGSESSION](../design/PROVISIONINGSESSION.md) · [IMAGESERVICING](../design/IMAGESERVICING.md) · [DEBLOAT](../design/DEBLOAT.md)  
 **Supersedes (partial):** legacy-setup + offline-primary debloat as *default product posture* — not immediate code removal  
 **Destination:** Solo dev USB demo — zero-touch install → locked splash → online debloat/packages → Explorer unlock
 
@@ -268,6 +268,8 @@ MountInstallWim
 
 ## Success Criteria (exit gates)
 
+> **Naming:** Ticket gates A/B/C below are historical delivery milestones. They are **not** product **Gate B** (wipe-ISO evidence via `just primary-gate`). Prefer Spike / OnlineDebloat / LegacySunset when speaking living language.
+
 ### Gate A — Spike (first ticket)
 
 - [ ] WinPE apply installs serviced 25H2 ARM64 Pro WIM to Hyper-V Gen2 VM zero-touch
@@ -326,7 +328,7 @@ One issue per session per [AGENTS.md](../../AGENTS.md); do not mega-epic.
 ## Further Notes
 
 - **Relationship to ConX discussion:** this spec intentionally avoids fixing ConX; it routes around Setup entirely on the green path.
-- **Relationship to [KEEPFLAG](../design/KEEPFLAG.md):** catalog validation unchanged; *execution venue* moves default from ImageServicing to ProvisioningSession.
+- **Relationship to [DEBLOAT](../design/DEBLOAT.md):** catalog validation unchanged; *execution venue* moves default from ImageServicing to ProvisioningSession.
 - **Relationship to [Smoke](2026-07-27-smoke.md):** extends acceptance; does not fork Hyper-V-only executor/settle rules.
 - After maintainer sign-off: GitHub issues [#70](https://github.com/yanai-sh/winmint/issues/70) · [#71](https://github.com/yanai-sh/winmint/issues/71) · [#72](https://github.com/yanai-sh/winmint/issues/72); `ready-for-agent` on **#70** only.
 

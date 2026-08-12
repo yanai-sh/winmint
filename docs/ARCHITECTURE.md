@@ -25,7 +25,7 @@ Greenfield product repo [`yanai-sh/winmint`](https://github.com/yanai-sh/winmint
 | **ImageServicing** | Orchestrator → `servicing/` | Apply plan to Source ISO → evidence — [design](design/IMAGESERVICING.md) | DISM/WIM/hive/oscdimg; opcode→script map |
 | **ProvisioningSession** | `WinMint.Provisioning` | `--machine-setup` *or* Shell → `SessionResult` — [design](design/PROVISIONINGSESSION.md) | Splash, stamps, DMA settle, jobs, checkpoint |
 
-**Hosts (not deep modules):** `WinMint.Cli` and Avalonia Wizard are thin clients of **BuildPlan**. `servicing/*.ps1` are ImageServicing adapters, not a second product CLI.
+**Hosts (not deep modules):** `WinMint.Cli` and Avalonia Wizard are thin clients of **HostCompile** (Profile → Plan → ImageServicing). `servicing/*.ps1` are ImageServicing adapters, not a second product CLI.
 
 **Seam discipline:**
 
@@ -44,8 +44,8 @@ Greenfield product repo [`yanai-sh/winmint`](https://github.com/yanai-sh/winmint
 | **Orchestrator** (C#) | BuildPlan; Profile validation; plan / unattend / job JSON; drives Servicing | In-process DISM / offline hive |
 | **Servicing** (elevated `pwsh -File`) | Thin DISM/WIM/hive/export adapters | Product CLI, fat monolith, guest FirstLogon |
 | **Provisioning Supervisor** (C# AOT) | ProvisioningSession | Offline imaging |
-| **Cli** | Flags → BuildPlan | Profile schema ownership, Servicing |
-| **Wizard** (Avalonia) | Profile authoring UI → same BuildPlan | Servicing, ISO splash |
+| **Cli** | Flags → HostCompile | Profile schema ownership, Servicing |
+| **Wizard** (Avalonia) | Profile authoring UI → HostCompile | Servicing, ISO splash |
 
 ## Runtime shape
 
@@ -71,13 +71,9 @@ Sibling archive [`winmint_v1`](https://github.com/yanai-sh/winmint_v1) is **arch
 | Evidence / VM acceptance *ideas* | Peer Splash.exe + JSON mailbox |
 | Behaviour notes mapped into BuildPlan / ProvisioningSession | Guest pwsh PreLock; `WinMint.ps1`; Shell↔RunOnce coupling |
 
-## Standing invariants (guest path)
+## Guest path
 
-1. Servicing stamps Shell offline to Supervisor; Machine setup: autologon → fail-closed Shell verify/restamp → secret wipe. No jobs. Never `DefaultUserName=defaultuser0` with `AutoAdminLogon` for first interactive logon. MachineSetup Failed ⇒ non-zero exit.
-2. Supervisor as Shell + splash = lock. Unlock = `explorer.exe` + exit. Fail-open on complete/failed/timeout. Reboot keeps Shell + checkpoint. Durable state: `%ProgramData%\WinMint\`.
-3. DMA settle: final snapshot authoritative. Hard: locale / GeoID / TZ. Soft: location-services.
-4. Splash: in-process Direct2D/GDI; paint before settle. Status in-memory; JSON = evidence only.
-5. Jobs: child-process / delegated batch; `needsReboot` ⇒ checkpoint, keep Shell, reboot, resume. No guest pwsh product runtime.
+Living invariants: [DESIGN](DESIGN.md#invariants). Topology above; do not restate the numbered list here.
 
 ## Image quality (run override)
 

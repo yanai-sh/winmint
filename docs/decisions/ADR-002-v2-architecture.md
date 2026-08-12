@@ -17,7 +17,7 @@ WinMint v2 is a new repository with no v1 contract back-compat. Empirical pain i
 5. **Guest control plane (ADR-004):** one Native AOT Provisioning Supervisor (`--machine-setup` + Winlogon Shell); deep module **ProvisioningSession**; DMA settle; C# provisioning jobs; in-memory status + evidence snapshots; Shell-tenure lock; checkpoint reboot.
 6. **First vertical = Smoke:** Profile → ISO → Hyper-V unattend → FirstLogon with splash + DMA hard-field evidence ([ADR-003](ADR-003-dma-interop.md)); plumbing only; password-required local account; Hyper-V smoke SKU = Pro.
 7. **CLI + Wizard** both host BuildPlan; Smoke path proved first historically.
-8. **Pre-planned git history** via `/to-spec` → `/to-tickets` → `/implement` (see [AGENTIC](../agents/AGENTIC.md)).
+8. **Issues are the work surface** ([issue-tracker](../agents/issue-tracker.md)); no PR ceremony unless asked.
 9. **Image quality lanes** (run override, not Profile): public names **`Test`** (Smoke/fast) and **`Release`** (hard recompress + WinSxS cleanup). See [ARCHITECTURE.md](../ARCHITECTURE.md#image-quality-run-override-not-profile).
 10. **v1 harvest:** invariants and evidence ideas only — not `runtime/` topology, peer Splash, or file control planes ([ARCHITECTURE harvest rule](../ARCHITECTURE.md#v1-harvest-rule)).
 11. **No tactical DDD packing** as day-one structure — one pipeline; deepen the three modules rather than pre-splitting projects.

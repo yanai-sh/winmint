@@ -21,6 +21,9 @@ _Avoid_: BuildConfig (user-facing); preset names in JSON
 **Orchestrator** — Validates Profile, plans, drives elevated Servicing. Hosts: Cli + Avalonia Wizard (**BuildPlan**).  
 _Avoid_: second planning brain in Cli/Wizard
 
+**Apply** — Elevated ImageServicing DISM loop (workdir → Output ISO). Product verb on Cli/Wizard is **`build`**; Just `apply-maintainer` is the same loop under a maintainer name.  
+_Avoid_: calling Flash “Apply”; treating `build` and Flash as the same step
+
 **BuildPlan** — Profile + run options → plan artifacts.  
 _Avoid_: DISM at the flag layer; ports before a second adapter
 
