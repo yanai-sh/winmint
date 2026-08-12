@@ -54,6 +54,17 @@ public static class Win32WorkstationQuiet
 
     private static void ApplyUserRegistry()
     {
+        // Widgets / News and interests off (HKLM — offline stamp of Policies\Microsoft\Dsh flakes on DISM mounts).
+        try
+        {
+            using RegistryKey? dsh = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Dsh");
+            dsh?.SetValue("AllowNewsAndInterests", 0, RegistryValueKind.DWord);
+        }
+        catch
+        {
+            // Best-effort — continue HKCU quiet rows.
+        }
+
         // Theme DWords as belt-and-suspenders when .theme flash is flaky.
         using (RegistryKey? personalize = Registry.CurrentUser.CreateSubKey(
                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize"))

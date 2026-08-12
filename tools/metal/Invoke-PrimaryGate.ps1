@@ -6,8 +6,8 @@
   Workdir defaults to %LOCALAPPDATA%\WinMint\work\sl7-primary so TEMP toolkit cleanup cannot delete out.iso.
 #>
 param(
-    [Parameter(Mandatory)]
-    [string] $Iso,
+    # Required unless -AssertOnly (re-check existing Gate B workdir).
+    [string] $Iso = '',
 
     [string] $Work = '',
 
@@ -27,6 +27,10 @@ $metal = Join-Path $PSScriptRoot 'Invoke-MetalApply.ps1'
 if ($AssertOnly) {
     & $metal -AssertOnly -WorkDirectory $Work -ExpectDrivers -RequireLane Release
     exit $LASTEXITCODE
+}
+
+if ([string]::IsNullOrWhiteSpace($Iso)) {
+    throw 'Iso is required unless -AssertOnly'
 }
 
 New-Item -ItemType Directory -Force -Path $Work | Out-Null

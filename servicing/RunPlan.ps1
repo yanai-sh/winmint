@@ -159,6 +159,15 @@ if (Test-Path -LiteralPath $sidePath) {
     }
 }
 
+# InjectDrivers writes logs/WinMint-DriverInventory.json — require it before greening evidence.
+$ranInjectDrivers = @($stagesDoc.stages | Where-Object { [string]$_.opcode -eq 'InjectDrivers' }).Count -gt 0
+if ($ranInjectDrivers) {
+    $inventoryPath = Join-Path $logDir 'WinMint-DriverInventory.json'
+    if (-not (Test-Path -LiteralPath $inventoryPath)) {
+        throw "InjectDrivers ran but inventory missing at $inventoryPath (metal ExpectDrivers would fail)"
+    }
+}
+
 $packageStrict = $false
 $bundlePath = Join-Path $WorkDirectory 'payload\bundle.json'
 if (Test-Path -LiteralPath $bundlePath) {
