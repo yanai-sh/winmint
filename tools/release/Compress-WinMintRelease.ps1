@@ -24,14 +24,12 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
+. (Join-Path $PSScriptRoot 'Get-WinMintReleaseVersion.ps1')
 
 $safeTag = $Tag.Trim()
-if ([string]::IsNullOrWhiteSpace($safeTag)) {
-    throw 'Tag is required (e.g. v0.1.0).'
-}
-if ($safeTag -notmatch '^[A-Za-z0-9._-]+$') {
-    throw "Tag contains invalid characters: $safeTag"
-}
+$commit = Assert-WinMintReleaseWorktree -RepoRoot $repoRoot -Tag $safeTag
+$version = Convert-WinMintReleaseTag -Tag $safeTag -Commit $commit
+$publishProps = Get-WinMintDotnetPublishProperties -Version $version
 
 if ([string]::IsNullOrWhiteSpace($OutDir)) {
     $OutDir = Join-Path $repoRoot '.scratch\release'
@@ -57,6 +55,7 @@ Write-Host "Publishing Cli ($Runtime, self-contained)…"
 dotnet publish (Join-Path $repoRoot 'src\WinMint.Cli\WinMint.Cli.csproj') `
     -c $Configuration -r $Runtime --self-contained true `
     -p:PublishSingleFile=false `
+    @publishProps `
     -o $cliOut
 if ($LASTEXITCODE -ne 0) { throw "Cli publish failed: $LASTEXITCODE" }
 
@@ -64,12 +63,15 @@ Write-Host "Publishing Wizard ($Runtime, self-contained)…"
 dotnet publish (Join-Path $repoRoot 'src\WinMint.Wizard\WinMint.Wizard.csproj') `
     -c $Configuration -r $Runtime --self-contained true `
     -p:PublishSingleFile=false `
+    @publishProps `
     -o $wizOut
 if ($LASTEXITCODE -ne 0) { throw "Wizard publish failed: $LASTEXITCODE" }
 
 Write-Host 'Publishing Provisioning Supervisor (AOT)…'
 dotnet publish (Join-Path $repoRoot 'src\WinMint.Provisioning\WinMint.Provisioning.csproj') `
-    -c $Configuration -o $provOut
+    -c $Configuration `
+    @publishProps `
+    -o $provOut
 if ($LASTEXITCODE -ne 0) { throw "Provisioning publish failed: $LASTEXITCODE" }
 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'Justfile') -Destination $stageRoot

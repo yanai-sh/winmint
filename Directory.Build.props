@@ -10,6 +10,10 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <!-- AOT-friendly graph; PublishAot is per-project (Provisioning Release). -->
     <IsAotCompatible>true</IsAotCompatible>
+    <Product>WinMint</Product>
+    <Company>WinMint contributors</Company>
+    <RepositoryUrl>https://github.com/yanai-sh/winmint</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <!-- Learn .NET 11 Runtime Async (NativeAOT-supported). -->
     <Features>runtime-async=on</Features>
     <!-- CS1591 / GenerateDocumentationFile off — still document BuildPlan / ImageServicing.Apply / ProvisioningSession entrypoints in source. -->

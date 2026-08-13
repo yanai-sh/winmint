@@ -17,7 +17,7 @@ build: restore
 plan PROFILE="samples/smoke.profile.json" OUT=".scratch/plan":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- plan '{{PROFILE}}' --out '{{OUT}}'
 
-# Pack no-clone toolkit zip + sha256 (win-arm64). Example: just pack-release v0.1.0
+# Pack no-clone toolkit zip + sha256 (win-arm64). Requires a clean worktree and tag vMAJOR.MINOR.PATCH at HEAD.
 pack-release TAG:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/release/Compress-WinMintRelease.ps1' -Tag '{{TAG}}'
 
@@ -32,6 +32,7 @@ check: format-check build
     just source-media-cache-contract
     just mount-recovery-contract
     just release-signing-policy-contract
+    just release-version-contract
     just packages-check-contract
 
 # Live winget/scoop prove → config/packages.proof.json. Not in `just check` (offline proof enforces freshness).
@@ -56,6 +57,9 @@ mount-recovery-contract:
 
 release-signing-policy-contract:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-ReleaseSigningPolicy.ps1'
+
+release-version-contract:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-ReleaseVersion.ps1'
 
 # Install once: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser
 analyze-servicing:
