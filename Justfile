@@ -30,6 +30,7 @@ check: format-check build
     just bootstrap-contract
     just disk-guard-contract
     just source-media-cache-contract
+    just mount-recovery-contract
     just packages-check-contract
 
 # Live winget/scoop prove → config/packages.proof.json. Not in `just check` (offline proof enforces freshness).
@@ -48,6 +49,9 @@ packages-check-contract:
 
 source-media-cache-contract:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-SourceMediaCache.ps1'
+
+mount-recovery-contract:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-WinMintMountRecovery.ps1'
 
 # Install once: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser
 analyze-servicing:

@@ -6,6 +6,7 @@ using static WinMint.Tests.ImageServicingTestFakes;
 namespace WinMint.Tests;
 
 /// <summary>Ticket 20 — capabilities / optional features at S1 + S2.</summary>
+[Collection(ElevatedServicingPlanDefinition.Name)]
 public class CapabilityPlanTests
 {
     [Fact]
@@ -132,6 +133,7 @@ public class CapabilityPlanTests
                 RedirectStandardError = true,
                 UseShellExecute = false,
             };
+            psi.Environment["ProgramData"] = Path.Combine(work, "programdata");
             using Process p = Process.Start(psi) ?? throw new InvalidOperationException("pwsh failed to start");
             string stdout = p.StandardOutput.ReadToEnd();
             string stderr = p.StandardError.ReadToEnd();

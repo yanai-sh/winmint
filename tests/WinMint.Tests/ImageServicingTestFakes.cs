@@ -90,6 +90,9 @@ internal static class ImageServicingTestFakes
         File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Invoke-ServicingPlan.ps1"),
             runner);
+        File.Copy(
+            Path.Combine(TestRepo.Root, "servicing", "Resolve-WinMintMount.ps1"),
+            Path.Combine(servicing, "Resolve-WinMintMount.ps1"));
 
         const string noOp = """
             param([hashtable] $Parameters)

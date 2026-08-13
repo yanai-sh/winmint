@@ -107,6 +107,7 @@ function Write-PlanFailure {
 }
 
 $scriptRoot = $PSScriptRoot
+. (Join-Path $scriptRoot 'Resolve-WinMintMount.ps1')
 
 function ConvertTo-ParamHashtable {
     param($ParametersObject)
@@ -138,20 +139,8 @@ function Resolve-KernelScript {
 }
 
 function Clear-LeftoverMount {
-    # Host mounts live under %ProgramData%\WinMint\Servicing (not workdir).
-    # Also discard legacy workdir mounts from older Applies. Discard only —
-    # workdir/logs/media stay for diagnosis (IMAGESERVICING invariant 4).
-    $roots = @(
-        (Join-Path $env:ProgramData 'WinMint\Servicing')
-        $WorkDirectory
-    )
-    foreach ($root in $roots) {
-        foreach ($name in @('mount', 'boot-mount')) {
-            $dir = Join-Path $root $name
-            if (-not (Test-Path -LiteralPath $dir)) { continue }
-            & dism.exe /English /Unmount-Image /MountDir:$dir /Discard 2>$null | Out-Null
-        }
-    }
+    # ponytail: one Host Apply at a time; discard only the owned ProgramData mount dirs.
+    Clear-WinMintOwnedMount
 }
 
 function Write-PlanEvidence {
@@ -240,12 +229,18 @@ function Write-PlanEvidence {
 # outside the kernel call.
 $failed = $true
 $opcode = ''
+$servicingLock = $null
 try {
     $logDir = Join-Path $WorkDirectory 'logs'
     $statusPath = Join-Path $WorkDirectory 'apply-status.txt'
     $evidencePath = Join-Path $WorkDirectory 'evidence.json'
     $failurePath = Join-Path $WorkDirectory 'failure.json'
     $stagesPath = Join-Path $WorkDirectory 'stages.json'
+    $env:WINMINT_SERVICING_RUN_ID = [guid]::NewGuid().ToString('N')
+    $env:WINMINT_SERVICING_WORK = $WorkDirectory
+
+    $servicingLock = Enter-WinMintImageServicingLock
+    Resolve-WinMintStaleMount | Out-Null
 
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
@@ -298,7 +293,8 @@ catch {
     Write-PlanFailure -Message "$_" -Opcode $opcode
 }
 finally {
-    if ($failed) { Clear-LeftoverMount }
+    if ($failed -and $null -ne $servicingLock) { Clear-LeftoverMount }
+    Exit-WinMintImageServicingLock $servicingLock
 }
 
 if ($failed) {

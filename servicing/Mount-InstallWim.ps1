@@ -33,6 +33,7 @@ if (-not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sou
 
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
 . (Join-Path $PSScriptRoot 'Initialize-SourceMediaCache.ps1')
+. (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
 
 New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
 
@@ -77,6 +78,7 @@ Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{
 }
 
 Write-Output "DISM Mount-Image index=1 → $mountDir"
+Write-WinMintMountOwner -Kind install -WorkDirectory $workDir -MountDirectory $mountDir -ImageFile $wimFile -SourceIsoSha256 $sourceIsoSha256 -SourceIndex 1 | Out-Null
 & dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:1 /MountDir:$mountDir
 if ($LASTEXITCODE -ne 0) { throw "DISM Mount-Image failed: $LASTEXITCODE" }
 

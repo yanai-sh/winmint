@@ -9,6 +9,10 @@ $mountDir = $Parameters['mountDir']
 if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
 if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
 . (Join-Path $PSScriptRoot 'WinPeApplyContract.ps1')
+. (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
+$workDirectory = $Parameters['workDirectory']
+if ([string]::IsNullOrWhiteSpace($workDirectory)) { $workDirectory = [string]$env:WINMINT_SERVICING_WORK }
+if ([string]::IsNullOrWhiteSpace($workDirectory)) { $workDirectory = $mountDir }
 $launchApplyPayload = Get-WinPeApplyPayloadPath
 $expectedMarker = Get-WinPeApplyMarkerText
 
@@ -23,9 +27,11 @@ if (-not (Test-Path -LiteralPath $bootWim)) {
 
 function Test-LaunchApplyPatched {
     param([string] $Wim, [string] $Mount, [int] $Index)
+    Write-WinMintMountOwner -Kind boot -WorkDirectory $workDirectory -MountDirectory $Mount -ImageFile $Wim -SourceIndex $Index | Out-Null
     & dism.exe /English /Mount-Image /ImageFile:$Wim /Index:$Index /MountDir:$Mount /ReadOnly
     if ($LASTEXITCODE -ne 0) {
         & dism.exe /English /Unmount-Image /MountDir:$Mount /Discard 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) { Remove-WinMintMountOwner -Kind boot }
         return $false
     }
     $clean = $false
@@ -40,7 +46,10 @@ function Test-LaunchApplyPatched {
     finally {
         & dism.exe /English /Unmount-Image /MountDir:$Mount /Discard | Out-Null
         $unmountExit = $LASTEXITCODE
-        if ($unmountExit -ne 0) {
+        if ($unmountExit -eq 0) {
+            Remove-WinMintMountOwner -Kind boot
+        }
+        else {
             $message = "Unmount boot.wim:$Index after apply check failed: $unmountExit"
             if ($null -eq $primaryError) { throw $message }
             Write-Warning "$message (preserving earlier error: $($primaryError.Exception.Message))"
@@ -52,6 +61,7 @@ function Test-LaunchApplyPatched {
 $bootMount = Join-Path (Split-Path -Parent $mountDir) 'boot-mount'
 if (Test-Path -LiteralPath $bootMount) {
     & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { Remove-WinMintMountOwner -Kind boot }
     Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
 }
 New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
@@ -92,6 +102,7 @@ $winpeshl = @"
 
 foreach ($index in $indexes) {
     Write-Output "Patch boot.wim index $index (WinPE apply launcher)"
+    Write-WinMintMountOwner -Kind boot -WorkDirectory $workDirectory -MountDirectory $bootMount -ImageFile $bootWim -SourceIndex $index | Out-Null
     & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:$index /MountDir:$bootMount
     if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:$index failed: $LASTEXITCODE" }
     try {
@@ -102,6 +113,7 @@ foreach ($index in $indexes) {
     finally {
         & dism.exe /English /Unmount-Image /MountDir:$bootMount /Commit
         if ($LASTEXITCODE -ne 0) { throw "Unmount boot.wim:$index failed: $LASTEXITCODE" }
+        Remove-WinMintMountOwner -Kind boot
     }
 }
 

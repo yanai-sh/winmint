@@ -20,6 +20,7 @@ if ([string]::IsNullOrWhiteSpace($compression)) { throw 'compression required' }
 if ([string]::IsNullOrWhiteSpace($cleanup)) { throw 'cleanup required' }
 
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
+. (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
 
 $wimFile = Join-Path $mediaDir 'sources\install.wim'
 if (-not (Test-Path -LiteralPath $wimFile)) { throw "install.wim missing: $wimFile" }
@@ -43,6 +44,7 @@ elseif ($cleanup -ne 'skip') {
 Write-Output "DISM Unmount-Image /Commit ($mountDir) lane=$lane compression=$compression cleanup=$cleanup name=$($before.Name)"
 & dism.exe /English /Unmount-Image /MountDir:$mountDir /Commit
 if ($LASTEXITCODE -ne 0) { throw "DISM Unmount-Image failed: $LASTEXITCODE" }
+Remove-WinMintMountOwner -Kind install
 
 $afterCommit = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
 if ([int]$afterCommit.IndexCount -ne 1) {

@@ -10,6 +10,7 @@ namespace WinMint.Tests;
 /// apply-status.txt is what the Wizard polls and <c>just watch-apply</c> tails. A throw
 /// outside the kernel call used to skip both and report stage=done.
 /// </summary>
+[Collection(ElevatedServicingPlanDefinition.Name)]
 public class ServicingPlanFailClosedTests
 {
     [Fact]
@@ -241,6 +242,9 @@ public class ServicingPlanFailClosedTests
         File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Invoke-ServicingPlan.ps1"),
             runner);
+        File.Copy(
+            Path.Combine(TestRepo.Root, "servicing", "Resolve-WinMintMount.ps1"),
+            Path.Combine(servicing, "Resolve-WinMintMount.ps1"));
         const string noOp = """
             param([hashtable] $Parameters)
             exit 0

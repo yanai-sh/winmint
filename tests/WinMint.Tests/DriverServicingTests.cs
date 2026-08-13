@@ -6,6 +6,7 @@ using static WinMint.Tests.ImageServicingTestFakes;
 namespace WinMint.Tests;
 
 /// <summary>Issue 63 — Surface Catalog driver injection at S2 (ImageServicing Materialize / Apply).</summary>
+[Collection(ElevatedServicingPlanDefinition.Name)]
 public class DriverServicingTests
 {
     [Fact]
@@ -74,6 +75,7 @@ public class DriverServicingTests
                 RedirectStandardError = true,
                 UseShellExecute = false,
             };
+            psi.Environment["ProgramData"] = Path.Combine(work, "programdata");
             using Process p = Process.Start(psi) ?? throw new InvalidOperationException("pwsh failed to start");
             string stdout = p.StandardOutput.ReadToEnd();
             string stderr = p.StandardError.ReadToEnd();
