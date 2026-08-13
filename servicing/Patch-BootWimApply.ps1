@@ -4,12 +4,9 @@ param(
     [Parameter(Mandatory)] [string] $MountDir,
     [Parameter(Mandatory)] [string] $WorkDirectory
 )
-$mediaDir = $MediaDir
-$mountDir = $MountDir
 # Source-ISO edition index is unrelated: after single-image export, apply target is always index 1.
 . (Join-Path $PSScriptRoot 'WinPeApplyContract.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
-$workDirectory = $WorkDirectory
 $launchApplyPayload = Get-WinPeApplyPayloadPath
 $expectedMarker = Get-WinPeApplyMarkerText
 

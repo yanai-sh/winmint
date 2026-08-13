@@ -5,10 +5,6 @@ param(
     [Parameter(Mandatory)] [string] $PoliciesPath
 )
 # Offline HKLM policy stamps (SOFTWARE + SYSTEM). Param-only — Plan owns which rows.
-$mountDir = $MountDir
-$workDirectory = $WorkDirectory
-$policiesPath = $PoliciesPath
-
 . (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
 
 $logDir = Join-Path $workDirectory 'logs'

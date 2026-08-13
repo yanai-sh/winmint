@@ -10,14 +10,6 @@ param(
 )
 # Commit + unmount. Params from BuildPlan only — no Profile branching.
 # Metadata assert + R/O clear + ei.cfg/PID.txt after final WIM shape.
-$mountDir = $MountDir
-$wimOut = $WimOut
-$mediaDir = $MediaDir
-$workDir = $WorkDirectory
-$lane = $Lane
-$compression = $Compression
-$cleanup = $Cleanup
-
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
 
@@ -81,7 +73,7 @@ if (-not (Test-Path -LiteralPath $wimOut)) {
     Copy-Item -LiteralPath $wimFile -Destination $wimOut -Force
 }
 
-Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{
+Write-WimMetadataEvidence -WorkDirectory $WorkDirectory -Document @{
     phase = 'ExportWim'; lane = $lane; compression = $compression; cleanup = $cleanup
     before = $before; afterCommit = $afterCommit; final = $final
 }

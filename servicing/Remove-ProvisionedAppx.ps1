@@ -70,9 +70,6 @@ function Get-PackageFamilyName {
 if ($MyInvocation.InvocationName -ne '.') {
 . (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
 
-$mountDir = $MountDir
-$workDir = $WorkDirectory
-$packageFamilyNamesPath = $PackageFamilyNamesPath
 if (-not (Test-Path -LiteralPath $packageFamilyNamesPath -PathType Leaf)) {
     throw "packageFamilyNamesPath missing: $packageFamilyNamesPath"
 }
@@ -84,7 +81,7 @@ $ids = @(
 )
 if ($ids.Count -eq 0) { throw 'packageFamilyNames.json empty' }
 
-$logDir = Join-Path $workDir 'logs'
+$logDir = Join-Path $WorkDirectory 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $dismLog = Join-Path $logDir 'remove-provisioned-appx.dism.log'
 
@@ -154,7 +151,7 @@ $digests = @{}
 foreach ($id in ($ids | Select-Object -Unique)) {
     $digests["removed.appx.$id"] = 'absent'
 }
-Save-WinMintDigestMap -WorkDirectory $workDir -Digests $digests
+Save-WinMintDigestMap -WorkDirectory $WorkDirectory -Digests $digests
 
 Write-Output "RemoveProvisionedAppx ok count=$($removed.Count)"
 exit 0

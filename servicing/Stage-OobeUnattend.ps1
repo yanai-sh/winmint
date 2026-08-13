@@ -4,10 +4,6 @@ param(
     [Parameter(Mandatory)] [string] $MountDir,
     [Parameter(Mandatory)] [string] $MediaDir
 )
-$unattendPath = $UnattendPath
-$mountDir = $MountDir
-$mediaDir = $MediaDir
-
 $panther = Join-Path $mountDir 'Windows\Panther'
 New-Item -ItemType Directory -Force -Path $panther | Out-Null
 Copy-Item -LiteralPath $unattendPath -Destination (Join-Path $panther 'unattend.xml') -Force

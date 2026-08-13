@@ -18,19 +18,6 @@ param(
 #
 # Root cause (2026-08-02): multi-edition Unmount/Commit stalls; export single-index first.
 # Metadata discipline: snapshot/assert Name/Arch/Edition fields; ei.cfg + PID.txt; clear R/O before export.
-$sourceIso = $SourceIso
-$mountDir = $MountDir
-$mediaDir = $MediaDir
-$wimIndex = $WimIndex
-$workDir = $WorkDirectory
-$sourceIsoSha256 = $SourceIsoSha256
-$sourceIsoLength = $SourceIsoLength
-$cacheSchema = $CacheSchema
-$cacheRoot = $CacheRoot
-$imageName = $ImageName
-$imageArchitecture = $Architecture
-$imageEdition = $ImageEdition
-$imageBuild = $ImageBuild
 if (-not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sourceIso" }
 
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
@@ -43,7 +30,7 @@ $expectedIdentity = [ordered]@{
     sourceIsoSha256 = $sourceIsoSha256
     wimIndex = [int]$wimIndex
     imageName = $imageName
-    architecture = $imageArchitecture
+    architecture = $Architecture
     edition = $imageEdition
     build = $imageBuild
 }
@@ -75,12 +62,12 @@ Assert-WimMetadataPresent -Snapshot $finalSnapshot -Context 'MountInstallWim sta
 if (-not (Test-WinMintSelectedImage -Snapshot $finalSnapshot -ExpectedIdentity $expectedIdentity)) {
     throw 'Staged install.wim does not match the approved selected-image metadata.'
 }
-Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{
+Write-WimMetadataEvidence -WorkDirectory $WorkDirectory -Document @{
     phase = 'MountInstallWim'; final = $finalSnapshot
 }
 
 Write-Output "DISM Mount-Image index=1 → $mountDir"
-Write-WinMintMountOwner -Kind install -WorkDirectory $workDir -MountDirectory $mountDir -ImageFile $wimFile -SourceIsoSha256 $sourceIsoSha256 -SourceIndex 1 | Out-Null
+Write-WinMintMountOwner -Kind install -WorkDirectory $WorkDirectory -MountDirectory $mountDir -ImageFile $wimFile -SourceIsoSha256 $sourceIsoSha256 -SourceIndex 1 | Out-Null
 $mountClock = [System.Diagnostics.Stopwatch]::StartNew()
 & dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:1 /MountDir:$mountDir
 $mountClock.Stop()
@@ -89,7 +76,7 @@ if ($LASTEXITCODE -ne 0) { throw "DISM Mount-Image failed: $LASTEXITCODE" }
 $manifest = Get-Content -LiteralPath (Join-Path $prepared.EntryPath 'manifest.json') -Raw | ConvertFrom-Json
 $recoveryAction = [string]$env:WINMINT_RECOVERY_ACTION
 if ([string]::IsNullOrWhiteSpace($recoveryAction)) { $recoveryAction = 'none' }
-Write-WinMintPreparedMediaResult -Path (Join-Path $workDir 'prepared-media.json') -Document ([ordered]@{
+Write-WinMintPreparedMediaResult -Path (Join-Path $WorkDirectory 'prepared-media.json') -Document ([ordered]@{
         'source.isoSha256'              = $sourceIsoSha256
         'source.isoLength'              = [long]$sourceIsoLength
         'source.index'                  = [int]$wimIndex

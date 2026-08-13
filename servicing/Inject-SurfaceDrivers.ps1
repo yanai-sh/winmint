@@ -19,13 +19,6 @@ function Test-MicrosoftDownloadUri {
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-$mountDir = $MountDir
-$workDirectory = $WorkDirectory
-$mediaDir = $MediaDir
-$deviceId = $DeviceId
-$detailsUrl = $DetailsUrl
-$expectedFileNameRegex = $ExpectedFileNameRegex
-
 $logDir = Join-Path $workDirectory 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 

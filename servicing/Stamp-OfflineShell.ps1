@@ -4,9 +4,6 @@ param(
     [Parameter(Mandatory)] [string] $MountDir
 )
 # Offline Winlogon Shell → Supervisor path (must match Machine setup verify target).
-$shellTarget = $ShellTarget
-$mountDir = $MountDir
-
 $hiveSoftware = Join-Path $mountDir 'Windows\System32\config\SOFTWARE'
 if (-not (Test-Path -LiteralPath $hiveSoftware)) { throw "SOFTWARE hive missing: $hiveSoftware" }
 

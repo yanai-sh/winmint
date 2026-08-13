@@ -4,9 +4,6 @@ param(
     [Parameter(Mandatory)] [string] $MountDir
 )
 # Stage Supervisor, SetupComplete.cmd, provisioning bundle into the offline image.
-$payloadDir = $PayloadDir
-$mountDir = $MountDir
-
 $guestWinMint = Join-Path $mountDir 'Windows\WinMint'
 $guestScripts = Join-Path $mountDir 'Windows\Setup\Scripts'
 New-Item -ItemType Directory -Force -Path $guestWinMint, $guestScripts | Out-Null

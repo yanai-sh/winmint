@@ -52,10 +52,6 @@ function Get-StateMap {
 if ($MyInvocation.InvocationName -ne '.') {
 . (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
 
-$kind = [string]$Kind
-$mountDir = $MountDir
-$workDir = $WorkDirectory
-$namesPath = $NamesPath
 if ($kind -ne 'capability' -and $kind -ne 'feature') { throw "kind must be capability|feature (got '$kind')" }
 if (-not (Test-Path -LiteralPath $namesPath -PathType Leaf)) { throw "namesPath missing: $namesPath" }
 
@@ -66,7 +62,7 @@ $ids = @(
 )
 if ($ids.Count -eq 0) { throw 'names JSON empty' }
 
-$logDir = Join-Path $workDir 'logs'
+$logDir = Join-Path $WorkDirectory 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $dismLog = Join-Path $logDir ("mutate-{0}.dism.log" -f $kind)
 
@@ -111,7 +107,7 @@ foreach ($id in ($ids | Select-Object -Unique)) {
         else { throw "Optional feature '$id' not Disabled after disable (state=$state)" }
     }
 }
-Save-WinMintDigestMap -WorkDirectory $workDir -Digests $digests
+Save-WinMintDigestMap -WorkDirectory $WorkDirectory -Digests $digests
 
 Write-Output ("MutateOffline {0} ok count={1}" -f $kind, $ids.Count)
 exit 0

@@ -33,8 +33,6 @@ function Get-WinMintOscdimgBootData {
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-    $outputIso = $OutputIso
-    $mediaDir = $MediaDir
     if (-not (Test-Path -LiteralPath $mediaDir)) { throw "mediaDir missing: $mediaDir" }
 
     $oscdimg = Find-Oscdimg
