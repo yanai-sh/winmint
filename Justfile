@@ -33,6 +33,7 @@ check: format-check build
     just mount-recovery-contract
     just release-signing-policy-contract
     just release-version-contract
+    just release-inventory-contract
     just packages-check-contract
 
 # Live winget/scoop prove → config/packages.proof.json. Not in `just check` (offline proof enforces freshness).
@@ -60,6 +61,14 @@ release-signing-policy-contract:
 
 release-version-contract:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-ReleaseVersion.ps1'
+
+release-inventory-contract:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-ReleaseInventory.ps1'
+
+release-contract:
+    just release-signing-policy-contract
+    just release-version-contract
+    just release-inventory-contract
 
 # Install once: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser
 analyze-servicing:

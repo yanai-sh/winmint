@@ -1,21 +1,14 @@
 #requires -Version 7.6
 <#
 .SYNOPSIS
-  Pack a no-clone WinMint toolkit zip (Cli + Wizard + servicing + samples + apply harness).
-
-.DESCRIPTION
-  Publishes win-arm64 self-contained Cli/Wizard, AOT Provisioning, stages release layout,
-  writes WinMint-<tag>.zip + WinMint-<tag>.zip.sha256 under -OutDir.
+  Zip an already-staged WinMint toolkit tree. Never builds, restores, or rewrites staged files.
+  If -StageRoot is omitted, runs Publish-WinMintRelease.ps1 first (unsigned staging only).
 #>
 param(
-    [Parameter(Mandatory)]
-    [string] $Tag,
-
+    [Parameter(Mandatory)] [string] $Tag,
+    [string] $StageRoot = '',
     [string] $OutDir = '',
-
-    [ValidateSet('win-arm64')]
-    [string] $Runtime = 'win-arm64',
-
+    [ValidateSet('win-arm64')] [string] $Runtime = 'win-arm64',
     [string] $Configuration = 'Release'
 )
 
@@ -23,13 +16,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
-Set-Location $repoRoot
-. (Join-Path $PSScriptRoot 'Get-WinMintReleaseVersion.ps1')
-
 $safeTag = $Tag.Trim()
-$commit = Assert-WinMintReleaseWorktree -RepoRoot $repoRoot -Tag $safeTag
-$version = Convert-WinMintReleaseTag -Tag $safeTag -Commit $commit
-$publishProps = Get-WinMintDotnetPublishProperties -Version $version
+if ($safeTag -notmatch '^v\d+\.\d+\.\d+$') {
+    throw "Tag must match vMAJOR.MINOR.PATCH: $Tag"
+}
 
 if ([string]::IsNullOrWhiteSpace($OutDir)) {
     $OutDir = Join-Path $repoRoot '.scratch\release'
@@ -37,67 +27,25 @@ if ([string]::IsNullOrWhiteSpace($OutDir)) {
 elseif (-not [System.IO.Path]::IsPathRooted($OutDir)) {
     $OutDir = Join-Path $repoRoot $OutDir
 }
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-$stageRoot = Join-Path $OutDir "WinMint-$safeTag"
+if ([string]::IsNullOrWhiteSpace($StageRoot)) {
+    $StageRoot = Join-Path $OutDir "WinMint-$safeTag"
+    & (Join-Path $PSScriptRoot 'Publish-WinMintRelease.ps1') -Tag $safeTag -StageRoot $StageRoot -Runtime $Runtime -Configuration $Configuration
+    if ($LASTEXITCODE -ne 0) { throw "Publish-WinMintRelease failed: $LASTEXITCODE" }
+}
+elseif (-not [System.IO.Path]::IsPathRooted($StageRoot)) {
+    $StageRoot = Join-Path $repoRoot $StageRoot
+}
+
+if (-not (Test-Path -LiteralPath $StageRoot -PathType Container)) {
+    throw "StageRoot missing: $StageRoot"
+}
+
 $zipPath = Join-Path $OutDir "WinMint-$safeTag.zip"
 $shaPath = "$zipPath.sha256"
-
-if (Test-Path -LiteralPath $stageRoot) {
-    Remove-Item -LiteralPath $stageRoot -Recurse -Force
-}
-New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
-
-$cliOut = Join-Path $stageRoot 'bin\cli'
-$wizOut = Join-Path $stageRoot 'bin\wizard'
-$provOut = Join-Path $stageRoot 'artifacts\provisioning'
-
-Write-Host "Publishing Cli ($Runtime, self-contained)…"
-dotnet publish (Join-Path $repoRoot 'src\WinMint.Cli\WinMint.Cli.csproj') `
-    -c $Configuration -r $Runtime --self-contained true `
-    -p:PublishSingleFile=false `
-    @publishProps `
-    -o $cliOut
-if ($LASTEXITCODE -ne 0) { throw "Cli publish failed: $LASTEXITCODE" }
-
-Write-Host "Publishing Wizard ($Runtime, self-contained)…"
-dotnet publish (Join-Path $repoRoot 'src\WinMint.Wizard\WinMint.Wizard.csproj') `
-    -c $Configuration -r $Runtime --self-contained true `
-    -p:PublishSingleFile=false `
-    @publishProps `
-    -o $wizOut
-if ($LASTEXITCODE -ne 0) { throw "Wizard publish failed: $LASTEXITCODE" }
-
-Write-Host 'Publishing Provisioning Supervisor (AOT)…'
-dotnet publish (Join-Path $repoRoot 'src\WinMint.Provisioning\WinMint.Provisioning.csproj') `
-    -c $Configuration `
-    @publishProps `
-    -o $provOut
-if ($LASTEXITCODE -ne 0) { throw "Provisioning publish failed: $LASTEXITCODE" }
-
-Copy-Item -LiteralPath (Join-Path $repoRoot 'Justfile') -Destination $stageRoot
-Copy-Item -LiteralPath (Join-Path $repoRoot 'config') -Destination (Join-Path $stageRoot 'config') -Recurse
-Copy-Item -LiteralPath (Join-Path $repoRoot 'servicing') -Destination (Join-Path $stageRoot 'servicing') -Recurse
-Copy-Item -LiteralPath (Join-Path $repoRoot 'payload') -Destination (Join-Path $stageRoot 'payload') -Recurse
-Copy-Item -LiteralPath (Join-Path $repoRoot 'samples') -Destination (Join-Path $stageRoot 'samples') -Recurse
-New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot 'tools\apply') | Out-Null
-Copy-Item -Path (Join-Path $repoRoot 'tools\apply\*.ps1') -Destination (Join-Path $stageRoot 'tools\apply')
-# Dot-sourced by tools\apply\*.ps1 as ..\Resolve-OutputIso.ps1
-Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\Resolve-OutputIso.ps1') `
-    -Destination (Join-Path $stageRoot 'tools\Resolve-OutputIso.ps1')
-# Host helpers used by Justfile from toolkit root
-New-Item -ItemType Directory -Force -Path (Join-Path $stageRoot 'tools\host') | Out-Null
-Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\host\Invoke-WinMintCli.ps1') `
-    -Destination (Join-Path $stageRoot 'tools\host\Invoke-WinMintCli.ps1')
-Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\host\Invoke-PackagesCheck.ps1') `
-    -Destination (Join-Path $stageRoot 'tools\host\Invoke-PackagesCheck.ps1')
-Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\host\Invoke-WinMintWizard.ps1') `
-    -Destination (Join-Path $stageRoot 'tools\host\Invoke-WinMintWizard.ps1')
-
-if (Test-Path -LiteralPath $zipPath) {
-    Remove-Item -LiteralPath $zipPath -Force
-}
-Compress-Archive -Path (Join-Path $stageRoot '*') -DestinationPath $zipPath -Force
-
+if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+Compress-Archive -Path (Join-Path $StageRoot '*') -DestinationPath $zipPath -Force
 $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath $shaPath -Value "$hash  WinMint-$safeTag.zip" -Encoding ascii -NoNewline
 Write-Host "Packed $zipPath"
