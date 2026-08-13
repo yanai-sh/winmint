@@ -254,7 +254,6 @@ internal sealed class WizardSession : IDisposable
         && string.Equals(left.WorkDirectory, right.WorkDirectory, StringComparison.Ordinal)
         && string.Equals(left.OutputIsoPath, right.OutputIsoPath, StringComparison.Ordinal)
         && left.WimIndex == right.WimIndex
-        && left.ReuseMedia == right.ReuseMedia
         && left.PackageStrict == right.PackageStrict
         && left.PackageAuditStrict == right.PackageAuditStrict
         && left.IncludeSmokeStubs == right.IncludeSmokeStubs

@@ -25,7 +25,6 @@ public class HostCompositionTests
                     ImageQualityLane.Release,
                     Path.Combine(root, "work"),
                     WimIndex: 1,
-                    ReuseMedia: true,
                     ProfileName: "sl7.profile.json",
                     AuthoredSelectionLabels: authoredSelections),
                 new RealHashProbe(),
@@ -48,7 +47,9 @@ public class HostCompositionTests
             Assert.DoesNotContain("\"password\"", composition.Review.AuthoredProfileJson, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(ImageQualityLane.Release, composition.Review.ImageQuality);
             Assert.True(composition.Review.PackageStrict);
-            Assert.True(composition.Review.ReuseMedia);
+            Assert.Null(typeof(HostReview).GetProperty("ReuseMedia"));
+            Assert.Null(typeof(HostComposeOptions).GetProperty("ReuseMedia"));
+            Assert.Null(typeof(HostComposition).GetProperty("ReuseMedia"));
             Assert.Equal("sl7", composition.Review.ProfileStem);
             Assert.Equal(["Edge"], composition.Review.AuthoredSelectionLabels);
             string timestamp = instant.ToLocalTime().ToString(
@@ -71,7 +72,7 @@ public class HostCompositionTests
             ServicingStage mount = Assert.Single(
                 runner.Stages,
                 stage => stage.Opcode == ServicingOpcode.MountInstallWim);
-            Assert.Equal("true", mount.Parameters[StageParams.ReuseMedia]);
+            Assert.False(mount.Parameters.ContainsKey("reuseMedia"));
             Assert.Equal(composition.Review.SourceMedia.SourceIsoSha256, mount.Parameters[StageParams.SourceIsoSha256]);
             Assert.Equal(composition.Review.SourceMedia.Selected.Name, mount.Parameters[StageParams.ImageName]);
             Assert.Equal(composition.OutputIsoPath, Assert.Single(

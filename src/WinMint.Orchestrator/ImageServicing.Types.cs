@@ -6,7 +6,6 @@ public sealed record ServicingRun(
     string? OutputIsoPath = null,
     string? ProfilePath = null,
     int? WimIndex = null,
-    bool ReuseMedia = false,
     string? SourceIsoSha256 = null,
     SelectedWim? SelectedImage = null);
 

@@ -148,20 +148,13 @@ if (-not $SkipApply) {
         Write-Host "Using packaged Supervisor: $supervisor"
     }
 
-    $reuseArgs = @()
-    $marker = Join-Path $Work 'media\sources\.winmint-single-index'
-    if (Test-Path -LiteralPath $marker) {
-        Write-Host 'Found single-image marker — passing --reuse-media'
-        $reuseArgs = @('--reuse-media')
-    }
-
     $strictArgs = @()
     if ($PackageStrict) { $strictArgs = @('--package-strict') }
 
     Write-Host "Host Apply Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality…"
     Write-Host 'Pre-wipe only: mutates offline WIM from Source ISO — does not install to this device.'
     $cliExe = Resolve-WinMintCliExe
-    $buildArgs = @('build', $Profile, '--iso', $Iso, '--work', $Work, '--image-quality', $ImageQuality, '--package-audit-strict') + $strictArgs + $reuseArgs
+    $buildArgs = @('build', $Profile, '--iso', $Iso, '--work', $Work, '--image-quality', $ImageQuality, '--package-audit-strict') + $strictArgs
     if ($cliExe) {
         & $cliExe @buildArgs
     }

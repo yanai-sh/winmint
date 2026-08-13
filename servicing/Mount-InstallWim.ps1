@@ -12,7 +12,6 @@ $mountDir = $Parameters['mountDir']
 $mediaDir = $Parameters['mediaDir']
 $wimIndex = $Parameters['wimIndex']
 $workDir = $Parameters['workDirectory']
-$reuseMedia = ($Parameters['reuseMedia'] -eq 'true')
 $sourceIsoSha256 = $Parameters['sourceIsoSha256']
 $imageName = $Parameters['imageName']
 $imageArchitecture = $Parameters['architecture']
@@ -23,12 +22,12 @@ if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
 if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
 if ([string]::IsNullOrWhiteSpace($wimIndex)) { throw 'wimIndex required' }
 if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
-if (-not $reuseMedia -and -not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sourceIso" }
+if (-not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sourceIso" }
 
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
 . (Join-Path $PSScriptRoot 'Test-MediaIdentity.ps1')
 
-New-Item -ItemType Directory -Force -Path $mountDir, $mediaDir | Out-Null
+New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
 
 $wimFile = Join-Path $mediaDir 'sources\install.wim'
 $marker = Join-Path $mediaDir '.winmint-media-identity.json'
@@ -39,32 +38,6 @@ $expectedIdentity = [ordered]@{
     architecture = $imageArchitecture
     edition = $imageEdition
     build = $imageBuild
-}
-$reuseSnapshot = $null
-$identityMatches = $false
-if ($reuseMedia -and (Test-Path -LiteralPath $wimFile -PathType Leaf)) {
-    try {
-        Clear-WimReadOnly -WimFile $wimFile
-        $reuseSnapshot = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
-        $identityMatches = Test-WinMintMediaIdentity `
-            -MarkerPath $marker `
-            -ExpectedIdentity $expectedIdentity `
-            -Snapshot $reuseSnapshot
-    }
-    catch {
-        $identityMatches = $false
-    }
-}
-
-if ($identityMatches) {
-    Assert-WimMetadataPresent -Snapshot $reuseSnapshot -Context 'MountInstallWim reuse-media'
-    Write-WinMintEditionConfig -MediaDir $mediaDir -Snapshot $reuseSnapshot
-    Write-Output "reuse-media: mounting matching single-image WIM index 1 ($($reuseSnapshot.Name))"
-    & dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:1 /MountDir:$mountDir
-    if ($LASTEXITCODE -ne 0) { throw "DISM Mount-Image failed: $LASTEXITCODE" }
-    Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{ phase = 'MountInstallWim.reuse'; final = $reuseSnapshot }
-    Write-Output "MountInstallWim ok"
-    exit 0
 }
 
 if (Test-Path -LiteralPath $mediaDir) {

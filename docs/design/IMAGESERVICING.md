@@ -27,7 +27,6 @@ public sealed record ServicingRun(
     string? OutputIsoPath = null,
     string? ProfilePath = null,
     int? WimIndex = null,
-    bool ReuseMedia = false,
     string? SourceIsoSha256 = null,
     SelectedWim? SelectedImage = null);
 
@@ -44,7 +43,7 @@ The stage list crosses this seam as `{workDirectory}/stages.json` — Materializ
 
 HostCompile resolves and freezes the build Output ISO path before Apply. The lower-level ImageServicing entry retains its default-name fallback for direct S2 callers, but HostCompile composition never relies on it. Materialize and evidence use the supplied path unchanged. Elevated `Invoke-ServicingPlan.ps1` is the hard seam; reading `evidence.json` into `ImageEvidence` stays inside ImageServicing.
 
-`MountInstallWim` receives the frozen Source ISO hash and selected-image metadata. `ReuseMedia=false` always recreates staged media. `ReuseMedia=true` requires an exact `winmint.media-identity/v1` marker plus matching staged single-image WIM metadata; absent, malformed, or mismatched identity takes the cold recreate path and writes the marker atomically after validation.
+`MountInstallWim` receives the frozen Source ISO hash and selected-image metadata. Every Apply recreates staged media from the Source ISO; leftover staged media is not an input. Prepared media (host-wide immutable tree) is added by #111 after this baseline.
 
 **Elevated plan loop:** opcode kernels mutate media only. The loop alone finalizes host Apply state — `Write-PlanEvidence` after all kernels succeed, `Write-PlanFailure` on any throw or non-zero kernel exit. Kernels do not write `evidence.json` or `failure.json`. **`BuildIso`** runs `oscdimg` and emits the **Output ISO** only; digest and evidence assembly happen in the loop after `BuildIso` returns.
 

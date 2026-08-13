@@ -4,7 +4,7 @@ param(
     [hashtable] $Parameters
 )
 # Offline capability remove OR optional-feature disable — param-only.
-# kind=capability|feature. Already-absent/disabled / not listed ⇒ ok + digest (reuse-media).
+# kind=capability|feature. Already-absent/disabled / not listed ⇒ ok + digest.
 $kind = [string]$Parameters['kind']
 $mountDir = $Parameters['mountDir']
 $workDir = $Parameters['workDirectory']

@@ -322,7 +322,6 @@ public static class ImageServicing
                     parameters[StageParams.MountDir] = mountDir;
                     parameters[StageParams.MediaDir] = mediaDir;
                     parameters[StageParams.WimIndex] = wimIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    parameters[StageParams.ReuseMedia] = run.ReuseMedia ? "true" : "false";
                     parameters[StageParams.WorkDirectory] = run.WorkDirectory;
                     if (run.SelectedImage is { } selected
                         && !string.IsNullOrWhiteSpace(run.SourceIsoSha256))

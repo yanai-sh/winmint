@@ -71,10 +71,10 @@ wipe-scratch:
 watch-apply WORK="":
     pwsh -NoProfile -Command "$w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Join-Path $env:LOCALAPPDATA 'WinMint\work\gate-b' }; Get-Content -LiteralPath (Join-Path $w 'apply-status.txt') -Wait -Tail 40"
 
-# Maintainer Apply (DISM hours). Cli verb is build. Auto --reuse-media when marker exists.
+# Maintainer Apply (DISM hours). Cli verb is build.
 # Prereq: just publish-provisioning. INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs.
 apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STUBS="false":
-    Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $marker = Join-Path '{{WORK}}' 'media\.winmint-media-identity.json'; $reuse = @(); if (Test-Path -LiteralPath $marker) { Write-Host 'Found media identity marker — passing --reuse-media'; $reuse = @('--reuse-media') }; $stubs = @(); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $stubs = @('--include-smoke-stubs') }; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}') + $stubs + $reuse; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
+    Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $stubs = @(); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $stubs = @('--include-smoke-stubs') }; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}') + $stubs; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
 
 # S4 Hyper-V Smoke — not in `just check`. Assert-only: just smoke-assert tests/fixtures/smoke-evidence
 smoke ISO WORK=".scratch/smoke" PROFILE="samples/acceptance.profile.json":

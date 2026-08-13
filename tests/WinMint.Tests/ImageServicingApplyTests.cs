@@ -100,8 +100,7 @@ public class ImageServicingApplyTests
             Assert.Contains(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.MountInstallWim
-                    && s.Parameters.TryGetValue(StageParams.ReuseMedia, out string? reuse)
-                    && reuse == "false"
+                    && !s.Parameters.ContainsKey("reuseMedia")
                     && s.Parameters.TryGetValue(StageParams.WorkDirectory, out string? mountWork)
                     && mountWork == work);
             Assert.Contains(
@@ -131,7 +130,7 @@ public class ImageServicingApplyTests
     }
 
     [Fact]
-    public async Task Apply_passes_reuseMedia_true_on_MountInstallWim_when_requested()
+    public async Task Apply_omits_reuseMedia_from_MountInstallWim()
     {
         BuildArtifacts plan = MinimalPlan();
         string work = NewTempDir();
@@ -141,8 +140,7 @@ public class ImageServicingApplyTests
             ServicingRun run = new(
                 SourceIsoPath: Path.Combine(work, "source.iso"),
                 WorkDirectory: work,
-                OutputIsoPath: Path.Combine(work, "out.iso"),
-                ReuseMedia: true);
+                OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
             Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
@@ -152,11 +150,12 @@ public class ImageServicingApplyTests
                 TestContext.Current.CancellationToken);
 
             Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
-            Assert.Contains(
+            ServicingStage mount = Assert.Single(
                 runner.Stages,
-                s => s.Opcode == ServicingOpcode.MountInstallWim
-                    && s.Parameters.TryGetValue(StageParams.ReuseMedia, out string? reuse)
-                    && reuse == "true");
+                s => s.Opcode == ServicingOpcode.MountInstallWim);
+            Assert.False(mount.Parameters.ContainsKey("reuseMedia"));
+            Assert.False(typeof(ServicingRun).GetProperty("ReuseMedia") is not null);
+            Assert.False(typeof(StageParams).GetField("ReuseMedia") is not null);
         }
         finally
         {

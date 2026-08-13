@@ -44,11 +44,6 @@ internal static class Program
             Description = "install.wim index (default: 3 = Windows 11 Pro on consumer multi-edition ISOs).",
         };
 
-        Option<bool> reuseMediaOption = new("--reuse-media")
-        {
-            Description = "Skip ISO copy/export; require existing single-image media under --work (fail closed if missing).",
-        };
-
         Option<string> imageQualityOption = new("--image-quality")
         {
             Description = "Image quality lane: Test (default) or Release.",
@@ -127,7 +122,6 @@ internal static class Program
             workOption,
             outIsoOption,
             wimIndexOption,
-            reuseMediaOption,
             imageQualityOption,
             imageArchitectureOption,
             packageAuditStrictOption,
@@ -141,14 +135,12 @@ internal static class Program
             DirectoryInfo work = parseResult.GetValue(workOption)!;
             FileInfo? outIso = parseResult.GetValue(outIsoOption);
             int? wimIndex = parseResult.GetValue(wimIndexOption);
-            bool reuseMedia = parseResult.GetValue(reuseMediaOption);
             return await RunBuildAsync(
                 profilePath,
                 iso,
                 work,
                 outIso,
                 wimIndex,
-                reuseMedia,
                 parseResult.GetValue(imageQualityOption)!,
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
@@ -273,7 +265,6 @@ internal static class Program
         DirectoryInfo work,
         FileInfo? outIso,
         int? wimIndex,
-        bool reuseMedia,
         string imageQuality,
         string? imageArchitecture,
         bool packageAuditStrict,
@@ -293,7 +284,6 @@ internal static class Program
                     work.FullName,
                     outIso?.FullName,
                     wimIndex,
-                    reuseMedia,
                     packageStrict,
                     packageAuditStrict,
                     includeSmokeStubs,

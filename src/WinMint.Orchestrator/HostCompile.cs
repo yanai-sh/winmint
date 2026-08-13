@@ -22,7 +22,7 @@ public static class HostCompile
 
         BuildArtifacts snapshot = SnapshotArtifacts(planned.Value);
         return Result.Ok<HostPlan, HostComposeError>(
-            new HostPlan(snapshot, CreateReview(owned, snapshot, null, null, null, false, "profile", null)));
+            new HostPlan(snapshot, CreateReview(owned, snapshot, null, null, null, "profile", null)));
     }
 
     public static Result<Unit, Failure> ExportPlan(HostPlan plan, string destinationDirectory)
@@ -149,7 +149,6 @@ public static class HostCompile
             composition.OutputIsoPath,
             ProfilePath: null,
             composition.Review.SourceMedia.Selected!.Index,
-            composition.ReuseMedia,
             composition.Review.SourceMedia.SourceIsoSha256,
             composition.Review.SourceMedia.Selected);
         return await ImageServicing.ApplyAsync(
@@ -279,7 +278,6 @@ public static class HostCompile
             media,
             work,
             output,
-            options.ReuseMedia,
             stemValue,
             authoredSelectionLabels);
         return Result.Ok<HostComposition, HostComposeError>(
@@ -290,8 +288,7 @@ public static class HostCompile
                 sourceProfileDirectory,
                 source,
                 work,
-                output,
-                options.ReuseMedia));
+                output));
     }
 
     private static HostReview CreateReview(
@@ -300,7 +297,6 @@ public static class HostCompile
         SourceMediaReview? media,
         string? work,
         string? output,
-        bool reuseMedia,
         string profileStem,
         IEnumerable<string>? authoredSelectionLabels) =>
         new(
@@ -316,7 +312,6 @@ public static class HostCompile
             media,
             work,
             output,
-            reuseMedia,
             profileStem,
             artifacts.Manifest.ImageQuality,
             artifacts.PackageStrict,
@@ -437,7 +432,6 @@ public sealed record HostComposeOptions(
     string? WorkDirectory = null,
     string? OutputIsoPath = null,
     int? WimIndex = null,
-    bool ReuseMedia = false,
     PackageStrictOverride PackageStrict = PackageStrictOverride.FromLane,
     bool PackageAuditStrict = false,
     bool IncludeSmokeStubs = false,
@@ -458,7 +452,6 @@ public sealed record HostReview(
     SourceMediaReview? SourceMedia,
     string? WorkDirectory,
     string? OutputIsoPath,
-    bool ReuseMedia,
     string ProfileStem,
     ImageQualityLane ImageQuality,
     bool PackageStrict,
@@ -484,8 +477,7 @@ public sealed class HostComposition
         string? sourceProfileDirectory,
         string sourceIsoPath,
         string workDirectory,
-        string outputIsoPath,
-        bool reuseMedia)
+        string outputIsoPath)
     {
         _artifacts = artifacts;
         Review = review;
@@ -494,14 +486,12 @@ public sealed class HostComposition
         SourceIsoPath = sourceIsoPath;
         WorkDirectory = workDirectory;
         OutputIsoPath = outputIsoPath;
-        ReuseMedia = reuseMedia;
     }
 
     public HostReview Review { get; }
     public string SourceIsoPath { get; }
     public string WorkDirectory { get; }
     public string OutputIsoPath { get; }
-    public bool ReuseMedia { get; }
     public byte[] GetProfileUtf8() => _profileUtf8.ToArray();
     internal BuildArtifacts Artifacts => _artifacts;
     public string? SourceProfileDirectory { get; }

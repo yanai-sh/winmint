@@ -5,7 +5,7 @@ param(
 )
 # Offline provisioned AppX remove — param-only; no Profile branching.
 # Policy (KEEPFLAG): Plan ⊆ catalog (typos fail at plan). Remove is idempotent: already-absent ⇒ ok + digest absent
-# (reuse-media re-Apply after a prior remove). Uses dism.exe (not DISM AppX cmdlets) — Store pwsh
+# (re-Apply after a prior remove). Uses dism.exe (not DISM AppX cmdlets) — Store pwsh
 # hits "Class not registered" on those COM APIs.
 $mountDir = $Parameters['mountDir']
 $packageFamilyNames = $Parameters['packageFamilyNames']
@@ -85,7 +85,7 @@ $removed = [System.Collections.Generic.List[object]]::new()
 foreach ($id in $ids) {
     $matchedPkgs = @($before | Where-Object { Test-PackageMatchesCatalogId -Package $_ -CatalogId $id })
     if ($matchedPkgs.Count -eq 0) {
-        # Idempotent: prior Apply / reuse-media already stripped this id.
+        # Idempotent: prior Apply already stripped this id.
         Write-Output "Remove-ProvisionedAppx already absent catalogId=$id"
         continue
     }
