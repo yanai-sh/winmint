@@ -1,13 +1,13 @@
 # Design: Host composition for Wizard Living Draft
 
 **Date:** 2026-08-12  
-**Status:** Shipped — [#94](https://github.com/yanai-sh/winmint/issues/94) · [#110](https://github.com/yanai-sh/winmint/issues/110) (commit `f17a64a`; `ready-for-agent` cleared on close)  
+**Status:** Historical — shipped [#94](https://github.com/yanai-sh/winmint/issues/94) · [#110](https://github.com/yanai-sh/winmint/issues/110) (commit `f17a64a`). Not living law. Prepared media and Apply: [DESIGN](../DESIGN.md) · [IMAGESERVICING](../design/IMAGESERVICING.md). `--reuse-media` / `ReuseMedia` are gone.  
 **Issue:** [#94 — WizardSession Living Draft](https://github.com/yanai-sh/winmint/issues/94)  
 **Unlocks:** [#110 — Split WizardViewModel by stage](https://github.com/yanai-sh/winmint/issues/110) (shipped)
 
 ## Problem
 
-The Wizard currently has a second planning brain:
+The Wizard had a second planning brain:
 
 1. `WizardSession.ComposeAndPlan` creates a `Profile` and calls `BuildPlan.Plan`.
 2. `WizardViewModel` parses the canonical Profile bytes it just received.
@@ -33,7 +33,7 @@ HostCompile owns source-media inspection, canonical Profile serialization, defau
 - Source ISO path and SHA-256;
 - selected WIM index, architecture, build, edition, and name;
 - lane, package policy, and other BuildPlan options;
-- work directory and media-reuse policy;
+- work directory;
 - Profile naming stem;
 - explicit or resolved Output ISO path.
 
@@ -66,7 +66,7 @@ public static Result<Unit, Failure> ExportPlan(
     string destinationDirectory);
 ```
 
-`HostComposeOptions` carries all authoring-independent build choices, including Source ISO, selected WIM index, work directory, media reuse, image-quality lane, package overrides, architecture/build expectations, and optional Output ISO override. HostCompile normalizes those values once.
+`HostComposeOptions` carries all authoring-independent build choices, including Source ISO, selected WIM index, work directory, image-quality lane, package overrides, architecture/build expectations, and optional Output ISO override. HostCompile normalizes those values once. Callers have no media-reuse switch.
 
 `HostComposition` exposes:
 
@@ -179,22 +179,7 @@ Cli `validate` and `plan` do not require Source ISO or workspace choices. They l
 
 Composition freezes Source ISO SHA-256 and selected-image metadata. Apply rechecks the SHA-256 before elevation and fails if the file changed.
 
-Before mutation, ImageServicing validates that staged media matches the composition's selected image metadata. `ReuseMedia=false` removes any old media and creates fresh media from the approved Source ISO.
-
-`ReuseMedia=true` uses a minimal marker beside staged media:
-
-```json
-{
-  "schemaVersion": "winmint.media-identity/v1",
-  "sourceIsoSha256": "...",
-  "wimIndex": 1,
-  "imageName": "...",
-  "architecture": "arm64",
-  "build": "..."
-}
-```
-
-Reuse requires an exact marker match and a probe of staged `sources/install.wim` confirming the selected-image metadata. A missing, malformed, or mismatched marker takes the cold path, recreates media, validates it, and atomically writes the marker. A Source ISO hash change after composition still fails Apply rather than silently recomposing. [#111](https://github.com/yanai-sh/winmint/issues/111) may replace this conservative marker after native ARM64 benchmarking, but #94's behavior is complete without that spike.
+#94 briefly owned a caller `ReuseMedia` flag and a `{work}/media/.winmint-media-identity.json` marker. That switch is deleted. ImageServicing owns Prepared media; staged media is a per-Apply copy. Living contract: [IMAGESERVICING](../design/IMAGESERVICING.md).
 
 Supervisor freshness and path preparation are checked immediately before Apply. Apply does not recompute defaults or replace approved source, WIM, lane, architecture, output, or package facts.
 
@@ -247,11 +232,11 @@ Review must not parse canonical bytes, re-expand presets, reapply product postur
 
 Tests use HostCompile and WizardSession interfaces:
 
-1. Composition freezes Source ISO hash, WIM index/metadata, architecture/build, work/output paths, reuse policy, and #104 lane/package facts.
+1. Composition freezes Source ISO hash, WIM index/metadata, architecture/build, work/output paths, and #104 lane/package facts.
 2. Staged artifacts observed through the existing elevated-runner fake equal the composition's immutable Review facts; no new `IImageServicing` port is added.
 3. Apply performs no Profile parse or BuildPlan invocation.
 4. Source ISO changes after composition fail before elevation.
-5. `ReuseMedia=false` cannot consume a pre-existing WIM; reused media must match frozen source/image identity.
+5. Callers have no reuse switch; leftover staged media is not an Apply input. Living contract: [IMAGESERVICING](../design/IMAGESERVICING.md).
 6. Changing or deleting an exported Profile cannot alter Apply.
 7. Output path and naming stem shown in Review equal ImageServicing input.
 8. Mutable input collections and returned byte arrays cannot alter the private approval snapshot.

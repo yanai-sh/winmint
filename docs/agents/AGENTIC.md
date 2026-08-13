@@ -7,7 +7,7 @@ Living rules: [DESIGN](../DESIGN.md). Glossary: [CONTEXT](../../CONTEXT.md). Con
 1. CONTEXT → DESIGN  
 2. The one module design for the seam you touch  
 3. ARCHITECTURE / STACK only when shape or pins matter  
-4. Cold: `decisions/`, `specs/`, `research/` — not status. Active plans only under `superpowers/` for in-flight work.
+4. Cold: `decisions/`, `specs/`, `research/` — not status. Shipped specs are historical. Active plans only under `superpowers/` for in-flight work.
 
 Prefer module names BuildPlan / ImageServicing / ProvisioningSession over “engine.”
 

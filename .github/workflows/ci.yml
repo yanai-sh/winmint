@@ -18,7 +18,7 @@ jobs:
   check:
     # Primary host is Windows on ARM64 - gate there first.
     runs-on: windows-11-arm
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -34,7 +34,7 @@ jobs:
           dotnet format --verify-no-changes
           dotnet restore
           dotnet build --no-restore
-          dotnet test --no-build -- --filter-not-trait "Category=S4"
+          dotnet test --no-build -- --filter-not-trait "Category=S4" --filter-not-trait "Category=S5"
 
       - name: PSScriptAnalyzer (servicing)
         shell: pwsh
@@ -48,6 +48,10 @@ jobs:
             exit 1
           }
           Write-Output 'PSScriptAnalyzer: clean'
+
+      - name: Contract tests
+        shell: pwsh
+        run: pwsh -NoProfile -File tests/contract/Invoke-ContractTests.ps1
 
       # NativeAOT win-arm64 publish smoke for Provisioning Supervisor.
       - name: AOT publish (Provisioning Supervisor)

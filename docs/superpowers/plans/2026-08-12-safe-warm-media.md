@@ -4,7 +4,7 @@
 **Spec:** [2026-08-12-safe-warm-media-design.md](../specs/2026-08-12-safe-warm-media-design.md)  
 **Issue:** [#111](https://github.com/yanai-sh/winmint/issues/111)
 
-Grill overlay: **Prepared media** (host-wide immutable tree) and **staged media** (per-Apply copy). No `--reuse-media`.
+Title is historical. Living vocabulary: **Prepared media** and **staged media** ([CONTEXT](../../../CONTEXT.md) · [IMAGESERVICING](../../design/IMAGESERVICING.md)). No `--reuse-media`. Do not implement leftover `ReuseMedia` slices from this log; that switch is gone.
 
 Implement in order. Each slice starts red, ends with its focused check green, and is a reviewable commit. Do not preserve the unsafe behavior behind a compatibility alias.
 

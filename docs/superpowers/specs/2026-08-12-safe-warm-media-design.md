@@ -1,7 +1,7 @@
 # Spec: Safe warm source media
 
 **Date:** 2026-08-12  
-**Status:** Implementing — living terms are **Prepared media** and **staged media** ([CONTEXT](../../../CONTEXT.md)). Do not say cache / run media / reuse in operator docs.  
+**Status:** Implementing under [#111](https://github.com/yanai-sh/winmint/issues/111). Title is historical. Living terms are **Prepared media** and **staged media** ([CONTEXT](../../../CONTEXT.md) · [IMAGESERVICING](../../design/IMAGESERVICING.md)). Do not reintroduce `--reuse-media` or call Prepared media a cache in product copy. The host directory leaf `media-cache` is an implementation path, not a product name.  
 **Authority:** [DESIGN](../../DESIGN.md) · [IMAGESERVICING](../../design/IMAGESERVICING.md) · [BUILDPLAN](../../design/BUILDPLAN.md)  
 **Research:** [CTT/WinUtil lessons](../../research/2026-08-12-ctt-winutil-lessons.md)  
 **Issue:** [#111](https://github.com/yanai-sh/winmint/issues/111)
@@ -10,15 +10,13 @@ Repository-relative paths in this document exist at the post-#94 baseline unless
 
 ## Decision
 
-ImageServicing automatically prepares and uses an immutable, content-addressed Source ISO cache. Callers no longer choose whether prior mutable build media is safe to reuse.
-
-The cache stores a source-derived, single-index base. Every Apply copies that base into a fresh mutable run workspace before any WIM is mounted or any Profile-derived mutation occurs.
+ImageServicing automatically prepares and uses host-wide **Prepared media**. Callers no longer choose whether prior mutable build media is safe to reuse. A published entry is a source-derived, single-index base. Every Apply copies that base into fresh **staged media** before any WIM is mounted or any Profile-derived mutation occurs.
 
 Ordinary copy is the correctness baseline. ReFS block cloning may be added only as a measured, behavior-preserving optimization.
 
 ## Problem
 
-#94 established a conservative baseline. `HostCompile` freezes the Source ISO SHA-256 and selected `SelectedWim`, rehashes the ISO before Apply, and materializes those values into the `MountInstallWim` stage. `ReuseMedia=false` always recreates staged media. `ReuseMedia=true` accepts existing media only when `.winmint-media-identity.json` has schema `winmint.media-identity/v1` and the single-image WIM still matches the selected Name, Architecture, Edition, and Build. Missing, malformed, or mismatched identity falls back to cold recreation.
+Before Prepared media, #94 used a caller `ReuseMedia` flag. `ReuseMedia=false` always recreated staged media. `ReuseMedia=true` accepted existing media only when `.winmint-media-identity.json` had schema `winmint.media-identity/v1` and the single-image WIM still matched the selected Name, Architecture, Edition, and Build. Missing, malformed, or mismatched identity fell back to recreation. That switch is gone.
 
 The marker and staged-WIM check prove source and selected-image identity, not pristine state. A matching tree may already contain destructive and accumulating mutations:
 

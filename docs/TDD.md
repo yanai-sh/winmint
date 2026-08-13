@@ -18,7 +18,7 @@
 | **S1** | BuildPlan (`TryParseProfile`, `SerializeProfile`, `Plan`) | In-process |
 | **S1b** | Host DebloatPresets + Wizard packages → Profile → Plan/Serialize | In-process |
 | **S1c** | `ProfileFile.TryLoad` | Local temp dirs |
-| **S1d** | HostCompile (`PlanDocument`, `ComposeAsync`, `ComposeFileAsync`, `ApplyAsync`) + WizardSession command sequences | Source-media probe / elevated-runner fakes |
+| **S1d** | HostCompile (`PlanDocument`, `ComposeAsync`, `ComposeFileAsync`, `ApplyAsync`) + WizardSession — Orchestrator entry, not a fourth product module ([DESIGN](DESIGN.md)) | Source-media probe / elevated-runner fakes |
 | **S2** | ImageServicing (`Apply`) | DISM (fake when port exists) |
 | **S3** | ProvisioningSession (`Run` + env adapters) | Local-substitutable OS |
 | **S4** | Hyper-V Smoke acceptance | Harness + VM |
@@ -49,7 +49,7 @@ Real temporary directories only. Assert absolute + Profile-relative resolution, 
 
 ### S1d — Host composition / Living Draft
 
-Assert immutable review and private approved-plan behavior through HostCompile and WizardSession. Drive Wizard navigation gates through `WizardViewModel`, and stage behavior through the Source, Account, Software, and Review binding interfaces—not private formatting helpers. A fake `ISourceMediaProbe` lists WIM indexes without hashing and supplies Source ISO identity plus selected-WIM metadata at Compose; observe materialized servicing facts through `IElevatedPlanRunner`. Cover source changes before elevation, deterministic output naming, structured document errors, relative-`passwordPath` Save relocation, dirty invalidation, out-of-order async result rejection, retry after Apply failure, and exact-handle success acknowledgement. Do not add an `IImageServicing` port.
+HostCompile is the Orchestrator entry ([DESIGN](DESIGN.md)). Assert immutable review and private approved-plan behavior through HostCompile and WizardSession. Drive Wizard navigation gates through `WizardViewModel`, and stage behavior through the Source, Account, Software, and Review binding interfaces—not private formatting helpers. A fake `ISourceMediaProbe` lists WIM indexes without hashing and supplies Source ISO identity plus selected-WIM metadata at Compose; observe materialized servicing facts through `IElevatedPlanRunner`. Cover source changes before elevation, deterministic output naming, structured document errors, relative-`passwordPath` Save relocation, dirty invalidation, out-of-order async result rejection, retry after Apply failure, and exact-handle success acknowledgement. Do not add an `IImageServicing` port.
 
 ### S2 — ImageServicing
 
@@ -70,7 +70,7 @@ One harness entry → Apply workdir evidence (`tools/apply/`). Assert `evidence.
 ## Gate commands
 
 ```powershell
-just check          # S1–S3 (excludes Category=S4 and Category=S5)
+just check          # S1–S3 (excludes Category=S4 and Category=S5) + contract tests; CI mirrors this
 # maintainer:
 just host-apply ISO=…
 just host-apply-assert WORK=…

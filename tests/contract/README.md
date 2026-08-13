@@ -13,4 +13,4 @@ Does not belong here:
 - Hyper-V Smoke (S4) or Host Apply (S5).
 - A contract around the deleted `--reuse-media` / marker four-way branch.
 
-`just check` discovers `tests/contract/Test-*.ps1`.
+`just check` discovers `tests/contract/Test-*.ps1`. CI runs the same discovery.

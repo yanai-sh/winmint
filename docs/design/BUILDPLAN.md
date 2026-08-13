@@ -62,7 +62,7 @@ public sealed record BuildArtifacts(
     DriverInject? Drivers = null);
 ```
 
-`BuildArtifacts` is BuildPlan's internal result vocabulary. Front ends enter through HostCompile: document-only `validate` / `plan` receive `HostPlan` via `PlanDocument(HostComposeOptions)`, while build flows receive an immutable `HostComposition` with a secret-free `HostReview`. HostCompile deep-snapshots the approved artifacts and keeps them private through Apply. Honesty and Gate B (`HostReview.IsGateB` = Release ∧ package-strict) are HostReview projections.
+`BuildArtifacts` is BuildPlan's internal result vocabulary. Front ends enter through HostCompile (`PlanDocument` / `Compose*` / `ApplyAsync`) — [DESIGN](../DESIGN.md). Honesty and Gate B (`HostReview.IsGateB` = Release ∧ package-strict) are HostReview projections.
 
 Stages: opcode list plus optional `DriverInject`. ImageServicing maps opcode → `servicing/*.ps1`, serializes typed Kernel records into `winmint.servicing.stages/v1`, and writes policy/AppX/component lists as JSON under `payload/`. Cli diagnostic dumps use `winmint.plan.stages/v1` (InjectDrivers + ExportWim diagnostic keys only); only ImageServicing materialization emits `winmint.servicing.stages/v1`. Jobs JSON is owned by `JobsWire.Write` / `TryParse` in Contracts. Guest `bundle.json` is owned by `GuestBundleWire.Write` / `TryParse`. See [CONTRACTS](CONTRACTS.md).
 

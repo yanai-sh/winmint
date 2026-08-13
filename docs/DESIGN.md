@@ -1,7 +1,7 @@
 # WinMint — Design (living)
 
 **Phase:** Alpha — maintainer pick or new GitHub issue.  
-**Product modules:** BuildPlan · ImageServicing · ProvisioningSession. HostCompile is the Orchestrator entry over BuildPlan + ImageServicing, not a fourth product module.  
+**Product modules:** BuildPlan · ImageServicing · ProvisioningSession. Front ends call **HostCompile** (Orchestrator entry over BuildPlan + ImageServicing) — not a fourth product module.  
 **Glossary:** [CONTEXT](../CONTEXT.md) · **Why greenfield:** [V1-LESSONS](design/V1-LESSONS.md) · **Shape:** [ARCHITECTURE](ARCHITECTURE.md)
 
 **Invariant** = identity/safety. **Default** = shipped behaviour (change with spike). Everything else is issue-scoped, not living law.
@@ -47,4 +47,4 @@ Cross-cuts (reference, not a frozen file set): [CONTRACTS](design/CONTRACTS.md) 
 
 ## Cold history
 
-[decisions/](decisions/) ADRs · [research/](research/) · [specs/](specs/) · git history. Prefer this file over ADR bodies when they disagree.
+[decisions/](decisions/) ADRs · [research/](research/) · [specs/](specs/) · git history. Shipped specs are historical. Prefer this file over ADR bodies when they disagree.

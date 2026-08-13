@@ -18,7 +18,7 @@ Revisable with spike evidence — [DESIGN](docs/DESIGN.md#defaults).
 
 ## Deep modules
 
-BuildPlan · ImageServicing · ProvisioningSession — [docs/design/](docs/design/).
+BuildPlan · ImageServicing · ProvisioningSession — [docs/design/](docs/design/). HostCompile is the Orchestrator entry (not a fourth module).
 
 ## Session
 
@@ -32,4 +32,4 @@ just check
 
 ## Read order
 
-[CONTEXT](CONTEXT.md) → [DESIGN](docs/DESIGN.md) → module design for the seam → [AGENTIC](docs/agents/AGENTIC.md) when needed · [TDD](docs/TDD.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [STACK](docs/STACK.md)
+[CONTEXT](CONTEXT.md) → [DESIGN](docs/DESIGN.md) → the one module design for the seam. [AGENTIC](docs/agents/AGENTIC.md) when the session needs it. TDD / ARCHITECTURE / STACK only when tests, shape, or pins are the work. Shipped specs are historical.
