@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace WinMint.Contracts;
@@ -9,7 +11,49 @@ namespace WinMint.Contracts;
 public static class GuestBundleWire
 {
     public const string SchemaVersion = "winmint.provisioning.bundle/v1";
+
+    public static string Write(BundleFile bundle)
+    {
+        ArgumentNullException.ThrowIfNull(bundle);
+        return JsonSerializer.Serialize(bundle, GuestBundleWireJsonContext.Default.BundleFile);
+    }
+
+    public static bool TryParse(
+        ReadOnlySpan<byte> utf8,
+        [NotNullWhen(true)] out BundleFile? file,
+        out GuestBundleWireError error)
+    {
+        try
+        {
+            file = JsonSerializer.Deserialize(utf8, GuestBundleWireJsonContext.Default.BundleFile);
+        }
+        catch (JsonException ex)
+        {
+            file = null;
+            error = new GuestBundleWireError("bundle.parse", $"Failed to parse bundle: {ex.Message}");
+            return false;
+        }
+
+        if (file is null)
+        {
+            error = new GuestBundleWireError("bundle.parse", "Failed to parse bundle.");
+            return false;
+        }
+
+        if (!string.Equals(file.SchemaVersion, SchemaVersion, StringComparison.Ordinal))
+        {
+            error = new GuestBundleWireError(
+                "bundle.schema",
+                $"Unsupported bundle schema '{file.SchemaVersion}' (need {SchemaVersion}).");
+            return false;
+        }
+
+        error = default;
+        return true;
+    }
 }
+
+public readonly record struct GuestBundleWireError(string Code, string Message);
 
 public sealed record BundleFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
@@ -28,3 +72,10 @@ public sealed record SettleFile(
     [property: JsonPropertyName("geoId")] int GeoId,
     [property: JsonPropertyName("timeZoneId")] string TimeZoneId,
     [property: JsonPropertyName("locationServicesEnabled")] bool LocationServicesEnabled);
+
+[JsonSerializable(typeof(BundleFile))]
+[JsonSourceGenerationOptions(
+    WriteIndented = true,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+internal sealed partial class GuestBundleWireJsonContext : JsonSerializerContext;

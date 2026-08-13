@@ -21,7 +21,7 @@ public class UnlockTimeoutTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
-                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
                 {
                     WallClockTimeout = TimeSpan.FromSeconds(4),
@@ -55,7 +55,7 @@ public class UnlockTimeoutTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
-                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
                 {
                     WallClockTimeout = TimeSpan.FromSeconds(10),
@@ -87,7 +87,7 @@ public class UnlockTimeoutTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
-                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
                 {
                     StaleTenureThreshold = TimeSpan.FromMinutes(15),
@@ -115,8 +115,9 @@ public class UnlockTimeoutTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
-                dma: new DmaSettleTarget(Enabled: false, null, null, null, null),
-                policy: SessionPolicy.SmokeDefaults with { FailedDwell = TimeSpan.Zero }),
+                dma: new DmaSettleTarget(null, null, null, null),
+                policy: SessionPolicy.SmokeDefaults with { FailedDwell = TimeSpan.Zero },
+                dmaEnabled: false),
             Env(time, winlogon, new MatchingRegion(), new RecordingSplashPresenter(), new RecordingEvidenceSink(), checkpoints),
             TestContext.Current.CancellationToken);
 
@@ -135,7 +136,7 @@ public class UnlockTimeoutTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
-                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
                 {
                     SettleDeadline = TimeSpan.Zero,
@@ -154,13 +155,15 @@ public class UnlockTimeoutTests
 
     private static ProvisioningBundle Bundle(
         DmaSettleTarget dma,
-        SessionPolicy policy) =>
+        SessionPolicy policy,
+        bool dmaEnabled = true) =>
         new(
             Account: new AccountStamp("winmint", ""),
             Dma: dma,
             Jobs: [new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub)],
             Policy: policy,
-            SupervisorShellPath: SupervisorPath);
+            SupervisorShellPath: SupervisorPath,
+            DmaEnabled: dmaEnabled);
 
     private static ShellEnvironment Env(
         TimeProvider time,

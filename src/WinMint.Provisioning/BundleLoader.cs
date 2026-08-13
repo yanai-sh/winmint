@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using WinMint.Contracts;
 
@@ -54,29 +53,9 @@ public static class BundleLoader
                 new BundleLoadError("bundle.read", $"Failed to read bundle: {path}: {ex.Message}"));
         }
 
-        BundleFile? file;
-        try
+        if (!GuestBundleWire.TryParse(bytes, out BundleFile? file, out GuestBundleWireError wireError))
         {
-            file = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.BundleFile);
-        }
-        catch (JsonException ex)
-        {
-            return BundleLoadResult.Fail(
-                new BundleLoadError("bundle.parse", $"Failed to parse bundle: {path}: {ex.Message}"));
-        }
-
-        if (file is null)
-        {
-            return BundleLoadResult.Fail(
-                new BundleLoadError("bundle.parse", $"Failed to parse bundle: {path}"));
-        }
-
-        if (!string.Equals(file.SchemaVersion, SchemaVersion, StringComparison.Ordinal))
-        {
-            return BundleLoadResult.Fail(
-                new BundleLoadError(
-                    "bundle.schema",
-                    $"Unsupported bundle schema '{file.SchemaVersion}' (need {SchemaVersion})."));
+            return BundleLoadResult.Fail(new BundleLoadError(wireError.Code, $"{wireError.Message} ({path})"));
         }
 
         if (string.IsNullOrWhiteSpace(file.SupervisorPath))
@@ -102,7 +81,6 @@ public static class BundleLoader
             new ProvisioningBundle(
                 Account: new AccountStamp(file.Username, file.Password ?? ""),
                 Dma: new DmaSettleTarget(
-                    file.DmaEnabled,
                     file.Settle?.Locale,
                     file.Settle?.GeoId,
                     file.Settle?.TimeZoneId,
@@ -112,7 +90,8 @@ public static class BundleLoader
                 SupervisorShellPath: file.SupervisorPath,
                 RemoveProvisionedAppx: file.RemoveProvisionedAppx ?? [],
                 RequiresNetwork: file.RequiresNetwork,
-                PackageStrict: file.PackageStrict));
+                PackageStrict: file.PackageStrict,
+                DmaEnabled: file.DmaEnabled));
     }
 
     private static bool TryLoadJobs(
@@ -194,7 +173,6 @@ public static class BundleLoader
 }
 
 
-[JsonSerializable(typeof(BundleFile))]
 [JsonSerializable(typeof(ProvisioningEvidenceFile))]
 [JsonSerializable(typeof(PackagesEvidenceFile))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]

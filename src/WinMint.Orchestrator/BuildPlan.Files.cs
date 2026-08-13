@@ -14,9 +14,6 @@ public static partial class BuildPlan
     public static string SerializePlanStagesFile(ServicingStageList stages) =>
         SerializeStagesFile(stages, PlanStagesSchemaVersion);
 
-    public static string SerializeServicingStagesFile(ServicingStageList stages) =>
-        SerializeStagesFile(stages, ServicingStagesSchemaVersion);
-
     private static string SerializeStagesFile(ServicingStageList stages, string schemaVersion) =>
         JsonSerializer.Serialize(
             new StagesFile(

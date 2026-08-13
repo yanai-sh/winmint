@@ -28,7 +28,8 @@ public sealed record ProvisioningBundle(
     CheckpointState? Resume = null,
     IReadOnlyList<string>? RemoveProvisionedAppx = null,
     bool RequiresNetwork = false,
-    bool PackageStrict = false);
+    bool PackageStrict = false,
+    bool DmaEnabled = true);
 
 public sealed record AccountStamp(string Username, string Password);
 

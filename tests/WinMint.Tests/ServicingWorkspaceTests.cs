@@ -6,7 +6,7 @@ namespace WinMint.Tests;
 public class ServicingWorkspaceTests
 {
     [Fact]
-    public void Leaf_names_match_pwsh_fallback()
+    public void Leaf_names_match_manifest()
     {
         string root = Path.Combine(Path.GetTempPath(), "winmint-ws-" + Guid.NewGuid().ToString("N"));
         ServicingWorkspace ws = new(root);

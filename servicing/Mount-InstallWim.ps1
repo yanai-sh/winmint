@@ -77,6 +77,7 @@ $manifest = Get-Content -LiteralPath (Join-Path $prepared.EntryPath 'manifest.js
 $recoveryAction = [string]$env:WINMINT_RECOVERY_ACTION
 if ([string]::IsNullOrWhiteSpace($recoveryAction)) { $recoveryAction = 'none' }
 Write-WinMintPreparedMediaResult -Path (Join-Path $WorkDirectory 'prepared-media.json') -Document ([ordered]@{
+        schemaVersion                   = 'winmint.prepared-media.audit/v1'
         'source.isoSha256'              = $sourceIsoSha256
         'source.isoLength'              = [long]$sourceIsoLength
         'source.index'                  = [int]$wimIndex

@@ -104,3 +104,25 @@ internal sealed record ExpectedEvidenceFile(
     [property: JsonPropertyName("requiredDigestValues")] Dictionary<string, string> RequiredDigestValues,
     [property: JsonPropertyName("requiredJobKinds")] IReadOnlyList<string> RequiredJobKinds,
     [property: JsonPropertyName("requiredWingetIds")] IReadOnlyList<string> RequiredWingetIds);
+
+internal sealed record PreparedMediaAuditFile(
+    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
+    [property: JsonPropertyName("source.isoSha256")] string? SourceIsoSha256 = null,
+    [property: JsonPropertyName("source.isoLength")] long? SourceIsoLength = null,
+    [property: JsonPropertyName("source.index")] int? SourceIndex = null,
+    [property: JsonPropertyName("mediaCache.schema")] int? MediaCacheSchema = null,
+    [property: JsonPropertyName("mediaCache.key")] string? MediaCacheKey = null,
+    [property: JsonPropertyName("mediaCache.entryPath")] string? MediaCacheEntryPath = null,
+    [property: JsonPropertyName("mediaCache.outcome")] string? MediaCacheOutcome = null,
+    [property: JsonPropertyName("mediaCache.installWimSha256")] string? MediaCacheInstallWimSha256 = null,
+    [property: JsonPropertyName("mediaCache.bootWimSha256")] string? MediaCacheBootWimSha256 = null,
+    [property: JsonPropertyName("mediaCache.copyMode")] string? MediaCacheCopyMode = null,
+    [property: JsonPropertyName("mediaCache.recoveryAction")] string? MediaCacheRecoveryAction = null,
+    [property: JsonPropertyName("mediaCache.previousMedia")] string? MediaCachePreviousMedia = null,
+    [property: JsonPropertyName("timings.sourceHashMs")] int? TimingsSourceHashMs = null,
+    [property: JsonPropertyName("timings.cacheValidateMs")] int? TimingsCacheValidateMs = null,
+    [property: JsonPropertyName("timings.cachePrepareMs")] int? TimingsCachePrepareMs = null,
+    [property: JsonPropertyName("timings.runMediaCopyMs")] int? TimingsRunMediaCopyMs = null,
+    [property: JsonPropertyName("timings.mountMs")] int? TimingsMountMs = null,
+    [property: JsonPropertyName("timings.exportMs")] int? TimingsExportMs = null,
+    [property: JsonPropertyName("timings.buildIsoMs")] int? TimingsBuildIsoMs = null);

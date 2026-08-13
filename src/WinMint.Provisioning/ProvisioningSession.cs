@@ -438,7 +438,7 @@ public static partial class ProvisioningSession
         SessionStatus begin = new("settle.begin", "DMA settle start.");
         Note(env, phases, begin);
 
-        if (!bundle.Dma.Enabled)
+        if (!bundle.DmaEnabled)
         {
             SessionStatus skipped = new("settle.skipped", "DMA disabled; settle skipped.");
             Note(env, phases, skipped);
@@ -616,7 +616,7 @@ public static partial class ProvisioningSession
         ShellEnvironment env,
         List<string> phases)
     {
-        if (!bundle.Dma.Enabled)
+        if (!bundle.DmaEnabled)
         {
             return null;
         }
@@ -747,7 +747,7 @@ public static partial class ProvisioningSession
             return Task.FromResult(shellFailure);
         }
 
-        if (bundle.Dma.Enabled)
+        if (bundle.DmaEnabled)
         {
             SessionResult? dmaSetupFail = EnsureDmaSetupRegionForMachineSetup(env);
             if (dmaSetupFail is not null)

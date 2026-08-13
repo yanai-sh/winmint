@@ -34,6 +34,7 @@ Profile JSON
 | Plan-dump stages (diagnostic) | `winmint.plan.stages/v1` |
 | Servicing stages (workdir) | `winmint.servicing.stages/v1` |
 | Image evidence | `winmint.image.evidence/v1` |
+| Prepared-media audit | `winmint.prepared-media.audit/v1` |
 | Packages proof | `winmint.packages.proof/v1` |
 | Packages check request (transient) | `winmint.packages.check.request/v1` |
 | Packages check outcome (transient) | `winmint.packages.check.outcome/v1` |
@@ -50,14 +51,15 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 | Profile | Human / Wizard | ProfileFile / BuildPlan; Smoke harness (guest creds only) |
 | BuildArtifacts | BuildPlan | ImageServicing; Cli plan files |
 | Plan-dump stages (`plan` output) | Cli via BuildPlan serializer | Human / diagnostic tooling; never Apply |
-| Servicing stages (`stages.json`) | ImageServicing Materialize | Elevated `Invoke-ServicingPlan.ps1`; Smoke harness (Debloat pin lists) |
+| Servicing stages (`stages.json`) | ImageServicing Materialize (`SerializeServicingStagesFile`) | Elevated `Invoke-ServicingPlan.ps1`; Smoke harness (Debloat pin lists) |
 | Payload policy / name lists (`payload/policies.json`, `packageFamilyNames.json`, `capabilityNames.json`, `featureNames.json`) | ImageServicing Materialize | Opcode kernels (`Stamp-OfflinePolicies`, `Remove-ProvisionedAppx`, `Set-OfflineComponent`) |
-| Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [SECRETS](SECRETS.md) |
+| Staged guest bundle | ImageServicing StagePayload (`GuestBundleWire.Write`) | ProvisioningSession host loader (`GuestBundleWire.TryParse`) | Smoke: plaintext password until MachineSetup wipe — [SECRETS](SECRETS.md) |
 | Evidence JSON | ProvisioningSession (projection) | Smoke harness (S4) — **never** session control |
 | Checkpoint | ProvisioningSession (`ICheckpointStore`) | Next Shell `Run` via store (optional `bundle.Resume` inject) |
 | Smoke acceptance summary | Host harness (`tools/vm/`) | Maintainer — `Assert-SmokeEvidence.ps1` |
 | Host Apply acceptance summary | Host harness (`tools/apply/`) | Maintainer — `Assert-ApplyEvidence.ps1` |
 | Image evidence (`evidence.json`) | ImageServicing (C#) | Host apply / Smoke assert — **never** session control |
+| Prepared-media audit (`prepared-media.json`) | Elevated `Mount-InstallWim` | ImageServicing evidence writer (typed merge); not a control-plane input |
 | Image expected evidence (`expected-evidence.json`) | ImageServicing Materialize | `Assert-ApplyEvidence.ps1` / `Assert-SmokeEvidence.ps1` |
 | Image digests (`logs/digests.json`) | Elevated kernels + plan loop | ImageServicing evidence writer |
 | Image failure (`failure.json`) | Elevated `Invoke-ServicingPlan.ps1` | ImageServicing runner; removed on successful Apply |
@@ -77,6 +79,7 @@ Transient packages-check files live under `.scratch/packages-check/{run}/` durin
 
 - Settle: locale, GeoId, timeZoneId, location posture. Host Profile settle is required; staged bundle settle may be nullable — map explicitly at the stage boundary (twin records OK; drift ⇒ consolidate).
 - Jobs: `ProvisionJob` (domain) and `JobsFile` / `JobFile` (wire) live once in `WinMint.Contracts` (`JobsWire`), with `JobsWire.SchemaVersion` the only `winmint.jobs/v1` literal. `JobsWire.Write` is the only writer used by Cli and ImageServicing; `JobsWire.TryParse` validates the wire before BundleLoader maps closed kinds. A new job field is one edit there plus the two mappers.
+- Guest bundle: `GuestBundleWire.Write` / `TryParse` is the only `winmint.provisioning.bundle/v1` writer/reader. `dmaEnabled` is a sibling of `settle`; do not copy Enabled onto nested settle.
 - `ServicingOpcode` and provisioning **job `Kind`** are closed sets (`ServicingOpcode` / `ProvisionJobKind`) with the same touch-point discipline. Wire JSON may use strings; parse once at the load boundary (`BundleLoader` → enum). Unknown kind ⇒ `Result` failure (`jobs.kind.unknown`).
 - `ProvisioningBundle.SupervisorShellPath` (`supervisorPath`) must match offline Shell stamp and Machine setup verify.
 

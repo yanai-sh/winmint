@@ -12,16 +12,9 @@ namespace WinMint.Provisioning;
 [SupportedOSPlatform("windows10.0.19041.0")]
 public sealed class Win32DmaSetupRegion : IDmaSetupRegion
 {
-    private const string DeviceRegionSubKey =
-        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Control Panel\DeviceRegion";
-
-    /// <summary>Relative to HKU — a leading backslash is ERROR_BAD_PATHNAME, not a root marker.</summary>
-    private const string DefaultUserGeoSubKey =
-        @".DEFAULT\Control Panel\International\Geo";
-
     private static int? ReadDeviceRegion()
     {
-        using RegistryKey? key = Registry.LocalMachine.OpenSubKey(DeviceRegionSubKey, writable: false);
+        using RegistryKey? key = Registry.LocalMachine.OpenSubKey(DmaInterop.DeviceRegionSubKey, writable: false);
         object? raw = key?.GetValue("DeviceRegion");
         return raw switch
         {
@@ -63,15 +56,15 @@ public sealed class Win32DmaSetupRegion : IDmaSetupRegion
 
     private static void WriteDeviceRegion(int geoId)
     {
-        using RegistryKey key = Registry.LocalMachine.CreateSubKey(DeviceRegionSubKey, writable: true)
-            ?? throw new InvalidOperationException($"Cannot open HKLM\\{DeviceRegionSubKey}.");
+        using RegistryKey key = Registry.LocalMachine.CreateSubKey(DmaInterop.DeviceRegionSubKey, writable: true)
+            ?? throw new InvalidOperationException($"Cannot open HKLM\\{DmaInterop.DeviceRegionSubKey}.");
         key.SetValue("DeviceRegion", geoId, RegistryValueKind.DWord);
     }
 
     private static void SeedDefaultUserGeo(int geoId, string geoName)
     {
-        using RegistryKey key = Registry.Users.CreateSubKey(DefaultUserGeoSubKey, writable: true)
-            ?? throw new InvalidOperationException($@"Cannot open HKU\{DefaultUserGeoSubKey}.");
+        using RegistryKey key = Registry.Users.CreateSubKey(DmaInterop.DefaultUserGeoSubKey, writable: true)
+            ?? throw new InvalidOperationException($@"Cannot open HKU\{DmaInterop.DefaultUserGeoSubKey}.");
         key.SetValue("Nation", geoId.ToString(CultureInfo.InvariantCulture), RegistryValueKind.String);
         key.SetValue("Name", geoName, RegistryValueKind.String);
     }

@@ -49,6 +49,9 @@ public class HostCompileLaneTests
                 cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(composed.IsOk, composed.IsOk ? null : $"{composed.Error.Code}: {composed.Error.Message}");
             Assert.Equal(expected, composed.Value.Review.PackageStrict);
+            Assert.Equal(
+                lane == ImageQualityLane.Release && expected,
+                composed.Value.Review.IsGateB);
             Result<ImageEvidence, Failure> result = await HostCompile.ApplyAsync(
                 composed.Value,
                 new ImageServicingTestFakes.RecordingElevatedPlanRunner(),
@@ -67,10 +70,27 @@ public class HostCompileLaneTests
         }
     }
 
+    [Theory]
+    [InlineData(ImageQualityLane.Test, PackageStrictOverride.FromLane, false)]
+    [InlineData(ImageQualityLane.Release, PackageStrictOverride.FromLane, true)]
+    [InlineData(ImageQualityLane.Release, PackageStrictOverride.Suppress, false)]
+    public void PlanDocument_resolves_package_strict_and_gate_b(
+        ImageQualityLane lane,
+        PackageStrictOverride packageStrict,
+        bool expectedStrict)
+    {
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(
+            Profile(),
+            new HostComposeOptions(ImageQuality: lane, PackageStrict: packageStrict));
+        Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
+        Assert.Equal(expectedStrict, planned.Value.Review.PackageStrict);
+        Assert.Equal(lane == ImageQualityLane.Release && expectedStrict, planned.Value.Review.IsGateB);
+    }
+
     private static Profile Profile() =>
         new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
             [],

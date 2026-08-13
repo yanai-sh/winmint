@@ -123,11 +123,12 @@ internal static class ImageServicingTestFakes
             """);
 
         string outputIso = Path.Combine(workDirectory, "output.iso");
+        new ServicingWorkspace(workDirectory).WriteManifest();
         File.WriteAllText(
             Path.Combine(workDirectory, "stages.json"),
             JsonSerializer.Serialize(new
             {
-                schemaVersion = BuildPlan.ServicingStagesSchemaVersion,
+                schemaVersion = ImageServicing.ServicingStagesSchemaVersion,
                 stages = new object[]
                 {
                     new
@@ -159,7 +160,7 @@ internal static class ImageServicingTestFakes
         using JsonDocument doc = JsonDocument.Parse(
             File.ReadAllBytes(workspace.Stages));
         Assert.Equal(
-            BuildPlan.ServicingStagesSchemaVersion,
+            ImageServicing.ServicingStagesSchemaVersion,
             doc.RootElement.GetProperty("schemaVersion").GetString());
 
         List<ServicingStage> stages = [];
@@ -168,7 +169,12 @@ internal static class ImageServicingTestFakes
             Dictionary<string, string> parameters = new(StringComparer.Ordinal);
             foreach (JsonProperty p in stage.GetProperty("parameters").EnumerateObject())
             {
-                parameters[p.Name] = p.Value.GetString()!;
+                parameters[p.Name] = p.Value.ValueKind switch
+                {
+                    JsonValueKind.String => p.Value.GetString() ?? "",
+                    JsonValueKind.Null => "",
+                    _ => p.Value.GetRawText(),
+                };
             }
 
             stages.Add(new ServicingStage(

@@ -9,12 +9,13 @@ public static class HostCompile
 {
     public static Result<HostPlan, HostComposeError> PlanDocument(
         Profile profile,
-        RunOptions? run = null)
+        HostComposeOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         Profile owned = SnapshotProfile(profile);
-        RunOptions normalized = SnapshotRun(run ?? new RunOptions());
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(owned, normalized);
+        HostComposeOptions compose = options ?? new HostComposeOptions();
+        RunOptions run = ToRunOptions(compose);
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(owned, run);
         if (!planned.IsOk)
         {
             return ComposeFail<HostPlan>(planned.Error);
@@ -137,17 +138,11 @@ public static class HostCompile
                     "Source ISO changed after composition; compose again before Apply."));
         }
 
-        if (runner is null && ImageServicing.CheckSupervisorFreshness() is { } staleSupervisor)
-        {
-            return Result.Fail<ImageEvidence, Failure>(staleSupervisor);
-        }
-
         Directory.CreateDirectory(composition.WorkDirectory);
         ServicingRun run = new(
             composition.SourceIsoPath,
             composition.WorkDirectory,
             composition.OutputIsoPath,
-            ProfilePath: null,
             composition.Review.SourceMedia.Selected!.Index,
             composition.Review.SourceMedia.SourceIsoSha256,
             composition.Review.SourceMedia.Selected);
@@ -252,18 +247,7 @@ public static class HostCompile
 
         Profile ownedProfile = SnapshotProfile(profile);
         byte[] canonical = BuildPlan.SerializeProfile(ownedProfile);
-        RunOptions run = new()
-        {
-            ImageQuality = options.ImageQuality,
-            SourceIsoPath = source,
-            OutputIsoPath = output,
-            ImageArchitecture = selectedArchitecture,
-            WindowsBuild = selectedBuild ?? options.WindowsBuild,
-            PackageAuditStrict = options.PackageAuditStrict,
-            PackageStrict = HostDefaults.ResolvePackageStrict(options.ImageQuality, options.PackageStrict),
-            IncludeSmokeStubs = options.IncludeSmokeStubs,
-            PackageCatalog = options.PackageCatalog,
-        };
+        RunOptions run = ToRunOptions(options, source, output, selectedArchitecture, selectedBuild);
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(ownedProfile, run);
         if (!planned.IsOk)
         {
@@ -348,18 +332,27 @@ public static class HostCompile
             Drivers = profile.Drivers is null ? null : profile.Drivers with { },
         };
 
-    private static RunOptions SnapshotRun(RunOptions run) => new()
-    {
-        ImageQuality = run.ImageQuality,
-        SourceIsoPath = run.SourceIsoPath,
-        OutputIsoPath = run.OutputIsoPath,
-        ImageArchitecture = run.ImageArchitecture,
-        WindowsBuild = run.WindowsBuild,
-        PackageAuditStrict = run.PackageAuditStrict,
-        PackageStrict = run.PackageStrict,
-        IncludeSmokeStubs = run.IncludeSmokeStubs,
-        PackageCatalog = run.PackageCatalog,
-    };
+    private static RunOptions ToRunOptions(
+        HostComposeOptions options,
+        string? sourceIsoPath = null,
+        string? outputIsoPath = null,
+        string? imageArchitecture = null,
+        int? windowsBuild = null) =>
+        new()
+        {
+            ImageQuality = options.ImageQuality,
+            SourceIsoPath = sourceIsoPath ?? NullIfEmpty(options.SourceIsoPath),
+            OutputIsoPath = outputIsoPath ?? NullIfEmpty(options.OutputIsoPath),
+            ImageArchitecture = imageArchitecture ?? NullIfEmpty(options.ImageArchitecture),
+            WindowsBuild = windowsBuild ?? options.WindowsBuild,
+            PackageAuditStrict = options.PackageAuditStrict,
+            PackageStrict = HostDefaults.ResolvePackageStrict(options.ImageQuality, options.PackageStrict),
+            IncludeSmokeStubs = options.IncludeSmokeStubs,
+            PackageCatalog = options.PackageCatalog,
+        };
+
+    private static string? NullIfEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static BuildArtifacts SnapshotArtifacts(BuildArtifacts artifacts) =>
         new(
@@ -430,7 +423,7 @@ public static class HostCompile
 }
 
 public sealed record HostComposeOptions(
-    string SourceIsoPath,
+    string SourceIsoPath = "",
     ImageQualityLane ImageQuality = ImageQualityLane.Test,
     string? WorkDirectory = null,
     string? OutputIsoPath = null,
@@ -466,7 +459,25 @@ public sealed record HostReview(
     bool BraveSelected,
     IReadOnlyList<string> EffectiveWinget,
     IReadOnlyList<string> EffectiveScoop,
-    IReadOnlyList<string> AuthoredSelectionLabels);
+    IReadOnlyList<string> AuthoredSelectionLabels)
+{
+    public bool IsGateB => ImageQuality == ImageQualityLane.Release && PackageStrict;
+
+    public string Honesty
+    {
+        get
+        {
+            string wifi = AuthoredProfile.Account.RequireWifiDuringOobe
+                ? "requireWifiDuringOobe=true (OOBE may show Network page)"
+                : "requireWifiDuringOobe=false (OOBE Network page hidden)";
+            string head = $"requiresNetwork={(RequiresNetwork ? "true" : "false")}; {wifi}";
+            return RequiresNetwork
+                ? head + Environment.NewLine
+                    + "Warning: FirstLogon needs outbound network (packages and/or online AppX removes)."
+                : head;
+        }
+    }
+}
 
 public sealed class HostComposition
 {

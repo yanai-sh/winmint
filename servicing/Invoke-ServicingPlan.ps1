@@ -211,6 +211,9 @@ $servicingLock = $null
 $script:phaseTimings = @{}
 $script:recoveryAction = 'none'
 try {
+    $failurePath = Join-Path $WorkDirectory 'failure.json'
+    $statusPath = Join-Path $WorkDirectory 'apply-status.txt'
+    $evidencePath = Join-Path $WorkDirectory 'evidence.json'
     $ws = Get-WinMintServicingWorkspace -Root $WorkDirectory
     $logDir = $ws.logs
     $statusPath = $ws.applyStatus

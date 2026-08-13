@@ -20,7 +20,7 @@ public class DmaSettleTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
-                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: TightSettlePolicy()),
             Env(time, region, splash, evidence, processes, winlogon),
             TestContext.Current.CancellationToken);
@@ -49,7 +49,7 @@ public class DmaSettleTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
-                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: TightSettlePolicy()),
             Env(time, region, splash, new RecordingEvidenceSink()),
             TestContext.Current.CancellationToken);
@@ -72,7 +72,7 @@ public class DmaSettleTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
-                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
                 {
                     SettleDeadline = TimeSpan.Zero,
@@ -99,7 +99,7 @@ public class DmaSettleTests
         OkDmaSetupRegion dmaSetup = new();
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
-            Bundle(dma: new DmaSettleTarget(Enabled: false, null, null, null, null)),
+            Bundle(dma: new DmaSettleTarget(null, null, null, null), dmaEnabled: false),
             Env(time, region, splash, new RecordingEvidenceSink(), dmaSetup: dmaSetup),
             TestContext.Current.CancellationToken);
 
@@ -122,7 +122,7 @@ public class DmaSettleTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
-                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: TightSettlePolicy()),
             Env(time, region, splash, evidence, dmaSetup: dmaSetup),
             TestContext.Current.CancellationToken);
@@ -148,7 +148,7 @@ public class DmaSettleTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
-                dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+                dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: TightSettlePolicy()),
             Env(time, region, splash, evidence, processes, dmaSetup: dmaSetup),
             TestContext.Current.CancellationToken);
@@ -169,7 +169,7 @@ public class DmaSettleTests
         RecordingEvidenceSink evidence = new();
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
-            Bundle(dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", null)),
+            Bundle(dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", null)),
             Env(time, region, splash, evidence),
             TestContext.Current.CancellationToken);
 
@@ -186,13 +186,14 @@ public class DmaSettleTests
             SettlePollInterval = TimeSpan.FromSeconds(2),
         };
 
-    private static ProvisioningBundle Bundle(DmaSettleTarget dma, SessionPolicy? policy = null) =>
+    private static ProvisioningBundle Bundle(DmaSettleTarget dma, SessionPolicy? policy = null, bool dmaEnabled = true) =>
         new(
             Account: new AccountStamp("winmint", ""),
             Dma: dma,
             Jobs: [new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub)],
             Policy: policy ?? TightSettlePolicy(),
-            SupervisorShellPath: SupervisorPath);
+            SupervisorShellPath: SupervisorPath,
+            DmaEnabled: dmaEnabled);
 
     private static ShellEnvironment Env(
         TimeProvider time,

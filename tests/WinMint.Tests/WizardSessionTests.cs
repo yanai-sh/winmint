@@ -166,7 +166,7 @@ public class WizardSessionTests
     private static Profile Profile() =>
         new(
             new AccountProfile("winmint", "lab-only", false),
-            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
             [],

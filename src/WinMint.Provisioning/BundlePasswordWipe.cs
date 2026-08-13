@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using WinMint.Contracts;
 
@@ -19,16 +18,12 @@ internal static class BundlePasswordWipe
         }
 
         byte[] bytes = File.ReadAllBytes(bundlePath);
-        BundleFile? file = JsonSerializer.Deserialize(bytes, ProvisioningJsonContext.Default.BundleFile);
-        if (file is null)
+        if (!GuestBundleWire.TryParse(bytes, out BundleFile? file, out GuestBundleWireError error))
         {
-            throw new InvalidOperationException($"Secret wipe: failed to parse bundle {bundlePath}");
+            throw new InvalidOperationException($"Secret wipe: {error.Message} ({bundlePath})");
         }
 
-        BundleFile redacted = file with { Password = "" };
-        byte[] outBytes = JsonSerializer.SerializeToUtf8Bytes(redacted, ProvisioningJsonContext.Default.BundleFile);
-        // ponytail: full DPAPI host→guest staging channel stays future if Smoke plaintext+wipe remains lab-ok
-        File.WriteAllBytes(bundlePath, outBytes);
+        File.WriteAllText(bundlePath, GuestBundleWire.Write(file with { Password = "" }));
         if (logger is not null)
         {
             GuestLog.SecretWiped(logger, bundlePath);

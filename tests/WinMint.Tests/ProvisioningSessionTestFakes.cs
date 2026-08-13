@@ -12,7 +12,7 @@ internal static class ProvisioningSessionTestFakes
     internal static ProvisioningBundle Bundle(IReadOnlyList<ProvisionJob> jobs) =>
         new(
             Account: new AccountStamp("winmint", ""),
-            Dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+            Dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
             Jobs: jobs,
             Policy: SessionPolicy.SmokeDefaults,
             SupervisorShellPath: SupervisorPath);

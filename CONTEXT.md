@@ -71,8 +71,8 @@ _Avoid_: treating Smoke alone as Primary wipe confidence
 **Host Apply (S5)** — Elevated Apply run on the build host, then assert the workdir evidence (`just host-apply`, `tools/apply/`). No Hyper-V and no hardware install — the destructive install is Primary, and it is manual.  
 _Avoid_: “metal” (retired name — it never touched hardware); treating a Test-lane Host Apply as wipe media
 
-**Gate B** — Pre-wipe host evidence that Release + package-strict Output ISO is ready to Flash. Not a completed Primary install.  
-_Avoid_: calling Gate B “Primary”; selling soft Host Apply Release as wipe media
+**Gate B** — Pre-wipe host evidence that Release + package-strict Output ISO is ready to Flash. Not a completed Primary install. The predicate is `HostReview.IsGateB` (Release ∧ package-strict).  
+_Avoid_: calling Gate B “Primary”; selling soft Host Apply Release as wipe media; re-deriving Gate B from lane alone or package-strict alone
 
 **Primary** — Release `samples/sl7.profile.json` safe to wipe primary SL7 after Gate B + real install evidence in-repo. Details: [DESIGN](docs/DESIGN.md#acceptance).  
 _Avoid_: shipping recovery images; treating Gate B alone as wipe-proven; gating Primary on a tracking issue; treating Flash as Primary proof
@@ -102,6 +102,9 @@ Short words that carry weight in type names. They are kept because no generic al
 
 **Evidence** — JSON WinMint emits so a harness can assert what happened (`IEvidenceSink`, `evidence.json`, S4/S5 bars). Never read back to decide the next phase.  
 _Avoid_: calling Prepared-media publication Evidence; reading Evidence to decide a Prepared-media hit
+
+**Prepared-media audit** — typed `prepared-media.json` ImageServicing merges into `evidence.json` after Apply. Not publication, not a control-plane input, not Evidence the harness reads to decide the next phase.  
+_Avoid_: treating the audit sidecar as a HostCompile input; re-hashing Output ISO in C# when `logs/digests.json` already has the digest
 
 **Proof** — `config/packages.proof.json`: catalog ids verified against live winget/scoop, content-hashed so `just check` can enforce freshness offline. Attests to the *catalog*, not to a run.
 

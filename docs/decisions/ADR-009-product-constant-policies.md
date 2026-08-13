@@ -34,4 +34,4 @@ CDM spray remains out as primary ([ADR-007](ADR-007-cdm-not-primary.md)); HKLM C
 
 - Edge Copilot remains available; AppX Copilot/gaming always stripped.
 - Digests `policy.<family>.<Name>=<data>` under `logs/digests.json`.
-- Store MSIX host pwsh fails closed on Apply (`servicing.pwsh.storeMsix`).
+- Store MSIX host pwsh fails closed on `PwshElevatedPlanRunner` (`servicing.pwsh.storeMsix`). Living locus: [IMAGESERVICING](../design/IMAGESERVICING.md) — not ImageServicing.Apply.

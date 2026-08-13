@@ -8,7 +8,6 @@ public static partial class BuildPlan
 {
     public const string ProfileSchemaVersion = "winmint.profile/v1";
     public const string PlanStagesSchemaVersion = "winmint.plan.stages/v1";
-    public const string ServicingStagesSchemaVersion = "winmint.servicing.stages/v1";
 
     public const string IrelandSetupLocale = DmaInterop.IrelandLocale;
     public const int IrelandSetupGeoId = DmaInterop.IrelandGeoId;
@@ -186,7 +185,6 @@ public static partial class BuildPlan
             new DmaProfile(
                 doc.Dma.Enabled ?? true,
                 new DmaSettleTarget(
-                    doc.Dma.Enabled ?? true,
                     settle.Locale,
                     settle.GeoId,
                     settle.TimeZoneId,
@@ -344,26 +342,6 @@ public static partial class BuildPlan
     /// <summary>FirstLogon always needs outbound network (product-constant MinGit + Nilesoft winget). Not authored in Profile JSON.</summary>
     public static bool PlanRequiresNetwork() => true;
 
-    /// <summary>
-    /// Host-facing plan honesty (Cli + Wizard). Warns when FirstLogon needs network; never a Failure.
-    /// </summary>
-    public static string FormatPlanHonesty(BuildManifest manifest, bool requireWifiDuringOobe)
-    {
-        string wifi = requireWifiDuringOobe
-            ? "requireWifiDuringOobe=true (OOBE may show Network page)"
-            : "requireWifiDuringOobe=false (OOBE Network page hidden)";
-        string head =
-            $"requiresNetwork={(manifest.RequiresNetwork ? "true" : "false")}; {wifi}";
-        if (!manifest.RequiresNetwork)
-        {
-            return head;
-        }
-
-        return head
-            + Environment.NewLine
-            + "Warning: FirstLogon needs outbound network (packages and/or online AppX removes).";
-    }
-
     /// <summary>Compose plan artifacts (jobs, stages, unattend, manifest) from a validated <see cref="Profile"/>.</summary>
     public static Result<BuildArtifacts, Failure> Plan(Profile profile, RunOptions? run = null)
     {
@@ -489,10 +467,7 @@ public static partial class BuildPlan
         [
             new ServicingStage(
                 ServicingOpcode.MountInstallWim,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    [StageParams.SourceIso] = options.SourceIsoPath ?? "",
-                }),
+                new Dictionary<string, string>(StringComparer.Ordinal)),
         ];
 
         // Stamp HKLM policies before AppX/capability/driver DISM mutations. Creating new
@@ -542,8 +517,6 @@ public static partial class BuildPlan
                     [StageParams.DeviceId] = device.Id,
                     [StageParams.DetailsUrl] = device.DetailsUrl,
                     [StageParams.ExpectedFileNameRegex] = device.ExpectedFileNameRegex,
-                    [StageParams.MinimumWindowsBuild] = device.MinimumWindowsBuild.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    [StageParams.Architecture] = device.Architecture,
                 }));
         }
 
@@ -552,10 +525,7 @@ public static partial class BuildPlan
 
         stageList.Add(new ServicingStage(
             ServicingOpcode.StampOfflineShell,
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [StageParams.ShellTarget] = "Supervisor.exe",
-            }));
+            new Dictionary<string, string>(StringComparer.Ordinal)));
 
         stageList.Add(new ServicingStage(ServicingOpcode.PatchBootWimApply, new Dictionary<string, string>(StringComparer.Ordinal)));
 
@@ -571,10 +541,7 @@ public static partial class BuildPlan
                 }),
             new ServicingStage(
                 ServicingOpcode.BuildIso,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    [StageParams.OutputIso] = options.OutputIsoPath ?? "",
-                }),
+                new Dictionary<string, string>(StringComparer.Ordinal)),
         ]);
 
         ServicingStageList stages = new(stageList);
@@ -662,17 +629,17 @@ public static partial class BuildPlan
                     <RunSynchronousCommand wcm:action="add">
                       <Order>1</Order>
                       <Description>WinMint DMA DeviceRegion latch (Ireland {{IrelandSetupGeoId}})</Description>
-                      <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Control Panel\DeviceRegion" /v DeviceRegion /t REG_DWORD /d {{IrelandSetupGeoId}} /f</Path>
+                      <Path>reg add "HKLM\{{DmaInterop.DeviceRegionSubKey}}" /v DeviceRegion /t REG_DWORD /d {{IrelandSetupGeoId}} /f</Path>
                     </RunSynchronousCommand>
                     <RunSynchronousCommand wcm:action="add">
                       <Order>2</Order>
                       <Description>WinMint DMA .DEFAULT Geo Nation (Ireland {{IrelandSetupGeoId}})</Description>
-                      <Path>reg add "HKU\.DEFAULT\Control Panel\International\Geo" /v Nation /t REG_SZ /d {{IrelandSetupGeoId}} /f</Path>
+                      <Path>reg add "HKU\{{DmaInterop.DefaultUserGeoSubKey}}" /v Nation /t REG_SZ /d {{IrelandSetupGeoId}} /f</Path>
                     </RunSynchronousCommand>
                     <RunSynchronousCommand wcm:action="add">
                       <Order>3</Order>
                       <Description>WinMint DMA .DEFAULT Geo Name ({{IrelandSetupGeoName}})</Description>
-                      <Path>reg add "HKU\.DEFAULT\Control Panel\International\Geo" /v Name /t REG_SZ /d {{IrelandSetupGeoName}} /f</Path>
+                      <Path>reg add "HKU\{{DmaInterop.DefaultUserGeoSubKey}}" /v Name /t REG_SZ /d {{IrelandSetupGeoName}} /f</Path>
                     </RunSynchronousCommand>
                   </RunSynchronous>
                 </component>

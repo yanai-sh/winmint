@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
 
@@ -231,6 +232,7 @@ public class ServicingPlanFailClosedTests
     {
         string work = Path.Combine(Path.GetTempPath(), $"winmint-plan-{tag}-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
+        new ServicingWorkspace(work).WriteManifest();
         return work;
     }
 

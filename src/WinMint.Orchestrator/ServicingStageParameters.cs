@@ -1,24 +1,24 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 
 namespace WinMint.Orchestrator;
 
-/// <summary>Flatten a typed opcode record through <see cref="ServicingJsonContext"/> into the stages.json bag.</summary>
-internal static class StageParamBag
+internal static class StageParamJson
 {
-    // ponytail: JSON flatten to string bag; nested/non-scalar properties would need a real typed stages.json.
-    public static Dictionary<string, string> From<T>(T record, JsonTypeInfo<T> typeInfo)
+    public static JsonObject From<T>(T record, JsonTypeInfo<T> typeInfo) =>
+        JsonSerializer.SerializeToNode(record, typeInfo)!.AsObject();
+
+    public static Dictionary<string, string> ToBag(JsonObject obj)
     {
-        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(record, typeInfo));
         Dictionary<string, string> bag = new(StringComparer.Ordinal);
-        foreach (JsonProperty p in doc.RootElement.EnumerateObject())
+        foreach (KeyValuePair<string, JsonNode?> p in obj)
         {
-            bag[p.Name] = p.Value.ValueKind switch
-            {
-                JsonValueKind.Null or JsonValueKind.Undefined => "",
-                JsonValueKind.String => p.Value.GetString() ?? "",
-                _ => p.Value.GetRawText(),
-            };
+            bag[p.Key] = p.Value is null || p.Value.GetValueKind() is JsonValueKind.Null or JsonValueKind.Undefined
+                ? ""
+                : p.Value.GetValueKind() == JsonValueKind.String
+                    ? p.Value.GetValue<string>() ?? ""
+                    : p.Value.ToJsonString();
         }
 
         return bag;

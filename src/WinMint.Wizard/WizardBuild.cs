@@ -29,7 +29,7 @@ internal static class WizardBuild
         }
 
         ImageEvidence evidence = applied.Value;
-        string gateHint = composition.Review.PackageStrict
+        string gateHint = composition.Review.IsGateB
             ? " Gate B wipe media (pre-wipe ISO evidence — not Primary install proven)."
             : " Test lane (not the wipe gate).";
         string ok =

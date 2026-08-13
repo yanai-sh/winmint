@@ -278,7 +278,7 @@ public class MachineSetupTests
     private static ProvisioningBundle MinimalBundle(string username, string password) =>
         new(
             Account: new AccountStamp(username, password),
-            Dma: new DmaSettleTarget(Enabled: true, "en-GB", 242, "GMT Standard Time", true),
+            Dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
             Jobs: [],
             Policy: SessionPolicy.SmokeDefaults,
             SupervisorShellPath: SupervisorPath);

@@ -177,6 +177,12 @@ public class BuildPlanPlanTests
         Assert.Equal("Test", export.Parameters[StageParams.Lane]);
         Assert.Equal("fast", export.Parameters[StageParams.Compression]);
         Assert.Equal("skip", export.Parameters[StageParams.Cleanup]);
+        Assert.Empty(
+            artifacts.Stages.Stages.First(s => s.Opcode == ServicingOpcode.MountInstallWim).Parameters);
+        Assert.Empty(
+            artifacts.Stages.Stages.First(s => s.Opcode == ServicingOpcode.BuildIso).Parameters);
+        Assert.Empty(
+            artifacts.Stages.Stages.First(s => s.Opcode == ServicingOpcode.StampOfflineShell).Parameters);
     }
 
     [Fact]

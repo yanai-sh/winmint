@@ -18,6 +18,19 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
                 new Failure("servicing.plan.missing", "servicing/Invoke-ServicingPlan.ps1 not found."));
         }
 
+        if (IsStoreMsixPwsh(ResolvePwshPath()))
+        {
+            return Result.Fail<ElevatedRunOk, Failure>(
+                new Failure(
+                    "servicing.pwsh.storeMsix",
+                    "Host PowerShell is Microsoft Store MSIX; DISM/AppX offline servicing requires WinPS 5.1 or non-Store pwsh (install from GitHub)."));
+        }
+
+        if (ImageServicing.CheckSupervisorFreshness() is { } staleSupervisor)
+        {
+            return Result.Fail<ElevatedRunOk, Failure>(staleSupervisor);
+        }
+
         bool elevated = IsProcessElevated();
         ProcessStartInfo psi = new()
         {
@@ -132,6 +145,39 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
     }
 
     private static string? FindServicingPlanScript() => ToolkitRoot.TryFind("servicing", "Invoke-ServicingPlan.ps1");
+
+    internal static bool IsStoreMsixPwsh(string? processPath)
+    {
+        if (string.IsNullOrWhiteSpace(processPath))
+        {
+            return false;
+        }
+
+        string path = processPath.Replace('/', '\\');
+        return path.Contains(@"\WindowsApps\Microsoft.PowerShell", StringComparison.OrdinalIgnoreCase)
+            || path.Contains(@"\WindowsApps\Microsoft.PowerShellPreview", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static string? ResolvePwshPath()
+    {
+        string fileName = OperatingSystem.IsWindows() ? "pwsh.exe" : "pwsh";
+        string? pathEnv = Environment.GetEnvironmentVariable("PATH");
+        if (pathEnv is null)
+        {
+            return null;
+        }
+
+        foreach (string dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            string candidate = Path.Combine(dir.Trim(), fileName);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
 
     private static bool IsProcessElevated()
     {

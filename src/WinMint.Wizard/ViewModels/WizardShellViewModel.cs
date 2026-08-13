@@ -334,7 +334,7 @@ public sealed partial class WizardShellViewModel :
                     : null;
             buildStage.Build.FlashGuidanceText = FlashGuidance.Format(
                 result.OutputIsoPath!,
-                composition.Review.ImageQuality == ImageQualityLane.Release,
+                composition.Review.IsGateB,
                 sha);
         }
         else
@@ -453,7 +453,6 @@ public sealed partial class WizardShellViewModel :
             new DmaProfile(
                 _account.DmaEnabled,
                 new DmaSettleTarget(
-                    _account.DmaEnabled,
                     _account.Locale.Trim(),
                     geoId,
                     _account.TimeZone.Trim(),

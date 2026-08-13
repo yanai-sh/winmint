@@ -41,9 +41,9 @@ public class PlanHonestyTests
     [Fact]
     public void FormatPlanHonesty_warns_when_requires_network()
     {
-        string text = BuildPlan.FormatPlanHonesty(
-            new BuildManifest(ImageQualityLane.Release, RequiresNetwork: true),
-            requireWifiDuringOobe: true);
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(Lab());
+        Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
+        string text = planned.Value.Review.Honesty;
 
         Assert.Contains("requiresNetwork=true", text, StringComparison.Ordinal);
         Assert.Contains("requireWifiDuringOobe=true", text, StringComparison.Ordinal);
@@ -55,9 +55,17 @@ public class PlanHonestyTests
     [Fact]
     public void FormatPlanHonesty_quiet_when_no_network_needed()
     {
-        string text = BuildPlan.FormatPlanHonesty(
-            new BuildManifest(ImageQualityLane.Test, RequiresNetwork: false),
-            requireWifiDuringOobe: false);
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(Lab());
+        Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
+        HostReview review = planned.Value.Review with
+        {
+            RequiresNetwork = false,
+            AuthoredProfile = planned.Value.Review.AuthoredProfile with
+            {
+                Account = planned.Value.Review.AuthoredProfile.Account with { RequireWifiDuringOobe = false },
+            },
+        };
+        string text = review.Honesty;
 
         Assert.Contains("requiresNetwork=false", text, StringComparison.Ordinal);
         Assert.Contains("requireWifiDuringOobe=false", text, StringComparison.Ordinal);
@@ -65,4 +73,18 @@ public class PlanHonestyTests
         Assert.DoesNotContain("Warning:", text, StringComparison.Ordinal);
     }
 
+    private static Profile Lab() =>
+        new(
+            new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: true),
+            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
+            DebloatMode.Online,
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []);
 }

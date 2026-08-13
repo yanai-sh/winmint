@@ -8,20 +8,17 @@ namespace WinMint.Tests;
 public class ImageServicingApplyTests
 {
     [Fact]
-    public async Task Apply_resolves_default_output_iso_from_profile_stem()
+    public async Task Apply_requires_output_iso_path()
     {
         BuildArtifacts plan = MinimalPlan();
         string work = NewTempDir();
         try
         {
             RecordingElevatedPlanRunner runner = new();
-            string profilePath = Path.Combine(work, "sl7.profile.json");
-            File.WriteAllText(profilePath, "{}");
             ServicingRun run = new(
                 SourceIsoPath: Path.Combine(work, "source.iso"),
                 WorkDirectory: work,
-                OutputIsoPath: null,
-                ProfilePath: profilePath);
+                OutputIsoPath: "");
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
             Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
@@ -30,12 +27,8 @@ public class ImageServicingApplyTests
                 runner,
                 TestContext.Current.CancellationToken);
 
-            Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
-            Assert.Contains("winmint_sl7_Test_", result.Value.OutputIsoPath, StringComparison.Ordinal);
-            Assert.DoesNotContain("winmint_profile_", result.Value.OutputIsoPath, StringComparison.Ordinal);
-            Assert.Equal(
-                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(result.Value.OutputIsoPath))),
-                result.Value.Digests["outputIso.sha256"]);
+            Assert.False(result.IsOk);
+            Assert.Equal("servicing.outputIso.missing", result.Error.Code);
         }
         finally
         {
@@ -116,6 +109,7 @@ public class ImageServicingApplyTests
             Assert.False(string.IsNullOrWhiteSpace(result.Value.ShellStampTargetPath));
             Assert.Equal(ImageQualityLane.Test, result.Value.Lane);
             Assert.Equal(ImageServicing.ShellStampGuestPath, result.Value.ShellStampTargetPath);
+            Assert.Equal(new string('a', 64), result.Value.Digests["outputIso.sha256"]);
             Assert.True(File.Exists(Path.Combine(work, "payload", "SetupComplete.cmd")));
             string stagedSetup = File.ReadAllText(Path.Combine(work, "payload", "SetupComplete.cmd"));
             string repoSetup = File.ReadAllText(
@@ -242,9 +236,11 @@ public class ImageServicingApplyTests
                 Path.Combine(work, "prepared-media.json"),
                 JsonSerializer.Serialize(new Dictionary<string, object?>
                 {
+                    ["schemaVersion"] = ImageServicing.PreparedMediaAuditSchemaVersion,
                     ["source.isoSha256"] = new string('b', 64),
                     ["mediaCache.outcome"] = "hit",
                     ["timings.mountMs"] = 4,
+                    ["mediaCache.previousMedia"] = Path.Combine(work, "media.previous-x"),
                 }));
             RecordingElevatedPlanRunner runner = new();
             ServicingRun run = new(
@@ -265,6 +261,8 @@ public class ImageServicingApplyTests
             Assert.False(result.Value.Digests.ContainsKey("mediaCache.outcome"));
             using JsonDocument evidence = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(work, "evidence.json")));
             Assert.Equal("hit", evidence.RootElement.GetProperty("mediaCache.outcome").GetString());
+            Assert.False(evidence.RootElement.TryGetProperty("mediaCache.previousMedia", out _));
+            Assert.Equal(new string('a', 64), result.Value.Digests["outputIso.sha256"]);
         }
         finally
         {
@@ -399,6 +397,36 @@ public class ImageServicingApplyTests
 
             Assert.False(result.IsOk);
             Assert.Equal("servicing.evidence.outputIso.missing", result.Error.Code);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    public async Task Apply_rejects_successful_runner_without_digest_sidecar()
+    {
+        BuildArtifacts plan = MinimalPlan();
+        string work = NewTempDir();
+        try
+        {
+            string outputIso = Path.Combine(work, "out.iso");
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: outputIso);
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+            File.WriteAllText(outputIso, "fake-iso");
+
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
+                plan,
+                run,
+                new SuccessfulElevatedPlanRunner(),
+                TestContext.Current.CancellationToken);
+
+            Assert.False(result.IsOk);
+            Assert.Equal("servicing.evidence.digests.missing", result.Error.Code);
         }
         finally
         {

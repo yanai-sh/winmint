@@ -201,19 +201,21 @@ internal static class Program
         PackageStrictOverride packageStrict,
         bool includeSmokeStubs)
     {
-        if (!TryBuildRunOptions(
-                imageQuality,
-                imageArchitecture,
-                packageAuditStrict,
-                packageStrict,
-                includeSmokeStubs,
-                out RunOptions run,
-                out int exit))
+        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
             return exit;
         }
 
-        if (!TryLoadPlan(profilePath, out _, out exit, run))
+        if (!TryLoadPlan(
+                profilePath,
+                out _,
+                out exit,
+                new HostComposeOptions(
+                    ImageQuality: lane,
+                    ImageArchitecture: imageArchitecture,
+                    PackageAuditStrict: packageAuditStrict,
+                    PackageStrict: packageStrict,
+                    IncludeSmokeStubs: includeSmokeStubs)))
         {
             return exit;
         }
@@ -231,19 +233,21 @@ internal static class Program
         PackageStrictOverride packageStrict,
         bool includeSmokeStubs)
     {
-        if (!TryBuildRunOptions(
-                imageQuality,
-                imageArchitecture,
-                packageAuditStrict,
-                packageStrict,
-                includeSmokeStubs,
-                out RunOptions run,
-                out int exit))
+        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
             return exit;
         }
 
-        if (!TryLoadPlan(profilePath, out HostPlan? plan, out exit, run))
+        if (!TryLoadPlan(
+                profilePath,
+                out HostPlan? plan,
+                out exit,
+                new HostComposeOptions(
+                    ImageQuality: lane,
+                    ImageArchitecture: imageArchitecture,
+                    PackageAuditStrict: packageAuditStrict,
+                    PackageStrict: packageStrict,
+                    IncludeSmokeStubs: includeSmokeStubs)))
         {
             return exit;
         }
@@ -330,33 +334,6 @@ internal static class Program
         return 0;
     }
 
-    private static bool TryBuildRunOptions(
-        string imageQuality,
-        string? imageArchitecture,
-        bool packageAuditStrict,
-        PackageStrictOverride packageStrict,
-        bool includeSmokeStubs,
-        out RunOptions run,
-        out int exitCode)
-    {
-        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out exitCode))
-        {
-            run = new RunOptions();
-            return false;
-        }
-
-        run = new RunOptions
-        {
-            ImageQuality = lane,
-            ImageArchitecture = imageArchitecture,
-            PackageAuditStrict = packageAuditStrict,
-            PackageStrict = HostDefaults.ResolvePackageStrict(lane, packageStrict),
-            IncludeSmokeStubs = includeSmokeStubs,
-        };
-        exitCode = 0;
-        return true;
-    }
-
     internal static PackageStrictOverride ParsePackageStrictOverride(
         ParseResult parseResult,
         Option<bool> option)
@@ -390,7 +367,7 @@ internal static class Program
         FileInfo profilePath,
         out HostPlan? plan,
         out int exitCode,
-        RunOptions? run = null)
+        HostComposeOptions? options = null)
     {
         plan = null;
         if (!profilePath.Exists)
@@ -413,7 +390,7 @@ internal static class Program
             return false;
         }
 
-        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(parsed.Value, run);
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(parsed.Value, options);
         if (!planned.IsOk)
         {
             CliLog.Failure(Log, planned.Error.Code, planned.Error.Message);
@@ -429,9 +406,7 @@ internal static class Program
     private static void WritePlanHonesty(HostReview review)
     {
         CliLog.Lane(Log, review.ImageQuality);
-        string honesty = BuildPlan.FormatPlanHonesty(
-            new BuildManifest(review.ImageQuality, review.RequiresNetwork),
-            review.AuthoredProfile.Account.RequireWifiDuringOobe);
+        string honesty = review.Honesty;
         foreach (string line in honesty.Split(["\r\n", "\n"], StringSplitOptions.None))
         {
             if (line.StartsWith("Warning:", StringComparison.Ordinal))

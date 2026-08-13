@@ -17,4 +17,12 @@ public static class DmaInterop
 
     /// <summary>ISO 3166-1 alpha-2 for Ireland (Geo <c>Name</c>).</summary>
     public const string IrelandGeoName = "IE";
+
+    /// <summary>HKLM DeviceRegion latch (Ireland GeoID). Relative to HKLM.</summary>
+    public const string DeviceRegionSubKey =
+        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Control Panel\DeviceRegion";
+
+    /// <summary>HKU .DEFAULT Geo seed. Relative to HKU — a leading backslash is ERROR_BAD_PATHNAME.</summary>
+    public const string DefaultUserGeoSubKey =
+        @".DEFAULT\Control Panel\International\Geo";
 }

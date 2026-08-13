@@ -1,7 +1,7 @@
 # WinMint — Design (living)
 
 **Phase:** Alpha — maintainer pick or new GitHub issue.  
-**Product:** Windows 11 ISO builder. Host ARM64-first. Guest = **Provisioning Supervisor**.  
+**Product modules:** BuildPlan · ImageServicing · ProvisioningSession. HostCompile is the Orchestrator entry over BuildPlan + ImageServicing, not a fourth product module.  
 **Glossary:** [CONTEXT](../CONTEXT.md) · **Why greenfield:** [V1-LESSONS](design/V1-LESSONS.md) · **Shape:** [ARCHITECTURE](ARCHITECTURE.md)
 
 **Invariant** = identity/safety. **Default** = shipped behaviour (change with spike). Everything else is issue-scoped, not living law.

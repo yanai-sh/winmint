@@ -55,11 +55,42 @@ public interface ISourceMediaProbe
         string sourceIsoPath,
         int wimIndex,
         CancellationToken cancellationToken = default);
+
+    /// <summary>WIM index list only — must not SHA-256 the ISO. Compose hashes once via <see cref="ProbeAsync"/>.</summary>
+    Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+        string sourceIsoPath,
+        CancellationToken cancellationToken = default)
+    {
+        async Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> FromProbe()
+        {
+            Result<SourceMediaReview, Failure> probed =
+                await ProbeAsync(sourceIsoPath, ImageServicing.DefaultProWimIndex, cancellationToken)
+                    .ConfigureAwait(false);
+            return probed.IsOk
+                ? Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(probed.Value.Indexes)
+                : Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(probed.Error);
+        }
+
+        return FromProbe();
+    }
 }
 
 public sealed class SourceMediaProbe : ISourceMediaProbe
 {
     public static SourceMediaProbe Instance { get; } = new();
+
+    public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+        string sourceIsoPath,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceIsoPath) || !File.Exists(sourceIsoPath.Trim()))
+        {
+            return Task.FromResult(Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.isoMissing", $"Source ISO not found: {sourceIsoPath}")));
+        }
+
+        return PwshWimIndexSource.ListFromIsoAsync(Path.GetFullPath(sourceIsoPath.Trim()), cancellationToken);
+    }
 
     public async Task<Result<SourceMediaReview, Failure>> ProbeAsync(
         string sourceIsoPath,
@@ -135,12 +166,11 @@ public static class SourceWimProbe
                 new Failure("wim.probe.isoMissing", $"Source ISO not found: {isoPath}"));
         }
 
-        Result<SourceMediaReview, Failure> result = await (source ?? SourceMediaProbe.Instance)
-            .ProbeAsync(isoPath.Trim(), ImageServicing.DefaultProWimIndex, cancellationToken)
-            .ConfigureAwait(false);
-        return result.IsOk
-            ? Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(result.Value.Indexes)
-            : Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(result.Error);
+        Result<IReadOnlyList<WimIndexInfo>, Failure> listed =
+            await (source ?? SourceMediaProbe.Instance)
+                .ListIndexesAsync(isoPath.Trim(), cancellationToken)
+                .ConfigureAwait(false);
+        return listed;
     }
 
     public static Result<IReadOnlyList<WimIndexInfo>, Failure> ParseListJson(string json)

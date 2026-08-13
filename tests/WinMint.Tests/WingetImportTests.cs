@@ -196,7 +196,7 @@ public class WingetImportTests
     private static Profile LabProfile(IReadOnlyList<string> winget) =>
         new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: false),
-            new DmaProfile(true, new DmaSettleTarget(true, "en-GB", 242, "GMT Standard Time", true)),
+            new DmaProfile(true, new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true)),
             DebloatMode.Online,
             [],
             winget,

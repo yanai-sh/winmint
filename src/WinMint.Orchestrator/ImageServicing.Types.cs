@@ -3,8 +3,7 @@ namespace WinMint.Orchestrator;
 public sealed record ServicingRun(
     string SourceIsoPath,
     string WorkDirectory,
-    string? OutputIsoPath = null,
-    string? ProfilePath = null,
+    string OutputIsoPath,
     int? WimIndex = null,
     string? SourceIsoSha256 = null,
     SelectedWim? SelectedImage = null);
