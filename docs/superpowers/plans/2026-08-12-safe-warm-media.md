@@ -6,6 +6,8 @@
 
 Implement in order. Each slice starts red, ends with its focused check green, and is a reviewable commit. Do not preserve the unsafe behavior behind a compatibility alias.
 
+Every path under **Files** was verified at the post-#94 baseline. `Add` marks a proposed path; `Modify` and `Remove` name existing paths.
+
 ## 1. Remove caller-owned mutable reuse
 
 **Files**
@@ -17,7 +19,9 @@ Implement in order. Each slice starts red, ends with its focused check green, an
 - Modify `src/WinMint.Orchestrator/ImageServicing.cs`
 - Modify `src/WinMint.Orchestrator/BuildArtifacts.cs`
 - Modify `src/WinMint.Cli/Program.cs`
-- Modify `src/WinMint.Wizard/WizardBuild.cs`
+- Modify `src/WinMint.Wizard/WizardSession.cs`
+- Modify `tests/WinMint.Tests/HostCompositionTests.cs`
+- Modify `tests/WinMint.Tests/WizardSessionTests.cs`
 - Modify `tools/apply/Invoke-HostApply.ps1`
 - Modify `Justfile`
 - Modify `servicing/Mount-InstallWim.ps1`
@@ -26,12 +30,12 @@ Implement in order. Each slice starts red, ends with its focused check green, an
 
 - Replace the tests that expect `reuseMedia=true/false` with assertions that materialized `MountInstallWim` parameters contain no `reuseMedia`.
 - Add a CLI parse/help assertion that `--reuse-media` is rejected/absent.
-- Add a repository contract assertion that no current host/stage contract declares `ReuseMedia`.
+- Add assertions that `HostComposeOptions`, `HostReview`, `HostComposition`, `ServicingRun`, `WizardSession`, and stage parameters no longer carry `ReuseMedia`.
 
 Run:
 
 ```powershell
-dotnet test tests/WinMint.Tests/WinMint.Tests.csproj --filter "FullyQualifiedName~ImageServicingApplyTests|FullyQualifiedName~Cli"
+dotnet test tests/WinMint.Tests/WinMint.Tests.csproj --filter "FullyQualifiedName~ImageServicingApplyTests|FullyQualifiedName~CliPackageStrictTests|FullyQualifiedName~HostCompositionTests|FullyQualifiedName~WizardSessionTests"
 ```
 
 Expected: compilation/test failure while the option and record fields remain.
@@ -40,7 +44,9 @@ Expected: compilation/test failure while the option and record fields remain.
 
 - Delete the flag and plumbing at every listed seam.
 - Delete both reuse branches from `Mount-InstallWim.ps1`.
-- Make the remaining pre-cache path always require a real Source ISO and fresh media.
+- Preserve #94's frozen Source ISO hash, selected `SelectedWim`, pre-Apply rehash, and selected-image validation.
+- Make the remaining pre-cache path require a real Source ISO and fresh media.
+- Remove the obsolete marker heuristics from `Justfile` and `tools/apply/Invoke-HostApply.ps1`.
 - Do not yet optimize the repeated extraction; this slice only eliminates unsound behavior.
 
 Run the focused test again, then:
@@ -59,9 +65,9 @@ Expected: no active contract/help match. Historical specs/research outside those
 
 - Add `src/WinMint.Orchestrator/ImageServicing.MediaCache.cs`
 - Modify `src/WinMint.Orchestrator/ImageServicing.cs`
-- Modify `src/WinMint.Orchestrator/BuildArtifacts.cs`
 - Add `tests/WinMint.Tests/MediaCacheIdentityTests.cs`
 - Modify `tests/WinMint.Tests/ImageServicingApplyTests.cs`
+- Modify `tests/WinMint.Tests/HostCompositionTests.cs`
 
 **Interface**
 
@@ -71,19 +77,19 @@ Keep the implementation internal:
 internal readonly record struct MediaCacheIdentity(
     string SourceIsoSha256,
     long SourceIsoLength,
-    int SourceIndex,
+    int WimIndex,
     int Schema)
 {
     internal const int CurrentSchema = 1;
     internal string RelativeEntryPath =>
-        Path.Combine($"v{Schema}", SourceIsoSha256, $"index-{SourceIndex}");
+        Path.Combine($"v{Schema}", SourceIsoSha256, $"index-{WimIndex}");
 }
 ```
 
-Use `SHA256.HashDataAsync(FileStream, ct)` and lowercase hexadecimal output. Reject non-positive source index. Resolve cache root from `Environment.SpecialFolder.CommonApplicationData`:
+Reuse `HostCompile`'s lowercase SHA-256 and pre-Apply source rehash. For direct `ImageServicing.ApplyAsync` callers that omit source identity, use one `SourceMediaProbe` result for both the hash and `SelectedWim`. Do not add another host-side hash on the HostCompile path; the elevated stage still rehashes before cache use. Reject non-positive WIM indexes. Resolve cache root from `Environment.SpecialFolder.CommonApplicationData`:
 
 ```text
-<CommonApplicationData>\WinMint\Servicing\media-cache
+%ProgramData%\WinMint\Servicing\media-cache
 ```
 
 Do not accept a caller-supplied cache root.
@@ -93,12 +99,11 @@ Add stage parameter constants:
 ```text
 sourceIsoSha256
 sourceIsoLength
-sourceIndex
 cacheSchema
 cacheRoot
 ```
 
-The host computes identity once before writing `stages.json`; the elevated stage rechecks Source ISO length/hash before using the cache.
+Keep the existing `wimIndex`, `imageName`, `architecture`, `imageEdition`, and `imageBuild` stage parameters. The host resolves identity before writing `stages.json`; the elevated stage rechecks Source ISO length/hash before using the cache.
 
 **Red**
 
@@ -110,6 +115,7 @@ Tests prove:
 - SHA output is lowercase 64-character hex;
 - zero/negative index fails;
 - materialized mount stage includes all identity fields and no reuse field.
+- HostCompile Apply carries its frozen hash and `SelectedWim` without a second probe.
 
 Run:
 
@@ -131,7 +137,9 @@ Implement the minimum internal type/hash function and materialization wiring. Ke
 
 - Add `servicing/Initialize-SourceMediaCache.ps1`
 - Modify `servicing/Mount-InstallWim.ps1`
+- Remove `servicing/Test-MediaIdentity.ps1` after its selected-image checks move to the cache helper
 - Add `tests/contract/Test-SourceMediaCache.ps1`
+- Remove `tests/contract/Test-MediaIdentityContract.ps1` after equivalent cache cases exist
 - Modify `Justfile` to include the contract check
 
 **PowerShell helper contract**
@@ -176,7 +184,7 @@ Expected: command fails because the helper does not exist.
 - Create same-parent `.prepare-*` staging.
 - Extract the complete ISO tree.
 - Export selected `install.wim` index into a separate file.
-- Reuse `Get-WimMetadata.ps1` assertions and edition-config writer.
+- Reuse `servicing/Get-WimMetadata.ps1` assertions and edition-config writer.
 - Hash `install.wim` and `boot.wim`.
 - Write manifest last, parse it back, then same-volume rename staging to final.
 - On a race, validate/use the winning final entry.
@@ -192,9 +200,10 @@ Run the contract test twice: the second run must leave no global cache/test resi
 
 **Files**
 
-- Extend `servicing/Initialize-SourceMediaCache.ps1`
+- Extend proposed `servicing/Initialize-SourceMediaCache.ps1` from slice 3
 - Modify `servicing/Mount-InstallWim.ps1`
-- Extend `tests/contract/Test-SourceMediaCache.ps1`
+- Modify `src/WinMint.Orchestrator/ImageServicing.cs`
+- Extend proposed `tests/contract/Test-SourceMediaCache.ps1` from slice 3
 - Modify `tests/WinMint.Tests/ImageServicingApplyTests.cs` only if stage parameter assertions change
 
 **Red**
@@ -205,10 +214,11 @@ Add contract cases:
 - cache miss and hit both call the same fresh-run-copy function;
 - existing `work\media` is moved aside and never used as source;
 - failed incoming copy is not renamed to `media`;
+- only the `media.previous-*` directory created by a successful run is removed;
 - source and destination files have distinct file IDs on NTFS;
 - changing destination `install.wim` leaves cached hash unchanged;
 - mount image path under cache root is rejected;
-- payload omitted from the cached source cannot survive from prior run media.
+- an optional payload omitted from run B cannot survive from run A's work directory.
 
 Run:
 
@@ -227,7 +237,7 @@ Copy-WinMintRunMedia
 Assert-WinMintMountImagePath
 ```
 
-Use ordinary `robocopy /E /COPY:DAT` into `media.incoming-{guid}`, validate the single-index WIM, rename to `media`, clear read-only bits, and mount only the run WIM. Never use `/SL`, hard links, or cache paths as mount image files.
+Use ordinary `robocopy /E /COPY:DAT` into `media.incoming-{guid}`, validate the single-index WIM, rename to `media`, clear read-only bits, and mount only the run WIM. In C# Materialize, remove and recreate the work payload directory before writing the current bundle. After successful Apply, remove only the prior-media directory this run created; preserve it on failure. Never use `/SL`, hard links, or cache paths as mount image files.
 
 No ReFS branch in this slice.
 
@@ -240,6 +250,7 @@ No ReFS branch in this slice.
 - Add `servicing/Resolve-WinMintMount.ps1`
 - Modify `servicing/Invoke-ServicingPlan.ps1`
 - Modify `servicing/Mount-InstallWim.ps1`
+- Modify `servicing/Patch-BootWimApply.ps1`
 - Modify `servicing/Export-Wim.ps1`
 - Add `tests/contract/Test-WinMintMountRecovery.ps1`
 - Modify `Justfile`
@@ -257,7 +268,14 @@ Write-WinMintMountOwner
 Remove-WinMintMountOwner
 ```
 
-It parses DISM mounted-image output once and refuses paths outside `%ProgramData%\WinMint\Servicing\mounts\`.
+It parses DISM mounted-image output once and accepts only the current fixed mount directories:
+
+```text
+%ProgramData%\WinMint\Servicing\mount
+%ProgramData%\WinMint\Servicing\boot-mount
+```
+
+Ownership records are proposed files under `%ProgramData%\WinMint\Servicing\mount-owners\`: `install.json` and `boot.json`. The boot record is updated before each boot-WIM index mount.
 
 **Red**
 
@@ -271,6 +289,7 @@ Contract cases:
 - cache WIM path is never discarded/mounted;
 - owner file is written immediately before mount;
 - owner is removed only after successful unmount/discard;
+- install and boot ownership records cannot overwrite each other;
 - failed recovery stops before Source ISO/cache mutation.
 
 Run:
@@ -329,29 +348,29 @@ Extend `ImageEvidence` only for values consumed by host/Wizard. Preserve the ful
 
 **Files**
 
-- Add `tests/metal/Invoke-WarmMediaAcceptance.ps1`
+- Add `tools/apply/Invoke-WarmMediaAcceptance.ps1`
 - Modify `Justfile` with an explicit non-default target, for example `warm-media-acceptance`
 - Add a small opposite-profile fixture only if existing fixtures cannot express the two runs
 
 **Test flow**
 
-1. Require elevation, native ARM64 host detection aware of `PROCESSOR_ARCHITEW6432`, native ARM64 `pwsh` 7.6+, Source ISO, and explicit destructive-test acknowledgment.
+1. Require elevation, a Source ISO, enough free space, and `pwsh` 7.6+ with both `RuntimeInformation.OSArchitecture` and `RuntimeInformation.ProcessArchitecture` equal to `Arm64`. Record `PROCESSOR_ARCHITECTURE` and `PROCESSOR_ARCHITEW6432` for diagnostics and reject an emulated process.
 2. Remove only the expected cache key to force cold.
 3. Run Profile A in a fresh workdir and save source/cache/evidence hashes.
 4. Run Profile B in the same workdir with opposite removal/payload intent.
 5. Assert a warm hit, fresh run-media path, unchanged cached WIM hashes, no A-only residue, and correct B intent.
 6. Corrupt a copied test cache entry and assert quarantine/rebuild.
-7. Run existing Test metal evidence checks on both Output ISOs.
+7. Run the existing Hyper-V Smoke path on both Output ISOs.
 
 This check is not part of default `just check` because it requires elevation, Source ISO, disk space, and minutes of host servicing.
 
 Run:
 
 ```powershell
-just warm-media-acceptance SOURCE_ISO="<official-arm64.iso>"
+just warm-media-acceptance SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
 ```
 
-Expected before implementation: second run exposes residue or lacks cache provenance. Expected after: all assertions pass.
+Expected before implementation: the current marker path lacks immutable-cache provenance and may expose residue. Expected after implementation: all assertions pass.
 
 **Commit:** `test(servicing): prove warm media run isolation`
 
@@ -365,9 +384,10 @@ Expected before implementation: second run exposes residue or lacks cache proven
 
 **Behavior**
 
-- Validate native ARM64 PowerShell using both `PROCESSOR_ARCHITECTURE` and `PROCESSOR_ARCHITEW6432`.
+- Require both `RuntimeInformation.OSArchitecture` and `RuntimeInformation.ProcessArchitecture` to equal `Arm64`. Record `PROCESSOR_ARCHITECTURE` and `PROCESSOR_ARCHITEW6432` so x64-emulation failures are diagnosable.
 - Require a fixed Source ISO, index, Profile, output directory, and baseline commit/worktree path.
-- Run one untimed prime plus five cold, five warm, and five pre-change baseline runs.
+- Require the baseline commit to contain #94 and precede #111. Run one untimed prime plus five new cold, five new warm, and five #94 cold-baseline runs from that fixed worktree.
+- Optionally measure five #94 marker-reuse runs as an unsafe diagnostic; label them clearly and exclude them from acceptance.
 - Capture per-phase/total milliseconds, range, median, filesystem, storage model, cache/work disk growth, WinMint commit, Source ISO hash, and pwsh/.NET/Windows versions.
 - Write machine-readable JSON and a concise Markdown record.
 - Do not automatically enable ReFS cloning.
@@ -380,7 +400,7 @@ pwsh -NoProfile -File tools/bench/Measure-WarmMedia.ps1 -WhatIf
 
 Expected: validates inputs and prints the exact matrix without mutation.
 
-Then run the full benchmark on the native ARM64 development host and attach the completed record to #111.
+Then run the full benchmark on the native ARM64 development host and attach the completed record to #111. Do not state a speedup until the record exists.
 
 **Commit:** `perf(servicing): benchmark cold and warm media paths`
 
@@ -404,6 +424,7 @@ Then run the full benchmark on the native ARM64 development host and attach the 
 - How to remove a cache entry safely while no Apply is active.
 - Cold/warm progress labels and evidence fields.
 - `--reuse-media` removal/migration note.
+- #94 `winmint.media-identity/v1` replacement note: its source/image validation remains, while the cache manifest replaces its mutable-tree marker.
 - ReFS cloning remains deferred pending benchmark threshold.
 
 Run:
@@ -423,8 +444,8 @@ Before closing #111:
 
 ```powershell
 just check
-just warm-media-acceptance SOURCE_ISO="<official-arm64.iso>"
-just bench-warm-media SOURCE_ISO="<official-arm64.iso>"
+just warm-media-acceptance SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
+just bench-warm-media SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
 ```
 
 Record:

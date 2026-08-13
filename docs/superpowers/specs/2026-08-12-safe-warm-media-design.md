@@ -5,6 +5,8 @@
 **Research:** [CTT/WinUtil lessons](../../research/2026-08-12-ctt-winutil-lessons.md)  
 **Issue:** [#111](https://github.com/yanai-sh/winmint/issues/111)
 
+Repository-relative paths in this document exist at the post-#94 baseline unless marked **proposed**. Host paths marked **proposed** are created by #111.
+
 ## Decision
 
 ImageServicing automatically prepares and uses an immutable, content-addressed Source ISO cache. Callers no longer choose whether prior mutable build media is safe to reuse.
@@ -15,9 +17,9 @@ Ordinary copy is the correctness baseline. ReFS block cloning may be added only 
 
 ## Problem
 
-Today `ReuseMedia` means “mount the prior run's media again.” The nominal cold path also silently reuses it when `media\sources\install.wim` already exists.
+#94 established a conservative baseline. `HostCompile` freezes the Source ISO SHA-256 and selected `SelectedWim`, rehashes the ISO before Apply, and materializes those values into the `MountInstallWim` stage. `ReuseMedia=false` always recreates staged media. `ReuseMedia=true` accepts existing media only when `.winmint-media-identity.json` has schema `winmint.media-identity/v1` and the single-image WIM still matches the selected Name, Architecture, Edition, and Build. Missing, malformed, or mismatched identity falls back to cold recreation.
 
-That media has already received destructive and accumulating mutations:
+The marker and staged-WIM check prove source and selected-image identity, not pristine state. A matching tree may already contain destructive and accumulating mutations:
 
 - provisioned AppX removals;
 - capability and optional-feature removals;
@@ -25,9 +27,9 @@ That media has already received destructive and accumulating mutations:
 - boot WIM patching;
 - Release `ResetBase` and WIM export.
 
-The `.winmint-single-index` marker proves only that an export occurred. It does not bind the tree to Source ISO bytes, source index, schema, transaction completion, or pristine state. Reuse can therefore produce an Output ISO that cannot be explained by the current Profile.
+The marker does not bind the tree to pristine install/boot WIM digests, Profile-derived mutations, or a completed cache transaction. Explicit reuse can therefore produce an Output ISO that cannot be explained by the current Profile. `Justfile` enables reuse from marker existence alone, and `tools/apply/Invoke-HostApply.ps1` still checks an obsolete single-index marker path.
 
-This design first restores correctness, then makes safe source preparation reusable.
+This design preserves #94's source and selected-image checks, removes caller-owned reuse, and makes only pristine source preparation reusable.
 
 ## Goals
 
@@ -59,24 +61,32 @@ public sealed record ServicingRun(
     string WorkDirectory,
     string? OutputIsoPath = null,
     string? ProfilePath = null,
-    int? WimIndex = null);
+    int? WimIndex = null,
+    string? SourceIsoSha256 = null,
+    SelectedWim? SelectedImage = null);
 ```
 
 Remove:
 
 - CLI `--reuse-media`;
-- Wizard `ReuseMedia`;
-- `HostCompileRequest.ReuseMedia`;
+- `HostComposeOptions.ReuseMedia`;
+- `HostReview.ReuseMedia`;
+- `HostComposition.ReuseMedia`;
 - `StageParams.ReuseMedia`;
 - `reuseMedia` in `MountInstallWim` parameters;
 - Justfile/apply-script marker heuristics.
 
-ImageServicing computes the Source ISO SHA-256 once before elevation and materializes these `MountInstallWim` parameters:
+`HostCompile` already computes the Source ISO SHA-256 during composition and verifies it again before Apply. Preserve that frozen value and `SelectedWim` through `ServicingRun`. For direct `ImageServicing.ApplyAsync` callers that omit either value, use one `SourceMediaProbe` result for both the hash and selected-image metadata before materialization. It then materializes these `MountInstallWim` parameters:
 
 ```text
 sourceIso
 sourceIsoSha256
-sourceIndex
+sourceIsoLength
+wimIndex
+imageName
+architecture
+imageEdition
+imageBuild
 cacheSchema
 cacheRoot
 mountDir
@@ -84,11 +94,11 @@ mediaDir
 workDirectory
 ```
 
-`sourceIndex` is the effective, required index after applying the existing default. Cache behavior remains an ImageServicing implementation detail; BuildPlan does not gain cache opcodes or policy.
+`wimIndex` is the effective, required source index after applying `ImageServicing.DefaultProWimIndex`. Cache behavior remains an ImageServicing implementation detail; BuildPlan does not gain cache opcodes or policy. Do not add another host-side hash beyond the existing composition hash and pre-Apply recheck. The elevated cache stage still rehashes immediately before hit validation or preparation.
 
 ## Cache identity and layout
 
-Root:
+Proposed host root:
 
 ```text
 %ProgramData%\WinMint\Servicing\media-cache\v1\
@@ -100,10 +110,9 @@ Entry:
 {sourceIsoSha256}\index-{sourceIndex}\
   manifest.json
   media\
-    <complete extracted ISO tree>
+    files copied from Source ISO
     sources\
       install.wim
-      .winmint-single-index
 ```
 
 The complete cache key is:
@@ -133,18 +142,19 @@ Those values do not alter pristine source bytes. A schema bump handles intention
 ```json
 {
   "schema": 1,
-  "sourceIsoSha256": "<sha256>",
-  "sourceIsoLength": 0,
-  "sourceIndex": 1,
+  "sourceIsoSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sourceIsoLength": 5872025600,
+  "sourceIndex": 3,
   "preparedUtc": "2026-08-12T00:00:00Z",
-  "installWimSha256": "<sha256>",
-  "installWimLength": 0,
-  "bootWimSha256": "<sha256>",
-  "bootWimLength": 0,
+  "installWimSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "installWimLength": 4294967296,
+  "bootWimSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "bootWimLength": 536870912,
   "image": {
-    "name": "<DISM name>",
-    "architecture": "<DISM architecture>",
-    "edition": "<DISM edition>",
+    "name": "Windows 11 Pro",
+    "architecture": "ARM64",
+    "edition": "Professional",
+    "build": "26200",
     "indexCount": 1
   }
 }
@@ -159,10 +169,10 @@ A hit requires all of:
 1. final entry directory exists;
 2. `manifest.json` parses;
 3. schema, source hash, source length, and source index match the request;
-4. `media\sources\install.wim`, `media\sources\boot.wim`, and marker exist;
+4. `media\sources\install.wim` and `media\sources\boot.wim` exist;
 5. recorded WIM lengths match;
 6. DISM reports exactly one install image at index 1;
-7. image Name/Architecture/Edition are present and match the manifest;
+7. image Name/Architecture/Edition/Build are present and match the manifest and approved `SelectedWim`;
 8. install/boot WIM hashes match the manifest.
 
 Hashing both WIMs on every hit is intentionally conservative for v1. If measurement shows that validation erases the warm-path benefit, a later schema may replace it with a protected immutable-entry mechanism; it must not silently weaken v1.
@@ -189,7 +199,7 @@ On a miss, under the cache/mount lock:
 8. Export only the selected index to a separate `install.single.wim` with DISM.
 9. Verify index count and metadata stability.
 10. Replace staging's original `install.wim` with the single-index WIM.
-11. Write `ei.cfg`, remove stale `PID.txt`, and write `.winmint-single-index`.
+11. Write `ei.cfg` and remove stale `PID.txt`.
 12. Hash/measure install and boot WIMs.
 13. Write and parse-back `manifest.json`.
 14. Move the staging directory to the final entry path on the same volume.
@@ -202,14 +212,15 @@ Any failure removes only the uniquely named staging directory after confirming n
 
 At Apply start:
 
-1. Refuse to mutate an existing `{workDirectory}\media`.
-2. If it exists from an earlier run, move it to `media.previous-{timestamp}-{guid}`; fail if that cannot be done.
-3. Copy `entry\media` to a newly created sibling `media.incoming-{guid}`.
-4. Copy all files as independent file records. Do not use hard links.
-5. Clear read-only attributes in the incoming tree.
-6. Validate its single-index WIM metadata.
-7. Atomically rename it to `{workDirectory}\media`.
+1. If `{workDirectory}\media` exists from an earlier run, move it to `media.previous-{timestamp}-{guid}`; fail if that cannot be done.
+2. Copy `entry\media` to a newly created sibling `media.incoming-{guid}`.
+3. Copy all files as independent file records. Do not use hard links.
+4. Clear read-only attributes in the incoming tree.
+5. Validate its single-index WIM metadata.
+6. Atomically rename it to `{workDirectory}\media`.
+7. Before elevation, C# Materialize removes and recreates `{workDirectory}\payload`, then writes the current bundle.
 8. Only then mount `{workDirectory}\media\sources\install.wim` read/write.
+9. After Apply completes, remove only the `media.previous-*` directory created by this run. Preserve it on failure.
 
 The cached WIM path is never passed to `/Mount-Image`. A path containment assertion rejects any mount image file under the cache root.
 
@@ -225,20 +236,22 @@ Global\WinMint.ImageServicing.v1
 
 This intentionally permits one ImageServicing Apply per host. Parallelism can be narrowed later only with evidence that DISM and mount directories are isolated safely.
 
-The elevated loop records mount ownership at:
+The elevated loop records ownership in the proposed directory:
 
 ```text
-%ProgramData%\WinMint\Servicing\mount-owner.json
+%ProgramData%\WinMint\Servicing\mount-owners\
+  install.json
+  boot.json
 ```
 
-Fields:
+Each record contains:
 
 ```text
-schema, runId, processId, workDirectory, mountDirectory,
-imageFile, startedUtc, sourceIsoSha256, sourceIndex
+schema, runId, processId, mountKind, workDirectory,
+mountDirectory, imageFile, startedUtc, sourceIsoSha256, sourceIndex
 ```
 
-The record is created immediately before DISM mount and deleted only after successful unmount or verified discard. It is diagnostic state, not proof that a mount exists.
+The install record covers the existing `%ProgramData%\WinMint\Servicing\mount` directory. The boot record covers the existing `%ProgramData%\WinMint\Servicing\boot-mount` directory and is updated for each boot-WIM index. Create a record immediately before each DISM mount. Delete it only after successful unmount or verified discard. A record is diagnostic state, not proof that a mount exists.
 
 ## Stale-mount recovery
 
@@ -250,7 +263,7 @@ Before preparing/copying/mounting:
 4. If the owner is absent/dead, call `DISM /Unmount-Image /Discard` for that WinMint mount.
 5. Verify it is no longer mounted.
 6. Run `DISM /Cleanup-Wim` only if discard reports stale/corrupt mount state, then query again.
-7. Never discard a mount outside `%ProgramData%\WinMint\Servicing\mounts\`.
+7. Never discard a mount outside the exact current install and boot mount directories.
 8. Never delete a cache entry or work media while its WIM appears in mounted-WIM state.
 
 Recovery actions and DISM results are written to the run log and final evidence. A recovery failure stops Apply.
@@ -322,19 +335,22 @@ Use the primary native ARM64 development host, native ARM64 `pwsh` 7.6+, one fix
 
 Record five successful runs for each condition after one untimed priming run:
 
-- cold: cache entry absent;
-- warm: valid entry present;
-- old baseline: current code from the fixed pre-change commit, fresh workdir.
+- new cold: cache entry absent;
+- new warm: valid entry present;
+- #94 cold baseline: fixed pre-#111 commit, `ReuseMedia=false`, fresh workdir;
+- #94 marker-reuse diagnostic: same fixed commit and matching marker, labeled unsafe and excluded from acceptance.
 
-Capture median and range for source hashing, preparation, copy, mount, total Apply, and peak cache/work disk usage. Record filesystem and storage model.
+Record the exact baseline commit. Capture median and range for source hashing, preparation, copy, mount, total Apply, and peak cache/work disk usage. Record filesystem and storage model. Do not publish speed claims until these runs complete.
 
-The feature ships for correctness even if warm time is not faster. ReFS cloning is pursued only if ordinary warm copy remains a material share of total Apply and cloning reduces median run-media-copy time by at least 30% without changing Output ISO acceptance.
+The feature ships for correctness even if warm time is not faster. Pursue ReFS cloning only if ordinary copying is at least 20% of median warm Apply time and cloning reduces median run-media-copy time by at least 30% without changing Output ISO acceptance.
 
 ## Acceptance tests
 
 ### Contract/unit
 
 - `ServicingRun`, CLI, Wizard, host request, and stage JSON expose no reuse flag.
+- `HostComposeOptions`, `HostReview`, `HostComposition`, and `WizardSession` expose or compare no reuse flag.
+- HostCompile preserves the frozen Source ISO hash and `SelectedWim` through Apply.
 - Same bytes at two Source ISO paths produce the same key.
 - One-byte Source ISO change produces a different key.
 - Different source index or schema produces a different key.
@@ -361,7 +377,7 @@ The feature ships for correctness even if warm time is not faster. ReFS cloning 
 - Removing a component in run A does not remove it from run B when B does not request removal.
 - Removing optional payload from run B leaves no run-A payload.
 - Corrupting cached `install.wim` causes quarantine/rebuild, not mount.
-- Output ISO passes existing Test metal acceptance in cold and warm modes.
+- Each cold/warm Output ISO passes the existing Hyper-V Smoke path in `tools/vm/Invoke-Smoke.ps1`.
 - Release path still passes Gate B; Primary remains the destructive truth.
 
 ### Repository
@@ -388,7 +404,8 @@ Implementation updates:
 - `docs/design/IMAGESERVICING.md` interface, invariants, recovery, and evidence;
 - `docs/DESIGN.md` default for automatic source-media caching;
 - `docs/ARCHITECTURE.md` only if the module boundary changes (not expected);
-- CLI/README/Justfile help that currently exposes `--reuse-media`.
+- CLI/README/Justfile help affected by `--reuse-media` removal;
+- the #94 media-identity helper and contract, which the cache manifest supersedes.
 
 No ADR is required: the decision deepens the existing ImageServicing module and removes an unsafe implementation option without changing product intent.
 

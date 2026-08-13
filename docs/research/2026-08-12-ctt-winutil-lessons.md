@@ -76,35 +76,25 @@ Those choices serve a different audience. They should not become WinMint default
 
 ## What the video exposed in WinMint
 
-### Current media reuse is not a safe cache
+### Current media reuse is not an immutable cache
 
-`servicing/Mount-InstallWim.ps1` has two accumulating paths:
+#94 added a conservative `winmint.media-identity/v1` marker. `HostCompile` now freezes the Source ISO SHA-256 and selected WIM metadata, rehashes the Source ISO before Apply, and passes both values to `MountInstallWim`. With `reuseMedia=false`, the mount kernel deletes staged media and recreates it from the Source ISO. With `reuseMedia=true`, it reuses staged media only when the marker and current single-image WIM metadata match; otherwise it takes the cold path.
 
-- explicit `reuseMedia=true` mounts the prior run's committed single-index `media\sources\install.wim`;
-- nominal cold mode skips Source ISO extraction whenever that same WIM already exists.
+That change prevents reuse across a changed Source ISO, selected index, image identity, or malformed marker. It does not make the matching staged tree pristine. The marker identifies the source and selected image, but it does not record pristine WIM or boot WIM digests, Profile-derived mutations, cache publication state, or whether a previous Apply completed.
 
-The marker proves only that a single-index export happened. It does not bind the media to:
+Every later servicing stage mutates the same work tree. AppX and capability removals, policy stamps, drivers, payload, `boot.wim`, and Release cleanup can therefore accumulate when explicit reuse accepts a matching marker. A later Profile cannot restore removed state.
 
-- Source ISO content;
-- selected source index;
-- pristine WIM or boot WIM digests;
-- WinMint cache schema;
-- a clean, completed cache transaction.
+The current callers also infer reuse too loosely:
 
-Every subsequent servicing stage mutates that same tree. AppX/capability removals, policy stamps, drivers, payload, `boot.wim`, and Release `ResetBase` therefore accumulate. A later Profile cannot restore removed state.
+- `Justfile` passes `--reuse-media` when the media-identity marker exists, before validating its contents
+- `tools/apply/Invoke-HostApply.ps1` still checks the obsolete `.winmint-single-index` path
+- `ImageServicing.Materialize` does not clear its payload directory before writing the current bundle, so omitted optional files can survive in a reused work directory
 
-The risk extends beyond WIMs:
-
-- `payload` is not pruned before materialization, so an omitted optional file can survive;
-- digest/log sidecars can survive and be merged into new evidence;
-- the work WIM is hard-linked to the mutable media WIM;
-- `Justfile` and `tools/apply/Invoke-HostApply.ps1` enable reuse from marker existence alone.
-
-This is a correctness defect to remove before treating reuse as a performance feature.
+The identity marker is a safe fallback gate, not an immutable cache. #111 must retain its source/image checks while replacing caller-owned reuse with a pristine base and fresh mutable run media.
 
 ### Signing is currently archive integrity, not publisher trust
 
-The release workflow publishes a self-contained ARM64 toolkit zip and `.sha256`. The bootstrap downloads both from the same GitHub release and checks the archive hash.
+The `release` workflow in `.github/workflows/release.yml` has one `pack` job. It publishes a self-contained ARM64 toolkit ZIP and `.sha256`. The bootstrap downloads both from the same GitHub release and checks the archive hash.
 
 That catches an incomplete or mismatched transfer. It does not give Windows a verified WinMint publisher for the host executables, Supervisor, or servicing scripts, and it does not protect against replacement of both release assets by an actor with release-write access.
 
@@ -119,7 +109,7 @@ The release contains distinct trust classes:
 
 ### 1. Immutable warm-media preparation
 
-Cache only source-derived pristine bytes. Key the cache by Source ISO SHA-256, selected image index, and cache schema. Populate it transactionally, validate it, and publish the manifest last.
+Cache only source-derived pristine bytes. Key the cache by Source ISO SHA-256, selected image index, and cache schema. Populate it transactionally, validate it, and publish the manifest last. Build on #94's frozen Source ISO hash and `SelectedWim` metadata rather than creating a second source probe.
 
 Every Apply receives a fresh mutable media tree. Cache WIMs are never mounted read/write and are never hard-linked into a run. Ordinary copy is the baseline. ReFS block cloning is an optional optimization only when measured on a supported same-volume ReFS layout.
 
@@ -136,11 +126,11 @@ Measure Source ISO hashing, extraction, selected-index export, workspace copy, m
 
 The first optimization target is the measured dominant stage. Replacing DISM/oscdimg is a separate decision that would require metadata, boot, Secure Boot, Test/Release, Gate B, and Primary evidence.
 
-### 3. SignPath-backed release trust
+### 3. SignPath Foundation as the preferred candidate
 
-Use SignPath Foundation if the project is accepted. It fits the GPLv3/public-repository shape and avoids private-key custody, but the displayed publisher is SignPath Foundation and every signing request requires manual approval.
+Use SignPath Foundation if the project is accepted and its approved artifact configuration covers WinMint's required file types. It fits the GPLv3/public-repository shape and avoids maintainer private-key custody. The displayed publisher is SignPath Foundation, and every signing request requires manual approval.
 
-The project must publish a code-signing/privacy policy, identify signing roles, prove CI provenance, keep product/version metadata consistent, and sign only WinMint-owned binaries. See [SignPath Foundation conditions](https://signpath.org/terms.html) and [GitHub integration](https://docs.signpath.io/trusted-build-systems/github).
+Before applying, the project must publish code-signing and privacy policies, identify signing roles, document system changes and removal, and keep product/version metadata consistent. Provider configuration and signing implementation remain blocked until acceptance. Sign only WinMint-owned files that the accepted policy covers. See [SignPath Foundation conditions](https://signpath.org/terms.html) and [GitHub integration](https://docs.signpath.io/trusted-build-systems/github).
 
 ### 4. Effective-plan disclosure
 
@@ -210,8 +200,8 @@ Claims such as “native,” “signed,” and “fast” remain useful only whe
 1. Retire caller-owned mutable `ReuseMedia`.
 2. Design ImageServicing-owned immutable source-media caching.
 3. Benchmark cold and warm paths on native ARM64 before selecting further optimization.
-4. Pursue SignPath Foundation as the preferred release-signing route.
-5. Sign WinMint-owned PE/PowerShell artifacts; preserve upstream signatures.
+4. Apply to SignPath Foundation as the preferred release-signing route after policy prerequisites are public.
+5. If accepted, sign WinMint-owned PE files and preserve upstream bytes/signatures. Treat PowerShell signing as blocked until SignPath confirms the approved artifact configuration and timestamp/verification method.
 6. Keep Output ISO trust as SHA-256 plus release provenance, not “signed ISO” language.
 7. Keep WinMint positioned as a reproducible workstation-state compiler rather than a broader tweak utility.
 

@@ -5,29 +5,37 @@
 **Research:** [CTT/WinUtil lessons](../../research/2026-08-12-ctt-winutil-lessons.md)  
 **Issue:** [#112](https://github.com/yanai-sh/winmint/issues/112)
 
+Repository-relative paths in this document exist unless marked **proposed**. Provider slugs, policy capabilities, certificate details, and signing formats remain proposed until SignPath Foundation accepts the project and confirms its configuration.
+
 ## Decision
 
-WinMint's preferred public code-signing route is the free SignPath Foundation program for open-source projects.
+WinMint applies to the free SignPath Foundation program as its preferred public code-signing route.
 
-The release pipeline Authenticode-signs WinMint-owned PE and PowerShell artifacts after build/test and before final packaging. It preserves upstream publisher signatures. The final ZIP and Output ISO are integrity/provenance artifacts, not Authenticode-signed executables.
+If accepted, the release pipeline Authenticode-signs WinMint-owned Portable Executable (PE) files after build/test and before final packaging. PowerShell signing is required only if SignPath confirms `.ps1` support in the approved artifact configuration and identifies the timestamp and verification contract. The pipeline preserves upstream bytes and signatures. The final ZIP and Output ISO are integrity/provenance artifacts, not Authenticode-signed executables.
 
-No release is described as signed unless the pipeline verifies every artifact required by this policy.
+Until that integration succeeds, releases remain explicitly unsigned. No release is described as signed unless the pipeline verifies every artifact required by the accepted policy.
 
 ## Why SignPath Foundation
 
-WinMint is GPLv3, public, Windows-specific, and currently maintained by an individual. SignPath can provide:
+WinMint is GPLv3, public, Windows-specific, and currently maintained by an individual. If accepted, SignPath provides:
 
-- an HSM-backed public-trust certificate without maintainer key custody;
+- a publicly trusted certificate without maintainer private-key custody;
 - a verified GitHub Actions build-to-signing chain;
 - mandatory signing approval;
-- Authenticode timestamps;
 - a route available to an OSS project that is not a legal entity.
 
-The visible publisher is **SignPath Foundation**, not the repository owner or “WinMint.” This must be stated wherever signed-release trust is explained.
+The expected certificate subject and Windows publisher display are `SignPath Foundation`, not the repository owner or `WinMint`. Verify the exact subject and display from the first accepted sample before freezing checks or documentation.
 
 SignPath Foundation acceptance is discretionary. WinMint must already be released, documented, actively maintained, fully OSI-licensed, free of proprietary maintainer components, and acceptable under SignPath's security/privacy rules. WinMint's elevated image mutation and optional policy changes require clear operator warnings; any feature interpreted as circumventing security controls may make the project ineligible.
 
-If the application is rejected or the service is unavailable, WinMint continues publishing explicitly **unsigned** releases with hashes/provenance. It does not silently substitute a self-signed certificate or market an OV/EV route that has not been funded and verified. A conventional publisher certificate is a separate future decision.
+If the application is rejected, WinMint may continue publishing explicitly **unsigned** releases with hashes/provenance through a separately named process. It does not silently substitute a self-signed certificate or market an organization-validation or extended-validation route that has not been funded and verified. A conventional publisher certificate is a separate future decision.
+
+Other routes remain fallback decisions:
+
+- Microsoft Artifact Signing is a paid managed-signing candidate that requires Microsoft identity validation. Evaluate current eligibility and cost only if SignPath rejects WinMint or its accepted policy cannot cover required artifacts.
+- A conventional organization-validation or extended-validation certificate requires a verified legal publisher and a separate key-custody/CI design.
+- A self-signed certificate does not provide the selected public publisher-trust boundary and is rejected for releases.
+- None of these routes guarantees SmartScreen or antivirus outcomes. ARM64 and NativeAOT acceptance must be proved with WinMint's actual artifacts.
 
 Sources:
 
@@ -38,13 +46,14 @@ Sources:
 
 ## Trust claims
 
-A valid WinMint signature establishes:
+A successfully verified WinMint signature establishes:
 
-- the file bytes have not changed since signing;
+- the content covered by the Authenticode digest has not changed since signing;
 - Windows built a valid certificate chain at verification time;
-- the certificate subject is SignPath Foundation;
-- SignPath accepted the signing request under the WinMint project/policy;
-- when a valid RFC 3161 timestamp is present, the signature can remain valid after certificate expiry.
+- the signer subject matches the accepted SignPath Foundation certificate;
+- the timestamp satisfies the provider-approved Authenticode timestamp policy.
+
+The separately verified whole-file SHA-256, release manifest, and SignPath request record cover exact file bytes and establish the WinMint project, policy, request, source commit, and workflow origin. The file signature alone does not encode all of that context.
 
 It does not establish:
 
@@ -56,22 +65,34 @@ It does not establish:
 - that a Source ISO or software installed by WinMint is authentic;
 - that GitHub release access can never be compromised.
 
-SmartScreen reputation is empirical and can reset or vary by file, certificate, prevalence, and telemetry. EV no longer provides an automatic reputation shortcut. Documentation says “Authenticode-signed by SignPath Foundation,” never “warning-free.”
+SmartScreen reputation varies by file hash, publisher certificate, prevalence, and telemetry. Extended Validation (EV) no longer provides an automatic reputation shortcut. After the accepted sample confirms the signer display, documentation may say “Authenticode-signed by SignPath Foundation,” never “warning-free.”
 
-## Eligibility and policy prerequisites
+## Work allowed before acceptance
+
+WinMint can complete these repository policy tasks before SignPath Foundation accepts the application:
+
+1. Publish `SECURITY.md` (**proposed**), `PRIVACY.md` (**proposed**), and `docs/CODE_SIGNING.md` (**proposed**).
+2. Link the code-signing policy from `README.md`.
+3. Document team roles, system changes, removal, network behavior, unsigned-release status, artifact classes, and incident response.
+4. Normalize WinMint-owned PE version metadata and add local inventory tests.
+5. Split the current build-and-package behavior in `tools/release/Compress-WinMintRelease.ps1` without claiming signed output.
+
+Provider configuration, SignPath credentials, signing requests, provider-specific artifact rules, signed-file verification fixtures, and the protected tagged workflow remain blocked on acceptance and configuration discovery.
+
+## Eligibility and provider prerequisites
 
 Before the first signing request:
 
 1. SignPath Foundation accepts `yanai-sh/winmint`.
 2. The SignPath GitHub App is installed for the repository.
 3. The predefined GitHub.com trusted build system is linked to the SignPath organization/project.
-4. All release-producing jobs run on GitHub-hosted runners. The current `windows-11-arm` runner must be confirmed by SignPath as GitHub-hosted; otherwise use SignPath's accepted GitHub-hosted Windows ARM64 label.
+4. All jobs leading to signing run on GitHub-hosted runners. The SignPath connector accepts origin metadata from the current `windows-11-arm` runner.
 5. GitHub MFA and SignPath MFA are enabled.
 6. Repository roles are published:
    - authors/committers and reviewers: repository collaborators with write/maintain access;
    - approvers: repository owner(s) listed in the code-signing policy.
 7. Every signing request requires manual approval in SignPath.
-8. The repository publishes:
+8. The repository publishes the proposed policy paths:
    - `SECURITY.md`;
    - `PRIVACY.md`;
    - `docs/CODE_SIGNING.md`;
@@ -85,9 +106,9 @@ Before the first signing request:
 
 “No uninstall” is truthful because the host toolkit is portable and the guest Supervisor erases itself; documentation must explain removal rather than invent an uninstaller.
 
-## SignPath configuration
+## Proposed SignPath configuration
 
-Use these stable names:
+Request these names, then record the provider-assigned values:
 
 ```text
 Project slug:                winmint
@@ -117,13 +138,13 @@ SIGNPATH_API_TOKEN
 
 The token has submitter permission for only project `winmint` and policy `release-signing`. It cannot approve requests. SignPath keeps certificate/private-key control; no PFX or certificate password exists in GitHub.
 
-The SignPath source/build policy:
+If the accepted SignPath tier supports repository source/build policy files, use the proposed path:
 
 ```text
 .signpath/policies/winmint/release-signing.yml
 ```
 
-requires GitHub-hosted runners and disallows reruns. Branch-ruleset requirements are added only if supported by the repository's GitHub plan and actual solo workflow; do not declare unenforced review guarantees.
+Require GitHub-hosted runners and disallow reruns if SignPath enables those policy controls for the accepted subscription. Do not commit provider-specific policy syntax until the accepted schema validates it. Add branch-ruleset requirements only if the repository enforces them.
 
 ## Artifact classes
 
@@ -140,8 +161,8 @@ Sign only files produced from WinMint-owned source:
 - `artifacts\provisioning\WinMint.Provisioning.exe`
 - any release rename/copy of that executable such as `Supervisor.exe`
 - any WinMint-owned PE added later whose assembly name begins `WinMint.`
-- every repository-owned `.ps1` copied into the release staging tree
-- the versioned release copy of `winmint.ps1`
+- every repository-owned `.ps1` copied into the release staging tree, if `.ps1` signing is confirmed
+- the proposed versioned release copy of `winmint.ps1`, if `.ps1` signing is confirmed
 
 Duplicate WinMint assemblies in separate host publish trees are all signed.
 
@@ -154,7 +175,7 @@ Duplicate WinMint assemblies in separate host publish trees are all signed.
 - any other NuGet/upstream EXE or DLL;
 - Microsoft files copied from Source ISO or ADK.
 
-The release check records upstream signature status but does not fail merely because an upstream OSS library is unsigned. It fails if an upstream file is signed with the WinMint/SignPath Foundation project signature, because that violates the Foundation policy.
+The release check records upstream signature status but does not fail merely because an upstream OSS library is unsigned. It fails if any upstream byte changes between unsigned inventory and final verification.
 
 ### Hash/provenance only
 
@@ -169,22 +190,22 @@ The release check records upstream signature status but does not fail merely bec
 
 Do not add catalog/MSIX signatures merely to cover these formats. The final release manifest and ZIP digest cover bytes within the accepted container gap.
 
-## Artifact-configuration enforcement
+## Proposed artifact-configuration enforcement
 
-The `winmint-release` artifact configuration has a ZIP root representing the unsigned GitHub Actions artifact and recursively signs only:
+After acceptance, derive `winmint-release` from an uploaded sample of the unsigned GitHub Actions artifact. Configure the ZIP root to sign only accepted formats and paths:
 
 ```text
-WinMint-<version>/bin/cli/WinMint.*.exe
-WinMint-<version>/bin/cli/WinMint.*.dll
-WinMint-<version>/bin/wizard/WinMint.*.exe
-WinMint-<version>/bin/wizard/WinMint.*.dll
-WinMint-<version>/artifacts/provisioning/WinMint.Provisioning.exe
-WinMint-<version>/**/*.ps1
+bin/cli/WinMint.*.exe
+bin/cli/WinMint.*.dll
+bin/wizard/WinMint.*.exe
+bin/wizard/WinMint.*.dll
+artifacts/provisioning/WinMint.Provisioning.exe
+**/*.ps1
 ```
 
-The configuration explicitly excludes non-`WinMint.*` PE files. A pre-submit allowlist generated by the repository is the first defense; SignPath artifact restrictions are the second.
+These are paths relative to the release staging root. If GitHub's uploaded artifact sample adds a wrapper directory, the generated SignPath configuration must include that observed directory rather than assuming its name. The `.ps1` pattern is conditional on provider confirmation. The configuration explicitly excludes non-`WinMint.*` PE files. A pre-submit allowlist generated by the repository is the first defense; SignPath artifact restrictions are the second.
 
-SignPath file metadata restrictions for every signed PE require:
+Request these file-metadata restrictions for every signed PE and adjust only if SignPath's accepted schema requires a different field name:
 
 ```text
 ProductName = WinMint
@@ -214,8 +235,8 @@ Version=1.2.3
 VersionPrefix=1.2.3
 FileVersion=1.2.3.0
 AssemblyVersion=1.2.0.0
-InformationalVersion=1.2.3+<fullGitSha>
-RepositoryCommit=<fullGitSha>
+InformationalVersion=1.2.3+0123456789abcdef0123456789abcdef01234567
+RepositoryCommit=0123456789abcdef0123456789abcdef01234567
 RepositoryUrl=https://github.com/yanai-sh/winmint
 Product=WinMint
 Company=WinMint contributors
@@ -223,9 +244,9 @@ Company=WinMint contributors
 
 The release script rejects a tag that does not point at the checked-out commit or does not match this grammar. AssemblyVersion remains major/minor-compatible while ProductVersion/FileVersion identify the release.
 
-## Release ordering
+## Target release ordering
 
-The protected release path is:
+The current `.github/workflows/release.yml` workflow is named `release` and has one `pack` job. It builds, packages, and publishes through `tools/release/Compress-WinMintRelease.ps1`. After acceptance, replace that path with:
 
 ```text
 tag checkout
@@ -285,27 +306,28 @@ The SignPath connector verifies the artifact was produced/stored by GitHub Actio
 
 ## Signature verification
 
-Verification runs on native ARM64 Windows where possible. Resolve the Windows SDK ARM64 `signtool.exe` using the installed SDK root/version; use `PROCESSOR_ARCHITEW6432`-aware host-architecture detection and reject x64 emulation for the release gate.
+Verification runs in native ARM64 PowerShell. Require both `RuntimeInformation.OSArchitecture` and `RuntimeInformation.ProcessArchitecture` to equal `Arm64`; record `PROCESSOR_ARCHITECTURE` and `PROCESSOR_ARCHITEW6432` for diagnostics. Resolve the Windows SDK ARM64 `signtool.exe` from the installed SDK root/version and reject x64 emulation.
 
-For every required signed file:
+For every required signed PE:
 
 1. `Get-AuthenticodeSignature` status is `Valid`.
-2. signer certificate subject identifies `SignPath Foundation`.
+2. signer certificate subject matches the subject confirmed from the accepted sample.
 3. certificate chain builds with online revocation checking.
-4. the signature has an RFC 3161 timestamp.
-5. `signtool verify /pa /all /v <file>` succeeds.
+4. timestamp verification uses the method confirmed by SignPath for the accepted signing policy.
+5. `signtool verify /pa /all /v $file` succeeds.
 6. PE ProductName/ProductVersion/CompanyName match policy.
 7. final hash differs from unsigned hash and matches final manifest.
 
 For every upstream PE:
 
 1. final hash equals unsigned hash;
-2. it was not signed by the WinMint SignPath request;
-3. any existing valid publisher signature remains valid.
+2. any existing valid publisher signature remains valid.
 
 For hash/provenance-only files, final hash must equal unsigned hash unless the release manifest explicitly classifies it as generated after signing.
 
-Any missing, invalid, unexpected, multiply signed, untimestamped, wrong-publisher, wrong-version, newly added, or modified-outside-policy file fails the release.
+If `.ps1` signing is accepted, verify scripts with `Get-AuthenticodeSignature`, an explicit chain build, and the provider-confirmed timestamp method. Do not assume `signtool verify` is the script verifier.
+
+Any missing, invalid, unexpected, wrong-publisher, wrong-version, newly added, or modified-outside-policy file fails the release. Reject multiple signatures only if the accepted artifact policy forbids them.
 
 ## Bootstrap verification
 
@@ -316,30 +338,31 @@ After extraction and before launching WinMint or invoking a toolkit PowerShell h
 1. loads the payload release manifest;
 2. requires its tag/version to match the selected GitHub release;
 3. enumerates rather than trusts the manifest's file list;
-4. verifies every `WinMint.*.exe`, `WinMint.*.dll`, `Supervisor.exe`, and shipped `.ps1`;
-5. requires valid SignPath Foundation Authenticode signatures and matching final hashes;
+4. verifies every WinMint-owned PE and every shipped `.ps1` required by the accepted signing policy;
+5. requires the accepted signer identity, valid Authenticode status, and matching final hashes;
 6. rejects extra unsigned WinMint-owned PE/PowerShell files in executable locations;
 7. verifies hash-only files against the payload manifest;
 8. refuses launch on any discrepancy and reports a non-retryable integrity failure.
 
 `-Force` may redownload but may not bypass signature checks. There is no insecure switch.
 
-The `irm ... | iex` bootstrap command cannot authenticate the bootstrap script itself: piping text into `Invoke-Expression` discards Authenticode file semantics. The canonical signed-release guidance therefore downloads the versioned `winmint.ps1` to a file, verifies it is valid and published by SignPath Foundation, then executes it with `pwsh -File`. The short web bootstrap may remain documented as HTTPS/repository trust convenience, but must disclose that weaker initial trust.
+The `irm ... | iex` bootstrap command cannot authenticate the bootstrap script itself: piping text into `Invoke-Expression` discards Authenticode file semantics. The canonical signed-release guidance therefore downloads the versioned `winmint.ps1` to a file, verifies it against the accepted signer, then executes it with `pwsh -File`. The short web bootstrap may remain documented as HTTPS/repository trust convenience, but must disclose that weaker initial trust.
 
 ## Output ISO and guest trust
 
 The Output ISO is never called Authenticode-signed.
 
-Its trust is:
+Its evidence is:
 
 - `digests.outputIso.sha256` in build evidence;
 - operator verification against the built file;
-- signed WinMint compiler/servicing inputs;
 - Gate B and Primary acceptance.
 
-WinMint-owned guest files placed into the image originate from the signed release staging tree and retain their signatures. Servicing must not rewrite signed PowerShell/PE bytes after signing. Generated Profile, unattend, CMD, and evidence files remain hash/provenance artifacts.
+A future release manifest may bind the compiler/toolkit release identity to the build record. #112 does not make the ISO container signed or establish Microsoft authorship.
 
-Secure Boot validates the Microsoft boot chain, not WinMint's ISO container. Signing WinMint does not change that contract.
+The signed release stages `artifacts\provisioning\WinMint.Provisioning.exe`; ImageServicing copies it into the guest as `Supervisor.exe`. Renaming does not change its bytes. Servicing must not rewrite signed PowerShell/PE bytes after signing. Generated Profile, unattend, CMD, and evidence files remain hash/provenance artifacts.
+
+Secure Boot validates the signatures in the boot chain, including the preserved Microsoft-signed boot components. It does not authenticate WinMint's ISO container. Signing WinMint does not change that contract.
 
 ## Failure policy
 
@@ -386,11 +409,12 @@ These gaps are disclosed, not papered over with “fully signed release” langu
 - SignPath accepts and configures the project/policy/artifact configuration.
 - All prerequisites/policies are public and linked.
 - Two consecutive tag releases pass the protected workflow.
-- Every required WinMint PE/PowerShell file verifies with SignPath Foundation and a timestamp.
+- Every required WinMint PE verifies with the accepted SignPath Foundation identity and timestamp policy.
+- Every required PowerShell file verifies under the same policy, or the design is revised before enabling signed releases if SignPath does not support it.
 - No upstream binary hash changes across signing.
 - Final ZIP, checksum, manifests, SignPath request link, and GitHub attestation are published.
 - Bootstrap rejects tampered ZIP, manifest, PE, and PowerShell files before launch.
-- Bootstrap rejects a validly signed file from a different publisher/project context.
+- Bootstrap rejects a validly signed file from a different publisher and rejects a manifest with the wrong SignPath project/request context.
 - Native ARM64 release artifacts run through existing CLI/Wizard/Test checks.
 - Documentation makes no warning-free, Microsoft-endorsed, signed-ISO, or EV-reputation claim.
 

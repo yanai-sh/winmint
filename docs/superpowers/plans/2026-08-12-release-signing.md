@@ -4,7 +4,11 @@
 **Spec:** [2026-08-12-release-signing-design.md](../specs/2026-08-12-release-signing-design.md)  
 **Issue:** [#112](https://github.com/yanai-sh/winmint/issues/112)
 
-Implementation begins only after SignPath Foundation accepts the project. Documentation/policy prerequisites may land earlier. Every code slice has a runnable local check that does not require the certificate; the protected tagged workflow is the final integration check.
+Every path under **Files** was verified at the current baseline. `Add` marks a proposed path; `Modify` names an existing path unless the entry explicitly says a prior slice creates it.
+
+Before SignPath Foundation acceptance, complete slices 1 through 3 and the documentation portion of slice 9. These are provider-independent policy, metadata, inventory, and packaging-boundary changes. Do not claim signed releases.
+
+Slices 4 through 8, the provider tabletop in slice 9, and final acceptance are blocked until SignPath accepts the project. Before starting them, confirm the accepted artifact formats, certificate subject, timestamp verification method, artifact-configuration schema, source/build policy availability, and `windows-11-arm` origin acceptance. Every code slice retains a runnable local check; the protected tagged workflow is the final integration check.
 
 ## 1. Publish eligibility, privacy, and code-signing policy
 
@@ -15,6 +19,8 @@ Implementation begins only after SignPath Foundation accepts the project. Docume
 - Add `docs/CODE_SIGNING.md`
 - Modify `README.md`
 - Add `docs/runbooks/release-signing-incident.md`
+- Add `tests/contract/Test-ReleaseSigningPolicy.ps1`
+- Modify `Justfile`
 
 **Required content**
 
@@ -22,10 +28,10 @@ Implementation begins only after SignPath Foundation accepts the project. Docume
 
   > Free code signing provided by SignPath.io, certificate by SignPath Foundation.
 
-- Publisher shown by Windows: `SignPath Foundation`.
-- Repository authors/reviewers/approvers and links to current GitHub role listings.
+- Expected Windows publisher: `SignPath Foundation`; replace this expectation with the exact display confirmed from the accepted sample.
+- Named repository authors/reviewers/approvers and links only where GitHub exposes a truthful public listing.
 - Manual approval requirement.
-- Files signed and intentionally not signed.
+- Current unsigned status, planned signed classes, and intentionally hash-only classes.
 - No SmartScreen/antivirus guarantee and no “signed ISO” claim.
 - Elevated mutation/destructive WinPE warning.
 - Portable-toolkit removal and self-erasing Supervisor behavior.
@@ -47,7 +53,7 @@ Expected initially: missing-file failures.
 
 **Green**
 
-Write the policies and link “Code signing policy” from README's download/release section. Submit the repository to SignPath Foundation only after the policy check passes. Record the application URL/status privately if it contains account data; record acceptance publicly on #112.
+Write the policies and link “Code signing policy” from README's download/release section. Submit the repository to SignPath Foundation only after the policy check passes. Record the application URL/status privately if it contains account data; record acceptance publicly on #112. This slice does not configure SignPath or alter `.github/workflows/release.yml`.
 
 **Commit:** `docs: publish release signing and privacy policy`
 
@@ -70,7 +76,7 @@ v1.2.3
 Version=1.2.3
 FileVersion=1.2.3.0
 AssemblyVersion=1.2.0.0
-InformationalVersion=1.2.3+<fullGitSha>
+InformationalVersion=1.2.3+0123456789abcdef0123456789abcdef01234567
 ```
 
 Set in MSBuild:
@@ -121,21 +127,21 @@ dotnet test tests/WinMint.Tests/WinMint.Tests.csproj
 
 ```powershell
 Publish-WinMintRelease.ps1
-  -Tag <vMAJOR.MINOR.PATCH>
-  -StageRoot <path>
+  -Tag v1.2.3
+  -StageRoot C:\WinMintRelease\unsigned
   -Runtime win-arm64
   -Configuration Release
 
 Get-WinMintReleaseInventory.ps1
-  -StageRoot <path>
-  -Tag <tag>
+  -StageRoot C:\WinMintRelease\unsigned
+  -Tag v1.2.3
   -Phase Unsigned|Signed
-  -OutFile <manifest.json>
+  -OutFile C:\WinMintRelease\unsigned-manifest.json
 
 Compress-WinMintRelease.ps1
-  -Tag <tag>
-  -StageRoot <already-signed-path>
-  -OutDir <path>
+  -Tag v1.2.3
+  -StageRoot C:\WinMintRelease\signed
+  -OutDir C:\WinMintRelease\assets
 ```
 
 Publish owns `dotnet publish` and copying toolkit files. Compress never builds, restores, or changes staged files. It creates only the final ZIP and `.sha256`.
@@ -158,7 +164,7 @@ Contract fixtures contain WinMint PE names, upstream names, scripts, config, and
 
 - expected classification;
 - unknown executable/script fails;
-- only WinMint classes are eligible for SignPath;
+- only WinMint classes are signing candidates, with PowerShell eligibility gated on provider confirmation;
 - no upstream path matches the signing allowlist;
 - final compressor does not invoke `dotnet`;
 - final hash format remains lowercase SHA-256 plus filename.
@@ -185,6 +191,8 @@ just release-contract
 
 ## 4. Configure SignPath Foundation project
 
+**External prerequisite:** Start this slice only after SignPath Foundation accepts `yanai-sh/winmint`. Treat every slug below as requested until the provider creates it.
+
 **External configuration**
 
 Create exactly:
@@ -201,15 +209,15 @@ Install the SignPath GitHub App for `yanai-sh/winmint` and link the project to t
 The artifact configuration root is the ZIP produced by GitHub `upload-artifact`. Configure recursive signing for only:
 
 ```text
-WinMint-*/bin/cli/WinMint.*.exe
-WinMint-*/bin/cli/WinMint.*.dll
-WinMint-*/bin/wizard/WinMint.*.exe
-WinMint-*/bin/wizard/WinMint.*.dll
-WinMint-*/artifacts/provisioning/WinMint.Provisioning.exe
-WinMint-*/**/*.ps1
+bin/cli/WinMint.*.exe
+bin/cli/WinMint.*.dll
+bin/wizard/WinMint.*.exe
+bin/wizard/WinMint.*.dll
+artifacts/provisioning/WinMint.Provisioning.exe
+**/*.ps1
 ```
 
-Add PE metadata restrictions from the design. Confirm the PowerShell file format uses Authenticode with RFC 3161 timestamping. If SignPath cannot sign `.ps1` in this artifact configuration, stop and update the design/issue; do not drop scripts silently.
+Treat those as staging-root-relative paths. Upload a representative artifact first and include any wrapper directory observed in the provider-generated configuration. Add PE metadata restrictions from the design. Submit a representative PE and `.ps1` sample. Record the exact certificate subject, Windows publisher display, supported timestamp type, and verification commands. If SignPath cannot sign `.ps1` in this artifact configuration, stop and update the design/issue; do not drop scripts silently.
 
 Signing policy `release-signing`:
 
@@ -221,11 +229,11 @@ Signing policy `release-signing`:
 
 **Repository files**
 
-- Add `.signpath/policies/winmint/release-signing.yml`
+- Add `.signpath/policies/winmint/release-signing.yml` only if the accepted subscription supports and validates this source/build policy
 - Add `.github/CODEOWNERS` only if it reflects actual maintainers; assign `.github/workflows/release.yml`, `.signpath/`, and `tools/release/`
-- Extend `tests/contract/Test-ReleaseSigningPolicy.ps1`
+- Extend proposed `tests/contract/Test-ReleaseSigningPolicy.ps1` from slice 1
 
-Policy YAML:
+Conditional policy YAML:
 
 ```yaml
 github-policies:
@@ -235,18 +243,18 @@ github-policies:
     disallow_reruns: true
 ```
 
-Do not add branch-review assertions that the solo repository does not enforce.
+Do not commit this file if the accepted tier does not support it. Do not add branch-review assertions that the solo repository does not enforce.
 
 **GitHub environment**
 
 Create `release-signing` and set:
 
 ```text
-Environment variable SIGNPATH_ORGANIZATION_ID=<provider-assigned value>
+Environment variable SIGNPATH_ORGANIZATION_ID
 Environment variable SIGNPATH_PROJECT_SLUG=winmint
 Environment variable SIGNPATH_ARTIFACT_CONFIGURATION_SLUG=winmint-release
 Environment variable SIGNPATH_SIGNING_POLICY_SLUG=release-signing
-Environment secret   SIGNPATH_API_TOKEN=<submitter-only token>
+Environment secret   SIGNPATH_API_TOKEN
 ```
 
 The provider-assigned organization ID and token are the only values not stored in the repository. No certificate/PFX secret is created.
@@ -263,23 +271,25 @@ Then submit SignPath's sample artifact from a temporary workflow and verify manu
 
 ## 5. Verify signed payloads fail closed
 
+**External prerequisite:** Use the accepted sample and recorded provider contract from slice 4. Do not invent signer or timestamp fixtures before those values are known.
+
 **Files**
 
 - Add `tools/release/Test-WinMintSignedRelease.ps1`
 - Add `tests/contract/Test-SignedReleaseVerification.ps1`
-- Modify `Get-WinMintReleaseInventory.ps1`
+- Modify proposed `tools/release/Get-WinMintReleaseInventory.ps1` from slice 3
 - Modify `Justfile`
 
 **Interface**
 
 ```powershell
 Test-WinMintSignedRelease.ps1
-  -UnsignedManifest <path>
-  -SignedStageRoot <path>
-  -Tag <tag>
-  -SignPathRequestId <id>
-  -SignPathRequestUrl <https-url>
-  -OutFile <release-manifest.json>
+  -UnsignedManifest C:\WinMintRelease\unsigned-manifest.json
+  -SignedStageRoot C:\WinMintRelease\signed
+  -Tag v1.2.3
+  -SignPathRequestId $requestId
+  -SignPathRequestUrl $requestUrl
+  -OutFile C:\WinMintRelease\release-manifest.json
 ```
 
 The verifier:
@@ -288,23 +298,24 @@ The verifier:
 - rejects additions/removals/unknown executable files;
 - checks required WinMint files with `Get-AuthenticodeSignature`;
 - builds signer chain with online revocation;
-- requires signer subject `SignPath Foundation`;
-- locates native ARM64 Windows SDK `signtool.exe` and runs `/pa /all /v`;
-- requires RFC 3161 timestamp evidence;
+- requires the signer subject confirmed from the accepted sample;
+- locates native ARM64 Windows SDK `signtool.exe` and runs `/pa /all /v` for PE files;
+- verifies timestamps with the provider-confirmed method;
 - checks PE metadata;
 - proves each upstream/hash-only file hash is unchanged;
-- rejects any upstream file signed by this request/policy;
+- rejects any upstream file whose bytes changed after unsigned inventory;
 - writes final per-file hashes/status and request identity.
 
-Host architecture detection uses:
+Require `RuntimeInformation.OSArchitecture` and `RuntimeInformation.ProcessArchitecture` to equal `Arm64`. Record these environment values for diagnostics:
 
 ```text
 PROCESSOR_ARCHITECTURE
 PROCESSOR_ARCHITEW6432
 RuntimeInformation.OSArchitecture
+RuntimeInformation.ProcessArchitecture
 ```
 
-and fails the protected release if not native ARM64.
+Fail the protected release if PowerShell is not native ARM64.
 
 **Red**
 
@@ -317,7 +328,7 @@ Fixture tests use:
 - missing timestamp fixture;
 - extra executable fixture.
 
-Abstract only signature inspection/command invocation behind scriptblocks so fixtures do not need SignPath. Production defaults use Windows APIs/SignTool.
+Abstract only signature inspection/command invocation behind scriptblocks so fixtures do not need live SignPath access. Production defaults use Windows APIs and SignTool for PE verification. If `.ps1` signing is accepted, use `Get-AuthenticodeSignature`, explicit chain validation, and the provider-confirmed timestamp method; do not assume SignTool verifies scripts.
 
 Run:
 
@@ -329,11 +340,7 @@ Expected: missing verifier, then one focused failure per invalid fixture.
 
 **Green**
 
-Implement verifier and final manifest. Resolve SignTool from:
-
-```text
-${env:ProgramFiles(x86)}\Windows Kits\10\bin\<highest-version>\arm64\signtool.exe
-```
+Implement the verifier and final manifest. Enumerate version directories under `${env:ProgramFiles(x86)}\Windows Kits\10\bin`, parse valid SDK versions, select the highest version containing `arm64\signtool.exe`, and record the resolved path.
 
 Fail if native ARM64 SignTool is absent; do not silently use x64.
 
@@ -341,11 +348,13 @@ Fail if native ARM64 SignTool is absent; do not silently use x64.
 
 ## 6. Build the protected tagged workflow
 
+**External prerequisite:** Replace the current `release` workflow's single `pack` job only after slices 4 and 5 pass against an accepted sample.
+
 **Files**
 
 - Modify `.github/workflows/release.yml`
 - Add `tools/release/New-WinMintReleaseManifests.ps1` only if inventory/verifier cannot remain narrow
-- Extend `tests/contract/Test-ReleaseSigningPolicy.ps1`
+- Extend proposed `tests/contract/Test-ReleaseSigningPolicy.ps1` from slice 1
 
 **Jobs**
 
@@ -360,9 +369,11 @@ Fail if native ARM64 SignTool is absent; do not silently use x64.
    - same GitHub-hosted runner class;
    - `actions: read`, `contents: read`;
    - `environment: release-signing`;
-   - submit exactly the prior artifact ID using `signpath/github-action-submit-signing-request@v2`;
+   - submit exactly the prior artifact ID using SignPath's submit-signing-request action pinned to a full commit SHA;
    - `wait-for-completion: true`;
-   - output signed staging and request ID/URL;
+   - set `wait-for-completion-timeout-in-seconds: 2700`;
+   - download signed staging through `output-artifact-directory`;
+   - capture `signing-request-id` and `signing-request-web-url`;
    - run signed-release verifier.
 3. `package-attest-publish`
    - download only verified signed staging;
@@ -374,26 +385,19 @@ Fail if native ARM64 SignTool is absent; do not silently use x64.
 Required final assets:
 
 ```text
-WinMint-<tag>.zip
-WinMint-<tag>.zip.sha256
-WinMint-<tag>.unsigned-manifest.json
-WinMint-<tag>.release-manifest.json
+WinMint-v1.2.3.zip
+WinMint-v1.2.3.zip.sha256
+WinMint-v1.2.3.unsigned-manifest.json
+WinMint-v1.2.3.release-manifest.json
 ```
 
 Release notes link the SignPath request and GitHub attestation.
 
 **Action pinning**
 
-Before editing workflow, resolve each chosen action tag to its current immutable commit:
+Before editing the workflow, choose current supported releases for SignPath submission, artifact upload/download, attestation, checkout, .NET setup, and GitHub Release publishing. Resolve each selected tag through `gh api repos/{owner}/{repository}/git/ref/tags/{tag}`. If the tag is annotated, dereference its object to the commit.
 
-```powershell
-gh api repos/SignPath/github-action-submit-signing-request/git/ref/tags/v2
-gh api repos/actions/upload-artifact/git/ref/tags/v4
-gh api repos/actions/download-artifact/git/ref/tags/v4
-gh api repos/actions/attest-build-provenance/git/ref/tags/v3
-```
-
-If a tag is annotated, dereference its object to the commit. Commit full SHAs with version comments. Never put mutable tags in the merged workflow.
+Commit full SHAs with version comments. Replace the current mutable `softprops/action-gh-release@v2` reference. Never put mutable tags in the merged workflow.
 
 **Red**
 
@@ -419,11 +423,13 @@ Expected: current one-job workflow fails.
 
 **Green**
 
-Implement workflow. Set signing wait timeout to 45 minutes and workflow timeout to 90 minutes to allow manual approval. Keep per-tag non-cancelling concurrency.
+Implement the workflow. Set job/workflow timeouts to allow the 45-minute signing wait and subsequent verification/package work. Keep per-tag non-cancelling concurrency.
 
 **Commit:** `ci: sign and attest protected releases`
 
 ## 7. Verify release trust in bootstrap
+
+**External prerequisite:** Implement against the accepted manifest, signer, and `.ps1` policy from slices 4 through 6.
 
 **Files**
 
@@ -444,7 +450,7 @@ After ZIP hash verification/extraction and before any extracted script/executabl
 
 - match manifest tag/version to GitHub release;
 - enumerate executable/script paths independently;
-- require valid SignPath Foundation signatures for WinMint PE/PS1;
+- require valid signatures from the accepted signer for every WinMint PE and each `.ps1` covered by policy;
 - require listed final hashes;
 - reject extra WinMint executable/script files;
 - require unchanged hashes for hash-only payload;
@@ -474,7 +480,7 @@ Expected: new trust cases fail.
 
 **Green**
 
-Implement verification and update bootstrap asset selection to download the release manifest. Update canonical README command to download the versioned signed bootstrap file, call `Get-AuthenticodeSignature`, require `Valid` + `SignPath Foundation`, then execute with `pwsh -File`.
+Implement verification and update bootstrap asset selection to download the release manifest. Update the canonical README command to download the versioned signed bootstrap file, call `Get-AuthenticodeSignature`, require `Valid` plus the signer subject confirmed in slice 4, then execute with `pwsh -File`.
 
 Keep `irm https://winmint.yanai.sh | iex` only in a clearly labeled convenience section that states the initial HTTPS/repository trust gap.
 
@@ -482,21 +488,23 @@ Keep `irm https://winmint.yanai.sh | iex` only in a clearly labeled convenience 
 
 ## 8. Sign and publish the bootstrap script
 
+**External prerequisite:** SignPath must confirm `.ps1` support. If it does not, stop and revise the bootstrap trust design before this slice.
+
 **Files**
 
-- Modify `tools/release/Publish-WinMintRelease.ps1`
+- Modify proposed `tools/release/Publish-WinMintRelease.ps1` from slice 3
 - Modify `.github/workflows/release.yml`
-- Modify `tools/release/Get-WinMintReleaseInventory.ps1`
-- Modify `tools/release/Test-WinMintSignedRelease.ps1`
+- Modify proposed `tools/release/Get-WinMintReleaseInventory.ps1` from slice 3
+- Modify proposed `tools/release/Test-WinMintSignedRelease.ps1` from slice 5
 - Modify `README.md`
 
 **Behavior**
 
-- Copy repository `winmint.ps1` into unsigned staging as `WinMint-<tag>\bootstrap\winmint.ps1`.
+- Copy repository `winmint.ps1` into unsigned staging as `bootstrap\winmint.ps1`, relative to `StageRoot`.
 - Sign it through the same SignPath request.
 - Verify it under the same publisher/timestamp policy.
-- Publish the exact signed copy as `winmint-<tag>.ps1` release asset.
-- Publish `winmint-<tag>.ps1.sha256`.
+- Publish the exact signed copy as `winmint-v1.2.3.ps1` release asset, substituting the actual tag.
+- Publish `winmint-v1.2.3.ps1.sha256`, substituting the actual tag.
 - Configure `winmint.yanai.sh` separately to serve/redirect to that immutable signed asset; never generate a different script at the edge.
 
 The source-tree `winmint.ps1` remains unsigned to avoid committing generated signature blocks. Only the staged release copy is signed.
@@ -509,23 +517,26 @@ pwsh -NoProfile -File tests/contract/Test-SignedReleaseVerification.ps1
 pwsh -NoProfile -File tests/contract/Test-BootstrapContract.ps1
 ```
 
-Expected: staged bootstrap is required, signed, hash-published, and byte-identical to the website's immutable release target.
+Expected locally: the staged bootstrap is required, signed, and hash-published. After configuring `winmint.yanai.sh`, fetch its immutable target and record a separate byte-identity check.
 
 **Commit:** `feat(release): publish a signed bootstrap script`
 
 ## 9. Exercise rejection and incident paths
 
+Write the runbook content in slice 1 before acceptance. Run the tabletop steps below only after the SignPath project, environment, and draft protected workflow exist.
+
 **Files**
 
-- Extend `docs/runbooks/release-signing-incident.md`
+- Extend proposed `docs/runbooks/release-signing-incident.md` from slice 1
 - Add `tools/release/Disable-WinMintRelease.ps1` only if GitHub's normal draft/delete commands cannot express the safe operation
-- Extend `tests/contract/Test-ReleaseSigningPolicy.ps1`
+- Extend proposed `tests/contract/Test-ReleaseSigningPolicy.ps1` from slice 1
 
 Prefer documented `gh` commands over a wrapper:
 
 ```powershell
-gh release edit <tag> --draft
-gh release delete-asset <tag> <asset> --yes
+$tag = 'v1.2.3'
+gh release edit $tag --draft
+gh release delete-asset $tag 'WinMint-v1.2.3.zip' --yes
 gh secret delete SIGNPATH_API_TOKEN --env release-signing
 ```
 
@@ -569,11 +580,12 @@ Create a release-candidate tag in the approved process. The GitHub-hosted native
 - immutable artifact ID accepted by SignPath;
 - manual SignPath approval;
 - complete signed payload returned;
-- every WinMint PE/PS1 valid, timestamped, and published by SignPath Foundation;
+- every WinMint PE valid under the accepted signer and timestamp policy;
+- every `.ps1` required by the accepted policy valid under its provider-confirmed verification method;
 - every upstream/hash-only byte unchanged;
 - final ZIP/hash/manifests/attestation/bootstrap assets published;
 - clean-machine bootstrap verifies before launch;
-- CLI and Wizard start natively on Windows ARM64;
+- CLI and Wizard start with both operating-system and process architecture reported as `Arm64`;
 - Supervisor remains valid after staging into an Output ISO;
 - no release note claims signed ISO, Microsoft endorsement, warning-free behavior, or EV reputation.
 
