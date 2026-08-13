@@ -21,7 +21,7 @@ You supply the official Microsoft ISO. WinMint does not download or redistribute
 
 WinMint is Alpha. You can plan and build ISOs today. A full wipe install (USB → WinPE → OOBE → FirstLogon) is something you run on your own hardware; land the results in the repo when you have them. Gate B (`just primary-gate` / Wizard **Release → Build**) is pre-wipe ISO evidence only — it is not the same as a completed install.
 
-GitHub Releases are unsigned. [Code signing policy](docs/CODE_SIGNING.md).
+GitHub Releases are unsigned. Authenticode is deferred. [Code signing policy](docs/CODE_SIGNING.md).
 
 ## Quickstart
 

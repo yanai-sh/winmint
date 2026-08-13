@@ -6,9 +6,9 @@
 
 Every path under **Files** was verified at the current baseline. `Add` marks a proposed path; `Modify` names an existing path unless the entry explicitly says a prior slice creates it.
 
-Before SignPath Foundation acceptance, complete slices 1 through 3 and the documentation portion of slice 9. These are provider-independent policy, metadata, inventory, and packaging-boundary changes. Do not claim signed releases.
+**Parked.** Slices 1–3 are done. Authenticode is deferred. Do not start slices 4–10, apply to SignPath, or add a signing workflow until a non-maintainer is expected to run a GitHub Release PE.
 
-Slices 4 through 8, the provider tabletop in slice 9, and final acceptance are blocked until SignPath accepts the project. Before starting them, confirm the accepted artifact formats, certificate subject, timestamp verification method, artifact-configuration schema, source/build policy availability, and `windows-11-arm` origin acceptance. Every code slice retains a runnable local check; the protected tagged workflow is the final integration check.
+If that event happens, slices 4 through 8, the provider tabletop in slice 9, and final acceptance stay blocked until SignPath accepts the project. Before starting them, confirm the accepted artifact formats, certificate subject, timestamp verification method, artifact-configuration schema, source/build policy availability, and `windows-11-arm` origin acceptance.
 
 ## 1. Publish eligibility, privacy, and code-signing policy
 
@@ -53,7 +53,7 @@ Expected initially: missing-file failures.
 
 **Green**
 
-Write the policies and link “Code signing policy” from README's download/release section. Submit the repository to SignPath Foundation only after the policy check passes. Record the application URL/status privately if it contains account data; record acceptance publicly on #112. This slice does not configure SignPath or alter `.github/workflows/release.yml`.
+Write the policies and link “Code signing policy” from README's download/release section. Do not submit the repository to SignPath Foundation. This slice does not configure SignPath or alter `.github/workflows/release.yml`.
 
 **Commit:** `docs: publish release signing and privacy policy`
 

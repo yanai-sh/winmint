@@ -130,7 +130,7 @@ The first optimization target is the measured dominant stage. Replacing DISM/osc
 
 Use SignPath Foundation if the project is accepted and its approved artifact configuration covers WinMint's required file types. It fits the GPLv3/public-repository shape and avoids maintainer private-key custody. The displayed publisher is SignPath Foundation, and every signing request requires manual approval.
 
-Before applying, the project must publish code-signing and privacy policies, identify signing roles, document system changes and removal, and keep product/version metadata consistent. Provider configuration and signing implementation remain blocked until acceptance. Sign only WinMint-owned files that the accepted policy covers. See [SignPath Foundation conditions](https://signpath.org/terms.html) and [GitHub integration](https://docs.signpath.io/trusted-build-systems/github).
+Applying is deferred until a non-maintainer is expected to run a GitHub Release PE. Before applying, the project must publish code-signing and privacy policies, identify signing roles, document system changes and removal, and keep product/version metadata consistent. Provider configuration and signing implementation remain blocked until acceptance. Sign only WinMint-owned files that the accepted policy covers. See [SignPath Foundation conditions](https://signpath.org/terms.html) and [GitHub integration](https://docs.signpath.io/trusted-build-systems/github).
 
 ### 4. Effective-plan disclosure
 

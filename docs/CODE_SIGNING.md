@@ -4,9 +4,11 @@ Free code signing provided by SignPath.io, certificate by SignPath Foundation.
 
 ## Status
 
-Current GitHub Releases are **unsigned**. Do not describe them as Authenticode, signed, or a signed Release. **Release** in WinMint is an image-quality Lane (`Test` | `Release`), not a GitHub artifact class. A GitHub Release is the toolkit drop.
+Current GitHub Releases are **unsigned**. Authenticode is deferred: there is no publisher-trust problem until someone other than the maintainer is expected to run a GitHub Release PE. Do not apply to SignPath Foundation, install the SignPath GitHub App, or add a signing workflow until that happens.
 
-Authenticode, when enabled after SignPath Foundation acceptance, is a timestamped publisher signature on WinMint-owned PE files, and on `.ps1` only if the accepted artifact policy covers scripts. The publisher is the certificate holder (**SignPath Foundation**), not the WinMint product name, the maintainer, or Microsoft.
+Do not describe GitHub Releases as Authenticode, signed, or a signed Release. **Release** in WinMint is an image-quality Lane (`Test` | `Release`), not a GitHub artifact class. A GitHub Release is the toolkit drop.
+
+If Authenticode is ever enabled, SignPath Foundation remains the preferred route. Authenticode would then be a timestamped publisher signature on WinMint-owned PE files, and on `.ps1` only if the accepted artifact policy covers scripts. The publisher is the certificate holder (**SignPath Foundation**), not the WinMint product name, the maintainer, or Microsoft.
 
 The Output ISO is a Digest. It is never Authenticode-signed as a container. Calling it a signed ISO is false.
 

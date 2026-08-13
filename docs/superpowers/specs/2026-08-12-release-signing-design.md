@@ -9,7 +9,9 @@ Repository-relative paths in this document exist unless marked **proposed**. Pro
 
 ## Decision
 
-WinMint applies to the free SignPath Foundation program as its preferred public code-signing route.
+Authenticode is deferred. WinMint has no downloaders other than the maintainer. Do not apply to SignPath Foundation, install the SignPath GitHub App, or add a signing workflow until someone other than the maintainer is expected to run `WinMint.Cli.exe` or `WinMint.Wizard.exe` from a GitHub Release.
+
+SignPath Foundation remains the preferred public code-signing route if that event happens.
 
 If accepted, the release pipeline Authenticode-signs WinMint-owned Portable Executable (PE) files after build/test and before final packaging. PowerShell signing is required only if SignPath confirms `.ps1` support in the approved artifact configuration and identifies the timestamp and verification contract. The pipeline preserves upstream bytes and signatures. The final ZIP and Output ISO are integrity/provenance artifacts, not Authenticode-signed executables.
 
@@ -69,7 +71,7 @@ SmartScreen reputation varies by file hash, publisher certificate, prevalence, a
 
 ## Work allowed before acceptance
 
-WinMint can complete these repository policy tasks before SignPath Foundation accepts the application:
+Do not apply to SignPath until a non-maintainer is expected to run a GitHub Release PE. These repository policy tasks may exist before that event:
 
 1. Publish `SECURITY.md` (**proposed**), `PRIVACY.md` (**proposed**), and `docs/CODE_SIGNING.md` (**proposed**).
 2. Link the code-signing policy from `README.md`.
@@ -77,7 +79,7 @@ WinMint can complete these repository policy tasks before SignPath Foundation ac
 4. Normalize WinMint-owned PE version metadata and add local inventory tests.
 5. Split the current build-and-package behavior in `tools/release/Compress-WinMintRelease.ps1` without claiming signed output.
 
-Provider configuration, SignPath credentials, signing requests, provider-specific artifact rules, signed-file verification fixtures, and the protected tagged workflow remain blocked on acceptance and configuration discovery.
+Provider configuration, SignPath credentials, signing requests, provider-specific artifact rules, signed-file verification fixtures, and the protected tagged workflow remain blocked until Authenticode is warranted and SignPath accepts the project.
 
 ## Eligibility and provider prerequisites
 

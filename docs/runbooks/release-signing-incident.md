@@ -1,6 +1,6 @@
 # Incident: Authenticode / GitHub Release compromise
 
-Use this when a GitHub Release, SignPath certificate, API token, or workflow may be compromised, or SignPath notifies the project.
+Use this when a GitHub Release, SignPath certificate, API token, or workflow may be compromised, or SignPath notifies the project. There is no signing pipeline today; these steps apply only after one exists.
 
 1. Disable the `release` workflow and the `release-signing` environment secret (`SIGNPATH_API_TOKEN`) so nothing new publishes.
 2. Notify SignPath and request project/policy suspension and certificate/request revocation as they advise.

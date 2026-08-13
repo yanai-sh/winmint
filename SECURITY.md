@@ -14,9 +14,9 @@ ImageServicing mutates a user-supplied Microsoft **Source ISO** offline (elevate
 
 ## Authenticode and GitHub Releases
 
-GitHub Releases are **explicitly unsigned** until SignPath Foundation accepts the project and a protected workflow verifies every required artifact. Do not call a GitHub Release, ZIP, or Output ISO Authenticode-signed.
+GitHub Releases are **explicitly unsigned**. Authenticode is deferred until someone other than the maintainer is expected to run a GitHub Release PE. Do not apply to SignPath Foundation or add a signing workflow until that happens. Do not call a GitHub Release, ZIP, or Output ISO Authenticode-signed.
 
-When that pipeline exists:
+If that pipeline is ever built:
 
 - **Authenticode** is a timestamped publisher signature on WinMint-owned PE files (and on `.ps1` only if the accepted policy covers scripts).
 - The Windows publisher is expected to display **SignPath Foundation** (confirm from the first accepted sample).
