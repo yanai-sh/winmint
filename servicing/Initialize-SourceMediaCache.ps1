@@ -391,3 +391,64 @@ function Initialize-WinMintPreparedMedia {
     }
     throw 'Prepared media failed validation after prepare'
 }
+
+function Copy-WinMintRunMedia {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    param(
+        [Parameter(Mandatory)] [string] $PreparedMedia,
+        [Parameter(Mandatory)] [string] $MediaDir,
+        [System.Collections.IDictionary] $ExpectedIdentity,
+        $Commands
+    )
+    if (-not (Test-Path -LiteralPath $PreparedMedia -PathType Container)) {
+        throw "Prepared media missing: $PreparedMedia"
+    }
+
+    $parent = Split-Path -Parent $MediaDir
+    $leaf = Split-Path -Leaf $MediaDir
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    $previous = $null
+    if (Test-Path -LiteralPath $MediaDir) {
+        $stamp = [datetime]::UtcNow.ToString('yyyyMMddHHmmss')
+        $previousName = $leaf + '.previous-' + $stamp + '-' + [guid]::NewGuid().ToString('N')
+        Rename-Item -LiteralPath $MediaDir -NewName $previousName
+        $previous = Join-Path $parent $previousName
+        if (-not (Test-Path -LiteralPath $previous)) {
+            throw "Could not move existing staged media aside: $MediaDir"
+        }
+    }
+
+    $incoming = Join-Path $parent ($leaf + '.incoming-' + [guid]::NewGuid().ToString('N'))
+    Copy-WinMintMediaTree -Source $PreparedMedia -Destination $incoming -Commands $Commands
+    Clear-WinMintTreeReadOnly $incoming
+    $wim = Join-Path $incoming 'sources\install.wim'
+    if (-not (Test-Path -LiteralPath $wim -PathType Leaf)) {
+        throw 'install.wim missing under staged incoming media'
+    }
+    $snap = Get-WinMintCachedWimSnapshot -WimFile $wim -Index 1 -Commands $Commands
+    if ([int]$snap.IndexCount -ne 1) {
+        throw "Staged install.wim has $($snap.IndexCount) indexes (need 1)"
+    }
+    Assert-WimMetadataPresent -Snapshot $snap -Context 'Staged media'
+    if ($ExpectedIdentity -and -not (Test-WinMintSelectedImage -Snapshot $snap -ExpectedIdentity $ExpectedIdentity)) {
+        throw 'Staged install.wim does not match the approved selected-image metadata.'
+    }
+    Rename-Item -LiteralPath $incoming -NewName $leaf
+
+    [pscustomobject]@{
+        MediaDir      = $MediaDir
+        PreviousMedia = $previous
+    }
+}
+
+function Assert-WinMintMountImagePath {
+    param(
+        [Parameter(Mandatory)] [string] $ImageFile,
+        [Parameter(Mandatory)] [string] $CacheRoot
+    )
+    $img = [IO.Path]::GetFullPath($ImageFile)
+    $root = [IO.Path]::GetFullPath($CacheRoot).TrimEnd([char]'\') + '\'
+    if ($img.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to mount a WIM under prepared-media root: $ImageFile"
+    }
+}

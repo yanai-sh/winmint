@@ -13,6 +13,9 @@ $mediaDir = $Parameters['mediaDir']
 $wimIndex = $Parameters['wimIndex']
 $workDir = $Parameters['workDirectory']
 $sourceIsoSha256 = $Parameters['sourceIsoSha256']
+$sourceIsoLength = $Parameters['sourceIsoLength']
+$cacheSchema = $Parameters['cacheSchema']
+$cacheRoot = $Parameters['cacheRoot']
 $imageName = $Parameters['imageName']
 $imageArchitecture = $Parameters['architecture']
 $imageEdition = $Parameters['imageEdition']
@@ -22,6 +25,10 @@ if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
 if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
 if ([string]::IsNullOrWhiteSpace($wimIndex)) { throw 'wimIndex required' }
 if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
+if ([string]::IsNullOrWhiteSpace($sourceIsoSha256)) { throw 'sourceIsoSha256 required' }
+if ([string]::IsNullOrWhiteSpace($sourceIsoLength)) { throw 'sourceIsoLength required' }
+if ([string]::IsNullOrWhiteSpace($cacheSchema)) { throw 'cacheSchema required' }
+if ([string]::IsNullOrWhiteSpace($cacheRoot)) { throw 'cacheRoot required' }
 if (-not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sourceIso" }
 
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
@@ -29,7 +36,6 @@ if (-not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sou
 
 New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
 
-$wimFile = Join-Path $mediaDir 'sources\install.wim'
 $expectedIdentity = [ordered]@{
     sourceIsoSha256 = $sourceIsoSha256
     wimIndex = [int]$wimIndex
@@ -39,87 +45,39 @@ $expectedIdentity = [ordered]@{
     build = $imageBuild
 }
 
-if (Test-Path -LiteralPath $mediaDir) {
-    Remove-Item -LiteralPath $mediaDir -Recurse -Force
-}
-New-Item -ItemType Directory -Force -Path $mediaDir | Out-Null
-Write-Output "Mounting ISO $sourceIso"
-$disk = Mount-DiskImage -ImagePath $sourceIso -PassThru
-try {
-    Start-Sleep -Seconds 2
-    $letter = ($disk | Get-Volume | Select-Object -First 1).DriveLetter
-    if ([string]::IsNullOrWhiteSpace($letter)) { throw 'ISO mounted but no drive letter' }
-    $isoRoot = "${letter}:"
-    Write-Output "ISO at $isoRoot — copying media to $mediaDir"
-    & robocopy.exe $isoRoot $mediaDir /E /COPY:DAT /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Host
-    $rc = $LASTEXITCODE
-    if ($rc -ge 8) { throw "robocopy failed with exit $rc" }
-}
-finally {
-    Dismount-DiskImage -ImagePath $sourceIso | Out-Null
-}
+Write-Output 'Validating prepared media'
+$prepared = Initialize-WinMintPreparedMedia `
+    -SourceIso $sourceIso `
+    -SourceIsoSha256 $sourceIsoSha256 `
+    -SourceIsoLength ([long]$sourceIsoLength) `
+    -WimIndex ([int]$wimIndex) `
+    -Schema ([int]$cacheSchema) `
+    -CacheRoot $cacheRoot `
+    -ExpectedIdentity $expectedIdentity
 
-Get-ChildItem -LiteralPath $mediaDir -Recurse -Force -File | ForEach-Object {
-    if ($_.IsReadOnly) { $_.IsReadOnly = $false }
-}
+Write-Output 'Copying staged media'
+Copy-WinMintRunMedia `
+    -PreparedMedia (Join-Path $prepared.EntryPath 'media') `
+    -MediaDir $mediaDir `
+    -ExpectedIdentity $expectedIdentity | Out-Null
 
-if (-not (Test-Path -LiteralPath $wimFile)) {
-    $esd = Join-Path $mediaDir 'sources\install.esd'
-    if (Test-Path -LiteralPath $esd) { throw 'install.esd present; convert to WIM before Apply (not implemented)' }
-    throw "install.wim missing under $mediaDir\sources"
-}
-
-$mountIndex = [int]$wimIndex
-$probe = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
-$indexCount = [int]$probe.IndexCount
-if ($indexCount -eq 1) {
-    $mountIndex = 1
-    $beforeExport = $probe
-}
-else {
-    $beforeExport = Get-WimMetadataSnapshot -WimFile $wimFile -Index $mountIndex
-}
-
-if ($indexCount -gt 1) {
-    Write-Output "Multi-index WIM ($indexCount indexes) — exporting index $wimIndex ($($beforeExport.Name))"
-    Clear-WimReadOnly -WimFile $wimFile
-    $tmp = Join-Path $mediaDir 'sources\install.single.wim'
-    if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force }
-    & dism.exe /English /Export-Image /SourceImageFile:$wimFile /SourceIndex:$wimIndex /DestinationImageFile:$tmp /Compress:fast
-    if ($LASTEXITCODE -ne 0) { throw "Export-Image (single-index) failed: $LASTEXITCODE" }
-    Remove-Item -LiteralPath $wimFile -Force
-    Move-Item -LiteralPath $tmp -Destination $wimFile -Force
-    Clear-WimReadOnly -WimFile $wimFile
-    $mountIndex = 1
-    $afterExport = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
-    if ([int]$afterExport.IndexCount -ne 1) {
-        throw "After single-index export, install.wim has $($afterExport.IndexCount) indexes (need 1)"
-    }
-    Assert-WimMetadataStable -Before $beforeExport -After $afterExport -Context 'MountInstallWim single-index export'
-    Write-WinMintEditionConfig -MediaDir $mediaDir -Snapshot $afterExport
-    Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{
-        phase = 'MountInstallWim.export'; before = $beforeExport; after = $afterExport; final = $afterExport
-    }
-    Write-Output "Single-image WIM ready (mount index 1); size=$((Get-Item -LiteralPath $wimFile).Length)"
-}
-else {
-    if ($indexCount -ne 1) {
-        throw "Expected single-image WIM or multi-index export; indexCount=$indexCount"
-    }
-    Clear-WimReadOnly -WimFile $wimFile
-    Assert-WimMetadataPresent -Snapshot $beforeExport -Context 'MountInstallWim single'
-    Write-WinMintEditionConfig -MediaDir $mediaDir -Snapshot $beforeExport
-    Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{ phase = 'MountInstallWim.single'; final = $beforeExport }
-    Write-Output "WIM already single-image; mount index $mountIndex ($($beforeExport.Name))"
-}
+$wimFile = Join-Path $mediaDir 'sources\install.wim'
+Assert-WinMintMountImagePath -ImageFile $wimFile -CacheRoot $cacheRoot
 
 $finalSnapshot = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
+if ([int]$finalSnapshot.IndexCount -ne 1) {
+    throw "Staged install.wim has $($finalSnapshot.IndexCount) indexes (need 1)"
+}
+Assert-WimMetadataPresent -Snapshot $finalSnapshot -Context 'MountInstallWim staged'
 if (-not (Test-WinMintSelectedImage -Snapshot $finalSnapshot -ExpectedIdentity $expectedIdentity)) {
     throw 'Staged install.wim does not match the approved selected-image metadata.'
 }
+Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{
+    phase = 'MountInstallWim'; final = $finalSnapshot
+}
 
-Write-Output "DISM Mount-Image index=$mountIndex → $mountDir"
-& dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:$mountIndex /MountDir:$mountDir
+Write-Output "DISM Mount-Image index=1 → $mountDir"
+& dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:1 /MountDir:$mountDir
 if ($LASTEXITCODE -ne 0) { throw "DISM Mount-Image failed: $LASTEXITCODE" }
 
 Write-Output "MountInstallWim ok"

@@ -73,7 +73,6 @@ public static class ImageServicing
 
         Directory.CreateDirectory(normalized.WorkDirectory);
         Directory.CreateDirectory(Path.Combine(normalized.WorkDirectory, "logs"));
-        Directory.CreateDirectory(Path.Combine(normalized.WorkDirectory, "payload"));
         Directory.CreateDirectory(HostServicingRoot);
 
         Result<IReadOnlyList<ServicingStage>, Failure> materialized = Materialize(plan, normalized);
@@ -272,6 +271,12 @@ public static class ImageServicing
     private static Result<IReadOnlyList<ServicingStage>, Failure> Materialize(BuildArtifacts plan, ServicingRun run)
     {
         string payloadDir = Path.Combine(run.WorkDirectory, "payload");
+        if (Directory.Exists(payloadDir))
+        {
+            Directory.Delete(payloadDir, recursive: true);
+        }
+
+        Directory.CreateDirectory(payloadDir);
         string mediaDir = Path.Combine(run.WorkDirectory, "media");
         string mountDir = HostMountDir;
         string unattendPath = Path.Combine(run.WorkDirectory, "unattend.xml");

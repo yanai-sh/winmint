@@ -445,6 +445,110 @@ try {
     if ($esdMessage -cne 'install.esd present; convert to WIM before Apply (not implemented)') {
         throw "install.esd message: $esdMessage"
     }
+
+    $work = Join-Path $root 'work'
+    $mediaDir = Join-Path $work 'media'
+    $preparedMedia = Join-Path $script:entryPath 'media'
+    $script:copyCount = 0
+    $script:mountCount = 0
+    $script:exportCount = 0
+    $stageCommands = New-TestCommands -CopyTree {
+        param($Source, $Destination)
+        $script:copyCount++
+        New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+        Copy-Item -Path (Join-Path $Source '*') -Destination $Destination -Recurse -Force
+    } -MountIso {
+        param($IsoPath)
+        $script:mountCount++
+        $isoTree
+    } -ExportImage {
+        param($SourceWim, $SourceIndex, $DestWim)
+        $script:exportCount++
+        Set-Content -LiteralPath $DestWim -Value 'SINGLE-INDEX-INSTALL-WIM' -Encoding utf8 -NoNewline
+    }
+
+    $leftoverPrevious = Join-Path $work 'media.previous-old'
+    New-Item -ItemType Directory -Force -Path (Join-Path $leftoverPrevious 'sources') | Out-Null
+    Set-Content -LiteralPath (Join-Path $leftoverPrevious 'stale.txt') -Value 'old-previous' -Encoding utf8
+    New-Item -ItemType Directory -Force -Path (Join-Path $mediaDir 'sources') | Out-Null
+    Set-Content -LiteralPath (Join-Path $mediaDir 'canary.txt') -Value 'from-prior-apply' -Encoding utf8
+
+    $hit = Initialize-WinMintPreparedMedia `
+        -SourceIso $isoPath `
+        -SourceIsoSha256 $script:sha `
+        -SourceIsoLength $script:isoLength `
+        -WimIndex $wimIndex `
+        -Schema $schema `
+        -CacheRoot $cacheRoot `
+        -ExpectedIdentity $expected `
+        -Commands $stageCommands
+    if ($hit.Outcome -cne 'hit') { throw "expected hit before staged copy, got $($hit.Outcome)" }
+    if ($script:mountCount -ne 0) { throw 'hit invoked Source ISO mount' }
+    if ($script:exportCount -ne 0) { throw 'hit invoked WIM export' }
+    $copiesBefore = $script:copyCount
+
+    $copied = Copy-WinMintRunMedia `
+        -PreparedMedia $preparedMedia `
+        -MediaDir $mediaDir `
+        -ExpectedIdentity $expected `
+        -Commands $stageCommands
+    if ($script:copyCount -ne ($copiesBefore + 1)) { throw 'hit did not copy fresh staged media' }
+    if ($script:mountCount -ne 0 -or $script:exportCount -ne 0) { throw 'staged copy invoked prepare commands' }
+    Assert-True (Test-Path -LiteralPath (Join-Path $mediaDir 'sources\install.wim')) 'staged install.wim missing'
+    Assert-False (Test-Path -LiteralPath (Join-Path $mediaDir 'canary.txt')) 'prior staged media was reused in place'
+    Assert-True (Test-Path -LiteralPath $copied.PreviousMedia) 'prior staged media was not moved aside'
+    Assert-True (Test-Path -LiteralPath (Join-Path $copied.PreviousMedia 'canary.txt')) 'moved prior media lost canary'
+    Assert-True (Test-Path -LiteralPath (Join-Path $leftoverPrevious 'stale.txt')) 'unrelated previous media was removed'
+
+    $preparedWim = Join-Path $preparedMedia 'sources\install.wim'
+    $stagedWim = Join-Path $mediaDir 'sources\install.wim'
+    $preparedId = (& fsutil.exe file queryfileid $preparedWim) -join ' '
+    $stagedId = (& fsutil.exe file queryfileid $stagedWim) -join ' '
+    if ([string]::IsNullOrWhiteSpace($preparedId) -or $preparedId -eq $stagedId) {
+        throw "staged WIM is not an independent file record: prepared=$preparedId staged=$stagedId"
+    }
+    $preparedHash = Get-Sha256Lower $preparedWim
+    Set-Content -LiteralPath $stagedWim -Value 'MUTATED-STAGED-WIM' -Encoding utf8 -NoNewline
+    if ((Get-Sha256Lower $preparedWim) -cne $preparedHash) {
+        throw 'mutating staged WIM changed prepared hash'
+    }
+
+    $incomingFail = Join-Path $root 'incoming-fail'
+    $failMedia = Join-Path $incomingFail 'media'
+    New-Item -ItemType Directory -Force -Path $failMedia | Out-Null
+    Set-Content -LiteralPath (Join-Path $failMedia 'keep.txt') -Value 'existing' -Encoding utf8
+    $failThrow = $false
+    try {
+        Copy-WinMintRunMedia `
+            -PreparedMedia $preparedMedia `
+            -MediaDir $failMedia `
+            -ExpectedIdentity $expected `
+            -Commands (New-TestCommands -CopyTree { throw 'injected copy failure' }) | Out-Null
+    }
+    catch {
+        $failThrow = $true
+        if ([string]$_.Exception.Message -notmatch 'injected copy failure') {
+            throw "unexpected copy failure: $($_.Exception.Message)"
+        }
+    }
+    Assert-True $failThrow 'failed staged copy did not throw'
+    Assert-False (Test-Path -LiteralPath $failMedia) 'failed incoming copy was renamed to media'
+    $incomingLeft = @(Get-ChildItem -LiteralPath $incomingFail -Force -Directory | Where-Object { $_.Name -like 'media.incoming-*' })
+    $previousLeft = @(Get-ChildItem -LiteralPath $incomingFail -Force -Directory | Where-Object { $_.Name -like 'media.previous-*' })
+    if ($previousLeft.Count -ne 1) { throw 'failed copy did not preserve moved-aside staged media' }
+    if ($incomingLeft.Count -gt 1) { throw 'failed copy left extra incoming directories' }
+
+    $cacheWim = Join-Path $script:entryPath 'media\sources\install.wim'
+    $mountThrow = $false
+    try { Assert-WinMintMountImagePath -ImageFile $cacheWim -CacheRoot $cacheRoot }
+    catch {
+        $mountThrow = $true
+        if ([string]$_.Exception.Message -notmatch 'prepared-media root') {
+            throw "unexpected mount-path message: $($_.Exception.Message)"
+        }
+    }
+    Assert-True $mountThrow 'prepared WIM path was allowed as a mount image'
+    Assert-WinMintMountImagePath -ImageFile $stagedWim -CacheRoot $cacheRoot
 }
 finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue

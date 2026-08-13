@@ -169,6 +169,40 @@ public class ImageServicingApplyTests
         }
     }
 
+    [Fact]
+    public async Task Apply_recreates_payload_before_writing_current_bundle()
+    {
+        BuildArtifacts plan = MinimalPlan();
+        string work = NewTempDir();
+        try
+        {
+            string leftover = Path.Combine(work, "payload", "from-run-a.txt");
+            Directory.CreateDirectory(Path.GetDirectoryName(leftover)!);
+            File.WriteAllText(leftover, "run-a-only");
+            RecordingElevatedPlanRunner runner = new();
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: Path.Combine(work, "out.iso"));
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
+                plan,
+                run,
+                runner,
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
+            Assert.False(File.Exists(leftover));
+            Assert.True(File.Exists(Path.Combine(work, "payload", "bundle.json")));
+            Assert.True(File.Exists(Path.Combine(work, "payload", "jobs.json")));
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
     [Theory]
     [InlineData(ImageQualityLane.Test, "Test", "fast", "skip")]
     [InlineData(ImageQualityLane.Release, "Release", "max", "full")]
