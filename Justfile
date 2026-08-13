@@ -29,7 +29,7 @@ check: format-check build
     just analyze-servicing
     just bootstrap-contract
     just disk-guard-contract
-    just media-identity-contract
+    just source-media-cache-contract
     just packages-check-contract
 
 # Live winget/scoop prove → config/packages.proof.json. Not in `just check` (offline proof enforces freshness).
@@ -46,8 +46,8 @@ disk-guard-contract:
 packages-check-contract:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-PackagesCheckContract.ps1'
 
-media-identity-contract:
-    pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-MediaIdentityContract.ps1'
+source-media-cache-contract:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-SourceMediaCache.ps1'
 
 # Install once: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser
 analyze-servicing:

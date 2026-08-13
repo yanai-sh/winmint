@@ -25,12 +25,11 @@ if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
 if (-not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sourceIso" }
 
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
-. (Join-Path $PSScriptRoot 'Test-MediaIdentity.ps1')
+. (Join-Path $PSScriptRoot 'Initialize-SourceMediaCache.ps1')
 
 New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
 
 $wimFile = Join-Path $mediaDir 'sources\install.wim'
-$marker = Join-Path $mediaDir '.winmint-media-identity.json'
 $expectedIdentity = [ordered]@{
     sourceIsoSha256 = $sourceIsoSha256
     wimIndex = [int]$wimIndex
@@ -118,7 +117,6 @@ $finalSnapshot = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
 if (-not (Test-WinMintSelectedImage -Snapshot $finalSnapshot -ExpectedIdentity $expectedIdentity)) {
     throw 'Staged install.wim does not match the approved selected-image metadata.'
 }
-Write-WinMintMediaIdentity -MarkerPath $marker -ExpectedIdentity $expectedIdentity
 
 Write-Output "DISM Mount-Image index=$mountIndex → $mountDir"
 & dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:$mountIndex /MountDir:$mountDir
