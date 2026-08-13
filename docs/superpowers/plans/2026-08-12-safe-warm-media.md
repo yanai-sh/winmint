@@ -4,6 +4,8 @@
 **Spec:** [2026-08-12-safe-warm-media-design.md](../specs/2026-08-12-safe-warm-media-design.md)  
 **Issue:** [#111](https://github.com/yanai-sh/winmint/issues/111)
 
+Grill overlay: **Prepared media** (host-wide immutable tree) and **staged media** (per-Apply copy). No `--reuse-media`.
+
 Implement in order. Each slice starts red, ends with its focused check green, and is a reviewable commit. Do not preserve the unsafe behavior behind a compatibility alias.
 
 Every path under **Files** was verified at the post-#94 baseline. `Add` marks a proposed path; `Modify` and `Remove` name existing paths.

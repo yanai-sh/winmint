@@ -43,7 +43,15 @@ The stage list crosses this seam as `{workDirectory}/stages.json` — Materializ
 
 HostCompile resolves and freezes the build Output ISO path before Apply. The lower-level ImageServicing entry retains its default-name fallback for direct S2 callers, but HostCompile composition never relies on it. Materialize and evidence use the supplied path unchanged. Elevated `Invoke-ServicingPlan.ps1` is the hard seam; reading `evidence.json` into `ImageEvidence` stays inside ImageServicing.
 
-`MountInstallWim` receives the frozen Source ISO hash and selected-image metadata. Every Apply recreates staged media from the Source ISO; leftover staged media is not an input. Prepared media (host-wide immutable tree) is added by #111 after this baseline.
+`MountInstallWim` receives the frozen Source ISO hash and selected-image metadata. Every Apply still requires the Source ISO file and a matching rehash. Leftover staged media is not an input.
+
+**Prepared media** lives under `%ProgramData%\WinMint\Servicing\media-cache\v{schema}\{sourceIsoSha256}\index-{n}\`. ImageServicing owns it: callers have no reuse switch. A published entry is an immutable Source ISO tree with a single-index `install.wim` and required `boot.wim`. It is copied into per-Apply **staged media** (`{work}/media`) and is never mounted. Invalid entries are quarantined and rebuilt once. Publication is not Evidence.
+
+**One Apply per Host.** The elevated loop takes `Global\WinMint.ImageServicing.v1` before any stage and recovers only the owned `%ProgramData%\WinMint\Servicing\mount` and `boot-mount` directories. Owner files live in `mount-owners\`. To delete a Prepared-media entry, wait until no Apply is running, then remove that entry directory only.
+
+`--reuse-media` is gone. Do not pass a compatibility alias. The old `{work}/media/.winmint-media-identity.json` marker (`winmint.media-identity/v1`) is not an input; source/image validation remains, and the Prepared-media manifest replaces that mutable-tree marker. ReFS block cloning is deferred until a recorded ARM64 benchmark says it pays.
+
+Progress labels: Hashing Source ISO → Validating prepared media → Preparing prepared media → Copying staged media → Mounting install image. `evidence.json` records source identity, Prepared-media outcome (`hit` | `miss-prepared` | `miss-rebuilt`), WIM hashes, copy mode, recovery action, and phase timings. Typed `ImageEvidence` stays the host/Wizard surface; the extra fields are audit JSON.
 
 **Elevated plan loop:** opcode kernels mutate media only. The loop alone finalizes host Apply state — `Write-PlanEvidence` after all kernels succeed, `Write-PlanFailure` on any throw or non-zero kernel exit. Kernels do not write `evidence.json` or `failure.json`. **`BuildIso`** runs `oscdimg` and emits the **Output ISO** only; digest and evidence assembly happen in the loop after `BuildIso` returns.
 

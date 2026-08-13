@@ -37,6 +37,7 @@ Cross-cuts (reference, not a frozen file set): [CONTRACTS](design/CONTRACTS.md) 
 - Secrets: prefer `passwordPath` / Wizard prompt. Host preset **`recommended`** expands → remove-list ids (never written as preset names).
 - First paint: assert paint-before-settle order in S3; ≤2.0 s is a target, not a veto on GDI vs D2D.
 - Flash: operator **Rufus DD Image** + SHA vs `digests.outputIso.sha256`; WinMint emits **Output ISO** only ([ADR-012](decisions/ADR-012-flash-outside-product-seam.md)).
+- Prepared media: ImageServicing-owned host store, copied to staged media each Apply. One Apply per Host. No caller `--reuse-media`.
 
 ## Acceptance
 

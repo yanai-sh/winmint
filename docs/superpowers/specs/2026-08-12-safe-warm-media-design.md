@@ -1,6 +1,7 @@
 # Spec: Safe warm source media
 
 **Date:** 2026-08-12  
+**Status:** Implementing — living terms are **Prepared media** and **staged media** ([CONTEXT](../../../CONTEXT.md)). Do not say cache / run media / reuse in operator docs.  
 **Authority:** [DESIGN](../../DESIGN.md) · [IMAGESERVICING](../../design/IMAGESERVICING.md) · [BUILDPLAN](../../design/BUILDPLAN.md)  
 **Research:** [CTT/WinUtil lessons](../../research/2026-08-12-ctt-winutil-lessons.md)  
 **Issue:** [#111](https://github.com/yanai-sh/winmint/issues/111)
