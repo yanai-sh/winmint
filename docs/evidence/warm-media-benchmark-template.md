@@ -1,6 +1,6 @@
 # Warm-media benchmark record
 
-Fill this from `just bench-warm-media SOURCE_ISO=... BASELINE=...` on the native ARM64 host. Do not state a speedup until the JSON record exists.
+Fill this from `just bench-prepared-media SOURCE_ISO=... BASELINE=...` on the native ARM64 host. Do not state a speedup until the JSON record exists.
 
 ## Host
 

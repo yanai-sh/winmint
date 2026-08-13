@@ -7,7 +7,7 @@
 
 | | Rule |
 |---|------|
-| **Should** | Day-to-day = S1–S3 (`just check` + fakes); Smoke = `Test` lane + stub jobs; provisioning jobs share S3 executor; CI = scaffold only (no VM / no ISO); S4 fail-fast on stalls |
+| **Should** | Day-to-day = S1–S3 (`just check` + fakes); Smoke = `Test` lane + stub jobs; provisioning jobs share S3 executor; CI = `just check` plus AOT publish (no VM / no ISO); S4 fail-fast on stalls |
 | **Could** | Diff VHD / digest-gated rebuild — harness-only |
 | **Don’t** | Skip S4 hard evidence; invent a Hyper-V-only settle/executor path “for speed” |
 
@@ -70,7 +70,7 @@ One harness entry → Apply workdir evidence (`tools/apply/`). Assert `evidence.
 ## Gate commands
 
 ```powershell
-just check          # S1–S3 (excludes Category=S4 and Category=S5) + contract tests; CI mirrors this
+just check          # S1–S3 (excludes Category=S4 and Category=S5) + contract tests; CI mirrors this plus AOT publish
 # maintainer:
 just host-apply ISO=…
 just host-apply-assert WORK=…

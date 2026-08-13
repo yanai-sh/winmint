@@ -113,12 +113,18 @@ host-apply-assert WORK=".scratch/sl7-build":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-HostApply.ps1' -AssertOnly -WorkDirectory '{{WORK}}' -ExpectDrivers
 
 # Prepared-media isolation (elevated, Source ISO, not in `just check`)
-warm-media-acceptance SOURCE_ISO="":
+prepared-media-acceptance SOURCE_ISO="":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-WarmMediaAcceptance.ps1' -SourceIso '{{SOURCE_ISO}}'
 
-# Cold/warm Apply timings (elevated, Source ISO, not in `just check`)
-bench-warm-media SOURCE_ISO="" BASELINE="":
+warm-media-acceptance SOURCE_ISO="":
+    just prepared-media-acceptance SOURCE_ISO="{{SOURCE_ISO}}"
+
+# Prepared-media Apply timings (elevated, Source ISO, not in `just check`)
+bench-prepared-media SOURCE_ISO="" BASELINE="":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/bench/Measure-WarmMedia.ps1' -SourceIso '{{SOURCE_ISO}}' -BaselineWorktree '{{BASELINE}}'
+
+bench-warm-media SOURCE_ISO="" BASELINE="":
+    just bench-prepared-media SOURCE_ISO="{{SOURCE_ISO}}" BASELINE="{{BASELINE}}"
 
 # Wipe-lane assert only (fails on Test evidence).
 primary-gate-assert WORK="":

@@ -25,7 +25,7 @@ internal static class StageParamJson
     }
 }
 
-/// <summary>Typed MountInstallWim bag (post-cache). No reuseMedia.</summary>
+/// <summary>Typed MountInstallWim parameters. CacheSchema/CacheRoot are the Prepared-media store (kernel names, not a product cache). No reuseMedia.</summary>
 public sealed record MountInstallWimParameters(
     string SourceIso,
     string MountDir,

@@ -4,13 +4,23 @@
 **Spec:** [2026-08-12-safe-warm-media-design.md](../specs/2026-08-12-safe-warm-media-design.md)  
 **Issue:** [#111](https://github.com/yanai-sh/winmint/issues/111)
 
-Title is historical. Living vocabulary: **Prepared media** and **staged media** ([CONTEXT](../../../CONTEXT.md) · [IMAGESERVICING](../../design/IMAGESERVICING.md)). No `--reuse-media`. Do not implement leftover `ReuseMedia` slices from this log; that switch is gone.
+Title is historical. Living vocabulary: **Prepared media** and **staged media** ([CONTEXT](../../../CONTEXT.md) · [IMAGESERVICING](../../design/IMAGESERVICING.md)). `--reuse-media` is gone.
 
-Implement in order. Each slice starts red, ends with its focused check green, and is a reviewable commit. Do not preserve the unsafe behavior behind a compatibility alias.
+**Status**
+
+| Slice | State |
+|-------|--------|
+| 1–6, 9 | Shipped on main. Do not re-implement. |
+| 7 | Harness shipped (`just prepared-media-acceptance`). Remaining: elevated Source ISO run + Hyper-V Smoke on both Output ISOs. |
+| 8 | Harness shipped (`just bench-prepared-media` WhatIf). Remaining: recorded native ARM64 benchmark; ReFS clone stays deferred. |
+
+Do not start at slice 1. Remaining work is human/ISO, not another `ReuseMedia` deletion.
 
 Every path under **Files** was verified at the post-#94 baseline. `Add` marks a proposed path; `Modify` and `Remove` name existing paths.
 
 ## 1. Remove caller-owned mutable reuse
+
+**Shipped.** Do not re-implement.
 
 **Files**
 
@@ -62,6 +72,8 @@ Expected: no active contract/help match. Historical specs/research outside those
 **Commit:** `fix(servicing): remove unsafe mutable media reuse`
 
 ## 2. Add source identity and cache contract
+
+**Shipped.** Do not re-implement. The type is `PreparedMediaIdentity`; the host directory leaf remains `media-cache`.
 
 **Files**
 
@@ -135,6 +147,8 @@ Implement the minimum internal type/hash function and materialization wiring. Ke
 
 ## 3. Prepare and validate transactional cache entries
 
+**Shipped.** Do not re-implement.
+
 **Files**
 
 - Add `servicing/Initialize-SourceMediaCache.ps1`
@@ -200,6 +214,8 @@ Run the contract test twice: the second run must leave no global cache/test resi
 
 ## 4. Copy fresh mutable media for every Apply
 
+**Shipped.** Do not re-implement.
+
 **Files**
 
 - Extend proposed `servicing/Initialize-SourceMediaCache.ps1` from slice 3
@@ -246,6 +262,8 @@ No ReFS branch in this slice.
 **Commit:** `feat(servicing): isolate each run from cached media`
 
 ## 5. Serialize mount ownership and recover stale mounts
+
+**Shipped.** Do not re-implement.
 
 **Files**
 
@@ -310,6 +328,8 @@ Implement the mutex and recovery rules. Update Export/unmount cleanup so owner l
 
 ## 6. Emit cache provenance and phase timings
 
+**Shipped.** Do not re-implement.
+
 **Files**
 
 - Modify `servicing/Invoke-ServicingPlan.ps1`
@@ -348,6 +368,8 @@ Extend `ImageEvidence` only for values consumed by host/Wizard. Preserve the ful
 
 ## 7. Prove cross-run isolation on Windows
 
+**Remaining:** harness is on main (`just prepared-media-acceptance`). Needs an elevated native ARM64 Source ISO run and Hyper-V Smoke on both Output ISOs.
+
 **Files**
 
 - Add `tools/apply/Invoke-WarmMediaAcceptance.ps1`
@@ -369,7 +391,7 @@ This check is not part of default `just check` because it requires elevation, So
 Run:
 
 ```powershell
-just warm-media-acceptance SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
+just prepared-media-acceptance SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
 ```
 
 Expected before implementation: the current marker path lacks immutable-cache provenance and may expose residue. Expected after implementation: all assertions pass.
@@ -377,6 +399,8 @@ Expected before implementation: the current marker path lacks immutable-cache pr
 **Commit:** `test(servicing): prove warm media run isolation`
 
 ## 8. Add native ARM64 benchmark
+
+**Remaining:** harness is on main (`just bench-prepared-media` WhatIf). Needs a recorded native ARM64 run attached to #111. ReFS clone stays deferred.
 
 **Files**
 
@@ -407,6 +431,8 @@ Then run the full benchmark on the native ARM64 development host and attach the 
 **Commit:** `perf(servicing): benchmark cold and warm media paths`
 
 ## 9. Update operator and module documentation
+
+**Shipped.** Do not re-implement.
 
 **Files**
 
@@ -446,8 +472,8 @@ Before closing #111:
 
 ```powershell
 just check
-just warm-media-acceptance SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
-just bench-warm-media SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
+just prepared-media-acceptance SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
+just bench-prepared-media SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
 ```
 
 Record:
