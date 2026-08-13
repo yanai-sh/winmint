@@ -84,11 +84,15 @@ function Write-PlanFailure {
 
     $reportingErrors = [System.Collections.Generic.List[string]]::new()
     try {
-        Write-JsonAtomic -Path $failurePath -Value @{
+        $failure = @{
             schemaVersion = 'winmint.image.evidence/v1'
             message       = ($messages -join '; ')
             opcode        = $Opcode
         }
+        if ($null -ne $script:phaseTimings) {
+            $failure = Merge-WinMintPreparedMediaEvidence -Evidence $failure -WorkDirectory $WorkDirectory -PhaseTimings $script:phaseTimings -RecoveryAction $script:recoveryAction
+        }
+        Write-JsonAtomic -Path $failurePath -Value $failure
     }
     catch {
         $reportingErrors.Add("failure.json write failed: $_")
@@ -209,13 +213,22 @@ function Write-PlanEvidence {
         }
     }
 
-    Write-JsonAtomic -Path $evidencePath -Value @{
-        schemaVersion         = 'winmint.image.evidence/v1'
-        outputIsoPath         = $outputIso
-        shellStampTargetPath  = $shellTarget
-        lane                  = $lane
-        packageStrict         = $packageStrict
-        digests               = $digests
+    Write-JsonAtomic -Path $evidencePath -Value (Merge-WinMintPreparedMediaEvidence -Evidence @{
+            schemaVersion        = 'winmint.image.evidence/v1'
+            outputIsoPath        = $outputIso
+            shellStampTargetPath = $shellTarget
+            lane                 = $lane
+            packageStrict        = $packageStrict
+            digests              = $digests
+        } -WorkDirectory $WorkDirectory -PhaseTimings $script:phaseTimings -RecoveryAction $script:recoveryAction)
+
+    $preparedPath = Join-Path $WorkDirectory 'prepared-media.json'
+    if (Test-Path -LiteralPath $preparedPath -PathType Leaf) {
+        $preparedDoc = Get-Content -LiteralPath $preparedPath -Raw | ConvertFrom-Json
+        $previousMedia = [string]$preparedDoc.'mediaCache.previousMedia'
+        if (-not [string]::IsNullOrWhiteSpace($previousMedia) -and (Test-Path -LiteralPath $previousMedia)) {
+            Remove-Item -LiteralPath $previousMedia -Recurse -Force
+        }
     }
 
     # Evidence is not green until stale failure state is gone. A deletion error returns to the
@@ -230,6 +243,8 @@ function Write-PlanEvidence {
 $failed = $true
 $opcode = ''
 $servicingLock = $null
+$script:phaseTimings = @{}
+$script:recoveryAction = 'none'
 try {
     $logDir = Join-Path $WorkDirectory 'logs'
     $statusPath = Join-Path $WorkDirectory 'apply-status.txt'
@@ -240,7 +255,11 @@ try {
     $env:WINMINT_SERVICING_WORK = $WorkDirectory
 
     $servicingLock = Enter-WinMintImageServicingLock
-    Resolve-WinMintStaleMount | Out-Null
+    $recovery = Resolve-WinMintStaleMount
+    $script:recoveryAction = [string]$recovery.recoveryAction
+    if ([string]::IsNullOrWhiteSpace($script:recoveryAction)) { $script:recoveryAction = 'none' }
+    $env:WINMINT_RECOVERY_ACTION = $script:recoveryAction
+    $script:phaseTimings = @{}
 
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
@@ -278,7 +297,15 @@ try {
         $kernel = Resolve-KernelScript -Opcode $opcode
         $logFile = Join-Path $logDir ("{0:D2}-{1}.log" -f $index, $opcode)
         Write-ApplyStatus -Stage $opcode -Log $logFile
+        $phaseClock = [System.Diagnostics.Stopwatch]::StartNew()
         & $kernel -Parameters $params *>&1 | Tee-Object -FilePath $logFile
+        $phaseClock.Stop()
+        if ($opcode -eq 'ExportWim') {
+            $script:phaseTimings['exportMs'] = [int]$phaseClock.ElapsedMilliseconds
+        }
+        elseif ($opcode -eq 'BuildIso') {
+            $script:phaseTimings['buildIsoMs'] = [int]$phaseClock.ElapsedMilliseconds
+        }
         if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
             throw "Kernel exited $LASTEXITCODE"
         }

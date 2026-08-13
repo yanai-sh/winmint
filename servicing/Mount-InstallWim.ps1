@@ -57,10 +57,10 @@ $prepared = Initialize-WinMintPreparedMedia `
     -ExpectedIdentity $expectedIdentity
 
 Write-Output 'Copying staged media'
-Copy-WinMintRunMedia `
+$copied = Copy-WinMintRunMedia `
     -PreparedMedia (Join-Path $prepared.EntryPath 'media') `
     -MediaDir $mediaDir `
-    -ExpectedIdentity $expectedIdentity | Out-Null
+    -ExpectedIdentity $expectedIdentity
 
 $wimFile = Join-Path $mediaDir 'sources\install.wim'
 Assert-WinMintMountImagePath -ImageFile $wimFile -CacheRoot $cacheRoot
@@ -79,8 +79,33 @@ Write-WimMetadataEvidence -WorkDirectory $workDir -Document @{
 
 Write-Output "DISM Mount-Image index=1 → $mountDir"
 Write-WinMintMountOwner -Kind install -WorkDirectory $workDir -MountDirectory $mountDir -ImageFile $wimFile -SourceIsoSha256 $sourceIsoSha256 -SourceIndex 1 | Out-Null
+$mountClock = [System.Diagnostics.Stopwatch]::StartNew()
 & dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:1 /MountDir:$mountDir
+$mountClock.Stop()
 if ($LASTEXITCODE -ne 0) { throw "DISM Mount-Image failed: $LASTEXITCODE" }
+
+$manifest = Get-Content -LiteralPath (Join-Path $prepared.EntryPath 'manifest.json') -Raw | ConvertFrom-Json
+$recoveryAction = [string]$env:WINMINT_RECOVERY_ACTION
+if ([string]::IsNullOrWhiteSpace($recoveryAction)) { $recoveryAction = 'none' }
+Write-WinMintPreparedMediaResult -Path (Join-Path $workDir 'prepared-media.json') -Document ([ordered]@{
+        'source.isoSha256'              = $sourceIsoSha256
+        'source.isoLength'              = [long]$sourceIsoLength
+        'source.index'                  = [int]$wimIndex
+        'mediaCache.schema'             = [int]$cacheSchema
+        'mediaCache.key'                = (Join-Path "v$cacheSchema" $sourceIsoSha256 "index-$wimIndex")
+        'mediaCache.entryPath'          = $prepared.EntryPath
+        'mediaCache.outcome'            = [string]$prepared.Outcome
+        'mediaCache.installWimSha256'   = [string]$manifest.installWimSha256
+        'mediaCache.bootWimSha256'      = [string]$manifest.bootWimSha256
+        'mediaCache.copyMode'           = [string]$copied.CopyMode
+        'mediaCache.recoveryAction'     = $recoveryAction
+        'mediaCache.previousMedia'      = [string]$copied.PreviousMedia
+        'timings.sourceHashMs'          = [int]$prepared.SourceHashMs
+        'timings.cacheValidateMs'       = [int]$prepared.CacheValidateMs
+        'timings.cachePrepareMs'        = [int]$prepared.CachePrepareMs
+        'timings.runMediaCopyMs'        = [int]$copied.CopyMs
+        'timings.mountMs'               = [int]$mountClock.ElapsedMilliseconds
+    })
 
 Write-Output "MountInstallWim ok"
 exit 0

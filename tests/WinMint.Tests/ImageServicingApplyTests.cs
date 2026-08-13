@@ -170,6 +170,63 @@ public class ImageServicingApplyTests
     }
 
     [Fact]
+    public async Task Apply_keeps_prepared_media_fields_off_typed_evidence()
+    {
+        BuildArtifacts plan = MinimalPlan();
+        string work = NewTempDir();
+        try
+        {
+            string outputIso = Path.Combine(work, "out.iso");
+            string evidence = JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["schemaVersion"] = ImageServicing.EvidenceSchemaVersion,
+                ["outputIsoPath"] = outputIso,
+                ["shellStampTargetPath"] = ImageServicing.ShellStampGuestPath,
+                ["lane"] = "Test",
+                ["source.isoSha256"] = new string('b', 64),
+                ["source.isoLength"] = 10,
+                ["source.index"] = 3,
+                ["mediaCache.schema"] = 1,
+                ["mediaCache.key"] = "v1/bb/index-3",
+                ["mediaCache.entryPath"] = @"C:\ProgramData\WinMint\Servicing\media-cache\v1\bb\index-3",
+                ["mediaCache.outcome"] = "hit",
+                ["mediaCache.installWimSha256"] = new string('c', 64),
+                ["mediaCache.bootWimSha256"] = new string('d', 64),
+                ["mediaCache.copyMode"] = "copy",
+                ["mediaCache.recoveryAction"] = "none",
+                ["timings.sourceHashMs"] = 1,
+                ["timings.cacheValidateMs"] = 2,
+                ["timings.cachePrepareMs"] = 0,
+                ["timings.runMediaCopyMs"] = 3,
+                ["timings.mountMs"] = 4,
+                ["timings.exportMs"] = 5,
+                ["timings.buildIsoMs"] = 6,
+                ["digests"] = new Dictionary<string, string> { ["outputIso.sha256"] = new string('a', 64) },
+            });
+            EvidenceElevatedPlanRunner runner = new(evidence);
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: outputIso);
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
+                plan,
+                run,
+                runner,
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
+            Assert.Equal(ImageQualityLane.Test, result.Value.Lane);
+            Assert.Equal(new string('a', 64), result.Value.Digests["outputIso.sha256"]);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
     public async Task Apply_recreates_payload_before_writing_current_bundle()
     {
         BuildArtifacts plan = MinimalPlan();

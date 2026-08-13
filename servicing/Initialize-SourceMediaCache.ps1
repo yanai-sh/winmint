@@ -353,7 +353,10 @@ function Initialize-WinMintPreparedMedia {
         [System.Collections.IDictionary] $ExpectedIdentity,
         $Commands
     )
+    $hashClock = [System.Diagnostics.Stopwatch]::StartNew()
     Assert-WinMintSourceIsoIdentity -SourceIso $SourceIso -SourceIsoSha256 $SourceIsoSha256 -SourceIsoLength $SourceIsoLength
+    $hashClock.Stop()
+
     $entry = Get-WinMintMediaCacheEntry -CacheRoot $CacheRoot -SourceIsoSha256 $SourceIsoSha256 -WimIndex $WimIndex -Schema $Schema
     $testArgs = @{
         EntryPath         = $entry
@@ -365,8 +368,17 @@ function Initialize-WinMintPreparedMedia {
         CacheRoot         = $CacheRoot
         Commands          = $Commands
     }
-    if (Test-WinMintMediaCacheEntry @testArgs) {
-        return [pscustomobject]@{ Outcome = 'hit'; EntryPath = $entry }
+    $validateClock = [System.Diagnostics.Stopwatch]::StartNew()
+    $hit = Test-WinMintMediaCacheEntry @testArgs
+    $validateClock.Stop()
+    if ($hit) {
+        return [pscustomobject]@{
+            Outcome          = 'hit'
+            EntryPath        = $entry
+            SourceHashMs     = [int]$hashClock.ElapsedMilliseconds
+            CacheValidateMs  = [int]$validateClock.ElapsedMilliseconds
+            CachePrepareMs   = 0
+        }
     }
 
     $quarantined = $false
@@ -375,6 +387,7 @@ function Initialize-WinMintPreparedMedia {
         $quarantined = $true
     }
 
+    $prepareClock = [System.Diagnostics.Stopwatch]::StartNew()
     New-WinMintMediaCacheEntry `
         -SourceIso $SourceIso `
         -SourceIsoSha256 $SourceIsoSha256 `
@@ -384,10 +397,17 @@ function Initialize-WinMintPreparedMedia {
         -CacheRoot $CacheRoot `
         -ExpectedIdentity $ExpectedIdentity `
         -Commands $Commands | Out-Null
+    $prepareClock.Stop()
 
     if (Test-WinMintMediaCacheEntry @testArgs) {
         $outcome = if ($quarantined) { 'miss-rebuilt' } else { 'miss-prepared' }
-        return [pscustomobject]@{ Outcome = $outcome; EntryPath = $entry }
+        return [pscustomobject]@{
+            Outcome          = $outcome
+            EntryPath        = $entry
+            SourceHashMs     = [int]$hashClock.ElapsedMilliseconds
+            CacheValidateMs  = [int]$validateClock.ElapsedMilliseconds
+            CachePrepareMs   = [int]$prepareClock.ElapsedMilliseconds
+        }
     }
     throw 'Prepared media failed validation after prepare'
 }
@@ -419,7 +439,9 @@ function Copy-WinMintRunMedia {
     }
 
     $incoming = Join-Path $parent ($leaf + '.incoming-' + [guid]::NewGuid().ToString('N'))
+    $copyClock = [System.Diagnostics.Stopwatch]::StartNew()
     Copy-WinMintMediaTree -Source $PreparedMedia -Destination $incoming -Commands $Commands
+    $copyClock.Stop()
     Clear-WinMintTreeReadOnly $incoming
     $wim = Join-Path $incoming 'sources\install.wim'
     if (-not (Test-Path -LiteralPath $wim -PathType Leaf)) {
@@ -438,6 +460,8 @@ function Copy-WinMintRunMedia {
     [pscustomobject]@{
         MediaDir      = $MediaDir
         PreviousMedia = $previous
+        CopyMs        = [int]$copyClock.ElapsedMilliseconds
+        CopyMode      = 'copy'
     }
 }
 
@@ -450,5 +474,23 @@ function Assert-WinMintMountImagePath {
     $root = [IO.Path]::GetFullPath($CacheRoot).TrimEnd([char]'\') + '\'
     if ($img.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to mount a WIM under prepared-media root: $ImageFile"
+    }
+}
+
+function Write-WinMintPreparedMediaResult {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    param(
+        [Parameter(Mandatory)] [string] $Path,
+        [Parameter(Mandatory)] [System.Collections.IDictionary] $Document
+    )
+    $parent = Split-Path -Parent $Path
+    if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+    $temporaryPath = "$Path.tmp"
+    try {
+        ($Document | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $temporaryPath -Encoding utf8
+        Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
+    }
+    finally {
+        Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
     }
 }

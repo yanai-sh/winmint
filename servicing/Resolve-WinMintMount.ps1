@@ -323,3 +323,37 @@ function Clear-WinMintOwnedMount {
         Remove-WinMintMountOwner -Kind $kind -ServicingRoot $root
     }
 }
+
+function Merge-WinMintPreparedMediaEvidence {
+    param(
+        [Parameter(Mandatory)] [hashtable] $Evidence,
+        [Parameter(Mandatory)] [string] $WorkDirectory,
+        [hashtable] $PhaseTimings,
+        [string] $RecoveryAction = 'none'
+    )
+    $path = Join-Path $WorkDirectory 'prepared-media.json'
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        $doc = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        foreach ($p in $doc.PSObject.Properties) {
+            if ([string]$p.Name -eq 'mediaCache.previousMedia') { continue }
+            $Evidence[[string]$p.Name] = $p.Value
+        }
+    }
+    if ($PhaseTimings) {
+        foreach ($key in $PhaseTimings.Keys) {
+            $Evidence["timings.$key"] = [int]$PhaseTimings[$key]
+        }
+    }
+    if (-not $Evidence.ContainsKey('mediaCache.recoveryAction')) {
+        $Evidence['mediaCache.recoveryAction'] = $RecoveryAction
+    }
+    foreach ($name in @(
+            'timings.sourceHashMs', 'timings.cacheValidateMs', 'timings.cachePrepareMs',
+            'timings.runMediaCopyMs', 'timings.mountMs', 'timings.exportMs', 'timings.buildIsoMs')) {
+        if ($Evidence.ContainsKey($name)) {
+            $value = [int]$Evidence[$name]
+            if ($value -lt 0) { throw "timing $name is negative" }
+        }
+    }
+    return $Evidence
+}

@@ -233,6 +233,42 @@ try {
     Assert-True ($bootKernel.Contains('Write-WinMintMountOwner')) 'boot owner not written before mount'
     Assert-True ($bootKernel.Contains('Remove-WinMintMountOwner')) 'boot owner not removed after unmount'
 
+    $workEvidence = Join-Path $root 'evidence-work'
+    New-Item -ItemType Directory -Force -Path $workEvidence | Out-Null
+    $sidecar = Join-Path $workEvidence 'prepared-media.json'
+    @{
+        'source.isoSha256'            = ('a' * 64)
+        'source.isoLength'            = 10
+        'source.index'                = 3
+        'mediaCache.schema'           = 1
+        'mediaCache.key'              = 'v1\aaa\index-3'
+        'mediaCache.entryPath'        = 'C:\prepared'
+        'mediaCache.outcome'          = 'hit'
+        'mediaCache.installWimSha256' = ('b' * 64)
+        'mediaCache.bootWimSha256'    = ('c' * 64)
+        'mediaCache.copyMode'         = 'copy'
+        'mediaCache.recoveryAction'   = 'discard'
+        'mediaCache.previousMedia'    = (Join-Path $workEvidence 'media.previous-x')
+        'timings.sourceHashMs'        = 1
+        'timings.cacheValidateMs'     = 2
+        'timings.cachePrepareMs'      = 3
+        'timings.runMediaCopyMs'      = 4
+        'timings.mountMs'             = 5
+    } | ConvertTo-Json | Set-Content -LiteralPath $sidecar -Encoding utf8
+    $merged = Merge-WinMintPreparedMediaEvidence -Evidence @{ schemaVersion = 'winmint.image.evidence/v1' } -WorkDirectory $workEvidence -PhaseTimings @{ exportMs = 6; buildIsoMs = 7 } -RecoveryAction 'none'
+    foreach ($name in @(
+            'source.isoSha256', 'source.isoLength', 'source.index',
+            'mediaCache.schema', 'mediaCache.key', 'mediaCache.entryPath', 'mediaCache.outcome',
+            'mediaCache.installWimSha256', 'mediaCache.bootWimSha256', 'mediaCache.copyMode',
+            'mediaCache.recoveryAction',
+            'timings.sourceHashMs', 'timings.cacheValidateMs', 'timings.cachePrepareMs',
+            'timings.runMediaCopyMs', 'timings.mountMs', 'timings.exportMs', 'timings.buildIsoMs')) {
+        Assert-True ($merged.ContainsKey($name)) "merged evidence missing $name"
+    }
+    Assert-False ($merged.ContainsKey('mediaCache.previousMedia')) 'previous media path leaked into evidence'
+    Assert-True ([int]$merged['timings.exportMs'] -eq 6 -and [int]$merged['timings.buildIsoMs'] -eq 7) 'phase timings not merged'
+    Assert-True ([string]$merged['mediaCache.recoveryAction'] -eq 'discard') 'recovery overwritten'
+
     Write-Output 'Test-WinMintMountRecovery ok'
 }
 finally {

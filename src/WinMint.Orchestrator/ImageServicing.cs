@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using WinMint.Contracts;
@@ -285,7 +286,17 @@ public static class ImageServicing
         string outputIso = run.OutputIsoPath
             ?? throw new InvalidOperationException("OutputIsoPath must be normalized before Materialize.");
         int wimIndex = run.WimIndex ?? DefaultProWimIndex;
-        Result<MediaCacheIdentity, Failure> identity = ResolveMediaIdentity(run, wimIndex);
+        Result<MediaCacheIdentity, Failure> identity;
+        Stopwatch identityClock = Stopwatch.StartNew();
+        try
+        {
+            identity = ResolveMediaIdentity(run, wimIndex);
+        }
+        finally
+        {
+            identityClock.Stop();
+        }
+
         if (!identity.IsOk)
         {
             return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(identity.Error);

@@ -155,6 +155,9 @@ try {
         -Commands $commands
 
     if ($prepared.Outcome -cne 'miss-prepared') { throw "expected miss-prepared, got $($prepared.Outcome)" }
+    if ([int]$prepared.SourceHashMs -lt 0 -or [int]$prepared.CacheValidateMs -lt 0 -or [int]$prepared.CachePrepareMs -lt 0) {
+        throw 'prepare timings were negative'
+    }
     if ($prepared.EntryPath -cne $script:entryPath) { throw 'prepare returned a different entry path' }
     Assert-True (Test-Path -LiteralPath (Join-Path $script:entryPath 'manifest.json')) 'manifest missing after prepare'
     $prepareLeft = @(Get-ChildItem -LiteralPath (Split-Path $script:entryPath -Parent) -Force -Directory |
@@ -206,6 +209,8 @@ try {
         -ExpectedIdentity $expected `
         -Commands $commands
     if ($hit.Outcome -cne 'hit') { throw "expected hit, got $($hit.Outcome)" }
+    if ([int]$hit.CachePrepareMs -ne 0) { throw 'hit recorded prepare time' }
+    if ([int]$hit.SourceHashMs -lt 0 -or [int]$hit.CacheValidateMs -lt 0) { throw 'hit timings were negative' }
     if ($script:exportCount -ne 0) { throw 'valid winner invoked export/merge' }
 
     $failRoot = Join-Path $root 'fail-iso'
