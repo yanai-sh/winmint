@@ -56,7 +56,13 @@ public sealed record RemoveProvisionedAppxParameters(
     string WorkDirectory,
     string PackageFamilyNamesPath);
 
-public sealed record OfflineComponentParameters(
+public sealed record RemoveCapabilitiesParameters(
+    string MountDir,
+    string WorkDirectory,
+    string Kind,
+    string NamesPath);
+
+public sealed record DisableOptionalFeaturesParameters(
     string MountDir,
     string WorkDirectory,
     string Kind,

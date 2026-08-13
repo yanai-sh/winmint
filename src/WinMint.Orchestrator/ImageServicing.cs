@@ -483,19 +483,19 @@ public static class ImageServicing
                         Path.Combine(payloadDir, ServicingWorkspace.PackageFamilyNamesFileName)),
                     ServicingJsonContext.Default.RemoveProvisionedAppxParameters),
                 ServicingOpcode.RemoveCapabilities => StageParamBag.From(
-                    new OfflineComponentParameters(
+                    new RemoveCapabilitiesParameters(
                         mountDir,
                         run.WorkDirectory,
                         "capability",
                         Path.Combine(payloadDir, ServicingWorkspace.CapabilityNamesFileName)),
-                    ServicingJsonContext.Default.OfflineComponentParameters),
+                    ServicingJsonContext.Default.RemoveCapabilitiesParameters),
                 ServicingOpcode.DisableOptionalFeatures => StageParamBag.From(
-                    new OfflineComponentParameters(
+                    new DisableOptionalFeaturesParameters(
                         mountDir,
                         run.WorkDirectory,
                         "feature",
                         Path.Combine(payloadDir, ServicingWorkspace.FeatureNamesFileName)),
-                    ServicingJsonContext.Default.OfflineComponentParameters),
+                    ServicingJsonContext.Default.DisableOptionalFeaturesParameters),
                 ServicingOpcode.InjectDrivers => StageParamBag.From(
                     new InjectDriversParameters(
                         mountDir,
@@ -705,7 +705,8 @@ internal sealed record FailureFile(
 [JsonSerializable(typeof(StampOfflineShellParameters))]
 [JsonSerializable(typeof(StampOfflinePoliciesParameters))]
 [JsonSerializable(typeof(RemoveProvisionedAppxParameters))]
-[JsonSerializable(typeof(OfflineComponentParameters))]
+[JsonSerializable(typeof(RemoveCapabilitiesParameters))]
+[JsonSerializable(typeof(DisableOptionalFeaturesParameters))]
 [JsonSerializable(typeof(InjectDriversParameters))]
 [JsonSerializable(typeof(ExportWimParameters))]
 [JsonSerializable(typeof(BuildIsoParameters))]

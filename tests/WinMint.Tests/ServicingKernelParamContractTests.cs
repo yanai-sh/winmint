@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 using WinMint.Orchestrator;
 using static WinMint.Tests.ImageServicingTestFakes;
 
@@ -38,8 +39,7 @@ public class ServicingKernelParamContractTests
                     .Order(StringComparer.OrdinalIgnoreCase)
                     .Select(static n => n.ToLowerInvariant())
                     .ToArray();
-                string[] kernelParams = KernelParameterNames(
-                        Path.Combine(TestRepo.Root, "servicing", KernelFile(stage.Opcode)))
+                string[] kernelParams = KernelParameterNames(KernelPath(stage.Opcode))
                     .Order(StringComparer.OrdinalIgnoreCase)
                     .Select(static n => n.ToLowerInvariant())
                     .ToArray();
@@ -103,23 +103,17 @@ public class ServicingKernelParamContractTests
         return planned.Value;
     }
 
-    private static string KernelFile(ServicingOpcode opcode) =>
-        opcode switch
-        {
-            ServicingOpcode.MountInstallWim => "Mount-InstallWim.ps1",
-            ServicingOpcode.StagePayload => "Stage-Payload.ps1",
-            ServicingOpcode.StageOobeUnattend => "Stage-OobeUnattend.ps1",
-            ServicingOpcode.PatchBootWimApply => "Patch-BootWimApply.ps1",
-            ServicingOpcode.StampOfflineShell => "Stamp-OfflineShell.ps1",
-            ServicingOpcode.StampOfflinePolicies => "Stamp-OfflinePolicies.ps1",
-            ServicingOpcode.RemoveProvisionedAppx => "Remove-ProvisionedAppx.ps1",
-            ServicingOpcode.RemoveCapabilities => "Set-OfflineComponent.ps1",
-            ServicingOpcode.DisableOptionalFeatures => "Set-OfflineComponent.ps1",
-            ServicingOpcode.InjectDrivers => "Inject-SurfaceDrivers.ps1",
-            ServicingOpcode.ExportWim => "Export-Wim.ps1",
-            ServicingOpcode.BuildIso => "Build-Iso.ps1",
-            _ => throw new ArgumentOutOfRangeException(nameof(opcode), opcode, "Map this opcode to its kernel file."),
-        };
+    private static string KernelPath(ServicingOpcode opcode)
+    {
+        string plan = File.ReadAllText(
+            Path.Combine(TestRepo.Root, "servicing", "Invoke-ServicingPlan.ps1"));
+        Match hit = Regex.Match(
+            plan,
+            $@"'{opcode}'\s*\{{[^\}}]*Join-Path \$scriptRoot '([^']+\.ps1)'",
+            RegexOptions.CultureInvariant);
+        Assert.True(hit.Success, $"Invoke-ServicingPlan.ps1 has no kernel for {opcode}");
+        return Path.Combine(TestRepo.Root, "servicing", hit.Groups[1].Value);
+    }
 
     private static string[] KernelParameterNames(string kernelPath)
     {
