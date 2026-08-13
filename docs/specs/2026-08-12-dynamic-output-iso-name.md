@@ -1,7 +1,8 @@
 # Spec: Dynamic output ISO filename
 
+**Status:** Shipped — `7e4e938` (`feat(servicing): name Output ISO winmint_{profile}_{lane}_{timestamp}`)  
 **Date:** 2026-08-12  
-**Authority:** [BUILDPLAN](../../design/BUILDPLAN.md) · [IMAGESERVICING](../../design/IMAGESERVICING.md) · [CONTEXT](../../../CONTEXT.md) (Primary / Gate B)
+**Authority:** [BUILDPLAN](../design/BUILDPLAN.md) · [IMAGESERVICING](../design/IMAGESERVICING.md) · [CONTEXT](../../CONTEXT.md) (Primary / Gate B)
 
 ## Problem
 

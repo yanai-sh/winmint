@@ -6,14 +6,17 @@ Policy / acceptance: [DESIGN](docs/DESIGN.md).
 
 ## Language
 
-**Source ISO** — Official Microsoft install media the user provides. No silent Windows download.  
-_Avoid_: golden ISO, UUP default source
+**Source ISO** — Official Microsoft install media the user provides. It remains an Apply input every run; a stored media tree must not stand in for a missing file. No silent Windows download.  
+_Avoid_: golden ISO, UUP default source; substituting Prepared media or staged media for the Source ISO
 
 **Output ISO** — Host compile result (default leaf `winmint_{profile}_{lane}_{yyyyMMdd-HHmmss}.iso`, or explicit `--out-iso`) plus digests: the delivery artifact ImageServicing emits.  
-_Avoid_: treating bootable USB as the compile output; calling Flash “Build”; opaque `out.iso` as the product name
+_Avoid_: treating bootable USB as the compile output; calling Flash “Build”; opaque `out.iso` as the product name; signed ISO; Authenticode on the ISO container; calling the ISO signed because it contains Authenticode PE
 
 **Flash** — Operator writes Output ISO to UEFI removable media with **Rufus** in **DD Image** mode (not ISO mode) and checks `digests.outputIso.sha256`. Outside WinMint’s product boundary — guidance copy only (path / Rufus DD / SHA / LaunchApply); no disk write, no Rufus launch.  
-_Avoid_: USB productization; in-process raw write; Rufus fork; “any flasher” as the named recipe; conflating Flash with Primary
+_Avoid_: USB productization; in-process raw write; Rufus fork; “any flasher” as the named recipe; conflating Flash with Primary; calling Flash or the USB Authenticode-signed
+
+**Authenticode** — Timestamped Windows publisher signature on WinMint-owned PE files, and on `.ps1` only if the accepted signing policy covers scripts. The publisher is the certificate holder, not the WinMint product name, the maintainer, or Microsoft; ImageServicing may copy or rename those bytes, not rewrite them. GitHub Releases stay unsigned until an accepted public publisher pipeline verifies every required artifact; inner PE on an Output ISO may carry Authenticode, the container does not.  
+_Avoid_: signed; signed Release; signed ISO; calling Digest or GitHub attestation Authenticode; SmartScreen-free; Microsoft-endorsed; self-signed as a stand-in; re-signing upstream PE; `irm | iex` as canonical Authenticode bootstrap; `-Force` skipping verification; quiet unsigned publish from a signing workflow; timestamp-optional; fail-open when revocation status is unavailable
 
 **Profile** — Build intent for one ISO (`winmint.profile/v1`).  
 _Avoid_: BuildConfig (user-facing); preset names in JSON
@@ -30,11 +33,17 @@ _Avoid_: DISM at the flag layer; ports before a second adapter
 **Plan dump** — Cli diagnostic files for inspecting BuildPlan output. `jobs.json` uses the real guest wire; `stages.json` uses `winmint.plan.stages/v1` and is never Apply input.  
 _Avoid_: treating a Plan dump as materialized Servicing state
 
-**Servicing / ImageServicing** — Offline WIM/ISO work via elevated `pwsh -File` kernels. Consumes the Output ISO path and source-media identity frozen by HostCompile.
-_Avoid_: in-process DISM from Wizard; guest FirstLogon Servicing; hosts inventing a second default Output ISO name
+**Servicing / ImageServicing** — Offline WIM/ISO work via elevated `pwsh -File` kernels. Consumes the Output ISO path and source-media identity frozen by HostCompile. Prepared media is Servicing mechanics, not Profile, CLI, or plan intent. At most one Apply per Host.  
+_Avoid_: in-process DISM from Wizard; guest FirstLogon Servicing; hosts inventing a second default Output ISO name; ReuseMedia; `--reuse-media`; caller-owned workdir reuse
 
-**Payload** — Staged SetupComplete, Supervisor, jobs/media. `%WINDIR%\WinMint\` tenure-only; `%ProgramData%\WinMint\` may remain for evidence.  
-_Avoid_: guest pwsh control plane; dual `$OEM$` SetupScripts
+**Prepared media** — Host-wide immutable Source ISO tree with the selected index as a single-index `install.wim` and a required `boot.wim`, identified by schema + Source ISO SHA-256 + source index. A complete published entry only: copied into staged media, never mounted, never auto-evicted. Invalid entries are quarantined off the hit path; publication is not Evidence, Proof, or Digest.  
+_Avoid_: cache; source-media cache; run media; reuse; warm media; cold path; golden ISO; WIM-only store; install.esd; multi-index install.wim; treating a prepare directory as Prepared media; serving or in-place overwriting an invalid entry; LRU of valid entries
+
+**Staged media** — Per-Apply mutable copy of Prepared media under the work directory. This is the tree Servicing mounts. A leftover tree from a prior Apply is not an input.  
+_Avoid_: run media; work media; reuse; mounting Prepared media; treating staged media as the Source ISO
+
+**Payload** — SetupComplete, Supervisor, jobs/media placed into the image. Guest `%WINDIR%\WinMint\` tenure-only; guest `%ProgramData%\WinMint\` may remain for evidence. Not the Host Prepared-media store.  
+_Avoid_: guest pwsh control plane; dual `$OEM$` SetupScripts; calling Payload staged media
 
 **Machine setup** — Supervisor `--machine-setup`: autologon + fail-closed Shell verify. No splash/settle/jobs.  
 _Avoid_: calling this FirstLogon
@@ -91,12 +100,13 @@ _Avoid_: “host” for a UI shell or a process that owns a window
 
 Short words that carry weight in type names. They are kept because no generic alternative says as much — but only if they mean one thing.
 
-**Evidence** — JSON WinMint emits so a harness can assert what happened (`IEvidenceSink`, `evidence.json`, S4/S5 bars). Never read back to decide the next phase.
+**Evidence** — JSON WinMint emits so a harness can assert what happened (`IEvidenceSink`, `evidence.json`, S4/S5 bars). Never read back to decide the next phase.  
+_Avoid_: calling Prepared-media publication Evidence; reading Evidence to decide a Prepared-media hit
 
 **Proof** — `config/packages.proof.json`: catalog ids verified against live winget/scoop, content-hashed so `just check` can enforce freshness offline. Attests to the *catalog*, not to a run.
 
 **Digest** — a sha256 of an artifact under `logs/digests.json`. Not a synonym for evidence or proof.  
-_Avoid_: “receipt” for any of these three
+_Avoid_: “receipt” for any of these three; calling a Digest Authenticode or signed
 
 **Posture** — product-constant settings applied with no Profile toggle (`ProductPosture`, [ADR-009](docs/decisions/ADR-009-product-constant-policies.md)).
 
@@ -106,7 +116,8 @@ _Avoid_: “receipt” for any of these three
 
 **Kernel** — one elevated `servicing/*.ps1` doing exactly one opcode. Parameter hashtables only, never Profile JSON.
 
-**Lane** — the `Test` | `Release` image-quality run override, and the `ExportWim` params it implies.
+**Lane** — the `Test` | `Release` image-quality run override, and the `ExportWim` params it implies.  
+_Avoid_: calling a GitHub Release “Release” without GitHub; signed Release; treating Authenticode as a Lane property
 
 **Quiet** — the always-on noise removal a user did not ask for and cannot opt out of (`Win32WorkstationQuiet`, Wizard "quiet" copy).
 

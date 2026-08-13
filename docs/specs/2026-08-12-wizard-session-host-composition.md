@@ -1,9 +1,9 @@
 # Design: Host composition for Wizard Living Draft
 
 **Date:** 2026-08-12  
-**Status:** Approved for planning  
+**Status:** Shipped — [#94](https://github.com/yanai-sh/winmint/issues/94) · [#110](https://github.com/yanai-sh/winmint/issues/110) (commit `f17a64a`; `ready-for-agent` cleared on close)  
 **Issue:** [#94 — WizardSession Living Draft](https://github.com/yanai-sh/winmint/issues/94)  
-**Unlocks:** [#110 — Split WizardViewModel by stage](https://github.com/yanai-sh/winmint/issues/110)
+**Unlocks:** [#110 — Split WizardViewModel by stage](https://github.com/yanai-sh/winmint/issues/110) (shipped)
 
 ## Problem
 

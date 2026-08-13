@@ -1,7 +1,8 @@
 # Spec: DMA DeviceRegion latch (hardened)
 
+**Status:** Shipped — `472eaa6` (`feat(dma): latch DeviceRegion Ireland with repair-then-verify`)  
 **Date:** 2026-08-12  
-**Authority:** [ADR-003](../../decisions/ADR-003-dma-interop.md) · [BUILDPLAN](../../design/BUILDPLAN.md) · [PROVISIONINGSESSION](../../design/PROVISIONINGSESSION.md) · Microsoft DMA setup-region rule (Insider blog) · GeoID table (Learn)
+**Authority:** [ADR-003](../decisions/ADR-003-dma-interop.md) · [BUILDPLAN](../design/BUILDPLAN.md) · [PROVISIONINGSESSION](../design/PROVISIONINGSESSION.md) · Microsoft DMA setup-region rule (Insider blog) · GeoID table (Learn)
 
 ## Problem
 
