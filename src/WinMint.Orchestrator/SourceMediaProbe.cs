@@ -5,6 +5,56 @@ using System.Text.Json.Serialization;
 
 namespace WinMint.Orchestrator;
 
+public readonly record struct SourceIsoIdentity(string Sha256, long Length)
+{
+    public static async Task<Result<SourceIsoIdentity, Failure>> FromFileAsync(
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return Result.Fail<SourceIsoIdentity, Failure>(
+                new Failure("sourceIso.missing", $"Source ISO not found: {path}"));
+        }
+
+        try
+        {
+            FileInfo info = new(path);
+            await using FileStream stream = new(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                1024 * 1024,
+                useAsync: true);
+            byte[] hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+            return Result.Ok<SourceIsoIdentity, Failure>(
+                new SourceIsoIdentity(Convert.ToHexStringLower(hash), info.Length));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Result.Fail<SourceIsoIdentity, Failure>(
+                new Failure("sourceIso.unreadable", ex.Message));
+        }
+    }
+
+    public async Task<Result<bool, Failure>> MatchesCurrentAsync(
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        Result<SourceIsoIdentity, Failure> current =
+            await FromFileAsync(path, cancellationToken).ConfigureAwait(false);
+        if (!current.IsOk)
+        {
+            return Result.Fail<bool, Failure>(current.Error);
+        }
+
+        return Result.Ok<bool, Failure>(
+            string.Equals(current.Value.Sha256, Sha256, StringComparison.Ordinal)
+            && current.Value.Length == Length);
+    }
+}
+
 public sealed record WimIndexInfo(
     int Index,
     string Name,
@@ -13,6 +63,13 @@ public sealed record WimIndexInfo(
     string? Version,
     string? Build)
 {
+    public static int ResolveSelection(
+        IReadOnlyList<WimIndexInfo> rows,
+        int currentIndex,
+        bool userChose,
+        int hostDefault) =>
+        userChose && rows.Any(row => row.Index == currentIndex) ? currentIndex : hostDefault;
+
     public string DisplayLabel
     {
         get
@@ -38,7 +95,7 @@ public sealed record SelectedWim(
 
 public sealed record SourceMediaReview(
     string SourceIsoPath,
-    string SourceIsoSha256,
+    SourceIsoIdentity SourceIso,
     IReadOnlyList<WimIndexInfo> Indexes,
     SelectedWim? Selected,
     SourceMediaSelectionMismatch? SelectionMismatch = null);
@@ -51,28 +108,15 @@ public sealed record SourceMediaSelectionMismatch(
 /// <summary>Unelevated Source ISO identity and WIM metadata seam.</summary>
 public interface ISourceMediaProbe
 {
+    /// <summary>WIM index list only — must not SHA-256 the ISO. Compose hashes once via <see cref="ProbeAsync"/>.</summary>
+    Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+        string sourceIsoPath,
+        CancellationToken cancellationToken = default);
+
     Task<Result<SourceMediaReview, Failure>> ProbeAsync(
         string sourceIsoPath,
         int wimIndex,
         CancellationToken cancellationToken = default);
-
-    /// <summary>WIM index list only — must not SHA-256 the ISO. Compose hashes once via <see cref="ProbeAsync"/>.</summary>
-    Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
-        string sourceIsoPath,
-        CancellationToken cancellationToken = default)
-    {
-        async Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> FromProbe()
-        {
-            Result<SourceMediaReview, Failure> probed =
-                await ProbeAsync(sourceIsoPath, ImageServicing.DefaultProWimIndex, cancellationToken)
-                    .ConfigureAwait(false);
-            return probed.IsOk
-                ? Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(probed.Value.Indexes)
-                : Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(probed.Error);
-        }
-
-        return FromProbe();
-    }
 }
 
 public sealed class SourceMediaProbe : ISourceMediaProbe
@@ -113,121 +157,34 @@ public sealed class SourceMediaProbe : ISourceMediaProbe
 
         WimIndexInfo? selected = listed.Value.FirstOrDefault(row => row.Index == wimIndex);
 
-        try
+        Result<SourceIsoIdentity, Failure> hashed =
+            await SourceIsoIdentity.FromFileAsync(fullPath, cancellationToken).ConfigureAwait(false);
+        if (!hashed.IsOk)
         {
-            await using FileStream stream = new(
+            return Result.Fail<SourceMediaReview, Failure>(hashed.Error);
+        }
+
+        return Result.Ok<SourceMediaReview, Failure>(
+            new SourceMediaReview(
                 fullPath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 1024 * 1024,
-                useAsync: true);
-            byte[] hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
-            return Result.Ok<SourceMediaReview, Failure>(
-                new SourceMediaReview(
-                    fullPath,
-                    Convert.ToHexStringLower(hash),
-                    Array.AsReadOnly(listed.Value.ToArray()),
-                    selected is null
-                        ? null
-                        : new SelectedWim(
-                            selected.Index,
-                            selected.Name,
-                            selected.Architecture,
-                            selected.Edition,
-                            selected.Version,
-                            selected.Build),
-                    selected is null
-                        ? new SourceMediaSelectionMismatch(
-                            wimIndex,
-                            "wim.probe.indexMissing",
-                            $"Source ISO does not contain WIM index {wimIndex}.")
-                        : null));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return Result.Fail<SourceMediaReview, Failure>(
-                new Failure("sourceMedia.hash.unreadable", ex.Message));
-        }
+                hashed.Value,
+                Array.AsReadOnly(listed.Value.ToArray()),
+                selected is null
+                    ? null
+                    : new SelectedWim(
+                        selected.Index,
+                        selected.Name,
+                        selected.Architecture,
+                        selected.Edition,
+                        selected.Version,
+                        selected.Build),
+                selected is null
+                    ? new SourceMediaSelectionMismatch(
+                        wimIndex,
+                        "wim.probe.indexMissing",
+                        $"Source ISO does not contain WIM index {wimIndex}.")
+                    : null));
     }
-}
-
-/// <summary>Wizard list-only facade over the HostCompile source-media adapter.</summary>
-public static class SourceWimProbe
-{
-    public static async Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> TryProbeIsoAsync(
-        string isoPath,
-        ISourceMediaProbe? source = null,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(isoPath) || !File.Exists(isoPath.Trim()))
-        {
-            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
-                new Failure("wim.probe.isoMissing", $"Source ISO not found: {isoPath}"));
-        }
-
-        Result<IReadOnlyList<WimIndexInfo>, Failure> listed =
-            await (source ?? SourceMediaProbe.Instance)
-                .ListIndexesAsync(isoPath.Trim(), cancellationToken)
-                .ConfigureAwait(false);
-        return listed;
-    }
-
-    public static Result<IReadOnlyList<WimIndexInfo>, Failure> ParseListJson(string json)
-    {
-        try
-        {
-            WimIndexListFile? file = JsonSerializer.Deserialize(json, SourceMediaJsonContext.Default.WimIndexListFile);
-            if (file?.Indexes is null || file.Indexes.Count == 0)
-            {
-                return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
-                    new Failure("wim.probe.empty", "Get-WimInfo returned no indexes."));
-            }
-
-            List<WimIndexInfo> rows = [];
-            foreach (WimIndexFile row in file.Indexes)
-            {
-                if (row.Index <= 0 || IsUndefinedName(row.Name))
-                {
-                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
-                        new Failure("wim.probe.incompleteName", $"Index {row.Index} Name is missing or undefined."));
-                }
-
-                rows.Add(new(
-                    row.Index,
-                    row.Name!.Trim(),
-                    NullIfEmpty(row.Architecture),
-                    NullIfEmpty(row.Edition),
-                    NullIfEmpty(row.Version),
-                    NullIfEmpty(row.Build)));
-            }
-
-            return Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(Array.AsReadOnly(rows.ToArray()));
-        }
-        catch (JsonException ex)
-        {
-            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
-                new Failure("wim.probe.unreadable", ex.Message));
-        }
-    }
-
-    public static int ResolveSelection(
-        IReadOnlyList<WimIndexInfo> rows,
-        int currentIndex,
-        bool userChose,
-        int hostDefault) =>
-        userChose && rows.Any(row => row.Index == currentIndex) ? currentIndex : hostDefault;
-
-    internal static bool IsUndefinedName(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return true;
-        string trimmed = value.Trim();
-        return trimmed.Equals("undefined", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Equals("<undefined>", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string? NullIfEmpty(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 internal static class PwshWimIndexSource
@@ -279,7 +236,7 @@ internal static class PwshWimIndexSource
                             : combined));
             }
 
-            return SourceWimProbe.ParseListJson(captured.StandardOutput.Trim());
+            return ParseListJson(captured.StandardOutput.Trim());
         }
         catch (OperationCanceledException)
         {
@@ -306,6 +263,59 @@ internal static class PwshWimIndexSource
         }
         return text[at..end];
     }
+
+    internal static Result<IReadOnlyList<WimIndexInfo>, Failure> ParseListJson(string json)
+    {
+        try
+        {
+            WimIndexListFile? file = JsonSerializer.Deserialize(json, SourceMediaJsonContext.Default.WimIndexListFile);
+            if (file?.Indexes is null || file.Indexes.Count == 0)
+            {
+                return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                    new Failure("wim.probe.empty", "Get-WimInfo returned no indexes."));
+            }
+
+            List<WimIndexInfo> rows = [];
+            foreach (WimIndexFile row in file.Indexes)
+            {
+                if (row.Index <= 0 || IsUndefinedName(row.Name))
+                {
+                    return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                        new Failure("wim.probe.incompleteName", $"Index {row.Index} Name is missing or undefined."));
+                }
+
+                rows.Add(new(
+                    row.Index,
+                    row.Name!.Trim(),
+                    NullIfEmpty(row.Architecture),
+                    NullIfEmpty(row.Edition),
+                    NullIfEmpty(row.Version),
+                    NullIfEmpty(row.Build)));
+            }
+
+            return Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(Array.AsReadOnly(rows.ToArray()));
+        }
+        catch (JsonException ex)
+        {
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
+                new Failure("wim.probe.unreadable", ex.Message));
+        }
+    }
+
+    internal static bool IsUndefinedName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        string trimmed = value.Trim();
+        return trimmed.Equals("undefined", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("<undefined>", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? NullIfEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 internal sealed class WimIndexListFile

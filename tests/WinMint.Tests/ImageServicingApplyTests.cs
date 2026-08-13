@@ -214,9 +214,9 @@ public class ImageServicingApplyTests
             Assert.True(mount.Parameters.ContainsKey(StageParams.SourceIsoSha256));
             Assert.True(mount.Parameters.ContainsKey(StageParams.SourceIsoLength));
             Assert.Equal(
-                MediaCacheIdentity.CurrentSchema.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                PreparedMediaIdentity.CurrentSchema.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 mount.Parameters[StageParams.CacheSchema]);
-            Assert.Equal(MediaCacheIdentity.Root, mount.Parameters[StageParams.CacheRoot]);
+            Assert.Equal(PreparedMediaIdentity.Root, mount.Parameters[StageParams.CacheRoot]);
         }
         finally
         {

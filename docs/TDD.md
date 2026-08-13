@@ -49,7 +49,7 @@ Real temporary directories only. Assert absolute + Profile-relative resolution, 
 
 ### S1d — Host composition / Living Draft
 
-Assert immutable review and private approved-plan behavior through HostCompile and WizardSession. Drive Wizard navigation gates through `WizardShellViewModel`, and stage behavior through the Source, Account, Software, and Review binding interfaces—not private formatting helpers. A fake `ISourceMediaProbe` supplies Source ISO hash and selected-WIM metadata; observe materialized servicing facts through `IElevatedPlanRunner`. Cover source changes before elevation, deterministic output naming, structured document errors, relative-`passwordPath` Save relocation, dirty invalidation, out-of-order async result rejection, retry after Apply failure, and exact-handle success acknowledgement. Do not add an `IImageServicing` port.
+Assert immutable review and private approved-plan behavior through HostCompile and WizardSession. Drive Wizard navigation gates through `WizardViewModel`, and stage behavior through the Source, Account, Software, and Review binding interfaces—not private formatting helpers. A fake `ISourceMediaProbe` lists WIM indexes without hashing and supplies Source ISO identity plus selected-WIM metadata at Compose; observe materialized servicing facts through `IElevatedPlanRunner`. Cover source changes before elevation, deterministic output naming, structured document errors, relative-`passwordPath` Save relocation, dirty invalidation, out-of-order async result rejection, retry after Apply failure, and exact-handle success acknowledgement. Do not add an `IImageServicing` port.
 
 ### S2 — ImageServicing
 

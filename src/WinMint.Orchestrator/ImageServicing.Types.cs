@@ -6,6 +6,7 @@ public sealed record ServicingRun(
     string OutputIsoPath,
     int? WimIndex = null,
     string? SourceIsoSha256 = null,
+    long? SourceIsoLength = null,
     SelectedWim? SelectedImage = null);
 
 public sealed record ImageEvidence(

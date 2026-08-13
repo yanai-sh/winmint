@@ -11,18 +11,37 @@ public static partial class BuildPlan
             new ManifestFile(manifest.ImageQuality.ToString(), manifest.RequiresNetwork),
             PlanFileJsonContext.Default.ManifestFile);
 
-    public static string SerializePlanStagesFile(ServicingStageList stages) =>
-        SerializeStagesFile(stages, PlanStagesSchemaVersion);
-
-    private static string SerializeStagesFile(ServicingStageList stages, string schemaVersion) =>
-        JsonSerializer.Serialize(
+    public static string SerializePlanStagesFile(
+        IReadOnlyList<ServicingOpcode> stages,
+        DriverInject? drivers = null,
+        ImageQualityLane lane = ImageQualityLane.Test)
+    {
+        ExportLane export = ExportLane.For(lane);
+        Dictionary<string, string> empty = [];
+        return JsonSerializer.Serialize(
             new StagesFile(
-                schemaVersion,
-                stages.Stages.Select(static s => new StageFile(
-                    s.Opcode.ToString(),
-                    s.Parameters.ToDictionary(static kv => kv.Key, static kv => kv.Value, StringComparer.Ordinal)))
+                PlanStagesSchemaVersion,
+                stages.Select(opcode => new StageFile(
+                    opcode.ToString(),
+                    opcode switch
+                    {
+                        ServicingOpcode.InjectDrivers when drivers is not null => new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            [StageParams.DeviceId] = drivers.DeviceId,
+                            [StageParams.DetailsUrl] = drivers.DetailsUrl,
+                            [StageParams.ExpectedFileNameRegex] = drivers.ExpectedFileNameRegex,
+                        },
+                        ServicingOpcode.ExportWim => new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            [StageParams.Lane] = export.Name,
+                            [StageParams.Compression] = export.Compression,
+                            [StageParams.Cleanup] = export.Cleanup,
+                        },
+                        _ => empty,
+                    }))
                     .ToArray()),
             PlanFileJsonContext.Default.StagesFile);
+    }
 }
 
 internal sealed record ManifestFile(

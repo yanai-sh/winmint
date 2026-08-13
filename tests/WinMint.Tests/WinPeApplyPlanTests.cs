@@ -30,7 +30,7 @@ public class WinPeApplyPlanTests
                 ServicingOpcode.ExportWim,
                 ServicingOpcode.BuildIso,
             ],
-            artifacts.Stages.Stages.Select(s => s.Opcode).ToArray());
+            artifacts.Stages);
     }
 
     [Fact]
@@ -175,8 +175,8 @@ public class WinPeApplyPlanTests
     {
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(ParseProfile());
         Assert.True(result.IsOk);
-        Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.StageOobeUnattend);
-        Assert.Contains(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.PatchBootWimApply);
+        Assert.Contains(ServicingOpcode.StageOobeUnattend, result.Value.Stages);
+        Assert.Contains(ServicingOpcode.PatchBootWimApply, result.Value.Stages);
     }
 
     private static Profile ParseProfile()

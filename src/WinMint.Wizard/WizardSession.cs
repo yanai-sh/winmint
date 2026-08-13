@@ -68,39 +68,26 @@ internal sealed class WizardSession : IDisposable
         return Revision;
     }
 
-    public async Task<Result<SourceMediaReview, Failure>> SettleProbeAsync(
+    public async Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
         CancellationToken cancellationToken = default)
     {
         if (_options is null)
         {
-            return Result.Fail<SourceMediaReview, Failure>(
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
                 new Failure("wizardSession.draft.missing", "Update the draft before probing."));
         }
 
         long revision = Revision;
         HostComposeOptions options = _options;
-        int index = options.WimIndex ?? ImageServicing.DefaultProWimIndex;
-        Result<SourceMediaReview, Failure> result = await (_sourceMedia ?? SourceMediaProbe.Instance)
-            .ProbeAsync(options.SourceIsoPath, index, cancellationToken)
+        Result<IReadOnlyList<WimIndexInfo>, Failure> result = await (_sourceMedia ?? SourceMediaProbe.Instance)
+            .ListIndexesAsync(options.SourceIsoPath, cancellationToken)
             .ConfigureAwait(false);
         if (revision != Revision || !ReferenceEquals(options, _options))
         {
-            return Result.Fail<SourceMediaReview, Failure>(
+            return Result.Fail<IReadOnlyList<WimIndexInfo>, Failure>(
                 new Failure("wizardSession.probe.stale", "Discarded source-media probe for an older draft."));
         }
 
-        if (result.IsOk)
-        {
-            _probe = result.Value with
-            {
-                Indexes = Array.AsReadOnly(result.Value.Indexes.Select(static row => row with { }).ToArray()),
-                Selected = result.Value.Selected is null ? null : result.Value.Selected with { },
-                SelectionMismatch = result.Value.SelectionMismatch is null
-                    ? null
-                    : result.Value.SelectionMismatch with { },
-            };
-            return Result.Ok<SourceMediaReview, Failure>(_probe);
-        }
         return result;
     }
 

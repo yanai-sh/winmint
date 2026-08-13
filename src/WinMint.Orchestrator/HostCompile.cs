@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Security.Cryptography;
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -23,7 +22,7 @@ public static class HostCompile
 
         BuildArtifacts snapshot = SnapshotArtifacts(planned.Value);
         return Result.Ok<HostPlan, HostComposeError>(
-            new HostPlan(snapshot, CreateReview(owned, snapshot, null, null, null, "profile", null)));
+            new HostPlan(snapshot, CreateReview(owned, snapshot, null, null, null, "profile", compose.AuthoredSelectionLabels)));
     }
 
     public static Result<Unit, Failure> ExportPlan(HostPlan plan, string destinationDirectory)
@@ -44,7 +43,10 @@ public static class HostCompile
             File.WriteAllText(Path.Combine(destination, "jobs.json"), JobsWire.Write(artifacts.Jobs.Jobs));
             File.WriteAllText(
                 Path.Combine(destination, "stages.json"),
-                BuildPlan.SerializePlanStagesFile(artifacts.Stages));
+                BuildPlan.SerializePlanStagesFile(
+                    artifacts.Stages,
+                    artifacts.Drivers,
+                    artifacts.Manifest.ImageQuality));
             File.WriteAllText(Path.Combine(destination, "manifest.json"), BuildPlan.SerializeManifestFile(artifacts.Manifest));
             return Result.Ok<Unit, Failure>(default);
         }
@@ -123,14 +125,15 @@ public static class HostCompile
     {
         ArgumentNullException.ThrowIfNull(composition);
 
-        Result<string, Failure> currentHash =
-            await HashSourceAsync(composition.SourceIsoPath, cancellationToken).ConfigureAwait(false);
-        if (!currentHash.IsOk)
+        SourceIsoIdentity frozen = composition.Review.SourceMedia!.SourceIso;
+        Result<bool, Failure> same =
+            await frozen.MatchesCurrentAsync(composition.SourceIsoPath, cancellationToken).ConfigureAwait(false);
+        if (!same.IsOk)
         {
-            return Result.Fail<ImageEvidence, Failure>(currentHash.Error);
+            return Result.Fail<ImageEvidence, Failure>(same.Error);
         }
 
-        if (!string.Equals(currentHash.Value, composition.Review.SourceMedia!.SourceIsoSha256, StringComparison.Ordinal))
+        if (!same.Value)
         {
             return Result.Fail<ImageEvidence, Failure>(
                 new Failure(
@@ -144,7 +147,8 @@ public static class HostCompile
             composition.WorkDirectory,
             composition.OutputIsoPath,
             composition.Review.SourceMedia.Selected!.Index,
-            composition.Review.SourceMedia.SourceIsoSha256,
+            frozen.Sha256,
+            frozen.Length,
             composition.Review.SourceMedia.Selected);
         return await ImageServicing.ApplyAsync(
                 composition.Artifacts,
@@ -303,7 +307,7 @@ public static class HostCompile
             ReadOnly(artifacts.RemoveProvisionedAppx),
             ReadOnly(artifacts.EffectivePackages),
             ReadOnly(artifacts.Jobs.Jobs.Select(SnapshotJob)),
-            ReadOnly(artifacts.Stages.Stages.Select(SnapshotStage)),
+            ReadOnly(artifacts.Stages),
             artifacts.BraveSelected,
             ReadOnly(artifacts.EffectivePackages
                 .Where(static package =>
@@ -358,7 +362,7 @@ public static class HostCompile
         new(
             artifacts.Unattend with { },
             new JobsArtifact(artifacts.Jobs.SchemaVersion, ReadOnly(artifacts.Jobs.Jobs.Select(SnapshotJob))),
-            new ServicingStageList(ReadOnly(artifacts.Stages.Stages.Select(SnapshotStage))),
+            ReadOnly(artifacts.Stages),
             artifacts.Dma with
             {
                 Settle = artifacts.Dma.Settle is null ? null : artifacts.Dma.Settle with { },
@@ -372,7 +376,8 @@ public static class HostCompile
             ReadOnly(artifacts.DisableOptionalFeatures),
             artifacts.WingetImportJson?.ToArray(),
             artifacts.PackageStrict,
-            artifacts.BraveSelected);
+            artifacts.BraveSelected,
+            artifacts.Drivers);
 
     private static ProvisionJob SnapshotJob(ProvisionJob job) =>
         job with
@@ -380,9 +385,6 @@ public static class HostCompile
             WslFromFileAssetNames = job.WslFromFileAssetNames is null ? null : ReadOnly(job.WslFromFileAssetNames),
             ScoopBuckets = job.ScoopBuckets is null ? null : ReadOnly(job.ScoopBuckets),
         };
-
-    private static ServicingStage SnapshotStage(ServicingStage stage) =>
-        new(stage.Opcode, new Dictionary<string, string>(stage.Parameters, StringComparer.Ordinal));
 
     private static SourceMediaReview SnapshotMedia(SourceMediaReview media) =>
         media with
@@ -397,29 +399,6 @@ public static class HostCompile
 
     private static Result<T, HostComposeError> ComposeFail<T>(Failure failure) =>
         Result.Fail<T, HostComposeError>(new HostComposeError(failure.Code, failure.Message));
-
-    private static async Task<Result<string, Failure>> HashSourceAsync(
-        string path,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await using FileStream stream = new(
-                path,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                1024 * 1024,
-                useAsync: true);
-            byte[] hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
-            return Result.Ok<string, Failure>(Convert.ToHexStringLower(hash));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return Result.Fail<string, Failure>(
-                new Failure("hostCompile.sourceIso.unreadable", ex.Message));
-        }
-    }
 }
 
 public sealed record HostComposeOptions(
@@ -455,7 +434,7 @@ public sealed record HostReview(
     IReadOnlyList<string> RemoveProvisionedAppx,
     IReadOnlyList<EffectivePackageFact> EffectivePackages,
     IReadOnlyList<ProvisionJob> Jobs,
-    IReadOnlyList<ServicingStage> Stages,
+    IReadOnlyList<ServicingOpcode> Stages,
     bool BraveSelected,
     IReadOnlyList<string> EffectiveWinget,
     IReadOnlyList<string> EffectiveScoop,
@@ -477,6 +456,44 @@ public sealed record HostReview(
                 : head;
         }
     }
+
+    public string Diff => PlanDiff.Format(this);
+
+    public string QuietSummary =>
+        RemoveProvisionedAppx.Count > 0
+            ? $"This build strips {RemoveProvisionedAppx.Count} apps."
+            : "This build applies product defaults.";
+
+    public string PickStrip
+    {
+        get
+        {
+            string[] labels = AuthoredSelectionLabels
+                .Where(static label => !string.IsNullOrWhiteSpace(label))
+                .Select(static label => label.Trim())
+                .ToArray();
+            return labels.Length == 0 ? string.Empty : string.Join(" · ", labels);
+        }
+    }
+
+    public string QuietBlock
+    {
+        get
+        {
+            List<string> parts = [.. ProductPosture.QuietLabels];
+            if (BraveSelected)
+            {
+                parts.Add("Brave policies");
+            }
+
+            return "Also applied quietly: " + string.Join(" · ", parts);
+        }
+    }
+
+    public string WhatsIncluded => string.Join(" · ", PlanDiff.FriendlyRemoveNames(RemoveProvisionedAppx));
+
+    public string PlanMeta =>
+        $"Account {AuthoredProfile.Account.Username.Trim()} · region {AuthoredProfile.Dma.Settle.Locale} / {AuthoredProfile.Dma.Settle.TimeZoneId} · network {(RequiresNetwork ? "needed" : "not needed")} · DMA {(AuthoredProfile.Dma.Enabled ? "on" : "off")} · {ImageQuality} lane";
 }
 
 public sealed class HostComposition

@@ -14,7 +14,8 @@ public class DriverPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.DoesNotContain(result.Value.Stages.Stages, s => s.Opcode == ServicingOpcode.InjectDrivers);
+        Assert.DoesNotContain(ServicingOpcode.InjectDrivers, result.Value.Stages);
+        Assert.Null(result.Value.Drivers);
     }
 
     [Fact]
@@ -58,16 +59,16 @@ public class DriverPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
-        ServicingStage inject = Assert.Single(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.InjectDrivers);
-        Assert.Equal("surface-laptop-7", inject.Parameters[StageParams.DeviceId]);
+        Assert.Contains(ServicingOpcode.InjectDrivers, result.Value.Stages);
+        Assert.NotNull(result.Value.Drivers);
+        DriverInject inject = result.Value.Drivers!;
+        Assert.Equal("surface-laptop-7", inject.DeviceId);
         Assert.Equal(
             "https://www.microsoft.com/en-us/download/details.aspx?id=106120",
-            inject.Parameters[StageParams.DetailsUrl]);
-        Assert.DoesNotContain(".ps1", string.Join('\0', inject.Parameters.Values), StringComparison.OrdinalIgnoreCase);
+            inject.DetailsUrl);
+        Assert.DoesNotContain(".ps1", inject.ExpectedFileNameRegex, StringComparison.OrdinalIgnoreCase);
 
-        IReadOnlyList<ServicingOpcode> opcodes = result.Value.Stages.Stages.Select(s => s.Opcode).ToArray();
+        IReadOnlyList<ServicingOpcode> opcodes = result.Value.Stages;
         int mountAt = opcodes.ToList().IndexOf(ServicingOpcode.MountInstallWim);
         int injectAt = opcodes.ToList().IndexOf(ServicingOpcode.InjectDrivers);
         int policiesAt = opcodes.ToList().IndexOf(ServicingOpcode.StampOfflinePolicies);
@@ -109,9 +110,7 @@ public class DriverPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.Contains(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.StampOfflinePolicies);
+        Assert.Contains(ServicingOpcode.StampOfflinePolicies, result.Value.Stages);
         Assert.Contains(
             result.Value.OfflinePolicies,
             static row => row.Name == "DisableCoInstallers");
@@ -125,9 +124,7 @@ public class DriverPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.Contains(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.StampOfflinePolicies);
+        Assert.Contains(ServicingOpcode.StampOfflinePolicies, result.Value.Stages);
         Assert.DoesNotContain(
             result.Value.OfflinePolicies,
             static row => row.Name == "DisableCoInstallers");

@@ -61,7 +61,7 @@ public class HostCompositionTests
                 StringComparison.OrdinalIgnoreCase);
             Assert.Equal(
                 Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(iso))),
-                composition.Review.SourceMedia!.SourceIsoSha256);
+                composition.Review.SourceMedia!.SourceIso.Sha256);
             Assert.Equal("ARM64", composition.Review.SourceMedia.Selected!.Architecture);
 
             ImageServicingTestFakes.RecordingElevatedPlanRunner runner = new();
@@ -73,11 +73,11 @@ public class HostCompositionTests
                 runner.Stages,
                 stage => stage.Opcode == ServicingOpcode.MountInstallWim);
             Assert.False(mount.Parameters.ContainsKey("reuseMedia"));
-            Assert.Equal(composition.Review.SourceMedia.SourceIsoSha256, mount.Parameters[StageParams.SourceIsoSha256]);
+            Assert.Equal(composition.Review.SourceMedia.SourceIso.Sha256, mount.Parameters[StageParams.SourceIsoSha256]);
             Assert.Equal(
-                MediaCacheIdentity.CurrentSchema.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                PreparedMediaIdentity.CurrentSchema.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 mount.Parameters[StageParams.CacheSchema]);
-            Assert.Equal(MediaCacheIdentity.Root, mount.Parameters[StageParams.CacheRoot]);
+            Assert.Equal(PreparedMediaIdentity.Root, mount.Parameters[StageParams.CacheRoot]);
             Assert.True(long.TryParse(mount.Parameters[StageParams.SourceIsoLength], out long isoLength));
             Assert.Equal(new FileInfo(iso).Length, isoLength);
             Assert.Equal(composition.Review.SourceMedia.Selected.Name, mount.Parameters[StageParams.ImageName]);
@@ -309,8 +309,8 @@ public class HostCompositionTests
             Assert.Equal(typed.Review.ImageQuality, file.Review.ImageQuality);
             Assert.Equal(typed.Review.PackageStrict, file.Review.PackageStrict);
             Assert.Equal(
-                typed.Review.SourceMedia!.SourceIsoSha256,
-                file.Review.SourceMedia!.SourceIsoSha256);
+                typed.Review.SourceMedia!.SourceIso.Sha256,
+                file.Review.SourceMedia!.SourceIso.Sha256);
             Assert.Equal(typed.Review.SourceMedia.Selected, file.Review.SourceMedia.Selected);
             Assert.Equal(typed.Review.SourceMedia.Indexes, file.Review.SourceMedia.Indexes);
             Assert.Equal(typed.Review.RemoveProvisionedAppx, file.Review.RemoveProvisionedAppx);
@@ -364,6 +364,11 @@ public class HostCompositionTests
 
     private sealed class FixedProbe : ISourceMediaProbe
     {
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+            string sourceIsoPath,
+            CancellationToken cancellationToken = default) =>
+            TestIso.List(Media(sourceIsoPath, ImageServicing.DefaultProWimIndex, new string('a', 64)).Indexes[0]);
+
         public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
             string sourceIsoPath,
             int wimIndex,
@@ -374,40 +379,56 @@ public class HostCompositionTests
 
     private sealed class RealHashProbe : ISourceMediaProbe
     {
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+            string sourceIsoPath,
+            CancellationToken cancellationToken = default) =>
+            TestIso.List(Media(sourceIsoPath, ImageServicing.DefaultProWimIndex, new string('a', 64)).Indexes[0]);
+
         public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
             string sourceIsoPath,
             int wimIndex,
             CancellationToken cancellationToken = default)
         {
-            string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(sourceIsoPath)));
-            return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(Media(sourceIsoPath, wimIndex, hash)));
+            SourceIsoIdentity id = TestIso.Identity(sourceIsoPath);
+            return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(Media(sourceIsoPath, wimIndex, id)));
         }
     }
 
     private sealed class ArchitectureProbe(string architecture) : ISourceMediaProbe
     {
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+            string sourceIsoPath,
+            CancellationToken cancellationToken = default)
+        {
+            WimIndexInfo row = new(ImageServicing.DefaultProWimIndex, "Windows 11 Pro", architecture, "Professional", null, "26100");
+            return TestIso.List(row);
+        }
+
         public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
             string sourceIsoPath,
             int wimIndex,
             CancellationToken cancellationToken = default)
         {
-            string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(sourceIsoPath)));
+            SourceIsoIdentity id = TestIso.Identity(sourceIsoPath);
             WimIndexInfo row = new(wimIndex, "Windows 11 Pro", architecture, "Professional", null, "26100");
             return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(
                 new(
                     Path.GetFullPath(sourceIsoPath),
-                    hash,
+                    id,
                     Array.AsReadOnly([row]),
                     new(wimIndex, row.Name, row.Architecture, row.Edition, row.Version, row.Build))));
         }
     }
 
-    private static SourceMediaReview Media(string iso, int index, string hash)
+    private static SourceMediaReview Media(string iso, int index, string hash) =>
+        Media(iso, index, TestIso.FixedHash(iso, hash));
+
+    private static SourceMediaReview Media(string iso, int index, SourceIsoIdentity id)
     {
         WimIndexInfo row = new(index, "Windows 11 Home", "ARM64", "Core", "10.0.26100.1", "26100");
         return new(
             Path.GetFullPath(iso),
-            hash,
+            id,
             Array.AsReadOnly([row]),
             new(index, row.Name, row.Architecture, row.Edition, row.Version, row.Build));
     }

@@ -27,6 +27,7 @@ public sealed record ServicingRun(
     string OutputIsoPath,
     int? WimIndex = null,
     string? SourceIsoSha256 = null,
+    long? SourceIsoLength = null,
     SelectedWim? SelectedImage = null);
 
 /// <summary>Elevation only — ImageServicing writes evidence after the runner returns.</summary>
@@ -48,7 +49,7 @@ HostCompile resolves and freezes the build Output ISO path before Apply. ImageSe
 
 **Prepared media** lives under `%ProgramData%\WinMint\Servicing\media-cache\v{schema}\{sourceIsoSha256}\index-{n}\`. ImageServicing owns it: callers have no reuse switch. A published entry is an immutable Source ISO tree with a single-index `install.wim` and required `boot.wim`. It is copied into per-Apply **staged media** (`{work}/media`) and is never mounted. Invalid entries are quarantined and rebuilt once. Publication is not Evidence.
 
-Wizard WIM list (`SourceWimProbe` / `ISourceMediaProbe.ListIndexesAsync`) must not SHA-256 the ISO. HostCompile Compose hashes once via `ProbeAsync` and freezes Source ISO SHA + `SelectedWim`; Apply verifies bytes against that freeze. Direct S2 callers may omit SHA (`MediaCacheIdentity.TryFromFile` once). Kernel `Assert-WinMintSourceIsoIdentity` stays verify-only.
+Wizard WIM list (`ISourceMediaProbe.ListIndexesAsync`) must not SHA-256 the ISO. HostCompile Compose hashes once via `ProbeAsync` (`SourceIsoIdentity`) and freezes SHA + length + `SelectedWim`; Apply verifies bytes against that freeze (`MatchesCurrentAsync`). Direct S2 callers may omit SHA (`PreparedMediaIdentity.TryFromFile` once). Kernel `Assert-WinMintSourceIsoIdentity` stays verify-only.
 
 **One Apply per Host.** The elevated loop takes `Global\WinMint.ImageServicing.v1` before any stage and recovers only the owned `%ProgramData%\WinMint\Servicing\mount` and `boot-mount` directories. Owner files live in `mount-owners\`. To delete a Prepared-media entry, wait until no Apply is running, then remove that entry directory only.
 
@@ -67,10 +68,10 @@ A kernel file is named for the opcode it serves: `ServicingOpcode.StampOfflinePo
 ## Invariants
 
 1. Stages run in plan order; do not invent product stages.
-2. BuildPlan emits opcodes + params — never repo-relative `.ps1` paths.
+2. BuildPlan emits opcodes + optional `DriverInject` — never repo-relative `.ps1` paths.
 3. Kernels: named typed parameters (splatted from the opcode record) — no Profile JSON, no `-Parameters` hashtable.
 4. First kernel non-zero → typed failure; workdir preserved; leftover mounts discarded.
-5. Lane encoded in `ExportWim` params by BuildPlan.
+5. Lane derived at materialize via `ExportLane.For(plan.Manifest.ImageQuality)` — not a plan bag.
 6. One elevated `servicing/Invoke-ServicingPlan.ps1` dumb loop per Apply (single UAC).
 7. Materialize owns Mutate params (e.g. capability/feature `kind`) — not the kernel loop.
 8. Single-image WIM before commit; ExportWim fail-closes if index count ≠ 1.

@@ -52,7 +52,7 @@ public class OnlineDebloatPlanTests
         Assert.Equal(expectSafetyNet, artifacts.Jobs.Jobs.Any(j => j.Kind == ProvisionJobKind.AppxSafetyNet));
         Assert.Equal(
             expectOfflineStage,
-            artifacts.Stages.Stages.Any(s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx));
+            artifacts.Stages.Contains(ServicingOpcode.RemoveProvisionedAppx));
     }
 
     [Fact]

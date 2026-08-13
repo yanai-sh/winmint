@@ -22,7 +22,7 @@ public interface ISourceStageViewModel
 internal interface ISourceStageHost
 {
     void SourceDraftChanged();
-    Task<Result<SourceMediaReview, Failure>> SettleSourceProbeAsync(CancellationToken cancellationToken);
+    Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListSourceIndexesAsync(CancellationToken cancellationToken);
     void ReportStageError(string code, string message);
     void ClearSourceProbeError();
 }
@@ -160,8 +160,8 @@ internal sealed partial class SourceStageViewModel : ObservableObject, ISourceSt
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                Result<SourceMediaReview, Failure> result =
-                    await _host.SettleSourceProbeAsync(cancellationToken).ConfigureAwait(true);
+                Result<IReadOnlyList<WimIndexInfo>, Failure> result =
+                    await _host.ListSourceIndexesAsync(cancellationToken).ConfigureAwait(true);
                 if (cancellationToken.IsCancellationRequested)
                 {
                     return;
@@ -179,13 +179,13 @@ internal sealed partial class SourceStageViewModel : ObservableObject, ISourceSt
                     return;
                 }
 
-                foreach (WimIndexInfo row in result.Value.Indexes)
+                foreach (WimIndexInfo row in result.Value)
                 {
                     WimIndexes.Add(row);
                 }
 
-                int selected = SourceWimProbe.ResolveSelection(
-                    result.Value.Indexes,
+                int selected = WimIndexInfo.ResolveSelection(
+                    result.Value,
                     _wimIndex,
                     _userChoseWimIndex,
                     _buildMachineWimDefault);
@@ -194,9 +194,11 @@ internal sealed partial class SourceStageViewModel : ObservableObject, ISourceSt
                 SelectedWimIndex = WimIndexes.FirstOrDefault(row => row.Index == selected);
                 _updatingWimPicker = false;
                 IsWimPickerVisible = true;
-                if (result.Value.SelectionMismatch is { } mismatch)
+                if (!result.Value.Any(row => row.Index == selected))
                 {
-                    _host.ReportStageError(mismatch.Code, mismatch.Message + " Select an available edition.");
+                    _host.ReportStageError(
+                        "wim.probe.indexMissing",
+                        $"Source ISO does not contain WIM index {selected}. Select an available edition.");
                 }
                 else
                 {

@@ -60,7 +60,7 @@ public sealed class ServicingWorkspace
     public string Digests { get; }
     public string PreparedMedia { get; }
 
-    public static string HostPreparedMediaRoot => MediaCacheIdentity.Root;
+    public static string HostPreparedMediaRoot => PreparedMediaIdentity.Root;
 
     public IReadOnlyDictionary<string, string> LeafMap() =>
         new Dictionary<string, string>(StringComparer.Ordinal)
@@ -83,6 +83,54 @@ public sealed class ServicingWorkspace
             ["hostPreparedMediaRoot"] = HostPreparedMediaRoot,
         };
 
+    public ApplyProgress? TryReadProgress(CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(ApplyStatus))
+        {
+            return null;
+        }
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // ponytail: small status file; Share ReadWrite so the elevated kernel loop can rewrite while we poll
+            using FileStream stream = new(
+                ApplyStatus,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            using StreamReader reader = new(stream);
+            string? stage = null;
+            string? log = null;
+            while (reader.ReadLine() is { } line)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (line.StartsWith("stage=", StringComparison.Ordinal))
+                {
+                    stage = line["stage=".Length..].Trim();
+                }
+                else if (line.StartsWith("log=", StringComparison.Ordinal))
+                {
+                    log = line["log=".Length..].Trim();
+                }
+            }
+
+            return stage is null ? null : new ApplyProgress(stage, string.IsNullOrWhiteSpace(log) ? null : log);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     public void WriteManifest()
     {
         Directory.CreateDirectory(Root);
@@ -93,6 +141,8 @@ public sealed class ServicingWorkspace
                 ServicingJsonContext.Default.DictionaryStringString));
     }
 }
+
+public readonly record struct ApplyProgress(string Stage, string? LogPath);
 
 internal sealed record ExpectedEvidenceFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,

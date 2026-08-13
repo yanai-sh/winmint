@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using WinMint.Orchestrator;
+using WinMint.Wizard;
 using WinMint.Wizard.ViewModels;
 
 namespace WinMint.Tests;
@@ -10,7 +10,7 @@ public class WizardViewModelTests
     [Fact]
     public async Task Replan_reports_an_unknown_chip_key_as_status_instead_of_throwing()
     {
-        using WizardShellViewModel vm = Vm();
+        using WizardViewModel vm = Vm();
         vm.Software.Chips.Browsers.Add(new ChipItem("not-in-catalog", "Nope", isSelected: true));
 
         await vm.ReplanAsync();
@@ -23,7 +23,7 @@ public class WizardViewModelTests
     [Fact]
     public void Close_without_a_host_window_is_a_no_op()
     {
-        using WizardShellViewModel vm = Vm();
+        using WizardViewModel vm = Vm();
 
         vm.CloseCommand.Execute(null);
     }
@@ -36,7 +36,7 @@ public class WizardViewModelTests
         try
         {
             PickerProbe probe = new();
-            using WizardShellViewModel vm = new(storage: null, close: null, sourceMedia: probe);
+            using WizardViewModel vm = new(storage: null, close: null, sourceMedia: probe);
             vm.Account.Password = "do-not-show-me";
             vm.Source.SourceIsoPath = iso;
             await WaitForProbeAsync(vm);
@@ -73,7 +73,7 @@ public class WizardViewModelTests
         try
         {
             QueuedProbe probe = new();
-            using WizardShellViewModel vm = new(storage: null, close: null, sourceMedia: probe);
+            using WizardViewModel vm = new(storage: null, close: null, sourceMedia: probe);
             vm.Source.SourceIsoPath = iso;
             await probe.WaitForCallsAsync(1);
 
@@ -95,9 +95,9 @@ public class WizardViewModelTests
         }
     }
 
-    private static WizardShellViewModel Vm() => new(storage: null, close: null, sourceMedia: null);
+    private static WizardViewModel Vm() => new(storage: null, close: null, sourceMedia: null);
 
-    private static async Task WaitForProbeAsync(WizardShellViewModel vm)
+    private static async Task WaitForProbeAsync(WizardViewModel vm)
     {
         for (int i = 0; i < 100 && vm.Source.IsWimProbeBusy; i++)
         {
@@ -108,27 +108,33 @@ public class WizardViewModelTests
 
     private sealed class PickerProbe : ISourceMediaProbe
     {
+        private static WimIndexInfo Available { get; } =
+            new(7, "Windows 11 Pro", "aarch64", "Professional", "10.0.26100.1", "26100");
+
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+            string sourceIsoPath,
+            CancellationToken cancellationToken = default) =>
+            TestIso.List(Available);
+
         public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
             string sourceIsoPath,
             int wimIndex,
             CancellationToken cancellationToken = default)
         {
-            WimIndexInfo available = new(7, "Windows 11 Pro", "aarch64", "Professional", "10.0.26100.1", "26100");
-            string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(sourceIsoPath)));
-            SelectedWim? selected = wimIndex == available.Index
+            SelectedWim? selected = wimIndex == Available.Index
                 ? new(
-                    available.Index,
-                    available.Name,
-                    available.Architecture,
-                    available.Edition,
-                    available.Version,
-                    available.Build)
+                    Available.Index,
+                    Available.Name,
+                    Available.Architecture,
+                    Available.Edition,
+                    Available.Version,
+                    Available.Build)
                 : null;
             return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(
                 new(
                     Path.GetFullPath(sourceIsoPath),
-                    hash,
-                    Array.AsReadOnly([available]),
+                    TestIso.Identity(sourceIsoPath),
+                    Array.AsReadOnly([Available]),
                     selected,
                     selected is null
                         ? new(
@@ -141,17 +147,30 @@ public class WizardViewModelTests
 
     private sealed class QueuedProbe : ISourceMediaProbe
     {
-        private readonly List<(string Source, int Index, TaskCompletionSource<Result<SourceMediaReview, Failure>> Completion)> _calls = [];
+        private readonly List<TaskCompletionSource<Result<IReadOnlyList<WimIndexInfo>, Failure>>> _calls = [];
+
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+            string sourceIsoPath,
+            CancellationToken cancellationToken = default)
+        {
+            TaskCompletionSource<Result<IReadOnlyList<WimIndexInfo>, Failure>> completion =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _calls.Add(completion);
+            return completion.Task;
+        }
 
         public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
             string sourceIsoPath,
             int wimIndex,
             CancellationToken cancellationToken = default)
         {
-            TaskCompletionSource<Result<SourceMediaReview, Failure>> completion =
-                new(TaskCreationOptions.RunContinuationsAsynchronously);
-            _calls.Add((sourceIsoPath, wimIndex, completion));
-            return completion.Task;
+            WimIndexInfo row = new(wimIndex, "Windows 11 Pro", "arm64", "Professional", "10.0.26100.1", "26100");
+            return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(
+                new(
+                    Path.GetFullPath(sourceIsoPath),
+                    TestIso.Identity(sourceIsoPath),
+                    [row],
+                    new(row.Index, row.Name, row.Architecture, row.Edition, row.Version, row.Build))));
         }
 
         public async Task WaitForCallsAsync(int count)
@@ -165,15 +184,14 @@ public class WizardViewModelTests
 
         public void Complete(int call)
         {
-            (string source, int index, TaskCompletionSource<Result<SourceMediaReview, Failure>> completion) = _calls[call];
-            WimIndexInfo row = new(index, "Windows 11 Pro", "arm64", "Professional", "10.0.26100.1", "26100");
-            string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(source)));
-            completion.SetResult(Result.Ok<SourceMediaReview, Failure>(
-                new(
-                    Path.GetFullPath(source),
-                    hash,
-                    [row],
-                    new(row.Index, row.Name, row.Architecture, row.Edition, row.Version, row.Build))));
+            WimIndexInfo row = new(
+                BuildMachineEdition.DefaultWimIndex(),
+                "Windows 11 Pro",
+                "arm64",
+                "Professional",
+                "10.0.26100.1",
+                "26100");
+            _calls[call].SetResult(Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>([row]));
         }
     }
 }

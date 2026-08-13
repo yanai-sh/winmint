@@ -8,7 +8,7 @@ using WinMint.Orchestrator;
 namespace WinMint.Wizard.ViewModels;
 
 /// <summary>Wizard navigation and one Living Draft composition handle; stage authoring stays in stage view models.</summary>
-public sealed partial class WizardShellViewModel :
+public sealed partial class WizardViewModel :
     ObservableObject,
     IDisposable,
     ISourceStageHost,
@@ -28,12 +28,12 @@ public sealed partial class WizardShellViewModel :
     private CancellationTokenSource? _buildCts;
     private bool _ready;
 
-    public WizardShellViewModel(Window window)
+    public WizardViewModel(Window window)
         : this(window.StorageProvider, window.Close, sourceMedia: null)
     {
     }
 
-    internal WizardShellViewModel(
+    internal WizardViewModel(
         IStorageProvider? storage,
         Action? close,
         ISourceMediaProbe? sourceMedia,
@@ -279,7 +279,7 @@ public sealed partial class WizardShellViewModel :
         using CancellationTokenSource pollCts =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         Task pollTask = PollApplyStatusAsync(
-            ApplyStatusReader.StatusPath(composition.WorkDirectory),
+            composition.WorkDirectory,
             buildStage,
             pollCts.Token);
         WizardBuildResult result;
@@ -345,17 +345,17 @@ public sealed partial class WizardShellViewModel :
     }
 
     private static async Task PollApplyStatusAsync(
-        string statusPath,
+        string workDirectory,
         ReviewStageViewModel buildStage,
         CancellationToken cancellationToken)
     {
+        ServicingWorkspace workspace = new(workDirectory);
         string? last = null;
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                string? label = ApplyStatusReader.FormatBusyLabel(
-                    ApplyStatusReader.TryRead(statusPath, cancellationToken));
+                string? label = FormatBusyLabel(workspace.TryReadProgress(cancellationToken));
                 if (label is not null
                     && !string.Equals(label, last, StringComparison.Ordinal))
                 {
@@ -374,6 +374,31 @@ public sealed partial class WizardShellViewModel :
         }
     }
 
+    internal static string? FormatBusyLabel(ApplyProgress? snapshot)
+    {
+        if (snapshot is null || string.IsNullOrWhiteSpace(snapshot.Value.Stage))
+        {
+            return null;
+        }
+
+        string stage = snapshot.Value.Stage;
+        if (stage.Equals("idle", StringComparison.OrdinalIgnoreCase)
+            || stage.Equals("done", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        string prefix = stage.StartsWith("failed:", StringComparison.OrdinalIgnoreCase)
+            ? "Failed"
+            : "Building";
+        string display = stage.StartsWith("failed:", StringComparison.OrdinalIgnoreCase)
+            ? stage["failed:".Length..]
+            : stage;
+        return string.IsNullOrWhiteSpace(snapshot.Value.LogPath)
+            ? $"{prefix}: {display}"
+            : $"{prefix}: {display} — {snapshot.Value.LogPath}";
+    }
+
     [RelayCommand]
     public void CancelBuild() => _buildCts?.Cancel();
 
@@ -382,9 +407,9 @@ public sealed partial class WizardShellViewModel :
 
     void ISourceStageHost.SourceDraftChanged() => DraftChanged();
 
-    Task<Result<SourceMediaReview, Failure>> ISourceStageHost.SettleSourceProbeAsync(
+    Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ISourceStageHost.ListSourceIndexesAsync(
         CancellationToken cancellationToken) =>
-        _session.SettleProbeAsync(cancellationToken);
+        _session.ListIndexesAsync(cancellationToken);
 
     void ISourceStageHost.ReportStageError(string code, string message) =>
         _source.Status.Set($"{code}: {message}", true);

@@ -5,7 +5,7 @@ using WinMint.Contracts;
 namespace WinMint.Orchestrator;
 
 /// <summary>Vanilla-to-WinMint diff text projected only from an approved, secret-free review.</summary>
-public static class PlanDiff
+internal static class PlanDiff
 {
     private static readonly Dictionary<string, string> AppxLabels =
         new(StringComparer.OrdinalIgnoreCase)
@@ -33,7 +33,7 @@ public static class PlanDiff
             ["Microsoft.Copilot"] = "Copilot",
         };
 
-    public static string Format(HostReview review)
+    internal static string Format(HostReview review)
     {
         ArgumentNullException.ThrowIfNull(review);
         StringBuilder sb = new();
@@ -45,13 +45,13 @@ public static class PlanDiff
         return sb.ToString().TrimEnd();
     }
 
-    public static IReadOnlyList<string> FriendlyRemoveNames(IEnumerable<string> appxFamilyIds) =>
+    internal static IReadOnlyList<string> FriendlyRemoveNames(IEnumerable<string> appxFamilyIds) =>
         appxFamilyIds.Select(FriendlyRemoveName).ToArray();
 
     private static void AppendOffline(StringBuilder sb, HostReview review)
     {
         Profile profile = review.AuthoredProfile;
-        if (review.Stages.Any(static stage => stage.Opcode == ServicingOpcode.RemoveProvisionedAppx))
+        if (review.Stages.Contains(ServicingOpcode.RemoveProvisionedAppx))
         {
             AppendAppx(sb, review.RemoveProvisionedAppx);
         }
@@ -66,7 +66,7 @@ public static class PlanDiff
             Line(sb, $"Optional feature {id}", "you chose");
         }
 
-        if (review.Stages.Any(static stage => stage.Opcode == ServicingOpcode.StampOfflinePolicies))
+        if (review.Stages.Contains(ServicingOpcode.StampOfflinePolicies))
         {
             Line(sb, "Edge / OneDrive / device metadata / WPBT policies", "always");
             if (review.BraveSelected)
@@ -75,7 +75,7 @@ public static class PlanDiff
             }
         }
 
-        if (review.Stages.Any(static stage => stage.Opcode == ServicingOpcode.InjectDrivers))
+        if (review.Stages.Contains(ServicingOpcode.InjectDrivers))
         {
             Line(sb, "Surface drivers", "you chose");
         }

@@ -153,7 +153,7 @@ public class BuildPlanPlanTests
         Assert.Equal(ImageQualityLane.Test, artifacts.Manifest.ImageQuality);
         Assert.Equal(JobsWire.SchemaVersion, artifacts.Jobs.SchemaVersion);
         Assert.DoesNotContain(artifacts.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Stub);
-        Assert.NotEmpty(artifacts.Stages.Stages);
+        Assert.NotEmpty(artifacts.Stages);
         Assert.Equal(
             [
                 ServicingOpcode.MountInstallWim,
@@ -165,24 +165,14 @@ public class BuildPlanPlanTests
                 ServicingOpcode.ExportWim,
                 ServicingOpcode.BuildIso,
             ],
-            artifacts.Stages.Stages.Select(s => s.Opcode).ToArray());
+            artifacts.Stages);
         Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == ProvisionJobKind.OneDriveUninstall);
         Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ReservedStorageDisable);
-        Assert.All(
-            artifacts.Stages.Stages,
-            stage => Assert.DoesNotContain(".ps1", string.Join('\0', stage.Parameters.Values), StringComparison.OrdinalIgnoreCase));
-        ServicingStage export = Assert.Single(
-            artifacts.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.ExportWim);
-        Assert.Equal("Test", export.Parameters[StageParams.Lane]);
-        Assert.Equal("fast", export.Parameters[StageParams.Compression]);
-        Assert.Equal("skip", export.Parameters[StageParams.Cleanup]);
-        Assert.Empty(
-            artifacts.Stages.Stages.First(s => s.Opcode == ServicingOpcode.MountInstallWim).Parameters);
-        Assert.Empty(
-            artifacts.Stages.Stages.First(s => s.Opcode == ServicingOpcode.BuildIso).Parameters);
-        Assert.Empty(
-            artifacts.Stages.Stages.First(s => s.Opcode == ServicingOpcode.StampOfflineShell).Parameters);
+        Assert.Null(artifacts.Drivers);
+        ExportLane export = ExportLane.For(artifacts.Manifest.ImageQuality);
+        Assert.Equal("Test", export.Name);
+        Assert.Equal("fast", export.Compression);
+        Assert.Equal("skip", export.Cleanup);
     }
 
     [Fact]
@@ -247,12 +237,10 @@ public class BuildPlanPlanTests
         Assert.True(result.IsOk);
         BuildArtifacts artifacts = result.Value;
         Assert.Equal(ImageQualityLane.Release, artifacts.Manifest.ImageQuality);
-        ServicingStage export = Assert.Single(
-            artifacts.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.ExportWim);
-        Assert.Equal("Release", export.Parameters[StageParams.Lane]);
-        Assert.Equal("max", export.Parameters[StageParams.Compression]);
-        Assert.Equal("full", export.Parameters[StageParams.Cleanup]);
+        ExportLane export = ExportLane.For(artifacts.Manifest.ImageQuality);
+        Assert.Equal("Release", export.Name);
+        Assert.Equal("max", export.Compression);
+        Assert.Equal("full", export.Cleanup);
     }
 
     private static Profile Parse(string json)

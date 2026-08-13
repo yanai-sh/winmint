@@ -14,10 +14,7 @@ public class BrowserPolicyPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
 
-        ServicingStage policies = Assert.Single(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.StampOfflinePolicies);
-        Assert.Empty(policies.Parameters);
+        Assert.Contains(ServicingOpcode.StampOfflinePolicies, result.Value.Stages);
         string names = string.Join(' ', result.Value.OfflinePolicies.Select(static r => r.Name));
         Assert.Contains("HideFirstRunExperience", names, StringComparison.Ordinal);
         Assert.Contains("NewTabPageLocation", names, StringComparison.Ordinal);
@@ -51,7 +48,7 @@ public class BrowserPolicyPlanTests
                 ServicingOpcode.ExportWim,
                 ServicingOpcode.BuildIso,
             ],
-            result.Value.Stages.Stages.Select(s => s.Opcode).ToArray());
+            result.Value.Stages);
     }
 
     [Fact]
@@ -60,9 +57,7 @@ public class BrowserPolicyPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(Lab(winget: ["Brave.Brave"]));
         Assert.True(result.IsOk);
         Assert.True(result.IsOk);
-        Assert.Contains(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.StampOfflinePolicies);
+        Assert.Contains(ServicingOpcode.StampOfflinePolicies, result.Value.Stages);
         string names = string.Join(' ', result.Value.OfflinePolicies.Select(static r => r.Name));
         Assert.Contains("BraveRewardsDisabled", names, StringComparison.Ordinal);
         Assert.Contains("BraveAIChatEnabled", names, StringComparison.Ordinal);

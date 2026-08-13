@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 namespace WinMint.Orchestrator;
 
-internal readonly record struct MediaCacheIdentity(
+internal readonly record struct PreparedMediaIdentity(
     string SourceIsoSha256,
     long SourceIsoLength,
     int WimIndex,
@@ -19,7 +19,7 @@ internal readonly record struct MediaCacheIdentity(
     internal static bool TryFromFile(
         string sourceIsoPath,
         int wimIndex,
-        out MediaCacheIdentity identity,
+        out PreparedMediaIdentity identity,
         out Failure error)
     {
         identity = default;
@@ -47,7 +47,7 @@ internal readonly record struct MediaCacheIdentity(
         long sourceIsoLength,
         int wimIndex,
         int schema,
-        out MediaCacheIdentity identity,
+        out PreparedMediaIdentity identity,
         out Failure error)
     {
         identity = default;
@@ -66,7 +66,7 @@ internal readonly record struct MediaCacheIdentity(
             return false;
         }
 
-        identity = new MediaCacheIdentity(sourceIsoSha256, sourceIsoLength, wimIndex, schema);
+        identity = new PreparedMediaIdentity(sourceIsoSha256, sourceIsoLength, wimIndex, schema);
         return true;
     }
 }

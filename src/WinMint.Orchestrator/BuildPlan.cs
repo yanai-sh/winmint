@@ -461,15 +461,6 @@ public static partial class BuildPlan
 
         JobsArtifact jobs = new(JobsWire.SchemaVersion, jobList);
 
-        ExportLane exportLane = ExportLane.For(options.ImageQuality);
-
-        List<ServicingStage> stageList =
-        [
-            new ServicingStage(
-                ServicingOpcode.MountInstallWim,
-                new Dictionary<string, string>(StringComparer.Ordinal)),
-        ];
-
         // Stamp HKLM policies before AppX/capability/driver DISM mutations. Creating new
         // Policies\Microsoft\* keys (Widgets Dsh) flakes Unauthorized on a heavily-serviced mount.
         bool injectDrivers = profile.Drivers is not null;
@@ -482,69 +473,42 @@ public static partial class BuildPlan
         IReadOnlyList<OfflinePolicyRow> policyRows = ProductPosture.ComposePolicies(
             includeBraveDebloat: braveSelected,
             includeDriverHygiene: injectDrivers);
-        stageList.Add(new ServicingStage(
+
+        List<ServicingOpcode> stages =
+        [
+            ServicingOpcode.MountInstallWim,
             ServicingOpcode.StampOfflinePolicies,
-            new Dictionary<string, string>(StringComparer.Ordinal)));
+        ];
 
         if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Offline)
         {
-            stageList.Add(new ServicingStage(
-                ServicingOpcode.RemoveProvisionedAppx,
-                new Dictionary<string, string>(StringComparer.Ordinal)));
+            stages.Add(ServicingOpcode.RemoveProvisionedAppx);
         }
 
         if (profile.RemoveCapabilities.Count > 0)
         {
-            stageList.Add(new ServicingStage(
-                ServicingOpcode.RemoveCapabilities,
-                new Dictionary<string, string>(StringComparer.Ordinal)));
+            stages.Add(ServicingOpcode.RemoveCapabilities);
         }
 
         if (profile.DisableOptionalFeatures.Count > 0)
         {
-            stageList.Add(new ServicingStage(
-                ServicingOpcode.DisableOptionalFeatures,
-                new Dictionary<string, string>(StringComparer.Ordinal)));
+            stages.Add(ServicingOpcode.DisableOptionalFeatures);
         }
 
+        DriverInject? drivers = null;
         if (injectDrivers)
         {
             SurfaceDriverDevice device = SurfaceDriverCatalog.Devices[profile.Drivers!.DeviceId];
-            stageList.Add(new ServicingStage(
-                ServicingOpcode.InjectDrivers,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    [StageParams.DeviceId] = device.Id,
-                    [StageParams.DetailsUrl] = device.DetailsUrl,
-                    [StageParams.ExpectedFileNameRegex] = device.ExpectedFileNameRegex,
-                }));
+            stages.Add(ServicingOpcode.InjectDrivers);
+            drivers = new DriverInject(device.Id, device.DetailsUrl, device.ExpectedFileNameRegex);
         }
 
-        stageList.Add(new ServicingStage(ServicingOpcode.StagePayload, new Dictionary<string, string>(StringComparer.Ordinal)));
-        stageList.Add(new ServicingStage(ServicingOpcode.StageOobeUnattend, new Dictionary<string, string>(StringComparer.Ordinal)));
-
-        stageList.Add(new ServicingStage(
-            ServicingOpcode.StampOfflineShell,
-            new Dictionary<string, string>(StringComparer.Ordinal)));
-
-        stageList.Add(new ServicingStage(ServicingOpcode.PatchBootWimApply, new Dictionary<string, string>(StringComparer.Ordinal)));
-
-        stageList.AddRange(
-        [
-            new ServicingStage(
-                ServicingOpcode.ExportWim,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    [StageParams.Lane] = exportLane.Name,
-                    [StageParams.Compression] = exportLane.Compression,
-                    [StageParams.Cleanup] = exportLane.Cleanup,
-                }),
-            new ServicingStage(
-                ServicingOpcode.BuildIso,
-                new Dictionary<string, string>(StringComparer.Ordinal)),
-        ]);
-
-        ServicingStageList stages = new(stageList);
+        stages.Add(ServicingOpcode.StagePayload);
+        stages.Add(ServicingOpcode.StageOobeUnattend);
+        stages.Add(ServicingOpcode.StampOfflineShell);
+        stages.Add(ServicingOpcode.PatchBootWimApply);
+        stages.Add(ServicingOpcode.ExportWim);
+        stages.Add(ServicingOpcode.BuildIso);
 
         BuildArtifacts artifacts = new(
             new UnattendArtifact(unattendXml),
@@ -560,7 +524,8 @@ public static partial class BuildPlan
             profile.DisableOptionalFeatures,
             packageSlice.WingetImportJson,
             options.PackageStrict,
-            braveSelected);
+            braveSelected,
+            drivers);
 
         return Result.Ok<BuildArtifacts, Failure>(artifacts);
     }

@@ -123,9 +123,7 @@ public class ProductPostureTests
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
 
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
-        Assert.DoesNotContain(
-            planned.Value.Stages.Stages.Single(s => s.Opcode == ServicingOpcode.StampOfflinePolicies).Parameters.Keys,
-            static key => key.Equals("policySpecs", StringComparison.Ordinal));
+        Assert.Contains(ServicingOpcode.StampOfflinePolicies, planned.Value.Stages);
         Assert.DoesNotContain(planned.Value.OfflinePolicies, static row => row.Name == "TurnOffWindowsCopilot");
         Assert.DoesNotContain(planned.Value.OfflinePolicies, static row => row.Name == "HubsSidebarEnabled");
     }

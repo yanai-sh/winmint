@@ -23,7 +23,10 @@ public static class BuildPlan
     public static Result<BuildArtifacts, Failure> Plan(Profile profile, RunOptions? run = null);
     // run null ⇒ ImageQuality.Test; IncludeSmokeStubs false unless harness passes true
 
-    public static string SerializePlanStagesFile(ServicingStageList stages);
+    public static string SerializePlanStagesFile(
+        IReadOnlyList<ServicingOpcode> stages,
+        DriverInject? drivers = null,
+        ImageQualityLane lane = ImageQualityLane.Test);
 }
 
 public static class ProfileFile
@@ -44,7 +47,7 @@ public sealed record RunOptions
 public sealed record BuildArtifacts(
     UnattendArtifact Unattend,
     JobsArtifact Jobs,           // IReadOnlyList<ProvisionJob> — WinMint.Contracts
-    ServicingStageList Stages,   // ServicingOpcode + params — NOT .ps1 paths
+    IReadOnlyList<ServicingOpcode> Stages,
     DmaContract Dma,
     BuildManifest Manifest,
     AccountProfile Account,
@@ -54,12 +57,14 @@ public sealed record BuildArtifacts(
     IReadOnlyList<string> RemoveCapabilities,
     IReadOnlyList<string> DisableOptionalFeatures,
     byte[]? WingetImportJson = null,
-    bool PackageStrict = false);
+    bool PackageStrict = false,
+    bool BraveSelected = false,
+    DriverInject? Drivers = null);
 ```
 
 `BuildArtifacts` is BuildPlan's internal result vocabulary. Front ends enter through HostCompile: document-only `validate` / `plan` receive `HostPlan` via `PlanDocument(HostComposeOptions)`, while build flows receive an immutable `HostComposition` with a secret-free `HostReview`. HostCompile deep-snapshots the approved artifacts and keeps them private through Apply. Honesty and Gate B (`HostReview.IsGateB` = Release ∧ package-strict) are HostReview projections.
 
-Stages: opcodes + params; ImageServicing maps opcode → `servicing/*.ps1`, serializes typed Kernel records into `winmint.servicing.stages/v1`, and writes policy/AppX/component lists as JSON under `payload/`. Cli diagnostic dumps use `winmint.plan.stages/v1` (plan-owned keys only); only ImageServicing materialization emits `winmint.servicing.stages/v1`. Jobs JSON is owned by `JobsWire.Write` / `TryParse` in Contracts. Guest `bundle.json` is owned by `GuestBundleWire.Write` / `TryParse`. See [CONTRACTS](CONTRACTS.md).
+Stages: opcode list plus optional `DriverInject`. ImageServicing maps opcode → `servicing/*.ps1`, serializes typed Kernel records into `winmint.servicing.stages/v1`, and writes policy/AppX/component lists as JSON under `payload/`. Cli diagnostic dumps use `winmint.plan.stages/v1` (InjectDrivers + ExportWim diagnostic keys only); only ImageServicing materialization emits `winmint.servicing.stages/v1`. Jobs JSON is owned by `JobsWire.Write` / `TryParse` in Contracts. Guest `bundle.json` is owned by `GuestBundleWire.Write` / `TryParse`. See [CONTRACTS](CONTRACTS.md).
 
 Package planning is one internal operation over Profile, PackageCatalog, effective image architecture, and audit strictness. It returns the complete package-job slice, deterministic winget import bytes, and typed `EffectivePackageFact` rows (source, resolved install id, ProductPosture/Profile origin, reboot requirement). Wizard Review consumes those facts from the same `Plan` call; it does not re-plan packages. Execution consumes `Jobs` and `WingetImportJson`. HostCompile resolves `PackageStrictOverride` once: Test defaults false, Release defaults true, and explicit Force/Suppress overrides the lane. The resolved bool is stamped into the guest bundle.
 
@@ -68,7 +73,7 @@ Package planning is one internal operation over Profile, PackageCatalog, effecti
 1. Pure / deterministic: same inputs → same artifacts (stable ordering).
 2. No I/O in `Plan` / `TryParseProfile` / `SerializeProfile` — password FS I/O in `ProfileFile.TryLoad`.
 3. Failure ⇒ no partial artifacts.
-4. Image quality only from `RunOptions` (into `ExportWim` params).
+4. Image quality only from `RunOptions`. ExportWim lane is derived via `ExportLane.For(Manifest.ImageQuality)` at dump/materialize — not stored as a plan bag.
 5. DMA enabled ⇒ Ireland sticky setup region (`DmaInterop` DeviceRegion + `.DEFAULT` Geo hive paths) in unattend **and** settle targets in `DmaContract`. Enabled stays on the outer DMA object, not nested settle.
 6. Local+autoLogon ⇒ non-empty password or `Failure` ([SECRETS](SECRETS.md)).
 7. Host order: materialize Profile → HostCompile composition (serialize + one `Plan`) → immutable approval → ImageServicing.Apply; Apply never reloads or replans.

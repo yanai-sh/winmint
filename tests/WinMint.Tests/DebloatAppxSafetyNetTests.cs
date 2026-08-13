@@ -127,9 +127,7 @@ public class DebloatAppxSafetyNetTests
             j => j.Kind == ProvisionJobKind.AppxSafetyNet);
         Assert.Equal("debloat.appx.safetyNet", safety.Id);
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.AppxSafetyNet);
-        Assert.DoesNotContain(
-            planned.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
+        Assert.DoesNotContain(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
     }
 
     [Fact]
@@ -161,9 +159,7 @@ public class DebloatAppxSafetyNetTests
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
         Assert.True(planned.IsOk);
-        Assert.Contains(
-            planned.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
+        Assert.Contains(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
         Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.AppxSafetyNet);
     }
 

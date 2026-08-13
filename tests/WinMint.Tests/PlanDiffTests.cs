@@ -25,7 +25,7 @@ public class PlanDiffTests
         Assert.Contains("Anysphere.Cursor", review.EffectiveWinget);
         Assert.Contains("curl", review.EffectiveScoop);
 
-        string text = PlanDiff.Format(review);
+        string text = review.Diff;
         Assert.Contains("Brave policies — you chose", text, StringComparison.Ordinal);
         Assert.Contains("Winget Anysphere.Cursor — you chose", text, StringComparison.Ordinal);
         Assert.Contains("Scoop curl — you chose", text, StringComparison.Ordinal);
@@ -50,7 +50,7 @@ public class PlanDiffTests
         Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(profile);
         Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
 
-        string text = PlanDiff.Format(planned.Value.Review);
+        string text = planned.Value.Review.Diff;
         int duringBuild = text.IndexOf("During image build", StringComparison.OrdinalIgnoreCase);
         int afterSignIn = text.IndexOf("After first sign-in", StringComparison.OrdinalIgnoreCase);
         int safetyNet = text.IndexOf("AppX safety net — always", StringComparison.OrdinalIgnoreCase);
@@ -68,7 +68,7 @@ public class PlanDiffTests
         Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(profile);
         Assert.True(planned.IsOk);
 
-        string text = PlanDiff.Format(planned.Value.Review);
+        string text = planned.Value.Review.Diff;
         int duringBuild = text.IndexOf("During image build", StringComparison.OrdinalIgnoreCase);
         int afterSignIn = text.IndexOf("After first sign-in", StringComparison.OrdinalIgnoreCase);
         int bingNews = text.IndexOf("Microsoft.BingNews", StringComparison.OrdinalIgnoreCase);
@@ -85,7 +85,7 @@ public class PlanDiffTests
         Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(profile);
         Assert.True(planned.IsOk);
 
-        string text = PlanDiff.Format(planned.Value.Review);
+        string text = planned.Value.Review.Diff;
 
         Assert.Contains("Winget Git.MinGit — always", text, StringComparison.Ordinal);
         Assert.Contains("Winget Microsoft.PowerShell — always", text, StringComparison.Ordinal);
@@ -103,7 +103,7 @@ public class PlanDiffTests
         Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(profile);
         Assert.True(planned.IsOk);
 
-        string text = PlanDiff.Format(planned.Value.Review);
+        string text = planned.Value.Review.Diff;
 
         Assert.Contains("Winget Git.MinGit — always", text, StringComparison.Ordinal);
         Assert.Contains("Winget Anysphere.Cursor — you chose", text, StringComparison.Ordinal);
@@ -127,7 +127,7 @@ public class PlanDiffTests
             EffectiveScoop = [],
         };
 
-        string text = PlanDiff.Format(review);
+        string text = review.Diff;
 
         Assert.Contains(expected, text, StringComparison.Ordinal);
     }

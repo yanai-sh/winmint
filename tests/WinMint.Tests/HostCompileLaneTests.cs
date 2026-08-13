@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Security.Cryptography;
 using WinMint.Contracts;
 using WinMint.Orchestrator;
 
@@ -104,17 +103,24 @@ public class HostCompileLaneTests
 
     private sealed class FixedProbe : ISourceMediaProbe
     {
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+            string sourceIsoPath,
+            CancellationToken cancellationToken = default)
+        {
+            WimIndexInfo row = new(ImageServicing.DefaultProWimIndex, "Windows 11 Home", "ARM64", "Core", null, "26100");
+            return TestIso.List(row);
+        }
+
         public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
             string sourceIsoPath,
             int wimIndex,
             CancellationToken cancellationToken = default)
         {
-            string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(sourceIsoPath)));
             WimIndexInfo row = new(wimIndex, "Windows 11 Home", "ARM64", "Core", null, "26100");
             return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(
                 new SourceMediaReview(
                     Path.GetFullPath(sourceIsoPath),
-                    hash,
+                    TestIso.Identity(sourceIsoPath),
                     Array.AsReadOnly([row]),
                     new SelectedWim(wimIndex, row.Name, row.Architecture, row.Edition, row.Version, row.Build))));
         }

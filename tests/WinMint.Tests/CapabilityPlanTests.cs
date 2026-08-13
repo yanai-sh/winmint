@@ -42,20 +42,14 @@ public class CapabilityPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
-        ServicingStage caps = Assert.Single(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.RemoveCapabilities);
-        Assert.Empty(caps.Parameters);
+        Assert.Contains(ServicingOpcode.RemoveCapabilities, result.Value.Stages);
         Assert.Equal(
             ["App.StepsRecorder~~~~0.0.1.0", "WMIC~~~~"],
             result.Value.RemoveCapabilities);
-        ServicingStage feats = Assert.Single(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.DisableOptionalFeatures);
-        Assert.Empty(feats.Parameters);
+        Assert.Contains(ServicingOpcode.DisableOptionalFeatures, result.Value.Stages);
         Assert.Equal(["WorkFolders-Client"], result.Value.DisableOptionalFeatures);
 
-        IReadOnlyList<ServicingOpcode> opcodes = result.Value.Stages.Stages.Select(s => s.Opcode).ToArray();
+        IReadOnlyList<ServicingOpcode> opcodes = result.Value.Stages;
         int mountAt = opcodes.ToList().IndexOf(ServicingOpcode.MountInstallWim);
         int capAt = opcodes.ToList().IndexOf(ServicingOpcode.RemoveCapabilities);
         int featAt = opcodes.ToList().IndexOf(ServicingOpcode.DisableOptionalFeatures);

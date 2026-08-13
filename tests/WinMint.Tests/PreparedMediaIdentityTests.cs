@@ -2,7 +2,7 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
 
-public class MediaCacheIdentityTests
+public class PreparedMediaIdentityTests
 {
     [Fact]
     public void Same_bytes_at_two_paths_share_identity()
@@ -16,8 +16,8 @@ public class MediaCacheIdentityTests
             File.WriteAllBytes(a, [1, 2, 3, 4]);
             File.Copy(a, b);
 
-            Assert.True(MediaCacheIdentity.TryFromFile(a, 3, out MediaCacheIdentity left, out _));
-            Assert.True(MediaCacheIdentity.TryFromFile(b, 3, out MediaCacheIdentity right, out _));
+            Assert.True(PreparedMediaIdentity.TryFromFile(a, 3, out PreparedMediaIdentity left, out _));
+            Assert.True(PreparedMediaIdentity.TryFromFile(b, 3, out PreparedMediaIdentity right, out _));
             Assert.Equal(left, right);
             Assert.Equal(left.RelativeEntryPath, right.RelativeEntryPath);
             Assert.Equal(64, left.SourceIsoSha256.Length);
@@ -40,8 +40,8 @@ public class MediaCacheIdentityTests
             File.WriteAllBytes(a, [1, 2, 3, 4]);
             File.WriteAllBytes(b, [1, 2, 3, 5]);
 
-            Assert.True(MediaCacheIdentity.TryFromFile(a, 3, out MediaCacheIdentity left, out _));
-            Assert.True(MediaCacheIdentity.TryFromFile(b, 3, out MediaCacheIdentity right, out _));
+            Assert.True(PreparedMediaIdentity.TryFromFile(a, 3, out PreparedMediaIdentity left, out _));
+            Assert.True(PreparedMediaIdentity.TryFromFile(b, 3, out PreparedMediaIdentity right, out _));
             Assert.NotEqual(left.SourceIsoSha256, right.SourceIsoSha256);
         }
         finally
@@ -56,10 +56,10 @@ public class MediaCacheIdentityTests
     public void Different_index_or_schema_changes_relative_path(int indexA, int indexB)
     {
         string sha = new('a', 64);
-        Assert.True(MediaCacheIdentity.TryCreate(sha, 4, indexA, 1, out MediaCacheIdentity a, out _));
-        Assert.True(MediaCacheIdentity.TryCreate(sha, 4, indexB, 1, out MediaCacheIdentity b, out _));
+        Assert.True(PreparedMediaIdentity.TryCreate(sha, 4, indexA, 1, out PreparedMediaIdentity a, out _));
+        Assert.True(PreparedMediaIdentity.TryCreate(sha, 4, indexB, 1, out PreparedMediaIdentity b, out _));
         Assert.NotEqual(a.RelativeEntryPath, b.RelativeEntryPath);
-        Assert.True(MediaCacheIdentity.TryCreate(sha, 4, 3, 2, out MediaCacheIdentity schema, out _));
+        Assert.True(PreparedMediaIdentity.TryCreate(sha, 4, 3, 2, out PreparedMediaIdentity schema, out _));
         Assert.NotEqual(a.RelativeEntryPath, schema.RelativeEntryPath);
     }
 
@@ -68,9 +68,9 @@ public class MediaCacheIdentityTests
     [InlineData(-1)]
     public void Non_positive_index_fails(int index)
     {
-        Assert.False(MediaCacheIdentity.TryFromFile("unused", index, out _, out Failure error));
+        Assert.False(PreparedMediaIdentity.TryFromFile("unused", index, out _, out Failure error));
         Assert.Equal("servicing.wimIndex.invalid", error.Code);
-        Assert.False(MediaCacheIdentity.TryCreate(new string('a', 64), 1, index, 1, out _, out Failure created));
+        Assert.False(PreparedMediaIdentity.TryCreate(new string('a', 64), 1, index, 1, out _, out Failure created));
         Assert.Equal("servicing.wimIndex.invalid", created.Code);
     }
 
@@ -79,7 +79,7 @@ public class MediaCacheIdentityTests
     {
         Assert.Equal(
             Path.Combine(ImageServicing.HostServicingRoot, "media-cache"),
-            MediaCacheIdentity.Root);
+            PreparedMediaIdentity.Root);
     }
 
     private static string NewRoot()

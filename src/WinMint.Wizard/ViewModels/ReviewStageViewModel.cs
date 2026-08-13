@@ -56,12 +56,12 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
     {
         ArgumentNullException.ThrowIfNull(review);
         Summary = new(
-            IncludedSummary.FormatQuietSummary(review.RemoveProvisionedAppx.Count),
-            IncludedSummary.FormatPickStrip(review.AuthoredSelectionLabels),
-            IncludedSummary.FormatQuietBlock(review.BraveSelected),
-            IncludedSummary.FormatWhatsIncluded(review.RemoveProvisionedAppx),
-            $"Account {review.AuthoredProfile.Account.Username.Trim()} · region {review.AuthoredProfile.Dma.Settle.Locale} / {review.AuthoredProfile.Dma.Settle.TimeZoneId} · network {(review.RequiresNetwork ? "needed" : "not needed")} · DMA {(review.AuthoredProfile.Dma.Enabled ? "on" : "off")} · {review.ImageQuality} lane",
-            PlanDiff.Format(review),
+            review.QuietSummary,
+            review.PickStrip,
+            review.QuietBlock,
+            review.WhatsIncluded,
+            review.PlanMeta,
+            review.Diff,
             $"Plan OK. Lane={review.ImageQuality}; removeProvisionedAppx={review.RemoveProvisionedAppx.Count}; jobs={review.Jobs.Count}.",
             review.AuthoredProfileJson,
             review.SourceMedia?.SourceIsoPath ?? "",

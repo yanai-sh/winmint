@@ -69,7 +69,7 @@ public sealed record ExportLane(string Name, string Compression, string Cleanup)
 public sealed record BuildArtifacts(
     UnattendArtifact Unattend,
     JobsArtifact Jobs,
-    ServicingStageList Stages,
+    IReadOnlyList<ServicingOpcode> Stages,
     DmaContract Dma,
     BuildManifest Manifest,
     AccountProfile Account,
@@ -80,7 +80,10 @@ public sealed record BuildArtifacts(
     IReadOnlyList<string> DisableOptionalFeatures,
     byte[]? WingetImportJson = null,
     bool PackageStrict = false,
-    bool BraveSelected = false);
+    bool BraveSelected = false,
+    DriverInject? Drivers = null);
+
+public sealed record DriverInject(string DeviceId, string DetailsUrl, string ExpectedFileNameRegex);
 
 public sealed record EffectivePackageFact(
     EffectivePackageSource Source,

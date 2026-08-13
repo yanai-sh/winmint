@@ -9,11 +9,9 @@ public class PlanStageSchemaTests
     [Fact]
     public void Plan_dump_and_materialized_stages_have_distinct_schema_ids()
     {
-        ServicingStageList stages = new([]);
-
         Assert.Equal(
             "winmint.plan.stages/v1",
-            Schema(BuildPlan.SerializePlanStagesFile(stages)));
+            Schema(BuildPlan.SerializePlanStagesFile([])));
         Assert.Equal(
             "winmint.servicing.stages/v1",
             Schema(ImageServicing.SerializeServicingStagesFile(

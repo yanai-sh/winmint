@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using WinMint.Orchestrator;
 using WinMint.Wizard;
 using WinMint.Wizard.ViewModels;
@@ -22,7 +21,7 @@ public class WizardStageGatesTests
         string iso = WriteIso();
         try
         {
-            using WizardShellViewModel shell = new(null, null, new FixedProbe());
+            using WizardViewModel shell = new(null, null, new FixedProbe());
             Assert.False(shell.CanGoToAccount);
             Assert.False(shell.CanGoToReview);
 
@@ -52,7 +51,7 @@ public class WizardStageGatesTests
         string iso = WriteIso();
         try
         {
-            using WizardShellViewModel shell = new(null, null, new FixedProbe());
+            using WizardViewModel shell = new(null, null, new FixedProbe());
             shell.Source.SourceIsoPath = iso;
             shell.Account.Password = "lab-only";
             Assert.False(shell.CanBuild);
@@ -76,7 +75,7 @@ public class WizardStageGatesTests
         string iso = WriteIso();
         try
         {
-            using WizardShellViewModel shell = new(null, null, new FixedProbe());
+            using WizardViewModel shell = new(null, null, new FixedProbe());
             shell.Source.SourceIsoPath = iso;
             shell.Account.Password = "lab-only";
             shell.Software.Presets.Value = DebloatPresets.Empty;
@@ -101,7 +100,7 @@ public class WizardStageGatesTests
         {
             TaskCompletionSource enteredApply = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource releaseApply = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            using WizardShellViewModel shell = new(
+            using WizardViewModel shell = new(
                 null,
                 null,
                 new FixedProbe(),
@@ -146,7 +145,7 @@ public class WizardStageGatesTests
         string iso = WriteIso();
         try
         {
-            WizardShellViewModel? shell = null;
+            WizardViewModel? shell = null;
             shell = new(
                 null,
                 null,
@@ -186,7 +185,7 @@ public class WizardStageGatesTests
         string iso = WriteIso();
         try
         {
-            using WizardShellViewModel shell = new(null, null, new FixedProbe());
+            using WizardViewModel shell = new(null, null, new FixedProbe());
             shell.Source.SourceIsoPath = iso;
             shell.Account.Password = "lab-only";
             shell.Software.Chips.Browsers.Single(chip => chip.Id == "edge").IsSelected = true;
@@ -210,12 +209,25 @@ public class WizardStageGatesTests
 
     private sealed class FixedProbe : ISourceMediaProbe
     {
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+            string sourceIsoPath,
+            CancellationToken cancellationToken = default)
+        {
+            WimIndexInfo row = new(
+                ImageServicing.DefaultProWimIndex,
+                "Windows 11 Pro",
+                "arm64",
+                "Professional",
+                "10.0.26100.1",
+                "26100");
+            return TestIso.List(row);
+        }
+
         public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
             string sourceIsoPath,
             int wimIndex,
             CancellationToken cancellationToken = default)
         {
-            string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(sourceIsoPath)));
             WimIndexInfo row = new(
                 wimIndex,
                 "Windows 11 Pro",
@@ -226,7 +238,7 @@ public class WizardStageGatesTests
             return Task.FromResult(Result.Ok<SourceMediaReview, Failure>(
                 new(
                     Path.GetFullPath(sourceIsoPath),
-                    hash,
+                    TestIso.Identity(sourceIsoPath),
                     [row],
                     new(row.Index, row.Name, row.Architecture, row.Edition, row.Version, row.Build))));
         }

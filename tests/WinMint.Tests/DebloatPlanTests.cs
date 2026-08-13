@@ -14,9 +14,7 @@ public class DebloatPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.DoesNotContain(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
+        Assert.DoesNotContain(ServicingOpcode.RemoveProvisionedAppx, result.Value.Stages);
         Assert.Empty(profile.RemoveProvisionedAppx);
     }
 
@@ -28,9 +26,7 @@ public class DebloatPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.DoesNotContain(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
+        Assert.DoesNotContain(ServicingOpcode.RemoveProvisionedAppx, result.Value.Stages);
     }
 
     [Fact]
@@ -57,16 +53,12 @@ public class DebloatPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
-        ServicingStage remove = Assert.Single(
-            result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
-        Assert.Empty(remove.Parameters);
+        Assert.Contains(ServicingOpcode.RemoveProvisionedAppx, result.Value.Stages);
         Assert.Equal(
             ProductPosture.UnionAppx(["Microsoft.BingNews", "Microsoft.GamingApp"]),
             result.Value.RemoveProvisionedAppx);
 
-        // After mount, before payload — offline remove on mounted image.
-        IReadOnlyList<ServicingOpcode> opcodes = result.Value.Stages.Stages.Select(s => s.Opcode).ToArray();
+        IReadOnlyList<ServicingOpcode> opcodes = result.Value.Stages;
         int mountAt = opcodes.ToList().IndexOf(ServicingOpcode.MountInstallWim);
         int removeAt = opcodes.ToList().IndexOf(ServicingOpcode.RemoveProvisionedAppx);
         int payloadAt = opcodes.ToList().IndexOf(ServicingOpcode.StagePayload);

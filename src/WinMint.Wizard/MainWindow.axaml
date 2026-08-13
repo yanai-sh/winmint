@@ -3,7 +3,7 @@
         xmlns:vm="using:WinMint.Wizard.ViewModels"
         xmlns:views="using:WinMint.Wizard.Views"
         x:Class="WinMint.Wizard.MainWindow"
-        x:DataType="vm:WizardShellViewModel"
+        x:DataType="vm:WizardViewModel"
         Title="WinMint"
         Width="1280"
         Height="860"

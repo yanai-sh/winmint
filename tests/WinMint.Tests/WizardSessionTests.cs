@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using WinMint.Contracts;
 using WinMint.Orchestrator;
 using WinMint.Wizard;
@@ -88,11 +87,11 @@ public class WizardSessionTests
             ControlledProbe probe = new();
             WizardSession session = new(probe);
             session.UpdateDraft(Profile(), Options(root, iso));
-            Task<Result<SourceMediaReview, Failure>> pendingProbe =
-                session.SettleProbeAsync(TestContext.Current.CancellationToken);
+            Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> pendingProbe =
+                session.ListIndexesAsync(TestContext.Current.CancellationToken);
             session.UpdateDraft(Profile() with { RemoveCapabilities = ["OpenSSH.Client~~~~0.0.1.0"] }, Options(root, iso));
             probe.Complete(iso);
-            Result<SourceMediaReview, Failure> staleProbe = await pendingProbe;
+            Result<IReadOnlyList<WimIndexInfo>, Failure> staleProbe = await pendingProbe;
             Assert.False(staleProbe.IsOk);
             Assert.Equal("wizardSession.probe.stale", staleProbe.Error.Code);
 
@@ -126,20 +125,19 @@ public class WizardSessionTests
             WizardSession session = new(probe);
 
             session.UpdateDraft(Profile(), Options(root, firstIso));
-            Task<Result<SourceMediaReview, Failure>> first =
-                session.SettleProbeAsync(TestContext.Current.CancellationToken);
+            Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> first =
+                session.ListIndexesAsync(TestContext.Current.CancellationToken);
             session.UpdateDraft(Profile(), Options(root, secondIso));
-            Task<Result<SourceMediaReview, Failure>> second =
-                session.SettleProbeAsync(TestContext.Current.CancellationToken);
+            Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> second =
+                session.ListIndexesAsync(TestContext.Current.CancellationToken);
 
             probe.Complete(1, secondIso);
             Assert.True((await second).IsOk);
             probe.Complete(0, firstIso);
-            Result<SourceMediaReview, Failure> stale = await first;
+            Result<IReadOnlyList<WimIndexInfo>, Failure> stale = await first;
 
             Assert.False(stale.IsOk);
             Assert.Equal("wizardSession.probe.stale", stale.Error.Code);
-            Assert.Equal(Path.GetFullPath(secondIso), session.View.SourceMedia!.SourceIsoPath);
         }
         finally
         {
@@ -197,6 +195,11 @@ public class WizardSessionTests
 
     private sealed class FixedProbe : ISourceMediaProbe
     {
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+            string sourceIsoPath,
+            CancellationToken cancellationToken = default) =>
+            TestIso.List(Review(sourceIsoPath, ImageServicing.DefaultProWimIndex).Indexes[0]);
+
         public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
             string sourceIsoPath,
             int wimIndex,
@@ -206,42 +209,61 @@ public class WizardSessionTests
 
     private sealed class ControlledProbe : ISourceMediaProbe
     {
-        private readonly TaskCompletionSource<Result<SourceMediaReview, Failure>> _completion =
+        private readonly TaskCompletionSource<Result<IReadOnlyList<WimIndexInfo>, Failure>> _list =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<Result<SourceMediaReview, Failure>> _probe =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
+            string sourceIsoPath,
+            CancellationToken cancellationToken = default) =>
+            _list.Task;
 
         public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
             string sourceIsoPath,
             int wimIndex,
             CancellationToken cancellationToken = default) =>
-            _completion.Task;
+            _probe.Task;
 
-        public void Complete(string iso) =>
-            _completion.SetResult(Result.Ok<SourceMediaReview, Failure>(Review(iso, 1)));
+        public void Complete(string iso)
+        {
+            SourceMediaReview review = Review(iso, 1);
+            _list.TrySetResult(Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(review.Indexes));
+            _probe.TrySetResult(Result.Ok<SourceMediaReview, Failure>(review));
+        }
     }
 
     private sealed class QueuedProbe : ISourceMediaProbe
     {
-        private readonly List<TaskCompletionSource<Result<SourceMediaReview, Failure>>> _pending = [];
+        private readonly List<TaskCompletionSource<Result<IReadOnlyList<WimIndexInfo>, Failure>>> _pending = [];
 
-        public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
+        public Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListIndexesAsync(
             string sourceIsoPath,
-            int wimIndex,
             CancellationToken cancellationToken = default)
         {
-            TaskCompletionSource<Result<SourceMediaReview, Failure>> completion =
+            TaskCompletionSource<Result<IReadOnlyList<WimIndexInfo>, Failure>> completion =
                 new(TaskCreationOptions.RunContinuationsAsynchronously);
             _pending.Add(completion);
             return completion.Task;
         }
 
+        public Task<Result<SourceMediaReview, Failure>> ProbeAsync(
+            string sourceIsoPath,
+            int wimIndex,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result.Ok<SourceMediaReview, Failure>(Review(sourceIsoPath, wimIndex)));
+
         public void Complete(int call, string iso) =>
-            _pending[call].SetResult(Result.Ok<SourceMediaReview, Failure>(Review(iso, 1)));
+            _pending[call].SetResult(Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(Review(iso, 1).Indexes));
     }
 
     private static SourceMediaReview Review(string iso, int index)
     {
-        string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(iso)));
         WimIndexInfo row = new(index, "Windows 11 Home", "ARM64", "Core", "10.0.26100.1", "26100");
-        return new(Path.GetFullPath(iso), hash, Array.AsReadOnly([row]), new(index, row.Name, row.Architecture, row.Edition, row.Version, row.Build));
+        return new(
+            Path.GetFullPath(iso),
+            TestIso.Identity(iso),
+            Array.AsReadOnly([row]),
+            new(index, row.Name, row.Architecture, row.Edition, row.Version, row.Build));
     }
 }
