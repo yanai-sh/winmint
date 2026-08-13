@@ -1,6 +1,8 @@
 #requires -Version 7.6
 param(
-    [hashtable] $Parameters
+    [Parameter(Mandatory)] [string] $MountDir,
+    [Parameter(Mandatory)] [string] $WorkDirectory,
+    [Parameter(Mandatory)] [string] $PackageFamilyNamesPath
 )
 # Offline provisioned AppX remove — param-only; no Profile branching.
 # Policy (KEEPFLAG): Plan ⊆ catalog (typos fail at plan). Remove is idempotent: already-absent ⇒ ok + digest absent
@@ -68,19 +70,19 @@ function Get-PackageFamilyName {
 if ($MyInvocation.InvocationName -ne '.') {
 . (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
 
-$mountDir = $Parameters['mountDir']
-$packageFamilyNames = $Parameters['packageFamilyNames']
-$workDir = $Parameters['workDirectory']
-if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
-if ([string]::IsNullOrWhiteSpace($packageFamilyNames)) { throw 'packageFamilyNames required' }
-if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
+$mountDir = $MountDir
+$workDir = $WorkDirectory
+$packageFamilyNamesPath = $PackageFamilyNamesPath
+if (-not (Test-Path -LiteralPath $packageFamilyNamesPath -PathType Leaf)) {
+    throw "packageFamilyNamesPath missing: $packageFamilyNamesPath"
+}
 
 $ids = @(
-    $packageFamilyNames.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) |
-        ForEach-Object { $_.Trim() } |
+    Get-Content -LiteralPath $packageFamilyNamesPath -Raw | ConvertFrom-Json |
+        ForEach-Object { [string]$_ } |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 )
-if ($ids.Count -eq 0) { throw 'packageFamilyNames empty after split' }
+if ($ids.Count -eq 0) { throw 'packageFamilyNames.json empty' }
 
 $logDir = Join-Path $workDir 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null

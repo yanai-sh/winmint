@@ -1,6 +1,11 @@
 #requires -Version 7.6
 param(
-    [hashtable] $Parameters
+    [Parameter(Mandatory)] [string] $MountDir,
+    [Parameter(Mandatory)] [string] $WorkDirectory,
+    [Parameter(Mandatory)] [string] $MediaDir,
+    [Parameter(Mandatory)] [string] $DeviceId,
+    [Parameter(Mandatory)] [string] $DetailsUrl,
+    [Parameter(Mandatory)] [string] $ExpectedFileNameRegex
 )
 # Surface Catalog offline driver injection — param-only (issue 63).
 # Download → MSI extract → SurfaceMsiSafe classify → DISM Add-Driver (install.wim + boot.wim subset).
@@ -14,18 +19,12 @@ function Test-MicrosoftDownloadUri {
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-$mountDir = $Parameters['mountDir']
-$workDirectory = $Parameters['workDirectory']
-$mediaDir = $Parameters['mediaDir']
-$deviceId = $Parameters['deviceId']
-$detailsUrl = $Parameters['detailsUrl']
-$expectedFileNameRegex = $Parameters['expectedFileNameRegex']
-if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
-if ([string]::IsNullOrWhiteSpace($workDirectory)) { throw 'workDirectory required' }
-if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
-if ([string]::IsNullOrWhiteSpace($deviceId)) { throw 'deviceId required' }
-if ([string]::IsNullOrWhiteSpace($detailsUrl)) { throw 'detailsUrl required' }
-if ([string]::IsNullOrWhiteSpace($expectedFileNameRegex)) { throw 'expectedFileNameRegex required' }
+$mountDir = $MountDir
+$workDirectory = $WorkDirectory
+$mediaDir = $MediaDir
+$deviceId = $DeviceId
+$detailsUrl = $DetailsUrl
+$expectedFileNameRegex = $ExpectedFileNameRegex
 
 $logDir = Join-Path $workDirectory 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using WinMint.Orchestrator;
 using static WinMint.Tests.ImageServicingTestFakes;
 
@@ -44,13 +45,15 @@ public class CapabilityPlanTests
         ServicingStage caps = Assert.Single(
             result.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.RemoveCapabilities);
+        Assert.Empty(caps.Parameters);
         Assert.Equal(
-            "App.StepsRecorder~~~~0.0.1.0;WMIC~~~~",
-            caps.Parameters[StageParams.CapabilityNames]);
+            ["App.StepsRecorder~~~~0.0.1.0", "WMIC~~~~"],
+            result.Value.RemoveCapabilities);
         ServicingStage feats = Assert.Single(
             result.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.DisableOptionalFeatures);
-        Assert.Equal("WorkFolders-Client", feats.Parameters[StageParams.FeatureNames]);
+        Assert.Empty(feats.Parameters);
+        Assert.Equal(["WorkFolders-Client"], result.Value.DisableOptionalFeatures);
 
         IReadOnlyList<ServicingOpcode> opcodes = result.Value.Stages.Stages.Select(s => s.Opcode).ToArray();
         int mountAt = opcodes.ToList().IndexOf(ServicingOpcode.MountInstallWim);
@@ -90,11 +93,25 @@ public class CapabilityPlanTests
             Assert.Equal(ImageServicing.HostMountDir, caps.Parameters[StageParams.MountDir]);
             Assert.Equal(work, caps.Parameters[StageParams.WorkDirectory]);
             Assert.Equal("capability", caps.Parameters[StageParams.Kind]);
+            Assert.Equal(
+                Path.Combine(work, ServicingWorkspace.PayloadDirectoryName, ServicingWorkspace.CapabilityNamesFileName),
+                caps.Parameters[StageParams.NamesPath]);
             ServicingStage feats = Assert.Single(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.DisableOptionalFeatures);
             Assert.Equal(ImageServicing.HostMountDir, feats.Parameters[StageParams.MountDir]);
             Assert.Equal("feature", feats.Parameters[StageParams.Kind]);
+            Assert.Equal(
+                Path.Combine(work, ServicingWorkspace.PayloadDirectoryName, ServicingWorkspace.FeatureNamesFileName),
+                feats.Parameters[StageParams.NamesPath]);
+            Assert.Equal(
+                ["App.StepsRecorder~~~~0.0.1.0"],
+                JsonSerializer.Deserialize<string[]>(
+                    File.ReadAllBytes(caps.Parameters[StageParams.NamesPath]))!);
+            Assert.Equal(
+                ["WorkFolders-Client"],
+                JsonSerializer.Deserialize<string[]>(
+                    File.ReadAllBytes(feats.Parameters[StageParams.NamesPath]))!);
         }
         finally
         {

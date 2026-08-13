@@ -1,14 +1,12 @@
 #requires -Version 7.6
 param(
-    [Parameter(Mandatory)]
-    [hashtable] $Parameters
+    [Parameter(Mandatory)] [string] $UnattendPath,
+    [Parameter(Mandatory)] [string] $MountDir,
+    [Parameter(Mandatory)] [string] $MediaDir
 )
-$unattendPath = $Parameters['unattendPath']
-$mountDir = $Parameters['mountDir']
-$mediaDir = $Parameters['mediaDir']
-if ([string]::IsNullOrWhiteSpace($unattendPath)) { throw 'unattendPath required' }
-if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
-if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
+$unattendPath = $UnattendPath
+$mountDir = $MountDir
+$mediaDir = $MediaDir
 
 $panther = Join-Path $mountDir 'Windows\Panther'
 New-Item -ItemType Directory -Force -Path $panther | Out-Null

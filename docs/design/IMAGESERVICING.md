@@ -45,7 +45,7 @@ HostCompile resolves and freezes the build Output ISO path before Apply. The low
 
 `ServicingWorkspace` owns every workdir leaf (`logs/`, `payload/`, `media/`, `evidence.json`, `failure.json`, `apply-status.txt`, `stages.json`, `install.wim`, `unattend.xml`, `media.incoming-*` / `media.previous-*`) plus the Host Prepared-media root. `IElevatedPlanRunner.ExecuteAsync` takes the workspace.
 
-`MountInstallWim` receives a typed post-cache bag (Source ISO hash, cache schema/root, selected-image metadata). The kernel takes named parameters; the loop splats them. Every Apply still requires the Source ISO file and a matching rehash. Leftover staged media is not an input.
+`MountInstallWim` receives a typed post-cache bag (Source ISO hash, cache schema/root, selected-image metadata). Every opcode is a typed record serialized through `ServicingJsonContext`; the loop splats named kernel parameters. Packed `policySpecs` / semicolon lists are gone — policy rows, AppX ids, and component ids travel as JSON under `payload/`. Every Apply still requires the Source ISO file and a matching rehash. Leftover staged media is not an input.
 
 **Prepared media** lives under `%ProgramData%\WinMint\Servicing\media-cache\v{schema}\{sourceIsoSha256}\index-{n}\`. ImageServicing owns it: callers have no reuse switch. A published entry is an immutable Source ISO tree with a single-index `install.wim` and required `boot.wim`. It is copied into per-Apply **staged media** (`{work}/media`) and is never mounted. Invalid entries are quarantined and rebuilt once. Publication is not Evidence.
 
@@ -67,7 +67,7 @@ A kernel file is named for the opcode it serves: `ServicingOpcode.StampOfflinePo
 
 1. Stages run in plan order; do not invent product stages.
 2. BuildPlan emits opcodes + params — never repo-relative `.ps1` paths.
-3. Kernels: parameter hashtables only — no Profile JSON.
+3. Kernels: named typed parameters (splatted from the opcode record) — no Profile JSON, no `-Parameters` hashtable.
 4. First kernel non-zero → typed failure; workdir preserved; leftover mounts discarded.
 5. Lane encoded in `ExportWim` params by BuildPlan.
 6. One elevated `servicing/Invoke-ServicingPlan.ps1` dumb loop per Apply (single UAC).

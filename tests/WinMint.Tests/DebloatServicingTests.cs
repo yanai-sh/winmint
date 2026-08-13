@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using WinMint.Orchestrator;
 using static WinMint.Tests.ImageServicingTestFakes;
 
@@ -32,8 +33,12 @@ public class DebloatServicingTests
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
             Assert.Equal(
-                string.Join(';', ProductPosture.UnionAppx(["Microsoft.BingNews", "Microsoft.GamingApp"])),
-                remove.Parameters[StageParams.PackageFamilyNames]);
+                ProductPosture.UnionAppx(["Microsoft.BingNews", "Microsoft.GamingApp"]),
+                JsonSerializer.Deserialize<string[]>(
+                    File.ReadAllBytes(remove.Parameters[StageParams.PackageFamilyNamesPath]))!);
+            Assert.Equal(
+                Path.Combine(work, ServicingWorkspace.PayloadDirectoryName, ServicingWorkspace.PackageFamilyNamesFileName),
+                remove.Parameters[StageParams.PackageFamilyNamesPath]);
             Assert.Equal(
                 ImageServicing.HostMountDir,
                 remove.Parameters[StageParams.MountDir]);

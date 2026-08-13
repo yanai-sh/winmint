@@ -250,12 +250,7 @@ public static class ImageServicing
     {
         bool injectDrivers = stages.Any(static s => s.Opcode == ServicingOpcode.InjectDrivers);
         bool expectFu = plan.Manifest.ImageQuality == ImageQualityLane.Release;
-        bool brave = plan.WingetImportJson is { Length: > 0 }
-            && System.Text.Encoding.UTF8.GetString(plan.WingetImportJson)
-                .Contains(ProductPosture.BraveWingetId, StringComparison.OrdinalIgnoreCase);
-        IReadOnlyList<OfflinePolicyRow> rows = ProductPosture.ComposePolicies(
-            includeBraveDebloat: brave,
-            includeDriverHygiene: injectDrivers);
+        IReadOnlyList<OfflinePolicyRow> rows = plan.OfflinePolicies;
         Dictionary<string, string> requiredValues = new(StringComparer.Ordinal);
         List<string> requiredKeys = ["outputIso.sha256"];
         foreach (OfflinePolicyRow row in rows)
@@ -409,14 +404,46 @@ public static class ImageServicing
             return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(shellSkel.Error);
         }
 
+        File.WriteAllBytes(
+            Path.Combine(payloadDir, ServicingWorkspace.PoliciesFileName),
+            JsonSerializer.SerializeToUtf8Bytes(
+                plan.OfflinePolicies.ToArray(),
+                ServicingJsonContext.Default.OfflinePolicyRowArray));
+
+        if (plan.RemoveProvisionedAppx.Count > 0)
+        {
+            File.WriteAllBytes(
+                Path.Combine(payloadDir, ServicingWorkspace.PackageFamilyNamesFileName),
+                JsonSerializer.SerializeToUtf8Bytes(
+                    plan.RemoveProvisionedAppx.ToArray(),
+                    ServicingJsonContext.Default.StringArray));
+        }
+
+        if (plan.RemoveCapabilities.Count > 0)
+        {
+            File.WriteAllBytes(
+                Path.Combine(payloadDir, ServicingWorkspace.CapabilityNamesFileName),
+                JsonSerializer.SerializeToUtf8Bytes(
+                    plan.RemoveCapabilities.ToArray(),
+                    ServicingJsonContext.Default.StringArray));
+        }
+
+        if (plan.DisableOptionalFeatures.Count > 0)
+        {
+            File.WriteAllBytes(
+                Path.Combine(payloadDir, ServicingWorkspace.FeatureNamesFileName),
+                JsonSerializer.SerializeToUtf8Bytes(
+                    plan.DisableOptionalFeatures.ToArray(),
+                    ServicingJsonContext.Default.StringArray));
+        }
+
         List<ServicingStage> resolved = new(plan.Stages.Stages.Count);
         foreach (ServicingStage stage in plan.Stages.Stages)
         {
-            Dictionary<string, string> parameters = new(stage.Parameters, StringComparer.Ordinal);
-            switch (stage.Opcode)
+            Dictionary<string, string> parameters = stage.Opcode switch
             {
-                case ServicingOpcode.MountInstallWim:
-                    parameters = new MountInstallWimParameters(
+                ServicingOpcode.MountInstallWim => StageParamBag.From(
+                    new MountInstallWimParameters(
                         SourceIso: run.SourceIsoPath,
                         MountDir: mountDir,
                         MediaDir: mediaDir,
@@ -429,63 +456,70 @@ public static class ImageServicing
                         ImageName: run.SelectedImage?.Name,
                         Architecture: run.SelectedImage?.Architecture,
                         ImageEdition: run.SelectedImage?.Edition,
-                        ImageBuild: run.SelectedImage?.Build).ToStageBag();
-                    break;
-                case ServicingOpcode.StagePayload:
-                    parameters[StageParams.PayloadDir] = payloadDir;
-                    parameters[StageParams.MountDir] = mountDir;
-                    break;
-                case ServicingOpcode.StageOobeUnattend:
-                    parameters[StageParams.UnattendPath] = unattendPath;
-                    parameters[StageParams.MountDir] = mountDir;
-                    parameters[StageParams.MediaDir] = mediaDir;
-                    break;
-                case ServicingOpcode.PatchBootWimApply:
-                    // Single-image install.wim apply target is always index 1 (Patch-BootWimApply.ps1).
-                    // Do not pass source-edition wimIndex — that previously poisoned LaunchApply.cmd.
-                    parameters[StageParams.MediaDir] = mediaDir;
-                    parameters[StageParams.MountDir] = mountDir;
-                    break;
-                case ServicingOpcode.StampOfflineShell:
-                    parameters[StageParams.ShellTarget] = ShellStampGuestPath;
-                    parameters[StageParams.MountDir] = mountDir;
-                    break;
-                case ServicingOpcode.StampOfflinePolicies:
-                    parameters[StageParams.MountDir] = mountDir;
-                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
-                    break;
-                case ServicingOpcode.RemoveProvisionedAppx:
-                    // packageFamilyNames comes from BuildPlan — inject mount + workdir for logs.
-                    parameters[StageParams.MountDir] = mountDir;
-                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
-                    break;
-                case ServicingOpcode.RemoveCapabilities:
-                    parameters[StageParams.MountDir] = mountDir;
-                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
-                    parameters[StageParams.Kind] = "capability";
-                    break;
-                case ServicingOpcode.DisableOptionalFeatures:
-                    parameters[StageParams.MountDir] = mountDir;
-                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
-                    parameters[StageParams.Kind] = "feature";
-                    break;
-                case ServicingOpcode.InjectDrivers:
-                    parameters[StageParams.MountDir] = mountDir;
-                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
-                    parameters[StageParams.MediaDir] = mediaDir;
-                    break;
-                case ServicingOpcode.ExportWim:
-                    // compression / cleanup / lane come from BuildPlan — do not invent defaults here.
-                    parameters[StageParams.MountDir] = mountDir;
-                    parameters[StageParams.MediaDir] = mediaDir;
-                    parameters[StageParams.WimOut] = wimOut;
-                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
-                    break;
-                case ServicingOpcode.BuildIso:
-                    parameters[StageParams.OutputIso] = outputIso;
-                    parameters[StageParams.MediaDir] = mediaDir;
-                    break;
-            }
+                        ImageBuild: run.SelectedImage?.Build),
+                    ServicingJsonContext.Default.MountInstallWimParameters),
+                ServicingOpcode.StagePayload => StageParamBag.From(
+                    new StagePayloadParameters(payloadDir, mountDir),
+                    ServicingJsonContext.Default.StagePayloadParameters),
+                ServicingOpcode.StageOobeUnattend => StageParamBag.From(
+                    new StageOobeUnattendParameters(unattendPath, mountDir, mediaDir),
+                    ServicingJsonContext.Default.StageOobeUnattendParameters),
+                ServicingOpcode.PatchBootWimApply => StageParamBag.From(
+                    new PatchBootWimApplyParameters(mediaDir, mountDir, workspace.Root),
+                    ServicingJsonContext.Default.PatchBootWimApplyParameters),
+                ServicingOpcode.StampOfflineShell => StageParamBag.From(
+                    new StampOfflineShellParameters(ShellStampGuestPath, mountDir),
+                    ServicingJsonContext.Default.StampOfflineShellParameters),
+                ServicingOpcode.StampOfflinePolicies => StageParamBag.From(
+                    new StampOfflinePoliciesParameters(
+                        mountDir,
+                        run.WorkDirectory,
+                        Path.Combine(payloadDir, ServicingWorkspace.PoliciesFileName)),
+                    ServicingJsonContext.Default.StampOfflinePoliciesParameters),
+                ServicingOpcode.RemoveProvisionedAppx => StageParamBag.From(
+                    new RemoveProvisionedAppxParameters(
+                        mountDir,
+                        run.WorkDirectory,
+                        Path.Combine(payloadDir, ServicingWorkspace.PackageFamilyNamesFileName)),
+                    ServicingJsonContext.Default.RemoveProvisionedAppxParameters),
+                ServicingOpcode.RemoveCapabilities => StageParamBag.From(
+                    new OfflineComponentParameters(
+                        mountDir,
+                        run.WorkDirectory,
+                        "capability",
+                        Path.Combine(payloadDir, ServicingWorkspace.CapabilityNamesFileName)),
+                    ServicingJsonContext.Default.OfflineComponentParameters),
+                ServicingOpcode.DisableOptionalFeatures => StageParamBag.From(
+                    new OfflineComponentParameters(
+                        mountDir,
+                        run.WorkDirectory,
+                        "feature",
+                        Path.Combine(payloadDir, ServicingWorkspace.FeatureNamesFileName)),
+                    ServicingJsonContext.Default.OfflineComponentParameters),
+                ServicingOpcode.InjectDrivers => StageParamBag.From(
+                    new InjectDriversParameters(
+                        mountDir,
+                        run.WorkDirectory,
+                        mediaDir,
+                        stage.Parameters[StageParams.DeviceId],
+                        stage.Parameters[StageParams.DetailsUrl],
+                        stage.Parameters[StageParams.ExpectedFileNameRegex]),
+                    ServicingJsonContext.Default.InjectDriversParameters),
+                ServicingOpcode.ExportWim => StageParamBag.From(
+                    new ExportWimParameters(
+                        mountDir,
+                        mediaDir,
+                        wimOut,
+                        run.WorkDirectory,
+                        stage.Parameters[StageParams.Lane],
+                        stage.Parameters[StageParams.Compression],
+                        stage.Parameters[StageParams.Cleanup]),
+                    ServicingJsonContext.Default.ExportWimParameters),
+                ServicingOpcode.BuildIso => StageParamBag.From(
+                    new BuildIsoParameters(outputIso, mediaDir),
+                    ServicingJsonContext.Default.BuildIsoParameters),
+                _ => throw new InvalidOperationException($"Unhandled opcode {stage.Opcode}"),
+            };
 
             resolved.Add(new ServicingStage(stage.Opcode, parameters));
         }
@@ -662,5 +696,18 @@ internal sealed record FailureFile(
 [JsonSerializable(typeof(ExpectedEvidenceFile))]
 [JsonSerializable(typeof(FailureFile))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
+[JsonSerializable(typeof(OfflinePolicyRow[]))]
+[JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(MountInstallWimParameters))]
+[JsonSerializable(typeof(StagePayloadParameters))]
+[JsonSerializable(typeof(StageOobeUnattendParameters))]
+[JsonSerializable(typeof(PatchBootWimApplyParameters))]
+[JsonSerializable(typeof(StampOfflineShellParameters))]
+[JsonSerializable(typeof(StampOfflinePoliciesParameters))]
+[JsonSerializable(typeof(RemoveProvisionedAppxParameters))]
+[JsonSerializable(typeof(OfflineComponentParameters))]
+[JsonSerializable(typeof(InjectDriversParameters))]
+[JsonSerializable(typeof(ExportWimParameters))]
+[JsonSerializable(typeof(BuildIsoParameters))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class ServicingJsonContext : JsonSerializerContext;

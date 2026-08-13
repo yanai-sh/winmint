@@ -75,17 +75,16 @@ public class ProductPostureTests
     }
 
     [Fact]
-    public void EncodePolicySpecs_ships_the_digest_key_so_pwsh_never_derives_a_family()
+    public void ComposePolicies_declares_family_on_each_row_so_digest_is_never_inferred()
     {
         IReadOnlyList<OfflinePolicyRow> rows = ProductPosture.ComposePolicies(
             includeBraveDebloat: true,
             includeDriverHygiene: true);
 
-        string[] specs = ProductPosture.EncodePolicySpecs(rows).Split(';');
-        Assert.Equal(rows.Count, specs.Length);
-        Assert.All(specs, spec => Assert.Equal(6, spec.Split('|').Length));
+        Assert.All(rows, row => Assert.False(string.IsNullOrWhiteSpace(row.Family)));
+        Assert.All(rows, row => Assert.Equal($"policy.{row.Family}.{row.Name}", row.Digest));
 
-        string[] digestKeys = specs.Select(spec => spec.Split('|')[5]).ToArray();
+        string[] digestKeys = rows.Select(static row => row.Digest).ToArray();
 
         // A new row falling through to the "edge" default shows up as a missing family here.
         Assert.Equal(
@@ -124,11 +123,11 @@ public class ProductPostureTests
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
 
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
-        string specs = Assert.Single(
-            planned.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.StampOfflinePolicies).Parameters[StageParams.PolicySpecs];
-        Assert.DoesNotContain("TurnOffWindowsCopilot", specs, StringComparison.Ordinal);
-        Assert.DoesNotContain("HubsSidebarEnabled", specs, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            planned.Value.Stages.Stages.Single(s => s.Opcode == ServicingOpcode.StampOfflinePolicies).Parameters.Keys,
+            static key => key.Equals("policySpecs", StringComparison.Ordinal));
+        Assert.DoesNotContain(planned.Value.OfflinePolicies, static row => row.Name == "TurnOffWindowsCopilot");
+        Assert.DoesNotContain(planned.Value.OfflinePolicies, static row => row.Name == "HubsSidebarEnabled");
     }
 
     [Fact]

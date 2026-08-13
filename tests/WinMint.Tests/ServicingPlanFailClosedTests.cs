@@ -249,7 +249,16 @@ public class ServicingPlanFailClosedTests
             Path.Combine(TestRepo.Root, "servicing", "Get-WinMintServicingWorkspace.ps1"),
             Path.Combine(servicing, "Get-WinMintServicingWorkspace.ps1"));
         const string noOp = """
-            param([hashtable] $Parameters)
+            param(
+                [string] $ShellTarget,
+                [string] $MountDir,
+                [string] $Lane,
+                [string] $MediaDir,
+                [string] $WimOut,
+                [string] $WorkDirectory,
+                [string] $Compression,
+                [string] $Cleanup
+            )
             exit 0
             """;
         File.WriteAllText(Path.Combine(servicing, "Stamp-OfflineShell.ps1"), noOp);
@@ -257,13 +266,16 @@ public class ServicingPlanFailClosedTests
         File.WriteAllText(
             Path.Combine(servicing, "Build-Iso.ps1"),
             """
-            param([hashtable] $Parameters)
-            $failurePath = $Parameters['failurePath']
-            if (-not (Test-Path -LiteralPath $failurePath -PathType Leaf)) {
-                throw "prior failure missing before BuildIso: $failurePath"
+            param(
+                [Parameter(Mandatory)] [string] $OutputIso,
+                [string] $FailurePath,
+                [string] $MediaDir
+            )
+            if (-not (Test-Path -LiteralPath $FailurePath -PathType Leaf)) {
+                throw "prior failure missing before BuildIso: $FailurePath"
             }
-            Set-Content -LiteralPath (Join-Path (Split-Path -Parent $failurePath) 'failure-observed.txt') -Value 'observed'
-            Set-Content -LiteralPath $Parameters['outputIso'] -Value 'fresh-iso' -Encoding utf8
+            Set-Content -LiteralPath (Join-Path (Split-Path -Parent $FailurePath) 'failure-observed.txt') -Value 'observed'
+            Set-Content -LiteralPath $OutputIso -Value 'fresh-iso' -Encoding utf8
             exit 0
             """);
         return runner;

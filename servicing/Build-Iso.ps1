@@ -1,6 +1,7 @@
 #requires -Version 7.6
 param(
-    [hashtable] $Parameters
+    [Parameter(Mandatory)] [string] $OutputIso,
+    [Parameter(Mandatory)] [string] $MediaDir
 )
 
 function Find-Oscdimg {
@@ -32,10 +33,8 @@ function Get-WinMintOscdimgBootData {
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-    $outputIso = $Parameters['outputIso']
-    $mediaDir = $Parameters['mediaDir']
-    if ([string]::IsNullOrWhiteSpace($outputIso)) { throw 'outputIso required' }
-    if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
+    $outputIso = $OutputIso
+    $mediaDir = $MediaDir
     if (-not (Test-Path -LiteralPath $mediaDir)) { throw "mediaDir missing: $mediaDir" }
 
     $oscdimg = Find-Oscdimg

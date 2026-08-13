@@ -3,8 +3,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repo 'servicing\Set-OfflineComponent.ps1')
-. (Join-Path $repo 'servicing\Remove-ProvisionedAppx.ps1')
+. (Join-Path $repo 'servicing\Set-OfflineComponent.ps1') -MountDir 'x' -WorkDirectory 'x' -Kind 'capability' -NamesPath 'x'
+. (Join-Path $repo 'servicing\Remove-ProvisionedAppx.ps1') -MountDir 'x' -WorkDirectory 'x' -PackageFamilyNamesPath 'x'
 
 $capText = @'
 Deployment Image Servicing and Management tool

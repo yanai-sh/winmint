@@ -75,6 +75,9 @@ public sealed record BuildArtifacts(
     AccountProfile Account,
     IReadOnlyList<string> RemoveProvisionedAppx,
     IReadOnlyList<EffectivePackageFact> EffectivePackages,
+    IReadOnlyList<OfflinePolicyRow> OfflinePolicies,
+    IReadOnlyList<string> RemoveCapabilities,
+    IReadOnlyList<string> DisableOptionalFeatures,
     byte[]? WingetImportJson = null,
     bool PackageStrict = false,
     bool BraveSelected = false);
@@ -126,12 +129,11 @@ public static class StageParams
     public const string Lane = "lane";
     public const string Compression = "compression";
     public const string Cleanup = "cleanup";
-    public const string PackageFamilyNames = "packageFamilyNames";
-    public const string CapabilityNames = "capabilityNames";
-    public const string FeatureNames = "featureNames";
+    public const string PackageFamilyNamesPath = "packageFamilyNamesPath";
+    public const string NamesPath = "namesPath";
     public const string WorkDirectory = "workDirectory";
     public const string Kind = "kind";
-    public const string PolicySpecs = "policySpecs";
+    public const string PoliciesPath = "policiesPath";
     public const string DeviceId = "deviceId";
     public const string DetailsUrl = "detailsUrl";
     public const string ExpectedFileNameRegex = "expectedFileNameRegex";

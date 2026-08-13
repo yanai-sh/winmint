@@ -509,39 +509,27 @@ public static partial class BuildPlan
             includeDriverHygiene: injectDrivers);
         stageList.Add(new ServicingStage(
             ServicingOpcode.StampOfflinePolicies,
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [StageParams.PolicySpecs] = ProductPosture.EncodePolicySpecs(policyRows),
-            }));
+            new Dictionary<string, string>(StringComparer.Ordinal)));
 
         if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Offline)
         {
             stageList.Add(new ServicingStage(
                 ServicingOpcode.RemoveProvisionedAppx,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    [StageParams.PackageFamilyNames] = string.Join(';', appx),
-                }));
+                new Dictionary<string, string>(StringComparer.Ordinal)));
         }
 
         if (profile.RemoveCapabilities.Count > 0)
         {
             stageList.Add(new ServicingStage(
                 ServicingOpcode.RemoveCapabilities,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    [StageParams.CapabilityNames] = string.Join(';', profile.RemoveCapabilities),
-                }));
+                new Dictionary<string, string>(StringComparer.Ordinal)));
         }
 
         if (profile.DisableOptionalFeatures.Count > 0)
         {
             stageList.Add(new ServicingStage(
                 ServicingOpcode.DisableOptionalFeatures,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    [StageParams.FeatureNames] = string.Join(';', profile.DisableOptionalFeatures),
-                }));
+                new Dictionary<string, string>(StringComparer.Ordinal)));
         }
 
         if (injectDrivers)
@@ -600,6 +588,9 @@ public static partial class BuildPlan
             profile.Account,
             appx,
             packageSlice.EffectivePackages,
+            policyRows,
+            profile.RemoveCapabilities,
+            profile.DisableOptionalFeatures,
             packageSlice.WingetImportJson,
             options.PackageStrict,
             braveSelected);

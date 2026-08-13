@@ -17,22 +17,23 @@ public class BrowserPolicyPlanTests
         ServicingStage policies = Assert.Single(
             result.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.StampOfflinePolicies);
-        string specs = policies.Parameters[StageParams.PolicySpecs];
-        Assert.Contains("HideFirstRunExperience", specs, StringComparison.Ordinal);
-        Assert.Contains("NewTabPageLocation", specs, StringComparison.Ordinal);
-        Assert.Contains("LongPathsEnabled", specs, StringComparison.Ordinal);
-        Assert.DoesNotContain("AllowNewsAndInterests", specs, StringComparison.Ordinal);
-        Assert.Contains("DisableWindowsConsumerFeatures", specs, StringComparison.Ordinal);
-        Assert.Contains("DisableSoftLanding", specs, StringComparison.Ordinal);
-        Assert.Contains("AutoDownload", specs, StringComparison.Ordinal);
-        Assert.Contains("AllowDevelopmentWithoutDevLicense", specs, StringComparison.Ordinal);
-        Assert.Contains("DisableFileSyncNGSC", specs, StringComparison.Ordinal);
-        Assert.Contains("PreventDeviceMetadataFromNetwork", specs, StringComparison.Ordinal);
-        Assert.Contains("DisableWpbtExecution", specs, StringComparison.Ordinal);
-        Assert.DoesNotContain("HubsSidebarEnabled", specs, StringComparison.Ordinal);
-        Assert.DoesNotContain("TurnOffWindowsCopilot", specs, StringComparison.Ordinal);
-        Assert.DoesNotContain("BraveRewardsDisabled", specs, StringComparison.Ordinal);
-        Assert.DoesNotContain("fDenyTSConnections", specs, StringComparison.Ordinal);
+        Assert.Empty(policies.Parameters);
+        string names = string.Join(' ', result.Value.OfflinePolicies.Select(static r => r.Name));
+        Assert.Contains("HideFirstRunExperience", names, StringComparison.Ordinal);
+        Assert.Contains("NewTabPageLocation", names, StringComparison.Ordinal);
+        Assert.Contains("LongPathsEnabled", names, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllowNewsAndInterests", names, StringComparison.Ordinal);
+        Assert.Contains("DisableWindowsConsumerFeatures", names, StringComparison.Ordinal);
+        Assert.Contains("DisableSoftLanding", names, StringComparison.Ordinal);
+        Assert.Contains("AutoDownload", names, StringComparison.Ordinal);
+        Assert.Contains("AllowDevelopmentWithoutDevLicense", names, StringComparison.Ordinal);
+        Assert.Contains("DisableFileSyncNGSC", names, StringComparison.Ordinal);
+        Assert.Contains("PreventDeviceMetadataFromNetwork", names, StringComparison.Ordinal);
+        Assert.Contains("DisableWpbtExecution", names, StringComparison.Ordinal);
+        Assert.DoesNotContain("HubsSidebarEnabled", names, StringComparison.Ordinal);
+        Assert.DoesNotContain("TurnOffWindowsCopilot", names, StringComparison.Ordinal);
+        Assert.DoesNotContain("BraveRewardsDisabled", names, StringComparison.Ordinal);
+        Assert.DoesNotContain("fDenyTSConnections", names, StringComparison.Ordinal);
 
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.OneDriveUninstall);
         Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.ReservedStorageDisable);
@@ -58,11 +59,13 @@ public class BrowserPolicyPlanTests
     {
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(Lab(winget: ["Brave.Brave"]));
         Assert.True(result.IsOk);
-        string specs = Assert.Single(
+        Assert.True(result.IsOk);
+        Assert.Contains(
             result.Value.Stages.Stages,
-            s => s.Opcode == ServicingOpcode.StampOfflinePolicies).Parameters[StageParams.PolicySpecs];
-        Assert.Contains("BraveRewardsDisabled", specs, StringComparison.Ordinal);
-        Assert.Contains("BraveAIChatEnabled", specs, StringComparison.Ordinal);
+            s => s.Opcode == ServicingOpcode.StampOfflinePolicies);
+        string names = string.Join(' ', result.Value.OfflinePolicies.Select(static r => r.Name));
+        Assert.Contains("BraveRewardsDisabled", names, StringComparison.Ordinal);
+        Assert.Contains("BraveAIChatEnabled", names, StringComparison.Ordinal);
     }
 
     [Fact]

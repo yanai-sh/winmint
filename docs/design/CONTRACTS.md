@@ -51,6 +51,7 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 | BuildArtifacts | BuildPlan | ImageServicing; Cli plan files |
 | Plan-dump stages (`plan` output) | Cli via BuildPlan serializer | Human / diagnostic tooling; never Apply |
 | Servicing stages (`stages.json`) | ImageServicing Materialize | Elevated `Invoke-ServicingPlan.ps1`; Smoke harness (Debloat pin lists) |
+| Payload policy / name lists (`payload/policies.json`, `packageFamilyNames.json`, `capabilityNames.json`, `featureNames.json`) | ImageServicing Materialize | Opcode kernels (`Stamp-OfflinePolicies`, `Remove-ProvisionedAppx`, `Set-OfflineComponent`) |
 | Staged guest bundle | ImageServicing StagePayload | ProvisioningSession host loader | Smoke: plaintext password until MachineSetup wipe — [SECRETS](SECRETS.md) |
 | Evidence JSON | ProvisioningSession (projection) | Smoke harness (S4) — **never** session control |
 | Checkpoint | ProvisioningSession (`ICheckpointStore`) | Next Shell `Run` via store (optional `bundle.Resume` inject) |

@@ -131,13 +131,6 @@ public static class ProductPosture
         return rows.ToArray();
     }
 
-    /// <summary>
-    /// Encode rows for the <c>policySpecs</c> stage param. The digest key ships with the row so
-    /// Stamp-OfflinePolicies.ps1 writes the key it was handed instead of re-deriving the family.
-    /// </summary>
-    public static string EncodePolicySpecs(IReadOnlyList<OfflinePolicyRow> rows) =>
-        string.Join(';', rows.Select(r => $"{r.Hive}|{r.SubKey}|{r.Name}|{r.RegType}|{r.Data}|{r.Digest}"));
-
     public static bool TryNormalizeDohProvider(string? raw, out string? provider, out string? error)
     {
         provider = null;
@@ -181,24 +174,24 @@ public static class ProductPosture
 
     private static readonly OfflinePolicyRow[] EdgeDebloat =
     [
-        Soft("Policies\\Microsoft\\EdgeUpdate", "CreateDesktopShortcutDefault", "0"),
-        Soft("Policies\\Microsoft\\Edge", "PersonalizationReportingEnabled", "0"),
-        SoftString("Policies\\Microsoft\\Edge\\ExtensionInstallBlocklist", "1", "ofefcgjbeghpigppfmkologfjadafddi"),
-        Soft("Policies\\Microsoft\\Edge", "ShowRecommendationsEnabled", "0"),
-        Soft("Policies\\Microsoft\\Edge", "HideFirstRunExperience", "1"),
-        SoftString("Policies\\Microsoft\\Edge", "NewTabPageLocation", "about:blank"),
-        Soft("Policies\\Microsoft\\Edge", "UserFeedbackAllowed", "0"),
-        Soft("Policies\\Microsoft\\Edge", "ConfigureDoNotTrack", "1"),
-        Soft("Policies\\Microsoft\\Edge", "AlternateErrorPagesEnabled", "0"),
-        Soft("Policies\\Microsoft\\Edge", "EdgeCollectionsEnabled", "0"),
-        Soft("Policies\\Microsoft\\Edge", "EdgeShoppingAssistantEnabled", "0"),
-        Soft("Policies\\Microsoft\\Edge", "MicrosoftEdgeInsiderPromotionEnabled", "0"),
-        Soft("Policies\\Microsoft\\Edge", "ShowMicrosoftRewards", "0"),
-        Soft("Policies\\Microsoft\\Edge", "WebWidgetAllowed", "0"),
-        Soft("Policies\\Microsoft\\Edge", "DiagnosticData", "0"),
-        Soft("Policies\\Microsoft\\Edge", "EdgeAssetDeliveryServiceEnabled", "0"),
-        Soft("Policies\\Microsoft\\Edge", "WalletDonationEnabled", "0"),
-        Soft("Policies\\Microsoft\\Edge", "DefaultBrowserSettingsCampaignEnabled", "0"),
+        Soft("Policies\\Microsoft\\EdgeUpdate", "CreateDesktopShortcutDefault", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "PersonalizationReportingEnabled", "0", "edge"),
+        SoftString("Policies\\Microsoft\\Edge\\ExtensionInstallBlocklist", "1", "ofefcgjbeghpigppfmkologfjadafddi", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "ShowRecommendationsEnabled", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "HideFirstRunExperience", "1", "edge"),
+        SoftString("Policies\\Microsoft\\Edge", "NewTabPageLocation", "about:blank", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "UserFeedbackAllowed", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "ConfigureDoNotTrack", "1", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "AlternateErrorPagesEnabled", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "EdgeCollectionsEnabled", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "EdgeShoppingAssistantEnabled", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "MicrosoftEdgeInsiderPromotionEnabled", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "ShowMicrosoftRewards", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "WebWidgetAllowed", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "DiagnosticData", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "EdgeAssetDeliveryServiceEnabled", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "WalletDonationEnabled", "0", "edge"),
+        Soft("Policies\\Microsoft\\Edge", "DefaultBrowserSettingsCampaignEnabled", "0", "edge"),
     ];
 
     /// <summary>
@@ -209,136 +202,70 @@ public static class ProductPosture
     [
         // Widgets AllowNewsAndInterests: FirstLogon HKLM (offline Policies\Microsoft\Dsh create/set
         // flakes Unauthorized on this host's DISM-mounted SOFTWARE hive).
-        Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableWindowsConsumerFeatures", "1"),
-        Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableSoftLanding", "1"),
-        Soft("Policies\\Microsoft\\WindowsStore", "AutoDownload", "2"),
-        Soft(@"Microsoft\Windows\CurrentVersion\AppModelUnlock", "AllowDevelopmentWithoutDevLicense", "1"),
-        Soft(@"Microsoft\Windows\CurrentVersion\Sudo", "Enabled", "3"),
-        Sys("ControlSet001\\Control\\FileSystem", "LongPathsEnabled", "1"),
+        Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableWindowsConsumerFeatures", "1", "cloudContent"),
+        Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableSoftLanding", "1", "cloudContent"),
+        Soft("Policies\\Microsoft\\WindowsStore", "AutoDownload", "2", "store"),
+        Soft(@"Microsoft\Windows\CurrentVersion\AppModelUnlock", "AllowDevelopmentWithoutDevLicense", "1", "developer"),
+        Soft(@"Microsoft\Windows\CurrentVersion\Sudo", "Enabled", "3", "sudo"),
+        Sys("ControlSet001\\Control\\FileSystem", "LongPathsEnabled", "1", "filesystem"),
     ];
 
     private static readonly OfflinePolicyRow[] OneDriveDisable =
     [
-        Soft("Policies\\Microsoft\\Windows\\OneDrive", "DisableFileSyncNGSC", "1"),
+        Soft("Policies\\Microsoft\\Windows\\OneDrive", "DisableFileSyncNGSC", "1", "onedrive"),
     ];
 
     private static readonly OfflinePolicyRow[] DeviceMetadata =
     [
-        Soft("Policies\\Microsoft\\Windows\\Device Metadata", "PreventDeviceMetadataFromNetwork", "1"),
+        Soft("Policies\\Microsoft\\Windows\\Device Metadata", "PreventDeviceMetadataFromNetwork", "1", "device"),
     ];
 
     private static readonly OfflinePolicyRow[] WpbtDisable =
     [
-        Sys("ControlSet001\\Control\\Session Manager", "DisableWpbtExecution", "1"),
+        Sys("ControlSet001\\Control\\Session Manager", "DisableWpbtExecution", "1", "wpbt"),
     ];
 
     private static readonly OfflinePolicyRow[] DriverHygiene =
     [
-        Soft(@"Microsoft\Windows\CurrentVersion\Device Installer", "DisableCoInstallers", "1"),
+        Soft(@"Microsoft\Windows\CurrentVersion\Device Installer", "DisableCoInstallers", "1", "deviceInstaller"),
     ];
 
     private static readonly OfflinePolicyRow[] BraveDebloat =
     [
-        Soft("Policies\\BraveSoftware\\Brave", "BraveRewardsDisabled", "1"),
-        Soft("Policies\\BraveSoftware\\Brave", "BraveWalletDisabled", "1"),
-        Soft("Policies\\BraveSoftware\\Brave", "BraveVPNDisabled", "1"),
-        Soft("Policies\\BraveSoftware\\Brave", "BraveAIChatEnabled", "0"),
-        Soft("Policies\\BraveSoftware\\Brave", "BraveStatsPingEnabled", "0"),
-        Soft("Policies\\BraveSoftware\\Brave", "BraveNewsDisabled", "1"),
-        Soft("Policies\\BraveSoftware\\Brave", "BraveTalkDisabled", "1"),
-        Soft("Policies\\BraveSoftware\\Brave", "TorDisabled", "1"),
-        Soft("Policies\\BraveSoftware\\Brave", "BraveP3AEnabled", "0"),
-        Soft("Policies\\BraveSoftware\\Brave", "UrlKeyedAnonymizedDataCollectionEnabled", "0"),
-        Soft("Policies\\BraveSoftware\\Brave", "SafeBrowsingExtendedReportingEnabled", "0"),
-        Soft("Policies\\BraveSoftware\\Brave", "MetricsReportingEnabled", "0"),
+        Soft("Policies\\BraveSoftware\\Brave", "BraveRewardsDisabled", "1", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "BraveWalletDisabled", "1", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "BraveVPNDisabled", "1", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "BraveAIChatEnabled", "0", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "BraveStatsPingEnabled", "0", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "BraveNewsDisabled", "1", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "BraveTalkDisabled", "1", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "TorDisabled", "1", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "BraveP3AEnabled", "0", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "UrlKeyedAnonymizedDataCollectionEnabled", "0", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "SafeBrowsingExtendedReportingEnabled", "0", "brave"),
+        Soft("Policies\\BraveSoftware\\Brave", "MetricsReportingEnabled", "0", "brave"),
     ];
 
-    private static OfflinePolicyRow Soft(string subKey, string name, string data) =>
-        new("SOFTWARE", subKey, name, "REG_DWORD", data, DigestKey(subKey, name));
+    private static OfflinePolicyRow Soft(string subKey, string name, string data, string family) =>
+        new("SOFTWARE", subKey, name, "REG_DWORD", data, family);
 
-    private static OfflinePolicyRow SoftString(string subKey, string name, string data) =>
-        new("SOFTWARE", subKey, name, "REG_SZ", data, DigestKey(subKey, name));
+    private static OfflinePolicyRow SoftString(string subKey, string name, string data, string family) =>
+        new("SOFTWARE", subKey, name, "REG_SZ", data, family);
 
-    private static OfflinePolicyRow Sys(string subKey, string name, string data) =>
-        new("SYSTEM", subKey, name, "REG_DWORD", data, DigestKey(subKey, name));
-
-    private static string DigestKey(string subKey, string name) =>
-        $"policy.{DigestFamily(subKey)}.{name}";
-
-    /// <summary>
-    /// Sole owner of the <c>policy.&lt;family&gt;.&lt;Name&gt;</c> digest vocabulary (ADR-009).
-    /// The key ships to Stamp-OfflinePolicies.ps1 in <c>policySpecs</c>; nothing re-derives it downstream.
-    /// </summary>
-    private static string DigestFamily(string subKey)
-    {
-        if (subKey.Contains("BraveSoftware", StringComparison.OrdinalIgnoreCase))
-        {
-            return "brave";
-        }
-
-        if (subKey.Contains("OneDrive", StringComparison.OrdinalIgnoreCase))
-        {
-            return "onedrive";
-        }
-
-        if (subKey.Contains("Device Installer", StringComparison.OrdinalIgnoreCase))
-        {
-            return "deviceInstaller";
-        }
-
-        if (subKey.Contains("Device Metadata", StringComparison.OrdinalIgnoreCase))
-        {
-            return "device";
-        }
-
-        if (subKey.Contains("Session Manager", StringComparison.OrdinalIgnoreCase))
-        {
-            return "wpbt";
-        }
-
-        if (subKey.Contains("FileSystem", StringComparison.OrdinalIgnoreCase))
-        {
-            return "filesystem";
-        }
-
-        if (subKey.Contains("\\Dsh", StringComparison.OrdinalIgnoreCase)
-            || subKey.EndsWith("Dsh", StringComparison.OrdinalIgnoreCase))
-        {
-            return "widgets";
-        }
-
-        if (subKey.Contains("CloudContent", StringComparison.OrdinalIgnoreCase))
-        {
-            return "cloudContent";
-        }
-
-        if (subKey.Contains("WindowsStore", StringComparison.OrdinalIgnoreCase))
-        {
-            return "store";
-        }
-
-        if (subKey.Contains("AppModelUnlock", StringComparison.OrdinalIgnoreCase))
-        {
-            return "developer";
-        }
-
-        if (subKey.Contains("\\Sudo", StringComparison.OrdinalIgnoreCase)
-            || subKey.EndsWith("Sudo", StringComparison.OrdinalIgnoreCase))
-        {
-            return "sudo";
-        }
-
-        return "edge";
-    }
+    private static OfflinePolicyRow Sys(string subKey, string name, string data, string family) =>
+        new("SYSTEM", subKey, name, "REG_DWORD", data, family);
 }
 
-/// <summary>One offline <c>reg add</c> row under SOFTWARE or SYSTEM hive.</summary>
+/// <summary>One offline <c>reg add</c> row under SOFTWARE or SYSTEM hive. <see cref="Family"/> is declared, never inferred.</summary>
 public sealed record OfflinePolicyRow(
     string Hive,
     string SubKey,
     string Name,
     string RegType,
     string Data,
-    string Digest);
+    string Family)
+{
+    public string Digest => $"policy.{Family}.{Name}";
+}
 
 public sealed record DohProviderSpec(string Primary, string Secondary, string DohTemplate);

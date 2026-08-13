@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repo 'servicing\Build-Iso.ps1')
+. (Join-Path $repo 'servicing\Build-Iso.ps1') -OutputIso 'x' -MediaDir 'y'
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('winmint-oscdimg-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path (Join-Path $tmp 'boot'), (Join-Path $tmp 'efi\microsoft\boot') | Out-Null

@@ -21,6 +21,10 @@ public sealed class ServicingWorkspace
     public const string PreparedMediaFileName = "prepared-media.json";
     public const string IncomingMediaPrefix = "media.incoming-";
     public const string PreviousMediaPrefix = "media.previous-";
+    public const string PoliciesFileName = "policies.json";
+    public const string PackageFamilyNamesFileName = "packageFamilyNames.json";
+    public const string CapabilityNamesFileName = "capabilityNames.json";
+    public const string FeatureNamesFileName = "featureNames.json";
 
     public ServicingWorkspace(string root)
     {
@@ -87,60 +91,6 @@ public sealed class ServicingWorkspace
             JsonSerializer.SerializeToUtf8Bytes(
                 new Dictionary<string, string>(LeafMap(), StringComparer.Ordinal),
                 ServicingJsonContext.Default.DictionaryStringString));
-    }
-}
-
-/// <summary>Typed MountInstallWim bag (post-cache). No reuseMedia.</summary>
-public sealed record MountInstallWimParameters(
-    string SourceIso,
-    string MountDir,
-    string MediaDir,
-    int WimIndex,
-    string WorkDirectory,
-    string SourceIsoSha256,
-    long SourceIsoLength,
-    int CacheSchema,
-    string CacheRoot,
-    string? ImageName = null,
-    string? Architecture = null,
-    string? ImageEdition = null,
-    string? ImageBuild = null)
-{
-    public Dictionary<string, string> ToStageBag()
-    {
-        Dictionary<string, string> bag = new(StringComparer.Ordinal)
-        {
-            [StageParams.SourceIso] = SourceIso,
-            [StageParams.MountDir] = MountDir,
-            [StageParams.MediaDir] = MediaDir,
-            [StageParams.WimIndex] = WimIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            [StageParams.WorkDirectory] = WorkDirectory,
-            [StageParams.SourceIsoSha256] = SourceIsoSha256,
-            [StageParams.SourceIsoLength] = SourceIsoLength.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            [StageParams.CacheSchema] = CacheSchema.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            [StageParams.CacheRoot] = CacheRoot,
-        };
-        if (!string.IsNullOrWhiteSpace(ImageName))
-        {
-            bag[StageParams.ImageName] = ImageName;
-        }
-
-        if (!string.IsNullOrWhiteSpace(Architecture))
-        {
-            bag[StageParams.Architecture] = Architecture;
-        }
-
-        if (!string.IsNullOrWhiteSpace(ImageEdition))
-        {
-            bag[StageParams.ImageEdition] = ImageEdition;
-        }
-
-        if (!string.IsNullOrWhiteSpace(ImageBuild))
-        {
-            bag[StageParams.ImageBuild] = ImageBuild;
-        }
-
-        return bag;
     }
 }
 

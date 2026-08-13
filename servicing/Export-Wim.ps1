@@ -1,23 +1,22 @@
 #requires -Version 7.6
 param(
-    [Parameter(Mandatory)]
-    [hashtable] $Parameters
+    [Parameter(Mandatory)] [string] $MountDir,
+    [Parameter(Mandatory)] [string] $MediaDir,
+    [Parameter(Mandatory)] [string] $WimOut,
+    [Parameter(Mandatory)] [string] $WorkDirectory,
+    [Parameter(Mandatory)] [string] $Lane,
+    [Parameter(Mandatory)] [string] $Compression,
+    [Parameter(Mandatory)] [string] $Cleanup
 )
 # Commit + unmount. Params from BuildPlan only — no Profile branching.
 # Metadata assert + R/O clear + ei.cfg/PID.txt after final WIM shape.
-$mountDir = $Parameters['mountDir']
-$wimOut = $Parameters['wimOut']
-$mediaDir = $Parameters['mediaDir']
-$workDir = $Parameters['workDirectory']
-$lane = $Parameters['lane']
-$compression = $Parameters['compression']
-$cleanup = $Parameters['cleanup']
-if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
-if ([string]::IsNullOrWhiteSpace($wimOut)) { throw 'wimOut required' }
-if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
-if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
-if ([string]::IsNullOrWhiteSpace($compression)) { throw 'compression required' }
-if ([string]::IsNullOrWhiteSpace($cleanup)) { throw 'cleanup required' }
+$mountDir = $MountDir
+$wimOut = $WimOut
+$mediaDir = $MediaDir
+$workDir = $WorkDirectory
+$lane = $Lane
+$compression = $Compression
+$cleanup = $Cleanup
 
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')

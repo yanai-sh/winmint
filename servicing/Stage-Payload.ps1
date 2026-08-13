@@ -1,13 +1,11 @@
 #requires -Version 7.6
 param(
-    [Parameter(Mandatory)]
-    [hashtable] $Parameters
+    [Parameter(Mandatory)] [string] $PayloadDir,
+    [Parameter(Mandatory)] [string] $MountDir
 )
 # Stage Supervisor, SetupComplete.cmd, provisioning bundle into the offline image.
-$payloadDir = $Parameters['payloadDir']
-$mountDir = $Parameters['mountDir']
-if ([string]::IsNullOrWhiteSpace($payloadDir)) { throw 'payloadDir required' }
-if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
+$payloadDir = $PayloadDir
+$mountDir = $MountDir
 
 $guestWinMint = Join-Path $mountDir 'Windows\WinMint'
 $guestScripts = Join-Path $mountDir 'Windows\Setup\Scripts'

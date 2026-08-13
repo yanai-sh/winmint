@@ -374,6 +374,9 @@ public static class HostCompile
             artifacts.Account with { },
             ReadOnly(artifacts.RemoveProvisionedAppx),
             ReadOnly(artifacts.EffectivePackages),
+            ReadOnly(artifacts.OfflinePolicies),
+            ReadOnly(artifacts.RemoveCapabilities),
+            ReadOnly(artifacts.DisableOptionalFeatures),
             artifacts.WingetImportJson?.ToArray(),
             artifacts.PackageStrict,
             artifacts.BraveSelected);

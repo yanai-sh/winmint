@@ -264,12 +264,7 @@ try {
         $logFile = Join-Path $logDir ("{0:D2}-{1}.log" -f $index, $opcode)
         Write-ApplyStatus -Stage $opcode -Log $logFile
         $phaseClock = [System.Diagnostics.Stopwatch]::StartNew()
-        if ($opcode -eq 'MountInstallWim') {
-            & $kernel @params *>&1 | Tee-Object -FilePath $logFile
-        }
-        else {
-            & $kernel -Parameters $params *>&1 | Tee-Object -FilePath $logFile
-        }
+        & $kernel @params *>&1 | Tee-Object -FilePath $logFile
         $phaseClock.Stop()
         if ($opcode -eq 'ExportWim') {
             $script:phaseTimings['exportMs'] = [int]$phaseClock.ElapsedMilliseconds

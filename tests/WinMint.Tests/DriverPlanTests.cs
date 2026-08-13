@@ -109,10 +109,12 @@ public class DriverPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        ServicingStage policies = Assert.Single(
+        Assert.Contains(
             result.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.StampOfflinePolicies);
-        Assert.Contains("DisableCoInstallers", policies.Parameters[StageParams.PolicySpecs], StringComparison.Ordinal);
+        Assert.Contains(
+            result.Value.OfflinePolicies,
+            static row => row.Name == "DisableCoInstallers");
     }
 
     [Fact]
@@ -123,10 +125,12 @@ public class DriverPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        ServicingStage policies = Assert.Single(
+        Assert.Contains(
             result.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.StampOfflinePolicies);
-        Assert.DoesNotContain("DisableCoInstallers", policies.Parameters[StageParams.PolicySpecs], StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            result.Value.OfflinePolicies,
+            static row => row.Name == "DisableCoInstallers");
     }
 
     private static string MinimalJson(string? source = null, string? deviceId = null)

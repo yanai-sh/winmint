@@ -1,6 +1,9 @@
 #requires -Version 7.6
 param(
-    [hashtable] $Parameters
+    [Parameter(Mandatory)] [string] $MountDir,
+    [Parameter(Mandatory)] [string] $WorkDirectory,
+    [Parameter(Mandatory)] [string] $Kind,
+    [Parameter(Mandatory)] [string] $NamesPath
 )
 # Offline capability remove OR optional-feature disable — param-only.
 # kind=capability|feature. Already-absent/disabled / not listed ⇒ ok + digest.
@@ -49,22 +52,19 @@ function Get-StateMap {
 if ($MyInvocation.InvocationName -ne '.') {
 . (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
 
-$kind = [string]$Parameters['kind']
-$mountDir = $Parameters['mountDir']
-$workDir = $Parameters['workDirectory']
-$namesKey = if ($kind -eq 'feature') { 'featureNames' } else { 'capabilityNames' }
-$names = $Parameters[$namesKey]
+$kind = [string]$Kind
+$mountDir = $MountDir
+$workDir = $WorkDirectory
+$namesPath = $NamesPath
 if ($kind -ne 'capability' -and $kind -ne 'feature') { throw "kind must be capability|feature (got '$kind')" }
-if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
-if ([string]::IsNullOrWhiteSpace($names)) { throw "$namesKey required" }
-if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
+if (-not (Test-Path -LiteralPath $namesPath -PathType Leaf)) { throw "namesPath missing: $namesPath" }
 
 $ids = @(
-    $names.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) |
-        ForEach-Object { $_.Trim() } |
+    Get-Content -LiteralPath $namesPath -Raw | ConvertFrom-Json |
+        ForEach-Object { [string]$_ } |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 )
-if ($ids.Count -eq 0) { throw "$namesKey empty after split" }
+if ($ids.Count -eq 0) { throw 'names JSON empty' }
 
 $logDir = Join-Path $workDir 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null

@@ -1,15 +1,13 @@
 #requires -Version 7.6
 param(
-    [Parameter(Mandatory)]
-    [hashtable] $Parameters
+    [Parameter(Mandatory)] [string] $MountDir,
+    [Parameter(Mandatory)] [string] $WorkDirectory,
+    [Parameter(Mandatory)] [string] $PoliciesPath
 )
 # Offline HKLM policy stamps (SOFTWARE + SYSTEM). Param-only — Plan owns which rows.
-$mountDir = $Parameters['mountDir']
-$workDirectory = $Parameters['workDirectory']
-$policySpecs = $Parameters['policySpecs']
-if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
-if ([string]::IsNullOrWhiteSpace($workDirectory)) { throw 'workDirectory required' }
-if ([string]::IsNullOrWhiteSpace($policySpecs)) { throw 'policySpecs required' }
+$mountDir = $MountDir
+$workDirectory = $WorkDirectory
+$policiesPath = $PoliciesPath
 
 . (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
 
@@ -95,26 +93,15 @@ function Invoke-OfflineRegAdd {
     }
 }
 
-# ProductPosture owns the digest key (6th field); no family derivation here.
-$rows = @()
-foreach ($raw in ($policySpecs -split ';')) {
-    if ([string]::IsNullOrWhiteSpace($raw)) { continue }
-    $parts = $raw -split '\|', 6
-    if ($parts.Count -ne 6) { throw "malformed policySpecs row: $raw" }
-    $rows += [pscustomobject]@{
-        Hive   = $parts[0].Trim().ToUpperInvariant()
-        SubKey = $parts[1]
-        Name   = $parts[2]
-        Type   = $parts[3]
-        Data   = $parts[4]
-        Digest = $parts[5]
-    }
-}
+# ProductPosture owns the digest key; family is declared on the row. JSON so Data may contain ; | ~~~~.
+if (-not (Test-Path -LiteralPath $policiesPath -PathType Leaf)) { throw "policiesPath missing: $policiesPath" }
+$rows = @(Get-Content -LiteralPath $policiesPath -Raw | ConvertFrom-Json)
+if ($rows.Count -eq 0) { throw 'policies.json empty' }
 
 $digests = @{}
 $byHive = $rows | Group-Object -Property Hive
 foreach ($group in $byHive) {
-    $hiveName = [string]$group.Name
+    $hiveName = ([string]$group.Name).Trim().ToUpperInvariant()
     $fileName = switch ($hiveName) {
         'SOFTWARE' { 'SOFTWARE' }
         'SYSTEM' { 'SYSTEM' }
@@ -130,7 +117,7 @@ foreach ($group in $byHive) {
     try {
         foreach ($row in $group.Group) {
             $ctx = "hive=$hiveName sub=$($row.SubKey) name=$($row.Name)"
-            Invoke-OfflineRegAdd -HiveKey $hiveKey -SubKey $row.SubKey -Name $row.Name -Type $row.Type -Data $row.Data -Context $ctx
+            Invoke-OfflineRegAdd -HiveKey $hiveKey -SubKey $row.SubKey -Name $row.Name -Type $row.RegType -Data $row.Data -Context $ctx
             $digests[$row.Digest] = [string]$row.Data
             Write-Output "policy ok: $($row.Digest)=$($row.Data)"
         }

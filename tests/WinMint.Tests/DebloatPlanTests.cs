@@ -60,10 +60,10 @@ public class DebloatPlanTests
         ServicingStage remove = Assert.Single(
             result.Value.Stages.Stages,
             s => s.Opcode == ServicingOpcode.RemoveProvisionedAppx);
+        Assert.Empty(remove.Parameters);
         Assert.Equal(
-            string.Join(';', ProductPosture.UnionAppx(["Microsoft.BingNews", "Microsoft.GamingApp"])),
-            remove.Parameters[StageParams.PackageFamilyNames]);
-        Assert.DoesNotContain(".ps1", string.Join('\0', remove.Parameters.Values), StringComparison.OrdinalIgnoreCase);
+            ProductPosture.UnionAppx(["Microsoft.BingNews", "Microsoft.GamingApp"]),
+            result.Value.RemoveProvisionedAppx);
 
         // After mount, before payload — offline remove on mounted image.
         IReadOnlyList<ServicingOpcode> opcodes = result.Value.Stages.Stages.Select(s => s.Opcode).ToArray();

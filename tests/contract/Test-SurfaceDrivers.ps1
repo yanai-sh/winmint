@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repo 'servicing\Inject-SurfaceDrivers.ps1')
+. (Join-Path $repo 'servicing\Inject-SurfaceDrivers.ps1') -MountDir 'x' -WorkDirectory 'x' -MediaDir 'x' -DeviceId 'x' -DetailsUrl 'x' -ExpectedFileNameRegex 'x'
 
 if (-not (Test-MicrosoftDownloadUri -Uri 'https://download.microsoft.com/download/x.msi')) {
     throw 'download.microsoft.com must be allowed'

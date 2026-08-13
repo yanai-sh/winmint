@@ -97,7 +97,16 @@ internal static class ImageServicingTestFakes
             Path.Combine(servicing, "Get-WinMintServicingWorkspace.ps1"));
 
         const string noOp = """
-            param([hashtable] $Parameters)
+            param(
+                [string] $ShellTarget,
+                [string] $MountDir,
+                [string] $Lane,
+                [string] $MediaDir,
+                [string] $WimOut,
+                [string] $WorkDirectory,
+                [string] $Compression,
+                [string] $Cleanup
+            )
             exit 0
             """;
         File.WriteAllText(Path.Combine(servicing, "Stamp-OfflineShell.ps1"), noOp);
@@ -105,8 +114,11 @@ internal static class ImageServicingTestFakes
         File.WriteAllText(
             Path.Combine(servicing, "Build-Iso.ps1"),
             """
-            param([hashtable] $Parameters)
-            Set-Content -LiteralPath $Parameters['outputIso'] -Value 'fake-iso' -Encoding utf8
+            param(
+                [Parameter(Mandatory)] [string] $OutputIso,
+                [string] $MediaDir
+            )
+            Set-Content -LiteralPath $OutputIso -Value 'fake-iso' -Encoding utf8
             exit 0
             """);
 

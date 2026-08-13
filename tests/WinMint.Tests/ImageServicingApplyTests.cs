@@ -79,12 +79,15 @@ public class ImageServicingApplyTests
             Assert.Contains(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.StampOfflinePolicies
-                    && s.Parameters.TryGetValue(StageParams.PolicySpecs, out string? specs)
-                    && specs.Contains("HideFirstRunExperience", StringComparison.Ordinal)
+                    && s.Parameters.TryGetValue(StageParams.PoliciesPath, out string? policiesPath)
+                    && policiesPath == Path.Combine(work, ServicingWorkspace.PayloadDirectoryName, ServicingWorkspace.PoliciesFileName)
                     && s.Parameters.TryGetValue(StageParams.MountDir, out string? polMount)
                     && polMount == ImageServicing.HostMountDir
                     && s.Parameters.TryGetValue(StageParams.WorkDirectory, out string? polWork)
                     && polWork == work);
+            string policiesJson = File.ReadAllText(
+                Path.Combine(work, ServicingWorkspace.PayloadDirectoryName, ServicingWorkspace.PoliciesFileName));
+            Assert.Contains("HideFirstRunExperience", policiesJson, StringComparison.Ordinal);
             Assert.Contains(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.StampOfflineShell
@@ -124,6 +127,62 @@ public class ImageServicingApplyTests
             Assert.Contains(ImageServicing.BundleSchemaVersion, bundle, StringComparison.Ordinal);
             Assert.Contains("username", bundle, StringComparison.Ordinal);
             Assert.Contains("winmint", bundle, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    public async Task Apply_policy_payload_json_round_trips_semicolon_pipe_and_tilde_in_data()
+    {
+        const string data = "semi;pipe|tilde~~~~end";
+        BuildArtifacts plan = MinimalPlan() with
+        {
+            OfflinePolicies =
+            [
+                new OfflinePolicyRow(
+                    "SOFTWARE",
+                    @"Policies\WinMint\Punctuation",
+                    "Example",
+                    "REG_SZ",
+                    data,
+                    "edge"),
+            ],
+        };
+        string work = NewTempDir();
+        try
+        {
+            RecordingElevatedPlanRunner runner = new();
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: Path.Combine(work, "out.iso"));
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
+                plan,
+                run,
+                runner,
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
+            string policiesPath = Path.Combine(
+                work,
+                ServicingWorkspace.PayloadDirectoryName,
+                ServicingWorkspace.PoliciesFileName);
+            Assert.True(File.Exists(policiesPath), "Materialize must write payload/policies.json");
+            using JsonDocument doc = JsonDocument.Parse(File.ReadAllBytes(policiesPath));
+            JsonElement row = Assert.Single(doc.RootElement.EnumerateArray());
+            Assert.Equal(data, row.GetProperty("data").GetString());
+            Assert.Equal("policy.edge.Example", row.GetProperty("digest").GetString());
+            Assert.Equal("edge", row.GetProperty("family").GetString());
+            ServicingStage stage = Assert.Single(
+                runner.Stages,
+                s => s.Opcode == ServicingOpcode.StampOfflinePolicies);
+            Assert.Equal(policiesPath, stage.Parameters[StageParams.PoliciesPath]);
+            Assert.False(stage.Parameters.ContainsKey("policySpecs"));
         }
         finally
         {

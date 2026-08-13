@@ -1,18 +1,15 @@
 #requires -Version 7.6
 param(
-    [Parameter(Mandatory)]
-    [hashtable] $Parameters
+    [Parameter(Mandatory)] [string] $MediaDir,
+    [Parameter(Mandatory)] [string] $MountDir,
+    [Parameter(Mandatory)] [string] $WorkDirectory
 )
-$mediaDir = $Parameters['mediaDir']
-$mountDir = $Parameters['mountDir']
+$mediaDir = $MediaDir
+$mountDir = $MountDir
 # Source-ISO edition index is unrelated: after single-image export, apply target is always index 1.
-if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
-if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
 . (Join-Path $PSScriptRoot 'WinPeApplyContract.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
-$workDirectory = $Parameters['workDirectory']
-if ([string]::IsNullOrWhiteSpace($workDirectory)) { $workDirectory = [string]$env:WINMINT_SERVICING_WORK }
-if ([string]::IsNullOrWhiteSpace($workDirectory)) { $workDirectory = $mountDir }
+$workDirectory = $WorkDirectory
 $launchApplyPayload = Get-WinPeApplyPayloadPath
 $expectedMarker = Get-WinPeApplyMarkerText
 

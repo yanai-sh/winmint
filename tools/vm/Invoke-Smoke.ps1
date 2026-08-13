@@ -224,26 +224,22 @@ catch {
     throw "stages.json unreadable under $Work : $($_.Exception.Message)"
 }
 
-function Get-StageParamIds {
+function Get-PayloadJsonIds {
     param(
         [Parameter(Mandatory)] $StagesDoc,
         [Parameter(Mandatory)] [string] $Opcode,
-        [Parameter(Mandatory)] [string] $ParamName
+        [Parameter(Mandatory)] [string] $PathParam
     )
     $stage = @($StagesDoc.stages) |
         Where-Object { [string]$_.opcode -eq $Opcode } |
         Select-Object -First 1
     if ($null -eq $stage) { return @() }
-    $joined = [string]$stage.parameters.$ParamName
-    if ([string]::IsNullOrWhiteSpace($joined)) { return @() }
-    return @(
-        $joined.Split(
-            ';',
-            [System.StringSplitOptions]::RemoveEmptyEntries -bor [System.StringSplitOptions]::TrimEntries)
-    )
+    $path = [string]$stage.parameters.$PathParam
+    if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) { return @() }
+    return @(Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json)
 }
 
-$pinnedRemoveAppx = @(Get-StageParamIds -StagesDoc $stagesDoc -Opcode 'RemoveProvisionedAppx' -ParamName 'packageFamilyNames')
+$pinnedRemoveAppx = @(Get-PayloadJsonIds -StagesDoc $stagesDoc -Opcode 'RemoveProvisionedAppx' -PathParam 'packageFamilyNamesPath')
 $pinnedOnlineRemoveAppx = @()
 if ($pinnedRemoveAppx.Count -eq 0) {
     $debloatDoc = $null
@@ -260,8 +256,8 @@ if ($pinnedRemoveAppx.Count -eq 0) {
         }
     }
 }
-$pinnedRemoveCapabilities = @(Get-StageParamIds -StagesDoc $stagesDoc -Opcode 'RemoveCapabilities' -ParamName 'capabilityNames')
-$pinnedDisableOptionalFeatures = @(Get-StageParamIds -StagesDoc $stagesDoc -Opcode 'DisableOptionalFeatures' -ParamName 'featureNames')
+$pinnedRemoveCapabilities = @(Get-PayloadJsonIds -StagesDoc $stagesDoc -Opcode 'RemoveCapabilities' -PathParam 'namesPath')
+$pinnedDisableOptionalFeatures = @(Get-PayloadJsonIds -StagesDoc $stagesDoc -Opcode 'DisableOptionalFeatures' -PathParam 'namesPath')
 
 function Test-GuestEvidenceReady {
     # Prefer PowerShell Direct when available; else host-copied folder under Work.
