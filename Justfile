@@ -98,6 +98,14 @@ primary-gate ISO WORK="" PROFILE="samples/sl7.profile.json":
 host-apply-assert WORK=".scratch/sl7-build":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-HostApply.ps1' -AssertOnly -WorkDirectory '{{WORK}}' -ExpectDrivers
 
+# Prepared-media isolation (elevated, Source ISO, not in `just check`)
+warm-media-acceptance SOURCE_ISO="":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-WarmMediaAcceptance.ps1' -SourceIso '{{SOURCE_ISO}}'
+
+# Cold/warm Apply timings (elevated, Source ISO, not in `just check`)
+bench-warm-media SOURCE_ISO="" BASELINE="":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/bench/Measure-WarmMedia.ps1' -SourceIso '{{SOURCE_ISO}}' -BaselineWorktree '{{BASELINE}}'
+
 # Wipe-lane assert only (fails on Test evidence).
 primary-gate-assert WORK="":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-PrimaryGate.ps1' -AssertOnly -Work '{{WORK}}'
