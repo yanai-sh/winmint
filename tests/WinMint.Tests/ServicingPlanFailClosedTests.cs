@@ -108,7 +108,7 @@ public class ServicingPlanFailClosedTests
 
             string status = File.ReadAllText(Path.Combine(work, "apply-status.txt"));
             Assert.DoesNotContain("stage=done", status, StringComparison.Ordinal);
-            Assert.Contains("stage=failed:evidence", status, StringComparison.Ordinal);
+            Assert.Contains("stage=failed:digests", status, StringComparison.Ordinal);
         }
         finally
         {
@@ -198,17 +198,17 @@ public class ServicingPlanFailClosedTests
             (int exitCode, string output) = RunPlan(work, runner);
 
             Assert.True(exitCode == 0, $"expected exit 0, got {exitCode}\n{output}");
-            string evidencePath = Path.Combine(work, "evidence.json");
-            Assert.True(File.Exists(evidencePath), $"expected evidence under workdir\n{output}");
+            string digestPath = Path.Combine(work, "logs", "digests.json");
+            Assert.True(File.Exists(digestPath), $"expected digests under workdir\n{output}");
+            Assert.False(File.Exists(Path.Combine(work, "evidence.json")), "C# owns evidence.json");
             Assert.True(File.Exists(outputIso), $"expected external ISO\n{output}");
             Assert.True(
                 File.Exists(Path.Combine(work, "failure-observed.txt")),
                 "fake BuildIso must observe prior failure before producing the ISO");
             Assert.False(File.Exists(Path.Combine(work, "failure.json")), "success clears stale failure last");
 
-            using JsonDocument evidence = JsonDocument.Parse(File.ReadAllBytes(evidencePath));
-            Assert.Equal(outputIso, evidence.RootElement.GetProperty("outputIsoPath").GetString());
-            JsonElement digests = evidence.RootElement.GetProperty("digests");
+            using JsonDocument digestsDoc = JsonDocument.Parse(File.ReadAllBytes(digestPath));
+            JsonElement digests = digestsDoc.RootElement;
             string expectedIsoHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(outputIso)))
                 .ToLowerInvariant();
             string expectedWimHash = Convert.ToHexString(
@@ -245,6 +245,9 @@ public class ServicingPlanFailClosedTests
         File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Resolve-WinMintMount.ps1"),
             Path.Combine(servicing, "Resolve-WinMintMount.ps1"));
+        File.Copy(
+            Path.Combine(TestRepo.Root, "servicing", "Get-WinMintServicingWorkspace.ps1"),
+            Path.Combine(servicing, "Get-WinMintServicingWorkspace.ps1"));
         const string noOp = """
             param([hashtable] $Parameters)
             exit 0

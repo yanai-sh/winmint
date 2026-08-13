@@ -1,3 +1,5 @@
+using WinMint.Orchestrator;
+
 namespace WinMint.Wizard;
 
 /// <summary>Unelevated reader for Invoke-ServicingPlan <c>{work}/apply-status.txt</c> (Avalonia-free).</summary>
@@ -6,7 +8,7 @@ internal static class ApplyStatusReader
     public const string FileName = "apply-status.txt";
 
     public static string StatusPath(string workDirectory) =>
-        Path.Combine(workDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), FileName);
+        new ServicingWorkspace(workDirectory).ApplyStatus;
 
     public static ApplyStatusSnapshot? TryRead(
         string statusFilePath,

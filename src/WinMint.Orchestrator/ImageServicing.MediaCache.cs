@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
 

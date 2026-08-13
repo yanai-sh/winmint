@@ -89,6 +89,71 @@ if ($evidence.PSObject.Properties.Name -contains 'digests' -and $null -ne $evide
     }
 }
 
+$expectedPath = Join-Path $WorkDirectory 'expected-evidence.json'
+if (Test-Path -LiteralPath $expectedPath -PathType Leaf) {
+    $expected = Get-Content -LiteralPath $expectedPath -Raw -Encoding utf8 | ConvertFrom-Json
+    if ([string]$expected.schemaVersion -ne 'winmint.expected-evidence/v1') {
+        throw "unexpected expected-evidence schema '$($expected.schemaVersion)'"
+    }
+    if ([string]::IsNullOrWhiteSpace($RequireLane) -and [string]$expected.lane -ne $lane) {
+        throw "lane must be $($expected.lane) for this assert, got '$lane' (do not flash a Test workdir as Primary)"
+    }
+    if ([bool]$expected.packageStrict) {
+        $packageStrict = $false
+        if ($evidence.PSObject.Properties.Name -contains 'packageStrict') {
+            $packageStrict = [bool]$evidence.packageStrict
+        }
+        if (-not $packageStrict) {
+            throw 'packageStrict must be true for Release Gate B assert (soft Release evidence is not wipe media)'
+        }
+    }
+    foreach ($key in @($expected.requiredDigestKeys)) {
+        if (-not $digestMap.ContainsKey([string]$key) -or [string]::IsNullOrWhiteSpace($digestMap[[string]$key])) {
+            throw "expected digest missing in evidence.json: $key"
+        }
+    }
+    if ($expected.PSObject.Properties.Name -contains 'requiredDigestValues' -and $null -ne $expected.requiredDigestValues) {
+        foreach ($p in $expected.requiredDigestValues.PSObject.Properties) {
+            $got = [string]$digestMap[$p.Name]
+            if ($got -ne [string]$p.Value) {
+                throw "expected digest $($p.Name) wanted $($p.Value), got '$got'"
+            }
+        }
+    }
+    if ([bool]$expected.expectDrivers) { $ExpectDrivers = $true }
+    if ([bool]$expected.expectFuPosture) { $ExpectFuPosture = $true }
+    $jobsPath = Join-Path $WorkDirectory 'payload\jobs.json'
+    foreach ($need in @($expected.requiredJobKinds)) {
+        if (-not (Test-Path -LiteralPath $jobsPath)) {
+            throw "payload/jobs.json missing: $jobsPath ($need)"
+        }
+        $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+        $kinds = @($jobsDoc.jobs | ForEach-Object { [string]$_.kind })
+        if ($kinds -notcontains [string]$need) {
+            throw "payload/jobs.json must include $need"
+        }
+    }
+    if (@($expected.requiredWingetIds).Count -gt 0) {
+        $importPath = Join-Path $WorkDirectory 'payload\winget-import.json'
+        if (-not (Test-Path -LiteralPath $importPath)) {
+            throw "winget-import.json missing: $importPath"
+        }
+        $importDoc = Get-Content -LiteralPath $importPath -Raw -Encoding utf8 | ConvertFrom-Json
+        $ids = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($src in @($importDoc.Sources)) {
+            foreach ($pkg in @($src.Packages)) {
+                $pkgId = [string]$pkg.PackageIdentifier
+                if (-not [string]::IsNullOrWhiteSpace($pkgId)) { [void]$ids.Add($pkgId) }
+            }
+        }
+        foreach ($needId in @($expected.requiredWingetIds)) {
+            if (-not $ids.Contains([string]$needId)) {
+                throw "winget-import.json missing shell-core id '$needId'"
+            }
+        }
+    }
+}
+
 if ($RequireOutputIso) {
     $outIso = Resolve-WinMintOutputIso -WorkDirectory $WorkDirectory -Evidence $evidence
     if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outIso)) {

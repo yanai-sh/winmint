@@ -82,9 +82,9 @@ public class DriverServicingTests
             Assert.True(p.WaitForExit(60_000), "Invoke-ServicingPlan timed out");
             Assert.True(p.ExitCode == 0, $"exit={p.ExitCode}\nstdout={stdout}\nstderr={stderr}");
 
-            string evidencePath = Path.Combine(work, "evidence.json");
-            Assert.True(File.Exists(evidencePath), "expected evidence.json");
-            string json = File.ReadAllText(evidencePath);
+            string digestPath = Path.Combine(work, "logs", "digests.json");
+            Assert.True(File.Exists(digestPath), "expected digests.json");
+            string json = File.ReadAllText(digestPath);
             Assert.Contains("drivers.deviceId", json, StringComparison.Ordinal);
             Assert.Contains("surface-laptop-7", json, StringComparison.Ordinal);
             Assert.Contains("drivers.includedCount", json, StringComparison.Ordinal);

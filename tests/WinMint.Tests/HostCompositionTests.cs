@@ -417,7 +417,7 @@ public class HostCompositionTests
         public int Calls { get; private set; }
 
         public Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
-            string workDirectory,
+            ServicingWorkspace workspace,
             CancellationToken ct)
         {
             Calls++;

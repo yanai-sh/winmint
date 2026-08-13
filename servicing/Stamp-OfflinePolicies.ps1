@@ -11,21 +11,10 @@ if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
 if ([string]::IsNullOrWhiteSpace($workDirectory)) { throw 'workDirectory required' }
 if ([string]::IsNullOrWhiteSpace($policySpecs)) { throw 'policySpecs required' }
 
+. (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
+
 $logDir = Join-Path $workDirectory 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$digestPath = Join-Path $logDir 'digests.json'
-
-function Save-DigestMap {
-    param([hashtable] $Digests)
-    $map = @{}
-    if (Test-Path -LiteralPath $digestPath) {
-        foreach ($p in (Get-Content -LiteralPath $digestPath -Raw | ConvertFrom-Json).PSObject.Properties) {
-            $map[[string]$p.Name] = [string]$p.Value
-        }
-    }
-    foreach ($k in $Digests.Keys) { $map[[string]$k] = [string]$Digests[$k] }
-    $map | ConvertTo-Json | Set-Content -LiteralPath $digestPath -Encoding utf8
-}
 
 function Test-TransientRegDenied {
     param([string] $Message)
@@ -155,6 +144,6 @@ foreach ($group in $byHive) {
     }
 }
 
-Save-DigestMap $digests
+Save-WinMintDigestMap -WorkDirectory $workDirectory -Digests $digests
 Write-Output "StampOfflinePolicies ok ($($rows.Count) rows)"
 exit 0

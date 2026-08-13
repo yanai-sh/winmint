@@ -1,10 +1,19 @@
 #requires -Version 7.6
 param(
-    [Parameter(Mandatory)]
     [hashtable] $Parameters
 )
 # Surface Catalog offline driver injection — param-only (issue 63).
 # Download → MSI extract → SurfaceMsiSafe classify → DISM Add-Driver (install.wim + boot.wim subset).
+
+function Test-MicrosoftDownloadUri {
+    param([string] $Uri)
+    $parsed = $null
+    if (-not [System.Uri]::TryCreate($Uri, [System.UriKind]::Absolute, [ref]$parsed)) { return $false }
+    if ($parsed.Scheme -ne 'https') { return $false }
+    $parsed.Host -in @('download.microsoft.com', 'www.microsoft.com')
+}
+
+if ($MyInvocation.InvocationName -ne '.') {
 $mountDir = $Parameters['mountDir']
 $workDirectory = $Parameters['workDirectory']
 $mediaDir = $Parameters['mediaDir']
@@ -20,27 +29,8 @@ if ([string]::IsNullOrWhiteSpace($expectedFileNameRegex)) { throw 'expectedFileN
 
 $logDir = Join-Path $workDirectory 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$digestPath = Join-Path $logDir 'digests.json'
 
-function Save-DigestMap {
-    param([hashtable] $Digests)
-    $map = [ordered]@{}
-    if (Test-Path -LiteralPath $digestPath) {
-        foreach ($p in (Get-Content -LiteralPath $digestPath -Raw | ConvertFrom-Json).PSObject.Properties) {
-            $map[[string]$p.Name] = [string]$p.Value
-        }
-    }
-    foreach ($k in $Digests.Keys) { $map[[string]$k] = [string]$Digests[$k] }
-    $map | ConvertTo-Json | Set-Content -LiteralPath $digestPath -Encoding utf8
-}
-
-function Test-MicrosoftDownloadUri {
-    param([string] $Uri)
-    $parsed = $null
-    if (-not [System.Uri]::TryCreate($Uri, [System.UriKind]::Absolute, [ref]$parsed)) { return $false }
-    if ($parsed.Scheme -ne 'https') { return $false }
-    $parsed.Host -in @('download.microsoft.com', 'www.microsoft.com')
-}
+. (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
 
 function Resolve-SurfaceMsiDownload {
     param([string] $Url, [string] $Pattern)
@@ -288,7 +278,7 @@ if (-not (Test-Path -LiteralPath $inventoryPath)) {
 }
 $inventorySha = (Get-FileHash -LiteralPath $inventoryPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
-Save-DigestMap @{
+Save-WinMintDigestMap -WorkDirectory $workDirectory -Digests @{
     'drivers.deviceId' = $deviceId
     'drivers.includedCount' = [string]$inventory.includedOfflineCount
     'drivers.excludedCount' = [string]$inventory.excludedCount
@@ -299,3 +289,4 @@ Save-DigestMap @{
 
 Write-Output "InjectSurfaceDrivers ok ($($inventory.includedOfflineCount) included, $($inventory.excludedCount) excluded/deferred)"
 exit 0
+}

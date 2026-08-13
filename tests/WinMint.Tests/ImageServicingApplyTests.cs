@@ -33,7 +33,9 @@ public class ImageServicingApplyTests
             Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
             Assert.Contains("winmint_sl7_Test_", result.Value.OutputIsoPath, StringComparison.Ordinal);
             Assert.DoesNotContain("winmint_profile_", result.Value.OutputIsoPath, StringComparison.Ordinal);
-            Assert.Equal(new string('a', 64), result.Value.Digests["outputIso.sha256"]);
+            Assert.Equal(
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(result.Value.OutputIsoPath))),
+                result.Value.Digests["outputIso.sha256"]);
         }
         finally
         {
@@ -177,33 +179,15 @@ public class ImageServicingApplyTests
         try
         {
             string outputIso = Path.Combine(work, "out.iso");
-            string evidence = JsonSerializer.Serialize(new Dictionary<string, object?>
-            {
-                ["schemaVersion"] = ImageServicing.EvidenceSchemaVersion,
-                ["outputIsoPath"] = outputIso,
-                ["shellStampTargetPath"] = ImageServicing.ShellStampGuestPath,
-                ["lane"] = "Test",
-                ["source.isoSha256"] = new string('b', 64),
-                ["source.isoLength"] = 10,
-                ["source.index"] = 3,
-                ["mediaCache.schema"] = 1,
-                ["mediaCache.key"] = "v1/bb/index-3",
-                ["mediaCache.entryPath"] = @"C:\ProgramData\WinMint\Servicing\media-cache\v1\bb\index-3",
-                ["mediaCache.outcome"] = "hit",
-                ["mediaCache.installWimSha256"] = new string('c', 64),
-                ["mediaCache.bootWimSha256"] = new string('d', 64),
-                ["mediaCache.copyMode"] = "copy",
-                ["mediaCache.recoveryAction"] = "none",
-                ["timings.sourceHashMs"] = 1,
-                ["timings.cacheValidateMs"] = 2,
-                ["timings.cachePrepareMs"] = 0,
-                ["timings.runMediaCopyMs"] = 3,
-                ["timings.mountMs"] = 4,
-                ["timings.exportMs"] = 5,
-                ["timings.buildIsoMs"] = 6,
-                ["digests"] = new Dictionary<string, string> { ["outputIso.sha256"] = new string('a', 64) },
-            });
-            EvidenceElevatedPlanRunner runner = new(evidence);
+            File.WriteAllText(
+                Path.Combine(work, "prepared-media.json"),
+                JsonSerializer.Serialize(new Dictionary<string, object?>
+                {
+                    ["source.isoSha256"] = new string('b', 64),
+                    ["mediaCache.outcome"] = "hit",
+                    ["timings.mountMs"] = 4,
+                }));
+            RecordingElevatedPlanRunner runner = new();
             ServicingRun run = new(
                 SourceIsoPath: Path.Combine(work, "source.iso"),
                 WorkDirectory: work,
@@ -218,7 +202,10 @@ public class ImageServicingApplyTests
 
             Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
             Assert.Equal(ImageQualityLane.Test, result.Value.Lane);
-            Assert.Equal(new string('a', 64), result.Value.Digests["outputIso.sha256"]);
+            Assert.False(result.Value.Digests.ContainsKey("source.isoSha256"));
+            Assert.False(result.Value.Digests.ContainsKey("mediaCache.outcome"));
+            using JsonDocument evidence = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(work, "evidence.json")));
+            Assert.Equal("hit", evidence.RootElement.GetProperty("mediaCache.outcome").GetString());
         }
         finally
         {
@@ -333,7 +320,7 @@ public class ImageServicingApplyTests
     }
 
     [Fact]
-    public async Task Apply_rejects_successful_runner_without_evidence()
+    public async Task Apply_rejects_successful_runner_without_output_iso()
     {
         BuildArtifacts plan = MinimalPlan();
         string work = NewTempDir();
@@ -352,95 +339,7 @@ public class ImageServicingApplyTests
                 TestContext.Current.CancellationToken);
 
             Assert.False(result.IsOk);
-            Assert.Equal("servicing.evidence.missing", result.Error.Code);
-        }
-        finally
-        {
-            TryDelete(work);
-        }
-    }
-
-    [Theory]
-    [InlineData("missing-output", "servicing.evidence.outputIso.missing")]
-    [InlineData("mismatch-output", "servicing.evidence.outputIso.mismatch")]
-    [InlineData("missing-lane", "servicing.evidence.lane.missing")]
-    [InlineData("mismatch-lane", "servicing.evidence.lane.mismatch")]
-    [InlineData("missing-shell", "servicing.evidence.shellStamp.missing")]
-    [InlineData("mismatch-shell", "servicing.evidence.shellStamp.mismatch")]
-    [InlineData("host-normalized-shell", "servicing.evidence.shellStamp.mismatch")]
-    [InlineData("missing-digests", "servicing.evidence.digests.missing")]
-    [InlineData("malformed-digest", "servicing.evidence.outputIsoDigest.invalid")]
-    [InlineData("malformed-json", "servicing.evidence.invalid")]
-    public async Task Apply_rejects_incomplete_or_mismatched_evidence(string defect, string expectedCode)
-    {
-        BuildArtifacts plan = MinimalPlan();
-        string work = NewTempDir();
-        try
-        {
-            string outputIso = Path.Combine(work, "out.iso");
-            Dictionary<string, object?> evidence = new(StringComparer.Ordinal)
-            {
-                ["schemaVersion"] = ImageServicing.EvidenceSchemaVersion,
-                ["outputIsoPath"] = outputIso,
-                ["shellStampTargetPath"] = ImageServicing.ShellStampGuestPath,
-                ["lane"] = "Test",
-                ["packageStrict"] = false,
-                ["digests"] = new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["outputIso.sha256"] = new string('a', 64),
-                },
-            };
-
-            switch (defect)
-            {
-                case "missing-output":
-                    evidence.Remove("outputIsoPath");
-                    break;
-                case "mismatch-output":
-                    evidence["outputIsoPath"] = Path.Combine(work, "other.iso");
-                    break;
-                case "missing-lane":
-                    evidence.Remove("lane");
-                    break;
-                case "mismatch-lane":
-                    evidence["lane"] = "Release";
-                    break;
-                case "missing-shell":
-                    evidence.Remove("shellStampTargetPath");
-                    break;
-                case "mismatch-shell":
-                    evidence["shellStampTargetPath"] = @"C:\Windows\Explorer.exe";
-                    break;
-                case "host-normalized-shell":
-                    evidence["shellStampTargetPath"] = "C:/Windows/WinMint/Supervisor.exe";
-                    break;
-                case "missing-digests":
-                    evidence.Remove("digests");
-                    break;
-                case "malformed-digest":
-                    evidence["digests"] = new Dictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["outputIso.sha256"] = new string('A', 64),
-                    };
-                    break;
-            }
-
-            string evidenceJson = defect == "malformed-json" ? "{" : JsonSerializer.Serialize(evidence);
-            EvidenceElevatedPlanRunner runner = new(evidenceJson);
-            ServicingRun run = new(
-                SourceIsoPath: Path.Combine(work, "source.iso"),
-                WorkDirectory: work,
-                OutputIsoPath: outputIso);
-            File.WriteAllText(run.SourceIsoPath, "iso-stub");
-
-            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
-                plan,
-                run,
-                runner,
-                TestContext.Current.CancellationToken);
-
-            Assert.False(result.IsOk);
-            Assert.Equal(expectedCode, result.Error.Code);
+            Assert.Equal("servicing.evidence.outputIso.missing", result.Error.Code);
         }
         finally
         {

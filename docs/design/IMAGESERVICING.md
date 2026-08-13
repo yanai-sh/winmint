@@ -30,20 +30,22 @@ public sealed record ServicingRun(
     string? SourceIsoSha256 = null,
     SelectedWim? SelectedImage = null);
 
-/// <summary>Elevation only — evidence read is ImageServicing implementation.</summary>
+/// <summary>Elevation only — ImageServicing writes evidence after the runner returns.</summary>
 public interface IElevatedPlanRunner
 {
     Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
-        string workDirectory,
+        ServicingWorkspace workspace,
         CancellationToken ct);
 }
 ```
 
 The stage list crosses this seam as `{workDirectory}/stages.json` — Materialize writes it, `Invoke-ServicingPlan.ps1` reads it. An adapter that also took stages in-process would be a second, unenforced copy of the contract.
 
-HostCompile resolves and freezes the build Output ISO path before Apply. The lower-level ImageServicing entry retains its default-name fallback for direct S2 callers, but HostCompile composition never relies on it. Materialize and evidence use the supplied path unchanged. Elevated `Invoke-ServicingPlan.ps1` is the hard seam; reading `evidence.json` into `ImageEvidence` stays inside ImageServicing.
+HostCompile resolves and freezes the build Output ISO path before Apply. The lower-level ImageServicing entry retains its default-name fallback for direct S2 callers, but HostCompile composition never relies on it. Materialize and evidence use the supplied path unchanged. Elevated `Invoke-ServicingPlan.ps1` is the hard seam; C# owns `evidence.json` (including Prepared-media outcome fields) and `expected-evidence.json`. PowerShell owns `logs/digests.json`.
 
-`MountInstallWim` receives the frozen Source ISO hash and selected-image metadata. Every Apply still requires the Source ISO file and a matching rehash. Leftover staged media is not an input.
+`ServicingWorkspace` owns every workdir leaf (`logs/`, `payload/`, `media/`, `evidence.json`, `failure.json`, `apply-status.txt`, `stages.json`, `install.wim`, `unattend.xml`, `media.incoming-*` / `media.previous-*`) plus the Host Prepared-media root. `IElevatedPlanRunner.ExecuteAsync` takes the workspace.
+
+`MountInstallWim` receives a typed post-cache bag (Source ISO hash, cache schema/root, selected-image metadata). The kernel takes named parameters; the loop splats them. Every Apply still requires the Source ISO file and a matching rehash. Leftover staged media is not an input.
 
 **Prepared media** lives under `%ProgramData%\WinMint\Servicing\media-cache\v{schema}\{sourceIsoSha256}\index-{n}\`. ImageServicing owns it: callers have no reuse switch. A published entry is an immutable Source ISO tree with a single-index `install.wim` and required `boot.wim`. It is copied into per-Apply **staged media** (`{work}/media`) and is never mounted. Invalid entries are quarantined and rebuilt once. Publication is not Evidence.
 
@@ -53,9 +55,9 @@ HostCompile resolves and freezes the build Output ISO path before Apply. The low
 
 Progress labels: Hashing Source ISO → Validating prepared media → Preparing prepared media → Copying staged media → Mounting install image. `evidence.json` records source identity, Prepared-media outcome (`hit` | `miss-prepared` | `miss-rebuilt`), WIM hashes, copy mode, recovery action, and phase timings. Typed `ImageEvidence` stays the host/Wizard surface; the extra fields are audit JSON.
 
-**Elevated plan loop:** opcode kernels mutate media only. The loop alone finalizes host Apply state — `Write-PlanEvidence` after all kernels succeed, `Write-PlanFailure` on any throw or non-zero kernel exit. Kernels do not write `evidence.json` or `failure.json`. **`BuildIso`** runs `oscdimg` and emits the **Output ISO** only; digest and evidence assembly happen in the loop after `BuildIso` returns.
+**Elevated plan loop:** opcode kernels mutate media only. The loop writes `logs/digests.json` (Output ISO hash last) and `failure.json` on throw or non-zero kernel exit. Kernels do not write `evidence.json`. After the runner returns, ImageServicing writes `evidence.json` from the plan, digests sidecar, and Prepared-media audit file. **`BuildIso`** runs `oscdimg` and emits the **Output ISO** only.
 
-**Stale evidence / failure ordering:** each Apply run removes stale `evidence.json` at start (prior `failure.json` stays visible until overwritten or cleared). Reusing a workdir therefore clears prior green evidence when the new run starts; use a fresh workdir to retain certifiable prior output. On failure the loop removes stale evidence, writes current `failure.json`, and sets `apply-status.txt` to failed. On success it writes fresh `evidence.json` (Output ISO digest last), then removes `failure.json`. Evidence is not green while a stale failure file remains.
+**Stale evidence / failure ordering:** each Apply run removes stale `evidence.json` at start (prior `failure.json` stays visible until overwritten or cleared). Reusing a workdir therefore clears prior green evidence when the new run starts; use a fresh workdir to retain certifiable prior output. On failure the loop removes stale evidence, writes current `failure.json`, and sets `apply-status.txt` to failed. On success it refreshes `logs/digests.json`, then C# writes fresh `evidence.json`. Evidence is not green while a stale failure file remains.
 
 ## Kernel naming
 

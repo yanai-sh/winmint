@@ -8,7 +8,7 @@ namespace WinMint.Orchestrator;
 public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 {
     public async Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
-        string workDirectory,
+        ServicingWorkspace workspace,
         CancellationToken ct)
     {
         string? planScript = FindServicingPlanScript();
@@ -28,7 +28,7 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
                 "-File",
                 planScript,
                 "-WorkDirectory",
-                workDirectory,
+                workspace.Root,
             },
             WorkingDirectory = Path.GetDirectoryName(planScript)!,
             UseShellExecute = !elevated,
@@ -88,7 +88,7 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
             {
                 // No failure.json means the plan runner died before it could say why — a distinct
                 // condition from a stage failing, and the elevated path has no stdout to fall back on.
-                string? message = ReadFailureMessage(workDirectory);
+                string? message = ReadFailureMessage(workspace);
                 return Result.Fail<ElevatedRunOk, Failure>(message is null
                     ? new Failure(
                         "servicing.plan.crashed",
@@ -110,9 +110,9 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         return Result.Ok<ElevatedRunOk, Failure>(default);
     }
 
-    private static string? ReadFailureMessage(string workDirectory)
+    private static string? ReadFailureMessage(ServicingWorkspace workspace)
     {
-        string path = Path.Combine(workDirectory, "failure.json");
+        string path = workspace.Failure;
         if (!File.Exists(path))
         {
             return null;

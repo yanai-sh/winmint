@@ -56,7 +56,9 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 | Checkpoint | ProvisioningSession (`ICheckpointStore`) | Next Shell `Run` via store (optional `bundle.Resume` inject) |
 | Smoke acceptance summary | Host harness (`tools/vm/`) | Maintainer — `Assert-SmokeEvidence.ps1` |
 | Host Apply acceptance summary | Host harness (`tools/apply/`) | Maintainer — `Assert-ApplyEvidence.ps1` |
-| Image evidence (`evidence.json`) | Elevated `Invoke-ServicingPlan.ps1` | ImageServicing; host apply assert — **never** session control |
+| Image evidence (`evidence.json`) | ImageServicing (C#) | Host apply / Smoke assert — **never** session control |
+| Image expected evidence (`expected-evidence.json`) | ImageServicing Materialize | `Assert-ApplyEvidence.ps1` / `Assert-SmokeEvidence.ps1` |
+| Image digests (`logs/digests.json`) | Elevated kernels + plan loop | ImageServicing evidence writer |
 | Image failure (`failure.json`) | Elevated `Invoke-ServicingPlan.ps1` | ImageServicing runner; removed on successful Apply |
 | Packages proof (`config/packages.proof.json`) | PackagesProof (C#) | PackagesProof.Validate; `just check` |
 | Packages check request (transient) | PackagesProof (C#) | `Invoke-PackagesCheck.ps1` |

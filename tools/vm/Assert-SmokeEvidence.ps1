@@ -126,6 +126,30 @@ if ($apply.PSObject.Properties.Name -contains 'digests' -and $null -ne $apply.di
     }
 }
 
+$expectedPath = Join-Path $EvidenceDir 'apply\expected-evidence.json'
+if (Test-Path -LiteralPath $expectedPath -PathType Leaf) {
+    $expected = Get-Content -LiteralPath $expectedPath -Raw -Encoding utf8 | ConvertFrom-Json
+    if ([string]$expected.schemaVersion -ne 'winmint.expected-evidence/v1') {
+        throw "unexpected expected-evidence schema '$($expected.schemaVersion)'"
+    }
+    if ([string]$expected.lane -ne $lane) {
+        throw "lane must be $($expected.lane) for this assert, got '$lane'"
+    }
+    foreach ($key in @($expected.requiredDigestKeys)) {
+        if (-not $digestMap.ContainsKey([string]$key) -or [string]::IsNullOrWhiteSpace($digestMap[[string]$key])) {
+            throw "expected digest missing in apply/evidence.json: $key"
+        }
+    }
+    if ($expected.PSObject.Properties.Name -contains 'requiredDigestValues' -and $null -ne $expected.requiredDigestValues) {
+        foreach ($p in $expected.requiredDigestValues.PSObject.Properties) {
+            $got = [string]$digestMap[$p.Name]
+            if ($got -ne [string]$p.Value) {
+                throw "expected digest $($p.Name) wanted $($p.Value), got '$got'"
+            }
+        }
+    }
+}
+
 function Assert-PinnedDigests {
     param(
         [string[]] $Ids,

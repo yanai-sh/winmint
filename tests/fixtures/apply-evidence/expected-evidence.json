@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "winmint.expected-evidence/v1",
+  "lane": "Test",
+  "packageStrict": false,
+  "expectDrivers": true,
+  "expectFuPosture": false,
+  "requiredDigestKeys": [
+    "outputIso.sha256",
+    "policy.deviceInstaller.DisableCoInstallers"
+  ],
+  "requiredDigestValues": {
+    "policy.deviceInstaller.DisableCoInstallers": "1"
+  },
+  "requiredJobKinds": [],
+  "requiredWingetIds": []
+}

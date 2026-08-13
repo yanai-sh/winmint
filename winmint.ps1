@@ -307,7 +307,7 @@ try {
             # Keep Apply workdir outside TEMP toolkit so Output ISO survives ephemeral cleanup.
             if ([string]::IsNullOrWhiteSpace($Work)) {
                 if ($PrimaryGate) {
-                    $Work = Join-Path $env:LOCALAPPDATA 'WinMint\work\gate-b'
+                    $Work = Join-Path $env:LOCALAPPDATA 'WinMint\work\gate-b' # must match Get-WinMintGateBWorkDirectory
                 }
                 else {
                     $Work = Join-Path $env:LOCALAPPDATA 'WinMint\work\scratch'

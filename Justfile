@@ -27,14 +27,11 @@ format-check:
 check: format-check build
     dotnet test --no-build -- --filter-not-trait "Category=S4" --filter-not-trait "Category=S5"
     just analyze-servicing
-    just bootstrap-contract
-    just disk-guard-contract
-    just source-media-cache-contract
-    just mount-recovery-contract
-    just release-signing-policy-contract
-    just release-version-contract
-    just release-inventory-contract
-    just packages-check-contract
+    just contract-tests
+
+# Discover tests/contract/Test-*.ps1 (WinPE / DISM / release helpers that cannot run on a live host).
+contract-tests:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Invoke-ContractTests.ps1'
 
 # Live winget/scoop prove → config/packages.proof.json. Not in `just check` (offline proof enforces freshness).
 packages-check:
@@ -90,7 +87,7 @@ wipe-scratch:
 
 # Tail apply-status.txt. Default WORK = Gate B (%LOCALAPPDATA%\WinMint\work\gate-b).
 watch-apply WORK="":
-    pwsh -NoProfile -Command "$w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Join-Path $env:LOCALAPPDATA 'WinMint\work\gate-b' }; Get-Content -LiteralPath (Join-Path $w 'apply-status.txt') -Wait -Tail 40"
+    pwsh -NoProfile -Command ". '{{justfile_directory()}}/tools/host/WinMintPaths.ps1'; $w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Get-WinMintGateBWorkDirectory }; Get-Content -LiteralPath (Join-Path $w 'apply-status.txt') -Wait -Tail 40"
 
 # Maintainer Apply (DISM hours). Cli verb is build.
 # Prereq: just publish-provisioning. INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs.

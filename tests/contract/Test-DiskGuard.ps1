@@ -21,10 +21,16 @@ $stop = [array]::IndexOf($lines, 'echo WinMint: erasing disk %TARGET%')
 $sub = [array]::IndexOf($lines, ':winmint_pick')
 if ($start -lt 0 -or $stop -le $start -or $sub -le $stop) { throw 'LaunchApply layout changed — update this test' }
 
+$work = Join-Path $env:TEMP ('winmint-diskguard-' + [guid]::NewGuid().ToString('N'))
+$usb = Join-Path $env:TEMP ('winmint-fake-usb-' + [guid]::NewGuid().ToString('N'))
+$cmdPath = Join-Path $env:TEMP ('winmint-diskguard-' + [guid]::NewGuid().ToString('N') + '.cmd')
+
 # Same decision logic, with the two diskpart reads pre-seeded. Nothing destructive is carried over.
 $harness = @('@echo off', 'setlocal EnableExtensions', 'set INSTALL=Z') +
     ($lines[$start..$stop] | ForEach-Object {
-        if ($_ -match 'echo list disk \| diskpart') { 'rem pre-seeded' } else { $_ } }) +
+        if ($_ -eq 'set WORK=%TEMP%\winmint') { "set WORK=$work" }
+        elseif ($_ -match 'echo list disk \| diskpart') { 'rem pre-seeded' }
+        else { $_ } }) +
     @('echo RESULT TARGET=%TARGET% EXTRA=%EXTRA%', 'exit /b 0', '') +
     ($lines[$sub..($lines.Length - 1)] | ForEach-Object {
         if ($_ -match '^\(echo select disk') { 'rem pre-seeded' } else { $_ } })
@@ -33,9 +39,6 @@ foreach ($danger in 'clean', 'Apply-Image', 'bcdboot', 'wpeutil', 'format') {
     if ($harness -match $danger) { throw "refusing to run: '$danger' leaked into the harness" }
 }
 
-$work = Join-Path $env:TEMP 'winmint'
-$usb = Join-Path $env:TEMP 'winmint-fake-usb'
-$cmdPath = Join-Path $env:TEMP 'winmint-diskguard-contract.cmd'
 Set-Content -LiteralPath $cmdPath -Value ($harness -join "`r`n") -Encoding ascii
 New-Item -ItemType Directory -Force -Path $usb | Out-Null
 & subst Z: /D 2>&1 | Out-Null

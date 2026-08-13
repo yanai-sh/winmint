@@ -1,6 +1,8 @@
 using System.Collections.Frozen;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using WinMint.Contracts;
 
@@ -9,6 +11,7 @@ namespace WinMint.Orchestrator;
 public static class ImageServicing
 {
     public const string EvidenceSchemaVersion = "winmint.image.evidence/v1";
+    public const string ExpectedEvidenceSchemaVersion = "winmint.expected-evidence/v1";
     public const string BundleSchemaVersion = GuestBundleWire.SchemaVersion;
 
     /// <summary>Guest path stamped into Winlogon Shell (offline); Machine setup verifies the same path.</summary>
@@ -72,18 +75,19 @@ public static class ImageServicing
 
         ServicingRun normalized = NormalizeOutputIso(run, plan.Manifest.ImageQuality);
 
-        Directory.CreateDirectory(normalized.WorkDirectory);
-        Directory.CreateDirectory(Path.Combine(normalized.WorkDirectory, "logs"));
+        ServicingWorkspace workspace = new(normalized.WorkDirectory);
+        Directory.CreateDirectory(workspace.Root);
+        Directory.CreateDirectory(workspace.Logs);
         Directory.CreateDirectory(HostServicingRoot);
 
-        Result<IReadOnlyList<ServicingStage>, Failure> materialized = Materialize(plan, normalized);
+        Result<IReadOnlyList<ServicingStage>, Failure> materialized = Materialize(plan, normalized, workspace);
         if (!materialized.IsOk)
         {
             return Result.Fail<ImageEvidence, Failure>(materialized.Error);
         }
 
         // Materialize already wrote stages.json; that file is the seam (Invoke-ServicingPlan.ps1 reads it).
-        Result<ElevatedRunOk, Failure> elevated = await runner.ExecuteAsync(normalized.WorkDirectory, ct)
+        Result<ElevatedRunOk, Failure> elevated = await runner.ExecuteAsync(workspace, ct)
             .ConfigureAwait(false);
         if (!elevated.IsOk)
         {
@@ -91,7 +95,7 @@ public static class ImageServicing
             return Result.Fail<ImageEvidence, Failure>(elevated.Error);
         }
 
-        return ReadEvidence(normalized.WorkDirectory, plan, normalized, materialized.Value);
+        return WriteEvidence(workspace, plan, normalized, materialized.Value);
     }
 
     /// <summary>Resolve default Output ISO once; Materialize/evidence never invent a leaf.</summary>
@@ -108,76 +112,24 @@ public static class ImageServicing
         };
     }
 
-    private static Result<ImageEvidence, Failure> ReadEvidence(
-        string workDirectory,
+    private static Result<ImageEvidence, Failure> WriteEvidence(
+        ServicingWorkspace workspace,
         BuildArtifacts plan,
         ServicingRun run,
         IReadOnlyList<ServicingStage> stages)
     {
-        string evidencePath = Path.Combine(workDirectory, "evidence.json");
-        if (!File.Exists(evidencePath))
-        {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure("servicing.evidence.missing", "Invoke-ServicingPlan succeeded but evidence.json is missing."));
-        }
-
-        EvidenceFile? file;
-        try
-        {
-            file = JsonSerializer.Deserialize(
-                File.ReadAllBytes(evidencePath),
-                ServicingJsonContext.Default.EvidenceFile);
-        }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
-        {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure("servicing.evidence.invalid", ex.Message));
-        }
-
-        if (file is null
-            || !string.Equals(file.SchemaVersion, EvidenceSchemaVersion, StringComparison.Ordinal))
-        {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure(
-                    "servicing.evidence.schema",
-                    $"Expected {EvidenceSchemaVersion}."));
-        }
-
         if (string.IsNullOrWhiteSpace(run.OutputIsoPath))
         {
             return Result.Fail<ImageEvidence, Failure>(
                 new Failure(
                     "servicing.outputIso.missing",
-                    "OutputIsoPath was not normalized before evidence read."));
+                    "OutputIsoPath was not normalized before evidence write."));
         }
 
-        if (string.IsNullOrWhiteSpace(file.OutputIsoPath))
+        if (!File.Exists(run.OutputIsoPath))
         {
             return Result.Fail<ImageEvidence, Failure>(
-                new Failure("servicing.evidence.outputIso.missing", "Evidence outputIsoPath is required."));
-        }
-
-        if (!WindowsPathsEqual(file.OutputIsoPath, run.OutputIsoPath))
-        {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure(
-                    "servicing.evidence.outputIso.mismatch",
-                    $"Evidence outputIsoPath does not match planned output: {file.OutputIsoPath}"));
-        }
-
-        string plannedLane = plan.Manifest.ImageQuality.ToString();
-        if (string.IsNullOrWhiteSpace(file.Lane))
-        {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure("servicing.evidence.lane.missing", "Evidence lane is required."));
-        }
-
-        if (!string.Equals(file.Lane, plannedLane, StringComparison.Ordinal))
-        {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure(
-                    "servicing.evidence.lane.mismatch",
-                    $"Evidence lane '{file.Lane}' does not match planned lane '{plannedLane}'."));
+                new Failure("servicing.evidence.outputIso.missing", "BuildIso output missing."));
         }
 
         ServicingStage? stamp = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.StampOfflineShell);
@@ -191,62 +143,163 @@ public static class ImageServicing
                     "StampOfflineShell stage missing or incomplete."));
         }
 
-        if (string.IsNullOrWhiteSpace(file.ShellStampTargetPath))
+        ServicingStage? export = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.ExportWim);
+        if (export is null
+            || !export.Parameters.TryGetValue(StageParams.Lane, out string? lane)
+            || string.IsNullOrWhiteSpace(lane))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure("servicing.lane.missing", "ExportWim stage missing lane."));
+        }
+
+        string plannedLane = plan.Manifest.ImageQuality.ToString();
+        if (!string.Equals(lane, plannedLane, StringComparison.Ordinal))
         {
             return Result.Fail<ImageEvidence, Failure>(
                 new Failure(
-                    "servicing.evidence.shellStamp.missing",
-                    "Evidence shellStampTargetPath is required."));
+                    "servicing.evidence.lane.mismatch",
+                    $"ExportWim lane '{lane}' does not match planned lane '{plannedLane}'."));
         }
 
-        if (!string.Equals(file.ShellStampTargetPath, shellTarget, StringComparison.OrdinalIgnoreCase))
+        Dictionary<string, string> digests = new(StringComparer.Ordinal);
+        if (File.Exists(workspace.Digests))
         {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure(
-                    "servicing.evidence.shellStamp.mismatch",
-                    $"Evidence shell target '{file.ShellStampTargetPath}' does not match planned target '{shellTarget}'."));
+            try
+            {
+                JsonNode? side = JsonNode.Parse(File.ReadAllBytes(workspace.Digests));
+                if (side is JsonObject obj)
+                {
+                    foreach (KeyValuePair<string, JsonNode?> p in obj)
+                    {
+                        if (p.Value is not null)
+                        {
+                            digests[p.Key] = p.Value.ToString();
+                        }
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                return Result.Fail<ImageEvidence, Failure>(
+                    new Failure("servicing.evidence.invalid", ex.Message));
+            }
         }
 
-        if (file.Digests is null)
+        if (File.Exists(workspace.InstallWim))
         {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure("servicing.evidence.digests.missing", "Evidence digests are required."));
+            digests["installWim.sha256"] = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(workspace.InstallWim)));
         }
 
-        if (!file.Digests.TryGetValue("outputIso.sha256", out string? outputIsoSha256)
-            || !IsLowerSha256(outputIsoSha256))
+        string outputIsoSha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(run.OutputIsoPath)));
+        digests["outputIso.sha256"] = outputIsoSha256;
+
+        JsonObject doc = new()
         {
-            return Result.Fail<ImageEvidence, Failure>(
-                new Failure(
-                    "servicing.evidence.outputIsoDigest.invalid",
-                    "Evidence outputIso.sha256 must be a lowercase 64-character hexadecimal digest."));
+            ["schemaVersion"] = EvidenceSchemaVersion,
+            ["outputIsoPath"] = run.OutputIsoPath,
+            ["shellStampTargetPath"] = shellTarget,
+            ["lane"] = plannedLane,
+            ["packageStrict"] = plan.PackageStrict,
+        };
+        JsonObject digestNode = new();
+        foreach (KeyValuePair<string, string> kv in digests)
+        {
+            digestNode[kv.Key] = kv.Value;
         }
+
+        doc["digests"] = digestNode;
+
+        if (File.Exists(workspace.PreparedMedia))
+        {
+            try
+            {
+                JsonNode? sidecar = JsonNode.Parse(File.ReadAllBytes(workspace.PreparedMedia));
+                if (sidecar is JsonObject extra)
+                {
+                    foreach (KeyValuePair<string, JsonNode?> p in extra)
+                    {
+                        if (p.Key == "mediaCache.previousMedia")
+                        {
+                            continue;
+                        }
+
+                        doc[p.Key] = p.Value?.DeepClone();
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // ponytail: sidecar is audit-only; a corrupt file must not block Output ISO evidence
+            }
+        }
+
+        File.WriteAllText(workspace.Evidence, doc.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
         return Result.Ok<ImageEvidence, Failure>(
             new ImageEvidence(
                 run.OutputIsoPath,
                 plan.Manifest.ImageQuality,
                 shellTarget,
-                file.Digests.ToFrozenDictionary(StringComparer.Ordinal)));
+                digests.ToFrozenDictionary(StringComparer.Ordinal)));
     }
 
-    private static bool WindowsPathsEqual(string left, string right)
+    private static void WriteExpectedEvidence(
+        ServicingWorkspace workspace,
+        BuildArtifacts plan,
+        IReadOnlyList<ServicingStage> stages)
     {
-        try
+        bool injectDrivers = stages.Any(static s => s.Opcode == ServicingOpcode.InjectDrivers);
+        bool expectFu = plan.Manifest.ImageQuality == ImageQualityLane.Release;
+        bool brave = plan.WingetImportJson is { Length: > 0 }
+            && System.Text.Encoding.UTF8.GetString(plan.WingetImportJson)
+                .Contains(ProductPosture.BraveWingetId, StringComparison.OrdinalIgnoreCase);
+        IReadOnlyList<OfflinePolicyRow> rows = ProductPosture.ComposePolicies(
+            includeBraveDebloat: brave,
+            includeDriverHygiene: injectDrivers);
+        Dictionary<string, string> requiredValues = new(StringComparer.Ordinal);
+        List<string> requiredKeys = ["outputIso.sha256"];
+        foreach (OfflinePolicyRow row in rows)
         {
-            string normalizedLeft = Path.TrimEndingDirectorySeparator(Path.GetFullPath(left.Trim()));
-            string normalizedRight = Path.TrimEndingDirectorySeparator(Path.GetFullPath(right.Trim()));
-            return string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase);
+            requiredKeys.Add(row.Digest);
+            requiredValues[row.Digest] = row.Data;
         }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return false;
-        }
-    }
 
-    private static bool IsLowerSha256(string? value) =>
-        value is { Length: 64 }
-        && value.All(static c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+        if (injectDrivers)
+        {
+            requiredKeys.AddRange(["drivers.deviceId", "drivers.includedCount", "drivers.excludedCount"]);
+        }
+
+        HashSet<string> needed =
+        [
+            ProvisionJobKindWire.WingetImport,
+            ProvisionJobKindWire.ScoopBatch,
+            ProvisionJobKindWire.ShellStamp,
+            ProvisionJobKindWire.PackageAuditNative,
+        ];
+        List<string> requiredJobs = plan.Jobs.Jobs
+            .Select(static j => j.Kind.ToWire())
+            .Where(needed.Contains)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        List<string> wingetIds = plan.WingetImportJson is { Length: > 0 }
+            ? [.. ProductPosture.WingetIds]
+            : [];
+
+        ExpectedEvidenceFile expected = new(
+            ExpectedEvidenceSchemaVersion,
+            plan.Manifest.ImageQuality.ToString(),
+            plan.PackageStrict,
+            injectDrivers,
+            expectFu,
+            requiredKeys.Distinct(StringComparer.Ordinal).ToArray(),
+            requiredValues,
+            requiredJobs.ToArray(),
+            wingetIds);
+        File.WriteAllBytes(
+            workspace.ExpectedEvidence,
+            JsonSerializer.SerializeToUtf8Bytes(expected, ServicingJsonContext.Default.ExpectedEvidenceFile));
+    }
 
     private static Result<MediaCacheIdentity, Failure> ResolveMediaIdentity(ServicingRun run, int wimIndex)
     {
@@ -269,19 +322,22 @@ public static class ImageServicing
             : Result.Fail<MediaCacheIdentity, Failure>(computedError);
     }
 
-    private static Result<IReadOnlyList<ServicingStage>, Failure> Materialize(BuildArtifacts plan, ServicingRun run)
+    private static Result<IReadOnlyList<ServicingStage>, Failure> Materialize(
+        BuildArtifacts plan,
+        ServicingRun run,
+        ServicingWorkspace workspace)
     {
-        string payloadDir = Path.Combine(run.WorkDirectory, "payload");
+        string payloadDir = workspace.Payload;
         if (Directory.Exists(payloadDir))
         {
             Directory.Delete(payloadDir, recursive: true);
         }
 
         Directory.CreateDirectory(payloadDir);
-        string mediaDir = Path.Combine(run.WorkDirectory, "media");
+        string mediaDir = workspace.Media;
         string mountDir = HostMountDir;
-        string unattendPath = Path.Combine(run.WorkDirectory, "unattend.xml");
-        string wimOut = Path.Combine(run.WorkDirectory, "install.wim");
+        string unattendPath = workspace.Unattend;
+        string wimOut = workspace.InstallWim;
         // NormalizeOutputIso already set OutputIsoPath before Materialize.
         string outputIso = run.OutputIsoPath
             ?? throw new InvalidOperationException("OutputIsoPath must be normalized before Materialize.");
@@ -360,22 +416,20 @@ public static class ImageServicing
             switch (stage.Opcode)
             {
                 case ServicingOpcode.MountInstallWim:
-                    parameters[StageParams.SourceIso] = run.SourceIsoPath;
-                    parameters[StageParams.MountDir] = mountDir;
-                    parameters[StageParams.MediaDir] = mediaDir;
-                    parameters[StageParams.WimIndex] = wimIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    parameters[StageParams.WorkDirectory] = run.WorkDirectory;
-                    parameters[StageParams.SourceIsoSha256] = identity.Value.SourceIsoSha256;
-                    parameters[StageParams.SourceIsoLength] = identity.Value.SourceIsoLength.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    parameters[StageParams.CacheSchema] = identity.Value.Schema.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    parameters[StageParams.CacheRoot] = MediaCacheIdentity.Root;
-                    if (run.SelectedImage is { } selected)
-                    {
-                        parameters[StageParams.ImageName] = selected.Name;
-                        parameters[StageParams.Architecture] = selected.Architecture ?? "";
-                        parameters[StageParams.ImageEdition] = selected.Edition ?? "";
-                        parameters[StageParams.ImageBuild] = selected.Build ?? "";
-                    }
+                    parameters = new MountInstallWimParameters(
+                        SourceIso: run.SourceIsoPath,
+                        MountDir: mountDir,
+                        MediaDir: mediaDir,
+                        WimIndex: wimIndex,
+                        WorkDirectory: workspace.Root,
+                        SourceIsoSha256: identity.Value.SourceIsoSha256,
+                        SourceIsoLength: identity.Value.SourceIsoLength,
+                        CacheSchema: identity.Value.Schema,
+                        CacheRoot: MediaCacheIdentity.Root,
+                        ImageName: run.SelectedImage?.Name,
+                        Architecture: run.SelectedImage?.Architecture,
+                        ImageEdition: run.SelectedImage?.Edition,
+                        ImageBuild: run.SelectedImage?.Build).ToStageBag();
                     break;
                 case ServicingOpcode.StagePayload:
                     parameters[StageParams.PayloadDir] = payloadDir;
@@ -437,8 +491,10 @@ public static class ImageServicing
         }
 
         File.WriteAllText(
-            Path.Combine(run.WorkDirectory, "stages.json"),
+            workspace.Stages,
             BuildPlan.SerializeServicingStagesFile(new ServicingStageList(resolved)));
+        workspace.WriteManifest();
+        WriteExpectedEvidence(workspace, plan, resolved);
 
         return Result.Ok<IReadOnlyList<ServicingStage>, Failure>(resolved.ToArray());
     }
@@ -597,21 +653,14 @@ public static class ImageServicing
     }
 }
 
-internal sealed record EvidenceFile(
-    [property: JsonPropertyName("schemaVersion")] string? SchemaVersion,
-    [property: JsonPropertyName("outputIsoPath")] string? OutputIsoPath,
-    [property: JsonPropertyName("shellStampTargetPath")] string? ShellStampTargetPath,
-    [property: JsonPropertyName("lane")] string? Lane,
-    [property: JsonPropertyName("packageStrict")] bool PackageStrict,
-    [property: JsonPropertyName("digests")] Dictionary<string, string>? Digests);
-
 internal sealed record FailureFile(
     [property: JsonPropertyName("schemaVersion")] string? SchemaVersion,
     [property: JsonPropertyName("message")] string? Message,
     [property: JsonPropertyName("opcode")] string? Opcode);
 
 [JsonSerializable(typeof(BundleFile))]
-[JsonSerializable(typeof(EvidenceFile))]
+[JsonSerializable(typeof(ExpectedEvidenceFile))]
 [JsonSerializable(typeof(FailureFile))]
+[JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class ServicingJsonContext : JsonSerializerContext;

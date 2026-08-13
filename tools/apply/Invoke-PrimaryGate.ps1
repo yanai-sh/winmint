@@ -21,7 +21,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 if ([string]::IsNullOrWhiteSpace($Work)) {
-    $Work = Join-Path $env:LOCALAPPDATA 'WinMint\work\gate-b'
+    . (Join-Path $PSScriptRoot '..\host\WinMintPaths.ps1')
+    $Work = Get-WinMintGateBWorkDirectory
 }
 
 $hostApply = Join-Path $PSScriptRoot 'Invoke-HostApply.ps1'

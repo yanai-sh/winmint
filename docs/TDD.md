@@ -26,6 +26,8 @@
 
 Do **not** test: private phase helpers, splash pixels (except status→presenter via `ISplashPresenter`), DISM internals, v1 scripts, evidence JSON as control plane.
 
+**Contract (`tests/contract/`):** prove a script whose runtime host cannot exist on a dev box (WinPE, DISM transcript parse, GitHub-release helpers) or a policy sentence that must not disappear. `just check` discovers `Test-*.ps1`. Not for in-process C# module tests, S4/S5, or the deleted `--reuse-media` / marker four-way branch.
+
 **S4 vs S5:** S4 = FirstLogon in Hyper-V. S5 = Apply on the build host — never a bare-metal install. Do not substitute one for the other.
 
 ## Good test criteria

@@ -75,6 +75,12 @@ public static class ProductPosture
         "shell skel stamp",
     ];
 
+    public static IReadOnlyList<string> AlwaysOnDigestKeys =>
+        ComposePolicies(includeBraveDebloat: false, includeDriverHygiene: false)
+            .Select(static row => row.Digest)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
     /// <summary>Profile appx first, then product-required; case-insensitive dedupe.</summary>
     public static IReadOnlyList<string> UnionAppx(IReadOnlyList<string> profileAppx) =>
         IdList.UnionOrdered(profileAppx, AppxIds);

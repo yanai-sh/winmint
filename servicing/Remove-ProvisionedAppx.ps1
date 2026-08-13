@@ -1,46 +1,23 @@
 #requires -Version 7.6
 param(
-    [Parameter(Mandatory)]
     [hashtable] $Parameters
 )
 # Offline provisioned AppX remove — param-only; no Profile branching.
 # Policy (KEEPFLAG): Plan ⊆ catalog (typos fail at plan). Remove is idempotent: already-absent ⇒ ok + digest absent
 # (re-Apply after a prior remove). Uses dism.exe (not DISM AppX cmdlets) — Store pwsh
 # hits "Class not registered" on those COM APIs.
-$mountDir = $Parameters['mountDir']
-$packageFamilyNames = $Parameters['packageFamilyNames']
-$workDir = $Parameters['workDirectory']
-if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
-if ([string]::IsNullOrWhiteSpace($packageFamilyNames)) { throw 'packageFamilyNames required' }
-if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
 
-$ids = @(
-    $packageFamilyNames.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) |
-        ForEach-Object { $_.Trim() } |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-)
-if ($ids.Count -eq 0) { throw 'packageFamilyNames empty after split' }
-
-$logDir = Join-Path $workDir 'logs'
-New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$dismLog = Join-Path $logDir 'remove-provisioned-appx.dism.log'
-$digestPath = Join-Path $logDir 'digests.json'
-
-function Get-ProvisionedInventory {
-    param([string] $Path)
-    $text = & dism.exe /English /Image:$Path /Get-ProvisionedAppxPackages 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) {
-        throw "dism Get-ProvisionedAppxPackages failed: $LASTEXITCODE`n$text"
-    }
+function ConvertFrom-ProvisionedAppxText {
+    param([Parameter(Mandatory)] [string] $Text)
     $pkgs = [System.Collections.Generic.List[object]]::new()
     $cur = $null
-    foreach ($line in ($text -split "`r?`n")) {
+    foreach ($line in ($Text -split "`r?`n")) {
         if ($line -match '^DisplayName\s*:\s*(.+)\s*$') {
             if ($null -ne $cur) { $pkgs.Add($cur) }
             $cur = [pscustomobject]@{
-                DisplayName  = $Matches[1].Trim()
-                PackageName  = ''
-                PublisherId  = ''
+                DisplayName = $Matches[1].Trim()
+                PackageName = ''
+                PublisherId = ''
             }
         }
         elseif ($null -ne $cur -and $line -match '^PackageName\s*:\s*(.+)\s*$') {
@@ -53,6 +30,15 @@ function Get-ProvisionedInventory {
     }
     if ($null -ne $cur) { $pkgs.Add($cur) }
     return @($pkgs)
+}
+
+function Get-ProvisionedInventory {
+    param([string] $Path)
+    $text = & dism.exe /English /Image:$Path /Get-ProvisionedAppxPackages 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        throw "dism Get-ProvisionedAppxPackages failed: $LASTEXITCODE`n$text"
+    }
+    return ConvertFrom-ProvisionedAppxText -Text $text
 }
 
 function Test-PackageMatchesCatalogId {
@@ -79,13 +65,33 @@ function Get-PackageFamilyName {
     return [string]$Package.PackageName
 }
 
+if ($MyInvocation.InvocationName -ne '.') {
+. (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
+
+$mountDir = $Parameters['mountDir']
+$packageFamilyNames = $Parameters['packageFamilyNames']
+$workDir = $Parameters['workDirectory']
+if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
+if ([string]::IsNullOrWhiteSpace($packageFamilyNames)) { throw 'packageFamilyNames required' }
+if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
+
+$ids = @(
+    $packageFamilyNames.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+)
+if ($ids.Count -eq 0) { throw 'packageFamilyNames empty after split' }
+
+$logDir = Join-Path $workDir 'logs'
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+$dismLog = Join-Path $logDir 'remove-provisioned-appx.dism.log'
+
 $before = Get-ProvisionedInventory -Path $mountDir
 
 $removed = [System.Collections.Generic.List[object]]::new()
 foreach ($id in $ids) {
     $matchedPkgs = @($before | Where-Object { Test-PackageMatchesCatalogId -Package $_ -CatalogId $id })
     if ($matchedPkgs.Count -eq 0) {
-        # Idempotent: prior Apply already stripped this id.
         Write-Output "Remove-ProvisionedAppx already absent catalogId=$id"
         continue
     }
@@ -113,7 +119,6 @@ foreach ($row in $removed) {
     }
 }
 
-# Deprovisioned stamps — survive feature-update reintroduction (KEEPFLAG / rehydrate research).
 if ($removed.Count -gt 0) {
     $hiveSoftware = Join-Path $mountDir 'Windows\System32\config\SOFTWARE'
     if (-not (Test-Path -LiteralPath $hiveSoftware)) { throw "SOFTWARE hive missing: $hiveSoftware" }
@@ -129,7 +134,6 @@ if ($removed.Count -gt 0) {
             $keyPath = "$deprovRoot\$pfn"
             & reg.exe add $keyPath /f
             if ($LASTEXITCODE -ne 0) { throw "reg add Deprovisioned\$pfn failed: $LASTEXITCODE" }
-            # Readback assert — FU survival requires the mark to exist after write.
             & reg.exe query $keyPath > $null 2>&1
             if ($LASTEXITCODE -ne 0) { throw "Deprovisioned stamp missing after write: $pfn" }
             Write-Output "Deprovisioned=$pfn"
@@ -148,14 +152,8 @@ $digests = @{}
 foreach ($id in ($ids | Select-Object -Unique)) {
     $digests["removed.appx.$id"] = 'absent'
 }
-$map = [ordered]@{}
-if (Test-Path -LiteralPath $digestPath) {
-    foreach ($p in (Get-Content -LiteralPath $digestPath -Raw | ConvertFrom-Json).PSObject.Properties) {
-        $map[$p.Name] = [string]$p.Value
-    }
-}
-foreach ($k in $digests.Keys) { $map[$k] = [string]$digests[$k] }
-$map | ConvertTo-Json | Set-Content -LiteralPath $digestPath -Encoding utf8
+Save-WinMintDigestMap -WorkDirectory $workDir -Digests $digests
 
 Write-Output "RemoveProvisionedAppx ok count=$($removed.Count)"
 exit 0
+}

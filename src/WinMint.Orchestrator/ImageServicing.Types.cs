@@ -26,6 +26,6 @@ public readonly record struct ElevatedRunOk;
 public interface IElevatedPlanRunner
 {
     Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
-        string workDirectory,
+        ServicingWorkspace workspace,
         CancellationToken ct);
 }

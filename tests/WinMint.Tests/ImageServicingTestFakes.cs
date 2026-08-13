@@ -11,10 +11,10 @@ internal static class ImageServicingTestFakes
         public IEnumerable<ServicingOpcode> Opcodes => Stages.Select(s => s.Opcode);
 
         public Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
-            string workDirectory,
+            ServicingWorkspace workspace,
             CancellationToken ct)
         {
-            Stages.AddRange(ReadStagesJson(workDirectory));
+            Stages.AddRange(ReadStagesJson(workspace));
             IReadOnlyList<ServicingStage> stages = Stages;
             ServicingStage? stamp = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.StampOfflineShell);
             if (stamp is null
@@ -45,20 +45,19 @@ internal static class ImageServicingTestFakes
                     new Failure("servicing.lane.missing", "ExportWim stage missing lane.")));
             }
 
-            // Minimal evidence fixture so ImageServicing.ReadEvidence can run (fake does not assemble ImageEvidence).
-            string evidence = JsonSerializer.Serialize(
-                new
+            Directory.CreateDirectory(Path.GetDirectoryName(outputIso)!);
+            if (!File.Exists(outputIso))
+            {
+                File.WriteAllText(outputIso, "fake-iso");
+            }
+
+            Directory.CreateDirectory(workspace.Logs);
+            File.WriteAllText(
+                workspace.Digests,
+                JsonSerializer.Serialize(new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    schemaVersion = ImageServicing.EvidenceSchemaVersion,
-                    outputIsoPath = outputIso,
-                    shellStampTargetPath = shellTarget,
-                    lane,
-                    digests = new Dictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["outputIso.sha256"] = new string('a', 64),
-                    },
-                });
-            File.WriteAllText(Path.Combine(workDirectory, "evidence.json"), evidence);
+                    ["outputIso.sha256"] = new string('a', 64),
+                }));
             return Task.FromResult(Result.Ok<ElevatedRunOk, Failure>(default));
         }
     }
@@ -66,10 +65,10 @@ internal static class ImageServicingTestFakes
     internal sealed class EvidenceElevatedPlanRunner(string evidence) : IElevatedPlanRunner
     {
         public Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
-            string workDirectory,
+            ServicingWorkspace workspace,
             CancellationToken ct)
         {
-            File.WriteAllText(Path.Combine(workDirectory, "evidence.json"), evidence);
+            File.WriteAllText(workspace.Evidence, evidence);
             return Task.FromResult(Result.Ok<ElevatedRunOk, Failure>(default));
         }
     }
@@ -77,7 +76,7 @@ internal static class ImageServicingTestFakes
     internal sealed class SuccessfulElevatedPlanRunner : IElevatedPlanRunner
     {
         public Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
-            string workDirectory,
+            ServicingWorkspace workspace,
             CancellationToken ct) =>
             Task.FromResult(Result.Ok<ElevatedRunOk, Failure>(default));
     }
@@ -93,6 +92,9 @@ internal static class ImageServicingTestFakes
         File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Resolve-WinMintMount.ps1"),
             Path.Combine(servicing, "Resolve-WinMintMount.ps1"));
+        File.Copy(
+            Path.Combine(TestRepo.Root, "servicing", "Get-WinMintServicingWorkspace.ps1"),
+            Path.Combine(servicing, "Get-WinMintServicingWorkspace.ps1"));
 
         const string noOp = """
             param([hashtable] $Parameters)
@@ -140,10 +142,10 @@ internal static class ImageServicingTestFakes
     }
 
     /// <summary>Parse <c>{work}/stages.json</c> the way Invoke-ServicingPlan.ps1 does, so the fake and pwsh share one contract.</summary>
-    private static List<ServicingStage> ReadStagesJson(string workDirectory)
+    private static List<ServicingStage> ReadStagesJson(ServicingWorkspace workspace)
     {
         using JsonDocument doc = JsonDocument.Parse(
-            File.ReadAllBytes(Path.Combine(workDirectory, "stages.json")));
+            File.ReadAllBytes(workspace.Stages));
         Assert.Equal(
             BuildPlan.ServicingStagesSchemaVersion,
             doc.RootElement.GetProperty("schemaVersion").GetString());
@@ -168,12 +170,12 @@ internal static class ImageServicingTestFakes
     internal sealed class FailingElevatedPlanRunner : IElevatedPlanRunner
     {
         public Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
-            string workDirectory,
+            ServicingWorkspace workspace,
             CancellationToken ct)
         {
-            Directory.CreateDirectory(Path.Combine(workDirectory, "logs"));
+            Directory.CreateDirectory(workspace.Logs);
             File.WriteAllText(
-                Path.Combine(workDirectory, "failure.json"),
+                workspace.Failure,
                 """{"schemaVersion":"winmint.image.evidence/v1","failed":true}""");
             return Task.FromResult(Result.Fail<ElevatedRunOk, Failure>(
                 new Failure("servicing.stage.failed", "StageOobeUnattend failed (test).")));

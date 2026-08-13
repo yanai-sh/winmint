@@ -112,6 +112,7 @@ function Write-PlanFailure {
 
 $scriptRoot = $PSScriptRoot
 . (Join-Path $scriptRoot 'Resolve-WinMintMount.ps1')
+. (Join-Path $scriptRoot 'Get-WinMintServicingWorkspace.ps1')
 
 function ConvertTo-ParamHashtable {
     param($ParametersObject)
@@ -147,19 +148,11 @@ function Clear-LeftoverMount {
     Clear-WinMintOwnedMount
 }
 
-function Write-PlanEvidence {
-    $shellTarget = $null
+function Write-PlanDigestSidecar {
     $outputIso = $null
-    $lane = $null
     foreach ($stage in $stagesDoc.stages) {
-        if ($stage.opcode -eq 'StampOfflineShell' -and $stage.parameters.shellTarget) {
-            $shellTarget = [string]$stage.parameters.shellTarget
-        }
         if ($stage.opcode -eq 'BuildIso' -and $stage.parameters.outputIso) {
             $outputIso = [string]$stage.parameters.outputIso
-        }
-        if ($stage.opcode -eq 'ExportWim' -and $stage.parameters.lane) {
-            $lane = [string]$stage.parameters.lane
         }
     }
 
@@ -169,71 +162,43 @@ function Write-PlanEvidence {
     if (-not (Test-Path -LiteralPath $outputIso -PathType Leaf)) {
         throw "BuildIso output missing: $outputIso"
     }
-    if ([string]::IsNullOrWhiteSpace($lane)) {
-        throw 'ExportWim stage lane required'
-    }
-    if ([string]::IsNullOrWhiteSpace($shellTarget)) {
-        throw 'StampOfflineShell stage shellTarget required'
-    }
 
     $digests = @{}
-    $sidePath = Join-Path $logDir 'digests.json'
-    if (Test-Path -LiteralPath $sidePath) {
-        $side = Get-Content -LiteralPath $sidePath -Raw | ConvertFrom-Json
+    if (Test-Path -LiteralPath $ws.digests) {
+        $side = Get-Content -LiteralPath $ws.digests -Raw | ConvertFrom-Json
         foreach ($p in $side.PSObject.Properties) {
             $digests[[string]$p.Name] = [string]$p.Value
         }
     }
 
-    $wimOut = Join-Path $WorkDirectory 'install.wim'
-    if (Test-Path -LiteralPath $wimOut -PathType Leaf) {
-        $shaWim = Get-FileHash -LiteralPath $wimOut -Algorithm SHA256
+    if (Test-Path -LiteralPath $ws.installWim -PathType Leaf) {
+        $shaWim = Get-FileHash -LiteralPath $ws.installWim -Algorithm SHA256
         $digests['installWim.sha256'] = $shaWim.Hash.ToLowerInvariant()
     }
 
-    # Authoritative ISO digest is computed last so no stale sidecar can replace it.
     $sha = Get-FileHash -LiteralPath $outputIso -Algorithm SHA256
     $digests['outputIso.sha256'] = $sha.Hash.ToLowerInvariant()
 
-    # InjectDrivers writes logs/WinMint-DriverInventory.json — require it before greening evidence.
     $ranInjectDrivers = @($stagesDoc.stages | Where-Object { [string]$_.opcode -eq 'InjectDrivers' }).Count -gt 0
     if ($ranInjectDrivers) {
-        $inventoryPath = Join-Path $logDir 'WinMint-DriverInventory.json'
+        $inventoryPath = Join-Path $ws.logs 'WinMint-DriverInventory.json'
         if (-not (Test-Path -LiteralPath $inventoryPath)) {
             throw "InjectDrivers ran but inventory missing at $inventoryPath (Host Apply ExpectDrivers would fail)"
         }
     }
 
-    $packageStrict = $false
-    $bundlePath = Join-Path $WorkDirectory 'payload\bundle.json'
-    if (Test-Path -LiteralPath $bundlePath) {
-        $bundle = Get-Content -LiteralPath $bundlePath -Raw | ConvertFrom-Json
-        if ($bundle.PSObject.Properties.Name -contains 'packageStrict') {
-            $packageStrict = [bool]$bundle.packageStrict
-        }
-    }
+    New-Item -ItemType Directory -Force -Path $ws.logs | Out-Null
+    $digests | ConvertTo-Json | Set-Content -LiteralPath $ws.digests -Encoding utf8
 
-    Write-JsonAtomic -Path $evidencePath -Value (Merge-WinMintPreparedMediaEvidence -Evidence @{
-            schemaVersion        = 'winmint.image.evidence/v1'
-            outputIsoPath        = $outputIso
-            shellStampTargetPath = $shellTarget
-            lane                 = $lane
-            packageStrict        = $packageStrict
-            digests              = $digests
-        } -WorkDirectory $WorkDirectory -PhaseTimings $script:phaseTimings -RecoveryAction $script:recoveryAction)
-
-    $preparedPath = Join-Path $WorkDirectory 'prepared-media.json'
-    if (Test-Path -LiteralPath $preparedPath -PathType Leaf) {
-        $preparedDoc = Get-Content -LiteralPath $preparedPath -Raw | ConvertFrom-Json
+    if (Test-Path -LiteralPath $ws.preparedMedia -PathType Leaf) {
+        $preparedDoc = Get-Content -LiteralPath $ws.preparedMedia -Raw | ConvertFrom-Json
         $previousMedia = [string]$preparedDoc.'mediaCache.previousMedia'
         if (-not [string]::IsNullOrWhiteSpace($previousMedia) -and (Test-Path -LiteralPath $previousMedia)) {
             Remove-Item -LiteralPath $previousMedia -Recurse -Force
         }
     }
 
-    # Evidence is not green until stale failure state is gone. A deletion error returns to the
-    # outer fail-closed handler, which removes/quarantines this fresh evidence and reports failure.
-    Invoke-FinalizerFileRemoval -Path $failurePath
+    Invoke-FinalizerFileRemoval -Path $ws.failure
 }
 
 # Fail closed: $failed clears only after evidence is on disk, so a throw anywhere — an unknown
@@ -246,11 +211,12 @@ $servicingLock = $null
 $script:phaseTimings = @{}
 $script:recoveryAction = 'none'
 try {
-    $logDir = Join-Path $WorkDirectory 'logs'
-    $statusPath = Join-Path $WorkDirectory 'apply-status.txt'
-    $evidencePath = Join-Path $WorkDirectory 'evidence.json'
-    $failurePath = Join-Path $WorkDirectory 'failure.json'
-    $stagesPath = Join-Path $WorkDirectory 'stages.json'
+    $ws = Get-WinMintServicingWorkspace -Root $WorkDirectory
+    $logDir = $ws.logs
+    $statusPath = $ws.applyStatus
+    $evidencePath = $ws.evidence
+    $failurePath = $ws.failure
+    $stagesPath = $ws.stages
     $env:WINMINT_SERVICING_RUN_ID = [guid]::NewGuid().ToString('N')
     $env:WINMINT_SERVICING_WORK = $WorkDirectory
 
@@ -298,7 +264,12 @@ try {
         $logFile = Join-Path $logDir ("{0:D2}-{1}.log" -f $index, $opcode)
         Write-ApplyStatus -Stage $opcode -Log $logFile
         $phaseClock = [System.Diagnostics.Stopwatch]::StartNew()
-        & $kernel -Parameters $params *>&1 | Tee-Object -FilePath $logFile
+        if ($opcode -eq 'MountInstallWim') {
+            & $kernel @params *>&1 | Tee-Object -FilePath $logFile
+        }
+        else {
+            & $kernel -Parameters $params *>&1 | Tee-Object -FilePath $logFile
+        }
         $phaseClock.Stop()
         if ($opcode -eq 'ExportWim') {
             $script:phaseTimings['exportMs'] = [int]$phaseClock.ElapsedMilliseconds
@@ -311,8 +282,8 @@ try {
         }
     }
 
-    $opcode = 'evidence'
-    Write-PlanEvidence
+    $opcode = 'digests'
+    Write-PlanDigestSidecar
     Write-ApplyStatus -Stage 'done'
     $failed = $false
 }

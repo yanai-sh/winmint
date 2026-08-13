@@ -104,6 +104,10 @@ if (-not (Test-Path -LiteralPath $applyEvidence)) {
     throw "Apply evidence.json missing under $Work (lane marker required for S4)"
 }
 Copy-Item -LiteralPath $applyEvidence -Destination (Join-Path $applyDir 'evidence.json') -Force
+$applyExpected = Join-Path $Work 'expected-evidence.json'
+if (Test-Path -LiteralPath $applyExpected -PathType Leaf) {
+    Copy-Item -LiteralPath $applyExpected -Destination (Join-Path $applyDir 'expected-evidence.json') -Force
+}
 
 # --- Hyper-V ---
 if (-not (Get-Command Get-VM -ErrorAction SilentlyContinue)) {

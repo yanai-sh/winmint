@@ -1,34 +1,36 @@
 #requires -Version 7.6
 param(
-    [Parameter(Mandatory)]
-    [hashtable] $Parameters
+    [Parameter(Mandatory)] [string] $SourceIso,
+    [Parameter(Mandatory)] [string] $MountDir,
+    [Parameter(Mandatory)] [string] $MediaDir,
+    [Parameter(Mandatory)] [int] $WimIndex,
+    [Parameter(Mandatory)] [string] $WorkDirectory,
+    [Parameter(Mandatory)] [string] $SourceIsoSha256,
+    [Parameter(Mandatory)] [long] $SourceIsoLength,
+    [Parameter(Mandatory)] [int] $CacheSchema,
+    [Parameter(Mandatory)] [string] $CacheRoot,
+    [string] $ImageName,
+    [string] $Architecture,
+    [string] $ImageEdition,
+    [string] $ImageBuild
 )
 # Mount Source ISO media + install.wim. Params only — no Profile branching.
 #
 # Root cause (2026-08-02): multi-edition Unmount/Commit stalls; export single-index first.
 # Metadata discipline: snapshot/assert Name/Arch/Edition fields; ei.cfg + PID.txt; clear R/O before export.
-$sourceIso = $Parameters['sourceIso']
-$mountDir = $Parameters['mountDir']
-$mediaDir = $Parameters['mediaDir']
-$wimIndex = $Parameters['wimIndex']
-$workDir = $Parameters['workDirectory']
-$sourceIsoSha256 = $Parameters['sourceIsoSha256']
-$sourceIsoLength = $Parameters['sourceIsoLength']
-$cacheSchema = $Parameters['cacheSchema']
-$cacheRoot = $Parameters['cacheRoot']
-$imageName = $Parameters['imageName']
-$imageArchitecture = $Parameters['architecture']
-$imageEdition = $Parameters['imageEdition']
-$imageBuild = $Parameters['imageBuild']
-if ([string]::IsNullOrWhiteSpace($sourceIso)) { throw 'sourceIso required' }
-if ([string]::IsNullOrWhiteSpace($mountDir)) { throw 'mountDir required' }
-if ([string]::IsNullOrWhiteSpace($mediaDir)) { throw 'mediaDir required' }
-if ([string]::IsNullOrWhiteSpace($wimIndex)) { throw 'wimIndex required' }
-if ([string]::IsNullOrWhiteSpace($workDir)) { throw 'workDirectory required' }
-if ([string]::IsNullOrWhiteSpace($sourceIsoSha256)) { throw 'sourceIsoSha256 required' }
-if ([string]::IsNullOrWhiteSpace($sourceIsoLength)) { throw 'sourceIsoLength required' }
-if ([string]::IsNullOrWhiteSpace($cacheSchema)) { throw 'cacheSchema required' }
-if ([string]::IsNullOrWhiteSpace($cacheRoot)) { throw 'cacheRoot required' }
+$sourceIso = $SourceIso
+$mountDir = $MountDir
+$mediaDir = $MediaDir
+$wimIndex = $WimIndex
+$workDir = $WorkDirectory
+$sourceIsoSha256 = $SourceIsoSha256
+$sourceIsoLength = $SourceIsoLength
+$cacheSchema = $CacheSchema
+$cacheRoot = $CacheRoot
+$imageName = $ImageName
+$imageArchitecture = $Architecture
+$imageEdition = $ImageEdition
+$imageBuild = $ImageBuild
 if (-not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sourceIso" }
 
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')

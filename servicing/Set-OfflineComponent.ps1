@@ -1,10 +1,54 @@
 #requires -Version 7.6
 param(
-    [Parameter(Mandatory)]
     [hashtable] $Parameters
 )
 # Offline capability remove OR optional-feature disable — param-only.
 # kind=capability|feature. Already-absent/disabled / not listed ⇒ ok + digest.
+
+function ConvertFrom-DismStateText {
+    param(
+        [Parameter(Mandatory)] [string] $Text,
+        [Parameter(Mandatory)] [string] $Kind
+    )
+    if ($Kind -eq 'capability') {
+        $idRe = '^Capability Identity\s*:\s*(.+)\s*$'
+    }
+    elseif ($Kind -eq 'feature') {
+        $idRe = '^Feature Name\s*:\s*(.+)\s*$'
+    }
+    else {
+        throw "kind must be capability|feature (got '$Kind')"
+    }
+    $map = @{}
+    $cur = $null
+    foreach ($line in ($Text -split "`r?`n")) {
+        if ($line -match $idRe) {
+            $cur = $Matches[1].Trim()
+        }
+        elseif ($null -ne $cur -and $line -match '^State\s*:\s*(.+)\s*$') {
+            $map[$cur] = $Matches[1].Trim()
+            $cur = $null
+        }
+    }
+    return $map
+}
+
+function Get-StateMap {
+    param([string] $Path, [string] $Kind)
+    if ($Kind -eq 'capability') {
+        $text = & dism.exe /English /Image:$Path /Get-Capabilities 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) { throw "dism Get-Capabilities failed: $LASTEXITCODE`n$text" }
+    }
+    else {
+        $text = & dism.exe /English /Image:$Path /Get-Features 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) { throw "dism Get-Features failed: $LASTEXITCODE`n$text" }
+    }
+    return ConvertFrom-DismStateText -Text $text -Kind $Kind
+}
+
+if ($MyInvocation.InvocationName -ne '.') {
+. (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
+
 $kind = [string]$Parameters['kind']
 $mountDir = $Parameters['mountDir']
 $workDir = $Parameters['workDirectory']
@@ -25,44 +69,6 @@ if ($ids.Count -eq 0) { throw "$namesKey empty after split" }
 $logDir = Join-Path $workDir 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $dismLog = Join-Path $logDir ("mutate-{0}.dism.log" -f $kind)
-$digestPath = Join-Path $logDir 'digests.json'
-
-function Get-StateMap {
-    param([string] $Path, [string] $Kind)
-    if ($Kind -eq 'capability') {
-        $text = & dism.exe /English /Image:$Path /Get-Capabilities 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) { throw "dism Get-Capabilities failed: $LASTEXITCODE`n$text" }
-        $idRe = '^Capability Identity\s*:\s*(.+)\s*$'
-    }
-    else {
-        $text = & dism.exe /English /Image:$Path /Get-Features 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) { throw "dism Get-Features failed: $LASTEXITCODE`n$text" }
-        $idRe = '^Feature Name\s*:\s*(.+)\s*$'
-    }
-    $map = @{}
-    $cur = $null
-    foreach ($line in ($text -split "`r?`n")) {
-        if ($line -match $idRe) {
-            $cur = $Matches[1].Trim()
-        }
-        elseif ($null -ne $cur -and $line -match '^State\s*:\s*(.+)\s*$') {
-            $map[$cur] = $Matches[1].Trim()
-            $cur = $null
-        }
-    }
-    return $map
-}
-
-function Save-DigestMap([hashtable] $New) {
-    $map = [ordered]@{}
-    if (Test-Path -LiteralPath $digestPath) {
-        foreach ($p in (Get-Content -LiteralPath $digestPath -Raw | ConvertFrom-Json).PSObject.Properties) {
-            $map[$p.Name] = [string]$p.Value
-        }
-    }
-    foreach ($k in $New.Keys) { $map[$k] = [string]$New[$k] }
-    $map | ConvertTo-Json | Set-Content -LiteralPath $digestPath -Encoding utf8
-}
 
 $before = Get-StateMap -Path $mountDir -Kind $kind
 
@@ -105,7 +111,8 @@ foreach ($id in ($ids | Select-Object -Unique)) {
         else { throw "Optional feature '$id' not Disabled after disable (state=$state)" }
     }
 }
-Save-DigestMap $digests
+Save-WinMintDigestMap -WorkDirectory $workDir -Digests $digests
 
 Write-Output ("MutateOffline {0} ok count={1}" -f $kind, $ids.Count)
 exit 0
+}
