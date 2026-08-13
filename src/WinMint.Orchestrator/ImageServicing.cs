@@ -248,6 +248,27 @@ public static class ImageServicing
         value is { Length: 64 }
         && value.All(static c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
 
+    private static Result<MediaCacheIdentity, Failure> ResolveMediaIdentity(ServicingRun run, int wimIndex)
+    {
+        if (!string.IsNullOrWhiteSpace(run.SourceIsoSha256))
+        {
+            long length = new FileInfo(run.SourceIsoPath).Length;
+            return MediaCacheIdentity.TryCreate(
+                run.SourceIsoSha256,
+                length,
+                wimIndex,
+                MediaCacheIdentity.CurrentSchema,
+                out MediaCacheIdentity frozen,
+                out Failure frozenError)
+                ? Result.Ok<MediaCacheIdentity, Failure>(frozen)
+                : Result.Fail<MediaCacheIdentity, Failure>(frozenError);
+        }
+
+        return MediaCacheIdentity.TryFromFile(run.SourceIsoPath, wimIndex, out MediaCacheIdentity computed, out Failure computedError)
+            ? Result.Ok<MediaCacheIdentity, Failure>(computed)
+            : Result.Fail<MediaCacheIdentity, Failure>(computedError);
+    }
+
     private static Result<IReadOnlyList<ServicingStage>, Failure> Materialize(BuildArtifacts plan, ServicingRun run)
     {
         string payloadDir = Path.Combine(run.WorkDirectory, "payload");
@@ -259,6 +280,11 @@ public static class ImageServicing
         string outputIso = run.OutputIsoPath
             ?? throw new InvalidOperationException("OutputIsoPath must be normalized before Materialize.");
         int wimIndex = run.WimIndex ?? DefaultProWimIndex;
+        Result<MediaCacheIdentity, Failure> identity = ResolveMediaIdentity(run, wimIndex);
+        if (!identity.IsOk)
+        {
+            return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(identity.Error);
+        }
 
         File.WriteAllText(unattendPath, plan.Unattend.Xml);
 
@@ -323,10 +349,12 @@ public static class ImageServicing
                     parameters[StageParams.MediaDir] = mediaDir;
                     parameters[StageParams.WimIndex] = wimIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     parameters[StageParams.WorkDirectory] = run.WorkDirectory;
-                    if (run.SelectedImage is { } selected
-                        && !string.IsNullOrWhiteSpace(run.SourceIsoSha256))
+                    parameters[StageParams.SourceIsoSha256] = identity.Value.SourceIsoSha256;
+                    parameters[StageParams.SourceIsoLength] = identity.Value.SourceIsoLength.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    parameters[StageParams.CacheSchema] = identity.Value.Schema.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    parameters[StageParams.CacheRoot] = MediaCacheIdentity.Root;
+                    if (run.SelectedImage is { } selected)
                     {
-                        parameters[StageParams.SourceIsoSha256] = run.SourceIsoSha256;
                         parameters[StageParams.ImageName] = selected.Name;
                         parameters[StageParams.Architecture] = selected.Architecture ?? "";
                         parameters[StageParams.ImageEdition] = selected.Edition ?? "";

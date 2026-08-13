@@ -112,6 +112,9 @@ public static class StageParams
     public const string MediaDir = "mediaDir";
     public const string WimIndex = "wimIndex";
     public const string SourceIsoSha256 = "sourceIsoSha256";
+    public const string SourceIsoLength = "sourceIsoLength";
+    public const string CacheSchema = "cacheSchema";
+    public const string CacheRoot = "cacheRoot";
     public const string ImageName = "imageName";
     public const string ImageEdition = "imageEdition";
     public const string ImageBuild = "imageBuild";

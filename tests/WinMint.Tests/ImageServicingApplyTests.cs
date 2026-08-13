@@ -156,6 +156,12 @@ public class ImageServicingApplyTests
             Assert.False(mount.Parameters.ContainsKey("reuseMedia"));
             Assert.False(typeof(ServicingRun).GetProperty("ReuseMedia") is not null);
             Assert.False(typeof(StageParams).GetField("ReuseMedia") is not null);
+            Assert.True(mount.Parameters.ContainsKey(StageParams.SourceIsoSha256));
+            Assert.True(mount.Parameters.ContainsKey(StageParams.SourceIsoLength));
+            Assert.Equal(
+                MediaCacheIdentity.CurrentSchema.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                mount.Parameters[StageParams.CacheSchema]);
+            Assert.Equal(MediaCacheIdentity.Root, mount.Parameters[StageParams.CacheRoot]);
         }
         finally
         {

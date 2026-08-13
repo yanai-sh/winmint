@@ -74,6 +74,12 @@ public class HostCompositionTests
                 stage => stage.Opcode == ServicingOpcode.MountInstallWim);
             Assert.False(mount.Parameters.ContainsKey("reuseMedia"));
             Assert.Equal(composition.Review.SourceMedia.SourceIsoSha256, mount.Parameters[StageParams.SourceIsoSha256]);
+            Assert.Equal(
+                MediaCacheIdentity.CurrentSchema.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                mount.Parameters[StageParams.CacheSchema]);
+            Assert.Equal(MediaCacheIdentity.Root, mount.Parameters[StageParams.CacheRoot]);
+            Assert.True(long.TryParse(mount.Parameters[StageParams.SourceIsoLength], out long isoLength));
+            Assert.Equal(new FileInfo(iso).Length, isoLength);
             Assert.Equal(composition.Review.SourceMedia.Selected.Name, mount.Parameters[StageParams.ImageName]);
             Assert.Equal(composition.OutputIsoPath, Assert.Single(
                 runner.Stages,
