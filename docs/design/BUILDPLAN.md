@@ -74,7 +74,7 @@ Package planning is one internal operation over Profile, PackageCatalog, effecti
 2. No I/O in `Plan` / `TryParseProfile` / `SerializeProfile` — password FS I/O in `ProfileFile.TryLoad`.
 3. Failure ⇒ no partial artifacts.
 4. Image quality only from `RunOptions`. ExportWim lane is derived via `ExportLane.For(Manifest.ImageQuality)` at dump/materialize — not stored as a plan bag.
-5. DMA enabled ⇒ Ireland sticky setup region (`DmaInterop` DeviceRegion + `.DEFAULT` Geo hive paths) in unattend **and** settle targets in `DmaContract`. Enabled stays on the outer DMA object, not nested settle.
+5. OOBE answers always emit in **oobeSystem** (`International-Core` + Shell-Setup hide/account/autologon/`TimeZone`). DMA enabled ⇒ Ireland sticky setup region (`DmaInterop` DeviceRegion + `.DEFAULT` Geo hive paths) in **specialize** and settle targets in `DmaContract`. Enabled stays on the outer DMA object, not nested settle. DMA on: oobeSystem `International-Core` uses Ireland Input/System/User locales; specialize has no `International-Core`. DMA off: oobeSystem `International-Core` uses `dma.settle` locale; specialize omitted. `UILanguage` / `UILanguageFallback` stay the Source ISO pack (`en-US` on the English ISO); `en-IE` is not an installed MUI. Shell-Setup `TimeZone` is always `dma.settle`. Do not use `SkipMachineOOBE`. SetupComplete must not exit non-zero on Unauthorized DeviceRegion — that reseals to OOBE Recovery, which Hyper-V Smoke cannot drive.
 6. Local+autoLogon ⇒ non-empty password or `Failure` ([SECRETS](SECRETS.md)).
 7. Host order: materialize Profile → HostCompile composition (serialize + one `Plan`) → immutable approval → ImageServicing.Apply; Apply never reloads or replans.
 8. No repo-relative script paths in artifacts.

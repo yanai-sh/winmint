@@ -1,4 +1,5 @@
 using System.Text;
+using System.Xml.Linq;
 using WinMint.Orchestrator;
 using static WinMint.Tests.ImageServicingTestFakes;
 
@@ -171,6 +172,110 @@ public class WinPeApplyPlanTests
     }
 
     [Fact]
+    public void Plan_dma_on_skips_oobe_region_pane_via_oobeSystem_international_core()
+    {
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(ParseProfile());
+        Assert.True(result.IsOk);
+        string xml = result.Value.Unattend.Xml;
+        Assert.DoesNotContain("SkipMachineOOBE", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SkipUserOOBE", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("FirstLogonCommands", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("HideLocalAccountScreen", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("NetworkLocation", xml, StringComparison.Ordinal);
+
+        XNamespace ns = "urn:schemas-microsoft-com:unattend";
+        XDocument doc = XDocument.Parse(xml);
+        XElement? oobe = doc.Root!.Elements(ns + "settings")
+            .FirstOrDefault(e => (string?)e.Attribute("pass") == "oobeSystem");
+        Assert.NotNull(oobe);
+
+        XElement? intl = oobe.Elements(ns + "component")
+            .FirstOrDefault(c => (string?)c.Attribute("name") == "Microsoft-Windows-International-Core");
+        Assert.NotNull(intl);
+        Assert.Equal("en-IE", (string?)intl.Element(ns + "InputLocale"));
+        Assert.Equal("en-IE", (string?)intl.Element(ns + "SystemLocale"));
+        Assert.Equal("en-US", (string?)intl.Element(ns + "UILanguage"));
+        Assert.Equal("en-US", (string?)intl.Element(ns + "UILanguageFallback"));
+        Assert.Equal("en-IE", (string?)intl.Element(ns + "UserLocale"));
+
+        XElement? shell = oobe.Elements(ns + "component")
+            .FirstOrDefault(c => (string?)c.Attribute("name") == "Microsoft-Windows-Shell-Setup");
+        Assert.NotNull(shell);
+        Assert.Equal("GMT Standard Time", (string?)shell.Element(ns + "TimeZone"));
+        XElement? oobeFlags = shell.Element(ns + "OOBE");
+        Assert.NotNull(oobeFlags);
+        Assert.Equal("true", (string?)oobeFlags.Element(ns + "HideEULAPage"));
+        Assert.Equal("true", (string?)oobeFlags.Element(ns + "HideOEMRegistrationScreen"));
+        Assert.Equal("true", (string?)oobeFlags.Element(ns + "HideOnlineAccountScreens"));
+        Assert.Equal("3", (string?)oobeFlags.Element(ns + "ProtectYourPC"));
+        Assert.NotNull(shell.Element(ns + "UserAccounts")?.Element(ns + "LocalAccounts"));
+        Assert.NotNull(shell.Element(ns + "AutoLogon"));
+
+        XElement? specialize = doc.Root.Elements(ns + "settings")
+            .FirstOrDefault(e => (string?)e.Attribute("pass") == "specialize");
+        Assert.NotNull(specialize);
+        Assert.Null(
+            specialize.Elements(ns + "component")
+                .FirstOrDefault(c => (string?)c.Attribute("name") == "Microsoft-Windows-International-Core"));
+
+        XElement? deployment = specialize.Elements(ns + "component")
+            .FirstOrDefault(c => (string?)c.Attribute("name") == "Microsoft-Windows-Deployment");
+        Assert.NotNull(deployment);
+        string[] paths = [.. deployment.Descendants(ns + "Path").Select(p => (string?)p ?? "")];
+        Assert.Contains(
+            paths,
+            p => p.Contains(@"Control Panel\DeviceRegion", StringComparison.Ordinal)
+                && p.Contains(" /d 68 ", StringComparison.Ordinal));
+        Assert.Contains(
+            paths,
+            p => p.Contains(@"Control Panel\International\Geo", StringComparison.Ordinal)
+                && p.Contains(" /v Nation ", StringComparison.Ordinal)
+                && p.Contains(" /d 68 ", StringComparison.Ordinal));
+        Assert.Contains(
+            paths,
+            p => p.Contains(@"Control Panel\International\Geo", StringComparison.Ordinal)
+                && p.Contains(" /v Name ", StringComparison.Ordinal)
+                && p.Contains(" /d IE ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Plan_dma_off_answers_oobe_from_settle_locale_without_specialize()
+    {
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(ParseProfile(dmaEnabled: false));
+        Assert.True(result.IsOk);
+        string xml = result.Value.Unattend.Xml;
+        Assert.DoesNotContain("SkipMachineOOBE", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SkipUserOOBE", xml, StringComparison.Ordinal);
+
+        XNamespace ns = "urn:schemas-microsoft-com:unattend";
+        XDocument doc = XDocument.Parse(xml);
+        Assert.Null(
+            doc.Root!.Elements(ns + "settings")
+                .FirstOrDefault(e => (string?)e.Attribute("pass") == "specialize"));
+
+        XElement? oobe = doc.Root.Elements(ns + "settings")
+            .FirstOrDefault(e => (string?)e.Attribute("pass") == "oobeSystem");
+        Assert.NotNull(oobe);
+
+        XElement? intl = oobe.Elements(ns + "component")
+            .FirstOrDefault(c => (string?)c.Attribute("name") == "Microsoft-Windows-International-Core");
+        Assert.NotNull(intl);
+        Assert.Equal("en-GB", (string?)intl.Element(ns + "InputLocale"));
+        Assert.Equal("en-GB", (string?)intl.Element(ns + "SystemLocale"));
+        Assert.Equal("en-US", (string?)intl.Element(ns + "UILanguage"));
+        Assert.Equal("en-US", (string?)intl.Element(ns + "UILanguageFallback"));
+        Assert.Equal("en-GB", (string?)intl.Element(ns + "UserLocale"));
+
+        XElement? shell = oobe.Elements(ns + "component")
+            .FirstOrDefault(c => (string?)c.Attribute("name") == "Microsoft-Windows-Shell-Setup");
+        Assert.NotNull(shell);
+        Assert.Equal("GMT Standard Time", (string?)shell.Element(ns + "TimeZone"));
+        Assert.NotNull(shell.Element(ns + "OOBE")?.Element(ns + "HideEULAPage"));
+        Assert.NotNull(shell.Element(ns + "UserAccounts")?.Element(ns + "LocalAccounts"));
+        Assert.NotNull(shell.Element(ns + "AutoLogon"));
+    }
+
+    [Fact]
     public void Plan_emits_winpe_stages_only()
     {
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(ParseProfile());
@@ -179,7 +284,7 @@ public class WinPeApplyPlanTests
         Assert.Contains(ServicingOpcode.PatchBootWimApply, result.Value.Stages);
     }
 
-    private static Profile ParseProfile()
+    private static Profile ParseProfile(bool dmaEnabled = true)
     {
         Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
             {
@@ -190,7 +295,7 @@ public class WinPeApplyPlanTests
                 "password": "lab-only"
               },
               "dma": {
-                "enabled": true,
+                "enabled": {{(dmaEnabled ? "true" : "false")}},
                 "settle": {
                   "locale": "en-GB",
                   "geoId": 242,

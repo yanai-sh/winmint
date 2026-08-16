@@ -13,6 +13,12 @@ public static partial class BuildPlan
     public const int IrelandSetupGeoId = DmaInterop.IrelandGeoId;
     public const string IrelandSetupGeoName = DmaInterop.IrelandGeoName;
 
+    /// <summary>
+    /// Display language of the English Source ISO. <see cref="IrelandSetupLocale"/> is a locale, not an
+    /// installed MUI pack — <c>UILanguage=en-IE</c> logs "not installed" and OOBE can reseal to Recovery.
+    /// </summary>
+    public const string SourceUiLanguage = "en-US";
+
     /// <summary>Parse and validate a <c>winmint.profile/v1</c> UTF-8 document into a <see cref="Profile"/>.</summary>
     public static Result<Profile, IReadOnlyList<DocumentError>> TryParseProfile(ReadOnlySpan<byte> utf8Json)
     {
@@ -538,13 +544,20 @@ public static partial class BuildPlan
         // Official Unattend: show Network when false/omit; hide when true (Smoke headless). See BUILDPLAN.
         string hideWireless = profile.Account.RequireWifiDuringOobe ? "false" : "true";
         string specialize = BuildSpecializeXml(profile);
+        // OOBE answers always emit; DMA enabled only chooses Ireland vs dma.settle locales.
+        string oobeLocale = XmlEscape(profile.Dma.Enabled ? IrelandSetupLocale : profile.Dma.Settle.Locale ?? "");
+        string oobeIntl = BuildInternationalCoreXml(oobeLocale);
+        string timeZone = XmlEscape(profile.Dma.Settle.TimeZoneId ?? "");
+        string timeZoneXml = string.IsNullOrEmpty(timeZone) ? "" : $"<TimeZone>{timeZone}</TimeZone>";
 
         return $$"""
             <?xml version="1.0" encoding="utf-8"?>
             <unattend xmlns="urn:schemas-microsoft-com:unattend">
               {{specialize}}
               <settings pass="oobeSystem">
+                {{oobeIntl}}
                 <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+                  {{timeZoneXml}}
                   <OOBE>
                     <HideEULAPage>true</HideEULAPage>
                     <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
@@ -579,16 +592,21 @@ public static partial class BuildPlan
             """;
     }
 
+    private static string BuildInternationalCoreXml(string locale) =>
+        $$"""
+                <component name="Microsoft-Windows-International-Core" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+                  <InputLocale>{{locale}}</InputLocale>
+                  <SystemLocale>{{locale}}</SystemLocale>
+                  <UILanguage>{{SourceUiLanguage}}</UILanguage>
+                  <UILanguageFallback>{{SourceUiLanguage}}</UILanguageFallback>
+                  <UserLocale>{{locale}}</UserLocale>
+                </component>
+                """;
+
     private static string BuildSpecializeXml(Profile profile) =>
         profile.Dma.Enabled
             ? $$"""
               <settings pass="specialize">
-                <component name="Microsoft-Windows-International-Core" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-                  <InputLocale>{{IrelandSetupLocale}}</InputLocale>
-                  <SystemLocale>{{IrelandSetupLocale}}</SystemLocale>
-                  <UILanguage>{{IrelandSetupLocale}}</UILanguage>
-                  <UserLocale>{{IrelandSetupLocale}}</UserLocale>
-                </component>
                 <component name="Microsoft-Windows-Deployment" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
                   <RunSynchronous>
                     <RunSynchronousCommand wcm:action="add">
