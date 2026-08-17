@@ -1,4 +1,5 @@
 // GdiSplashPresenter
+GetConsoleWindow
 CreateWindowExW
 DestroyWindow
 ShowWindow

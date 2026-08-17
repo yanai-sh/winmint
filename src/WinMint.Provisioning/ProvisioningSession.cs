@@ -1,5 +1,6 @@
 namespace WinMint.Provisioning;
 
+using System.Security;
 using System.Text.Json.Serialization;
 using WinMint.Contracts;
 
@@ -602,6 +603,12 @@ public static partial class ProvisioningSession
             _ = env.DmaSetup.EnsureIreland();
             return null;
         }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or SecurityException)
+        {
+            // ponytail: OOBE still holds DeviceRegion during SetupComplete. Exit 1 reseals to Recovery.
+            // FirstLogon settle retries the latch; fail-closed stays for verify/null-port failures.
+            return null;
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return Fail("machineSetup.dmaSetupRegionFailed", ex.Message);
@@ -756,7 +763,7 @@ public static partial class ProvisioningSession
             }
         }
 
-        // SetupComplete runs as SYSTEM — only elevated window before FirstLogon medium-IL Shell.
+        // SetupComplete runs as SYSTEM before FirstLogon medium-IL Shell (console hidden).
         // ponytail: best-effort; winget register still fails closed if ACLs stay wrong.
         if (env.Appx is not null)
         {

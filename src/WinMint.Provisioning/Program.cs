@@ -1,9 +1,16 @@
+using System.Diagnostics;
+
 namespace WinMint.Provisioning;
 
 internal static class Program
 {
     private static async Task<int> Main(string[] args)
     {
+        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
+        {
+            NativeConsole.Hide();
+        }
+
         if (args is ["--machine-setup", ..])
         {
             return await RunMachineSetupAsync().ConfigureAwait(false);
@@ -17,6 +24,7 @@ internal static class Program
         string programData = ProgramDataRoot();
         Directory.CreateDirectory(programData);
         GuestFileLogger log = new(Path.Combine(programData, "machine-setup.log"));
+        TryDisableReservedStorage(log);
 
         try
         {
@@ -141,6 +149,36 @@ internal static class Program
 
     private static string ProgramDataRoot() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "WinMint");
+
+    private static void TryDisableReservedStorage(GuestFileLogger log)
+    {
+        try
+        {
+            string dism = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                "System32",
+                "dism.exe");
+            ProcessExitStatus status = Process.Run(
+                dism,
+                ["/Online", "/Set-ReservedStorageState", "/State:Disabled"],
+                silent: true,
+                timeout: TimeSpan.FromMinutes(2));
+            if (status.Canceled)
+            {
+                GuestLog.ReservedStorageDismFailed(log, "timed out");
+                return;
+            }
+
+            if (status.ExitCode != 0)
+            {
+                GuestLog.ReservedStorageDismNonZero(log, status.ExitCode);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            GuestLog.ReservedStorageDismFailed(log, ex.Message);
+        }
+    }
 
     private static Win32WinlogonRegistry Winlogon() =>
         OperatingSystem.IsWindows()

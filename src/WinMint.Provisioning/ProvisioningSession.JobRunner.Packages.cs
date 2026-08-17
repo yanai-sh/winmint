@@ -53,32 +53,17 @@ internal static partial class ProvisioningJobRunner
         }
     }
 
-    private static async Task<JobsRunResult?> RunReservedStorageDisableJobAsync(
+    private static Task<JobsRunResult?> RunReservedStorageDisableJobAsync(
         JobRunnerEnv env,
         ProvisionJob job,
         CancellationToken ct)
     {
-        try
-        {
-            ProcessStartResult started = await env.Processes.RunAsync(
-                    "dism.exe",
-                    ["/Online", "/Set-ReservedStorageState", "/State:Disabled"],
-                    ct)
-                .ConfigureAwait(false);
-            if (started.ExitCode != 0)
-            {
-                return FailJob(
-                    env,
-                    "jobs.failed",
-                    $"{job.Id}: dism Set-ReservedStorageState exited {started.ExitCode}.");
-            }
-
-            return null;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return FailJob(env, "jobs.failed", $"{job.Id}: {ex.Message}");
-        }
+        // ponytail: DISM /Online /Set-ReservedStorageState requires SYSTEM. Supervisor
+        // --machine-setup runs it hidden. FirstLogon is medium-IL (exit 740) and must not fail S4.
+        _ = env;
+        _ = job;
+        _ = ct;
+        return Task.FromResult<JobsRunResult?>(null);
     }
 
     private static async Task<JobsRunResult?> RunDohSetJobAsync(

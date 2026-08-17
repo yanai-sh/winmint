@@ -23,7 +23,7 @@ Cross-cuts (reference, not a frozen file set): [CONTRACTS](design/CONTRACTS.md) 
 3. Host Servicing: elevated `pwsh -File` kernels only (not in-process DISM from Cli/Wizard)
 4. Debloat: remove-list only; no Profile preset names in JSON; CDM not primary
 5. Residual self-erase after green Shell Complete; no dual `$OEM$` SetupScripts; tenure-only branded payload under `%WINDIR%\WinMint\`
-6. Machine setup failure → non-zero exit (fail closed)
+6. Machine setup failure → non-zero exit (fail closed). Unauthorized DeviceRegion during SetupComplete is not a machine-setup failure: OOBE still holds the key, and exit 1 reseals `IMAGE_STATE_COMPLETE` to the Recovery page, which Invoke-Smoke cannot drive.
 7. WIM: single-image commit; snapshot/assert Name/Arch/(Edition|Build) across export/commit
 8. Stay on `winmint.profile/v1` until a real breaking change forces `v2`
 9. Durable guest evidence/logs under `%ProgramData%\WinMint\`

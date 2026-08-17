@@ -194,6 +194,8 @@ internal static class ProvisioningSessionTestFakes
                 DmaSetupStep.AlreadyOkStep => DmaSetupRegionEnsureResult.AlreadyOk,
                 DmaSetupStep.RepairedStep => DmaSetupRegionEnsureResult.Repaired,
                 DmaSetupStep.ThrowStep t => throw new InvalidOperationException(t.Message),
+                DmaSetupStep.ThrowUnauthorizedStep =>
+                    throw new UnauthorizedAccessException("Attempted to perform an unauthorized operation."),
                 _ => throw new InvalidOperationException("Unknown DMA setup step."),
             };
         }
@@ -206,9 +208,13 @@ internal static class ProvisioningSessionTestFakes
 
             public sealed record ThrowStep(string Message) : DmaSetupStep;
 
+            public sealed record ThrowUnauthorizedStep : DmaSetupStep;
+
             public static DmaSetupStep AlreadyOk { get; } = new AlreadyOkStep();
 
             public static DmaSetupStep Repaired { get; } = new RepairedStep();
+
+            public static DmaSetupStep ThrowUnauthorized { get; } = new ThrowUnauthorizedStep();
 
             public static DmaSetupStep Throw(string message) => new ThrowStep(message);
         }

@@ -29,11 +29,12 @@ $cmdPath = Join-Path $env:TEMP ('winmint-diskguard-' + [guid]::NewGuid().ToStrin
 $harness = @('@echo off', 'setlocal EnableExtensions', 'set INSTALL=Z') +
     ($lines[$start..$stop] | ForEach-Object {
         if ($_ -eq 'set WORK=%TEMP%\winmint') { "set WORK=$work" }
-        elseif ($_ -match 'echo list disk \| diskpart') { 'rem pre-seeded' }
+        elseif ($_ -match 'list disk') { 'rem pre-seeded' }
+        elseif ($_ -match 'diskpart /s') { 'rem pre-seeded' }
         else { $_ } }) +
     @('echo RESULT TARGET=%TARGET% EXTRA=%EXTRA%', 'exit /b 0', '') +
     ($lines[$sub..($lines.Length - 1)] | ForEach-Object {
-        if ($_ -match '^\(echo select disk') { 'rem pre-seeded' } else { $_ } })
+        if ($_ -match 'diskpart /s') { 'rem pre-seeded' } else { $_ } })
 
 foreach ($danger in 'clean', 'Apply-Image', 'bcdboot', 'wpeutil', 'format') {
     if ($harness -match $danger) { throw "refusing to run: '$danger' leaked into the harness" }

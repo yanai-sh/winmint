@@ -30,7 +30,24 @@ public sealed class Win32DmaSetupRegion : IDmaSetupRegion
         bool alreadyOk = current == DmaInterop.IrelandGeoId;
         if (!alreadyOk)
         {
-            WriteDeviceRegion(DmaInterop.IrelandGeoId);
+            // ponytail: SetupComplete races OOBE still holding DeviceRegion (Unauthorized).
+            // 8×250ms lost on 25H2; 30×1s is still shorter than OOBE's hold. Machine-setup
+            // fail-opens Unauthorized so SetupComplete can exit 0; settle retries.
+            const int tries = 30;
+            for (int i = 0; ; i++)
+            {
+                try
+                {
+                    WriteDeviceRegion(DmaInterop.IrelandGeoId);
+                    break;
+                }
+                catch (Exception ex) when (
+                    ex is UnauthorizedAccessException or SecurityException
+                    && i < tries - 1)
+                {
+                    Thread.Sleep(1000);
+                }
+            }
         }
 
         // Seed .DEFAULT so first GetUserGeoID fallback cannot race before DeviceRegion is read.

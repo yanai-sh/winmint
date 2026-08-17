@@ -104,8 +104,8 @@ internal static class ProvisioningJobRunner
 
 ## Phase machine
 
-**MachineSetup:** StampAutologon → VerifyOrRestampShell (fail-closed) → WipeSecrets → EnsureWingetFrameworkAcls (best-effort) → RemoveOobeTempUser → `Complete` | `Failed`  
-(No splash, settle, or jobs.)
+**MachineSetup:** StampAutologon → VerifyOrRestampShell (fail-closed) → WipeSecrets → EnsureIreland (Unauthorized/SecurityException → continue; verify fail → `Failed`) → EnsureWingetFrameworkAcls (best-effort) → RemoveOobeTempUser → `Complete` | `Failed`  
+(No splash, settle, or jobs. Non-zero SetupComplete reseals OOBE to Recovery.)
 
 **Shell:** Bootstrap (checkpoint | stale→fail-open) → FirstPaint → Settling (final snapshot) → RunningJobs (hard settle green only) → Unlock → Complete + ResidueErase  
 ↘ hard DMA / job fail / timeout → FailedDwell → Unlock → Failed  

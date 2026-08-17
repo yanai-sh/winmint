@@ -82,4 +82,22 @@ public class StubJobsTests
         Assert.DoesNotContain("jobs.ok", evidence.Documents[0].Phases);
     }
 
+    [Fact]
+    public async Task Shell_reserved_storage_disable_completes_without_unelevated_dism()
+    {
+        RecordingProcessHost processes = new() { ExitCode = 740 };
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs: [new ProvisionJob("reservedStorage.disable", ProvisionJobKind.ReservedStorageDisable)]),
+            Env(processes, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal("jobs.ok", result.FinalStatus.Code);
+        Assert.DoesNotContain(
+            processes.Starts,
+            s => s.FileName.Contains("dism", StringComparison.OrdinalIgnoreCase));
+    }
+
 }

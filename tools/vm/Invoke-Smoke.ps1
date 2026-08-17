@@ -129,6 +129,7 @@ else {
     # Soft-guard: do not Remove-VM / rewrite out.iso while another Smoke wait loop is live.
     if ($existing) {
         Stop-VM -Name $VmName -TurnOff -Force -ErrorAction SilentlyContinue
+        Get-VMSnapshot -VMName $VmName -ErrorAction SilentlyContinue | Remove-VMSnapshot -ErrorAction SilentlyContinue
         Remove-VM -Name $VmName -Force
     }
     # Dynamic VHD may be renamed by Hyper-V; clear any smoke*.vhdx under Work.
@@ -142,6 +143,7 @@ else {
     # WinPE apply stamps LabConfig on the applied-image SYSTEM hive.
     New-VHD -Path $vhdx -SizeBytes 64GB -Dynamic | Out-Null
     New-VM -Name $VmName -Generation 2 -MemoryStartupBytes 4GB -VHDPath $vhdx | Out-Null
+    Set-VM -Name $VmName -AutomaticCheckpointsEnabled $false
     Set-VMFirmware -VMName $VmName -EnableSecureBoot Off
     Set-VMProcessor -VMName $VmName -Count 4
     # Guest NAT for winget/source (prior Smoke was offline-friendly stubs; Default Switch = Hyper-V NAT).
@@ -202,14 +204,12 @@ catch {
 }
 
 $expectNativePackageAudit = $false
-try {
-    if ($null -ne $profileDoc.packages -and $null -ne $profileDoc.packages.winget) {
-        $wingetIds = @($profileDoc.packages.winget | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+if ($null -ne $profileDoc -and $profileDoc.PSObject.Properties.Name -contains 'packages') {
+    $packages = $profileDoc.packages
+    if ($null -ne $packages -and $packages.PSObject.Properties.Name -contains 'winget') {
+        $wingetIds = @($packages.winget | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
         $expectNativePackageAudit = $wingetIds.Count -gt 0
     }
-}
-catch {
-    Write-Warning "Could not read Profile packages.winget: $($_.Exception.Message)"
 }
 
 # Keep-flag pins from Apply Materialize (stages.json) — not Profile debloat.* (CONTRACTS ownership).
@@ -241,18 +241,12 @@ function Get-PayloadJsonIds {
 
 $pinnedRemoveAppx = @(Get-PayloadJsonIds -StagesDoc $stagesDoc -Opcode 'RemoveProvisionedAppx' -PathParam 'packageFamilyNamesPath')
 $pinnedOnlineRemoveAppx = @()
-if ($pinnedRemoveAppx.Count -eq 0) {
-    $debloatDoc = $null
-    try {
-        $debloatDoc = Get-Content -LiteralPath $Profile -Raw -Encoding utf8 | ConvertFrom-Json
-    }
-    catch {
-        Write-Warning "Could not read Profile debloat for online pins: $($_.Exception.Message)"
-    }
-    if ($null -ne $debloatDoc.debloat -and $null -ne $debloatDoc.debloat.removeProvisionedAppx) {
-        $mode = [string]$debloatDoc.debloat.mode
+if ($pinnedRemoveAppx.Count -eq 0 -and $null -ne $profileDoc -and $profileDoc.PSObject.Properties.Name -contains 'debloat') {
+    $debloat = $profileDoc.debloat
+    if ($null -ne $debloat -and $debloat.PSObject.Properties.Name -contains 'removeProvisionedAppx') {
+        $mode = if ($debloat.PSObject.Properties.Name -contains 'mode') { [string]$debloat.mode } else { '' }
         if ([string]::IsNullOrWhiteSpace($mode) -or $mode -eq 'online') {
-            $pinnedOnlineRemoveAppx = @($debloatDoc.debloat.removeProvisionedAppx | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+            $pinnedOnlineRemoveAppx = @($debloat.removeProvisionedAppx | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
         }
     }
 }
@@ -286,8 +280,9 @@ function Test-GuestEvidenceReady {
         if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
         $session = New-PSSession @sessionParams
         try {
-            # Disk is booting Windows — prefer HDD and eject install ISO (avoid re-Setup).
+            # Disk is booting Windows — HDD first; eject DVD only after heartbeat (not mid-WinPE reboot).
             Prefer-DiskBoot
+            Dismount-InstallDvdWhenWindowsBoots
 
             $remote = Invoke-Command -Session $session -ScriptBlock {
                 $dir = Join-Path $env:ProgramData 'WinMint\evidence'
@@ -338,24 +333,70 @@ function Test-GuestEvidenceReady {
 }
 
 $script:DiskBootPreferred = $false
+$script:DvdEjected = $false
+function Test-SmokeVhdHasImage {
+    try {
+        $drive = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
+        if (-not $drive -or [string]::IsNullOrWhiteSpace($drive.Path)) { return $false }
+        # Dynamic VHD FileSize stays tiny until WinPE actually applies the WIM.
+        return ((Get-VHD -Path $drive.Path).FileSize -ge 1GB)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Test-GuestWindowsHeartbeat {
+    try {
+        $hb = Get-VMIntegrationService -VMName $VmName |
+            Where-Object { $_.Name -eq 'Heartbeat' } |
+            Select-Object -First 1
+        return [string]$hb.PrimaryStatusDescription -eq 'OK'
+    }
+    catch {
+        return $false
+    }
+}
+
 function Prefer-DiskBoot {
     if ($script:DiskBootPreferred) { return }
+    if (-not (Test-SmokeVhdHasImage)) {
+        Write-Host 'Setup reboot before disk has an image — keeping install DVD attached.'
+        return
+    }
     try {
         $hddDev = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
         $dvdDev = Get-VMDvdDrive -VMName $VmName
         if ($null -eq $hddDev) { return }
         if ($null -ne $dvdDev) {
             Set-VMFirmware -VMName $VmName -BootOrder $hddDev, $dvdDev
-            Set-VMDvdDrive -VMName $VmName -Path $null
         }
         else {
             Set-VMFirmware -VMName $VmName -BootOrder $hddDev
         }
         $script:DiskBootPreferred = $true
-        Write-Host 'Preferred HDD boot and ejected install DVD.'
+        # ponytail: ejecting here races WinPE wpeutil reboot → Boot Manager 0xc0000178 STATUS_NO_MEDIA.
+        Write-Host 'Preferred HDD boot (install DVD attached until Windows heartbeat).'
     }
     catch {
         Write-Warning "Could not prefer disk boot: $($_.Exception.Message)"
+    }
+}
+
+function Dismount-InstallDvdWhenWindowsBoots {
+    if ($script:DvdEjected) { return }
+    if (-not $script:DiskBootPreferred) { return }
+    if (-not (Test-GuestWindowsHeartbeat)) { return }
+    try {
+        $dvdDev = Get-VMDvdDrive -VMName $VmName
+        if ($null -ne $dvdDev -and -not [string]::IsNullOrWhiteSpace([string]$dvdDev.Path)) {
+            Set-VMDvdDrive -VMName $VmName -Path $null
+            Write-Host 'Ejected install DVD after Windows heartbeat.'
+        }
+        $script:DvdEjected = $true
+    }
+    catch {
+        Write-Warning "Could not eject install DVD: $($_.Exception.Message)"
     }
 }
 
@@ -389,10 +430,14 @@ while ([datetime]::UtcNow -lt $deadline) {
 
     $vm = Get-VM -Name $VmName
     # Setup reboots flip Running → Stopping → Off → Starting → Running; do not fail-closed.
-    # Prefer HDD+eject DVD on first setup reboot (not only at PS Direct) so efisys_noprompt
-    # cannot re-enter Setup against a half-installed disk.
+    # Eject DVD only after the VHD has an applied image so a WinPE reboot cannot leave an empty disk.
     switch ([string]$vm.State) {
-        'Running' { }
+        'Running' {
+            # HDD first before wpeutil reboot. Waiting for Stopping misses the flip and
+            # WinPE LaunchApply runs again (clean + apply) if DVD is still attached.
+            Prefer-DiskBoot
+            Dismount-InstallDvdWhenWindowsBoots
+        }
         'Starting' { Write-Host 'VM Starting (setup reboot)…' }
         'Stopping' {
             Write-Host 'VM Stopping (setup reboot)…'

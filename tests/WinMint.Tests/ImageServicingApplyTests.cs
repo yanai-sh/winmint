@@ -115,6 +115,12 @@ public class ImageServicingApplyTests
             string repoSetup = File.ReadAllText(
                 Path.Combine(TestRepo.Root, "payload", "scripts", "SetupComplete.cmd"));
             Assert.Equal(repoSetup, stagedSetup);
+            Assert.DoesNotContain("dism.exe", stagedSetup, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("wscript", stagedSetup, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("powershell", stagedSetup, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("start /min", stagedSetup, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Supervisor.exe", stagedSetup, StringComparison.Ordinal);
+            Assert.Contains("--machine-setup", stagedSetup, StringComparison.Ordinal);
             Assert.True(File.Exists(Path.Combine(work, "payload", "bundle.json")));
             Assert.True(File.Exists(Path.Combine(work, "payload", "Supervisor.exe")));
             string bundle = File.ReadAllText(Path.Combine(work, "payload", "bundle.json"));

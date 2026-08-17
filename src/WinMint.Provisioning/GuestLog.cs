@@ -54,4 +54,10 @@ internal static partial class GuestLog
 
     [LoggerMessage(EventId = 18, Level = LogLevel.Information, Message = "winget.acl: granted SYSTEM FullControl on {PackageDirectory}")]
     public static partial void WingetAclGranted(ILogger logger, string packageDirectory);
+
+    [LoggerMessage(EventId = 19, Level = LogLevel.Warning, Message = "reservedStorage.disable: DISM exited {ExitCode} (fail-open)")]
+    public static partial void ReservedStorageDismNonZero(ILogger logger, int exitCode);
+
+    [LoggerMessage(EventId = 20, Level = LogLevel.Warning, Message = "reservedStorage.disable: {Message} (fail-open)")]
+    public static partial void ReservedStorageDismFailed(ILogger logger, string message);
 }

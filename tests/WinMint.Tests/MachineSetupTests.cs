@@ -239,6 +239,25 @@ public class MachineSetupTests
     }
 
     [Fact]
+    public async Task MachineSetup_completes_when_device_region_write_is_unauthorized()
+    {
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        RecordingWipeSecrets secrets = new();
+        ScriptedDmaSetupRegion dmaSetup = new(ScriptedDmaSetupRegion.DmaSetupStep.ThrowUnauthorized);
+
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
+            MinimalBundle("winmint", "lab-only"),
+            Env(winlogon, secrets, dmaSetup: dmaSetup),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal("machineSetup.ok", result.FinalStatus.Code);
+        Assert.True(winlogon.AutoAdminLogon);
+        Assert.Equal(1, secrets.WipeCount);
+        Assert.Equal(1, dmaSetup.EnsureCalls);
+    }
+
+    [Fact]
     public async Task MachineSetup_fails_when_device_region_verify_fails()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };

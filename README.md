@@ -56,7 +56,7 @@ Optional: `-CacheRelease` / `-InstallRoot` keep a reusable toolkit under `%LOCAL
 <details>
 <summary>Host prerequisites</summary>
 
-Needs network once. Bootstrap installs PowerShell 7.6+ and [Just](https://github.com/casey/just#installation) via winget when missing. Building an ISO needs a Microsoft Source ISO, an administrator session, and several hours of offline image servicing. ImageServicing may keep **Prepared media** under `%ProgramData%\WinMint\Servicing\` so a later Apply on the same Source ISO skips extraction; there is no `--reuse-media` switch. At most one Apply runs on the Host at a time.
+Needs network once. Bootstrap installs GitHub MSI PowerShell 7.6+ (`PowerShell-*-win-arm64.msi` on ARM64 — not `winget Microsoft.PowerShell`, which is MSIX) and [Just](https://github.com/casey/just#installation) via winget when missing. Building an ISO needs a Microsoft Source ISO, an administrator session, and several hours of offline image servicing. ImageServicing may keep **Prepared media** under `%ProgramData%\WinMint\Servicing\` so a later Apply on the same Source ISO skips extraction; there is no `--reuse-media` switch. At most one Apply runs on the Host at a time.
 
 </details>
 

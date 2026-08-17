@@ -63,7 +63,10 @@ _Avoid_: conflating with Machine setup
 _Avoid_: jobs before hard settle; “metal jobs” (retired name)
 
 **DMA interop / settle** — **DMA is the EU Digital Markets Act, not Direct Memory Access.** Sticky Ireland setup region (`DeviceRegion` 68) during Setup; restore user visible region by **final snapshot**. Hard: locale/GeoID/TZ + DeviceRegion verify. Soft: location. Rationale: [ADR-003](docs/decisions/ADR-003-dma-interop.md).  
-_Avoid_: reading `Dma*` types as device-memory or Kernel DMA Protection; sticky intermediate failures as authoritative
+_Avoid_: reading `Dma*` types as device-memory or Kernel DMA Protection; sticky intermediate failures as authoritative; treating DMA enabled as whether OOBE is answered
+
+**OOBE answers** — Profile-derived replies that complete Windows setup screens so those screens never appear. Distinct from the DMA sticky setup region and from FirstLogon.  
+_Avoid_: SkipMachineOOBE; SkipUserOOBE; gating answers on DMA enabled; conflating with Machine setup or FirstLogon
 
 **Smoke** — Hyper-V plumbing acceptance (`Test` lane, Local+autoLogon, Pro).  
 _Avoid_: treating Smoke alone as Primary wipe confidence

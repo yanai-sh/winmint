@@ -391,7 +391,7 @@ This check is not part of default `just check` because it requires elevation, So
 Run:
 
 ```powershell
-just prepared-media-acceptance SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
+just prepared-media-acceptance "D:\isos\Win11_25H2_Arm64.iso"
 ```
 
 Expected before implementation: the current marker path lacks immutable-cache provenance and may expose residue. Expected after implementation: all assertions pass.
@@ -472,8 +472,8 @@ Before closing #111:
 
 ```powershell
 just check
-just prepared-media-acceptance SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
-just bench-prepared-media SOURCE_ISO="D:\isos\Win11_25H2_Arm64.iso"
+just prepared-media-acceptance "D:\isos\Win11_25H2_Arm64.iso"
+just bench-prepared-media "D:\isos\Win11_25H2_Arm64.iso"
 ```
 
 Record:
