@@ -142,7 +142,9 @@ else {
     # Gen2, Secure Boot off + no vTPM (Start-VM times out with vTPM on this host — SPLASH).
     # WinPE apply stamps LabConfig on the applied-image SYSTEM hive.
     New-VHD -Path $vhdx -SizeBytes 64GB -Dynamic | Out-Null
-    New-VM -Name $VmName -Generation 2 -MemoryStartupBytes 4GB -VHDPath $vhdx | Out-Null
+    New-VM -Name $VmName -Generation 2 -VHDPath $vhdx | Out-Null
+    # 8GB is apply/OOBE headroom; 4GB is only the Win11 floor. Not a #118 acceptance bar.
+    Set-VMMemory -VMName $VmName -DynamicMemoryEnabled $false -StartupBytes 8GB
     Set-VM -Name $VmName -AutomaticCheckpointsEnabled $false
     Set-VMFirmware -VMName $VmName -EnableSecureBoot Off
     Set-VMProcessor -VMName $VmName -Count 4

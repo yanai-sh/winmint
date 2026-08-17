@@ -27,6 +27,15 @@ if ($smoke -notmatch 'STATUS_NO_MEDIA') {
 if ($smoke -notmatch "Running' \{[^}]*Prefer-DiskBoot") {
     throw 'Prefer-DiskBoot must run while VM is Running (before wpeutil reboot), not only on Stopping'
 }
+if ($smoke -notmatch 'Set-VMMemory') {
+    throw 'Set-VMMemory required (static 8GB; do not balloon during DISM apply)'
+}
+if ($smoke -notmatch 'StartupBytes 8GB') {
+    throw 'Smoke VM startup RAM must be 8GB'
+}
+if ($smoke -match 'MemoryStartupBytes 4GB' -or $smoke -match 'StartupBytes 4GB') {
+    throw '4GB is only the Win11 floor, not the smoke guest size'
+}
 
 Write-Output 'Test-SmokeDiskBoot ok'
 exit 0
