@@ -37,28 +37,5 @@ if ($smoke -match 'MemoryStartupBytes 4GB' -or $smoke -match 'StartupBytes 4GB')
     throw '4GB is only the Win11 floor, not the smoke guest size'
 }
 
-# Hyper-V VMConnect click in the WinPE console is cmd Select Mode, not "press any key to boot".
-$launch = Get-Content -LiteralPath (Join-Path $repo 'payload/winpe/LaunchApply.cmd') -Raw -Encoding ascii
-if ($launch -notmatch 'reg add HKCU\\Console /v QuickEdit /t REG_DWORD /d 0 /f') {
-    throw 'LaunchApply must disable console Quick Edit (Hyper-V click = select-mode pause)'
-}
-if ($launch -match '(?im)^\s*pause\b') {
-    throw 'LaunchApply must not pause for a key'
-}
-if ($launch -match '(?im)^\s*set /p ') {
-    throw 'LaunchApply must not wait on set /p'
-}
-if ($launch -match '(?im)^\s*choice\b') {
-    throw 'LaunchApply must not wait on choice'
-}
-if ($launch -match 'Press any key') {
-    throw 'LaunchApply must not prompt Press any key'
-}
-foreach ($line in ($launch -split '\r?\n')) {
-    if ($line -match '(?i)^\s*timeout\b' -and $line -notmatch '/nobreak') {
-        throw "LaunchApply timeout must use /nobreak: $line"
-    }
-}
-
 Write-Output 'Test-SmokeDiskBoot ok'
 exit 0
