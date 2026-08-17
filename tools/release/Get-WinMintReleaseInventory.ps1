@@ -33,7 +33,8 @@ foreach ($rel in @(
         'bin\wizard\WinMint.Contracts.dll',
         'bin\wizard\WinMint.Orchestrator.dll',
         'artifacts\provisioning\WinMint.Provisioning.exe',
-        'artifacts\provisioning\Supervisor.exe'
+        'artifacts\provisioning\Supervisor.exe',
+        'artifacts\winpe-apply\WinMintApply.exe'
     )) { [void]$winmintPeAllow.Add($rel) }
 
 $generatedAfterSigning = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -57,7 +58,8 @@ foreach ($file in $files) {
     $relNorm = $rel.Replace('/', '\')
     $underHostPublish = $relNorm.StartsWith('bin\cli\', [StringComparison]::OrdinalIgnoreCase) -or
         $relNorm.StartsWith('bin\wizard\', [StringComparison]::OrdinalIgnoreCase) -or
-        $relNorm.StartsWith('artifacts\provisioning\', [StringComparison]::OrdinalIgnoreCase)
+        $relNorm.StartsWith('artifacts\provisioning\', [StringComparison]::OrdinalIgnoreCase) -or
+        $relNorm.StartsWith('artifacts\winpe-apply\', [StringComparison]::OrdinalIgnoreCase)
     $underScripts = $relNorm.StartsWith('servicing\', [StringComparison]::OrdinalIgnoreCase) -or
         $relNorm.StartsWith('tools\', [StringComparison]::OrdinalIgnoreCase) -or
         $relNorm.StartsWith('payload\', [StringComparison]::OrdinalIgnoreCase)

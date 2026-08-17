@@ -123,6 +123,7 @@ public class ImageServicingApplyTests
             Assert.Contains("--machine-setup", stagedSetup, StringComparison.Ordinal);
             Assert.True(File.Exists(Path.Combine(work, "payload", "bundle.json")));
             Assert.True(File.Exists(Path.Combine(work, "payload", "Supervisor.exe")));
+            Assert.True(File.Exists(Path.Combine(work, "payload", "WinMintApply.exe")));
             string bundle = File.ReadAllText(Path.Combine(work, "payload", "bundle.json"));
             Assert.Contains(ImageServicing.BundleSchemaVersion, bundle, StringComparison.Ordinal);
             Assert.Contains("username", bundle, StringComparison.Ordinal);

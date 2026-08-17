@@ -150,6 +150,24 @@ public static partial class ImageServicing
                 + "that no longer matches this tree. Run: just publish-provisioning");
     }
 
+    /// <returns>Null when the publish is current, absent, or unverifiable.</returns>
+    public static Failure? CheckWinPeApplyFreshness()
+    {
+        string? published = FindPublishedWinPeApply();
+        if (published is null)
+        {
+            return null;
+        }
+
+        string? staleSince = FindSourceNewerThan(published, ToolkitRoot.TryFind("src", "WinMint.WinPeApply"));
+        return staleSince is null
+            ? null
+            : new Failure(
+                "hostCompile.winPeApply.stale",
+                $"Published WinMintApply predates '{staleSince}'. An ISO built now would ship a WinPE helper "
+                + "that no longer matches this tree. Run: just publish-provisioning");
+    }
+
     /// <summary>
     /// First <c>*.cs</c> under <paramref name="sourceRoot"/> newer than the published binary.
     /// Null when source is absent — a packaged toolkit ships without <c>src/</c> and cannot check.

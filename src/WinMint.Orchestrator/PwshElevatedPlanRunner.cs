@@ -32,6 +32,11 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
             return Result.Fail<ElevatedRunOk, Failure>(staleSupervisor);
         }
 
+        if (ImageServicing.CheckWinPeApplyFreshness() is { } staleWinPeApply)
+        {
+            return Result.Fail<ElevatedRunOk, Failure>(staleWinPeApply);
+        }
+
         bool elevated = IsProcessElevated();
         ProcessStartInfo psi = new()
         {

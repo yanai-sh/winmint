@@ -12,6 +12,7 @@ $owned = @(
     'bin\wizard\WinMint.Wizard.exe'
     'artifacts\provisioning\WinMint.Provisioning.exe'
     'artifacts\provisioning\Supervisor.exe'
+    'artifacts\winpe-apply\WinMintApply.exe'
 )
 
 $found = 0

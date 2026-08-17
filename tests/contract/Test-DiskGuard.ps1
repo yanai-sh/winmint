@@ -97,7 +97,7 @@ if ($resolvedPayload -cne (Resolve-Path $payloadPath).Path) {
 }
 
 $shipped = $body
-$winpeshl = "[LaunchApps]`r`n%SYSTEMDRIVE%\Windows\System32\LaunchApply.cmd"
+$winpeshl = Get-WinPeApplyWinpeshlText
 # Never executed — written to a fake mount and read back. Media looked like this before commit 114adc7.
 $preGuard = @'
 @echo off
@@ -109,7 +109,7 @@ dism /English /Apply-Image /ImageFile:D:\sources\install.wim /Index:1 /ApplyDir:
 $mount = Join-Path $env:TEMP 'winmint-applycontract'
 
 function Assert-Contract {
-    param([string] $Name, [string] $Launch, [string] $Winpeshl, [string] $Expect)
+    param([string] $Name, [string] $Launch, [string] $Winpeshl, [string] $Expect, [switch] $NoHelper)
 
     Remove-Item -LiteralPath $mount -Recurse -Force -ErrorAction SilentlyContinue
     $system32 = Join-Path $mount 'Windows\System32'
@@ -122,6 +122,10 @@ function Assert-Contract {
     }
     if (-not [string]::IsNullOrEmpty($Winpeshl)) {
         Set-Content -LiteralPath (Join-Path $system32 'winpeshl.ini') -Value $Winpeshl -Encoding ascii
+    }
+    if (-not $NoHelper) {
+        # Contract checks presence, not AOT bytes — a stub is enough on a fake mount.
+        [IO.File]::WriteAllText((Join-Path $system32 'WinMintApply.exe'), 'MZ', [Text.Encoding]::ASCII)
     }
 
     $defects = Get-WinPeApplyDefect -MountDir $mount
@@ -140,7 +144,8 @@ try {
     Assert-Contract 'source edition index rejected' ($shipped -replace '/Index:1', '/Index:3') $winpeshl 'wrong /Index:3'
     Assert-Contract 'missing launcher rejected' '' $winpeshl 'LaunchApply.cmd missing'
     Assert-Contract 'missing winpeshl rejected' $shipped '' 'winpeshl.ini missing'
-    Assert-Contract 'winpeshl not launching apply rejected' $shipped '[LaunchApps]' 'must launch LaunchApply.cmd'
+    Assert-Contract 'missing helper rejected' $shipped $winpeshl 'WinMintApply.exe missing' -NoHelper
+    Assert-Contract 'LaunchApps cmd host rejected' $shipped "[LaunchApps]`r`n%SYSTEMDRIVE%\Windows\System32\LaunchApply.cmd" 'must [LaunchApp] AppPath WinMintApply.exe'
 }
 finally {
     Remove-Item -LiteralPath $mount -Recurse -Force -ErrorAction SilentlyContinue

@@ -15,6 +15,7 @@
     <ProjectReference Include="..\..\src\WinMint.Cli\WinMint.Cli.csproj" />
     <ProjectReference Include="..\..\src\WinMint.Orchestrator\WinMint.Orchestrator.csproj" />
     <ProjectReference Include="..\..\src\WinMint.Provisioning\WinMint.Provisioning.csproj" />
+    <ProjectReference Include="..\..\src\WinMint.WinPeApply\WinMint.WinPeApply.csproj" />
     <ProjectReference Include="..\..\src\WinMint.Wizard\WinMint.Wizard.csproj" />
   </ItemGroup>
   <ItemGroup>

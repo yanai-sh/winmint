@@ -89,10 +89,11 @@ if (Test-Path -LiteralPath $bootMarker) {
 $bootItem = Get-Item -LiteralPath $bootWim
 if ($bootItem.IsReadOnly) { $bootItem.IsReadOnly = $false }
 
-$winpeshl = @"
-[LaunchApps]
-%SYSTEMDRIVE%\Windows\System32\LaunchApply.cmd
-"@
+$helperSrc = Join-Path $workDirectory 'payload\WinMintApply.exe'
+if (-not (Test-Path -LiteralPath $helperSrc -PathType Leaf)) {
+    throw "WinMintApply.exe missing under $helperSrc. Run: just publish-provisioning"
+}
+$winpeshl = Get-WinPeApplyWinpeshlText
 
 foreach ($index in $indexes) {
     Write-Output "Patch boot.wim index $index (WinPE apply launcher)"
@@ -102,6 +103,8 @@ foreach ($index in $indexes) {
     try {
         Copy-Item -LiteralPath $launchApplyPayload `
             -Destination (Join-Path $bootMount 'Windows\System32\LaunchApply.cmd') -Force
+        Copy-Item -LiteralPath $helperSrc `
+            -Destination (Join-Path $bootMount 'Windows\System32\WinMintApply.exe') -Force
         Set-Content -LiteralPath (Join-Path $bootMount 'Windows\System32\winpeshl.ini') -Value $winpeshl -Encoding ascii
     }
     finally {

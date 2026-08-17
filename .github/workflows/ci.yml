@@ -53,7 +53,9 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File tests/contract/Invoke-ContractTests.ps1
 
-      # NativeAOT win-arm64 publish smoke for Provisioning Supervisor.
-      - name: AOT publish (Provisioning Supervisor)
+      # NativeAOT win-arm64 publish smoke for Provisioning Supervisor and WinPE apply helper.
+      - name: AOT publish (Supervisor + WinMintApply)
         shell: pwsh
-        run: dotnet publish src/WinMint.Provisioning/WinMint.Provisioning.csproj -c Release -o artifacts/provisioning
+        run: |
+          dotnet publish src/WinMint.WinPeApply/WinMint.WinPeApply.csproj -c Release -o artifacts/winpe-apply
+          dotnet publish src/WinMint.Provisioning/WinMint.Provisioning.csproj -c Release -o artifacts/provisioning

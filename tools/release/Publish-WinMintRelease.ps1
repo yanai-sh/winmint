@@ -33,6 +33,7 @@ New-Item -ItemType Directory -Force -Path $StageRoot | Out-Null
 $cliOut = Join-Path $StageRoot 'bin\cli'
 $wizOut = Join-Path $StageRoot 'bin\wizard'
 $provOut = Join-Path $StageRoot 'artifacts\provisioning'
+$winPeOut = Join-Path $StageRoot 'artifacts\winpe-apply'
 
 Write-Host "Publishing Cli ($Runtime, self-contained)…"
 dotnet publish (Join-Path $repoRoot 'src\WinMint.Cli\WinMint.Cli.csproj') `
@@ -56,6 +57,13 @@ dotnet publish (Join-Path $repoRoot 'src\WinMint.Provisioning\WinMint.Provisioni
     @publishProps `
     -o $provOut
 if ($LASTEXITCODE -ne 0) { throw "Provisioning publish failed: $LASTEXITCODE" }
+
+Write-Host 'Publishing WinPE apply helper (AOT WinExe)…'
+dotnet publish (Join-Path $repoRoot 'src\WinMint.WinPeApply\WinMint.WinPeApply.csproj') `
+    -c $Configuration `
+    @publishProps `
+    -o $winPeOut
+if ($LASTEXITCODE -ne 0) { throw "WinPeApply publish failed: $LASTEXITCODE" }
 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'Justfile') -Destination $StageRoot
 Copy-Item -LiteralPath (Join-Path $repoRoot 'config') -Destination (Join-Path $StageRoot 'config') -Recurse

@@ -20,7 +20,7 @@ Signing requests require manual SignPath approval. A signing job that cannot ver
 
 | Class | What | Trust |
 | --- | --- | --- |
-| WinMint PE | `WinMint.Cli.exe`, `WinMint.Wizard.exe`, `WinMint.Provisioning.exe` / `Supervisor.exe`, `WinMint.*.dll` built from this repo | Authenticode candidate |
+| WinMint PE | `WinMint.Cli.exe`, `WinMint.Wizard.exe`, `WinMint.Provisioning.exe` / `Supervisor.exe`, `WinMintApply.exe`, `WinMint.*.dll` built from this repo | Authenticode candidate |
 | WinMint PowerShell | repo-owned `.ps1` in the toolkit | Authenticode only if SignPath confirms `.ps1` |
 | Upstream PE | .NET runtime, Avalonia, WinGet-adjacent, ADK, NuGet | preserve bytes; never re-sign |
 | Hash-only | ZIP, `.sha256`, Output ISO, JSON, CMD, Profile, Justfile, docs | Digest only |

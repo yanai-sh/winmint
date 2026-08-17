@@ -6,13 +6,14 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $inventory = Join-Path $repo 'tools/release/Get-WinMintReleaseInventory.ps1'
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ('winmint-inv-' + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Force -Path (Join-Path $root 'bin\cli'), (Join-Path $root 'bin\wizard'), (Join-Path $root 'artifacts\provisioning'), (Join-Path $root 'servicing'), (Join-Path $root 'tools\apply') | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $root 'bin\cli'), (Join-Path $root 'bin\wizard'), (Join-Path $root 'artifacts\provisioning'), (Join-Path $root 'artifacts\winpe-apply'), (Join-Path $root 'servicing'), (Join-Path $root 'tools\apply') | Out-Null
 try {
     Set-Content -LiteralPath (Join-Path $root 'bin\cli\WinMint.Cli.exe') -Value 'cli' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'bin\cli\WinMint.Contracts.dll') -Value 'contracts' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'bin\cli\coreclr.dll') -Value 'runtime' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'bin\wizard\WinMint.Wizard.exe') -Value 'wiz' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'artifacts\provisioning\WinMint.Provisioning.exe') -Value 'prov' -Encoding ascii
+    Set-Content -LiteralPath (Join-Path $root 'artifacts\winpe-apply\WinMintApply.exe') -Value 'winpe' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'servicing\Mount-InstallWim.ps1') -Value '# kernel' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'Justfile') -Value 'check:' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'config.json') -Value '{}' -Encoding ascii
@@ -21,6 +22,8 @@ try {
     $byPath = @{}
     foreach ($f in $doc.files) { $byPath[$f.path] = $f }
     if ($byPath['bin/cli/WinMint.Cli.exe'].class -cne 'winmint-pe') { throw 'cli class' }
+    if ($byPath['artifacts/winpe-apply/WinMintApply.exe'].class -cne 'winmint-pe') { throw 'winpe helper class' }
+    if (-not $byPath['artifacts/winpe-apply/WinMintApply.exe'].signingCandidate) { throw 'winpe helper should be a signing candidate' }
     if (-not $byPath['bin/cli/WinMint.Cli.exe'].signingCandidate) { throw 'cli should be a signing candidate' }
     if ($byPath['bin/cli/coreclr.dll'].class -cne 'upstream-pe') { throw 'upstream class' }
     if ($byPath['bin/cli/coreclr.dll'].signingCandidate) { throw 'upstream must not be a signing candidate' }

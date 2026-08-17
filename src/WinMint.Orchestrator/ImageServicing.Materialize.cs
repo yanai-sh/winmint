@@ -125,6 +125,12 @@ public static partial class ImageServicing
             return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(supervisor.Error);
         }
 
+        Result<string, Failure> winPeApply = StageWinPeApplyHelper(payloadDir);
+        if (!winPeApply.IsOk)
+        {
+            return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(winPeApply.Error);
+        }
+
         Result<string, Failure> shellSkel = StageShellSkel(payloadDir);
         if (!shellSkel.IsOk)
         {
@@ -340,6 +346,22 @@ public static partial class ImageServicing
         return Result.Ok<string, Failure>(dest);
     }
 
+    private static Result<string, Failure> StageWinPeApplyHelper(string payloadDir)
+    {
+        string dest = Path.Combine(payloadDir, "WinMintApply.exe");
+        string? published = FindPublishedWinPeApply();
+        if (published is null)
+        {
+            return Result.Fail<string, Failure>(
+                new Failure(
+                    "servicing.winPeApply.missing",
+                    "Published WinMintApply not found. Run: just publish-provisioning"));
+        }
+
+        File.Copy(published, dest, overwrite: true);
+        return Result.Ok<string, Failure>(dest);
+    }
+
     private static Result<string, Failure> StageShellSkel(string payloadDir)
     {
         string? source = FindShellSkelDirectory();
@@ -380,6 +402,13 @@ public static partial class ImageServicing
     {
         string sideBySide = Path.Combine(AppContext.BaseDirectory, "WinMint.Provisioning.exe");
         return ToolkitRoot.TryFind("artifacts", "provisioning", "WinMint.Provisioning.exe")
+            ?? (File.Exists(sideBySide) ? sideBySide : null);
+    }
+
+    private static string? FindPublishedWinPeApply()
+    {
+        string sideBySide = Path.Combine(AppContext.BaseDirectory, "WinMintApply.exe");
+        return ToolkitRoot.TryFind("artifacts", "winpe-apply", "WinMintApply.exe")
             ?? (File.Exists(sideBySide) ? sideBySide : null);
     }
 }

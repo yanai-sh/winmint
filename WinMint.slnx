@@ -4,6 +4,7 @@
     <Project Path="src/WinMint.Contracts/WinMint.Contracts.csproj" />
     <Project Path="src/WinMint.Orchestrator/WinMint.Orchestrator.csproj" />
     <Project Path="src/WinMint.Provisioning/WinMint.Provisioning.csproj" />
+    <Project Path="src/WinMint.WinPeApply/WinMint.WinPeApply.csproj" />
     <Project Path="src/WinMint.Wizard/WinMint.Wizard.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -14,7 +14,13 @@ function Get-WinPeApplyPayloadPath {
 }
 
 function Get-WinPeApplyMarkerText {
-    return 'apply+wimIndex=1'
+    return 'apply+wimIndex=1+winpeshlLaunchApp'
+}
+
+function Get-WinPeApplyWinpeshlText {
+    # Learn: [LaunchApp] AppPath is a Windows-subsystem exe with no arguments.
+    # [LaunchApps] + a .cmd is how v2 painted X:\windows\system32\cmd.exe (#119).
+    return "[LaunchApp]`r`nAppPath = %SYSTEMDRIVE%\Windows\System32\WinMintApply.exe`r`n"
 }
 
 function Get-WinPeApplyDefect {
@@ -70,8 +76,13 @@ function Get-WinPeApplyDefect {
     if (-not (Test-Path -LiteralPath $winpeshl)) {
         $defects += 'winpeshl.ini missing inside boot.wim'
     }
-    elseif ((Get-Content -LiteralPath $winpeshl -Raw -Encoding ascii) -notmatch 'LaunchApply\.cmd') {
-        $defects += 'winpeshl.ini must launch LaunchApply.cmd'
+    elseif ((Get-Content -LiteralPath $winpeshl -Raw -Encoding ascii) -notmatch '(?is)\[LaunchApp\].*AppPath\s*=\s*%SYSTEMDRIVE%\\Windows\\System32\\WinMintApply\.exe') {
+        $defects += 'winpeshl.ini must [LaunchApp] AppPath WinMintApply.exe'
+    }
+
+    $helper = Join-Path $MountDir 'Windows\System32\WinMintApply.exe'
+    if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) {
+        $defects += 'WinMintApply.exe missing inside boot.wim'
     }
 
     return , ([string[]] $defects)

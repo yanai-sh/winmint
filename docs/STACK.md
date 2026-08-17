@@ -19,7 +19,7 @@ No guest **pwsh product runtime**. Inbox `powershell.exe` for Scoop bootstrap / 
 | SDK | Rolling .NET 11 preview (`global.json` floor + `latestFeature` + `allowPrerelease`) |
 | LangVersion | `preview` |
 | Runtime Async | Opt in with `<Features>runtime-async=on</Features>` (Learn .NET 11; NativeAOT-supported) |
-| AOT | `PublishAot` on Provisioning (Release); `IsAotCompatible` graph-wide |
+| AOT | `PublishAot` on Provisioning and WinPeApply (Release); `IsAotCompatible` graph-wide |
 | Build | Deterministic; `ContinuousIntegrationBuild` under GITHUB_ACTIONS |
 | Host / CI | **ARM64** first (`windows-11-arm`) |
 
@@ -31,9 +31,10 @@ No guest **pwsh product runtime**. Inbox `powershell.exe` for Scoop bootstrap / 
 | `src/WinMint.Contracts` | Tiny shared wire enums + `DmaSettleTarget` + guest bundle DTOs |
 | `src/WinMint.Orchestrator` | BuildPlan; drives Servicing |
 | `src/WinMint.Provisioning` | ProvisioningSession (AOT Supervisor) |
+| `src/WinMint.WinPeApply` | WinPE apply host (`WinMintApply.exe`, AOT WinExe; winpeshl `[LaunchApp]`) |
 | `src/WinMint.Wizard` | Avalonia BuildPlan front end |
 | `servicing/` | ImageServicing `pwsh -File` adapters |
-| `payload/winpe/` | Authoritative WinPE apply launcher (`LaunchApply.cmd`; byte-copied into every `boot.wim` index) |
+| `payload/winpe/` | Authoritative WinPE apply script (`LaunchApply.cmd`; byte-copied into every `boot.wim` index; launched hidden by `WinMintApply.exe`) |
 | `payload/scripts/` | `SetupComplete.cmd` |
 | `tools/` | Smoke / apply harness |
 

@@ -93,8 +93,11 @@ public class WinPeApplyPlanTests
         string payload = File.ReadAllText(FindRepoFile("payload", "winpe", "LaunchApply.cmd"));
         Assert.Contains("$bootWim = Join-Path $mediaDir", script, StringComparison.Ordinal);
         Assert.Contains("Get-WinPeApplyPayloadPath", script, StringComparison.Ordinal);
+        Assert.Contains("Get-WinPeApplyWinpeshlText", script, StringComparison.Ordinal);
         Assert.Contains("Copy-Item -LiteralPath $launchApplyPayload", script, StringComparison.Ordinal);
+        Assert.Contains("WinMintApply.exe", script, StringComparison.Ordinal);
         Assert.DoesNotContain("$launchApply = @\"", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("[LaunchApps]", script, StringComparison.Ordinal);
         Assert.DoesNotContain("$applyWimIndex", script, StringComparison.Ordinal);
         Assert.Contains("/Index:1", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("/Index:$wimIndex", script, StringComparison.Ordinal);
