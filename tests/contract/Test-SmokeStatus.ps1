@@ -21,5 +21,24 @@ Assert-Eq (Resolve-SmokePhase -HostStage wait -VmState Running -VhdFileSizeBytes
 Assert-Eq (Resolve-SmokePhase -HostStage wait -VmState Running -VhdFileSizeBytes 1GB -HeartbeatOk) guest-up 'heartbeat wins VHD'
 Assert-Eq (Resolve-SmokePhase -HostStage wait -VmState Running -HeartbeatOk -EvidenceReady) guest-up 'evidence ready still guest-up until HostStage assert'
 
+$tmp = Join-Path ([IO.Path]::GetTempPath()) ('smoke-status-' + [guid]::NewGuid().ToString('N'))
+$statusPath = Join-Path $tmp 'smoke-status.json'
+try {
+    Write-SmokeStatus -Path $statusPath -Phase apply -VmName 'winmint-smoke' `
+        -StallMinutesLeft 45 -WallMinutesLeft 180 -LastHostLine 'Applying'
+    $doc = Get-Content -LiteralPath $statusPath -Raw | ConvertFrom-Json
+    Assert-Eq $doc.schemaVersion 'winmint.smoke.status/v1' 'schema'
+    Assert-Eq $doc.phase 'apply' 'written phase'
+    Assert-Eq $doc.vmName 'winmint-smoke' 'vm name'
+    if ($null -eq $doc.updatedAt) { throw 'updatedAt missing' }
+
+    $blocked = Join-Path $tmp 'blocked'
+    Set-Content -LiteralPath $blocked -Value 'not-a-dir' -Encoding utf8
+    Write-SmokeStatus -Path (Join-Path $blocked 'smoke-status.json') -Phase failed `
+        -VmName 'winmint-smoke' -StallMinutesLeft 0 -WallMinutesLeft 0 -LastHostLine 'fail'
+} finally {
+    Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Output 'Test-SmokeStatus ok'
 exit 0
