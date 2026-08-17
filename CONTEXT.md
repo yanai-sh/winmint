@@ -68,8 +68,8 @@ _Avoid_: reading `Dma*` types as device-memory or Kernel DMA Protection; sticky 
 **OOBE answers** — Profile-derived replies that complete Windows setup screens so those screens never appear. Distinct from the DMA sticky setup region and from FirstLogon.  
 _Avoid_: SkipMachineOOBE; SkipUserOOBE; gating answers on DMA enabled; conflating with Machine setup or FirstLogon
 
-**Smoke** — Hyper-V plumbing acceptance (`Test` lane, Local+autoLogon, Pro).  
-_Avoid_: treating Smoke alone as Primary wipe confidence
+**Smoke** — Hyper-V plumbing acceptance (`Test` lane, Local+autoLogon, Pro). Headless by default.  
+_Avoid_: treating Smoke alone as Primary wipe confidence; treating Hyper-V Connect as the product UI; calling a host status file Evidence
 
 **Host Apply (S5)** — Elevated Apply run on the build host, then assert the workdir evidence (`just host-apply`, `tools/apply/`). No Hyper-V and no hardware install — the destructive install is Primary, and it is manual.  
 _Avoid_: “metal” (retired name — it never touched hardware); treating a Test-lane Host Apply as wipe media
@@ -104,7 +104,10 @@ _Avoid_: “host” for a UI shell or a process that owns a window
 Short words that carry weight in type names. They are kept because no generic alternative says as much — but only if they mean one thing.
 
 **Evidence** — JSON WinMint emits so a harness can assert what happened (`IEvidenceSink`, `evidence.json`, S4/S5 bars). Never read back to decide the next phase.  
-_Avoid_: calling Prepared-media publication Evidence; reading Evidence to decide a Prepared-media hit
+_Avoid_: calling Prepared-media publication Evidence; reading Evidence to decide a Prepared-media hit; calling Smoke status Evidence
+
+**Smoke status** — Host-written `smoke-status.json` projection of an S4 wait loop so a human or agent can watch without being the waiter. Watch-only; the harness must not read it to decide the next phase.  
+_Avoid_: dashboard; monitor UI; Splash (guest); Evidence; treating VMConnect as required for green
 
 **Prepared-media audit** — typed `prepared-media.json` ImageServicing merges into `evidence.json` after Apply. Not publication, not a control-plane input, not Evidence the harness reads to decide the next phase.  
 _Avoid_: treating the audit sidecar as a HostCompile input; re-hashing Output ISO in C# when `logs/digests.json` already has the digest
