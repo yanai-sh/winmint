@@ -34,8 +34,14 @@ try {
 
     $blocked = Join-Path $tmp 'blocked'
     Set-Content -LiteralPath $blocked -Value 'not-a-dir' -Encoding utf8
-    Write-SmokeStatus -Path (Join-Path $blocked 'smoke-status.json') -Phase failed `
-        -VmName 'winmint-smoke' -StallMinutesLeft 0 -WallMinutesLeft 0 -LastHostLine 'fail'
+    try {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        Write-SmokeStatus -Path (Join-Path $blocked 'smoke-status.json') -Phase failed `
+            -VmName 'winmint-smoke' -StallMinutesLeft 0 -WallMinutesLeft 0 -LastHostLine 'fail'
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
 } finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }

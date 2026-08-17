@@ -39,7 +39,7 @@ function Write-SmokeStatus {
     )
     try {
         $dir = Split-Path -Parent $Path
-        if ($dir) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        if ($dir) { New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop | Out-Null }
         $doc = [ordered]@{
             schemaVersion    = 'winmint.smoke.status/v1'
             updatedAt        = [datetime]::UtcNow.ToString('o')
@@ -54,7 +54,7 @@ function Write-SmokeStatus {
             lastHostLine     = $LastHostLine
             outputIso        = $OutputIso
         }
-        ($doc | ConvertTo-Json -Compress) | Set-Content -LiteralPath $Path -Encoding utf8
+        ($doc | ConvertTo-Json -Compress) | Set-Content -LiteralPath $Path -Encoding utf8 -ErrorAction Stop
     }
     catch {
         Write-Warning "Could not write Smoke status: $($_.Exception.Message)"
