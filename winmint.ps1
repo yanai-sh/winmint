@@ -87,12 +87,54 @@ try {
         return ($v.Major -gt 7) -or ($v.Major -eq 7 -and $v.Minor -ge 6)
     }
 
+    function Get-WinMintHostPwshMsiRid {
+        # W6432 is the native host when this process is emulated (not PROCESSOR_ARCHITECTURE alone).
+        $wow = $env:PROCESSOR_ARCHITEW6432
+        $pa = $env:PROCESSOR_ARCHITECTURE
+        if ($wow -eq 'ARM64' -or $pa -eq 'ARM64') { return 'win-arm64' }
+        if ($wow -eq 'AMD64' -or $pa -eq 'AMD64') { return 'win-x64' }
+        throw ('Unsupported host architecture for GitHub pwsh MSI (PROCESSOR_ARCHITECTURE={0} PROCESSOR_ARCHITEW6432={1}).' -f $pa, $wow)
+    }
+
+    function Test-WinMintServicingPwsh {
+        Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe')
+    }
+
+    function Install-WinMintServicingPwsh {
+        $rid = Get-WinMintHostPwshMsiRid
+        $msiName = 'PowerShell-*-{0}.msi' -f $rid
+        Set-WinMintBootstrapOperation -Operation 'Installing GitHub pwsh MSI.' -FailureKind 'Runtime' -Recovery 'Download PowerShell-*-win-arm64.msi (or win-x64) from https://github.com/PowerShell/PowerShell/releases/latest. winget Microsoft.PowerShell is MSIX and cannot run DISM. msiexec, then retry from Program Files\PowerShell\7\pwsh.exe.'
+        Write-WinMintBootstrapLog 'winget Microsoft.PowerShell is MSIX; DISM needs the GitHub MSI.'
+        $apiBase = $ReleaseApiRoot.TrimEnd('/')
+        $psUri = $apiBase + '/repos/PowerShell/PowerShell/releases/latest'
+        $psRelease = Invoke-RestMethod -Uri $psUri -Headers @{
+            'Accept'     = 'application/vnd.github+json'
+            'User-Agent' = 'WinMint-Bootstrap'
+        }
+        $asset = @($psRelease.assets) | Where-Object { $_.name -like $msiName } | Select-Object -First 1
+        if (-not $asset) {
+            throw ('GitHub PowerShell release {0} has no {1}.' -f $psRelease.tag_name, $msiName)
+        }
+        $msiPath = Join-Path $env:TEMP $asset.name
+        Write-WinMintBootstrapLog ('Downloading {0}.' -f $asset.name)
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msiPath -Headers @{ 'User-Agent' = 'WinMint-Bootstrap' } -UseBasicParsing
+        $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', $msiPath, '/qn', 'ADD_PATH=1') -Wait -PassThru
+        if ($p.ExitCode -ne 0) {
+            throw ('msiexec exited {0} installing {1}.' -f $p.ExitCode, $asset.name)
+        }
+        if (-not (Test-WinMintServicingPwsh)) {
+            throw 'GitHub pwsh MSI installed but Program Files\PowerShell\7\pwsh.exe is missing.'
+        }
+        Write-WinMintBootstrapLog 'Installed servicing pwsh under Program Files\PowerShell\7.' 'OK'
+    }
+
+    if (-not (Test-WinMintServicingPwsh)) {
+        Install-WinMintServicingPwsh
+    }
+
     if (-not (Test-WinMintPwshVersion)) {
-        Set-WinMintBootstrapOperation -Operation 'Ensuring PowerShell 7.6+.' -FailureKind 'Runtime' `
-            -Recovery 'Install PowerShell 7.6+ (winget install Microsoft.PowerShell), then re-run irm https://winmint.yanai.sh | iex in pwsh.'
-        Write-WinMintBootstrapLog 'PowerShell 7.6.0+ is required. Installing PowerShell 7.6.0+ via WinGet…'
-        & winget install --id Microsoft.PowerShell -e --accept-package-agreements --accept-source-agreements
-        throw 'Relaunch this command from pwsh 7.6+ after the PowerShell install finishes.'
+        Set-WinMintBootstrapOperation -Operation 'Ensuring PowerShell 7.6+.' -FailureKind 'Runtime' -Recovery 'Relaunch irm https://winmint.yanai.sh | iex from Program Files\PowerShell\7\pwsh.exe (GitHub MSI, not winget MSIX).'
+        throw 'Relaunch this command from pwsh 7.6+ after the PowerShell MSI install finishes.'
     }
 
     function Test-WinMintJust {

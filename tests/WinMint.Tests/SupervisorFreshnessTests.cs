@@ -29,6 +29,16 @@ public class SupervisorFreshnessTests : IDisposable
     }
 
     [Fact]
+    public void Source_mtime_in_the_future_is_clock_skew_not_stale()
+    {
+        DateTime now = DateTime.UtcNow;
+        string exe = Publish(at: now.AddMinutes(-5));
+        _ = Source("Program.cs", at: now.AddHours(2));
+
+        Assert.Null(ImageServicing.FindSourceNewerThan(exe, SourceRoot));
+    }
+
+    [Fact]
     public void Build_output_is_not_mistaken_for_source()
     {
         string exe = Publish(at: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));

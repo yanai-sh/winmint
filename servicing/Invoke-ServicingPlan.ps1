@@ -57,6 +57,9 @@ function Invoke-FinalizerFileRemoval {
     )
 
     if (Test-Path -LiteralPath $Path) {
+        if ((Get-Item -LiteralPath $Path) -is [System.IO.DirectoryInfo]) {
+            throw "Cannot remove directory as file: $Path"
+        }
         Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
     }
 }

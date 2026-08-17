@@ -18,12 +18,13 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
                 new Failure("servicing.plan.missing", "servicing/Invoke-ServicingPlan.ps1 not found."));
         }
 
-        if (IsStoreMsixPwsh(ResolvePwshPath()))
+        string? pwshPath = ResolvePwshPath();
+        if (pwshPath is null || IsStoreMsixPwsh(pwshPath))
         {
             return Result.Fail<ElevatedRunOk, Failure>(
                 new Failure(
                     "servicing.pwsh.storeMsix",
-                    "Host PowerShell is Microsoft Store MSIX; DISM/AppX offline servicing requires WinPS 5.1 or non-Store pwsh (install from GitHub)."));
+                    "Host pwsh is WindowsApps MSIX (winget Microsoft.PowerShell defaults to msix). DISM needs GitHub PowerShell-*-win-arm64.msi (or win-x64) under Program Files\\PowerShell\\7."));
         }
 
         if (ImageServicing.CheckSupervisorFreshness() is { } staleSupervisor)
@@ -34,7 +35,7 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         bool elevated = IsProcessElevated();
         ProcessStartInfo psi = new()
         {
-            FileName = "pwsh",
+            FileName = pwshPath,
             ArgumentList =
             {
                 "-NoProfile",
@@ -154,29 +155,47 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         }
 
         string path = processPath.Replace('/', '\\');
-        return path.Contains(@"\WindowsApps\Microsoft.PowerShell", StringComparison.OrdinalIgnoreCase)
-            || path.Contains(@"\WindowsApps\Microsoft.PowerShellPreview", StringComparison.OrdinalIgnoreCase);
+        // Packaged install (GitHub MSIX or Store) and the WindowsApps execution alias both run DISM as MSIX.
+        return path.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static string? FirstNonStorePwsh(params string[] existingPaths)
+    {
+        foreach (string path in existingPaths)
+        {
+            if (!string.IsNullOrWhiteSpace(path) && !IsStoreMsixPwsh(path))
+            {
+                return path;
+            }
+        }
+
+        return null;
     }
 
     internal static string? ResolvePwshPath()
     {
         string fileName = OperatingSystem.IsWindows() ? "pwsh.exe" : "pwsh";
+        List<string> candidates = [];
         string? pathEnv = Environment.GetEnvironmentVariable("PATH");
-        if (pathEnv is null)
+        if (pathEnv is not null)
         {
-            return null;
-        }
-
-        foreach (string dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            string candidate = Path.Combine(dir.Trim(), fileName);
-            if (File.Exists(candidate))
+            foreach (string dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
             {
-                return candidate;
+                candidates.Add(Path.Combine(dir.Trim(), fileName));
             }
         }
 
-        return null;
+        if (OperatingSystem.IsWindows())
+        {
+            candidates.Add(Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "PowerShell",
+                "7",
+                fileName));
+        }
+
+        IEnumerable<string> existing = candidates.Where(File.Exists);
+        return FirstNonStorePwsh([.. existing]);
     }
 
     private static bool IsProcessElevated()

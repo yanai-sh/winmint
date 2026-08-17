@@ -162,13 +162,19 @@ public static partial class ImageServicing
         }
 
         // ponytail: mtime, not content hash — a clock skew or a no-op touch gives a false "stale".
-        // That errs toward an extra publish; upgrade to hashing inputs only if that becomes noise.
+        // Future source mtimes (clock jumped backward) are skew, not "edited after this publish".
+        // Hash inputs only if that remaining noise (no-op touch in the past) becomes a problem.
         DateTime published = File.GetLastWriteTimeUtc(publishedExe);
+        DateTime now = DateTime.UtcNow;
         return Directory
             .EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
             .Where(static file =>
                 !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                 && !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .FirstOrDefault(file => File.GetLastWriteTimeUtc(file) > published);
+            .FirstOrDefault(file =>
+            {
+                DateTime source = File.GetLastWriteTimeUtc(file);
+                return source <= now && source > published;
+            });
     }
 }
