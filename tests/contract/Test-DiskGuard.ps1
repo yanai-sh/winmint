@@ -136,6 +136,7 @@ try {
     Assert-Contract 'byte drift rejected' ($shipped + 'rem drift') $winpeshl 'bytes differ from authoritative payload'
     # The drift that mattered: pre-guard media satisfies /Index:1 and would erase disk 0 unattended.
     Assert-Contract 'pre-guard media rejected' $preGuard $winpeshl 'predates the target-disk guard'
+    Assert-Contract 'pre-quickedit media rejected' ($shipped.Replace('reg add HKCU\Console /v QuickEdit /t REG_DWORD /d 0 /f >nul', '')) $winpeshl 'Quick Edit'
     Assert-Contract 'source edition index rejected' ($shipped -replace '/Index:1', '/Index:3') $winpeshl 'wrong /Index:3'
     Assert-Contract 'missing launcher rejected' '' $winpeshl 'LaunchApply.cmd missing'
     Assert-Contract 'missing winpeshl rejected' $shipped '' 'winpeshl.ini missing'

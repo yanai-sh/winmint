@@ -60,6 +60,11 @@ function Get-WinPeApplyDefect {
         if ($body -notmatch 'winmint_pick') {
             $defects += 'LaunchApply.cmd predates the target-disk guard (no winmint_pick): it would erase disk 0'
         }
+        # HKCU\Console\QuickEdit is read when the console is created. A Hyper-V click in Select Mode
+        # pauses DISM until another click/Enter; media without this line still has that stall.
+        if ($body -notmatch 'reg add HKCU\\Console /v QuickEdit /t REG_DWORD /d 0 /f') {
+            $defects += 'LaunchApply.cmd must disable console Quick Edit (Hyper-V click pauses DISM)'
+        }
     }
 
     if (-not (Test-Path -LiteralPath $winpeshl)) {

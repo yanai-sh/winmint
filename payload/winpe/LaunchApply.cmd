@@ -1,5 +1,13 @@
 @echo off
 setlocal EnableExtensions
+rem Hyper-V VMConnect click enters cmd Select Mode (Quick Edit) and pauses DISM until another click/Enter.
+reg add HKCU\Console /v QuickEdit /t REG_DWORD /d 0 /f >nul
+rem ponytail: respawn so the apply console is created after QuickEdit=0; SetConsoleMode / #119 if the extra window matters
+if not defined WINMINT_QE (
+  set WINMINT_QE=1
+  start "WinMint" /wait /d "%~dp0" "%ComSpec%" /c "%~f0" %*
+  exit /b %ERRORLEVEL%
+)
 echo WinMint: initializing Windows PE...
 call wpeinit
 set "PATH=%SystemRoot%\System32;%PATH%"
