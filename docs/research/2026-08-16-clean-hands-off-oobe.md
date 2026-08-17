@@ -13,7 +13,7 @@
 - **Shell replacement only after OOBE.** Winlogon Shell = Supervisor then `explorer.exe`. Microsoft: custom shell before OOBE is unsupported (image not deployable; OOBE UI is launched via Explorer). v1: Shell while `OobeInProgress` → Recovery / soft-BSOD.
 - **First paint is Supervisor splash, not OEM OOBE.xml.** Inbox Direct2D/GDI. No third-party OOBE skins, no `Oobe.xml` registration pages, no Ngen/unattend theater.
 - **SetupComplete must exit 0** unless machine-setup truly failed. Unauthorized `DeviceRegion` during SetupComplete is not a failure (OOBE still holds the key). Non-zero empirically reseals to Recovery even though Learn says Setup does not check the exit code.
-- **WinPE LaunchApply is install-time**, not the FirstLogon look.
+- **WinPE LaunchApply is install-time**, not the FirstLogon look. Visible `cmd` follow-up: [#119](https://github.com/yanai-sh/winmint/issues/119).
 
 ## What to hide
 

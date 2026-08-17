@@ -86,7 +86,7 @@ WinPE apply lane only. Release differs in `ExportWim` compression/cleanup params
 
 ### WinPE apply launcher
 
-Authoritative launcher: `payload/winpe/LaunchApply.cmd`. `PatchBootWimApply` byte-copies it into `Windows\System32\LaunchApply.cmd` and stamps `winpeshl.ini` across **every** `boot.wim` index (skip only when marker + all indexes match). `WinPeApplyContract.ps1` is the single definition for patch skip/re-patch and Gate B assert — byte identity, `/Index:1` apply target, disk guard, and `winpeshl.ini` launch line. Do not embed launcher content in kernels; edit the payload file.
+Authoritative launcher: `payload/winpe/LaunchApply.cmd`. `PatchBootWimApply` byte-copies it into `Windows\System32\LaunchApply.cmd` and stamps `winpeshl.ini` across **every** `boot.wim` index (skip only when marker + all indexes match). `WinPeApplyContract.ps1` is the single definition for patch skip/re-patch and Gate B assert — byte identity, `/Index:1` apply target, disk guard, and `winpeshl.ini` launch line. Do not embed launcher content in kernels; edit the payload file. A visible `cmd` during apply is winpeshl `[LaunchApps]` launching the `.cmd`; hide it with a Windows-subsystem `[LaunchApp]` helper ([#119](https://github.com/yanai-sh/winmint/issues/119)), not as a #118 Smoke A fix.
 
 ### Target disk
 
