@@ -5,6 +5,13 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $repo 'tools/vm/SmokeStatus.ps1')
 
+$smoke = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Invoke-Smoke.ps1') -Raw -Encoding utf8
+if ($smoke -notmatch 'tools[/\\]vm[/\\]SmokeStatus\.ps1') { throw 'Invoke-Smoke must dot-source SmokeStatus.ps1' }
+if ($smoke -notmatch '\[switch\]\s*\$Monitor') { throw '-Monitor switch missing' }
+if ($smoke -notmatch 'Start-SmokeMonitor') { throw 'Start-SmokeMonitor not called' }
+if ($smoke -notmatch 'Write-SmokeStatus') { throw 'Write-SmokeStatus not called' }
+if ($smoke -match 'Get-Content[^\n]*smoke-status\.json') { throw 'must not read smoke-status.json as control plane' }
+
 function Assert-Eq($Actual, $Expected, [string] $Message) {
     if ($Actual -cne $Expected) { throw "$Message (got '$Actual', expected '$Expected')" }
 }

@@ -35,6 +35,9 @@ param(
     [int] $WallClockMinutes = 90,
 
     [Parameter(ParameterSetName = 'Run')]
+    [switch] $Monitor,
+
+    [Parameter(ParameterSetName = 'Run')]
     [switch] $SkipApply,
 
     # Attach to an in-progress winmint-smoke VM (setup reboot); do not recreate VHD.
@@ -55,6 +58,9 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
+
+. (Join-Path $repoRoot 'tools/vm/SmokeStatus.ps1')
+$statusPath = Join-Path $Work 'smoke-status.json'
 
 $assertScript = Join-Path $PSScriptRoot 'Assert-SmokeEvidence.ps1'
 
@@ -87,6 +93,9 @@ if (-not $SkipApply) {
     & just publish-provisioning
     if ($LASTEXITCODE -ne 0) { throw "just publish-provisioning failed: $LASTEXITCODE" }
 
+    Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
+        -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
+        -LastHostLine "Applying Profile=$Profile" -OutputIso $null
     Write-Host "Applying Profile=$Profile Iso=$Iso Work=$Work (Test lane, smoke stubs on)…"
     & just apply-maintainer $Iso $Work $Profile true
     if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
@@ -185,6 +194,7 @@ else {
 }
 
 Write-Host "VM ready. Waiting for guest evidence (stall=${StallMinutes}m, wall=${WallClockMinutes}m)…"
+if ($Monitor) { Start-SmokeMonitor -VmName $VmName }
 
 $deadline = [datetime]::UtcNow.AddMinutes($WallClockMinutes)
 $stallDeadline = [datetime]::UtcNow.AddMinutes($StallMinutes)
@@ -424,66 +434,95 @@ function Send-VmBootNudge {
 
 Send-VmBootNudge
 
-while ([datetime]::UtcNow -lt $deadline) {
-    if (Test-GuestEvidenceReady) {
-        Write-Host 'Guest evidence pulled.'
-        break
-    }
-
-    $vm = Get-VM -Name $VmName
-    # Setup reboots flip Running → Stopping → Off → Starting → Running; do not fail-closed.
-    # Eject DVD only after the VHD has an applied image so a WinPE reboot cannot leave an empty disk.
-    switch ([string]$vm.State) {
-        'Running' {
-            # HDD first before wpeutil reboot. Waiting for Stopping misses the flip and
-            # WinPE LaunchApply runs again (clean + apply) if DVD is still attached.
-            Prefer-DiskBoot
-            Dismount-InstallDvdWhenWindowsBoots
+$wallLeft = [math]::Max(0, [int]($deadline - [datetime]::UtcNow).TotalMinutes)
+try {
+    while ([datetime]::UtcNow -lt $deadline) {
+        if (Test-GuestEvidenceReady) {
+            Write-Host 'Guest evidence pulled.'
+            break
         }
-        'Starting' { Write-Host 'VM Starting (setup reboot)…' }
-        'Stopping' {
-            Write-Host 'VM Stopping (setup reboot)…'
-            Prefer-DiskBoot
+
+        $vm = Get-VM -Name $VmName
+        # Setup reboots flip Running → Stopping → Off → Starting → Running; do not fail-closed.
+        # Eject DVD only after the VHD has an applied image so a WinPE reboot cannot leave an empty disk.
+        switch ([string]$vm.State) {
+            'Running' {
+                # HDD first before wpeutil reboot. Waiting for Stopping misses the flip and
+                # WinPE LaunchApply runs again (clean + apply) if DVD is still attached.
+                Prefer-DiskBoot
+                Dismount-InstallDvdWhenWindowsBoots
+            }
+            'Starting' { Write-Host 'VM Starting (setup reboot)…' }
+            'Stopping' {
+                Write-Host 'VM Stopping (setup reboot)…'
+                Prefer-DiskBoot
+            }
+            'Off' {
+                Write-Host 'VM Off during setup — starting again…'
+                Prefer-DiskBoot
+                Start-VM -Name $VmName -ErrorAction SilentlyContinue
+            }
+            default {
+                throw "VM in unexpected state: $($vm.State)"
+            }
         }
-        'Off' {
-            Write-Host 'VM Off during setup — starting again…'
-            Prefer-DiskBoot
-            Start-VM -Name $VmName -ErrorAction SilentlyContinue
+
+        # Heartbeat: CPU activity or setup reboot churn extends stall — idle Running does not.
+        $cpu = 0
+        try { $cpu = [int]$vm.CPUUsage } catch { $cpu = 0 }
+        if ($cpu -gt 0 -or $vm.State -in @('Starting', 'Stopping')) {
+            $stallDeadline = [datetime]::UtcNow.AddMinutes($StallMinutes)
         }
-        default {
-            throw "VM in unexpected state: $($vm.State)"
+
+        $vhdBytes = 0
+        try {
+            $drive = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
+            if ($drive) { $vhdBytes = [long](Get-VHD -Path $drive.Path).FileSize }
+        } catch { $vhdBytes = 0 }
+        $hb = Test-GuestWindowsHeartbeat
+        $phase = Resolve-SmokePhase -HostStage wait -VmState ([string]$vm.State) `
+            -VhdFileSizeBytes $vhdBytes -HeartbeatOk:$hb
+        $stallLeft = [math]::Max(0, [int]($stallDeadline - [datetime]::UtcNow).TotalMinutes)
+        $wallLeft = [math]::Max(0, [int]($deadline - [datetime]::UtcNow).TotalMinutes)
+        Write-SmokeStatus -Path $statusPath -Phase $phase -VmName $VmName -VmState ([string]$vm.State) `
+            -Cpu $cpu -Heartbeat $(if ($hb) { 'OK' } else { 'No Contact' }) `
+            -VhdFileSizeMB ([int][math]::Round($vhdBytes / 1MB)) `
+            -StallMinutesLeft $stallLeft -WallMinutesLeft $wallLeft `
+            -LastHostLine "VM $([string]$vm.State)" -OutputIso $outIso
+
+        if ([datetime]::UtcNow -gt $stallDeadline) {
+            throw "STALL_SUSPECT: no guest evidence / CPU progress for ${StallMinutes} minutes (fail-fast before WallClockTimeout)."
         }
+
+        # Boot nudge only while DVD is still first (before Prefer-DiskBoot).
+        if (-not $script:DiskBootPreferred -and [datetime]::UtcNow -lt $bootNudgeUntil -and $vm.State -eq 'Running') {
+            Send-VmBootNudge
+        }
+
+        Start-Sleep -Seconds 30
     }
 
-    # Heartbeat: CPU activity or setup reboot churn extends stall — idle Running does not.
-    $cpu = 0
-    try { $cpu = [int]$vm.CPUUsage } catch { $cpu = 0 }
-    if ($cpu -gt 0 -or $vm.State -in @('Starting', 'Stopping')) {
-        $stallDeadline = [datetime]::UtcNow.AddMinutes($StallMinutes)
+    if (-not (Get-ChildItem -LiteralPath $guestDir -Filter 'evidence-*.json' -ErrorAction SilentlyContinue)) {
+        throw "Wall clock elapsed without guest evidence under $guestDir"
     }
 
-    if ([datetime]::UtcNow -gt $stallDeadline) {
-        throw "STALL_SUSPECT: no guest evidence / CPU progress for ${StallMinutes} minutes (fail-fast before WallClockTimeout)."
-    }
-
-    # Boot nudge only while DVD is still first (before Prefer-DiskBoot).
-    if (-not $script:DiskBootPreferred -and [datetime]::UtcNow -lt $bootNudgeUntil -and $vm.State -eq 'Running') {
-        Send-VmBootNudge
-    }
-
-    Start-Sleep -Seconds 30
+    Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage assert) `
+        -VmName $VmName -StallMinutesLeft 0 -WallMinutesLeft $wallLeft `
+        -LastHostLine 'Guest evidence pulled.' -OutputIso $outIso
+    & $assertScript -EvidenceDir $evidenceOut `
+        -PinnedRemoveAppx $pinnedRemoveAppx `
+        -PinnedOnlineRemoveAppx $pinnedOnlineRemoveAppx `
+        -PinnedRemoveCapabilities $pinnedRemoveCapabilities `
+        -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures `
+        $(if ($expectNativePackageAudit) { '-ExpectNativePackageAudit' })
+    if ($LASTEXITCODE -ne 0) { throw "Assert-SmokeEvidence exit $LASTEXITCODE" }
+    Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage green) `
+        -VmName $VmName -LastHostLine 'Smoke green' -OutputIso $outIso
+    Write-Host "Smoke green. Evidence: $evidenceOut"
+    exit 0
 }
-
-if (-not (Get-ChildItem -LiteralPath $guestDir -Filter 'evidence-*.json' -ErrorAction SilentlyContinue)) {
-    throw "Wall clock elapsed without guest evidence under $guestDir"
+catch {
+    Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage failed) `
+        -VmName $VmName -LastHostLine ([string]$_.Exception.Message) -OutputIso $outIso
+    throw
 }
-
-& $assertScript -EvidenceDir $evidenceOut `
-    -PinnedRemoveAppx $pinnedRemoveAppx `
-    -PinnedOnlineRemoveAppx $pinnedOnlineRemoveAppx `
-    -PinnedRemoveCapabilities $pinnedRemoveCapabilities `
-    -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures `
-    $(if ($expectNativePackageAudit) { '-ExpectNativePackageAudit' })
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host "Smoke green. Evidence: $evidenceOut"
-exit 0
