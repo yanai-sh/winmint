@@ -71,37 +71,77 @@ if ([string]::IsNullOrWhiteSpace($OutDir)) {
 }
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
+$matrix['baselineCommit'] = (git -C $BaselineWorktree rev-parse HEAD)
+
 $hostApply = Join-Path $repoRoot 'tools\apply\Invoke-HostApply.ps1'
 $work = Join-Path $repoRoot '.scratch\warm-media-bench'
 $samples = [System.Collections.Generic.List[object]]::new()
+$jsonPath = Join-Path $OutDir 'warm-media-benchmark.json'
+$mdPath = Join-Path $OutDir 'warm-media-benchmark.md'
+$sha = (Get-FileHash -LiteralPath $SourceIso -Algorithm SHA256).Hash.ToLowerInvariant()
+
+function Get-JsonProperty {
+    param($Object, [string] $Name)
+    if ($null -eq $Object) { return $null }
+    $p = $Object.PSObject.Properties[$Name]
+    if ($null -eq $p) { return $null }
+    return $p.Value
+}
+
+function Write-BenchRecord {
+    $record = [ordered]@{
+        schemaVersion   = 'winmint.warm-media.bench/v1'
+        capturedUtc     = [datetime]::UtcNow.ToString('o')
+        host            = $matrix
+        sourceIso       = $SourceIso
+        sourceIsoSha256 = $sha
+        samples         = @($samples)
+    }
+    ($record | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $jsonPath -Encoding utf8
+    @(
+        '# Warm-media benchmark'
+        ''
+        "- Commit: $($matrix.winmintCommit)"
+        "- Baseline commit: $($matrix.baselineCommit)"
+        "- Source ISO SHA-256: $sha"
+        "- Captured: $($record.capturedUtc)"
+        ''
+        '| label | totalMs | outcome |'
+        '| --- | ---: | --- |'
+    ) + @(
+        $samples | ForEach-Object { "| $($_.label) | $($_.totalMs) | $($_.outcome) |" }
+    ) | Set-Content -LiteralPath $mdPath -Encoding utf8
+}
 
 function Invoke-TimedApply {
     param([string] $Label, [string] $ApplyScript, [string] $ApplyWork)
+    Write-Output $Label
     New-Item -ItemType Directory -Force -Path $ApplyWork | Out-Null
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     & $ApplyScript -Iso $SourceIso -Work $ApplyWork -Profile $Profile -ImageQuality Test
     $sw.Stop()
     if ($LASTEXITCODE -ne 0) { throw "$Label Apply failed: $LASTEXITCODE" }
     $evidence = Get-Content -LiteralPath (Join-Path $ApplyWork 'evidence.json') -Raw | ConvertFrom-Json
+    $digests = Get-JsonProperty $evidence 'digests'
     $samples.Add([ordered]@{
-            label                 = $Label
-            totalMs               = [int]$sw.ElapsedMilliseconds
-            outcome               = [string]$evidence.'mediaCache.outcome'
-            sourceHashMs          = [int]$evidence.'timings.sourceHashMs'
-            cacheValidateMs       = [int]$evidence.'timings.cacheValidateMs'
-            cachePrepareMs        = [int]$evidence.'timings.cachePrepareMs'
-            runMediaCopyMs        = [int]$evidence.'timings.runMediaCopyMs'
-            mountMs               = [int]$evidence.'timings.mountMs'
-            exportMs              = [int]$evidence.'timings.exportMs'
-            buildIsoMs            = [int]$evidence.'timings.buildIsoMs'
-            outputIsoSha256       = [string]$evidence.digests.'outputIso.sha256'
+            label           = $Label
+            totalMs         = [int]$sw.ElapsedMilliseconds
+            outcome         = [string](Get-JsonProperty $evidence 'mediaCache.outcome')
+            sourceHashMs    = [int](Get-JsonProperty $evidence 'timings.sourceHashMs')
+            cacheValidateMs = [int](Get-JsonProperty $evidence 'timings.cacheValidateMs')
+            cachePrepareMs  = [int](Get-JsonProperty $evidence 'timings.cachePrepareMs')
+            runMediaCopyMs  = [int](Get-JsonProperty $evidence 'timings.runMediaCopyMs')
+            mountMs         = [int](Get-JsonProperty $evidence 'timings.mountMs')
+            exportMs        = [int](Get-JsonProperty $evidence 'timings.exportMs')
+            buildIsoMs      = [int](Get-JsonProperty $evidence 'timings.buildIsoMs')
+            outputIsoSha256 = [string](Get-JsonProperty $digests 'outputIso.sha256')
         })
+    Write-BenchRecord
 }
 
 Write-Output 'Prime (untimed)'
 & $hostApply -Iso $SourceIso -Work (Join-Path $work 'prime') -Profile $Profile -ImageQuality Test | Out-Null
 
-$sha = (Get-FileHash -LiteralPath $SourceIso -Algorithm SHA256).Hash.ToLowerInvariant()
 $entry = Join-Path $env:ProgramData "WinMint\Servicing\media-cache\v1\$sha\index-$WimIndex"
 
 1..5 | ForEach-Object {
@@ -117,29 +157,7 @@ $baselineApply = Join-Path $BaselineWorktree 'tools\apply\Invoke-HostApply.ps1'
     Invoke-TimedApply -Label "baseline-cold-$_" -ApplyScript $baselineApply -ApplyWork (Join-Path $work "baseline-$_")
 }
 
-$record = [ordered]@{
-    schemaVersion = 'winmint.warm-media.bench/v1'
-    capturedUtc   = [datetime]::UtcNow.ToString('o')
-    host          = $matrix
-    sourceIso     = $SourceIso
-    sourceIsoSha256 = $sha
-    samples       = @($samples)
-}
-$jsonPath = Join-Path $OutDir 'warm-media-benchmark.json'
-$mdPath = Join-Path $OutDir 'warm-media-benchmark.md'
-($record | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $jsonPath -Encoding utf8
-@(
-    '# Warm-media benchmark'
-    ''
-    "- Commit: $($matrix.winmintCommit)"
-    "- Source ISO SHA-256: $sha"
-    "- Captured: $($record.capturedUtc)"
-    ''
-    '| label | totalMs | outcome |'
-    '| --- | ---: | --- |'
-) + @(
-    $samples | ForEach-Object { "| $($_.label) | $($_.totalMs) | $($_.outcome) |" }
-) | Set-Content -LiteralPath $mdPath -Encoding utf8
+Write-BenchRecord
 Write-Output "Wrote $jsonPath"
 Write-Output "Wrote $mdPath"
 exit 0
