@@ -46,5 +46,15 @@ try {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+Start-SmokeMonitor -VmName 'winmint-smoke' -ConnectExe 'C:\no-such-vmconnect.exe'
+$script:launched = $null
+Start-SmokeMonitor -VmName 'winmint-smoke' -ConnectExe $PSCommandPath -Launcher {
+    param($Exe, $VmName)
+    $script:launched = @{ Exe = $Exe; VmName = $VmName }
+}
+if ($null -eq $script:launched) { throw 'Launcher not called for existing ConnectExe' }
+Assert-Eq $script:launched.VmName 'winmint-smoke' 'vmconnect vm name'
+Start-SmokeMonitor -VmName 'x' -ConnectExe $PSCommandPath -Launcher { throw 'boom' }
+
 Write-Output 'Test-SmokeStatus ok'
 exit 0

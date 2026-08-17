@@ -60,3 +60,24 @@ function Write-SmokeStatus {
         Write-Warning "Could not write Smoke status: $($_.Exception.Message)"
     }
 }
+
+function Start-SmokeMonitor {
+    param(
+        [Parameter(Mandatory)][string] $VmName,
+        [string] $ConnectExe = (Join-Path $env:WINDIR 'System32\vmconnect.exe'),
+        [scriptblock] $Launcher = {
+            param($Exe, $Name)
+            Start-Process -FilePath $Exe -ArgumentList @('localhost', $Name)
+        }
+    )
+    if (-not (Test-Path -LiteralPath $ConnectExe)) {
+        Write-Warning "vmconnect.exe not found; continuing headless"
+        return
+    }
+    try {
+        & $Launcher $ConnectExe $VmName
+    }
+    catch {
+        Write-Warning "Could not start VMConnect: $($_.Exception.Message)"
+    }
+}
