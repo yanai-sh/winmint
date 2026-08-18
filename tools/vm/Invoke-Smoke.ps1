@@ -13,7 +13,9 @@
 
 .NOTES
   Requires: Hyper-V, admin for Apply/VM, user-supplied Source ISO (ADR-001).
-  Stall fail-fast: no guest evidence progress for -StallMinutes ⇒ fail before 90 min wall clock.
+  Stall fail-fast: no guest evidence progress for -StallMinutes ⇒ fail before wall clock.
+  Empty-VHD fail-fast: dynamic VHD stays under 1GB for -EmptyVhdMinutes after Running (WinPE never applied).
+  Elapsed time uses Stopwatch (QPC), not Get-Date — SL7's clock can jump.
 #>
 param(
     [Parameter(ParameterSetName = 'Run')]
@@ -33,6 +35,9 @@ param(
 
     [Parameter(ParameterSetName = 'Run')]
     [int] $WallClockMinutes = 90,
+
+    [Parameter(ParameterSetName = 'Run')]
+    [int] $EmptyVhdMinutes = 8,
 
     [Parameter(ParameterSetName = 'Run')]
     [switch] $Monitor,
@@ -122,6 +127,7 @@ if (Test-Path -LiteralPath $applyExpected -PathType Leaf) {
 if (-not (Get-Command Get-VM -ErrorAction SilentlyContinue)) {
     throw 'Hyper-V PowerShell module not available. Install Hyper-V or use -AssertOnly.'
 }
+Enable-VMEventing -Force -ErrorAction SilentlyContinue
 
 $vhdx = Join-Path $Work 'smoke.vhdx'
 $existing = Get-VM -Name $VmName -ErrorAction SilentlyContinue
@@ -153,7 +159,7 @@ else {
     New-VHD -Path $vhdx -SizeBytes 64GB -Dynamic | Out-Null
     New-VM -Name $VmName -Generation 2 -VHDPath $vhdx | Out-Null
     # 8GB is apply/OOBE headroom; 4GB is only the Win11 floor. Not a #118 acceptance bar.
-    Set-VMMemory -VMName $VmName -DynamicMemoryEnabled $false -StartupBytes 8GB
+    Set-VMMemory -VMName $VmName -DynamicMemoryEnabled $false -StartupBytes (Get-SmokeVmStartupBytes)
     Set-VM -Name $VmName -AutomaticCheckpointsEnabled $false
     Set-VMFirmware -VMName $VmName -EnableSecureBoot Off
     Set-VMProcessor -VMName $VmName -Count 4
@@ -193,12 +199,13 @@ else {
     Start-VM -Name $VmName
 }
 
-Write-Host "VM ready. Waiting for guest evidence (stall=${StallMinutes}m, wall=${WallClockMinutes}m)…"
+Write-Host "VM ready. Waiting for guest evidence (stall=${StallMinutes}m, empty-vhd=${EmptyVhdMinutes}m, wall=${WallClockMinutes}m)…"
 if ($Monitor) { Start-SmokeMonitor -VmName $VmName }
 
-$deadline = [datetime]::UtcNow.AddMinutes($WallClockMinutes)
-$stallDeadline = [datetime]::UtcNow.AddMinutes($StallMinutes)
-$bootNudgeUntil = [datetime]::UtcNow.AddMinutes(3)
+$wallSw = [Diagnostics.Stopwatch]::StartNew()
+$stallSw = [Diagnostics.Stopwatch]::StartNew()
+$nudgeSw = [Diagnostics.Stopwatch]::StartNew()
+$script:emptyVhdSw = $null
 
 # Local+autoLogon Profiles need explicit PS Direct credentials (workgroup guest).
 $guestCred = $null
@@ -371,8 +378,11 @@ function Test-GuestWindowsHeartbeat {
 }
 
 function Prefer-DiskBoot {
-    if ($script:DiskBootPreferred) { return }
-    if (-not (Test-SmokeVhdHasImage)) {
+    $decision = Get-SmokePreferDiskBootDecision `
+        -AlreadyPreferred $script:DiskBootPreferred `
+        -VhdHasImage (Test-SmokeVhdHasImage)
+    if ($decision -eq 'skip') { return }
+    if ($decision -eq 'keep-dvd') {
         Write-Host 'Setup reboot before disk has an image — keeping install DVD attached.'
         return
     }
@@ -387,7 +397,6 @@ function Prefer-DiskBoot {
             Set-VMFirmware -VMName $VmName -BootOrder $hddDev
         }
         $script:DiskBootPreferred = $true
-        # ponytail: ejecting here races WinPE wpeutil reboot → Boot Manager 0xc0000178 STATUS_NO_MEDIA.
         Write-Host 'Preferred HDD boot (install DVD attached until Windows heartbeat).'
     }
     catch {
@@ -396,9 +405,11 @@ function Prefer-DiskBoot {
 }
 
 function Dismount-InstallDvdWhenWindowsBoots {
-    if ($script:DvdEjected) { return }
-    if (-not $script:DiskBootPreferred) { return }
-    if (-not (Test-GuestWindowsHeartbeat)) { return }
+    $decision = Get-SmokeEjectDvdDecision `
+        -AlreadyEjected $script:DvdEjected `
+        -DiskBootPreferred $script:DiskBootPreferred `
+        -HeartbeatOk:(Test-GuestWindowsHeartbeat)
+    if ($decision -eq 'skip') { return }
     try {
         $dvdDev = Get-VMDvdDrive -VMName $VmName
         if ($null -ne $dvdDev -and -not [string]::IsNullOrWhiteSpace([string]$dvdDev.Path)) {
@@ -434,9 +445,9 @@ function Send-VmBootNudge {
 
 Send-VmBootNudge
 
-$wallLeft = [math]::Max(0, [int]($deadline - [datetime]::UtcNow).TotalMinutes)
+$wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
 try {
-    while ([datetime]::UtcNow -lt $deadline) {
+    while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         if (Test-GuestEvidenceReady) {
             Write-Host 'Guest evidence pulled.'
             break
@@ -471,7 +482,7 @@ try {
         $cpu = 0
         try { $cpu = [int]$vm.CPUUsage } catch { $cpu = 0 }
         if ($cpu -gt 0 -or $vm.State -in @('Starting', 'Stopping')) {
-            $stallDeadline = [datetime]::UtcNow.AddMinutes($StallMinutes)
+            $stallSw.Restart()
         }
 
         $vhdBytes = 0
@@ -479,23 +490,53 @@ try {
             $drive = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
             if ($drive) { $vhdBytes = [long](Get-VHD -Path $drive.Path).FileSize }
         } catch { $vhdBytes = 0 }
+
+        if ([string]$vm.State -eq 'Running' -and $vhdBytes -lt 1GB) {
+            if ($null -eq $script:emptyVhdSw) {
+                $script:emptyVhdSw = [Diagnostics.Stopwatch]::StartNew()
+            }
+            elseif (-not $script:emptyVhdSw.IsRunning) {
+                $script:emptyVhdSw.Start()
+            }
+        }
+        else {
+            if ($null -ne $script:emptyVhdSw -and $script:emptyVhdSw.IsRunning) {
+                $script:emptyVhdSw.Stop()
+            }
+            if ($vhdBytes -ge 1GB) {
+                $script:emptyVhdSw = $null
+            }
+        }
+
         $hb = Test-GuestWindowsHeartbeat
         $phase = Resolve-SmokePhase -HostStage wait -VmState ([string]$vm.State) `
             -VhdFileSizeBytes $vhdBytes -HeartbeatOk:$hb
-        $stallLeft = [math]::Max(0, [int]($stallDeadline - [datetime]::UtcNow).TotalMinutes)
-        $wallLeft = [math]::Max(0, [int]($deadline - [datetime]::UtcNow).TotalMinutes)
+        $stallLeft = [math]::Max(0, [int]($StallMinutes - $stallSw.Elapsed.TotalMinutes))
+        $wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
         Write-SmokeStatus -Path $statusPath -Phase $phase -VmName $VmName -VmState ([string]$vm.State) `
             -Cpu $cpu -Heartbeat $(if ($hb) { 'OK' } else { 'No Contact' }) `
             -VhdFileSizeMB ([int][math]::Round($vhdBytes / 1MB)) `
             -StallMinutesLeft $stallLeft -WallMinutesLeft $wallLeft `
             -LastHostLine "VM $([string]$vm.State)" -OutputIso $outIso
 
-        if ([datetime]::UtcNow -gt $stallDeadline) {
+        $emptySecs = 0
+        if ($null -ne $script:emptyVhdSw) {
+            $emptySecs = [int]$script:emptyVhdSw.Elapsed.TotalSeconds
+        }
+        $verdict = Get-SmokeWatchVerdict -Phase $phase -VmState ([string]$vm.State) `
+            -VhdFileSizeMB ([int][math]::Round($vhdBytes / 1MB)) `
+            -EmptyVhdRunningSeconds $emptySecs `
+            -EmptyVhdFailAfterSeconds ([int]($EmptyVhdMinutes * 60))
+        if ($verdict -eq 'empty-vhd') {
+            throw "EMPTY_VHD: WinPE has not applied (VHD FileSize still under 1GB) for ${EmptyVhdMinutes} minutes after Running."
+        }
+
+        if ($stallSw.Elapsed.TotalMinutes -ge $StallMinutes) {
             throw "STALL_SUSPECT: no guest evidence / CPU progress for ${StallMinutes} minutes (fail-fast before WallClockTimeout)."
         }
 
         # Boot nudge only while DVD is still first (before Prefer-DiskBoot).
-        if (-not $script:DiskBootPreferred -and [datetime]::UtcNow -lt $bootNudgeUntil -and $vm.State -eq 'Running') {
+        if (-not $script:DiskBootPreferred -and $nudgeSw.Elapsed.TotalMinutes -lt 3 -and $vm.State -eq 'Running') {
             Send-VmBootNudge
         }
 

@@ -35,11 +35,13 @@ function Write-SmokeStatus {
         [int] $StallMinutesLeft = 0,
         [int] $WallMinutesLeft = 0,
         [string] $LastHostLine = '',
-        $OutputIso = $null
+        $OutputIso = $null,
+        [int] $WaiterPid = 0
     )
     try {
         $dir = Split-Path -Parent $Path
         if ($dir) { New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop | Out-Null }
+        if ($WaiterPid -le 0) { $WaiterPid = [int]$PID }
         $doc = [ordered]@{
             schemaVersion    = 'winmint.smoke.status/v1'
             updatedAt        = [datetime]::UtcNow.ToString('o')
@@ -53,6 +55,7 @@ function Write-SmokeStatus {
             wallMinutesLeft  = $WallMinutesLeft
             lastHostLine     = $LastHostLine
             outputIso        = $OutputIso
+            waiterPid        = $WaiterPid
         }
         ($doc | ConvertTo-Json -Compress) | Set-Content -LiteralPath $Path -Encoding utf8 -ErrorAction Stop
     }
@@ -80,4 +83,65 @@ function Start-SmokeMonitor {
     catch {
         Write-Warning "Could not start VMConnect: $($_.Exception.Message)"
     }
+}
+
+function Get-SmokeVmStartupBytes {
+    # 8GB is apply/OOBE headroom; 4GB is only the Win11 floor.
+    8GB
+}
+
+function Get-SmokePreferDiskBootDecision {
+    param(
+        [bool] $AlreadyPreferred,
+        [bool] $VhdHasImage
+    )
+    if ($AlreadyPreferred) { return 'skip' }
+    # ponytail: ejecting here races WinPE wpeutil reboot → Boot Manager 0xc0000178 STATUS_NO_MEDIA.
+    if (-not $VhdHasImage) { return 'keep-dvd' }
+    return 'prefer-hdd'
+}
+
+function Get-SmokeEjectDvdDecision {
+    param(
+        [bool] $AlreadyEjected,
+        [bool] $DiskBootPreferred,
+        [bool] $HeartbeatOk
+    )
+    if ($AlreadyEjected -or -not $DiskBootPreferred -or -not $HeartbeatOk) { return 'skip' }
+    return 'eject'
+}
+
+function Get-SmokeWatchVerdict {
+    <#
+    .SYNOPSIS
+      Watch-only verdict from Hyper-V-native signals + status freshness. Never infers death from PIDs.
+    .NOTES
+      Invoke-Smoke throws on empty-vhd. Watchers must not Stop-VM / Remove-VM;
+      harness-stale stays watch-only.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string] $Phase,
+        [string] $VmState = '',
+        [int] $VhdFileSizeMB = 0,
+        [int] $StatusAgeSeconds = 0,
+        [int] $EmptyVhdRunningSeconds = 0,
+        [int] $EmptyVhdFailAfterSeconds = 480,
+        [int] $HarnessStaleAfterSeconds = 120
+    )
+    if ($Phase -in @('green', 'failed', 'assert')) {
+        return 'done'
+    }
+    # DISM Apply can run for hours without a status refresh.
+    if ($Phase -eq 'apply') {
+        return 'continue'
+    }
+    if ($VmState -eq 'Running' -and $VhdFileSizeMB -lt 1024 -and
+        $EmptyVhdRunningSeconds -ge $EmptyVhdFailAfterSeconds) {
+        return 'empty-vhd'
+    }
+    if ($StatusAgeSeconds -gt $HarnessStaleAfterSeconds) {
+        return 'harness-stale'
+    }
+    return 'continue'
 }

@@ -11,6 +11,13 @@ if ($smoke -notmatch '\[switch\]\s*\$Monitor') { throw '-Monitor switch missing'
 if ($smoke -notmatch 'Start-SmokeMonitor') { throw 'Start-SmokeMonitor not called' }
 if ($smoke -notmatch 'Write-SmokeStatus') { throw 'Write-SmokeStatus not called' }
 if ($smoke -match 'Get-Content[^\n]*smoke-status\.json') { throw 'must not read smoke-status.json as control plane' }
+if ($smoke -notmatch 'Get-SmokeWatchVerdict') { throw 'Invoke-Smoke wait loop must call Get-SmokeWatchVerdict' }
+if ($smoke -notmatch 'EMPTY_VHD:') { throw 'empty-VHD throw prefix missing (operator copy)' }
+if ($smoke -notmatch '\[Diagnostics\.Stopwatch\]') { throw 'stall/wall/empty-vhd must use Stopwatch, not UtcNow deadlines' }
+if ($smoke -notmatch 'Enable-VMEventing') { throw 'Enable-VMEventing keeps Hyper-V objects fresh without host polling' }
+if ($smoke -match 'process-exited-early' -or $smoke -match 'Find-SmokePids') {
+    throw 'Invoke-Smoke must not infer harness death from process lists'
+}
 
 function Assert-Eq($Actual, $Expected, [string] $Message) {
     if ($Actual -cne $Expected) { throw "$Message (got '$Actual', expected '$Expected')" }
@@ -38,6 +45,22 @@ try {
     Assert-Eq $doc.phase 'apply' 'written phase'
     Assert-Eq $doc.vmName 'winmint-smoke' 'vm name'
     if ($null -eq $doc.updatedAt) { throw 'updatedAt missing' }
+    if ([int]$doc.waiterPid -ne [int]$PID) { throw "waiterPid should default to this pwsh (got $($doc.waiterPid))" }
+
+    $watchParams = (Get-Command Get-SmokeWatchVerdict).Parameters.Keys
+    if ($watchParams -match 'Pid') { throw 'Get-SmokeWatchVerdict must not take a PID list' }
+
+    Assert-Eq (Get-SmokeWatchVerdict -Phase green) done 'green is done'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase failed) done 'failed is done'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase assert) done 'assert is done'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase apply -StatusAgeSeconds 99999) continue 'apply may be silent for hours'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase apply -VmState Running -VhdFileSizeMB 36 -EmptyVhdRunningSeconds 480) continue 'apply is host DISM, not empty-VHD'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase guest-up -VmState Running -VhdFileSizeMB 17000 -StatusAgeSeconds 5) continue 'guest-up with fresh status is live (not missing PIDs)'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase winpe-apply -VmState Running -VhdFileSizeMB 2048 -StatusAgeSeconds 5) continue 'VHD growth is WinPE apply progress'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase setup-reboot -VmState Off -VhdFileSizeMB 36 -EmptyVhdRunningSeconds 480) continue 'Off is setup reboot, not empty-VHD'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase guest-up -StatusAgeSeconds 200) harness-stale 'stale status after wait phases'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase vm-boot -VmState Running -VhdFileSizeMB 36 -EmptyVhdRunningSeconds 60) continue 'empty VHD under budget'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase vm-boot -VmState Running -VhdFileSizeMB 36 -EmptyVhdRunningSeconds 480) empty-vhd 'empty VHD after Running budget'
 
     $blocked = Join-Path $tmp 'blocked'
     Set-Content -LiteralPath $blocked -Value 'not-a-dir' -Encoding utf8
