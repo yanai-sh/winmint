@@ -9,7 +9,7 @@
 |---|------|
 | **Should** | Day-to-day = S1–S3 (`just check` + fakes); Smoke = `Test` lane + stub jobs; provisioning jobs share S3 executor; CI = `just check` plus AOT publish (no VM / no ISO); S4 fail-fast on stalls |
 | **Could** | Diff VHD / digest-gated rebuild — harness-only |
-| **Don’t** | Skip S4 hard evidence; invent a Hyper-V-only settle/executor path “for speed” |
+| **Don’t** | Skip S4 hard evidence; invent a Hyper-V-only settle/executor path “for speed”; inject Hyper-V cmdlet adapters to unit-test Prefer-DiskBoot |
 
 ## Seams (usual homes)
 
@@ -28,7 +28,7 @@ Do **not** test: private phase helpers, splash pixels (except status→presenter
 
 **Contract (`tests/contract/`):** prove a script whose runtime host cannot exist on a dev box (WinPE, DISM transcript parse, GitHub-release helpers) or a policy sentence that must not disappear. `just check` discovers `Test-*.ps1`. Not for in-process C# module tests, S4/S5, or the deleted `--reuse-media` / marker four-way branch.
 
-WinPE apply **host** (`WinMintApply` `Run`, cmd quoting) is in-process / `just check` — see `WinPeApplyHostTests`. Helper identity vs the work payload is `Get-WinPeApplyDefect` / `Test-DiskGuard`, not a marker bump. Smoke disk-boot / DVD / RAM policy is `Get-SmokePreferDiskBootDecision` / `Get-SmokeEjectDvdDecision` / `Get-SmokeVmStartupBytes` (VHD `FileSize` + Heartbeat). Contract greps stay for hosts that literally cannot run here (diskpart-in-WinPE, DISM transcripts, wait-loop firmware sequencing).
+WinPE apply **host** (`WinMintApply` `Run`, cmd quoting) is in-process / `just check` — see `WinPeApplyHostTests`. Helper identity vs the work payload is `Get-WinPeApplyDefect` / `Test-DiskGuard`, not a marker bump. Smoke disk-boot / DVD / RAM policy is `Get-SmokePreferDiskBootDecision` / `Get-SmokeEjectDvdDecision` / `Get-SmokeVmStartupBytes` (VHD `FileSize` + Heartbeat). Four-line `Get-SmokePreferDiskBootDecision` / `Get-SmokeEjectDvdDecision` stay; they are not a second adapter. A fake `Set-VMFirmware` is a hypothetical seam (one adapter) and is forbidden. Contract greps stay for hosts that literally cannot run here (diskpart-in-WinPE, DISM transcripts, wait-loop firmware sequencing).
 
 **S4 vs S5:** S4 = FirstLogon in Hyper-V. S5 = Apply on the build host — never a bare-metal install. Do not substitute one for the other.
 
@@ -65,7 +65,7 @@ See [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md). Use `ShellEnvironment`
 
 ### S4 — Hyper-V acceptance
 
-One harness entry → guest evidence (`tools/vm/`). Splash before Explorer; DMA hard fields; unlock; lane marker; time-to-first-paint. Acceptance pinned remove-list digests. Not part of `just check`. External watch uses `Get-SmokeWatchVerdict` (phase, `Get-VHD` FileSize, status age) — not process lists or `vmconnect`. Invoke-Smoke throws from `Get-SmokeWatchVerdict`, not a second empty-VHD `if`. Stall/empty-VHD elapsed is Stopwatch. Watchers must not `Remove-VM`. Disk-boot tests drive those policy functions, not a Hyper-V executor.
+One harness entry → guest evidence (`tools/vm/`). Splash before Explorer; DMA hard fields; unlock; lane marker; time-to-first-paint. Acceptance pinned remove-list digests. Not part of `just check`. External watch uses `Get-SmokeWatchVerdict` (phase, `Get-VHD` FileSize, status age) — not process lists or `vmconnect`. Invoke-Smoke throws from `Get-SmokeWatchVerdict`, not a second empty-VHD `if`. Stall/empty-VHD elapsed is Stopwatch. Watchers must not `Remove-VM`. Disk-boot tests drive those policy functions, not a Hyper-V executor. Do not "complete" that by faking Hyper-V.
 
 ### S5 — Host Apply acceptance (pre-wipe)
 
