@@ -19,12 +19,9 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         }
 
         string? pwshPath = ResolvePwshPath();
-        if (pwshPath is null || IsStoreMsixPwsh(pwshPath))
+        if (RefuseStoreMsixPwsh(pwshPath) is { } storeMsix)
         {
-            return Result.Fail<ElevatedRunOk, Failure>(
-                new Failure(
-                    "servicing.pwsh.storeMsix",
-                    "Host pwsh is WindowsApps MSIX (winget Microsoft.PowerShell defaults to msix). DISM needs GitHub PowerShell-*-win-arm64.msi (or win-x64) under Program Files\\PowerShell\\7."));
+            return Result.Fail<ElevatedRunOk, Failure>(storeMsix);
         }
 
         if (ImageServicing.CheckSupervisorFreshness() is { } staleSupervisor)
@@ -151,6 +148,18 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
     }
 
     private static string? FindServicingPlanScript() => ToolkitRoot.TryFind("servicing", "Invoke-ServicingPlan.ps1");
+
+    internal static Failure? RefuseStoreMsixPwsh(string? pwshPath)
+    {
+        if (pwshPath is null || IsStoreMsixPwsh(pwshPath))
+        {
+            return new Failure(
+                "servicing.pwsh.storeMsix",
+                "Host pwsh is WindowsApps MSIX (winget Microsoft.PowerShell defaults to msix). DISM needs GitHub PowerShell-*-win-arm64.msi (or win-x64) under Program Files\\PowerShell\\7.");
+        }
+
+        return null;
+    }
 
     internal static bool IsStoreMsixPwsh(string? processPath)
     {

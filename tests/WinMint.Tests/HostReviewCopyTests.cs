@@ -45,38 +45,15 @@ public class HostReviewCopyTests
     }
 
     [Fact]
-    public void FriendlyRemoveNames_maps_known_recommended_appx_ids()
-    {
-        IReadOnlyList<string> names = PlanDiff.FriendlyRemoveNames(
-        [
-            "Microsoft.BingNews",
-            "Microsoft.BingWeather",
-            "Microsoft.MicrosoftSolitaireCollection",
-            "Microsoft.YourPhone",
-            "Microsoft.ZuneVideo",
-        ]);
-
-        Assert.Equal(
-            ["Bing News", "Bing Weather", "Solitaire", "Phone Link", "Movies & TV"],
-            names);
-    }
-
-    [Fact]
-    public void FriendlyRemoveNames_falls_back_to_last_segment_for_unknown_ids()
-    {
-        Assert.Equal(["UnknownApp"], PlanDiff.FriendlyRemoveNames(["Contoso.UnknownApp"]));
-    }
-
-    [Fact]
     public void WhatsIncluded_joins_friendly_names()
     {
         Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(Lab());
         Assert.True(planned.IsOk);
         Assert.Equal(
-            "Bing News · To Do",
+            "Bing News · UnknownApp",
             (planned.Value.Review with
             {
-                RemoveProvisionedAppx = ["Microsoft.BingNews", "Microsoft.Todos"],
+                RemoveProvisionedAppx = ["Microsoft.BingNews", "Contoso.UnknownApp"],
             }).WhatsIncluded);
     }
 

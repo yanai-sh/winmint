@@ -16,7 +16,13 @@ public class SupervisorFreshnessTests : IDisposable
         string exe = Publish(at: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         string source = Source("Program.cs", at: new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc));
 
-        Assert.Equal(source, ImageServicing.FindSourceNewerThan(exe, SourceRoot));
+        Failure? stale = ImageServicing.CheckPublishedBinaryFreshness(
+            exe, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning");
+
+        Assert.NotNull(stale);
+        Assert.Equal("hostCompile.supervisor.stale", stale.Value.Code);
+        Assert.Contains(source, stale.Value.Message, StringComparison.Ordinal);
+        Assert.Contains("just publish-provisioning", stale.Value.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -25,7 +31,8 @@ public class SupervisorFreshnessTests : IDisposable
         string exe = Publish(at: new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc));
         _ = Source("Program.cs", at: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 
-        Assert.Null(ImageServicing.FindSourceNewerThan(exe, SourceRoot));
+        Assert.Null(ImageServicing.CheckPublishedBinaryFreshness(
+            exe, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning"));
     }
 
     [Fact]
@@ -35,7 +42,8 @@ public class SupervisorFreshnessTests : IDisposable
         string exe = Publish(at: now.AddMinutes(-5));
         _ = Source("Program.cs", at: now.AddHours(2));
 
-        Assert.Null(ImageServicing.FindSourceNewerThan(exe, SourceRoot));
+        Assert.Null(ImageServicing.CheckPublishedBinaryFreshness(
+            exe, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning"));
     }
 
     [Fact]
@@ -45,7 +53,8 @@ public class SupervisorFreshnessTests : IDisposable
         // obj/ regenerates on every build and would report stale forever.
         _ = Source(Path.Combine("obj", "Generated.cs"), at: new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc));
 
-        Assert.Null(ImageServicing.FindSourceNewerThan(exe, SourceRoot));
+        Assert.Null(ImageServicing.CheckPublishedBinaryFreshness(
+            exe, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning"));
     }
 
     [Fact]
@@ -53,8 +62,15 @@ public class SupervisorFreshnessTests : IDisposable
     {
         string exe = Publish(at: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 
-        // A packaged toolkit ships without src/ — refusing to build there would be the wrong failure.
-        Assert.Null(ImageServicing.FindSourceNewerThan(exe, Path.Combine(_root, "no-such-src")));
+        Assert.Null(ImageServicing.CheckPublishedBinaryFreshness(
+            exe, [Path.Combine(_root, "no-such-src")], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning"));
+    }
+
+    [Fact]
+    public void Missing_publish_cannot_be_checked_and_must_not_block()
+    {
+        Assert.Null(ImageServicing.CheckPublishedBinaryFreshness(
+            null, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning"));
     }
 
     private string SourceRoot => Path.Combine(_root, "src");

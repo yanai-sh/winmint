@@ -5,15 +5,25 @@ namespace WinMint.Tests;
 public class PwshElevatedPlanRunnerTests
 {
     [Fact]
-    public void Pwsh_store_path_detected()
+    public void Store_msix_pwsh_is_refused_before_elevation()
     {
-        Assert.True(PwshElevatedPlanRunner.IsStoreMsixPwsh(
-            @"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.4.0.0_arm64__8wekyb3d8bbwe\pwsh.exe"));
-        Assert.True(PwshElevatedPlanRunner.IsStoreMsixPwsh(
-            @"C:/Program Files/WindowsApps/Microsoft.PowerShellPreview_7.5.0.0_arm64__8wekyb3d8bbwe/pwsh.exe"));
-        Assert.True(PwshElevatedPlanRunner.IsStoreMsixPwsh(
+        Failure? refused = PwshElevatedPlanRunner.RefuseStoreMsixPwsh(
+            @"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.4.0.0_arm64__8wekyb3d8bbwe\pwsh.exe");
+        Assert.NotNull(refused);
+        Assert.Equal("servicing.pwsh.storeMsix", refused.Value.Code);
+    }
+
+    [Fact]
+    public void WindowsApps_alias_pwsh_is_refused_before_elevation()
+    {
+        Assert.NotNull(PwshElevatedPlanRunner.RefuseStoreMsixPwsh(
             @"C:\Users\yanai\AppData\Local\Microsoft\WindowsApps\pwsh.exe"));
-        Assert.False(PwshElevatedPlanRunner.IsStoreMsixPwsh(
+    }
+
+    [Fact]
+    public void Msi_pwsh_is_not_refused_as_store_msix()
+    {
+        Assert.Null(PwshElevatedPlanRunner.RefuseStoreMsixPwsh(
             @"C:\Program Files\PowerShell\7\pwsh.exe"));
     }
 

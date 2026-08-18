@@ -56,6 +56,8 @@ HostCompile is the Orchestrator entry ([DESIGN](DESIGN.md)). Assert immutable re
 ### S2 — ImageServicing
 
 Prefer fake elevated runner when introduced. Assert stage order, Shell stamp path, lane params — not ISO bytes. Kernels: no Profile branching. Never commit multi-edition WIM ([IMAGESERVICING](design/IMAGESERVICING.md#invariants)).
+Freshness tests go through `CheckPublishedBinaryFreshness`; store-MSIX tests go through `RefuseStoreMsixPwsh`.
+Do not call `ExecuteAsync` from `just check` because it crosses the UAC/process boundary.
 
 ### S3 — ProvisioningSession
 
@@ -85,4 +87,5 @@ just smoke          # S4 Hyper-V
 - File mailbox control-plane assertions.
 - Whole-unattend snapshots without Ireland/autologon targets.
 - Horizontal “write all tests then code.”
+- Calling `PwshElevatedPlanRunner.ExecuteAsync` from `just check`.
 - MediatR / Generic Host / AutoMapper for testability theater (xUnit + fakes stay fine; better asserts OK when they pay rent).

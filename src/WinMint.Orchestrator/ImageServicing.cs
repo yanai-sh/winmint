@@ -129,43 +129,44 @@ public static partial class ImageServicing
     /// tree that built it — the machine then fails in ways the source no longer explains.
     /// </summary>
     /// <returns>Null when the publish is current, absent, or unverifiable.</returns>
-    public static Failure? CheckSupervisorFreshness()
+    public static Failure? CheckSupervisorFreshness() =>
+        CheckPublishedBinaryFreshness(
+            FindPublishedSupervisor(),
+            SupervisorSourceProjects.Select(static project => ToolkitRoot.TryFind("src", project)),
+            "hostCompile.supervisor.stale",
+            "Supervisor",
+            "just publish-provisioning");
+
+    /// <returns>Null when the publish is current, absent, or unverifiable.</returns>
+    public static Failure? CheckWinPeApplyFreshness() =>
+        CheckPublishedBinaryFreshness(
+            FindPublishedWinPeApply(),
+            [ToolkitRoot.TryFind("src", "WinMint.WinPeApply")],
+            "hostCompile.winPeApply.stale",
+            "WinMintApply",
+            "just publish-provisioning");
+
+    internal static Failure? CheckPublishedBinaryFreshness(
+        string? publishedExe,
+        IEnumerable<string?> sourceRoots,
+        string code,
+        string publishedLabel,
+        string remedy)
     {
-        string? published = FindPublishedSupervisor();
-        if (published is null)
+        if (publishedExe is null)
         {
-            return null; // Staging reports the missing publish with its own remedy.
+            return null;
         }
 
-        string? staleSince = SupervisorSourceProjects
-            .Select(static project => ToolkitRoot.TryFind("src", project))
-            .Select(root => FindSourceNewerThan(published, root))
+        string? staleSince = sourceRoots
+            .Select(root => FindSourceNewerThan(publishedExe, root))
             .FirstOrDefault(static hit => hit is not null);
 
         return staleSince is null
             ? null
             : new Failure(
-                "hostCompile.supervisor.stale",
-                $"Published Supervisor predates '{staleSince}'. An ISO built now would ship guest code "
-                + "that no longer matches this tree. Run: just publish-provisioning");
-    }
-
-    /// <returns>Null when the publish is current, absent, or unverifiable.</returns>
-    public static Failure? CheckWinPeApplyFreshness()
-    {
-        string? published = FindPublishedWinPeApply();
-        if (published is null)
-        {
-            return null;
-        }
-
-        string? staleSince = FindSourceNewerThan(published, ToolkitRoot.TryFind("src", "WinMint.WinPeApply"));
-        return staleSince is null
-            ? null
-            : new Failure(
-                "hostCompile.winPeApply.stale",
-                $"Published WinMintApply predates '{staleSince}'. An ISO built now would ship a WinPE helper "
-                + "that no longer matches this tree. Run: just publish-provisioning");
+                code,
+                $"Published {publishedLabel} predates '{staleSince}'. An ISO built now would ship guest code that no longer matches this tree. Run: {remedy}");
     }
 
     /// <summary>
