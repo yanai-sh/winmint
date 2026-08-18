@@ -50,10 +50,17 @@ public class HostReviewCopyTests
         Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(Lab());
         Assert.True(planned.IsOk);
         Assert.Equal(
-            "Bing News · UnknownApp",
+            "Bing News · To Do · Phone Link · Movies & TV · UnknownApp",
             (planned.Value.Review with
             {
-                RemoveProvisionedAppx = ["Microsoft.BingNews", "Contoso.UnknownApp"],
+                RemoveProvisionedAppx =
+                [
+                    "Microsoft.BingNews",
+                    "Microsoft.Todos",
+                    "Microsoft.YourPhone",
+                    "Microsoft.ZuneVideo",
+                    "Contoso.UnknownApp",
+                ],
             }).WhatsIncluded);
     }
 

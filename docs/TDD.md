@@ -65,7 +65,7 @@ See [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md). Use `ShellEnvironment`
 
 ### S4 — Hyper-V acceptance
 
-One harness entry → guest evidence (`tools/vm/`). Splash before Explorer; DMA hard fields; unlock; lane marker; time-to-first-paint. Acceptance pinned remove-list digests. Not part of `just check`. External watch uses `Get-SmokeWatchVerdict` (phase, `Get-VHD` FileSize, status age) — not process lists or `vmconnect`. Invoke-Smoke throws from `Get-SmokeWatchVerdict`, not a second empty-VHD `if`. Stall/empty-VHD elapsed is Stopwatch. Watchers must not `Remove-VM`. Disk-boot tests drive those policy functions, not a Hyper-V executor. Do not "complete" that by faking Hyper-V.
+One harness entry → guest evidence (`tools/vm/`). Splash before Explorer; DMA hard fields; unlock; lane marker; time-to-first-paint. Acceptance pinned remove-list digests. Not part of `just check`. External watch uses `Get-SmokeWatchVerdict` (phase, `Get-VHD` FileSize, status age) — not process lists or `vmconnect`. Invoke-Smoke throws from `Get-SmokeWatchVerdict`, not a second empty-VHD `if`. `waiterPid` is an optional `Wait-Process` handle, not a fail/kill signal; watchers must not infer death from PIDs or `Remove-VM`. Stall/empty-VHD elapsed is Stopwatch. Disk-boot tests drive those policy functions, not a Hyper-V executor. Do not "complete" that by faking Hyper-V.
 
 ### S5 — Host Apply acceptance (pre-wipe)
 

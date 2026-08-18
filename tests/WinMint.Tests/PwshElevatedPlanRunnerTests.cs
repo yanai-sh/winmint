@@ -16,8 +16,19 @@ public class PwshElevatedPlanRunnerTests
     [Fact]
     public void WindowsApps_alias_pwsh_is_refused_before_elevation()
     {
-        Assert.NotNull(PwshElevatedPlanRunner.RefuseStoreMsixPwsh(
-            @"C:\Users\yanai\AppData\Local\Microsoft\WindowsApps\pwsh.exe"));
+        Failure? refused = PwshElevatedPlanRunner.RefuseStoreMsixPwsh(
+            @"C:\Users\yanai\AppData\Local\Microsoft\WindowsApps\pwsh.exe");
+        Assert.NotNull(refused);
+        Assert.Equal("servicing.pwsh.storeMsix", refused.Value.Code);
+    }
+
+    [Fact]
+    public void Forward_slash_store_msix_pwsh_is_refused_before_elevation()
+    {
+        Failure? refused = PwshElevatedPlanRunner.RefuseStoreMsixPwsh(
+            "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.4.0.0_arm64__8wekyb3d8bbwe/pwsh.exe");
+        Assert.NotNull(refused);
+        Assert.Equal("servicing.pwsh.storeMsix", refused.Value.Code);
     }
 
     [Fact]
