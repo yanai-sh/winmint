@@ -13,7 +13,8 @@ public sealed record ImageEvidence(
     string OutputIsoPath,
     ImageQualityLane Lane,
     string ShellStampTargetPath,
-    IReadOnlyDictionary<string, string> Digests);
+    IReadOnlyDictionary<string, string> Digests,
+    IReadOnlyDictionary<string, string> PreparedMediaFields);
 
 /// <summary>Elevation succeeded — evidence is ImageServicing's job.</summary>
 public readonly record struct ElevatedRunOk;

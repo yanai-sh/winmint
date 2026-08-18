@@ -266,9 +266,8 @@ public class ImageServicingApplyTests
             Assert.Equal(ImageQualityLane.Test, result.Value.Lane);
             Assert.False(result.Value.Digests.ContainsKey("source.isoSha256"));
             Assert.False(result.Value.Digests.ContainsKey("mediaCache.outcome"));
-            using JsonDocument evidence = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(work, "evidence.json")));
-            Assert.Equal("hit", evidence.RootElement.GetProperty("mediaCache.outcome").GetString());
-            Assert.False(evidence.RootElement.TryGetProperty("mediaCache.previousMedia", out _));
+            Assert.Equal("hit", result.Value.PreparedMediaFields["mediaCache.outcome"]);
+            Assert.False(result.Value.PreparedMediaFields.ContainsKey("mediaCache.previousMedia"));
             Assert.Equal(new string('a', 64), result.Value.Digests["outputIso.sha256"]);
         }
         finally

@@ -82,6 +82,8 @@ public static partial class ImageServicing
 
         doc["digests"] = digestNode;
 
+        IReadOnlyDictionary<string, string> preparedFields =
+            FrozenDictionary<string, string>.Empty;
         if (File.Exists(workspace.PreparedMedia))
         {
             PreparedMediaAuditFile? audit;
@@ -106,7 +108,9 @@ public static partial class ImageServicing
                         $"prepared-media.json schema '{audit?.SchemaVersion}' (need {PreparedMediaAuditSchemaVersion})."));
             }
 
-            CopyPreparedMediaAudit(doc, audit);
+            Dictionary<string, string> fields = [];
+            CopyPreparedMediaAudit(doc, audit, fields);
+            preparedFields = fields.ToFrozenDictionary(StringComparer.Ordinal);
         }
 
         File.WriteAllText(workspace.Evidence, doc.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
@@ -116,12 +120,16 @@ public static partial class ImageServicing
                 run.OutputIsoPath,
                 plan.Manifest.ImageQuality,
                 shellTarget,
-                digests.ToFrozenDictionary(StringComparer.Ordinal)));
+                digests.ToFrozenDictionary(StringComparer.Ordinal),
+                preparedFields));
     }
 
-    private static void CopyPreparedMediaAudit(JsonObject doc, PreparedMediaAuditFile audit)
+    private static void CopyPreparedMediaAudit(
+        JsonObject doc,
+        PreparedMediaAuditFile audit,
+        Dictionary<string, string> preparedFields)
     {
-        SetIfPresent(doc, "source.isoSha256", audit.SourceIsoSha256);
+        SetIfPresent(doc, preparedFields, "source.isoSha256", audit.SourceIsoSha256);
         if (audit.SourceIsoLength is long length)
         {
             doc["source.isoLength"] = length;
@@ -137,13 +145,13 @@ public static partial class ImageServicing
             doc["mediaCache.schema"] = schema;
         }
 
-        SetIfPresent(doc, "mediaCache.key", audit.MediaCacheKey);
-        SetIfPresent(doc, "mediaCache.entryPath", audit.MediaCacheEntryPath);
-        SetIfPresent(doc, "mediaCache.outcome", audit.MediaCacheOutcome);
-        SetIfPresent(doc, "mediaCache.installWimSha256", audit.MediaCacheInstallWimSha256);
-        SetIfPresent(doc, "mediaCache.bootWimSha256", audit.MediaCacheBootWimSha256);
-        SetIfPresent(doc, "mediaCache.copyMode", audit.MediaCacheCopyMode);
-        SetIfPresent(doc, "mediaCache.recoveryAction", audit.MediaCacheRecoveryAction);
+        SetIfPresent(doc, preparedFields, "mediaCache.key", audit.MediaCacheKey);
+        SetIfPresent(doc, preparedFields, "mediaCache.entryPath", audit.MediaCacheEntryPath);
+        SetIfPresent(doc, preparedFields, "mediaCache.outcome", audit.MediaCacheOutcome);
+        SetIfPresent(doc, preparedFields, "mediaCache.installWimSha256", audit.MediaCacheInstallWimSha256);
+        SetIfPresent(doc, preparedFields, "mediaCache.bootWimSha256", audit.MediaCacheBootWimSha256);
+        SetIfPresent(doc, preparedFields, "mediaCache.copyMode", audit.MediaCacheCopyMode);
+        SetIfPresent(doc, preparedFields, "mediaCache.recoveryAction", audit.MediaCacheRecoveryAction);
         SetTiming(doc, "timings.sourceHashMs", audit.TimingsSourceHashMs);
         SetTiming(doc, "timings.cacheValidateMs", audit.TimingsCacheValidateMs);
         SetTiming(doc, "timings.cachePrepareMs", audit.TimingsCachePrepareMs);
@@ -153,11 +161,16 @@ public static partial class ImageServicing
         SetTiming(doc, "timings.buildIsoMs", audit.TimingsBuildIsoMs);
     }
 
-    private static void SetIfPresent(JsonObject doc, string key, string? value)
+    private static void SetIfPresent(
+        JsonObject doc,
+        Dictionary<string, string> preparedFields,
+        string key,
+        string? value)
     {
         if (!string.IsNullOrWhiteSpace(value))
         {
             doc[key] = value;
+            preparedFields[key] = value;
         }
     }
 
