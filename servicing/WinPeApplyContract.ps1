@@ -13,8 +13,17 @@ function Get-WinPeApplyPayloadPath {
     return Join-Path (Split-Path -Parent $PSScriptRoot) 'payload\winpe\LaunchApply.cmd'
 }
 
+function Get-WinPeApplyHelperPath {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string] $WorkDirectory
+    )
+    return Join-Path $WorkDirectory 'payload\WinMintApply.exe'
+}
+
 function Get-WinPeApplyMarkerText {
-    return 'apply+wimIndex=1+winpeshlLaunchApp'
+    return 'apply+wimIndex=1+winpeshlLaunchApp+cmdCall'
 }
 
 function Get-WinPeApplyWinpeshlText {
@@ -30,7 +39,10 @@ function Get-WinPeApplyDefect {
     #>
     param(
         [Parameter(Mandatory)]
-        [string] $MountDir
+        [string] $MountDir,
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string] $WorkDirectory
     )
 
     $defects = @()
@@ -46,10 +58,9 @@ function Get-WinPeApplyDefect {
         $defects += 'LaunchApply.cmd missing inside boot.wim'
     }
     else {
-        $mountedBytes = [IO.File]::ReadAllBytes($launch)
         if ($payloadAvailable) {
-            $payloadBytes = [IO.File]::ReadAllBytes($payload)
-            if ([Convert]::ToBase64String($mountedBytes) -cne [Convert]::ToBase64String($payloadBytes)) {
+            if ((Get-FileHash -LiteralPath $launch -Algorithm SHA256).Hash -cne
+                (Get-FileHash -LiteralPath $payload -Algorithm SHA256).Hash) {
                 $defects += 'LaunchApply.cmd bytes differ from authoritative payload/winpe/LaunchApply.cmd'
             }
         }
@@ -81,8 +92,16 @@ function Get-WinPeApplyDefect {
     }
 
     $helper = Join-Path $MountDir 'Windows\System32\WinMintApply.exe'
+    $helperSrc = Get-WinPeApplyHelperPath -WorkDirectory $WorkDirectory
     if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) {
         $defects += 'WinMintApply.exe missing inside boot.wim'
+    }
+    elseif (-not (Test-Path -LiteralPath $helperSrc -PathType Leaf)) {
+        $defects += "WinMintApply.exe helper source missing: $helperSrc"
+    }
+    elseif ((Get-FileHash -LiteralPath $helper -Algorithm SHA256).Hash -cne
+        (Get-FileHash -LiteralPath $helperSrc -Algorithm SHA256).Hash) {
+        $defects += 'WinMintApply.exe bytes differ from work payload'
     }
 
     return , ([string[]] $defects)

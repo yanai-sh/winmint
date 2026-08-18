@@ -107,11 +107,20 @@ diskpart /s "%TEMP%\dp.txt"
 dism /English /Apply-Image /ImageFile:D:\sources\install.wim /Index:1 /ApplyDir:W:\
 '@
 $mount = Join-Path $env:TEMP 'winmint-applycontract'
+$contractWork = Join-Path $env:TEMP 'winmint-applycontract-work'
 
 function Assert-Contract {
-    param([string] $Name, [string] $Launch, [string] $Winpeshl, [string] $Expect, [switch] $NoHelper)
+    param(
+        [string] $Name,
+        [string] $Launch,
+        [string] $Winpeshl,
+        [string] $Expect,
+        [switch] $NoHelper,
+        [switch] $HelperMismatch,
+        [switch] $NoWorkHelper
+    )
 
-    Remove-Item -LiteralPath $mount -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $mount, $contractWork -Recurse -Force -ErrorAction SilentlyContinue
     $system32 = Join-Path $mount 'Windows\System32'
     New-Item -ItemType Directory -Force -Path $system32 | Out-Null
     if (-not [string]::IsNullOrEmpty($Launch)) {
@@ -124,11 +133,22 @@ function Assert-Contract {
         Set-Content -LiteralPath (Join-Path $system32 'winpeshl.ini') -Value $Winpeshl -Encoding ascii
     }
     if (-not $NoHelper) {
-        # Contract checks presence, not AOT bytes — a stub is enough on a fake mount.
         [IO.File]::WriteAllText((Join-Path $system32 'WinMintApply.exe'), 'MZ', [Text.Encoding]::ASCII)
     }
+    if (-not $NoWorkHelper) {
+        $payloadDir = Join-Path $contractWork 'payload'
+        New-Item -ItemType Directory -Force -Path $payloadDir | Out-Null
+        $helperText = if ($HelperMismatch) { 'MZ-stale' } else { 'MZ' }
+        [IO.File]::WriteAllText(
+            (Join-Path $payloadDir 'WinMintApply.exe'),
+            $helperText,
+            [Text.Encoding]::ASCII)
+    }
+    else {
+        New-Item -ItemType Directory -Force -Path $contractWork | Out-Null
+    }
 
-    $defects = Get-WinPeApplyDefect -MountDir $mount
+    $defects = Get-WinPeApplyDefect -MountDir $mount -WorkDirectory $contractWork
     $actual = if ($defects.Count -eq 0) { 'none' } else { $defects -join '; ' }
     if ($actual -notmatch [regex]::Escape($Expect)) {
         $script:failures += "$Name`n    expected: $Expect`n    actual:   $actual"
@@ -146,9 +166,11 @@ try {
     Assert-Contract 'missing winpeshl rejected' $shipped '' 'winpeshl.ini missing'
     Assert-Contract 'missing helper rejected' $shipped $winpeshl 'WinMintApply.exe missing' -NoHelper
     Assert-Contract 'LaunchApps cmd host rejected' $shipped "[LaunchApps]`r`n%SYSTEMDRIVE%\Windows\System32\LaunchApply.cmd" 'must [LaunchApp] AppPath WinMintApply.exe'
+    Assert-Contract 'helper bytes mismatch rejected' $shipped $winpeshl 'bytes differ from work payload' -HelperMismatch
+    Assert-Contract 'helper source missing rejected' $shipped $winpeshl 'helper source missing' -NoWorkHelper
 }
 finally {
-    Remove-Item -LiteralPath $mount -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $mount, $contractWork -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 $packagedRoot = Join-Path $env:TEMP "winmint-packaged-root-$([guid]::NewGuid().ToString('N'))"
@@ -164,6 +186,11 @@ try {
     $resolvedPackagedPayload = (Resolve-Path (Get-WinPeApplyPayloadPath)).Path
     if ($resolvedPackagedPayload -cne $expectedPackagedPayload) {
         $failures += "packaged payload resolution`n    expected: $expectedPackagedPayload`n    actual:   $resolvedPackagedPayload"
+    }
+    $expectedPackagedHelper = Join-Path $packagedRoot 'payload\WinMintApply.exe'
+    $resolvedPackagedHelper = Get-WinPeApplyHelperPath -WorkDirectory $packagedRoot
+    if ($resolvedPackagedHelper -cne $expectedPackagedHelper) {
+        $failures += "packaged helper resolution`n    expected: $expectedPackagedHelper`n    actual:   $resolvedPackagedHelper"
     }
 }
 finally {

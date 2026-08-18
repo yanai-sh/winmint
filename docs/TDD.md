@@ -28,6 +28,8 @@ Do **not** test: private phase helpers, splash pixels (except status→presenter
 
 **Contract (`tests/contract/`):** prove a script whose runtime host cannot exist on a dev box (WinPE, DISM transcript parse, GitHub-release helpers) or a policy sentence that must not disappear. `just check` discovers `Test-*.ps1`. Not for in-process C# module tests, S4/S5, or the deleted `--reuse-media` / marker four-way branch.
 
+WinPE apply **host** (`WinMintApply` `Run`, cmd quoting) is in-process / `just check` — see `WinPeApplyHostTests`. Helper identity vs the work payload is `Get-WinPeApplyDefect` / `Test-DiskGuard`, not a marker bump. Contract greps stay for hosts that literally cannot run here (diskpart-in-WinPE, DISM transcripts, Hyper-V firmware).
+
 **S4 vs S5:** S4 = FirstLogon in Hyper-V. S5 = Apply on the build host — never a bare-metal install. Do not substitute one for the other.
 
 ## Good test criteria

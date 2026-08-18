@@ -31,7 +31,7 @@ function Test-LaunchApplyPatched {
     $clean = $false
     $primaryError = $null
     try {
-        $clean = (Get-WinPeApplyDefect -MountDir $Mount).Count -eq 0
+        $clean = (Get-WinPeApplyDefect -MountDir $Mount -WorkDirectory $workDirectory).Count -eq 0
     }
     catch {
         $primaryError = $_
@@ -64,6 +64,11 @@ $info = & dism.exe /English /Get-WimInfo /WimFile:$bootWim 2>&1 | Out-String
 $indexes = @([regex]::Matches($info, '(?m)^Index : (\d+)\s*$') | ForEach-Object { [int]$_.Groups[1].Value })
 if ($indexes.Count -eq 0) { throw 'boot.wim has no indexes' }
 
+$helperSrc = Get-WinPeApplyHelperPath -WorkDirectory $workDirectory
+if (-not (Test-Path -LiteralPath $helperSrc -PathType Leaf)) {
+    throw "WinMintApply.exe missing under $helperSrc. Run: just publish-provisioning"
+}
+
 # Skip only when marker + every boot index proves the authoritative apply launcher contract.
 if (Test-Path -LiteralPath $bootMarker) {
     $markerText = (Get-Content -LiteralPath $bootMarker -Raw -Encoding utf8).Trim()
@@ -89,10 +94,6 @@ if (Test-Path -LiteralPath $bootMarker) {
 $bootItem = Get-Item -LiteralPath $bootWim
 if ($bootItem.IsReadOnly) { $bootItem.IsReadOnly = $false }
 
-$helperSrc = Join-Path $workDirectory 'payload\WinMintApply.exe'
-if (-not (Test-Path -LiteralPath $helperSrc -PathType Leaf)) {
-    throw "WinMintApply.exe missing under $helperSrc. Run: just publish-provisioning"
-}
 $winpeshl = Get-WinPeApplyWinpeshlText
 
 foreach ($index in $indexes) {

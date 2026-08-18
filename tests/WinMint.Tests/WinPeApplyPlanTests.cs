@@ -158,9 +158,14 @@ public class WinPeApplyPlanTests
             "Test-LaunchApplyPatched -Wim $bootWim -Mount $bootMount -Index 1",
             patcher,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "Get-WinPeApplyDefect -MountDir $Mount -WorkDirectory $workDirectory",
+            patcher,
+            StringComparison.Ordinal);
+        Assert.Contains("Get-WinPeApplyHelperPath", patcher, StringComparison.Ordinal);
         Assert.True(
             gate.IndexOf("foreach ($index in $indexes)", StringComparison.Ordinal)
-                < gate.IndexOf("Get-WinPeApplyDefect -MountDir $bootMount", StringComparison.Ordinal),
+                < gate.IndexOf("Get-WinPeApplyDefect -MountDir $bootMount -WorkDirectory $WorkDirectory", StringComparison.Ordinal),
             "Gate must evaluate the shared apply contract inside its all-index loop.");
     }
 

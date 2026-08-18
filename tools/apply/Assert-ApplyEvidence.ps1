@@ -198,7 +198,7 @@ if (Test-Path -LiteralPath $bootWim) {
         try {
             & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:$index /MountDir:$bootMount /ReadOnly
             if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:$index for apply assert failed: $LASTEXITCODE" }
-            $defects = Get-WinPeApplyDefect -MountDir $bootMount
+            $defects = Get-WinPeApplyDefect -MountDir $bootMount -WorkDirectory $WorkDirectory
             if ($defects.Count -gt 0) {
                 throw "boot.wim index $index is not apply media: $($defects -join '; ')"
             }

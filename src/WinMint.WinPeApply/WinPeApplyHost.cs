@@ -12,7 +12,7 @@ namespace WinMint.WinPeApply;
 internal static class WinPeApplyHost
 {
     internal const string LaunchName = "LaunchApply.cmd";
-    internal const string QuickEditSkip = "WINMINT_QE";
+    private const string QuickEditSkip = "WINMINT_QE";
 
     private static int Main()
     {
@@ -42,7 +42,7 @@ internal static class WinPeApplyHost
             : ShowFailure(system32, log, holdFailureConsole, apply.ExitCode);
     }
 
-    internal static ProcessStartInfo HiddenLaunch(string system32, string logPath)
+    private static ProcessStartInfo HiddenLaunch(string system32, string logPath)
     {
         string launch = Path.Combine(system32, LaunchName);
         ProcessStartInfo psi = new()
@@ -51,9 +51,9 @@ internal static class WinPeApplyHost
             WorkingDirectory = system32,
             UseShellExecute = false,
             CreateNoWindow = true,
+            // ponytail: ArgumentList extra-quotes this blob; cmd /c then exits 1 and LaunchApply never runs.
+            Arguments = $"/c call \"{launch}\" > \"{logPath}\" 2>&1",
         };
-        psi.ArgumentList.Add("/c");
-        psi.ArgumentList.Add($"\"{launch}\" > \"{logPath}\" 2>&1");
         psi.Environment[QuickEditSkip] = "1";
         return psi;
     }
@@ -70,9 +70,8 @@ internal static class WinPeApplyHost
             FileName = Path.Combine(system32, "cmd.exe"),
             UseShellExecute = false,
             CreateNoWindow = false,
+            Arguments = $"/k echo WinMint apply failed (exit {code}) & type \"{logPath}\"",
         };
-        psi.ArgumentList.Add("/k");
-        psi.ArgumentList.Add($"echo WinMint apply failed (exit {code}) & type \"{logPath}\"");
         using Process? shown = Process.Start(psi);
         shown?.WaitForExit();
         return code;

@@ -86,7 +86,7 @@ WinPE apply lane only. Release differs in `ExportWim` compression/cleanup params
 
 ### WinPE apply launcher
 
-Authoritative apply script: `payload/winpe/LaunchApply.cmd`. `PatchBootWimApply` byte-copies it into `Windows\System32\LaunchApply.cmd`, copies staged `WinMintApply.exe`, and stamps `winpeshl.ini` `[LaunchApp]` `AppPath` across **every** `boot.wim` index (skip only when marker + all indexes match). `WinPeApplyContract.ps1` is the single definition for patch skip/re-patch and Gate B assert — byte identity of the `.cmd`, `/Index:1` apply target, disk guard, Windows-subsystem helper, and `winpeshl.ini` `[LaunchApp]` line. Do not embed launcher content in kernels; edit the payload file. winpeshl starts a Windows-subsystem exe so apply is not a visible `cmd` ([#119](https://github.com/yanai-sh/winmint/issues/119)); disk-guard refusals reopen a console with the captured log.
+Authoritative apply script: `payload/winpe/LaunchApply.cmd`. `PatchBootWimApply` byte-copies it into `Windows\System32\LaunchApply.cmd`, copies staged `WinMintApply.exe`, and stamps `winpeshl.ini` `[LaunchApp]` `AppPath` across **every** `boot.wim` index (skip only when marker + all indexes match). `WinPeApplyContract.ps1` is the single definition for patch skip/re-patch and Gate B assert — byte identity of the `.cmd` and of `WinMintApply.exe` against the work payload, `/Index:1` apply target, disk guard, Windows-subsystem helper, and `winpeshl.ini` `[LaunchApp]` line. Do not embed launcher content in kernels; edit the payload file. winpeshl starts a Windows-subsystem exe so apply is not a visible `cmd` ([#119](https://github.com/yanai-sh/winmint/issues/119)); disk-guard refusals reopen a console with the captured log.
 
 ### Target disk
 
