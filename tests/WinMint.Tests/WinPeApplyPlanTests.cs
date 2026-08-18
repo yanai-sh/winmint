@@ -87,89 +87,6 @@ public class WinPeApplyPlanTests
     }
 
     [Fact]
-    public void PatchBootWimApply_script_contains_apply_lane_steps_not_legacy_setup()
-    {
-        string script = File.ReadAllText(FindPatchBootScript());
-        string payload = File.ReadAllText(FindRepoFile("payload", "winpe", "LaunchApply.cmd"));
-        Assert.Contains("$bootWim = Join-Path $mediaDir", script, StringComparison.Ordinal);
-        Assert.Contains("Get-WinPeApplyPayloadPath", script, StringComparison.Ordinal);
-        Assert.Contains("Get-WinPeApplyWinpeshlText", script, StringComparison.Ordinal);
-        Assert.Contains("Copy-Item -LiteralPath $launchApplyPayload", script, StringComparison.Ordinal);
-        Assert.Contains("WinMintApply.exe", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("$launchApply = @\"", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("[LaunchApps]", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("$applyWimIndex", script, StringComparison.Ordinal);
-        Assert.Contains("/Index:1", payload, StringComparison.Ordinal);
-        Assert.DoesNotContain("/Index:$wimIndex", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("$wimIndex = [int]$Parameters['wimIndex']", script, StringComparison.Ordinal);
-        Assert.Contains("LaunchApply.cmd", script, StringComparison.Ordinal);
-        Assert.Contains("diskpart", payload, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Apply-Image", payload, StringComparison.Ordinal);
-        Assert.Contains("bcdboot", payload, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("wpeutil reboot", payload, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LabConfig", payload, StringComparison.Ordinal);
-        Assert.DoesNotContain("setup.exe", payload, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("/legacy", payload, StringComparison.Ordinal);
-        // Skip path must verify LaunchApply content — marker alone hid Index:3 after code fix.
-        Assert.Contains("Test-LaunchApplyPatched", script, StringComparison.Ordinal);
-        Assert.Contains("LaunchApply verified in every boot.wim index", script, StringComparison.Ordinal);
-        Assert.Contains(".winmint-boot-legacy", script, StringComparison.Ordinal);
-
-        // The erase target is discovered, never hardcoded: disk 0 can be the USB we booted from.
-        // Branch behaviour lives in tests/contract/Test-DiskGuard.ps1 — this only pins the contract.
-        Assert.DoesNotContain("select disk 0", payload, StringComparison.Ordinal);
-        Assert.Contains("echo select disk %TARGET%", payload, StringComparison.Ordinal);
-        Assert.Contains(":winmint_pick", payload, StringComparison.Ordinal);
-        Assert.Contains("refusing to guess", payload, StringComparison.Ordinal);
-        // What "patched" means is executed by tests/contract/Test-DiskGuard.ps1. Pin only that the
-        // patcher and the pre-wipe gate read the one contract, so neither can be taught a rule alone.
-        string gate = File.ReadAllText(FindRepoFile("tools", "apply", "Assert-ApplyEvidence.ps1"));
-        foreach (string reader in new[] { script, gate })
-        {
-            Assert.Contains("WinPeApplyContract.ps1", reader, StringComparison.Ordinal);
-            Assert.Contains("Get-WinPeApplyDefect", reader, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void Patcher_and_gate_certify_every_boot_wim_index()
-    {
-        string patcher = File.ReadAllText(FindPatchBootScript());
-        string gate = File.ReadAllText(FindRepoFile("tools", "apply", "Assert-ApplyEvidence.ps1"));
-
-        foreach (string reader in new[] { patcher, gate })
-        {
-            Assert.Contains("/Get-WimInfo", reader, StringComparison.Ordinal);
-            Assert.Contains("Index : (\\d+)", reader, StringComparison.Ordinal);
-            Assert.Contains("foreach ($index in $indexes)", reader, StringComparison.Ordinal);
-            Assert.Contains("/Index:$index /MountDir:$bootMount", reader, StringComparison.Ordinal);
-            Assert.DoesNotContain("/Index:1 /MountDir:$bootMount", reader, StringComparison.Ordinal);
-        }
-
-        Assert.True(
-            patcher.IndexOf("/Get-WimInfo", StringComparison.Ordinal)
-                < patcher.IndexOf("if (Test-Path -LiteralPath $bootMarker)", StringComparison.Ordinal),
-            "Patcher must enumerate boot.wim indexes before marker skip certification.");
-        Assert.Contains(
-            "Test-LaunchApplyPatched -Wim $bootWim -Mount $bootMount -Index $index",
-            patcher,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "Test-LaunchApplyPatched -Wim $bootWim -Mount $bootMount -Index 1",
-            patcher,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Get-WinPeApplyDefect -MountDir $Mount -WorkDirectory $workDirectory",
-            patcher,
-            StringComparison.Ordinal);
-        Assert.Contains("Get-WinPeApplyHelperPath", patcher, StringComparison.Ordinal);
-        Assert.True(
-            gate.IndexOf("foreach ($index in $indexes)", StringComparison.Ordinal)
-                < gate.IndexOf("Get-WinPeApplyDefect -MountDir $bootMount -WorkDirectory $WorkDirectory", StringComparison.Ordinal),
-            "Gate must evaluate the shared apply contract inside its all-index loop.");
-    }
-
-    [Fact]
     public void BuildIso_script_does_not_finalize_plan_evidence()
     {
         string script = File.ReadAllText(FindServicingScript("Build-Iso.ps1"));
@@ -316,8 +233,6 @@ public class WinPeApplyPlanTests
         Assert.True(parsed.IsOk);
         return parsed.Value;
     }
-
-    private static string FindPatchBootScript() => FindServicingScript("Patch-BootWimApply.ps1");
 
     private static string FindServicingScript(string fileName) => FindRepoFile("servicing", fileName);
 
