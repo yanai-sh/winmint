@@ -1,0 +1,1 @@
+downloadInformation = [{'url':'http://download.windowsupdate.com/c/msdownload/update/software/secu/2026/08/windows11.0-kb5121003-arm64_deadbeef.msu'}];

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -17,7 +18,7 @@ public static partial class ImageServicing
 
     /// <summary>
     /// Host-only DISM mount root (not guest durable state). Keeps mounts off workdir/.scratch trees —
-    /// short path, single cleanup locus. Subdirs: mount, boot-mount.
+    /// short path, single cleanup locus. Subdirs: mount, boot-mount, quality-cache.
     /// </summary>
     public static string HostServicingRoot { get; } =
         Path.Combine(
@@ -28,6 +29,8 @@ public static partial class ImageServicing
     public static string HostMountDir => Path.Combine(HostServicingRoot, "mount");
 
     public static string HostBootMountDir => Path.Combine(HostServicingRoot, "boot-mount");
+
+    public static string HostQualityCacheRoot => Path.Combine(HostServicingRoot, "quality-cache");
 
     /// <summary>Smoke default: Windows 11 Pro on consumer multi-edition ARM64/x64 ISOs (Home=1, Home SL=2, Pro=3).
     /// MountInstallWim exports this index to a single-image WIM before mount (IMAGESERVICING invariant 8).</summary>

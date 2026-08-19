@@ -2,13 +2,17 @@
 param(
     [Parameter(Mandatory)] [string] $MediaDir,
     [Parameter(Mandatory)] [string] $MountDir,
-    [Parameter(Mandatory)] [string] $WorkDirectory
+    [Parameter(Mandatory)] [string] $WorkDirectory,
+    [Parameter(Mandatory)] [string] $QualityPackageDir
 )
 # Source-ISO edition index is unrelated: after single-image export, apply target is always index 1.
 . (Join-Path $PSScriptRoot 'WinPeApplyContract.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
+. (Join-Path $PSScriptRoot 'Resolve-WinMintQualityUpdate.ps1')
 $launchApplyPayload = Get-WinPeApplyPayloadPath
 $expectedMarker = Get-WinPeApplyMarkerText
+$bootPackages = @(Get-WinMintQualityPackageLeaf -PackageDir $QualityPackageDir -Kind boot)
+$applyQuality = $bootPackages.Count -gt 0
 
 # Spike #70: 3-partition GPT (EFI 100 MB, MSR 16 MB, primary) — WinPE apply disk layout.
 # LabConfig on applied-image SYSTEM hive (not boot.wim) — Hyper-V no-vTPM VMs read it at first boot.
@@ -69,26 +73,29 @@ if (-not (Test-Path -LiteralPath $helperSrc -PathType Leaf)) {
     throw "WinMintApply.exe missing under $helperSrc. Run: just publish-provisioning"
 }
 
-# Skip only when marker + every boot index proves the authoritative apply launcher contract.
+# Skip only when marker + every boot index proves the authoritative apply launcher contract
+# and this run did not Add-Package an LCU (LCU can overwrite winpeshl.ini).
 if (Test-Path -LiteralPath $bootMarker) {
-    $markerText = (Get-Content -LiteralPath $bootMarker -Raw -Encoding utf8).Trim()
-    $allIndexesPatched = $markerText -eq $expectedMarker
-    if ($allIndexesPatched) {
-        foreach ($index in $indexes) {
-            if (-not (Test-LaunchApplyPatched -Wim $bootWim -Mount $bootMount -Index $index)) {
-                $allIndexesPatched = $false
-                break
+    if (-not $applyQuality) {
+        $markerText = (Get-Content -LiteralPath $bootMarker -Raw -Encoding utf8).Trim()
+        $allIndexesPatched = $markerText -eq $expectedMarker
+        if ($allIndexesPatched) {
+            foreach ($index in $indexes) {
+                if (-not (Test-LaunchApplyPatched -Wim $bootWim -Mount $bootMount -Index $index)) {
+                    $allIndexesPatched = $false
+                    break
+                }
             }
         }
+        if ($allIndexesPatched) {
+            Remove-Item -LiteralPath $legacyMarker -Force -ErrorAction SilentlyContinue
+            Write-Output 'PatchBootWimApply skipped (already patched; LaunchApply verified in every boot.wim index)'
+            Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
+            exit 0
+        }
+        Write-Output "PatchBootWimApply re-patch (marker='$markerText' or LaunchApply mismatch)"
+        Remove-Item -LiteralPath $bootMarker -Force -ErrorAction SilentlyContinue
     }
-    if ($allIndexesPatched) {
-        Remove-Item -LiteralPath $legacyMarker -Force -ErrorAction SilentlyContinue
-        Write-Output 'PatchBootWimApply skipped (already patched; LaunchApply verified in every boot.wim index)'
-        Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
-        exit 0
-    }
-    Write-Output "PatchBootWimApply re-patch (marker='$markerText' or LaunchApply mismatch)"
-    Remove-Item -LiteralPath $bootMarker -Force -ErrorAction SilentlyContinue
 }
 
 $bootItem = Get-Item -LiteralPath $bootWim
@@ -102,6 +109,11 @@ foreach ($index in $indexes) {
     & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:$index /MountDir:$bootMount
     if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:$index failed: $LASTEXITCODE" }
     try {
+        if ($applyQuality) {
+            foreach ($leaf in $bootPackages) {
+                Invoke-WinMintDismAddPackage -MountDir $bootMount -PackagePath (Join-Path $QualityPackageDir $leaf)
+            }
+        }
         Copy-Item -LiteralPath $launchApplyPayload `
             -Destination (Join-Path $bootMount 'Windows\System32\LaunchApply.cmd') -Force
         Copy-Item -LiteralPath $helperSrc `
@@ -118,6 +130,38 @@ foreach ($index in $indexes) {
 Set-Content -LiteralPath $bootMarker -Value $expectedMarker -Encoding utf8
 # Apply lane supersedes legacy LabConfig-in-boot.wim marker; leave no ambiguous dual story.
 Remove-Item -LiteralPath $legacyMarker -Force -ErrorAction SilentlyContinue
+
+$winreSrc = Join-Path $MountDir 'Windows\System32\Recovery\Winre.wim'
+$winrePackages = @(Get-WinMintQualityPackageLeaf -PackageDir $QualityPackageDir -Kind winre)
+if ((Test-Path -LiteralPath $winreSrc) -and $winrePackages.Count -gt 0) {
+    Write-Output 'PatchBootWimApply Safe OS DU on WinRE'
+    $winreTmp = Join-Path $WorkDirectory 'winre.wim'
+    Copy-Item -LiteralPath $winreSrc -Destination $winreTmp -Force
+    $winreItem = Get-Item -LiteralPath $winreTmp
+    if ($winreItem.IsReadOnly) { $winreItem.IsReadOnly = $false }
+    Write-WinMintMountOwner -Kind boot -WorkDirectory $workDirectory -MountDirectory $bootMount -ImageFile $winreTmp -SourceIndex 1 | Out-Null
+    & dism.exe /English /Mount-Image /ImageFile:$winreTmp /MountDir:$bootMount /Index:1
+    if ($LASTEXITCODE -ne 0) { throw "Mount WinRE failed: $LASTEXITCODE" }
+    try {
+        foreach ($leaf in $winrePackages) {
+            Invoke-WinMintDismAddPackage -MountDir $bootMount -PackagePath (Join-Path $QualityPackageDir $leaf)
+        }
+    }
+    finally {
+        & dism.exe /English /Unmount-Image /MountDir:$bootMount /Commit
+        if ($LASTEXITCODE -ne 0) { throw "Unmount WinRE failed: $LASTEXITCODE" }
+        Remove-WinMintMountOwner -Kind boot
+    }
+    Copy-Item -LiteralPath $winreTmp -Destination $winreSrc -Force
+    Remove-Item -LiteralPath $winreTmp -Force -ErrorAction SilentlyContinue
+}
+
+$stl = Join-Path $QualityPackageDir 'boot.stl'
+if (Test-Path -LiteralPath $stl -PathType Leaf) {
+    Copy-Item -LiteralPath $stl -Destination (Join-Path $mediaDir 'sources\boot.stl') -Force
+    Write-Output 'PatchBootWimApply copied boot.stl'
+}
+
 Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
 Write-Output 'PatchBootWimApply ok'
 exit 0

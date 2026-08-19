@@ -43,7 +43,7 @@ The stage list crosses this seam as `{workDirectory}/stages.json` — Materializ
 
 HostCompile resolves and freezes the build Output ISO path before Apply. ImageServicing.Apply requires that path — it does not invent a default leaf. Direct S2 callers pass an explicit Output ISO. Materialize and evidence use the supplied path unchanged. Elevated `Invoke-ServicingPlan.ps1` is the hard seam; C# owns `evidence.json` (including Prepared-media outcome fields) and `expected-evidence.json`. PowerShell owns `logs/digests.json`. Store MSIX pwsh (WindowsApps package or execution alias) and Supervisor freshness fail closed on `PwshElevatedPlanRunner`. `winget` `Microsoft.PowerShell` is MSIX — that is not the DISM host. The runner skips WindowsApps PATH hits and launches GitHub MSI `pwsh` (`PowerShell-*-win-arm64.msi` / `win-x64`) under `Program Files\PowerShell\7` when present. Fake runners skip both. [ADR-009](../decisions/ADR-009-product-constant-policies.md) still says “fails closed on Apply”; the runner is the living locus.
 
-`ServicingWorkspace` owns every workdir leaf (`logs/`, `payload/`, `media/`, `evidence.json`, `failure.json`, `apply-status.txt`, `stages.json`, `install.wim`, `unattend.xml`, `media.incoming-*` / `media.previous-*`) plus the Host Prepared-media root. C# writes `workspace.json`; the elevated loop reads it and fail-closes if the file is missing. `IElevatedPlanRunner.ExecuteAsync` takes the workspace.
+`ServicingWorkspace` owns every workdir leaf (`logs/`, `payload/`, `media/`, `quality-packages/`, `evidence.json`, `failure.json`, `apply-status.txt`, `stages.json`, `install.wim`, `unattend.xml`, `media.incoming-*` / `media.previous-*`) plus the Host Prepared-media root and quality-cache. C# writes `workspace.json`; the elevated loop reads it and fail-closes if the file is missing. `IElevatedPlanRunner.ExecuteAsync` takes the workspace.
 
 `MountInstallWim` receives a typed Prepared-media identity (Source ISO hash, store schema/root, selected-image metadata). Kernel parameter names `CacheSchema` and `CacheRoot` are the Prepared-media store (implementation names, not a product cache). Every opcode is a typed record serialized as the `parameters` object on `winmint.servicing.stages/v1` (scalars may stay numbers); ImageServicing owns that serializer. The loop splats named kernel parameters. Packed `policySpecs` / semicolon lists are gone — policy rows, AppX ids, and component ids travel as JSON under `payload/`. Every Apply still requires the Source ISO file and a matching rehash. Leftover staged media is not an input.
 
@@ -63,11 +63,11 @@ Progress labels: Hashing Source ISO → Validating prepared media → Preparing 
 
 ## Kernel naming
 
-A kernel file is named for the opcode it serves: `ServicingOpcode.StampOfflinePolicies` → `servicing/Stamp-OfflinePolicies.ps1`. That one-to-one mapping outranks PowerShell's approved-verb list, so `Stamp-`, `Stage-`, `Patch-` and `Inject-` stay. Everything in `servicing/` that is **not** an opcode kernel is a helper and does take an approved verb — `Invoke-ServicingPlan.ps1` (the loop), `Get-WimMetadata.ps1` (dot-sourced parser). `Set-OfflineComponent.ps1` serves two opcodes (`RemoveCapabilities`, `DisableOptionalFeatures`) and so cannot take either name.
+A kernel file is named for the opcode it serves: `ServicingOpcode.StampOfflinePolicies` → `servicing/Stamp-OfflinePolicies.ps1`. That one-to-one mapping outranks PowerShell's approved-verb list, so `Stamp-`, `Stage-`, `Patch-` and `Inject-` stay. Everything in `servicing/` that is **not** an opcode kernel is a helper and does take an approved verb — `Invoke-ServicingPlan.ps1` (the loop), `Get-WimMetadata.ps1` (dot-sourced parser), `Resolve-WinMintQualityUpdate.ps1` (Catalog select / BITS / SSU expand). `Set-OfflineComponent.ps1` serves two opcodes (`RemoveCapabilities`, `DisableOptionalFeatures`) and so cannot take either name.
 
 ## Invariants
 
-1. Stages run in plan order; do not invent product stages.
+1. BuildPlan emits Profile/plan stages; ImageServicing may insert **Catalog quality** ([ADR-013](../decisions/ADR-013-catalog-lcu.md)), parallel to Prepared media (not a Profile field). Remaining stages run in that materialized order.
 2. BuildPlan emits opcodes + optional `DriverInject` — never repo-relative `.ps1` paths.
 3. Kernels: named typed parameters (splatted from the opcode record) — no Profile JSON, no `-Parameters` hashtable.
 4. First kernel non-zero → typed failure; workdir preserved; leftover mounts discarded.
@@ -76,17 +76,23 @@ A kernel file is named for the opcode it serves: `ServicingOpcode.StampOfflinePo
 7. Materialize owns Mutate params (e.g. capability/feature `kind`) — not the kernel loop.
 8. Single-image WIM before commit; ExportWim fail-closes if index count ≠ 1.
 9. Host mounts under `%ProgramData%\WinMint\Servicing\` — not under workdir.
-10. WIM metadata snapshot/assert across export/commit/max-export; `ei.cfg` / INDEX=1 discipline.
+10. WIM metadata snapshot/assert Name/Arch/Edition across export/commit/max-export; ServicePack Build may increase after LCU; `ei.cfg` / INDEX=1 discipline.
 
 ## Typical stage order (Test)
 
-`MountInstallWim` → `StampOfflinePolicies` → Debloat removes? → capability/feature removes? → `InjectDrivers`? → `StagePayload` → `StageOobeUnattend` → `StampOfflineShell` → `PatchBootWimApply` → `ExportWim` → `BuildIso`  
+`MountInstallWim` → `StampOfflinePolicies` → Debloat removes? → capability/feature removes? → `InjectDrivers`? → `StagePayload` → `StageOobeUnattend` → `StampOfflineShell` → `AddQualityUpdates` (Materialize insert) → `PatchBootWimApply` → `ExportWim` → `BuildIso`  
 Policies stamp first: creating new `Policies\Microsoft\*` keys flakes Unauthorized on a heavily-serviced mount.
 WinPE apply lane only. Release differs in `ExportWim` compression/cleanup params.
 
+### Catalog quality updates
+
+`AddQualityUpdates` slipstreams the same-train Microsoft Update Catalog LCU into the **staged** `install.wim` mount when ServicePack Build is behind ([ADR-013](../decisions/ADR-013-catalog-lcu.md)). **Resolve** (`Resolve-WinMintQualityUpdate`) is the interface: WIM identity + Catalog search/details → skip | newest B-release. Live Catalog and fixture HTML are the two adapters; `just check` uses fixtures only. Combined SSU+LCU: `expand.exe` then `/Add-Package` SSU **then** LCU. Checkpoint `.msu` files listed by Catalog stay in the same package folder. Prepared media is never rewritten.
+
+LCU can overwrite `winpeshl.ini`, so `PatchBootWimApply` `/Add-Package`s from PackageDir ordered leaf lists (`boot.packages`, `winre.packages`) on each RW-mounted `boot.wim` index **before** restamping LaunchApply. Empty or missing lists skip `/Add-Package` and still restamp LaunchApply. `boot.stl` is copied when that file exists in PackageDir. Safe OS Dynamic Update targets WinRE when present; LCU is not the WinRE path. `PatchBootWimApply` does not read KB/UBR/skipped.
+
 ### WinPE apply launcher
 
-Authoritative apply script: `payload/winpe/LaunchApply.cmd`. `PatchBootWimApply` byte-copies it into `Windows\System32\LaunchApply.cmd`, copies staged `WinMintApply.exe`, and stamps `winpeshl.ini` `[LaunchApp]` `AppPath` across **every** `boot.wim` index (skip only when marker + all indexes match). `WinPeApplyContract.ps1` is the single definition for patch skip/re-patch and Gate B assert — byte identity of the `.cmd` and of `WinMintApply.exe` against the work payload, `/Index:1` apply target, disk guard, Windows-subsystem helper, and `winpeshl.ini` `[LaunchApp]` line. Do not embed launcher content in kernels; edit the payload file. winpeshl starts a Windows-subsystem exe so apply is not a visible `cmd` ([#119](https://github.com/yanai-sh/winmint/issues/119)); disk-guard refusals reopen a console with the captured log.
+Authoritative apply script: `payload/winpe/LaunchApply.cmd`. `PatchBootWimApply` byte-copies it into `Windows\System32\LaunchApply.cmd`, copies staged `WinMintApply.exe`, and stamps `winpeshl.ini` `[LaunchApp]` `AppPath` across **every** `boot.wim` index (skip only when marker + all indexes match **and** quality packages were not applied this run). `WinPeApplyContract.ps1` is the single definition for patch skip/re-patch and Gate B assert — byte identity of the `.cmd` and of `WinMintApply.exe` against the work payload, `/Index:1` apply target, disk guard, Windows-subsystem helper, and `winpeshl.ini` `[LaunchApp]` line. Do not embed launcher content in kernels; edit the payload file. winpeshl starts a Windows-subsystem exe so apply is not a visible `cmd` ([#119](https://github.com/yanai-sh/winmint/issues/119)); disk-guard refusals reopen a console with the captured log.
 
 ### Target disk
 

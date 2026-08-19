@@ -84,6 +84,26 @@ if (-not $threw) { throw 'Test-WimMetadata: expected list refuse on <undefined> 
 
 Assert-WimMetadataStable -Before $proSnap -After $proSnap -Context 'Test-WimMetadata identity'
 
+$beforeUbr = [ordered]@{
+    Name = 'Windows 11 Pro'; Architecture = 'ARM64'; Edition = 'Professional'
+    Installation = 'Client'; ProductType = 'WinNT'; ProductSuite = 'Terminal Server'; Languages = 'en-US'
+    Build = '8037'
+}
+$afterUbr = [ordered]@{
+    Name = 'Windows 11 Pro'; Architecture = 'ARM64'; Edition = 'Professional'
+    Installation = 'Client'; ProductType = 'WinNT'; ProductSuite = 'Terminal Server'; Languages = 'en-US'
+    Build = '9168'
+}
+Assert-WimMetadataStable -Before $beforeUbr -After $afterUbr -Context 'Test-WimMetadata ubr increase'
+
+$downUbr = [ordered]@{}
+foreach ($k in $afterUbr.Keys) { $downUbr[$k] = $afterUbr[$k] }
+$downUbr['Build'] = '8000'
+$threw = $false
+try { Assert-WimMetadataStable -Before $beforeUbr -After $downUbr -Context 'Test-WimMetadata ubr down' } catch { $threw = $true }
+if (-not $threw) { throw 'Test-WimMetadata: expected assert throw on UBR decrease' }
+
+
 $badName = [ordered]@{ Name = '<undefined>'; Architecture = 'ARM64'; Edition = 'Professional'; Installation = 'Client'; ProductType = 'WinNT'; Build = '26100' }
 $threw = $false
 try { Assert-WimMetadataStable -Before $proSnap -After $badName -Context 'Test-WimMetadata bad name' } catch { $threw = $true }

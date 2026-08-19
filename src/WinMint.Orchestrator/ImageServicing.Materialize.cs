@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
+
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -91,7 +92,7 @@ public static partial class ImageServicing
             File.WriteAllBytes(Path.Combine(payloadDir, "winget-import.json"), plan.WingetImportJson);
         }
 
-        string[] removeProvisionedAppx = plan.RemoveProvisionedAppx.ToArray();
+        string[] removeProvisionedAppx = [.. plan.RemoveProvisionedAppx];
 
         BundleFile bundle = new(
             BundleSchemaVersion,
@@ -140,7 +141,7 @@ public static partial class ImageServicing
         File.WriteAllBytes(
             Path.Combine(payloadDir, ServicingWorkspace.PoliciesFileName),
             JsonSerializer.SerializeToUtf8Bytes(
-                plan.OfflinePolicies.ToArray(),
+                [.. plan.OfflinePolicies],
                 ServicingJsonContext.Default.OfflinePolicyRowArray));
 
         if (plan.RemoveProvisionedAppx.Count > 0)
@@ -148,7 +149,7 @@ public static partial class ImageServicing
             File.WriteAllBytes(
                 Path.Combine(payloadDir, ServicingWorkspace.PackageFamilyNamesFileName),
                 JsonSerializer.SerializeToUtf8Bytes(
-                    plan.RemoveProvisionedAppx.ToArray(),
+                    [.. plan.RemoveProvisionedAppx],
                     ServicingJsonContext.Default.StringArray));
         }
 
@@ -157,7 +158,7 @@ public static partial class ImageServicing
             File.WriteAllBytes(
                 Path.Combine(payloadDir, ServicingWorkspace.CapabilityNamesFileName),
                 JsonSerializer.SerializeToUtf8Bytes(
-                    plan.RemoveCapabilities.ToArray(),
+                    [.. plan.RemoveCapabilities],
                     ServicingJsonContext.Default.StringArray));
         }
 
@@ -166,12 +167,22 @@ public static partial class ImageServicing
             File.WriteAllBytes(
                 Path.Combine(payloadDir, ServicingWorkspace.FeatureNamesFileName),
                 JsonSerializer.SerializeToUtf8Bytes(
-                    plan.DisableOptionalFeatures.ToArray(),
+                    [.. plan.DisableOptionalFeatures],
                     ServicingJsonContext.Default.StringArray));
         }
 
-        List<ServicingStage> resolved = new(plan.Stages.Count);
-        List<(ServicingOpcode Opcode, JsonObject Parameters)> wire = new(plan.Stages.Count);
+        List<ServicingOpcode> opcodes = [.. plan.Stages];
+        if (!opcodes.Contains(ServicingOpcode.AddQualityUpdates))
+        {
+            int boot = opcodes.IndexOf(ServicingOpcode.PatchBootWimApply);
+            if (boot >= 0)
+            {
+                opcodes.Insert(boot, ServicingOpcode.AddQualityUpdates);
+            }
+        }
+
+        List<ServicingStage> resolved = new(opcodes.Count);
+        List<(ServicingOpcode Opcode, JsonObject Parameters)> wire = new(opcodes.Count);
         void Add<T>(ServicingOpcode opcode, T record, JsonTypeInfo<T> typeInfo)
         {
             JsonObject obj = StageParamJson.From(record, typeInfo);
@@ -179,7 +190,7 @@ public static partial class ImageServicing
             resolved.Add(new ServicingStage(opcode, StageParamJson.ToBag(obj)));
         }
 
-        foreach (ServicingOpcode opcode in plan.Stages)
+        foreach (ServicingOpcode opcode in opcodes)
         {
             switch (opcode)
             {
@@ -217,8 +228,19 @@ public static partial class ImageServicing
                 case ServicingOpcode.PatchBootWimApply:
                     Add(
                         opcode,
-                        new PatchBootWimApplyParameters(mediaDir, mountDir, workspace.Root),
+                        new PatchBootWimApplyParameters(mediaDir, mountDir, workspace.Root, workspace.QualityPackages),
                         ServicingJsonContext.Default.PatchBootWimApplyParameters);
+                    break;
+                case ServicingOpcode.AddQualityUpdates:
+                    Add(
+                        opcode,
+                        new AddQualityUpdatesParameters(
+                            mountDir,
+                            mediaDir,
+                            workspace.Root,
+                            HostQualityCacheRoot,
+                            workspace.QualityPackages),
+                        ServicingJsonContext.Default.AddQualityUpdatesParameters);
                     break;
                 case ServicingOpcode.StampOfflineShell:
                     Add(
@@ -311,7 +333,7 @@ public static partial class ImageServicing
         workspace.WriteManifest();
         WriteExpectedEvidence(workspace, plan, resolved);
 
-        return Result.Ok<IReadOnlyList<ServicingStage>, Failure>(resolved.ToArray());
+        return Result.Ok<IReadOnlyList<ServicingStage>, Failure>([.. resolved]);
     }
 
     private static Result<string, Failure> StageSetupCompleteScript(string payloadDir)

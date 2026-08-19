@@ -2,6 +2,7 @@ using System.Collections.Frozen;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -210,11 +211,10 @@ public static partial class ImageServicing
             ProvisionJobKindWire.ShellStamp,
             ProvisionJobKindWire.PackageAuditNative,
         ];
-        List<string> requiredJobs = plan.Jobs.Jobs
+        List<string> requiredJobs = [.. plan.Jobs.Jobs
             .Select(static j => j.Kind.ToWire())
             .Where(needed.Contains)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+            .Distinct(StringComparer.Ordinal)];
 
         List<string> wingetIds = plan.WingetImportJson is { Length: > 0 }
             ? [.. ProductPosture.WingetIds]
@@ -226,9 +226,9 @@ public static partial class ImageServicing
             plan.PackageStrict,
             injectDrivers,
             expectFu,
-            requiredKeys.Distinct(StringComparer.Ordinal).ToArray(),
+            [.. requiredKeys.Distinct(StringComparer.Ordinal)],
             requiredValues,
-            requiredJobs.ToArray(),
+            [.. requiredJobs],
             wingetIds);
         File.WriteAllBytes(
             workspace.ExpectedEvidence,
@@ -251,6 +251,7 @@ internal sealed record FailureFile(
 [JsonSerializable(typeof(StagePayloadParameters))]
 [JsonSerializable(typeof(StageOobeUnattendParameters))]
 [JsonSerializable(typeof(PatchBootWimApplyParameters))]
+[JsonSerializable(typeof(AddQualityUpdatesParameters))]
 [JsonSerializable(typeof(StampOfflineShellParameters))]
 [JsonSerializable(typeof(StampOfflinePoliciesParameters))]
 [JsonSerializable(typeof(RemoveProvisionedAppxParameters))]

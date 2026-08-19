@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
+
 using WinMint.Orchestrator;
+
 using static WinMint.Tests.ImageServicingTestFakes;
 
 namespace WinMint.Tests;
@@ -64,6 +66,7 @@ public class ImageServicingApplyTests
                     ServicingOpcode.StagePayload,
                     ServicingOpcode.StageOobeUnattend,
                     ServicingOpcode.StampOfflineShell,
+                    ServicingOpcode.AddQualityUpdates,
                     ServicingOpcode.PatchBootWimApply,
                     ServicingOpcode.ExportWim,
                     ServicingOpcode.BuildIso,

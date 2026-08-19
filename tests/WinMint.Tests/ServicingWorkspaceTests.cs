@@ -1,4 +1,5 @@
 using System.Text.Json;
+
 using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
@@ -21,6 +22,7 @@ public class ServicingWorkspaceTests
         Assert.Equal(Path.Combine(root, "install.wim"), ws.InstallWim);
         Assert.Equal(Path.Combine(root, "unattend.xml"), ws.Unattend);
         Assert.Equal(Path.Combine(root, "logs", "digests.json"), ws.Digests);
+        Assert.Equal(Path.Combine(root, "quality-packages"), ws.QualityPackages);
         Assert.Equal("media.incoming-", ServicingWorkspace.IncomingMediaPrefix);
         Assert.Equal("media.previous-", ServicingWorkspace.PreviousMediaPrefix);
         Assert.Equal(

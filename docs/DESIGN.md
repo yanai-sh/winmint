@@ -18,13 +18,13 @@ Cross-cuts (reference, not a frozen file set): [CONTRACTS](design/CONTRACTS.md) 
 
 ## Invariants
 
-1. User-supplied Source ISO only — no bundling or silent Windows media download
+1. User-supplied Source ISO only — no bundling or silent Windows **ISO**/UUP-dump download ([ADR-001](decisions/ADR-001-source-iso-legal.md)). Same-train Catalog quality `.msu` is ImageServicing ([ADR-013](decisions/ADR-013-catalog-lcu.md))
 2. Provisioning Supervisor owns FirstLogon: splash-before-Explorer, DMA settle, unlock/reboot checkpoint, in-process splash — no guest **pwsh product runtime**, no peer Splash.exe, no v1 `WinMint.ps1`
 3. Host Servicing: elevated `pwsh -File` kernels only (not in-process DISM from Cli/Wizard)
 4. Debloat: remove-list only; no Profile preset names in JSON; CDM not primary
 5. Residual self-erase after green Shell Complete; no dual `$OEM$` SetupScripts; tenure-only branded payload under `%WINDIR%\WinMint\`
 6. Machine setup failure → non-zero exit (fail closed). Unauthorized DeviceRegion during SetupComplete is not a machine-setup failure: OOBE still holds the key, and exit 1 reseals `IMAGE_STATE_COMPLETE` to the Recovery page, which Invoke-Smoke cannot drive.
-7. WIM: single-image commit; snapshot/assert Name/Arch/(Edition|Build) across export/commit
+7. WIM: single-image commit; snapshot/assert Name/Arch/Edition across export/commit. ServicePack Build (UBR) may increase after quality updates; it is not image identity
 8. Stay on `winmint.profile/v1` until a real breaking change forces `v2`
 9. Durable guest evidence/logs under `%ProgramData%\WinMint\`
 10. Always-on product posture exists (offline policy stamps + fixed FirstLogon jobs) — **concrete ids live in code** / [ADR-009](decisions/ADR-009-product-constant-policies.md), not this list

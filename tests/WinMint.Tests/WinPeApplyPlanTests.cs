@@ -1,6 +1,8 @@
 using System.Text;
 using System.Xml.Linq;
+
 using WinMint.Orchestrator;
+
 using static WinMint.Tests.ImageServicingTestFakes;
 
 namespace WinMint.Tests;
@@ -76,7 +78,9 @@ public class WinPeApplyPlanTests
                 s => s.Opcode == ServicingOpcode.PatchBootWimApply
                     && !s.Parameters.ContainsKey(StageParams.WimIndex)
                     && s.Parameters.TryGetValue(StageParams.MediaDir, out string? media)
-                    && media.EndsWith("media", StringComparison.OrdinalIgnoreCase));
+                    && media.EndsWith("media", StringComparison.OrdinalIgnoreCase)
+                    && s.Parameters.TryGetValue(StageParams.QualityPackageDir, out string? pkg)
+                    && pkg.EndsWith("quality-packages", StringComparison.OrdinalIgnoreCase));
             string written = File.ReadAllText(Path.Combine(work, "unattend.xml"));
             Assert.DoesNotContain("windowsPE", written, StringComparison.Ordinal);
         }

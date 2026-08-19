@@ -45,7 +45,18 @@ public sealed record StagePayloadParameters(string PayloadDir, string MountDir);
 
 public sealed record StageOobeUnattendParameters(string UnattendPath, string MountDir, string MediaDir);
 
-public sealed record PatchBootWimApplyParameters(string MediaDir, string MountDir, string WorkDirectory);
+public sealed record PatchBootWimApplyParameters(
+    string MediaDir,
+    string MountDir,
+    string WorkDirectory,
+    string QualityPackageDir);
+
+public sealed record AddQualityUpdatesParameters(
+    string MountDir,
+    string MediaDir,
+    string WorkDirectory,
+    string QualityCacheRoot,
+    string QualityPackageDir);
 
 public sealed record StampOfflineShellParameters(string ShellTarget, string MountDir);
 

@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -142,6 +143,8 @@ public static class StageParams
     public const string ExpectedFileNameRegex = "expectedFileNameRegex";
     public const string MinimumWindowsBuild = "minimumWindowsBuild";
     public const string Architecture = "architecture";
+    public const string QualityPackageDir = "qualityPackageDir";
+    public const string QualityCacheRoot = "qualityCacheRoot";
 }
 
 public enum ServicingOpcode
@@ -156,6 +159,7 @@ public enum ServicingOpcode
     RemoveCapabilities,
     DisableOptionalFeatures,
     InjectDrivers,
+    AddQualityUpdates,
     ExportWim,
     BuildIso,
 }

@@ -1,0 +1,15 @@
+Deployment Image Servicing and Management tool
+Version: 10.0.26100.5074
+
+Image Version: 10.0.26200.9168
+
+Packages listing:
+
+Package Identity : Microsoft-Windows-Foundation-Package~31bf3856ad364e35~arm64~~10.0.26200.1
+State : Installed
+
+Package Identity : Package_for_RollupFix~31bf3856ad364e35~arm64~~26200.9168.1.0
+State : Installed
+Release Type : Security Update
+
+The operation completed successfully.

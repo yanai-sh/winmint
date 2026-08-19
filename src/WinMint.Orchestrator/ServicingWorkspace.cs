@@ -25,6 +25,7 @@ public sealed class ServicingWorkspace
     public const string PackageFamilyNamesFileName = "packageFamilyNames.json";
     public const string CapabilityNamesFileName = "capabilityNames.json";
     public const string FeatureNamesFileName = "featureNames.json";
+    public const string QualityPackagesDirectoryName = "quality-packages";
 
     public ServicingWorkspace(string root)
     {
@@ -43,6 +44,7 @@ public sealed class ServicingWorkspace
         Unattend = Path.Combine(Root, UnattendFileName);
         Digests = Path.Combine(Logs, DigestsFileName);
         PreparedMedia = Path.Combine(Root, PreparedMediaFileName);
+        QualityPackages = Path.Combine(Root, QualityPackagesDirectoryName);
     }
 
     public string Root { get; }
@@ -59,6 +61,7 @@ public sealed class ServicingWorkspace
     public string Unattend { get; }
     public string Digests { get; }
     public string PreparedMedia { get; }
+    public string QualityPackages { get; }
 
     public static string HostPreparedMediaRoot => PreparedMediaIdentity.Root;
 
@@ -78,6 +81,7 @@ public sealed class ServicingWorkspace
             ["unattend"] = Unattend,
             ["digests"] = Digests,
             ["preparedMedia"] = PreparedMedia,
+            ["qualityPackages"] = QualityPackages,
             ["incomingMediaPrefix"] = IncomingMediaPrefix,
             ["previousMediaPrefix"] = PreviousMediaPrefix,
             ["hostPreparedMediaRoot"] = HostPreparedMediaRoot,

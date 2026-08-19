@@ -285,7 +285,7 @@ function Assert-WimMetadataStable {
     Assert-WimMetadataPresent -Snapshot $Before -Context "${Context} (before)"
     Assert-WimMetadataPresent -Snapshot $After -Context "${Context} (after)"
 
-    foreach ($key in @('Name', 'Architecture', 'Edition', 'Installation', 'ProductType', 'ProductSuite', 'Languages', 'Build')) {
+    foreach ($key in @('Name', 'Architecture', 'Edition', 'Installation', 'ProductType', 'ProductSuite', 'Languages')) {
         $b = [string]$Before[$key]
         $a = [string]$After[$key]
         if ([string]::IsNullOrWhiteSpace($b)) { continue }
@@ -294,6 +294,24 @@ function Assert-WimMetadataStable {
         }
         if (-not $b.Equals($a, [StringComparison]::OrdinalIgnoreCase)) {
             throw "${Context}: $key changed from '$b' to '$a'"
+        }
+    }
+
+    $beforeBuild = [string]$Before['Build']
+    $afterBuild = [string]$After['Build']
+    if (-not [string]::IsNullOrWhiteSpace($beforeBuild)) {
+        if (Test-WimMetadataUndefined $afterBuild) {
+            throw "${Context}: after.Build is missing or undefined (was '$beforeBuild')"
+        }
+        $beforeUbr = 0
+        $afterUbr = 0
+        if ([int]::TryParse($beforeBuild, [ref]$beforeUbr) -and [int]::TryParse($afterBuild, [ref]$afterUbr)) {
+            if ($afterUbr -lt $beforeUbr) {
+                throw "${Context}: ServicePack Build decreased from '$beforeBuild' to '$afterBuild'"
+            }
+        }
+        elseif (-not $beforeBuild.Equals($afterBuild, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "${Context}: Build changed from '$beforeBuild' to '$afterBuild'"
         }
     }
 }
