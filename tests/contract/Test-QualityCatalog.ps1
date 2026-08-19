@@ -60,6 +60,13 @@ $urls = ConvertFrom-WinMintCatalogDownloadDialog -Text (Get-Content -LiteralPath
 $msu = Select-WinMintCatalogMsuUrl -Urls $urls
 if ($msu -notmatch 'kb5121003-arm64') { throw "Test-QualityCatalog: msu $msu" }
 if (-not (Test-WinMintDownloadWindowsupdateUri -Uri $msu)) { throw 'Test-QualityCatalog: download host' }
+$delivery = ConvertFrom-WinMintCatalogDownloadDialog -Text (Get-Content -LiteralPath (Join-Path $fx 'download-dialog-kb5121003-delivery.txt') -Raw)
+$deliveryMsu = Select-WinMintCatalogMsuUrl -Urls $delivery
+if ($deliveryMsu -notmatch 'kb5121003-arm64') { throw "Test-QualityCatalog: delivery msu $deliveryMsu" }
+if (-not (Test-WinMintDownloadWindowsupdateUri -Uri $deliveryMsu)) { throw 'Test-QualityCatalog: delivery host' }
+if (Test-WinMintDownloadWindowsupdateUri -Uri 'https://catalog.update.microsoft.com/DownloadDialog.aspx') {
+    throw 'Test-QualityCatalog: Catalog HTML host is not a payload CDN'
+}
 $threw = $false
 try { ConvertFrom-WinMintCatalogDownloadDialog -Text "url:'https://evil.example/payload.msu'" | Out-Null } catch { $threw = $true }
 if (-not $threw) { throw 'Test-QualityCatalog: expected refuse non-WU host' }

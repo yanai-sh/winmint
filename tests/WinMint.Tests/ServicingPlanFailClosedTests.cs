@@ -55,6 +55,41 @@ public class ServicingPlanFailClosedTests
     }
 
     [Fact]
+    public void Kernel_throw_writes_opcode_log_named_in_apply_status()
+    {
+        string work = NewWork("kernel-log");
+        try
+        {
+            string runner = PrepareFakeServicingRoot(work);
+            File.WriteAllText(
+                Path.Combine(Path.GetDirectoryName(runner)!, "Stamp-OfflineShell.ps1"),
+                """
+                param([string] $ShellTarget, [string] $MountDir)
+                throw 'kernel boom'
+                """);
+            File.WriteAllText(
+                Path.Combine(work, "stages.json"),
+                """{"schemaVersion":"winmint.servicing.stages/v1","stages":[{"opcode":"StampOfflineShell","parameters":{"shellTarget":"C:\\Windows\\WinMint\\Supervisor.exe"}}]}""");
+
+            (int exitCode, string output) = RunPlan(work, runner);
+
+            Assert.True(exitCode == 1, $"expected exit 1, got {exitCode}\n{output}");
+            string log = Path.Combine(work, "logs", "01-StampOfflineShell.log");
+            Assert.True(File.Exists(log), $"expected kernel log\n{output}");
+            Assert.Contains("kernel boom", File.ReadAllText(log), StringComparison.Ordinal);
+            Assert.Contains(
+                "stage=failed:StampOfflineShell",
+                File.ReadAllText(Path.Combine(work, "apply-status.txt")),
+                StringComparison.Ordinal);
+            Assert.Contains("01-StampOfflineShell.log", File.ReadAllText(Path.Combine(work, "apply-status.txt")), StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
     public void Evidence_cleanup_failure_still_writes_current_failure_and_status()
     {
         string work = NewWork("cleanup-failure");

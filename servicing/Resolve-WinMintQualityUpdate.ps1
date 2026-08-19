@@ -158,18 +158,16 @@ function ConvertFrom-WinMintCatalogUbr {
 
 function ConvertFrom-WinMintCatalogDownloadDialog {
     param([Parameter(Mandatory)] [string] $Text)
+    # Catalog JS often escapes slashes; payload host moved to dl.delivery.mp.microsoft.com.
+    $normalized = $Text.Replace('\/', '/')
     $urls = @(
-        [regex]::Matches($Text, "https?://(?:[^/]+\.)?download\.windowsupdate\.com/[^'""\s<>]+") |
+        [regex]::Matches($normalized, "https?://[^'""\s<>]+") |
             ForEach-Object { $_.Value.TrimEnd('\', ',', ';') } |
-            Select-Object -Unique
+            Select-Object -Unique |
+            Where-Object { Test-WinMintDownloadWindowsupdateUri -Uri $_ }
     )
     if ($urls.Count -lt 1) {
-        throw 'Catalog DownloadDialog returned no download.windowsupdate.com URL'
-    }
-    foreach ($u in $urls) {
-        if ($u -notmatch '(?i)^https?://([^/]+\.)?download\.windowsupdate\.com/') {
-            throw "Catalog download host is not download.windowsupdate.com: $u"
-        }
+        throw 'Catalog DownloadDialog returned no Catalog payload URL (download.windowsupdate.com or dl.delivery.mp.microsoft.com)'
     }
     return $urls
 }
@@ -208,7 +206,9 @@ function Test-WinMintDownloadWindowsupdateUri {
     $parsed = $null
     if (-not [System.Uri]::TryCreate($Uri, [System.UriKind]::Absolute, [ref]$parsed)) { return $false }
     if ($parsed.Scheme -notin @('http', 'https')) { return $false }
-    return $parsed.Host -match '(?i)(^|\.)download\.windowsupdate\.com$'
+    # Catalog DownloadDialog (2026): files[].url is catalog.sf.dl.delivery.mp.microsoft.com, not WU.
+    return $parsed.Host -match '(?i)(^|\.)download\.windowsupdate\.com$' -or
+        $parsed.Host -match '(?i)(^|\.)dl\.delivery\.mp\.microsoft\.com$'
 }
 
 function Save-WinMintCatalogPayload {
@@ -217,7 +217,7 @@ function Save-WinMintCatalogPayload {
         [Parameter(Mandatory)] [string] $Destination
     )
     if (-not (Test-WinMintDownloadWindowsupdateUri -Uri $Uri)) {
-        throw "Quality download host is not download.windowsupdate.com: $Uri"
+        throw "Quality download host is not a Catalog payload CDN: $Uri"
     }
     $dir = Split-Path -Parent $Destination
     New-Item -ItemType Directory -Force -Path $dir | Out-Null

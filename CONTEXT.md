@@ -6,8 +6,8 @@ Policy / acceptance: [DESIGN](docs/DESIGN.md).
 
 ## Language
 
-**Catalog quality** — Same-train Microsoft Update Catalog **Security Update** (B-release) LCU applied during ImageServicing when staged `install.wim` UBR is behind. Newest matching ARM64 package each Apply — not a pinned KB or Patch Tuesday date. Not a Source ISO ([ADR-013](docs/decisions/ADR-013-catalog-lcu.md)).  
-_Avoid_: pinning a KB; calling Preview CU “latest”; 26H1 from 25H2; UUP dump; rewriting Prepared media
+**Catalog quality** — Same-train Microsoft Update Catalog **Security Update** (B-release) LCU applied during ImageServicing when staged `install.wim` UBR is behind. Newest matching ARM64 package each Apply — not a pinned KB or Patch Tuesday date. Not a Source ISO ([ADR-013](docs/decisions/ADR-013-catalog-lcu.md)). Payload bytes come from Catalog CDNs (`download.windowsupdate.com` or `*.dl.delivery.mp.microsoft.com`), never from a Windows ISO host.  
+_Avoid_: pinning a KB; calling Preview CU “latest”; 26H1 from 25H2; UUP dump; rewriting Prepared media; treating catalog.update.microsoft.com HTML as the `.msu` host
 
 **Source ISO** — Official Microsoft install media the user provides. It remains an Apply input every run; a stored media tree must not stand in for a missing file. No silent Windows ISO or UUP-dump download. Same-train Catalog quality `.msu` is ImageServicing, not a Source ISO ([ADR-013](docs/decisions/ADR-013-catalog-lcu.md)).  
 _Avoid_: golden ISO, UUP default source; substituting Prepared media or staged media for the Source ISO

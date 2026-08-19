@@ -91,6 +91,14 @@ if (Test-Path -LiteralPath $guestDir) {
 }
 New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 
+$workFull = if ([IO.Path]::IsPathRooted($Work)) { $Work } else { Join-Path $repoRoot $Work }
+$pwshExe = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
+Start-Process -FilePath $pwshExe -WorkingDirectory $repoRoot -ArgumentList @(
+    '-NoProfile',
+    '-File', (Join-Path $PSScriptRoot 'Watch-SmokeHost.ps1'),
+    '-Work', $workFull
+) | Out-Null
+
 $applyEvidence = Join-Path $Work 'evidence.json'
 $outIso = Resolve-WinMintOutputIso -WorkDirectory $Work
 if (-not $SkipApply) {
@@ -102,8 +110,28 @@ if (-not $SkipApply) {
         -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
         -LastHostLine "Applying Profile=$Profile" -OutputIso $null
     Write-Host "Applying Profile=$Profile Iso=$Iso Work=$Work (Test lane, smoke stubs on)…"
-    & just apply-maintainer $Iso $Work $Profile true
-    if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
+    try {
+        & just apply-maintainer $Iso $Work $Profile true
+        if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
+    }
+    catch {
+        $failLine = [string]$_.Exception.Message
+        $failureJson = Join-Path $workFull 'failure.json'
+        if (Test-Path -LiteralPath $failureJson) {
+            try {
+                $failDoc = Get-Content -LiteralPath $failureJson -Raw -Encoding utf8 | ConvertFrom-Json
+                if (-not [string]::IsNullOrWhiteSpace([string]$failDoc.message)) {
+                    $failLine = [string]$failDoc.message
+                }
+            }
+            catch {
+                # keep throw message
+            }
+        }
+        Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage failed) `
+            -VmName $VmName -LastHostLine $failLine -OutputIso $null
+        throw
+    }
 
     # Re-resolve after Apply (dynamic leaf).
     $outIso = Resolve-WinMintOutputIso -WorkDirectory $Work

@@ -15,6 +15,7 @@ When staged `install.wim` UBR is behind the latest same-family **Security Update
 - Source ISO stays user-supplied. Prepared-media entries stay an unpatched Source-ISO tree.
 - Same DISM `Version` family only (`26200` → 25H2, `26100` → 24H2). Unknown family, 26H1, or x64-only Catalog results fail closed.
 - Fail closed when the WIM is behind and Catalog, BITS, or DISM cannot complete.
+- Catalog `.msu` payload URLs are `download.windowsupdate.com` **or** `*.dl.delivery.mp.microsoft.com` (Catalog DownloadDialog `files[].url` as of 2026). Other hosts fail closed. Not a Source ISO host.
 - Skip download and DISM when `packageUbr <= imageUbr`.
 - `just check` never hits Catalog. Maintainer live reconcile is `just quality-check`.
 - Evidence fields (`lcu.kb`, `lcu.ubrBefore`, `lcu.ubrAfter`, `lcu.sha256`, `lcu.skipped`) are projection, not a control plane.
@@ -24,7 +25,7 @@ When staged `install.wim` UBR is behind the latest same-family **Security Update
 - The `AddQualityUpdates` opcode is ImageServicing Materialize-owned, not BuildPlan Profile intent.
 - Host Apply progress (`apply-status.txt` / DISM percent) is the long wait when the ISO is behind; guest ZDP after NAT remains short and mandatory.
 - Quality-cache is not a product golden WIM and is never rewritten in place as Prepared media.
-- Revisit if Microsoft stops publishing combined Catalog `.msu` for the current train, or ships an official in-place path to the next feature release.
+- Revisit if Microsoft stops publishing combined Catalog `.msu` for the current train, ships an official in-place path to the next feature release, or moves `.msu` bytes off `download.windowsupdate.com` / `*.dl.delivery.mp.microsoft.com`.
 
 ### Review trigger
 

@@ -10,6 +10,9 @@ if ($smoke -notmatch 'tools[/\\]vm[/\\]SmokeStatus\.ps1') { throw 'Invoke-Smoke 
 if ($smoke -notmatch '\[switch\]\s*\$Monitor') { throw '-Monitor switch missing' }
 if ($smoke -notmatch 'Start-SmokeMonitor') { throw 'Start-SmokeMonitor not called' }
 if ($smoke -notmatch 'Write-SmokeStatus') { throw 'Write-SmokeStatus not called' }
+if ($smoke -notmatch 'Watch-SmokeHost\.ps1') { throw 'Invoke-Smoke must Start-Process Watch-SmokeHost.ps1' }
+if ($smoke -notmatch 'just apply-maintainer') { throw 'Apply path missing' }
+if ($smoke -notmatch "Resolve-SmokePhase -HostStage failed") { throw 'Apply/wait failures must write phase=failed' }
 if ($smoke -match 'Get-Content[^\n]*smoke-status\.json') { throw 'must not read smoke-status.json as control plane' }
 if ($smoke -notmatch 'Get-SmokeWatchVerdict') { throw 'Invoke-Smoke wait loop must call Get-SmokeWatchVerdict' }
 if ($smoke -notmatch 'EMPTY_VHD:') { throw 'empty-VHD throw prefix missing (operator copy)' }
