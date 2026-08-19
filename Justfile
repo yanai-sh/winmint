@@ -37,6 +37,10 @@ contract-tests:
 packages-check:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- packages-check
 
+# Live Microsoft Update Catalog B-release reconcile (25H2/24H2 ARM64). Not in `just check`.
+quality-check:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-QualityCheck.ps1'
+
 bootstrap-contract:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-BootstrapContract.ps1'
 
@@ -68,8 +72,10 @@ release-contract:
     just release-inventory-contract
 
 # Install once: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser
-analyze-servicing:
-    if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) { Write-Error 'PSScriptAnalyzer not installed. Run: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser'; exit 1 }; $issues = Invoke-ScriptAnalyzer -Path '{{justfile_directory()}}/servicing' -Settings '{{justfile_directory()}}/servicing/PSScriptAnalyzerSettings.psd1' -Recurse; if ($issues) { $issues | Format-Table -AutoSize | Out-String | Write-Output; exit 1 }; Write-Output 'PSScriptAnalyzer: clean'
+analyze-powershell:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-ScriptAnalyzerGate.ps1'
+
+analyze-servicing: analyze-powershell
 
 publish-provisioning:
     dotnet publish src/WinMint.WinPeApply/WinMint.WinPeApply.csproj -c Release -o artifacts/winpe-apply

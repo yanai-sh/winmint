@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -468,10 +469,9 @@ public sealed record HostReview(
     {
         get
         {
-            string[] labels = AuthoredSelectionLabels
+            string[] labels = [.. AuthoredSelectionLabels
                 .Where(static label => !string.IsNullOrWhiteSpace(label))
-                .Select(static label => label.Trim())
-                .ToArray();
+                .Select(static label => label.Trim())];
             return labels.Length == 0 ? string.Empty : string.Join(" · ", labels);
         }
     }
@@ -512,7 +512,7 @@ public sealed class HostComposition
     {
         _artifacts = artifacts;
         Review = review;
-        _profileUtf8 = profileUtf8.ToArray();
+        _profileUtf8 = [.. profileUtf8];
         SourceProfileDirectory = sourceProfileDirectory;
         SourceIsoPath = sourceIsoPath;
         WorkDirectory = workDirectory;
@@ -523,7 +523,7 @@ public sealed class HostComposition
     public string SourceIsoPath { get; }
     public string WorkDirectory { get; }
     public string OutputIsoPath { get; }
-    public byte[] GetProfileUtf8() => _profileUtf8.ToArray();
+    public byte[] GetProfileUtf8() => [.. _profileUtf8];
     internal BuildArtifacts Artifacts => _artifacts;
     public string? SourceProfileDirectory { get; }
 }

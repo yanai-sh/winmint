@@ -1,5 +1,7 @@
 #Requires -Version 7
 # WinMint opinionated PowerShell 7 profile (one-shot skel). Edit freely — WinMint will not re-apply.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingInvokeExpression', '', Justification = 'starship and zoxide document Invoke-Expression for init')]
+param()
 
 $PROFILE_DIR = Split-Path -Path $PROFILE -Parent
 

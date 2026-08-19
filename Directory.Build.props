@@ -7,7 +7,15 @@
     <Deterministic>true</Deterministic>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!-- This SDK: latest=11.0, preview=12.0. There is no analysislevel_12_*.globalconfig, so preview-* would skip the CA catalog. -->
+    <AnalysisLevel>11-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- SDK recommended style catalog. IDE0005 needs documentation files; CS1591 stays off (not a shipped public API). -->
+    <AnalysisLevelStyle>11-recommended</AnalysisLevelStyle>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- LangVersion preview compiler waves. AnalysisLevel=preview would set this, but that alias is CA-12 (missing configs). -->
+    <WarningLevel>9999</WarningLevel>
     <!-- AOT-friendly graph; PublishAot is per-project (Provisioning Release). -->
     <IsAotCompatible>true</IsAotCompatible>
     <Product>WinMint</Product>
@@ -16,8 +24,16 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <!-- Learn .NET 11 Runtime Async (NativeAOT-supported). -->
     <Features>runtime-async=on</Features>
-    <!-- CS1591 / GenerateDocumentationFile off — still document BuildPlan / ImageServicing.Apply / ProvisioningSession entrypoints in source. -->
+    <!-- CS1591 off (not a shipped public API). GenerateDocumentationFile stays on for IDE0005. Document BuildPlan / ImageServicing.Apply / ProvisioningSession entrypoints in source. -->
   </PropertyGroup>
+  <ItemGroup>
+    <!-- STACK: DllImport + GetResult/Wait/.Result. SDK has no banned-API list. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
+  </ItemGroup>
   <PropertyGroup Condition="'$(CI)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>

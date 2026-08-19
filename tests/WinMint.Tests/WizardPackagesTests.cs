@@ -1,7 +1,8 @@
 using System.Text;
 using System.Text.Json;
-using WinMint.Orchestrator;
+
 using WinMint.Contracts;
+using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
 

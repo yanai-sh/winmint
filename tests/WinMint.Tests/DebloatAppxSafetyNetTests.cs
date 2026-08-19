@@ -1,6 +1,7 @@
-using WinMint.Orchestrator;
 using WinMint.Contracts;
+using WinMint.Orchestrator;
 using WinMint.Provisioning;
+
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
@@ -82,7 +83,7 @@ public class DebloatAppxSafetyNetTests
             appx.DeprovisionedFamilyNames);
         Assert.Equal(
             ["Microsoft.BingNews_8wekyb3d8bbwe", "Microsoft.GamingApp_8wekyb3d8bbwe"],
-            appx.EnsuredDeprovisionedMarks.OrderBy(s => s, StringComparer.Ordinal).ToArray());
+            [.. appx.EnsuredDeprovisionedMarks.OrderBy(s => s, StringComparer.Ordinal)]);
     }
 
     [Fact]

@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text;
+
 using WinMint.Orchestrator;
+
 using static WinMint.Tests.ImageServicingTestFakes;
 
 namespace WinMint.Tests;
@@ -42,7 +44,7 @@ public class DriverServicingTests
                 string.Join('\0', inject.Parameters.Values),
                 StringComparison.OrdinalIgnoreCase);
 
-            IReadOnlyList<ServicingOpcode> opcodes = runner.Opcodes.ToArray();
+            IReadOnlyList<ServicingOpcode> opcodes = [.. runner.Opcodes];
             int injectAt = opcodes.ToList().IndexOf(ServicingOpcode.InjectDrivers);
             int policiesAt = opcodes.ToList().IndexOf(ServicingOpcode.StampOfflinePolicies);
             int payloadAt = opcodes.ToList().IndexOf(ServicingOpcode.StagePayload);

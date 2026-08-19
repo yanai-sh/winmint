@@ -1,6 +1,7 @@
-using System.Security.Cryptography;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
+
 using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
@@ -466,11 +467,10 @@ public class PackagesProofTests
     [Fact]
     public void PackagesProof_public_surface_is_refresh_and_validate_only()
     {
-        string[] methods = typeof(PackagesProof)
+        string[] methods = [.. typeof(PackagesProof)
             .GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
             .Select(method => method.Name)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
+            .Order(StringComparer.Ordinal)];
 
         Assert.Equal(["RefreshAsync", "Validate"], methods);
         Assert.False(typeof(PackagesProofEntry).IsPublic);

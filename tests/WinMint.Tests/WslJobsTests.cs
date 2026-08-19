@@ -1,7 +1,9 @@
 using System.Text;
-using WinMint.Orchestrator;
+
 using WinMint.Contracts;
+using WinMint.Orchestrator;
 using WinMint.Provisioning;
+
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;
@@ -17,9 +19,7 @@ public class WslJobsTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        ProvisionJob[] wslJobs = result.Value.Jobs.Jobs
-            .Where(j => j.Kind is ProvisionJobKind.Wsl or ProvisionJobKind.WslPlatform)
-            .ToArray();
+        ProvisionJob[] wslJobs = [.. result.Value.Jobs.Jobs.Where(j => j.Kind is ProvisionJobKind.Wsl or ProvisionJobKind.WslPlatform)];
         Assert.Equal(2, wslJobs.Length);
         Assert.Equal(ProvisionJobKind.WslPlatform, wslJobs[0].Kind);
         Assert.Equal("wsl.platform", wslJobs[0].Id);

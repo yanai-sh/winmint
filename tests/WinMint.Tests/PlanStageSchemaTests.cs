@@ -1,5 +1,5 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
+
 using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
@@ -15,7 +15,7 @@ public class PlanStageSchemaTests
         Assert.Equal(
             "winmint.servicing.stages/v1",
             Schema(ImageServicing.SerializeServicingStagesFile(
-                Array.Empty<(ServicingOpcode, JsonObject)>())));
+                [])));
     }
 
     private static string Schema(string json)

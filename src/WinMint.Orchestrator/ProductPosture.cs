@@ -76,10 +76,9 @@ public static class ProductPosture
     ];
 
     public static IReadOnlyList<string> AlwaysOnDigestKeys =>
-        ComposePolicies(includeBraveDebloat: false, includeDriverHygiene: false)
+        [.. ComposePolicies(includeBraveDebloat: false, includeDriverHygiene: false)
             .Select(static row => row.Digest)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+            .Distinct(StringComparer.Ordinal)];
 
     /// <summary>Profile appx first, then product-required; case-insensitive dedupe.</summary>
     public static IReadOnlyList<string> UnionAppx(IReadOnlyList<string> profileAppx) =>
@@ -128,7 +127,7 @@ public static class ProductPosture
             rows.AddRange(DriverHygiene);
         }
 
-        return rows.ToArray();
+        return [.. rows];
     }
 
     public static bool TryNormalizeDohProvider(string? raw, out string? provider, out string? error)

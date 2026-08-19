@@ -1,6 +1,7 @@
 using System.Text.Json;
-using WinMint.Orchestrator;
+
 using WinMint.Contracts;
+using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
 
@@ -84,7 +85,7 @@ public class ProductPostureTests
         Assert.All(rows, row => Assert.False(string.IsNullOrWhiteSpace(row.Family)));
         Assert.All(rows, row => Assert.Equal($"policy.{row.Family}.{row.Name}", row.Digest));
 
-        string[] digestKeys = rows.Select(static row => row.Digest).ToArray();
+        string[] digestKeys = [.. rows.Select(static row => row.Digest)];
 
         // A new row falling through to the "edge" default shows up as a missing family here.
         Assert.Equal(
@@ -101,10 +102,9 @@ public class ProductPostureTests
                 "sudo",
                 "wpbt",
             ],
-            digestKeys.Select(key => key.Split('.')[1])
+            [.. digestKeys.Select(key => key.Split('.')[1])
                 .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal)
-                .ToArray());
+                .Order(StringComparer.Ordinal)]);
 
         // Keys the apply/smoke gates assert on by literal (tools/apply/Assert-ApplyEvidence.ps1).
         Assert.Contains("policy.cloudContent.DisableWindowsConsumerFeatures", digestKeys);
@@ -142,10 +142,9 @@ public class ProductPostureTests
         Assert.True(result.Value.Manifest.RequiresNetwork);
 
         using JsonDocument doc = JsonDocument.Parse(result.Value.WingetImportJson!);
-        string[] ids = doc.RootElement.GetProperty("Sources")[0].GetProperty("Packages")
+        string[] ids = [.. doc.RootElement.GetProperty("Sources")[0].GetProperty("Packages")
             .EnumerateArray()
-            .Select(p => p.GetProperty("PackageIdentifier").GetString()!)
-            .ToArray();
+            .Select(p => p.GetProperty("PackageIdentifier").GetString()!)];
         Assert.Equal(
             [
                 "Git.MinGit",

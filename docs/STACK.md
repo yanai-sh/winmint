@@ -18,6 +18,7 @@ No guest **pwsh product runtime**. Inbox `powershell.exe` for Scoop bootstrap / 
 | TFM | `net11.0` |
 | SDK | Rolling .NET 11 preview (`global.json` floor + `latestFeature` + `allowPrerelease`) |
 | LangVersion | `preview` |
+| Analyzers | `AnalysisLevel` `11-recommended` (not `preview-*`: this SDK maps `preview` to CA 12, and those configs are not shipped). Style: `11-recommended` + `EnforceCodeStyleInBuild` + `dotnet new editorconfig` (STACK: file-scoped namespaces, collection expressions, primary constructors). `GenerateDocumentationFile` on, CS1591 off. Compiler waves: `WarningLevel` 9999. |
 | Runtime Async | Opt in with `<Features>runtime-async=on</Features>` (Learn .NET 11; NativeAOT-supported) |
 | AOT | `PublishAot` on Provisioning and WinPeApply (Release); `IsAotCompatible` graph-wide |
 | Build | Deterministic; `ContinuousIntegrationBuild` under GITHUB_ACTIONS |
@@ -51,5 +52,5 @@ No MediatR / Generic Host / AutoMapper. Shared wire types live in `WinMint.Contr
 - **Errors:** expected validation / parse / unknown-key → typed `Result` (or session status) at **every** seam (Profile, catalog, bundle, plan, apply). Exceptions for bugs and true invariants only.
 - **Job kinds:** closed set at the load boundary (enum today; C# 15 `union` after PublishAot/STJ spike). Wire JSON may stay string.
 - NuGet: justify every package (“why not BCL”). Avalonia **12.x** Wizard. `xunit` v3 + MTP. Prefer `LoggerMessage` / const status codes over `.resx` i18n.
-- Document deep-module entrypoints in source. Keep `GenerateDocumentationFile` / CS1591 off until a shipped public API needs it.
-- Warnings as errors + analyzers (`Directory.Build.props`).
+- Document deep-module entrypoints in source. `GenerateDocumentationFile` is on for IDE0005 (unused usings); CS1591 stays off until a shipped public API needs it.
+- Warnings as errors + .NET 11 recommended CA and code-style catalogs + `EnforceCodeStyleInBuild` (`Directory.Build.props`). Banned APIs: `BannedSymbols.txt`. PowerShell: PSScriptAnalyzer on `servicing/`, `tools/`, `tests/contract/`, payload profile, and `winmint.ps1`.

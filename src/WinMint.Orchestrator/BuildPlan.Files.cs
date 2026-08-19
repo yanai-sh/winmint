@@ -21,7 +21,7 @@ public static partial class BuildPlan
         return JsonSerializer.Serialize(
             new StagesFile(
                 PlanStagesSchemaVersion,
-                stages.Select(opcode => new StageFile(
+                [.. stages.Select(opcode => new StageFile(
                     opcode.ToString(),
                     opcode switch
                     {
@@ -38,8 +38,7 @@ public static partial class BuildPlan
                             [StageParams.Cleanup] = export.Cleanup,
                         },
                         _ => empty,
-                    }))
-                    .ToArray()),
+                    }))]),
             PlanFileJsonContext.Default.StagesFile);
     }
 }

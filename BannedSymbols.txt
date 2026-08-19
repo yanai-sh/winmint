@@ -1,0 +1,13 @@
+// STACK: LibraryImport only (CsWin32 or hand-written).
+T:System.Runtime.InteropServices.DllImportAttribute; Use LibraryImport
+
+// STACK: no sync-over-async bridges.
+M:System.Runtime.CompilerServices.TaskAwaiter.GetResult; Use await — do not call GetAwaiter().GetResult()
+M:System.Runtime.CompilerServices.TaskAwaiter`1.GetResult; Use await — do not call GetAwaiter().GetResult()
+M:System.Runtime.CompilerServices.ValueTaskAwaiter.GetResult; Use await
+M:System.Runtime.CompilerServices.ValueTaskAwaiter`1.GetResult; Use await
+P:System.Threading.Tasks.Task`1.Result; Use await
+M:System.Threading.Tasks.Task.Wait; Use await
+M:System.Threading.Tasks.Task.Wait(System.TimeSpan); Use await
+M:System.Threading.Tasks.Task.Wait(System.Int32); Use await
+M:System.Threading.Tasks.Task.Wait(System.Threading.CancellationToken); Use await

@@ -1,6 +1,7 @@
 using System.Text;
-using WinMint.Orchestrator;
+
 using WinMint.Contracts;
+using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
 
@@ -104,9 +105,7 @@ public class DebloatPresetTests
         Assert.DoesNotContain("Microsoft.Copilot", result.Value.RemoveProvisionedAppx);
         Assert.Equal(
             ProductPosture.AppxIds,
-            ProductPosture.UnionAppx(result.Value.RemoveProvisionedAppx)
-                .Where(id => ProductPosture.AppxIds.Contains(id, StringComparer.OrdinalIgnoreCase))
-                .ToArray());
+            [.. ProductPosture.UnionAppx(result.Value.RemoveProvisionedAppx).Where(id => ProductPosture.AppxIds.Contains(id, StringComparer.OrdinalIgnoreCase))]);
     }
 
     [Fact]

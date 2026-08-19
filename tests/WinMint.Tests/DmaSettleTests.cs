@@ -1,7 +1,9 @@
-using WinMint.Provisioning;
 using WinMint.Contracts;
-using DmaSettleTarget = WinMint.Contracts.DmaSettleTarget;
+using WinMint.Provisioning;
+
 using static WinMint.Tests.ProvisioningSessionTestFakes;
+
+using DmaSettleTarget = WinMint.Contracts.DmaSettleTarget;
 
 namespace WinMint.Tests;
 
@@ -222,13 +224,10 @@ public class DmaSettleTests
         public sealed record ThrowRead(string Message) : RegionRead;
     }
 
-    private sealed class ScriptedRegionSnapshot : IRegionSnapshot
+    private sealed class ScriptedRegionSnapshot(params DmaSettleTests.RegionRead[] reads) : IRegionSnapshot
     {
-        private readonly Queue<RegionRead> _reads;
+        private readonly Queue<RegionRead> _reads = new Queue<RegionRead>(reads);
         private RegionState? _lastGood;
-
-        public ScriptedRegionSnapshot(params RegionRead[] reads) =>
-            _reads = new Queue<RegionRead>(reads);
 
         public List<DmaSettleTarget> Applied { get; } = [];
 

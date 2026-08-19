@@ -27,6 +27,6 @@ public static class IdList
             }
         }
 
-        return merged.ToArray();
+        return [.. merged];
     }
 }

@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Security.Principal;
+
 using Microsoft.Extensions.Logging;
+
 using Windows.ApplicationModel;
 using Windows.Management.Deployment;
 
@@ -47,7 +49,7 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
             return [];
         }
 
-        return hits.ToArray();
+        return [.. hits];
     }
 
     public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId)
@@ -71,7 +73,7 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
             return [];
         }
 
-        return hits.ToArray();
+        return [.. hits];
     }
 
     public async Task RemovePackageAsync(string packageFullName, CancellationToken ct = default)
@@ -160,7 +162,7 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
         }
 
         string root = WindowsAppsRoot;
-        string[] dirs = FindWingetFrameworkPackageDirectories(root).ToArray();
+        string[] dirs = [.. FindWingetFrameworkPackageDirectories(root)];
         if (_logger is not null)
         {
             GuestLog.WingetAclFound(_logger, dirs.Length, root);

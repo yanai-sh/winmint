@@ -1,7 +1,9 @@
-using WinMint.Provisioning;
 using WinMint.Contracts;
-using DmaSettleTarget = WinMint.Contracts.DmaSettleTarget;
+using WinMint.Provisioning;
+
 using static WinMint.Tests.ProvisioningSessionTestFakes;
+
+using DmaSettleTarget = WinMint.Contracts.DmaSettleTarget;
 
 namespace WinMint.Tests;
 
@@ -191,19 +193,12 @@ public class UnlockTimeoutTests
     }
 
     /// <summary>First probe mismatches (and may jump wall clock); later probes match.</summary>
-    private sealed class JumpThenMatchRegion : IRegionSnapshot
+    private sealed class JumpThenMatchRegion(RegionState mismatch, RegionState match, Action onFirstMismatch) : IRegionSnapshot
     {
-        private readonly RegionState _mismatch;
-        private readonly RegionState _match;
-        private readonly Action _onFirstMismatch;
+        private readonly RegionState _mismatch = mismatch;
+        private readonly RegionState _match = match;
+        private readonly Action _onFirstMismatch = onFirstMismatch;
         private int _reads;
-
-        public JumpThenMatchRegion(RegionState mismatch, RegionState match, Action onFirstMismatch)
-        {
-            _mismatch = mismatch;
-            _match = match;
-            _onFirstMismatch = onFirstMismatch;
-        }
 
         public void Apply(DmaSettleTarget target) { }
 

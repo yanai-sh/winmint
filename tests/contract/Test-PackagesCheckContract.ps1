@@ -70,7 +70,7 @@ if ($bounded -notmatch 'timed out after \$DownloadTimeoutSeconds seconds' `
     $failures += 'timeout errors must state the active bound'
 }
 
-Invoke-Expression $bounded
+. ([scriptblock]::Create($bounded))
 $script:DownloadTimeoutSeconds = 5
 $probe = Invoke-BoundedProcess `
     -FileName $env:ComSpec `

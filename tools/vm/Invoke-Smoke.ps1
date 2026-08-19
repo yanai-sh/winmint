@@ -292,6 +292,7 @@ function Test-GuestEvidenceReady {
         }
         catch {
             # corrupt local copy — re-query
+            $null = $_
         }
     }
     try {
@@ -347,6 +348,7 @@ function Test-GuestEvidenceReady {
     }
     catch {
         # PS Direct unavailable until guest is up / integration services ready
+        $null = $_
     }
     return $false
 }

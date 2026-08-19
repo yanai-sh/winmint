@@ -1,6 +1,6 @@
-namespace WinMint.Provisioning;
-
 using WinMint.Contracts;
+
+namespace WinMint.Provisioning;
 
 internal sealed record JobRunnerEnv(
     IReadOnlyList<string> RemoveProvisionedAppx,

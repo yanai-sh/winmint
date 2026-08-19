@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -46,7 +47,7 @@ internal static class PlanDiff
     }
 
     internal static IReadOnlyList<string> FriendlyRemoveNames(IEnumerable<string> appxFamilyIds) =>
-        appxFamilyIds.Select(FriendlyRemoveName).ToArray();
+        [.. appxFamilyIds.Select(FriendlyRemoveName)];
 
     private static void AppendOffline(StringBuilder sb, HostReview review)
     {
@@ -116,14 +117,14 @@ internal static class PlanDiff
                 EffectivePackageSource source = job.Kind == ProvisionJobKind.Winget
                     ? EffectivePackageSource.Winget
                     : EffectivePackageSource.Wsl;
-                EffectivePackageFact[] packages = review.EffectivePackages.Where(
+                EffectivePackageFact[] packages = [.. review.EffectivePackages.Where(
                     package => (package.Source == source
                             || (source == EffectivePackageSource.Winget
                                 && package.Source == EffectivePackageSource.Store))
                         && string.Equals(
                             package.ResolvedInstallId,
                             job.PackageId,
-                            StringComparison.OrdinalIgnoreCase)).ToArray();
+                            StringComparison.OrdinalIgnoreCase))];
                 if (packages.Length == 0)
                 {
                     Line(sb, JobLabel(job), JobAlways(job) ? "always" : "you chose");

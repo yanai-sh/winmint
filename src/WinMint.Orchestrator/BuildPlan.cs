@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -220,12 +221,12 @@ public static partial class BuildPlan
             || profile.WslDistros.Count > 0 || profile.WslNeedsReboot.Count > 0)
         {
             packages = new PackagesDocument(
-                profile.WingetPackages.Count == 0 ? null : profile.WingetPackages.ToArray(),
-                profile.WingetNeedsReboot.Count == 0 ? null : profile.WingetNeedsReboot.ToArray(),
-                profile.ScoopPackages.Count == 0 ? null : profile.ScoopPackages.ToArray(),
-                profile.ScoopNeedsReboot.Count == 0 ? null : profile.ScoopNeedsReboot.ToArray(),
-                profile.WslDistros.Count == 0 ? null : profile.WslDistros.ToArray(),
-                profile.WslNeedsReboot.Count == 0 ? null : profile.WslNeedsReboot.ToArray());
+                profile.WingetPackages.Count == 0 ? null : [.. profile.WingetPackages],
+                profile.WingetNeedsReboot.Count == 0 ? null : [.. profile.WingetNeedsReboot],
+                profile.ScoopPackages.Count == 0 ? null : [.. profile.ScoopPackages],
+                profile.ScoopNeedsReboot.Count == 0 ? null : [.. profile.ScoopNeedsReboot],
+                profile.WslDistros.Count == 0 ? null : [.. profile.WslDistros],
+                profile.WslNeedsReboot.Count == 0 ? null : [.. profile.WslNeedsReboot]);
         }
 
         DebloatDocument? debloat = null;
@@ -236,9 +237,9 @@ public static partial class BuildPlan
         {
             debloat = new DebloatDocument(
                 profile.DebloatMode == DebloatMode.Offline ? "offline" : null,
-                profile.RemoveProvisionedAppx.Count == 0 ? null : profile.RemoveProvisionedAppx.ToArray(),
-                profile.RemoveCapabilities.Count == 0 ? null : profile.RemoveCapabilities.ToArray(),
-                profile.DisableOptionalFeatures.Count == 0 ? null : profile.DisableOptionalFeatures.ToArray());
+                profile.RemoveProvisionedAppx.Count == 0 ? null : [.. profile.RemoveProvisionedAppx],
+                profile.RemoveCapabilities.Count == 0 ? null : [.. profile.RemoveCapabilities],
+                profile.DisableOptionalFeatures.Count == 0 ? null : [.. profile.DisableOptionalFeatures]);
         }
 
         PoliciesProfile effective = profile.EffectivePolicies;
@@ -317,11 +318,10 @@ public static partial class BuildPlan
             return [];
         }
 
-        return raw
+        return [.. raw
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .Select(s => s.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 
     private static Failure? ValidateNeedsRebootSubset(

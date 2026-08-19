@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+
 using WinMint.Contracts;
 
 namespace WinMint.Provisioning;
@@ -167,7 +168,7 @@ public static class BundleLoader
                     j.DohTemplate));
         }
 
-        jobs = list.ToArray();
+        jobs = [.. list];
         return true;
     }
 }

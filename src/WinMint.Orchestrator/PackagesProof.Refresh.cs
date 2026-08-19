@@ -83,14 +83,13 @@ public static partial class PackagesProof
             SchemaVersion = RequestSchemaVersion,
             Architecture = DefaultArchitecture,
             CatalogSha256 = CatalogSha256(catalogPath),
-            Entries = proveSet
+            Entries = [.. proveSet
                 .Select(e => new PackagesCheckEntryFile
                 {
                     Source = e.Source,
                     Id = e.Id,
                     Bucket = e.ScoopBucket,
-                })
-                .ToList(),
+                })],
         };
 
         string runDirectory = Path.Combine(
@@ -349,8 +348,8 @@ public static partial class PackagesProof
             Architecture = request.Architecture,
             CatalogSha256 = request.CatalogSha256,
             ProveSetSha256 = ProveSetSha256(
-                request.Entries.Select(
-                    e => new PackagesProofEntry(e.Source!, e.Id!, e.Bucket)).ToArray()),
+                [.. request.Entries.Select(
+                    e => new PackagesProofEntry(e.Source!, e.Id!, e.Bucket))]),
             ProvenAtUtc = outcome.CompletedAtUtc,
             Host = new PackagesProofHostFile
             {

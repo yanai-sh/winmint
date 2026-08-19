@@ -1,7 +1,10 @@
 using System.Collections.ObjectModel;
+
 using Avalonia.Platform.Storage;
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+
 using WinMint.Orchestrator;
 
 namespace WinMint.Wizard.ViewModels;

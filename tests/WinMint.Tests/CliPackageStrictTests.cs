@@ -1,5 +1,7 @@
 using System.CommandLine;
+
 using WinMint.Orchestrator;
+
 using CliProgram = WinMint.Cli.Program;
 
 namespace WinMint.Tests;

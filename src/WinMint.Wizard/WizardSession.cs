@@ -3,9 +3,9 @@ using WinMint.Orchestrator;
 namespace WinMint.Wizard;
 
 /// <summary>Stateful Living Draft owner; composition remains HostCompile's job.</summary>
-internal sealed class WizardSession : IDisposable
+internal sealed class WizardSession(ISourceMediaProbe? sourceMedia = null) : IDisposable
 {
-    private readonly ISourceMediaProbe? _sourceMedia;
+    private readonly ISourceMediaProbe? _sourceMedia = sourceMedia;
     private Profile? _profile;
     private HostComposeOptions? _options;
     private byte[]? _draftIdentity;
@@ -13,11 +13,6 @@ internal sealed class WizardSession : IDisposable
     private long _approvedRevision = -1;
     private SourceMediaReview? _probe;
     private string? _savedPath;
-
-    public WizardSession(ISourceMediaProbe? sourceMedia = null)
-    {
-        _sourceMedia = sourceMedia;
-    }
 
     public SessionView View =>
         new(

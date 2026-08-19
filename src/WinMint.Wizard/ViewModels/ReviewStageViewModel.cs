@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+
 using WinMint.Orchestrator;
 
 namespace WinMint.Wizard.ViewModels;

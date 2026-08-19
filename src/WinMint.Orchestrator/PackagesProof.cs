@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -78,10 +79,9 @@ public static partial class PackagesProof
             // store / other: skip
         }
 
-        return list
+        return [.. list
             .OrderBy(e => e.Source, StringComparer.Ordinal)
-            .ThenBy(e => e.Id, StringComparer.Ordinal)
-            .ToArray();
+            .ThenBy(e => e.Id, StringComparer.Ordinal)];
     }
 
     internal static string ProveSetSha256(IReadOnlyList<PackagesProofEntry> entries)
@@ -245,12 +245,11 @@ public static partial class PackagesProof
 
     internal static IReadOnlyList<string> DuplicateIdentities(
         IEnumerable<PackagesProofEntry> entries) =>
-        entries
+        [.. entries
             .GroupBy(e => $"{e.Source}:{e.Id}", StringComparer.OrdinalIgnoreCase)
             .Where(group => group.Skip(1).Any())
             .Select(group => group.Key)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
+            .Order(StringComparer.Ordinal)];
 }
 
 internal sealed class PackagesProofFile

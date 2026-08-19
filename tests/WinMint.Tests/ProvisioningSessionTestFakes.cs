@@ -172,12 +172,9 @@ internal static class ProvisioningSessionTestFakes
         }
     }
 
-    internal sealed class ScriptedDmaSetupRegion : IDmaSetupRegion
+    internal sealed class ScriptedDmaSetupRegion(params ScriptedDmaSetupRegion.DmaSetupStep[] steps) : IDmaSetupRegion
     {
-        private readonly Queue<DmaSetupStep> _steps;
-
-        public ScriptedDmaSetupRegion(params DmaSetupStep[] steps) =>
-            _steps = new Queue<DmaSetupStep>(steps);
+        private readonly Queue<DmaSetupStep> _steps = new Queue<DmaSetupStep>(steps);
 
         public int EnsureCalls { get; private set; }
 
@@ -279,10 +276,10 @@ internal static class ProvisioningSessionTestFakes
         public int EnsureSystemFullControlCalls { get; private set; }
 
         public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) =>
-            Registered.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId)).ToArray();
+            [.. Registered.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId))];
 
         public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) =>
-            Provisioned.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId)).ToArray();
+            [.. Provisioned.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId))];
 
         public Task RemovePackageAsync(string packageFullName, CancellationToken ct = default)
         {

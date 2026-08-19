@@ -1,5 +1,5 @@
-using WinMint.Provisioning;
 using WinMint.Contracts;
+using WinMint.Provisioning;
 
 namespace WinMint.Tests;
 

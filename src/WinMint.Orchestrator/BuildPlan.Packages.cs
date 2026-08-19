@@ -1,4 +1,5 @@
 using System.Text.Json;
+
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -197,14 +198,14 @@ public static partial class BuildPlan
 
         if (scoopTools.Count > 0)
         {
-            string[] scoopIds = scoopTools.Select(tool => tool.InstallId).ToArray();
+            string[] scoopIds = [.. scoopTools.Select(tool => tool.InstallId)];
             IReadOnlySet<string> scoopBuckets = catalog.ScoopBucketsForInstallIds(scoopIds);
             jobs.Add(new ProvisionJob(
                 "scoop.batch",
                 ProvisionJobKind.ScoopBatch,
                 PackageId: string.Join(';', scoopIds),
                 NeedsReboot: scoopReboot.Contains(true),
-                ScoopBuckets: scoopBuckets.OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToArray()));
+                ScoopBuckets: [.. scoopBuckets.OrderBy(b => b, StringComparer.OrdinalIgnoreCase)]));
         }
 
         jobs.Add(new ProvisionJob("shell.stamp", ProvisionJobKind.ShellStamp));
@@ -238,7 +239,7 @@ public static partial class BuildPlan
         }
 
         return Result.Ok<PackagePlanSlice, Failure>(
-            new PackagePlanSlice(facts.ToArray(), jobs.ToArray(), wingetImportJson));
+            new PackagePlanSlice([.. facts], [.. jobs], wingetImportJson));
     }
 
     private static bool SupportsArchitecture(IReadOnlyList<string> architectures, string imageArchitecture) =>

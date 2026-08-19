@@ -1,5 +1,6 @@
-using WinMint.Provisioning;
 using WinMint.Contracts;
+using WinMint.Provisioning;
+
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;

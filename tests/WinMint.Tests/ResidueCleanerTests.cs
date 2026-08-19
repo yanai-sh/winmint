@@ -1,4 +1,5 @@
 using WinMint.Provisioning;
+
 using static WinMint.Tests.ProvisioningSessionTestFakes;
 
 namespace WinMint.Tests;

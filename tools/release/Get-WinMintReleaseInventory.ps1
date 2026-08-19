@@ -21,7 +21,7 @@ if (-not (Test-Path -LiteralPath $stageFull -PathType Container)) {
 }
 
 $commit = ('0' * 40)
-try { $commit = (git -C (Join-Path $PSScriptRoot '..\..') rev-parse HEAD).Trim().ToLowerInvariant() } catch { }
+try { $commit = (git -C (Join-Path $PSScriptRoot '..\..') rev-parse HEAD).Trim().ToLowerInvariant() } catch { $null = $_ }
 $version = Convert-WinMintReleaseTag -Tag $Tag -Commit $commit
 
 $winmintPeAllow = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)

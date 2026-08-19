@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
+
 using WinMint.Orchestrator;
+
 using static WinMint.Tests.ImageServicingTestFakes;
 
 namespace WinMint.Tests;
@@ -48,7 +50,7 @@ public class DebloatServicingTests
                 string.Join('\0', remove.Parameters.Values),
                 StringComparison.OrdinalIgnoreCase);
 
-            IReadOnlyList<ServicingOpcode> opcodes = runner.Opcodes.ToArray();
+            IReadOnlyList<ServicingOpcode> opcodes = [.. runner.Opcodes];
             int mountAt = opcodes.ToList().IndexOf(ServicingOpcode.MountInstallWim);
             int removeAt = opcodes.ToList().IndexOf(ServicingOpcode.RemoveProvisionedAppx);
             int payloadAt = opcodes.ToList().IndexOf(ServicingOpcode.StagePayload);

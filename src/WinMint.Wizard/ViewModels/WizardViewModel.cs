@@ -1,7 +1,9 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+
 using WinMint.Contracts;
 using WinMint.Orchestrator;
 
@@ -26,7 +28,7 @@ public sealed partial class WizardViewModel :
     private readonly Func<HostComposition, CancellationToken, Task<WizardBuildResult>> _apply;
     private ReviewStageViewModel? _reviewStage;
     private CancellationTokenSource? _buildCts;
-    private bool _ready;
+    private readonly bool _ready;
 
     public WizardViewModel(Window window)
         : this(window.StorageProvider, window.Close, sourceMedia: null)
@@ -501,7 +503,7 @@ public sealed partial class WizardViewModel :
             _source.ImageQuality,
             WimIndex: _source.WimIndex,
             ProfileName: "winmint.profile.json",
-            AuthoredSelectionLabels: _software.SelectedLabels().ToArray());
+            AuthoredSelectionLabels: [.. _software.SelectedLabels()]);
         return Result.Ok<WizardDraft, Failure>(new WizardDraft(profile, options));
     }
 

@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
+
 using WinMint.Orchestrator;
+
 using static WinMint.Tests.ImageServicingTestFakes;
 
 namespace WinMint.Tests;
@@ -35,20 +37,18 @@ public class ServicingKernelParamContractTests
             foreach (ServicingStage stage in runner.Stages)
             {
                 seen.Add(stage.Opcode);
-                string[] emitted = stage.Parameters.Keys
+                string[] emitted = [.. stage.Parameters.Keys
                     .Order(StringComparer.OrdinalIgnoreCase)
-                    .Select(static n => n.ToLowerInvariant())
-                    .ToArray();
-                string[] kernelParams = KernelParameterNames(KernelPath(stage.Opcode))
+                    .Select(static n => n.ToLowerInvariant())];
+                string[] kernelParams = [.. KernelParameterNames(KernelPath(stage.Opcode))
                     .Order(StringComparer.OrdinalIgnoreCase)
-                    .Select(static n => n.ToLowerInvariant())
-                    .ToArray();
+                    .Select(static n => n.ToLowerInvariant())];
                 Assert.Equal(kernelParams, emitted);
             }
 
             Assert.Equal(
                 Enum.GetValues<ServicingOpcode>().Order().ToArray(),
-                seen.Order().ToArray());
+                [.. seen.Order()]);
         }
         finally
         {

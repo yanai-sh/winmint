@@ -54,6 +54,7 @@ function Invoke-BoundedProcess {
                 }
                 catch [System.InvalidOperationException] {
                     # Process exited between HasExited and Kill.
+                    $null = $_
                 }
             }
             throw "$Label timed out after $DownloadTimeoutSeconds seconds"

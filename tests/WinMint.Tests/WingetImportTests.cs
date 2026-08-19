@@ -1,6 +1,7 @@
 using System.Text.Json;
-using WinMint.Orchestrator;
+
 using WinMint.Contracts;
+using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
 
@@ -133,7 +134,7 @@ public class WingetImportTests
             new RunOptions { ImageArchitecture = "arm64", PackageAuditStrict = true });
 
         Assert.True(result.IsOk, result.IsOk ? null : result.Error.Message);
-        EffectivePackageFact[] facts = result.Value.EffectivePackages.ToArray();
+        EffectivePackageFact[] facts = [.. result.Value.EffectivePackages];
         Assert.Equal(ProductPosture.WingetIds[0], facts[0].ResolvedInstallId);
         Assert.Equal(EffectivePackageOrigin.ProductPosture, facts[0].Origin);
         Assert.Equal(1, facts.Count(f => f.ResolvedInstallId.Equals("Git.MinGit", StringComparison.OrdinalIgnoreCase)));
@@ -164,7 +165,7 @@ public class WingetImportTests
                 NeedsReboot: true,
             });
 
-        ProvisionJob[] jobs = result.Value.Jobs.Jobs.ToArray();
+        ProvisionJob[] jobs = [.. result.Value.Jobs.Jobs];
         int import = Array.FindIndex(jobs, j => j.Kind == ProvisionJobKind.WingetImport);
         int scoop = Array.FindIndex(jobs, j => j.Kind == ProvisionJobKind.ScoopBatch);
         int shell = Array.FindIndex(jobs, j => j.Kind == ProvisionJobKind.ShellStamp);

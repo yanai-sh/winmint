@@ -1,9 +1,9 @@
-namespace WinMint.Provisioning;
+using System.Reflection.PortableExecutable;
+using System.Text.Json;
 
 using WinMint.Contracts;
 
-using System.Reflection.PortableExecutable;
-using System.Text.Json;
+namespace WinMint.Provisioning;
 
 internal static partial class ProvisioningJobRunner
 {

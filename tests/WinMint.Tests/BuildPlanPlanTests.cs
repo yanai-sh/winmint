@@ -1,6 +1,7 @@
 using System.Text;
-using WinMint.Orchestrator;
+
 using WinMint.Contracts;
+using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
 

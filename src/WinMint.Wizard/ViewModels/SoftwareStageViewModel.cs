@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+
 using WinMint.Orchestrator;
 
 namespace WinMint.Wizard.ViewModels;
@@ -93,21 +95,13 @@ public sealed partial class AdvancedPackageTextViewModel : ObservableObject
     partial void OnWslChanged(string value) => _changed();
 }
 
-internal sealed partial class SoftwareStageViewModel : ObservableObject, ISoftwareStageViewModel
+internal sealed partial class SoftwareStageViewModel(Action draftChanged, Func<Task> useDefaults) : ObservableObject, ISoftwareStageViewModel
 {
-    private readonly Func<Task> _useDefaults;
+    private readonly Func<Task> _useDefaults = useDefaults;
 
-    public SoftwareStageViewModel(Action draftChanged, Func<Task> useDefaults)
-    {
-        _useDefaults = useDefaults;
-        Chips = new CuratedChipSelection(draftChanged);
-        Presets = new PresetSelectionViewModel(draftChanged);
-        Advanced = new AdvancedPackageTextViewModel(draftChanged);
-    }
-
-    public CuratedChipSelection Chips { get; }
-    public PresetSelectionViewModel Presets { get; }
-    public AdvancedPackageTextViewModel Advanced { get; }
+    public CuratedChipSelection Chips { get; } = new CuratedChipSelection(draftChanged);
+    public PresetSelectionViewModel Presets { get; } = new PresetSelectionViewModel(draftChanged);
+    public AdvancedPackageTextViewModel Advanced { get; } = new AdvancedPackageTextViewModel(draftChanged);
     public StageStatusViewModel Status { get; } = new();
 
     [RelayCommand]

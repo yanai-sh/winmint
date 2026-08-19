@@ -1,7 +1,8 @@
-using System.Reflection;
 using System.Collections.Frozen;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
 using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
@@ -140,7 +141,7 @@ public sealed class PackageCatalog
         }
 
         return Result.Ok<PackageSelection, Failure>(
-            new PackageSelection(winget.ToArray(), scoop.ToArray(), []));
+            new PackageSelection([.. winget], [.. scoop], []));
     }
 
     /// <summary>Resolve WSL chip keys / profile tokens to catalog profile tokens for <c>packages.wsl</c>.</summary>
@@ -170,7 +171,7 @@ public sealed class PackageCatalog
             }
         }
 
-        return Result.Ok<IReadOnlyList<string>, Failure>(distros.ToArray());
+        return Result.Ok<IReadOnlyList<string>, Failure>([.. distros]);
     }
 
     public static string? ResolveWingetArchitectureFlag(PackageToolEntry tool, string imageArchitecture)
@@ -207,7 +208,7 @@ public sealed class PackageCatalog
 
     public static string DefaultImageArchitecture => "arm64";
 
-    public IReadOnlyList<string> ToolCatalogKeys => _toolsByKey.Keys.ToArray();
+    public IReadOnlyList<string> ToolCatalogKeys => [.. _toolsByKey.Keys];
 
     /// <summary>Validate maintainer invariants for the shipped package catalog.</summary>
     public IReadOnlyList<string> Validate()
@@ -241,7 +242,7 @@ public sealed class PackageCatalog
             }
         }
 
-        return errors.ToArray();
+        return [.. errors];
     }
 
     public IReadOnlySet<string> ScoopBucketsForInstallIds(IEnumerable<string> installIds)
