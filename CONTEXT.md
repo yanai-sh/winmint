@@ -7,7 +7,7 @@ Policy / acceptance: [DESIGN](docs/DESIGN.md).
 ## Language
 
 **Catalog quality** — Same-train Microsoft Update Catalog **Security Update** (B-release) LCU applied during ImageServicing when staged `install.wim` UBR is behind. Newest matching ARM64 package each Apply — not a pinned KB or Patch Tuesday date. Not a Source ISO ([ADR-013](docs/decisions/ADR-013-catalog-lcu.md)). Payload bytes come from Catalog CDNs (`download.windowsupdate.com` or `*.dl.delivery.mp.microsoft.com`), never from a Windows ISO host.  
-_Avoid_: pinning a KB; calling Preview CU “latest”; 26H1 from 25H2; UUP dump; rewriting Prepared media; treating catalog.update.microsoft.com HTML as the `.msu` host
+_Avoid_: pinning a KB; calling Preview CU “latest”; 26H1 from 25H2; UUP dump; rewriting Prepared media; treating catalog.update.microsoft.com HTML as the `.msu` host; first `.msu` in a DownloadDialog; first file under the quality-cache KB folder; treating a checkpoint `.msu` as the combined LCU
 
 **Source ISO** — Official Microsoft install media the user provides. It remains an Apply input every run; a stored media tree must not stand in for a missing file. No silent Windows ISO or UUP-dump download. Same-train Catalog quality `.msu` is ImageServicing, not a Source ISO ([ADR-013](docs/decisions/ADR-013-catalog-lcu.md)).  
 _Avoid_: golden ISO, UUP default source; substituting Prepared media or staged media for the Source ISO
@@ -41,6 +41,9 @@ _Avoid_: in-process DISM from Wizard; guest FirstLogon Servicing; hosts inventin
 
 **Prepared media** — Host-wide immutable Source ISO tree with the selected index as a single-index `install.wim` and a required `boot.wim`, identified by schema + Source ISO SHA-256 + source index. A complete published entry only: copied into staged media, never mounted, never auto-evicted. Invalid entries are quarantined off the hit path; publication is not Evidence, Proof, or Digest. Host directory leaf: `%ProgramData%\WinMint\Servicing\media-cache\` (implementation path, not a product name).  
 _Avoid_: calling Prepared media a cache in product copy; source-media cache as a product name; run media; reuse; warm media; golden ISO; WIM-only store; install.esd; multi-index install.wim; treating a prepare directory as Prepared media; serving or in-place overwriting an invalid entry; LRU of valid entries
+
+**Quality-cache** — Host Catalog `.msu`/`.cab` store under `%ProgramData%\WinMint\Servicing\quality-cache\{KB}\{arch}\{sha256}\`. A hit is SHA + payload leaf containing that KB (combined LCU or that checkpoint’s own KB). Wrong leaves are quarantined off the hit path. Same hit discipline as Prepared media; not the same store and not a patched WIM.  
+_Avoid_: first file under the KB folder; merging with Prepared media; treating a checkpoint `.msu` as the requested LCU because it sat in that folder
 
 **Staged media** — Per-Apply mutable copy of Prepared media under the work directory. This is the tree Servicing mounts. A leftover tree from a prior Apply is not an input.  
 _Avoid_: run media; work media; reuse; mounting Prepared media; treating staged media as the Source ISO
@@ -109,8 +112,8 @@ Short words that carry weight in type names. They are kept because no generic al
 **Evidence** — JSON WinMint emits so a harness can assert what happened (`IEvidenceSink`, `evidence.json`, S4/S5 bars). Never read back to decide the next phase.  
 _Avoid_: calling Prepared-media publication Evidence; reading Evidence to decide a Prepared-media hit; calling Smoke status Evidence
 
-**Smoke status** — Host-written `smoke-status.json` projection of an S4 wait loop so a human or agent can watch without being the waiter. Watch-only; the harness must not read it to decide the next phase.  
-_Avoid_: dashboard; monitor UI; Splash (guest); Evidence; treating VMConnect as required for green
+**Smoke status** — Host-written `smoke-status.json` projection of an S4 wait loop so a human or agent can watch without being the waiter. Watch-only; the harness must not read it to decide the next phase. ImageServicing truth is `apply-status.txt` / `failure.json`; the waiter must flip `phase=failed` when Apply dies.  
+_Avoid_: dashboard; monitor UI; Splash (guest); Evidence; treating VMConnect as required for green; leaving `phase=apply` after Apply throw; inferring harness death from PIDs
 
 **Prepared-media audit** — typed `prepared-media.json` ImageServicing merges into `evidence.json` after Apply. Not publication, not a control-plane input, not Evidence the harness reads to decide the next phase.  
 _Avoid_: treating the audit sidecar as a HostCompile input; re-hashing Output ISO in C# when `logs/digests.json` already has the digest

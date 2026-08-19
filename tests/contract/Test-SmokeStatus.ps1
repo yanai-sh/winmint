@@ -13,6 +13,7 @@ if ($smoke -notmatch 'Write-SmokeStatus') { throw 'Write-SmokeStatus not called'
 if ($smoke -notmatch 'Watch-SmokeHost\.ps1') { throw 'Invoke-Smoke must Start-Process Watch-SmokeHost.ps1' }
 if ($smoke -notmatch 'just apply-maintainer') { throw 'Apply path missing' }
 if ($smoke -notmatch "Resolve-SmokePhase -HostStage failed") { throw 'Apply/wait failures must write phase=failed' }
+if ($smoke -notmatch 'stage=failed:') { throw 'waiter must project apply-status.txt failure, not just LASTEXITCODE' }
 if ($smoke -match 'Get-Content[^\n]*smoke-status\.json') { throw 'must not read smoke-status.json as control plane' }
 if ($smoke -notmatch 'Get-SmokeWatchVerdict') { throw 'Invoke-Smoke wait loop must call Get-SmokeWatchVerdict' }
 if ($smoke -notmatch 'EMPTY_VHD:') { throw 'empty-VHD throw prefix missing (operator copy)' }

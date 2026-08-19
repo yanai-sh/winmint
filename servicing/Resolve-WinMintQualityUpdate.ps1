@@ -395,9 +395,31 @@ function Select-WinMintDynamicUpdate {
     return @($candidates | Sort-Object Title -Descending)[0]
 }
 
+function Test-WinMintQualityKbLeaf {
+    param(
+        [Parameter(Mandatory)] [string] $Name,
+        [Parameter(Mandatory)] [string] $Kb
+    )
+    $token = $Kb.Trim()
+    if ($token -notmatch '^(?i)KB') { $token = 'KB' + $token }
+    return $Name -match ('(?i)' + [regex]::Escape($token))
+}
+
 function Select-WinMintCatalogMsuUrl {
-    param([Parameter(Mandatory)] $Urls)
+    param(
+        [Parameter(Mandatory)] $Urls,
+        [string] $Kb
+    )
     $msu = @($Urls | Where-Object { $_ -match '(?i)\.msu(\?|$)' })
+    if (-not [string]::IsNullOrWhiteSpace($Kb)) {
+        $hit = @(
+            $msu | Where-Object {
+                Test-WinMintQualityKbLeaf -Name ([IO.Path]::GetFileName(([uri]$_).AbsolutePath)) -Kb $Kb
+            }
+        )
+        if ($hit.Count -ge 1) { return [string]$hit[0] }
+        throw "Catalog download had no .msu leaf for $Kb"
+    }
     if ($msu.Count -ge 1) { return [string]$msu[0] }
     $cab = @($Urls | Where-Object { $_ -match '(?i)\.cab(\?|$)' })
     if ($cab.Count -ge 1) { return [string]$cab[0] }
@@ -415,9 +437,12 @@ function Get-WinMintCatalogPayload {
     $cached = Resolve-WinMintCachedQualityFile -CacheRoot $CacheRoot -Kb $Kb -Architecture $Architecture
     if ($cached) { return $cached }
     $dialog = Invoke-WinMintCatalogDownloadDialog -UpdateId $UpdateId
-    $url = Select-WinMintCatalogMsuUrl -Urls (ConvertFrom-WinMintCatalogDownloadDialog -Text $dialog)
+    $url = Select-WinMintCatalogMsuUrl -Urls (ConvertFrom-WinMintCatalogDownloadDialog -Text $dialog) -Kb $Kb
     $leaf = [IO.Path]::GetFileName(([uri]$url).AbsolutePath)
     if ([string]::IsNullOrWhiteSpace($leaf)) { $leaf = "$Kb.msu" }
+    if (-not (Test-WinMintQualityKbLeaf -Name $leaf -Kb $Kb)) {
+        throw "Catalog payload leaf is not ${Kb}: $leaf"
+    }
     $tmp = Join-Path $StagingDir $leaf
     Save-WinMintCatalogPayload -Uri $url -Destination $tmp
     return (Save-WinMintQualityCacheFile -CacheRoot $CacheRoot -Kb $Kb -Architecture $Architecture -SourcePath $tmp).Path
@@ -435,18 +460,57 @@ function Resolve-WinMintCachedQualityFile {
     if (-not [string]::IsNullOrWhiteSpace($Sha256)) {
         $dir = Join-Path $CacheRoot "$kbLeaf\$arch\$($Sha256.ToLowerInvariant())"
         $hit = Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Extension -in '.msu', '.cab' } |
+            Where-Object { $_.Extension -in '.msu', '.cab' -and (Test-WinMintQualityKbLeaf -Name $_.Name -Kb $Kb) } |
             Select-Object -First 1
         if ($null -ne $hit) { return [string]$hit.FullName }
+        if (Test-Path -LiteralPath $dir) {
+            Move-WinMintInvalidQualityCacheEntry -EntryPath $dir -CacheRoot $CacheRoot
+        }
         return $null
     }
     $base = Join-Path $CacheRoot "$kbLeaf\$arch"
     if (-not (Test-Path -LiteralPath $base)) { return $null }
-    $hit = Get-ChildItem -LiteralPath $base -Recurse -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Extension -in '.msu', '.cab' } |
-        Select-Object -First 1
-    if ($null -eq $hit) { return $null }
-    return [string]$hit.FullName
+    $hits = @(
+        Get-ChildItem -LiteralPath $base -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in '.msu', '.cab' }
+    )
+    $matched = @($hits | Where-Object { Test-WinMintQualityKbLeaf -Name $_.Name -Kb $Kb })
+    $unmatched = @($hits | Where-Object { -not (Test-WinMintQualityKbLeaf -Name $_.Name -Kb $Kb) })
+    $matchedDirs = @($matched | ForEach-Object { $_.DirectoryName } | Select-Object -Unique)
+    $poisonDirs = @(
+        $unmatched |
+            ForEach-Object { $_.DirectoryName } |
+            Select-Object -Unique |
+            Where-Object { $matchedDirs -notcontains $_ }
+    )
+    foreach ($dir in $poisonDirs) {
+        Move-WinMintInvalidQualityCacheEntry -EntryPath $dir -CacheRoot $CacheRoot
+    }
+    if ($matched.Count -ge 1) { return [string]$matched[0].FullName }
+    return $null
+}
+
+function Move-WinMintInvalidQualityCacheEntry {
+    param(
+        [Parameter(Mandatory)] [string] $EntryPath,
+        [Parameter(Mandatory)] [string] $CacheRoot
+    )
+    if (-not (Test-Path -LiteralPath $EntryPath)) { return }
+    $dir = $EntryPath
+    if (Test-Path -LiteralPath $EntryPath -PathType Leaf) {
+        $dir = Split-Path -Parent $EntryPath
+    }
+    $stamp = [datetime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
+    $name = (Split-Path -Leaf $dir) + '.invalid-' + $stamp + '-' + [guid]::NewGuid().ToString('N')
+    $qroot = Join-Path $CacheRoot 'quarantine'
+    New-Item -ItemType Directory -Force -Path $qroot | Out-Null
+    $dest = Join-Path $qroot $name
+    try {
+        Move-Item -LiteralPath $dir -Destination $dest
+    }
+    catch {
+        # Hit path already skipped this leaf; quarantine is best-effort (ProgramData ACL).
+    }
 }
 
 function Save-WinMintQualityCacheFile {
@@ -458,10 +522,14 @@ function Save-WinMintQualityCacheFile {
         [Parameter(Mandatory)] [string] $SourcePath
     )
     $sha = (Get-FileHash -LiteralPath $SourcePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $leaf = Split-Path -Leaf $SourcePath
+    if (-not (Test-WinMintQualityKbLeaf -Name $leaf -Kb $Kb)) {
+        throw "Refuse quality-cache write: leaf is not ${Kb}: $leaf"
+    }
     $arch = $Architecture.ToLowerInvariant()
     $dir = Join-Path $CacheRoot "$($Kb.ToUpperInvariant())\$arch\$sha"
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    $dest = Join-Path $dir (Split-Path -Leaf $SourcePath)
+    $dest = Join-Path $dir $leaf
     if (-not (Test-Path -LiteralPath $dest)) {
         Copy-Item -LiteralPath $SourcePath -Destination $dest -Force
     }

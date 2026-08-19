@@ -57,12 +57,61 @@ catch { $threw = $true }
 if (-not $threw) { throw 'Test-QualityCatalog: expected 24H2 not to pick 25H2 rows' }
 
 $urls = ConvertFrom-WinMintCatalogDownloadDialog -Text (Get-Content -LiteralPath (Join-Path $fx 'download-dialog-kb5121003.txt') -Raw)
-$msu = Select-WinMintCatalogMsuUrl -Urls $urls
+$msu = Select-WinMintCatalogMsuUrl -Urls $urls -Kb 'KB5121003'
 if ($msu -notmatch 'kb5121003-arm64') { throw "Test-QualityCatalog: msu $msu" }
 if (-not (Test-WinMintDownloadWindowsupdateUri -Uri $msu)) { throw 'Test-QualityCatalog: download host' }
 $delivery = ConvertFrom-WinMintCatalogDownloadDialog -Text (Get-Content -LiteralPath (Join-Path $fx 'download-dialog-kb5121003-delivery.txt') -Raw)
-$deliveryMsu = Select-WinMintCatalogMsuUrl -Urls $delivery
+$deliveryMsu = Select-WinMintCatalogMsuUrl -Urls $delivery -Kb 'KB5121003'
 if ($deliveryMsu -notmatch 'kb5121003-arm64') { throw "Test-QualityCatalog: delivery msu $deliveryMsu" }
+$ckptFirst = ConvertFrom-WinMintCatalogDownloadDialog -Text (Get-Content -LiteralPath (Join-Path $fx 'download-dialog-checkpoint-first.txt') -Raw)
+$ckptPick = Select-WinMintCatalogMsuUrl -Urls $ckptFirst -Kb 'KB5121003'
+if ($ckptPick -notmatch 'kb5121003-arm64' -or $ckptPick -match 'kb5043080') {
+    throw "Test-QualityCatalog: checkpoint-first picked $ckptPick"
+}
+$threw = $false
+try {
+    Select-WinMintCatalogMsuUrl -Urls @(
+        'https://catalog.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/x/public/windows11.0-kb5043080-arm64_x.msu'
+    ) -Kb 'KB5121003' | Out-Null
+}
+catch { $threw = $true }
+if (-not $threw) { throw 'Test-QualityCatalog: expected refuse checkpoint-only dialog for LCU KB' }
+
+$poisonRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-quality-poison-' + [guid]::NewGuid().ToString('N'))
+$poisonDir = Join-Path $poisonRoot 'KB5121003\arm64\deadbeef'
+New-Item -ItemType Directory -Force -Path $poisonDir | Out-Null
+Set-Content -LiteralPath (Join-Path $poisonDir 'windows11.0-kb5043080-arm64_x.msu') -Value 'not-an-lcu'
+$poisonHit = Resolve-WinMintCachedQualityFile -CacheRoot $poisonRoot -Kb 'KB5121003' -Architecture 'ARM64'
+if ($null -ne $poisonHit) { throw "Test-QualityCatalog: poisoned cache must miss, got $poisonHit" }
+if (Test-Path -LiteralPath $poisonDir) { throw 'Test-QualityCatalog: poison SHA dir must leave the hit path' }
+$quarantined = @(
+    Get-ChildItem -LiteralPath (Join-Path $poisonRoot 'quarantine') -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like 'deadbeef.invalid-*' }
+)
+if ($quarantined.Count -ne 1) {
+    throw "Test-QualityCatalog: expected one quarantined SHA dir, got $($quarantined.Count)"
+}
+$mixedRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-quality-mixed-' + [guid]::NewGuid().ToString('N'))
+$goodDir = Join-Path $mixedRoot 'KB5121003\arm64\cafebabe'
+$badDir = Join-Path $mixedRoot 'KB5121003\arm64\deadbeef'
+New-Item -ItemType Directory -Force -Path $goodDir, $badDir | Out-Null
+Set-Content -LiteralPath (Join-Path $goodDir 'windows11.0-kb5121003-arm64_x.msu') -Value 'lcu'
+Set-Content -LiteralPath (Join-Path $badDir 'windows11.0-kb5043080-arm64_x.msu') -Value 'ckpt'
+$mixedHit = Resolve-WinMintCachedQualityFile -CacheRoot $mixedRoot -Kb 'KB5121003' -Architecture 'ARM64'
+if ($mixedHit -notmatch 'kb5121003') { throw "Test-QualityCatalog: mixed cache must hit LCU, got $mixedHit" }
+if (Test-Path -LiteralPath $badDir) { throw 'Test-QualityCatalog: mixed poison SHA dir must leave the hit path' }
+if (-not (Test-Path -LiteralPath $goodDir)) { throw 'Test-QualityCatalog: mixed LCU SHA dir must stay' }
+Remove-Item -LiteralPath $mixedRoot -Recurse -Force
+$writeRefuse = Join-Path $poisonRoot 'windows11.0-kb5043080-arm64_x.msu'
+Set-Content -LiteralPath $writeRefuse -Value 'not-an-lcu'
+$threw = $false
+try {
+    Save-WinMintQualityCacheFile -CacheRoot $poisonRoot -Kb 'KB5121003' -Architecture 'ARM64' -SourcePath $writeRefuse | Out-Null
+}
+catch { $threw = $true }
+if (-not $threw) { throw 'Test-QualityCatalog: expected refuse writing checkpoint leaf under LCU KB' }
+Remove-Item -LiteralPath $poisonRoot -Recurse -Force
+
 if (-not (Test-WinMintDownloadWindowsupdateUri -Uri $deliveryMsu)) { throw 'Test-QualityCatalog: delivery host' }
 if (Test-WinMintDownloadWindowsupdateUri -Uri 'https://catalog.update.microsoft.com/DownloadDialog.aspx') {
     throw 'Test-QualityCatalog: Catalog HTML host is not a payload CDN'

@@ -112,6 +112,13 @@ if (-not $SkipApply) {
     Write-Host "Applying Profile=$Profile Iso=$Iso Work=$Work (Test lane, smoke stubs on)…"
     try {
         & just apply-maintainer $Iso $Work $Profile true
+        $applyStatusPath = Join-Path $workFull 'apply-status.txt'
+        if (Test-Path -LiteralPath $applyStatusPath) {
+            $applyStatus = Get-Content -LiteralPath $applyStatusPath -Raw -Encoding utf8
+            if ($applyStatus -match 'stage=failed:') {
+                throw 'Apply failed (apply-status)'
+            }
+        }
         if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
     }
     catch {

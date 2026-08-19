@@ -65,6 +65,9 @@ New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
     $lcuPath = Get-WinMintCatalogPayload -UpdateId $resolved.UpdateId -CacheRoot $QualityCacheRoot `
         -Kb $resolved.Kb -Architecture 'ARM64' -StagingDir $staging
+    if (-not (Test-WinMintQualityKbLeaf -Name (Split-Path -Leaf $lcuPath) -Kb $resolved.Kb)) {
+        throw "Combined LCU payload leaf is not $($resolved.Kb): $lcuPath"
+    }
     $sha = (Get-FileHash -LiteralPath $lcuPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $lcuLeaf = Split-Path -Leaf $lcuPath
     Copy-Item -LiteralPath $lcuPath -Destination (Join-Path $QualityPackageDir $lcuLeaf) -Force

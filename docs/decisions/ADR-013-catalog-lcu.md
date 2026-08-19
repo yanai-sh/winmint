@@ -15,7 +15,7 @@ When staged `install.wim` UBR is behind the latest same-family **Security Update
 - Source ISO stays user-supplied. Prepared-media entries stay an unpatched Source-ISO tree.
 - Same DISM `Version` family only (`26200` → 25H2, `26100` → 24H2). Unknown family, 26H1, or x64-only Catalog results fail closed.
 - Fail closed when the WIM is behind and Catalog, BITS, or DISM cannot complete.
-- Catalog `.msu` payload URLs are `download.windowsupdate.com` **or** `*.dl.delivery.mp.microsoft.com` (Catalog DownloadDialog `files[].url` as of 2026). Other hosts fail closed. Not a Source ISO host.
+- Catalog `.msu` payload URLs are `download.windowsupdate.com` **or** `*.dl.delivery.mp.microsoft.com` (Catalog DownloadDialog `files[].url` as of 2026). Other hosts fail closed. Not a Source ISO host. The payload **leaf** must contain the requested KB; a checkpoint `.msu` in the same dialog or a poisoned quality-cache folder is a miss (quarantined off the hit path), not a combined LCU.
 - Skip download and DISM when `packageUbr <= imageUbr`.
 - `just check` never hits Catalog. Maintainer live reconcile is `just quality-check`.
 - Evidence fields (`lcu.kb`, `lcu.ubrBefore`, `lcu.ubrAfter`, `lcu.sha256`, `lcu.skipped`) are projection, not a control plane.

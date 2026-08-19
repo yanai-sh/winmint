@@ -1,0 +1,2 @@
+downloadInformation[0].files[0].url = 'https://catalog.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/aaaa/public/windows11.0-kb5043080-arm64_deadbeef.msu';
+downloadInformation[0].files[1].url = 'https://catalog.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/bbbb/public/windows11.0-kb5121003-arm64_cafebabe.msu';

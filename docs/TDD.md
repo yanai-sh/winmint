@@ -56,6 +56,7 @@ HostCompile is the Orchestrator entry ([DESIGN](DESIGN.md)). Assert immutable re
 ### S2 — ImageServicing
 
 Prefer fake elevated runner when introduced. Assert stage order, Shell stamp path, lane params — not ISO bytes. Kernels: no Profile branching. Never commit multi-edition WIM ([IMAGESERVICING](design/IMAGESERVICING.md#invariants)).
+Catalog quality identity is one rule in `Test-QualityCatalog.ps1`: dialog URL, cache hit, cache write, and expand all refuse a leaf that is not the requested KB. Poisoned quality-cache is a miss plus quarantine off the hit path — not first-file. Do not invent `IQualityDownload` until a second adapter exists.
 Freshness tests go through `CheckPublishedBinaryFreshness`; store-MSIX tests go through `RefuseStoreMsixPwsh`.
 Do not call `ExecuteAsync` from `just check` because it crosses the UAC/process boundary.
 
@@ -65,7 +66,7 @@ See [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md). Use `ShellEnvironment`
 
 ### S4 — Hyper-V acceptance
 
-One harness entry → guest evidence (`tools/vm/`). Splash before Explorer; DMA hard fields; unlock; lane marker; time-to-first-paint. Acceptance pinned remove-list digests. Not part of `just check`. External watch uses `Get-SmokeWatchVerdict` (phase, `Get-VHD` FileSize, status age) — not process lists or `vmconnect`. Invoke-Smoke throws from `Get-SmokeWatchVerdict`, not a second empty-VHD `if`. `waiterPid` is an optional `Wait-Process` handle, not a fail/kill signal; watchers must not infer death from PIDs or `Remove-VM`. Stall/empty-VHD elapsed is Stopwatch. Disk-boot tests drive those policy functions, not a Hyper-V executor. Do not "complete" that by faking Hyper-V.
+One harness entry → guest evidence (`tools/vm/`). Splash before Explorer; DMA hard fields; unlock; lane marker; time-to-first-paint. Acceptance pinned remove-list digests. Not part of `just check`. External watch uses `Get-SmokeWatchVerdict` (phase, `Get-VHD` FileSize, status age) — not process lists or `vmconnect`. Invoke-Smoke throws from `Get-SmokeWatchVerdict`, not a second empty-VHD `if`. `waiterPid` is an optional `Wait-Process` handle, not a fail/kill signal; watchers must not infer death from PIDs or `Remove-VM`. After `just apply-maintainer`, the waiter must project `apply-status.txt` `stage=failed:` into `smoke-status.json` `phase=failed` even when `LASTEXITCODE` is 0. Stall/empty-VHD elapsed is Stopwatch. Disk-boot tests drive those policy functions, not a Hyper-V executor. Do not "complete" that by faking Hyper-V.
 
 ### S5 — Host Apply acceptance (pre-wipe)
 
