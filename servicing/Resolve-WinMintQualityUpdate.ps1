@@ -50,7 +50,9 @@ function ConvertFrom-WinMintCatalogSearchHtml {
                 Kb       = $kb
             })
     }
-    return $rows
+    # Comma keeps an empty list intact through pipeline unroll — otherwise a rowless
+    # Catalog page becomes $null and Mandatory -Rows binding fails before the real throw.
+    return , $rows
 }
 
 function Test-WinMintQualityBReleaseTitle {
@@ -81,7 +83,8 @@ function Select-WinMintQualityUpdate {
             Where-Object { -not [string]::IsNullOrWhiteSpace($_.Kb) }
     )
     if ($candidates.Count -lt 1) {
-        throw "Catalog had no ARM64 $FamilyLabel Security (B-release) Cumulative Update"
+        # Row count separates a rowless page (markup change / throttle / outage) from a filter miss.
+        throw "Catalog had no ARM64 $FamilyLabel Security (B-release) Cumulative Update (parsed $(@($Rows).Count) Catalog search rows)"
     }
     $sorted = @(
         $candidates | Sort-Object {
@@ -329,14 +332,37 @@ function Write-WinMintQualityPackageLeaf {
 }
 
 function Invoke-WinMintCatalogSearchHtml {
-    param([Parameter(Mandatory)] [string] $Query)
+    # Catalog intermittently serves a rowless chrome-only page (observed 22 Aug 2026,
+    # ~41KB, zero goToDetails rows). Retry before letting callers fail closed —
+    # a transient must not kill a multi-hour Apply.
+    param(
+        [Parameter(Mandatory)] [string] $Query,
+        [int] $Attempts = 3,
+        [int] $RetryDelaySeconds = 15,
+        [scriptblock] $Fetch = {
+            param($Uri)
+            try {
+                (Invoke-WebRequest -Uri $Uri -UseBasicParsing).Content
+            }
+            catch {
+                throw "Catalog search failed (host offline or Catalog down): $($_.Exception.Message)"
+            }
+        }
+    )
     $uri = 'https://www.catalog.update.microsoft.com/Search.aspx?q=' + [uri]::EscapeDataString($Query)
-    try {
-        return (Invoke-WebRequest -Uri $uri -UseBasicParsing).Content
+    $html = ''
+    for ($i = 1; $i -le $Attempts; $i++) {
+        $html = [string](& $Fetch $uri)
+        # Assign before counting: @() around the call would count the wrapped list as one object.
+        $parsed = ConvertFrom-WinMintCatalogSearchHtml -Html $html
+        if (@($parsed).Count -ge 1) { return $html }
+        if ($i -lt $Attempts) {
+            Write-Verbose "Catalog search rowless (attempt $i of $Attempts): $Query"
+            Start-Sleep -Seconds $RetryDelaySeconds
+        }
     }
-    catch {
-        throw "Catalog search failed (host offline or Catalog down): $($_.Exception.Message)"
-    }
+    # Rowless after retries: return the last page; callers fail closed on 0 parsed rows.
+    return $html
 }
 
 function Invoke-WinMintCatalogDetailsHtml {

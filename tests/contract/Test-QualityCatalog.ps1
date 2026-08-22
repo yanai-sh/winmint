@@ -56,6 +56,48 @@ try {
 catch { $threw = $true }
 if (-not $threw) { throw 'Test-QualityCatalog: expected 24H2 not to pick 25H2 rows' }
 
+# Rowless Catalog page (markup change / throttle / outage) must fail closed with the
+# Catalog message, not a null -Rows parameter binding error (22 Aug prove-out failure).
+$threw = $false
+try {
+    Resolve-WinMintQualityUpdate -Version '10.0.26200.1' -Architecture 'ARM64' -ImageUbr 1 `
+        -SearchHtml '<html><body>We did not find any results for your search.</body></html>' `
+        -DetailsHtml $details | Out-Null
+}
+catch {
+    $threw = $true
+    if ($_.Exception.Message -notmatch 'Catalog had no ARM64.*parsed 0 Catalog search rows') {
+        throw "Test-QualityCatalog: rowless search must throw the Catalog fail-closed message, got: $($_.Exception.Message)"
+    }
+}
+if (-not $threw) { throw 'Test-QualityCatalog: expected rowless search to throw' }
+
+# Transient rowless Catalog page: search retries and recovers without caller involvement.
+$script:fetchCalls = 0
+$goodHtml = $search25
+$retried = Invoke-WinMintCatalogSearchHtml -Query 'q' -Attempts 3 -RetryDelaySeconds 0 -Fetch {
+    param($Uri)
+    $script:fetchCalls++
+    if ($script:fetchCalls -lt 2) { return '<html>rowless chrome page</html>' }
+    return $goodHtml
+}
+if ($script:fetchCalls -ne 2) { throw "Test-QualityCatalog: expected retry after rowless page (fetches=$script:fetchCalls)" }
+$retriedRows = ConvertFrom-WinMintCatalogSearchHtml -Html $retried
+if (@($retriedRows).Count -lt 1) {
+    throw 'Test-QualityCatalog: retry must return the page that parsed rows'
+}
+$script:fetchCalls = 0
+$exhausted = Invoke-WinMintCatalogSearchHtml -Query 'q' -Attempts 3 -RetryDelaySeconds 0 -Fetch {
+    param($Uri)
+    $script:fetchCalls++
+    return '<html>rowless chrome page</html>'
+}
+if ($script:fetchCalls -ne 3) { throw "Test-QualityCatalog: expected 3 attempts before giving up (fetches=$script:fetchCalls)" }
+$exhaustedRows = ConvertFrom-WinMintCatalogSearchHtml -Html $exhausted
+if (@($exhaustedRows).Count -ne 0) {
+    throw 'Test-QualityCatalog: exhausted retries must surface the rowless page for fail-closed callers'
+}
+
 $urls = ConvertFrom-WinMintCatalogDownloadDialog -Text (Get-Content -LiteralPath (Join-Path $fx 'download-dialog-kb5121003.txt') -Raw)
 $msu = Select-WinMintCatalogMsuUrl -Urls $urls -Kb 'KB5121003'
 if ($msu -notmatch 'kb5121003-arm64') { throw "Test-QualityCatalog: msu $msu" }
