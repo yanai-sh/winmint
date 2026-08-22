@@ -165,6 +165,12 @@ $ckptPick = Select-WinMintCatalogMsuUrl -Urls $ckptFirst -Kb 'KB5121003'
 if ($ckptPick -notmatch 'kb5121003-arm64' -or $ckptPick -match 'kb5043080') {
     throw "Test-QualityCatalog: checkpoint-first picked $ckptPick"
 }
+$safeOsCab = Select-WinMintCatalogMsuUrl -Urls @(
+    'https://catalog.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/x/public/windows11.0-kb5121002-arm64_bd34458fa840a0f0ea95f42346110eaf2e97e1a3.cab'
+) -Kb 'KB5121002'
+if ($safeOsCab -notmatch 'kb5121002-arm64.*\.cab$') {
+    throw "Test-QualityCatalog: Safe OS DU cab leaf $safeOsCab"
+}
 $threw = $false
 try {
     Select-WinMintCatalogMsuUrl -Urls @(

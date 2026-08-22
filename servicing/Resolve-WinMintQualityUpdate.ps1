@@ -508,7 +508,9 @@ function Select-WinMintCatalogMsuUrl {
         [Parameter(Mandatory)] $Urls,
         [string] $Kb
     )
+    # Combined LCUs / checkpoints are usually .msu; Safe OS / Setup Dynamic Updates are .cab.
     $msu = @($Urls | Where-Object { $_ -match '(?i)\.msu(\?|$)' })
+    $cab = @($Urls | Where-Object { $_ -match '(?i)\.cab(\?|$)' })
     if (-not [string]::IsNullOrWhiteSpace($Kb)) {
         $hit = @(
             $msu | Where-Object {
@@ -516,10 +518,15 @@ function Select-WinMintCatalogMsuUrl {
             }
         )
         if ($hit.Count -ge 1) { return [string]$hit[0] }
-        throw "Catalog download had no .msu leaf for $Kb"
+        $cabHit = @(
+            $cab | Where-Object {
+                Test-WinMintQualityKbLeaf -Name ([IO.Path]::GetFileName(([uri]$_).AbsolutePath)) -Kb $Kb
+            }
+        )
+        if ($cabHit.Count -ge 1) { return [string]$cabHit[0] }
+        throw "Catalog download had no .msu/.cab leaf for $Kb"
     }
     if ($msu.Count -ge 1) { return [string]$msu[0] }
-    $cab = @($Urls | Where-Object { $_ -match '(?i)\.cab(\?|$)' })
     if ($cab.Count -ge 1) { return [string]$cab[0] }
     throw 'Catalog download had no .msu/.cab payload'
 }
