@@ -1,38 +1,21 @@
-using System.Globalization;
 using System.Runtime.Versioning;
 
 using WinMint.Provisioning;
 
 namespace WinMint.Tests;
 
-/// <summary>Host-side check: locale Apply must not call a fictional kernel32 export.</summary>
+/// <summary>
+/// GetUserDefaultLocaleName is a real kernel32 export (NativeMethods.txt).
+/// Do not Set-Culture from just check — user locale is process/host global.
+/// </summary>
 [SupportedOSPlatform("windows10.0.19041.0")]
-[Collection(HostCultureMutatingDefinition.Name)]
 public class Win32RegionLocaleTests
 {
     [Fact]
-    public void SetUserLocaleName_roundtrips_via_GetUserDefaultLocaleName()
+    public void Read_locale_comes_from_GetUserDefaultLocaleName()
     {
-        string original = CultureInfo.CurrentCulture.Name;
-        string probe = string.Equals(original, "en-GB", StringComparison.OrdinalIgnoreCase)
-            ? "en-US"
-            : "en-GB";
-
-        try
-        {
-            Win32RegionSnapshot.SetUserLocaleName(probe);
-            Win32RegionSnapshot.SetUserLocaleName(probe); // idempotent
-        }
-        finally
-        {
-            try
-            {
-                Win32RegionSnapshot.SetUserLocaleName(original);
-            }
-            catch
-            {
-                // ponytail: restore best-effort so other tests keep the host culture
-            }
-        }
+        RegionState state = new Win32RegionSnapshot().Read();
+        Assert.False(string.IsNullOrWhiteSpace(state.Locale));
+        Assert.True(state.Locale.Length >= 2, $"locale '{state.Locale}'");
     }
 }
