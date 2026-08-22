@@ -182,9 +182,12 @@ function Invoke-WinMintCleanupWim {
         & $injected
         return
     }
-    & dism.exe /English /Cleanup-Wim
+    # /Cleanup-Wim is the deprecated spelling; DISM 10.0.26100 (ARM64) rejects it
+    # with Error 50 "The request is not supported". /Cleanup-Mountpoints is the
+    # supported command for the same intent (delete stale/corrupt mount state).
+    & dism.exe /English /Cleanup-Mountpoints
     if ($LASTEXITCODE -ne 0) {
-        throw "DISM Cleanup-Wim failed: $LASTEXITCODE"
+        throw "DISM Cleanup-Mountpoints failed: $LASTEXITCODE"
     }
 }
 
@@ -264,17 +267,17 @@ function Resolve-WinMintStaleMount {
             Invoke-WinMintUnmountDiscard -MountDir $mountDir -Commands $Commands
         }
         catch {
-            $message = [string]$_.Exception.Message
-            if ($message -notmatch 'stale|corrupt') {
-                throw
-            }
+            # Real DISM only reports "DISM Unmount-Image /Discard failed: <exit>".
+            # Owned mount + dead/missing owner + discard failure is the stale/corrupt
+            # case Cleanup-Mountpoints is for — escalate; re-query decides success vs fail-closed.
+            # (A prior 'stale|corrupt' message gate never matched the real throw.)
             Invoke-WinMintCleanupWim -Commands $Commands
             $afterCleanup = @(Get-WinMintMountedImages -Commands $Commands)
             $still = @($afterCleanup | Where-Object {
                     Test-WinMintOwnedMountDir -MountDir ([string]$_.MountDir) -InstallMount $installMount -BootMount $bootMount
                 })
             if ($still.Count -gt 0) {
-                throw "stale mount recovery failed after Cleanup-Wim: $mountDir"
+                throw "stale mount recovery failed after Cleanup-Mountpoints: $mountDir"
             }
             Remove-WinMintMountOwner -Kind $kind -ServicingRoot $root
             return [pscustomobject]@{ recoveryAction = 'cleanup-wim'; mountDirectory = $mountDir }
