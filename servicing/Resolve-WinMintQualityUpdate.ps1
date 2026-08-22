@@ -261,10 +261,13 @@ function Expand-WinMintQualitySsu {
     if (Test-WinMintQualityMsuIsWim -Path $MsuPath) {
         # expand.exe cannot open WIM-MSUs ("Can't open input file", exit -1).
         if ($ApplyWim) {
-            & $ApplyWim $MsuPath $Destination
+            # Swallow helper output so it cannot pollute the returned SSU path.
+            $null = & $ApplyWim $MsuPath $Destination
         }
         else {
-            & dism.exe /English /Apply-Image /ImageFile:$MsuPath /Index:1 /ApplyDir:$Destination
+            # DISM writes banner/progress to the success stream; Out-Null keeps the
+            # function's only output the SSU path (else Split-Path sees '' first).
+            & dism.exe /English /Apply-Image /ImageFile:$MsuPath /Index:1 /ApplyDir:$Destination | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw "DISM /Apply-Image failed ($LASTEXITCODE) extracting WIM-MSU: $MsuPath"
             }
@@ -274,7 +277,7 @@ function Expand-WinMintQualitySsu {
         $expand = Join-Path $env:SystemRoot 'System32\expand.exe'
         if (-not (Test-Path -LiteralPath $expand)) { throw 'expand.exe missing' }
         if ($ExpandCab) {
-            & $ExpandCab $MsuPath $Destination
+            $null = & $ExpandCab $MsuPath $Destination
         }
         else {
             & $expand $MsuPath -F:* $Destination | Out-Null
@@ -289,7 +292,7 @@ function Expand-WinMintQualitySsu {
             $inner = Join-Path $Destination ($cab.BaseName + '-inner')
             New-Item -ItemType Directory -Force -Path $inner | Out-Null
             if ($ExpandCab) {
-                & $ExpandCab $cab.FullName $inner
+                $null = & $ExpandCab $cab.FullName $inner
             }
             else {
                 $expand = Join-Path $env:SystemRoot 'System32\expand.exe'
@@ -301,7 +304,8 @@ function Expand-WinMintQualitySsu {
     if ($ssu.Count -lt 1) {
         throw "Combined LCU missing SSU-*.cab after expand: $MsuPath"
     }
-    return [string]$ssu[0].FullName
+    # Comma wrapper: one path object, even if a caller enumerates the return.
+    return , [string]$ssu[0].FullName
 }
 
 function Find-WinMintQualityBootStl {

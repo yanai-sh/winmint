@@ -258,10 +258,16 @@ try {
     $ssuFromWim = Expand-WinMintQualitySsu -MsuPath $wimMsu -Destination $wimOut -ApplyWim {
         param($Src, $Dst)
         $script:appliedWim = $true
+        # DISM-like success-stream noise (empty lines first) must not become the return.
+        Write-Output ''
+        Write-Output 'Deployment Image Servicing and Management tool'
         Set-Content -LiteralPath (Join-Path $Dst 'SSU-26100.1-arm64.cab') -Value 'ssu' -Encoding ascii
     }
     if (-not $script:appliedWim) { throw 'Test-QualityCatalog: WIM-MSU must use ApplyWim, not expand.exe' }
+    if ($ssuFromWim -is [Array]) { throw 'Test-QualityCatalog: Expand must return one path, not DISM stdout array' }
+    if ([string]::IsNullOrWhiteSpace($ssuFromWim)) { throw 'Test-QualityCatalog: WIM-MSU SSU path empty' }
     if (-not (Test-Path -LiteralPath $ssuFromWim)) { throw 'Test-QualityCatalog: WIM-MSU SSU path missing' }
+    $null = Split-Path -Leaf $ssuFromWim  # must not throw Path empty (regression)
 
     $cabOut = Join-Path $msuProbe 'cab-out'
     $script:expandedCab = $false
