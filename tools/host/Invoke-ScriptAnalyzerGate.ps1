@@ -1,9 +1,26 @@
 #requires -Version 7.6
+param([string] $PsscriptAnalyzerVersion)
+
 # Shared `just check` / CI gate. Settings files own the host vs guest split.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+if ([string]::IsNullOrWhiteSpace($PsscriptAnalyzerVersion)) {
+    if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+        Write-Error 'PSScriptAnalyzer not installed. Run: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser'
+        exit 1
+    }
+    Import-Module -Name PSScriptAnalyzer -Force
+}
+else {
+    if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer | Where-Object Version -eq ([version]$PsscriptAnalyzerVersion))) {
+        Write-Error "PSScriptAnalyzer $PsscriptAnalyzerVersion not installed"
+        exit 1
+    }
+    Import-Module -FullyQualifiedName @{ ModuleName = 'PSScriptAnalyzer'; RequiredVersion = $PsscriptAnalyzerVersion } -Force
+}
+
+if (-not (Get-Module -Name PSScriptAnalyzer)) {
     Write-Error 'PSScriptAnalyzer not installed. Run: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser'
     exit 1
 }

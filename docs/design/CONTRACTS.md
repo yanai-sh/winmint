@@ -39,6 +39,7 @@ Profile JSON
 | Packages check request (transient) | `winmint.packages.check.request/v1` |
 | Packages check outcome (transient) | `winmint.packages.check.outcome/v1` |
 | Native package audit | `winmint.native-packages/v1` |
+| Acceptance provenance manifest (transient projection) | `winmint.acceptance.manifest/v1` |
 
 The JSON key is `schemaVersion` and the C# constant is `SchemaVersion` — everywhere, no `schema` shorthand. Each id has **one** literal in C# (`JobsWire.SchemaVersion`, `GuestBundleWire.SchemaVersion`, …); a second spelling is a bug, not a style choice. PowerShell writers repeat the literal and are held honest by the C# reader that validates them.
 
@@ -66,8 +67,29 @@ Unknown schemaVersion ⇒ fail closed at parse (host or session loader).
 | Packages proof (`config/packages.proof.json`) | PackagesProof (C#) | PackagesProof.Validate; `just check` |
 | Packages check request (transient) | PackagesProof (C#) | `Invoke-PackagesCheck.ps1` |
 | Packages check outcome (transient) | `Invoke-PackagesCheck.ps1` | PackagesProof (C#) |
+| Acceptance provenance manifest (transient) | Full-run acceptance harnesses, after their existing assertion | Maintainer / sanitized ledger tooling; never a gate or control-plane input |
 
 Transient packages-check files live under `.scratch/packages-check/{run}/` during `packages-check` only; C# owns request write, reconciliation, and proof replace — not durable interchange.
+
+Acceptance provenance manifests are transient projections written under the real run/evidence
+work directory. They record the exact commit, profile bytes, Source ISO identity, output ISO
+digest, lane, and source evidence schemas; they do not replace S4, S5, Gate B, or Primary
+predicates. Only a positively confirmed Primary wizard checklist after off-box FirstLogon
+evidence copy may emit `acceptanceKind=Primary`; Gate B is never Primary.
+
+The schema owner is `tools/AcceptanceManifest.ps1`. Green records contain
+`schemaVersion`, `acceptanceKind`, `outcome=green`, `commitSha`, `profileSha256`,
+`sourceIso.sha256`, `sourceIso.length`, `outputIsoSha256`, `lane`,
+`sourceEvidenceSchemas`, and normalized relative `artifactPaths`; `packageStrict` is
+included when known. Failed records may omit unavailable hashes, but never represent a
+green result.
+
+When a maintainer chooses to retain a result, the sanitized durable ledger convention is
+`docs/evidence/acceptance/<commitSha>/<acceptanceKind>-<lane>-<short-run-id>.json`.
+Ledger records must contain the manifest projection only: no absolute paths, passwords,
+secrets, or raw evidence. Fixtures may exercise the projection but are explicitly
+non-acceptance and must not be copied into this ledger. No real ledger records are committed
+by the contract tests.
 
 ## Compatibility
 

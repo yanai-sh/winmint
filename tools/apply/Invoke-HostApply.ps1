@@ -44,6 +44,9 @@ param(
     [ValidateSet('Test', 'Release')]
     [string] $RequireLane = '',
 
+    [ValidateSet('HostApply', 'GateB')]
+    [string] $AcceptanceKind = 'HostApply',
+
     [switch] $ExpectDrivers,
 
     [switch] $ExpectNativePackageAuditJobs,
@@ -58,6 +61,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
+. (Join-Path $repoRoot 'tools\AcceptanceManifest.ps1')
 
 $assertScript = Join-Path $PSScriptRoot 'Assert-ApplyEvidence.ps1'
 
@@ -79,6 +83,28 @@ function Invoke-ApplyAssert {
     if ($WingetImport) { $assertParams['ExpectWingetImport'] = $true }
     & $assertScript @assertParams
     if ($LASTEXITCODE -ne 0) { throw "Apply assert failed: $LASTEXITCODE" }
+}
+
+trap {
+    $originalFailure = $_
+    if (-not $AssertOnly -and -not $SkipApply -and -not [string]::IsNullOrWhiteSpace($Work)) {
+        try {
+            $failureLane = if (-not [string]::IsNullOrWhiteSpace($RequireLane)) { $RequireLane } else { $ImageQuality }
+            $failureArtifacts = @(
+                @('apply-status.txt', 'failure.json', 'evidence.json') |
+                    Where-Object { Test-Path -LiteralPath (Join-Path $Work $_) -PathType Leaf }
+            )
+            if ($failureArtifacts.Count -eq 0) { $failureArtifacts = @('acceptance.manifest.json') }
+            Write-WinMintAcceptanceManifest -Path (Join-Path $Work 'acceptance.manifest.json') `
+                -AcceptanceKind $AcceptanceKind -Outcome failed -Lane $failureLane -RepositoryRoot $repoRoot `
+                -SourceEvidenceSchemas @('winmint.image.evidence/v1') -ArtifactPaths $failureArtifacts `
+                -PackageStrict ([Nullable[bool]]$PackageStrict) | Out-Null
+        }
+        catch {
+            Write-Warning "Could not write failure acceptance manifest: $($_.Exception.Message)"
+        }
+    }
+    throw $originalFailure
 }
 
 if ($AssertOnly) {
@@ -168,17 +194,32 @@ $assertLane = if (-not [string]::IsNullOrWhiteSpace($RequireLane)) { $RequireLan
 Invoke-ApplyAssert -Dir $Work -Lane $assertLane -Drivers:$expectDrivers -NativeAuditJobs:$expectNativeAuditJobs -WingetImport:$expectWingetImport
 
 $sha = $null
+$sourceSha = $null
+$sourceLength = 0
 $evidencePath = Join-Path $Work 'evidence.json'
 $ev = $null
 if (Test-Path -LiteralPath $evidencePath) {
     $ev = Get-Content -LiteralPath $evidencePath -Raw -Encoding utf8 | ConvertFrom-Json
     if ($ev.PSObject.Properties.Name -contains 'digests' -and $null -ne $ev.digests) {
         foreach ($p in $ev.digests.PSObject.Properties) {
-            if ([string]$p.Name -eq 'outputIso.sha256') { $sha = [string]$p.Value; break }
+            if ([string]$p.Name -eq 'outputIso.sha256') { $sha = [string]$p.Value }
+            if ([string]$p.Name -eq 'source.isoSha256') { $sourceSha = [string]$p.Value }
+            if ([string]$p.Name -eq 'source.isoLength') { $sourceLength = [long]$p.Value }
         }
     }
 }
 $outIso = Resolve-WinMintOutputIso -WorkDirectory $Work -Evidence $ev
+if (-not $SkipApply) {
+    $artifactRoot = (Resolve-Path $Work).Path
+    $outputRelative = [IO.Path]::GetRelativePath($artifactRoot, (Resolve-Path $outIso).Path).Replace('\', '/')
+    Write-WinMintAcceptanceManifest -Path (Join-Path $Work 'acceptance.manifest.json') `
+        -AcceptanceKind $AcceptanceKind -Outcome green -Lane $assertLane -RepositoryRoot $repoRoot `
+        -ProfilePath $Profile -SourceIsoPath $Iso -OutputIsoPath $outIso `
+        -SourceIsoSha256 $sourceSha -SourceIsoLength $sourceLength -OutputIsoSha256 $sha `
+        -SourceEvidenceSchemas @('winmint.image.evidence/v1', 'winmint.apply.acceptance/v1') `
+        -ArtifactPaths @($outputRelative, 'evidence.json', 'apply-acceptance.json') `
+        -PackageStrict ([Nullable[bool]]$PackageStrict)
+}
 Write-Host "Host Apply gate OK. Work=$Work lane=$assertLane"
 if ($sha) { Write-Host "outputIso.sha256=$sha" }
 if ($outIso) { Write-Host "Output ISO: $outIso" }

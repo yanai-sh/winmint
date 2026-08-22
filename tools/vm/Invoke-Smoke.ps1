@@ -65,9 +65,13 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 
 . (Join-Path $repoRoot 'tools/vm/SmokeStatus.ps1')
+. (Join-Path $repoRoot 'tools/AcceptanceManifest.ps1')
 $statusPath = Join-Path $Work 'smoke-status.json'
 
 $assertScript = Join-Path $PSScriptRoot 'Assert-SmokeEvidence.ps1'
+$manifestPath = Join-Path $Work 'smoke-evidence\acceptance.manifest.json'
+$runId = [guid]::NewGuid().ToString('N')
+$outIso = $null
 
 if ($AssertOnly) {
     & $assertScript -EvidenceDir $EvidenceDir
@@ -75,6 +79,7 @@ if ($AssertOnly) {
     exit 0
 }
 
+try {
 if ([string]::IsNullOrWhiteSpace($Iso)) {
     throw 'Iso is required for a full Smoke run (user-supplied Source ISO).'
 }
@@ -95,7 +100,6 @@ $workFull = if ([IO.Path]::IsPathRooted($Work)) { $Work } else { Join-Path $repo
 
 # New run identity, stamped before the watcher spawns: a stale terminal status
 # from a prior run must never read as this run's outcome (watchers key on runId).
-$runId = [guid]::NewGuid().ToString('N')
 Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
     -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
     -LastHostLine 'Smoke run starting' -OutputIso $null -RunId $runId
@@ -133,9 +137,6 @@ if (-not $SkipApply) {
         if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
     }
     catch {
-        $failLine = [string]$_.Exception.Message
-        Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage failed) `
-            -VmName $VmName -LastHostLine $failLine -OutputIso $null -RunId $runId
         throw
     }
 
@@ -594,6 +595,28 @@ try {
         -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures `
         $(if ($expectNativePackageAudit) { '-ExpectNativePackageAudit' })
     if ($LASTEXITCODE -ne 0) { throw "Assert-SmokeEvidence exit $LASTEXITCODE" }
+    if (-not $SkipApply) {
+        $applyDoc = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json
+        $digestMap = @{}
+        foreach ($p in @($applyDoc.digests.PSObject.Properties)) { $digestMap[[string]$p.Name] = [string]$p.Value }
+        $sourceSha = if ($digestMap.ContainsKey('source.isoSha256')) { $digestMap['source.isoSha256'] } else { $null }
+        $sourceLength = if ($digestMap.ContainsKey('source.isoLength')) { [long]$digestMap['source.isoLength'] } else { 0 }
+        $outputSha = if ($digestMap.ContainsKey('outputIso.sha256')) { $digestMap['outputIso.sha256'] } else { $null }
+        $packageStrict = $null
+        if ($applyDoc.PSObject.Properties.Name -contains 'packageStrict') { $packageStrict = [bool]$applyDoc.packageStrict }
+        $artifactRoot = (Resolve-Path $Work).Path
+        $outputRelative = [IO.Path]::GetRelativePath($artifactRoot, (Resolve-Path $outIso).Path).Replace('\', '/')
+        Write-WinMintAcceptanceManifest -Path $manifestPath -AcceptanceKind Smoke -Outcome green `
+            -Lane ([string]$applyDoc.lane) -RepositoryRoot $repoRoot -ProfilePath $Profile `
+            -SourceIsoPath $Iso -OutputIsoPath $outIso -SourceIsoSha256 $sourceSha `
+            -SourceIsoLength $sourceLength -OutputIsoSha256 $outputSha `
+            -SourceEvidenceSchemas @(
+                'winmint.image.evidence/v1',
+                'winmint.provisioning.evidence/v1',
+                'winmint.smoke.acceptance/v1'
+            ) -ArtifactPaths @($outputRelative, 'smoke-evidence/apply/evidence.json', 'smoke-evidence/guest') `
+            -PackageStrict ([Nullable[bool]]$packageStrict)
+    }
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage green) `
         -VmName $VmName -LastHostLine 'Smoke green' -OutputIso $outIso -RunId $runId
     Write-Host "Smoke green. Evidence: $evidenceOut"
@@ -602,5 +625,13 @@ try {
 catch {
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage failed) `
         -VmName $VmName -LastHostLine ([string]$_.Exception.Message) -OutputIso $outIso -RunId $runId
+    try {
+        Write-WinMintAcceptanceManifest -Path $manifestPath -AcceptanceKind Smoke -Outcome failed `
+            -Lane Test -RepositoryRoot $repoRoot -SourceEvidenceSchemas @('winmint.smoke.acceptance/v1') `
+            -ArtifactPaths @('smoke-status.json')
+    }
+    catch {
+        Write-Warning "Could not write failure acceptance manifest: $($_.Exception.Message)"
+    }
     throw
 }

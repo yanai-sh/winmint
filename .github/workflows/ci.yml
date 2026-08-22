@@ -27,30 +27,36 @@ jobs:
         with:
           dotnet-version: "11.0.x"
 
-      # Mirror of local `just check` — inlined: no just binary/action on win-arm64 runners.
-      - name: Dotnet gate
+      - name: Deterministic check gate
         shell: pwsh
-        run: |
-          dotnet format --verify-no-changes
-          dotnet restore
-          dotnet build --no-restore
-          dotnet test --no-build -- --filter-not-trait "Category=S4" --filter-not-trait "Category=S5"
+        run: pwsh -NoProfile -File tools/host/Invoke-CheckGate.ps1
 
-      - name: PSScriptAnalyzer
-        shell: pwsh
-        run: |
-          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
-            Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
-          }
-          pwsh -NoProfile -File tools/host/Invoke-ScriptAnalyzerGate.ps1
+  candidate:
+    needs: check
+    # Candidate publishes are intentionally separate from the fast deterministic gate.
+    permissions:
+      contents: read
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Contract tests
-        shell: pwsh
-        run: pwsh -NoProfile -File tests/contract/Invoke-ContractTests.ps1
+      - name: Setup .NET 11 (latest preview on channel)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "11.0.x"
 
-      # NativeAOT win-arm64 publish smoke for Provisioning Supervisor and WinPE apply helper.
-      - name: AOT publish (Supervisor + WinMintApply)
+      - name: Publish unsigned candidate and inventory
         shell: pwsh
-        run: |
-          dotnet publish src/WinMint.WinPeApply/WinMint.WinPeApply.csproj -c Release -o artifacts/winpe-apply
-          dotnet publish src/WinMint.Provisioning/WinMint.Provisioning.csproj -c Release -o artifacts/provisioning
+        run: pwsh -NoProfile -File tools/ci/Publish-WinMintCandidate.ps1
+
+      - name: Upload candidate proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: winmint-candidate-proof
+          path: |
+            .scratch/candidate-proof/candidate-inventory.json
+            .scratch/candidate-proof/candidate-build.log
+          if-no-files-found: warn
+          retention-days: 1

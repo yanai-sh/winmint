@@ -1,0 +1,61 @@
+name: health
+
+on:
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+
+# Health signals are read-only and never gate CI or release.
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    permissions:
+      contents: read
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run live quality check
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/ci/Invoke-HealthCheck.ps1 -Mode Quality
+
+      - name: Upload quality transcript
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: winmint-health-quality
+          path: .scratch/health/quality/quality-check.log
+          if-no-files-found: warn
+          retention-days: 1
+
+  packages:
+    permissions:
+      contents: read
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET 11 (latest preview on channel)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "11.0.x"
+
+      - name: Reconcile live package catalog
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/ci/Invoke-HealthCheck.ps1 -Mode Packages
+
+      - name: Upload package reconciliation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: winmint-health-packages
+          path: |
+            .scratch/health/packages/packages-check.log
+            .scratch/health/packages/packages.proof.json
+            .scratch/health/packages/packages.proof.diff
+          if-no-files-found: warn
+          retention-days: 1

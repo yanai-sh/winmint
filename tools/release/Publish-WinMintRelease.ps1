@@ -53,14 +53,14 @@ if ($LASTEXITCODE -ne 0) { throw "Wizard publish failed: $LASTEXITCODE" }
 
 Write-Host 'Publishing Provisioning Supervisor (AOT)…'
 dotnet publish (Join-Path $repoRoot 'src\WinMint.Provisioning\WinMint.Provisioning.csproj') `
-    -c $Configuration `
+    -c $Configuration -r $Runtime `
     @publishProps `
     -o $provOut
 if ($LASTEXITCODE -ne 0) { throw "Provisioning publish failed: $LASTEXITCODE" }
 
 Write-Host 'Publishing WinPE apply helper (AOT WinExe)…'
 dotnet publish (Join-Path $repoRoot 'src\WinMint.WinPeApply\WinMint.WinPeApply.csproj') `
-    -c $Configuration `
+    -c $Configuration -r $Runtime `
     @publishProps `
     -o $winPeOut
 if ($LASTEXITCODE -ne 0) { throw "WinPeApply publish failed: $LASTEXITCODE" }

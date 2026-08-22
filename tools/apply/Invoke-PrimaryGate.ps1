@@ -36,5 +36,6 @@ if ([string]::IsNullOrWhiteSpace($Iso)) {
 }
 
 New-Item -ItemType Directory -Force -Path $Work | Out-Null
-& $hostApply -Iso $Iso -Work $Work -Profile $Profile -ImageQuality Release -PackageStrict -ExpectDrivers -RequireLane Release
+& $hostApply -Iso $Iso -Work $Work -Profile $Profile -ImageQuality Release -PackageStrict `
+    -ExpectDrivers -RequireLane Release -AcceptanceKind GateB
 exit $LASTEXITCODE

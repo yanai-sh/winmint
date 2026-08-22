@@ -21,6 +21,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
+. (Join-Path $repoRoot 'tools\AcceptanceManifest.ps1')
 
 if (-not $EnvFile) { $EnvFile = Join-Path $repoRoot '.scratch\primary-gate.env' }
 
@@ -297,6 +298,104 @@ Write-Step 'HKLM ...\WindowsStore\AutoDownload = 2'
 Write-Note 'True FU survival needs a later Feature Update + re-check - record the baseline now.'
 if (Confirm-Yes 'packages.evidence.json green AND FU HKLM baseline present?') {
     Write-Good 'Primary wipe path looks met - attach evidence in-repo when ready.'
+    if (-not (Test-Path -LiteralPath $evidenceDir -PathType Container)) {
+        throw "Primary evidence copy directory not found: $evidenceDir"
+    }
+    $evidenceFull = (Resolve-Path -LiteralPath $evidenceDir).Path
+    $gateFull = (Resolve-Path -LiteralPath $gateWork).Path
+    if ($evidenceFull -eq $gateFull -or $evidenceFull.StartsWith($gateFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Primary evidence must be copied from outside the Gate B workdir'
+    }
+    if ($evidenceFull -match '(?i)(^|[\\/])tests[\\/]fixtures([\\/]|$)|(^|[\\/])fixture[^\\/]*([\\/]|$)') {
+        throw 'Fixture evidence cannot support Primary'
+    }
+    $gateManifestPath = Join-Path $gateWork 'apply-acceptance.json'
+    if (-not (Test-Path -LiteralPath $gateManifestPath -PathType Leaf)) {
+        throw 'Gate B acceptance manifest is missing'
+    }
+    $gateManifest = Get-Content -LiteralPath $gateManifestPath -Raw -Encoding utf8 | ConvertFrom-Json
+    if ([string]$gateManifest.schemaVersion -cne 'winmint.apply.acceptance/v1' -or
+        [string]$gateManifest.lane -cne 'Release' -or
+        $gateManifest.preWipeOnly -ne $true) {
+        throw 'Gate B manifest must be a Release pre-wipe acceptance result'
+    }
+
+    # The manifest must bind the evidence actually copied off-box, not merely
+    # trust arbitrary JSON that happens to contain a known schema.
+    $copiedEvidenceRoot = Join-Path $gateWork 'primary-evidence'
+    if (Test-Path -LiteralPath $copiedEvidenceRoot) {
+        Remove-Item -LiteralPath $copiedEvidenceRoot -Recurse -Force
+    }
+    New-Item -ItemType Directory -Force -Path $copiedEvidenceRoot | Out-Null
+    $copiedArtifacts = @()
+    $copiedSchemas = @()
+    foreach ($sourceFile in Get-ChildItem -LiteralPath $evidenceDir -Filter '*.json' -File -Recurse -ErrorAction Stop) {
+        $relative = [IO.Path]::GetRelativePath((Resolve-Path $evidenceDir).Path, $sourceFile.FullName).Replace('\', '/')
+        $artifact = Normalize-WinMintArtifactPath ("primary-evidence/$relative")
+        $target = Join-Path $copiedEvidenceRoot ($relative.Replace('/', [IO.Path]::DirectorySeparatorChar))
+        if ($artifact -match '(?i)(^|/)(password|secret|credential)([^/]*)(/|$)|(?i)(^|/)[^/]*\.(password|secret|pem|pfx|key)$') {
+            throw "Primary evidence path is not safe to copy: $relative"
+        }
+        $targetParent = Split-Path -Parent $target
+        New-Item -ItemType Directory -Force -Path $targetParent | Out-Null
+        Copy-Item -LiteralPath $sourceFile.FullName -Destination $target -Force
+        $copiedArtifacts += $artifact
+        try {
+            $doc = Get-Content -LiteralPath $target -Raw -Encoding utf8 | ConvertFrom-Json
+            $schema = [string]$doc.schemaVersion
+            if ($script:WinMintAcceptanceKnownSchemas -contains $schema) {
+                $copiedSchemas += $schema
+            }
+        }
+        catch {
+            throw "Copied Primary evidence is not valid JSON: $relative"
+        }
+    }
+    $copiedSchemas = @($copiedSchemas | Sort-Object -Unique)
+    if ($copiedSchemas -notcontains 'winmint.provisioning.evidence/v1') {
+        throw 'Primary evidence copy lacks live provisioning evidence'
+    }
+    if ($copiedSchemas -notcontains 'winmint.packages.evidence/v1') {
+        throw 'Primary evidence copy lacks package-strict package evidence'
+    }
+    $liveProvisioning = Get-ChildItem -LiteralPath $copiedEvidenceRoot -Filter '*.json' -File -Recurse |
+        Where-Object {
+            try {
+                $doc = Get-Content -LiteralPath $_.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+                [string]$doc.schemaVersion -eq 'winmint.provisioning.evidence/v1' -and
+                    [string]$doc.outcome -eq 'Complete'
+            }
+            catch { $false }
+        }
+    if (-not $liveProvisioning) { throw 'Primary evidence lacks a complete live provisioning run' }
+    $packageEvidence = Get-ChildItem -LiteralPath $copiedEvidenceRoot -Filter '*.json' -File -Recurse |
+        Where-Object {
+            try {
+                $doc = Get-Content -LiteralPath $_.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+                [string]$doc.schemaVersion -eq 'winmint.packages.evidence/v1' -and @($doc.failures).Count -eq 0
+            }
+            catch { $false }
+        }
+    if (-not $packageEvidence) { throw 'Primary package evidence contains failures or is unreadable' }
+    $primarySchemas = @('winmint.image.evidence/v1') + $copiedSchemas | Sort-Object -Unique
+    $gateEvidence = Get-Content -LiteralPath $evidencePath -Raw | ConvertFrom-Json
+    if ([string]$gateEvidence.schemaVersion -cne 'winmint.image.evidence/v1') {
+        throw 'Gate B evidence is not image evidence'
+    }
+    $primaryDigest = Get-JsonValue (Get-JsonValue $gateEvidence 'digests') 'outputIso.sha256'
+    $primarySourceSha = Get-JsonValue (Get-JsonValue $gateEvidence 'digests') 'source.isoSha256'
+    $primarySourceLength = [long](Get-JsonValue (Get-JsonValue $gateEvidence 'digests') 'source.isoLength')
+    $primaryOutput = if ($wipeIso) { $wipeIso } else { $null }
+    $primaryRoot = (Resolve-Path $gateWork).Path
+    $primaryOutputRelative = [IO.Path]::GetRelativePath($primaryRoot, (Resolve-Path $primaryOutput).Path).Replace('\', '/')
+    $primaryArtifacts = @($primaryOutputRelative, 'evidence.json', 'apply-acceptance.json') + $copiedArtifacts
+    Write-WinMintAcceptanceManifest -Path (Join-Path $gateWork 'primary.acceptance.manifest.json') `
+        -AcceptanceKind Primary -Outcome green -Lane Release -RepositoryRoot $repoRoot `
+        -ProfilePath 'samples/sl7.profile.json' -SourceIsoPath $sourceIso -OutputIsoPath $primaryOutput `
+        -SourceIsoSha256 $primarySourceSha -SourceIsoLength $primarySourceLength `
+        -OutputIsoSha256 $primaryDigest -SourceEvidenceSchemas $primarySchemas `
+        -ArtifactPaths $primaryArtifacts `
+        -PackageStrict $true
 }
 else {
     Write-Warn 'Not green - do not treat Primary as proven without install evidence.'

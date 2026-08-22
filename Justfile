@@ -24,10 +24,8 @@ pack-release TAG:
 format-check:
     dotnet format --verify-no-changes
 
-check: format-check build
-    dotnet test --no-build -- --filter-not-trait "Category=S4" --filter-not-trait "Category=S5"
-    just analyze-servicing
-    just contract-tests
+check:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-CheckGate.ps1'
 
 # Discover tests/contract/Test-*.ps1 (WinPE / DISM / release helpers that cannot run on a live host).
 contract-tests:
