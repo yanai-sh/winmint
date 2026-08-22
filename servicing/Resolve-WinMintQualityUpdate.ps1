@@ -509,7 +509,7 @@ function Move-WinMintInvalidQualityCacheEntry {
         Move-Item -LiteralPath $dir -Destination $dest
     }
     catch {
-        # Hit path already skipped this leaf; quarantine is best-effort (ProgramData ACL).
+        Write-Verbose "quality-cache quarantine skipped: $($_.Exception.Message)"
     }
 }
 

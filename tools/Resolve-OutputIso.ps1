@@ -31,10 +31,12 @@ function Resolve-WinMintOutputIso {
         }
     }
 
-    $named = @(Get-ChildItem -LiteralPath $WorkDirectory -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending)
-    if ($named.Count -ge 1) {
-        return $named[0].FullName
+    $named = @(Get-ChildItem -LiteralPath $WorkDirectory -Filter 'winmint_*.iso' -File -ErrorAction SilentlyContinue)
+    if ($named.Count -eq 1) {
+        return (Resolve-Path -LiteralPath $named[0].FullName).Path
+    }
+    if ($named.Count -gt 1) {
+        throw "Multiple winmint_*.iso under $WorkDirectory — set evidence.outputIsoPath (do not pick by LastWriteTime)"
     }
 
     $legacy = Join-Path $WorkDirectory 'out.iso'

@@ -7,20 +7,25 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 $smoke = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Invoke-Smoke.ps1') -Raw -Encoding utf8
 if ($smoke -notmatch 'tools[/\\]vm[/\\]SmokeStatus\.ps1') { throw 'Invoke-Smoke must dot-source SmokeStatus.ps1' }
-if ($smoke -notmatch '\[switch\]\s*\$Monitor') { throw '-Monitor switch missing' }
-if ($smoke -notmatch 'Start-SmokeMonitor') { throw 'Start-SmokeMonitor not called' }
-if ($smoke -notmatch 'Write-SmokeStatus') { throw 'Write-SmokeStatus not called' }
-if ($smoke -notmatch 'Watch-SmokeHost\.ps1') { throw 'Invoke-Smoke must Start-Process Watch-SmokeHost.ps1' }
-if ($smoke -notmatch 'just apply-maintainer') { throw 'Apply path missing' }
+if ($smoke -notmatch 'Get-WinMintApplyHostFailure') { throw 'Apply wait must use Get-WinMintApplyHostFailure' }
 if ($smoke -notmatch "Resolve-SmokePhase -HostStage failed") { throw 'Apply/wait failures must write phase=failed' }
-if ($smoke -notmatch 'stage=failed:') { throw 'waiter must project apply-status.txt failure, not just LASTEXITCODE' }
 if ($smoke -match 'Get-Content[^\n]*smoke-status\.json') { throw 'must not read smoke-status.json as control plane' }
 if ($smoke -notmatch 'Get-SmokeWatchVerdict') { throw 'Invoke-Smoke wait loop must call Get-SmokeWatchVerdict' }
 if ($smoke -notmatch 'EMPTY_VHD:') { throw 'empty-VHD throw prefix missing (operator copy)' }
 if ($smoke -notmatch '\[Diagnostics\.Stopwatch\]') { throw 'stall/wall/empty-vhd must use Stopwatch, not UtcNow deadlines' }
-if ($smoke -notmatch 'Enable-VMEventing') { throw 'Enable-VMEventing keeps Hyper-V objects fresh without host polling' }
+if ($smoke -notmatch 'Select-WinMintGuestEvidencePath') { throw 'guest evidence must select by outcome, not LastWriteTime' }
 if ($smoke -match 'process-exited-early' -or $smoke -match 'Find-SmokePids') {
     throw 'Invoke-Smoke must not infer harness death from process lists'
+}
+if ($smoke -notmatch '-RunId \$runId') { throw 'Invoke-Smoke must stamp every status with this run''s runId' }
+if ($smoke -notmatch "Remove-Item[^\n]*priorProjections" -or $smoke -notmatch "'evidence\.json', 'stages\.json'") {
+    throw 'Invoke-Smoke must clear prior-run Apply projections (apply-status/failure/evidence/stages/expected) before Apply'
+}
+if ($smoke -notmatch 'if \(\$SkipApply\) \{ Resolve-WinMintOutputIso') {
+    throw 'Full runs must not resolve the Output ISO before Apply (stale winmint_*.iso would fail-close a fresh Apply)'
+}
+if ($smoke.IndexOf('Write-SmokeStatus') -gt $smoke.IndexOf('Watch-SmokeHost.ps1')) {
+    throw 'Invoke-Smoke must write this run''s status before spawning Watch-SmokeHost (stale-status guard)'
 }
 
 function Assert-Eq($Actual, $Expected, [string] $Message) {
@@ -65,6 +70,36 @@ try {
     Assert-Eq (Get-SmokeWatchVerdict -Phase guest-up -StatusAgeSeconds 200) harness-stale 'stale status after wait phases'
     Assert-Eq (Get-SmokeWatchVerdict -Phase vm-boot -VmState Running -VhdFileSizeMB 36 -EmptyVhdRunningSeconds 60) continue 'empty VHD under budget'
     Assert-Eq (Get-SmokeWatchVerdict -Phase vm-boot -VmState Running -VhdFileSizeMB 36 -EmptyVhdRunningSeconds 480) empty-vhd 'empty VHD after Running budget'
+
+    # Run identity: a status carried over from a prior run is awaiting-run, never done (22 Aug false-terminal).
+    Write-SmokeStatus -Path $statusPath -Phase failed -VmName 'winmint-smoke' -RunId 'run-a' -LastHostLine 'old failure'
+    $stale = Get-Content -LiteralPath $statusPath -Raw | ConvertFrom-Json
+    Assert-Eq $stale.runId 'run-a' 'runId written to status'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase failed -StatusRunId 'run-a' -PriorRunId 'run-a') awaiting-run 'prior-run failed is not done'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase failed -StatusRunId '' -PriorRunId '') awaiting-run 'runId-less stale status is not done'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase failed -StatusRunId 'run-b' -PriorRunId 'run-a') done 'new run failed is done'
+    Assert-Eq (Get-SmokeWatchVerdict -Phase apply -StatusRunId 'run-b' -PriorRunId 'run-a' -StatusAgeSeconds 99999) continue 'new run apply may be silent for hours'
+
+    $applyWork = Join-Path $tmp 'apply-work'
+    New-Item -ItemType Directory -Force -Path $applyWork | Out-Null
+    Set-Content -LiteralPath (Join-Path $applyWork 'apply-status.txt') -Value "stage=failed:AddQualityUpdates`nlog=x" -Encoding utf8
+    '{"message":"combined LCU missing SSU"}' | Set-Content -LiteralPath (Join-Path $applyWork 'failure.json') -Encoding utf8
+    Assert-Eq (Get-WinMintApplyHostFailure -WorkDirectory $applyWork) 'combined LCU missing SSU' 'apply-status projects failure.json'
+    Set-Content -LiteralPath (Join-Path $applyWork 'apply-status.txt') -Value "stage=MountInstallWim`n" -Encoding utf8
+    if ($null -ne (Get-WinMintApplyHostFailure -WorkDirectory $applyWork)) {
+        throw 'Get-WinMintApplyHostFailure must ignore a live Apply'
+    }
+
+    $evDir = Join-Path $tmp 'guest-ev'
+    New-Item -ItemType Directory -Force -Path $evDir | Out-Null
+    '{"outcome":"Reboot"}' | Set-Content -LiteralPath (Join-Path $evDir 'evidence-newer-reboot.json') -Encoding utf8
+    '{"outcome":"Complete"}' | Set-Content -LiteralPath (Join-Path $evDir 'evidence-older-complete.json') -Encoding utf8
+    (Get-Item -LiteralPath (Join-Path $evDir 'evidence-newer-reboot.json')).LastWriteTimeUtc = [datetime]::UtcNow
+    (Get-Item -LiteralPath (Join-Path $evDir 'evidence-older-complete.json')).LastWriteTimeUtc = [datetime]::UtcNow.AddDays(-2)
+    $picked = Select-WinMintGuestEvidencePath -Directory $evDir
+    if ($picked -notmatch 'evidence-older-complete') {
+        throw "Select-WinMintGuestEvidencePath must prefer Complete over newer Reboot, got $picked"
+    }
 
     $blocked = Join-Path $tmp 'blocked'
     Set-Content -LiteralPath $blocked -Value 'not-a-dir' -Encoding utf8

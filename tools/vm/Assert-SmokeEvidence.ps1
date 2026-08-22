@@ -32,6 +32,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'SmokeStatus.ps1')
+
 $ExplorerShell = 'explorer.exe'
 $SupervisorShellLeaf = 'Supervisor.exe'
 
@@ -41,12 +43,11 @@ function Get-LatestGuestEvidence {
     if (-not (Test-Path -LiteralPath $guest)) {
         throw "guest evidence folder missing: $guest"
     }
-    $files = Get-ChildItem -LiteralPath $guest -Filter 'evidence-*.json' -File |
-        Sort-Object LastWriteTimeUtc -Descending
-    if (-not $files) {
-        throw "no guest evidence-*.json under $guest"
+    $hit = Select-WinMintGuestEvidencePath -Directory $guest
+    if ([string]::IsNullOrWhiteSpace($hit)) {
+        throw "no Complete/Failed guest evidence-*.json under $guest"
     }
-    return $files[0].FullName
+    return $hit
 }
 
 $guestPath = Get-LatestGuestEvidence -Dir $EvidenceDir

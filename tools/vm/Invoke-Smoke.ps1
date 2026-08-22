@@ -92,6 +92,14 @@ if (Test-Path -LiteralPath $guestDir) {
 New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 
 $workFull = if ([IO.Path]::IsPathRooted($Work)) { $Work } else { Join-Path $repoRoot $Work }
+
+# New run identity, stamped before the watcher spawns: a stale terminal status
+# from a prior run must never read as this run's outcome (watchers key on runId).
+$runId = [guid]::NewGuid().ToString('N')
+Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
+    -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
+    -LastHostLine 'Smoke run starting' -OutputIso $null -RunId $runId
+
 $pwshExe = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
 Start-Process -FilePath $pwshExe -WorkingDirectory $repoRoot -ArgumentList @(
     '-NoProfile',
@@ -100,43 +108,34 @@ Start-Process -FilePath $pwshExe -WorkingDirectory $repoRoot -ArgumentList @(
 ) | Out-Null
 
 $applyEvidence = Join-Path $Work 'evidence.json'
-$outIso = Resolve-WinMintOutputIso -WorkDirectory $Work
+# Resolve pre-Apply only for -SkipApply reuse. A full run resolves after Apply —
+# stale winmint_*.iso from failed prior runs must not fail-close a fresh Apply.
+$outIso = if ($SkipApply) { Resolve-WinMintOutputIso -WorkDirectory $Work } else { $null }
 if (-not $SkipApply) {
     Write-Host 'Publishing Supervisor (Release AOT)…'
     & just publish-provisioning
     if ($LASTEXITCODE -ne 0) { throw "just publish-provisioning failed: $LASTEXITCODE" }
 
+    # Clear prior-run Apply projections so a crashed Apply cannot resurrect an old
+    # stage=failed, lane marker, keep-flag pins, or expected digests into this run.
+    $priorProjections = @('apply-status.txt', 'failure.json', 'evidence.json', 'stages.json', 'expected-evidence.json') |
+        ForEach-Object { Join-Path $Work $_ }
+    Remove-Item -LiteralPath $priorProjections -Force -ErrorAction SilentlyContinue
+
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
         -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
-        -LastHostLine "Applying Profile=$Profile" -OutputIso $null
+        -LastHostLine "Applying Profile=$Profile" -OutputIso $null -RunId $runId
     Write-Host "Applying Profile=$Profile Iso=$Iso Work=$Work (Test lane, smoke stubs on)…"
     try {
         & just apply-maintainer $Iso $Work $Profile true
-        $applyStatusPath = Join-Path $workFull 'apply-status.txt'
-        if (Test-Path -LiteralPath $applyStatusPath) {
-            $applyStatus = Get-Content -LiteralPath $applyStatusPath -Raw -Encoding utf8
-            if ($applyStatus -match 'stage=failed:') {
-                throw 'Apply failed (apply-status)'
-            }
-        }
+        $applyFail = Get-WinMintApplyHostFailure -WorkDirectory $workFull
+        if ($applyFail) { throw $applyFail }
         if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
     }
     catch {
         $failLine = [string]$_.Exception.Message
-        $failureJson = Join-Path $workFull 'failure.json'
-        if (Test-Path -LiteralPath $failureJson) {
-            try {
-                $failDoc = Get-Content -LiteralPath $failureJson -Raw -Encoding utf8 | ConvertFrom-Json
-                if (-not [string]::IsNullOrWhiteSpace([string]$failDoc.message)) {
-                    $failLine = [string]$failDoc.message
-                }
-            }
-            catch {
-                # keep throw message
-            }
-        }
         Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage failed) `
-            -VmName $VmName -LastHostLine $failLine -OutputIso $null
+            -VmName $VmName -LastHostLine $failLine -OutputIso $null -RunId $runId
         throw
     }
 
@@ -310,12 +309,10 @@ $pinnedDisableOptionalFeatures = @(Get-PayloadJsonIds -StagesDoc $stagesDoc -Opc
 function Test-GuestEvidenceReady {
     # Prefer PowerShell Direct when available; else host-copied folder under Work.
     # Reboot evidence is not terminal — keep waiting for resume → Complete (ticket 17).
-    $localReady = Get-ChildItem -Path (Join-Path $guestDir 'evidence-*.json') -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTimeUtc -Descending |
-        Select-Object -First 1
-    if ($null -ne $localReady) {
+    $localReadyPath = Select-WinMintGuestEvidencePath -Directory $guestDir
+    if ($localReadyPath) {
         try {
-            $localDoc = Get-Content -LiteralPath $localReady.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+            $localDoc = Get-Content -LiteralPath $localReadyPath -Raw -Encoding utf8 | ConvertFrom-Json
             $localOutcome = [string]$localDoc.outcome
             if ($localOutcome -eq 'Complete' -and (Test-Path -LiteralPath (Join-Path $guestDir 'winlogon-shell.txt'))) {
                 return $true
@@ -339,17 +336,20 @@ function Test-GuestEvidenceReady {
             Prefer-DiskBoot
             Dismount-InstallDvdWhenWindowsBoots
 
-            $remote = Invoke-Command -Session $session -ScriptBlock {
+            $remotePaths = @(Invoke-Command -Session $session -ScriptBlock {
                 $dir = Join-Path $env:ProgramData 'WinMint\evidence'
-                if (-not (Test-Path -LiteralPath $dir)) { return $null }
+                if (-not (Test-Path -LiteralPath $dir)) { return @() }
                 Get-ChildItem -LiteralPath $dir -Filter 'evidence-*.json' -File |
-                    Sort-Object LastWriteTimeUtc -Descending |
-                    Select-Object -First 1 -ExpandProperty FullName
-            }
-            if ($remote) {
+                    ForEach-Object { $_.FullName }
+            })
+            foreach ($remote in $remotePaths) {
+                if ([string]::IsNullOrWhiteSpace([string]$remote)) { continue }
                 $leaf = Split-Path $remote -Leaf
                 Copy-Item -FromSession $session -Path $remote -Destination (Join-Path $guestDir $leaf) -Force
-                $pulled = Get-Content -LiteralPath (Join-Path $guestDir $leaf) -Raw -Encoding utf8 | ConvertFrom-Json
+            }
+            $selected = Select-WinMintGuestEvidencePath -Directory $guestDir
+            if ($selected) {
+                $pulled = Get-Content -LiteralPath $selected -Raw -Encoding utf8 | ConvertFrom-Json
                 $outcome = [string]$pulled.outcome
                 if ($expectNativePackageAudit) {
                     $nativeRemote = Invoke-Command -Session $session -ScriptBlock {
@@ -554,7 +554,7 @@ try {
             -Cpu $cpu -Heartbeat $(if ($hb) { 'OK' } else { 'No Contact' }) `
             -VhdFileSizeMB ([int][math]::Round($vhdBytes / 1MB)) `
             -StallMinutesLeft $stallLeft -WallMinutesLeft $wallLeft `
-            -LastHostLine "VM $([string]$vm.State)" -OutputIso $outIso
+            -LastHostLine "VM $([string]$vm.State)" -OutputIso $outIso -RunId $runId
 
         $emptySecs = 0
         if ($null -ne $script:emptyVhdSw) {
@@ -586,7 +586,7 @@ try {
 
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage assert) `
         -VmName $VmName -StallMinutesLeft 0 -WallMinutesLeft $wallLeft `
-        -LastHostLine 'Guest evidence pulled.' -OutputIso $outIso
+        -LastHostLine 'Guest evidence pulled.' -OutputIso $outIso -RunId $runId
     & $assertScript -EvidenceDir $evidenceOut `
         -PinnedRemoveAppx $pinnedRemoveAppx `
         -PinnedOnlineRemoveAppx $pinnedOnlineRemoveAppx `
@@ -595,12 +595,12 @@ try {
         $(if ($expectNativePackageAudit) { '-ExpectNativePackageAudit' })
     if ($LASTEXITCODE -ne 0) { throw "Assert-SmokeEvidence exit $LASTEXITCODE" }
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage green) `
-        -VmName $VmName -LastHostLine 'Smoke green' -OutputIso $outIso
+        -VmName $VmName -LastHostLine 'Smoke green' -OutputIso $outIso -RunId $runId
     Write-Host "Smoke green. Evidence: $evidenceOut"
     exit 0
 }
 catch {
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage failed) `
-        -VmName $VmName -LastHostLine ([string]$_.Exception.Message) -OutputIso $outIso
+        -VmName $VmName -LastHostLine ([string]$_.Exception.Message) -OutputIso $outIso -RunId $runId
     throw
 }

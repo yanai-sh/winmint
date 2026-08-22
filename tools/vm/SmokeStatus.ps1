@@ -36,7 +36,8 @@ function Write-SmokeStatus {
         [int] $WallMinutesLeft = 0,
         [string] $LastHostLine = '',
         $OutputIso = $null,
-        [int] $WaiterPid = 0
+        [int] $WaiterPid = 0,
+        [string] $RunId = ''
     )
     try {
         $dir = Split-Path -Parent $Path
@@ -45,6 +46,7 @@ function Write-SmokeStatus {
         $doc = [ordered]@{
             schemaVersion    = 'winmint.smoke.status/v1'
             updatedAt        = [datetime]::UtcNow.ToString('o')
+            runId            = $RunId
             phase            = $Phase
             vmName           = $VmName
             vmState          = $VmState
@@ -118,6 +120,9 @@ function Get-SmokeWatchVerdict {
     .NOTES
       Invoke-Smoke throws on empty-vhd. Watchers must not Stop-VM / Remove-VM;
       harness-stale stays watch-only.
+      External watchers pass -PriorRunId (runId of any status present at watch
+      start; empty when none) so a carried-over terminal status reads as
+      awaiting-run, never done. Invoke-Smoke's own wait loop omits it.
     #>
     param(
         [Parameter(Mandatory)]
@@ -127,8 +132,14 @@ function Get-SmokeWatchVerdict {
         [int] $StatusAgeSeconds = 0,
         [int] $EmptyVhdRunningSeconds = 0,
         [int] $EmptyVhdFailAfterSeconds = 480,
-        [int] $HarnessStaleAfterSeconds = 120
+        [int] $HarnessStaleAfterSeconds = 120,
+        [string] $StatusRunId = '',
+        [string] $PriorRunId = ''
     )
+    # Run identity first: a status left by a prior run must never be this run's outcome.
+    if ($PSBoundParameters.ContainsKey('PriorRunId') -and $StatusRunId -eq $PriorRunId) {
+        return 'awaiting-run'
+    }
     if ($Phase -in @('green', 'failed', 'assert')) {
         return 'done'
     }
@@ -144,4 +155,54 @@ function Get-SmokeWatchVerdict {
         return 'harness-stale'
     }
     return 'continue'
+}
+
+function Get-WinMintApplyHostFailure {
+    param([Parameter(Mandatory)] [string] $WorkDirectory)
+    $applyStatusPath = Join-Path $WorkDirectory 'apply-status.txt'
+    if (-not (Test-Path -LiteralPath $applyStatusPath -PathType Leaf)) {
+        return $null
+    }
+    $applyStatus = Get-Content -LiteralPath $applyStatusPath -Raw -Encoding utf8
+    if ($applyStatus -notmatch 'stage=failed:') {
+        return $null
+    }
+    $failureJson = Join-Path $WorkDirectory 'failure.json'
+    if (Test-Path -LiteralPath $failureJson -PathType Leaf) {
+        try {
+            $failDoc = Get-Content -LiteralPath $failureJson -Raw -Encoding utf8 | ConvertFrom-Json
+            if (-not [string]::IsNullOrWhiteSpace([string]$failDoc.message)) {
+                return [string]$failDoc.message
+            }
+        }
+        catch {
+            Write-Verbose "failure.json unreadable: $($_.Exception.Message)"
+        }
+    }
+    return 'Apply failed (apply-status)'
+}
+
+function Select-WinMintGuestEvidencePath {
+    param([Parameter(Mandatory)] [string] $Directory)
+    if (-not (Test-Path -LiteralPath $Directory -PathType Container)) {
+        return $null
+    }
+    $rows = @(
+        Get-ChildItem -LiteralPath $Directory -Filter 'evidence-*.json' -File -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                try {
+                    $doc = Get-Content -LiteralPath $_.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+                    [pscustomobject]@{ Path = $_.FullName; Outcome = [string]$doc.outcome }
+                }
+                catch {
+                    $null
+                }
+            } |
+            Where-Object { $null -ne $_ }
+    )
+    $failed = @($rows | Where-Object { $_.Outcome -eq 'Failed' })
+    if ($failed.Count -ge 1) { return [string]$failed[0].Path }
+    $complete = @($rows | Where-Object { $_.Outcome -eq 'Complete' })
+    if ($complete.Count -ge 1) { return [string]$complete[0].Path }
+    return $null
 }

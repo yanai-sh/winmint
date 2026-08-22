@@ -15,7 +15,9 @@ if ($smoke -notmatch 'Get-SmokeEjectDvdDecision') { throw 'Invoke-Smoke must use
 if ($smoke -notmatch "Running' \{[^}]*Prefer-DiskBoot") {
     throw 'Prefer-DiskBoot must run while VM is Running (before wpeutil reboot), not only on Stopping'
 }
-$preferFn = [regex]::Match($smoke, '(?s)function Prefer-DiskBoot \{.*?^function ', [System.Text.RegularExpressions.RegexOptions]::Multiline).Value
+$preferFn = [regex]::Match(
+    $smoke,
+    '(?s)function Prefer-DiskBoot \{.*?function Dismount-InstallDvdWhenWindowsBoots').Value
 if ([string]::IsNullOrWhiteSpace($preferFn)) { throw 'could not slice Prefer-DiskBoot' }
 if ($preferFn -match 'Set-VMDvdDrive') {
     throw 'Prefer-DiskBoot must not eject the DVD (Set-VMDvdDrive) — 0xc0000178 STATUS_NO_MEDIA'

@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
+. (Join-Path $PSScriptRoot 'Resolve-WinMintPublishedBinary.ps1')
 
 # just / `pwsh -File … -- …` may pass a literal `--` as $args[0]
 $cliArgs = [System.Collections.Generic.List[string]]::new()
@@ -14,7 +15,13 @@ foreach ($a in $args) {
 }
 
 $published = Join-Path $repoRoot 'bin\cli\WinMint.Cli.exe'
-if (Test-Path -LiteralPath $published -PathType Leaf) {
+$cliSourceRoots = @(
+    (Join-Path $repoRoot 'src\WinMint.Cli'),
+    (Join-Path $repoRoot 'src\WinMint.Orchestrator'),
+    (Join-Path $repoRoot 'src\WinMint.Contracts')
+)
+if ((Test-Path -LiteralPath $published -PathType Leaf) -and
+    (Test-WinMintPublishedBinaryCurrent -PublishedExe $published -SourceRoots $cliSourceRoots)) {
     & $published @cliArgs
     exit $LASTEXITCODE
 }
