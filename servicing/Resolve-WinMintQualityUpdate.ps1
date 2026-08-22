@@ -197,7 +197,13 @@ function Test-WinMintRollupFixPresent {
         [Parameter(Mandatory)] [string] $Architecture
     )
     $arch = $Architecture.ToLowerInvariant()
-    $pattern = "(?im)^Package Identity\s*:\s*Package_for_RollupFix~\w+~$arch~~$Family\.$Ubr\."
+    # 25H2 WIMs report 10.0.26200.*, but Catalog LCUs still install as
+    # Package_for_RollupFix~...~~26100.<ubr> (enablement on the 24H2 binary train).
+    $families = [System.Collections.Generic.List[int]]::new()
+    [void]$families.Add($Family)
+    if ($Family -eq 26200) { [void]$families.Add(26100) }
+    $alt = (@($families | ForEach-Object { [regex]::Escape(("$_.$Ubr")) }) -join '|')
+    $pattern = "(?im)^Package Identity\s*:\s*Package_for_RollupFix~\w+~$arch~~(?:$alt)\."
     if ($GetPackagesText -notmatch $pattern) {
         throw "DISM /Get-Packages missing RollupFix ${Family}.${Ubr} ($Architecture)"
     }

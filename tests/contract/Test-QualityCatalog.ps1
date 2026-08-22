@@ -62,6 +62,30 @@ catch {
 }
 if (-not $threw) { throw 'Test-QualityCatalog: expected family 26100 to fail closed (25H2+ only)' }
 
+# 25H2 enablement: RollupFix package identity stays on 26100.<ubr> even when WIM family is 26200.
+$rollup25 = @"
+Package Identity : Package_for_RollupFix~31bf3856ad364e35~arm64~~26100.9168.1.19
+State : Installed
+"@
+try {
+    Test-WinMintRollupFixPresent -GetPackagesText $rollup25 -Family 26200 -Ubr 9168 -Architecture 'ARM64'
+}
+catch {
+    throw "Test-QualityCatalog: 25H2 must accept RollupFix 26100.<ubr>: $($_.Exception.Message)"
+}
+$threw = $false
+try {
+    Test-WinMintRollupFixPresent -GetPackagesText $rollup25 -Family 26200 -Ubr 9168 -Architecture 'x64'
+}
+catch { $threw = $true }
+if (-not $threw) { throw 'Test-QualityCatalog: RollupFix assert must still require matching arch' }
+$threw = $false
+try {
+    Test-WinMintRollupFixPresent -GetPackagesText $rollup25 -Family 26200 -Ubr 9999 -Architecture 'ARM64'
+}
+catch { $threw = $true }
+if (-not $threw) { throw 'Test-QualityCatalog: RollupFix assert must still require matching UBR' }
+
 # Rowless Catalog page (markup change / throttle / outage) must fail closed with the
 # Catalog message, not a null -Rows parameter binding error (22 Aug prove-out failure).
 $threw = $false
