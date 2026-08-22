@@ -312,26 +312,8 @@ $pinnedRemoveCapabilities = @(Get-PayloadJsonIds -StagesDoc $stagesDoc -Opcode '
 $pinnedDisableOptionalFeatures = @(Get-PayloadJsonIds -StagesDoc $stagesDoc -Opcode 'DisableOptionalFeatures' -PathParam 'namesPath')
 
 function Test-GuestEvidenceReady {
-    # Prefer PowerShell Direct when available; else host-copied folder under Work.
     # Reboot evidence is not terminal — keep waiting for resume → Complete (ticket 17).
-    $localReadyPath = Select-WinMintGuestEvidencePath -Directory $guestDir
-    if ($localReadyPath) {
-        try {
-            $localDoc = Get-Content -LiteralPath $localReadyPath -Raw -Encoding utf8 | ConvertFrom-Json
-            $localOutcome = [string]$localDoc.outcome
-            if ($localOutcome -eq 'Complete' -and (Test-Path -LiteralPath (Join-Path $guestDir 'winlogon-shell.txt'))) {
-                return $true
-            }
-            if ($localOutcome -eq 'Failed') {
-                return $true
-            }
-            # Reboot / incomplete unlock marker — fall through and re-query guest.
-        }
-        catch {
-            # corrupt local copy — re-query
-            $null = $_
-        }
-    }
+    # Complete evidence alone is not terminal — require live explorer shell and no Supervisor process.
     try {
         $sessionParams = @{ VMName = $VmName; ErrorAction = 'Stop' }
         if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
@@ -353,34 +335,55 @@ function Test-GuestEvidenceReady {
                 Copy-Item -FromSession $session -Path $remote -Destination (Join-Path $guestDir $leaf) -Force
             }
             $selected = Select-WinMintGuestEvidencePath -Directory $guestDir
-            if ($selected) {
-                $pulled = Get-Content -LiteralPath $selected -Raw -Encoding utf8 | ConvertFrom-Json
-                $outcome = [string]$pulled.outcome
-                if ($expectNativePackageAudit) {
-                    $nativeRemote = Invoke-Command -Session $session -ScriptBlock {
-                        $p = Join-Path $env:ProgramData 'WinMint\evidence\native-packages.json'
-                        if (Test-Path -LiteralPath $p) { $p } else { $null }
-                    }
-                    if ($nativeRemote) {
-                        Copy-Item -FromSession $session -Path $nativeRemote -Destination (Join-Path $guestDir 'native-packages.json') -Force
-                    }
-                }
-                if ($outcome -eq 'Reboot') {
-                    Write-Host 'Guest evidence outcome=Reboot — waiting for checkpoint resume…'
-                    return $false
-                }
-                # Unlock prove-out: Winlogon Shell after tenure
-                $shellVal = Invoke-Command -Session $session -ScriptBlock {
-                    try {
-                        (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name Shell -ErrorAction Stop).Shell
-                    }
-                    catch { $null }
-                }
-                if ($shellVal) {
-                    Set-Content -LiteralPath (Join-Path $guestDir 'winlogon-shell.txt') -Value ([string]$shellVal).Trim() -Encoding utf8
-                }
-                return $true
+            if (-not $selected) { return $false }
+
+            $pulled = Get-Content -LiteralPath $selected -Raw -Encoding utf8 | ConvertFrom-Json
+            $outcome = [string]$pulled.outcome
+            if ($outcome -eq 'Reboot') {
+                Write-Host 'Guest evidence outcome=Reboot — waiting for checkpoint resume…'
+                return $false
             }
+
+            $live = Invoke-Command -Session $session -ScriptBlock {
+                $shell = $null
+                try {
+                    $shell = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name Shell -ErrorAction Stop).Shell
+                }
+                catch { $null = $_ }
+                $supervisor = $false
+                try {
+                    $supervisor = @(Get-Process -Name 'Supervisor' -ErrorAction SilentlyContinue).Count -gt 0
+                }
+                catch { $null = $_ }
+                [pscustomobject]@{
+                    Shell              = [string]$shell
+                    SupervisorRunning  = [bool]$supervisor
+                }
+            }
+
+            if ($expectNativePackageAudit) {
+                $nativeRemote = Invoke-Command -Session $session -ScriptBlock {
+                    $p = Join-Path $env:ProgramData 'WinMint\evidence\native-packages.json'
+                    if (Test-Path -LiteralPath $p) { $p } else { $null }
+                }
+                if ($nativeRemote) {
+                    Copy-Item -FromSession $session -Path $nativeRemote -Destination (Join-Path $guestDir 'native-packages.json') -Force
+                }
+            }
+
+            if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $pulled `
+                    -LiveShell ([string]$live.Shell) -SupervisorRunning:$live.SupervisorRunning)) {
+                if ($outcome -eq 'Complete') {
+                    Write-Host ("Guest evidence Complete but handoff not verified " +
+                        "(shell='$($live.Shell)' supervisor=$($live.SupervisorRunning)) — waiting…")
+                }
+                return $false
+            }
+
+            if ($live.Shell) {
+                Set-Content -LiteralPath (Join-Path $guestDir 'winlogon-shell.txt') -Value ([string]$live.Shell).Trim() -Encoding utf8
+            }
+            return $true
         }
         finally {
             Remove-PSSession $session -ErrorAction SilentlyContinue

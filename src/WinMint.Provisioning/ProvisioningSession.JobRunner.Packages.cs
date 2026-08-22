@@ -127,6 +127,9 @@ internal static partial class ProvisioningJobRunner
         IReadOnlyList<string> ids = env.RemoveProvisionedAppx;
         try
         {
+            env.ReportStatus(new SessionStatus(
+                $"jobs.{job.Id}.running",
+                $"{job.Id} online AppX safety net…"));
             HashSet<string> families = new(StringComparer.OrdinalIgnoreCase);
             foreach (string catalogId in ids)
             {

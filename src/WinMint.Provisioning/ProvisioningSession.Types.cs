@@ -101,6 +101,9 @@ public interface IGuestMachine
     void ApplyWorkstationQuiet();
 
     void SuppressWslOobe();
+
+    /// <summary>Best-effort: tear down stuck CloudExperienceHost OOBE overlay after Shell unlock.</summary>
+    void TryDismissOobeOverlay();
 }
 
 /// <summary>

@@ -14,6 +14,9 @@ if ($smoke -notmatch 'Get-SmokeWatchVerdict') { throw 'Invoke-Smoke wait loop mu
 if ($smoke -notmatch 'EMPTY_VHD:') { throw 'empty-VHD throw prefix missing (operator copy)' }
 if ($smoke -notmatch '\[Diagnostics\.Stopwatch\]') { throw 'stall/wall/empty-vhd must use Stopwatch, not UtcNow deadlines' }
 if ($smoke -notmatch 'Select-WinMintGuestEvidencePath') { throw 'guest evidence must select by outcome, not LastWriteTime' }
+if ($smoke -notmatch 'Test-WinMintGuestEvidenceTerminal') {
+    throw 'Invoke-Smoke must fail-close Complete evidence with Test-WinMintGuestEvidenceTerminal'
+}
 if ($smoke -match 'process-exited-early' -or $smoke -match 'Find-SmokePids') {
     throw 'Invoke-Smoke must not infer harness death from process lists'
 }
@@ -99,6 +102,49 @@ try {
     $picked = Select-WinMintGuestEvidencePath -Directory $evDir
     if ($picked -notmatch 'evidence-older-complete') {
         throw "Select-WinMintGuestEvidencePath must prefer Complete over newer Reboot, got $picked"
+    }
+
+    # Newest Complete wins when multiple Complete files exist (stale prior-tenure evidence).
+    $evNew = Join-Path $tmp 'guest-ev-newest'
+    New-Item -ItemType Directory -Force -Path $evNew | Out-Null
+    '{"outcome":"Complete"}' | Set-Content -LiteralPath (Join-Path $evNew 'evidence-20260101000000000-old.json') -Encoding utf8
+    '{"outcome":"Complete","statusCode":"jobs.ok","phases":["jobs.ok"]}' |
+        Set-Content -LiteralPath (Join-Path $evNew 'evidence-20260201000000000-new.json') -Encoding utf8
+    $newest = Select-WinMintGuestEvidencePath -Directory $evNew
+    if ($newest -notmatch 'evidence-20260201000000000-new') {
+        throw "Select-WinMintGuestEvidencePath must pick newest Complete, got $newest"
+    }
+
+    $staleComplete = [pscustomobject]@{
+        outcome    = 'Complete'
+        statusCode = 'jobs.ok'
+        phases     = @('shell.firstPaint', 'jobs.ok')
+    }
+    if (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $staleComplete `
+            -LiveShell 'C:\Windows\WinMint\Supervisor.exe' -SupervisorRunning:$true) {
+        throw 'Complete evidence must not pass while Supervisor is still running'
+    }
+    $noDismiss = [pscustomobject]@{
+        outcome    = 'Complete'
+        statusCode = 'jobs.ok'
+        phases     = @('shell.firstPaint', 'jobs.ok')
+    }
+    if (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $noDismiss `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false) {
+        throw 'Complete evidence without oobe.dismiss must fail handoff gate'
+    }
+    $handoff = [pscustomobject]@{
+        outcome    = 'Complete'
+        statusCode = 'jobs.ok'
+        phases     = @('shell.firstPaint', 'jobs.ok', 'oobe.dismiss')
+    }
+    if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $handoff `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false)) {
+        throw 'Complete + explorer shell + no Supervisor must pass handoff gate'
+    }
+    if (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $handoff `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$true) {
+        throw 'Supervisor running must fail handoff gate even with Complete evidence'
     }
 
     $blocked = Join-Path $tmp 'blocked'

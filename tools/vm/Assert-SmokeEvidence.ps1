@@ -73,7 +73,25 @@ if ($outcome -ne 'Complete') {
     throw "Smoke acceptance requires outcome Complete, got '$outcome' (Failed/Reboot is not green)"
 }
 
-# DMA hard fields must succeed — applyFailed / hardMismatch / deviceRegionFailed are not acceptance-green.
+if ([string]$guest.statusCode -ne 'jobs.ok') {
+    throw "Smoke acceptance requires statusCode jobs.ok, got '$($guest.statusCode)'"
+}
+if ($phases -notcontains 'jobs.ok') {
+    throw 'Complete evidence must include jobs.ok phase'
+}
+if ($phases -notcontains 'oobe.dismiss') {
+    throw 'FirstLogon handoff marker missing: phases must contain oobe.dismiss'
+}
+
+$onlineRemoves = @($phases | Where-Object { $_ -like 'removed.appx.online.*' })
+if ($onlineRemoves.Count -gt 0) {
+    $deprovisionMarks = @($phases | Where-Object { $_ -like 'deprovisioned.appx.*' })
+    if ($deprovisionMarks.Count -eq 0) {
+        throw 'AppX safety-net incomplete: removed.appx.online phases present but no deprovisioned.appx.* phase'
+    }
+}
+
+# DMA hard fields must succeed
 # resumeSkip + checkpoint.resume also proves prior settle (ticket 17), including setup-region gate on resume.
 $dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.locationWarn') -or
     (($phases -contains 'settle.resumeSkip') -and ($phases -contains 'checkpoint.resume'))

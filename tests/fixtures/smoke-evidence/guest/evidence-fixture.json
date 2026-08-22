@@ -9,7 +9,8 @@
     "settle.deviceRegionOk",
     "settle.ok",
     "jobs.begin",
-    "jobs.ok"
+    "jobs.ok",
+    "oobe.dismiss"
   ],
   "firstPaintMs": 420
 }

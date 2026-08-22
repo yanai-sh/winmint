@@ -60,6 +60,14 @@ public sealed class Win32GuestMachine : IGuestMachine
         }
     }
 
+    public void TryDismissOobeOverlay()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Win32OobeOverlay.TryDismiss();
+        }
+    }
+
     private static string? TryResolveScoopShim()
     {
         string candidate = Path.Combine(

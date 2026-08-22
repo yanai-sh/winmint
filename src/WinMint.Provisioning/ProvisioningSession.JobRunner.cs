@@ -425,6 +425,9 @@ internal static partial class ProvisioningJobRunner
             ProcessStartResult started;
             try
             {
+                env.ReportStatus(new SessionStatus(
+                    $"jobs.{job.Id}.running",
+                    $"{job.Id} in progress…"));
                 started = await env.Processes.RunAsync(fileName, arguments, ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

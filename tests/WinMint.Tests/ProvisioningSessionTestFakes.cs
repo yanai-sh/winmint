@@ -134,11 +134,15 @@ internal static class ProvisioningSessionTestFakes
 
         public Action SuppressWslOobeCallback { get; init; } = () => { };
 
+        public Action TryDismissOobeOverlayCallback { get; init; } = () => { };
+
         public bool IsWslPlatformReady() => IsWslPlatformReadyCallback();
 
         public void ApplyWorkstationQuiet() => ApplyWorkstationQuietCallback();
 
         public void SuppressWslOobe() => SuppressWslOobeCallback();
+
+        public void TryDismissOobeOverlay() => TryDismissOobeOverlayCallback();
     }
 
     internal sealed class FakeAssetDownload : IAssetDownload

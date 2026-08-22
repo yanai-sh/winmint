@@ -182,17 +182,32 @@ function Get-WinMintApplyHostFailure {
     return 'Apply failed (apply-status)'
 }
 
-function Select-WinMintGuestEvidencePath {
+$Script:WinMintExplorerShell = 'explorer.exe'
+$Script:WinMintSupervisorProcessName = 'Supervisor'
+
+function Test-WinMintExplorerShellValue {
+    param([AllowEmptyString()] [string] $Shell)
+    if ([string]::IsNullOrWhiteSpace($Shell)) { return $false }
+    $trim = $Shell.Trim()
+    return $trim.Equals($Script:WinMintExplorerShell, [System.StringComparison]::OrdinalIgnoreCase) `
+        -or $trim.EndsWith("\$($Script:WinMintExplorerShell)", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-WinMintGuestEvidenceRows {
     param([Parameter(Mandatory)] [string] $Directory)
     if (-not (Test-Path -LiteralPath $Directory -PathType Container)) {
-        return $null
+        return @()
     }
-    $rows = @(
+    return @(
         Get-ChildItem -LiteralPath $Directory -Filter 'evidence-*.json' -File -ErrorAction SilentlyContinue |
             ForEach-Object {
                 try {
                     $doc = Get-Content -LiteralPath $_.FullName -Raw -Encoding utf8 | ConvertFrom-Json
-                    [pscustomobject]@{ Path = $_.FullName; Outcome = [string]$doc.outcome }
+                    [pscustomobject]@{
+                        Path    = $_.FullName
+                        Outcome = [string]$doc.outcome
+                        SortKey = if ($_.Name -match '^evidence-(\d+)') { [long]$Matches[1] } else { 0L }
+                    }
                 }
                 catch {
                     $null
@@ -200,9 +215,37 @@ function Select-WinMintGuestEvidencePath {
             } |
             Where-Object { $null -ne $_ }
     )
-    $failed = @($rows | Where-Object { $_.Outcome -eq 'Failed' })
+}
+
+function Select-WinMintGuestEvidencePath {
+    param([Parameter(Mandatory)] [string] $Directory)
+    $rows = @(Get-WinMintGuestEvidenceRows -Directory $Directory)
+    if ($rows.Count -eq 0) { return $null }
+    $failed = @($rows | Where-Object { $_.Outcome -eq 'Failed' } | Sort-Object SortKey -Descending)
     if ($failed.Count -ge 1) { return [string]$failed[0].Path }
-    $complete = @($rows | Where-Object { $_.Outcome -eq 'Complete' })
+    $complete = @($rows | Where-Object { $_.Outcome -eq 'Complete' } | Sort-Object SortKey -Descending)
     if ($complete.Count -ge 1) { return [string]$complete[0].Path }
     return $null
+}
+
+function Test-WinMintGuestEvidenceTerminal {
+    <#
+      Fail-closed S4 gate: Complete evidence alone is not terminal — live explorer shell
+      and no Supervisor process mean FirstLogon handoff actually finished.
+    #>
+    param(
+        [Parameter(Mandatory)] $EvidenceDoc,
+        [Parameter(Mandatory)] [string] $LiveShell,
+        [bool] $SupervisorRunning = $false
+    )
+    $outcome = [string]$EvidenceDoc.outcome
+    if ($outcome -eq 'Failed') { return $true }
+    if ($outcome -ne 'Complete') { return $false }
+    if ([string]$EvidenceDoc.statusCode -ne 'jobs.ok') { return $false }
+    $phases = @($EvidenceDoc.phases)
+    if ($phases -notcontains 'jobs.ok') { return $false }
+    if ($phases -notcontains 'oobe.dismiss') { return $false }
+    if (-not (Test-WinMintExplorerShellValue $LiveShell)) { return $false }
+    if ($SupervisorRunning) { return $false }
+    return $true
 }

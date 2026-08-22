@@ -95,6 +95,74 @@ public class SmokeEvidenceAssertTests
         }
     }
 
+    [Fact]
+    [Trait("Category", "S4")]
+    public void Assert_smoke_evidence_fails_without_oobe_dismiss_phase()
+    {
+        string repo = TestRepo.Root;
+        string fixture = Path.Combine(repo, "tests", "fixtures", "smoke-evidence");
+        string work = Path.Combine(Path.GetTempPath(), "winmint-s4-no-oobe-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyTree(fixture, work);
+            string guestPath = Directory.GetFiles(Path.Combine(work, "guest"), "evidence-*.json")[0];
+            JsonNode doc = JsonNode.Parse(File.ReadAllText(guestPath))
+                ?? throw new InvalidOperationException("guest evidence parse failed");
+            doc["phases"] = new JsonArray(
+                "shell.firstPaint",
+                "settle.begin",
+                "settle.deviceRegionOk",
+                "settle.ok",
+                "jobs.begin",
+                "jobs.ok");
+            File.WriteAllText(guestPath, doc.ToJsonString());
+
+            int exit = RunAssert(repo, work, out _, out string stderr);
+            Assert.NotEqual(0, exit);
+            Assert.Contains("oobe.dismiss", stderr, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(work, "acceptance.json")));
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "S4")]
+    public void Assert_smoke_evidence_fails_when_online_remove_lacks_deprovision_mark()
+    {
+        string repo = TestRepo.Root;
+        string fixture = Path.Combine(repo, "tests", "fixtures", "smoke-evidence");
+        string work = Path.Combine(Path.GetTempPath(), "winmint-s4-no-deprov-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyTree(fixture, work);
+            string guestPath = Directory.GetFiles(Path.Combine(work, "guest"), "evidence-*.json")[0];
+            JsonNode doc = JsonNode.Parse(File.ReadAllText(guestPath))
+                ?? throw new InvalidOperationException("guest evidence parse failed");
+            doc["phases"] = new JsonArray(
+                "shell.firstPaint",
+                "settle.begin",
+                "settle.deviceRegionOk",
+                "settle.ok",
+                "jobs.begin",
+                "removed.appx.online.Microsoft.BingNews",
+                "jobs.ok",
+                "oobe.dismiss");
+            File.WriteAllText(guestPath, doc.ToJsonString());
+
+            int exit = RunAssert(repo, work, out _, out string stderr);
+            Assert.NotEqual(0, exit);
+            Assert.Contains("deprovisioned.appx", stderr, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(work, "acceptance.json")));
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
     private static int RunAssert(
         string repo,
         string evidenceDir,

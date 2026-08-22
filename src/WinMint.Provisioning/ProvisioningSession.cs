@@ -262,6 +262,8 @@ public static partial class ProvisioningSession
                 firstPaintMs).ConfigureAwait(false);
         }
 
+        TryDismissOobeOverlay(env, phases);
+
         EvidenceSnapshot snap = env.Evidence.Write(
             new ProvisioningEvidenceFile(
                 SchemaVersion: EvidenceSchemaVersion,
@@ -301,6 +303,24 @@ public static partial class ProvisioningSession
         catch (Exception)
         {
             // ponytail: Explorer already held; residue erase is best-effort (ADR-008)
+        }
+    }
+
+    private static void TryDismissOobeOverlay(ShellEnvironment env, List<string>? phases)
+    {
+        try
+        {
+            env.Guest.TryDismissOobeOverlay();
+            if (phases is not null)
+            {
+                Note(env, phases, new SessionStatus(
+                    "oobe.dismiss",
+                    "Dismissed stuck CloudExperienceHost OOBE overlay."));
+            }
+        }
+        catch (Exception)
+        {
+            // ponytail: unlock already durable; overlay teardown is best-effort
         }
     }
 
@@ -370,7 +390,10 @@ public static partial class ProvisioningSession
                 FirstPaintMs: firstPaintMs)));
 
         // Unlock after evidence — custom Shell is medium-IL and may lack HKLM write.
-        _ = TryUnlock(env);
+        if (TryUnlock(env))
+        {
+            TryDismissOobeOverlay(env, phases: null);
+        }
 
         return new SessionResult(SessionOutcome.Failed, status, emitted);
     }

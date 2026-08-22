@@ -65,6 +65,9 @@ _Avoid_: conflating with Machine setup
 
 **Provisioning lock** — Supervisor is Shell + splash; unlock = `explorer.exe` + exit.
 
+**Provisioning handoff** — End of FirstLogon tenure: Winlogon Shell restored to `explorer.exe`, OOBE overlay dismissed (`oobe.dismiss` phase), Supervisor process exited. Smoke S4 fail-closes on live handoff, not evidence JSON alone. Distinct from **OOBE answers** (unattend screens) and from mid-tenure splash status.  
+_Avoid_: treating `evidence Complete` or `phase=green` as a visible desktop; manual VM reset mid-tenure
+
 **Provisioning jobs** — Post hard-settle installs (per-id or batch). Same executor Smoke and Primary.  
 _Avoid_: jobs before hard settle; “metal jobs” (retired name)
 
