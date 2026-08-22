@@ -235,24 +235,66 @@ function Save-WinMintCatalogPayload {
     }
 }
 
+function Test-WinMintQualityMsuIsWim {
+    param([Parameter(Mandatory)] [string] $Path)
+    # Classic .msu is CAB (MSCF); large combined LCUs ship as WIM-packaged .msu (MSWIM).
+    $fs = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $buf = New-Object byte[] 5
+        if ($fs.Read($buf, 0, 5) -ne 5) { return $false }
+        return [Text.Encoding]::ASCII.GetString($buf) -eq 'MSWIM'
+    }
+    finally {
+        $fs.Dispose()
+    }
+}
+
 function Expand-WinMintQualitySsu {
     param(
         [Parameter(Mandatory)] [string] $MsuPath,
-        [Parameter(Mandatory)] [string] $Destination
+        [Parameter(Mandatory)] [string] $Destination,
+        # Injectable for contract tests — production leaves these unset.
+        [scriptblock] $ExpandCab,
+        [scriptblock] $ApplyWim
     )
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    $expand = Join-Path $env:SystemRoot 'System32\expand.exe'
-    if (-not (Test-Path -LiteralPath $expand)) { throw 'expand.exe missing' }
-    & $expand $MsuPath -F:* $Destination | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "expand.exe failed ($LASTEXITCODE): $MsuPath"
+    if (Test-WinMintQualityMsuIsWim -Path $MsuPath) {
+        # expand.exe cannot open WIM-MSUs ("Can't open input file", exit -1).
+        if ($ApplyWim) {
+            & $ApplyWim $MsuPath $Destination
+        }
+        else {
+            & dism.exe /English /Apply-Image /ImageFile:$MsuPath /Index:1 /ApplyDir:$Destination
+            if ($LASTEXITCODE -ne 0) {
+                throw "DISM /Apply-Image failed ($LASTEXITCODE) extracting WIM-MSU: $MsuPath"
+            }
+        }
+    }
+    else {
+        $expand = Join-Path $env:SystemRoot 'System32\expand.exe'
+        if (-not (Test-Path -LiteralPath $expand)) { throw 'expand.exe missing' }
+        if ($ExpandCab) {
+            & $ExpandCab $MsuPath $Destination
+        }
+        else {
+            & $expand $MsuPath -F:* $Destination | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "expand.exe failed ($LASTEXITCODE): $MsuPath"
+            }
+        }
     }
     $ssu = @(Get-ChildItem -LiteralPath $Destination -Filter 'SSU-*.cab' -File -ErrorAction SilentlyContinue)
     if ($ssu.Count -lt 1) {
         foreach ($cab in @(Get-ChildItem -LiteralPath $Destination -Filter '*.cab' -File)) {
             $inner = Join-Path $Destination ($cab.BaseName + '-inner')
             New-Item -ItemType Directory -Force -Path $inner | Out-Null
-            & $expand $cab.FullName -F:* $inner | Out-Null
+            if ($ExpandCab) {
+                & $ExpandCab $cab.FullName $inner
+            }
+            else {
+                $expand = Join-Path $env:SystemRoot 'System32\expand.exe'
+                & $expand $cab.FullName -F:* $inner | Out-Null
+            }
             $ssu += @(Get-ChildItem -LiteralPath $inner -Filter 'SSU-*.cab' -File -ErrorAction SilentlyContinue)
         }
     }

@@ -243,5 +243,39 @@ finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+$msuProbe = Join-Path ([IO.Path]::GetTempPath()) ('winmint-msu-probe-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $msuProbe | Out-Null
+try {
+    $wimMsu = Join-Path $msuProbe 'wim.msu'
+    $cabMsu = Join-Path $msuProbe 'cab.msu'
+    [IO.File]::WriteAllBytes($wimMsu, [Text.Encoding]::ASCII.GetBytes('MSWIM') + [byte[]](0, 0, 0))
+    [IO.File]::WriteAllBytes($cabMsu, [Text.Encoding]::ASCII.GetBytes('MSCF') + [byte[]](0, 0, 0))
+    if (-not (Test-WinMintQualityMsuIsWim -Path $wimMsu)) { throw 'Test-QualityCatalog: MSWIM must be WIM-MSU' }
+    if (Test-WinMintQualityMsuIsWim -Path $cabMsu) { throw 'Test-QualityCatalog: MSCF must not be WIM-MSU' }
+
+    $wimOut = Join-Path $msuProbe 'wim-out'
+    $script:appliedWim = $false
+    $ssuFromWim = Expand-WinMintQualitySsu -MsuPath $wimMsu -Destination $wimOut -ApplyWim {
+        param($Src, $Dst)
+        $script:appliedWim = $true
+        Set-Content -LiteralPath (Join-Path $Dst 'SSU-26100.1-arm64.cab') -Value 'ssu' -Encoding ascii
+    }
+    if (-not $script:appliedWim) { throw 'Test-QualityCatalog: WIM-MSU must use ApplyWim, not expand.exe' }
+    if (-not (Test-Path -LiteralPath $ssuFromWim)) { throw 'Test-QualityCatalog: WIM-MSU SSU path missing' }
+
+    $cabOut = Join-Path $msuProbe 'cab-out'
+    $script:expandedCab = $false
+    $ssuFromCab = Expand-WinMintQualitySsu -MsuPath $cabMsu -Destination $cabOut -ExpandCab {
+        param($Src, $Dst)
+        $script:expandedCab = $true
+        Set-Content -LiteralPath (Join-Path $Dst 'SSU-26100.1-arm64.cab') -Value 'ssu' -Encoding ascii
+    }
+    if (-not $script:expandedCab) { throw 'Test-QualityCatalog: CAB-MSU must use ExpandCab' }
+    if (-not (Test-Path -LiteralPath $ssuFromCab)) { throw 'Test-QualityCatalog: CAB-MSU SSU path missing' }
+}
+finally {
+    Remove-Item -LiteralPath $msuProbe -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Output 'Test-QualityCatalog ok'
 exit 0
