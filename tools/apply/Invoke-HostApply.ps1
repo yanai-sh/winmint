@@ -62,8 +62,10 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 . (Join-Path $repoRoot 'tools\AcceptanceManifest.ps1')
+. (Join-Path $repoRoot 'tools\host\Invoke-ArtifactHygiene.ps1') -NoRun
 
 $assertScript = Join-Path $PSScriptRoot 'Assert-ApplyEvidence.ps1'
+$runScratchHygiene = $false
 
 function Invoke-ApplyAssert {
     param(
@@ -104,6 +106,7 @@ trap {
             Write-Warning "Could not write failure acceptance manifest: $($_.Exception.Message)"
         }
     }
+    if (-not $AssertOnly -and $runScratchHygiene) { Invoke-WinMintScratchHygiene -RepoRoot $repoRoot }
     throw $originalFailure
 }
 
@@ -179,6 +182,7 @@ if (-not $SkipApply) {
 
     Write-Host "Host Apply Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality…"
     Write-Host 'Pre-wipe only: mutates offline WIM from Source ISO — does not install to this device.'
+    $runScratchHygiene = $true
     $cliExe = Resolve-WinMintCliExe
     $buildArgs = @('build', $Profile, '--iso', $Iso, '--work', $Work, '--image-quality', $ImageQuality, '--package-audit-strict') + $strictArgs
     if ($cliExe) {
@@ -229,4 +233,5 @@ if ($assertLane -eq 'Release' -and $PackageStrict) {
 } else {
     Write-Host 'Test lane — not the Primary wipe ISO. Use just primary-gate for Release wipe media.'
 }
+if ($runScratchHygiene) { Invoke-WinMintScratchHygiene -RepoRoot $repoRoot }
 exit 0

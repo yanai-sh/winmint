@@ -63,6 +63,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
+. (Join-Path $repoRoot 'tools\host\Invoke-ArtifactHygiene.ps1') -NoRun
 
 . (Join-Path $repoRoot 'tools/vm/SmokeStatus.ps1')
 . (Join-Path $repoRoot 'tools/AcceptanceManifest.ps1')
@@ -72,6 +73,7 @@ $assertScript = Join-Path $PSScriptRoot 'Assert-SmokeEvidence.ps1'
 $manifestPath = Join-Path $Work 'smoke-evidence\acceptance.manifest.json'
 $runId = [guid]::NewGuid().ToString('N')
 $outIso = $null
+$runScratchHygiene = $false
 
 if ($AssertOnly) {
     & $assertScript -EvidenceDir $EvidenceDir
@@ -115,6 +117,7 @@ $applyEvidence = Join-Path $Work 'evidence.json'
 # Resolve pre-Apply only for -SkipApply reuse. A full run resolves after Apply —
 # stale winmint_*.iso from failed prior runs must not fail-close a fresh Apply.
 $outIso = if ($SkipApply) { Resolve-WinMintOutputIso -WorkDirectory $Work } else { $null }
+if ($SkipApply) { $runScratchHygiene = $true }
 if (-not $SkipApply) {
     Write-Host 'Publishing Supervisor (Release AOT)…'
     & just publish-provisioning
@@ -130,6 +133,7 @@ if (-not $SkipApply) {
         -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
         -LastHostLine "Applying Profile=$Profile" -OutputIso $null -RunId $runId
     Write-Host "Applying Profile=$Profile Iso=$Iso Work=$Work (Test lane, smoke stubs on)…"
+    $runScratchHygiene = $true
     try {
         & just apply-maintainer $Iso $Work $Profile true
         $applyFail = Get-WinMintApplyHostFailure -WorkDirectory $workFull
@@ -621,7 +625,6 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage green) `
         -VmName $VmName -LastHostLine 'Smoke green' -OutputIso $outIso -RunId $runId
     Write-Host "Smoke green. Evidence: $evidenceOut"
-    exit 0
 }
 catch {
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage failed) `
@@ -635,4 +638,7 @@ catch {
         Write-Warning "Could not write failure acceptance manifest: $($_.Exception.Message)"
     }
     throw
+}
+finally {
+    if ($runScratchHygiene) { Invoke-WinMintScratchHygiene -RepoRoot $repoRoot }
 }

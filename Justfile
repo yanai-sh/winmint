@@ -83,7 +83,8 @@ publish-provisioning:
 exclude-scratch ISO="":
     $scratch = Join-Path '{{justfile_directory()}}' '.scratch'; $servicing = Join-Path $env:ProgramData 'WinMint\Servicing'; New-Item -ItemType Directory -Force -Path $scratch, $servicing | Out-Null; $paths = @($scratch, $servicing); if ('{{ISO}}' -ne '') { $paths += '{{ISO}}' }; foreach ($p in $paths) { Add-MpPreference -ExclusionPath $p; Write-Host "Excluded: $p" }
 
-# Artifact hygiene under .scratch (or root=…). Nuclear: just wipe-scratch
+# Artifact hygiene under .scratch (or root=…). Also runs after smoke / host-apply / Cli build with -SkipIfBusy.
+# Nuclear: just wipe-scratch
 clean-artifacts root=".scratch" keep="2" workdirs="1" days="14":
     $root = '{{root}}'; if (-not [System.IO.Path]::IsPathRooted($root)) { $root = Join-Path '{{justfile_directory()}}' $root }; pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-ArtifactHygiene.ps1' -Root $root -KeepIso {{keep}} -KeepWorkDirs {{workdirs}} -MaxAgeDays {{days}}
 

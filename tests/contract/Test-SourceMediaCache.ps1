@@ -503,7 +503,7 @@ try {
     Assert-False (Test-Path -LiteralPath (Join-Path $mediaDir 'canary.txt')) 'prior staged media was reused in place'
     Assert-True (Test-Path -LiteralPath $copied.PreviousMedia) 'prior staged media was not moved aside'
     Assert-True (Test-Path -LiteralPath (Join-Path $copied.PreviousMedia 'canary.txt')) 'moved prior media lost canary'
-    Assert-True (Test-Path -LiteralPath (Join-Path $leftoverPrevious 'stale.txt')) 'unrelated previous media was removed'
+    Assert-False (Test-Path -LiteralPath $leftoverPrevious) 'leftover previous media from an earlier retry was kept'
 
     $preparedWim = Join-Path $preparedMedia 'sources\install.wim'
     $stagedWim = Join-Path $mediaDir 'sources\install.wim'

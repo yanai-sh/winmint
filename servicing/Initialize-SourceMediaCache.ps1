@@ -427,6 +427,14 @@ function Copy-WinMintRunMedia {
     $parent = Split-Path -Parent $MediaDir
     $leaf = Split-Path -Leaf $MediaDir
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    $previousPrefix = $leaf + '.previous-'
+    $incomingPrefix = $leaf + '.incoming-'
+    Get-ChildItem -LiteralPath $parent -Directory -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name.StartsWith($previousPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+            $_.Name.StartsWith($incomingPrefix, [StringComparison]::OrdinalIgnoreCase)
+        } |
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
     $previous = $null
     if (Test-Path -LiteralPath $MediaDir) {
         $stamp = [datetime]::UtcNow.ToString('yyyyMMddHHmmss')

@@ -20,10 +20,21 @@ $cliSourceRoots = @(
     (Join-Path $repoRoot 'src\WinMint.Orchestrator'),
     (Join-Path $repoRoot 'src\WinMint.Contracts')
 )
+
+function Invoke-WinMintCliThenHygiene {
+    param($Command, $Arguments)
+    & $Command @Arguments
+    $code = $LASTEXITCODE
+    if ($cliArgs.Count -gt 0 -and $cliArgs[0] -eq 'build') {
+        . (Join-Path $repoRoot 'tools\host\Invoke-ArtifactHygiene.ps1') -NoRun
+        Invoke-WinMintScratchHygiene -RepoRoot $repoRoot
+    }
+    exit $code
+}
+
 if ((Test-Path -LiteralPath $published -PathType Leaf) -and
     (Test-WinMintPublishedBinaryCurrent -PublishedExe $published -SourceRoots $cliSourceRoots)) {
-    & $published @cliArgs
-    exit $LASTEXITCODE
+    Invoke-WinMintCliThenHygiene -Command $published -Arguments $cliArgs
 }
 
 $project = Join-Path $repoRoot 'src\WinMint.Cli\WinMint.Cli.csproj'
@@ -31,5 +42,4 @@ if (-not (Test-Path -LiteralPath $project)) {
     throw "WinMint.Cli.exe not found at $published and project missing at $project"
 }
 
-& dotnet run --project $project -- @cliArgs
-exit $LASTEXITCODE
+Invoke-WinMintCliThenHygiene -Command 'dotnet' -Arguments (@('run', '--project', $project, '--') + @($cliArgs))
