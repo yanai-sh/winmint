@@ -52,6 +52,7 @@ Real temporary directories only. Assert absolute + Profile-relative resolution, 
 ### S1d — Host composition / Living Draft
 
 HostCompile is the Orchestrator entry ([DESIGN](DESIGN.md)). Assert immutable review and private approved-plan behavior through HostCompile and WizardSession. Drive Wizard navigation gates through `WizardViewModel`, and stage behavior through the Source, Account, Software, and Review binding interfaces—not private formatting helpers. A fake `ISourceMediaProbe` lists WIM indexes without hashing and supplies Source ISO identity plus selected-WIM metadata at Compose; observe materialized servicing facts through `IElevatedPlanRunner`. Cover source changes before elevation, deterministic output naming, structured document errors, relative-`passwordPath` Save relocation, dirty invalidation, out-of-order async result rejection, retry after Apply failure, and exact-handle success acknowledgement. Do not add an `IImageServicing` port.
+`Invoke-WinMintCli` must not launch a stale `bin\cli` when `src/WinMint.Cli` (or Orchestrator/Contracts) is newer — fall through to `dotnet run`. Prove with `Test-PublishedBinary.ps1` (`Test-WinMintPublishedBinaryCurrent`). Multiple `winmint_*.iso` without `evidence.outputIsoPath` fail closed (`Test-ResolveOutputIso.ps1`); do not pick by `LastWriteTime`.
 
 ### S2 — ImageServicing
 
@@ -63,10 +64,11 @@ Do not call `ExecuteAsync` from `just check` because it crosses the UAC/process 
 ### S3 — ProvisioningSession
 
 See [PROVISIONINGSESSION](design/PROVISIONINGSESSION.md). Use `ShellEnvironment` / `MachineSetupEnvironment` fakes + `TimeProvider`. Assert paint-before-settle **order**; wall-clock paint budget is S4.
+`Win32RegionLocaleTests` only `Read()`s `GetUserDefaultLocaleName`. Do not `Set-Culture` from `just check`.
 
 ### S4 — Hyper-V acceptance
 
-One harness entry → guest evidence (`tools/vm/`). Splash before Explorer; DMA hard fields; unlock; lane marker; time-to-first-paint. Acceptance pinned remove-list digests. Not part of `just check`. External watch uses `Get-SmokeWatchVerdict` (phase, `Get-VHD` FileSize, status age) — not process lists or `vmconnect`. Invoke-Smoke throws from `Get-SmokeWatchVerdict`, not a second empty-VHD `if`. `waiterPid` is an optional `Wait-Process` handle, not a fail/kill signal; watchers must not infer death from PIDs or `Remove-VM`. After `just apply-maintainer`, the waiter must project `apply-status.txt` `stage=failed:` into `smoke-status.json` `phase=failed` even when `LASTEXITCODE` is 0. Stall/empty-VHD elapsed is Stopwatch. Disk-boot tests drive those policy functions, not a Hyper-V executor. Do not "complete" that by faking Hyper-V.
+One harness entry → guest evidence (`tools/vm/`). Splash before Explorer; DMA hard fields; unlock; lane marker; time-to-first-paint. Acceptance pinned remove-list digests. Not part of `just check`. External watch uses `Get-SmokeWatchVerdict` (phase, `Get-VHD` FileSize, status age) — not process lists or `vmconnect`. Watchers pass `-PriorRunId` (the `runId` of any status present at watch start); a carried-over terminal status is `awaiting-run`, never `done` — Invoke-Smoke stamps a fresh `runId` before spawning Watch-SmokeHost. Invoke-Smoke throws from `Get-SmokeWatchVerdict`, not a second empty-VHD `if`. `waiterPid` is an optional `Wait-Process` handle, not a fail/kill signal; watchers must not infer death from PIDs or `Remove-VM`. After `just apply-maintainer`, `Get-WinMintApplyHostFailure` projects `apply-status.txt` into `smoke-status.json` `phase=failed` even when `LASTEXITCODE` is 0. Guest `evidence-*.json` is selected by outcome (`Select-WinMintGuestEvidencePath`: Failed, then Complete — not `LastWriteTime`). Stall/empty-VHD elapsed is Stopwatch. Disk-boot tests drive `Get-SmokePreferDiskBootDecision` / `Get-SmokeEjectDvdDecision` / `Get-SmokeVmStartupBytes`. Do not "complete" that by faking Hyper-V.
 
 ### S5 — Host Apply acceptance (pre-wipe)
 
