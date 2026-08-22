@@ -331,13 +331,18 @@ function Write-WinMintQualityPackageLeaf {
 }
 
 function Invoke-WinMintCatalogSearchHtml {
-    # Catalog intermittently serves a rowless chrome-only page (observed 22 Aug 2026,
-    # ~41KB, zero goToDetails rows). Retry before letting callers fail closed —
-    # a transient must not kill a multi-hour Apply.
+    # Catalog intermittently serves a rowless page: HTTP 200, full search chrome
+    # (~41KB), zero goToDetails result rows. Probed 22 Aug 2026: the rowless
+    # response arrives after ~100s (vs ~700ms healthy) — a backend search stall,
+    # not a bot check or rate limit (25 back-to-back requests were all healthy;
+    # a rowless spell then ran 25+ minutes across two processes). Back off up to
+    # ~45 min wall (sleeps below + ~100s per stalled response) — cheap insurance
+    # inside a multi-hour Apply. Write-Warning (not Write-Verbose) so retries
+    # reach the stage log via the kernel's *>&1 | Tee-Object.
     param(
         [Parameter(Mandatory)] [string] $Query,
-        [int] $Attempts = 3,
-        [int] $RetryDelaySeconds = 15,
+        [int[]] $RetryDelaysSeconds = @(15, 30, 60, 120, 300, 600, 900),
+        [string] $RowlessDumpDir = [IO.Path]::GetTempPath(),
         [scriptblock] $Fetch = {
             param($Uri)
             try {
@@ -349,15 +354,37 @@ function Invoke-WinMintCatalogSearchHtml {
         }
     )
     $uri = 'https://www.catalog.update.microsoft.com/Search.aspx?q=' + [uri]::EscapeDataString($Query)
+    $attempts = @($RetryDelaysSeconds).Count + 1
     $html = ''
-    for ($i = 1; $i -le $Attempts; $i++) {
-        $html = [string](& $Fetch $uri)
+    for ($i = 1; $i -le $attempts; $i++) {
+        # A thrown fetch (connection reset mid-spell, 22 Aug 2026) is the same
+        # transient as a rowless page: warn, back off, retry. Rethrow only when
+        # the ladder is exhausted.
+        try {
+            $html = [string](& $Fetch $uri)
+        }
+        catch {
+            if ($i -ge $attempts) { throw }
+            Write-Warning "Catalog search errored (attempt $i of $attempts): $($_.Exception.Message)"
+            Start-Sleep -Seconds ([int]$RetryDelaysSeconds[$i - 1])
+            continue
+        }
         # Assign before counting: @() around the call would count the wrapped list as one object.
         $parsed = ConvertFrom-WinMintCatalogSearchHtml -Html $html
         if (@($parsed).Count -ge 1) { return $html }
-        if ($i -lt $Attempts) {
-            Write-Verbose "Catalog search rowless (attempt $i of $Attempts): $Query"
-            Start-Sleep -Seconds $RetryDelaySeconds
+        $saved = 'dump failed'
+        try {
+            $dump = Join-Path $RowlessDumpDir ("winmint-catalog-rowless-{0}-attempt{1}-{2}.html" -f `
+                    [datetime]::UtcNow.ToString('yyyyMMddTHHmmssZ'), $i, [guid]::NewGuid().ToString('N').Substring(0, 8))
+            Set-Content -LiteralPath $dump -Value $html -Encoding utf8
+            $saved = "saved $dump"
+        }
+        catch {
+            $saved = "dump failed: $($_.Exception.Message)"
+        }
+        Write-Warning "Catalog search rowless (attempt $i of $attempts, htmlLen $($html.Length), $saved): $Query"
+        if ($i -lt $attempts) {
+            Start-Sleep -Seconds ([int]$RetryDelaysSeconds[$i - 1])
         }
     }
     # Rowless after retries: return the last page; callers fail closed on 0 parsed rows.

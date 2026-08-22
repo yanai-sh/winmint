@@ -79,29 +79,78 @@ catch {
 if (-not $threw) { throw 'Test-QualityCatalog: expected rowless search to throw' }
 
 # Transient rowless Catalog page: search retries and recovers without caller involvement.
-$script:fetchCalls = 0
-$goodHtml = $search25
-$retried = Invoke-WinMintCatalogSearchHtml -Query 'q' -Attempts 3 -RetryDelaySeconds 0 -Fetch {
-    param($Uri)
-    $script:fetchCalls++
-    if ($script:fetchCalls -lt 2) { return '<html>rowless chrome page</html>' }
-    return $goodHtml
+# Rowless attempts dump the raw HTML for forensics and warn into the stage log.
+$dumpDir = Join-Path ([IO.Path]::GetTempPath()) ('winmint-quality-rowless-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
+try {
+    $script:fetchCalls = 0
+    $goodHtml = $search25
+    $retried = Invoke-WinMintCatalogSearchHtml -Query 'q' -RetryDelaysSeconds @(0, 0, 0, 0) `
+        -RowlessDumpDir $dumpDir -WarningAction SilentlyContinue -WarningVariable retryWarnings -Fetch {
+        param($Uri)
+        $script:fetchCalls++
+        if ($script:fetchCalls -lt 2) { return '<html>rowless chrome page</html>' }
+        return $goodHtml
+    }
+    if ($script:fetchCalls -ne 2) { throw "Test-QualityCatalog: expected retry after rowless page (fetches=$script:fetchCalls)" }
+    $retriedRows = ConvertFrom-WinMintCatalogSearchHtml -Html $retried
+    if (@($retriedRows).Count -lt 1) {
+        throw 'Test-QualityCatalog: retry must return the page that parsed rows'
+    }
+    if (@($retryWarnings).Count -ne 1 -or $retryWarnings[0] -notmatch 'rowless \(attempt 1 of 5.*saved .*winmint-catalog-rowless-') {
+        throw "Test-QualityCatalog: rowless retry must warn with attempt count and dump path, got: $retryWarnings"
+    }
+    $script:fetchCalls = 0
+    $exhausted = Invoke-WinMintCatalogSearchHtml -Query 'q' -RetryDelaysSeconds @(0, 0, 0, 0) `
+        -RowlessDumpDir $dumpDir -WarningAction SilentlyContinue -Fetch {
+        param($Uri)
+        $script:fetchCalls++
+        return '<html>rowless chrome page</html>'
+    }
+    if ($script:fetchCalls -ne 5) { throw "Test-QualityCatalog: expected 5 attempts before giving up (fetches=$script:fetchCalls)" }
+    $exhaustedRows = ConvertFrom-WinMintCatalogSearchHtml -Html $exhausted
+    if (@($exhaustedRows).Count -ne 0) {
+        throw 'Test-QualityCatalog: exhausted retries must surface the rowless page for fail-closed callers'
+    }
+    $dumps = @(Get-ChildItem -LiteralPath $dumpDir -Filter 'winmint-catalog-rowless-*.html' -File)
+    if ($dumps.Count -ne 6) {
+        throw "Test-QualityCatalog: expected 6 rowless forensics dumps (1 recovered + 5 exhausted), got $($dumps.Count)"
+    }
+
+    # A thrown fetch (connection reset mid-spell) rides the same backoff ladder.
+    $script:fetchCalls = 0
+    $errRecovered = Invoke-WinMintCatalogSearchHtml -Query 'q' -RetryDelaysSeconds @(0, 0) `
+        -RowlessDumpDir $dumpDir -WarningAction SilentlyContinue -Fetch {
+        param($Uri)
+        $script:fetchCalls++
+        if ($script:fetchCalls -lt 2) { throw 'Catalog search failed (host offline or Catalog down): reset' }
+        return $goodHtml
+    }
+    if ($script:fetchCalls -ne 2) { throw "Test-QualityCatalog: expected retry after thrown fetch (fetches=$script:fetchCalls)" }
+    if (@(ConvertFrom-WinMintCatalogSearchHtml -Html $errRecovered).Count -lt 1) {
+        throw 'Test-QualityCatalog: thrown-fetch retry must return the page that parsed rows'
+    }
+    $script:fetchCalls = 0
+    $threw = $false
+    try {
+        Invoke-WinMintCatalogSearchHtml -Query 'q' -RetryDelaysSeconds @(0, 0) `
+            -RowlessDumpDir $dumpDir -WarningAction SilentlyContinue -Fetch {
+            param($Uri)
+            $script:fetchCalls++
+            throw 'Catalog search failed (host offline or Catalog down): reset'
+        } | Out-Null
+    }
+    catch {
+        $threw = $true
+        if ($_.Exception.Message -notmatch 'Catalog search failed') {
+            throw "Test-QualityCatalog: exhausted thrown fetches must rethrow the fetch error, got: $($_.Exception.Message)"
+        }
+    }
+    if (-not $threw) { throw 'Test-QualityCatalog: expected throw after exhausted fetch errors' }
+    if ($script:fetchCalls -ne 3) { throw "Test-QualityCatalog: expected 3 fetch attempts before rethrow (fetches=$script:fetchCalls)" }
 }
-if ($script:fetchCalls -ne 2) { throw "Test-QualityCatalog: expected retry after rowless page (fetches=$script:fetchCalls)" }
-$retriedRows = ConvertFrom-WinMintCatalogSearchHtml -Html $retried
-if (@($retriedRows).Count -lt 1) {
-    throw 'Test-QualityCatalog: retry must return the page that parsed rows'
-}
-$script:fetchCalls = 0
-$exhausted = Invoke-WinMintCatalogSearchHtml -Query 'q' -Attempts 3 -RetryDelaySeconds 0 -Fetch {
-    param($Uri)
-    $script:fetchCalls++
-    return '<html>rowless chrome page</html>'
-}
-if ($script:fetchCalls -ne 3) { throw "Test-QualityCatalog: expected 3 attempts before giving up (fetches=$script:fetchCalls)" }
-$exhaustedRows = ConvertFrom-WinMintCatalogSearchHtml -Html $exhausted
-if (@($exhaustedRows).Count -ne 0) {
-    throw 'Test-QualityCatalog: exhausted retries must surface the rowless page for fail-closed callers'
+finally {
+    Remove-Item -LiteralPath $dumpDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 $urls = ConvertFrom-WinMintCatalogDownloadDialog -Text (Get-Content -LiteralPath (Join-Path $fx 'download-dialog-kb5121003.txt') -Raw)
