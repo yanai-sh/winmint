@@ -13,7 +13,7 @@ A user-supplied Source ISO can be the current feature train (e.g. 25H2 / `10.0.2
 When staged `install.wim` UBR is behind the latest same-family **Security Update** (B-release) on the Microsoft Update Catalog, ImageServicing downloads the ARM64 combined LCU (and Catalog-listed checkpoint `.msu` files) into `%ProgramData%\WinMint\Servicing\quality-cache\` keyed by KB + arch + SHA-256, then `dism.exe /Add-Package` on **staged** media only.
 
 - Source ISO stays user-supplied. Prepared-media entries stay an unpatched Source-ISO tree.
-- Same DISM `Version` family only (`26200` → 25H2, `26100` → 24H2). Unknown family, 26H1, or x64-only Catalog results fail closed.
+- Same DISM `Version` family only (`26200` → 25H2). WinMint supports 25H2+: older families (`26100` / 24H2), unknown families, 26H1 guesses, or x64-only Catalog results fail closed.
 - Fail closed when the WIM is behind and Catalog, BITS, or DISM cannot complete.
 - Catalog `.msu` payload URLs are `download.windowsupdate.com` **or** `*.dl.delivery.mp.microsoft.com` (Catalog DownloadDialog `files[].url` as of 2026). Other hosts fail closed. Not a Source ISO host. The payload **leaf** must contain the requested KB; a checkpoint `.msu` in the same dialog or a poisoned quality-cache folder is a miss (quarantined off the hit path), not a combined LCU.
 - Skip download and DISM when `packageUbr <= imageUbr`.

@@ -18,11 +18,10 @@ function Get-WinMintQualityTrain {
     $family = [int]$Matches[1]
     $label = switch ($family) {
         26200 { '25H2' }
-        26100 { '24H2' }
         default { $null }
     }
     if ($null -eq $label) {
-        throw "No Catalog LCU mapping for Version family $family (do not guess 26H1)"
+        throw "No Catalog LCU mapping for Version family $family (WinMint is 25H2+; do not guess newer trains)"
     }
     return [pscustomobject]@{
         Family       = $family

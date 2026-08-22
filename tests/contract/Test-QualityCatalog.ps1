@@ -48,13 +48,19 @@ try {
 catch { $threw = $true }
 if (-not $threw) { throw 'Test-QualityCatalog: expected refuse 26H1/x64-only fixture' }
 
+# 24H2 (26100) is out of product scope — WinMint supports 25H2+ only.
 $threw = $false
 try {
     Resolve-WinMintQualityUpdate -Version '10.0.26100.1' -Architecture 'ARM64' -ImageUbr 1 `
         -SearchHtml $search25 -DetailsHtml $details | Out-Null
 }
-catch { $threw = $true }
-if (-not $threw) { throw 'Test-QualityCatalog: expected 24H2 not to pick 25H2 rows' }
+catch {
+    $threw = $true
+    if ($_.Exception.Message -notmatch 'No Catalog LCU mapping') {
+        throw "Test-QualityCatalog: family 26100 must fail closed on mapping, got: $($_.Exception.Message)"
+    }
+}
+if (-not $threw) { throw 'Test-QualityCatalog: expected family 26100 to fail closed (25H2+ only)' }
 
 # Rowless Catalog page (markup change / throttle / outage) must fail closed with the
 # Catalog message, not a null -Rows parameter binding error (22 Aug prove-out failure).
