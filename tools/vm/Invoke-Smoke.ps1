@@ -484,8 +484,9 @@ function Send-VmBootNudge {
 Send-VmBootNudge
 
 $wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
-try {
-    while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
+# Outer try (line ~82) owns the catch: Apply failures and wait/assert failures share
+# one smoke-status + acceptance-manifest failure path.
+while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         if (Test-GuestEvidenceReady) {
             Write-Host 'Guest evidence pulled.'
             break
