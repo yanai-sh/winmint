@@ -18,7 +18,7 @@ if (Test-MicrosoftDownloadUri -Uri 'https://evil.example/payload.msi') {
     throw 'non-Microsoft host must be refused'
 }
 
-$bootClasses = Get-WinMintBootSetupCriticalClasses
+$bootClasses = Get-WinMintBootSetupCriticalClass
 foreach ($acpi in @('system', 'extension')) {
     if ($bootClasses -contains $acpi) {
         throw "WinPE boot subset must not include Class=$acpi (Hyper-V ACPI 0xA5)"

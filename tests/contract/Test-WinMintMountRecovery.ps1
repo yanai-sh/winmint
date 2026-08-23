@@ -69,6 +69,7 @@ try {
     $script:discardFailCount = 0
     $script:remountFailCount = 0
     $script:cleanupClears = $false
+    $script:cleanupReverse = $false
     $script:orphanStops = 0
     $script:settles = 0
 
@@ -104,6 +105,9 @@ try {
             $script:cleanupCount++
             if ($script:cleanupClears) {
                 $script:mounted = @()
+            }
+            elseif ($script:cleanupReverse) {
+                [array]::Reverse($script:mounted)
             }
         }
         StopOrphanDismHost = {
@@ -223,6 +227,26 @@ try {
     Assert-True ($script:remountCalls.Count -eq 2) "Invalid retry remounts=$($script:remountCalls.Count)"
     Assert-True ($script:discardCalls.Count -eq 1) 'failed remount still discarded'
     Assert-True ($script:cleanupCount -eq 1 -and $script:orphanStops -eq 1) 'Invalid remount-fail skipped cleanup'
+
+    # Dual leftover: Ok sibling listed first after cleanup must not supply retry Status
+    $script:discardCalls.Clear()
+    $script:remountCalls.Clear()
+    $script:cleanupCount = 0
+    $script:orphanStops = 0
+    $script:settles = 0
+    $script:cleanupClears = $false
+    $script:cleanupReverse = $true
+    $script:remountFailCount = 1
+    $script:mounted = @(
+        New-MountedImage -MountDir $bootMount -ImageFile (Join-Path $workDirectory 'media\sources\boot.wim') -Status 'Invalid'
+        New-MountedImage -MountDir $installMount -ImageFile (Join-Path $workDirectory 'media\sources\install.wim') -Status 'Ok'
+    )
+    New-OwnerRecord -Kind 'boot' -ProcessId 1 -MountDirectory $bootMount | Out-Null
+    $dualRetry = Resolve-WinMintStaleMount @ctx
+    Assert-True ($dualRetry.recoveryAction -eq 'cleanup-wim') "dual leftover expected cleanup-wim, got $($dualRetry.recoveryAction)"
+    Assert-True ($script:remountCalls.Count -eq 2 -and $script:remountCalls[0] -eq $bootMount -and $script:remountCalls[1] -eq $bootMount) "dual leftover remounts=$($script:remountCalls -join ',')"
+    Assert-True ($script:discardCalls.Contains($bootMount)) 'dual leftover skipped discard of Invalid boot'
+    $script:cleanupReverse = $false
 
     # discard failure (real DISM exit-code message) triggers Cleanup-Mountpoints + re-query;
     # mount still listed after cleanup and retry discard also fails ⇒ fail closed

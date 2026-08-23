@@ -338,7 +338,7 @@ function Resolve-WinMintStaleMount {
             Invoke-WinMintCleanupWim -Commands $Commands
             $afterCleanup = @(Get-WinMintMountedImage -Commands $Commands)
             $still = @($afterCleanup | Where-Object {
-                    Test-WinMintOwnedMountDir -MountDir ([string]$_.MountDir) -InstallMount $installMount -BootMount $bootMount
+                    [IO.Path]::GetFullPath([string]$_.MountDir).Equals([IO.Path]::GetFullPath($mountDir), [StringComparison]::OrdinalIgnoreCase)
                 })
             if ($still.Count -eq 0) {
                 Remove-WinMintMountOwner -Kind $kind -ServicingRoot $root

@@ -781,7 +781,6 @@ catch {
                 if ((Get-SmokeSuspendVmDecision -FailureMessage $failMsg) -eq 'suspend') {
                     Suspend-VM -Name $VmName -ErrorAction SilentlyContinue
                     Write-SmokeHostLine -Name "Suspended $VmName for post-mortem (VMConnect still works)." -Outcome failed
-                    Write-WinMintHostProgress -Activity Smoke -Completed
                 }
             }
         }
@@ -789,6 +788,7 @@ catch {
     catch {
         Write-Warning "Could not capture/suspend VM after failure: $($_.Exception.Message)"
     }
+    Write-WinMintHostProgress -Activity Smoke -Completed
     try {
         Write-WinMintAcceptanceManifest -Path $manifestPath -AcceptanceKind Smoke -Outcome failed `
             -Lane Test -RepositoryRoot $repoRoot -SourceEvidenceSchemas @('winmint.smoke.acceptance/v1') `

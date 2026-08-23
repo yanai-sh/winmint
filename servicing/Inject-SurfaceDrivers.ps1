@@ -18,7 +18,7 @@ function Test-MicrosoftDownloadUri {
     $parsed.Host -in @('download.microsoft.com', 'www.microsoft.com')
 }
 
-function Get-WinMintBootSetupCriticalClasses {
+function Get-WinMintBootSetupCriticalClass {
     # WinPE on Hyper-V: Surface Class=system/extension (ACPI platform/filter) bugchecks 0xA5 _ADR.
     # Storage/USB/HID/net only. install.wim still gets the full SurfaceMsiSafe set.
     @('hdc', 'scsiadapter', 'usb', 'usbdevice', 'hidclass', 'keyboard', 'mouse', 'net')
@@ -42,7 +42,7 @@ function Read-InfMeta {
 
 function Copy-SetupCriticalDriverSubset {
     param([string] $DriverSource, [string] $Destination)
-    $includeClasses = Get-WinMintBootSetupCriticalClasses
+    $includeClasses = Get-WinMintBootSetupCriticalClass
     $excludeClasses = @('display', 'media', 'camera', 'bluetooth', 'sensor', 'softwarecomponent', 'printer', 'monitor', 'firmware')
     $sourceRoot = (Get-Item -LiteralPath $DriverSource).FullName
     $null = New-Item -ItemType Directory -Path $Destination -Force

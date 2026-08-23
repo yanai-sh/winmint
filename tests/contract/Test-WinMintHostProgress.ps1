@@ -46,6 +46,13 @@ Assert-True ($spawnAt -ge 0) 'Invoke-Smoke must spawn Watch-SmokeHost'
 $spawn = $smoke.Substring($spawnAt, [Math]::Min(400, $smoke.Length - $spawnAt))
 Assert-True ($spawn -match 'PriorRunId') 'spawned watcher must receive leftover or empty PriorRunId'
 Assert-True ($spawn -notmatch '\$runId') 'spawned watcher must not receive this run''s already-written runId as PriorRunId'
+$suspendWarnAt = $smoke.IndexOf('Could not capture/suspend VM after failure')
+Assert-True ($suspendWarnAt -ge 0) 'Smoke fail missing suspend-try warning'
+$completedAfterFailTry = $false
+foreach ($m in [regex]::Matches($smoke, 'Write-WinMintHostProgress -Activity Smoke -Completed')) {
+    if ($m.Index -gt $suspendWarnAt) { $completedAfterFailTry = $true }
+}
+Assert-True $completedAfterFailTry 'Smoke fail must Completed after suspend try (including skip)'
 
 $old = $PSStyle.OutputRendering
 try {

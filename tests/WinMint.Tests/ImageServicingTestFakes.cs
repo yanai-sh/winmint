@@ -96,6 +96,11 @@ internal static class ImageServicingTestFakes
         File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Get-WinMintServicingWorkspace.ps1"),
             Path.Combine(servicing, "Get-WinMintServicingWorkspace.ps1"));
+        string host = Path.Combine(workDirectory, "tools", "host");
+        Directory.CreateDirectory(host);
+        File.Copy(
+            Path.Combine(TestRepo.Root, "tools", "host", "Write-WinMintHostProgress.ps1"),
+            Path.Combine(host, "Write-WinMintHostProgress.ps1"));
 
         const string noOp = """
             param(
