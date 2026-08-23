@@ -184,7 +184,9 @@ public static partial class ProvisioningSession
                 AssetDownload: env.Guest.AssetDownload,
                 IsWslPlatformReady: env.Guest.IsWslPlatformReady,
                 ApplyWorkstationQuiet: env.Guest.ApplyWorkstationQuiet,
-                SuppressWslOobe: env.Guest.SuppressWslOobe);
+                SuppressWslOobe: env.Guest.SuppressWslOobe,
+                IsHypervisorGuest: env.Guest.IsHypervisorGuest,
+                WslMock: new WslMockState());
             jobs = await ProvisioningJobRunner.Run(bundle.Jobs, runnerEnv, ct)
                 .ConfigureAwait(false);
         }

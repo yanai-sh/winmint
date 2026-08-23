@@ -52,6 +52,7 @@ internal static class ProvisioningSessionTestFakes
         ISplashPresenter? splash = null,
         Func<string?>? resolveScoopCmd = null,
         Func<bool>? isWslPlatformReady = null,
+        Func<bool>? isHypervisorGuest = null,
         Action? applyWorkstationQuiet = null,
         Action? suppressWslOobe = null,
         IAssetDownload? assetDownload = null,
@@ -65,6 +66,7 @@ internal static class ProvisioningSessionTestFakes
                 Reboot = reboot,
                 ResolveScoopCmd = resolveScoopCmd,
                 IsWslPlatformReadyCallback = isWslPlatformReady ?? (() => false),
+                IsHypervisorGuestCallback = isHypervisorGuest ?? (() => false),
                 ApplyWorkstationQuietCallback = applyWorkstationQuiet ?? (() => { }),
                 SuppressWslOobeCallback = suppressWslOobe ?? (() => { }),
                 AssetDownload = assetDownload,
@@ -130,6 +132,8 @@ internal static class ProvisioningSessionTestFakes
 
         public Func<bool> IsWslPlatformReadyCallback { get; init; } = () => false;
 
+        public Func<bool> IsHypervisorGuestCallback { get; init; } = () => false;
+
         public Action ApplyWorkstationQuietCallback { get; init; } = () => { };
 
         public Action SuppressWslOobeCallback { get; init; } = () => { };
@@ -137,6 +141,8 @@ internal static class ProvisioningSessionTestFakes
         public Action TryDismissOobeOverlayCallback { get; init; } = () => { };
 
         public bool IsWslPlatformReady() => IsWslPlatformReadyCallback();
+
+        public bool IsHypervisorGuest() => IsHypervisorGuestCallback();
 
         public void ApplyWorkstationQuiet() => ApplyWorkstationQuietCallback();
 

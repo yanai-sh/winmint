@@ -6,10 +6,29 @@ internal static partial class ProvisioningJobRunner
 {
     private static async Task<JobsRunResult?> RunWslPlatformJobAsync(
         JobContext context,
+        IReadOnlyList<string> remainingDistros,
         CancellationToken ct)
     {
         JobRunnerEnv env = context.Env;
         ProvisionJob job = context.Job;
+        if (env.IsHypervisorGuest())
+        {
+            env.WslMock.Mocked = true;
+            env.ReportStatus(new SessionStatus(
+                "jobs.wsl.platform.mocked",
+                "WSL mocked on hypervisor guest."));
+            try
+            {
+                Win32WslTerminalMock.TryStage(remainingDistros);
+            }
+            catch
+            {
+                // Best-effort Terminal mock — hypervisor skip must still succeed.
+            }
+
+            return null;
+        }
+
         bool ready = env.IsWslPlatformReady();
         if (ready)
         {

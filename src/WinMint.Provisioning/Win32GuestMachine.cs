@@ -50,6 +50,9 @@ public sealed class Win32GuestMachine : IGuestMachine
     public bool IsWslPlatformReady() =>
         OperatingSystem.IsWindows() && Win32WslPlatform.IsVirtualMachinePlatformReady();
 
+    public bool IsHypervisorGuest() =>
+        OperatingSystem.IsWindows() && Win32HypervisorGuest.Probe();
+
     public void ApplyWorkstationQuiet() => Win32WorkstationQuiet.Apply();
 
     public void SuppressWslOobe()

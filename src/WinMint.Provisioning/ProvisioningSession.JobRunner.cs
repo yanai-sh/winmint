@@ -2,6 +2,11 @@ using WinMint.Contracts;
 
 namespace WinMint.Provisioning;
 
+internal sealed class WslMockState
+{
+    public bool Mocked;
+}
+
 internal sealed record JobRunnerEnv(
     IReadOnlyList<string> RemoveProvisionedAppx,
     IProcessHost Processes,
@@ -17,7 +22,9 @@ internal sealed record JobRunnerEnv(
     IAssetDownload? AssetDownload,
     Func<bool> IsWslPlatformReady,
     Action ApplyWorkstationQuiet,
-    Action SuppressWslOobe);
+    Action SuppressWslOobe,
+    Func<bool> IsHypervisorGuest,
+    WslMockState WslMock);
 
 internal enum JobsRunKind
 {
@@ -365,6 +372,14 @@ internal static partial class ProvisioningJobRunner
 
                 case ProvisionJobKind.Wsl:
                     {
+                        if (env.WslMock.Mocked)
+                        {
+                            env.ReportStatus(new SessionStatus(
+                                $"jobs.{job.Id}.mocked",
+                                $"{job.Id} mocked on hypervisor guest."));
+                            continue;
+                        }
+
                         if (string.IsNullOrWhiteSpace(job.PackageId))
                         {
                             return FailJob(
@@ -405,7 +420,14 @@ internal static partial class ProvisioningJobRunner
 
                 case ProvisionJobKind.WslPlatform:
                     {
-                        JobsRunResult? platform = await RunWslPlatformJobAsync(context, ct)
+                        string[] remainingDistros =
+                        [
+                            .. jobs.Skip(i + 1)
+                                .Where(j => j.Kind is ProvisionJobKind.Wsl
+                                    && !string.IsNullOrWhiteSpace(j.PackageId))
+                                .Select(j => j.PackageId!),
+                        ];
+                        JobsRunResult? platform = await RunWslPlatformJobAsync(context, remainingDistros, ct)
                             .ConfigureAwait(false);
                         if (platform is not null)
                         {

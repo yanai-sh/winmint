@@ -107,7 +107,12 @@ public class WslJobsTests
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             BundleFastSettle(jobs: [new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform)]),
-            Env(processes, evidence, checkpoints: checkpoints, isWslPlatformReady: static () => false),
+            Env(
+                processes,
+                evidence,
+                checkpoints: checkpoints,
+                isWslPlatformReady: static () => false,
+                isHypervisorGuest: static () => false),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Reboot, result.Outcome);
@@ -117,6 +122,26 @@ public class WslJobsTests
             processes.Starts,
             s => s.FileName.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase)
                 && s.Arguments is ["--install", "--no-distribution"]);
+    }
+
+    [Fact]
+    public async Task Shell_wsl_platform_mocks_on_hypervisor_guest_and_skips_distro()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs:
+            [
+                new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform),
+                new ProvisionJob("wsl.FedoraLinux", ProvisionJobKind.Wsl, PackageId: "FedoraLinux"),
+            ]),
+            Env(processes, evidence, isWslPlatformReady: static () => false, isHypervisorGuest: static () => true),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.DoesNotContain(processes.Starts, s => s.FileName.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("jobs.wsl.platform.mocked", evidence.Documents[^1].Phases);
+        Assert.Contains("jobs.wsl.FedoraLinux.mocked", evidence.Documents[^1].Phases);
     }
 
     [Fact]

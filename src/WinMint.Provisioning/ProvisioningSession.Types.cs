@@ -98,6 +98,8 @@ public interface IGuestMachine
 
     bool IsWslPlatformReady();
 
+    bool IsHypervisorGuest();
+
     void ApplyWorkstationQuiet();
 
     void SuppressWslOobe();
