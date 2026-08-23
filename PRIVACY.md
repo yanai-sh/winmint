@@ -1,6 +1,7 @@
 # Privacy
 
 WinMint does not send data off the PC unless you started that step.
+WinMint does not transfer information to networked systems unless the operator requested that operation.
 
 When you do, it may contact:
 

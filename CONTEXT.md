@@ -77,8 +77,8 @@ _Avoid_: reading `Dma*` types as device-memory or Kernel DMA Protection; sticky 
 **OOBE answers** — Profile-derived replies that complete Windows setup screens so those screens never appear. Distinct from the DMA sticky setup region and from FirstLogon.  
 _Avoid_: SkipMachineOOBE; SkipUserOOBE; gating answers on DMA enabled; conflating with Machine setup or FirstLogon
 
-**Smoke** — Hyper-V plumbing acceptance (`Test` lane, Local+autoLogon, Pro). Headless by default.  
-_Avoid_: treating Smoke alone as Primary wipe confidence; treating Hyper-V Connect as the product UI; calling a host status file Evidence
+**Smoke** — Hyper-V plumbing acceptance (`Test` lane, Local+autoLogon, Pro). Headless by default. Maintainer vanilla Source ISO path: [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-host.json) (also [AGENTS](AGENTS.md#maintainer-host)).  
+_Avoid_: treating Smoke alone as Primary wipe confidence; treating Hyper-V Connect as the product UI; calling a host status file Evidence; inventing a second ISO path in chat when the fixture already names it
 
 **Host Apply (S5)** — Elevated Apply run on the build host, then assert the workdir evidence (`just host-apply`, `tools/apply/`). No Hyper-V and no hardware install — the destructive install is Primary, and it is manual.  
 _Avoid_: “metal” (retired name — it never touched hardware); treating a Test-lane Host Apply as wipe media

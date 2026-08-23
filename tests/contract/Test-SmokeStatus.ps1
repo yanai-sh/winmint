@@ -20,7 +20,15 @@ if ($smoke -notmatch 'Test-WinMintGuestEvidenceTerminal') {
 if ($smoke -match 'process-exited-early' -or $smoke -match 'Find-SmokePids') {
     throw 'Invoke-Smoke must not infer harness death from process lists'
 }
-if ($smoke -notmatch '-RunId \$runId') { throw 'Invoke-Smoke must stamp every status with this run''s runId' }
+if ($smoke -notmatch 'Get-SmokeWaitPhaseSticky') {
+    throw 'Invoke-Smoke wait loop must use Get-SmokeWaitPhaseSticky (sticky guest-up)'
+}
+if ($smoke -notmatch 'Get-SmokeRunIdStampDecision') {
+    throw 'Invoke-Smoke must retry smoke-run.id via Get-SmokeRunIdStampDecision'
+}
+if ($smoke -notmatch 'SmokeRunIdStamped') {
+    throw 'Invoke-Smoke must track SmokeRunIdStamped across wait polls'
+}
 if ($smoke -notmatch "Remove-Item[^\n]*priorProjections" -or $smoke -notmatch "'evidence\.json', 'stages\.json'") {
     throw 'Invoke-Smoke must clear prior-run Apply projections (apply-status/failure/evidence/stages/expected) before Apply'
 }
@@ -46,6 +54,28 @@ Assert-Eq (Resolve-SmokePhase -HostStage wait -VmState Running -VhdFileSizeBytes
 Assert-Eq (Resolve-SmokePhase -HostStage wait -VmState Running -VhdFileSizeBytes 1GB) winpe-apply 'VHD has image'
 Assert-Eq (Resolve-SmokePhase -HostStage wait -VmState Running -VhdFileSizeBytes 1GB -HeartbeatOk) guest-up 'heartbeat wins VHD'
 Assert-Eq (Resolve-SmokePhase -HostStage wait -VmState Running -HeartbeatOk -EvidenceReady) guest-up 'evidence ready still guest-up until HostStage assert'
+
+# Sticky guest-up: after 2 consecutive heartbeat OK while Running, stay guest-up on a blip.
+$sticky1 = Get-SmokeWaitPhaseSticky -VmState Running -VhdFileSizeBytes 1GB -HeartbeatOk:$true `
+    -GuestUpSticky:$false -ConsecutiveHeartbeatOk 0
+Assert-Eq $sticky1.Phase guest-up 'first HB still guest-up'
+Assert-Eq ([string]$sticky1.GuestUpSticky) 'False' 'sticky arms at 2'
+Assert-Eq ([int]$sticky1.ConsecutiveHeartbeatOk) 1 'consec after first HB'
+$sticky2 = Get-SmokeWaitPhaseSticky -VmState Running -VhdFileSizeBytes 1GB -HeartbeatOk:$true `
+    -GuestUpSticky:$false -ConsecutiveHeartbeatOk 1
+Assert-Eq $sticky2.Phase guest-up 'second HB guest-up'
+Assert-Eq ([string]$sticky2.GuestUpSticky) 'True' 'sticky armed'
+$stickyBlip = Get-SmokeWaitPhaseSticky -VmState Running -VhdFileSizeBytes 1GB -HeartbeatOk:$false `
+    -GuestUpSticky:$true -ConsecutiveHeartbeatOk 2
+Assert-Eq $stickyBlip.Phase guest-up 'sticky survives HB blip'
+Assert-Eq (Get-SmokeWaitPhaseSticky -VmState Off -VhdFileSizeBytes 1GB -HeartbeatOk:$false `
+    -GuestUpSticky:$true -ConsecutiveHeartbeatOk 2).Phase setup-reboot 'Off clears sticky path'
+Assert-Eq ([string](Get-SmokeWaitPhaseSticky -VmState Off -VhdFileSizeBytes 1GB -HeartbeatOk:$false `
+    -GuestUpSticky:$true -ConsecutiveHeartbeatOk 2).GuestUpSticky) 'False' 'Off clears sticky flag'
+
+Assert-Eq (Get-SmokeRunIdStampDecision -AlreadyStamped:$true -HeartbeatOk:$true) skip 'already stamped'
+Assert-Eq (Get-SmokeRunIdStampDecision -AlreadyStamped:$false -HeartbeatOk:$false) skip 'no heartbeat yet'
+Assert-Eq (Get-SmokeRunIdStampDecision -AlreadyStamped:$false -HeartbeatOk:$true) try-stamp 'first contact'
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('smoke-status-' + [guid]::NewGuid().ToString('N'))
 $statusPath = Join-Path $tmp 'smoke-status.json'

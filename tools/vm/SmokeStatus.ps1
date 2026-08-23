@@ -113,6 +113,59 @@ function Get-SmokeEjectDvdDecision {
     return 'eject'
 }
 
+function Get-SmokeRunIdStampDecision {
+    <#
+    .SYNOPSIS
+      Whether the wait loop should try PS Direct stamp of smoke-run.id this poll.
+    #>
+    param(
+        [bool] $AlreadyStamped,
+        [bool] $HeartbeatOk
+    )
+    if ($AlreadyStamped) { return 'skip' }
+    if (-not $HeartbeatOk) { return 'skip' }
+    return 'try-stamp'
+}
+
+function Get-SmokeWaitPhaseSticky {
+    <#
+    .SYNOPSIS
+      Wait-phase resolution with sticky guest-up after two consecutive heartbeat OK polls.
+      Clears sticky when VM is not Running. DVD eject must still use live heartbeat.
+    #>
+    param(
+        [string] $VmState,
+        [long] $VhdFileSizeBytes = 0,
+        [switch] $HeartbeatOk,
+        [bool] $GuestUpSticky = $false,
+        [int] $ConsecutiveHeartbeatOk = 0
+    )
+    if ($VmState -notin @('Running')) {
+        return [pscustomobject]@{
+            Phase                   = (Resolve-SmokePhase -HostStage wait -VmState $VmState -VhdFileSizeBytes $VhdFileSizeBytes -HeartbeatOk:$HeartbeatOk)
+            GuestUpSticky           = $false
+            ConsecutiveHeartbeatOk  = 0
+        }
+    }
+
+    $consec = if ($HeartbeatOk) { [math]::Max(0, $ConsecutiveHeartbeatOk) + 1 } else { 0 }
+    $sticky = $GuestUpSticky -or ($consec -ge 2)
+    if ($sticky) {
+        return [pscustomobject]@{
+            Phase                  = 'guest-up'
+            GuestUpSticky          = $true
+            ConsecutiveHeartbeatOk = $consec
+        }
+    }
+
+    return [pscustomobject]@{
+        Phase                  = (Resolve-SmokePhase -HostStage wait -VmState $VmState `
+                -VhdFileSizeBytes $VhdFileSizeBytes -HeartbeatOk:$HeartbeatOk)
+        GuestUpSticky          = $false
+        ConsecutiveHeartbeatOk = $consec
+    }
+}
+
 function Get-SmokeWatchVerdict {
     <#
     .SYNOPSIS

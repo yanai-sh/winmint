@@ -399,6 +399,9 @@ function Test-GuestEvidenceReady {
 
 $script:DiskBootPreferred = $false
 $script:DvdEjected = $false
+$script:SmokeRunIdStamped = $false
+$script:GuestUpSticky = $false
+$script:ConsecutiveHeartbeatOk = 0
 function Test-SmokeVhdHasImage {
     try {
         $drive = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
@@ -491,25 +494,28 @@ function Send-VmBootNudge {
 
 Send-VmBootNudge
 
-# Bind this Smoke run to guest Evidence (ReuseVm must not green on prior Complete).
-try {
-    $sessionParams = @{ VMName = $VmName; ErrorAction = 'Stop' }
-    if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
-    $stampSession = New-PSSession @sessionParams
+function Try-StampSmokeRunId {
+    if ($script:SmokeRunIdStamped) { return }
     try {
-        Invoke-Command -Session $stampSession -ScriptBlock {
-            $root = Join-Path $env:ProgramData 'WinMint'
-            New-Item -ItemType Directory -Force -Path $root | Out-Null
-            Set-Content -LiteralPath (Join-Path $root 'smoke-run.id') -Value ($using:runId).Trim() -Encoding utf8 -NoNewline
+        $sessionParams = @{ VMName = $VmName; ErrorAction = 'Stop' }
+        if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
+        $stampSession = New-PSSession @sessionParams
+        try {
+            Invoke-Command -Session $stampSession -ScriptBlock {
+                $root = Join-Path $env:ProgramData 'WinMint'
+                New-Item -ItemType Directory -Force -Path $root | Out-Null
+                Set-Content -LiteralPath (Join-Path $root 'smoke-run.id') -Value ($using:runId).Trim() -Encoding utf8 -NoNewline
+            }
+            $script:SmokeRunIdStamped = $true
+            Write-Host "Stamped guest smoke-run.id=$runId"
         }
-        Write-Host "Stamped guest smoke-run.id=$runId"
+        finally {
+            Remove-PSSession $stampSession -ErrorAction SilentlyContinue
+        }
     }
-    finally {
-        Remove-PSSession $stampSession -ErrorAction SilentlyContinue
+    catch {
+        Write-Warning "Could not stamp guest smoke-run.id yet: $($_.Exception.Message)"
     }
-}
-catch {
-    Write-Warning "Could not stamp guest smoke-run.id yet: $($_.Exception.Message)"
 }
 
 $wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
@@ -577,8 +583,15 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         }
 
         $hb = Test-GuestWindowsHeartbeat
-        $phase = Resolve-SmokePhase -HostStage wait -VmState ([string]$vm.State) `
-            -VhdFileSizeBytes $vhdBytes -HeartbeatOk:$hb
+        if ((Get-SmokeRunIdStampDecision -AlreadyStamped:$script:SmokeRunIdStamped -HeartbeatOk:$hb) -eq 'try-stamp') {
+            Try-StampSmokeRunId
+        }
+        $phaseRes = Get-SmokeWaitPhaseSticky -VmState ([string]$vm.State) -VhdFileSizeBytes $vhdBytes `
+            -HeartbeatOk:$hb -GuestUpSticky:$script:GuestUpSticky `
+            -ConsecutiveHeartbeatOk $script:ConsecutiveHeartbeatOk
+        $phase = [string]$phaseRes.Phase
+        $script:GuestUpSticky = [bool]$phaseRes.GuestUpSticky
+        $script:ConsecutiveHeartbeatOk = [int]$phaseRes.ConsecutiveHeartbeatOk
         $stallLeft = [math]::Max(0, [int]($StallMinutes - $stallSw.Elapsed.TotalMinutes))
         $wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
         Write-SmokeStatus -Path $statusPath -Phase $phase -VmName $VmName -VmState ([string]$vm.State) `

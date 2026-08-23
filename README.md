@@ -14,7 +14,7 @@ You bring an [official Windows 11 ISO from Microsoft](https://www.microsoft.com/
 
 You can plan and build ISOs today. Flashing that ISO and wiping a PC is something you run yourself. Treat every wipe as your own risk.
 
-GitHub Releases are unsigned. See the [code signing policy](docs/CODE_SIGNING.md).
+GitHub Releases are unsigned. See the [Code signing policy](docs/CODE_SIGNING.md).
 
 ## Open the Wizard
 

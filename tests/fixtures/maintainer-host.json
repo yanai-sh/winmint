@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "winmint.maintainer-host/v1",
+  "notes": [
+    "Maintainer SL7 local facts for agents and humans — not product defaults.",
+    "CI must not fetch Windows media (ADR-001). This path exists only on the maintainer host.",
+    "just check never mounts or hashes this ISO."
+  ],
+  "sourceIso": {
+    "role": "vanilla-test",
+    "description": "Official Microsoft Windows 11 25H2 English ARM64 retail/business Source ISO used for Smoke and Host Apply on SL7",
+    "path": "C:\\Users\\yanai\\Documents\\Win11_25H2_English_Arm64_v2.iso",
+    "leaf": "Win11_25H2_English_Arm64_v2.iso",
+    "architecture": "ARM64",
+    "train": "25H2"
+  },
+  "smokeRecipe": "just smoke-maintainer",
+  "smokeRecipePositional": "just smoke \"C:\\Users\\yanai\\Documents\\Win11_25H2_English_Arm64_v2.iso\"",
+  "smokeRecipeNote": "Under PowerShell, pass the ISO as a positional just argument. Do not use ISO=path — just embeds the literal ISO= prefix into -Iso."
+}

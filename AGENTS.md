@@ -24,6 +24,19 @@ BuildPlan · ImageServicing · ProvisioningSession — [docs/design/](docs/desig
 
 **Clock** — Maintainer zone is Asia/Jerusalem (Tel Aviv). SL7’s system time can jump backward at random even after a sync (faulty DMA workaround on this machine, not product DMA settle). Do not trust `Get-Date`, `[datetime]::UtcNow`, file `LastWriteTime`, chat timestamps, or harness remaining-time as elapsed truth. Smoke stall/wall and the DVD boot-nudge window are wall-clock: a backward jump inflates them. If remaining time grows or files look newer than “now,” the clock jumped — stop treating those timers as elapsed and ask the human. A sync is temporary.
 
+**Vanilla Source ISO (Smoke / Host Apply)** — Official Microsoft 25H2 English ARM64 ISO on this host:
+
+`C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso`
+
+Same fact in [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-host.json). User-supplied only ([ADR-001](docs/decisions/ADR-001-source-iso-legal.md)); never commit the ISO bytes; CI must not fetch Windows media.
+
+```powershell
+just publish-provisioning
+just smoke-maintainer
+# or: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'
+# (positional path — do not use ISO=path under PowerShell)
+```
+
 ## Session
 
 Prefer one issue per session. Tiny same-risk fixes in touched code are fine — do not leave obvious breakage to obey “no drive-bys.” Apply `ready-for-agent` when starting scoped implement work. Keep `just check` green. Commits when asked: `docs:` · `feat(scope):` · `fix(scope):` …
