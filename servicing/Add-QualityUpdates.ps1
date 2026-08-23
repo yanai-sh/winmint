@@ -38,6 +38,7 @@ $imageUbr = 0
 if (-not [int]::TryParse([string]$snap.Build, [ref]$imageUbr)) {
     throw "WIM ServicePack Build is not an integer UBR: $($snap.Build)"
 }
+Write-Output "Catalog search start Version=$($snap.Version) UBR=$imageUbr"
 
 $resolved = Invoke-WinMintQualityCatalogResolve `
     -Version ([string]$snap.Version) `
@@ -63,6 +64,7 @@ if ($resolved.Skipped) {
 $staging = Join-Path $WorkDirectory 'quality-staging'
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
+    Write-Output "Catalog BITS start $($resolved.Kb)"
     $lcuPath = Get-WinMintCatalogPayload -UpdateId $resolved.UpdateId -CacheRoot $QualityCacheRoot `
         -Kb $resolved.Kb -Architecture 'ARM64' -StagingDir $staging
     if (-not (Test-WinMintQualityKbLeaf -Name (Split-Path -Leaf $lcuPath) -Kb $resolved.Kb)) {

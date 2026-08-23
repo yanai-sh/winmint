@@ -107,6 +107,13 @@ function Write-PlanFailure {
     catch {
         $reportingErrors.Add("apply status write failed: $_")
     }
+    try {
+        Write-WinMintHostPhase -Lane Apply -Name ($Opcode ? $Opcode : 'plan') -Outcome failed
+        Write-WinMintHostProgress -Activity Apply -Completed
+    }
+    catch {
+        Write-Debug "host phase failed: $_"
+    }
 
     foreach ($reportingError in $reportingErrors) {
         [Console]::Error.WriteLine($reportingError)
@@ -116,6 +123,7 @@ function Write-PlanFailure {
 $scriptRoot = $PSScriptRoot
 . (Join-Path $scriptRoot 'Resolve-WinMintMount.ps1')
 . (Join-Path $scriptRoot 'Get-WinMintServicingWorkspace.ps1')
+. (Join-Path $scriptRoot '..\tools\host\Write-WinMintHostProgress.ps1')
 
 function ConvertTo-ParamHashtable {
     param($ParametersObject)
@@ -256,6 +264,7 @@ try {
     }
 
     $index = 0
+    $stageCount = @($stagesDoc.stages).Count
     foreach ($stage in $stagesDoc.stages) {
         $index++
         if ($null -eq $stage -or
@@ -270,6 +279,9 @@ try {
         $kernel = Resolve-KernelScript -Opcode $opcode
         $logFile = Join-Path $logDir ("{0:D2}-{1}.log" -f $index, $opcode)
         Write-ApplyStatus -Stage $opcode -Log $logFile
+        $percent = if ($stageCount -gt 0) { [int][Math]::Floor(100 * $index / $stageCount) } else { 0 }
+        Write-WinMintHostPhase -Lane Apply -Name $opcode -Index $index -Count $stageCount
+        Write-WinMintHostProgress -Activity Apply -Status $opcode -PercentComplete $percent
         $phaseClock = [System.Diagnostics.Stopwatch]::StartNew()
         New-Item -ItemType File -Force -Path $logFile | Out-Null
         try {
@@ -280,6 +292,9 @@ try {
             throw
         }
         $phaseClock.Stop()
+        Write-WinMintHostPhase -Lane Apply -Name $opcode -Index $index -Count $stageCount `
+            -Outcome ok -DurationMs ([int]$phaseClock.ElapsedMilliseconds)
+        Write-WinMintHostProgress -Activity Apply -Completed
         if ($opcode -eq 'ExportWim') {
             $script:phaseTimings['exportMs'] = [int]$phaseClock.ElapsedMilliseconds
         }

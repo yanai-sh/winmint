@@ -38,6 +38,19 @@ if ($smoke -notmatch 'if \(\$SkipApply\) \{ Resolve-WinMintOutputIso') {
 if ($smoke.IndexOf('Write-SmokeStatus') -gt $smoke.IndexOf('Watch-SmokeHost.ps1')) {
     throw 'Invoke-Smoke must write this run''s status before spawning Watch-SmokeHost (stale-status guard)'
 }
+$watch = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Watch-SmokeHost.ps1') -Raw -Encoding utf8
+if ($watch -notmatch 'Get-SmokeWatchVerdict') {
+    throw 'Watch-SmokeHost must call Get-SmokeWatchVerdict'
+}
+if ($watch -notmatch 'PriorRunId') {
+    throw 'Watch-SmokeHost must pass -PriorRunId'
+}
+if ($watch -notmatch 'verdict') {
+    throw 'Watch-SmokeHost must display the verdict'
+}
+if ($watch -notmatch 'Format-WinMintHostWatch') {
+    throw 'Watch-SmokeHost must render via Format-WinMintHostWatch'
+}
 
 function Assert-Eq($Actual, $Expected, [string] $Message) {
     if ($Actual -cne $Expected) { throw "$Message (got '$Actual', expected '$Expected')" }
