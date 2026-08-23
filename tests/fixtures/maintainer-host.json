@@ -3,7 +3,8 @@
   "notes": [
     "Maintainer SL7 local facts for agents and humans — not product defaults.",
     "CI must not fetch Windows media (ADR-001). This path exists only on the maintainer host.",
-    "just check never mounts or hashes this ISO."
+    "just check never mounts or hashes this ISO.",
+    "just smoke-maintainer uses samples/sl7.profile.json (same Primary install target). Requires .scratch/sl7.password."
   ],
   "sourceIso": {
     "role": "vanilla-test",

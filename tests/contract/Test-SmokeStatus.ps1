@@ -38,6 +38,60 @@ if ($smoke -notmatch 'if \(\$SkipApply\) \{ Resolve-WinMintOutputIso') {
 if ($smoke.IndexOf('Write-SmokeStatus') -gt $smoke.IndexOf('Watch-SmokeHost.ps1')) {
     throw 'Invoke-Smoke must write this run''s status before spawning Watch-SmokeHost (stale-status guard)'
 }
+if ($smoke -notmatch 'Resolve-WinMintSmokeGuestCredential') {
+    throw 'Invoke-Smoke must resolve guest credentials via Resolve-WinMintSmokeGuestCredential'
+}
+if ($smoke -notmatch 'Get-SmokeStallExtendDecision') {
+    throw 'Invoke-Smoke wait loop must use Get-SmokeStallExtendDecision'
+}
+if ($smoke -notmatch 'Get-SmokeSetupRebootTransition') {
+    throw 'Invoke-Smoke must count setup reboots via Get-SmokeSetupRebootTransition'
+}
+if ($smoke -notmatch 'Get-SmokeRebootLoopVerdict') {
+    throw 'Invoke-Smoke must fail-fast reboot loops via Get-SmokeRebootLoopVerdict'
+}
+if ($smoke -notmatch 'Save-SmokeVmScreenshot') {
+    throw 'Invoke-Smoke must capture a VM console screenshot on failure/half-stall'
+}
+if ($smoke -notmatch 'Get-SmokeSuspendVmDecision') {
+    throw 'Invoke-Smoke must Suspend-VM on stall/wall/reboot-loop via Get-SmokeSuspendVmDecision'
+}
+if ($smoke -notmatch 'Get-SmokeNudgeRearmDecision') {
+    throw 'Invoke-Smoke must re-arm the DVD nudge via Get-SmokeNudgeRearmDecision'
+}
+if ($smoke -notmatch 'PrimaryOperationalStatus') {
+    throw 'Heartbeat must use PrimaryOperationalStatus, not a localized OK string'
+}
+if ($smoke -notmatch 'ExplorerRunning') {
+    throw 'Live handoff probe must check explorer.exe is running'
+}
+if ($smoke -notmatch 'LastProbeError') {
+    throw 'Invoke-Smoke must surface the last PS Direct probe error'
+}
+if ($smoke -notmatch 'ProfilePath') {
+    throw 'Invoke-Smoke must take -ProfilePath (not the automatic \$PROFILE)'
+}
+if ($smoke -notmatch '-NonInteractive') {
+    throw 'Watcher spawn must pass -NonInteractive so prompts fail closed'
+}
+if ($smoke -notmatch 'Get-SmokeWatcherSpawnDecision') {
+    throw 'Invoke-Smoke must skip a live watcher via Get-SmokeWatcherSpawnDecision'
+}
+
+$justfile = Get-Content -LiteralPath (Join-Path $repo 'Justfile') -Raw -Encoding utf8
+if ($justfile -notmatch 'NonInteractive') {
+    throw 'just smoke / smoke-assert must pass -NonInteractive'
+}
+if ($justfile -notmatch 'STALL=') {
+    throw 'just smoke must expose STALL'
+}
+if ($justfile -notmatch 'MONITOR="" STALL="45"') {
+    throw 'just smoke STALL must come after MONITOR (positional 5 is MONITOR, not StallMinutes)'
+}
+if ($justfile -notmatch "just smoke '[^']+' '{{WORK}}' '[^']+' '{{WALL}}' '{{MONITOR}}' '{{STALL}}'") {
+    throw 'just smoke-maintainer must pass MONITOR then STALL (empty MONITOR must not become -StallMinutes)'
+}
+
 $watch = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Watch-SmokeHost.ps1') -Raw -Encoding utf8
 if ($watch -notmatch 'Get-SmokeWatchVerdict') {
     throw 'Watch-SmokeHost must call Get-SmokeWatchVerdict'
@@ -225,6 +279,85 @@ try {
             -LiveShell 'explorer.exe' -SupervisorRunning:$true) {
         throw 'Supervisor running must fail handoff gate even with Complete evidence'
     }
+    if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $handoff `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false)) {
+        throw 'omitting ExplorerRunning must stay neutral for static fixtures'
+    }
+    if (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $handoff `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false -ExplorerRunning $false) {
+        throw 'live mode must fail-close when explorer.exe is not running'
+    }
+    if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $handoff `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false -ExplorerRunning $true)) {
+        throw 'live mode must pass when explorer.exe is running'
+    }
+
+    # Credentials: password, passwordPath (relative), missing file, root-relative.
+    $credDir = Join-Path $tmp 'creds'
+    New-Item -ItemType Directory -Force -Path $credDir | Out-Null
+    '{"schemaVersion":"winmint.profile/v1","account":{"username":"winmint","password":"inline"}}' |
+        Set-Content -LiteralPath (Join-Path $credDir 'inline.json') -Encoding utf8
+    $inlineCred = Resolve-WinMintSmokeGuestCredential -ProfilePath (Join-Path $credDir 'inline.json')
+    Assert-Eq $inlineCred.UserName 'winmint' 'inline password username'
+    $secret = Join-Path $credDir 'secret.txt'
+    Set-Content -LiteralPath $secret -Value "path-pass`n" -NoNewline -Encoding utf8
+    '{"schemaVersion":"winmint.profile/v1","account":{"username":"yanai","passwordPath":"secret.txt"}}' |
+        Set-Content -LiteralPath (Join-Path $credDir 'path.json') -Encoding utf8
+    $pathCred = Resolve-WinMintSmokeGuestCredential -ProfilePath (Join-Path $credDir 'path.json')
+    Assert-Eq $pathCred.UserName 'yanai' 'passwordPath username'
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($pathCred.Password)
+    try {
+        Assert-Eq ([Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)) 'path-pass' 'passwordPath contents'
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
+    '{"schemaVersion":"winmint.profile/v1","account":{"username":"yanai","passwordPath":"missing.password"}}' |
+        Set-Content -LiteralPath (Join-Path $credDir 'missing.json') -Encoding utf8
+    try {
+        $null = Resolve-WinMintSmokeGuestCredential -ProfilePath (Join-Path $credDir 'missing.json')
+        throw 'missing passwordPath must throw'
+    } catch {
+        if ($_.Exception.Message -notmatch 'missing file') { throw "missing passwordPath message: $($_.Exception.Message)" }
+    }
+    '{"schemaVersion":"winmint.profile/v1","account":{"username":"yanai","passwordPath":"\\scratch\\pw"}}' |
+        Set-Content -LiteralPath (Join-Path $credDir 'rooted.json') -Encoding utf8
+    try {
+        $null = Resolve-WinMintSmokeGuestCredential -ProfilePath (Join-Path $credDir 'rooted.json')
+        throw 'root-relative passwordPath must throw'
+    } catch {
+        if ($_.Exception.Message -notmatch 'root-relative') { throw "rooted passwordPath message: $($_.Exception.Message)" }
+    }
+
+    # Stall / reboot-loop / progress / nudge / suspend / watcher spawn.
+    Assert-Eq (Get-SmokeStallExtendDecision -VmState Starting -Cpu 0 -GuestUpSticky $false -GuestProgress $false) extend 'reboot churn extends'
+    Assert-Eq (Get-SmokeStallExtendDecision -VmState Running -Cpu 40 -GuestUpSticky $false -GuestProgress $false) extend 'pre-guest-up CPU extends'
+    Assert-Eq (Get-SmokeStallExtendDecision -VmState Running -Cpu 90 -GuestUpSticky $true -GuestProgress $false) hold 'CEH spinner after guest-up does not extend'
+    Assert-Eq (Get-SmokeStallExtendDecision -VmState Running -Cpu 0 -GuestUpSticky $true -GuestProgress $true) extend 'guest progress extends after guest-up'
+    Assert-Eq (Get-SmokeGuestProgressDecision -LastFingerprint '1:Reboot' -Fingerprint '1:Reboot' -SupervisorRunning $false) idle 'same evidence is idle'
+    Assert-Eq (Get-SmokeGuestProgressDecision -LastFingerprint '1:Reboot' -Fingerprint '2:Complete' -SupervisorRunning $false) progress 'new evidence is progress'
+    Assert-Eq (Get-SmokeGuestProgressDecision -LastFingerprint '' -Fingerprint '' -SupervisorRunning $true) progress 'Supervisor alive is progress'
+    Assert-Eq (Get-SmokeSetupRebootTransition -LastVmState Running -VmState Stopping -VhdHasImage $true) count 'image + Stopping counts'
+    Assert-Eq (Get-SmokeSetupRebootTransition -LastVmState Running -VmState Stopping -VhdHasImage $false) skip 'empty VHD is WinPE churn'
+    Assert-Eq (Get-SmokeSetupRebootTransition -LastVmState Off -VmState Running -VhdHasImage $true) skip 'Off→Running is start, not leave-Running'
+    Assert-Eq (Get-SmokeRebootLoopVerdict -SetupRebootCount 8 -MaxSetupReboots 8) continue 'at cap continues'
+    Assert-Eq (Get-SmokeRebootLoopVerdict -SetupRebootCount 9 -MaxSetupReboots 8) reboot-loop 'past cap is a loop'
+    Assert-Eq (Get-SmokeNudgeRearmDecision -LastVmState Off -VmState Running -DiskBootPreferred $false) rearm 'Off→Running re-arms while DVD first'
+    Assert-Eq (Get-SmokeNudgeRearmDecision -LastVmState Off -VmState Running -DiskBootPreferred $true) skip 'HDD-first does not re-arm'
+    Assert-Eq (Get-SmokeSuspendVmDecision -FailureMessage 'STALL_SUSPECT: no guest progress') suspend 'stall suspends'
+    Assert-Eq (Get-SmokeSuspendVmDecision -FailureMessage 'Wall clock elapsed without guest evidence') suspend 'wall suspends'
+    Assert-Eq (Get-SmokeSuspendVmDecision -FailureMessage 'REBOOT_LOOP: 9 setup reboots') suspend 'reboot-loop suspends'
+    Assert-Eq (Get-SmokeSuspendVmDecision -FailureMessage 'Apply failed: 1') skip 'Apply failure does not suspend'
+    Assert-Eq (Get-SmokeWatcherSpawnDecision -MarkerPidAlive $true) skip 'live watcher is unique'
+    Assert-Eq (Get-SmokeWatcherSpawnDecision -MarkerPidAlive $false) spawn 'dead marker respawns'
+
+    $pixels = [byte[]]::new(8) # 2x2 RGB565, stride 4
+    $bmp = ConvertTo-WinMintBmp565 -PixelData $pixels -Width 2 -Height 2
+    if ($bmp.Length -ne (14 + 40 + 12 + 8)) { throw "BMP size $($bmp.Length)" }
+    if ($bmp[0] -ne 0x42 -or $bmp[1] -ne 0x4D) { throw 'BMP magic' }
+    $fileSize = [BitConverter]::ToInt32($bmp, 2)
+    if ($fileSize -ne $bmp.Length) { throw "BMP file size $fileSize" }
+    $height = [BitConverter]::ToInt32($bmp, 22)
+    if ($height -ne -2) { throw "BMP height $height (want top-down -2)" }
 
     $blocked = Join-Path $tmp 'blocked'
     Set-Content -LiteralPath $blocked -Value 'not-a-dir' -Encoding utf8

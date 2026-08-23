@@ -107,17 +107,26 @@ apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STU
     Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $stubs = @(); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $stubs = @('--include-smoke-stubs') }; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}') + $stubs; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
 
 # S4 Hyper-V Smoke — not in `just check`. Assert-only: just smoke-assert tests/fixtures/smoke-evidence
+# Default Profile = samples/sl7.profile.json (same install target as Primary / this machine).
+# Needs .scratch/sl7.password (SECRETS). Longer wall — winget/WSL on Default Switch NAT.
 # Positional ISO path (PowerShell: do not use ISO=path — just treats that as the path string).
 # Usage: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'
-smoke ISO WORK=".scratch/smoke" PROFILE="samples/acceptance.profile.json" WALL="90" MONITOR="":
-    $mon = @(); if ('{{MONITOR}}') { $mon = @('-Monitor') }; pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -WallClockMinutes {{WALL}} @mon
+# Positional: ISO WORK PROFILE WALL MONITOR STALL — do not insert params before MONITOR
+# (smoke-maintainer passes MONITOR as the 5th argument; an empty 5th used to become -StallMinutes).
+smoke ISO WORK=".scratch/smoke" PROFILE="samples/sl7.profile.json" WALL="180" MONITOR="" STALL="45":
+    $mon = @(); if ('{{MONITOR}}') { $mon = @('-Monitor') }; pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} @mon
 
 # Maintainer SL7 vanilla Source ISO — path in tests/fixtures/maintainer-host.json
-smoke-maintainer WORK=".scratch/smoke" WALL="90" MONITOR="":
-    just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso' '{{WORK}}' 'samples/acceptance.profile.json' '{{WALL}}' '{{MONITOR}}'
+smoke-maintainer WORK=".scratch/smoke" WALL="180" MONITOR="" STALL="45":
+    just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso' '{{WORK}}' 'samples/sl7.profile.json' '{{WALL}}' '{{MONITOR}}' '{{STALL}}'
+
+# Own-console host watch (Apply/Smoke keep running if you close it).
+# smoke-maintainer already spawns one Watch-SmokeHost; use this to attach a second view.
+watch-smoke WORK=".scratch/smoke":
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Watch-SmokeHost.ps1' -Work '{{WORK}}'
 
 smoke-assert EVIDENCE:
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'
 
 # S5 Host Apply (pre-wipe). Test lane ≠ Primary. Wipe ISO: just primary-gate <iso> <work>
 host-apply ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="Test":

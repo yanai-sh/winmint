@@ -37,7 +37,8 @@ function Write-SmokeStatus {
         [string] $LastHostLine = '',
         $OutputIso = $null,
         [int] $WaiterPid = 0,
-        [string] $RunId = ''
+        [string] $RunId = '',
+        [int] $SetupRebootCount = 0
     )
     try {
         $dir = Split-Path -Parent $Path
@@ -57,7 +58,8 @@ function Write-SmokeStatus {
             wallMinutesLeft  = $WallMinutesLeft
             lastHostLine     = $LastHostLine
             outputIso        = $OutputIso
-            waiterPid        = $WaiterPid
+            waiterPid         = $WaiterPid
+            setupRebootCount  = $SetupRebootCount
         }
         ($doc | ConvertTo-Json -Compress) | Set-Content -LiteralPath $Path -Encoding utf8 -ErrorAction Stop
     }
@@ -125,6 +127,249 @@ function Get-SmokeRunIdStampDecision {
     if ($AlreadyStamped) { return 'skip' }
     if (-not $HeartbeatOk) { return 'skip' }
     return 'try-stamp'
+}
+
+function Resolve-WinMintSmokeGuestCredential {
+    <#
+    .SYNOPSIS
+      PS Direct credential from a Profile: account.password, else account.passwordPath
+      resolved relative to the Profile's directory (mirrors ProfileFile.TryLoad).
+    .NOTES
+      Throws when a localAutoLogon Profile yields no credential — New-PSSession -VMName
+      has a mandatory -Credential and would block the wait loop on an interactive prompt.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string] $ProfilePath
+    )
+    if (-not (Test-Path -LiteralPath $ProfilePath -PathType Leaf)) {
+        throw "Profile not found: $ProfilePath"
+    }
+    $doc = Get-Content -LiteralPath $ProfilePath -Raw -Encoding utf8 | ConvertFrom-Json
+    $account = if ($doc.PSObject.Properties.Name -contains 'account') { $doc.account } else { $null }
+    if ($null -eq $account) {
+        throw "Profile has no account block: $ProfilePath"
+    }
+    $names = @($account.PSObject.Properties.Name)
+    $username = if ($names -contains 'username') { [string]$account.username } else { '' }
+    if ([string]::IsNullOrWhiteSpace($username)) {
+        throw "Profile account.username missing: $ProfilePath"
+    }
+    $password = if ($names -contains 'password') { [string]$account.password } else { '' }
+    if ([string]::IsNullOrWhiteSpace($password)) {
+        $authored = if ($names -contains 'passwordPath') { [string]$account.passwordPath } else { '' }
+        if ([string]::IsNullOrWhiteSpace($authored)) {
+            throw ("Profile '$ProfilePath' has neither account.password nor account.passwordPath — " +
+                'PS Direct needs guest credentials for the Smoke wait loop.')
+        }
+        $resolved = $authored
+        if (-not [IO.Path]::IsPathFullyQualified($authored)) {
+            if ([IO.Path]::IsPathRooted($authored)) {
+                throw "account.passwordPath '$authored' is root-relative — use fully qualified or Profile-relative."
+            }
+            $profileDir = Split-Path -Parent (Resolve-Path -LiteralPath $ProfilePath).Path
+            $resolved = [IO.Path]::GetFullPath((Join-Path $profileDir $authored))
+        }
+        if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+            throw "account.passwordPath '$authored' resolves to missing file: $resolved (docs/design/SECRETS.md)"
+        }
+        $password = ([IO.File]::ReadAllText($resolved)).TrimEnd("`r", "`n")
+        if ([string]::IsNullOrEmpty($password)) {
+            throw "Password file is empty: $resolved"
+        }
+    }
+    return [pscredential]::new($username, (ConvertTo-SecureString $password -AsPlainText -Force))
+}
+
+function Get-SmokeStallExtendDecision {
+    <#
+    .SYNOPSIS
+      Whether this poll extends the stall budget.
+      Pre-guest-up: CPU activity or setup reboot churn counts (WinPE/OOBE leave no durable
+      guest signal). After sticky guest-up: only real guest progress extends — Supervisor
+      process alive (its own wall clock bounds tenure) or new evidence bytes. A CPU-burning
+      CloudExperienceHost "Just a moment" spinner no longer resets stall.
+    #>
+    param(
+        [string] $VmState,
+        [int] $Cpu = 0,
+        [bool] $GuestUpSticky = $false,
+        [bool] $GuestProgress = $false
+    )
+    if ($VmState -in @('Starting', 'Stopping')) { return 'extend' }
+    if ($GuestUpSticky) {
+        if ($GuestProgress) { return 'extend' }
+        return 'hold'
+    }
+    if ($Cpu -gt 0) { return 'extend' }
+    return 'hold'
+}
+
+function Get-SmokeSetupRebootTransition {
+    <#
+    .SYNOPSIS
+      Counts a setup reboot when the VM leaves Running after the VHD carries an applied
+      image. Pre-image transitions are WinPE/firmware churn, not setup reboots.
+    #>
+    param(
+        [string] $LastVmState,
+        [string] $VmState,
+        [bool] $VhdHasImage
+    )
+    if ($LastVmState -eq 'Running' -and $VmState -in @('Stopping', 'Off') -and $VhdHasImage) {
+        return 'count'
+    }
+    return 'skip'
+}
+
+function Get-SmokeRebootLoopVerdict {
+    <#
+    .SYNOPSIS
+      Fail fast on a boot loop instead of churning until wall clock: setup reboots past
+      the cap are a loop, not progress (each reboot also burns one guest autologon).
+    #>
+    param(
+        [int] $SetupRebootCount = 0,
+        [int] $MaxSetupReboots = 8
+    )
+    if ($MaxSetupReboots -gt 0 -and $SetupRebootCount -gt $MaxSetupReboots) {
+        return 'reboot-loop'
+    }
+    return 'continue'
+}
+
+function Get-SmokeGuestProgressDecision {
+    <#
+    .SYNOPSIS
+      After sticky guest-up, stall extends only on Supervisor alive or new evidence bytes.
+    #>
+    param(
+        [string] $LastFingerprint = '',
+        [string] $Fingerprint = '',
+        [bool] $SupervisorRunning = $false
+    )
+    if ($SupervisorRunning) { return 'progress' }
+    if (-not [string]::IsNullOrWhiteSpace($Fingerprint) -and $Fingerprint -ne $LastFingerprint) {
+        return 'progress'
+    }
+    return 'idle'
+}
+
+function Get-SmokeNudgeRearmDecision {
+    <#
+    .SYNOPSIS
+      Re-arm the DVD boot-key window on Off→Running while DVD is still first.
+    #>
+    param(
+        [string] $LastVmState,
+        [string] $VmState,
+        [bool] $DiskBootPreferred
+    )
+    if ($DiskBootPreferred) { return 'skip' }
+    if ($LastVmState -eq 'Off' -and $VmState -eq 'Running') { return 'rearm' }
+    return 'skip'
+}
+
+function Get-SmokeSuspendVmDecision {
+    <#
+    .SYNOPSIS
+      Freeze the console on stall/wall/reboot-loop so VMConnect can inspect later.
+      Apply failures leave the VM alone (it may not exist yet).
+    #>
+    param([string] $FailureMessage)
+    if ($FailureMessage -match '^(STALL_SUSPECT|EMPTY_VHD|REBOOT_LOOP|Wall clock)') {
+        return 'suspend'
+    }
+    return 'skip'
+}
+
+function Get-SmokeWatcherSpawnDecision {
+    param([bool] $MarkerPidAlive)
+    if ($MarkerPidAlive) { return 'skip' }
+    return 'spawn'
+}
+
+function ConvertTo-WinMintBmp565 {
+    <#
+    .SYNOPSIS
+      Wrap a raw RGB565 pixel buffer (Msvm thumbnail wire format) as a top-down 16bpp
+      BI_BITFIELDS BMP. Pure — no Hyper-V.
+    #>
+    param(
+        [Parameter(Mandatory)] [byte[]] $PixelData,
+        [Parameter(Mandatory)] [int] $Width,
+        [Parameter(Mandatory)] [int] $Height
+    )
+    $stride = $Width * 2
+    if ($stride % 4 -ne 0) {
+        throw "ConvertTo-WinMintBmp565 needs a 4-byte-aligned row (width $Width is not)"
+    }
+    if ($PixelData.Length -ne ($stride * $Height)) {
+        throw "pixel buffer $($PixelData.Length) bytes != ${Width}x${Height}x2"
+    }
+    $headerSize = 14 + 40 + 12
+    $ms = [IO.MemoryStream]::new()
+    $bw = [IO.BinaryWriter]::new($ms)
+    try {
+        $bw.Write([byte]0x42); $bw.Write([byte]0x4D)          # 'BM'
+        $bw.Write([int]($headerSize + $PixelData.Length))     # file size
+        $bw.Write([int]0)                                     # reserved
+        $bw.Write([int]$headerSize)                           # pixel offset
+        $bw.Write([int]40)                                    # BITMAPINFOHEADER size
+        $bw.Write([int]$Width)
+        $bw.Write([int](-$Height))                            # negative height = top-down rows
+        $bw.Write([int16]1)                                   # planes
+        $bw.Write([int16]16)                                  # bpp
+        $bw.Write([int]3)                                     # BI_BITFIELDS
+        $bw.Write([int]$PixelData.Length)
+        $bw.Write([int]2835); $bw.Write([int]2835)            # 72 DPI
+        $bw.Write([int]0); $bw.Write([int]0)                  # palette
+        $bw.Write([int]0xF800); $bw.Write([int]0x07E0); $bw.Write([int]0x001F)
+        $bw.Write($PixelData)
+        $bw.Flush()
+        return , $ms.ToArray()
+    }
+    finally {
+        $bw.Dispose()
+        $ms.Dispose()
+    }
+}
+
+function Save-SmokeVmScreenshot {
+    <#
+    .SYNOPSIS
+      Best-effort VM console screenshot for post-mortem (which screen was the guest on?).
+      Diagnostics only — never an acceptance input (witnessed-smoke spec).
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $VmName,
+        [Parameter(Mandatory)] [string] $Path,
+        [int] $Width = 640,
+        [int] $Height = 480
+    )
+    try {
+        $vmCs = Get-CimInstance -Namespace root\virtualization\v2 -ClassName Msvm_ComputerSystem `
+            -Filter "ElementName='$VmName'" -ErrorAction Stop
+        if ($null -eq $vmCs) { return $false }
+        $svc = Get-CimInstance -Namespace root\virtualization\v2 `
+            -ClassName Msvm_VirtualSystemManagementService -ErrorAction Stop
+        $result = Invoke-CimMethod -InputObject $svc -MethodName GetVirtualSystemThumbnailImage -Arguments @{
+            HeightPixels = [uint16]$Height
+            WidthPixels  = [uint16]$Width
+            TargetSystem = $vmCs
+        }
+        if ($null -eq $result -or $result.ReturnValue -ne 0 -or -not $result.ImageData) { return $false }
+        $dir = Split-Path -Parent $Path
+        if ($dir) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        $bmp = ConvertTo-WinMintBmp565 -PixelData ([byte[]]$result.ImageData) -Width $Width -Height $Height
+        [IO.File]::WriteAllBytes($Path, $bmp)
+        Write-Host "VM console screenshot → $Path"
+        return $true
+    }
+    catch {
+        Write-Warning "Could not capture VM console screenshot: $($_.Exception.Message)"
+        return $false
+    }
 }
 
 function Get-SmokeWaitPhaseSticky {
@@ -298,12 +543,16 @@ function Test-WinMintGuestEvidenceTerminal {
     <#
       Fail-closed S4 gate: Complete evidence alone is not terminal — live explorer shell
       and no Supervisor process mean FirstLogon handoff actually finished.
+      ExplorerRunning: live probes pass $true/$false (explorer.exe process alive — a
+      restored Shell value with a crashed explorer is not a desktop); static fixtures
+      omit it ($null = neutral).
     #>
     param(
         [Parameter(Mandatory)] $EvidenceDoc,
         [Parameter(Mandatory)] [string] $LiveShell,
         [bool] $SupervisorRunning = $false,
-        [string] $RequiredSmokeRunId = ''
+        [string] $RequiredSmokeRunId = '',
+        $ExplorerRunning = $null
     )
     if (-not [string]::IsNullOrWhiteSpace($RequiredSmokeRunId)) {
         $got = ''
@@ -321,5 +570,6 @@ function Test-WinMintGuestEvidenceTerminal {
     if ($phases -notcontains 'oobe.dismiss') { return $false }
     if (-not (Test-WinMintExplorerShellValue $LiveShell)) { return $false }
     if ($SupervisorRunning) { return $false }
+    if ($ExplorerRunning -is [bool] -and -not $ExplorerRunning) { return $false }
     return $true
 }
