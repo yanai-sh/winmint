@@ -25,5 +25,14 @@ if (Test-Path -LiteralPath $shellSkel) {
     Copy-Item -Path (Join-Path $shellSkel '*') -Destination $guestSkel -Recurse -Force
 }
 
+$bloomSrc = Join-Path $payloadDir 'bloom.jpg'
+if (-not (Test-Path -LiteralPath $bloomSrc -PathType Leaf)) {
+    Write-Error 'StagePayload: bloom.jpg missing from payloadDir'
+    exit 1
+}
+$wallpaperDir = Join-Path $mountDir 'Windows\Web\Wallpaper\Windows'
+New-Item -ItemType Directory -Force -Path $wallpaperDir | Out-Null
+Copy-Item -LiteralPath $bloomSrc -Destination (Join-Path $wallpaperDir 'WinMint-Bloom.jpg') -Force
+
 Write-Output "StagePayload ok"
 exit 0

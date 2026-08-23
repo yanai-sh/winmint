@@ -138,6 +138,12 @@ public static partial class ImageServicing
             return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(shellSkel.Error);
         }
 
+        Result<string, Failure> bloom = StageBloomWallpaper(payloadDir);
+        if (!bloom.IsOk)
+        {
+            return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(bloom.Error);
+        }
+
         File.WriteAllBytes(
             Path.Combine(payloadDir, ServicingWorkspace.PoliciesFileName),
             JsonSerializer.SerializeToUtf8Bytes(
@@ -397,6 +403,20 @@ public static partial class ImageServicing
 
         string dest = Path.Combine(payloadDir, "shell-skel");
         CopyDirectory(source, dest);
+        return Result.Ok<string, Failure>(dest);
+    }
+
+    private static Result<string, Failure> StageBloomWallpaper(string payloadDir)
+    {
+        string? source = ToolkitRoot.TryFind("payload", "media", "wallpaper", "bloom.jpg");
+        if (source is null)
+        {
+            return Result.Fail<string, Failure>(
+                new Failure("servicing.bloom.missing", "payload/media/wallpaper/bloom.jpg not found."));
+        }
+
+        string dest = Path.Combine(payloadDir, "bloom.jpg");
+        File.Copy(source, dest, overwrite: true);
         return Result.Ok<string, Failure>(dest);
     }
 
