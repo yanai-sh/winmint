@@ -84,7 +84,7 @@ A kernel file is named for the opcode it serves: `ServicingOpcode.StampOfflinePo
 
 `MountInstallWim` → `StampOfflinePolicies` → Debloat removes? → capability/feature removes? → `InjectDrivers`? → `StagePayload` → `StageOobeUnattend` → `StampOfflineShell` → `AddQualityUpdates` (Materialize insert) → `PatchBootWimApply` → `ExportWim` → `BuildIso`  
 Policies stamp first: creating new `Policies\Microsoft\*` keys flakes Unauthorized on a heavily-serviced mount.
-WinPE apply lane only. Release differs in `ExportWim` compression/cleanup params.
+WinPE apply lane only. Release differs in `ExportWim` compression/cleanup params. Surface `boot.wim` injection is storage/USB/HID/net only (`Get-WinMintBootSetupCriticalClasses`) — not `system`/`extension` ACPI, which bugchecks 0xA5 `_ADR` on Hyper-V. `install.wim` still gets the full SurfaceMsiSafe set.
 
 ### Catalog quality updates
 

@@ -18,6 +18,50 @@ function Test-MicrosoftDownloadUri {
     $parsed.Host -in @('download.microsoft.com', 'www.microsoft.com')
 }
 
+function Get-WinMintBootSetupCriticalClasses {
+    # WinPE on Hyper-V: Surface Class=system/extension (ACPI platform/filter) bugchecks 0xA5 _ADR.
+    # Storage/USB/HID/net only. install.wim still gets the full SurfaceMsiSafe set.
+    @('hdc', 'scsiadapter', 'usb', 'usbdevice', 'hidclass', 'keyboard', 'mouse', 'net')
+}
+
+function Read-InfMeta {
+    param([string] $InfPath)
+    $fields = @{ Class = ''; Provider = ''; DriverVer = '' }
+    foreach ($line in (Get-Content -LiteralPath $InfPath -ErrorAction SilentlyContinue)) {
+        if ($line -match '^\s*(Class|Provider|DriverVer)\s*=\s*(.+?)\s*$') {
+            $fields[$matches[1]] = $matches[2].Trim().Trim('"')
+        }
+    }
+    return [pscustomobject]@{
+        Name = [IO.Path]::GetFileName($InfPath)
+        Class = ([string]$fields.Class).ToLowerInvariant()
+        Provider = [string]$fields.Provider
+        DriverVer = [string]$fields.DriverVer
+    }
+}
+
+function Copy-SetupCriticalDriverSubset {
+    param([string] $DriverSource, [string] $Destination)
+    $includeClasses = Get-WinMintBootSetupCriticalClasses
+    $excludeClasses = @('display', 'media', 'camera', 'bluetooth', 'sensor', 'softwarecomponent', 'printer', 'monitor', 'firmware')
+    $sourceRoot = (Get-Item -LiteralPath $DriverSource).FullName
+    $null = New-Item -ItemType Directory -Path $Destination -Force
+    $copied = 0
+    foreach ($inf in Get-ChildItem -LiteralPath $DriverSource -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue) {
+        $class = (Read-InfMeta -InfPath $inf.FullName).Class
+        if ([string]::IsNullOrWhiteSpace($class)) { continue }
+        if ($excludeClasses -contains $class) { continue }
+        if ($includeClasses -notcontains $class) { continue }
+        $rel = $inf.DirectoryName.Substring($sourceRoot.Length).TrimStart([char[]]@('\', '/'))
+        $targetDir = if ([string]::IsNullOrWhiteSpace($rel)) { $Destination } else { Join-Path $Destination $rel }
+        $null = New-Item -ItemType Directory -Path $targetDir -Force
+        Get-ChildItem -LiteralPath $inf.DirectoryName -Force -ErrorAction SilentlyContinue |
+            Copy-Item -Destination $targetDir -Recurse -Force -ErrorAction SilentlyContinue
+        $copied++
+    }
+    return $copied
+}
+
 if ($MyInvocation.InvocationName -ne '.') {
 $logDir = Join-Path $workDirectory 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -70,22 +114,6 @@ function Invoke-MsiAdministrativeExtract {
     $infCount = (Get-ChildItem -LiteralPath $Destination -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue | Measure-Object).Count
     if ($infCount -lt 1) {
         throw "Administrative install produced no .inf files under $Destination"
-    }
-}
-
-function Read-InfMeta {
-    param([string] $InfPath)
-    $fields = @{ Class = ''; Provider = ''; DriverVer = '' }
-    foreach ($line in (Get-Content -LiteralPath $InfPath -ErrorAction SilentlyContinue)) {
-        if ($line -match '^\s*(Class|Provider|DriverVer)\s*=\s*(.+?)\s*$') {
-            $fields[$matches[1]] = $matches[2].Trim().Trim('"')
-        }
-    }
-    return [pscustomobject]@{
-        Name = [IO.Path]::GetFileName($InfPath)
-        Class = ([string]$fields.Class).ToLowerInvariant()
-        Provider = [string]$fields.Provider
-        DriverVer = [string]$fields.DriverVer
     }
 }
 
@@ -151,28 +179,6 @@ function Copy-ClassifiedDriverPayload {
         excludedCount = @($excluded).Count
         records = @($records)
     }
-}
-
-function Copy-SetupCriticalDriverSubset {
-    param([string] $DriverSource, [string] $Destination)
-    $includeClasses = @('hdc', 'scsiadapter', 'system', 'usb', 'usbdevice', 'hidclass', 'keyboard', 'mouse', 'net', 'extension')
-    $excludeClasses = @('display', 'media', 'camera', 'bluetooth', 'sensor', 'softwarecomponent', 'printer', 'monitor', 'firmware')
-    $sourceRoot = (Get-Item -LiteralPath $DriverSource).FullName
-    $null = New-Item -ItemType Directory -Path $Destination -Force
-    $copied = 0
-    foreach ($inf in Get-ChildItem -LiteralPath $DriverSource -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue) {
-        $class = (Read-InfMeta -InfPath $inf.FullName).Class
-        if ([string]::IsNullOrWhiteSpace($class)) { continue }
-        if ($excludeClasses -contains $class) { continue }
-        if ($includeClasses -notcontains $class) { continue }
-        $rel = $inf.DirectoryName.Substring($sourceRoot.Length).TrimStart([char[]]@('\', '/'))
-        $targetDir = if ([string]::IsNullOrWhiteSpace($rel)) { $Destination } else { Join-Path $Destination $rel }
-        $null = New-Item -ItemType Directory -Path $targetDir -Force
-        Get-ChildItem -LiteralPath $inf.DirectoryName -Force -ErrorAction SilentlyContinue |
-            Copy-Item -Destination $targetDir -Recurse -Force -ErrorAction SilentlyContinue
-        $copied++
-    }
-    return $copied
 }
 
 function Invoke-DismAddDriver {

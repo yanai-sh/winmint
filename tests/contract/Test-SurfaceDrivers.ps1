@@ -18,5 +18,51 @@ if (Test-MicrosoftDownloadUri -Uri 'https://evil.example/payload.msi') {
     throw 'non-Microsoft host must be refused'
 }
 
+$bootClasses = Get-WinMintBootSetupCriticalClasses
+foreach ($acpi in @('system', 'extension')) {
+    if ($bootClasses -contains $acpi) {
+        throw "WinPE boot subset must not include Class=$acpi (Hyper-V ACPI 0xA5)"
+    }
+}
+foreach ($need in @('hdc', 'scsiadapter', 'usb')) {
+    if ($bootClasses -notcontains $need) {
+        throw "WinPE boot subset missing storage/USB class $need"
+    }
+}
+
+$fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) "winmint-surface-drivers-test-$([Guid]::NewGuid().ToString('n'))"
+try {
+    $usbDir = Join-Path $fixtureRoot 'usb'
+    $systemDir = Join-Path $fixtureRoot 'system'
+    $extensionDir = Join-Path $fixtureRoot 'extension'
+    $null = New-Item -ItemType Directory -Path $usbDir, $systemDir, $extensionDir -Force
+    @(
+        @{ Dir = $usbDir; Name = 'fixture-usb.inf'; Class = 'USB' }
+        @{ Dir = $systemDir; Name = 'fixture-system.inf'; Class = 'System' }
+        @{ Dir = $extensionDir; Name = 'fixture-extension.inf'; Class = 'Extension' }
+    ) | ForEach-Object {
+        Set-Content -LiteralPath (Join-Path $_.Dir $_.Name) -Value "[Version]`nClass=$($_.Class)"
+    }
+
+    $dest = Join-Path $fixtureRoot 'out'
+    $copied = Copy-SetupCriticalDriverSubset -DriverSource $fixtureRoot -Destination $dest
+    if ($copied -ne 1) {
+        throw "Copy-SetupCriticalDriverSubset expected 1 copied INF, got $copied"
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $dest 'usb\fixture-usb.inf'))) {
+        throw 'Copy-SetupCriticalDriverSubset must copy usb fixture INF'
+    }
+    foreach ($skip in @('system', 'extension')) {
+        $skipped = Get-ChildItem -LiteralPath $dest -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match [regex]::Escape([IO.Path]::DirectorySeparatorChar + $skip + [IO.Path]::DirectorySeparatorChar) }
+        if (@($skipped).Count -gt 0) {
+            throw "Copy-SetupCriticalDriverSubset must skip Class=$skip fixture INF"
+        }
+    }
+}
+finally {
+    Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Output 'Test-SurfaceDrivers ok'
 exit 0
