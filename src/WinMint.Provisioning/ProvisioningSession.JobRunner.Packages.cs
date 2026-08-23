@@ -130,6 +130,8 @@ internal static partial class ProvisioningJobRunner
             env.ReportStatus(new SessionStatus(
                 $"jobs.{job.Id}.running",
                 $"{job.Id} online AppX safety net…"));
+            // FU survival = Deprovisioned hive marks (Learn: remove-provisioned-apps-during-update).
+            // Collect PFNs from live hits; if already gone offline, still stamp catalog→PFN.
             HashSet<string> families = new(StringComparer.OrdinalIgnoreCase);
             foreach (string catalogId in ids)
             {
@@ -138,9 +140,11 @@ internal static partial class ProvisioningJobRunner
                     continue;
                 }
 
+                bool touched = false;
                 foreach (AppxPackageInfo registered in env.Appx.FindRegisteredByCatalogId(catalogId))
                 {
                     await env.Appx.RemovePackageAsync(registered.PackageFullName, ct).ConfigureAwait(false);
+                    touched = true;
                     if (!string.IsNullOrWhiteSpace(registered.PackageFamilyName))
                     {
                         families.Add(registered.PackageFamilyName);
@@ -151,18 +155,29 @@ internal static partial class ProvisioningJobRunner
                 {
                     await env.Appx.DeprovisionPackageFamilyAsync(provisioned.PackageFamilyName, ct)
                         .ConfigureAwait(false);
+                    touched = true;
                     if (!string.IsNullOrWhiteSpace(provisioned.PackageFamilyName))
                     {
                         families.Add(provisioned.PackageFamilyName);
                     }
                 }
 
-                env.ReportStatus(new SessionStatus(
-                    $"removed.appx.online.{catalogId}",
-                    $"Removed online AppX catalog id '{catalogId}'."));
+                // Vacuous "already absent" must not look like an online remove (Smoke assert).
+                if (touched)
+                {
+                    env.ReportStatus(new SessionStatus(
+                        $"removed.appx.online.{catalogId}",
+                        $"Removed online AppX catalog id '{catalogId}'."));
+                }
+
+                // Always ensure FU-survival mark for this catalog id (Learn manual Deprovisioned keys).
+                string stampPfn = families.FirstOrDefault(pfn =>
+                    pfn.StartsWith(catalogId + "_", StringComparison.OrdinalIgnoreCase))
+                    ?? AppxCatalogFamilyNames.Resolve(catalogId);
+                families.Add(stampPfn);
             }
 
-            foreach (string pfn in families)
+            foreach (string pfn in families.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
             {
                 env.Appx.EnsureDeprovisionedMark(pfn);
                 env.ReportStatus(new SessionStatus(

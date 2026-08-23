@@ -16,7 +16,7 @@ Unknown catalog id ⇒ Plan fail-closed. Absent/empty ⇒ no removes. Host/Wizar
 
 **Offline (ImageServicing):** primary remove via DISM `/Image` (AppX / caps / features). Listed-but-absent ⇒ ok + digest. Kernels param-only.
 
-**FirstLogon (ProvisioningSession):** optional `appx.safetyNet` when AppX remove-list non-empty — PackageManager remove; deprovision only if still provisioned; **verify/stamp** `AppxAllUserStore\Deprovisioned\<PFN>` when missing (same FU-survival mark as offline). No guest pwsh; no UI Automation.
+**FirstLogon (ProvisioningSession):** optional `appx.safetyNet` when AppX remove-list non-empty — PackageManager remove when still registered; API-deprovision when still provisioned (admin; fail-open on access denied); **always** verify/stamp `AppxAllUserStore\Deprovisioned\<PFN>` for each catalog id (Learn FU guidance — manual keys when offline remove left no mark). Emit `removed.appx.online.*` only when a live remove/deprovision ran; always emit `deprovisioned.appx.*` after Ensure. No guest pwsh; no UI Automation.
 
 **FU survival:** durable **HKLM** product policies (CloudContent / Store AutoDownload / Widgets / Edge / …) plus **Deprovisioned** marks — not live re-assert, not WU deferral, not HKCU CDM as primary ([ADR-007](../decisions/ADR-007-cdm-not-primary.md), [ADR-009](../decisions/ADR-009-product-constant-policies.md)).
 

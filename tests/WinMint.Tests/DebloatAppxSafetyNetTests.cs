@@ -87,6 +87,50 @@ public class DebloatAppxSafetyNetTests
     }
 
     [Fact]
+    public async Task Shell_appx_safetyNet_stamps_deprovisioned_when_already_absent()
+    {
+        // Offline DISM already removed packages: live finds empty. Must still stamp
+        // Deprovisioned hive (Learn FU guidance) and must NOT emit vacuous removed.appx.online.*.
+        RecordingAppx appx = new();
+        RecordingSplashPresenter splash = new();
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(
+                jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
+                removeProvisionedAppx: ["Microsoft.BingNews", "Microsoft.BingWeather"]),
+            Env(new FakeGuestMachine { Appx = appx }, evidence, splash: splash),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Empty(appx.RemovedFullNames);
+        Assert.Empty(appx.DeprovisionedFamilyNames);
+        Assert.Equal(
+            ["Microsoft.BingNews_8wekyb3d8bbwe", "Microsoft.BingWeather_8wekyb3d8bbwe"],
+            [.. appx.EnsuredDeprovisionedMarks.OrderBy(s => s, StringComparer.Ordinal)]);
+        Assert.DoesNotContain(
+            splash.Events,
+            e => e.StartsWith("Status:removed.appx.online.", StringComparison.Ordinal));
+        Assert.Contains("Status:deprovisioned.appx.Microsoft.BingNews_8wekyb3d8bbwe", splash.Events);
+        Assert.Contains("Status:deprovisioned.appx.Microsoft.BingWeather_8wekyb3d8bbwe", splash.Events);
+        Assert.Contains("deprovisioned.appx.Microsoft.BingNews_8wekyb3d8bbwe", evidence.Documents[^1].Phases);
+        Assert.DoesNotContain(
+            evidence.Documents[^1].Phases,
+            p => p.StartsWith("removed.appx.online.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AppxCatalogFamilyNames_resolves_microsoft_store_publisher()
+    {
+        Assert.Equal(
+            "Microsoft.BingNews_8wekyb3d8bbwe",
+            AppxCatalogFamilyNames.Resolve("Microsoft.BingNews"));
+        Assert.Equal(
+            "Clipchamp.Clipchamp_yxz26nhyzhsrt",
+            AppxCatalogFamilyNames.Resolve("Clipchamp.Clipchamp"));
+    }
+
+    [Fact]
     public void AppxDeprovisionedMarks_path_is_under_appx_all_user_store()
     {
         Assert.Contains(
