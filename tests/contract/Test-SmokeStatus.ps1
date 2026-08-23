@@ -51,6 +51,18 @@ if ($watch -notmatch 'verdict') {
 if ($watch -notmatch 'Format-WinMintHostWatch') {
     throw 'Watch-SmokeHost must render via Format-WinMintHostWatch'
 }
+$spawnAt = $smoke.IndexOf('Watch-SmokeHost.ps1')
+if ($spawnAt -lt 0) { throw 'Invoke-Smoke must spawn Watch-SmokeHost' }
+$spawn = $smoke.Substring($spawnAt, [Math]::Min(400, $smoke.Length - $spawnAt))
+if ($spawn -notmatch 'PriorRunId') {
+    throw 'spawned watcher must receive leftover or empty -PriorRunId (parent already stamped)'
+}
+if ($spawn -match '\$runId') {
+    throw 'spawned watcher must not receive this run''s already-written runId as PriorRunId'
+}
+if ($watch -notmatch 'PSBoundParameters' -or $watch -notmatch 'ContainsKey') {
+    throw 'Watch-SmokeHost must not treat the post-stamp file as PriorRunId when the parent bound leftover/empty'
+}
 
 function Assert-Eq($Actual, $Expected, [string] $Message) {
     if ($Actual -cne $Expected) { throw "$Message (got '$Actual', expected '$Expected')" }

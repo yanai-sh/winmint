@@ -6,7 +6,11 @@
 #>
 param(
     [Parameter(Mandatory)]
-    [string] $Work
+    [string] $Work,
+
+    # Invoke-Smoke binds leftover or empty after it already stamped this run.
+    # Unbound = standalone watch: leftover file id is prior.
+    [string] $PriorRunId
 )
 
 Set-StrictMode -Version Latest
@@ -20,12 +24,14 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 
 $apply = Join-Path $Work 'apply-status.txt'
 $status = Join-Path $Work 'smoke-status.json'
-$priorRunId = ''
-if (Test-Path -LiteralPath $status -PathType Leaf) {
-    try {
-        $priorRunId = [string]((Get-Content -LiteralPath $status -Raw -Encoding utf8 | ConvertFrom-Json).runId)
+if (-not $PSBoundParameters.ContainsKey('PriorRunId')) {
+    $PriorRunId = ''
+    if (Test-Path -LiteralPath $status -PathType Leaf) {
+        try {
+            $PriorRunId = [string]((Get-Content -LiteralPath $status -Raw -Encoding utf8 | ConvertFrom-Json).runId)
+        }
+        catch { $PriorRunId = '' }
     }
-    catch { $priorRunId = '' }
 }
 
 $doneTicks = 0
@@ -63,7 +69,7 @@ while ($true) {
         $statusRunId = if ($doc.PSObject.Properties.Name -contains 'runId') { [string]$doc.runId } else { '' }
         $phase = [string]$doc.phase
         $verdict = Get-SmokeWatchVerdict -Phase $phase -VmState $vmState `
-            -VhdFileSizeMB $vhdMb -StatusAgeSeconds $age -StatusRunId $statusRunId -PriorRunId $priorRunId
+            -VhdFileSizeMB $vhdMb -StatusAgeSeconds $age -StatusRunId $statusRunId -PriorRunId $PriorRunId
         $heartbeat = if ($doc.PSObject.Properties.Name -contains 'heartbeat') { [string]$doc.heartbeat } else { '' }
         $stallLeft = if ($doc.PSObject.Properties.Name -contains 'stallMinutesLeft') { [int]$doc.stallMinutesLeft } else { 0 }
         $wallLeft = if ($doc.PSObject.Properties.Name -contains 'wallMinutesLeft') { [int]$doc.wallMinutesLeft } else { 0 }

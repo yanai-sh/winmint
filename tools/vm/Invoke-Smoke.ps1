@@ -118,8 +118,8 @@ New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 
 $workFull = if ([IO.Path]::IsPathRooted($Work)) { $Work } else { Join-Path $repoRoot $Work }
 
-# New run identity, stamped before the watcher spawns: a stale terminal status
-# from a prior run must never read as this run's outcome (watchers key on runId).
+# New run identity, stamped before the watcher spawns. Pass leftover/empty
+# -PriorRunId: — the post-stamp file is this run, not prior.
 Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
     -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
     -LastHostLine 'Smoke run starting' -OutputIso $null -RunId $runId
@@ -128,7 +128,8 @@ $pwshExe = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
 Start-Process -FilePath $pwshExe -WorkingDirectory $repoRoot -ArgumentList @(
     '-NoProfile',
     '-File', (Join-Path $PSScriptRoot 'Watch-SmokeHost.ps1'),
-    '-Work', $workFull
+    '-Work', $workFull,
+    '-PriorRunId:'
 ) | Out-Null
 
 $applyEvidence = Join-Path $Work 'evidence.json'

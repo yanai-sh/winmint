@@ -41,6 +41,11 @@ Assert-True ($smoke -match 'Write-WinMintHostPhase') 'Smoke host lines must use 
 Assert-True ($smoke -match 'Write-WinMintHostProgress') 'Smoke host lines must use helper progress'
 Assert-True ($smoke -match 'Write-WinMintHostProgress -Activity wait -Status') 'wait phase uses helper without percent'
 Assert-True ($smoke -notmatch 'PercentComplete') 'Smoke wait must not invent a fake percent'
+$spawnAt = $smoke.IndexOf('Watch-SmokeHost.ps1')
+Assert-True ($spawnAt -ge 0) 'Invoke-Smoke must spawn Watch-SmokeHost'
+$spawn = $smoke.Substring($spawnAt, [Math]::Min(400, $smoke.Length - $spawnAt))
+Assert-True ($spawn -match 'PriorRunId') 'spawned watcher must receive leftover or empty PriorRunId'
+Assert-True ($spawn -notmatch '\$runId') 'spawned watcher must not receive this run''s already-written runId as PriorRunId'
 
 $old = $PSStyle.OutputRendering
 try {
