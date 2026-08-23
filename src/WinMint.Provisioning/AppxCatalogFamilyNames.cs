@@ -15,6 +15,7 @@ internal static class AppxCatalogFamilyNames
     {
         // Clipchamp uses a non-Store publisher id on current Win11 media.
         ["Clipchamp.Clipchamp"] = "Clipchamp.Clipchamp_yxz26nhyzhsrt",
+        ["5319275A.WhatsAppDesktop"] = "5319275A.WhatsAppDesktop_cv1g1gvanyjgm",
     };
 
     /// <summary>Resolve PFN for a Profile catalog id when live inventory has no hit.</summary>

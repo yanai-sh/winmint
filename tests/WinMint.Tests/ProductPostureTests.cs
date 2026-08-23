@@ -66,6 +66,27 @@ public class ProductPostureTests
     }
 
     [Fact]
+    public void UnionAppx_includes_v1_default_groups_and_whatsapp_and_drops_clock()
+    {
+        IReadOnlyList<string> merged = ProductPosture.UnionAppx(["Microsoft.WindowsAlarms", "Microsoft.BingNews"]);
+
+        Assert.DoesNotContain("Microsoft.WindowsAlarms", merged);
+        Assert.Contains("Microsoft.BingNews", merged);
+        Assert.Contains("Clipchamp.Clipchamp", merged);
+        Assert.Contains("Microsoft.OutlookForWindows", merged);
+        Assert.Contains("MicrosoftWindows.Client.WebExperience", merged);
+        Assert.Contains("Microsoft.WindowsCalculator", merged);
+        Assert.Contains("MSTeams", merged);
+        Assert.Contains("5319275A.WhatsAppDesktop", merged);
+        Assert.Contains("LinkedInforWindows", merged);
+        Assert.Contains("SpotifyAB.SpotifyMusic", merged);
+        Assert.Contains("4DF9E0F8.Netflix", merged);
+        Assert.Contains("AD2F1837.HPWelcome", merged);
+        Assert.DoesNotContain("Microsoft.WindowsStore", merged);
+        Assert.DoesNotContain("Microsoft.WindowsCamera", merged);
+    }
+
+    [Fact]
     public void UnionAppx_deduplicates_case_insensitively()
     {
         IReadOnlyList<string> merged = ProductPosture.UnionAppx(

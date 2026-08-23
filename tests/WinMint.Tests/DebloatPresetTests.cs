@@ -103,9 +103,17 @@ public class DebloatPresetTests
         Assert.True(result.IsOk);
         Assert.DoesNotContain("Microsoft.GamingApp", result.Value.RemoveProvisionedAppx);
         Assert.DoesNotContain("Microsoft.Copilot", result.Value.RemoveProvisionedAppx);
-        Assert.Equal(
-            ProductPosture.AppxIds,
-            [.. ProductPosture.UnionAppx(result.Value.RemoveProvisionedAppx).Where(id => ProductPosture.AppxIds.Contains(id, StringComparer.OrdinalIgnoreCase))]);
+        IReadOnlyList<string> union = ProductPosture.UnionAppx(result.Value.RemoveProvisionedAppx);
+        foreach (string id in ProductPosture.AppxIds)
+        {
+            if (ProductPosture.PreserveAppxSet.Contains(id))
+            {
+                Assert.DoesNotContain(id, union);
+                continue;
+            }
+
+            Assert.Contains(id, union);
+        }
     }
 
     [Fact]
@@ -254,8 +262,18 @@ public class DebloatPresetTests
         Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
         Assert.Equal("yanai", parsed.Value.Account.Username);
         Assert.Equal("lab-only-sl7", parsed.Value.Account.Password);
+        Assert.DoesNotContain("Microsoft.WindowsAlarms", parsed.Value.RemoveProvisionedAppx);
+        Assert.DoesNotContain("Microsoft.YourPhone", parsed.Value.RemoveProvisionedAppx);
         Assert.Equal(
-            ProductPosture.UnionAppx(expanded.Value.RemoveProvisionedAppx),
+            [
+                .. expanded.Value.RemoveProvisionedAppx.Where(id =>
+                    id is not "Microsoft.WindowsAlarms" and not "Microsoft.YourPhone"),
+                "Microsoft.Copilot",
+                "Microsoft.GamingApp",
+                "Microsoft.Xbox.TCUI",
+                "Microsoft.XboxGamingOverlay",
+                "Microsoft.XboxSpeechToTextOverlay",
+            ],
             parsed.Value.RemoveProvisionedAppx);
         Assert.Equal(expanded.Value.RemoveCapabilities, parsed.Value.RemoveCapabilities);
         Assert.Equal(expanded.Value.DisableOptionalFeatures, parsed.Value.DisableOptionalFeatures);

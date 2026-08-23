@@ -34,14 +34,14 @@ public class HostCompositionTests
 
             Assert.True(result.IsOk, result.IsOk ? null : result.Error.Message);
             HostComposition composition = result.Value;
-            appx.Add("Microsoft.ZuneMusic");
+            appx.Add("Microsoft.YourPhone");
             authoredSelections.Add("Not frozen");
             byte[] first = composition.GetProfileUtf8();
             first.AsSpan().Fill((byte)'x');
             byte[] second = composition.GetProfileUtf8();
 
             Assert.Contains("Microsoft.GetHelp", composition.Review.RemoveProvisionedAppx);
-            Assert.DoesNotContain("Microsoft.ZuneMusic", composition.Review.RemoveProvisionedAppx);
+            Assert.DoesNotContain("Microsoft.YourPhone", composition.Review.RemoveProvisionedAppx);
             Assert.NotEqual(first, second);
             Assert.Null(composition.Review.AuthoredProfile.Account.Password);
             Assert.DoesNotContain("lab-only", composition.Review.AuthoredProfileJson, StringComparison.Ordinal);
@@ -258,7 +258,7 @@ public class HostCompositionTests
                 cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(composed.IsOk);
 
-            File.WriteAllBytes(profilePath, BuildPlan.SerializeProfile(Profile(["Microsoft.ZuneMusic"])));
+            File.WriteAllBytes(profilePath, BuildPlan.SerializeProfile(Profile(["Microsoft.YourPhone"])));
             ImageServicingTestFakes.RecordingElevatedPlanRunner runner = new();
             Result<ImageEvidence, Failure> applied = await HostCompile.ApplyAsync(
                 composed.Value,
@@ -267,7 +267,7 @@ public class HostCompositionTests
 
             Assert.True(applied.IsOk, applied.IsOk ? null : applied.Error.Message);
             Assert.Contains("Microsoft.GetHelp", composed.Value.Review.RemoveProvisionedAppx);
-            Assert.DoesNotContain("Microsoft.ZuneMusic", composed.Value.Review.RemoveProvisionedAppx);
+            Assert.DoesNotContain("Microsoft.YourPhone", composed.Value.Review.RemoveProvisionedAppx);
         }
         finally
         {
