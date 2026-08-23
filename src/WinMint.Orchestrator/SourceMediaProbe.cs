@@ -83,6 +83,34 @@ public sealed record WimIndexInfo(
             return $"{Index} — {Name}{suffix}";
         }
     }
+
+    /// <summary>
+    /// OS family (26100) from DISM <c>Version</c> <c>10.0.family[.ubr]</c>.
+    /// <c>ServicePack Build</c> is the UBR (8037 after quality) — not family, not image identity.
+    /// Fallback: SP Build only when Version is missing and the value looks like a family (≥ 10000).
+    /// </summary>
+    public static bool TryParseFamily(string? version, string? servicePackBuild, out int family)
+    {
+        family = 0;
+        if (!string.IsNullOrWhiteSpace(version))
+        {
+            string[] parts = version.Trim().Split('.');
+            if (parts.Length >= 3 && int.TryParse(parts[2], out int fromVersion) && fromVersion > 0)
+            {
+                family = fromVersion;
+                return true;
+            }
+        }
+
+        // RTM Get-WimInfo often prints ServicePack Build equal to the family (26100).
+        if (int.TryParse(servicePackBuild, out int sp) && sp >= 10000)
+        {
+            family = sp;
+            return true;
+        }
+
+        return false;
+    }
 }
 
 public sealed record SelectedWim(

@@ -230,6 +230,9 @@ public static partial class ProvisioningSession
             // Keep Supervisor as Shell — do not unlock.
             env.Guest.Checkpoints.WriteCheckpoint(new CheckpointState($"jobs:{nextJobIndex}"));
             env.Guest.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
+            // Unattend LogonCount=5 is a hard autologon budget; re-arm so NeedsReboot
+            // jobs cannot land on a password prompt before the next Shell tenure.
+            env.Guest.Winlogon.ReArmAutoLogonCount();
             Note(env, phases, jobs.Status);
             EvidenceSnapshot rebootSnap = env.Evidence.Write(
                 new ProvisioningEvidenceFile(

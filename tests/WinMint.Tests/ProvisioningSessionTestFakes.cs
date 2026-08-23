@@ -346,7 +346,13 @@ internal static class ProvisioningSessionTestFakes
 
         public string? GetDefaultUserName() => null;
 
-        public bool GetAutoAdminLogon() => false;
+        public bool GetAutoAdminLogon() => AutoAdminLogon;
+
+        public bool AutoAdminLogon { get; private set; }
+
+        public int? AutoLogonCount { get; private set; }
+
+        public int ReArmCalls { get; private set; }
 
         public string? GetShell() => Shell;
 
@@ -357,6 +363,13 @@ internal static class ProvisioningSessionTestFakes
         }
 
         public void GrantShellUnlockAccess(string username) { }
+
+        public void ReArmAutoLogonCount(int logonCount = 5)
+        {
+            AutoAdminLogon = true;
+            AutoLogonCount = logonCount;
+            ReArmCalls++;
+        }
     }
 
     internal sealed class MatchingRegion : IRegionSnapshot
@@ -388,6 +401,8 @@ internal static class ProvisioningSessionTestFakes
         public void SetShell(string path) => Shell = path;
 
         public void GrantShellUnlockAccess(string username) { }
+
+        public void ReArmAutoLogonCount(int logonCount = 5) { }
     }
 
     internal sealed class NoopProcesses : IProcessHost
@@ -472,6 +487,11 @@ internal static class ProvisioningSessionTestFakes
         }
 
         public void GrantShellUnlockAccess(string username) { }
+
+        public void ReArmAutoLogonCount(int logonCount = 5)
+        {
+            AutoAdminLogon = true;
+        }
     }
 
     internal sealed class RecordingWipeSecrets

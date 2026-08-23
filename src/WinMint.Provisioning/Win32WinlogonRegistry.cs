@@ -58,6 +58,14 @@ public sealed class Win32WinlogonRegistry : IWinlogonRegistry
         key.SetValue("Shell", path, RegistryValueKind.String);
     }
 
+    public void ReArmAutoLogonCount(int logonCount = 5)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(logonCount);
+        using RegistryKey key = OpenWritable();
+        key.SetValue("AutoAdminLogon", "1", RegistryValueKind.String);
+        key.SetValue("AutoLogonCount", logonCount, RegistryValueKind.DWord);
+    }
+
     /// <summary>
     /// Custom Shell runs at medium IL without HKLM admin write. Grant SetValue on Winlogon
     /// so Unlock (Shell → explorer.exe) can succeed.

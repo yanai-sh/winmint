@@ -241,13 +241,15 @@ public static class HostCompile
                     $"Selected WIM architecture '{media.Selected.Architecture}' does not match '{options.ImageArchitecture}'."));
         }
 
-        int? selectedBuild = int.TryParse(media.Selected.Build, out int parsedBuild) ? parsedBuild : null;
+        int? selectedBuild = WimIndexInfo.TryParseFamily(media.Selected.Version, media.Selected.Build, out int family)
+            ? family
+            : null;
         if (options.WindowsBuild is int expectedBuild && selectedBuild != expectedBuild)
         {
             return Result.Fail<HostComposition, HostComposeError>(
                 new HostComposeError(
                     "hostCompose.windowsBuild.mismatch",
-                    $"Selected WIM build '{media.Selected.Build}' does not match '{expectedBuild}'."));
+                    $"Selected WIM Version family '{selectedBuild}' does not match '{expectedBuild}'."));
         }
 
         Profile ownedProfile = SnapshotProfile(profile);

@@ -32,8 +32,28 @@ public class CheckpointRebootTests
         Assert.Equal("jobs:1", checkpoints.LastWritten.Phase);
         Assert.Equal("Reboot", evidence.Documents[0].Outcome);
         Assert.Contains("jobs.reboot", evidence.Documents[0].Phases);
+        Assert.Equal(1, winlogon.ReArmCalls);
+        Assert.Equal(5, winlogon.AutoLogonCount);
+        Assert.True(winlogon.AutoAdminLogon);
         Assert.DoesNotContain(splash.Events, e => e == "Status:appearance.applied");
         Assert.DoesNotContain(splash.Events, e => e == "Status:jobs.ok");
+    }
+
+    [Fact]
+    public async Task Shell_complete_does_not_rearm_autologon()
+    {
+        RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
+        RecordingCheckpoints checkpoints = new();
+        RecordingSplashPresenter splash = new();
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle([new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub)]),
+            Env(winlogon, checkpoints, splash, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal(0, winlogon.ReArmCalls);
     }
 
     [Fact]
@@ -82,6 +102,7 @@ public class CheckpointRebootTests
         Assert.Contains("checkpoint.resume", evidence.Documents[^1].Phases);
         Assert.Contains("settle.resumeSkip", evidence.Documents[^1].Phases);
         Assert.Equal("Complete", evidence.Documents[^1].Outcome);
+        Assert.Equal(1, winlogon.ReArmCalls);
     }
 
     [Fact]

@@ -92,6 +92,26 @@ public class SourceMediaProbeTests
     }
 
     [Theory]
+    [InlineData("10.0.26100.1", "8037", 26100)]
+    [InlineData("10.0.26100.8037", "8037", 26100)]
+    [InlineData("10.0.26100", null, 26100)]
+    [InlineData(null, "26100", 26100)]
+    public void TryParseFamily_reads_os_family_not_ubr(string? version, string? servicePackBuild, int expected)
+    {
+        Assert.True(WimIndexInfo.TryParseFamily(version, servicePackBuild, out int family));
+        Assert.Equal(expected, family);
+    }
+
+    [Theory]
+    [InlineData(null, "8037")]
+    [InlineData("", "1")]
+    [InlineData("10.0", "8037")]
+    public void TryParseFamily_rejects_ubr_alone(string? version, string? servicePackBuild)
+    {
+        Assert.False(WimIndexInfo.TryParseFamily(version, servicePackBuild, out _));
+    }
+
+    [Theory]
     [InlineData(1, false, 1, 1)]
     [InlineData(3, false, 1, 1)]
     [InlineData(3, true, 1, 3)]

@@ -183,6 +183,13 @@ public interface IWinlogonRegistry
     void SetShell(string path);
 
     void GrantShellUnlockAccess(string username);
+
+    /// <summary>
+    /// Reset Winlogon <c>AutoLogonCount</c> (and keep <c>AutoAdminLogon=1</c>) so a
+    /// mid-tenure reboot does not consume the unattend LogonCount budget.
+    /// Does not touch the stored password.
+    /// </summary>
+    void ReArmAutoLogonCount(int logonCount = 5);
 }
 
 /// <summary>
