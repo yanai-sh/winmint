@@ -14,6 +14,51 @@ public static class Win32WorkstationQuiet
 {
     public const string DarkThemePath = @"C:\Windows\Resources\Themes\dark.theme";
 
+    public const int SearchboxTaskbarMode = 0;
+    public const int HideRecycleBin = 1;
+
+    private const string RecycleBinClsid = "{645FF040-5081-101B-9F08-00AA002F954E}";
+
+    private static readonly string[] HideDesktopIconViews = ["NewStartPanel", "ClassicStartMenu"];
+
+    public static readonly IReadOnlyDictionary<string, int> ExplorerAdvancedDwords =
+        new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["HideFileExt"] = 0,
+            ["Hidden"] = 1,
+            ["FullPathAddress"] = 1,
+            ["LaunchTo"] = 1,
+            ["ShowFrequent"] = 0,
+            ["NavPaneShowVersionControl"] = 1,
+            ["ShowSyncProviderNotifications"] = 0,
+            ["TaskbarDa"] = 0,
+            ["TaskbarEndTask"] = 1,
+            ["Start_IrisRecommendations"] = 0,
+            ["ShowTaskViewButton"] = 0,
+            ["TaskbarMn"] = 0,
+            ["ShowCopilotButton"] = 0,
+            ["Start_AccountNotifications"] = 0,
+        };
+
+    // v1 Set-WinMintFirstLogonQuietUxDefaults ContentDeliveryManager names, all 0.
+    public static readonly IReadOnlyList<string> ContentDeliveryManagerDwords =
+    [
+        "SubscribedContent-310093Enabled",
+        "SubscribedContent-338388Enabled",
+        "SubscribedContent-338389Enabled",
+        "SubscribedContent-338393Enabled",
+        "SubscribedContent-353694Enabled",
+        "SubscribedContent-353696Enabled",
+        "SubscribedContent-353698Enabled",
+        "SoftLandingEnabled",
+        "SystemPaneSuggestionsEnabled",
+        "SilentInstalledAppsEnabled",
+        "PreInstalledAppsEnabled",
+        "OemPreInstalledAppsEnabled",
+        "RotatingLockScreenEnabled",
+        "RotatingLockScreenOverlayEnabled",
+    ];
+
     public static void Apply()
     {
         try
@@ -84,16 +129,13 @@ public static class Win32WorkstationQuiet
         using (RegistryKey? advanced = Registry.CurrentUser.CreateSubKey(
                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"))
         {
-            advanced?.SetValue("HideFileExt", 0, RegistryValueKind.DWord);
-            advanced?.SetValue("Hidden", 1, RegistryValueKind.DWord);
-            advanced?.SetValue("FullPathAddress", 1, RegistryValueKind.DWord);
-            advanced?.SetValue("LaunchTo", 1, RegistryValueKind.DWord);
-            advanced?.SetValue("ShowFrequent", 0, RegistryValueKind.DWord);
-            advanced?.SetValue("NavPaneShowVersionControl", 1, RegistryValueKind.DWord);
-            advanced?.SetValue("ShowSyncProviderNotifications", 0, RegistryValueKind.DWord);
-            advanced?.SetValue("TaskbarDa", 0, RegistryValueKind.DWord);
-            advanced?.SetValue("TaskbarEndTask", 1, RegistryValueKind.DWord);
-            advanced?.SetValue("Start_IrisRecommendations", 0, RegistryValueKind.DWord);
+            if (advanced is not null)
+            {
+                foreach ((string name, int value) in ExplorerAdvancedDwords)
+                {
+                    advanced.SetValue(name, value, RegistryValueKind.DWord);
+                }
+            }
         }
 
         using (RegistryKey? explorer = Registry.CurrentUser.CreateSubKey(
@@ -101,6 +143,31 @@ public static class Win32WorkstationQuiet
         {
             explorer?.SetValue("ShowRecent", 0, RegistryValueKind.DWord);
             explorer?.SetValue("ShowCloudFilesInQuickAccess", 0, RegistryValueKind.DWord);
+        }
+
+        using (RegistryKey? search = Registry.CurrentUser.CreateSubKey(
+                   @"SOFTWARE\Microsoft\Windows\CurrentVersion\Search"))
+        {
+            search?.SetValue("SearchboxTaskbarMode", SearchboxTaskbarMode, RegistryValueKind.DWord);
+        }
+
+        foreach (string view in HideDesktopIconViews)
+        {
+            using RegistryKey? hide = Registry.CurrentUser.CreateSubKey(
+                $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\{view}");
+            hide?.SetValue(RecycleBinClsid, HideRecycleBin, RegistryValueKind.DWord);
+        }
+
+        using (RegistryKey? cdm = Registry.CurrentUser.CreateSubKey(
+                   @"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"))
+        {
+            if (cdm is not null)
+            {
+                foreach (string name in ContentDeliveryManagerDwords)
+                {
+                    cdm.SetValue(name, 0, RegistryValueKind.DWord);
+                }
+            }
         }
 
         using (RegistryKey? searchPolicy = Registry.CurrentUser.CreateSubKey(
