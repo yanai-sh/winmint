@@ -83,6 +83,12 @@ publish-provisioning:
 exclude-scratch ISO="":
     $scratch = Join-Path '{{justfile_directory()}}' '.scratch'; $servicing = Join-Path $env:ProgramData 'WinMint\Servicing'; New-Item -ItemType Directory -Force -Path $scratch, $servicing | Out-Null; $paths = @($scratch, $servicing); if ('{{ISO}}' -ne '') { $paths += '{{ISO}}' }; foreach ($p in $paths) { Add-MpPreference -ExclusionPath $p; Write-Host "Excluded: $p" }
 
+# Admin: discard a leftover install/boot mount after a killed Apply (0xc1420117 / Error 50).
+# Does not start Apply. If this still fails: close Explorer on that path, then reboot.
+# Recipe body is already pwsh -Command (windows-shell) — do not nest another -Command or $vars vanish.
+discard-stale-mount:
+    . '{{justfile_directory()}}/servicing/Resolve-WinMintMount.ps1'; $held = Enter-WinMintImageServicingLock; try { Resolve-WinMintStaleMount | ConvertTo-Json -Compress } finally { Exit-WinMintImageServicingLock $held }
+
 # Artifact hygiene under .scratch (or root=…). Also runs after smoke / host-apply / Cli build with -SkipIfBusy.
 # Nuclear: just wipe-scratch
 clean-artifacts root=".scratch" keep="2" workdirs="1" days="14":

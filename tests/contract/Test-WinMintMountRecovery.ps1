@@ -62,21 +62,39 @@ try {
 
     $script:mounted = @()
     $script:discardCalls = [System.Collections.Generic.List[string]]::new()
+    $script:remountCalls = [System.Collections.Generic.List[string]]::new()
     $script:cleanupCount = 0
     $script:queryCount = 0
     $script:discardFail = $null
+    $script:discardFailCount = 0
+    $script:remountFailCount = 0
     $script:cleanupClears = $false
+    $script:orphanStops = 0
+    $script:settles = 0
 
     $commands = @{
         GetMountedImages = {
             $script:queryCount++
             @($script:mounted)
         }
+        Remount          = {
+            param($MountDir)
+            $script:remountCalls.Add([string]$MountDir)
+            if ($script:remountFailCount -gt 0) {
+                $script:remountFailCount--
+                throw 'DISM Remount-Image failed: 50'
+            }
+            foreach ($img in $script:mounted) {
+                if ([string]$img.MountDir -ceq [string]$MountDir) {
+                    $img.Status = 'Ok'
+                }
+            }
+        }
         UnmountDiscard   = {
             param($MountDir)
             $script:discardCalls.Add([string]$MountDir)
-            if ($script:discardFail -eq $MountDir) {
-                $script:discardFail = $null
+            if ($script:discardFail -eq $MountDir -and $script:discardFailCount -gt 0) {
+                $script:discardFailCount--
                 # Real Invoke-WinMintUnmountDiscard shape (exit code only).
                 throw 'DISM Unmount-Image /Discard failed: 50'
             }
@@ -87,6 +105,12 @@ try {
             if ($script:cleanupClears) {
                 $script:mounted = @()
             }
+        }
+        StopOrphanDismHost = {
+            $script:orphanStops++
+        }
+        Settle           = {
+            $script:settles++
         }
         TestProcessAlive = {
             param([int] $ProcessId)
@@ -140,27 +164,76 @@ try {
 
     # dead/missing owner plus owned mount discards and verifies
     $script:discardCalls.Clear()
+    $script:remountCalls.Clear()
     $script:mounted = @(New-MountedImage -MountDir $installMount -ImageFile (Join-Path $workDirectory 'media\sources\install.wim'))
     New-OwnerRecord -Kind 'install' -ProcessId 1 -MountDirectory $installMount | Out-Null
     $deadResult = Resolve-WinMintStaleMount @ctx
     Assert-True ($deadResult.recoveryAction -eq 'discard') "expected discard, got $($deadResult.recoveryAction)"
     Assert-True ($script:discardCalls.Count -eq 1 -and $script:discardCalls[0] -eq $installMount) 'dead owner did not discard owned mount'
+    Assert-True ($script:remountCalls.Count -eq 0) 'Ok dead-owner remounted'
     Assert-False (Test-Path -LiteralPath (Join-Path $ownerRoot 'install.json')) 'dead owner file remained after verified discard'
     Assert-True ($script:mounted.Count -eq 0) 'discard did not verify mount gone'
 
     $script:discardCalls.Clear()
+    $script:remountCalls.Clear()
     $script:mounted = @(New-MountedImage -MountDir $bootMount -ImageFile (Join-Path $workDirectory 'media\sources\boot.wim'))
     $missingResult = Resolve-WinMintStaleMount @ctx
     Assert-True ($missingResult.recoveryAction -eq 'discard') "missing owner expected discard, got $($missingResult.recoveryAction)"
     Assert-True ($script:discardCalls.Contains($bootMount)) 'missing owner did not discard boot mount'
+    Assert-True ($script:remountCalls.Count -eq 0) 'Ok mount remounted'
+
+    # Invalid: Remount-Image then discard (Cleanup-Mountpoints will not drop remountable images)
+    $script:discardCalls.Clear()
+    $script:remountCalls.Clear()
+    $script:cleanupCount = 0
+    $script:mounted = @(New-MountedImage -MountDir $installMount -ImageFile (Join-Path $workDirectory 'media\sources\install.wim') -Status 'Invalid')
+    New-OwnerRecord -Kind 'install' -ProcessId 1 -MountDirectory $installMount | Out-Null
+    $invalidResult = Resolve-WinMintStaleMount @ctx
+    Assert-True ($invalidResult.recoveryAction -eq 'discard') "Invalid expected discard, got $($invalidResult.recoveryAction)"
+    Assert-True ($script:remountCalls.Count -eq 1 -and $script:remountCalls[0] -eq $installMount) 'Invalid did not remount'
+    Assert-True ($script:discardCalls.Count -eq 1) 'Invalid remount skipped discard'
+    Assert-True ($script:cleanupCount -eq 0) 'Invalid remount ran Cleanup-Mountpoints'
+    Assert-False (Test-Path -LiteralPath (Join-Path $ownerRoot 'install.json')) 'owner remained after Invalid remount discard'
+
+    # Needs Remount is the same remount-then-discard path (Cleanup-Mountpoints will not drop it)
+    $script:discardCalls.Clear()
+    $script:remountCalls.Clear()
+    $script:cleanupCount = 0
+    $script:mounted = @(New-MountedImage -MountDir $bootMount -ImageFile (Join-Path $workDirectory 'media\sources\boot.wim') -Status 'Needs Remount')
+    New-OwnerRecord -Kind 'boot' -ProcessId 1 -MountDirectory $bootMount | Out-Null
+    $needsRemount = Resolve-WinMintStaleMount @ctx
+    Assert-True ($needsRemount.recoveryAction -eq 'discard') "Needs Remount expected discard, got $($needsRemount.recoveryAction)"
+    Assert-True ($script:remountCalls.Count -eq 1 -and $script:remountCalls[0] -eq $bootMount) 'Needs Remount did not remount'
+    Assert-True ($script:discardCalls.Count -eq 1) 'Needs Remount remount skipped discard'
+    Assert-True ($script:cleanupCount -eq 0) 'Needs Remount remount ran Cleanup-Mountpoints'
+    Assert-False (Test-Path -LiteralPath (Join-Path $ownerRoot 'boot.json')) 'owner remained after Needs Remount discard'
+
+    # Invalid remount fails once; cleanup leaves the row; retry remount+discard succeeds
+    $script:discardCalls.Clear()
+    $script:remountCalls.Clear()
+    $script:cleanupCount = 0
+    $script:orphanStops = 0
+    $script:settles = 0
+    $script:cleanupClears = $false
+    $script:remountFailCount = 1
+    $script:mounted = @(New-MountedImage -MountDir $installMount -ImageFile (Join-Path $workDirectory 'media\sources\install.wim') -Status 'Invalid')
+    New-OwnerRecord -Kind 'install' -ProcessId 1 -MountDirectory $installMount | Out-Null
+    $invalidRetry = Resolve-WinMintStaleMount @ctx
+    Assert-True ($invalidRetry.recoveryAction -eq 'cleanup-wim') "Invalid retry expected cleanup-wim, got $($invalidRetry.recoveryAction)"
+    Assert-True ($script:remountCalls.Count -eq 2) "Invalid retry remounts=$($script:remountCalls.Count)"
+    Assert-True ($script:discardCalls.Count -eq 1) 'failed remount still discarded'
+    Assert-True ($script:cleanupCount -eq 1 -and $script:orphanStops -eq 1) 'Invalid remount-fail skipped cleanup'
 
     # discard failure (real DISM exit-code message) triggers Cleanup-Mountpoints + re-query;
-    # mount still listed after cleanup ⇒ fail closed
+    # mount still listed after cleanup and retry discard also fails ⇒ fail closed
     $script:discardCalls.Clear()
     $script:cleanupCount = 0
     $script:queryCount = 0
+    $script:orphanStops = 0
+    $script:settles = 0
     $script:cleanupClears = $false
     $script:discardFail = $installMount
+    $script:discardFailCount = 2
     $script:mounted = @(New-MountedImage -MountDir $installMount -ImageFile (Join-Path $workDirectory 'media\sources\install.wim'))
     New-OwnerRecord -Kind 'install' -ProcessId 1 -MountDirectory $installMount | Out-Null
     $cleanupThrew = $false
@@ -176,20 +249,41 @@ try {
     Assert-True $cleanupThrew 'stale discard did not fail recovery'
     Assert-True ($script:cleanupCount -eq 1) "Cleanup-Mountpoints count $($script:cleanupCount)"
     Assert-True ($script:queryCount -ge 2) "expected re-query after Cleanup-Mountpoints, queries=$($script:queryCount)"
-    Assert-True ($script:discardCalls.Count -eq 1) 'stale discard retried Unmount'
+    Assert-True ($script:discardCalls.Count -eq 2) 'stale discard did not retry Unmount after cleanup'
+    Assert-True ($script:orphanStops -eq 1 -and $script:settles -eq 1) 'retry skipped orphan DismHost stop'
     Assert-True (Test-Path -LiteralPath (Join-Path $ownerRoot 'install.json')) 'owner removed after failed cleanup'
+
+    # first discard fails, cleanup leaves the row, retry discard succeeds
+    $script:discardCalls.Clear()
+    $script:cleanupCount = 0
+    $script:orphanStops = 0
+    $script:settles = 0
+    $script:cleanupClears = $false
+    $script:discardFail = $installMount
+    $script:discardFailCount = 1
+    $script:mounted = @(New-MountedImage -MountDir $installMount -ImageFile (Join-Path $workDirectory 'media\sources\install.wim'))
+    New-OwnerRecord -Kind 'install' -ProcessId 1 -MountDirectory $installMount | Out-Null
+    $retried = Resolve-WinMintStaleMount @ctx
+    Assert-True ($retried.recoveryAction -eq 'cleanup-wim') "expected cleanup-wim after retry, got $($retried.recoveryAction)"
+    Assert-True ($script:discardCalls.Count -eq 2) 'retry path discarded twice'
+    Assert-True ($script:orphanStops -eq 1 -and $script:settles -eq 1) 'retry did not stop orphan DismHost'
+    Assert-False (Test-Path -LiteralPath (Join-Path $ownerRoot 'install.json')) 'owner remained after retry discard'
+    Assert-True ($script:mounted.Count -eq 0) 'retry discard did not verify mount gone'
 
     # same discard failure, but Cleanup-Mountpoints clears the mount ⇒ recoveryAction cleanup-wim
     $script:discardCalls.Clear()
     $script:cleanupCount = 0
+    $script:orphanStops = 0
     $script:cleanupClears = $true
     $script:discardFail = $installMount
+    $script:discardFailCount = 1
     $script:mounted = @(New-MountedImage -MountDir $installMount -ImageFile (Join-Path $workDirectory 'media\sources\install.wim'))
     New-OwnerRecord -Kind 'install' -ProcessId 1 -MountDirectory $installMount | Out-Null
     $cleaned = Resolve-WinMintStaleMount @ctx
     Assert-True ($cleaned.recoveryAction -eq 'cleanup-wim') "expected cleanup-wim, got $($cleaned.recoveryAction)"
     Assert-True ($script:cleanupCount -eq 1) 'successful cleanup did not run Cleanup-Mountpoints'
     Assert-True ($script:discardCalls.Count -eq 1) 'successful cleanup path discarded once'
+    Assert-True ($script:orphanStops -eq 0) 'cleanup-clears path stopped DismHost'
     Assert-False (Test-Path -LiteralPath (Join-Path $ownerRoot 'install.json')) 'owner remained after successful cleanup'
     Assert-True ($script:mounted.Count -eq 0) 'cleanup did not clear mount list'
 
@@ -243,6 +337,14 @@ try {
     $stageAt = $plan.IndexOf('Resolve-KernelScript -Opcode')
     Assert-True ($lockAt -ge 0 -and $resolveAt -ge 0 -and $stageAt -ge 0) 'elevated loop missing lock/recovery'
     Assert-True ($lockAt -lt $resolveAt -and $resolveAt -lt $stageAt) 'recovery is not before Source ISO / stage mutation'
+
+    $mountHelper = Get-Content -LiteralPath (Join-Path $repo 'servicing/Resolve-WinMintMount.ps1') -Raw
+    $stopAt = $mountHelper.IndexOf('function Stop-WinMintOrphanDismHost')
+    $stopEnd = $mountHelper.IndexOf('function ', $stopAt + 1)
+    Assert-True ($stopAt -ge 0 -and $stopEnd -gt $stopAt) 'Stop-WinMintOrphanDismHost missing'
+    $stopBlock = $mountHelper.Substring($stopAt, $stopEnd - $stopAt)
+    Assert-True ($stopBlock -match 'SupportsShouldProcess') 'Stop-WinMintOrphanDismHost must implement ShouldProcess'
+    Assert-True ($stopBlock -notmatch 'SuppressMessageAttribute') 'Stop-WinMintOrphanDismHost must not suppress ShouldProcess'
 
     $mountKernel = Get-Content -LiteralPath (Join-Path $repo 'servicing/Mount-InstallWim.ps1') -Raw
     $writeAt = $mountKernel.IndexOf('Write-WinMintMountOwner')

@@ -362,12 +362,13 @@ function Get-WinMintQualityPackageLeaf {
 }
 
 function Write-WinMintQualityPackageLeaf {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)] [string] $PackageDir,
         [Parameter(Mandatory)] [ValidateSet('boot', 'winre')] [string] $Kind,
         [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]] $Leaf
     )
+    if (-not $PSCmdlet.ShouldProcess($PackageDir, "Write $Kind package leaf list")) { return }
     New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
     $names = [System.Collections.Generic.List[string]]::new()
     foreach ($item in @($Leaf)) {
@@ -384,8 +385,8 @@ function Write-WinMintQualityPackageLeaf {
 
 # Pure install/boot/winre leaf order: SSU → checkpoints → LCU;
 # boot = install + optional Setup DU; winre = SSU + optional SafeOS DU.
-function New-WinMintQualityPackageOrder {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+# Resolve- (not New-): returns an in-memory order, does not create files.
+function Resolve-WinMintQualityPackageOrder {
     param(
         [Parameter(Mandatory)] [string] $SsuLeaf,
         [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]] $CheckpointLeaves,
@@ -434,7 +435,7 @@ function Invoke-WinMintQualityPackagesApply {
         [scriptblock] $AddPackage,
         [scriptblock] $GetPackages
     )
-    $order = New-WinMintQualityPackageOrder -SsuLeaf $SsuLeaf -CheckpointLeaves $CheckpointLeaves `
+    $order = Resolve-WinMintQualityPackageOrder -SsuLeaf $SsuLeaf -CheckpointLeaves $CheckpointLeaves `
         -LcuLeaf $LcuLeaf -SetupLeaf $SetupLeaf -SafeOsLeaf $SafeOsLeaf
 
     foreach ($leaf in @($order.Install)) {
@@ -681,11 +682,13 @@ function Resolve-WinMintCachedQualityFile {
 }
 
 function Move-WinMintInvalidQualityCacheEntry {
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)] [string] $EntryPath,
         [Parameter(Mandatory)] [string] $CacheRoot
     )
     if (-not (Test-Path -LiteralPath $EntryPath)) { return }
+    if (-not $PSCmdlet.ShouldProcess($EntryPath, 'Quarantine invalid quality-cache entry')) { return }
     $dir = $EntryPath
     if (Test-Path -LiteralPath $EntryPath -PathType Leaf) {
         $dir = Split-Path -Parent $EntryPath
@@ -704,7 +707,7 @@ function Move-WinMintInvalidQualityCacheEntry {
 }
 
 function Save-WinMintQualityCacheFile {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)] [string] $CacheRoot,
         [Parameter(Mandatory)] [string] $Kb,
@@ -718,6 +721,7 @@ function Save-WinMintQualityCacheFile {
     }
     $arch = $Architecture.ToLowerInvariant()
     $dir = Join-Path $CacheRoot "$($Kb.ToUpperInvariant())\$arch\$sha"
+    if (-not $PSCmdlet.ShouldProcess($dir, "Save quality-cache $leaf")) { return }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     $dest = Join-Path $dir $leaf
     if (-not (Test-Path -LiteralPath $dest)) {

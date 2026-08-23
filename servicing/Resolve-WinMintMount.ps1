@@ -61,8 +61,7 @@ function Exit-WinMintImageServicingLock {
     $Mutex.Dispose()
 }
 
-function Get-WinMintMountedImages {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', '')]
+function Get-WinMintMountedImage {
     param($Commands)
     $injected = Get-WinMintMountCommand -Commands $Commands -Name 'GetMountedImages'
     if ($injected) {
@@ -148,14 +147,39 @@ function Write-WinMintMountOwner {
 }
 
 function Remove-WinMintMountOwner {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)] [ValidateSet('install', 'boot')] [string] $Kind,
         [string] $ServicingRoot
     )
     $path = Get-WinMintMountOwnerPath -Kind $Kind -ServicingRoot $ServicingRoot
-    if (Test-Path -LiteralPath $path) {
+    if ((Test-Path -LiteralPath $path) -and $PSCmdlet.ShouldProcess($path, 'Remove')) {
         Remove-Item -LiteralPath $path -Force
+    }
+}
+
+function Test-WinMintMountNeedsRemount {
+    param([string] $Status)
+    $s = ([string]$Status).Trim()
+    return $s.Equals('Invalid', [StringComparison]::OrdinalIgnoreCase) -or
+        $s.Equals('Needs Remount', [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Invoke-WinMintRemount {
+    param(
+        [Parameter(Mandatory)] [string] $MountDir,
+        $Commands
+    )
+    $injected = Get-WinMintMountCommand -Commands $Commands -Name 'Remount'
+    if ($injected) {
+        & $injected $MountDir
+        return
+    }
+    # Invalid / Needs Remount: Cleanup-Mountpoints will not drop a remountable image
+    # (learn.microsoft.com DISM image management — /Cleanup-Mountpoints).
+    & dism.exe /English /Remount-Image /MountDir:$MountDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "DISM Remount-Image failed: $LASTEXITCODE"
     }
 }
 
@@ -175,6 +199,18 @@ function Invoke-WinMintUnmountDiscard {
     }
 }
 
+function Invoke-WinMintRecoverOwnedMount {
+    param(
+        [Parameter(Mandatory)] [string] $MountDir,
+        [string] $Status,
+        $Commands
+    )
+    if (Test-WinMintMountNeedsRemount -Status $Status) {
+        Invoke-WinMintRemount -MountDir $MountDir -Commands $Commands
+    }
+    Invoke-WinMintUnmountDiscard -MountDir $MountDir -Commands $Commands
+}
+
 function Invoke-WinMintCleanupWim {
     param($Commands)
     $injected = Get-WinMintMountCommand -Commands $Commands -Name 'CleanupWim'
@@ -189,6 +225,31 @@ function Invoke-WinMintCleanupWim {
     if ($LASTEXITCODE -ne 0) {
         throw "DISM Cleanup-Mountpoints failed: $LASTEXITCODE"
     }
+}
+
+function Stop-WinMintOrphanDismHost {
+    [CmdletBinding(SupportsShouldProcess)]
+    param($Commands)
+    $injected = Get-WinMintMountCommand -Commands $Commands -Name 'StopOrphanDismHost'
+    if ($injected) {
+        & $injected
+        return
+    }
+    foreach ($proc in @(Get-Process -Name 'DismHost' -ErrorAction SilentlyContinue)) {
+        if ($PSCmdlet.ShouldProcess("DismHost (PID $($proc.Id))", 'Stop')) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Invoke-WinMintStaleDiscardSettle {
+    param($Commands)
+    $injected = Get-WinMintMountCommand -Commands $Commands -Name 'Settle'
+    if ($injected) {
+        & $injected
+        return
+    }
+    Start-Sleep -Seconds 2
 }
 
 function Test-WinMintOwnedMountDir {
@@ -245,7 +306,7 @@ function Resolve-WinMintStaleMount {
     }
 
     $recoveryAction = 'none'
-    $images = @(Get-WinMintMountedImages -Commands $Commands)
+    $images = @(Get-WinMintMountedImage -Commands $Commands)
 
     foreach ($image in $images) {
         $imageFile = [string]$image.ImageFile
@@ -264,26 +325,49 @@ function Resolve-WinMintStaleMount {
         }
 
         try {
-            Invoke-WinMintUnmountDiscard -MountDir $mountDir -Commands $Commands
+            Invoke-WinMintRecoverOwnedMount -MountDir $mountDir -Status ([string]$image.Status) -Commands $Commands
         }
         catch {
             # Real DISM only reports "DISM Unmount-Image /Discard failed: <exit>".
             # Owned mount + dead/missing owner + discard failure is the stale/corrupt
             # case Cleanup-Mountpoints is for — escalate; re-query decides success vs fail-closed.
-            # (A prior 'stale|corrupt' message gate never matched the real throw.)
+            # Invalid / Needs Remount must Remount-Image first; Cleanup-Mountpoints will
+            # not drop a remountable image (DISM image-management docs).
+            # 0xc1420117 = handles still open in the mount (orphaned DismHost after a
+            # killed Apply). Cleanup often leaves the row listed; kill hosts + retry.
             Invoke-WinMintCleanupWim -Commands $Commands
-            $afterCleanup = @(Get-WinMintMountedImages -Commands $Commands)
+            $afterCleanup = @(Get-WinMintMountedImage -Commands $Commands)
             $still = @($afterCleanup | Where-Object {
                     Test-WinMintOwnedMountDir -MountDir ([string]$_.MountDir) -InstallMount $installMount -BootMount $bootMount
                 })
-            if ($still.Count -gt 0) {
-                throw "stale mount recovery failed after Cleanup-Mountpoints: $mountDir"
+            if ($still.Count -eq 0) {
+                Remove-WinMintMountOwner -Kind $kind -ServicingRoot $root
+                return [pscustomobject]@{ recoveryAction = 'cleanup-wim'; mountDirectory = $mountDir }
+            }
+
+            Stop-WinMintOrphanDismHost -Commands $Commands
+            Invoke-WinMintStaleDiscardSettle -Commands $Commands
+            $retryStatus = [string]$still[0].Status
+            try {
+                Invoke-WinMintRecoverOwnedMount -MountDir $mountDir -Status $retryStatus -Commands $Commands
+            }
+            catch {
+                $status = @($still | ForEach-Object { [string]$_.Status }) -join ','
+                throw "stale mount recovery failed after Cleanup-Mountpoints: $mountDir (Status=$status). Close Explorer/Defender handles on that path or reboot, then retry."
+            }
+            $afterRetry = @(Get-WinMintMountedImage -Commands $Commands)
+            $stillAfterRetry = @($afterRetry | Where-Object {
+                    [IO.Path]::GetFullPath([string]$_.MountDir).Equals([IO.Path]::GetFullPath($mountDir), [StringComparison]::OrdinalIgnoreCase)
+                })
+            if ($stillAfterRetry.Count -gt 0) {
+                $status = @($stillAfterRetry | ForEach-Object { [string]$_.Status }) -join ','
+                throw "stale mount recovery failed after Cleanup-Mountpoints: $mountDir (Status=$status). Close Explorer/Defender handles on that path or reboot, then retry."
             }
             Remove-WinMintMountOwner -Kind $kind -ServicingRoot $root
             return [pscustomobject]@{ recoveryAction = 'cleanup-wim'; mountDirectory = $mountDir }
         }
 
-        $after = @(Get-WinMintMountedImages -Commands $Commands)
+        $after = @(Get-WinMintMountedImage -Commands $Commands)
         $stillMounted = @($after | Where-Object {
                 [IO.Path]::GetFullPath([string]$_.MountDir).Equals([IO.Path]::GetFullPath($mountDir), [StringComparison]::OrdinalIgnoreCase)
             })
@@ -298,7 +382,7 @@ function Resolve-WinMintStaleMount {
         $ownerPath = Get-WinMintMountOwnerPath -Kind $kind -ServicingRoot $root
         if (-not (Test-Path -LiteralPath $ownerPath)) { continue }
         $kindMount = Get-WinMintMountDirectory -Kind $kind -ServicingRoot $root
-        $still = @((Get-WinMintMountedImages -Commands $Commands) | Where-Object {
+        $still = @((Get-WinMintMountedImage -Commands $Commands) | Where-Object {
                 [IO.Path]::GetFullPath([string]$_.MountDir).Equals([IO.Path]::GetFullPath($kindMount), [StringComparison]::OrdinalIgnoreCase)
             })
         if ($still.Count -gt 0) { continue }
@@ -310,10 +394,14 @@ function Resolve-WinMintStaleMount {
 }
 
 function Clear-WinMintOwnedMount {
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [string] $ServicingRoot,
         $Commands
     )
+    if (-not $PSCmdlet.ShouldProcess((Get-WinMintServicingRoot -ServicingRoot $ServicingRoot), 'Discard owned mounts')) {
+        return
+    }
     $root = Get-WinMintServicingRoot -ServicingRoot $ServicingRoot
     foreach ($kind in @('install', 'boot')) {
         $mountDir = Get-WinMintMountDirectory -Kind $kind -ServicingRoot $root

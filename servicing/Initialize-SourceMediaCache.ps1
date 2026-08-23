@@ -201,10 +201,12 @@ function Test-WinMintMediaCacheEntry {
 }
 
 function Move-WinMintInvalidMediaCacheEntry {
+    [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)] [string] $EntryPath)
     if (-not (Test-Path -LiteralPath $EntryPath -PathType Container)) {
         throw "Prepared media entry missing: $EntryPath"
     }
+    if (-not $PSCmdlet.ShouldProcess($EntryPath, 'Quarantine invalid prepared-media entry')) { return }
     $stamp = [datetime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
     $name = (Split-Path -Leaf $EntryPath) + '.invalid-' + $stamp + '-' + [guid]::NewGuid().ToString('N')
     Rename-Item -LiteralPath $EntryPath -NewName $name
@@ -212,7 +214,7 @@ function Move-WinMintInvalidMediaCacheEntry {
 }
 
 function New-WinMintMediaCacheEntry {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)] [string] $SourceIso,
         [Parameter(Mandatory)] [string] $SourceIsoSha256,
@@ -225,6 +227,7 @@ function New-WinMintMediaCacheEntry {
     )
     Initialize-WinMintMediaCacheRoot -CacheRoot $CacheRoot
     $entry = Get-WinMintMediaCacheEntry -CacheRoot $CacheRoot -SourceIsoSha256 $SourceIsoSha256 -WimIndex $WimIndex -Schema $Schema
+    if (-not $PSCmdlet.ShouldProcess($entry, 'Prepare media entry')) { return }
     $parent = Split-Path -Parent $entry
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
     Assert-WinMintNoReparseBetween -Root $CacheRoot -Path $parent
@@ -413,7 +416,7 @@ function Initialize-WinMintPreparedMedia {
 }
 
 function Copy-WinMintRunMedia {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)] [string] $PreparedMedia,
         [Parameter(Mandatory)] [string] $MediaDir,
@@ -423,6 +426,7 @@ function Copy-WinMintRunMedia {
     if (-not (Test-Path -LiteralPath $PreparedMedia -PathType Container)) {
         throw "Prepared media missing: $PreparedMedia"
     }
+    if (-not $PSCmdlet.ShouldProcess($MediaDir, 'Copy prepared media into staged media')) { return }
 
     $parent = Split-Path -Parent $MediaDir
     $leaf = Split-Path -Leaf $MediaDir
@@ -486,11 +490,12 @@ function Assert-WinMintMountImagePath {
 }
 
 function Write-WinMintPreparedMediaResult {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)] [string] $Path,
         [Parameter(Mandatory)] [System.Collections.IDictionary] $Document
     )
+    if (-not $PSCmdlet.ShouldProcess($Path, 'Write prepared-media result')) { return }
     $parent = Split-Path -Parent $Path
     if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
     $temporaryPath = "$Path.tmp"

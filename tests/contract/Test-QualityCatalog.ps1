@@ -314,7 +314,7 @@ finally {
 }
 
 # Package order: SSU → checkpoints → LCU; boot + Setup; winre = SSU + SafeOS.
-$orderFull = New-WinMintQualityPackageOrder -SsuLeaf 'SSU.cab' -CheckpointLeaves @('CK1.msu', 'CK2.msu') `
+$orderFull = Resolve-WinMintQualityPackageOrder -SsuLeaf 'SSU.cab' -CheckpointLeaves @('CK1.msu', 'CK2.msu') `
     -LcuLeaf 'LCU.msu' -SetupLeaf 'Setup.cab' -SafeOsLeaf 'SafeOS.cab'
 if (@($orderFull.Install) -join ',' -ne 'SSU.cab,CK1.msu,CK2.msu,LCU.msu') {
     throw "Test-QualityCatalog: install order $($orderFull.Install -join ',')"
@@ -325,7 +325,7 @@ if (@($orderFull.Boot) -join ',' -ne 'SSU.cab,CK1.msu,CK2.msu,LCU.msu,Setup.cab'
 if (@($orderFull.WinRe) -join ',' -ne 'SSU.cab,SafeOS.cab') {
     throw "Test-QualityCatalog: winre order $($orderFull.WinRe -join ',')"
 }
-$orderBare = New-WinMintQualityPackageOrder -SsuLeaf 'SSU.cab' -CheckpointLeaves @() -LcuLeaf 'LCU.msu'
+$orderBare = Resolve-WinMintQualityPackageOrder -SsuLeaf 'SSU.cab' -CheckpointLeaves @() -LcuLeaf 'LCU.msu'
 if (@($orderBare.Install) -join ',' -ne 'SSU.cab,LCU.msu') {
     throw "Test-QualityCatalog: bare install $($orderBare.Install -join ',')"
 }
