@@ -336,12 +336,16 @@ try {
     Assert-Eq (Get-SmokeGuestProgressDecision -LastFingerprint '1:Reboot' -Fingerprint '1:Reboot' -SupervisorRunning $false) idle 'same evidence is idle'
     Assert-Eq (Get-SmokeGuestProgressDecision -LastFingerprint '1:Reboot' -Fingerprint '2:Complete' -SupervisorRunning $false) progress 'new evidence is progress'
     Assert-Eq (Get-SmokeGuestProgressDecision -LastFingerprint '' -Fingerprint '' -SupervisorRunning $true) progress 'Supervisor alive is progress'
+    if ($smoke -notmatch '(?s)LastProbeError = \[string\]\$_\.Exception\.Message\s+\$script:LastSupervisorRunning = \$false') {
+        throw 'probe-fail must not keep Supervisor-alive'
+    }
     Assert-Eq (Get-SmokeSetupRebootTransition -LastVmState Running -VmState Stopping -VhdHasImage $true) count 'image + Stopping counts'
     Assert-Eq (Get-SmokeSetupRebootTransition -LastVmState Running -VmState Stopping -VhdHasImage $false) skip 'empty VHD is WinPE churn'
     Assert-Eq (Get-SmokeSetupRebootTransition -LastVmState Off -VmState Running -VhdHasImage $true) skip 'Off→Running is start, not leave-Running'
     Assert-Eq (Get-SmokeRebootLoopVerdict -SetupRebootCount 8 -MaxSetupReboots 8) continue 'at cap continues'
     Assert-Eq (Get-SmokeRebootLoopVerdict -SetupRebootCount 9 -MaxSetupReboots 8) reboot-loop 'past cap is a loop'
     Assert-Eq (Get-SmokeNudgeRearmDecision -LastVmState Off -VmState Running -DiskBootPreferred $false) rearm 'Off→Running re-arms while DVD first'
+    Assert-Eq (Get-SmokeNudgeRearmDecision -LastVmState Starting -VmState Running -DiskBootPreferred $false) rearm 'Starting→Running re-arms while DVD first'
     Assert-Eq (Get-SmokeNudgeRearmDecision -LastVmState Off -VmState Running -DiskBootPreferred $true) skip 'HDD-first does not re-arm'
     Assert-Eq (Get-SmokeSuspendVmDecision -FailureMessage 'STALL_SUSPECT: no guest progress') suspend 'stall suspends'
     Assert-Eq (Get-SmokeSuspendVmDecision -FailureMessage 'Wall clock elapsed without guest evidence') suspend 'wall suspends'

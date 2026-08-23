@@ -258,7 +258,8 @@ function Get-SmokeGuestProgressDecision {
 function Get-SmokeNudgeRearmDecision {
     <#
     .SYNOPSIS
-      Re-arm the DVD boot-key window on Off→Running while DVD is still first.
+      Re-arm the DVD boot-key window on return to Running from any non-Running
+      state while DVD is still first (Off→Starting→Running is the usual pair).
     #>
     param(
         [string] $LastVmState,
@@ -266,7 +267,7 @@ function Get-SmokeNudgeRearmDecision {
         [bool] $DiskBootPreferred
     )
     if ($DiskBootPreferred) { return 'skip' }
-    if ($LastVmState -eq 'Off' -and $VmState -eq 'Running') { return 'rearm' }
+    if ($VmState -eq 'Running' -and $LastVmState -and $LastVmState -ne 'Running') { return 'rearm' }
     return 'skip'
 }
 

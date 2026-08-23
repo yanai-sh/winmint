@@ -455,6 +455,7 @@ function Test-GuestEvidenceReady {
     catch {
         # PS Direct unavailable until guest is up / integration services ready
         $script:LastProbeError = [string]$_.Exception.Message
+        $script:LastSupervisorRunning = $false
     }
     return $false
 }
