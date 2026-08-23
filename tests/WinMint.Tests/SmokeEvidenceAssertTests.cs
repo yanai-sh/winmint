@@ -163,6 +163,44 @@ public class SmokeEvidenceAssertTests
         }
     }
 
+    [Fact]
+    [Trait("Category", "S4")]
+    public void Assert_smoke_evidence_fails_live_handoff_when_shell_not_explorer()
+    {
+        string repo = TestRepo.Root;
+        string fixture = Path.Combine(repo, "tests", "fixtures", "smoke-evidence");
+        string work = Path.Combine(Path.GetTempPath(), "winmint-s4-live-shell-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyTree(fixture, work);
+            string script = Path.Combine(repo, "tools", "vm", "Assert-SmokeEvidence.ps1");
+            ProcessStartInfo psi = new()
+            {
+                FileName = "pwsh",
+                ArgumentList =
+                {
+                    "-NoProfile", "-File", script, "-EvidenceDir", work,
+                    "-LiveShell", @"C:\Windows\WinMint\Supervisor.exe",
+                    "-SupervisorRunning", "false",
+                },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            using Process p = Process.Start(psi) ?? throw new InvalidOperationException("pwsh failed to start");
+            _ = p.StandardOutput.ReadToEnd();
+            string stderr = p.StandardError.ReadToEnd();
+            Assert.True(p.WaitForExit(60_000));
+            Assert.NotEqual(0, p.ExitCode);
+            Assert.Contains("handoff", stderr, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(work, "acceptance.json")));
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
     private static int RunAssert(
         string repo,
         string evidenceDir,
@@ -176,7 +214,7 @@ public class SmokeEvidenceAssertTests
         ProcessStartInfo psi = new()
         {
             FileName = "pwsh",
-            ArgumentList = { "-NoProfile", "-File", script, "-EvidenceDir", evidenceDir },
+            ArgumentList = { "-NoProfile", "-File", script, "-EvidenceDir", evidenceDir, "-StaticEvidenceOnly" },
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

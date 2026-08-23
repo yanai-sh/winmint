@@ -26,31 +26,45 @@ param(
 
     [string[]] $PinnedDisableOptionalFeatures = @(),
 
-    [switch] $ExpectNativePackageAudit
+    [switch] $ExpectNativePackageAudit,
+
+    # Full Smoke: live Winlogon Shell from the successful wait poll.
+    [string] $LiveShell = '',
+
+    [bool] $SupervisorRunning = $false,
+
+    # Full Smoke: bind guest Evidence to this run (optional on StaticEvidenceOnly).
+    [string] $RequiredSmokeRunId = '',
+
+    # AssertOnly / fixtures: file marker only — not live FirstLogon truth.
+    [switch] $StaticEvidenceOnly
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'SmokeStatus.ps1')
+. (Join-Path $PSScriptRoot '..\host\Assert-ImageEvidenceCore.ps1')
 
-$ExplorerShell = 'explorer.exe'
-$SupervisorShellLeaf = 'Supervisor.exe'
+if (-not $StaticEvidenceOnly -and [string]::IsNullOrWhiteSpace($LiveShell)) {
+    throw 'Assert-SmokeEvidence requires -LiveShell (full Smoke) or -StaticEvidenceOnly (AssertOnly/fixtures)'
+}
 
 function Get-LatestGuestEvidence {
-    param([string] $Dir)
+    param([string] $Dir, [string] $RequiredSmokeRunId = '')
     $guest = Join-Path $Dir 'guest'
     if (-not (Test-Path -LiteralPath $guest)) {
         throw "guest evidence folder missing: $guest"
     }
-    $hit = Select-WinMintGuestEvidencePath -Directory $guest
+    $hit = Select-WinMintGuestEvidencePath -Directory $guest -RequiredSmokeRunId $RequiredSmokeRunId
     if ([string]::IsNullOrWhiteSpace($hit)) {
         throw "no Complete/Failed guest evidence-*.json under $guest"
     }
     return $hit
 }
 
-$guestPath = Get-LatestGuestEvidence -Dir $EvidenceDir
+$selectRunId = if ($StaticEvidenceOnly) { '' } else { $RequiredSmokeRunId }
+$guestPath = Get-LatestGuestEvidence -Dir $EvidenceDir -RequiredSmokeRunId $selectRunId
 $guest = Get-Content -LiteralPath $guestPath -Raw -Encoding utf8 | ConvertFrom-Json
 
 if ($guest.schemaVersion -ne 'winmint.provisioning.evidence/v1') {
@@ -104,70 +118,42 @@ if (-not $setupRegionOk) {
     throw 'DMA setup region missing: need settle.deviceRegionOk or settle.deviceRegionRepaired (DeviceRegion Ireland)'
 }
 
-# Unlock: Winlogon Shell must be Explorer, not Supervisor.
+# Unlock / handoff: same gate as the wait loop (Test-WinMintGuestEvidenceTerminal).
 $shellPath = Join-Path $EvidenceDir 'guest\winlogon-shell.txt'
 if (-not (Test-Path -LiteralPath $shellPath)) {
     throw "unlock marker missing: expected guest/winlogon-shell.txt (Winlogon Shell after tenure)"
 }
-$shell = ([string](Get-Content -LiteralPath $shellPath -Raw -Encoding utf8)).Trim()
-if ([string]::IsNullOrWhiteSpace($shell)) {
+$fileShell = ([string](Get-Content -LiteralPath $shellPath -Raw -Encoding utf8)).Trim()
+if ([string]::IsNullOrWhiteSpace($fileShell)) {
     throw 'unlock marker empty: guest/winlogon-shell.txt'
 }
-if ($shell -like "*$SupervisorShellLeaf") {
-    throw "unlock failed: Winlogon Shell still Supervisor ('$shell')"
+
+$handoffShell = if ($StaticEvidenceOnly) { $fileShell } else { $LiveShell.Trim() }
+$handoffSupervisor = if ($StaticEvidenceOnly) { $false } else { $SupervisorRunning }
+$handoffRunId = if ($StaticEvidenceOnly) { '' } else { $RequiredSmokeRunId }
+
+if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $guest `
+        -LiveShell $handoffShell -SupervisorRunning:$handoffSupervisor `
+        -RequiredSmokeRunId $handoffRunId)) {
+    throw ("FirstLogon handoff gate failed " +
+        "(shell='$handoffShell' supervisor=$handoffSupervisor static=$StaticEvidenceOnly)")
 }
-if (-not ($shell.Equals($ExplorerShell, [System.StringComparison]::OrdinalIgnoreCase) -or
-        $shell.EndsWith("\$ExplorerShell", [System.StringComparison]::OrdinalIgnoreCase))) {
-    throw "unlock failed: expected explorer.exe, got '$shell'"
+
+if ($fileShell -match '(?i)Supervisor\.exe') {
+    throw "unlock failed: Winlogon Shell still Supervisor ('$fileShell')"
+}
+if (-not (Test-WinMintExplorerShellValue $fileShell)) {
+    throw "unlock failed: expected explorer.exe in winlogon-shell.txt, got '$fileShell'"
 }
 
 $lane = $null
 $applyEvidence = Join-Path $EvidenceDir 'apply\evidence.json'
-if (-not (Test-Path -LiteralPath $applyEvidence)) {
-    throw "lane marker missing: expected apply/evidence.json under $EvidenceDir"
-}
-$apply = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json
-if ($apply.PSObject.Properties.Name -contains 'lane' -and $apply.lane) {
-    $lane = [string]$apply.lane
-}
-if (-not $lane) {
-    throw 'lane marker missing (apply/evidence.json must include lane)'
-}
-if ($lane -notin @('Test', 'Release')) {
-    throw "lane marker must be Test|Release, got '$lane'"
-}
-
-# Keep-flag (ticket 14 / ADR-006 B4): offline remove digests from Apply evidence when Profile pins any.
-$digestMap = @{}
-if ($apply.PSObject.Properties.Name -contains 'digests' -and $null -ne $apply.digests) {
-    foreach ($p in $apply.digests.PSObject.Properties) {
-        $digestMap[[string]$p.Name] = [string]$p.Value
-    }
-}
-
-$expectedPath = Join-Path $EvidenceDir 'apply\expected-evidence.json'
-if (Test-Path -LiteralPath $expectedPath -PathType Leaf) {
-    $expected = Get-Content -LiteralPath $expectedPath -Raw -Encoding utf8 | ConvertFrom-Json
-    if ([string]$expected.schemaVersion -ne 'winmint.expected-evidence/v1') {
-        throw "unexpected expected-evidence schema '$($expected.schemaVersion)'"
-    }
-    if ([string]$expected.lane -ne $lane) {
-        throw "lane must be $($expected.lane) for this assert, got '$lane'"
-    }
-    foreach ($key in @($expected.requiredDigestKeys)) {
-        if (-not $digestMap.ContainsKey([string]$key) -or [string]::IsNullOrWhiteSpace($digestMap[[string]$key])) {
-            throw "expected digest missing in apply/evidence.json: $key"
-        }
-    }
-    if ($expected.PSObject.Properties.Name -contains 'requiredDigestValues' -and $null -ne $expected.requiredDigestValues) {
-        foreach ($p in $expected.requiredDigestValues.PSObject.Properties) {
-            $got = [string]$digestMap[$p.Name]
-            if ($got -ne [string]$p.Value) {
-                throw "expected digest $($p.Name) wanted $($p.Value), got '$got'"
-            }
-        }
-    }
-}
+$core = Assert-WinMintImageEvidence `
+    -EvidencePath $applyEvidence `
+    -ExpectedEvidencePath (Join-Path $EvidenceDir 'apply\expected-evidence.json') `
+    -EvidenceLabel 'apply/evidence.json'
+$lane = $core.Lane
+$digestMap = $core.DigestMap
 
 function Assert-PinnedDigests {
     param(
@@ -227,10 +213,11 @@ if ($ExpectNativePackageAudit) {
 }
 
 $acceptance = [ordered]@{
-    schemaVersion        = 'winmint.smoke.acceptance/v1'
-    splashBeforeExplorer = $true
-    outcome              = $outcome
-    lane                 = $lane
+    schemaVersion         = 'winmint.smoke.acceptance/v1'
+    splashBeforeExplorer  = $true
+    outcome               = $outcome
+    lane                  = $lane
+    liveHandoffVerified   = (-not $StaticEvidenceOnly)
 }
 $acceptancePath = Join-Path $EvidenceDir 'acceptance.json'
 $acceptance | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $acceptancePath -Encoding utf8

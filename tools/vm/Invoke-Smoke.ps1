@@ -76,7 +76,7 @@ $outIso = $null
 $runScratchHygiene = $false
 
 if ($AssertOnly) {
-    & $assertScript -EvidenceDir $EvidenceDir
+    & $assertScript -EvidenceDir $EvidenceDir -StaticEvidenceOnly
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     exit 0
 }
@@ -334,7 +334,7 @@ function Test-GuestEvidenceReady {
                 $leaf = Split-Path $remote -Leaf
                 Copy-Item -FromSession $session -Path $remote -Destination (Join-Path $guestDir $leaf) -Force
             }
-            $selected = Select-WinMintGuestEvidencePath -Directory $guestDir
+            $selected = Select-WinMintGuestEvidencePath -Directory $guestDir -RequiredSmokeRunId $runId
             if (-not $selected) { return $false }
 
             $pulled = Get-Content -LiteralPath $selected -Raw -Encoding utf8 | ConvertFrom-Json
@@ -372,7 +372,8 @@ function Test-GuestEvidenceReady {
             }
 
             if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $pulled `
-                    -LiveShell ([string]$live.Shell) -SupervisorRunning:$live.SupervisorRunning)) {
+                    -LiveShell ([string]$live.Shell) -SupervisorRunning:$live.SupervisorRunning `
+                    -RequiredSmokeRunId $runId)) {
                 if ($outcome -eq 'Complete') {
                     Write-Host ("Guest evidence Complete but handoff not verified " +
                         "(shell='$($live.Shell)' supervisor=$($live.SupervisorRunning)) — waiting…")
@@ -490,6 +491,27 @@ function Send-VmBootNudge {
 
 Send-VmBootNudge
 
+# Bind this Smoke run to guest Evidence (ReuseVm must not green on prior Complete).
+try {
+    $sessionParams = @{ VMName = $VmName; ErrorAction = 'Stop' }
+    if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
+    $stampSession = New-PSSession @sessionParams
+    try {
+        Invoke-Command -Session $stampSession -ScriptBlock {
+            $root = Join-Path $env:ProgramData 'WinMint'
+            New-Item -ItemType Directory -Force -Path $root | Out-Null
+            Set-Content -LiteralPath (Join-Path $root 'smoke-run.id') -Value ($using:runId).Trim() -Encoding utf8 -NoNewline
+        }
+        Write-Host "Stamped guest smoke-run.id=$runId"
+    }
+    finally {
+        Remove-PSSession $stampSession -ErrorAction SilentlyContinue
+    }
+}
+catch {
+    Write-Warning "Could not stamp guest smoke-run.id yet: $($_.Exception.Message)"
+}
+
 $wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
 # Outer try (line ~82) owns the catch: Apply failures and wait/assert failures share
 # one smoke-status + acceptance-manifest failure path.
@@ -596,7 +618,11 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage assert) `
         -VmName $VmName -StallMinutesLeft 0 -WallMinutesLeft $wallLeft `
         -LastHostLine 'Guest evidence pulled.' -OutputIso $outIso -RunId $runId
+    $shellForAssert = ([string](Get-Content -LiteralPath (Join-Path $guestDir 'winlogon-shell.txt') -Raw -Encoding utf8)).Trim()
     & $assertScript -EvidenceDir $evidenceOut `
+        -LiveShell $shellForAssert `
+        -SupervisorRunning:$false `
+        -RequiredSmokeRunId $runId `
         -PinnedRemoveAppx $pinnedRemoveAppx `
         -PinnedOnlineRemoveAppx $pinnedOnlineRemoveAppx `
         -PinnedRemoveCapabilities $pinnedRemoveCapabilities `

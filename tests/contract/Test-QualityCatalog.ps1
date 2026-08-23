@@ -313,5 +313,73 @@ finally {
     Remove-Item -LiteralPath $msuProbe -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# Package order: SSU → checkpoints → LCU; boot + Setup; winre = SSU + SafeOS.
+$orderFull = New-WinMintQualityPackageOrder -SsuLeaf 'SSU.cab' -CheckpointLeaves @('CK1.msu', 'CK2.msu') `
+    -LcuLeaf 'LCU.msu' -SetupLeaf 'Setup.cab' -SafeOsLeaf 'SafeOS.cab'
+if (@($orderFull.Install) -join ',' -ne 'SSU.cab,CK1.msu,CK2.msu,LCU.msu') {
+    throw "Test-QualityCatalog: install order $($orderFull.Install -join ',')"
+}
+if (@($orderFull.Boot) -join ',' -ne 'SSU.cab,CK1.msu,CK2.msu,LCU.msu,Setup.cab') {
+    throw "Test-QualityCatalog: boot order $($orderFull.Boot -join ',')"
+}
+if (@($orderFull.WinRe) -join ',' -ne 'SSU.cab,SafeOS.cab') {
+    throw "Test-QualityCatalog: winre order $($orderFull.WinRe -join ',')"
+}
+$orderBare = New-WinMintQualityPackageOrder -SsuLeaf 'SSU.cab' -CheckpointLeaves @() -LcuLeaf 'LCU.msu'
+if (@($orderBare.Install) -join ',' -ne 'SSU.cab,LCU.msu') {
+    throw "Test-QualityCatalog: bare install $($orderBare.Install -join ',')"
+}
+if (@($orderBare.Boot) -join ',' -ne 'SSU.cab,LCU.msu') {
+    throw "Test-QualityCatalog: bare boot $($orderBare.Boot -join ',')"
+}
+if (@($orderBare.WinRe) -join ',' -ne 'SSU.cab') {
+    throw "Test-QualityCatalog: bare winre $($orderBare.WinRe -join ',')"
+}
+
+# Orchestration with injected DISM Adapters (no live DISM).
+$pkgApply = Join-Path ([IO.Path]::GetTempPath()) ('winmint-qual-apply-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $pkgApply | Out-Null
+try {
+    foreach ($leaf in @('SSU.cab', 'CK.msu', 'LCU.msu', 'Setup.cab', 'SafeOS.cab')) {
+        Set-Content -LiteralPath (Join-Path $pkgApply $leaf) -Value 'pkg' -Encoding ascii
+    }
+    $script:addCalls = [System.Collections.Generic.List[string]]::new()
+    $rollupText = @"
+Deployment Image Servicing and Management tool
+
+Package Identity : Package_for_RollupFix~31bf3856ad364e35~arm64~~26100.9168.1.0
+"@
+    $null = Invoke-WinMintQualityPackagesApply `
+        -MountDir 'C:\fake-mount' `
+        -PackageDir $pkgApply `
+        -SsuLeaf 'SSU.cab' `
+        -CheckpointLeaves @('CK.msu') `
+        -LcuLeaf 'LCU.msu' `
+        -SetupLeaf 'Setup.cab' `
+        -SafeOsLeaf 'SafeOS.cab' `
+        -Family 26200 `
+        -PackageUbr 9168 `
+        -Architecture 'ARM64' `
+        -AddPackage {
+            param($Mount, $Path)
+            $script:addCalls.Add([IO.Path]::GetFileName($Path))
+        } `
+        -GetPackages { param($Mount) $rollupText }
+    if (@($script:addCalls) -join ',' -ne 'SSU.cab,CK.msu,LCU.msu') {
+        throw "Test-QualityCatalog: Add-Package order $($script:addCalls -join ',')"
+    }
+    $bootLeaves = @(Get-WinMintQualityPackageLeaf -PackageDir $pkgApply -Kind boot)
+    $winreLeaves = @(Get-WinMintQualityPackageLeaf -PackageDir $pkgApply -Kind winre)
+    if ($bootLeaves -join ',' -ne 'SSU.cab,CK.msu,LCU.msu,Setup.cab') {
+        throw "Test-QualityCatalog: boot.packages $($bootLeaves -join ',')"
+    }
+    if ($winreLeaves -join ',' -ne 'SSU.cab,SafeOS.cab') {
+        throw "Test-QualityCatalog: winre.packages $($winreLeaves -join ',')"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $pkgApply -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Output 'Test-QualityCatalog ok'
 exit 0

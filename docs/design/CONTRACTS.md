@@ -27,9 +27,9 @@ Profile JSON
 | Profile document | `winmint.profile/v1` |
 | Job manifest (guest) | `winmint.jobs/v1` |
 | Provisioning bundle (staged) | `winmint.provisioning.bundle/v1` |
-| Evidence snapshot | `winmint.provisioning.evidence/v1` |
+| Evidence snapshot | `winmint.provisioning.evidence/v1` (optional additive `smokeRunId` when Smoke stamps `smoke-run.id`) |
 | Checkpoint | `winmint.provisioning.checkpoint/v1` |
-| Smoke acceptance summary | `winmint.smoke.acceptance/v1` |
+| Smoke acceptance summary | `winmint.smoke.acceptance/v1` (`liveHandoffVerified` bool) |
 | Host Apply acceptance summary | `winmint.apply.acceptance/v1` |
 | Plan-dump stages (diagnostic) | `winmint.plan.stages/v1` |
 | Servicing stages (workdir) | `winmint.servicing.stages/v1` |

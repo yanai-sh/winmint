@@ -41,6 +41,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot '..\Resolve-OutputIso.ps1')
+. (Join-Path $PSScriptRoot '..\host\Assert-ImageEvidenceCore.ps1')
 # Same definition of "patched" the patcher uses — the gate must not certify media it would re-patch.
 . (Join-Path $PSScriptRoot '..\..\servicing\WinPeApplyContract.ps1')
 
@@ -48,78 +49,17 @@ if (-not (Test-Path -LiteralPath $WorkDirectory)) {
     throw "Work directory missing: $WorkDirectory"
 }
 
-$evidencePath = Join-Path $WorkDirectory 'evidence.json'
-if (-not (Test-Path -LiteralPath $evidencePath)) {
-    throw "Apply evidence.json missing: $evidencePath"
-}
+$core = Assert-WinMintImageEvidence `
+    -EvidencePath (Join-Path $WorkDirectory 'evidence.json') `
+    -ExpectedEvidencePath (Join-Path $WorkDirectory 'expected-evidence.json') `
+    -RequireLane $RequireLane `
+    -EvidenceLabel 'evidence.json'
+$evidence = $core.Evidence
+$lane = $core.Lane
+$digestMap = $core.DigestMap
+$expected = $core.Expected
 
-$evidence = Get-Content -LiteralPath $evidencePath -Raw -Encoding utf8 | ConvertFrom-Json
-if ([string]$evidence.schemaVersion -ne 'winmint.image.evidence/v1') {
-    throw "unexpected evidence schema '$($evidence.schemaVersion)'"
-}
-
-$lane = $null
-if ($evidence.PSObject.Properties.Name -contains 'lane' -and $evidence.lane) {
-    $lane = [string]$evidence.lane
-}
-if (-not $lane) {
-    throw 'lane marker missing (evidence.json must include lane)'
-}
-if ($lane -notin @('Test', 'Release')) {
-    throw "lane marker must be Test|Release, got '$lane'"
-}
-if (-not [string]::IsNullOrWhiteSpace($RequireLane) -and $lane -ne $RequireLane) {
-    throw "lane must be $RequireLane for this assert, got '$lane' (do not flash a Test workdir as Primary)"
-}
-
-if ($RequireLane -eq 'Release') {
-    $packageStrict = $false
-    if ($evidence.PSObject.Properties.Name -contains 'packageStrict') {
-        $packageStrict = [bool]$evidence.packageStrict
-    }
-    if (-not $packageStrict) {
-        throw 'packageStrict must be true for Release Gate B assert (soft Release evidence is not wipe media)'
-    }
-}
-
-$digestMap = @{}
-if ($evidence.PSObject.Properties.Name -contains 'digests' -and $null -ne $evidence.digests) {
-    foreach ($p in $evidence.digests.PSObject.Properties) {
-        $digestMap[[string]$p.Name] = [string]$p.Value
-    }
-}
-
-$expectedPath = Join-Path $WorkDirectory 'expected-evidence.json'
-if (Test-Path -LiteralPath $expectedPath -PathType Leaf) {
-    $expected = Get-Content -LiteralPath $expectedPath -Raw -Encoding utf8 | ConvertFrom-Json
-    if ([string]$expected.schemaVersion -ne 'winmint.expected-evidence/v1') {
-        throw "unexpected expected-evidence schema '$($expected.schemaVersion)'"
-    }
-    if ([string]::IsNullOrWhiteSpace($RequireLane) -and [string]$expected.lane -ne $lane) {
-        throw "lane must be $($expected.lane) for this assert, got '$lane' (do not flash a Test workdir as Primary)"
-    }
-    if ([bool]$expected.packageStrict) {
-        $packageStrict = $false
-        if ($evidence.PSObject.Properties.Name -contains 'packageStrict') {
-            $packageStrict = [bool]$evidence.packageStrict
-        }
-        if (-not $packageStrict) {
-            throw 'packageStrict must be true for Release Gate B assert (soft Release evidence is not wipe media)'
-        }
-    }
-    foreach ($key in @($expected.requiredDigestKeys)) {
-        if (-not $digestMap.ContainsKey([string]$key) -or [string]::IsNullOrWhiteSpace($digestMap[[string]$key])) {
-            throw "expected digest missing in evidence.json: $key"
-        }
-    }
-    if ($expected.PSObject.Properties.Name -contains 'requiredDigestValues' -and $null -ne $expected.requiredDigestValues) {
-        foreach ($p in $expected.requiredDigestValues.PSObject.Properties) {
-            $got = [string]$digestMap[$p.Name]
-            if ($got -ne [string]$p.Value) {
-                throw "expected digest $($p.Name) wanted $($p.Value), got '$got'"
-            }
-        }
-    }
+if ($null -ne $expected) {
     if ([bool]$expected.expectDrivers) { $ExpectDrivers = $true }
     if ([bool]$expected.expectFuPosture) { $ExpectFuPosture = $true }
     $jobsPath = Join-Path $WorkDirectory 'payload\jobs.json'

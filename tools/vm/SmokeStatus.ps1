@@ -194,7 +194,10 @@ function Test-WinMintExplorerShellValue {
 }
 
 function Get-WinMintGuestEvidenceRows {
-    param([Parameter(Mandatory)] [string] $Directory)
+    param(
+        [Parameter(Mandatory)] [string] $Directory,
+        [string] $RequiredSmokeRunId = ''
+    )
     if (-not (Test-Path -LiteralPath $Directory -PathType Container)) {
         return @()
     }
@@ -203,6 +206,13 @@ function Get-WinMintGuestEvidenceRows {
             ForEach-Object {
                 try {
                     $doc = Get-Content -LiteralPath $_.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+                    if (-not [string]::IsNullOrWhiteSpace($RequiredSmokeRunId)) {
+                        $got = ''
+                        if ($doc.PSObject.Properties.Name -contains 'smokeRunId') {
+                            $got = [string]$doc.smokeRunId
+                        }
+                        if ($got -ne $RequiredSmokeRunId) { return }
+                    }
                     [pscustomobject]@{
                         Path    = $_.FullName
                         Outcome = [string]$doc.outcome
@@ -218,8 +228,11 @@ function Get-WinMintGuestEvidenceRows {
 }
 
 function Select-WinMintGuestEvidencePath {
-    param([Parameter(Mandatory)] [string] $Directory)
-    $rows = @(Get-WinMintGuestEvidenceRows -Directory $Directory)
+    param(
+        [Parameter(Mandatory)] [string] $Directory,
+        [string] $RequiredSmokeRunId = ''
+    )
+    $rows = @(Get-WinMintGuestEvidenceRows -Directory $Directory -RequiredSmokeRunId $RequiredSmokeRunId)
     if ($rows.Count -eq 0) { return $null }
     $failed = @($rows | Where-Object { $_.Outcome -eq 'Failed' } | Sort-Object SortKey -Descending)
     if ($failed.Count -ge 1) { return [string]$failed[0].Path }
@@ -236,8 +249,16 @@ function Test-WinMintGuestEvidenceTerminal {
     param(
         [Parameter(Mandatory)] $EvidenceDoc,
         [Parameter(Mandatory)] [string] $LiveShell,
-        [bool] $SupervisorRunning = $false
+        [bool] $SupervisorRunning = $false,
+        [string] $RequiredSmokeRunId = ''
     )
+    if (-not [string]::IsNullOrWhiteSpace($RequiredSmokeRunId)) {
+        $got = ''
+        if ($EvidenceDoc.PSObject.Properties.Name -contains 'smokeRunId') {
+            $got = [string]$EvidenceDoc.smokeRunId
+        }
+        if ($got -ne $RequiredSmokeRunId) { return $false }
+    }
     $outcome = [string]$EvidenceDoc.outcome
     if ($outcome -eq 'Failed') { return $true }
     if ($outcome -ne 'Complete') { return $false }

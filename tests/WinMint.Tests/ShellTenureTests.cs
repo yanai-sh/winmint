@@ -67,6 +67,62 @@ public class ShellTenureTests
     }
 
     [Fact]
+    public void FileEvidenceSink_stamps_smokeRunId_from_sibling_file()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "winmint-smoke-run-" + Guid.NewGuid().ToString("N"));
+        string evidenceDir = Path.Combine(root, "evidence");
+        try
+        {
+            Directory.CreateDirectory(root);
+            File.WriteAllText(Path.Combine(root, FileEvidenceSink.SmokeRunIdFileName), "run-abc");
+            FileEvidenceSink sink = new(evidenceDir);
+            EvidenceSnapshot snap = sink.Write(
+                new ProvisioningEvidenceFile(
+                    SchemaVersion: ProvisioningSession.EvidenceSchemaVersion,
+                    Outcome: "Complete",
+                    StatusCode: "jobs.ok",
+                    StatusMessage: "ok",
+                    Phases: ["jobs.ok"]));
+            string json = File.ReadAllText(snap.Path);
+            Assert.Contains("\"smokeRunId\":\"run-abc\"", json.Replace(" ", ""), StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void FileEvidenceSink_omits_smokeRunId_when_stamp_missing()
+    {
+        string evidenceDir = Path.Combine(Path.GetTempPath(), "winmint-evidence-nostamp-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            FileEvidenceSink sink = new(evidenceDir);
+            EvidenceSnapshot snap = sink.Write(
+                new ProvisioningEvidenceFile(
+                    SchemaVersion: ProvisioningSession.EvidenceSchemaVersion,
+                    Outcome: "Complete",
+                    StatusCode: "jobs.ok",
+                    StatusMessage: "ok",
+                    Phases: ["jobs.ok"]));
+            string json = File.ReadAllText(snap.Path);
+            Assert.DoesNotContain("\"smokeRunId\": \"run-", json, StringComparison.Ordinal);
+            Assert.Contains("\"smokeRunId\": null", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(evidenceDir))
+            {
+                Directory.Delete(evidenceDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Shell_pushes_in_memory_status_updates_to_presenter()
     {
         RecordingSplashPresenter splash = new();

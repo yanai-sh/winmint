@@ -10,6 +10,9 @@ public sealed class FileEvidenceSink(string directory) : IEvidenceSink
 {
     public const string SchemaVersion = ProvisioningSession.EvidenceSchemaVersion;
 
+    /// <summary>Sibling of the evidence folder: %ProgramData%\WinMint\smoke-run.id</summary>
+    public const string SmokeRunIdFileName = "smoke-run.id";
+
     private readonly string _directory = RequireDir(directory);
 
     private static string RequireDir(string directory)
@@ -25,6 +28,15 @@ public sealed class FileEvidenceSink(string directory) : IEvidenceSink
         {
             throw new InvalidOperationException(
                 $"Evidence schema '{document.SchemaVersion}' must be '{SchemaVersion}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(document.SmokeRunId))
+        {
+            string? stamped = TryReadSmokeRunId(_directory);
+            if (!string.IsNullOrWhiteSpace(stamped))
+            {
+                document = document with { SmokeRunId = stamped };
+            }
         }
 
         Directory.CreateDirectory(_directory);
@@ -55,5 +67,31 @@ public sealed class FileEvidenceSink(string directory) : IEvidenceSink
             ProvisioningJsonContext.Default.PackagesEvidenceFile);
         File.WriteAllBytes(path, bytes);
         return new EvidenceSnapshot(document.SchemaVersion, path);
+    }
+
+    /// <summary>Fail-open: missing/unreadable stamp is normal for Primary (no Smoke host).</summary>
+    internal static string? TryReadSmokeRunId(string evidenceDirectory)
+    {
+        try
+        {
+            string? parent = Path.GetDirectoryName(Path.GetFullPath(evidenceDirectory));
+            if (string.IsNullOrWhiteSpace(parent))
+            {
+                return null;
+            }
+
+            string path = Path.Combine(parent, SmokeRunIdFileName);
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            string text = File.ReadAllText(path).Trim();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

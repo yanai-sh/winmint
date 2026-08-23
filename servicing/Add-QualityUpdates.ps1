@@ -118,29 +118,18 @@ try {
         Copy-Item -LiteralPath $safePath -Destination (Join-Path $QualityPackageDir $safeLeaf) -Force
     }
 
-    $install = [System.Collections.Generic.List[string]]::new()
-    $install.Add($ssuLeaf)
-    foreach ($c in $checkpointLeaves) { $install.Add($c) }
-    $install.Add($lcuLeaf)
+    $null = Invoke-WinMintQualityPackagesApply `
+        -MountDir $MountDir `
+        -PackageDir $QualityPackageDir `
+        -SsuLeaf $ssuLeaf `
+        -CheckpointLeaves @($checkpointLeaves) `
+        -LcuLeaf $lcuLeaf `
+        -SetupLeaf $setupLeaf `
+        -SafeOsLeaf $safeLeaf `
+        -Family $resolved.Family `
+        -PackageUbr $resolved.PackageUbr `
+        -Architecture 'ARM64'
 
-    $boot = [System.Collections.Generic.List[string]]::new()
-    foreach ($p in $install) { $boot.Add($p) }
-    if ($setupLeaf) { $boot.Add($setupLeaf) }
-
-    $winre = [System.Collections.Generic.List[string]]::new()
-    $winre.Add($ssuLeaf)
-    if ($safeLeaf) { $winre.Add($safeLeaf) }
-
-    foreach ($leaf in $install) {
-        Invoke-WinMintDismAddPackage -MountDir $MountDir -PackagePath (Join-Path $QualityPackageDir $leaf)
-    }
-
-    $packages = & dism.exe /English /Image:$MountDir /Get-Packages 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) { throw "DISM /Get-Packages failed: $LASTEXITCODE" }
-    Test-WinMintRollupFixPresent -GetPackagesText $packages -Family $resolved.Family -Ubr $resolved.PackageUbr -Architecture 'ARM64'
-
-    Write-WinMintQualityPackageLeaf -PackageDir $QualityPackageDir -Kind boot -Leaf @($boot)
-    Write-WinMintQualityPackageLeaf -PackageDir $QualityPackageDir -Kind winre -Leaf @($winre)
     Write-QualityEvidence -State ([pscustomobject]@{
             Skipped   = $false
             Kb        = $resolved.Kb

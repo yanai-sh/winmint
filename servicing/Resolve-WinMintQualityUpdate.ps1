@@ -382,6 +382,85 @@ function Write-WinMintQualityPackageLeaf {
         -Value @($names) -Encoding utf8
 }
 
+# Pure install/boot/winre leaf order: SSU → checkpoints → LCU;
+# boot = install + optional Setup DU; winre = SSU + optional SafeOS DU.
+function New-WinMintQualityPackageOrder {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    param(
+        [Parameter(Mandatory)] [string] $SsuLeaf,
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]] $CheckpointLeaves,
+        [Parameter(Mandatory)] [string] $LcuLeaf,
+        [string] $SetupLeaf = '',
+        [string] $SafeOsLeaf = ''
+    )
+    $install = [System.Collections.Generic.List[string]]::new()
+    $install.Add($SsuLeaf.Trim())
+    foreach ($c in @($CheckpointLeaves)) {
+        if (-not [string]::IsNullOrWhiteSpace($c)) { $install.Add($c.Trim()) }
+    }
+    $install.Add($LcuLeaf.Trim())
+
+    $boot = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in $install) { $boot.Add($p) }
+    if (-not [string]::IsNullOrWhiteSpace($SetupLeaf)) { $boot.Add($SetupLeaf.Trim()) }
+
+    $winre = [System.Collections.Generic.List[string]]::new()
+    $winre.Add($SsuLeaf.Trim())
+    if (-not [string]::IsNullOrWhiteSpace($SafeOsLeaf)) { $winre.Add($SafeOsLeaf.Trim()) }
+
+    return [pscustomobject]@{
+        Install = @($install)
+        Boot    = @($boot)
+        WinRe   = @($winre)
+    }
+}
+
+function Invoke-WinMintQualityPackagesApply {
+    <#
+      Order → Add-Package loop → RollupFix verify → write boot/winre leaf files.
+      Inject AddPackage / GetPackages for contract tests (no live DISM).
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $MountDir,
+        [Parameter(Mandatory)] [string] $PackageDir,
+        [Parameter(Mandatory)] [string] $SsuLeaf,
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]] $CheckpointLeaves,
+        [Parameter(Mandatory)] [string] $LcuLeaf,
+        [string] $SetupLeaf = '',
+        [string] $SafeOsLeaf = '',
+        [Parameter(Mandatory)] [int] $Family,
+        [Parameter(Mandatory)] [int] $PackageUbr,
+        [string] $Architecture = 'ARM64',
+        [scriptblock] $AddPackage,
+        [scriptblock] $GetPackages
+    )
+    $order = New-WinMintQualityPackageOrder -SsuLeaf $SsuLeaf -CheckpointLeaves $CheckpointLeaves `
+        -LcuLeaf $LcuLeaf -SetupLeaf $SetupLeaf -SafeOsLeaf $SafeOsLeaf
+
+    foreach ($leaf in @($order.Install)) {
+        $pkg = Join-Path $PackageDir $leaf
+        if ($AddPackage) {
+            & $AddPackage $MountDir $pkg
+        }
+        else {
+            Invoke-WinMintDismAddPackage -MountDir $MountDir -PackagePath $pkg
+        }
+    }
+
+    if ($GetPackages) {
+        $packages = [string](& $GetPackages $MountDir)
+    }
+    else {
+        $packages = & dism.exe /English /Image:$MountDir /Get-Packages 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) { throw "DISM /Get-Packages failed: $LASTEXITCODE" }
+    }
+    Test-WinMintRollupFixPresent -GetPackagesText $packages -Family $Family -Ubr $PackageUbr -Architecture $Architecture
+
+    Write-WinMintQualityPackageLeaf -PackageDir $PackageDir -Kind boot -Leaf @($order.Boot)
+    Write-WinMintQualityPackageLeaf -PackageDir $PackageDir -Kind winre -Leaf @($order.WinRe)
+    return $order
+}
+
 function Invoke-WinMintCatalogSearchHtml {
     # Catalog intermittently serves a rowless page: HTTP 200, full search chrome
     # (~41KB), zero goToDetails result rows. Probed 22 Aug 2026: the rowless

@@ -282,7 +282,8 @@ public sealed record ProvisioningEvidenceFile(
     [property: JsonPropertyName("statusCode")] string StatusCode,
     [property: JsonPropertyName("statusMessage")] string StatusMessage,
     [property: JsonPropertyName("phases")] IReadOnlyList<string> Phases,
-    [property: JsonPropertyName("firstPaintMs")] long? FirstPaintMs = null);
+    [property: JsonPropertyName("firstPaintMs")] long? FirstPaintMs = null,
+    [property: JsonPropertyName("smokeRunId")] string? SmokeRunId = null);
 
 public sealed record PackageFailureEntry(
     [property: JsonPropertyName("jobId")] string JobId,

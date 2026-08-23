@@ -115,6 +115,30 @@ try {
         throw "Select-WinMintGuestEvidencePath must pick newest Complete, got $newest"
     }
 
+    # RequiredSmokeRunId ignores stale Complete from another Smoke run.
+    $evRun = Join-Path $tmp 'guest-ev-runid'
+    New-Item -ItemType Directory -Force -Path $evRun | Out-Null
+    '{"outcome":"Complete","smokeRunId":"old-run"}' |
+        Set-Content -LiteralPath (Join-Path $evRun 'evidence-20260101000000001.json') -Encoding utf8
+    '{"outcome":"Complete","smokeRunId":"this-run","statusCode":"jobs.ok"}' |
+        Set-Content -LiteralPath (Join-Path $evRun 'evidence-20260101000000002.json') -Encoding utf8
+    if ($null -ne (Select-WinMintGuestEvidencePath -Directory $evRun -RequiredSmokeRunId 'missing')) {
+        throw 'Select-WinMintGuestEvidencePath must reject when no evidence matches RequiredSmokeRunId'
+    }
+    $matched = Select-WinMintGuestEvidencePath -Directory $evRun -RequiredSmokeRunId 'this-run'
+    if ($matched -notmatch 'evidence-20260101000000002') {
+        throw "Select-WinMintGuestEvidencePath must pick matching smokeRunId, got $matched"
+    }
+    $noStamp = [pscustomobject]@{
+        outcome    = 'Complete'
+        statusCode = 'jobs.ok'
+        phases     = @('shell.firstPaint', 'jobs.ok', 'oobe.dismiss')
+    }
+    if (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $noStamp `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false -RequiredSmokeRunId 'this-run') {
+        throw 'Complete without matching smokeRunId must fail when RequiredSmokeRunId is set'
+    }
+
     $staleComplete = [pscustomobject]@{
         outcome    = 'Complete'
         statusCode = 'jobs.ok'
