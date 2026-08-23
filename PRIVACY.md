@@ -1,14 +1,14 @@
 # Privacy
 
-WinMint does not transfer information to networked systems unless the operator requested that operation.
+WinMint does not send data off the PC unless you started that step.
 
-When the operator asks, WinMint may contact:
+When you do, it may contact:
 
-- **GitHub** — download a GitHub Release toolkit ZIP and checksum; API lookups for tags.
-- **Microsoft** — Source ISO is operator-supplied (not downloaded by WinMint). Offline servicing may use DISM against that media. Optional Surface Catalog driver fetch uses Microsoft download URLs from the in-repo catalog. WinGet source update/install uses Microsoft WinGet endpoints.
-- **WinGet / Scoop** — package resolve and install only when the Profile lists those packages and FirstLogon/jobs run them.
-- **Package vendor endpoints** — whatever the selected WinGet/Scoop packages fetch.
+- **GitHub** — download the toolkit zip and checksum, and look up release tags.
+- **Microsoft** — you supply the Windows ISO. Servicing can use DISM on that file. Optional Surface drivers and WinGet use Microsoft's servers.
+- **WinGet / Scoop** — only if you chose those apps and first sign-in installs them.
+- **Package vendor sites** — whatever those apps download.
 
-The portable toolkit stores Apply workdirs and Output ISOs on disk where the operator pointed them. Guest evidence may remain under `%ProgramData%\WinMint\` after Supervisor self-erase. Host **Prepared media** under `%ProgramData%\WinMint\Servicing\` is a local Source ISO tree, not a network cache.
+Work folders and the output ISO stay where you put them. Logs may remain under `%ProgramData%\WinMint\`. A local copy of extracted Windows may remain under `%ProgramData%\WinMint\Servicing\` so a later build can skip re-extracting. That copy is not uploaded.
 
-No telemetry service, no crash-upload endpoint, and no SignPath traffic from operator machines until a signed GitHub Release exists and the operator downloads it.
+No telemetry service, no crash-upload endpoint, and no SignPath traffic from your PC until a signed GitHub Release exists and you download it.
