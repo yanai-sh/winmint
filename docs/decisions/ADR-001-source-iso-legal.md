@@ -1,23 +1,22 @@
-# ADR-001: Source ISO is legally user-supplied
+# ADR-001: Source ISO is user-supplied
 
-**Status:** Accepted  
-**Date:** 2026-07-18
+**Status:** Accepted · **Date:** 2026-07-18
 
 ### Context
 
-WinMint could pin a golden image, download UUP payloads, or otherwise obtain Windows media for the user. That creates license and distribution risk.
+Pinning a golden image or silently fetching Windows media (ISO/UUP) is a license and distribution risk.
+
+### Rejected
+
+Golden ISO, UUP dump as a product path, CI fetching Windows media, treating Catalog `.msu` as a Source ISO.
 
 ### Decision
 
-The user **must always provide** an official Microsoft Windows **Source ISO**. WinMint does not bundle, pin, cache-as-product-default, or silently download Windows **images** (including UUP dump as a public product path). This is a **legal** constraint, not only an engineering preference.
+The operator always provides an official Microsoft **Source ISO**. WinMint does not bundle, pin, or download Windows **images**.
 
-Same-train **Microsoft Update Catalog quality `.msu`** (combined SSU+LCU for the staged WIM’s DISM `Version` family, e.g. `10.0.26200`) is **not** a Source ISO. That fetch is in-product ImageServicing — [ADR-013](ADR-013-catalog-lcu.md). CI must still not fetch ISOs.
+Same-train Catalog quality `.msu` is ImageServicing, not a Source ISO ([ADR-013](ADR-013-catalog-lcu.md)). Feature-upgrade media (25H2 → 26H1) stays out.
 
-### Consequences
-
-- CLI and wizard only accept a user-supplied Source ISO path (or equivalent explicit user fetch outside WinMint).
-- Acceptance fixtures use a local ISO the maintainer supplies; CI must not fetch Windows media. On the SL7 maintainer host the vanilla 25H2 English ARM64 Source ISO path is recorded in `tests/fixtures/maintainer-host.json` (and [AGENTS.md](../../AGENTS.md#maintainer-host)) — path text only, never the ISO bytes.
-- Catalog quality packages for the same feature train are allowed under ADR-013. Feature-upgrade media (25H2 → 26H1) and UUP dump remain out.
+CI must not fetch ISOs. Maintainer path text lives in `tests/fixtures/maintainer-host.json` — never the bytes.
 
 ### Review trigger
 

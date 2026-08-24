@@ -2,7 +2,7 @@ namespace WinMint.Orchestrator;
 
 /// <summary>
 /// Host-side named presets that expand to debloat remove-lists.
-/// Preset names never appear in Profile JSON ([DEBLOAT] / ADR-005 / issue 56).
+/// Preset names never appear in Profile JSON (ADR-005).
 /// Copilot/gaming AppX are product-required via <see cref="ProductPosture"/> — not preset overlays.
 /// </summary>
 public static class DebloatPresets

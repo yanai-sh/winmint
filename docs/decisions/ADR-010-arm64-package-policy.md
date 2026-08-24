@@ -1,24 +1,25 @@
 # ADR-010: ARM64-first package catalog
 
-**Status:** Accepted (amended 2026-08-11)  
-**Date:** 2026-08-05  
-**Related:** [BUILDPLAN](../design/BUILDPLAN.md), [spec](../specs/2026-08-05-package-catalog-arm64.md), [ADR-011](ADR-011-alpha-posture-and-package-delegation.md)
+**Status:** Accepted · **Date:** 2026-08-05 · **Updated:** 2026-08-11
+
+### Context
+
+A catalog that is x64-first will plan installs that fail or emulate on this product’s ARM64 images.
+
+### Rejected
+
+Live winget search in Wizard. Runtime PE audit as default FirstLogon policy. Third-party `scoop-aarch64` as a silent catalog dependency. `winget show` / a manifest URL alone as architecture proof.
 
 ### Decision
 
-1. Ship `config/packages.json` (embedded in Orchestrator). Profile stores **install ids**; Wizard chips use **catalog keys**.
-2. `BuildPlan.Plan` fail-closed: `packages.catalog.unknown`, `packages.catalog.unsupportedArch` on arm64 (default when unset).
-3. Winget jobs on arm64 images carry `--architecture arm64` when catalog supports arm64 (or equivalent in generated import JSON).
-4. WSL `fromFile` for NixOS-WSL (GitHub release → `wsl --install --from-file`).
-5. **Architecture truth at catalog time:** `just packages-check` (`tools/host/Invoke-PackagesCheck.ps1`) proves live winget ids with `winget download` (App Installer has no `install --dry-run`) and scoop ids via manifest + archive download, then writes `config/packages.proof.json`. `just check` validates that receipt offline (content-hash). Stubs (`stub: true`) are skipped. **`package.auditNative`** remains optional metal evidence — not default FirstLogon policy ([ADR-011](ADR-011-alpha-posture-and-package-delegation.md)).
-6. Scoop: prefer official **main** / **extras** manifests with `architecture.arm64`; optional catalog field **`scoopBucket`**. Do **not** depend on third-party `scoop-aarch64` for catalog entries unless explicitly grilled.
+`config/packages.json` is the human catalog. Profile stores **install ids**; Wizard chips are **catalog keys** (UI vocabulary, never JSON).
 
-Out of scope unchanged: live winget search in Wizard, guest pwsh product runtime, Profile preset names in JSON.
+Plan fail-closes on unknown id or unsupported arch (arm64 when unset).
 
-### Amended (2026-08-06)
+Architecture truth is **catalog time**: `just packages-check` writes a hashed receipt; `just check` validates it offline. Stubs skipped. Optional metal `package.auditNative` is not default product policy ([ADR-011](ADR-011-alpha-posture-and-package-delegation.md)).
 
-Plan may emit derived **`winget import`** JSON (or configure YAML after spike) from the catalog. Supervisor may delegate the winget/scoop package phase per [ADR-011](ADR-011-alpha-posture-and-package-delegation.md).
+Supervisor may delegate the package phase (import/batch) per ADR-011. Derived import JSON is generated, not a second source of truth.
 
-### Amended (2026-08-11)
+### Review trigger
 
-Catalog-time truth is download prove + committed `packages.proof.json` receipt gate (`just packages-check` → `just check` offline), not `winget show` / manifest URL alone.
+Winget/scoop lose a durable ARM64 prove path, or the product adds a second arch as first-class.

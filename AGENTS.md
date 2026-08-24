@@ -8,17 +8,30 @@ Windows 11 ISO builder (**alpha**). **ARM64-first**. Host Servicing: **pwsh 7.6+
 
 Elevate **only** Servicing `pwsh -File`. No v1 `WinMint.ps1`. No guest **pwsh product runtime** — inbox `powershell.exe` for Scoop bootstrap or narrow winget import/configure is OK.
 
-## Invariants
+## Docs
 
-Living list: [DESIGN](docs/DESIGN.md#invariants). Short form: Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break.
+Code and tests are the product ([ADR-014](docs/decisions/ADR-014-docs-are-not-living-law.md)). Markdown holds three things:
 
-## Defaults
+- **Glossary** — [CONTEXT.md](CONTEXT.md)
+- **Why** — [docs/decisions/](docs/decisions/)
+- **This map**
 
-Revisable with spike evidence — [DESIGN](docs/DESIGN.md#defaults).
+Do not add living design docs. Do not restate types, opcodes, or defaults that already live in `src/`. An ADR is the choice and what was rejected — not an id catalog or changelog.
 
-## Deep modules
+Short form of the identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break.
 
-BuildPlan · ImageServicing · ProvisioningSession — [docs/design/](docs/design/). HostCompile is the Orchestrator entry (not a fourth module).
+## Map
+
+| Module | Lives in |
+|--------|----------|
+| **BuildPlan** | `src/WinMint.Orchestrator` |
+| **ImageServicing** | `src/WinMint.Orchestrator` + `servicing/` |
+| **ProvisioningSession** | `src/WinMint.Provisioning` |
+| **HostCompile** | Orchestrator entry (not a fourth module) |
+
+Front ends: `src/WinMint.Cli`, `src/WinMint.Wizard`. Guest apply helper: `src/WinMint.WinPeApply`. Staged bits: `payload/`. Pins: `global.json`, `Directory.Build.props`. Tests: `tests/` — `just check`.
+
+Operator/legal: [README.md](README.md), [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md).
 
 ## Maintainer host
 
@@ -33,6 +46,7 @@ Same fact in [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-hos
 ```powershell
 just publish-provisioning
 just smoke-maintainer
+# Profile default: samples/sl7.profile.json (needs .scratch/sl7.password)
 # or: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'
 # (positional path — do not use ISO=path under PowerShell)
 ```
@@ -45,8 +59,16 @@ Prefer one issue per session. Tiny same-risk fixes in touched code are fine — 
 just check
 ```
 
-**Solo — no PRs** unless asked. Issues are the work surface ([issue-tracker](docs/agents/issue-tracker.md)).
+**Solo — no PRs** unless asked. Issues are the work surface.
 
-## Read order
+- Create: `gh issue create --title "..." --body "..."` (heredoc for multi-line)
+- Read: `gh issue view <number> --comments`
+- List: `gh issue list --state open --json number,title,body,labels,comments`
+- Comment: `gh issue comment <number> --body "..."`
+- Labels: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
+- Close: `gh issue close <number> --comment "..."`
 
-[CONTEXT](CONTEXT.md) → [DESIGN](docs/DESIGN.md) → the one module design for the seam. [AGENTIC](docs/agents/AGENTIC.md) when the session needs it. TDD / ARCHITECTURE / STACK only when tests, shape, or pins are the work. Shipped specs are historical.
+Labels: `needs-triage` · `needs-info` · `ready-for-agent` · `ready-for-human` · `wontfix`. Apply `ready-for-agent` only when starting an implement session on that issue.
+
+When a skill says “publish to the issue tracker” → create a GitHub issue.  
+When a skill says “fetch the relevant ticket” → `gh issue view <number> --comments`.

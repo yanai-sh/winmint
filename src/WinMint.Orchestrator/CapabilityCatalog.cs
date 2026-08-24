@@ -2,7 +2,7 @@ namespace WinMint.Orchestrator;
 
 /// <summary>
 /// Static catalog of legal capability ids for <c>debloat.removeCapabilities</c> (ticket 20).
-/// Inventory pin: 25H2 ARM64 English — thin acceptance pins in [DEBLOAT](../../docs/design/DEBLOAT.md).
+/// Inventory pin: 25H2 ARM64 English. Legal ids are this set; host presets live in `DebloatPresets`.
 /// </summary>
 public static class CapabilityCatalog
 {

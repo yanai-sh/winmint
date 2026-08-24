@@ -1,32 +1,23 @@
 # ADR-013: Catalog LCU is ImageServicing
 
-**Status:** Accepted  
-**Date:** 2026-08-19  
-**Related:** [ADR-001](ADR-001-source-iso-legal.md), [IMAGESERVICING](../design/IMAGESERVICING.md), [DESIGN](../DESIGN.md)
+**Status:** Accepted · **Date:** 2026-08-19
 
 ### Context
 
-A user-supplied Source ISO can be the current feature train (e.g. 25H2 / `10.0.26200`) and still behind Patch Tuesday. Guest OOBE then spends a long quality-update wait. Microsoft’s documented image-currency path is Catalog packages + DISM `/Add-Package`, not a UUP dump and not a product-owned golden WIM.
+A current-train Source ISO can still be behind Patch Tuesday. Guest OOBE then waits on quality updates. Microsoft’s documented image-currency path is Catalog packages + DISM `/Add-Package`, not UUP dump and not a product-owned golden WIM.
+
+### Rejected
+
+Treating Catalog `.msu` as a Source ISO ([ADR-001](ADR-001-source-iso-legal.md)). Rewriting Prepared media in place. Pinning a KB or Patch Tuesday date. Preview CU as “latest.” Cross-train packages. UUP dump. First file in a DownloadDialog or quality-cache folder as identity. A checkpoint `.msu` standing in for the combined LCU. `just check` hitting Catalog.
 
 ### Decision
 
-When staged `install.wim` UBR is behind the latest same-family **Security Update** (B-release) on the Microsoft Update Catalog, ImageServicing downloads the ARM64 combined LCU (and Catalog-listed checkpoint `.msu` files) into `%ProgramData%\WinMint\Servicing\quality-cache\` keyed by KB + arch + SHA-256, then `dism.exe /Add-Package` on **staged** media only.
+When staged `install.wim` UBR is behind the newest same-family Catalog **Security Update** (B-release), ImageServicing fetches the ARM64 combined LCU (plus listed checkpoint packages) into a host quality-cache keyed by KB + arch + SHA, then `/Add-Package` on **staged** media only.
 
-- Source ISO stays user-supplied. Prepared-media entries stay an unpatched Source-ISO tree.
-- Same DISM `Version` family only (`26200` → 25H2). WinMint supports 25H2+: older families (`26100` / 24H2), unknown families, 26H1 guesses, or x64-only Catalog results fail closed.
-- Fail closed when the WIM is behind and Catalog, BITS, or DISM cannot complete.
-- Catalog `.msu` payload URLs are `download.windowsupdate.com` **or** `*.dl.delivery.mp.microsoft.com` (Catalog DownloadDialog `files[].url` as of 2026). Other hosts fail closed. Not a Source ISO host. The payload **leaf** must contain the requested KB; a checkpoint `.msu` in the same dialog or a poisoned quality-cache folder is a miss (quarantined off the hit path), not a combined LCU.
-- Skip download and DISM when `packageUbr <= imageUbr`.
-- `just check` never hits Catalog. Maintainer live reconcile is `just quality-check`.
-- Evidence fields (`lcu.kb`, `lcu.ubrBefore`, `lcu.ubrAfter`, `lcu.sha256`, `lcu.skipped`) are projection, not a control plane.
+Same DISM Version family only. Fail closed if behind and Catalog/BITS/DISM cannot finish. Payload hosts and leaf-KB identity live in code; other hosts and wrong leaves are a miss.
 
-### Consequences
-
-- The `AddQualityUpdates` opcode is ImageServicing Materialize-owned, not BuildPlan Profile intent.
-- Host Apply progress (`apply-status.txt` / DISM percent) is the long wait when the ISO is behind; guest ZDP after NAT remains short and mandatory.
-- Quality-cache is not a product golden WIM and is never rewritten in place as Prepared media.
-- Revisit if Microsoft stops publishing combined Catalog `.msu` for the current train, ships an official in-place path to the next feature release, or moves `.msu` bytes off `download.windowsupdate.com` / `*.dl.delivery.mp.microsoft.com`.
+Quality-cache is not Prepared media and not a golden WIM. Skip when already current.
 
 ### Review trigger
 
-Catalog/DISM applicability break on ARM64 25H2; Microsoft redistribution change; a real 26H1 in-place update from 25H2.
+Microsoft stops publishing combined Catalog `.msu` for the train, ships an official in-place feature-upgrade path, or moves `.msu` bytes off the allowed CDNs.
