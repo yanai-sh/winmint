@@ -412,6 +412,163 @@ function Get-SmokeWaitPhaseSticky {
     }
 }
 
+function Get-SmokeWaitTick {
+    <#
+    .SYNOPSIS
+      One Smoke wait poll: snapshot in, actions out. Pure — no Hyper-V.
+    #>
+    param([Parameter(Mandatory)] $Snap)
+
+    $d = @{
+        VmState                   = ''
+        LastVmState               = ''
+        Cpu                       = 0
+        VhdFileSizeBytes          = 0L
+        VhdHasImage               = $null
+        HeartbeatOk               = $false
+        GuestUpSticky             = $false
+        ConsecutiveHeartbeatOk    = 0
+        DiskBootPreferred         = $false
+        DvdEjected                = $false
+        SmokeRunIdStamped         = $false
+        LastFingerprint           = ''
+        Fingerprint               = ''
+        SupervisorRunning         = $false
+        SetupRebootCount          = 0
+        MaxSetupReboots           = 8
+        StallElapsedMinutes       = 0.0
+        StallMinutes              = 45
+        EmptyVhdRunningSeconds    = 0
+        EmptyVhdFailAfterSeconds  = 480
+        NudgeElapsedMinutes       = 0.0
+        HalfStallShot             = $false
+    }
+    foreach ($p in $Snap.PSObject.Properties) {
+        $d[$p.Name] = $p.Value
+    }
+
+    $vmState = [string]$d.VmState
+    $vhdBytes = [long]$d.VhdFileSizeBytes
+    $vhdHasImage = if ($null -ne $d.VhdHasImage) { [bool]$d.VhdHasImage } else { $vhdBytes -ge 1GB }
+    $hb = [bool]$d.HeartbeatOk
+    $diskPreferred = [bool]$d.DiskBootPreferred
+
+    if ($vmState -notin @('Running', 'Starting', 'Stopping', 'Off')) {
+        return [pscustomobject]@{
+            Phase                  = 'setup-reboot'
+            GuestUpSticky          = $false
+            ConsecutiveHeartbeatOk = 0
+            SetupRebootCount       = [int]$d.SetupRebootCount
+            LastFingerprint        = [string]$d.LastFingerprint
+            PreferDisk             = 'skip'
+            EjectDvd               = 'skip'
+            StartVm                = $false
+            RearmNudge             = $false
+            ExtendStall            = $false
+            TryStamp               = $false
+            SendNudge              = $false
+            HalfStallShot          = $false
+            HostLine               = "VM $vmState"
+            FailReason             = 'UNEXPECTED'
+            FailMessage            = "VM in unexpected state: $vmState"
+        }
+    }
+
+    $considerPrefer = $vmState -in @('Running', 'Stopping', 'Off')
+    $preferDisk = if ($considerPrefer) {
+        Get-SmokePreferDiskBootDecision -AlreadyPreferred $diskPreferred -VhdHasImage $vhdHasImage
+    }
+    else {
+        'skip'
+    }
+    $diskAfter = $diskPreferred -or ($preferDisk -eq 'prefer-hdd')
+    $ejectDvd = if ($vmState -eq 'Running') {
+        Get-SmokeEjectDvdDecision -AlreadyEjected ([bool]$d.DvdEjected) `
+            -DiskBootPreferred $diskAfter -HeartbeatOk $hb
+    }
+    else {
+        'skip'
+    }
+
+    $setupCount = [int]$d.SetupRebootCount
+    if ((Get-SmokeSetupRebootTransition -LastVmState ([string]$d.LastVmState) `
+            -VmState $vmState -VhdHasImage $vhdHasImage) -eq 'count') {
+        $setupCount++
+    }
+
+    $rearmNudge = (Get-SmokeNudgeRearmDecision -LastVmState ([string]$d.LastVmState) `
+            -VmState $vmState -DiskBootPreferred $diskAfter) -eq 'rearm'
+    $nudgeElapsed = [double]$d.NudgeElapsedMinutes
+    if ($rearmNudge) { $nudgeElapsed = 0 }
+
+    $guestProgress = (Get-SmokeGuestProgressDecision -LastFingerprint ([string]$d.LastFingerprint) `
+            -Fingerprint ([string]$d.Fingerprint) -SupervisorRunning ([bool]$d.SupervisorRunning)) -eq 'progress'
+    $lastFp = [string]$d.LastFingerprint
+    if ($guestProgress) { $lastFp = [string]$d.Fingerprint }
+
+    $extendStall = (Get-SmokeStallExtendDecision -VmState $vmState -Cpu ([int]$d.Cpu) `
+            -GuestUpSticky ([bool]$d.GuestUpSticky) -GuestProgress $guestProgress) -eq 'extend'
+    $stallElapsed = [double]$d.StallElapsedMinutes
+    if ($extendStall) { $stallElapsed = 0 }
+
+    $tryStamp = (Get-SmokeRunIdStampDecision -AlreadyStamped ([bool]$d.SmokeRunIdStamped) `
+            -HeartbeatOk $hb) -eq 'try-stamp'
+
+    $phaseRes = Get-SmokeWaitPhaseSticky -VmState $vmState -VhdFileSizeBytes $vhdBytes `
+        -HeartbeatOk:$hb -GuestUpSticky ([bool]$d.GuestUpSticky) `
+        -ConsecutiveHeartbeatOk ([int]$d.ConsecutiveHeartbeatOk)
+    $phase = [string]$phaseRes.Phase
+    $vhdMb = [int][math]::Round($vhdBytes / 1MB)
+    $failReason = $null
+    $failMessage = $null
+    $watch = Get-SmokeWatchVerdict -Phase $phase -VmState $vmState -VhdFileSizeMB $vhdMb `
+        -EmptyVhdRunningSeconds ([int]$d.EmptyVhdRunningSeconds) `
+        -EmptyVhdFailAfterSeconds ([int]$d.EmptyVhdFailAfterSeconds)
+    $emptyMin = [int]([int]$d.EmptyVhdFailAfterSeconds / 60)
+    if ($watch -eq 'empty-vhd') {
+        $failReason = 'EMPTY_VHD'
+        $failMessage = "EMPTY_VHD: WinPE has not applied (VHD FileSize still under 1GB) for ${emptyMin} minutes after Running."
+    }
+    elseif ((Get-SmokeRebootLoopVerdict -SetupRebootCount $setupCount `
+            -MaxSetupReboots ([int]$d.MaxSetupReboots)) -eq 'reboot-loop') {
+        $failReason = 'REBOOT_LOOP'
+        $failMessage = "REBOOT_LOOP: $setupCount setup reboots after the image applied (cap $([int]$d.MaxSetupReboots))."
+    }
+    else {
+        $stallMin = [int]$d.StallMinutes
+        if ($stallElapsed -ge $stallMin) {
+            $failReason = 'STALL'
+            $failMessage = "STALL_SUSPECT: no guest progress for ${stallMin} minutes (fail-fast before WallClockTimeout)."
+        }
+    }
+
+    $hostLine = switch ($vmState) {
+        'Starting' { 'VM Starting (setup reboot)…' }
+        'Stopping' { 'VM Stopping (setup reboot)…' }
+        'Off' { 'VM Off during setup — starting again…' }
+        default { "VM $vmState" }
+    }
+
+    return [pscustomobject]@{
+        Phase                  = $phase
+        GuestUpSticky          = [bool]$phaseRes.GuestUpSticky
+        ConsecutiveHeartbeatOk = [int]$phaseRes.ConsecutiveHeartbeatOk
+        SetupRebootCount       = $setupCount
+        LastFingerprint        = $lastFp
+        PreferDisk             = $preferDisk
+        EjectDvd               = $ejectDvd
+        StartVm                = ($vmState -eq 'Off')
+        RearmNudge             = $rearmNudge
+        ExtendStall            = $extendStall
+        TryStamp               = $tryStamp
+        SendNudge              = (-not $diskAfter -and $nudgeElapsed -lt 3 -and $vmState -eq 'Running')
+        HalfStallShot          = (-not [bool]$d.HalfStallShot -and $stallElapsed -ge ([int]$d.StallMinutes / 2.0))
+        HostLine               = $hostLine
+        FailReason             = $failReason
+        FailMessage            = $failMessage
+    }
+}
+
 function Get-SmokeWatchVerdict {
     <#
     .SYNOPSIS
@@ -454,31 +611,6 @@ function Get-SmokeWatchVerdict {
         return 'harness-stale'
     }
     return 'continue'
-}
-
-function Get-WinMintApplyHostFailure {
-    param([Parameter(Mandatory)] [string] $WorkDirectory)
-    $applyStatusPath = Join-Path $WorkDirectory 'apply-status.txt'
-    if (-not (Test-Path -LiteralPath $applyStatusPath -PathType Leaf)) {
-        return $null
-    }
-    $applyStatus = Get-Content -LiteralPath $applyStatusPath -Raw -Encoding utf8
-    if ($applyStatus -notmatch 'stage=failed:') {
-        return $null
-    }
-    $failureJson = Join-Path $WorkDirectory 'failure.json'
-    if (Test-Path -LiteralPath $failureJson -PathType Leaf) {
-        try {
-            $failDoc = Get-Content -LiteralPath $failureJson -Raw -Encoding utf8 | ConvertFrom-Json
-            if (-not [string]::IsNullOrWhiteSpace([string]$failDoc.message)) {
-                return [string]$failDoc.message
-            }
-        }
-        catch {
-            Write-Verbose "failure.json unreadable: $($_.Exception.Message)"
-        }
-    }
-    return 'Apply failed (apply-status)'
 }
 
 $Script:WinMintExplorerShell = 'explorer.exe'

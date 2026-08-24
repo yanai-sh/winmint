@@ -87,6 +87,31 @@ function Read-WinMintApplyStatus {
     [pscustomobject]@{ Stage = $stage; Log = $log }
 }
 
+function Get-WinMintApplyHostFailure {
+    param([Parameter(Mandatory)] [string] $WorkDirectory)
+    $applyStatusPath = Join-Path $WorkDirectory 'apply-status.txt'
+    if (-not (Test-Path -LiteralPath $applyStatusPath -PathType Leaf)) {
+        return $null
+    }
+    $applyStatus = Get-Content -LiteralPath $applyStatusPath -Raw -Encoding utf8
+    if ($applyStatus -notmatch 'stage=failed:') {
+        return $null
+    }
+    $failureJson = Join-Path $WorkDirectory 'failure.json'
+    if (Test-Path -LiteralPath $failureJson -PathType Leaf) {
+        try {
+            $failDoc = Get-Content -LiteralPath $failureJson -Raw -Encoding utf8 | ConvertFrom-Json
+            if (-not [string]::IsNullOrWhiteSpace([string]$failDoc.message)) {
+                return [string]$failDoc.message
+            }
+        }
+        catch {
+            Write-Verbose "failure.json unreadable: $($_.Exception.Message)"
+        }
+    }
+    return 'Apply failed (apply-status)'
+}
+
 function Format-WinMintHostWatch {
     param(
         [string] $Title = '',

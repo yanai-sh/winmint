@@ -38,7 +38,7 @@ $expected = @(
     'dotnet format --verify-no-changes',
     'dotnet restore',
     'dotnet build --no-restore',
-    'dotnet test --no-build -- --filter-not-trait Category=S4 --filter-not-trait Category=S5',
+    'dotnet test --no-build',
     'find-module PSScriptAnalyzer 1.25.0',
     'install-module PSScriptAnalyzer 1.25.0',
     'import-module PSScriptAnalyzer 1.25.0'

@@ -173,7 +173,8 @@ if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive:$watcherAlive) -eq 'spawn') {
     $watcher = Start-Process -FilePath $pwshExe -WorkingDirectory $repoRoot -PassThru -ArgumentList @(
         '-NoProfile',
         '-NonInteractive',
-        '-File', (Join-Path $PSScriptRoot 'Watch-SmokeHost.ps1'),
+        '-File', (Join-Path $repoRoot 'tools/host/Watch-Host.ps1'),
+        '-Kind', 'smoke',
         '-Work', $workFull,
         '-PriorRunId:'
     )
@@ -369,8 +370,15 @@ function Test-GuestEvidenceReady {
         $session = New-PSSession @sessionParams
         try {
             # Disk is booting Windows — HDD first; eject DVD only after heartbeat (not mid-WinPE reboot).
-            Prefer-DiskBoot
-            Dismount-InstallDvdWhenWindowsBoots
+            $hbReady = Test-GuestWindowsHeartbeat
+            if ((Get-SmokePreferDiskBootDecision -AlreadyPreferred $script:DiskBootPreferred `
+                    -VhdHasImage (Test-SmokeVhdHasImage)) -eq 'prefer-hdd') {
+                Prefer-DiskBoot
+            }
+            if ((Get-SmokeEjectDvdDecision -AlreadyEjected $script:DvdEjected `
+                    -DiskBootPreferred $script:DiskBootPreferred -HeartbeatOk $hbReady) -eq 'eject') {
+                Dismount-InstallDvdWhenWindowsBoots
+            }
 
             $remotePaths = @(Invoke-Command -Session $session -ScriptBlock {
                 $dir = Join-Path $env:ProgramData 'WinMint\evidence'
@@ -505,14 +513,7 @@ function Test-GuestWindowsHeartbeat {
 }
 
 function Prefer-DiskBoot {
-    $decision = Get-SmokePreferDiskBootDecision `
-        -AlreadyPreferred $script:DiskBootPreferred `
-        -VhdHasImage (Test-SmokeVhdHasImage)
-    if ($decision -eq 'skip') { return }
-    if ($decision -eq 'keep-dvd') {
-        Write-SmokeHostLine -Name 'Setup reboot before disk has an image — keeping install DVD attached.' -Activity wait
-        return
-    }
+    # I/O only — Get-SmokeWaitTick decides prefer-hdd. Must not eject (0xc0000178 STATUS_NO_MEDIA).
     try {
         $hddDev = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
         $dvdDev = Get-VMDvdDrive -VMName $VmName
@@ -532,11 +533,6 @@ function Prefer-DiskBoot {
 }
 
 function Dismount-InstallDvdWhenWindowsBoots {
-    $decision = Get-SmokeEjectDvdDecision `
-        -AlreadyEjected $script:DvdEjected `
-        -DiskBootPreferred $script:DiskBootPreferred `
-        -HeartbeatOk:(Test-GuestWindowsHeartbeat)
-    if ($decision -eq 'skip') { return }
     try {
         $dvdDev = Get-VMDvdDrive -VMName $VmName
         if ($null -ne $dvdDev -and -not [string]::IsNullOrWhiteSpace([string]$dvdDev.Path)) {
@@ -607,60 +603,14 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
 
         $vm = Get-VM -Name $VmName
         $vmStateNow = [string]$vm.State
-        # Setup reboots flip Running → Stopping → Off → Starting → Running; do not fail-closed.
-        # Eject DVD only after the VHD has an applied image so a WinPE reboot cannot leave an empty disk.
-        switch ($vmStateNow) {
-            'Running' {
-                # HDD first before wpeutil reboot. Waiting for Stopping misses the flip and
-                # WinPE LaunchApply runs again (clean + apply) if DVD is still attached.
-                Prefer-DiskBoot
-                Dismount-InstallDvdWhenWindowsBoots
-            }
-            'Starting' { Write-SmokeHostLine -Name 'VM Starting (setup reboot)…' -Activity wait }
-            'Stopping' {
-                Write-SmokeHostLine -Name 'VM Stopping (setup reboot)…' -Activity wait
-                Prefer-DiskBoot
-            }
-            'Off' {
-                Write-SmokeHostLine -Name 'VM Off during setup — starting again…' -Activity wait
-                Prefer-DiskBoot
-                Start-VM -Name $VmName -ErrorAction SilentlyContinue
-            }
-            default {
-                throw "VM in unexpected state: $($vm.State)"
-            }
-        }
-
         $cpu = 0
         try { $cpu = [int]$vm.CPUUsage } catch { $cpu = 0 }
-        $vhdHasImage = $false
-        try {
-            $drive = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
-            if ($drive) { $vhdHasImage = ((Get-VHD -Path $drive.Path).FileSize -ge 1GB) }
-        } catch { $vhdHasImage = $false }
-        if ((Get-SmokeSetupRebootTransition -LastVmState $script:LastVmState -VmState $vmStateNow -VhdHasImage:$vhdHasImage) -eq 'count') {
-            $script:SetupRebootCount++
-        }
-        if ((Get-SmokeNudgeRearmDecision -LastVmState $script:LastVmState -VmState $vmStateNow -DiskBootPreferred:$script:DiskBootPreferred) -eq 'rearm') {
-            $nudgeSw.Restart()
-            Write-SmokeHostLine -Name 'Re-armed DVD boot nudge after Off→Running (DVD still first).' -Activity wait
-        }
-        $script:LastVmState = $vmStateNow
-        $guestProgress = (Get-SmokeGuestProgressDecision `
-            -LastFingerprint $script:LastGuestEvidenceFingerprint `
-            -Fingerprint $script:GuestEvidenceFingerprint `
-            -SupervisorRunning:$script:LastSupervisorRunning) -eq 'progress'
-        if ($guestProgress) { $script:LastGuestEvidenceFingerprint = $script:GuestEvidenceFingerprint }
-        if ((Get-SmokeStallExtendDecision -VmState $vmStateNow -Cpu $cpu `
-                -GuestUpSticky:$script:GuestUpSticky -GuestProgress:$guestProgress) -eq 'extend') {
-            $stallSw.Restart()
-        }
-
         $vhdBytes = 0
         try {
             $drive = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
             if ($drive) { $vhdBytes = [long](Get-VHD -Path $drive.Path).FileSize }
         } catch { $vhdBytes = 0 }
+        $vhdHasImage = $vhdBytes -ge 1GB
 
         if ([string]$vm.State -eq 'Running' -and $vhdBytes -lt 1GB) {
             if ($null -eq $script:emptyVhdSw) {
@@ -678,56 +628,81 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
                 $script:emptyVhdSw = $null
             }
         }
+        $emptySecs = 0
+        if ($null -ne $script:emptyVhdSw) {
+            $emptySecs = [int]$script:emptyVhdSw.Elapsed.TotalSeconds
+        }
 
         $hb = Test-GuestWindowsHeartbeat
-        if ((Get-SmokeRunIdStampDecision -AlreadyStamped:$script:SmokeRunIdStamped -HeartbeatOk:$hb) -eq 'try-stamp') {
-            Try-StampSmokeRunId
+        $tick = Get-SmokeWaitTick -Snap ([pscustomobject]@{
+                VmState                  = $vmStateNow
+                LastVmState              = $script:LastVmState
+                Cpu                      = $cpu
+                VhdFileSizeBytes         = $vhdBytes
+                VhdHasImage              = $vhdHasImage
+                HeartbeatOk              = $hb
+                GuestUpSticky            = $script:GuestUpSticky
+                ConsecutiveHeartbeatOk   = $script:ConsecutiveHeartbeatOk
+                DiskBootPreferred        = $script:DiskBootPreferred
+                DvdEjected               = $script:DvdEjected
+                SmokeRunIdStamped        = $script:SmokeRunIdStamped
+                LastFingerprint          = $script:LastGuestEvidenceFingerprint
+                Fingerprint              = $script:GuestEvidenceFingerprint
+                SupervisorRunning        = $script:LastSupervisorRunning
+                SetupRebootCount         = $script:SetupRebootCount
+                MaxSetupReboots          = $MaxSetupReboots
+                StallElapsedMinutes      = $stallSw.Elapsed.TotalMinutes
+                StallMinutes             = $StallMinutes
+                EmptyVhdRunningSeconds   = $emptySecs
+                EmptyVhdFailAfterSeconds = [int]($EmptyVhdMinutes * 60)
+                NudgeElapsedMinutes      = $nudgeSw.Elapsed.TotalMinutes
+                HalfStallShot            = $script:HalfStallShot
+            })
+        if ($tick.FailReason) { throw $tick.FailMessage }
+
+        if ($tick.PreferDisk -eq 'keep-dvd') {
+            Write-SmokeHostLine -Name 'Setup reboot before disk has an image — keeping install DVD attached.' -Activity wait
         }
-        $phaseRes = Get-SmokeWaitPhaseSticky -VmState ([string]$vm.State) -VhdFileSizeBytes $vhdBytes `
-            -HeartbeatOk:$hb -GuestUpSticky:$script:GuestUpSticky `
-            -ConsecutiveHeartbeatOk $script:ConsecutiveHeartbeatOk
-        $phase = [string]$phaseRes.Phase
-        $script:GuestUpSticky = [bool]$phaseRes.GuestUpSticky
-        $script:ConsecutiveHeartbeatOk = [int]$phaseRes.ConsecutiveHeartbeatOk
+        elseif ($tick.PreferDisk -eq 'prefer-hdd') {
+            Prefer-DiskBoot
+        }
+        if ($tick.EjectDvd -eq 'eject' -and $script:DiskBootPreferred) {
+            Dismount-InstallDvdWhenWindowsBoots
+        }
+        if ($tick.StartVm) {
+            Write-SmokeHostLine -Name $tick.HostLine -Activity wait
+            Start-VM -Name $VmName -ErrorAction SilentlyContinue
+        }
+        elseif ($vmStateNow -in @('Starting', 'Stopping')) {
+            Write-SmokeHostLine -Name $tick.HostLine -Activity wait
+        }
+        if ($tick.RearmNudge) {
+            $nudgeSw.Restart()
+            Write-SmokeHostLine -Name 'Re-armed DVD boot nudge after Off→Running (DVD still first).' -Activity wait
+        }
+        if ($tick.ExtendStall) { $stallSw.Restart() }
+        if ($tick.TryStamp) { Try-StampSmokeRunId }
+        $script:LastVmState = $vmStateNow
+        $script:SetupRebootCount = [int]$tick.SetupRebootCount
+        $script:LastGuestEvidenceFingerprint = [string]$tick.LastFingerprint
+        $script:GuestUpSticky = [bool]$tick.GuestUpSticky
+        $script:ConsecutiveHeartbeatOk = [int]$tick.ConsecutiveHeartbeatOk
         $stallLeft = [math]::Max(0, [int]($StallMinutes - $stallSw.Elapsed.TotalMinutes))
         $wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
-        $hostLine = "VM $vmStateNow"
+        $hostLine = [string]$tick.HostLine
         if ($script:LastProbeError) { $hostLine = "PS Direct: $($script:LastProbeError)" }
-        Write-SmokeStatus -Path $statusPath -Phase $phase -VmName $VmName -VmState $vmStateNow `
+        Write-SmokeStatus -Path $statusPath -Phase $tick.Phase -VmName $VmName -VmState $vmStateNow `
             -Cpu $cpu -Heartbeat $(if ($hb) { 'OK' } else { 'No Contact' }) `
             -VhdFileSizeMB ([int][math]::Round($vhdBytes / 1MB)) `
             -StallMinutesLeft $stallLeft -WallMinutesLeft $wallLeft `
             -LastHostLine $hostLine -OutputIso $outIso -RunId $runId `
             -SetupRebootCount $script:SetupRebootCount
 
-        $emptySecs = 0
-        if ($null -ne $script:emptyVhdSw) {
-            $emptySecs = [int]$script:emptyVhdSw.Elapsed.TotalSeconds
-        }
-        $verdict = Get-SmokeWatchVerdict -Phase $phase -VmState ([string]$vm.State) `
-            -VhdFileSizeMB ([int][math]::Round($vhdBytes / 1MB)) `
-            -EmptyVhdRunningSeconds $emptySecs `
-            -EmptyVhdFailAfterSeconds ([int]($EmptyVhdMinutes * 60))
-        if ($verdict -eq 'empty-vhd') {
-            throw "EMPTY_VHD: WinPE has not applied (VHD FileSize still under 1GB) for ${EmptyVhdMinutes} minutes after Running."
-        }
-        if ((Get-SmokeRebootLoopVerdict -SetupRebootCount $script:SetupRebootCount -MaxSetupReboots $MaxSetupReboots) -eq 'reboot-loop') {
-            throw "REBOOT_LOOP: $($script:SetupRebootCount) setup reboots after the image applied (cap $MaxSetupReboots)."
-        }
-
-        if (-not $script:HalfStallShot -and $stallSw.Elapsed.TotalMinutes -ge ($StallMinutes / 2.0)) {
+        if ($tick.HalfStallShot) {
             Save-SmokeVmScreenshot -VmName $VmName -Path (Join-Path $evidenceOut 'console-half-stall.bmp') | Out-Null
             $script:HalfStallShot = $true
         }
-
-        if ($stallSw.Elapsed.TotalMinutes -ge $StallMinutes) {
-            throw "STALL_SUSPECT: no guest progress for ${StallMinutes} minutes (fail-fast before WallClockTimeout)."
-        }
-
-        # Boot nudge only while DVD is still first (before Prefer-DiskBoot).
-        if (-not $script:DiskBootPreferred -and $nudgeSw.Elapsed.TotalMinutes -lt 3 -and $vmStateNow -eq 'Running') {
-            Send-VmBootNudge
-        }
+        if ($tick.SendNudge) { Send-VmBootNudge }
 
         Start-Sleep -Seconds 30
     }

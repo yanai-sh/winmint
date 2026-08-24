@@ -99,7 +99,7 @@ wipe-scratch:
 
 # Own-console apply-status watch. Default WORK = Gate B (%LOCALAPPDATA%\WinMint\work\gate-b).
 watch-apply WORK="":
-    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/host/Watch-ApplyHost.ps1' -Work '{{WORK}}'
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/host/Watch-Host.ps1' -Kind apply -Work '{{WORK}}'
 
 # Maintainer Apply (DISM hours). Cli verb is build.
 # Prereq: just publish-provisioning. INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs.
@@ -121,13 +121,13 @@ smoke-maintainer WORK=".scratch/smoke" WALL="180" MONITOR="" STALL="45":
     just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso' '{{WORK}}' 'samples/sl7.profile.json' '{{WALL}}' '{{MONITOR}}' '{{STALL}}'
 
 # Own-console host watch (Apply/Smoke keep running if you close it).
-# smoke-maintainer already spawns one Watch-SmokeHost; use this to attach a second view.
+# smoke-maintainer already spawns one Watch-Host; use this to attach a second view.
 watch-smoke WORK=".scratch/smoke":
-    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Watch-SmokeHost.ps1' -Work '{{WORK}}'
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/host/Watch-Host.ps1' -Kind smoke -Work '{{WORK}}'
 
 # Attach to just check. Default PATH = .scratch/check-status.json. just check does not spawn this.
 watch-check PATH="":
-    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/host/Watch-CheckHost.ps1' -Path '{{PATH}}'
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/host/Watch-Host.ps1' -Kind check -Path '{{PATH}}'
 
 smoke-assert EVIDENCE:
     pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'

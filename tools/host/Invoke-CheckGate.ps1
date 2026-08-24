@@ -76,7 +76,7 @@ function Invoke-CheckGate {
         Invoke-CheckedNative -Command 'dotnet' -Arguments @('build', '--no-restore')
         Write-GateProgress -Phase test -Line 'dotnet test --no-build'
         Invoke-CheckedNative -Command 'dotnet' -Arguments @(
-            'test', '--no-build', '--', '--filter-not-trait', 'Category=S4', '--filter-not-trait', 'Category=S5'
+            'test', '--no-build'
         )
 
         Write-GateProgress -Phase analyzer -Line 'PSScriptAnalyzer'
