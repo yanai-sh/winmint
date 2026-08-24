@@ -184,6 +184,23 @@ internal static partial class ProvisioningJobRunner
                     $"deprovisioned.appx.{pfn}",
                     $"Ensured deprovisioned mark for '{pfn}'."));
             }
+
+            foreach (string catalogId in ids)
+            {
+                if (string.IsNullOrWhiteSpace(catalogId))
+                {
+                    continue;
+                }
+
+                if (env.Appx.FindRegisteredByCatalogId(catalogId).Count > 0
+                    || env.Appx.FindProvisionedByCatalogId(catalogId).Count > 0)
+                {
+                    return FailJob(
+                        env,
+                        "jobs.failed",
+                        $"Job '{job.Id}': '{catalogId}' still present after safety net.");
+                }
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

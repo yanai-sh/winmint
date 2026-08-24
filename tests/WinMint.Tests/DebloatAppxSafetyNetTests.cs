@@ -120,6 +120,35 @@ public class DebloatAppxSafetyNetTests
     }
 
     [Fact]
+    public async Task Shell_appx_safetyNet_fails_when_family_still_visible_after_remove()
+    {
+        RecordingAppx appx = new() { RemoveIsNoOp = true };
+        appx.Registered.Add(new AppxPackageInfo(
+            "Microsoft.MicrosoftSolitaireCollection_1.0.0.0_neutral__8wekyb3d8bbwe",
+            "Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe",
+            "Microsoft.MicrosoftSolitaireCollection"));
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(
+                jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
+                removeProvisionedAppx: ["Microsoft.MicrosoftSolitaireCollection"]),
+            Env(new FakeGuestMachine { Appx = appx }, new RecordingEvidenceSink()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+    }
+
+    [Fact]
+    public void MatchesCatalogId_prefix_matches_publisher_variant()
+    {
+        AppxPackageInfo linkedIn = new(
+            "7EE7776C.LinkedInforWindows_1.0.0.0_neutral__wfncspz0ncs4j",
+            "7EE7776C.LinkedInforWindows_wfncspz0ncs4j",
+            "7EE7776C.LinkedInforWindows");
+        Assert.True(WinRTAppxPackageManager.MatchesCatalogId(linkedIn, "LinkedInforWindows"));
+    }
+
+    [Fact]
     public void AppxCatalogFamilyNames_resolves_microsoft_store_publisher()
     {
         Assert.Equal(

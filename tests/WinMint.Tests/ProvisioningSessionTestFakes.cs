@@ -283,6 +283,8 @@ internal static class ProvisioningSessionTestFakes
 
         public string? WingetPath { get; init; }
 
+        public bool RemoveIsNoOp { get; init; }
+
         public int EnsureSystemFullControlCalls { get; private set; }
 
         public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) =>
@@ -294,12 +296,20 @@ internal static class ProvisioningSessionTestFakes
         public Task RemovePackageAsync(string packageFullName, CancellationToken ct = default)
         {
             RemovedFullNames.Add(packageFullName);
+            if (!RemoveIsNoOp)
+            {
+                Registered.RemoveAll(p =>
+                    string.Equals(p.PackageFullName, packageFullName, StringComparison.OrdinalIgnoreCase));
+            }
+
             return Task.CompletedTask;
         }
 
         public Task DeprovisionPackageFamilyAsync(string packageFamilyName, CancellationToken ct = default)
         {
             DeprovisionedFamilyNames.Add(packageFamilyName);
+            Provisioned.RemoveAll(p =>
+                string.Equals(p.PackageFamilyName, packageFamilyName, StringComparison.OrdinalIgnoreCase));
             return Task.CompletedTask;
         }
 

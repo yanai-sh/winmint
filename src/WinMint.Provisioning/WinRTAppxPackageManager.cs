@@ -332,7 +332,22 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
             string.IsNullOrWhiteSpace(package.Id.Name) ? package.DisplayName : package.Id.Name);
 
     internal static bool MatchesCatalogId(AppxPackageInfo package, string catalogId) =>
-        string.Equals(package.DisplayName, catalogId, StringComparison.OrdinalIgnoreCase)
-        || package.PackageFamilyName.StartsWith(catalogId + "_", StringComparison.OrdinalIgnoreCase)
-        || package.PackageFullName.StartsWith(catalogId + "_", StringComparison.OrdinalIgnoreCase);
+        FieldMatches(package.DisplayName, catalogId)
+        || FieldMatches(package.PackageFamilyName, catalogId)
+        || FieldMatches(package.PackageFullName, catalogId);
+
+    // Prefix of Name/PFN, or of a dotted segment (LinkedInforWindows → 7EE7776C.LinkedInforWindows).
+    private static bool FieldMatches(string? value, string catalogId)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return false;
+        }
+
+        return value.Equals(catalogId, StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith(catalogId + "_", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith(catalogId + ".", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("." + catalogId + "_", StringComparison.OrdinalIgnoreCase)
+            || value.EndsWith("." + catalogId, StringComparison.OrdinalIgnoreCase);
+    }
 }
