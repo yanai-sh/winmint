@@ -140,6 +140,8 @@ internal static class ProvisioningSessionTestFakes
 
         public List<ShellChromeRequest> ShellChromeRequests { get; } = [];
 
+        public List<IReadOnlyList<string>> WslTerminalMockStages { get; } = [];
+
         public Action SuppressWslOobeCallback { get; init; } = () => { };
 
         public Action TryDismissOobeOverlayCallback { get; init; } = () => { };
@@ -155,6 +157,9 @@ internal static class ProvisioningSessionTestFakes
             ShellChromeRequests.Add(request);
             return ApplyShellChromeCallback(request);
         }
+
+        public void TryStageWslTerminalMock(IReadOnlyList<string> distroNames) =>
+            WslTerminalMockStages.Add(distroNames);
 
         public void SuppressWslOobe() => SuppressWslOobeCallback();
 

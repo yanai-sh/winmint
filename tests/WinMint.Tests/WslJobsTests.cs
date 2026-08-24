@@ -129,19 +129,27 @@ public class WslJobsTests
     {
         RecordingProcessHost processes = new();
         RecordingEvidenceSink evidence = new();
+        FakeGuestMachine guest = new()
+        {
+            Processes = processes,
+            IsWslPlatformReadyCallback = static () => false,
+            IsHypervisorGuestCallback = static () => true,
+        };
+
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs:
             [
                 new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform),
                 new ProvisionJob("wsl.FedoraLinux", ProvisionJobKind.Wsl, PackageId: "FedoraLinux"),
             ]),
-            Env(processes, evidence, isWslPlatformReady: static () => false, isHypervisorGuest: static () => true),
+            Env(guest, evidence),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.DoesNotContain(processes.Starts, s => s.FileName.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("jobs.wsl.platform.mocked", evidence.Documents[^1].Phases);
         Assert.Contains("jobs.wsl.FedoraLinux.mocked", evidence.Documents[^1].Phases);
+        Assert.Equal(["FedoraLinux"], Assert.Single(guest.WslTerminalMockStages));
     }
 
     [Fact]

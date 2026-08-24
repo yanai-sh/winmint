@@ -44,6 +44,77 @@ public class ShellChromeLayoutTests
     }
 
     [Fact]
+    public void TryResolveShortcut_uses_start_menu_lnk_when_sibling_missing()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "winmint-chrome-start-" + Guid.NewGuid().ToString("N"));
+        string programs = Path.Combine(root, "Programs");
+        Directory.CreateDirectory(programs);
+        try
+        {
+            string exe = Path.Combine(root, "Cursor.exe");
+            string startLink = Path.Combine(programs, "Cursor.lnk");
+            File.WriteAllBytes(exe, [0]);
+            File.WriteAllBytes(startLink, [0]);
+
+            Assert.Equal(
+                startLink,
+                ShellChromeLayout.TryResolveShortcut([exe], startMenuRoots: [root], startMenuNameContains: "Cursor"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryResolveShortcut_returns_null_when_only_exe_exists()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "winmint-chrome-exeonly-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string exe = Path.Combine(dir, "Cursor.exe");
+            File.WriteAllBytes(exe, [0]);
+
+            Assert.Null(ShellChromeLayout.TryResolveShortcut(
+                [exe],
+                startMenuRoots: [dir],
+                startMenuNameContains: "Cursor"));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryBuildPins_omits_cursor_and_zen_when_no_lnk()
+    {
+        bool ok = ShellChromeLayout.TryBuildPins(
+            [ShellChromeLayout.CursorWingetId, ShellChromeLayout.ZenWingetId],
+            failOpen: true,
+            resolveShortcut: static _ => null,
+            out ShellChromePins pins);
+
+        Assert.True(ok);
+        Assert.Empty(pins.LinkPaths);
+        Assert.Equal(["explorer", "settings", "terminal"], pins.StartPinIds);
+        Assert.Equal(["explorer", "terminal"], pins.TaskbarPinIds);
+        Assert.DoesNotContain("cursor", pins.StartPinIds);
+        Assert.DoesNotContain("zen-browser", pins.StartPinIds);
+    }
+
+    [Fact]
+    public void TryBuildPins_fail_closed_when_selected_pin_has_no_lnk()
+    {
+        Assert.False(ShellChromeLayout.TryBuildPins(
+            [ShellChromeLayout.CursorWingetId],
+            failOpen: false,
+            resolveShortcut: static _ => null,
+            out _));
+    }
+
+    [Fact]
     public void Zen_candidates_include_localappdata_zen_browser()
     {
         string expected = Path.Combine(

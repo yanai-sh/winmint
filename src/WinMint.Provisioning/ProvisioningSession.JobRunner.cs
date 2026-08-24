@@ -23,6 +23,7 @@ internal sealed record JobRunnerEnv(
     Func<bool> IsWslPlatformReady,
     Action ApplyWorkstationQuiet,
     Func<ShellChromeRequest, bool> ApplyShellChrome,
+    Action<IReadOnlyList<string>> TryStageWslTerminalMock,
     Action SuppressWslOobe,
     Func<bool> IsHypervisorGuest,
     WslMockState WslMock);

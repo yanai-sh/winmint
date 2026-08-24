@@ -236,8 +236,8 @@ if ([string]$chrome.wallpaperPath -ne $expectedWallpaper) {
 }
 $startPins = @($chrome.startPinIds)
 $taskbarPins = @($chrome.taskbarPinIds)
-if ($startPins -cnotcontains 'explorer' -or $startPins -cnotcontains 'terminal') {
-    throw 'shell chrome startPinIds must contain explorer and terminal'
+if ($startPins -cnotcontains 'explorer' -or $startPins -cnotcontains 'settings' -or $startPins -cnotcontains 'terminal' -or $startPins -cnotcontains 'zen-browser' -or $startPins -cnotcontains 'cursor') {
+    throw 'shell chrome startPinIds must contain explorer, settings, terminal, zen-browser, and cursor'
 }
 if ($taskbarPins -cnotcontains 'explorer' -or $taskbarPins -cnotcontains 'terminal') {
     throw 'shell chrome taskbarPinIds must contain explorer and terminal'

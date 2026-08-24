@@ -132,6 +132,34 @@ public class SmokeEvidenceAssertTests
 
     [Fact]
     [Trait("Category", "S4")]
+    public void Assert_smoke_evidence_fails_without_required_start_pins()
+    {
+        string repo = TestRepo.Root;
+        string fixture = Path.Combine(repo, "tests", "fixtures", "smoke-evidence");
+        string work = Path.Combine(Path.GetTempPath(), "winmint-s4-pins-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyTree(fixture, work);
+            DeleteAcceptance(work);
+            string chromePath = Path.Combine(work, "guest", "shell-chrome.json");
+            JsonNode doc = JsonNode.Parse(File.ReadAllText(chromePath))
+                ?? throw new InvalidOperationException("shell-chrome parse failed");
+            doc["startPinIds"] = new JsonArray("explorer", "terminal");
+            File.WriteAllText(chromePath, doc.ToJsonString());
+
+            int exit = RunAssert(repo, work, out _, out string stderr);
+            Assert.NotEqual(0, exit);
+            Assert.Contains("startPinIds", stderr, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(work, "acceptance.json")));
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "S4")]
     public void Assert_smoke_evidence_fails_without_shell_chrome_json()
     {
         string repo = TestRepo.Root;

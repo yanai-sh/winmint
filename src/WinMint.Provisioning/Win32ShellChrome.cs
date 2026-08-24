@@ -21,35 +21,13 @@ public static class Win32ShellChrome
             return false;
         }
 
-        List<string> links = [];
-        List<string> startPinIds = ["explorer", "settings", "terminal"];
-        List<string> taskbarPinIds = ["explorer", "terminal"];
-        foreach (string wingetId in request.SelectedWingetIds)
+        if (!ShellChromeLayout.TryBuildPins(
+                request.SelectedWingetIds,
+                request.FailOpen,
+                ShellChromeLayout.TryResolveShortcut,
+                out ShellChromePins pins))
         {
-            string? pinId = ShellChromeLayout.TryPinId(wingetId);
-            if (pinId is null)
-            {
-                continue;
-            }
-
-            string? resolved = ShellChromeLayout.TryResolveShortcut(wingetId);
-            if (resolved is null)
-            {
-                if (!request.FailOpen)
-                {
-                    return false;
-                }
-
-                continue;
-            }
-
-            if (resolved.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
-            {
-                links.Add(resolved);
-            }
-
-            startPinIds.Add(pinId);
-            taskbarPinIds.Add(pinId);
+            return false;
         }
 
         try
@@ -59,8 +37,8 @@ public static class Win32ShellChrome
                 ApplyWallpaper();
             }
 
-            ApplyPins(links);
-            WriteEvidence(startPinIds, taskbarPinIds);
+            ApplyPins(pins.LinkPaths);
+            WriteEvidence(pins.StartPinIds, pins.TaskbarPinIds);
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException && request.FailOpen)

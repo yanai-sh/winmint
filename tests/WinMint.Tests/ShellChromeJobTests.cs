@@ -109,4 +109,74 @@ public class ShellChromeJobTests
         Assert.Empty(request.SelectedWingetIds);
         Assert.DoesNotContain("shell.chrome", evidence.Documents[^1].Phases);
     }
+
+    [Fact]
+    public void Import_file_cursor_and_zen_reach_selected_winget_ids()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "winmint-chrome-import-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string importPath = Path.Combine(dir, "winget-import.json");
+        try
+        {
+            File.WriteAllText(
+                importPath,
+                """
+                {
+                  "Sources": [
+                    {
+                      "Packages": [
+                        { "PackageIdentifier": "Git.Git" },
+                        { "PackageIdentifier": "Anysphere.Cursor" },
+                        { "PackageIdentifier": "Zen-Team.Zen-Browser" }
+                      ]
+                    }
+                  ]
+                }
+                """);
+
+            IReadOnlyList<string> ids = ProvisioningJobRunner.CollectSelectedWingetIds(
+                [new ProvisionJob("winget.import", ProvisionJobKind.WingetImport)],
+                importPath);
+
+            Assert.Contains(ShellChromeLayout.CursorWingetId, ids);
+            Assert.Contains(ShellChromeLayout.ZenWingetId, ids);
+            Assert.DoesNotContain("Git.Git", ids);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Import_file_absent_does_not_select_cursor_or_zen()
+    {
+        IReadOnlyList<string> ids = ProvisioningJobRunner.CollectSelectedWingetIds(
+            [new ProvisionJob("winget.import", ProvisionJobKind.WingetImport)],
+            Path.Combine(Path.GetTempPath(), "winmint-missing-import-" + Guid.NewGuid().ToString("N") + ".json"));
+
+        Assert.DoesNotContain(ShellChromeLayout.CursorWingetId, ids);
+        Assert.DoesNotContain(ShellChromeLayout.ZenWingetId, ids);
+    }
+
+    [Fact]
+    public void Corrupt_import_file_throws_and_is_not_swallowed()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "winmint-chrome-badimport-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string importPath = Path.Combine(dir, "winget-import.json");
+        try
+        {
+            File.WriteAllText(importPath, "{ not-json");
+
+            Assert.ThrowsAny<System.Text.Json.JsonException>(() =>
+                ProvisioningJobRunner.CollectSelectedWingetIds(
+                    [new ProvisionJob("winget.import", ProvisionJobKind.WingetImport)],
+                    importPath));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

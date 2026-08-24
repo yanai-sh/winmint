@@ -2,6 +2,11 @@ using System.Security;
 
 namespace WinMint.Provisioning;
 
+internal readonly record struct ShellChromePins(
+    IReadOnlyList<string> LinkPaths,
+    IReadOnlyList<string> StartPinIds,
+    IReadOnlyList<string> TaskbarPinIds);
+
 public static class ShellChromeLayout
 {
     public const string WallpaperPath = @"C:\Windows\Web\Wallpaper\Windows\WinMint-Bloom.jpg";
@@ -73,13 +78,18 @@ public static class ShellChromeLayout
             return null;
         }
 
-        return TryResolveShortcut(Candidates(wingetId));
+        return TryResolveShortcut(
+            Candidates(wingetId),
+            DefaultStartMenuRoots(),
+            StartMenuNameContains(wingetId));
     }
 
-    // ponytail: no IShellLink factory; prefer sibling .lnk, exe only for existence
-    internal static string? TryResolveShortcut(IReadOnlyList<string> candidates)
+    // ponytail: no IShellLink/COM; sibling .lnk, then Start Menu name match. Never treat exe as a pin.
+    internal static string? TryResolveShortcut(
+        IReadOnlyList<string> candidates,
+        IReadOnlyList<string>? startMenuRoots = null,
+        string? startMenuNameContains = null)
     {
-        string? exe = null;
         foreach (string candidate in candidates)
         {
             string link = Path.ChangeExtension(candidate, ".lnk");
@@ -87,14 +97,108 @@ public static class ShellChromeLayout
             {
                 return link;
             }
+        }
 
-            if (exe is null && File.Exists(candidate))
+        if (!string.IsNullOrWhiteSpace(startMenuNameContains) && startMenuRoots is { Count: > 0 })
+        {
+            return TryFindStartMenuLink(startMenuRoots, startMenuNameContains);
+        }
+
+        return null;
+    }
+
+    internal static bool TryBuildPins(
+        IReadOnlyList<string> selectedWingetIds,
+        bool failOpen,
+        Func<string, string?> resolveShortcut,
+        out ShellChromePins pins)
+    {
+        ArgumentNullException.ThrowIfNull(selectedWingetIds);
+        ArgumentNullException.ThrowIfNull(resolveShortcut);
+
+        List<string> links = [];
+        List<string> startPinIds = ["explorer", "settings", "terminal"];
+        List<string> taskbarPinIds = ["explorer", "terminal"];
+        foreach (string wingetId in selectedWingetIds)
+        {
+            string? pinId = TryPinId(wingetId);
+            if (pinId is null)
             {
-                exe = candidate;
+                continue;
+            }
+
+            string? resolved = resolveShortcut(wingetId);
+            if (resolved is null || !resolved.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!failOpen)
+                {
+                    pins = default;
+                    return false;
+                }
+
+                continue;
+            }
+
+            links.Add(resolved);
+            startPinIds.Add(pinId);
+            taskbarPinIds.Add(pinId);
+        }
+
+        pins = new ShellChromePins(links, startPinIds, taskbarPinIds);
+        return true;
+    }
+
+    private static string? TryFindStartMenuLink(IReadOnlyList<string> roots, string nameContains)
+    {
+        foreach (string root in roots)
+        {
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            {
+                continue;
+            }
+
+            IEnumerable<string> files;
+            try
+            {
+                files = Directory.EnumerateFiles(root, "*.lnk", SearchOption.AllDirectories);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or DirectoryNotFoundException or IOException)
+            {
+                continue;
+            }
+
+            foreach (string file in files)
+            {
+                if (Path.GetFileNameWithoutExtension(file)
+                    .Contains(nameContains, StringComparison.OrdinalIgnoreCase))
+                {
+                    return file;
+                }
             }
         }
 
-        return exe;
+        return null;
+    }
+
+    private static string[] DefaultStartMenuRoots() =>
+    [
+        Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu),
+    ];
+
+    private static string? StartMenuNameContains(string wingetId)
+    {
+        if (wingetId.Equals(CursorWingetId, StringComparison.OrdinalIgnoreCase))
+        {
+            return "Cursor";
+        }
+
+        if (wingetId.Equals(ZenWingetId, StringComparison.OrdinalIgnoreCase))
+        {
+            return "Zen";
+        }
+
+        return null;
     }
 
     private static string JsonString(string value) =>

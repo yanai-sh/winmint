@@ -43,9 +43,9 @@ internal static partial class ProvisioningJobRunner
         ProvisionJob job,
         IReadOnlyList<ProvisionJob> jobs)
     {
-        IReadOnlyList<string> ids = CollectSelectedWingetIds(jobs);
         try
         {
+            IReadOnlyList<string> ids = CollectSelectedWingetIds(jobs);
             if (!env.ApplyShellChrome(new ShellChromeRequest(FailOpen: false, ids)))
             {
                 return FailJob(env, "jobs.failed", $"{job.Id}: shell chrome apply failed.");
@@ -60,7 +60,9 @@ internal static partial class ProvisioningJobRunner
         }
     }
 
-    private static List<string> CollectSelectedWingetIds(IReadOnlyList<ProvisionJob> jobs)
+    internal static List<string> CollectSelectedWingetIds(
+        IReadOnlyList<ProvisionJob> jobs,
+        string? importPath = null)
     {
         List<string> ids = [];
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
@@ -72,41 +74,42 @@ internal static partial class ProvisioningJobRunner
             }
         }
 
-        if (jobs.Any(j => j.Kind is ProvisionJobKind.WingetImport)
-            && File.Exists(BundleLoader.DefaultGuestWingetImportPath))
+        if (!jobs.Any(j => j.Kind is ProvisionJobKind.WingetImport))
         {
-            try
+            return ids;
+        }
+
+        string path = importPath ?? BundleLoader.DefaultGuestWingetImportPath;
+        if (!File.Exists(path))
+        {
+            return ids;
+        }
+
+        using JsonDocument doc = JsonDocument.Parse(File.ReadAllBytes(path));
+        if (!doc.RootElement.TryGetProperty("Sources", out JsonElement sources))
+        {
+            return ids;
+        }
+
+        foreach (JsonElement source in sources.EnumerateArray())
+        {
+            if (!source.TryGetProperty("Packages", out JsonElement packages))
             {
-                using JsonDocument doc = JsonDocument.Parse(
-                    File.ReadAllBytes(BundleLoader.DefaultGuestWingetImportPath));
-                if (doc.RootElement.TryGetProperty("Sources", out JsonElement sources))
-                {
-                    foreach (JsonElement source in sources.EnumerateArray())
-                    {
-                        if (!source.TryGetProperty("Packages", out JsonElement packages))
-                        {
-                            continue;
-                        }
-
-                        foreach (JsonElement package in packages.EnumerateArray())
-                        {
-                            if (!package.TryGetProperty("PackageIdentifier", out JsonElement idEl))
-                            {
-                                continue;
-                            }
-
-                            string? id = idEl.GetString();
-                            if (id is not null && ShellChromeLayout.IsPinApp(id))
-                            {
-                                AddSelectedId(ids, seen, id);
-                            }
-                        }
-                    }
-                }
+                continue;
             }
-            catch (JsonException)
+
+            foreach (JsonElement package in packages.EnumerateArray())
             {
-                // ponytail: import is a pin hint; missing Cursor/Zen fail-closes in Apply
+                if (!package.TryGetProperty("PackageIdentifier", out JsonElement idEl))
+                {
+                    continue;
+                }
+
+                string? id = idEl.GetString();
+                if (id is not null && ShellChromeLayout.IsPinApp(id))
+                {
+                    AddSelectedId(ids, seen, id);
+                }
             }
         }
 

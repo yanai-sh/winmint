@@ -108,6 +108,8 @@ public interface IGuestMachine
 
     bool ApplyShellChrome(ShellChromeRequest request);
 
+    void TryStageWslTerminalMock(IReadOnlyList<string> distroNames);
+
     void SuppressWslOobe();
 
     /// <summary>Best-effort: tear down stuck CloudExperienceHost OOBE overlay after Shell unlock.</summary>

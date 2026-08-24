@@ -19,7 +19,7 @@ internal static partial class ProvisioningJobRunner
                 "WSL mocked on hypervisor guest."));
             try
             {
-                Win32WslTerminalMock.TryStage(remainingDistros);
+                env.TryStageWslTerminalMock(remainingDistros);
             }
             catch
             {

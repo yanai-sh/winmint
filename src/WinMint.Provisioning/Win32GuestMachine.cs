@@ -58,6 +58,14 @@ public sealed class Win32GuestMachine : IGuestMachine
     public bool ApplyShellChrome(ShellChromeRequest request) =>
         OperatingSystem.IsWindows() && Win32ShellChrome.Apply(request);
 
+    public void TryStageWslTerminalMock(IReadOnlyList<string> distroNames)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Win32WslTerminalMock.TryStage(distroNames);
+        }
+    }
+
     public void SuppressWslOobe()
     {
         if (OperatingSystem.IsWindows())
