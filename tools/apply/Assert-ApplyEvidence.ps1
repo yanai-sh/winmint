@@ -232,6 +232,12 @@ if ($ExpectWingetImport) {
     if ($importJobs.Count -eq 0) {
         throw 'payload/jobs.json must include winget.import when -ExpectWingetImport'
     }
+    foreach ($src in @($importDoc.Sources)) {
+        $id = [string]$src.SourceDetails.Identifier
+        if ($id -ne 'Microsoft.Winget.Source_8wekyb3d8bbwe') {
+            throw "winget-import.json Identifier must be Microsoft.Winget.Source_8wekyb3d8bbwe (winget source export), got '$id'"
+        }
+    }
 }
 
 $expectFu = $ExpectFuPosture -or ($RequireLane -eq 'Release')

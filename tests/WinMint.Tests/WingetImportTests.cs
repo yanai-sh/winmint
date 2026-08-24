@@ -37,6 +37,24 @@ public class WingetImportTests
     }
 
     [Fact]
+    public void Import_json_uses_rest_source_identifier_from_winget_source_export()
+    {
+        Profile profile = LabProfile(winget: ["Anysphere.Cursor"]);
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { ImageArchitecture = "arm64" });
+
+        Assert.True(result.IsOk, result.IsOk ? null : result.Error.Code);
+        Assert.NotNull(result.Value.WingetImportJson);
+        using JsonDocument doc = JsonDocument.Parse(result.Value.WingetImportJson);
+        JsonElement details = doc.RootElement.GetProperty("Sources")[0].GetProperty("SourceDetails");
+        Assert.Equal("winget", details.GetProperty("Name").GetString());
+        Assert.Equal("Microsoft.Winget.Source_8wekyb3d8bbwe", details.GetProperty("Identifier").GetString());
+        Assert.Equal("https://cdn.winget.microsoft.com/cache", details.GetProperty("Argument").GetString());
+        Assert.Equal("Microsoft.PreIndexed.Package", details.GetProperty("Type").GetString());
+    }
+
+    [Fact]
     public void Import_json_includes_arm64_override_arguments()
     {
         Profile profile = LabProfile(winget: ["Anysphere.Cursor"]);

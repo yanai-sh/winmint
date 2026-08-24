@@ -225,7 +225,7 @@ public class ApplyEvidenceAssertTests
             File.WriteAllText(
                 Path.Combine(payload, "winget-import.json"),
                 """
-                {"Sources":[{"Packages":[
+                {"Sources":[{"SourceDetails":{"Name":"winget","Identifier":"Microsoft.Winget.Source_8wekyb3d8bbwe","Argument":"https://cdn.winget.microsoft.com/cache","Type":"Microsoft.PreIndexed.Package"},"Packages":[
                   {"PackageIdentifier":"Git.MinGit"},
                   {"PackageIdentifier":"Microsoft.PowerShell"},
                   {"PackageIdentifier":"Microsoft.WindowsTerminal"},

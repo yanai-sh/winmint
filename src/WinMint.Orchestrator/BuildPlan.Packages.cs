@@ -275,7 +275,7 @@ public static partial class BuildPlan
                 new WingetImportSourceFile(
                     new WingetSourceDetailsFile(
                         "winget",
-                        "8wekyb3d8bbwe",
+                        "Microsoft.Winget.Source_8wekyb3d8bbwe",
                         "https://cdn.winget.microsoft.com/cache",
                         "Microsoft.PreIndexed.Package"),
                     packages),
