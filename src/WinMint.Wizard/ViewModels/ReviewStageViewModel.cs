@@ -1,6 +1,9 @@
+using System.Globalization;
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using WinMint.Contracts;
 using WinMint.Orchestrator;
 
 namespace WinMint.Wizard.ViewModels;
@@ -35,7 +38,12 @@ public sealed record ReviewSummaryViewModel(
     string PreviewJson,
     string SourceIsoPath,
     string? OutputIsoPath,
-    string BuildRecipe);
+    string BuildRecipe,
+    string AccountName,
+    string LaneName,
+    string EditionName,
+    string WifiLabel,
+    string RegionLabel);
 
 public sealed partial class ReviewBuildViewModel : ObservableObject
 {
@@ -67,7 +75,12 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
             review.AuthoredProfileJson,
             review.SourceMedia?.SourceIsoPath ?? "",
             review.OutputIsoPath,
-            review.OutputIsoPath is null ? "" : $"Output ISO: {review.OutputIsoPath}");
+            review.OutputIsoPath is null ? "" : $"Output ISO: {review.OutputIsoPath}",
+            review.AuthoredProfile.Account.Username,
+            review.ImageQuality.ToString(),
+            review.SourceMedia?.Selected?.Name ?? "—",
+            review.AuthoredProfile.Account.RequireWifiDuringOobe ? "Required at OOBE" : "Optional",
+            FormatRegion(review.AuthoredProfile.Dma.Settle));
         Status.Set(Summary.PlanSummary, false);
         Build.PropertyChanged += (_, args) =>
         {
@@ -99,5 +112,11 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
 
     [RelayCommand]
     private void CancelBuild() => _host?.CancelBuild();
+
+    private static string FormatRegion(DmaSettleTarget settle)
+    {
+        string geo = settle.GeoId?.ToString(CultureInfo.InvariantCulture) ?? "—";
+        return $"{settle.Locale ?? "—"} · {geo} · {settle.TimeZoneId ?? "—"}";
+    }
 
 }

@@ -3,76 +3,86 @@
              xmlns:vm="using:WinMint.Wizard.ViewModels"
              xmlns:orchestrator="using:WinMint.Orchestrator"
              x:Class="WinMint.Wizard.Views.SourceStepView"
-             x:DataType="vm:ISourceStageViewModel">
-  <StackPanel Spacing="22" MaxWidth="720" HorizontalAlignment="Center" VerticalAlignment="Center">
-    <!-- Brand: v1 winmint_hero_ui.png (= wordmark lockup UI raster); SVG lockups kept in Assets for later. -->
-    <Image Source="avares://WinMint.Wizard/Assets/lockup_ui.png"
-           MaxHeight="72"
-           HorizontalAlignment="Left"
-           Stretch="Uniform" />
-
-    <TextBlock Classes="hero-title" Text="Choose your Windows ISO" />
+             x:DataType="vm:ISourceStageViewModel"
+             DragDrop.AllowDrop="True">
+  <StackPanel Spacing="18" MaxWidth="640">
+    <TextBlock Classes="hero-title" Text="Source" />
     <TextBlock Classes="hero-sub"
-               Text="WinMint services the official image you provide. Pick a source file, then choose the image-quality lane." />
+               Text="Official Windows ISO on this PC. WinMint does not download media." />
 
-    <Border Classes="iso-stage">
-      <StackPanel Spacing="18" HorizontalAlignment="Center">
-        <TextBlock Text="{Binding SourceIsoPath}"
-                   TextWrapping="Wrap"
-                   TextAlignment="Center"
-                   FontFamily="Cascadia Mono, Consolas, monospace"
+    <Button x:Name="IsoPick"
+            Classes="iso-pick"
+            Command="{Binding BrowseIsoCommand}"
+            IsVisible="{Binding SourceIsoPath, Converter={x:Static StringConverters.IsNullOrEmpty}}">
+      <StackPanel Spacing="6">
+        <TextBlock Text="Drop or choose Windows ISO" FontWeight="SemiBold" HorizontalAlignment="Center" />
+        <TextBlock Text="Official media on this PC — not a download"
+                   Opacity="0.65"
                    FontSize="13"
-                   Opacity="0.75"
-                   IsVisible="{Binding SourceIsoPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <TextBlock Text="No ISO selected"
-                   TextAlignment="Center"
-                   Opacity="0.45"
-                   IsVisible="{Binding SourceIsoPath, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
-        <Button Classes="primary"
-                Content="Choose ISO"
-                HorizontalAlignment="Center"
-                Command="{Binding BrowseIsoCommand}" />
+                   HorizontalAlignment="Center" />
       </StackPanel>
+    </Button>
+
+    <Border x:Name="IsoStage"
+            Classes="iso-stage"
+            IsVisible="{Binding SourceIsoPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel>
+          <TextBlock Text="Ready" FontSize="12" FontWeight="SemiBold" Foreground="#0F7B0F" />
+          <TextBlock Text="Source selected" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding SourceIsoPath}"
+                     FontFamily="Cascadia Mono, Consolas, monospace"
+                     FontSize="12"
+                     Opacity="0.55"
+                     TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <Button Grid.Column="1"
+                Classes="ghost"
+                Content="Change"
+                VerticalAlignment="Center"
+                Command="{Binding BrowseIsoCommand}" />
+      </Grid>
     </Border>
+
+    <TextBlock Text="Reading editions from ISO…"
+               Opacity="0.55"
+               IsVisible="{Binding IsWimProbeBusy}" />
 
     <Border Classes="panel-card" HorizontalAlignment="Stretch"
             IsVisible="{Binding IsWimPickerVisible}">
       <StackPanel Spacing="10">
-        <TextBlock Classes="panel-label" Text="SOURCE EDITION" />
+        <TextBlock Classes="panel-label" Text="Source edition" />
         <ComboBox ItemsSource="{Binding WimIndexes}"
                   SelectedItem="{Binding SelectedWimIndex}"
-                  HorizontalAlignment="Stretch"
-                  MinWidth="280">
+                  HorizontalAlignment="Stretch">
           <ComboBox.ItemTemplate>
             <DataTemplate x:DataType="orchestrator:WimIndexInfo">
               <TextBlock Text="{Binding DisplayLabel}" TextWrapping="Wrap" />
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>
-        <TextBlock Text="Index Apply will export from this ISO (single-image media after build)."
+        <TextBlock Text="Index Apply exports this edition (single-image media after build)."
                    Opacity="0.55"
                    FontSize="12"
                    TextWrapping="Wrap" />
       </StackPanel>
     </Border>
-    <TextBlock Text="Reading editions from ISO…"
-               Opacity="0.55"
-               IsVisible="{Binding IsWimProbeBusy}" />
 
     <Border Classes="panel-card" HorizontalAlignment="Left" MinWidth="280">
       <StackPanel>
-        <TextBlock Classes="panel-label" Text="IMAGE QUALITY" />
+        <TextBlock Classes="panel-label" Text="Image quality" />
         <StackPanel Orientation="Horizontal">
           <ToggleButton Classes="chip" Content="Test" IsChecked="{Binding Lane.IsTest}"
                         Command="{Binding SelectLaneCommand}" CommandParameter="Test" />
           <ToggleButton Classes="chip" Content="Release" IsChecked="{Binding Lane.IsRelease}"
                         Command="{Binding SelectLaneCommand}" CommandParameter="Release" />
         </StackPanel>
-        <TextBlock Text="Release → Build runs Gate B wipe-media apply in this Wizard (workdir %LOCALAPPDATA%\WinMint\work\gate-b, package-strict). That is pre-wipe ISO evidence — not a completed Primary install."
+        <TextBlock Text="Release: Build runs Gate B wipe-media apply in this Wizard (pre-wipe ISO evidence — not a completed Primary install)."
                    Opacity="0.55"
                    FontSize="12"
                    TextWrapping="Wrap"
-                   Margin="0,8,0,0" />
+                   Margin="0,8,0,0"
+                   MaxWidth="520" />
       </StackPanel>
     </Border>
 

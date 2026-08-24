@@ -5,105 +5,157 @@
         x:Class="WinMint.Wizard.MainWindow"
         x:DataType="vm:WizardViewModel"
         Title="WinMint"
-        Width="1280"
-        Height="860"
-        MinWidth="960"
-        MinHeight="640"
+        Width="1080"
+        Height="720"
+        MinWidth="880"
+        MinHeight="600"
         WindowStartupLocation="CenterScreen"
         TransparencyLevelHint="Mica"
         Background="Transparent"
         TransparencyBackgroundFallback="{DynamicResource SystemRegionBrush}"
         ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaTitleBarHeightHint="40">
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
-    <!-- Drag region under system caption -->
+        ExtendClientAreaTitleBarHeightHint="32">
+  <Grid RowDefinitions="Auto,Auto,*">
     <Border Grid.Row="0"
-            Height="40"
+            Height="32"
             Background="Transparent"
             WindowDecorationProperties.ElementRole="TitleBar">
-        <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center">
-          <Image Source="avares://WinMint.Wizard/Assets/mark_ui_132.png"
-                 Width="20" Height="20" />
-          <TextBlock Text="WinMint"
-                     FontWeight="SemiBold"
-                     FontSize="13"
-                     Opacity="0.9"
-                     VerticalAlignment="Center" />
-        </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8" Margin="14,0,0,0" VerticalAlignment="Center">
+        <Image Source="avares://WinMint.Wizard/Assets/mark_ui_132.png"
+               Width="16" Height="16" />
+        <TextBlock Text="WinMint"
+                   FontSize="12"
+                   Opacity="0.75"
+                   VerticalAlignment="Center" />
+      </StackPanel>
     </Border>
 
     <ProgressBar Grid.Row="1"
                  Minimum="0"
                  Maximum="1"
                  Value="{Binding ProgressFraction}"
-                 Height="3"
+                 Height="2"
                  ShowProgressText="False" />
 
-    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
-      <Panel Margin="56,28,56,24">
-        <Panel IsVisible="{Binding IsSourceStep}">
-          <views:SourceStepView DataContext="{Binding Source}" />
-        </Panel>
-        <Panel IsVisible="{Binding IsAccountStep}">
-          <views:AccountStepView DataContext="{Binding Account}" />
-        </Panel>
-        <Panel IsVisible="{Binding IsSoftwareStep}">
-          <views:SoftwareStepView DataContext="{Binding Software}" />
-        </Panel>
-        <Panel IsVisible="{Binding IsReviewStep}">
-          <views:ReviewStepView DataContext="{Binding Review}" />
-        </Panel>
-      </Panel>
-    </ScrollViewer>
+    <Grid Grid.Row="2" ColumnDefinitions="220,*">
+      <Border BorderThickness="0,0,1,0"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+              Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}"
+              Padding="8,12">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Bottom"
+                     Text="Host builds the ISO. Guest finishes setup with the Provisioning Supervisor."
+                     TextWrapping="Wrap"
+                     FontSize="11"
+                     Opacity="0.45"
+                     Margin="12,12,12,8"
+                     LineHeight="16" />
+          <StackPanel Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="12,4,12,12">
+              <Image Source="avares://WinMint.Wizard/Assets/mark_ui_132.png"
+                     Width="28" Height="28" />
+              <TextBlock Text="WinMint"
+                         FontWeight="SemiBold"
+                         FontSize="16"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+            <Button Classes="nav-stage" Classes.current="{Binding IsSourceStep}"
+                    Command="{Binding GoToSourceCommand}" IsEnabled="{Binding CanGoToSource}">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Classes="nav-glyph" Text="▣" />
+                <TextBlock Text="Source" />
+              </StackPanel>
+            </Button>
+            <Button Classes="nav-stage" Classes.current="{Binding IsAccountStep}"
+                    Command="{Binding GoToAccountCommand}" IsEnabled="{Binding CanGoToAccount}">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Classes="nav-glyph" Text="☺" />
+                <TextBlock Text="Account" />
+              </StackPanel>
+            </Button>
+            <Button Classes="nav-stage" Classes.current="{Binding IsSoftwareStep}"
+                    Command="{Binding GoToSoftwareCommand}" IsEnabled="{Binding CanGoToSoftware}">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Classes="nav-glyph" Text="✦" />
+                <TextBlock Text="Software" />
+              </StackPanel>
+            </Button>
+            <Button Classes="nav-stage" Classes.current="{Binding IsReviewStep}"
+                    Command="{Binding GoToReviewCommand}" IsEnabled="{Binding CanGoToReview}">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Classes="nav-glyph" Text="✓" />
+                <TextBlock Text="Review" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </DockPanel>
+      </Border>
 
-    <Border Grid.Row="3"
-            Padding="28,0"
-            Height="72"
-            BorderThickness="0,1,0,0"
-            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
-            Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
-      <DockPanel>
-        <!-- Stage scrub — click Source/Account/Software/Review to jump directly (moodboard intent, no pixel morph). -->
-        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <Button Classes="stage-scrub" Classes.active="{Binding IsSourceStep}"
-                  Content="1 Source" Command="{Binding GoToSourceCommand}" IsEnabled="{Binding CanGoToSource}" />
-          <Button Classes="stage-scrub" Classes.active="{Binding IsAccountStep}"
-                  Content="2 Account" Command="{Binding GoToAccountCommand}" IsEnabled="{Binding CanGoToAccount}" />
-          <Button Classes="stage-scrub" Classes.active="{Binding IsSoftwareStep}"
-                  Content="3 Software" Command="{Binding GoToSoftwareCommand}" IsEnabled="{Binding CanGoToSoftware}" />
-          <Button Classes="stage-scrub" Classes.active="{Binding IsReviewStep}"
-                  Content="4 Review" Command="{Binding GoToReviewCommand}" IsEnabled="{Binding CanGoToReview}" />
-        </StackPanel>
-        <StackPanel DockPanel.Dock="Right"
-                    Orientation="Horizontal"
-                    Spacing="10"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Center">
-          <!-- Build/Cancel live here (status bar) so they're reachable from any stage, not just Included (US#11/#28). -->
-          <Button Classes="ghost"
-                  Content="Cancel"
-                  Command="{Binding CancelBuildCommand}"
-                  IsVisible="{Binding IsBusy}" />
-          <Button Classes="primary"
-                  Content="Build"
-                  Command="{Binding BuildCommand}"
-                  IsEnabled="{Binding CanBuild}"
-                  ToolTip.Tip="Plans if needed, saves the profile into the workdir, then elevates Apply (UAC)." />
-          <Button Classes="ghost"
-                  Content="Back"
-                  Command="{Binding BackCommand}"
-                  IsEnabled="{Binding CanGoBack}" />
-          <Button Classes="primary"
-                  Content="{Binding NextLabel}"
-                  Command="{Binding NextCommand}"
-                  IsEnabled="{Binding CanGoNext}"
-                  IsVisible="{Binding !IsReviewStep}" />
-          <Button Classes="primary"
-                  Content="Finish"
-                  Command="{Binding CloseCommand}"
-                  IsVisible="{Binding IsReviewStep}" />
-        </StackPanel>
-      </DockPanel>
-    </Border>
+      <Grid Grid.Column="1" RowDefinitions="*,Auto">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <Panel Margin="32,24,32,16">
+            <Panel IsVisible="{Binding IsSourceStep, DataType={x:Type vm:WizardViewModel}}">
+              <views:SourceStepView DataContext="{Binding Source, DataType={x:Type vm:WizardViewModel}}" />
+            </Panel>
+            <Panel IsVisible="{Binding IsAccountStep, DataType={x:Type vm:WizardViewModel}}">
+              <views:AccountStepView DataContext="{Binding Account, DataType={x:Type vm:WizardViewModel}}" />
+            </Panel>
+            <Panel IsVisible="{Binding IsSoftwareStep, DataType={x:Type vm:WizardViewModel}}">
+              <views:SoftwareStepView DataContext="{Binding Software, DataType={x:Type vm:WizardViewModel}}" />
+            </Panel>
+            <Panel IsVisible="{Binding IsReviewStep, DataType={x:Type vm:WizardViewModel}}">
+              <views:ReviewStepView DataContext="{Binding Review, DataType={x:Type vm:WizardViewModel}}" />
+            </Panel>
+          </Panel>
+        </ScrollViewer>
+
+        <Border Grid.Row="1"
+                Padding="16,0"
+                Height="56"
+                BorderThickness="1,1,0,0"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        VerticalAlignment="Center">
+              <Button Classes="ghost"
+                      Content="Cancel"
+                      Command="{Binding CancelBuildCommand}"
+                      IsVisible="{Binding IsBusy}" />
+              <Button Classes="ghost"
+                      Content="Back"
+                      Command="{Binding BackCommand}"
+                      IsEnabled="{Binding CanGoBack}" />
+              <Button Classes="ghost"
+                      Content="{Binding NextLabel}"
+                      Command="{Binding NextCommand}"
+                      IsEnabled="{Binding CanGoNext}"
+                      IsVisible="{Binding !IsReviewStep}" />
+              <Button Classes="primary"
+                      Content="Finish"
+                      Command="{Binding CloseCommand}"
+                      IsVisible="{Binding IsReviewStep}" />
+              <Button Classes="primary"
+                      Content="Build"
+                      Command="{Binding BuildCommand}"
+                      IsEnabled="{Binding CanBuild}"
+                      ToolTip.Tip="Plans if needed, saves the profile into the workdir, then elevates Apply (UAC)." />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+              <Border Classes="status-dot"
+                      Classes.warn="{Binding FooterWarn}"
+                      Classes.ok="{Binding FooterReady}" />
+              <TextBlock Text="{Binding FooterStatus}"
+                         FontSize="12"
+                         Opacity="0.65"
+                         TextTrimming="CharacterEllipsis"
+                         FontFamily="Cascadia Mono, Consolas, monospace" />
+            </StackPanel>
+          </DockPanel>
+        </Border>
+      </Grid>
+    </Grid>
   </Grid>
 </Window>

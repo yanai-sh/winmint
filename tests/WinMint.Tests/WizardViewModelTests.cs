@@ -29,6 +29,61 @@ public class WizardViewModelTests
     }
 
     [Fact]
+    public void Footer_prompts_for_iso_then_password_then_ready()
+    {
+        using WizardViewModel vm = Vm();
+        Assert.Equal("Select a Windows ISO to begin.", vm.FooterStatus);
+        Assert.False(vm.FooterWarn);
+        Assert.False(vm.FooterReady);
+
+        string iso = Path.Combine(Path.GetTempPath(), "winmint-footer-" + Guid.NewGuid().ToString("N") + ".iso");
+        File.WriteAllText(iso, "iso-stub");
+        try
+        {
+            vm.Source.SourceIsoPath = iso;
+            Assert.True(vm.FooterWarn);
+            Assert.False(vm.FooterReady);
+            Assert.Contains("password", vm.FooterStatus, StringComparison.OrdinalIgnoreCase);
+
+            vm.Account.Password = "secret";
+            Assert.True(vm.FooterReady);
+            Assert.False(vm.FooterWarn);
+            Assert.StartsWith("Ready ·", vm.FooterStatus, StringComparison.Ordinal);
+            Assert.Contains("winmint", vm.FooterStatus, StringComparison.Ordinal);
+            Assert.Contains("Test", vm.FooterStatus, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
+    }
+
+    [Fact]
+    public void Chip_glyph_uses_first_two_compact_letters()
+    {
+        Assert.Equal("VS", new ChipItem("vscode", "VS Code").Glyph);
+        Assert.Equal("Z", new ChipItem("zen", "Z").Glyph);
+    }
+
+    [Fact]
+    public void First_existing_iso_path_skips_non_iso_and_missing()
+    {
+        string iso = Path.Combine(Path.GetTempPath(), "winmint-drop-" + Guid.NewGuid().ToString("N") + ".iso");
+        File.WriteAllText(iso, "iso-stub");
+        try
+        {
+            Assert.Equal(
+                iso,
+                SourceStageViewModel.FirstExistingIsoPath(["notes.txt", iso, "missing.iso"]));
+            Assert.Null(SourceStageViewModel.FirstExistingIsoPath(["notes.txt", "missing.iso"]));
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
+    }
+
+    [Fact]
     public async Task Picker_recovers_missing_default_preview_is_redacted_and_invalid_raw_edit_revokes_apply()
     {
         string iso = Path.Combine(Path.GetTempPath(), "winmint-picker-" + Guid.NewGuid().ToString("N") + ".iso");

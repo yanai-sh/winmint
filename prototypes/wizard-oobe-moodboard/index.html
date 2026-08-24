@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WinMint — Media · You · Taste · Included</title>
+  <title>WinMint — Source · Account · Software · Review</title>
   <!--
-    PROTOTYPE — modern Win11 take (Fluent cues: Mica-ish layers, accent, NavigationView rail).
-    Stage lock: Media → You → Taste → Included. Not product UI.
+    Spec mock — Fluent chrome from the moodboard; product stages and every shipping Wizard control.
+    Source → Account → Software → Review. Visual spec for the Avalonia port. Not a runtime.
   -->
   <style>
     :root {
@@ -132,7 +132,7 @@
       padding: 10px 12px; border-radius: 6px; cursor: pointer;
       color: var(--text); font: 400 0.9rem/1.2 var(--font);
     }
-    .nav button .glyph {
+    .nav button .glyph, .nav button .glyph {
       width: 20px; text-align: center; font-size: 0.85rem; color: var(--text-sec);
     }
     .nav button[aria-current="true"] {
@@ -144,12 +144,12 @@
       background: rgba(128, 128, 128, 0.1);
     }
     .nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-    .nav .hint {
+    .nav .hint, .nav .hint {
       margin-top: auto; padding: 12px; font-size: 0.72rem; color: var(--text-ter);
       line-height: 1.35;
     }
 
-    .content {
+    .content, .content {
       display: flex; flex-direction: column; min-width: 0; min-height: 0;
       background: transparent;
     }
@@ -166,7 +166,7 @@
       margin: 0 0 6px; font-family: var(--font-display);
       font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em;
     }
-    .page .lede {
+    .page .lede, .page .lede {
       margin: 0 0 22px; color: var(--text-sec); font-size: 0.92rem;
       max-width: 48ch; line-height: 1.45;
     }
@@ -177,25 +177,25 @@
       backdrop-filter: blur(20px);
     }
 
-    .iso-pick {
+    .iso-pick, .iso-pick {
       appearance: none; width: 100%; border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--stroke));
       background: var(--accent-soft); border-radius: var(--radius-lg);
       padding: 36px 20px; font: inherit; color: var(--text-sec); cursor: pointer; text-align: center;
     }
-    .iso-pick:hover { border-color: var(--accent); color: var(--text); }
-    .iso-pick strong { display: block; color: var(--text); font-weight: 600; font-size: 1rem; margin-bottom: 6px; }
-    .iso-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .iso-pick:hover, .iso-pick:hover { border-color: var(--accent); color: var(--text); }
+    .iso-pick strong, .iso-pick strong { display: block; color: var(--text); font-weight: 600; font-size: 1rem; margin-bottom: 6px; }
+    .iso-pick:focus-visible, .iso-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-    .iso-ready { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .iso-ready .badge {
+    .iso-ready, .iso-ready { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .iso-ready .badge, .iso-ready .badge {
       display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem;
       font-weight: 600; color: var(--mint); margin-bottom: 4px;
     }
-    .iso-ready .badge i {
+    .iso-ready .badge i, .iso-ready .badge i {
       width: 7px; height: 7px; border-radius: 50%; background: var(--mint);
     }
-    .iso-ready strong { display: block; font-size: 0.95rem; }
-    .iso-ready code {
+    .iso-ready strong, .iso-ready strong { display: block; font-size: 0.95rem; }
+    .iso-ready code, .iso-ready code {
       font-family: var(--mono); font-size: 0.72rem; color: var(--text-ter);
       display: block; max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
@@ -242,7 +242,7 @@
     .block h2 {
       margin: 0 0 10px; font-size: 0.78rem; font-weight: 600; color: var(--text-sec);
     }
-    .tiles { display: flex; flex-wrap: wrap; gap: 10px; }
+    .tiles, .tiles { display: flex; flex-wrap: wrap; gap: 10px; }
     .tile {
       appearance: none; width: 88px; min-height: 88px; border: 1px solid var(--stroke);
       background: var(--card-solid); border-radius: var(--radius-lg); padding: 12px 6px 8px;
@@ -255,7 +255,7 @@
       box-shadow: inset 0 0 0 1px var(--accent);
     }
     .tile img { width: 32px; height: 32px; object-fit: contain; }
-    .tile .g {
+    .tile .g, .tile .g {
       width: 32px; height: 32px; display: grid; place-items: center;
       font: 600 0.85rem var(--mono); color: var(--text-sec);
     }
@@ -265,7 +265,7 @@
     }
     .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-    .skip {
+    .skip, .skip {
       appearance: none; border: 0; background: transparent; color: var(--accent);
       font: 600 0.88rem var(--font); cursor: pointer; padding: 4px 0;
     }
@@ -282,18 +282,18 @@
 
     .picks { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 4px; }
     .picks img { width: 28px; height: 28px; }
-    .picks .mini {
+    .picks .mini, .picks .mini {
       width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--stroke);
       display: grid; place-items: center; font: 600 0.65rem var(--mono); color: var(--text-sec);
       background: var(--ctrl);
     }
 
-    .quiet {
+    .quiet, .quiet {
       margin: 12px 0; padding: 12px 14px; border-radius: var(--radius);
       background: var(--accent-soft); color: var(--text); font-size: 0.84rem; line-height: 1.4;
       border-left: 3px solid var(--accent);
     }
-    .more {
+    .more, .more {
       appearance: none; border: 0; background: transparent; color: var(--accent);
       font: 600 0.88rem var(--font); cursor: pointer; padding: 0;
     }
@@ -304,7 +304,7 @@
     .details h3 { margin: 0 0 2px; font-size: 0.82rem; font-weight: 600; }
     .details p { margin: 0; font-size: 0.82rem; color: var(--text-sec); line-height: 1.4; }
 
-    .statusbar {
+    .statusbar, .statusbar {
       flex: 0 0 var(--footer); display: flex; align-items: center; gap: 10px;
       padding: 0 16px 0 20px; border-top: 1px solid var(--stroke);
       background: var(--layer);
@@ -345,7 +345,7 @@
       transition: opacity 180ms; max-width: 80%; text-align: center;
       box-shadow: 0 8px 24px rgba(0,0,0,0.12);
     }
-    .toast.on { opacity: 1; }
+    .toast.on, .toast.on { opacity: 1; }
 
     .client { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .proto {
@@ -356,6 +356,42 @@
     @media (prefers-color-scheme: dark) {
       .proto { color: rgba(255,255,255,0.25); }
     }
+
+    .iso-pick.drag, .iso-pick.drag { border-style: solid; border-color: var(--accent); }
+    .combo {
+      appearance: none; width: 100%; border: 1px solid var(--stroke); border-radius: var(--radius);
+      padding: 10px 12px; font: 400 0.95rem var(--font); color: var(--text);
+      background: var(--ctrl); margin-top: 10px;
+    }
+    .combo:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .check {
+      display: flex; flex-direction: row; align-items: center; gap: 8px;
+      font-size: 0.88rem; font-weight: 400; color: var(--text); margin-top: 12px;
+    }
+    .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+    .note { margin: 8px 0 0; font-size: 0.78rem; color: var(--text-ter); line-height: 1.4; max-width: 54ch; }
+    .stack { display: flex; flex-direction: column; gap: 14px; }
+    .adv {
+      margin-top: 4px; border: 1px solid var(--stroke); border-radius: var(--radius-lg);
+      padding: 8px 14px 12px; background: var(--card);
+    }
+    .adv > summary {
+      cursor: pointer; font-size: 0.82rem; font-weight: 600; color: var(--text-sec); padding: 6px 0;
+    }
+    textarea {
+      appearance: none; border: 1px solid var(--stroke); border-radius: var(--radius);
+      padding: 10px 12px; font: 400 0.82rem/1.4 var(--mono); color: var(--text);
+      background: var(--ctrl); width: 100%; min-height: 64px; resize: vertical;
+    }
+    textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .flash {
+      margin-top: 12px; padding: 12px 14px; border-radius: var(--radius);
+      border: 1px solid var(--stroke); font-size: 0.82rem; line-height: 1.45;
+      white-space: pre-wrap; font-family: var(--mono);
+    }
+    .row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .pre { margin: 8px 0 0; font: 400 0.75rem/1.4 var(--mono); color: var(--text-sec); white-space: pre-wrap; }
+    .busy { font-size: 0.82rem; color: var(--text-sec); margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -373,22 +409,22 @@
     </header>
     <div class="client" id="client"></div>
   </div>
-  <p class="proto">Prototype · Win11 Fluent take · not product</p>
+  <p class="proto">Spec mock · Source · Account · Software · Review</p>
 
   <script>
     const STAGES = [
-      { id: "media", label: "Media", glyph: "▣", title: "Media", lede: "Pick the official Windows ISO on this PC. WinMint does not download media." },
-      { id: "you", label: "You", glyph: "☺", title: "You", lede: "One local account for first sign-in. Password is required for autologon." },
-      { id: "taste", label: "Taste", glyph: "✦", title: "Taste", lede: "Editors, browsers, desktop, and WSL. Or skip and use recommended defaults." },
-      { id: "included", label: "Included", glyph: "✓", title: "Included", lede: "Compose receipt — your picks plus what WinMint applies quietly." },
+      { id: "source", label: "Source", glyph: "▣", title: "Source", lede: "Official Windows ISO on this PC. WinMint does not download media." },
+      { id: "account", label: "Account", glyph: "☺", title: "Account", lede: "Local account for first sign-in. Password is required for autologon." },
+      { id: "software", label: "Software", glyph: "✦", title: "Software", lede: "Editors, browsers, shell, and WSL — or continue with recommended defaults." },
+      { id: "review", label: "Review", glyph: "✓", title: "Review", lede: "Receipt of your picks plus what WinMint applies quietly." },
     ];
 
     const catalog = {
       editors: [
         { id: "cursor", name: "Cursor", src: "assets/cursor.svg" },
-        { id: "neovim", name: "Neovim", src: "assets/neovim.svg" },
+        { id: "vscode", name: "VS Code", glyph: "Vs" },
         { id: "zed", name: "Zed", src: "assets/zed.svg" },
-        { id: "vscodium", name: "VSCodium", src: "assets/vscodium.svg" },
+        { id: "neovim", name: "Neovim", src: "assets/neovim.svg" },
       ],
       browsers: [
         { id: "zen-browser", name: "Zen", glyph: "Z" },
@@ -397,14 +433,17 @@
         { id: "edge", name: "Edge", glyph: "Ed" },
       ],
       desktop: [
-        { id: "komorebi", name: "Komorebi", src: "assets/komorebi.svg" },
-        { id: "yasb", name: "YASB", src: "assets/yasb.svg" },
         { id: "windhawk", name: "Windhawk", src: "assets/windhawk.svg" },
+        { id: "yasb", name: "YASB", src: "assets/yasb.svg" },
+        { id: "komorebi", name: "Komorebi", src: "assets/komorebi.svg" },
+        { id: "fancywm", name: "FancyWM", glyph: "Fw", disabled: true, title: "Coming soon" },
       ],
       wsl: [
-        { id: "ubuntu", name: "Ubuntu", src: "assets/ubuntu.svg" },
+        { id: "Ubuntu", name: "Ubuntu", src: "assets/ubuntu.svg" },
+        { id: "FedoraLinux", name: "Fedora", src: "assets/fedora.svg" },
         { id: "archlinux", name: "Arch", src: "assets/archlinux.svg" },
-        { id: "fedora", name: "Fedora", src: "assets/fedora.svg" },
+        { id: "NixOS-WSL", name: "NixOS", glyph: "Nx" },
+        { id: "pengwin", name: "Pengwin", glyph: "Pw" },
       ],
       keep: [
         { id: "gaming", name: "Xbox & gaming" },
@@ -416,7 +455,7 @@
       editors: ["neovim", "zed"],
       browsers: [],
       desktop: ["komorebi", "yasb", "windhawk"],
-      wsl: ["ubuntu"],
+      wsl: ["Ubuntu"],
       keep: [],
     };
 
@@ -429,10 +468,21 @@
     const state = {
       index: 0,
       isoPath: "",
+      probing: false,
       edition: "Windows 11 Pro",
       editions: ["Windows 11 Pro", "Windows 11 Home"],
-      username: "yanai",
+      lane: "Test",
+      username: "winmint",
       password: "",
+      requireWifi: false,
+      locale: "en-GB",
+      geoId: "242",
+      timeZone: "GMT Standard Time",
+      locationServices: true,
+      cleanup: "recommended",
+      winget: "",
+      scoop: "",
+      wslExtra: "",
       picks: {
         editors: new Set(DEFAULTS.editors),
         browsers: new Set(DEFAULTS.browsers),
@@ -440,9 +490,13 @@
         wsl: new Set(DEFAULTS.wsl),
         keep: new Set(DEFAULTS.keep),
       },
-      detailsOpen: false,
+      includedOpen: false,
+      planOpen: false,
+      jsonOpen: false,
+      cliOpen: false,
       building: false,
-      lane: "Test",
+      built: false,
+      saveNote: "",
     };
 
     let toastTimer = 0;
@@ -455,7 +509,7 @@
     function statusMessage() {
       if (state.building) return "Building image… (demo)";
       if (!state.isoPath) return "Select a Windows ISO to begin.";
-      if (!identityReady()) return "Source ready · set a password on You";
+      if (!identityReady()) return "Source ready · set a password on Account";
       return "Ready · " + state.edition.replace("Windows 11 ", "") + " · " + state.username + " · " + state.lane;
     }
 
@@ -480,9 +534,15 @@
     }
 
     function pickIso() {
+      state.probing = true;
       state.isoPath = "D:\\\\ISOs\\\\Win11_25H2_Arm64.iso";
-      state.edition = "Windows 11 Pro";
       render();
+      window.setTimeout(() => {
+        state.probing = false;
+        state.editions = ["Windows 11 Pro", "Windows 11 Home"];
+        state.edition = "Windows 11 Pro";
+        render();
+      }, 400);
     }
 
     function clearIso() {
@@ -493,19 +553,21 @@
 
     function useDefaults() {
       Object.keys(DEFAULTS).forEach((k) => { state.picks[k] = new Set(DEFAULTS[k]); });
+      state.cleanup = "recommended";
       go(3);
-      showToast("Using recommended defaults — review on Included.");
+      showToast("Using recommended defaults — review on Review.");
     }
 
     function doBuild() {
       if (!sourceReady()) { pickIso(); return; }
-      if (!identityReady()) { go(1); showToast("Password required on You."); return; }
+      if (!identityReady()) { go(1); showToast("Password required on Account."); return; }
       if (!canBuild()) return;
       state.building = true;
       render();
       window.setTimeout(() => {
         state.building = false;
         render();
+        state.built = true;
         showToast("Demo only — product Build elevates ImageServicing.Apply.");
       }, 900);
     }
@@ -520,8 +582,8 @@
 
     function go(i) {
       if (!canGo(i)) {
-        if (!sourceReady()) showToast("Choose an ISO on Media first.");
-        else if (!identityReady()) { state.index = 1; showToast("Password required before Included."); render(); }
+        if (!sourceReady()) showToast("Choose an ISO on Source first.");
+        else if (!identityReady()) { state.index = 1; showToast("Password required before Review."); render(); }
         return;
       }
       state.index = i;
@@ -555,11 +617,50 @@
       return n;
     }
 
+    function bindDrop(target) {
+      target.addEventListener("dragover", (e) => { e.preventDefault(); target.classList.add("drag"); });
+      target.addEventListener("dragleave", () => target.classList.remove("drag"));
+      target.addEventListener("drop", (e) => { e.preventDefault(); target.classList.remove("drag"); pickIso(); });
+    }
+
+    function checkRow(label, checked, onChange) {
+      const row = el("label", "check");
+      const box = document.createElement("input");
+      box.type = "checkbox"; box.checked = checked;
+      box.addEventListener("change", () => onChange(box.checked));
+      row.append(box, document.createTextNode(label));
+      return row;
+    }
+
+    function combo(values, selected, onChange) {
+      const s = document.createElement("select");
+      s.className = "combo";
+      values.forEach((v) => {
+        const o = document.createElement("option");
+        o.value = v; o.textContent = v; o.selected = v === selected;
+        s.appendChild(o);
+      });
+      s.addEventListener("change", () => onChange(s.value));
+      return s;
+    }
+
+    function field(caption, value, opts, onInput) {
+      const lab = el("label", null, caption);
+      const input = document.createElement("input");
+      if (opts && opts.password) input.type = "password";
+      input.value = value;
+      if (opts && opts.placeholder) input.placeholder = opts.placeholder;
+      input.addEventListener("input", () => onInput(input.value));
+      lab.appendChild(input);
+      return lab;
+    }
+
     function tile(item, pressed, onClick) {
       const b = el("button", "tile");
       b.type = "button";
       b.setAttribute("aria-pressed", pressed ? "true" : "false");
-      b.title = item.name;
+      b.title = item.title || item.name;
+      if (item.disabled) { b.disabled = true; b.style.opacity = "0.45"; }
       if (item.src) {
         const img = document.createElement("img");
         img.src = item.src; img.alt = "";
@@ -568,7 +669,7 @@
         b.appendChild(el("span", "g", item.glyph || item.name.slice(0, 1)));
       }
       b.appendChild(el("span", null, item.name));
-      b.addEventListener("click", onClick);
+      if (!item.disabled) b.addEventListener("click", onClick);
       return b;
     }
 
@@ -581,8 +682,9 @@
         if (!state.isoPath) {
           const pick = el("button", "iso-pick");
           pick.type = "button";
-          pick.innerHTML = "<strong>Drop or choose Windows ISO</strong>Browse for official media on this PC";
+          pick.innerHTML = "<strong>Drop or choose Windows ISO</strong>Official media on this PC — not a download";
           pick.addEventListener("click", pickIso);
+          bindDrop(pick);
           page.appendChild(pick);
         } else {
           const card = el("div", "card");
@@ -595,33 +697,64 @@
           change.addEventListener("click", clearIso);
           ready.append(left, change);
           card.appendChild(ready);
-          const eds = el("div", "editions");
-          state.editions.forEach((name) => {
-            const b = el("button", null, name.replace("Windows 11 ", ""));
-            b.type = "button";
-            b.setAttribute("aria-pressed", state.edition === name ? "true" : "false");
-            b.addEventListener("click", () => { state.edition = name; render(); });
-            eds.appendChild(b);
-          });
-          card.appendChild(eds);
+          if (state.probing) {
+            card.appendChild(el("p", "busy", "Reading editions from ISO…"));
+          } else {
+            const lab = el("p", "note", "Source edition — Index Apply exports this one (single-image media after build).");
+            card.append(lab, combo(state.editions, state.edition, (v) => { state.edition = v; render(); }));
+          }
           page.appendChild(card);
+          const lane = el("div", "card");
+          lane.style.marginTop = "14px";
+          lane.appendChild(el("p", "note", "Image quality"));
+          const pills = el("div", "editions");
+          ["Test", "Release"].forEach((name) => {
+            const b = el("button", null, name);
+            b.type = "button";
+            b.setAttribute("aria-pressed", state.lane === name ? "true" : "false");
+            b.addEventListener("click", () => { state.lane = name; render(); });
+            pills.appendChild(b);
+          });
+          lane.appendChild(pills);
+          lane.appendChild(el("p", "note",
+            state.lane === "Release"
+              ? "Release: Build runs Gate B wipe-media apply in this Wizard (pre-wipe ISO evidence — not a completed Primary install)."
+              : "Test: faster loop. Not the wipe gate."));
+          page.appendChild(lane);
         }
       } else if (state.index === 1) {
-        const card = el("div", "card fields");
-        const u = el("label", null, "Username");
-        const ui = document.createElement("input");
-        ui.value = state.username;
-        ui.addEventListener("input", () => { state.username = ui.value; syncStatus(); });
-        u.appendChild(ui);
-        const p = el("label", null, "Password");
-        const pi = document.createElement("input");
-        pi.type = "password"; pi.value = state.password; pi.placeholder = "Required for autologon";
-        pi.addEventListener("input", () => { state.password = pi.value; syncStatus(); });
-        p.appendChild(pi);
-        card.append(u, p);
-        page.appendChild(card);
+        const stack = el("div", "stack");
+        const ident = el("div", "card fields");
+        ident.append(
+          field("Username", state.username, { placeholder: "winmint" }, (v) => { state.username = v; syncStatus(); }),
+          field("Password", state.password, { password: true, placeholder: "Required for autologon" }, (v) => { state.password = v; syncStatus(); })
+        );
+        ident.appendChild(checkRow("Require Wi-Fi during OOBE", state.requireWifi, (v) => { state.requireWifi = v; }));
+        stack.appendChild(ident);
+        const dma = el("div", "card");
+        dma.append(
+          el("h2", null, "Region after first sign-in"),
+          el("p", "note", "DMA uses Ireland during Setup, then restores these after it settles.")
+        );
+        const grid = el("div", "fields");
+        grid.append(
+          field("Locale", state.locale, { placeholder: "en-GB" }, (v) => { state.locale = v; }),
+          field("Geo ID", state.geoId, { placeholder: "242" }, (v) => { state.geoId = v; })
+        );
+        dma.appendChild(grid);
+        dma.appendChild(field("Time zone", state.timeZone, { placeholder: "GMT Standard Time" }, (v) => { state.timeZone = v; }));
+        dma.appendChild(checkRow("Enable location services", state.locationServices, (v) => { state.locationServices = v; }));
+        const pc = el("button", "skip", "Use this PC region");
+        pc.type = "button";
+        pc.addEventListener("click", () => {
+          state.locale = "en-GB"; state.geoId = "242"; state.timeZone = "GMT Standard Time"; state.locationServices = true;
+          render(); showToast("Filled from this PC (demo).");
+        });
+        dma.appendChild(pc);
+        stack.appendChild(dma);
+        page.appendChild(stack);
       } else if (state.index === 2) {
-        [["Editors", "editors"], ["Browsers", "browsers"], ["Desktop", "desktop"], ["Linux · WSL", "wsl"]].forEach(([label, group]) => {
+        [["Editors", "editors"], ["Browsers", "browsers"], ["Shell", "desktop"], ["WSL", "wsl"]].forEach(([label, group]) => {
           const block = el("div", "block");
           block.appendChild(el("h2", null, label));
           const tiles = el("div", "tiles");
@@ -644,11 +777,44 @@
           keep.appendChild(b);
         });
         keepBlock.appendChild(keep);
+        keepBlock.appendChild(el("p", "note", "Recommended cleanup stays on unless Advanced overrides it."));
         page.appendChild(keepBlock);
-        const skip = el("button", "skip", "Use defaults → Included");
+        const skip = el("button", "skip", "Use defaults → Review");
         skip.type = "button";
         skip.addEventListener("click", useDefaults);
         page.appendChild(skip);
+        const adv = document.createElement("details");
+        adv.className = "adv";
+        const sum = document.createElement("summary");
+        sum.textContent = "Advanced packages (optional)";
+        adv.appendChild(sum);
+        const presets = el("div", "editions");
+        [["recommended", "Recommended"], ["acceptance", "Acceptance"], ["empty", "Empty"]].forEach(([id, label]) => {
+          const b = el("button", null, label);
+          b.type = "button";
+          b.setAttribute("aria-pressed", state.cleanup === id ? "true" : "false");
+          b.addEventListener("click", () => { state.cleanup = id; render(); });
+          presets.appendChild(b);
+        });
+        adv.appendChild(el("p", "note", "Acceptance / Empty override chip selections. MinGit and Nilesoft Shell are always installed."));
+        adv.appendChild(presets);
+        const wg = el("label", null, "Winget install IDs");
+        const wt = document.createElement("textarea");
+        wt.placeholder = "Anysphere.Cursor\nZen-Team.Zen-Browser"; wt.value = state.winget;
+        wt.addEventListener("input", () => { state.winget = wt.value; });
+        wg.appendChild(wt);
+        const sc = el("label", null, "Scoop IDs");
+        const st = document.createElement("textarea");
+        st.placeholder = "curl\nkomorebi"; st.value = state.scoop;
+        st.addEventListener("input", () => { state.scoop = st.value; });
+        sc.appendChild(st);
+        const wx = el("label", null, "WSL tokens");
+        const wxT = document.createElement("textarea");
+        wxT.placeholder = "FedoraLinux\nNixOS-WSL"; wxT.value = state.wslExtra;
+        wxT.addEventListener("input", () => { state.wslExtra = wxT.value; });
+        wx.appendChild(wxT);
+        adv.append(wg, sc, wx);
+        page.appendChild(adv);
       } else {
         const card = el("div", "card");
         const rows = el("div", "rows");
@@ -657,14 +823,16 @@
           ["Edition", state.edition],
           ["Account", state.username || "—"],
           ["Lane", state.lane],
-          ["Meta", "DMA on · network may be needed at FirstLogon"],
+          ["Cleanup", state.cleanup],
+          ["Wi-Fi", state.requireWifi ? "Required at OOBE" : "Optional"],
+          ["Region", state.locale + " · " + state.geoId + " · " + state.timeZone],
+          ["Output", "%LOCALAPPDATA%\\WinMint\\out\\WinMint.iso"],
         ].forEach(([k, v]) => {
           const row = el("div", "row");
           row.append(el("span", null, k), el("span", null, v));
           rows.appendChild(row);
         });
         card.appendChild(rows);
-
         const picks = allPicked();
         if (picks.length) {
           const strip = el("div", "picks");
@@ -681,14 +849,31 @@
           });
           card.appendChild(strip);
         }
-
         card.appendChild(el("p", "quiet", quietText()));
-        const more = el("button", "more", state.detailsOpen ? "Hide what’s included" : "What’s included");
+        const actions = el("div", "row-actions");
+        const save = el("button", "btn btn-ghost", "Save Profile");
+        save.type = "button";
+        save.addEventListener("click", () => {
+          state.saveNote = "Profile saved (demo) — %LOCALAPPDATA%\\WinMint\\profiles\\winmint.json";
+          render(); showToast("Profile saved (demo).");
+        });
+        actions.appendChild(save);
+        card.appendChild(actions);
+        if (state.saveNote) card.appendChild(el("p", "note", state.saveNote));
+        if (state.built) {
+          card.appendChild(el("div", "flash",
+            (state.lane === "Release"
+              ? "Gate B wipe media ready (pre-wipe ISO evidence — not a completed Primary install).\n"
+              : "Test ISO ready (not the wipe gate).\n") +
+            "ISO: %LOCALAPPDATA%\\WinMint\\out\\WinMint.iso\n" +
+            "Flash with Rufus in DD Image mode (not ISO mode).\n" +
+            "Boot expects WinPE LaunchApply, not Setup."));
+        }
+        const more = el("button", "more", state.includedOpen ? "Hide what’s included" : "What’s included");
         more.type = "button";
-        more.addEventListener("click", () => { state.detailsOpen = !state.detailsOpen; render(); });
+        more.addEventListener("click", () => { state.includedOpen = !state.includedOpen; render(); });
         card.appendChild(more);
-
-        if (state.detailsOpen) {
+        if (state.includedOpen) {
           const keep = namesIn("keep");
           const d = el("div", "details");
           [
@@ -706,6 +891,28 @@
           });
           card.appendChild(d);
         }
+        const plan = document.createElement("details");
+        plan.className = "adv"; if (state.planOpen) plan.open = true;
+        plan.addEventListener("toggle", () => { state.planOpen = plan.open; });
+        plan.appendChild(Object.assign(document.createElement("summary"), { textContent: "Show full plan" }));
+        plan.appendChild(el("p", "pre", "Plan OK. Lane=" + state.lane + "; cleanup=" + state.cleanup + "; jobs=quiet+packages+dma."));
+        const replan = el("button", "skip", "Re-run Plan");
+        replan.type = "button";
+        replan.addEventListener("click", () => showToast("Plan refreshed (demo)."));
+        plan.appendChild(replan);
+        card.appendChild(plan);
+        const json = document.createElement("details");
+        json.className = "adv"; if (state.jsonOpen) json.open = true;
+        json.addEventListener("toggle", () => { state.jsonOpen = json.open; });
+        json.appendChild(Object.assign(document.createElement("summary"), { textContent: "Plan JSON" }));
+        json.appendChild(el("p", "pre", '{\n  "account": "' + state.username + '",\n  "lane": "' + state.lane + '",\n  "edition": "' + state.edition + '"\n}'));
+        card.appendChild(json);
+        const cli = document.createElement("details");
+        cli.className = "adv"; if (state.cliOpen) cli.open = true;
+        cli.addEventListener("toggle", () => { state.cliOpen = cli.open; });
+        cli.appendChild(Object.assign(document.createElement("summary"), { textContent: "CLI equivalent" }));
+        cli.appendChild(el("p", "pre", "winmint apply --iso <source> --profile winmint.json --lane " + state.lane.toLowerCase()));
+        card.appendChild(cli);
         page.appendChild(card);
       }
       return page;

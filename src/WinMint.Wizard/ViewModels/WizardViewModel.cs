@@ -64,13 +64,16 @@ public sealed partial class WizardViewModel :
     [ObservableProperty] private double _progressFraction = 0.25;
     [ObservableProperty] private bool _canGoBack;
     [ObservableProperty] private bool _canGoNext;
-    [ObservableProperty] private string _nextLabel = "Continue";
+    [ObservableProperty] private string _nextLabel = "Next";
     [ObservableProperty] private bool _canGoToSource = true;
     [ObservableProperty] private bool _canGoToAccount;
     [ObservableProperty] private bool _canGoToSoftware;
     [ObservableProperty] private bool _canGoToReview;
     [ObservableProperty] private bool _canBuild;
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private string _footerStatus = "Select a Windows ISO to begin.";
+    [ObservableProperty] private bool _footerWarn;
+    [ObservableProperty] private bool _footerReady;
 
     public bool IsSourceStep => StepIndex == SourceIndex;
     public bool IsAccountStep => StepIndex == AccountIndex;
@@ -565,6 +568,39 @@ public sealed partial class WizardViewModel :
         && (targetIndex == SourceIndex
             || (_source.IsReady && (targetIndex < ReviewIndex || _account.IdentityReady)));
 
+    private void RefreshFooter()
+    {
+        if (IsBusy)
+        {
+            FooterStatus = "Building image…";
+            FooterWarn = false;
+            FooterReady = true;
+            return;
+        }
+
+        if (!_source.IsReady)
+        {
+            FooterStatus = "Select a Windows ISO to begin.";
+            FooterWarn = false;
+            FooterReady = false;
+            return;
+        }
+
+        if (!_account.IdentityReady)
+        {
+            FooterStatus = "Source ready · set a password on Account";
+            FooterWarn = true;
+            FooterReady = false;
+            return;
+        }
+
+        string edition = _source.SelectedWimIndex?.Name ?? "ISO";
+        string lane = _source.Lane.IsRelease ? "Release" : "Test";
+        FooterStatus = $"Ready · {edition} · {_account.Username} · {lane}";
+        FooterWarn = false;
+        FooterReady = true;
+    }
+
     private void RefreshCanBuild()
     {
         CanBuild = _source.IsReady && _account.IdentityReady && _session.View.CanApply && !IsBusy;
@@ -578,9 +614,10 @@ public sealed partial class WizardViewModel :
     {
         CanGoBack = !IsBusy && StepIndex > SourceIndex;
         CanGoNext = !IsBusy && StepIndex < ReviewIndex && CanAdvance(StepIndex);
-        NextLabel = StepIndex == ReviewIndex ? "Finish" : "Continue";
+        NextLabel = StepIndex == ReviewIndex ? "Finish" : "Next";
         StageLabel = StageNames[StepIndex];
         ProgressFraction = (StepIndex + 1) / (double)StageNames.Length;
+        RefreshFooter();
         OnPropertyChanged(nameof(IsSourceStep));
         OnPropertyChanged(nameof(IsAccountStep));
         OnPropertyChanged(nameof(IsSoftwareStep));

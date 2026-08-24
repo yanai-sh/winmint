@@ -14,6 +14,15 @@ public sealed partial class ChipItem(
     public bool IsEnabled { get; } = isEnabled;
     public string? ToolTip { get; } = toolTip;
 
+    public string Glyph
+    {
+        get
+        {
+            string compact = Label.Replace(" ", "", StringComparison.Ordinal);
+            return compact.Length >= 2 ? compact[..2] : compact;
+        }
+    }
+
     [ObservableProperty]
     private bool _isSelected = isSelected;
 }

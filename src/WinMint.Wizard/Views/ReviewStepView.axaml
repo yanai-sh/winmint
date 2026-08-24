@@ -3,109 +3,114 @@
              xmlns:vm="using:WinMint.Wizard.ViewModels"
              x:Class="WinMint.Wizard.Views.ReviewStepView"
              x:DataType="vm:IReviewStageViewModel">
-  <StackPanel Spacing="18" MaxWidth="760" HorizontalAlignment="Center" VerticalAlignment="Center">
+  <StackPanel Spacing="16" MaxWidth="640">
     <TextBlock Classes="hero-title" Text="Review" />
     <TextBlock Classes="hero-sub" Text="{Binding Summary.QuietSummaryText}" />
 
-    <Border Classes="iso-stage">
-      <StackPanel Spacing="14">
-        <TextBlock Text="{Binding Summary.PickStripText}"
-                   TextWrapping="Wrap"
-                   FontWeight="Medium"
-                   IsVisible="{Binding Summary.PickStripText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <TextBlock Text="{Binding Summary.QuietBlockText}"
-                   TextWrapping="Wrap"
-                   Opacity="0.7"
-                   FontSize="13" />
-        <TextBlock Text="{Binding Summary.PlanMetaText}"
-                   TextWrapping="Wrap"
-                   Opacity="0.55"
-                   FontSize="12" />
-
-        <Expander Header="What's included" IsExpanded="False"
-                   IsVisible="{Binding Summary.WhatsIncludedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-          <TextBlock Text="{Binding Summary.WhatsIncludedText}" TextWrapping="Wrap" Opacity="0.75" Margin="0,8,0,0" />
-        </Expander>
-
-        <Expander Header="Show full plan" IsExpanded="False"
-                   IsVisible="{Binding Summary.FullPlanText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-          <TextBlock Text="{Binding Summary.FullPlanText}"
-                     TextWrapping="Wrap"
-                     Opacity="0.8"
-                     Margin="0,8,0,0"
-                     FontFamily="Cascadia Mono, Consolas, monospace"
-                     FontSize="12" />
-        </Expander>
-
-        <Expander Header="Plan detail" IsExpanded="False">
-          <StackPanel Spacing="8" Margin="0,8,0,0">
-            <TextBlock Text="{Binding Summary.PlanSummary}" TextWrapping="Wrap" Opacity="0.75" />
-            <Button Classes="ghost" Content="Re-run Plan" HorizontalAlignment="Left" Command="{Binding ReplanCommand}" />
-            <TextBox Text="{Binding Summary.PreviewJson}"
-                     IsReadOnly="True"
-                     AcceptsReturn="True"
-                     TextWrapping="NoWrap"
-                     MinHeight="160"
-                     FontFamily="Cascadia Mono, Consolas, monospace"
-                     PlaceholderText="Profile JSON" />
-          </StackPanel>
-        </Expander>
-      </StackPanel>
-    </Border>
-
     <Border Classes="panel-card" HorizontalAlignment="Stretch">
-      <StackPanel Spacing="14">
-        <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto" RowSpacing="8">
-          <TextBlock Text="Source" Opacity="0.55" />
-          <TextBlock Grid.Column="1" Text="{Binding Summary.SourceIsoPath}" TextWrapping="Wrap" TextAlignment="Right" />
-          <TextBlock Grid.Row="1" Text="Output" Opacity="0.55" />
-          <TextBlock Grid.Row="1" Grid.Column="1"
-                     Text="{Binding Summary.OutputIsoPath}"
-                     TextWrapping="Wrap"
-                     TextAlignment="Right" />
+      <StackPanel>
+        <Grid Classes="receipt-row" ColumnDefinitions="140,*" Margin="0,0,0,12">
+          <TextBlock Classes="receipt-k" Text="Source" />
+          <TextBlock Classes="receipt-v" Grid.Column="1" Text="{Binding Summary.SourceIsoPath}" />
+        </Grid>
+        <Grid Classes="receipt-row" ColumnDefinitions="140,*" Margin="0,0,0,12">
+          <TextBlock Classes="receipt-k" Text="Edition" />
+          <TextBlock Classes="receipt-v" Grid.Column="1" Text="{Binding Summary.EditionName}" />
+        </Grid>
+        <Grid Classes="receipt-row" ColumnDefinitions="140,*" Margin="0,0,0,12">
+          <TextBlock Classes="receipt-k" Text="Account" />
+          <TextBlock Classes="receipt-v" Grid.Column="1" Text="{Binding Summary.AccountName}" />
+        </Grid>
+        <Grid Classes="receipt-row" ColumnDefinitions="140,*" Margin="0,0,0,12">
+          <TextBlock Classes="receipt-k" Text="Lane" />
+          <TextBlock Classes="receipt-v" Grid.Column="1" Text="{Binding Summary.LaneName}" />
+        </Grid>
+        <Grid Classes="receipt-row" ColumnDefinitions="140,*" Margin="0,0,0,12">
+          <TextBlock Classes="receipt-k" Text="Wi-Fi" />
+          <TextBlock Classes="receipt-v" Grid.Column="1" Text="{Binding Summary.WifiLabel}" />
+        </Grid>
+        <Grid Classes="receipt-row" ColumnDefinitions="140,*" Margin="0,0,0,12">
+          <TextBlock Classes="receipt-k" Text="Region" />
+          <TextBlock Classes="receipt-v" Grid.Column="1" Text="{Binding Summary.RegionLabel}" />
+        </Grid>
+        <Grid Classes="receipt-row" ColumnDefinitions="140,*">
+          <TextBlock Classes="receipt-k" Text="Output" />
+          <TextBlock Classes="receipt-v" Grid.Column="1" Text="{Binding Summary.OutputIsoPath}" />
         </Grid>
 
-        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center" Margin="0,8,0,0">
-          <Button Classes="primary"
-                  Content="Save Profile"
-                  Command="{Binding SaveProfileCommand}"
-                  IsEnabled="{Binding !Build.IsBusy}" />
-          <Button Classes="primary"
-                  Content="Build"
-                  Command="{Binding BuildCommand}"
-                  IsEnabled="{Binding Build.CanBuild}"
-                  ToolTip.Tip="Plans if needed, saves the profile into the workdir, then elevates Apply (UAC)." />
-          <Button Classes="ghost"
-                  Content="Cancel"
-                  Command="{Binding CancelBuildCommand}"
-                  IsVisible="{Binding Build.IsBusy}" />
-        </StackPanel>
+        <TextBlock Text="{Binding Summary.PickStripText}"
+                   Margin="0,14,0,0"
+                   FontWeight="Medium"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding Summary.PickStripText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <Border Classes="quiet-box">
+          <TextBlock Text="{Binding Summary.QuietBlockText}" TextWrapping="Wrap" FontSize="13" />
+        </Border>
+
+        <Button Classes="ghost"
+                Content="Save Profile"
+                HorizontalAlignment="Left"
+                Margin="0,12,0,0"
+                Command="{Binding SaveProfileCommand}"
+                IsEnabled="{Binding !Build.IsBusy}" />
+        <TextBlock Text="{Binding Build.SaveStatus}"
+                   Opacity="0.75"
+                   TextWrapping="Wrap"
+                   Margin="0,6,0,0" />
 
         <ProgressBar IsIndeterminate="True"
                      Height="4"
                      IsVisible="{Binding Build.IsBusy}"
-                     Margin="0,4,0,0" />
+                     Margin="0,8,0,0" />
         <TextBlock Text="{Binding Build.BuildWaitHint}"
                    TextWrapping="Wrap"
                    Opacity="0.65"
                    FontSize="12"
                    IsVisible="{Binding Build.IsBusy}" />
         <TextBlock Text="{Binding Build.BuildStatus}" TextWrapping="Wrap" Opacity="0.85" />
-        <TextBlock Text="{Binding Build.SaveStatus}" Opacity="0.75" TextWrapping="Wrap" />
 
-        <Border Classes="iso-stage"
-                IsVisible="{Binding Build.FlashGuidanceText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                Margin="0,8,0,0"
-                Padding="12">
+        <Border Classes="flash"
+                IsVisible="{Binding Build.FlashGuidanceText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
           <StackPanel Spacing="6">
-            <TextBlock Classes="panel-label" Text="FLASH" />
+            <TextBlock Classes="panel-label" Text="FLASH" Margin="0" />
             <TextBlock Text="{Binding Build.FlashGuidanceText}"
                        TextWrapping="Wrap"
-                       FontSize="13" />
+                       FontSize="13"
+                       FontFamily="Cascadia Mono, Consolas, monospace" />
           </StackPanel>
         </Border>
 
-        <Expander Header="CLI equivalent" IsExpanded="False" Margin="0,8,0,0">
+        <Expander Header="What's included" IsExpanded="False" Margin="0,12,0,0"
+                  IsVisible="{Binding Summary.WhatsIncludedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding Summary.WhatsIncludedText}" TextWrapping="Wrap" Opacity="0.75" Margin="0,8,0,0" />
+        </Expander>
+
+        <Expander Header="Show full plan" IsExpanded="False" Margin="0,4,0,0"
+                  IsVisible="{Binding Summary.FullPlanText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <StackPanel Spacing="8" Margin="0,8,0,0">
+            <TextBlock Text="{Binding Summary.PlanSummary}" TextWrapping="Wrap" Opacity="0.75" />
+            <Button Classes="link" Content="Re-run Plan" Command="{Binding ReplanCommand}" />
+            <TextBlock Text="{Binding Summary.FullPlanText}"
+                       TextWrapping="Wrap"
+                       Opacity="0.8"
+                       FontFamily="Cascadia Mono, Consolas, monospace"
+                       FontSize="12" />
+          </StackPanel>
+        </Expander>
+
+        <Expander Header="Plan JSON" IsExpanded="False" Margin="0,4,0,0">
+          <TextBox Text="{Binding Summary.PreviewJson}"
+                   IsReadOnly="True"
+                   AcceptsReturn="True"
+                   TextWrapping="NoWrap"
+                   MinHeight="160"
+                   Margin="0,8,0,0"
+                   FontFamily="Cascadia Mono, Consolas, monospace"
+                   Watermark="Profile JSON" />
+        </Expander>
+
+        <Expander Header="CLI equivalent" IsExpanded="False" Margin="0,4,0,0">
           <TextBox Text="{Binding Summary.BuildRecipe}"
                    IsReadOnly="True"
                    AcceptsReturn="True"

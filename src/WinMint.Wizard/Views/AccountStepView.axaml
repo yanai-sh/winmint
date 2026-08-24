@@ -3,20 +3,20 @@
              xmlns:vm="using:WinMint.Wizard.ViewModels"
              x:Class="WinMint.Wizard.Views.AccountStepView"
              x:DataType="vm:IAccountStageViewModel">
-  <StackPanel Spacing="22" MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
+  <StackPanel Spacing="16" MaxWidth="520">
     <TextBlock Classes="hero-title" Text="Account" />
     <TextBlock Classes="hero-sub"
-               Text="Local account for first sign-in. Password required — Windows autologon never accepts a blank one." />
+               Text="Local account for first sign-in. Password is required for autologon." />
 
     <Border Classes="panel-card" HorizontalAlignment="Stretch">
       <StackPanel Spacing="14">
         <StackPanel Spacing="6">
-          <TextBlock Classes="panel-label" Text="USERNAME" />
-          <TextBox Text="{Binding Username}" PlaceholderText="winmint" />
+          <TextBlock Classes="panel-label" Text="Username" />
+          <TextBox Text="{Binding Username}" Watermark="winmint" />
         </StackPanel>
         <StackPanel Spacing="6">
-          <TextBlock Classes="panel-label" Text="PASSWORD" />
-          <TextBox Text="{Binding Password}" PasswordChar="•" PlaceholderText="Required" />
+          <TextBlock Classes="panel-label" Text="Password" />
+          <TextBox Text="{Binding Password}" PasswordChar="•" Watermark="Required for autologon" />
         </StackPanel>
         <CheckBox Content="Require Wi-Fi during OOBE" IsChecked="{Binding RequireWifi}" />
       </StackPanel>
@@ -24,25 +24,26 @@
 
     <Border Classes="panel-card" HorizontalAlignment="Stretch">
       <StackPanel Spacing="14">
-        <TextBlock Classes="panel-label" Text="REGION AFTER FIRST SIGN-IN" />
+        <TextBlock Classes="panel-label" Text="Region after first sign-in" />
         <TextBlock Classes="hero-sub"
-                   Text="DMA uses Ireland during Setup, then restores these settings after it settles." />
+                   Text="DMA uses Ireland during Setup, then restores these after it settles." />
+        <Grid ColumnDefinitions="*,12,*">
+          <StackPanel Spacing="6">
+            <TextBlock Classes="panel-label" Text="Locale" />
+            <TextBox Text="{Binding Locale}" Watermark="en-GB" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="6">
+            <TextBlock Classes="panel-label" Text="Geo ID" />
+            <TextBox Text="{Binding GeoId}" Watermark="242" />
+          </StackPanel>
+        </Grid>
         <StackPanel Spacing="6">
-          <TextBlock Classes="panel-label" Text="LOCALE" />
-          <TextBox Text="{Binding Locale}" PlaceholderText="en-GB" />
-        </StackPanel>
-        <StackPanel Spacing="6">
-          <TextBlock Classes="panel-label" Text="GEO ID" />
-          <TextBox Text="{Binding GeoId}" PlaceholderText="242" />
-        </StackPanel>
-        <StackPanel Spacing="6">
-          <TextBlock Classes="panel-label" Text="TIME ZONE" />
-          <TextBox Text="{Binding TimeZone}" PlaceholderText="GMT Standard Time" />
+          <TextBlock Classes="panel-label" Text="Time zone" />
+          <TextBox Text="{Binding TimeZone}" Watermark="GMT Standard Time" />
         </StackPanel>
         <CheckBox Content="Enable location services" IsChecked="{Binding LocationServices}" />
-        <Button Classes="ghost"
+        <Button Classes="link"
                 Content="Use this PC region"
-                HorizontalAlignment="Left"
                 Command="{Binding UseBuildMachineDmaCommand}" />
       </StackPanel>
     </Border>

@@ -224,6 +224,25 @@ internal sealed partial class SourceStageViewModel : ObservableObject, ISourceSt
         }
     }
 
+    internal static string? FirstExistingIsoPath(IEnumerable<string?> candidates)
+    {
+        foreach (string? candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                continue;
+            }
+
+            string path = candidate.Trim();
+            if (path.EndsWith(".iso", StringComparison.OrdinalIgnoreCase) && File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        return null;
+    }
+
     public void Dispose()
     {
         _probeCts?.Cancel();
