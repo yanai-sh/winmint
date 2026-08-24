@@ -48,7 +48,8 @@ internal static class Program
                 WipeSecrets: _ => BundlePasswordWipe.WipeBundlePassword(bundlePath, logger: log),
                 Appx: new WinRTAppxPackageManager(logger: log),
                 LocalAccounts: new Win32LocalAccounts(),
-                DmaSetup: new Win32DmaSetupRegion());
+                DmaSetup: new Win32DmaSetupRegion(),
+                StampOobeComplete: Win32OobeOverlay.TryStampSetupComplete);
             SessionResult result = await ProvisioningSession.RunMachineSetupAsync(bundle, env)
                 .ConfigureAwait(false);
             GuestLog.SessionStatus(log, result.FinalStatus.Code, result.FinalStatus.Message);

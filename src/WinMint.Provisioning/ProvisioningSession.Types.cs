@@ -62,15 +62,17 @@ public interface IConnectivityProbe
 }
 
 /// <summary>
-/// Ports the SetupComplete/SYSTEM pass reaches for. Autologon, secret wipe, and the two best-effort
-/// repairs — nothing else, so a caller cannot be asked for a splash or a clock this pass never reads.
+/// Ports the SetupComplete/SYSTEM pass reaches for. Autologon, secret wipe, OOBE ImageState stamp,
+/// and the two best-effort repairs — nothing else, so a caller cannot be asked for a splash or a clock
+/// this pass never reads.
 /// </summary>
 public sealed record MachineSetupEnvironment(
     IWinlogonRegistry Winlogon,
     Action<ProvisioningBundle>? WipeSecrets = null,
     IAppxPackageManager? Appx = null,
     ILocalAccounts? LocalAccounts = null,
-    IDmaSetupRegion? DmaSetup = null);
+    IDmaSetupRegion? DmaSetup = null,
+    Action? StampOobeComplete = null);
 
 /// <summary>
 /// Live guest capabilities used during Shell tenure. Production groups the Win32/WinRT adapters;

@@ -50,6 +50,41 @@ public class MachineSetupTests
     }
 
     [Fact]
+    public async Task MachineSetup_stamps_oobe_complete_as_system()
+    {
+        int stampCount = 0;
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        RecordingWipeSecrets secrets = new();
+        ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
+
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
+            bundle,
+            Env(winlogon, secrets, stampOobeComplete: () => stampCount++),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal(1, stampCount);
+    }
+
+    [Fact]
+    public async Task MachineSetup_completes_when_oobe_stamp_throws()
+    {
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        RecordingWipeSecrets secrets = new();
+        ProvisioningBundle bundle = MinimalBundle("winmint", "lab-only");
+
+        SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
+            bundle,
+            Env(
+                winlogon,
+                secrets,
+                stampOobeComplete: () => throw new InvalidOperationException("simulated stamp failure")),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+    }
+
+    [Fact]
     public async Task MachineSetup_restamps_Shell_when_mismatched_then_succeeds()
     {
         FakeWinlogonRegistry winlogon = new() { Shell = "explorer.exe" };
@@ -310,11 +345,13 @@ public class MachineSetupTests
         Action<ProvisioningBundle>? wipeSecrets = null,
         IAppxPackageManager? appx = null,
         ILocalAccounts? localAccounts = null,
-        IDmaSetupRegion? dmaSetup = null) =>
+        IDmaSetupRegion? dmaSetup = null,
+        Action? stampOobeComplete = null) =>
         new(
             Winlogon: winlogon,
             WipeSecrets: wipeSecrets ?? secrets!.Wipe,
             Appx: appx,
             LocalAccounts: localAccounts,
-            DmaSetup: dmaSetup ?? new OkDmaSetupRegion());
+            DmaSetup: dmaSetup ?? new OkDmaSetupRegion(),
+            StampOobeComplete: stampOobeComplete);
 }

@@ -832,6 +832,19 @@ public static partial class ProvisioningSession
             }
         }
 
+        if (env.StampOobeComplete is not null)
+        {
+            try
+            {
+                env.StampOobeComplete();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // ponytail: SYSTEM ImageState stamp is best-effort; Shell TryDismiss still runs
+                _ = ex;
+            }
+        }
+
         return Task.FromResult(new SessionResult(
             SessionOutcome.Complete,
             new SessionStatus("machineSetup.ok", "Autologon stamped; Shell verified; secrets wiped."),

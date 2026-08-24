@@ -12,7 +12,7 @@ namespace WinMint.Provisioning;
 [SupportedOSPlatform("windows")]
 public static class Win32OobeOverlay
 {
-    private static readonly string[] OverlayProcessNames = ["CloudExperienceHost", "setuphost"];
+    private static readonly string[] OverlayProcessNames = ["CloudExperienceHost", "UserOOBEBroker", "setuphost"];
 
     public static void TryDismiss()
     {
@@ -21,7 +21,11 @@ public static class Win32OobeOverlay
         TryStartExplorerIfMissing();
     }
 
-    private static void TryStampSetupComplete()
+    /// <summary>
+    /// SYSTEM/SetupComplete: mark OOBE complete so CloudExperienceHost does not sit on explorer.
+    /// FirstLogon is medium-IL and cannot write these HKLM keys.
+    /// </summary>
+    public static void TryStampSetupComplete()
     {
         try
         {
