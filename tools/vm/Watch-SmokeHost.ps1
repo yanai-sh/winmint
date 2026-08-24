@@ -38,11 +38,10 @@ $doneTicks = 0
 while ($true) {
     $applyStage = ''
     $log = $null
-    if (Test-Path -LiteralPath $apply) {
-        foreach ($line in Get-Content -LiteralPath $apply) {
-            if ($line.StartsWith('stage=')) { $applyStage = $line.Substring(6) }
-            if ($line.StartsWith('log=')) { $log = $line.Substring(4) }
-        }
+    $snap = Read-WinMintApplyStatus -Path $apply
+    if ($null -ne $snap) {
+        $applyStage = [string]$snap.Stage
+        $log = $snap.Log
     }
 
     $doc = $null
@@ -85,7 +84,7 @@ while ($true) {
 
     Clear-Host
     Write-Host (Format-WinMintHostWatch -Title $host.UI.RawUI.WindowTitle `
-            -Clock (Get-Date -Format 'HH:mm:ss') -Verdict $verdict -Phase $phase `
+            -Verdict $verdict -Phase $phase `
             -VmState $vmState -Heartbeat $heartbeat -StallMinutesLeft $stallLeft `
             -WallMinutesLeft $wallLeft -ApplyStage $applyStage -LastHostLine $lastHost `
             -LogLeaf $logLeaf -LogTail $logTail)

@@ -54,6 +54,18 @@ foreach ($m in [regex]::Matches($smoke, 'Write-WinMintHostProgress -Activity Smo
 }
 Assert-True $completedAfterFailTry 'Smoke fail must Completed after suspend try (including skip)'
 
+$watchHost = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Watch-SmokeHost.ps1') -Raw -Encoding utf8
+Assert-True ($watchHost -match 'Read-WinMintApplyStatus') 'Watch-SmokeHost must read apply-status via Read-WinMintApplyStatus'
+Assert-True ($watchHost -notmatch 'Get-Date') 'Watch-SmokeHost must not pass Get-Date as a dashboard clock'
+
+$applyWatch = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Watch-ApplyHost.ps1') -Raw -Encoding utf8
+Assert-True ($applyWatch -match 'Read-WinMintApplyStatus') 'Watch-ApplyHost must use Read-WinMintApplyStatus'
+Assert-True ($applyWatch -match 'Format-WinMintHostWatch') 'Watch-ApplyHost must render via Format-WinMintHostWatch'
+
+$just = Get-Content -LiteralPath (Join-Path $repo 'Justfile') -Raw -Encoding utf8
+Assert-True ($just -match 'Watch-ApplyHost.ps1') 'just watch-apply must call Watch-ApplyHost'
+Assert-True ($just -notmatch 'Get-Content -LiteralPath.*apply-status') 'just watch-apply must not Get-Content -Wait the apply-status file'
+
 $old = $PSStyle.OutputRendering
 try {
     $PSStyle.OutputRendering = 'PlainText'
@@ -69,6 +81,20 @@ try {
     Assert-True ($dash -match 'Smoke green') 'dashboard missing last host line'
     Assert-True ($dash -match '09-AddQualityUpdates.log') 'dashboard missing log leaf'
     Assert-True ((@($dash -split "`n" | Where-Object { $_ -match 'Catalog search start' }).Count -eq 1)) 'log tail not shown'
+
+    $checkDash = Format-WinMintHostWatch -Title 'check' -Verdict 'continue' -Phase 'test' -Leaf '' -LastHostLine 'dotnet test'
+    Assert-True ($checkDash -notmatch 'stall') 'check layout must omit stall/wall'
+    Assert-True ($checkDash -notmatch 'heartbeat') 'check layout must omit VM/heartbeat'
+    Assert-True ($checkDash -match 'test') 'check layout missing phase'
+    Assert-True ($checkDash -notmatch '12:00:00') 'check layout must omit clock unless passed'
+
+    $applyTmp = Join-Path ([IO.Path]::GetTempPath()) ('apply-status-' + [guid]::NewGuid().ToString('N') + '.txt')
+    Set-Content -LiteralPath $applyTmp -Value "updated=2026-01-01T00:00:00Z`nstage=AddQualityUpdates`nlog=C:\logs\09.log" -Encoding utf8
+    $snap = Read-WinMintApplyStatus -Path $applyTmp
+    Assert-True ($snap.Stage -eq 'AddQualityUpdates') 'Read-WinMintApplyStatus missed stage'
+    Assert-True ($snap.Log -eq 'C:\logs\09.log') 'Read-WinMintApplyStatus missed log'
+    Remove-Item -LiteralPath $applyTmp -Force
+
     Write-WinMintHostPhase -Lane Apply -Name 'AddQualityUpdates' -Index 9 -Count 14 -Outcome ok -DurationMs 1234
     Write-WinMintHostProgress -Activity Apply -Status 'AddQualityUpdates' -PercentComplete 64
     Write-WinMintHostProgress -Activity Apply -Completed

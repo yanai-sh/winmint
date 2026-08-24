@@ -73,12 +73,27 @@ function Write-WinMintHostProgress {
     Write-Progress @progress
 }
 
+function Read-WinMintApplyStatus {
+    param([string] $Path)
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $null
+    }
+    $stage = ''
+    $log = ''
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line.StartsWith('stage=')) { $stage = $line.Substring(6) }
+        elseif ($line.StartsWith('log=')) { $log = $line.Substring(4) }
+    }
+    [pscustomobject]@{ Stage = $stage; Log = $log }
+}
+
 function Format-WinMintHostWatch {
     param(
         [string] $Title = '',
         [string] $Clock = '',
         [string] $Verdict = '',
         [string] $Phase = '',
+        [string] $Leaf = '',
         [string] $VmState = '',
         [string] $Heartbeat = '',
         [int] $StallMinutesLeft = 0,
@@ -98,10 +113,26 @@ function Format-WinMintHostWatch {
         $lines.Add($Clock)
     }
     $lines.Add('')
-    $lines.Add("${bold}verdict${reset}  $Verdict")
-    $lines.Add(('phase    {0,-14}  VM {1,-12}  heartbeat {2}' -f $Phase, $VmState, $Heartbeat))
-    $lines.Add(('stall    {0}m             wall {1}m' -f $StallMinutesLeft, $WallMinutesLeft))
-    $lines.Add("apply    $ApplyStage")
+    if (-not [string]::IsNullOrWhiteSpace($Verdict)) {
+        $lines.Add("${bold}verdict${reset}  $Verdict")
+    }
+    $showVm = $PSBoundParameters.ContainsKey('VmState') -or $PSBoundParameters.ContainsKey('Heartbeat') -or
+        -not [string]::IsNullOrWhiteSpace($VmState) -or -not [string]::IsNullOrWhiteSpace($Heartbeat)
+    if ($showVm) {
+        $lines.Add(('phase    {0,-14}  VM {1,-12}  heartbeat {2}' -f $Phase, $VmState, $Heartbeat))
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($Phase)) {
+        $lines.Add("phase    $Phase")
+    }
+    if ($PSBoundParameters.ContainsKey('StallMinutesLeft') -or $PSBoundParameters.ContainsKey('WallMinutesLeft')) {
+        $lines.Add(('stall    {0}m             wall {1}m' -f $StallMinutesLeft, $WallMinutesLeft))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ApplyStage)) {
+        $lines.Add("apply    $ApplyStage")
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Leaf)) {
+        $lines.Add("leaf     $Leaf")
+    }
     if (-not [string]::IsNullOrWhiteSpace($LastHostLine)) {
         $lines.Add("host     $LastHostLine")
     }

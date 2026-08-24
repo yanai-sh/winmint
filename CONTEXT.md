@@ -116,7 +116,10 @@ Short words that carry weight in type names. They are kept because no generic al
 _Avoid_: calling Prepared-media publication Evidence; reading Evidence to decide a Prepared-media hit; calling Smoke status Evidence
 
 **Smoke status** — Host-written `smoke-status.json` projection of an S4 wait loop so a human or agent can watch without being the waiter. Watch-only; the harness must not read it to decide the next phase. ImageServicing truth is `apply-status.txt` / `failure.json`; the waiter must flip `phase=failed` when Apply dies.  
-_Avoid_: dashboard; monitor UI; Splash (guest); Evidence; treating VMConnect as required for green; leaving `phase=apply` after Apply throw; inferring harness death from PIDs
+_Avoid_: dashboard; monitor UI; Splash (guest); Evidence; treating VMConnect as required for green; leaving `phase=apply` after Apply throw; inferring harness death from PIDs; calling Check status Smoke status
+
+**Check status** — Host-written `.scratch/check-status.json` projection of a `just check` run so a human or agent can watch without being the gate. Watch-only; the check-gate must not read it to decide the next native. Grain is gate phase plus current contract leaf, not per-test names. ImageServicing `apply-status.txt` is a different document.  
+_Avoid_: dashboard; monitor UI; Evidence; Smoke status; reading Check status to pick the next `dotnet`/`pwsh`; MTP per-test loggers as the attach channel; auto-spawning a second console from `just check`
 
 **Prepared-media audit** — typed `prepared-media.json` ImageServicing merges into `evidence.json` after Apply. Not publication, not a control-plane input, not Evidence the harness reads to decide the next phase.  
 _Avoid_: treating the audit sidecar as a HostCompile input; re-hashing Output ISO in C# when `logs/digests.json` already has the digest

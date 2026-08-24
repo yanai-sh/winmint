@@ -97,9 +97,9 @@ clean-artifacts root=".scratch" keep="2" workdirs="1" days="14":
 wipe-scratch:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-ArtifactHygiene.ps1' -Root (Join-Path '{{justfile_directory()}}' '.scratch') -Wipe
 
-# Tail apply-status.txt. Default WORK = Gate B (%LOCALAPPDATA%\WinMint\work\gate-b).
+# Own-console apply-status watch. Default WORK = Gate B (%LOCALAPPDATA%\WinMint\work\gate-b).
 watch-apply WORK="":
-    pwsh -NoProfile -Command ". '{{justfile_directory()}}/tools/host/WinMintPaths.ps1'; $w='{{WORK}}'; if ([string]::IsNullOrWhiteSpace($w)) { $w = Get-WinMintGateBWorkDirectory }; Get-Content -LiteralPath (Join-Path $w 'apply-status.txt') -Wait -Tail 40"
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/host/Watch-ApplyHost.ps1' -Work '{{WORK}}'
 
 # Maintainer Apply (DISM hours). Cli verb is build.
 # Prereq: just publish-provisioning. INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs.
@@ -124,6 +124,10 @@ smoke-maintainer WORK=".scratch/smoke" WALL="180" MONITOR="" STALL="45":
 # smoke-maintainer already spawns one Watch-SmokeHost; use this to attach a second view.
 watch-smoke WORK=".scratch/smoke":
     pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Watch-SmokeHost.ps1' -Work '{{WORK}}'
+
+# Attach to just check. Default PATH = .scratch/check-status.json. just check does not spawn this.
+watch-check PATH="":
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/host/Watch-CheckHost.ps1' -Path '{{PATH}}'
 
 smoke-assert EVIDENCE:
     pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'
