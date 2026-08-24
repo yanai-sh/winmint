@@ -171,7 +171,7 @@ function Resolve-WinMintSmokeGuestCredential {
             $resolved = [IO.Path]::GetFullPath((Join-Path $profileDir $authored))
         }
         if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
-            throw "account.passwordPath '$authored' resolves to missing file: $resolved (docs/design/SECRETS.md)"
+            throw "account.passwordPath '$authored' resolves to missing file: $resolved"
         }
         $password = ([IO.File]::ReadAllText($resolved)).TrimEnd("`r", "`n")
         if ([string]::IsNullOrEmpty($password)) {

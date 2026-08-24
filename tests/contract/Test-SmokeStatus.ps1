@@ -41,6 +41,9 @@ if ($smoke.IndexOf('Write-SmokeStatus') -gt $smoke.IndexOf('Watch-SmokeHost.ps1'
 if ($smoke -notmatch 'Resolve-WinMintSmokeGuestCredential') {
     throw 'Invoke-Smoke must resolve guest credentials via Resolve-WinMintSmokeGuestCredential'
 }
+if ($smoke -notmatch 'ExpectNativePackageAudit:\$expectNativePackageAudit') {
+    throw 'assert splat must bind -ExpectNativePackageAudit as a switch, not a positional string'
+}
 if ($smoke -notmatch 'Get-SmokeStallExtendDecision') {
     throw 'Invoke-Smoke wait loop must use Get-SmokeStallExtendDecision'
 }

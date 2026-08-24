@@ -748,7 +748,7 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         -PinnedOnlineRemoveAppx $pinnedOnlineRemoveAppx `
         -PinnedRemoveCapabilities $pinnedRemoveCapabilities `
         -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures `
-        $(if ($expectNativePackageAudit) { '-ExpectNativePackageAudit' })
+        -ExpectNativePackageAudit:$expectNativePackageAudit
     if ($LASTEXITCODE -ne 0) { throw "Assert-SmokeEvidence exit $LASTEXITCODE" }
     if (-not $SkipApply) {
         $applyDoc = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json
