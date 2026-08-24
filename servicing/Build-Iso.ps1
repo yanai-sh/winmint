@@ -18,14 +18,20 @@ function Find-Oscdimg {
     return $null
 }
 
-function Get-WinMintOscdimgBootData {
+function Get-WinMintOscdimgEfisysPath {
     param([Parameter(Mandatory)] [string] $MediaDir)
-    $etfsboot = Join-Path $MediaDir 'boot\etfsboot.com'
     $efisys = Join-Path $MediaDir 'efi\microsoft\boot\efisys_noprompt.bin'
     if (-not (Test-Path -LiteralPath $efisys)) {
         $efisys = Join-Path $MediaDir 'efi\microsoft\boot\efisys.bin'
     }
     if (-not (Test-Path -LiteralPath $efisys)) { throw "efisys*.bin missing under $MediaDir\efi\microsoft\boot" }
+    return $efisys
+}
+
+function Get-WinMintOscdimgBootData {
+    param([Parameter(Mandatory)] [string] $MediaDir)
+    $etfsboot = Join-Path $MediaDir 'boot\etfsboot.com'
+    $efisys = Get-WinMintOscdimgEfisysPath -MediaDir $MediaDir
     if (Test-Path -LiteralPath $etfsboot) {
         return "2#p0,e,b$etfsboot#pEF,e,b$efisys"
     }
@@ -38,6 +44,10 @@ if ($MyInvocation.InvocationName -ne '.') {
     $oscdimg = Find-Oscdimg
     if (-not $oscdimg) { throw 'oscdimg.exe not found (install ADK Deployment Tools)' }
 
+    $efisys = Get-WinMintOscdimgEfisysPath -MediaDir $mediaDir
+    $efisysLeaf = Split-Path $efisys -Leaf
+    $efisysKind = if ($efisysLeaf -like '*noprompt*') { 'noprompt' } else { 'prompt' }
+    Write-Output "oscdimg efisys=$efisysLeaf ($efisysKind)"
     $bootdata = Get-WinMintOscdimgBootData -MediaDir $mediaDir
 
     $outDir = Split-Path -Parent $outputIso

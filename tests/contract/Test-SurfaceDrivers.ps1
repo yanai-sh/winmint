@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repo 'servicing\Inject-SurfaceDrivers.ps1') -MountDir 'x' -WorkDirectory 'x' -MediaDir 'x' -DeviceId 'x' -DetailsUrl 'x' -ExpectedFileNameRegex 'x'
+. (Join-Path $repo 'servicing\Inject-SurfaceDrivers.ps1') -MountDir 'x' -WorkDirectory 'x' -MediaDir 'x' -DeviceId 'x' -DetailsUrl 'x' -ExpectedFileNameRegex 'x' -Lane Test
 
 if (-not (Test-MicrosoftDownloadUri -Uri 'https://download.microsoft.com/download/x.msi')) {
     throw 'download.microsoft.com must be allowed'
@@ -62,6 +62,14 @@ try {
 }
 finally {
     Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+$kernel = Get-Content -LiteralPath (Join-Path $repo 'servicing\Inject-SurfaceDrivers.ps1') -Raw -Encoding utf8
+if ($kernel -notmatch '\$Lane -eq ''Test''' -or $kernel -notmatch 'surface_test_install_drivers') {
+    throw 'Test lane must inject the boot class subset into install.wim'
+}
+if ($kernel -notmatch "ValidateSet\('Test', 'Release'\)") {
+    throw 'Inject-SurfaceDrivers must take a Test/Release Lane'
 }
 
 Write-Output 'Test-SurfaceDrivers ok'

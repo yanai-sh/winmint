@@ -30,6 +30,7 @@ public static partial class BuildPlan
                             [StageParams.DeviceId] = drivers.DeviceId,
                             [StageParams.DetailsUrl] = drivers.DetailsUrl,
                             [StageParams.ExpectedFileNameRegex] = drivers.ExpectedFileNameRegex,
+                            [StageParams.Lane] = export.Name,
                         },
                         ServicingOpcode.ExportWim => new Dictionary<string, string>(StringComparer.Ordinal)
                         {

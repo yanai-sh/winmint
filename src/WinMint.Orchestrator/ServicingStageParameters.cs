@@ -85,7 +85,8 @@ public sealed record InjectDriversParameters(
     string MediaDir,
     string DeviceId,
     string DetailsUrl,
-    string ExpectedFileNameRegex);
+    string ExpectedFileNameRegex,
+    string Lane);
 
 public sealed record ExportWimParameters(
     string MountDir,

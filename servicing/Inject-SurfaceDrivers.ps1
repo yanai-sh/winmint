@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory)] [string] $MediaDir,
     [Parameter(Mandatory)] [string] $DeviceId,
     [Parameter(Mandatory)] [string] $DetailsUrl,
-    [Parameter(Mandatory)] [string] $ExpectedFileNameRegex
+    [Parameter(Mandatory)] [string] $ExpectedFileNameRegex,
+    [Parameter(Mandatory)] [ValidateSet('Test', 'Release')] [string] $Lane
 )
 # Surface Catalog offline driver injection — param-only (issue 63).
 # Download → MSI extract → SurfaceMsiSafe classify → DISM Add-Driver (install.wim + boot.wim subset).
@@ -20,7 +21,8 @@ function Test-MicrosoftDownloadUri {
 
 function Get-WinMintBootSetupCriticalClass {
     # WinPE on Hyper-V: Surface Class=system/extension (ACPI platform/filter) bugchecks 0xA5 _ADR.
-    # Storage/USB/HID/net only. install.wim still gets the full SurfaceMsiSafe set.
+    # Storage/USB/HID/net only. Release install.wim still gets the full SurfaceMsiSafe set.
+    # Test install.wim uses this same list — Hyper-V 0xA5 _ADR after disk boot.
     @('hdc', 'scsiadapter', 'usb', 'usbdevice', 'hidclass', 'keyboard', 'mouse', 'net')
 }
 
@@ -214,8 +216,13 @@ if ([int]$inventory.includedOfflineCount -lt 1) {
     throw "SurfaceMsiSafe found no offline-safe INF drivers for $deviceId"
 }
 
-Write-Output "Injecting $($inventory.includedOfflineCount) offline-safe driver(s) into install.wim…"
-Invoke-DismAddDriver -ImageMount $mountDir -DriverSource $preparedDir
+$installSource = $preparedDir
+if ($Lane -eq 'Test') {
+    $installSource = Join-Path $workDirectory 'surface_test_install_drivers'
+    $null = Copy-SetupCriticalDriverSubset -DriverSource $preparedDir -Destination $installSource
+}
+Write-Output "Injecting $($inventory.includedOfflineCount) offline-safe driver(s) into install.wim (lane=$Lane)…"
+Invoke-DismAddDriver -ImageMount $mountDir -DriverSource $installSource
 
 $bootWim = Join-Path $mediaDir 'sources\boot.wim'
 $bootInfCount = 0

@@ -38,6 +38,7 @@ $imageUbr = 0
 if (-not [int]::TryParse([string]$snap.Build, [ref]$imageUbr)) {
     throw "WIM ServicePack Build is not an integer UBR: $($snap.Build)"
 }
+Write-Output "AddQualityUpdates start Version=$($snap.Version) UBR=$imageUbr"
 Write-Output "Catalog search start Version=$($snap.Version) UBR=$imageUbr"
 
 $resolved = Invoke-WinMintQualityCatalogResolve `
