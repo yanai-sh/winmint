@@ -82,7 +82,8 @@ public class BundleLoaderTests
                     { "id": "winget.jqlang.jq", "kind": "winget", "packageId": "jqlang.jq" },
                     { "id": "scoop.curl", "kind": "scoop", "packageId": "curl" },
                     { "id": "wsl.Ubuntu", "kind": "wsl", "packageId": "Ubuntu" },
-                    { "id": "debloat.appx.safetyNet", "kind": "appx.safetyNet" }
+                    { "id": "debloat.appx.safetyNet", "kind": "appx.safetyNet" },
+                    { "id": "shell.chrome", "kind": "shell.chrome" }
                   ]
                 }
                 """);
@@ -96,6 +97,7 @@ public class BundleLoaderTests
                     ProvisionJobKind.Scoop,
                     ProvisionJobKind.Wsl,
                     ProvisionJobKind.AppxSafetyNet,
+                    ProvisionJobKind.ShellChrome,
                 ],
                 loaded.Value.Jobs.Select(j => j.Kind).ToArray());
         }

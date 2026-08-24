@@ -55,6 +55,9 @@ public sealed class Win32GuestMachine : IGuestMachine
 
     public void ApplyWorkstationQuiet() => Win32WorkstationQuiet.Apply();
 
+    public bool ApplyShellChrome(ShellChromeRequest request) =>
+        OperatingSystem.IsWindows() && Win32ShellChrome.Apply(request);
+
     public void SuppressWslOobe()
     {
         if (OperatingSystem.IsWindows())

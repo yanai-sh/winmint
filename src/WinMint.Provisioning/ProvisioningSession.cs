@@ -184,6 +184,7 @@ public static partial class ProvisioningSession
                 AssetDownload: env.Guest.AssetDownload,
                 IsWslPlatformReady: env.Guest.IsWslPlatformReady,
                 ApplyWorkstationQuiet: env.Guest.ApplyWorkstationQuiet,
+                ApplyShellChrome: env.Guest.ApplyShellChrome,
                 SuppressWslOobe: env.Guest.SuppressWslOobe,
                 IsHypervisorGuest: env.Guest.IsHypervisorGuest,
                 WslMock: new WslMockState());

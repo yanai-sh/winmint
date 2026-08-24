@@ -32,6 +32,10 @@ public sealed record ProvisioningBundle(
     bool PackageStrict = false,
     bool DmaEnabled = true);
 
+public sealed record ShellChromeRequest(
+    bool FailOpen,
+    IReadOnlyList<string> SelectedWingetIds);
+
 public sealed record AccountStamp(string Username, string Password);
 
 public sealed record CheckpointState(string Phase);
@@ -101,6 +105,8 @@ public interface IGuestMachine
     bool IsHypervisorGuest();
 
     void ApplyWorkstationQuiet();
+
+    bool ApplyShellChrome(ShellChromeRequest request);
 
     void SuppressWslOobe();
 

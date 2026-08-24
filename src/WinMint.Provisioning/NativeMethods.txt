@@ -34,3 +34,6 @@ GetUserDefaultLocaleName
 // Win32LocalAccounts
 NetUserDel
 DeleteProfileW
+
+// Win32ShellChrome
+SystemParametersInfoW

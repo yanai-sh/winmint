@@ -149,7 +149,8 @@ internal static class PlanDiff
             or ProvisionJobKind.ReservedStorageDisable
             or ProvisionJobKind.WorkstationQuiet
             or ProvisionJobKind.AppxSafetyNet
-            or ProvisionJobKind.ShellStamp;
+            or ProvisionJobKind.ShellStamp
+            or ProvisionJobKind.ShellChrome;
 
     private static string JobLabel(ProvisionJob job) =>
         job.Kind switch
@@ -164,6 +165,7 @@ internal static class PlanDiff
             ProvisionJobKind.Winget => $"Winget {job.PackageId}",
             ProvisionJobKind.ScoopBatch => "Scoop batch",
             ProvisionJobKind.ShellStamp => "Shell skel stamp",
+            ProvisionJobKind.ShellChrome => "Start / taskbar chrome",
             ProvisionJobKind.Wsl => $"WSL {job.PackageId}",
             _ => job.Kind.ToWire(),
         };

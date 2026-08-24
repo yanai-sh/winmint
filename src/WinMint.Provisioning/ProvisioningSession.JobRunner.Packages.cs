@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using WinMint.Contracts;
 
 namespace WinMint.Provisioning;
@@ -33,6 +35,89 @@ internal static partial class ProvisioningJobRunner
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return FailJob(env, "jobs.failed", $"{job.Id}: {ex.Message}");
+        }
+    }
+
+    private static JobsRunResult? RunShellChromeJob(
+        JobRunnerEnv env,
+        ProvisionJob job,
+        IReadOnlyList<ProvisionJob> jobs)
+    {
+        IReadOnlyList<string> ids = CollectSelectedWingetIds(jobs);
+        try
+        {
+            if (!env.ApplyShellChrome(new ShellChromeRequest(FailOpen: false, ids)))
+            {
+                return FailJob(env, "jobs.failed", $"{job.Id}: shell chrome apply failed.");
+            }
+
+            env.ReportStatus(new SessionStatus("shell.chrome", "Start, taskbar, and bloom wallpaper applied."));
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return FailJob(env, "jobs.failed", $"{job.Id}: {ex.Message}");
+        }
+    }
+
+    private static List<string> CollectSelectedWingetIds(IReadOnlyList<ProvisionJob> jobs)
+    {
+        List<string> ids = [];
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        foreach (ProvisionJob job in jobs)
+        {
+            if (job.Kind is ProvisionJobKind.Winget && !string.IsNullOrWhiteSpace(job.PackageId))
+            {
+                AddSelectedId(ids, seen, job.PackageId);
+            }
+        }
+
+        if (jobs.Any(j => j.Kind is ProvisionJobKind.WingetImport)
+            && File.Exists(BundleLoader.DefaultGuestWingetImportPath))
+        {
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(
+                    File.ReadAllBytes(BundleLoader.DefaultGuestWingetImportPath));
+                if (doc.RootElement.TryGetProperty("Sources", out JsonElement sources))
+                {
+                    foreach (JsonElement source in sources.EnumerateArray())
+                    {
+                        if (!source.TryGetProperty("Packages", out JsonElement packages))
+                        {
+                            continue;
+                        }
+
+                        foreach (JsonElement package in packages.EnumerateArray())
+                        {
+                            if (!package.TryGetProperty("PackageIdentifier", out JsonElement idEl))
+                            {
+                                continue;
+                            }
+
+                            string? id = idEl.GetString();
+                            if (id is not null && ShellChromeLayout.IsPinApp(id))
+                            {
+                                AddSelectedId(ids, seen, id);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // ponytail: import is a pin hint; missing Cursor/Zen fail-closes in Apply
+            }
+        }
+
+        return ids;
+    }
+
+    private static void AddSelectedId(List<string> ids, HashSet<string> seen, string id)
+    {
+        if (seen.Add(id))
+        {
+            ids.Add(id);
         }
     }
 

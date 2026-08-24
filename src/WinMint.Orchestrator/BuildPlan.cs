@@ -464,6 +464,7 @@ public static partial class BuildPlan
         }
 
         jobList.AddRange(packageSlice.Jobs);
+        jobList.Add(new ProvisionJob("shell.chrome", ProvisionJobKind.ShellChrome));
 
         JobsArtifact jobs = new(JobsWire.SchemaVersion, jobList);
 

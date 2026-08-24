@@ -136,6 +136,10 @@ internal static class ProvisioningSessionTestFakes
 
         public Action ApplyWorkstationQuietCallback { get; init; } = () => { };
 
+        public Func<ShellChromeRequest, bool> ApplyShellChromeCallback { get; init; } = static _ => true;
+
+        public List<ShellChromeRequest> ShellChromeRequests { get; } = [];
+
         public Action SuppressWslOobeCallback { get; init; } = () => { };
 
         public Action TryDismissOobeOverlayCallback { get; init; } = () => { };
@@ -145,6 +149,12 @@ internal static class ProvisioningSessionTestFakes
         public bool IsHypervisorGuest() => IsHypervisorGuestCallback();
 
         public void ApplyWorkstationQuiet() => ApplyWorkstationQuietCallback();
+
+        public bool ApplyShellChrome(ShellChromeRequest request)
+        {
+            ShellChromeRequests.Add(request);
+            return ApplyShellChromeCallback(request);
+        }
 
         public void SuppressWslOobe() => SuppressWslOobeCallback();
 

@@ -22,6 +22,7 @@ internal sealed record JobRunnerEnv(
     IAssetDownload? AssetDownload,
     Func<bool> IsWslPlatformReady,
     Action ApplyWorkstationQuiet,
+    Func<ShellChromeRequest, bool> ApplyShellChrome,
     Action SuppressWslOobe,
     Func<bool> IsHypervisorGuest,
     WslMockState WslMock);
@@ -432,6 +433,17 @@ internal static partial class ProvisioningJobRunner
                         if (platform is not null)
                         {
                             return platform.Value;
+                        }
+
+                        continue;
+                    }
+
+                case ProvisionJobKind.ShellChrome:
+                    {
+                        JobsRunResult? chrome = RunShellChromeJob(env, job, jobs);
+                        if (chrome is not null)
+                        {
+                            return chrome.Value;
                         }
 
                         continue;
