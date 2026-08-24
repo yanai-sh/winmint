@@ -73,21 +73,28 @@ public static class ShellChromeLayout
             return null;
         }
 
-        foreach (string candidate in Candidates(wingetId))
-        {
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
+        return TryResolveShortcut(Candidates(wingetId));
+    }
 
+    // ponytail: no IShellLink factory; prefer sibling .lnk, exe only for existence
+    internal static string? TryResolveShortcut(IReadOnlyList<string> candidates)
+    {
+        string? exe = null;
+        foreach (string candidate in candidates)
+        {
             string link = Path.ChangeExtension(candidate, ".lnk");
             if (File.Exists(link))
             {
                 return link;
             }
+
+            if (exe is null && File.Exists(candidate))
+            {
+                exe = candidate;
+            }
         }
 
-        return null;
+        return exe;
     }
 
     private static string JsonString(string value) =>
@@ -110,7 +117,7 @@ public static class ShellChromeLayout
         return null;
     }
 
-    private static string[] Candidates(string wingetId)
+    internal static string[] Candidates(string wingetId)
     {
         string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
@@ -130,6 +137,7 @@ public static class ShellChromeLayout
             return
             [
                 Path.Combine(programFiles, "Zen Browser", "zen.exe"),
+                Path.Combine(localAppData, "Zen Browser", "zen.exe"),
                 Path.Combine(programFilesX86, "Zen Browser", "zen.exe"),
                 Path.Combine(localAppData, "Programs", "Zen Browser", "zen.exe"),
             ];

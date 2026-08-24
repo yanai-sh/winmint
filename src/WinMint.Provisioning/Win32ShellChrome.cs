@@ -43,7 +43,11 @@ public static class Win32ShellChrome
                 continue;
             }
 
-            links.Add(resolved);
+            if (resolved.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+            {
+                links.Add(resolved);
+            }
+
             startPinIds.Add(pinId);
             taskbarPinIds.Add(pinId);
         }

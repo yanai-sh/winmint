@@ -22,4 +22,35 @@ public class ShellChromeLayoutTests
         Assert.Contains("PinListPlacement=\"Replace\"", xml, StringComparison.Ordinal);
         Assert.DoesNotContain("Microsoft.Xbox", xml, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void TryResolveShortcut_prefers_lnk_when_exe_also_exists()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "winmint-chrome-lnk-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string exe = Path.Combine(dir, "Cursor.exe");
+            string link = Path.Combine(dir, "Cursor.lnk");
+            File.WriteAllBytes(exe, [0]);
+            File.WriteAllBytes(link, [0]);
+
+            Assert.Equal(link, ShellChromeLayout.TryResolveShortcut([exe]));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Zen_candidates_include_localappdata_zen_browser()
+    {
+        string expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Zen Browser",
+            "zen.exe");
+
+        Assert.Contains(expected, ShellChromeLayout.Candidates(ShellChromeLayout.ZenWingetId));
+    }
 }
