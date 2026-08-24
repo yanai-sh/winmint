@@ -46,11 +46,8 @@ public class SmokeEvidenceAssertTests
             File.WriteAllText(
                 Path.Combine(work, "apply", "evidence.json"),
                 """{"schemaVersion":"winmint.image.evidence/v1","lane":"Test","digests":{}}""");
+            DeleteAcceptance(work);
             string acceptancePath = Path.Combine(work, "acceptance.json");
-            if (File.Exists(acceptancePath))
-            {
-                File.Delete(acceptancePath);
-            }
 
             // Empty Assert defaults skip keep-flag — pass pins explicitly.
             int exit = RunAssert(
@@ -79,6 +76,7 @@ public class SmokeEvidenceAssertTests
         try
         {
             CopyTree(fixture, work);
+            DeleteAcceptance(work);
             string guestPath = Directory.GetFiles(Path.Combine(work, "guest"), "evidence-*.json")[0];
             JsonNode doc = JsonNode.Parse(File.ReadAllText(guestPath))
                 ?? throw new InvalidOperationException("guest evidence parse failed");
@@ -105,6 +103,7 @@ public class SmokeEvidenceAssertTests
         try
         {
             CopyTree(fixture, work);
+            DeleteAcceptance(work);
             string guestPath = Directory.GetFiles(Path.Combine(work, "guest"), "evidence-*.json")[0];
             JsonNode doc = JsonNode.Parse(File.ReadAllText(guestPath))
                 ?? throw new InvalidOperationException("guest evidence parse failed");
@@ -114,12 +113,43 @@ public class SmokeEvidenceAssertTests
                 "settle.deviceRegionOk",
                 "settle.ok",
                 "jobs.begin",
+                "jobs.workstation.quiet",
+                "jobs.wsl.platform.mocked",
+                "shell.chrome",
                 "jobs.ok");
             File.WriteAllText(guestPath, doc.ToJsonString());
 
             int exit = RunAssert(repo, work, out _, out string stderr);
             Assert.NotEqual(0, exit);
             Assert.Contains("oobe.dismiss", stderr, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(work, "acceptance.json")));
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "S4")]
+    public void Assert_smoke_evidence_fails_without_shell_chrome_json()
+    {
+        string repo = TestRepo.Root;
+        string fixture = Path.Combine(repo, "tests", "fixtures", "smoke-evidence");
+        string work = Path.Combine(Path.GetTempPath(), "winmint-s4-no-chrome-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyTree(fixture, work);
+            DeleteAcceptance(work);
+            string chromePath = Path.Combine(work, "guest", "shell-chrome.json");
+            if (File.Exists(chromePath))
+            {
+                File.Delete(chromePath);
+            }
+
+            int exit = RunAssert(repo, work, out _, out string stderr);
+            Assert.NotEqual(0, exit);
+            Assert.Contains("shell-chrome.json", stderr, StringComparison.OrdinalIgnoreCase);
             Assert.False(File.Exists(Path.Combine(work, "acceptance.json")));
         }
         finally
@@ -138,6 +168,7 @@ public class SmokeEvidenceAssertTests
         try
         {
             CopyTree(fixture, work);
+            DeleteAcceptance(work);
             string guestPath = Directory.GetFiles(Path.Combine(work, "guest"), "evidence-*.json")[0];
             JsonNode doc = JsonNode.Parse(File.ReadAllText(guestPath))
                 ?? throw new InvalidOperationException("guest evidence parse failed");
@@ -147,7 +178,10 @@ public class SmokeEvidenceAssertTests
                 "settle.deviceRegionOk",
                 "settle.ok",
                 "jobs.begin",
+                "jobs.workstation.quiet",
+                "jobs.wsl.platform.mocked",
                 "removed.appx.online.Microsoft.BingNews",
+                "shell.chrome",
                 "jobs.ok",
                 "oobe.dismiss");
             File.WriteAllText(guestPath, doc.ToJsonString());
@@ -173,6 +207,7 @@ public class SmokeEvidenceAssertTests
         try
         {
             CopyTree(fixture, work);
+            DeleteAcceptance(work);
             string script = Path.Combine(repo, "tools", "vm", "Assert-SmokeEvidence.ps1");
             ProcessStartInfo psi = new()
             {
@@ -181,7 +216,7 @@ public class SmokeEvidenceAssertTests
                 {
                     "-NoProfile", "-File", script, "-EvidenceDir", work,
                     "-LiveShell", @"C:\Windows\WinMint\Supervisor.exe",
-                    "-SupervisorRunning", "false",
+                    "-SupervisorRunning:false",
                 },
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -231,6 +266,15 @@ public class SmokeEvidenceAssertTests
         return p.ExitCode;
     }
 
+
+    private static void DeleteAcceptance(string evidenceDir)
+    {
+        string acceptancePath = Path.Combine(evidenceDir, "acceptance.json");
+        if (File.Exists(acceptancePath))
+        {
+            File.Delete(acceptancePath);
+        }
+    }
 
     private static void CopyTree(string source, string dest)
     {

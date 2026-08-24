@@ -433,6 +433,14 @@ function Test-GuestEvidenceReady {
                 }
             }
 
+            $chromeRemote = Invoke-Command -Session $session -ScriptBlock {
+                $p = Join-Path $env:ProgramData 'WinMint\shell-chrome.json'
+                if (Test-Path -LiteralPath $p) { $p } else { $null }
+            }
+            if ($chromeRemote) {
+                Copy-Item -FromSession $session -Path $chromeRemote -Destination (Join-Path $guestDir 'shell-chrome.json') -Force
+            }
+
             if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $pulled `
                     -LiveShell ([string]$live.Shell) -SupervisorRunning:$live.SupervisorRunning `
                     -RequiredSmokeRunId $runId -ExplorerRunning $live.ExplorerRunning)) {

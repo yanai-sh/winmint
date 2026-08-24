@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "winmint.shell.chrome/v1",
+  "wallpaperPath": "C:\\Windows\\Web\\Wallpaper\\Windows\\WinMint-Bloom.jpg",
+  "startPinIds": ["explorer", "settings", "terminal", "zen-browser", "cursor"],
+  "taskbarPinIds": ["explorer", "terminal", "zen-browser", "cursor"],
+  "quietDwords": { "SearchboxTaskbarMode": 0, "TaskbarDa": 0, "TaskbarMn": 0, "ShowTaskViewButton": 0, "ShowCopilotButton": 0 }
+}

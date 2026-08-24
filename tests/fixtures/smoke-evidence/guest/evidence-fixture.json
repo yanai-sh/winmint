@@ -9,6 +9,9 @@
     "settle.deviceRegionOk",
     "settle.ok",
     "jobs.begin",
+    "jobs.workstation.quiet",
+    "jobs.wsl.platform.mocked",
+    "shell.chrome",
     "jobs.ok",
     "oobe.dismiss"
   ],

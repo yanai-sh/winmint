@@ -8,6 +8,7 @@
     <EvidenceDir>/guest/evidence-*.json  (winmint.provisioning.evidence/v1)
     <EvidenceDir>/apply/evidence.json    (winmint.image.evidence/v1, optional lane)
     <EvidenceDir>/guest/winlogon-shell.txt  (Winlogon Shell after tenure — must be explorer.exe)
+    <EvidenceDir>/guest/shell-chrome.json   (winmint.shell.chrome/v1 — wallpaper, pins, quiet DWords)
   Writes <EvidenceDir>/acceptance.json summary on success.
 #>
 param(
@@ -95,6 +96,15 @@ if ($phases -notcontains 'jobs.ok') {
 }
 if ($phases -notcontains 'oobe.dismiss') {
     throw 'FirstLogon handoff marker missing: phases must contain oobe.dismiss'
+}
+if ($phases -notcontains 'jobs.workstation.quiet') {
+    throw 'FirstLogon quiet chrome missing: phases must contain jobs.workstation.quiet'
+}
+if ($phases -notcontains 'jobs.wsl.platform.mocked') {
+    throw 'hypervisor WSL mock missing: phases must contain jobs.wsl.platform.mocked'
+}
+if ($phases -notcontains 'shell.chrome') {
+    throw 'shell chrome missing: phases must contain shell.chrome'
 }
 
 $onlineRemoves = @($phases | Where-Object { $_ -like 'removed.appx.online.*' })
@@ -209,6 +219,48 @@ if ($ExpectNativePackageAudit) {
     }
     if ($null -eq $native.packages -or @($native.packages).Count -eq 0) {
         throw 'native-packages.json must list at least one audited package'
+    }
+}
+
+$chromePath = Join-Path $EvidenceDir 'guest\shell-chrome.json'
+if (-not (Test-Path -LiteralPath $chromePath)) {
+    throw 'shell chrome evidence missing: expected guest/shell-chrome.json'
+}
+$chrome = Get-Content -LiteralPath $chromePath -Raw -Encoding utf8 | ConvertFrom-Json
+if ([string]$chrome.schemaVersion -ne 'winmint.shell.chrome/v1') {
+    throw "unexpected shell chrome schema '$($chrome.schemaVersion)'"
+}
+$expectedWallpaper = 'C:\Windows\Web\Wallpaper\Windows\WinMint-Bloom.jpg'
+if ([string]$chrome.wallpaperPath -ne $expectedWallpaper) {
+    throw "shell chrome wallpaperPath must be $expectedWallpaper, got '$($chrome.wallpaperPath)'"
+}
+$startPins = @($chrome.startPinIds)
+$taskbarPins = @($chrome.taskbarPinIds)
+if ($startPins -cnotcontains 'explorer' -or $startPins -cnotcontains 'terminal') {
+    throw 'shell chrome startPinIds must contain explorer and terminal'
+}
+if ($taskbarPins -cnotcontains 'explorer' -or $taskbarPins -cnotcontains 'terminal') {
+    throw 'shell chrome taskbarPinIds must contain explorer and terminal'
+}
+if ($null -eq $chrome.quietDwords) {
+    throw 'shell chrome quietDwords missing'
+}
+# Task 6 writes the full ExplorerAdvancedDwords table plus SearchboxTaskbarMode.
+# Assert the v1 quiet keys as a subset (must be 0); do not require exact dictionary equality.
+$requiredQuiet = [ordered]@{
+    SearchboxTaskbarMode = 0
+    TaskbarDa            = 0
+    TaskbarMn            = 0
+    ShowTaskViewButton   = 0
+    ShowCopilotButton    = 0
+}
+foreach ($name in $requiredQuiet.Keys) {
+    $prop = $chrome.quietDwords.PSObject.Properties[$name]
+    if ($null -eq $prop) {
+        throw "shell chrome quietDwords missing $name"
+    }
+    if ([int]$prop.Value -ne $requiredQuiet[$name]) {
+        throw "shell chrome quietDwords.$name must be $($requiredQuiet[$name]), got '$($prop.Value)'"
     }
 }
 
