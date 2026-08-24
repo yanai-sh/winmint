@@ -395,6 +395,15 @@ public static partial class ProvisioningSession
                 Phases: phases,
                 FirstPaintMs: firstPaintMs)));
 
+        try
+        {
+            env.Guest.ApplyShellChrome(new(FailOpen: true, SelectedWingetIds: []));
+        }
+        catch (Exception)
+        {
+            // ponytail: evidence already durable; fail-open chrome is best-effort (same as oobe.dismiss)
+        }
+
         // Unlock after evidence — custom Shell is medium-IL and may lack HKLM write.
         if (TryUnlock(env))
         {

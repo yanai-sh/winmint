@@ -71,4 +71,42 @@ public class ShellChromeJobTests
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.DoesNotContain("shell.chrome", evidence.Documents[^1].Phases);
     }
+
+    [Fact]
+    public async Task Fail_open_applies_baseline_chrome_and_stays_failed()
+    {
+        RecordingProcessHost processes = new()
+        {
+            OnRun = static (file, args) =>
+            {
+                if (file.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase)
+                    && args is ["--install", "--no-distribution"])
+                {
+                    return new ProcessStartResult(1);
+                }
+
+                return new ProcessStartResult(0);
+            },
+        };
+        RecordingEvidenceSink evidence = new();
+        FakeGuestMachine guest = new()
+        {
+            Processes = processes,
+            IsWslPlatformReadyCallback = static () => false,
+            IsHypervisorGuestCallback = static () => false,
+            ApplyShellChromeCallback = static _ =>
+                throw new InvalidOperationException("simulated chrome failure"),
+        };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle(jobs: [new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform)]),
+            Env(guest, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        ShellChromeRequest request = Assert.Single(guest.ShellChromeRequests);
+        Assert.True(request.FailOpen);
+        Assert.Empty(request.SelectedWingetIds);
+        Assert.DoesNotContain("shell.chrome", evidence.Documents[^1].Phases);
+    }
 }
