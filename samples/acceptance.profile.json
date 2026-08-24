@@ -9,9 +9,9 @@
   "dma": {
     "enabled": true,
     "settle": {
-      "locale": "en-GB",
-      "geoId": 242,
-      "timeZoneId": "GMT Standard Time",
+      "locale": "en-US",
+      "geoId": 117,
+      "timeZoneId": "Israel Standard Time",
       "locationServicesEnabled": true
     }
   },
