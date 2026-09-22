@@ -57,6 +57,25 @@ function Invoke-OfflineHiveValueWrite {
     }
 }
 
+function Invoke-OfflineRegExeAdd {
+    param(
+        [Parameter(Mandatory)][string] $HiveKey,
+        [Parameter(Mandatory)][string] $SubKey,
+        [Parameter(Mandatory)][string] $Name,
+        [Parameter(Mandatory)][string] $Type,
+        [Parameter(Mandatory)][string] $Data
+    )
+    $regType = switch ($Type.ToUpperInvariant()) {
+        'REG_DWORD' { 'REG_DWORD' }
+        'REG_SZ' { 'REG_SZ' }
+        'REG_QWORD' { 'REG_QWORD' }
+        default { throw "unsupported reg type '$Type'" }
+    }
+    $path = "$HiveKey\$SubKey"
+    & reg.exe add $path /v $Name /t $regType /d $Data /f | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "reg.exe add exit $LASTEXITCODE for $path\$Name" }
+}
+
 function Invoke-OfflineRegAdd {
     param(
         [Parameter(Mandatory)][string] $HiveKey,
@@ -77,6 +96,12 @@ function Invoke-OfflineRegAdd {
         catch {
             $msg = $_.Exception.Message
             Write-Output "reg write retry $i/$max $($Context): $msg"
+            if ($i -eq $max -and (Test-TransientRegDenied $msg)) {
+                Write-Output "reg.exe fallback $($Context)"
+                Invoke-OfflineRegExeAdd -HiveKey $HiveKey -SubKey $SubKey -Name $Name -Type $Type -Data $Data
+                Write-Output "The operation completed successfully (reg.exe)."
+                return
+            }
             if (-not (Test-TransientRegDenied $msg) -or $i -eq $max) {
                 throw "reg add failed: $Context — $msg"
             }

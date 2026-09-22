@@ -7,6 +7,7 @@ $kernel = Get-Content -LiteralPath (Join-Path $repo 'servicing\Stamp-OfflineDefa
 if ($kernel -notmatch 'NTUSER\.DAT') { throw 'Stamp-OfflineDefaultUser must load Users\Default\NTUSER.DAT' }
 if ($kernel -notmatch 'ConvertFrom-Json') { throw 'Stamp-OfflineDefaultUser must read default-user.json' }
 if ($kernel -notmatch 'finally') { throw 'Stamp-OfflineDefaultUser must unload the hive in finally' }
+if ($kernel -notmatch 'reg\.exe add') { throw 'Stamp-OfflineDefaultUser must fall back to reg.exe on denied .NET writes' }
 if ($kernel -notmatch 'must not create Policies') { throw 'Stamp-OfflineDefaultUser must reject Policies rows' }
 if ($kernel -match 'Clear-WinMintOfflineOneDriveRun') { throw 'Stamp-OfflineDefaultUser must not clear OneDrive Run values' }
 
