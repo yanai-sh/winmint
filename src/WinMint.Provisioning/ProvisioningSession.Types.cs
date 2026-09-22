@@ -34,7 +34,8 @@ public sealed record ProvisioningBundle(
 
 public sealed record ShellChromeRequest(
     bool FailOpen,
-    IReadOnlyList<string> SelectedWingetIds);
+    IReadOnlyList<string> SelectedWingetIds,
+    bool RequireSelectedPins = true);
 
 public sealed record AccountStamp(string Username, string Password);
 

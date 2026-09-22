@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using WinMint.Contracts;
 using WinMint.Orchestrator;
+using WinMint.Provisioning;
 
 namespace WinMint.Tests;
 
@@ -118,9 +119,14 @@ public class ProductPostureTests
                 "deviceInstaller",
                 "edge",
                 "filesystem",
+                "fonts",
                 "onedrive",
+                "search",
+                "start",
                 "store",
                 "sudo",
+                "taskbar",
+                "widgets",
                 "wpbt",
             ],
             [.. digestKeys.Select(key => key.Split('.')[1])
@@ -134,6 +140,65 @@ public class ProductPostureTests
         Assert.Contains("policy.wpbt.DisableWpbtExecution", digestKeys);
         Assert.Contains("policy.filesystem.LongPathsEnabled", digestKeys);
         Assert.Contains("policy.deviceInstaller.DisableCoInstallers", digestKeys);
+        Assert.Contains("policy.taskbar.LayoutXMLPath", digestKeys);
+        Assert.Contains("policy.onedrive.DisableFileSyncNGSC", digestKeys);
+        Assert.Contains("policy.onedrive.PreventNetworkTrafficPreUserSignIn", digestKeys);
+        Assert.Equal("AllowNewsAndInterests", rows[0].Name);
+        Assert.Equal("ConfigureStartPins", rows[1].Name);
+        Assert.Equal(GuestChrome.StartPinsBaselineJson, rows[1].Data);
+        Assert.Contains(
+            rows,
+            static row => row.Name == "LayoutXMLPath" && row.Data == GuestChrome.TaskbarLayoutOemGuestPath);
+    }
+
+    [Fact]
+    public void ComposeDefaultUserRows_matches_quiet_overlay_and_omits_policies()
+    {
+        IReadOnlyList<OfflinePolicyRow> rows = ProductPosture.ComposeDefaultUserRows();
+        Assert.NotEmpty(rows);
+        Assert.All(rows, static row => Assert.Equal("NTUSER", row.Hive));
+        Assert.All(
+            rows,
+            static row => Assert.DoesNotContain("Policies", row.SubKey, StringComparison.OrdinalIgnoreCase));
+
+        foreach ((string name, int value) in Win32WorkstationQuiet.ExplorerAdvancedDwords)
+        {
+            Assert.Contains(
+                rows,
+                row => row.Name == name
+                    && row.Data == value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    && row.RegType == "REG_DWORD");
+        }
+
+        foreach (string name in Win32WorkstationQuiet.ContentDeliveryManagerDwords)
+        {
+            Assert.Contains(rows, row => row.Name == name && row.Data == "0");
+        }
+
+        Assert.Contains(
+            rows,
+            row => row.Name == "Wallpaper" && row.Data == GuestChrome.BloomWallpaperPath);
+        Assert.Contains(rows, row => row.Name == "TileWallpaper" && row.Data == "0");
+        Assert.Equal(GuestChrome.BloomWallpaperPath, ShellChromeLayout.WallpaperPath);
+    }
+
+    [Fact]
+    public void Plan_emits_default_user_opcode_after_payload()
+    {
+        Profile profile = Lab();
+
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
+
+        Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
+        IReadOnlyList<ServicingOpcode> stages = planned.Value.Stages;
+        int payloadAt = stages.ToList().IndexOf(ServicingOpcode.StagePayload);
+        int defaultUserAt = stages.ToList().IndexOf(ServicingOpcode.StampOfflineDefaultUser);
+        int oobeAt = stages.ToList().IndexOf(ServicingOpcode.StageOobeUnattend);
+        Assert.True(payloadAt >= 0 && defaultUserAt == payloadAt + 1 && oobeAt == defaultUserAt + 1);
+        Assert.NotEmpty(planned.Value.OfflineDefaultUser);
+        Assert.All(
+            planned.Value.OfflineDefaultUser,
+            static row => Assert.DoesNotContain("Policies", row.SubKey, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

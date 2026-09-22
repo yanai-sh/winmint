@@ -62,6 +62,8 @@ public sealed record StampOfflineShellParameters(string ShellTarget, string Moun
 
 public sealed record StampOfflinePoliciesParameters(string MountDir, string WorkDirectory, string PoliciesPath);
 
+public sealed record StampOfflineDefaultUserParameters(string MountDir, string WorkDirectory, string DefaultUserPath);
+
 public sealed record RemoveProvisionedAppxParameters(
     string MountDir,
     string WorkDirectory,

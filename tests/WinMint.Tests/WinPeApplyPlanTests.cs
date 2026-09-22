@@ -27,6 +27,7 @@ public class WinPeApplyPlanTests
                 ServicingOpcode.MountInstallWim,
                 ServicingOpcode.StampOfflinePolicies,
                 ServicingOpcode.StagePayload,
+                ServicingOpcode.StampOfflineDefaultUser,
                 ServicingOpcode.StageOobeUnattend,
                 ServicingOpcode.StampOfflineShell,
                 ServicingOpcode.PatchBootWimApply,
@@ -40,8 +41,8 @@ public class WinPeApplyPlanTests
     public async Task Apply_materializes_winpe_opcode_params()
     {
         Profile profile = ParseProfile();
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
-        Assert.True(planned.IsOk);
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(profile);
+        Assert.True(host.IsOk, host.IsOk ? null : host.Error.Message);
 
         string work = NewTempDir();
         try
@@ -55,7 +56,7 @@ public class WinPeApplyPlanTests
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
 
             Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
-                planned.Value,
+                host.Value.Artifacts,
                 run,
                 runner,
                 TestContext.Current.CancellationToken);

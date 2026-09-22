@@ -352,7 +352,7 @@ internal static partial class ProvisioningJobRunner
 
                 case ProvisionJobKind.ShellStamp:
                     {
-                        (bool stampOk, string message) = await ShellStamp.ApplyAsync(httpHandler: null, ct)
+                        (bool stampOk, string message) = await ShellStamp.ApplyAsync(ct)
                             .ConfigureAwait(false);
                         if (!stampOk)
                         {

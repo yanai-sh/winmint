@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO.Compression;
 
 namespace WinMint.Provisioning;
 
@@ -10,13 +9,10 @@ namespace WinMint.Provisioning;
 internal static class ShellStamp
 {
     public const string GuestSkelDirectory = @"C:\Windows\WinMint\shell-skel";
-    public const string CascadiaVersion = "2407.24";
 
     private static readonly string[] WantedFonts = ["CascadiaCodeNF.ttf", "CascadiaMonoNF.ttf"];
 
-    public static async Task<(bool Ok, string Message)> ApplyAsync(
-        HttpMessageHandler? httpHandler,
-        CancellationToken ct)
+    public static async Task<(bool Ok, string Message)> ApplyAsync(CancellationToken ct)
     {
         string skel = GuestSkelDirectory;
         if (!Directory.Exists(skel))
@@ -35,7 +31,7 @@ internal static class ShellStamp
         }
 
         List<string> notes = [];
-        await InstallCascadiaFontsAsync(httpHandler, notes, ct).ConfigureAwait(false);
+        InstallCascadiaFonts(notes);
         StampPowerShellSkel(skel, notes);
         StampWindowsTerminalSettings(skel, notes);
         await SeedChezmoiAsync(skel, notes, ct).ConfigureAwait(false);
@@ -135,90 +131,25 @@ internal static class ShellStamp
         notes.Add($"{name} stamped");
     }
 
-    private static async Task InstallCascadiaFontsAsync(
-        HttpMessageHandler? httpHandler,
-        List<string> notes,
-        CancellationToken ct)
+    private static void InstallCascadiaFonts(List<string> notes)
     {
-        string fontsDir = Path.Combine(
+        string windowsFonts = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            "Fonts");
+        string userFonts = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Microsoft",
             "Windows",
             "Fonts");
-        Directory.CreateDirectory(fontsDir);
 
-        if (WantedFonts.All(f => File.Exists(Path.Combine(fontsDir, f))))
+        if (WantedFonts.All(f =>
+                File.Exists(Path.Combine(windowsFonts, f)) || File.Exists(Path.Combine(userFonts, f))))
         {
             notes.Add("cascadia fonts present");
             return;
         }
 
-        string zipUrl =
-            $"https://github.com/microsoft/cascadia-code/releases/download/v{CascadiaVersion}/CascadiaCode-{CascadiaVersion}.zip";
-        string work = Path.Combine(Path.GetTempPath(), $"winmint-cascadia-{CascadiaVersion}");
-        Directory.CreateDirectory(work);
-        string zipPath = Path.Combine(work, "CascadiaCode.zip");
-
-        try
-        {
-            using HttpClient client = httpHandler is null
-                ? new HttpClient()
-                : new HttpClient(httpHandler, disposeHandler: false);
-            client.Timeout = TimeSpan.FromMinutes(5);
-            await using Stream remote = await client.GetStreamAsync(zipUrl, ct).ConfigureAwait(false);
-            await using FileStream file = File.Create(zipPath);
-            await remote.CopyToAsync(file, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            notes.Add($"cascadia download failed: {ex.Message}");
-            return;
-        }
-
-        try
-        {
-            ZipFile.ExtractToDirectory(zipPath, work, overwriteFiles: true);
-        }
-        catch (Exception ex)
-        {
-            notes.Add($"cascadia extract failed: {ex.Message}");
-            return;
-        }
-
-        string? ttfRoot = Directory.EnumerateFiles(work, "CascadiaCodeNF.ttf", SearchOption.AllDirectories)
-            .Select(Path.GetDirectoryName)
-            .FirstOrDefault();
-        if (ttfRoot is null)
-        {
-            notes.Add("cascadia ttf not in zip");
-            return;
-        }
-
-        foreach (string font in WantedFonts)
-        {
-            string src = Path.Combine(ttfRoot, font);
-            string dest = Path.Combine(fontsDir, font);
-            if (!File.Exists(src))
-            {
-                continue;
-            }
-
-            File.Copy(src, dest, overwrite: true);
-            try
-            {
-                Microsoft.Win32.Registry.SetValue(
-                    @"HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts",
-                    $"{Path.GetFileNameWithoutExtension(font)} (TrueType)",
-                    dest,
-                    Microsoft.Win32.RegistryValueKind.String);
-            }
-            catch
-            {
-                // best-effort font registration
-            }
-        }
-
-        notes.Add("cascadia fonts installed");
+        notes.Add("cascadia fonts missing (ISO StagePayload)");
     }
 
     private static async Task SeedChezmoiAsync(string skel, List<string> notes, CancellationToken ct)

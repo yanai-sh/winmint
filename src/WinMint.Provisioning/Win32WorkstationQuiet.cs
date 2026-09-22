@@ -100,11 +100,16 @@ public static class Win32WorkstationQuiet
 
     private static void ApplyUserRegistry()
     {
-        // Widgets / News and interests off (HKLM — offline stamp of Policies\Microsoft\Dsh flakes on DISM mounts).
+        // Widgets / News and interests: ISO stamps HKLM Dsh first; live overlay if that row missed.
         try
         {
-            using RegistryKey? dsh = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Dsh");
-            dsh?.SetValue("AllowNewsAndInterests", 0, RegistryValueKind.DWord);
+            using RegistryKey? existing = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Dsh");
+            object? current = existing?.GetValue("AllowNewsAndInterests");
+            if (current is not int value || value != 0)
+            {
+                using RegistryKey? dsh = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Dsh");
+                dsh?.SetValue("AllowNewsAndInterests", 0, RegistryValueKind.DWord);
+            }
         }
         catch
         {
@@ -168,12 +173,6 @@ public static class Win32WorkstationQuiet
                     cdm.SetValue(name, 0, RegistryValueKind.DWord);
                 }
             }
-        }
-
-        using (RegistryKey? searchPolicy = Registry.CurrentUser.CreateSubKey(
-                   @"SOFTWARE\Policies\Microsoft\Windows\Explorer"))
-        {
-            searchPolicy?.SetValue("DisableSearchBoxSuggestions", 1, RegistryValueKind.DWord);
         }
 
         using (RegistryKey? searchSettings = Registry.CurrentUser.CreateSubKey(

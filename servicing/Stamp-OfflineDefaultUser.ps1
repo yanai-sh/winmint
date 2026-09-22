@@ -2,11 +2,9 @@
 param(
     [Parameter(Mandatory)] [string] $MountDir,
     [Parameter(Mandatory)] [string] $WorkDirectory,
-    [Parameter(Mandatory)] [string] $PoliciesPath
+    [Parameter(Mandatory)] [string] $DefaultUserPath
 )
-# Offline HKLM policy stamps (SOFTWARE + SYSTEM). Param-only — Plan owns which rows.
-. (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
-
+# Offline Default User (NTUSER.DAT) stamps. Param-only — Plan owns which rows. Never create Policies.
 $logDir = Join-Path $workDirectory 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
@@ -89,46 +87,37 @@ function Invoke-OfflineRegAdd {
     }
 }
 
-# ProductPosture owns the digest key; family is declared on the row. JSON so Data may contain ; | ~~~~.
-if (-not (Test-Path -LiteralPath $policiesPath -PathType Leaf)) { throw "policiesPath missing: $policiesPath" }
-$rows = @(Get-Content -LiteralPath $policiesPath -Raw | ConvertFrom-Json)
-if ($rows.Count -eq 0) { throw 'policies.json empty' }
-
-$digests = @{}
-$byHive = $rows | Group-Object -Property Hive
-foreach ($group in $byHive) {
-    $hiveName = ([string]$group.Name).Trim().ToUpperInvariant()
-    $fileName = switch ($hiveName) {
-        'SOFTWARE' { 'SOFTWARE' }
-        'SYSTEM' { 'SYSTEM' }
-        default { throw "unsupported hive '$hiveName'" }
-    }
-    $hivePath = Join-Path $mountDir "Windows\System32\config\$fileName"
-    if (-not (Test-Path -LiteralPath $hivePath)) { throw "hive missing: $hivePath" }
-
-    # Not WinMintPol_SOFTWARE: a load key that ends with SOFTWARE makes SetValue
-    # unauthorized (live HKLM\SOFTWARE ACL). Same pattern as WinMintSoft / WinMintDU.
-    $hiveKey = "HKLM\WinMintPol_${hiveName}_Off"
-    Write-Output "REG LOAD $hiveKey"
-    & reg.exe load $hiveKey $hivePath
-    if ($LASTEXITCODE -ne 0) { throw "reg load failed ($hiveName): $LASTEXITCODE" }
-    try {
-        foreach ($row in $group.Group) {
-            $ctx = "hive=$hiveName sub=$($row.SubKey) name=$($row.Name)"
-            Invoke-OfflineRegAdd -HiveKey $hiveKey -SubKey $row.SubKey -Name $row.Name -Type $row.RegType -Data $row.Data -Context $ctx
-            $digests[$row.Digest] = [string]$row.Data
-            Write-Output "policy ok: $($row.Digest)=$($row.Data)"
-        }
-    }
-    finally {
-        [gc]::Collect()
-        [gc]::WaitForPendingFinalizers()
-        Start-Sleep -Milliseconds 500
-        & reg.exe unload $hiveKey
-        if ($LASTEXITCODE -ne 0) { throw "reg unload failed ($hiveName): $LASTEXITCODE" }
+if (-not (Test-Path -LiteralPath $defaultUserPath -PathType Leaf)) { throw "defaultUserPath missing: $defaultUserPath" }
+$rows = @(Get-Content -LiteralPath $defaultUserPath -Raw | ConvertFrom-Json)
+if ($rows.Count -eq 0) { throw 'default-user.json empty' }
+foreach ($row in $rows) {
+    $sub = [string]$row.SubKey
+    if ($sub -match '(?i)(^|\\)Policies(\\+|$)') {
+        throw "default-user row must not create Policies: $sub"
     }
 }
 
-Save-WinMintDigestMap -WorkDirectory $workDirectory -Digests $digests
-Write-Output "StampOfflinePolicies ok ($($rows.Count) rows)"
+$hivePath = Join-Path $mountDir 'Users\Default\NTUSER.DAT'
+if (-not (Test-Path -LiteralPath $hivePath -PathType Leaf)) { throw "NTUSER.DAT missing: $hivePath" }
+
+$hiveKey = 'HKLM\WinMintDU'
+Write-Output "REG LOAD $hiveKey"
+& reg.exe load $hiveKey $hivePath
+if ($LASTEXITCODE -ne 0) { throw "reg load failed (NTUSER): $LASTEXITCODE" }
+try {
+    foreach ($row in $rows) {
+        $ctx = "hive=NTUSER sub=$($row.SubKey) name=$($row.Name)"
+        Invoke-OfflineRegAdd -HiveKey $hiveKey -SubKey $row.SubKey -Name $row.Name -Type $row.RegType -Data $row.Data -Context $ctx
+        Write-Output "default-user ok: $($row.Name)=$($row.Data)"
+    }
+}
+finally {
+    [gc]::Collect()
+    [gc]::WaitForPendingFinalizers()
+    Start-Sleep -Milliseconds 500
+    & reg.exe unload $hiveKey
+    if ($LASTEXITCODE -ne 0) { throw "reg unload failed (NTUSER): $LASTEXITCODE" }
+}
+
+Write-Output "StampOfflineDefaultUser ok ($($rows.Count) rows)"
 exit 0

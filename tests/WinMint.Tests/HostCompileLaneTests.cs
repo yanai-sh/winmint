@@ -60,6 +60,15 @@ public class HostCompileLaneTests
             using JsonDocument bundle = JsonDocument.Parse(
                 File.ReadAllBytes(Path.Combine(work, "payload", "bundle.json")));
             Assert.Equal(expected, bundle.RootElement.GetProperty("packageStrict").GetBoolean());
+            string payload = Path.Combine(work, ServicingWorkspace.PayloadDirectoryName);
+            string defaultUserJson = File.ReadAllText(
+                Path.Combine(payload, ServicingWorkspace.DefaultUserFileName));
+            Assert.NotEqual("[]", defaultUserJson.Trim());
+            Assert.Contains("AppsUseLightTheme", defaultUserJson, StringComparison.Ordinal);
+            string policiesJson = File.ReadAllText(
+                Path.Combine(payload, ServicingWorkspace.PoliciesFileName));
+            Assert.NotEqual("[]", policiesJson.Trim());
+            Assert.Contains("HideFirstRunExperience", policiesJson, StringComparison.Ordinal);
         }
         finally
         {
@@ -88,6 +97,123 @@ public class HostCompileLaneTests
     }
 
     [Fact]
+    public void PlanDocument_keeps_default_user_rows()
+    {
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(Profile());
+        Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
+        Assert.NotEmpty(planned.Value.Artifacts.OfflineDefaultUser);
+        Assert.Contains(
+            planned.Value.Artifacts.OfflineDefaultUser,
+            static row => row.Name == "AppsUseLightTheme");
+    }
+
+    [Fact]
+    public void PlanDocument_preserves_plan_artifacts()
+    {
+        Profile profile = Sl7DriversProfile() with { WingetPackages = [ProductPosture.BraveWingetId] };
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
+        Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(profile);
+        Assert.True(host.IsOk, host.IsOk ? null : host.Error.Message);
+
+        BuildArtifacts raw = planned.Value;
+        BuildArtifacts snap = host.Value.Artifacts;
+        Assert.Equal(raw.Unattend.Xml, snap.Unattend.Xml);
+        Assert.Equal(raw.Manifest, snap.Manifest);
+        Assert.Equal(raw.Account.Username, snap.Account.Username);
+        Assert.Equal(raw.Dma, snap.Dma);
+        Assert.Equal(raw.Stages, snap.Stages);
+        Assert.Equal(raw.OfflineDefaultUser, snap.OfflineDefaultUser);
+        Assert.Equal(raw.OfflinePolicies, snap.OfflinePolicies);
+        Assert.Equal(raw.Drivers, snap.Drivers);
+        Assert.Equal(raw.WingetImportJson, snap.WingetImportJson);
+        Assert.Equal(raw.PackageStrict, snap.PackageStrict);
+        Assert.Equal(raw.BraveSelected, snap.BraveSelected);
+        Assert.Equal(raw.RemoveProvisionedAppx, snap.RemoveProvisionedAppx);
+        Assert.Equal(raw.RemoveCapabilities, snap.RemoveCapabilities);
+        Assert.Equal(raw.DisableOptionalFeatures, snap.DisableOptionalFeatures);
+        Assert.Equal(raw.EffectivePackages, snap.EffectivePackages);
+        Assert.Equal(raw.Jobs.SchemaVersion, snap.Jobs.SchemaVersion);
+        Assert.Equal(raw.Jobs.Jobs.Count, snap.Jobs.Jobs.Count);
+        for (int i = 0; i < raw.Jobs.Jobs.Count; i++)
+        {
+            ProvisionJob a = raw.Jobs.Jobs[i];
+            ProvisionJob b = snap.Jobs.Jobs[i];
+            Assert.Equal(a.Id, b.Id);
+            Assert.Equal(a.Kind, b.Kind);
+            Assert.Equal(a.PackageId, b.PackageId);
+            Assert.Equal(a.NeedsReboot, b.NeedsReboot);
+            Assert.Equal(a.DohPrimary, b.DohPrimary);
+            Assert.Equal(a.ScoopBuckets ?? [], b.ScoopBuckets ?? []);
+        }
+        Assert.NotNull(snap.Drivers);
+        Assert.NotEmpty(snap.OfflineDefaultUser);
+        Assert.NotEmpty(snap.OfflinePolicies);
+        Assert.NotNull(snap.WingetImportJson);
+        Assert.True(snap.WingetImportJson!.Length > 2);
+
+        HostReview review = host.Value.Review;
+        Assert.Equal(snap.Stages, review.Stages);
+        Assert.Equal(snap.RemoveProvisionedAppx, review.RemoveProvisionedAppx);
+        Assert.Equal(snap.EffectivePackages, review.EffectivePackages);
+        Assert.Equal(snap.PackageStrict, review.PackageStrict);
+        Assert.Equal(snap.BraveSelected, review.BraveSelected);
+        Assert.Equal(snap.Manifest.ImageQuality, review.ImageQuality);
+        Assert.Equal(snap.Manifest.RequiresNetwork, review.RequiresNetwork);
+        Assert.Equal(snap.Jobs.Jobs.Count, review.Jobs.Count);
+        Assert.Equal(
+            snap.Jobs.Jobs.Select(static j => j.Id),
+            review.Jobs.Select(static j => j.Id));
+    }
+
+    [Theory]
+    [InlineData(typeof(HostReview))]
+    [InlineData(typeof(BuildArtifacts))]
+    [InlineData(typeof(JobsArtifact))]
+    public void Snapshot_records_have_no_optional_constructor_parameters(Type type)
+    {
+        Assert.DoesNotContain(
+            type.GetConstructors().SelectMany(static ctor => ctor.GetParameters()),
+            static parameter => parameter.HasDefaultValue);
+    }
+
+    [Fact]
+    public void ExportPlan_writes_payload_facts()
+    {
+        Profile profile = Sl7DriversProfile() with { WingetPackages = [ProductPosture.BraveWingetId] };
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(profile);
+        Assert.True(host.IsOk, host.IsOk ? null : host.Error.Message);
+        string dest = Path.Combine(Path.GetTempPath(), "winmint-export-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Result<Unit, Failure> exported = HostCompile.ExportPlan(host.Value, dest);
+            Assert.True(exported.IsOk, exported.IsOk ? null : $"{exported.Error.Code}: {exported.Error.Message}");
+            string defaultUserJson = File.ReadAllText(Path.Combine(dest, ServicingWorkspace.DefaultUserFileName));
+            Assert.NotEqual("[]", defaultUserJson.Trim());
+            Assert.Contains("AppsUseLightTheme", defaultUserJson, StringComparison.Ordinal);
+            string policiesJson = File.ReadAllText(Path.Combine(dest, ServicingWorkspace.PoliciesFileName));
+            Assert.NotEqual("[]", policiesJson.Trim());
+            Assert.Contains("HideFirstRunExperience", policiesJson, StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(dest, "winget-import.json")));
+            Assert.True(new FileInfo(Path.Combine(dest, "winget-import.json")).Length > 2);
+            Assert.Contains(
+                "surface-laptop-7",
+                File.ReadAllText(Path.Combine(dest, "stages.json")),
+                StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(dest, "jobs.json")));
+            Assert.True(File.Exists(Path.Combine(dest, "unattend.xml")));
+            Assert.True(File.Exists(Path.Combine(dest, "manifest.json")));
+        }
+        finally
+        {
+            if (Directory.Exists(dest))
+            {
+                Directory.Delete(dest, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Compose_sl7_drivers_uses_version_family_not_servicepack_ubr()
     {
         string root = Path.Combine(Path.GetTempPath(), "winmint-host-ubr-" + Guid.NewGuid().ToString("N"));
@@ -105,6 +231,8 @@ public class HostCompileLaneTests
                 cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(composed.IsOk, composed.IsOk ? null : $"{composed.Error.Code}: {composed.Error.Message}");
             Assert.Contains(ServicingOpcode.InjectDrivers, composed.Value.Artifacts.Stages);
+            Assert.NotNull(composed.Value.Artifacts.Drivers);
+            Assert.Equal("surface-laptop-7", composed.Value.Artifacts.Drivers.DeviceId);
         }
         finally
         {

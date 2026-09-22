@@ -33,7 +33,7 @@ _Avoid_: second Plan/Apply brain in Cli or Wizard; conflating with Flash; launch
 **BuildPlan** — Profile + run options → plan artifacts.  
 _Avoid_: DISM at the flag layer; ports before a second adapter
 
-**Plan dump** — Cli diagnostic files for inspecting BuildPlan output. `jobs.json` uses the real guest wire; `stages.json` uses `winmint.plan.stages/v1` and is never Apply input.  
+**Plan dump** — Cli diagnostic files for inspecting BuildPlan output. `jobs.json` uses the real guest wire; `stages.json` uses `winmint.plan.stages/v1` and is never Apply input. Also emits `policies.json`, `default-user.json`, `winget-import.json`, and remove-list JSON when those facts exist.  
 _Avoid_: treating a Plan dump as materialized Servicing state
 
 **Servicing / ImageServicing** — Offline WIM/ISO work via elevated `pwsh -File` kernels. Consumes the Output ISO path and source-media identity frozen by HostCompile. Prepared media is Servicing mechanics, not Profile, CLI, or plan intent. At most one Apply per Host.  

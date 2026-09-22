@@ -160,6 +160,7 @@ public class BuildPlanPlanTests
                 ServicingOpcode.MountInstallWim,
                 ServicingOpcode.StampOfflinePolicies,
                 ServicingOpcode.StagePayload,
+                ServicingOpcode.StampOfflineDefaultUser,
                 ServicingOpcode.StageOobeUnattend,
                 ServicingOpcode.StampOfflineShell,
                 ServicingOpcode.PatchBootWimApply,

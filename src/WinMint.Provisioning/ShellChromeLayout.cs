@@ -1,5 +1,7 @@
 using System.Security;
 
+using WinMint.Contracts;
+
 namespace WinMint.Provisioning;
 
 internal readonly record struct ShellChromePins(
@@ -9,7 +11,7 @@ internal readonly record struct ShellChromePins(
 
 public static class ShellChromeLayout
 {
-    public const string WallpaperPath = @"C:\Windows\Web\Wallpaper\Windows\WinMint-Bloom.jpg";
+    public const string WallpaperPath = GuestChrome.BloomWallpaperPath;
     internal const string CursorWingetId = "Anysphere.Cursor";
     internal const string ZenWingetId = "Zen-Team.Zen-Browser";
 
@@ -38,6 +40,11 @@ public static class ShellChromeLayout
     public static string TaskbarLayoutXml(IReadOnlyList<string> desktopLinkPaths)
     {
         ArgumentNullException.ThrowIfNull(desktopLinkPaths);
+        if (desktopLinkPaths.All(string.IsNullOrWhiteSpace))
+        {
+            return GuestChrome.TaskbarLayoutBaselineXml;
+        }
+
         List<string> lines =
         [
             """<?xml version="1.0" encoding="utf-8"?>""",
@@ -68,7 +75,7 @@ public static class ShellChromeLayout
         lines.Add("    </defaultlayout:TaskbarLayout>");
         lines.Add("  </CustomTaskbarLayoutCollection>");
         lines.Add("</LayoutModificationTemplate>");
-        return string.Join("\r\n", lines);
+        return string.Join('\n', lines);
     }
 
     public static string? TryResolveShortcut(string wingetId)

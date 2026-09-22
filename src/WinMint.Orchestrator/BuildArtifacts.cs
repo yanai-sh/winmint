@@ -79,10 +79,11 @@ public sealed record BuildArtifacts(
     IReadOnlyList<OfflinePolicyRow> OfflinePolicies,
     IReadOnlyList<string> RemoveCapabilities,
     IReadOnlyList<string> DisableOptionalFeatures,
-    byte[]? WingetImportJson = null,
-    bool PackageStrict = false,
-    bool BraveSelected = false,
-    DriverInject? Drivers = null);
+    byte[]? WingetImportJson,
+    bool PackageStrict,
+    bool BraveSelected,
+    DriverInject? Drivers,
+    IReadOnlyList<OfflinePolicyRow> OfflineDefaultUser);
 
 public sealed record DriverInject(string DeviceId, string DetailsUrl, string ExpectedFileNameRegex);
 
@@ -138,6 +139,7 @@ public static class StageParams
     public const string WorkDirectory = "workDirectory";
     public const string Kind = "kind";
     public const string PoliciesPath = "policiesPath";
+    public const string DefaultUserPath = "defaultUserPath";
     public const string DeviceId = "deviceId";
     public const string DetailsUrl = "detailsUrl";
     public const string ExpectedFileNameRegex = "expectedFileNameRegex";
@@ -155,6 +157,7 @@ public enum ServicingOpcode
     PatchBootWimApply,
     StampOfflineShell,
     StampOfflinePolicies,
+    StampOfflineDefaultUser,
     RemoveProvisionedAppx,
     RemoveCapabilities,
     DisableOptionalFeatures,

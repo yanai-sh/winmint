@@ -29,6 +29,14 @@ public static partial class ImageServicing
                     "StampOfflineShell stage missing or incomplete."));
         }
 
+        if (!stages.Any(static s => s.Opcode == ServicingOpcode.StampOfflineDefaultUser))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.defaultUser.missing",
+                    "StampOfflineDefaultUser stage missing or incomplete."));
+        }
+
         if (!stages.Any(static s => s.Opcode == ServicingOpcode.ExportWim))
         {
             return Result.Fail<ImageEvidence, Failure>(
@@ -254,6 +262,7 @@ internal sealed record FailureFile(
 [JsonSerializable(typeof(AddQualityUpdatesParameters))]
 [JsonSerializable(typeof(StampOfflineShellParameters))]
 [JsonSerializable(typeof(StampOfflinePoliciesParameters))]
+[JsonSerializable(typeof(StampOfflineDefaultUserParameters))]
 [JsonSerializable(typeof(RemoveProvisionedAppxParameters))]
 [JsonSerializable(typeof(RemoveCapabilitiesParameters))]
 [JsonSerializable(typeof(DisableOptionalFeaturesParameters))]

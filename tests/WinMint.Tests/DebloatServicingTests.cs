@@ -89,9 +89,9 @@ public class DebloatServicingTests
             }
             """));
         Assert.True(parsed.IsOk, string.Join("; ", parsed.IsOk ? [] : parsed.Error.Select(i => i.Message)));
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
-        Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
-        return planned.Value;
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(parsed.Value);
+        Assert.True(host.IsOk, host.IsOk ? null : $"{host.Error.Code}: {host.Error.Message}");
+        return host.Value.Artifacts;
     }
 
     private static string NewTempDir()

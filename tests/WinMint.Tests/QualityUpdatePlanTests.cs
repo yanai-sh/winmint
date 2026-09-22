@@ -26,8 +26,8 @@ public class QualityUpdatePlanTests
     [Fact]
     public async Task Apply_materializes_quality_cache_and_package_dir()
     {
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(Parse());
-        Assert.True(planned.IsOk);
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(Parse());
+        Assert.True(host.IsOk, host.IsOk ? null : host.Error.Message);
         string work = Path.Combine(Path.GetTempPath(), "winmint-quality-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
         try
@@ -39,7 +39,7 @@ public class QualityUpdatePlanTests
                 OutputIsoPath: Path.Combine(work, "out.iso"));
             File.WriteAllText(run.SourceIsoPath, "iso-stub");
             Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
-                planned.Value,
+                host.Value.Artifacts,
                 run,
                 runner,
                 TestContext.Current.CancellationToken);

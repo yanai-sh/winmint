@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 
 using WinMint.Contracts;
 
@@ -49,6 +50,19 @@ public static class HostCompile
                     artifacts.Drivers,
                     artifacts.Manifest.ImageQuality));
             File.WriteAllText(Path.Combine(destination, "manifest.json"), BuildPlan.SerializeManifestFile(artifacts.Manifest));
+            WritePolicyRows(destination, ServicingWorkspace.PoliciesFileName, artifacts.OfflinePolicies);
+            WritePolicyRows(
+                destination,
+                ServicingWorkspace.DefaultUserFileName,
+                artifacts.OfflineDefaultUser ?? []);
+            if (artifacts.WingetImportJson is { Length: > 0 })
+            {
+                File.WriteAllBytes(Path.Combine(destination, "winget-import.json"), artifacts.WingetImportJson);
+            }
+
+            WriteNameList(destination, ServicingWorkspace.PackageFamilyNamesFileName, artifacts.RemoveProvisionedAppx);
+            WriteNameList(destination, ServicingWorkspace.CapabilityNamesFileName, artifacts.RemoveCapabilities);
+            WriteNameList(destination, ServicingWorkspace.FeatureNamesFileName, artifacts.DisableOptionalFeatures);
             return Result.Ok<Unit, Failure>(default);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
@@ -361,26 +375,57 @@ public static class HostCompile
     private static string? NullIfEmpty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
 
+    private static void WritePolicyRows(
+        string destination,
+        string fileName,
+        IReadOnlyList<OfflinePolicyRow> rows) =>
+        File.WriteAllBytes(
+            Path.Combine(destination, fileName),
+            JsonSerializer.SerializeToUtf8Bytes(
+                [.. rows],
+                ServicingJsonContext.Default.OfflinePolicyRowArray));
+
+    private static void WriteNameList(
+        string destination,
+        string fileName,
+        IReadOnlyList<string> names)
+    {
+        if (names.Count == 0)
+        {
+            return;
+        }
+
+        File.WriteAllBytes(
+            Path.Combine(destination, fileName),
+            JsonSerializer.SerializeToUtf8Bytes(
+                [.. names],
+                ServicingJsonContext.Default.StringArray));
+    }
+
     private static BuildArtifacts SnapshotArtifacts(BuildArtifacts artifacts) =>
-        new(
-            artifacts.Unattend with { },
-            new JobsArtifact(artifacts.Jobs.SchemaVersion, ReadOnly(artifacts.Jobs.Jobs.Select(SnapshotJob))),
-            ReadOnly(artifacts.Stages),
-            artifacts.Dma with
+        artifacts with
+        {
+            Unattend = artifacts.Unattend with { },
+            Jobs = artifacts.Jobs with
+            {
+                Jobs = ReadOnly(artifacts.Jobs.Jobs.Select(SnapshotJob)),
+            },
+            Stages = ReadOnly(artifacts.Stages),
+            Dma = artifacts.Dma with
             {
                 Settle = artifacts.Dma.Settle is null ? null : artifacts.Dma.Settle with { },
             },
-            artifacts.Manifest with { },
-            artifacts.Account with { },
-            ReadOnly(artifacts.RemoveProvisionedAppx),
-            ReadOnly(artifacts.EffectivePackages),
-            ReadOnly(artifacts.OfflinePolicies),
-            ReadOnly(artifacts.RemoveCapabilities),
-            ReadOnly(artifacts.DisableOptionalFeatures),
-            artifacts.WingetImportJson?.ToArray(),
-            artifacts.PackageStrict,
-            artifacts.BraveSelected,
-            artifacts.Drivers);
+            Manifest = artifacts.Manifest with { },
+            Account = artifacts.Account with { },
+            RemoveProvisionedAppx = ReadOnly(artifacts.RemoveProvisionedAppx),
+            EffectivePackages = ReadOnly(artifacts.EffectivePackages),
+            OfflinePolicies = ReadOnly(artifacts.OfflinePolicies),
+            RemoveCapabilities = ReadOnly(artifacts.RemoveCapabilities),
+            DisableOptionalFeatures = ReadOnly(artifacts.DisableOptionalFeatures),
+            WingetImportJson = artifacts.WingetImportJson?.ToArray(),
+            Drivers = artifacts.Drivers,
+            OfflineDefaultUser = ReadOnly(artifacts.OfflineDefaultUser ?? []),
+        };
 
     private static ProvisionJob SnapshotJob(ProvisionJob job) =>
         job with

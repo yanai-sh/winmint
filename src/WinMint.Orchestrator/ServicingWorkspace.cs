@@ -22,6 +22,8 @@ public sealed class ServicingWorkspace
     public const string IncomingMediaPrefix = "media.incoming-";
     public const string PreviousMediaPrefix = "media.previous-";
     public const string PoliciesFileName = "policies.json";
+    public const string DefaultUserFileName = "default-user.json";
+    public const string LayoutModificationFileName = "LayoutModification.xml";
     public const string PackageFamilyNamesFileName = "packageFamilyNames.json";
     public const string CapabilityNamesFileName = "capabilityNames.json";
     public const string FeatureNamesFileName = "featureNames.json";

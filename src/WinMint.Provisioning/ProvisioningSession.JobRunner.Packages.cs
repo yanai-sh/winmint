@@ -26,7 +26,7 @@ internal static partial class ProvisioningJobRunner
 
         try
         {
-            ProcessStartResult started = await env.Processes.RunAsync(setup, ["/uninstall", "/allusers"], ct)
+            ProcessStartResult started = await env.Processes.RunAsync(setup, ["/uninstall"], ct)
                 .ConfigureAwait(false);
             // Non-zero is common when OneDrive was never fully installed; treat as best-effort ok.
             _ = started;
@@ -46,7 +46,10 @@ internal static partial class ProvisioningJobRunner
         try
         {
             IReadOnlyList<string> ids = CollectSelectedWingetIds(jobs);
-            if (!env.ApplyShellChrome(new ShellChromeRequest(FailOpen: false, ids)))
+            if (!env.ApplyShellChrome(new ShellChromeRequest(
+                    FailOpen: false,
+                    ids,
+                    RequireSelectedPins: env.PackageStrict)))
             {
                 return FailJob(env, "jobs.failed", $"{job.Id}: shell chrome apply failed.");
             }

@@ -468,8 +468,7 @@ public static partial class BuildPlan
 
         JobsArtifact jobs = new(JobsWire.SchemaVersion, jobList);
 
-        // Stamp HKLM policies before AppX/capability/driver DISM mutations. Creating new
-        // Policies\Microsoft\* keys (Widgets Dsh) flakes Unauthorized on a heavily-serviced mount.
+        // Stamp HKLM policies before AppX/capability/driver DISM mutations.
         bool injectDrivers = profile.Drivers is not null;
         bool braveSelected = packageSlice.EffectivePackages.Any(
             package => package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store
@@ -511,6 +510,7 @@ public static partial class BuildPlan
         }
 
         stages.Add(ServicingOpcode.StagePayload);
+        stages.Add(ServicingOpcode.StampOfflineDefaultUser);
         stages.Add(ServicingOpcode.StageOobeUnattend);
         stages.Add(ServicingOpcode.StampOfflineShell);
         stages.Add(ServicingOpcode.PatchBootWimApply);
@@ -532,7 +532,8 @@ public static partial class BuildPlan
             packageSlice.WingetImportJson,
             options.PackageStrict,
             braveSelected,
-            drivers);
+            drivers,
+            ProductPosture.ComposeDefaultUserRows());
 
         return Result.Ok<BuildArtifacts, Failure>(artifacts);
     }

@@ -187,9 +187,9 @@ public class CapabilityPlanTests
     private static BuildArtifacts PlanWith(string[] capabilities, string[] features)
     {
         Profile profile = Parse(MinimalJson(capabilities, features));
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
-        Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
-        return planned.Value;
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(profile);
+        Assert.True(host.IsOk, host.IsOk ? null : $"{host.Error.Code}: {host.Error.Message}");
+        return host.Value.Artifacts;
     }
 
     private static Profile Parse(string json)

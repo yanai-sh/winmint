@@ -20,12 +20,16 @@ public class BrowserPolicyPlanTests
         Assert.Contains("HideFirstRunExperience", names, StringComparison.Ordinal);
         Assert.Contains("NewTabPageLocation", names, StringComparison.Ordinal);
         Assert.Contains("LongPathsEnabled", names, StringComparison.Ordinal);
-        Assert.DoesNotContain("AllowNewsAndInterests", names, StringComparison.Ordinal);
+        Assert.Contains("AllowNewsAndInterests", names, StringComparison.Ordinal);
+        Assert.Contains("ConfigureStartPins", names, StringComparison.Ordinal);
+        Assert.Contains("DisableSearchBoxSuggestions", names, StringComparison.Ordinal);
         Assert.Contains("DisableWindowsConsumerFeatures", names, StringComparison.Ordinal);
         Assert.Contains("DisableSoftLanding", names, StringComparison.Ordinal);
         Assert.Contains("AutoDownload", names, StringComparison.Ordinal);
         Assert.Contains("AllowDevelopmentWithoutDevLicense", names, StringComparison.Ordinal);
         Assert.Contains("DisableFileSyncNGSC", names, StringComparison.Ordinal);
+        Assert.Contains("PreventNetworkTrafficPreUserSignIn", names, StringComparison.Ordinal);
+        Assert.Contains("LayoutXMLPath", names, StringComparison.Ordinal);
         Assert.Contains("PreventDeviceMetadataFromNetwork", names, StringComparison.Ordinal);
         Assert.Contains("DisableWpbtExecution", names, StringComparison.Ordinal);
         Assert.DoesNotContain("HubsSidebarEnabled", names, StringComparison.Ordinal);
@@ -43,6 +47,7 @@ public class BrowserPolicyPlanTests
                 ServicingOpcode.MountInstallWim,
                 ServicingOpcode.StampOfflinePolicies,
                 ServicingOpcode.StagePayload,
+                ServicingOpcode.StampOfflineDefaultUser,
                 ServicingOpcode.StageOobeUnattend,
                 ServicingOpcode.StampOfflineShell,
                 ServicingOpcode.PatchBootWimApply,

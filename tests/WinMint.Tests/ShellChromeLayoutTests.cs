@@ -1,3 +1,4 @@
+using WinMint.Contracts;
 using WinMint.Provisioning;
 
 namespace WinMint.Tests;
@@ -9,6 +10,7 @@ public class ShellChromeLayoutTests
     {
         string json = ShellChromeLayout.ConfigureStartPinsJson([]);
 
+        Assert.Equal(GuestChrome.StartPinsBaselineJson, json);
         Assert.Contains("Microsoft.Windows.Explorer", json, StringComparison.Ordinal);
         Assert.Contains("windows.immutablecontrolpanel", json, StringComparison.Ordinal);
         Assert.Contains("Microsoft.WindowsTerminal_8wekyb3d8bbwe!App", json, StringComparison.Ordinal);
@@ -19,6 +21,7 @@ public class ShellChromeLayoutTests
     {
         string xml = ShellChromeLayout.TaskbarLayoutXml([]);
 
+        Assert.Equal(GuestChrome.TaskbarLayoutBaselineXml, xml);
         Assert.Contains("PinListPlacement=\"Replace\"", xml, StringComparison.Ordinal);
         Assert.DoesNotContain("Microsoft.Xbox", xml, StringComparison.Ordinal);
     }

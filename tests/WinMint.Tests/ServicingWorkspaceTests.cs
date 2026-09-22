@@ -53,8 +53,8 @@ public class ServicingWorkspaceTests
             }
             """u8.ToArray());
         Assert.True(parsed.IsOk);
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
-        Assert.True(planned.IsOk);
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(parsed.Value);
+        Assert.True(host.IsOk, host.IsOk ? null : host.Error.Message);
 
         string work = Path.Combine(Path.GetTempPath(), "winmint-expected-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
@@ -62,7 +62,7 @@ public class ServicingWorkspaceTests
         {
             File.WriteAllText(Path.Combine(work, "source.iso"), "iso-stub");
             Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
-                planned.Value,
+                host.Value.Artifacts,
                 new ServicingRun(
                     Path.Combine(work, "source.iso"),
                     work,

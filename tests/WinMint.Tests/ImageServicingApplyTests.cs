@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 
+using WinMint.Contracts;
 using WinMint.Orchestrator;
 
 using static WinMint.Tests.ImageServicingTestFakes;
@@ -64,6 +65,7 @@ public class ImageServicingApplyTests
                     ServicingOpcode.MountInstallWim,
                     ServicingOpcode.StampOfflinePolicies,
                     ServicingOpcode.StagePayload,
+                    ServicingOpcode.StampOfflineDefaultUser,
                     ServicingOpcode.StageOobeUnattend,
                     ServicingOpcode.StampOfflineShell,
                     ServicingOpcode.AddQualityUpdates,
@@ -81,6 +83,17 @@ public class ImageServicingApplyTests
                     && polMount == ImageServicing.HostMountDir
                     && s.Parameters.TryGetValue(StageParams.WorkDirectory, out string? polWork)
                     && polWork == work);
+            Assert.Contains(
+                runner.Stages,
+                s => s.Opcode == ServicingOpcode.StampOfflineDefaultUser
+                    && s.Parameters.TryGetValue(StageParams.DefaultUserPath, out string? defaultUserPath)
+                    && defaultUserPath == Path.Combine(work, ServicingWorkspace.PayloadDirectoryName, ServicingWorkspace.DefaultUserFileName)
+                    && s.Parameters.TryGetValue(StageParams.MountDir, out string? duMount)
+                    && duMount == ImageServicing.HostMountDir);
+            string defaultUserJson = File.ReadAllText(
+                Path.Combine(work, ServicingWorkspace.PayloadDirectoryName, ServicingWorkspace.DefaultUserFileName));
+            Assert.Contains("AppsUseLightTheme", defaultUserJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("Policies", defaultUserJson, StringComparison.Ordinal);
             string policiesJson = File.ReadAllText(
                 Path.Combine(work, ServicingWorkspace.PayloadDirectoryName, ServicingWorkspace.PoliciesFileName));
             Assert.Contains("HideFirstRunExperience", policiesJson, StringComparison.Ordinal);
@@ -127,6 +140,11 @@ public class ImageServicingApplyTests
             Assert.True(File.Exists(Path.Combine(work, "payload", "bundle.json")));
             Assert.True(File.Exists(Path.Combine(work, "payload", "Supervisor.exe")));
             Assert.True(File.Exists(Path.Combine(work, "payload", "WinMintApply.exe")));
+            Assert.True(File.Exists(Path.Combine(work, "payload", "fonts", "CascadiaCodeNF.ttf")));
+            Assert.True(File.Exists(Path.Combine(work, "payload", "fonts", "CascadiaMonoNF.ttf")));
+            Assert.Equal(
+                GuestChrome.TaskbarLayoutBaselineXml,
+                File.ReadAllText(Path.Combine(work, "payload", ServicingWorkspace.LayoutModificationFileName)));
             string bundle = File.ReadAllText(Path.Combine(work, "payload", "bundle.json"));
             Assert.Contains(ImageServicing.BundleSchemaVersion, bundle, StringComparison.Ordinal);
             Assert.Contains("username", bundle, StringComparison.Ordinal);
@@ -465,11 +483,11 @@ public class ImageServicingApplyTests
             }
             """));
         Assert.True(parsed.IsOk);
-        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(
             parsed.Value,
-            new RunOptions { ImageQuality = quality });
-        Assert.True(planned.IsOk);
-        return planned.Value;
+            new HostComposeOptions(ImageQuality: quality));
+        Assert.True(host.IsOk, host.IsOk ? null : $"{host.Error.Code}: {host.Error.Message}");
+        return host.Value.Artifacts;
     }
 
     private static string NewTempDir()

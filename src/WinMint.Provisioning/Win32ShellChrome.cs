@@ -23,7 +23,7 @@ public static class Win32ShellChrome
 
         if (!ShellChromeLayout.TryBuildPins(
                 request.SelectedWingetIds,
-                request.FailOpen,
+                request.FailOpen || !request.RequireSelectedPins,
                 ShellChromeLayout.TryResolveShortcut,
                 out ShellChromePins pins))
         {
@@ -53,6 +53,7 @@ public static class Win32ShellChrome
         {
             desktop?.SetValue("Wallpaper", ShellChromeLayout.WallpaperPath, RegistryValueKind.String);
             desktop?.SetValue("WallpaperStyle", "10", RegistryValueKind.String);
+            desktop?.SetValue("TileWallpaper", "0", RegistryValueKind.String);
         }
 
         unsafe
@@ -71,17 +72,6 @@ public static class Win32ShellChrome
 
     private static void ApplyPins(IReadOnlyList<string> desktopLinkPaths)
     {
-        string startJson = ShellChromeLayout.ConfigureStartPinsJson(desktopLinkPaths);
-        using (RegistryKey? hkcu = Registry.CurrentUser.CreateSubKey(@"Software\Policies\Microsoft\Windows\Explorer"))
-        {
-            hkcu?.SetValue("ConfigureStartPins", startJson, RegistryValueKind.String);
-        }
-
-        using (RegistryKey? hklm = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Windows\Explorer"))
-        {
-            hklm?.SetValue("ConfigureStartPins", startJson, RegistryValueKind.String);
-        }
-
         string shellDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Microsoft",

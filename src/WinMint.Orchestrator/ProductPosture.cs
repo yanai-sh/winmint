@@ -1,5 +1,7 @@
 using System.Collections.Frozen;
 
+using WinMint.Contracts;
+
 namespace WinMint.Orchestrator;
 
 /// <summary>
@@ -247,14 +249,66 @@ public static class ProductPosture
         string.Join(
             Environment.NewLine,
             IdList.FromMultiline(scoopMultiline).Where(static id => !ScoopIdSet.Contains(id)));
+
+    /// <summary>HKCU quiet defaults for Default User NTUSER.DAT. Never includes Policies keys.</summary>
+    public static IReadOnlyList<OfflinePolicyRow> ComposeDefaultUserRows()
+    {
+        List<OfflinePolicyRow> rows =
+        [
+            User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", "0"),
+            User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize", "SystemUsesLightTheme", "0"),
+            User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings", "NOC_GLOBAL_SETTING_TOASTS_ENABLED", "0"),
+        ];
+        foreach ((string name, int value) in DefaultUserExplorerAdvanced)
+        {
+            rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced", name, value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "ShowRecent", "0"));
+        rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "ShowCloudFilesInQuickAccess", "0"));
+        rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Search", "SearchboxTaskbarMode", "0"));
+        foreach (string view in DefaultUserHideDesktopIconViews)
+        {
+            rows.Add(User(
+                $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\{view}",
+                RecycleBinClsid,
+                "1"));
+        }
+
+        foreach (string name in DefaultUserContentDeliveryManager)
+        {
+            rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", name, "0"));
+        }
+
+        rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings", "IsDynamicSearchBoxEnabled", "0"));
+        rows.Add(UserString(@"Control Panel\Desktop", "Wallpaper", GuestChrome.BloomWallpaperPath));
+        rows.Add(UserString(@"Control Panel\Desktop", "WallpaperStyle", "10"));
+        rows.Add(UserString(@"Control Panel\Desktop", "TileWallpaper", "0"));
+        return rows;
+    }
+
     public static IReadOnlyList<OfflinePolicyRow> ComposePolicies(
         bool includeBraveDebloat,
         bool includeDriverHygiene = false)
     {
         List<OfflinePolicyRow> rows =
         [
-            // Widgets/CloudContent before long Edge spray — creating Policies\Microsoft\Dsh
-            // flakes Unauthorized after many offline reg writes on a DISM-mounted hive.
+            // Widgets first in the JSON only for readability. Unauthorized Dsh writes were the
+            // load-key name WinMintPol_SOFTWARE, not row order.
+            Soft("Policies\\Microsoft\\Dsh", "AllowNewsAndInterests", "0", "widgets"),
+            SoftString(
+                "Policies\\Microsoft\\Windows\\Explorer",
+                "ConfigureStartPins",
+                GuestChrome.StartPinsBaselineJson,
+                "start"),
+            Soft("Policies\\Microsoft\\Windows\\Explorer", "DisableSearchBoxSuggestions", "1", "search"),
+            SoftString(
+                @"Microsoft\Windows\CurrentVersion\Explorer",
+                "LayoutXMLPath",
+                GuestChrome.TaskbarLayoutOemGuestPath,
+                "taskbar"),
+            SoftString(@"Microsoft\Windows NT\CurrentVersion\Fonts", "Cascadia Code NF (TrueType)", "CascadiaCodeNF.ttf", "fonts"),
+            SoftString(@"Microsoft\Windows NT\CurrentVersion\Fonts", "Cascadia Mono NF (TrueType)", "CascadiaMonoNF.ttf", "fonts"),
             .. WorkstationMachine,
             .. EdgeDebloat,
             .. OneDriveDisable,
@@ -337,14 +391,54 @@ public static class ProductPosture
         Soft("Policies\\Microsoft\\Edge", "DefaultBrowserSettingsCampaignEnabled", "0", "edge"),
     ];
 
+    private const string RecycleBinClsid = "{645FF040-5081-101B-9F08-00AA002F954E}";
+
+    private static readonly string[] DefaultUserHideDesktopIconViews = ["NewStartPanel", "ClassicStartMenu"];
+
+    // Keep in lockstep with Win32WorkstationQuiet.ExplorerAdvancedDwords (test asserts).
+    private static readonly Dictionary<string, int> DefaultUserExplorerAdvanced =
+        new(StringComparer.Ordinal)
+        {
+            ["HideFileExt"] = 0,
+            ["Hidden"] = 1,
+            ["FullPathAddress"] = 1,
+            ["LaunchTo"] = 1,
+            ["ShowFrequent"] = 0,
+            ["NavPaneShowVersionControl"] = 1,
+            ["ShowSyncProviderNotifications"] = 0,
+            ["TaskbarDa"] = 0,
+            ["TaskbarEndTask"] = 1,
+            ["Start_IrisRecommendations"] = 0,
+            ["ShowTaskViewButton"] = 0,
+            ["TaskbarMn"] = 0,
+            ["ShowCopilotButton"] = 0,
+            ["Start_AccountNotifications"] = 0,
+        };
+
+    private static readonly string[] DefaultUserContentDeliveryManager =
+    [
+        "SubscribedContent-310093Enabled",
+        "SubscribedContent-338388Enabled",
+        "SubscribedContent-338389Enabled",
+        "SubscribedContent-338393Enabled",
+        "SubscribedContent-353694Enabled",
+        "SubscribedContent-353696Enabled",
+        "SubscribedContent-353698Enabled",
+        "SoftLandingEnabled",
+        "SystemPaneSuggestionsEnabled",
+        "SilentInstalledAppsEnabled",
+        "PreInstalledAppsEnabled",
+        "OemPreInstalledAppsEnabled",
+        "RotatingLockScreenEnabled",
+        "RotatingLockScreenOverlayEnabled",
+    ];
+
     /// <summary>
     /// Machine posture aligned with Microsoft Windows Developer Config (HKLM only).
     /// Skip RDP enable — widens attack surface on wipe-ready workstations.
     /// </summary>
     private static readonly OfflinePolicyRow[] WorkstationMachine =
     [
-        // Widgets AllowNewsAndInterests: FirstLogon HKLM (offline Policies\Microsoft\Dsh create/set
-        // flakes Unauthorized on this host's DISM-mounted SOFTWARE hive).
         Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableWindowsConsumerFeatures", "1", "cloudContent"),
         Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableSoftLanding", "1", "cloudContent"),
         Soft("Policies\\Microsoft\\WindowsStore", "AutoDownload", "2", "store"),
@@ -356,6 +450,7 @@ public static class ProductPosture
     private static readonly OfflinePolicyRow[] OneDriveDisable =
     [
         Soft("Policies\\Microsoft\\Windows\\OneDrive", "DisableFileSyncNGSC", "1", "onedrive"),
+        Soft(@"Microsoft\OneDrive", "PreventNetworkTrafficPreUserSignIn", "1", "onedrive"),
     ];
 
     private static readonly OfflinePolicyRow[] DeviceMetadata =
@@ -397,9 +492,15 @@ public static class ProductPosture
 
     private static OfflinePolicyRow Sys(string subKey, string name, string data, string family) =>
         new("SYSTEM", subKey, name, "REG_DWORD", data, family);
+
+    private static OfflinePolicyRow User(string subKey, string name, string data) =>
+        new("NTUSER", subKey, name, "REG_DWORD", data, "quiet");
+
+    private static OfflinePolicyRow UserString(string subKey, string name, string data) =>
+        new("NTUSER", subKey, name, "REG_SZ", data, "quiet");
 }
 
-/// <summary>One offline <c>reg add</c> row under SOFTWARE or SYSTEM hive. <see cref="Family"/> is declared, never inferred.</summary>
+/// <summary>One offline <c>reg add</c> row under SOFTWARE, SYSTEM, or NTUSER. <see cref="Family"/> is declared, never inferred.</summary>
 public sealed record OfflinePolicyRow(
     string Hive,
     string SubKey,

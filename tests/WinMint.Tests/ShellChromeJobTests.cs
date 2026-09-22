@@ -51,7 +51,28 @@ public class ShellChromeJobTests
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         ShellChromeRequest request = Assert.Single(guest.ShellChromeRequests);
         Assert.False(request.FailOpen);
+        Assert.False(request.RequireSelectedPins);
         Assert.Contains("shell.chrome", evidence.Documents[^1].Phases);
+    }
+
+    [Fact]
+    public async Task Shell_chrome_requires_selected_pins_when_package_strict()
+    {
+        FakeGuestMachine guest = new();
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs: [new ProvisionJob("shell.chrome", ProvisionJobKind.ShellChrome)]) with
+            {
+                PackageStrict = true,
+            },
+            Env(guest, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        ShellChromeRequest request = Assert.Single(guest.ShellChromeRequests);
+        Assert.False(request.FailOpen);
+        Assert.True(request.RequireSelectedPins);
     }
 
     [Fact]
@@ -146,6 +167,19 @@ public class ShellChromeJobTests
         {
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    [Fact]
+    public void ApplyPins_source_does_not_write_policies()
+    {
+        string chrome = File.ReadAllText(
+            Path.Combine(TestRepo.Root, "src", "WinMint.Provisioning", "Win32ShellChrome.cs"));
+        string quiet = File.ReadAllText(
+            Path.Combine(TestRepo.Root, "src", "WinMint.Provisioning", "Win32WorkstationQuiet.cs"));
+        Assert.DoesNotContain(@"Software\Policies\Microsoft\Windows\Explorer", chrome, StringComparison.Ordinal);
+        Assert.DoesNotContain("ConfigureStartPins", chrome, StringComparison.Ordinal);
+        Assert.DoesNotContain("DisableSearchBoxSuggestions", quiet, StringComparison.Ordinal);
+        Assert.Contains("LayoutModification.xml", chrome, StringComparison.Ordinal);
     }
 
     [Fact]

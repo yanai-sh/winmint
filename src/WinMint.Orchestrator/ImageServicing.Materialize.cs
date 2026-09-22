@@ -144,11 +144,27 @@ public static partial class ImageServicing
             return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(bloom.Error);
         }
 
+        Result<string, Failure> fonts = StageCascadiaFonts(payloadDir);
+        if (!fonts.IsOk)
+        {
+            return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(fonts.Error);
+        }
+
         File.WriteAllBytes(
             Path.Combine(payloadDir, ServicingWorkspace.PoliciesFileName),
             JsonSerializer.SerializeToUtf8Bytes(
                 [.. plan.OfflinePolicies],
                 ServicingJsonContext.Default.OfflinePolicyRowArray));
+
+        File.WriteAllBytes(
+            Path.Combine(payloadDir, ServicingWorkspace.DefaultUserFileName),
+            JsonSerializer.SerializeToUtf8Bytes(
+                [.. plan.OfflineDefaultUser ?? []],
+                ServicingJsonContext.Default.OfflinePolicyRowArray));
+
+        File.WriteAllText(
+            Path.Combine(payloadDir, ServicingWorkspace.LayoutModificationFileName),
+            GuestChrome.TaskbarLayoutBaselineXml);
 
         if (plan.RemoveProvisionedAppx.Count > 0)
         {
@@ -262,6 +278,15 @@ public static partial class ImageServicing
                             run.WorkDirectory,
                             Path.Combine(payloadDir, ServicingWorkspace.PoliciesFileName)),
                         ServicingJsonContext.Default.StampOfflinePoliciesParameters);
+                    break;
+                case ServicingOpcode.StampOfflineDefaultUser:
+                    Add(
+                        opcode,
+                        new StampOfflineDefaultUserParameters(
+                            mountDir,
+                            run.WorkDirectory,
+                            Path.Combine(payloadDir, ServicingWorkspace.DefaultUserFileName)),
+                        ServicingJsonContext.Default.StampOfflineDefaultUserParameters);
                     break;
                 case ServicingOpcode.RemoveProvisionedAppx:
                     Add(
@@ -419,6 +444,26 @@ public static partial class ImageServicing
         string dest = Path.Combine(payloadDir, "bloom.jpg");
         File.Copy(source, dest, overwrite: true);
         return Result.Ok<string, Failure>(dest);
+    }
+
+    private static Result<string, Failure> StageCascadiaFonts(string payloadDir)
+    {
+        string destDir = Path.Combine(payloadDir, "fonts");
+        Directory.CreateDirectory(destDir);
+        string[] names = ["CascadiaCodeNF.ttf", "CascadiaMonoNF.ttf"];
+        foreach (string name in names)
+        {
+            string? source = ToolkitRoot.TryFind("payload", "fonts", name);
+            if (source is null)
+            {
+                return Result.Fail<string, Failure>(
+                    new Failure("servicing.fonts.missing", $"payload/fonts/{name} not found."));
+            }
+
+            File.Copy(source, Path.Combine(destDir, name), overwrite: true);
+        }
+
+        return Result.Ok<string, Failure>(destDir);
     }
 
     private static void CopyDirectory(string sourceDir, string destDir)
