@@ -236,11 +236,49 @@ if ([string]$chrome.wallpaperPath -ne $expectedWallpaper) {
 }
 $startPins = @($chrome.startPinIds)
 $taskbarPins = @($chrome.taskbarPinIds)
-if ($startPins -cnotcontains 'explorer' -or $startPins -cnotcontains 'settings' -or $startPins -cnotcontains 'terminal' -or $startPins -cnotcontains 'zen-browser' -or $startPins -cnotcontains 'cursor') {
-    throw 'shell chrome startPinIds must contain explorer, settings, terminal, zen-browser, and cursor'
+foreach ($id in @('explorer', 'settings', 'terminal')) {
+    if ($startPins -cnotcontains $id) {
+        throw "shell chrome startPinIds must contain $id"
+    }
 }
 if ($taskbarPins -cnotcontains 'explorer' -or $taskbarPins -cnotcontains 'terminal') {
     throw 'shell chrome taskbarPinIds must contain explorer and terminal'
+}
+
+$packageStrict = $false
+$applyEvidencePath = Join-Path $EvidenceDir 'apply\evidence.json'
+if (Test-Path -LiteralPath $applyEvidencePath -PathType Leaf) {
+    $applyDoc = Get-Content -LiteralPath $applyEvidencePath -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($applyDoc.PSObject.Properties.Name -contains 'packageStrict') {
+        $packageStrict = [bool]$applyDoc.packageStrict
+    }
+}
+
+$extraPinIds = [ordered]@{
+    'Anysphere.Cursor'     = 'cursor'
+    'Zen-Team.Zen-Browser' = 'zen-browser'
+}
+if ($packageStrict) {
+    foreach ($pinId in $extraPinIds.Values) {
+        if ($startPins -cnotcontains $pinId) {
+            throw "package-strict shell chrome startPinIds must contain $pinId"
+        }
+    }
+}
+else {
+    $nativePath = Join-Path $EvidenceDir 'guest\native-packages.json'
+    if (Test-Path -LiteralPath $nativePath -PathType Leaf) {
+        $nativePins = Get-Content -LiteralPath $nativePath -Raw -Encoding utf8 | ConvertFrom-Json
+        foreach ($pkg in @($nativePins.packages)) {
+            $wingetId = [string]$pkg.wingetId
+            $pinId = $extraPinIds[$wingetId]
+            if ([string]::IsNullOrWhiteSpace($pinId)) { continue }
+            if ([string]::IsNullOrWhiteSpace([string]$pkg.binaryPath)) { continue }
+            if ($startPins -cnotcontains $pinId) {
+                throw "shell chrome startPinIds must contain $pinId (native audit found $wingetId)"
+            }
+        }
+    }
 }
 if ($null -eq $chrome.quietDwords) {
     throw 'shell chrome quietDwords missing'

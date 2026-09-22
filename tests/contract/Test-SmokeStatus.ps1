@@ -43,6 +43,12 @@ if ($smoke -notmatch 'Save-SmokeVmScreenshot') {
 if ($smoke -notmatch 'Get-SmokeSuspendVmDecision') {
     throw 'Invoke-Smoke must Suspend-VM on stall/wall/reboot-loop via Get-SmokeSuspendVmDecision'
 }
+if ($smoke -notmatch 'Stop-SmokeVmGuest') {
+    throw 'Invoke-Smoke must ACPI-stop leftover/assert-fail VMs (TurnOff is DirtyShutdown)'
+}
+if ($smoke -notmatch "failVmAction -eq 'shutdown'") {
+    throw 'assert/guest fail must ACPI-stop when Get-SmokeSuspendVmDecision returns shutdown'
+}
 if ($smoke -notmatch 'PrimaryOperationalStatus') {
     throw 'Heartbeat must use PrimaryOperationalStatus, not a localized OK string'
 }
@@ -200,7 +206,11 @@ if ($t.FailReason -cne 'UNEXPECTED') { throw 'unexpected VM state' }
 if ((Get-SmokeSuspendVmDecision -FailureMessage 'STALL_SUSPECT: no guest progress') -cne 'suspend') { throw 'stall suspends' }
 if ((Get-SmokeSuspendVmDecision -FailureMessage 'Wall clock elapsed without guest evidence') -cne 'suspend') { throw 'wall suspends' }
 if ((Get-SmokeSuspendVmDecision -FailureMessage 'REBOOT_LOOP: 9 setup reboots') -cne 'suspend') { throw 'reboot-loop suspends' }
+if ((Get-SmokeSuspendVmDecision -FailureMessage 'EMPTY_VHD: disk never grew') -cne 'suspend') { throw 'empty-vhd suspends' }
 if ((Get-SmokeSuspendVmDecision -FailureMessage 'Apply failed: 1') -cne 'skip') { throw 'Apply failure does not suspend' }
+if ((Get-SmokeSuspendVmDecision -FailureMessage "Smoke acceptance requires outcome Complete, got 'Failed' (Failed/Reboot is not green)") -cne 'shutdown') {
+    throw 'assert fail must ACPI-shutdown (leftover Running + TurnOff is DirtyShutdown / why-did-my-PC-restart)'
+}
 if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive $true) -cne 'skip') { throw 'live watcher is unique' }
 if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive $false) -cne 'spawn') { throw 'dead marker respawns' }
 

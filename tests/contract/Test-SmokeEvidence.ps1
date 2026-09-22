@@ -89,6 +89,42 @@ try {
     if ($r.Code -eq 0) { throw 'missing start pins must fail' }
     if ($r.Err -notmatch 'startPinIds') { throw "startPinIds message: $($r.Err)" }
 
+    $baseline = Join-Path $root 'baseline'
+    Copy-Tree $fixture $baseline
+    Remove-Item -LiteralPath (Join-Path $baseline 'acceptance.json') -ErrorAction SilentlyContinue
+    $chrome = Get-Content -LiteralPath (Join-Path $baseline 'guest\shell-chrome.json') -Raw | ConvertFrom-Json
+    $chrome.startPinIds = @('explorer', 'settings', 'terminal')
+    $chrome.taskbarPinIds = @('explorer', 'terminal')
+    ($chrome | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $baseline 'guest\shell-chrome.json') -Encoding utf8
+    $r = Invoke-StaticAssert $baseline
+    if ($r.Code -ne 0) { throw "Test-lane baseline pins must pass: $($r.Err)" }
+
+    $strict = Join-Path $root 'strict'
+    Copy-Tree $baseline $strict
+    $apply = Get-Content -LiteralPath (Join-Path $strict 'apply\evidence.json') -Raw | ConvertFrom-Json
+    $apply.packageStrict = $true
+    ($apply | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $strict 'apply\evidence.json') -Encoding utf8
+    $r = Invoke-StaticAssert $strict
+    if ($r.Code -eq 0) { throw 'package-strict missing extra pins must fail' }
+    if ($r.Err -notmatch 'package-strict') { throw "package-strict extra pin message: $($r.Err)" }
+
+    $nativeMiss = Join-Path $root 'nativeMiss'
+    Copy-Tree $baseline $nativeMiss
+    Set-Content -LiteralPath (Join-Path $nativeMiss 'guest\native-packages.json') -Encoding utf8 -Value @'
+{"schemaVersion":"winmint.native-packages/v1","packages":[{"wingetId":"Anysphere.Cursor","binaryPath":null,"isArm64Native":null}]}
+'@
+    $r = Invoke-StaticAssert $nativeMiss
+    if ($r.Code -ne 0) { throw "absent native extra pin must not require chrome pin: $($r.Err)" }
+
+    $nativeHit = Join-Path $root 'nativeHit'
+    Copy-Tree $baseline $nativeHit
+    Set-Content -LiteralPath (Join-Path $nativeHit 'guest\native-packages.json') -Encoding utf8 -Value @'
+{"schemaVersion":"winmint.native-packages/v1","packages":[{"wingetId":"Anysphere.Cursor","binaryPath":"C:\\Users\\winmint\\AppData\\Local\\Programs\\cursor\\Cursor.exe","isArm64Native":true}]}
+'@
+    $r = Invoke-StaticAssert $nativeHit
+    if ($r.Code -eq 0) { throw 'installed Cursor without chrome pin must fail' }
+    if ($r.Err -notmatch 'cursor') { throw "native extra pin message: $($r.Err)" }
+
     $nochrome = Join-Path $root 'nochrome'
     Copy-Tree $fixture $nochrome
     Remove-Item -LiteralPath (Join-Path $nochrome 'acceptance.json') -ErrorAction SilentlyContinue

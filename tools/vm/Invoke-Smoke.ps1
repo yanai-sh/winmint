@@ -94,6 +94,29 @@ function Write-SmokeHostLine {
         Write-WinMintHostProgress -Activity $Activity -Status $Name
     }
 }
+
+function Stop-SmokeVmGuest {
+    # ACPI first; TurnOff only if the guest ignores the power button (WinPE).
+    param(
+        [Parameter(Mandatory)] [string] $Name,
+        [int] $WaitSeconds = 90
+    )
+    $vm = Get-VM -Name $Name -ErrorAction SilentlyContinue
+    if (-not $vm -or $vm.State -eq 'Off') { return }
+    if ($vm.State -eq 'Saved' -or $vm.State -eq 'Paused') {
+        Stop-VM -Name $Name -TurnOff -Force -ErrorAction SilentlyContinue
+        return
+    }
+    $job = Stop-VM -Name $Name -Force -AsJob -ErrorAction SilentlyContinue
+    if ($job) {
+        $null = Wait-Job $job -Timeout $WaitSeconds
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+    }
+    $vm = Get-VM -Name $Name -ErrorAction SilentlyContinue
+    if ($vm -and $vm.State -ne 'Off') {
+        Stop-VM -Name $Name -TurnOff -Force -ErrorAction SilentlyContinue
+    }
+}
 $statusPath = Join-Path $Work 'smoke-status.json'
 
 $assertScript = Join-Path $PSScriptRoot 'Assert-SmokeEvidence.ps1'
@@ -247,7 +270,7 @@ else {
     Write-SmokeHostLine -Name "Preparing VM $VmName…" -Activity vm
     # Soft-guard: do not Remove-VM / rewrite out.iso while another Smoke wait loop is live.
     if ($existing) {
-        Stop-VM -Name $VmName -TurnOff -Force -ErrorAction SilentlyContinue
+        Stop-SmokeVmGuest -Name $VmName
         Get-VMSnapshot -VMName $VmName -ErrorAction SilentlyContinue | Remove-VMSnapshot -ErrorAction SilentlyContinue
         Remove-VM -Name $VmName -Force
     }
@@ -761,9 +784,14 @@ catch {
             $failVm = Get-VM -Name $VmName -ErrorAction SilentlyContinue
             if ($failVm) {
                 Save-SmokeVmScreenshot -VmName $VmName -Path (Join-Path $Work 'smoke-evidence\console-failed.bmp') | Out-Null
-                if ((Get-SmokeSuspendVmDecision -FailureMessage $failMsg) -eq 'suspend') {
+                $failVmAction = Get-SmokeSuspendVmDecision -FailureMessage $failMsg
+                if ($failVmAction -eq 'suspend') {
                     Suspend-VM -Name $VmName -ErrorAction SilentlyContinue
                     Write-SmokeHostLine -Name "Suspended $VmName for post-mortem (VMConnect still works)." -Outcome failed
+                }
+                elseif ($failVmAction -eq 'shutdown') {
+                    Stop-SmokeVmGuest -Name $VmName
+                    Write-SmokeHostLine -Name "Shut down $VmName after failure (ACPI). Start-VM is a clean boot." -Outcome failed
                 }
             }
         }

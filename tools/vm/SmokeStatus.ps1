@@ -274,14 +274,17 @@ function Get-SmokeNudgeRearmDecision {
 function Get-SmokeSuspendVmDecision {
     <#
     .SYNOPSIS
-      Freeze the console on stall/wall/reboot-loop so VMConnect can inspect later.
-      Apply failures leave the VM alone (it may not exist yet).
+      After a Smoke fail: freeze WinPE/setup consoles, ACPI-stop a Windows guest,
+      leave Apply fails alone (VM may not exist yet).
+      ACPI Stop-VM (not TurnOff) so leftover Windows is not DirtyShutdown —
+      Hyper-V Turn Off is a power-cut and the next Start is "Why did my PC restart?".
     #>
     param([string] $FailureMessage)
+    if ($FailureMessage -match 'Apply failed') { return 'skip' }
     if ($FailureMessage -match '^(STALL_SUSPECT|EMPTY_VHD|REBOOT_LOOP|Wall clock)') {
         return 'suspend'
     }
-    return 'skip'
+    return 'shutdown'
 }
 
 function Get-SmokeWatcherSpawnDecision {
