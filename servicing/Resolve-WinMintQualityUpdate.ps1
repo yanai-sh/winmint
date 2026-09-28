@@ -104,7 +104,11 @@ function Resolve-WinMintQualityUpdate {
     $train = Get-WinMintQualityTrain -Version $Version -Architecture $Architecture
     $rows = ConvertFrom-WinMintCatalogSearchHtml -Html $SearchHtml
     $picked = Select-WinMintQualityUpdate -Rows $rows -FamilyLabel $train.Label -Architecture $train.Architecture
-    $packageUbr = ConvertFrom-WinMintCatalogUbr -Text $DetailsHtml -Family $train.Family
+    # Details HTML lists every bundled component build; the search-row title carries the shipping OS UBR.
+    $packageUbr = ConvertFrom-WinMintCatalogTitleUbr -Title $picked.Title -Family $train.Family
+    if ($null -eq $packageUbr) {
+        $packageUbr = ConvertFrom-WinMintCatalogUbr -Text $DetailsHtml -Family $train.Family
+    }
     return [pscustomobject]@{
         Skipped      = $packageUbr -le $ImageUbr
         Kb           = $picked.Kb
@@ -139,6 +143,17 @@ function Invoke-WinMintQualityCatalogResolve {
         -ImageUbr $ImageUbr `
         -SearchHtml $searchHtml `
         -DetailsHtml $detailsHtml
+}
+
+function ConvertFrom-WinMintCatalogTitleUbr {
+    param(
+        [Parameter(Mandatory)] [string] $Title,
+        [Parameter(Mandatory)] [int] $Family
+    )
+    if ($Title -match '\(' + [regex]::Escape("$Family") + '\.(\d{3,5})\)') {
+        return [int]$Matches[1]
+    }
+    return $null
 }
 
 function ConvertFrom-WinMintCatalogUbr {

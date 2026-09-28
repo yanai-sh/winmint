@@ -18,6 +18,16 @@ if ($apply.Title -match '26H1|x64-based|Preview') {
     throw "Test-QualityCatalog: picked junk $($apply.Title)"
 }
 
+$searchTitleUbr = @'
+<a href="javascript:void(0);" onclick="goToDetails(&quot;aaaaaaaa-bbbb-cccc-dddd-111111111111&quot;);">2026-09 Cumulative Update for Windows 11 Version 25H2 for ARM64-based Systems (KB5121003) (26200.9457)</a>
+'@
+$misleadingDetails = '<p>Bundled builds include 26200.9550 and 26200.9457.</p>'
+$titleUbr = Resolve-WinMintQualityUpdate -Version '10.0.26200.1' -Architecture 'ARM64' -ImageUbr 8037 `
+    -SearchHtml $searchTitleUbr -DetailsHtml $misleadingDetails
+if ($titleUbr.PackageUbr -ne 9457) {
+    throw "Test-QualityCatalog: title OS UBR must beat details max scrape, got $($titleUbr.PackageUbr)"
+}
+
 $skip = Resolve-WinMintQualityUpdate -Version '10.0.26200.1' -Architecture 'ARM64' -ImageUbr 9168 `
     -SearchHtml $search25 -DetailsHtml $details
 if (-not $skip.Skipped -or $skip.Kb -ne 'KB5121003') {
