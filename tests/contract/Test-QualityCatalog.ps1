@@ -346,6 +346,13 @@ if (@($orderBare.WinRe) -join ',' -ne 'SSU.cab') {
     throw "Test-QualityCatalog: bare winre $($orderBare.WinRe -join ',')"
 }
 
+if (-not (Test-WinMintBootWimQualityLeaf -Leaf 'SSU-26100.1-arm64.cab')) { throw 'Test-QualityCatalog: SSU cab is boot leaf' }
+if (-not (Test-WinMintBootWimQualityLeaf -Leaf 'windows11.0-kb5129195-arm64_deadbeef.msu')) { throw 'Test-QualityCatalog: LCU msu is boot leaf' }
+if (Test-WinMintBootWimQualityLeaf -Leaf 'windows11.0-kb5127216-arm64_deadbeef.cab') {
+    throw 'Test-QualityCatalog: gap-fill checkpoint cab is not a boot leaf'
+}
+if (-not (Test-WinMintBootWimQualityLeaf -Leaf 'Setup.cab')) { throw 'Test-QualityCatalog: Setup DU cab may apply to boot.wim' }
+
 # Orchestration with injected DISM Adapters (no live DISM).
 $pkgApply = Join-Path ([IO.Path]::GetTempPath()) ('winmint-qual-apply-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $pkgApply | Out-Null

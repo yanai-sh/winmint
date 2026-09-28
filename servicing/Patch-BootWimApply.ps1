@@ -11,7 +11,12 @@ param(
 . (Join-Path $PSScriptRoot 'Resolve-WinMintQualityUpdate.ps1')
 $launchApplyPayload = Get-WinPeApplyPayloadPath
 $expectedMarker = Get-WinPeApplyMarkerText
-$bootPackages = @(Get-WinMintQualityPackageLeaf -PackageDir $QualityPackageDir -Kind boot)
+$bootLeafRaw = @(Get-WinMintQualityPackageLeaf -PackageDir $QualityPackageDir -Kind boot)
+$bootPackages = @($bootLeafRaw | Where-Object { Test-WinMintBootWimQualityLeaf -Leaf $_ })
+if ($bootLeafRaw.Count -gt 0 -and $bootPackages.Count -lt $bootLeafRaw.Count) {
+    Write-WinMintQualityPackageLeaf -PackageDir $QualityPackageDir -Kind boot -Leaf $bootPackages
+    Write-Output 'PatchBootWimApply trimmed install-only checkpoint leaves from boot.packages'
+}
 $applyQuality = $bootPackages.Count -gt 0
 
 # Spike #70: 3-partition GPT (EFI 100 MB, MSR 16 MB, primary) — WinPE apply disk layout.

@@ -360,6 +360,17 @@ function Get-WinMintQualityPackageLeafPath {
     return Join-Path $PackageDir "$Kind.packages"
 }
 
+function Test-WinMintBootWimQualityLeaf {
+    param([Parameter(Mandatory)] [string] $Leaf)
+    $name = $Leaf.Trim()
+    if ($name -match '(?i)^SSU-.+\.cab$') { return $true }
+    if ($name -match '(?i)\.msu$') { return $true }
+    # Gap-fill checkpoint cumulative updates use windows11.0-kb*.cab; Setup DU uses other CAB names.
+    if ($name -match '(?i)^windows11\.0-kb.+\.cab$') { return $false }
+    if ($name -match '(?i)\.cab$') { return $true }
+    return $false
+}
+
 function Get-WinMintQualityPackageLeaf {
     param(
         [Parameter(Mandatory)] [string] $PackageDir,
