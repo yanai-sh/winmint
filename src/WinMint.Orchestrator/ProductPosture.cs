@@ -261,6 +261,11 @@ public static class ProductPosture
         ];
         foreach ((string name, int value) in DefaultUserExplorerAdvanced)
         {
+            if (DefaultUserOfflineSkipExplorerAdvanced.Contains(name))
+            {
+                continue;
+            }
+
             rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced", name, value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
 
@@ -395,7 +400,16 @@ public static class ProductPosture
 
     private static readonly string[] DefaultUserHideDesktopIconViews = ["NewStartPanel", "ClassicStartMenu"];
 
-    // Keep in lockstep with Win32WorkstationQuiet.ExplorerAdvancedDwords (test asserts).
+    // Values also in Win32WorkstationQuiet.ExplorerAdvancedDwords; taskbar subset is live-only (NTUSER stamp fails on Win11).
+    private static readonly HashSet<string> DefaultUserOfflineSkipExplorerAdvanced =
+        new(StringComparer.Ordinal)
+        {
+            "TaskbarDa",
+            "TaskbarMn",
+            "ShowTaskViewButton",
+            "ShowCopilotButton",
+        };
+
     private static readonly Dictionary<string, int> DefaultUserExplorerAdvanced =
         new(StringComparer.Ordinal)
         {

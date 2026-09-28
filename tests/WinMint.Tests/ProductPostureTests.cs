@@ -163,6 +163,12 @@ public class ProductPostureTests
 
         foreach ((string name, int value) in Win32WorkstationQuiet.ExplorerAdvancedDwords)
         {
+            if (name is "TaskbarDa" or "TaskbarMn" or "ShowTaskViewButton" or "ShowCopilotButton")
+            {
+                Assert.DoesNotContain(rows, row => row.Name == name);
+                continue;
+            }
+
             Assert.Contains(
                 rows,
                 row => row.Name == name
