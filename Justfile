@@ -109,16 +109,20 @@ apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STU
 # S4 Hyper-V Smoke — not in `just check`. Assert-only: just smoke-assert tests/fixtures/smoke-evidence
 # Default Profile = samples/sl7.profile.json (same install target as Primary / this machine).
 # Needs .scratch/sl7.password (SECRETS). Longer wall — winget/WSL on Default Switch NAT.
-# Positional ISO path (PowerShell: do not use ISO=path — just treats that as the path string).
+# PowerShell: pass ISO as a positional arg only — not ISO=path. NAME=value overrides are not reliable on Windows;
+# use positional WORK WALL MONITOR STALL or `smoke-maintainer-monitor` for VMConnect.
 # Usage: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'
-# Positional: ISO WORK PROFILE WALL MONITOR STALL — do not insert params before MONITOR
-# (smoke-maintainer passes MONITOR as the 5th argument; an empty 5th used to become -StallMinutes).
-smoke ISO WORK=".scratch/smoke" PROFILE="samples/sl7.profile.json" WALL="180" MONITOR="" STALL="45":
-    $mon = @(); if ('{{MONITOR}}') { $mon = @('-Monitor') }; pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} @mon
+#        just smoke-maintainer .scratch/smoke 180 1 45
+smoke ISO WORK=".scratch/smoke" PROFILE="samples/sl7.profile.json" WALL="180" MONITOR="0" STALL="45":
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -ProfilePath '{{PROFILE}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}'
 
-# Maintainer SL7 vanilla Source ISO — path in tests/fixtures/maintainer-host.json
-smoke-maintainer WORK=".scratch/smoke" WALL="180" MONITOR="" STALL="45":
-    just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso' '{{WORK}}' 'samples/sl7.profile.json' '{{WALL}}' '{{MONITOR}}' '{{STALL}}'
+# Maintainer SL7 vanilla Source ISO — tests/fixtures/maintainer-host.json
+smoke-maintainer WORK=".scratch/smoke" WALL="180" MONITOR="0" STALL="45":
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Maintainer -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}'
+
+# VMConnect during maintainer smoke (elevated pwsh required).
+smoke-maintainer-monitor WORK=".scratch/smoke" WALL="180" STALL="45":
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Maintainer -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor 1
 
 # Own-console host watch (Apply/Smoke keep running if you close it).
 # smoke-maintainer already spawns one Watch-Host; use this to attach a second view.

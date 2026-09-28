@@ -45,10 +45,12 @@ Same fact in [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-hos
 
 ```powershell
 just publish-provisioning
-just smoke-maintainer
-# Profile default: samples/sl7.profile.json (needs .scratch/sl7.password)
-# or: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'
-# (positional path — do not use ISO=path under PowerShell)
+# Elevated pwsh — Apply + Hyper-V
+just smoke-maintainer-monitor
+# or: sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1
+# Profile: samples/sl7.profile.json (needs .scratch/sl7.password)
+# Custom wall/monitor (positional — not WALL=180 on PowerShell): just smoke-maintainer .scratch/smoke 180 1 45
+# Custom ISO only: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'
 ```
 
 ## Session

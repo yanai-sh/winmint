@@ -4,7 +4,9 @@
     "Maintainer SL7 local facts for agents and humans — not product defaults.",
     "CI must not fetch Windows media (ADR-001). This path exists only on the maintainer host.",
     "just check never mounts or hashes this ISO.",
-    "just smoke-maintainer uses samples/sl7.profile.json (same Primary install target). Requires .scratch/sl7.password."
+    "just smoke-maintainer uses samples/sl7.profile.json (same Primary install target). Requires .scratch/sl7.password.",
+    "PowerShell: do not use just NAME=value overrides (WALL=180 binds to WORK). Use defaults, positional args (.scratch/smoke 180 1 45), or just smoke-maintainer-monitor.",
+    "Elevated: sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1"
   ],
   "sourceIso": {
     "role": "vanilla-test",
@@ -14,7 +16,8 @@
     "architecture": "ARM64",
     "train": "25H2"
   },
-  "smokeRecipe": "just smoke-maintainer",
-  "smokeRecipePositional": "just smoke \"C:\\Users\\yanai\\Documents\\Win11_25H2_English_Arm64_v2.iso\"",
-  "smokeRecipeNote": "Under PowerShell, pass the ISO as a positional just argument. Do not use ISO=path — just embeds the literal ISO= prefix into -Iso."
+  "smokeRecipe": "just smoke-maintainer-monitor",
+  "smokeRecipeElevated": "sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1",
+  "smokeRecipePositional": "just smoke-maintainer .scratch/smoke 180 1 45",
+  "smokeRecipeNote": "ISO path is only for `just smoke` (positional). Maintainer ISO is fixed in this fixture; recipes call Invoke-SmokeRecipe.ps1."
 }

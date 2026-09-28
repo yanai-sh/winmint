@@ -78,12 +78,18 @@ if ($justfile -notmatch 'NonInteractive') {
 if ($justfile -notmatch 'STALL=') {
     throw 'just smoke must expose STALL'
 }
-if ($justfile -notmatch 'MONITOR="" STALL="45"') {
-    throw 'just smoke STALL must come after MONITOR (positional 5 is MONITOR, not StallMinutes)'
+if ($justfile -notmatch 'MONITOR="0" STALL="45"') {
+    throw 'just smoke must default MONITOR=0 (PowerShell treats empty string as truthy in recipe bodies)'
 }
-if ($justfile -notmatch "just smoke '[^']+' '{{WORK}}' '[^']+' '{{WALL}}' '{{MONITOR}}' '{{STALL}}'") {
-    throw 'just smoke-maintainer must pass MONITOR then STALL (empty MONITOR must not become -StallMinutes)'
+if ($justfile -match '(?ms)^smoke-maintainer[^\n]*:\s*\r?\n\s+just smoke ') {
+    throw 'smoke-maintainer must not nest `just smoke` (Windows positional forwarding breaks WALL/MONITOR)'
 }
+if ($justfile -notmatch 'Invoke-SmokeRecipe\.ps1') {
+    throw 'just smoke recipes must call tools/vm/Invoke-SmokeRecipe.ps1'
+}
+$recipe = Get-Content -LiteralPath (Join-Path $repo 'tools\vm\Invoke-SmokeRecipe.ps1') -Raw -Encoding utf8
+if ($recipe -notmatch 'Invoke-Smoke\.ps1') { throw 'Invoke-SmokeRecipe must delegate to Invoke-Smoke.ps1' }
+if ($recipe -notmatch 'Maintainer') { throw 'Invoke-SmokeRecipe must support -Maintainer' }
 
 $watch = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Watch-Host.ps1') -Raw -Encoding utf8
 if ($watch -notmatch 'Get-SmokeWatchVerdict') { throw 'Watch-Host smoke must call Get-SmokeWatchVerdict' }
