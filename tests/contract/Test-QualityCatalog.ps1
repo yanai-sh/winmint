@@ -323,13 +323,13 @@ finally {
     Remove-Item -LiteralPath $msuProbe -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# Package order: SSU → checkpoints → LCU; boot + Setup; winre = SSU + SafeOS.
+# Package order: install SSU → checkpoints → LCU; boot SSU → LCU + Setup; winre SSU + SafeOS.
 $orderFull = Resolve-WinMintQualityPackageOrder -SsuLeaf 'SSU.cab' -CheckpointLeaves @('CK1.msu', 'CK2.msu') `
     -LcuLeaf 'LCU.msu' -SetupLeaf 'Setup.cab' -SafeOsLeaf 'SafeOS.cab'
 if (@($orderFull.Install) -join ',' -ne 'SSU.cab,CK1.msu,CK2.msu,LCU.msu') {
     throw "Test-QualityCatalog: install order $($orderFull.Install -join ',')"
 }
-if (@($orderFull.Boot) -join ',' -ne 'SSU.cab,CK1.msu,CK2.msu,LCU.msu,Setup.cab') {
+if (@($orderFull.Boot) -join ',' -ne 'SSU.cab,LCU.msu,Setup.cab') {
     throw "Test-QualityCatalog: boot order $($orderFull.Boot -join ',')"
 }
 if (@($orderFull.WinRe) -join ',' -ne 'SSU.cab,SafeOS.cab') {
@@ -380,7 +380,7 @@ Package Identity : Package_for_RollupFix~31bf3856ad364e35~arm64~~26100.9168.1.0
     }
     $bootLeaves = @(Get-WinMintQualityPackageLeaf -PackageDir $pkgApply -Kind boot)
     $winreLeaves = @(Get-WinMintQualityPackageLeaf -PackageDir $pkgApply -Kind winre)
-    if ($bootLeaves -join ',' -ne 'SSU.cab,CK.msu,LCU.msu,Setup.cab') {
+    if ($bootLeaves -join ',' -ne 'SSU.cab,LCU.msu,Setup.cab') {
         throw "Test-QualityCatalog: boot.packages $($bootLeaves -join ',')"
     }
     if ($winreLeaves -join ',' -ne 'SSU.cab,SafeOS.cab') {

@@ -398,8 +398,9 @@ function Write-WinMintQualityPackageLeaf {
         -Value @($names) -Encoding utf8
 }
 
-# Pure install/boot/winre leaf order: SSU → checkpoints → LCU;
-# boot = install + optional Setup DU; winre = SSU + optional SafeOS DU.
+# Pure install/boot/winre leaf order: install = SSU → checkpoints → LCU;
+# boot = SSU → LCU (+ Setup DU); winre = SSU (+ SafeOS DU). Checkpoints gap-fill
+# install.wim only — offline WinPE rejects checkpoint CABs (DISM exit 2).
 # Resolve- (not New-): returns an in-memory order, does not create files.
 function Resolve-WinMintQualityPackageOrder {
     param(
@@ -417,7 +418,8 @@ function Resolve-WinMintQualityPackageOrder {
     $install.Add($LcuLeaf.Trim())
 
     $boot = [System.Collections.Generic.List[string]]::new()
-    foreach ($p in $install) { $boot.Add($p) }
+    $boot.Add($SsuLeaf.Trim())
+    $boot.Add($LcuLeaf.Trim())
     if (-not [string]::IsNullOrWhiteSpace($SetupLeaf)) { $boot.Add($SetupLeaf.Trim()) }
 
     $winre = [System.Collections.Generic.List[string]]::new()
