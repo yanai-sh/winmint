@@ -189,8 +189,9 @@ public class WingetImportTests
         int shell = Array.FindIndex(jobs, j => j.Kind == ProvisionJobKind.ShellStamp);
         int platform = Array.FindIndex(jobs, j => j.Kind == ProvisionJobKind.WslPlatform);
         int distro = Array.FindIndex(jobs, j => j.Kind == ProvisionJobKind.Wsl);
+        int terminal = Array.FindIndex(jobs, j => j.Kind == ProvisionJobKind.WslTerminal);
         int audit = Array.FindIndex(jobs, j => j.Kind == ProvisionJobKind.PackageAuditNative);
-        Assert.True(import < scoop && scoop < shell && shell < platform && platform < distro && distro < audit);
+        Assert.True(import < scoop && scoop < shell && shell < platform && platform < distro && distro < terminal && terminal < audit);
         Assert.True(jobs[import].NeedsReboot);
         Assert.True(jobs[distro].NeedsReboot);
         using JsonDocument importDoc = JsonDocument.Parse(result.Value.WingetImportJson!);

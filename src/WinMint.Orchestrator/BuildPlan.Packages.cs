@@ -229,6 +229,11 @@ public static partial class BuildPlan
                 WslFromFileAssetNames: assetNames is { Count: > 0 } ? assetNames : null));
         }
 
+        if (wslEntries.Count > 0)
+        {
+            jobs.Add(new ProvisionJob("wsl.terminal", ProvisionJobKind.WslTerminal));
+        }
+
         if (auditStrict && auditTargets.Count > 0 && imageArch == "arm64")
         {
             jobs.Add(new ProvisionJob(

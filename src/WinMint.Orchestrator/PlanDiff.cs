@@ -159,6 +159,7 @@ internal static class PlanDiff
             ProvisionJobKind.ReservedStorageDisable => "Reserved Storage off",
             ProvisionJobKind.WorkstationQuiet => "Dark theme / Do Not Disturb",
             ProvisionJobKind.WslPlatform => "WSL platform",
+            ProvisionJobKind.WslTerminal => "Windows Terminal WSL profile",
             ProvisionJobKind.AppxSafetyNet => "AppX safety net",
             ProvisionJobKind.DohSet => $"DNS over HTTPS ({job.PackageId})",
             ProvisionJobKind.WingetImport => "Winget import",

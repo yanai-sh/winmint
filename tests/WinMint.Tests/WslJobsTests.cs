@@ -31,6 +31,32 @@ public class WslJobsTests
     }
 
     [Fact]
+    public void Plan_emits_wsl_terminal_after_all_distro_jobs()
+    {
+        Profile profile = Parse(MinimalJson(wsl: ["Ubuntu", "FedoraLinux"]));
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk);
+        ProvisionJob[] jobs = [.. result.Value.Jobs.Jobs];
+        int lastDistro = jobs.ToList().FindLastIndex(j => j.Kind == ProvisionJobKind.Wsl);
+        int terminal = jobs.ToList().FindIndex(j => j is { Id: "wsl.terminal", Kind: ProvisionJobKind.WslTerminal });
+        Assert.True(lastDistro >= 0);
+        Assert.True(terminal > lastDistro);
+    }
+
+    [Fact]
+    public void Plan_omits_wsl_terminal_when_no_wsl_packages()
+    {
+        Profile profile = Parse(MinimalJson());
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk);
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WslTerminal);
+    }
+
+    [Fact]
     public void Plan_nixos_wsl_emits_fromFile_metadata()
     {
         Profile profile = Parse(MinimalJson(wsl: ["NixOS-WSL"]));
