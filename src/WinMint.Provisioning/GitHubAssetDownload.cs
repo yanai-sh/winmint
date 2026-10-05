@@ -26,31 +26,68 @@ public sealed class GitHubAssetDownload : IAssetDownload
             return null;
         }
 
+        (string Name, string Url)? picked = PickReleaseAsset(
+            release.Assets.Select(a => (a.Name, a.BrowserDownloadUrl)),
+            assetNameCandidates);
+        if (picked is null)
+        {
+            return null;
+        }
+
+        string assetLeaf = Path.GetFileName(picked.Value.Name);
+        string tempDir = Path.Combine(Path.GetTempPath(), "WinMint", "wsl");
+        Directory.CreateDirectory(tempDir);
+        string destination = Path.Combine(tempDir, assetLeaf);
+        using HttpResponseMessage assetResponse = await client.GetAsync(picked.Value.Url, ct)
+            .ConfigureAwait(false);
+        assetResponse.EnsureSuccessStatusCode();
+        await using FileStream stream = File.Create(destination);
+        await assetResponse.Content.CopyToAsync(stream, ct).ConfigureAwait(false);
+        return destination;
+    }
+
+    internal static (string Name, string Url)? PickReleaseAsset(
+        IEnumerable<(string Name, string? BrowserDownloadUrl)> assets,
+        IReadOnlyList<string> assetNameCandidates)
+    {
         foreach (string candidate in assetNameCandidates)
         {
-            GitHubAsset? asset = release.Assets.FirstOrDefault(
-                a => a.Name.Contains(candidate, StringComparison.OrdinalIgnoreCase));
-            if (asset?.BrowserDownloadUrl is null)
+            List<(string Name, string Url)> matches = [];
+            foreach ((string name, string? url) in assets)
             {
-                continue;
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    continue;
+                }
+
+                string leaf = Path.GetFileName(name);
+                if (string.IsNullOrWhiteSpace(leaf)
+                    || !string.Equals(leaf, name, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (!name.Contains(candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                matches.Add((name, url));
             }
 
-            string assetLeaf = Path.GetFileName(asset.Name);
-            if (string.IsNullOrWhiteSpace(assetLeaf)
-                || !string.Equals(assetLeaf, asset.Name, StringComparison.Ordinal))
+            (string Name, string Url)? preferred = matches
+                .Where(m => m.Name.EndsWith(".wsl", StringComparison.OrdinalIgnoreCase))
+                .Select(m => ((string Name, string Url)?)m)
+                .FirstOrDefault();
+            if (preferred is not null)
             {
-                continue;
+                return preferred;
             }
 
-            string tempDir = Path.Combine(Path.GetTempPath(), "WinMint", "wsl");
-            Directory.CreateDirectory(tempDir);
-            string destination = Path.Combine(tempDir, assetLeaf);
-            using HttpResponseMessage assetResponse = await client.GetAsync(asset.BrowserDownloadUrl, ct)
-                .ConfigureAwait(false);
-            assetResponse.EnsureSuccessStatusCode();
-            await using FileStream stream = File.Create(destination);
-            await assetResponse.Content.CopyToAsync(stream, ct).ConfigureAwait(false);
-            return destination;
+            if (matches.Count > 0)
+            {
+                return matches[0];
+            }
         }
 
         return null;
