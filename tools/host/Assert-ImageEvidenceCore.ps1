@@ -4,7 +4,36 @@ Set-StrictMode -Version Latest
 <#
 .SYNOPSIS
   Shared ImageEvidence schema/lane/digest/expected-evidence asserts for S4 and S5.
+  Gate B polarity matches HostReview.IsGateB (Release ∧ packageStrict).
 #>
+
+function Test-WinMintIsGateB {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Lane,
+
+        [Parameter(Mandatory)]
+        [bool] $PackageStrict
+    )
+    return $Lane -eq 'Release' -and $PackageStrict
+}
+
+function Assert-WinMintGateB {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Lane,
+
+        [Parameter(Mandatory)]
+        [bool] $PackageStrict,
+
+        [string] $Context = 'Gate B'
+    )
+    if (-not (Test-WinMintIsGateB -Lane $Lane -PackageStrict:$PackageStrict)) {
+        throw ("$Context requires Release and packageStrict " +
+            "(soft Release evidence is not wipe media; lane='$Lane' packageStrict=$PackageStrict)")
+    }
+}
+
 function Assert-WinMintImageEvidence {
     param(
         [Parameter(Mandatory)]
@@ -47,9 +76,7 @@ function Assert-WinMintImageEvidence {
         if ($evidence.PSObject.Properties.Name -contains 'packageStrict') {
             $packageStrict = [bool]$evidence.packageStrict
         }
-        if (-not $packageStrict) {
-            throw 'packageStrict must be true for Release Gate B assert (soft Release evidence is not wipe media)'
-        }
+        Assert-WinMintGateB -Lane $lane -PackageStrict:$packageStrict -Context 'Release Gate B assert'
     }
 
     $digestMap = @{}
@@ -74,9 +101,7 @@ function Assert-WinMintImageEvidence {
             if ($evidence.PSObject.Properties.Name -contains 'packageStrict') {
                 $packageStrict = [bool]$evidence.packageStrict
             }
-            if (-not $packageStrict) {
-                throw 'packageStrict must be true for Release Gate B assert (soft Release evidence is not wipe media)'
-            }
+            Assert-WinMintGateB -Lane $lane -PackageStrict:$packageStrict -Context 'expected-evidence Gate B'
         }
         foreach ($key in @($expected.requiredDigestKeys)) {
             if (-not $digestMap.ContainsKey([string]$key) -or [string]::IsNullOrWhiteSpace($digestMap[[string]$key])) {

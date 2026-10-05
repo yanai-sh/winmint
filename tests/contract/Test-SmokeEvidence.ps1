@@ -79,7 +79,9 @@ try {
     ($guest | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Guest-EvidencePath $nooobe) -Encoding utf8
     $r = Invoke-StaticAssert $nooobe
     if ($r.Code -eq 0) { throw 'missing oobe.dismiss must fail' }
-    if ($r.Err -notmatch 'oobe.dismiss') { throw "oobe.dismiss message: $($r.Err)" }
+    if ($r.Err -notmatch 'handoff gate failed|wait-handoff') {
+        throw "oobe.dismiss via handoff readiness message: $($r.Err)"
+    }
 
     $pins = Join-Path $root 'pins'
     Copy-Tree $fixture $pins

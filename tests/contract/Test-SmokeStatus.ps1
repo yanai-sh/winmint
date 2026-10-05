@@ -23,6 +23,9 @@ $assertSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Assert-SmokeEvi
 if ($assertSrc -notmatch 'Get-WinMintGuestHandoffReadiness') {
     throw 'Assert-SmokeEvidence must share Get-WinMintGuestHandoffReadiness facts'
 }
+if ($assertSrc -match "statusCode -ne 'jobs\.ok'") {
+    throw 'Assert-SmokeEvidence must not restate jobs.ok statusCode; handoff readiness owns that fact'
+}
 if ($statusSrc -notmatch 'function Get-WinMintGuestHandoffReadiness') {
     throw 'SmokeStatus must define Get-WinMintGuestHandoffReadiness'
 }

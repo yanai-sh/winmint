@@ -89,15 +89,7 @@ if ($outcome -ne 'Complete') {
     throw "Smoke acceptance requires outcome Complete, got '$outcome' (Failed/Reboot is not green)"
 }
 
-if ([string]$guest.statusCode -ne 'jobs.ok') {
-    throw "Smoke acceptance requires statusCode jobs.ok, got '$($guest.statusCode)'"
-}
-if ($phases -notcontains 'jobs.ok') {
-    throw 'Complete evidence must include jobs.ok phase'
-}
-if ($phases -notcontains 'oobe.dismiss') {
-    throw 'FirstLogon handoff marker missing: phases must contain oobe.dismiss'
-}
+# jobs.ok / oobe.dismiss / explorer Shell live in Get-WinMintGuestHandoffReadiness (shared with wait).
 if ($phases -notcontains 'jobs.workstation.quiet') {
     throw 'FirstLogon quiet chrome missing: phases must contain jobs.workstation.quiet'
 }

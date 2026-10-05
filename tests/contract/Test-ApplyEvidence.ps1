@@ -6,6 +6,16 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $assert = Join-Path $repo 'tools\apply\Assert-ApplyEvidence.ps1'
 $fixture = Join-Path $repo 'tests\fixtures\apply-evidence'
+. (Join-Path $repo 'tools\host\Assert-ImageEvidenceCore.ps1')
+if (-not (Test-WinMintIsGateB -Lane 'Release' -PackageStrict:$true)) {
+    throw 'Test-WinMintIsGateB must match HostReview.IsGateB for Release+strict'
+}
+if (Test-WinMintIsGateB -Lane 'Release' -PackageStrict:$false) {
+    throw 'soft Release must not be Gate B'
+}
+if (Test-WinMintIsGateB -Lane 'Test' -PackageStrict:$true) {
+    throw 'Test lane must not be Gate B'
+}
 
 function Copy-Tree([string] $Source, [string] $Dest) {
     foreach ($file in [IO.Directory]::GetFiles($Source, '*', [IO.SearchOption]::AllDirectories)) {
@@ -101,7 +111,7 @@ try {
     ($ev | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $psfalse 'evidence.json') -Encoding utf8
     $r = Invoke-ApplyAssert $psfalse -RequireLane Release
     if ($r.Code -eq 0) { throw 'Release packageStrict false must fail' }
-    if ($r.Err -notmatch 'packageStrict must be true') { throw "packageStrict false message: $($r.Err)" }
+    if ($r.Err -notmatch 'packageStrict') { throw "packageStrict false message: $($r.Err)" }
 
     $nofu = Join-Path $root 'nofu'
     Copy-Tree $fixture $nofu

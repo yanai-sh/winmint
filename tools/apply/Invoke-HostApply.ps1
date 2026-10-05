@@ -62,6 +62,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 . (Join-Path $repoRoot 'tools\AcceptanceManifest.ps1')
+. (Join-Path $repoRoot 'tools\host\Assert-ImageEvidenceCore.ps1')
 . (Join-Path $repoRoot 'tools\host\Invoke-ArtifactHygiene.ps1') -NoRun
 
 $assertScript = Join-Path $PSScriptRoot 'Assert-ApplyEvidence.ps1'
@@ -116,8 +117,9 @@ if ($AssertOnly) {
     exit 0
 }
 
-# Gate B wipe media = Release + PackageStrict (just primary-gate). Soft Release Host Apply must not print flash guidance.
-if ($ImageQuality -eq 'Release' -and -not $PackageStrict) {
+# Gate B wipe media = HostReview.IsGateB (Release ∧ packageStrict). Soft Release must not print flash guidance.
+if ($ImageQuality -eq 'Release' -and
+    -not (Test-WinMintIsGateB -Lane $ImageQuality -PackageStrict:([bool]$PackageStrict))) {
     throw 'Release Host Apply without -PackageStrict is not Gate B. Use: just primary-gate ISO=...'
 }
 
@@ -231,7 +233,7 @@ if (-not $SkipApply) {
 Write-Host "Host Apply gate OK. Work=$Work lane=$assertLane"
 if ($sha) { Write-Host "outputIso.sha256=$sha" }
 if ($outIso) { Write-Host "Output ISO: $outIso" }
-if ($assertLane -eq 'Release' -and $PackageStrict) {
+if (Test-WinMintIsGateB -Lane $assertLane -PackageStrict:([bool]$PackageStrict)) {
     Write-Host "Flash only this workdir's Output ISO ($outIso). Do not flash a Test-lane workdir (.scratch/sl7-build)."
     Write-Host 'Next step (manual, destructive): write that ISO to USB and bare-metal install — not run by this harness.'
 } else {
