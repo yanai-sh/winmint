@@ -93,8 +93,11 @@ _Avoid_: shipping recovery images; treating Gate B alone as wipe-proven; gating 
 
 **Install engine** — WinPE apply only (no Setup `/legacy`).
 
-**Debloat** — Remove-list posture for AppX / capabilities / optional features. Profile fields are `debloat.*`. Host presets (`recommended`, Acceptance, empty) expand to lists; never write preset names into JSON.  
-_Avoid_: Keep-flag (retired name); keep-list polarity; BCU; CDM as primary; Profile preset names
+**Debloat** — Remove-list posture for AppX / capabilities / optional features. Profile fields are `debloat.*`. Host presets (`recommended`, Acceptance, empty) expand to lists; never write preset names into JSON. Wizard chrome uses **Station outcome**, not these preset ids.  
+_Avoid_: Keep-flag (retired name); keep-list polarity; BCU; CDM as primary; Profile preset names; Wizard cleanup-preset UI after Station outcomes land
+
+**Station outcome** — Host-only Wizard choice (**Comfort** / **Minimal** / **Power**) that expands to remove-lists and chip selections before Profile draft; the outcome name never appears in `winmint.profile/v1`. Replaces Wizard cleanup-preset chrome (`empty` / `acceptance` / `recommended` remain host/harness ids). **Minimal** = thin/empty debloat + no optional chips (shell core + Quiet only). **Comfort** = recommended-depth debloat + curated linux-like chips (editor, browser, WSL, default desktop axes). **Power** = Comfort plus tiling (Komorebi) and a denser chip set. User may refine after seed. Distinct from harness **Lane**.  
+_Avoid_: calling Station outcome a Lane; Quiet as an outcome name; preset names in Profile JSON; calling CuratedDefaults alone a Station outcome; two Wizard expanders (outcome + cleanup preset)
 
 **Shell** — Winlogon replacement during Provisioning tenure only.  
 _Avoid_: calling Wizard UI chrome “Shell”
@@ -105,8 +108,11 @@ _Avoid_: treating Nilesoft as a taskbar surface choice; conflating with Desktop 
 **Desktop surfaces** — Two independent axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)): **taskbar surface** (Windows taskbar default, or YASB + tHide) and **window management** (optional Komorebi). Wizard Software stage; package catalog owns package ids; provisioning job `shell.desktop` owns tHide install/pin/hash and applies assets under `payload/desktop/`.  
 _Avoid_: one flat package-checkbox row for both axes; overlapping taskbar layers; Windhawk automation without a stable CLI; redistributing cursors without a license
 
-**Wizard** — Avalonia front end over HostCompile: Source → Account → Software → Review; Phase B elevated Apply.  
-_Avoid_: DISM or second planner in UI
+**Wizard** — Avalonia front end over HostCompile: Source → Account → Software → Review; Phase B elevated Apply. Final-user path has no **Lane** control (shipping image-quality / Gate B semantics only). **Station outcome** seeds Software; user may refine chips and desktop axes afterward. Review Apply shows a live status tail from ImageServicing progress.  
+_Avoid_: DISM or second planner in UI; Test vs Release radio for end users
+
+**Station pack** — Shareable host bundle whose sole Apply intent is the **Profile**; siblings include plan dump and a packages-only WinGet Configuration document (mirrors `winget-import.json`); never a second Apply brain.  
+_Avoid_: treating plan dump or WinGet Configuration as Apply input; mapping Quiet/policies into DSC; environment report as intent
 
 **Package catalog** — `config/packages.json`: **chip** key ≠ Profile install id. A chip is one Wizard toggle (`ChipItem`); its key is UI vocabulary and never reaches JSON.  
 _Avoid_: live winget search in Wizard
@@ -143,10 +149,11 @@ _Avoid_: “receipt” for any of these three; calling a Digest Authenticode or 
 
 **Kernel** — one elevated `servicing/*.ps1` doing exactly one opcode. Parameter hashtables only, never Profile JSON.
 
-**Lane** — the `Test` | `Release` image-quality run override, and the `ExportWim` params it implies.  
-_Avoid_: calling a GitHub Release “Release” without GitHub; signed Release; treating Authenticode as a Lane property
+**Lane** — the `Test` | `Release` image-quality run override, and the `ExportWim` params it implies. **Pre-release / maintainer harness only** — not a final-user Wizard choice; the shipping Wizard must not expose Lane as an option.  
+_Avoid_: calling a GitHub Release “Release” without GitHub; signed Release; treating Authenticode as a Lane property; Wizard radio for Test vs Release; teaching end users the word Lane
 
-**Quiet** — the always-on noise removal a user did not ask for and cannot opt out of (`Win32WorkstationQuiet`, Wizard "quiet" copy).
+**Quiet** — the always-on noise removal a user did not ask for and cannot opt out of (`Win32WorkstationQuiet`, Wizard "quiet" copy).  
+_Avoid_: naming a host Station outcome “Quiet” (collides with this constant); opt-in quiet toggles
 
 **Residue** — WinMint's own files left in the guest after a green FirstLogon; the cleaner erases them ([ADR-008](docs/decisions/ADR-008-residual-minimization.md)).
 
