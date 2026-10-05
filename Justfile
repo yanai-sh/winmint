@@ -39,6 +39,10 @@ packages-check:
 quality-check:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-QualityCheck.ps1'
 
+# SL7 maintainer: quality-check + Source ISO advisory (mounts maintainer ISO). Not in `just check`.
+maintainer-check:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-MaintainerCheck.ps1'
+
 bootstrap-contract:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Test-BootstrapContract.ps1'
 

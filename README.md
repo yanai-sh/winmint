@@ -8,7 +8,7 @@
 
 WinMint builds a custom Windows 11 ISO for a clean ARM64 developer PC.
 
-You bring an [official Windows 11 ISO from Microsoft](https://www.microsoft.com/software-download/windows11). WinMint does not download or redistribute Windows. It services that ISO offline, then finishes setup on first sign-in.
+You bring an official **English (US)** Windows 11 ARM64 ISO from [Microsoft software download](https://www.microsoft.com/software-download/windows11) (choose **English 64-bit**, not English International). WinMint does not download or redistribute Windows. It services that ISO offline, then finishes setup on first sign-in.
 
 ## Alpha
 
@@ -38,7 +38,7 @@ The first run needs network. Missing PowerShell 7.6+ is installed from GitHub's 
 
 The Wizard is **Source** → **Account** → **Software** → **Review**.
 
-1. Choose your Microsoft ISO.
+1. Choose your **English (US)** Microsoft ISO.
 2. Set a local account. A password is required.
 3. Pick apps and cleanup, or continue with defaults.
 4. On **Review**, choose **Build**. Servicing is elevated and takes several hours.
@@ -56,3 +56,5 @@ Write the ISO to a UEFI USB with [Rufus](https://rufus.ie/) in **DD Image** mode
 Before you wipe a PC, prepare a restore path: OEM recovery when available, or a Windows recovery drive. WinMint does not download recovery images.
 
 [Issues](https://github.com/yanai-sh/winmint/issues) · [Privacy](PRIVACY.md) · [GPL-3.0-or-later](LICENSE)
+
+Coding agents: [AGENTS.md](AGENTS.md) (map) · [CONTEXT.md](CONTEXT.md) (glossary).

@@ -4,17 +4,21 @@
     "Maintainer SL7 local facts for agents and humans — not product defaults.",
     "CI must not fetch Windows media (ADR-001). This path exists only on the maintainer host.",
     "just check never mounts or hashes this ISO.",
+    "Weekly: GitHub Actions workflow health (Catalog B-release). SL7: just maintainer-check (quality + ISO advisory); writes .scratch/maintainer/last-check.json.",
+    "Optional sourceIso.sha256: (Get-FileHash -Algorithm SHA256 <path>).Hash.ToLowerInvariant() after you verify the retail ISO.",
+    "Task Scheduler example (run from repo root): pwsh -NoProfile -File tools/host/Invoke-MaintainerCheck.ps1",
     "just smoke-maintainer uses samples/sl7.profile.json (same Primary install target). Requires .scratch/sl7.password.",
     "PowerShell: do not use just NAME=value overrides (WALL=180 binds to WORK). Use defaults, positional args (.scratch/smoke 180 1 45), or just smoke-maintainer-monitor.",
     "Elevated: sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1"
   ],
   "sourceIso": {
     "role": "vanilla-test",
-    "description": "Official Microsoft Windows 11 25H2 English ARM64 retail/business Source ISO used for Smoke and Host Apply on SL7",
+    "description": "Official Microsoft Windows 11 25H2 English (US) ARM64 retail/business Source ISO (DISM Languages en-US) for Smoke and Host Apply on SL7",
     "path": "C:\\Users\\yanai\\Documents\\Win11_25H2_English_Arm64_v2.iso",
     "leaf": "Win11_25H2_English_Arm64_v2.iso",
     "architecture": "ARM64",
-    "train": "25H2"
+    "train": "25H2",
+    "sha256": "638aa2c88e94385b00f4f178d071e3df0b7d9e335577a83bd533b7f2eb65adf0"
   },
   "smokeRecipe": "just smoke-maintainer-monitor",
   "smokeRecipeElevated": "sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1",

@@ -8,40 +8,50 @@ Windows 11 ISO builder (**alpha**). **ARM64-first**. Host Servicing: **pwsh 7.6+
 
 Elevate **only** Servicing `pwsh -File`. No v1 `WinMint.ps1`. No guest **pwsh product runtime** — inbox `powershell.exe` for Scoop bootstrap or narrow winget import/configure is OK.
 
-## Docs
+## Reach
 
-Code and tests are the product ([ADR-014](docs/decisions/ADR-014-docs-are-not-living-law.md)). Markdown holds three things:
+Code and tests are the product ([ADR-014](docs/decisions/ADR-014-docs-are-not-living-law.md)). Do not add living design docs. Do not restate types, opcodes, or defaults that already live in `src/`. An ADR is the choice and what was rejected — not an id catalog or changelog.
 
-- **Glossary** — [CONTEXT.md](CONTEXT.md)
-- **Why** — [docs/decisions/](docs/decisions/)
-- **This map**
+Open by branch:
 
-Do not add living design docs. Do not restate types, opcodes, or defaults that already live in `src/`. An ADR is the choice and what was rejected — not an id catalog or changelog.
+| When | Open |
+|------|------|
+| Coined word, polarity, avoid-list | [CONTEXT.md](CONTEXT.md) |
+| Why a bar exists / what was rejected | [docs/decisions/](docs/decisions/) |
+| Behaviour, types, opcodes, defaults | `src/`, `servicing/`, `tests/` |
+| Operator / legal policy | [README.md](README.md), [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) |
 
-Short form of the identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break.
+Identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)).
 
 ## Map
 
-| Module | Lives in |
-|--------|----------|
-| **BuildPlan** | `src/WinMint.Orchestrator` |
+| Concern | Lives in |
+|---------|----------|
+| **BuildPlan** / plan artifacts | `src/WinMint.Orchestrator` |
+| **HostCompile** (entry; not a fourth module) | `src/WinMint.Orchestrator` |
 | **ImageServicing** | `src/WinMint.Orchestrator` + `servicing/` |
-| **ProvisioningSession** | `src/WinMint.Provisioning` |
-| **HostCompile** | Orchestrator entry (not a fourth module) |
+| **ProvisioningSession** / Supervisor | `src/WinMint.Provisioning` |
+| Contracts / job wire | `src/WinMint.Contracts` |
+| Cli / Wizard front ends | `src/WinMint.Cli`, `src/WinMint.Wizard` |
+| WinPE apply helper | `src/WinMint.WinPeApply` |
+| Package catalog / chips | `config/packages.json` (+ `config/packages.proof.json`) |
+| Guest payload / skel / desktop assets | `payload/` |
+| Sample profiles | `samples/` |
+| Host recipes | `Justfile`, `tools/host/` |
+| Smoke / Hyper-V | `tools/vm/` |
+| Contract harness | `tests/contract/` |
+| Unit / session tests | `tests/WinMint.Tests/` |
+| Maintainer ISO / smoke recipes | `tests/fixtures/maintainer-host.json` |
 
-Front ends: `src/WinMint.Cli`, `src/WinMint.Wizard`. Guest apply helper: `src/WinMint.WinPeApply`. Staged bits: `payload/`. Pins: `global.json`, `Directory.Build.props`. Tests: `tests/` — `just check`.
-
-Operator/legal: [README.md](README.md), [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md).
+Pins: `global.json`, `Directory.Build.props`. Gate: `just check`.
 
 ## Maintainer host
 
 **Clock** — Maintainer zone is Asia/Jerusalem (Tel Aviv). SL7’s system time can jump backward at random even after a sync (faulty DMA workaround on this machine, not product DMA settle). Do not trust `Get-Date`, `[datetime]::UtcNow`, file `LastWriteTime`, chat timestamps, or harness remaining-time as elapsed truth. Smoke stall/wall and the DVD boot-nudge window are wall-clock: a backward jump inflates them. If remaining time grows or files look newer than “now,” the clock jumped — stop treating those timers as elapsed and ask the human. A sync is temporary.
 
-**Vanilla Source ISO (Smoke / Host Apply)** — Official Microsoft 25H2 English ARM64 ISO on this host:
+**Vanilla Source ISO (Smoke / Host Apply)** — Official Microsoft **English (US)** 25H2 ARM64 ISO on this host (DISM `Languages : en-US`; not English International). Path and recipes: [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-host.json). User-supplied only ([ADR-001](docs/decisions/ADR-001-source-iso-legal.md)); never commit the ISO bytes; CI must not fetch Windows media.
 
-`C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso`
-
-Same fact in [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-host.json). User-supplied only ([ADR-001](docs/decisions/ADR-001-source-iso-legal.md)); never commit the ISO bytes; CI must not fetch Windows media.
+**Maintainer signals** — Weekly Catalog B-release: GitHub Actions workflow **health** (subscribe to failures). SL7 ISO + Catalog: `just maintainer-check` (optional Task Scheduler; see fixture notes). Catalog-only: `just quality-check`.
 
 ```powershell
 just publish-provisioning
