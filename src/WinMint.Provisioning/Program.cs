@@ -76,7 +76,7 @@ internal static class Program
             if (!File.Exists(bundlePath))
             {
                 GuestLog.BundleMissing(log, bundlePath);
-                return FailShellTenure(log);
+                return FailOpenShell(log);
             }
 
             if (!OperatingSystem.IsWindows())
@@ -89,7 +89,7 @@ internal static class Program
             if (!loaded.IsOk)
             {
                 GuestLog.Failure(log, loaded.Error.Code, loaded.Error.Message);
-                return FailShellTenure(log);
+                return FailOpenShell(log);
             }
 
             ProvisioningBundle bundle = loaded.Value;
@@ -107,12 +107,14 @@ internal static class Program
                 GuestLog.Evidence(log, snap.SchemaVersion, snap.Path);
             }
 
-            return result.Outcome == SessionOutcome.Complete ? 0 : 1;
+            // Session already stamped Complete/Failed/Reboot; Apply is the durable exit seam
+            // (idempotent unlock, withhold on Reboot) so Program cannot skip Shell policy.
+            return ShellTenureEntry.Apply(winlogon, ShellTenureEntry.FromSession(result.Outcome));
         }
         catch (Exception ex)
         {
             GuestLog.ShellCrash(log, ex);
-            return FailShellTenure(log);
+            return FailOpenShell(log);
         }
         finally
         {
@@ -121,21 +123,16 @@ internal static class Program
     }
 
     /// <summary>
-    /// Last-resort unlock for Shell exits that never reached the session, so a failed run cannot become a
-    /// machine with no desktop: Winlogon still points at the Supervisor, which exits, which logs on again.
-    /// <para>
-    /// Only for giving-up paths. The session owns its own unlock and deliberately withholds it on
-    /// <see cref="SessionOutcome.Reboot"/>, where the Supervisor must stay the shell to resume — so this
-    /// must never move into <c>finally</c>.
-    /// </para>
+    /// Catastrophic Shell exits that never produced a session outcome (missing bundle, load fail, crash).
+    /// Must unlock — never leave Supervisor as a dead shell. Not for Reboot.
     /// </summary>
-    private static int FailShellTenure(GuestFileLogger log)
+    private static int FailOpenShell(GuestFileLogger log)
     {
         try
         {
             if (OperatingSystem.IsWindows())
             {
-                Winlogon().SetShell(ProvisioningSession.ExplorerShell);
+                return ShellTenureEntry.Apply(Winlogon(), TenureExit.FailOpen);
             }
         }
         catch (Exception ex)

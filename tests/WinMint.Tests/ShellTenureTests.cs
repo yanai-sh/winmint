@@ -1,4 +1,5 @@
 using WinMint.Contracts;
+using WinMint.Orchestrator;
 using WinMint.Provisioning;
 
 using static WinMint.Tests.ProvisioningSessionTestFakes;
@@ -149,24 +150,21 @@ public class ShellTenureTests
             SupervisorShellPath: SupervisorPath);
 
     /// <summary>
-    /// Winlogon launches the Supervisor as the shell, so a Shell-mode exit that skips the unlock leaves a
-    /// machine that logs on, runs nothing, exits, and logs on again — no desktop, recovery media only.
-    /// The session unlocks its own Complete and fail-open paths; exits that never reach it must route
-    /// through <c>FailShellTenure</c>, so a bare <c>return 1</c> in <c>RunShellAsync</c> is the bug.
+    /// Winlogon launches the Supervisor as Shell. A tenure exit that skips unlock leaves a machine that
+    /// logs on, exits, and logs on again — no desktop. Reboot must withhold so Supervisor resumes.
     /// </summary>
-    [Fact]
-    public void Shell_tenure_has_no_exit_that_skips_the_unlock()
+    [Theory]
+    [InlineData(TenureExit.FailOpen, "explorer.exe", 1)] // MissingBundle / LoadFail / crash
+    [InlineData(TenureExit.Reboot, ImageServicing.ShellStampGuestPath, 1)]
+    [InlineData(TenureExit.Complete, "explorer.exe", 0)]
+    public void Shell_stamp_follows_tenure_exit(TenureExit exit, string expectedShell, int expectedCode)
     {
-        string source = File.ReadAllText(
-            Path.Combine(TestRepo.Root, "src", "WinMint.Provisioning", "Program.cs"));
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
 
-        int start = source.IndexOf("private static async Task<int> RunShellAsync()", StringComparison.Ordinal);
-        int end = source.IndexOf("private static int FailShellTenure", StringComparison.Ordinal);
-        Assert.True(start >= 0 && end > start, "cannot locate RunShellAsync — the scan is broken, not clean");
+        int code = ShellTenureEntry.Apply(winlogon, exit);
 
-        string body = source[start..end];
-        Assert.DoesNotContain("return 1;", body, StringComparison.Ordinal);
-        Assert.Contains("FailShellTenure(log)", body, StringComparison.Ordinal);
+        Assert.Equal(expectedCode, code);
+        Assert.Equal(expectedShell, winlogon.Shell);
     }
 
     private static ShellEnvironment Env(

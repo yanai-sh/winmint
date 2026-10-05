@@ -255,7 +255,8 @@ public static partial class ProvisioningSession
         env.Guest.Checkpoints.ClearCheckpoint();
 
         // Unlock before Complete evidence so S4 never claims green while Shell is still Supervisor.
-        if (!TryUnlock(env) || !IsExplorerShell(env.Guest.Winlogon.GetShell()))
+        if (!ShellTenureEntry.TryUnlock(env.Guest.Winlogon)
+            || !ShellTenureEntry.IsExplorerShell(env.Guest.Winlogon.GetShell()))
         {
             return await FailOpenAsync(
                 bundle,
@@ -331,10 +332,6 @@ public static partial class ProvisioningSession
         }
     }
 
-    private static bool IsExplorerShell(string? shell) =>
-        !string.IsNullOrWhiteSpace(shell)
-        && shell.Trim().Equals(ExplorerShell, StringComparison.OrdinalIgnoreCase);
-
     private static bool IsStaleHeartbeat(
         ProvisioningBundle bundle,
         ShellEnvironment env,
@@ -353,9 +350,6 @@ public static partial class ProvisioningSession
 
     private static SessionStatus TimeoutStatus() =>
         new("shell.timeout", "Shell tenure timeout.");
-
-    private static void Unlock(IWinlogonRegistry winlogon) =>
-        winlogon.SetShell(ExplorerShell);
 
     private static async Task<SessionResult> FailOpenAsync(
         ProvisioningBundle bundle,
@@ -406,27 +400,12 @@ public static partial class ProvisioningSession
         }
 
         // Unlock after evidence — custom Shell is medium-IL and may lack HKLM write.
-        if (TryUnlock(env))
+        if (ShellTenureEntry.TryUnlock(env.Guest.Winlogon))
         {
             TryDismissOobeOverlay(env, phases: null);
         }
 
         return new SessionResult(SessionOutcome.Failed, status, emitted);
-    }
-
-    /// <returns>true when SetShell(explorer) did not throw.</returns>
-    private static bool TryUnlock(ShellEnvironment env)
-    {
-        try
-        {
-            Unlock(env.Guest.Winlogon);
-            return true;
-        }
-        catch (Exception)
-        {
-            // ponytail: evidence already durable; MachineSetup grants unlock ACL for Shell (see GrantShellUnlockAccess)
-            return false;
-        }
     }
 
     private static async Task<SessionStatus?> EnsureNetworkAvailableAsync(
