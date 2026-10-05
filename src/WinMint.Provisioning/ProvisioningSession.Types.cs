@@ -226,6 +226,29 @@ public enum DmaSetupRegionEnsureResult
     Repaired,
 }
 
+/// <summary>Access policy for <see cref="ProvisioningSession.EnsureDmaSetupRegion"/>.</summary>
+internal enum DmaSetupRegionPolicy
+{
+    /// <summary>SetupComplete: UnauthorizedAccess fail-open (OOBE may still hold the key).</summary>
+    MachineSetup,
+
+    /// <summary>FirstLogon settle: repair/verify fail-closed.</summary>
+    Settle,
+}
+
+internal enum DmaSetupRegionLatchKind
+{
+    Ok,
+    MissingPort,
+    AccessDeniedSoft,
+    Failed,
+}
+
+internal readonly record struct DmaSetupRegionLatch(
+    DmaSetupRegionLatchKind Kind,
+    DmaSetupRegionEnsureResult? EnsureResult,
+    string? Message);
+
 /// <summary>Setup region port. DMA = EU Digital Markets Act (<see cref="WinMint.Contracts.DmaInterop"/>).</summary>
 public interface IDmaSetupRegion
 {

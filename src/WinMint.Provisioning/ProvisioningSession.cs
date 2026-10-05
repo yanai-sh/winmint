@@ -366,7 +366,11 @@ public static partial class ProvisioningSession
 
         try
         {
-            env.Guest.ApplyShellChrome(new(FailOpen: true, SelectedWingetIds: []));
+            _ = ShellSurfaces.TryApplyChrome(
+                env.Guest,
+                selectedWingetIds: [],
+                packageStrict: false,
+                failOpen: true);
         }
         catch (Exception)
         {
@@ -584,28 +588,17 @@ public static partial class ProvisioningSession
 
     private static SessionResult? EnsureDmaSetupRegionForMachineSetup(MachineSetupEnvironment env)
     {
-        if (env.DmaSetup is null)
+        DmaSetupRegionLatch latch = EnsureDmaSetupRegion(
+            env.DmaSetup,
+            DmaSetupRegionPolicy.MachineSetup);
+        return latch.Kind switch
         {
-            return Fail(
+            DmaSetupRegionLatchKind.Ok or DmaSetupRegionLatchKind.AccessDeniedSoft => null,
+            DmaSetupRegionLatchKind.MissingPort => Fail(
                 "machineSetup.dmaSetupRegionFailed",
-                "DmaSetup port required when DMA enabled.");
-        }
-
-        try
-        {
-            _ = env.DmaSetup.EnsureIreland();
-            return null;
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or SecurityException)
-        {
-            // ponytail: OOBE still holds DeviceRegion during SetupComplete. Exit 1 reseals to Recovery.
-            // FirstLogon settle retries the latch; fail-closed stays for verify/null-port failures.
-            return null;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return Fail("machineSetup.dmaSetupRegionFailed", ex.Message);
-        }
+                "DmaSetup port required when DMA enabled."),
+            _ => Fail("machineSetup.dmaSetupRegionFailed", latch.Message ?? "DeviceRegion latch failed."),
+        };
     }
 
     /// <summary>
@@ -621,29 +614,55 @@ public static partial class ProvisioningSession
             return null;
         }
 
-        if (env.Guest.DmaSetup is null)
+        DmaSetupRegionLatch latch = EnsureDmaSetupRegion(
+            env.Guest.DmaSetup,
+            DmaSetupRegionPolicy.Settle);
+        SessionStatus status = latch.Kind switch
         {
-            SessionStatus missing = new(
-                "settle.deviceRegionFailed",
-                "DmaSetup port required when DMA enabled.");
-            Note(env, phases, missing);
-            return new SettlePhaseResult(HardFailed: true, TimedOut: false, missing);
+            DmaSetupRegionLatchKind.Ok when latch.EnsureResult == DmaSetupRegionEnsureResult.Repaired =>
+                new("settle.deviceRegionRepaired", "DeviceRegion repaired to Ireland (68)."),
+            DmaSetupRegionLatchKind.Ok =>
+                new("settle.deviceRegionOk", "DeviceRegion already Ireland (68)."),
+            DmaSetupRegionLatchKind.MissingPort =>
+                new("settle.deviceRegionFailed", "DmaSetup port required when DMA enabled."),
+            _ => new("settle.deviceRegionFailed", latch.Message ?? "DeviceRegion latch failed."),
+        };
+        Note(env, phases, status);
+        return new SettlePhaseResult(
+            HardFailed: latch.Kind is not DmaSetupRegionLatchKind.Ok,
+            TimedOut: false,
+            status);
+    }
+
+    /// <summary>
+    /// Sticky Ireland DeviceRegion latch (ADR-003). Machine setup fail-opens on access denied;
+    /// FirstLogon settle fail-closes after repair/verify.
+    /// </summary>
+    internal static DmaSetupRegionLatch EnsureDmaSetupRegion(
+        IDmaSetupRegion? port,
+        DmaSetupRegionPolicy policy)
+    {
+        if (port is null)
+        {
+            return new DmaSetupRegionLatch(DmaSetupRegionLatchKind.MissingPort, null, null);
         }
 
         try
         {
-            DmaSetupRegionEnsureResult result = env.Guest.DmaSetup.EnsureIreland();
-            SessionStatus status = result == DmaSetupRegionEnsureResult.Repaired
-                ? new("settle.deviceRegionRepaired", "DeviceRegion repaired to Ireland (68).")
-                : new("settle.deviceRegionOk", "DeviceRegion already Ireland (68).");
-            Note(env, phases, status);
-            return new SettlePhaseResult(HardFailed: false, TimedOut: false, status);
+            DmaSetupRegionEnsureResult result = port.EnsureIreland();
+            return new DmaSetupRegionLatch(DmaSetupRegionLatchKind.Ok, result, null);
+        }
+        catch (Exception ex) when (
+            policy == DmaSetupRegionPolicy.MachineSetup
+            && ex is UnauthorizedAccessException or SecurityException)
+        {
+            // ponytail: OOBE still holds DeviceRegion during SetupComplete. Exit 1 reseals to Recovery.
+            // FirstLogon settle retries the latch; fail-closed stays for verify/null-port failures.
+            return new DmaSetupRegionLatch(DmaSetupRegionLatchKind.AccessDeniedSoft, null, null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            SessionStatus failed = new("settle.deviceRegionFailed", ex.Message);
-            Note(env, phases, failed);
-            return new SettlePhaseResult(HardFailed: true, TimedOut: false, failed);
+            return new DmaSetupRegionLatch(DmaSetupRegionLatchKind.Failed, null, ex.Message);
         }
     }
 
