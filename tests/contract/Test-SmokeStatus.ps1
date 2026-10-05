@@ -16,8 +16,15 @@ $statusSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/SmokeStatus.ps1
 if ($statusSrc -notmatch 'EMPTY_VHD:') { throw 'empty-VHD throw prefix missing (operator copy)' }
 if ($smoke -notmatch '\[Diagnostics\.Stopwatch\]') { throw 'stall/wall/empty-vhd must use Stopwatch, not UtcNow deadlines' }
 if ($smoke -notmatch 'Select-WinMintGuestEvidencePath') { throw 'guest evidence must select by outcome, not LastWriteTime' }
-if ($smoke -notmatch 'Test-WinMintGuestEvidenceTerminal') {
-    throw 'Invoke-Smoke must fail-close Complete evidence with Test-WinMintGuestEvidenceTerminal'
+if ($smoke -notmatch 'Get-WinMintGuestHandoffReadiness') {
+    throw 'Invoke-Smoke must classify guest snap via Get-WinMintGuestHandoffReadiness'
+}
+$assertSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Assert-SmokeEvidence.ps1') -Raw -Encoding utf8
+if ($assertSrc -notmatch 'Get-WinMintGuestHandoffReadiness') {
+    throw 'Assert-SmokeEvidence must share Get-WinMintGuestHandoffReadiness facts'
+}
+if ($statusSrc -notmatch 'function Get-WinMintGuestHandoffReadiness') {
+    throw 'SmokeStatus must define Get-WinMintGuestHandoffReadiness'
 }
 if ($smoke -match 'process-exited-early' -or $smoke -match 'Find-SmokePids') {
     throw 'Invoke-Smoke must not infer harness death from process lists'
@@ -301,15 +308,34 @@ try {
         statusCode = 'jobs.ok'
         phases     = @('shell.firstPaint', 'jobs.ok', 'oobe.dismiss')
     }
+    if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $noStamp `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false -RequiredSmokeRunId 'this-run') -cne 'wait-handoff') {
+        throw 'Complete without matching smokeRunId must wait-handoff when RequiredSmokeRunId is set'
+    }
     if (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $noStamp `
             -LiveShell 'explorer.exe' -SupervisorRunning:$false -RequiredSmokeRunId 'this-run') {
         throw 'Complete without matching smokeRunId must fail when RequiredSmokeRunId is set'
+    }
+
+    # First red (#130): Complete Evidence + Supervisor still alive → not ready.
+    $completeAlive = [pscustomobject]@{
+        outcome    = 'Complete'
+        statusCode = 'jobs.ok'
+        phases     = @('shell.firstPaint', 'jobs.ok', 'oobe.dismiss')
+    }
+    if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $completeAlive `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$true) -cne 'wait-handoff') {
+        throw 'Complete + Supervisor alive must be wait-handoff (not ready)'
     }
 
     $staleComplete = [pscustomobject]@{
         outcome    = 'Complete'
         statusCode = 'jobs.ok'
         phases     = @('shell.firstPaint', 'jobs.ok')
+    }
+    if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $staleComplete `
+            -LiveShell 'C:\Windows\WinMint\Supervisor.exe' -SupervisorRunning:$true) -cne 'wait-handoff') {
+        throw 'Complete without oobe.dismiss under Supervisor must wait-handoff'
     }
     if (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $staleComplete `
             -LiveShell 'C:\Windows\WinMint\Supervisor.exe' -SupervisorRunning:$true) {
@@ -320,6 +346,10 @@ try {
         statusCode = 'jobs.ok'
         phases     = @('shell.firstPaint', 'jobs.ok')
     }
+    if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $noDismiss `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false) -cne 'wait-handoff') {
+        throw 'Complete without oobe.dismiss must wait-handoff'
+    }
     if (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $noDismiss `
             -LiveShell 'explorer.exe' -SupervisorRunning:$false) {
         throw 'Complete evidence without oobe.dismiss must fail handoff gate'
@@ -329,21 +359,57 @@ try {
         statusCode = 'jobs.ok'
         phases     = @('shell.firstPaint', 'jobs.ok', 'oobe.dismiss')
     }
+    if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $handoff `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false) -cne 'ready') {
+        throw 'Complete + explorer shell + no Supervisor must be ready'
+    }
     if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $handoff `
             -LiveShell 'explorer.exe' -SupervisorRunning:$false)) {
         throw 'Complete + explorer shell + no Supervisor must pass handoff gate'
+    }
+    if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $handoff `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$true) -cne 'wait-handoff') {
+        throw 'Supervisor running must wait-handoff even with Complete evidence'
     }
     if (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $handoff `
             -LiveShell 'explorer.exe' -SupervisorRunning:$true) {
         throw 'Supervisor running must fail handoff gate even with Complete evidence'
     }
+    if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $handoff `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false -ExplorerRunning $false) -cne 'wait-handoff') {
+        throw 'live mode must wait-handoff when explorer.exe is not running'
+    }
     if (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $handoff `
             -LiveShell 'explorer.exe' -SupervisorRunning:$false -ExplorerRunning $false) {
         throw 'live mode must fail-close when explorer.exe is not running'
     }
+    if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $handoff `
+            -LiveShell 'explorer.exe' -SupervisorRunning:$false -ExplorerRunning $true) -cne 'ready') {
+        throw 'live mode must be ready when explorer.exe is running'
+    }
     if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $handoff `
             -LiveShell 'explorer.exe' -SupervisorRunning:$false -ExplorerRunning $true)) {
         throw 'live mode must pass when explorer.exe is running'
+    }
+
+    $rebootDoc = [pscustomobject]@{ outcome = 'Reboot' }
+    if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $rebootDoc -LiveShell '') -cne 'wait-reboot') {
+        throw 'Reboot evidence must be wait-reboot'
+    }
+    $failedDoc = [pscustomobject]@{ outcome = 'Failed' }
+    if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $failedDoc -LiveShell '') -cne 'failed') {
+        throw 'Failed evidence must be failed'
+    }
+    if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $failedDoc -LiveShell '')) {
+        throw 'Failed evidence must be terminal for the wait loop'
+    }
+
+    $evRebootOnly = Join-Path $tmp 'guest-ev-reboot'
+    New-Item -ItemType Directory -Force -Path $evRebootOnly | Out-Null
+    '{"outcome":"Reboot"}' | Set-Content -LiteralPath (Join-Path $evRebootOnly 'evidence-20260101000000010.json') -Encoding utf8
+    $rebootPath = Select-WinMintGuestEvidencePath -Directory $evRebootOnly
+    if ($rebootPath -notmatch 'evidence-20260101000000010') {
+        throw "Select must return Reboot when no Complete/Failed, got $rebootPath"
     }
 
     $credDir = Join-Path $tmp 'creds'

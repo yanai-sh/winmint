@@ -418,8 +418,21 @@ function Test-GuestEvidenceReady {
 
             $pulled = Get-Content -LiteralPath $selected -Raw -Encoding utf8 | ConvertFrom-Json
             $outcome = [string]$pulled.outcome
+
+            $evRows = @(Get-WinMintGuestEvidenceRows -Directory $guestDir -RequiredSmokeRunId $runId)
+            $newest = @($evRows | Sort-Object SortKey -Descending | Select-Object -First 1)
+            if ($newest.Count -ge 1) {
+                $script:GuestEvidenceFingerprint = "$($newest[0].SortKey):$($newest[0].Outcome)"
+            }
+
+            # Reboot needs no live shell probe — readiness alone is wait-reboot.
             if ($outcome -eq 'Reboot') {
-                Write-SmokeHostLine -Name 'Guest evidence outcome=Reboot — waiting for checkpoint resume…' -Activity wait
+                $script:LastProbeError = ''
+                $script:LastSupervisorRunning = $false
+                if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $pulled `
+                        -LiveShell '' -SupervisorRunning:$false -RequiredSmokeRunId $runId) -ceq 'wait-reboot') {
+                    Write-SmokeHostLine -Name 'Guest evidence outcome=Reboot — waiting for checkpoint resume…' -Activity wait
+                }
                 return $false
             }
 
@@ -447,11 +460,6 @@ function Test-GuestEvidenceReady {
             }
             $script:LastProbeError = ''
             $script:LastSupervisorRunning = [bool]$live.SupervisorRunning
-            $evRows = @(Get-WinMintGuestEvidenceRows -Directory $guestDir -RequiredSmokeRunId $runId)
-            $newest = @($evRows | Sort-Object SortKey -Descending | Select-Object -First 1)
-            if ($newest.Count -ge 1) {
-                $script:GuestEvidenceFingerprint = "$($newest[0].SortKey):$($newest[0].Outcome)"
-            }
 
             if ($expectNativePackageAudit) {
                 $nativeRemote = Invoke-Command -Session $session -ScriptBlock {
@@ -479,13 +487,18 @@ function Test-GuestEvidenceReady {
                 Copy-Item -FromSession $session -Path $packageEvidenceRemote -Destination (Join-Path $guestDir 'packages.evidence.json') -Force
             }
 
-            if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $pulled `
-                    -LiveShell ([string]$live.Shell) -SupervisorRunning:$live.SupervisorRunning `
-                    -RequiredSmokeRunId $runId -ExplorerRunning $live.ExplorerRunning)) {
+            # Snap → readiness; PS Direct only materializes the snap above.
+            $readiness = Get-WinMintGuestHandoffReadiness -EvidenceDoc $pulled `
+                -LiveShell ([string]$live.Shell) -SupervisorRunning:$live.SupervisorRunning `
+                -RequiredSmokeRunId $runId -ExplorerRunning $live.ExplorerRunning
+            if ($readiness -eq 'wait-handoff') {
                 if ($outcome -eq 'Complete') {
                     Write-SmokeHostLine -Name ("Guest evidence Complete but handoff not verified " +
                         "(shell='$($live.Shell)' supervisor=$($live.SupervisorRunning) explorer=$($live.ExplorerRunning)) — waiting…") -Activity wait
                 }
+                return $false
+            }
+            if ($readiness -notin @('ready', 'failed')) {
                 return $false
             }
 

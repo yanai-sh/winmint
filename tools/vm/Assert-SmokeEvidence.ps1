@@ -129,7 +129,7 @@ if (-not $setupRegionOk) {
     throw 'DMA setup region missing: need settle.deviceRegionOk or settle.deviceRegionRepaired (DeviceRegion Ireland)'
 }
 
-# Unlock / handoff: same gate as the wait loop (Test-WinMintGuestEvidenceTerminal).
+# Unlock / handoff: same readiness facts as the wait loop (Get-WinMintGuestHandoffReadiness).
 $shellPath = Join-Path $EvidenceDir 'guest\winlogon-shell.txt'
 if (-not (Test-Path -LiteralPath $shellPath)) {
     throw "unlock marker missing: expected guest/winlogon-shell.txt (Winlogon Shell after tenure)"
@@ -143,11 +143,12 @@ $handoffShell = if ($StaticEvidenceOnly) { $fileShell } else { $LiveShell.Trim()
 $handoffSupervisor = if ($StaticEvidenceOnly) { $false } else { $SupervisorRunning }
 $handoffRunId = if ($StaticEvidenceOnly) { '' } else { $RequiredSmokeRunId }
 
-if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $guest `
-        -LiveShell $handoffShell -SupervisorRunning:$handoffSupervisor `
-        -RequiredSmokeRunId $handoffRunId)) {
+$handoffReady = Get-WinMintGuestHandoffReadiness -EvidenceDoc $guest `
+    -LiveShell $handoffShell -SupervisorRunning:$handoffSupervisor `
+    -RequiredSmokeRunId $handoffRunId
+if ($handoffReady -cne 'ready') {
     throw ("FirstLogon handoff gate failed " +
-        "(shell='$handoffShell' supervisor=$handoffSupervisor static=$StaticEvidenceOnly)")
+        "(readiness=$handoffReady shell='$handoffShell' supervisor=$handoffSupervisor static=$StaticEvidenceOnly)")
 }
 
 if ($fileShell -match '(?i)Supervisor\.exe') {

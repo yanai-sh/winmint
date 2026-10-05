@@ -672,40 +672,63 @@ function Select-WinMintGuestEvidencePath {
     if ($failed.Count -ge 1) { return [string]$failed[0].Path }
     $complete = @($rows | Where-Object { $_.Outcome -eq 'Complete' } | Sort-Object SortKey -Descending)
     if ($complete.Count -ge 1) { return [string]$complete[0].Path }
+    # Reboot is not terminal — still select so readiness can return wait-reboot.
+    $reboot = @($rows | Where-Object { $_.Outcome -eq 'Reboot' } | Sort-Object SortKey -Descending)
+    if ($reboot.Count -ge 1) { return [string]$reboot[0].Path }
     return $null
 }
 
-function Test-WinMintGuestEvidenceTerminal {
+function Get-WinMintGuestHandoffReadiness {
     <#
-      Fail-closed S4 gate: Complete evidence alone is not terminal — live explorer shell
-      and no Supervisor process mean FirstLogon handoff actually finished.
+    .SYNOPSIS
+      Pure guest snap → ready | wait-reboot | wait-handoff | failed.
+      PS Direct only materializes the snap; Assert shares these readiness facts.
       ExplorerRunning: live probes pass $true/$false (explorer.exe process alive — a
       restored Shell value with a crashed explorer is not a desktop); static fixtures
       omit it ($null = neutral).
     #>
     param(
         [Parameter(Mandatory)] $EvidenceDoc,
-        [Parameter(Mandatory)] [string] $LiveShell,
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $LiveShell,
         [bool] $SupervisorRunning = $false,
         [string] $RequiredSmokeRunId = '',
         $ExplorerRunning = $null
     )
+    $outcome = [string]$EvidenceDoc.outcome
+    if ($outcome -eq 'Failed') { return 'failed' }
+    if ($outcome -eq 'Reboot') { return 'wait-reboot' }
+    if ($outcome -ne 'Complete') { return 'wait-handoff' }
+
     if (-not [string]::IsNullOrWhiteSpace($RequiredSmokeRunId)) {
         $got = ''
         if ($EvidenceDoc.PSObject.Properties.Name -contains 'smokeRunId') {
             $got = [string]$EvidenceDoc.smokeRunId
         }
-        if ($got -ne $RequiredSmokeRunId) { return $false }
+        if ($got -ne $RequiredSmokeRunId) { return 'wait-handoff' }
     }
-    $outcome = [string]$EvidenceDoc.outcome
-    if ($outcome -eq 'Failed') { return $true }
-    if ($outcome -ne 'Complete') { return $false }
-    if ([string]$EvidenceDoc.statusCode -ne 'jobs.ok') { return $false }
+    if ([string]$EvidenceDoc.statusCode -ne 'jobs.ok') { return 'wait-handoff' }
     $phases = @($EvidenceDoc.phases)
-    if ($phases -notcontains 'jobs.ok') { return $false }
-    if ($phases -notcontains 'oobe.dismiss') { return $false }
-    if (-not (Test-WinMintExplorerShellValue $LiveShell)) { return $false }
-    if ($SupervisorRunning) { return $false }
-    if ($ExplorerRunning -is [bool] -and -not $ExplorerRunning) { return $false }
-    return $true
+    if ($phases -notcontains 'jobs.ok') { return 'wait-handoff' }
+    if ($phases -notcontains 'oobe.dismiss') { return 'wait-handoff' }
+    if (-not (Test-WinMintExplorerShellValue $LiveShell)) { return 'wait-handoff' }
+    if ($SupervisorRunning) { return 'wait-handoff' }
+    if ($ExplorerRunning -is [bool] -and -not $ExplorerRunning) { return 'wait-handoff' }
+    return 'ready'
+}
+
+function Test-WinMintGuestEvidenceTerminal {
+    <#
+      Fail-closed S4 gate via Get-WinMintGuestHandoffReadiness: ready or failed stop the wait.
+    #>
+    param(
+        [Parameter(Mandatory)] $EvidenceDoc,
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $LiveShell,
+        [bool] $SupervisorRunning = $false,
+        [string] $RequiredSmokeRunId = '',
+        $ExplorerRunning = $null
+    )
+    $verdict = Get-WinMintGuestHandoffReadiness -EvidenceDoc $EvidenceDoc -LiveShell $LiveShell `
+        -SupervisorRunning:$SupervisorRunning -RequiredSmokeRunId $RequiredSmokeRunId `
+        -ExplorerRunning $ExplorerRunning
+    return $verdict -in @('ready', 'failed')
 }
