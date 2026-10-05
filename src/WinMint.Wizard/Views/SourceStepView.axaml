@@ -68,24 +68,6 @@
       </StackPanel>
     </Border>
 
-    <Border Classes="panel-card" HorizontalAlignment="Left" MinWidth="280">
-      <StackPanel>
-        <TextBlock Classes="panel-label" Text="Image quality" />
-        <StackPanel Orientation="Horizontal">
-          <ToggleButton Classes="chip" Content="Test" IsChecked="{Binding Lane.IsTest}"
-                        Command="{Binding SelectLaneCommand}" CommandParameter="Test" />
-          <ToggleButton Classes="chip" Content="Release" IsChecked="{Binding Lane.IsRelease}"
-                        Command="{Binding SelectLaneCommand}" CommandParameter="Release" />
-        </StackPanel>
-        <TextBlock Text="Release: Build runs Gate B wipe-media apply in this Wizard (pre-wipe ISO evidence — not a completed Primary install)."
-                   Opacity="0.55"
-                   FontSize="12"
-                   TextWrapping="Wrap"
-                   Margin="0,8,0,0"
-                   MaxWidth="520" />
-      </StackPanel>
-    </Border>
-
     <Button Classes="primary"
             Content="Use WinMint defaults → Review"
             HorizontalAlignment="Left"

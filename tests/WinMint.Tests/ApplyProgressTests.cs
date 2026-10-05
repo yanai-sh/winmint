@@ -90,4 +90,35 @@ public class ApplyProgressTests
             Path.Combine(@"C:\ProgramData\WinMint\work", "apply-status.txt"),
             new ServicingWorkspace(@"C:\ProgramData\WinMint\work").ApplyStatus);
     }
+
+    [Fact]
+    public void FormatApplyPresentation_includes_stage_and_log_tail()
+    {
+        string log = Path.Combine(Path.GetTempPath(), "winmint-tail-" + Guid.NewGuid().ToString("N") + ".log");
+        try
+        {
+            File.WriteAllText(log, string.Join('\n', Enumerable.Range(1, 25).Select(i => $"line-{i}")));
+            string? text = WizardViewModel.FormatApplyPresentation(
+                new ApplyProgress("MountInstallWim", log),
+                path => File.ReadAllLines(path),
+                tailLines: 20);
+            Assert.NotNull(text);
+            Assert.Contains("MountInstallWim", text, StringComparison.Ordinal);
+            Assert.Contains("line-25", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("line-5", text, StringComparison.Ordinal); // outside last 20
+        }
+        finally
+        {
+            if (File.Exists(log)) File.Delete(log);
+        }
+    }
+
+    [Fact]
+    public void FormatApplyPresentation_failed_stage_is_obvious()
+    {
+        string? text = WizardViewModel.FormatApplyPresentation(
+            new ApplyProgress("failed:ExportWim", null));
+        Assert.NotNull(text);
+        Assert.StartsWith("Failed", text, StringComparison.Ordinal);
+    }
 }

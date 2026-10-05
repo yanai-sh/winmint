@@ -48,9 +48,10 @@ public class WizardViewModelTests
             vm.Account.Password = "secret";
             Assert.True(vm.FooterReady);
             Assert.False(vm.FooterWarn);
-            Assert.StartsWith("Ready ·", vm.FooterStatus, StringComparison.Ordinal);
-            Assert.Contains("winmint", vm.FooterStatus, StringComparison.Ordinal);
-            Assert.Contains("Test", vm.FooterStatus, StringComparison.Ordinal);
+            Assert.Equal("Ready · ISO · winmint", vm.FooterStatus);
+            Assert.DoesNotContain("Test", vm.FooterStatus, StringComparison.Ordinal);
+            Assert.DoesNotContain("Release", vm.FooterStatus, StringComparison.Ordinal);
+            Assert.DoesNotContain("Lane", vm.FooterStatus, StringComparison.Ordinal);
         }
         finally
         {

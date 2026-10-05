@@ -16,9 +16,7 @@ public interface ISourceStageViewModel
     WimIndexInfo? SelectedWimIndex { get; set; }
     bool IsWimPickerVisible { get; }
     bool IsWimProbeBusy { get; }
-    SourceLaneViewModel Lane { get; }
     IAsyncRelayCommand BrowseIsoCommand { get; }
-    IRelayCommand<string?> SelectLaneCommand { get; }
     StageStatusViewModel Status { get; }
 }
 
@@ -28,19 +26,6 @@ internal interface ISourceStageHost
     Task<Result<IReadOnlyList<WimIndexInfo>, Failure>> ListSourceIndexesAsync(CancellationToken cancellationToken);
     void ReportStageError(string code, string message);
     void ClearSourceProbeError();
-}
-
-public sealed partial class SourceLaneViewModel : ObservableObject
-{
-    private readonly Func<ImageQualityLane> _current;
-    internal SourceLaneViewModel(Func<ImageQualityLane> current) => _current = current;
-    public bool IsTest => _current() == ImageQualityLane.Test;
-    public bool IsRelease => _current() == ImageQualityLane.Release;
-    internal void Refresh()
-    {
-        OnPropertyChanged(nameof(IsTest));
-        OnPropertyChanged(nameof(IsRelease));
-    }
 }
 
 internal sealed partial class SourceStageViewModel : ObservableObject, ISourceStageViewModel, IDisposable
@@ -58,18 +43,15 @@ internal sealed partial class SourceStageViewModel : ObservableObject, ISourceSt
         _storage = storage;
         _host = host;
         _wimIndex = _buildMachineWimDefault;
-        Lane = new SourceLaneViewModel(() => ImageQuality);
     }
 
     [ObservableProperty] private string _sourceIsoPath = "";
-    [ObservableProperty] private ImageQualityLane _imageQuality = ImageQualityLane.Test;
     [ObservableProperty] private WimIndexInfo? _selectedWimIndex;
     [ObservableProperty] private bool _isWimPickerVisible;
     [ObservableProperty] private bool _isWimProbeBusy;
 
     public ObservableCollection<WimIndexInfo> WimIndexes { get; } = [];
     public StageStatusViewModel Status { get; } = new();
-    public SourceLaneViewModel Lane { get; }
     internal int WimIndex => _wimIndex;
     internal bool IsReady => !string.IsNullOrWhiteSpace(SourceIsoPath) && File.Exists(SourceIsoPath.Trim());
 
@@ -78,12 +60,6 @@ internal sealed partial class SourceStageViewModel : ObservableObject, ISourceSt
         _userChoseWimIndex = false;
         _host.SourceDraftChanged();
         _ = ProbeSourceWimAsync();
-    }
-
-    partial void OnImageQualityChanged(ImageQualityLane value)
-    {
-        Lane.Refresh();
-        _host.SourceDraftChanged();
     }
 
     partial void OnSelectedWimIndexChanged(WimIndexInfo? value)
@@ -103,15 +79,6 @@ internal sealed partial class SourceStageViewModel : ObservableObject, ISourceSt
         }
         _wimIndex = value.Index;
         _host.SourceDraftChanged();
-    }
-
-    [RelayCommand]
-    private void SelectLane(string? lane)
-    {
-        if (Enum.TryParse(lane, ignoreCase: true, out ImageQualityLane parsed))
-        {
-            ImageQuality = parsed;
-        }
     }
 
     [RelayCommand]
