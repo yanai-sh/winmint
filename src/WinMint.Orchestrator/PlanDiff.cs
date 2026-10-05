@@ -81,7 +81,8 @@ internal static class PlanDiff
             Line(sb, "Surface drivers", "you chose");
         }
 
-        Line(sb, $"Export WIM ({review.ImageQuality} lane)", "you chose");
+        ExportLane export = ExportLane.For(review.ImageQuality);
+        Line(sb, $"Export WIM ({export.Compression} compression, {export.Cleanup} cleanup)", "always");
     }
 
     private static void AppendLive(StringBuilder sb, HostReview review)

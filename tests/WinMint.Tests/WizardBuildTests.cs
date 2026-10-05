@@ -7,7 +7,7 @@ namespace WinMint.Tests;
 public class WizardBuildTests
 {
     [Theory]
-    [InlineData(ImageQualityLane.Test, "Test lane (not the wipe gate).")]
+    [InlineData(ImageQualityLane.Test, "Fast export (not wipe-gate media).")]
     [InlineData(ImageQualityLane.Release, "Gate B wipe media")]
     public async Task Apply_uses_the_approved_composition(
         ImageQualityLane lane,
@@ -24,6 +24,8 @@ public class WizardBuildTests
 
             Assert.True(result.Succeeded, $"{result.Code}: {result.Message}");
             Assert.Contains(expectedHint, result.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("Lane=", result.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("lane", result.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(composition.OutputIsoPath, result.OutputIsoPath);
         }
         finally

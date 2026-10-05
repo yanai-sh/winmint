@@ -29,6 +29,11 @@ public class PlanDiffTests
         Assert.Contains("Brave policies — you chose", text, StringComparison.Ordinal);
         Assert.Contains("Winget Anysphere.Cursor — you chose", text, StringComparison.Ordinal);
         Assert.Contains("Scoop curl — you chose", text, StringComparison.Ordinal);
+        Assert.Contains(
+            "Export WIM (fast compression, skip cleanup) — always",
+            text,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("lane", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
