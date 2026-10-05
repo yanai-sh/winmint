@@ -4,16 +4,17 @@
   Prevent the failure mode that hit ~386 GB: stacked output ISOs + multiple full Apply/Smoke workdirs.
 .NOTES
   Targets:
-    - Flat output dirs (v1-style): keep N newest *.iso
+    - Flat output dirs (v1-style): keep N newest *.iso (default 1 — timestamped Apply must not stack)
     - .scratch (v2): keep N newest *heavy* child workdirs (media/out.iso/vhdx); drop the rest
     - Nested media.previous-* / media.incoming-* under a kept workdir
   Do not age-purge WIM/ISO bytes by LastWriteTime (Source ISO timestamps survive copy).
   After just smoke / host-apply / Cli build: -SkipIfBusy (skip if dism.exe or the ImageServicing mutex is held).
+  Apply/Smoke also Clear-WinMintPriorOutputIsos at start (ISO trim does not need the servicing lock).
   Never touches paths outside -Root.
 #>
 param(
     [string] $Root = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) '.scratch'),
-    [int] $KeepIso = 2,
+    [int] $KeepIso = 1,
     [int] $KeepWorkDirs = 1,
     [int] $MaxAgeDays = 14,
     [switch] $Wipe,
@@ -70,7 +71,7 @@ function Test-HeavyWorkDir {
 function Invoke-ArtifactHygiene {
     param(
         [Parameter(Mandatory)][string] $Root,
-        [int] $KeepIso = 2,
+        [int] $KeepIso = 1,
         [int] $KeepWorkDirs = 1,
         [int] $MaxAgeDays = 14,
         [switch] $Wipe,
@@ -167,9 +168,9 @@ if ($SelfCheck) {
             Set-Content -LiteralPath $p -Value $i
             (Get-Item -LiteralPath $p).LastWriteTime = (Get-Date).AddDays(-$i)
         }
-        Invoke-ArtifactHygiene -Root $tmp -KeepIso 2 -KeepWorkDirs 9 -MaxAgeDays 365
+        Invoke-ArtifactHygiene -Root $tmp -KeepIso 1 -KeepWorkDirs 9 -MaxAgeDays 365
         $left = @(Get-ChildItem -LiteralPath $tmp -Filter '*.iso' | Sort-Object Name)
-        if ($left.Count -ne 2) { throw "iso retain: expected 2, got $($left.Count)" }
+        if ($left.Count -ne 1) { throw "iso retain: expected 1, got $($left.Count)" }
 
         # Heavy workdirs (v2 .scratch/)
         foreach ($name in @('smoke', 'work', 'apply-full')) {
@@ -205,7 +206,7 @@ if ($SelfCheck) {
         Set-Content -LiteralPath (Join-Path $stale 'out.iso') -Value 'stale'
         (Get-Item -LiteralPath $stale).LastWriteTime = (Get-Date).AddHours(-3)
         (Get-Item -LiteralPath $smoke).LastWriteTime = (Get-Date).AddHours(-1)
-        Invoke-ArtifactHygiene -Root $tmp -KeepIso 2 -KeepWorkDirs 1 -MaxAgeDays 14
+        Invoke-ArtifactHygiene -Root $tmp -KeepIso 1 -KeepWorkDirs 1 -MaxAgeDays 14
         if (-not (Test-Path -LiteralPath $boot)) { throw 'live boot.wim was age-purged' }
         if (Test-Path -LiteralPath $prev) { throw 'nested media.previous-* survived' }
         if (Test-Path -LiteralPath $incoming) { throw 'nested media.incoming-* survived' }
@@ -251,7 +252,7 @@ if ($SelfCheck) {
 function Invoke-WinMintScratchHygiene {
     param([Parameter(Mandatory)][string] $RepoRoot)
     try {
-        Invoke-ArtifactHygiene -Root (Join-Path $RepoRoot '.scratch') -SkipIfBusy
+        Invoke-ArtifactHygiene -Root (Join-Path $RepoRoot '.scratch') -KeepIso 1 -KeepWorkDirs 1 -MaxAgeDays 14 -SkipIfBusy
     }
     catch {
         Write-Warning "scratch hygiene: $($_.Exception.Message)"

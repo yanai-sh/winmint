@@ -26,16 +26,45 @@ public class OutputIsoNamingTests
     }
 
     [Fact]
-    public void DefaultPath_joins_workdir()
+    public void ClearPrior_removes_other_leaves_keeps_target()
     {
-        DateTimeOffset ts = new(2026, 8, 12, 9, 0, 0, TimeSpan.FromHours(3));
-        string path = OutputIsoNaming.DefaultPath(
-            @"C:\work\gate-b",
-            "samples/sl7.profile.json",
-            ImageQualityLane.Test,
-            ts);
-        Assert.Equal(
-            Path.Combine(@"C:\work\gate-b", "winmint_sl7_Test_20260812-090000.iso"),
-            path);
+        string root = Path.Combine(Path.GetTempPath(), "winmint-iso-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            string keep = Path.Combine(root, "winmint_sl7_Test_20261005-120000.iso");
+            string drop = Path.Combine(root, "winmint_sl7_Test_20260928-083807.iso");
+            string legacy = Path.Combine(root, "out.iso");
+            File.WriteAllText(keep, "keep");
+            File.WriteAllText(drop, "drop");
+            File.WriteAllText(legacy, "legacy");
+
+            Assert.Equal(2, WorkdirOutputIsos.ClearPrior(root, keep));
+            Assert.True(File.Exists(keep));
+            Assert.False(File.Exists(drop));
+            Assert.False(File.Exists(legacy));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ClearPrior_without_keep_removes_all_leaves()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "winmint-iso-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "winmint_a_Test_20260101-000000.iso"), "a");
+            File.WriteAllText(Path.Combine(root, "out.iso"), "b");
+            Assert.Equal(2, WorkdirOutputIsos.ClearPrior(root));
+            Assert.Empty(Directory.GetFiles(root, "*.iso"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 }

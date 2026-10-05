@@ -17,6 +17,13 @@ build: restore
 plan PROFILE="samples/smoke.profile.json" OUT=".scratch/plan":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- plan '{{PROFILE}}' --out '{{OUT}}'
 
+# Product-curated Profile + bootstrap password (issue #136); distinct from samples/sl7.profile.json.
+curated-emit OUT=".scratch/curated":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- emit-defaults --out '{{OUT}}'
+
+curated-plan OUT=".scratch/curated" PLAN=".scratch/curated-plan": curated-emit
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- plan '{{OUT}}/winmint.profile.json' --out '{{PLAN}}'
+
 # Pack no-clone toolkit zip + sha256 (win-arm64). Requires a clean worktree and tag vMAJOR.MINOR.PATCH at HEAD.
 pack-release TAG:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/release/Compress-WinMintRelease.ps1' -Tag '{{TAG}}'
@@ -95,7 +102,7 @@ discard-stale-mount:
 
 # Artifact hygiene under .scratch (or root=…). Also runs after smoke / host-apply / Cli build with -SkipIfBusy.
 # Nuclear: just wipe-scratch
-clean-artifacts root=".scratch" keep="2" workdirs="1" days="14":
+clean-artifacts root=".scratch" keep="1" workdirs="1" days="14":
     $root = '{{root}}'; if (-not [System.IO.Path]::IsPathRooted($root)) { $root = Join-Path '{{justfile_directory()}}' $root }; pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-ArtifactHygiene.ps1' -Root $root -KeepIso {{keep}} -KeepWorkDirs {{workdirs}} -MaxAgeDays {{days}}
 
 wipe-scratch:

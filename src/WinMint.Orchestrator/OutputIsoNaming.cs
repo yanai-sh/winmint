@@ -84,3 +84,74 @@ internal static partial class OutputIsoNaming
     [GeneratedRegex("_{2,}")]
     private static partial Regex CollapseUnderscores();
 }
+
+/// <summary>
+/// Workdir Output ISO retain: at most one generation. Timestamped default leaves stack otherwise.
+/// </summary>
+internal static class WorkdirOutputIsos
+{
+    /// <summary>
+    /// Delete <c>winmint_*.iso</c> and legacy <c>out.iso</c> directly under <paramref name="workDirectory"/>,
+    /// keeping <paramref name="keepFullPath"/> when it resolves to one of those files.
+    /// </summary>
+    /// <returns>Number of files deleted.</returns>
+    public static int ClearPrior(string workDirectory, string? keepFullPath = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workDirectory);
+        if (!Directory.Exists(workDirectory))
+        {
+            return 0;
+        }
+
+        string? keep = null;
+        if (!string.IsNullOrWhiteSpace(keepFullPath))
+        {
+            keep = Path.GetFullPath(keepFullPath.Trim());
+        }
+
+        int removed = 0;
+        foreach (string path in Enumerate(workDirectory))
+        {
+            if (keep is not null
+                && string.Equals(Path.GetFullPath(path), keep, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Delete(path);
+                removed++;
+            }
+            catch (IOException)
+            {
+                // ponytail: locked ISO mid-Flash — next start-of-run trim retries
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return removed;
+    }
+
+    public static IEnumerable<string> Enumerate(string workDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workDirectory);
+        if (!Directory.Exists(workDirectory))
+        {
+            yield break;
+        }
+
+        foreach (string path in Directory.EnumerateFiles(workDirectory, "winmint_*.iso"))
+        {
+            yield return path;
+        }
+
+        string legacy = Path.Combine(workDirectory, "out.iso");
+        if (File.Exists(legacy))
+        {
+            yield return legacy;
+        }
+    }
+}

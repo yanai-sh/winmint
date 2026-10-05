@@ -182,6 +182,10 @@ if (-not $SkipApply) {
 
     Write-Host "Host Apply Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality…"
     Write-Host 'Pre-wipe only: mutates offline WIM from Source ISO — does not install to this device.'
+    $dropped = Clear-WinMintPriorOutputIsos -WorkDirectory $Work
+    if ($dropped -gt 0) {
+        Write-Host "Dropped $dropped prior Output ISO(s) under $Work"
+    }
     $runScratchHygiene = $true
     $cliExe = Resolve-WinMintCliExe
     $buildArgs = @('build', $Profile, '--iso', $Iso, '--work', $Work, '--image-quality', $ImageQuality, '--package-audit-strict') + $strictArgs

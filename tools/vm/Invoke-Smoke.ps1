@@ -220,6 +220,12 @@ if (-not $SkipApply) {
         ForEach-Object { Join-Path $Work $_ }
     Remove-Item -LiteralPath $priorProjections -Force -ErrorAction SilentlyContinue
 
+    # Free disk before DISM: drop stacked timestamped Output ISOs (KeepPath empty — new leaf after Apply).
+    $dropped = Clear-WinMintPriorOutputIsos -WorkDirectory $Work
+    if ($dropped -gt 0) {
+        Write-SmokeHostLine -Name "Dropped $dropped prior Output ISO(s) under $Work" -Activity apply
+    }
+
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
         -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
         -LastHostLine "Applying Profile=$ProfilePath" -OutputIso $null -RunId $runId
