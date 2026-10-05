@@ -398,5 +398,101 @@ finally {
     Remove-Item -LiteralPath $pkgApply -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# Stage plan: resolved Catalog + identity → QualityPackageDir leaves (inject fetch; no elevation).
+$stageRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-qual-stage-' + [guid]::NewGuid().ToString('N'))
+$stagePkg = Join-Path $stageRoot 'packages'
+$stageCache = Join-Path $stageRoot 'cache'
+$stageStaging = Join-Path $stageRoot 'staging'
+$stagePayload = Join-Path $stageRoot 'payload'
+New-Item -ItemType Directory -Force -Path $stagePkg, $stageCache, $stageStaging, $stagePayload | Out-Null
+try {
+    $detailsCk = @'
+<html>
+<p>OS Builds 26200.9168 and 26100.9168.</p>
+<p>Install the checkpoint cumulative update (KB5043080) before this package.</p>
+</html>
+'@
+    $stageResolved = Resolve-WinMintQualityUpdate -Version '10.0.26200.1' -Architecture 'ARM64' -ImageUbr 8037 `
+        -SearchHtml $search25 -DetailsHtml $detailsCk
+    if ($stageResolved.Skipped -or $stageResolved.Kb -ne 'KB5121003') {
+        throw "Test-QualityCatalog: stage resolve $($stageResolved.Kb) skip=$($stageResolved.Skipped)"
+    }
+
+    $lcuLeaf = 'windows11.0-kb5121003-arm64_deadbeef.msu'
+    $ckLeaf = 'windows11.0-kb5043080-arm64_cafe.msu'
+    $setupLeaf = 'windows11.0-kb5121001-arm64_setup.cab'
+    $safeLeaf = 'windows11.0-kb5121002-arm64_safe.cab'
+    $ssuLeaf = 'SSU-26100.1-arm64.cab'
+    # Combined LCU is WIM-packaged (.msu starts MSWIM) so stage uses ApplyWim, not expand.exe.
+    [IO.File]::WriteAllBytes((Join-Path $stagePayload $lcuLeaf), [Text.Encoding]::ASCII.GetBytes('MSWIM') + [byte[]](0, 0, 0))
+    foreach ($pair in @(
+            @{ Leaf = $ckLeaf; Body = 'ckpt-bytes' },
+            @{ Leaf = $setupLeaf; Body = 'setup-bytes' },
+            @{ Leaf = $safeLeaf; Body = 'safe-bytes' }
+        )) {
+        Set-Content -LiteralPath (Join-Path $stagePayload $pair.Leaf) -Value $pair.Body -Encoding ascii
+    }
+
+    # $script: — stage locals (SetupLeaf/SafeOsLeaf) would otherwise shadow inject lookups.
+    $script:stagePayloadByKb = @{
+        'KB5121003' = Join-Path $stagePayload $lcuLeaf
+        'KB5043080' = Join-Path $stagePayload $ckLeaf
+        'KB5121001' = Join-Path $stagePayload $setupLeaf
+        'KB5121002' = Join-Path $stagePayload $safeLeaf
+    }
+    $script:stageCkSearch = @'
+<a href="javascript:void(0);" onclick="goToDetails(&quot;bbbbbbbb-bbbb-cccc-dddd-111111111111&quot;);">2024-09 Cumulative Update for Windows 11 Version 24H2 for ARM64-based Systems (KB5043080)</a>
+'@
+    $script:stageDuSearch = @'
+<a href="javascript:void(0);" onclick="goToDetails(&quot;cccccccc-bbbb-cccc-dddd-111111111111&quot;);">2026-08 Dynamic Update for Windows 11 Version 25H2 for ARM64-based Systems (KB5121001)</a>
+<a href="javascript:void(0);" onclick="goToDetails(&quot;cccccccc-bbbb-cccc-dddd-222222222222&quot;);">2026-08 Safe OS Dynamic Update for Windows 11 Version 25H2 for ARM64-based Systems (KB5121002)</a>
+'@
+    $script:stageSsuLeaf = $ssuLeaf
+
+    $staged = Invoke-WinMintQualityPackageStage `
+        -Resolved $stageResolved `
+        -PackageDir $stagePkg `
+        -CacheRoot $stageCache `
+        -StagingDir $stageStaging `
+        -FetchPayload {
+            param($UpdateId, $Kb)
+            $path = $script:stagePayloadByKb[$Kb]
+            if (-not $path) { throw "Test-QualityCatalog: unexpected fetch Kb=$Kb UpdateId=$UpdateId" }
+            return $path
+        } `
+        -SearchHtml {
+            param($Query)
+            if ($Query -match 'KB5043080') { return $script:stageCkSearch }
+            if ($Query -match 'Dynamic Update') { return $script:stageDuSearch }
+            throw "Test-QualityCatalog: unexpected search query: $Query"
+        } `
+        -ApplyWim {
+            param($Src, $Dst)
+            Set-Content -LiteralPath (Join-Path $Dst $script:stageSsuLeaf) -Value 'ssu' -Encoding ascii
+            Set-Content -LiteralPath (Join-Path $Dst 'boot.stl') -Value 'stl' -Encoding ascii
+        }
+
+    $expected = @($ssuLeaf, 'boot.stl', $ckLeaf, $lcuLeaf, $setupLeaf, $safeLeaf) | Sort-Object
+    $actual = @(Get-ChildItem -LiteralPath $stagePkg -File | ForEach-Object { $_.Name } | Sort-Object)
+    if (($actual -join ',') -ne ($expected -join ',')) {
+        throw "Test-QualityCatalog: stage leaves got [$($actual -join ',')] want [$($expected -join ',')]"
+    }
+    if ($staged.LcuLeaf -ne $lcuLeaf -or $staged.SsuLeaf -ne $ssuLeaf) {
+        throw "Test-QualityCatalog: stage identity LCU=$($staged.LcuLeaf) SSU=$($staged.SsuLeaf)"
+    }
+    if (@($staged.CheckpointLeaves) -join ',' -ne $ckLeaf) {
+        throw "Test-QualityCatalog: stage checkpoints $($staged.CheckpointLeaves -join ',')"
+    }
+    if ($staged.SetupLeaf -ne $setupLeaf -or $staged.SafeOsLeaf -ne $safeLeaf) {
+        throw "Test-QualityCatalog: stage DU setup=$($staged.SetupLeaf) safe=$($staged.SafeOsLeaf)"
+    }
+    if ([string]::IsNullOrWhiteSpace($staged.Sha256)) {
+        throw 'Test-QualityCatalog: stage must hash the LCU'
+    }
+}
+finally {
+    Remove-Item -LiteralPath $stageRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Output 'Test-QualityCatalog ok'
 exit 0
