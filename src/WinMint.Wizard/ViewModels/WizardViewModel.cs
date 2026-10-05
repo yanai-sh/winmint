@@ -546,8 +546,14 @@ public sealed partial class WizardViewModel :
         {
             return Result.Fail<WizardDraft, Failure>(packagesResult.Error);
         }
+        Result<StationOutcomeExpansion, Failure> outcome =
+            StationOutcomes.TryExpand(_software.Outcomes.Value);
+        if (!outcome.IsOk)
+        {
+            return Result.Fail<WizardDraft, Failure>(outcome.Error);
+        }
         Result<DebloatExpansion, Failure> expanded =
-            DebloatPresets.TryExpand(_software.Presets.Value);
+            DebloatPresets.TryExpand(outcome.Value.DebloatPreset);
         if (!expanded.IsOk)
         {
             return Result.Fail<WizardDraft, Failure>(expanded.Error);

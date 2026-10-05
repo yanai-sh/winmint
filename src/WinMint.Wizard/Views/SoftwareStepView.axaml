@@ -19,7 +19,22 @@
   <StackPanel Spacing="16" MaxWidth="720">
     <TextBlock Classes="hero-title" Text="Software" />
     <TextBlock Classes="hero-sub"
-               Text="Editors, browsers, desktop, and WSL — or continue with recommended defaults." />
+               Text="Pick a Station outcome to seed chips and cleanup, then refine as needed." />
+
+    <StackPanel Spacing="6">
+      <TextBlock Classes="panel-label" Text="Station outcome" />
+      <StackPanel Orientation="Horizontal">
+        <ToggleButton Classes="chip" Content="Comfort" IsChecked="{Binding Outcomes.IsComfort}"
+                      Command="{Binding Outcomes.SelectCommand}" CommandParameter="comfort"
+                      AutomationProperties.Name="Comfort Station outcome" />
+        <ToggleButton Classes="chip" Content="Minimal" IsChecked="{Binding Outcomes.IsMinimal}"
+                      Command="{Binding Outcomes.SelectCommand}" CommandParameter="minimal"
+                      AutomationProperties.Name="Minimal Station outcome" />
+        <ToggleButton Classes="chip" Content="Power" IsChecked="{Binding Outcomes.IsPower}"
+                      Command="{Binding Outcomes.SelectCommand}" CommandParameter="power"
+                      AutomationProperties.Name="Power Station outcome" />
+      </StackPanel>
+    </StackPanel>
 
     <Button Classes="link"
             Content="Use WinMint defaults → Review"
@@ -109,17 +124,8 @@
 
     <Expander Header="Advanced packages (optional)" IsExpanded="False">
       <StackPanel Spacing="8" Margin="0,8,0,0">
-        <TextBlock Classes="panel-label" Text="Cleanup preset" />
-        <StackPanel Orientation="Horizontal">
-          <ToggleButton Classes="chip" Content="Recommended" IsChecked="{Binding Presets.IsRecommended}"
-                        Command="{Binding Presets.SelectCommand}" CommandParameter="recommended" />
-          <ToggleButton Classes="chip" Content="Acceptance" IsChecked="{Binding Presets.IsAcceptance}"
-                        Command="{Binding Presets.SelectCommand}" CommandParameter="acceptance" />
-          <ToggleButton Classes="chip" Content="Empty" IsChecked="{Binding Presets.IsEmpty}"
-                        Command="{Binding Presets.SelectCommand}" CommandParameter="empty" />
-        </StackPanel>
         <TextBlock Classes="hero-sub"
-                   Text="Acceptance / Empty override chip selections. MinGit and Nilesoft Shell are always installed." />
+                   Text="Extra install ids merge with chips. MinGit and Nilesoft Shell are always installed." />
         <TextBlock Classes="panel-label" Text="Winget install IDs" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
                  Watermark="Anysphere.Cursor&#x0A;Zen-Team.Zen-Browser"

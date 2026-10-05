@@ -78,7 +78,7 @@ public class WizardStageGatesTests
             using WizardViewModel shell = new(null, null, new FixedProbe());
             shell.Source.SourceIsoPath = iso;
             shell.Account.Password = "lab-only";
-            shell.Software.Presets.Value = DebloatPresets.Empty;
+            shell.Software.Outcomes.Value = StationOutcomes.Minimal;
 
             await shell.ReplanAsync();
 

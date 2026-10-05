@@ -173,11 +173,43 @@ public class WizardSessionTests
         Assert.True(selection.IsOk);
         Assert.True(software.Desktop.IsWindowsTaskbar);
         Assert.False(software.Desktop.Komorebi);
-        Assert.Equal(DebloatPresets.Recommended, software.Presets.Value);
+        Assert.Equal(StationOutcomes.Comfort, software.Outcomes.Value);
         Assert.Contains("Anysphere.Cursor", selection.Value.WingetInstallIds);
         Assert.Contains("Zen-Team.Zen-Browser", selection.Value.WingetInstallIds);
         Assert.Equal(["FedoraLinux"], selection.Value.WslProfileTokens);
         Assert.DoesNotContain("AmN.yasb", selection.Value.WingetInstallIds);
+    }
+
+    [Fact]
+    public void ApplyStationOutcome_Power_seeds_komorebi_and_denser_chips()
+    {
+        SoftwareStageViewModel software = new(() => { }, () => Task.CompletedTask);
+        software.ApplyStationOutcome(StationOutcomes.Power);
+
+        Result<PackageSelection, Failure> selection = software.ResolvePackages();
+        Assert.True(selection.IsOk);
+        Assert.Equal(StationOutcomes.Power, software.Outcomes.Value);
+        Assert.True(software.Desktop.Komorebi);
+        Assert.Contains("LGUG2Z.komorebi", selection.Value.WingetInstallIds);
+        Assert.Contains("LGUG2Z.whkd", selection.Value.WingetInstallIds);
+        Assert.Contains("Neovim", software.SelectedLabels());
+        Assert.Contains("VS Code", software.SelectedLabels());
+        Assert.Contains("Komorebi", software.SelectedLabels());
+    }
+
+    [Fact]
+    public void ApplyStationOutcome_Minimal_clears_optional_chips()
+    {
+        SoftwareStageViewModel software = new(() => { }, () => Task.CompletedTask);
+        software.ApplyCuratedDefaults();
+        software.ApplyStationOutcome(StationOutcomes.Minimal);
+
+        Result<PackageSelection, Failure> selection = software.ResolvePackages();
+        Assert.True(selection.IsOk);
+        Assert.Equal(StationOutcomes.Minimal, software.Outcomes.Value);
+        Assert.Empty(selection.Value.WingetInstallIds);
+        Assert.Empty(selection.Value.WslProfileTokens);
+        Assert.False(software.Desktop.Komorebi);
     }
 
     [Fact]

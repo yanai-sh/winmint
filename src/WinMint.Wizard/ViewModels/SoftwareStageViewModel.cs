@@ -11,7 +11,7 @@ public interface ISoftwareStageViewModel
 {
     CuratedChipSelection Chips { get; }
     DesktopSelectionViewModel Desktop { get; }
-    PresetSelectionViewModel Presets { get; }
+    StationOutcomeSelectionViewModel Outcomes { get; }
     AdvancedPackageTextViewModel Advanced { get; }
     IAsyncRelayCommand UseDefaultsCommand { get; }
     StageStatusViewModel Status { get; }
@@ -85,31 +85,36 @@ public sealed class CuratedChipSelection
     }
 }
 
-public sealed partial class PresetSelectionViewModel : ObservableObject
+public sealed partial class StationOutcomeSelectionViewModel : ObservableObject
 {
     private readonly Action _changed;
-    [ObservableProperty] private string _value = DebloatPresets.Recommended;
+    private readonly Action<string> _apply;
+    [ObservableProperty] private string _value = StationOutcomes.Comfort;
 
-    internal PresetSelectionViewModel(Action changed) => _changed = changed;
+    internal StationOutcomeSelectionViewModel(Action changed, Action<string> apply)
+    {
+        _changed = changed;
+        _apply = apply;
+    }
 
-    public bool IsEmpty => string.Equals(Value, DebloatPresets.Empty, StringComparison.OrdinalIgnoreCase);
-    public bool IsAcceptance => string.Equals(Value, DebloatPresets.Acceptance, StringComparison.OrdinalIgnoreCase);
-    public bool IsRecommended => string.Equals(Value, DebloatPresets.Recommended, StringComparison.OrdinalIgnoreCase);
+    public bool IsMinimal => string.Equals(Value, StationOutcomes.Minimal, StringComparison.OrdinalIgnoreCase);
+    public bool IsComfort => string.Equals(Value, StationOutcomes.Comfort, StringComparison.OrdinalIgnoreCase);
+    public bool IsPower => string.Equals(Value, StationOutcomes.Power, StringComparison.OrdinalIgnoreCase);
 
     partial void OnValueChanged(string value)
     {
-        OnPropertyChanged(nameof(IsEmpty));
-        OnPropertyChanged(nameof(IsAcceptance));
-        OnPropertyChanged(nameof(IsRecommended));
+        OnPropertyChanged(nameof(IsMinimal));
+        OnPropertyChanged(nameof(IsComfort));
+        OnPropertyChanged(nameof(IsPower));
         _changed();
     }
 
     [RelayCommand]
-    private void Select(string? preset)
+    private void Select(string? outcome)
     {
-        if (!string.IsNullOrWhiteSpace(preset))
+        if (!string.IsNullOrWhiteSpace(outcome))
         {
-            Value = preset;
+            _apply(outcome.Trim());
         }
     }
 }
@@ -128,32 +133,58 @@ public sealed partial class AdvancedPackageTextViewModel : ObservableObject
     partial void OnWslChanged(string value) => _changed();
 }
 
-internal sealed partial class SoftwareStageViewModel(Action draftChanged, Func<Task> useDefaults) : ObservableObject, ISoftwareStageViewModel
+internal sealed partial class SoftwareStageViewModel : ObservableObject, ISoftwareStageViewModel
 {
-    private readonly Func<Task> _useDefaults = useDefaults;
+    private readonly Func<Task> _useDefaults;
 
-    public CuratedChipSelection Chips { get; } = new CuratedChipSelection(draftChanged);
-    public DesktopSelectionViewModel Desktop { get; } = new DesktopSelectionViewModel(draftChanged);
-    public PresetSelectionViewModel Presets { get; } = new PresetSelectionViewModel(draftChanged);
-    public AdvancedPackageTextViewModel Advanced { get; } = new AdvancedPackageTextViewModel(draftChanged);
-    public StageStatusViewModel Status { get; } = new();
+    public SoftwareStageViewModel(Action draftChanged, Func<Task> useDefaults)
+    {
+        _useDefaults = useDefaults;
+        Chips = new CuratedChipSelection(draftChanged);
+        Desktop = new DesktopSelectionViewModel(draftChanged);
+        Advanced = new AdvancedPackageTextViewModel(draftChanged);
+        Status = new StageStatusViewModel();
+        Outcomes = new StationOutcomeSelectionViewModel(draftChanged, ApplyStationOutcome);
+    }
+
+    public CuratedChipSelection Chips { get; }
+    public DesktopSelectionViewModel Desktop { get; }
+    public StationOutcomeSelectionViewModel Outcomes { get; }
+    public AdvancedPackageTextViewModel Advanced { get; }
+    public StageStatusViewModel Status { get; }
 
     [RelayCommand]
     private Task UseDefaults() => _useDefaults();
 
-    /// <summary>Apply product-curated chips + recommended debloat + Windows taskbar (issue #136).</summary>
-    internal void ApplyCuratedDefaults()
+    /// <summary>Comfort Station outcome seed (issue #136 / #140).</summary>
+    internal void ApplyCuratedDefaults() => ApplyStationOutcome(StationOutcomes.Comfort);
+
+    internal void ApplyStationOutcome(string outcome)
     {
-        Presets.Value = DebloatPresets.Recommended;
-        HashSet<string> curated = new(
-            CuratedDefaults.ToolChipKeys.Concat(CuratedDefaults.WslTokens),
+        Result<StationOutcomeExpansion, Failure> expanded = StationOutcomes.TryExpand(outcome);
+        if (!expanded.IsOk)
+        {
+            return;
+        }
+
+        string normalized = outcome.Trim().ToLowerInvariant() switch
+        {
+            StationOutcomes.Minimal => StationOutcomes.Minimal,
+            StationOutcomes.Power => StationOutcomes.Power,
+            _ => StationOutcomes.Comfort,
+        };
+        Outcomes.Value = normalized;
+
+        HashSet<string> selected = new(
+            expanded.Value.ToolChipKeys.Concat(expanded.Value.WslTokens),
             StringComparer.OrdinalIgnoreCase);
         foreach (ChipItem chip in Chips.All)
         {
-            chip.IsSelected = curated.Contains(chip.Id);
+            chip.IsSelected = selected.Contains(chip.Id);
         }
+
         Desktop.Taskbar = DesktopSelectionViewModel.WindowsTaskbar;
-        Desktop.Komorebi = false;
+        Desktop.Komorebi = expanded.Value.Komorebi;
         Advanced.Winget = "";
         Advanced.Scoop = "";
         Advanced.Wsl = "";
