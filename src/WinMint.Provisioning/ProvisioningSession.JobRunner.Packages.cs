@@ -47,16 +47,7 @@ internal static partial class ProvisioningJobRunner
         try
         {
             IReadOnlyList<string> ids = CollectAllWingetIds(jobs);
-            ShellDesktopRequest request = new(
-                ids,
-                env.Guest.Processes,
-                env.Guest.AssetDownload,
-                ShellDesktopLayout.GuestDesktopRoot,
-                ShellDesktopLayout.DefaultThideInstallDir,
-                ShellDesktopLayout.DefaultYasbConfigDir,
-                ShellDesktopLayout.DefaultKomorebiConfigDir,
-                ShellDesktopLayout.DefaultWhkdrcPath);
-            _ = await ShellDesktop.ApplyAsync(request, ct).ConfigureAwait(false);
+            await ShellSurfaces.ApplyDesktopAsync(env.Guest, ids, ct).ConfigureAwait(false);
             env.ReportStatus(new SessionStatus("shell.desktop", "Desktop surface applied (fail-open)."));
             return null;
         }
@@ -75,10 +66,7 @@ internal static partial class ProvisioningJobRunner
         try
         {
             IReadOnlyList<string> ids = CollectSelectedWingetIds(jobs);
-            if (!env.Guest.ApplyShellChrome(new ShellChromeRequest(
-                    FailOpen: false,
-                    ids,
-                    RequireSelectedPins: env.PackageStrict)))
+            if (!ShellSurfaces.TryApplyChrome(env.Guest, ids, env.PackageStrict))
             {
                 return FailJob(env, "jobs.failed", $"{job.Id}: shell chrome apply failed.");
             }
