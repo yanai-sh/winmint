@@ -392,17 +392,6 @@ function Test-GuestEvidenceReady {
         if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
         $session = New-PSSession @sessionParams
         try {
-            # Disk is booting Windows — HDD first; eject DVD only after heartbeat (not mid-WinPE reboot).
-            $hbReady = Test-GuestWindowsHeartbeat
-            if ((Get-SmokePreferDiskBootDecision -AlreadyPreferred $script:DiskBootPreferred `
-                    -VhdHasImage (Test-SmokeVhdHasImage)) -eq 'prefer-hdd') {
-                Prefer-DiskBoot
-            }
-            if ((Get-SmokeEjectDvdDecision -AlreadyEjected $script:DvdEjected `
-                    -DiskBootPreferred $script:DiskBootPreferred -HeartbeatOk $hbReady) -eq 'eject') {
-                Dismount-InstallDvdWhenWindowsBoots
-            }
-
             $remotePaths = @(Invoke-Command -Session $session -ScriptBlock {
                 $dir = Join-Path $env:ProgramData 'WinMint\evidence'
                 if (-not (Test-Path -LiteralPath $dir)) { return @() }
@@ -511,18 +500,6 @@ $script:LastGuestEvidenceFingerprint = ''
 $script:LastVmState = ''
 $script:SetupRebootCount = 0
 $script:HalfStallShot = $false
-function Test-SmokeVhdHasImage {
-    try {
-        $drive = Get-VMHardDiskDrive -VMName $VmName | Select-Object -First 1
-        if (-not $drive -or [string]::IsNullOrWhiteSpace($drive.Path)) { return $false }
-        # Dynamic VHD FileSize stays tiny until WinPE actually applies the WIM.
-        return ((Get-VHD -Path $drive.Path).FileSize -ge 1GB)
-    }
-    catch {
-        return $false
-    }
-}
-
 function Test-GuestWindowsHeartbeat {
     try {
         $hb = Get-VMIntegrationService -VMName $VmName |

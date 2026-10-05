@@ -69,6 +69,51 @@ $t = Invoke-Tick @{ VmState = 'Stopping'; VhdHasImage = $true; DiskBootPreferred
 if ($t.PreferDisk -cne 'prefer-hdd') { throw 'Stopping still prefers HDD' }
 if ($t.EjectDvd -cne 'skip') { throw 'Stopping must not eject' }
 
+# Multi-poll: one snap → tick → fold PreferDisk/EjectDvd into the next snap.
+# Dual prefer/eject is impossible here — actions come only from Get-SmokeWaitTick.
+$state = @{
+    DiskBootPreferred = $false
+    DvdEjected        = $false
+}
+$polls = @(
+    @{ Snap = @{ VhdHasImage = $false; VhdFileSizeBytes = 100MB; HeartbeatOk = $false }; Prefer = 'keep-dvd'; Eject = 'skip' }
+    @{ Snap = @{ VhdHasImage = $true; HeartbeatOk = $false }; Prefer = 'prefer-hdd'; Eject = 'skip' }
+    @{ Snap = @{ VhdHasImage = $true; HeartbeatOk = $false }; Prefer = 'skip'; Eject = 'skip' }
+    @{ Snap = @{ VhdHasImage = $true; HeartbeatOk = $true }; Prefer = 'skip'; Eject = 'eject' }
+    @{ Snap = @{ VhdHasImage = $true; HeartbeatOk = $true }; Prefer = 'skip'; Eject = 'skip' }
+)
+$actions = foreach ($poll in $polls) {
+    $over = @{}
+    foreach ($k in $poll.Snap.Keys) { $over[$k] = $poll.Snap[$k] }
+    $over['DiskBootPreferred'] = $state.DiskBootPreferred
+    $over['DvdEjected'] = $state.DvdEjected
+    $tick = Invoke-Tick $over
+    if ($tick.PreferDisk -cne $poll.Prefer) {
+        throw "multi-poll PreferDisk=$($tick.PreferDisk) want $($poll.Prefer) (state preferred=$($state.DiskBootPreferred))"
+    }
+    if ($tick.EjectDvd -cne $poll.Eject) {
+        throw "multi-poll EjectDvd=$($tick.EjectDvd) want $($poll.Eject) (state ejected=$($state.DvdEjected))"
+    }
+    if ($tick.PreferDisk -eq 'prefer-hdd') { $state.DiskBootPreferred = $true }
+    if ($tick.EjectDvd -eq 'eject') { $state.DvdEjected = $true }
+    "$($tick.PreferDisk)/$($tick.EjectDvd)"
+}
+$want = 'keep-dvd/skip|prefer-hdd/skip|skip/skip|skip/eject|skip/skip'
+$got = (@($actions) -join '|')
+if ($got -cne $want) { throw "multi-poll action list: $got want $want" }
+
+# Probe gathers evidence only — prefer/eject leaves live in Get-SmokeWaitTick alone.
+if ($smoke -match 'Get-SmokePreferDiskBootDecision|Get-SmokeEjectDvdDecision') {
+    throw 'Invoke-Smoke must not re-decide prefer/eject — snap→tick→actions owns that path'
+}
+$probeFn = [regex]::Match(
+    $smoke,
+    '(?ms)function Test-GuestEvidenceReady \{.*?^\}').Value
+if ([string]::IsNullOrWhiteSpace($probeFn)) { throw 'could not slice Test-GuestEvidenceReady' }
+if ($probeFn -match 'Prefer-DiskBoot|Dismount-InstallDvdWhenWindowsBoots') {
+    throw 'Test-GuestEvidenceReady must not act prefer/eject — wait-loop tick actions own I/O'
+}
+
 $preferSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/SmokeStatus.ps1') -Raw -Encoding utf8
 if ($preferSrc -notmatch 'STATUS_NO_MEDIA') {
     throw 'harness must document 0xc0000178 STATUS_NO_MEDIA'
