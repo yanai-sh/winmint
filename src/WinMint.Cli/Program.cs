@@ -174,16 +174,107 @@ internal static class Program
             return RunEmitDefaults(outDir);
         });
 
+        Option<DirectoryInfo> packOutOption = new("--out", "-o")
+        {
+            Description = "Directory for the Station pack (Profile + plan siblings).",
+            Required = true,
+        };
+        Command packCommand = new(
+            "pack",
+            "Export a Station pack: Profile (Apply intent) plus plan/configure siblings (#141).")
+        {
+            profileArgument,
+            packOutOption,
+            imageQualityOption,
+            imageArchitectureOption,
+            packageAuditStrictOption,
+            packageStrictOption,
+            includeSmokeStubsOption,
+        };
+        packCommand.SetAction(parseResult =>
+        {
+            FileInfo profilePath = parseResult.GetValue(profileArgument)!;
+            DirectoryInfo outDir = parseResult.GetValue(packOutOption)!;
+            return RunPack(
+                profilePath,
+                outDir,
+                parseResult.GetValue(imageQualityOption)!,
+                parseResult.GetValue(imageArchitectureOption),
+                parseResult.GetValue(packageAuditStrictOption),
+                ParsePackageStrictOverride(parseResult, packageStrictOption),
+                parseResult.GetValue(includeSmokeStubsOption));
+        });
+
         RootCommand root = new("WinMint — Profile plan and ImageServicing build")
         {
             validateCommand,
             planCommand,
+            packCommand,
             buildCommand,
             packagesCheckCommand,
             emitDefaultsCommand,
         };
 
         return root.Parse(args).Invoke();
+    }
+
+    private static int RunPack(
+        FileInfo profilePath,
+        DirectoryInfo outDir,
+        string imageQuality,
+        string? imageArchitecture,
+        bool packageAuditStrict,
+        PackageStrictOverride packageStrict,
+        bool includeSmokeStubs)
+    {
+        if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
+        {
+            return exit;
+        }
+
+        if (!profilePath.Exists)
+        {
+            CliLog.ProfileNotFound(Log, profilePath.FullName);
+            return 1;
+        }
+
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(profilePath.FullName);
+        if (!parsed.IsOk)
+        {
+            foreach (DocumentError issue in parsed.Error)
+            {
+                string pathSuffix = issue.Path is null ? "" : $" ({issue.Path})";
+                CliLog.DocumentIssue(Log, issue.Code, issue.Message, pathSuffix);
+            }
+
+            return 1;
+        }
+
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(
+            parsed.Value,
+            new HostComposeOptions(
+                ImageQuality: lane,
+                ImageArchitecture: imageArchitecture,
+                PackageAuditStrict: packageAuditStrict,
+                PackageStrict: packageStrict,
+                IncludeSmokeStubs: includeSmokeStubs));
+        if (!planned.IsOk)
+        {
+            CliLog.Failure(Log, planned.Error.Code, planned.Error.Message);
+            return 1;
+        }
+
+        Result<StationPackResult, Failure> packed =
+            HostCompile.ExportStationPack(planned.Value, parsed.Value, outDir.FullName);
+        if (!packed.IsOk)
+        {
+            CliLog.Failure(Log, packed.Error.Code, packed.Error.Message);
+            return 1;
+        }
+
+        CliLog.StationPackWritten(Log, packed.Value.Directory, packed.Value.ProfilePath);
+        WritePlanHonesty(planned.Value.Review);
+        return 0;
     }
 
     private static int RunEmitDefaults(DirectoryInfo outDir)

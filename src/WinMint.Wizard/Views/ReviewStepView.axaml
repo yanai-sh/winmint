@@ -44,12 +44,19 @@
           <TextBlock Text="{Binding Summary.QuietBlockText}" TextWrapping="Wrap" FontSize="13" />
         </Border>
 
-        <Button Classes="ghost"
-                Content="Save Profile"
-                HorizontalAlignment="Left"
-                Margin="0,12,0,0"
-                Command="{Binding SaveProfileCommand}"
-                IsEnabled="{Binding !Build.IsBusy}" />
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
+          <Button Classes="ghost"
+                  Content="Save Profile"
+                  HorizontalAlignment="Left"
+                  Command="{Binding SaveProfileCommand}"
+                  IsEnabled="{Binding !Build.IsBusy}" />
+          <Button Classes="ghost"
+                  Content="Export Station pack"
+                  HorizontalAlignment="Left"
+                  Command="{Binding ExportStationPackCommand}"
+                  IsEnabled="{Binding !Build.IsBusy}"
+                  AutomationProperties.Name="Export Station pack" />
+        </StackPanel>
         <TextBlock Text="{Binding Build.SaveStatus}"
                    Opacity="0.75"
                    TextWrapping="Wrap"

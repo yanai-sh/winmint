@@ -50,4 +50,7 @@ internal static partial class CliLog
 
     [LoggerMessage(EventId = 15, Level = LogLevel.Information, Message = "Wrote curated Profile {ProfilePath} (bootstrap password: {PasswordPath})")]
     public static partial void CuratedDefaultsEmitted(ILogger logger, string profilePath, string passwordPath);
+
+    [LoggerMessage(EventId = 16, Level = LogLevel.Information, Message = "Wrote Station pack to {PackDir} (Apply Profile: {ProfilePath})")]
+    public static partial void StationPackWritten(ILogger logger, string packDir, string profilePath);
 }

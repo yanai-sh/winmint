@@ -264,6 +264,61 @@ public sealed partial class WizardViewModel :
         RefreshCanBuild();
     }
 
+    public async Task ExportStationPackAsync(CancellationToken cancellationToken)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+        if (!await RunPlanAsync().ConfigureAwait(true))
+        {
+            return;
+        }
+        if (_storage is null)
+        {
+            ReportCurrentError("wizard.pack.storage", "Export failed: no storage provider.");
+            return;
+        }
+
+        Result<HostComposition, Failure> approved = _session.TryGetApplyComposition();
+        if (!approved.IsOk)
+        {
+            ReportCurrentError(approved.Error.Code, approved.Error.Message);
+            return;
+        }
+
+        IReadOnlyList<IStorageFolder> folders = await _storage.OpenFolderPickerAsync(
+            new FolderPickerOpenOptions
+            {
+                Title = "Export Station pack",
+                AllowMultiple = false,
+            }).ConfigureAwait(true);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (folders.Count == 0)
+        {
+            return;
+        }
+
+        string? path = folders[0].TryGetLocalPath();
+        if (string.IsNullOrEmpty(path))
+        {
+            ReportCurrentError("wizard.pack.path", "Export failed: could not resolve local folder path.");
+            return;
+        }
+
+        Result<StationPackResult, Failure> packed =
+            HostCompile.ExportStationPack(approved.Value, path);
+        if (!packed.IsOk)
+        {
+            ReportCurrentError(packed.Error.Code, packed.Error.Message);
+            return;
+        }
+
+        _reviewStage!.Build.SaveStatus = $"Station pack → {packed.Value.Directory}";
+        _reviewStage.Status.Set(_reviewStage.Build.SaveStatus, false);
+        RefreshCanBuild();
+    }
+
     [RelayCommand]
     public async Task BuildAsync()
     {

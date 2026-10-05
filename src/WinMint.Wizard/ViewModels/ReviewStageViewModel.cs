@@ -15,6 +15,7 @@ public interface IReviewStageViewModel
     StageStatusViewModel Status { get; }
     IAsyncRelayCommand ReplanCommand { get; }
     IAsyncRelayCommand SaveProfileCommand { get; }
+    IAsyncRelayCommand ExportStationPackCommand { get; }
     IAsyncRelayCommand BuildCommand { get; }
     IRelayCommand CancelBuildCommand { get; }
 }
@@ -23,6 +24,7 @@ internal interface IReviewStageHost
 {
     Task ReplanAsync();
     Task SaveProfileAsync(CancellationToken cancellationToken);
+    Task ExportStationPackAsync(CancellationToken cancellationToken);
     Task BuildAsync();
     void CancelBuild();
 }
@@ -88,6 +90,7 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
             {
                 ReplanCommand.NotifyCanExecuteChanged();
                 SaveProfileCommand.NotifyCanExecuteChanged();
+                ExportStationPackCommand.NotifyCanExecuteChanged();
             }
         };
     }
@@ -107,6 +110,10 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
     private Task SaveProfileAsync(CancellationToken cancellationToken) =>
         _host?.SaveProfileAsync(cancellationToken) ?? Task.CompletedTask;
 
+    [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(CanPlan))]
+    private Task ExportStationPackAsync(CancellationToken cancellationToken) =>
+        _host?.ExportStationPackAsync(cancellationToken) ?? Task.CompletedTask;
+
     [RelayCommand]
     private Task BuildAsync() => _host?.BuildAsync() ?? Task.CompletedTask;
 
@@ -118,5 +125,4 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
         string geo = settle.GeoId?.ToString(CultureInfo.InvariantCulture) ?? "—";
         return $"{settle.Locale ?? "—"} · {geo} · {settle.TimeZoneId ?? "—"}";
     }
-
 }

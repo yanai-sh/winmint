@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text;
 using System.Text.Json;
 
 using WinMint.Contracts;
@@ -8,6 +9,9 @@ namespace WinMint.Orchestrator;
 /// <summary>Orchestrator Profile → immutable approval → ImageServicing entry.</summary>
 public static class HostCompile
 {
+    public const string StationPackProfileFileName = "winmint.profile.json";
+    public const string StationPackPasswordFileName = "account.password";
+
     public static Result<HostPlan, HostComposeError> PlanDocument(
         Profile profile,
         HostComposeOptions? options = null)
@@ -25,6 +29,105 @@ public static class HostCompile
         BuildArtifacts snapshot = SnapshotArtifacts(planned.Value);
         return Result.Ok<HostPlan, HostComposeError>(
             new HostPlan(snapshot, CreateReview(owned, snapshot, null, null, null, "profile", compose.AuthoredSelectionLabels)));
+    }
+
+    /// <summary>
+    /// Station pack (#141) from an approved composition. Profile bytes are the Apply intent;
+    /// ExportPlan siblings are inspection/interop only.
+    /// </summary>
+    public static Result<StationPackResult, Failure> ExportStationPack(
+        HostComposition composition,
+        string destinationDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(composition);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed =
+            BuildPlan.TryParseProfile(composition.GetProfileUtf8());
+        if (!parsed.IsOk)
+        {
+            DocumentError first = parsed.Error[0];
+            return Result.Fail<StationPackResult, Failure>(
+                new Failure(first.Code, first.Message));
+        }
+
+        return ExportStationPack(
+            new HostPlan(composition.Artifacts, composition.Review),
+            parsed.Value,
+            destinationDirectory);
+    }
+
+    /// <summary>
+    /// Station pack (#141): Profile is the sole Apply intent; ExportPlan siblings are inspection/interop only.
+    /// Password sidecar matches emit-defaults when a secret is materialised.
+    /// </summary>
+    public static Result<StationPackResult, Failure> ExportStationPack(
+        HostPlan plan,
+        Profile applyProfile,
+        string destinationDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(applyProfile);
+        if (string.IsNullOrWhiteSpace(destinationDirectory))
+        {
+            return Result.Fail<StationPackResult, Failure>(
+                new Failure("stationPack.destination.missing", "Destination directory is required."));
+        }
+
+        string destination;
+        try
+        {
+            destination = Path.GetFullPath(destinationDirectory.Trim());
+            Directory.CreateDirectory(destination);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or UnauthorizedAccessException)
+        {
+            return Result.Fail<StationPackResult, Failure>(
+                new Failure("stationPack.destination.invalid", ex.Message));
+        }
+
+        Result<Unit, Failure> siblings = ExportPlan(plan, destination);
+        if (!siblings.IsOk)
+        {
+            return Result.Fail<StationPackResult, Failure>(siblings.Error);
+        }
+
+        try
+        {
+            Profile written = applyProfile;
+            string? secret = applyProfile.Account.Password;
+            if (!string.IsNullOrEmpty(secret))
+            {
+                string leaf = StationPackPasswordFileName;
+                if (!string.IsNullOrWhiteSpace(applyProfile.Account.PasswordPath))
+                {
+                    string candidate = Path.GetFileName(applyProfile.Account.PasswordPath.Trim());
+                    if (!string.IsNullOrEmpty(candidate)
+                        && candidate is not ("." or "..")
+                        && candidate.IndexOfAny(Path.GetInvalidFileNameChars()) < 0)
+                    {
+                        leaf = candidate;
+                    }
+                }
+
+                File.WriteAllText(Path.Combine(destination, leaf), secret, Encoding.UTF8);
+                written = applyProfile with
+                {
+                    Account = applyProfile.Account with
+                    {
+                        Password = null,
+                        PasswordPath = leaf,
+                    },
+                };
+            }
+
+            string profilePath = Path.Combine(destination, StationPackProfileFileName);
+            File.WriteAllBytes(profilePath, BuildPlan.SerializeProfile(written));
+            return Result.Ok<StationPackResult, Failure>(new StationPackResult(destination, profilePath));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return Result.Fail<StationPackResult, Failure>(
+                new Failure("stationPack.export.failed", ex.Message));
+        }
     }
 
     public static Result<Unit, Failure> ExportPlan(HostPlan plan, string destinationDirectory)
@@ -589,5 +692,8 @@ public sealed class HostPlan
     public HostReview Review { get; }
     internal BuildArtifacts Artifacts { get; }
 }
+
+/// <summary>Station pack directory: Profile path is the Apply input; siblings are ExportPlan dump only.</summary>
+public sealed record StationPackResult(string Directory, string ProfilePath);
 
 public readonly record struct Unit;
