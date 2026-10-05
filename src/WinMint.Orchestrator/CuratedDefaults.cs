@@ -6,21 +6,17 @@ using WinMint.Contracts;
 namespace WinMint.Orchestrator;
 
 /// <summary>
-/// Product-curated host defaults (issue #136 P0): recommended debloat + authored package ids,
-/// Windows taskbar, bootstrap account. Preset names never enter Profile JSON (ADR-005).
+/// Bootstrap account + Cli emit for Comfort Station seed (issue #136 P0).
+/// Software slice comes from <see cref="StationOutcomes.TrySeed"/>; preset names never enter Profile JSON (ADR-005).
 /// Distinct from Primary <c>samples/sl7.profile.json</c> (#96 freeze).
 /// </summary>
 public static class CuratedDefaults
 {
     public const string BootstrapUsername = "winmint";
 
-    /// <summary>Wizard chip keys for the curated authored package set.</summary>
-    public static IReadOnlyList<string> ToolChipKeys { get; } = ["cursor", "zen-browser"];
-
-    public static IReadOnlyList<string> WslTokens { get; } = ["FedoraLinux"];
-
-    public static IReadOnlyList<string> SelectionLabels { get; } =
-        ["Windows taskbar", "Cursor", "Zen", "Fedora"];
+    /// <summary>Comfort seed authored labels (taskbar + chips).</summary>
+    public static IReadOnlyList<string> SelectionLabels =>
+        StationOutcomes.TrySeed(StationOutcomes.Comfort).Value.SelectionLabels;
 
     public static string NewBootstrapPassword()
     {
@@ -34,7 +30,7 @@ public static class CuratedDefaults
     }
 
     /// <summary>
-    /// Expand curated defaults into a Profile. Pass <paramref name="passwordPath"/> to author
+    /// Expand Comfort seed + bootstrap account into a Profile. Pass <paramref name="passwordPath"/> to author
     /// <c>account.passwordPath</c> (caller writes the secret); otherwise inline <c>account.password</c>.
     /// </summary>
     public static Result<Profile, Failure> TryCreate(
@@ -50,24 +46,10 @@ public static class CuratedDefaults
                 new Failure("account.password.required", "Curated bootstrap requires a non-empty password."));
         }
 
-        Result<DebloatExpansion, Failure> debloat = DebloatPresets.TryExpand(DebloatPresets.Recommended);
-        if (!debloat.IsOk)
+        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(StationOutcomes.Comfort);
+        if (!seed.IsOk)
         {
-            return Result.Fail<Profile, Failure>(debloat.Error);
-        }
-
-        Result<PackageSelection, Failure> tools =
-            PackageCatalog.Default.ResolveToolKeys(ToolChipKeys);
-        if (!tools.IsOk)
-        {
-            return Result.Fail<Profile, Failure>(tools.Error);
-        }
-
-        Result<IReadOnlyList<string>, Failure> wsl =
-            PackageCatalog.Default.ResolveWslTokens(WslTokens);
-        if (!wsl.IsOk)
-        {
-            return Result.Fail<Profile, Failure>(wsl.Error);
+            return Result.Fail<Profile, Failure>(seed.Error);
         }
 
         bool usePath = !string.IsNullOrWhiteSpace(passwordPath);
@@ -77,20 +59,21 @@ public static class CuratedDefaults
             requireWifiDuringOobe,
             usePath ? passwordPath!.Trim() : null);
 
+        StationSeed software = seed.Value;
         return Result.Ok<Profile, Failure>(
             new Profile(
                 account,
                 new DmaProfile(Enabled: true, settle),
                 DebloatMode.Online,
-                debloat.Value.RemoveProvisionedAppx,
-                tools.Value.WingetInstallIds,
+                software.RemoveProvisionedAppx,
+                software.Packages.WingetInstallIds,
                 [],
-                tools.Value.ScoopInstallIds,
+                software.Packages.ScoopInstallIds,
                 [],
-                wsl.Value,
+                software.Packages.WslProfileTokens,
                 [],
-                debloat.Value.RemoveCapabilities,
-                debloat.Value.DisableOptionalFeatures));
+                software.RemoveCapabilities,
+                software.DisableOptionalFeatures));
     }
 
     /// <summary>Write curated Profile + bootstrap password file for CLI recipe parity.</summary>

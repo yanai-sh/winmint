@@ -10,7 +10,7 @@ namespace WinMint.Tests;
 public class CuratedDefaultsTests
 {
     [Fact]
-    public void TryCreate_expands_recommended_debloat_and_curated_packages()
+    public void TryCreate_uses_Comfort_station_seed_for_software()
     {
         Result<Profile, Failure> created = CuratedDefaults.TryCreate(
             new DmaSettleTarget("en-US", 244, "Pacific Standard Time", true),
@@ -22,14 +22,13 @@ public class CuratedDefaultsTests
         Assert.Equal("bootstrap-secret", profile.Account.Password);
         Assert.Null(profile.Account.PasswordPath);
 
-        Result<DebloatExpansion, Failure> recommended = DebloatPresets.TryExpand(DebloatPresets.Recommended);
-        Assert.True(recommended.IsOk);
-        Assert.Equal(recommended.Value.RemoveProvisionedAppx, profile.RemoveProvisionedAppx);
-        Assert.Equal(recommended.Value.RemoveCapabilities, profile.RemoveCapabilities);
-        Assert.Equal(recommended.Value.DisableOptionalFeatures, profile.DisableOptionalFeatures);
-
-        Assert.Equal(["Anysphere.Cursor", "Zen-Team.Zen-Browser"], profile.WingetPackages);
-        Assert.Equal(["FedoraLinux"], profile.WslDistros);
+        Result<StationSeed, Failure> comfort = StationOutcomes.TrySeed(StationOutcomes.Comfort);
+        Assert.True(comfort.IsOk);
+        Assert.Equal(comfort.Value.RemoveProvisionedAppx, profile.RemoveProvisionedAppx);
+        Assert.Equal(comfort.Value.RemoveCapabilities, profile.RemoveCapabilities);
+        Assert.Equal(comfort.Value.DisableOptionalFeatures, profile.DisableOptionalFeatures);
+        Assert.Equal(comfort.Value.Packages.WingetInstallIds, profile.WingetPackages);
+        Assert.Equal(comfort.Value.Packages.WslProfileTokens, profile.WslDistros);
         Assert.Empty(profile.ScoopPackages);
     }
 
@@ -118,10 +117,10 @@ public class CuratedDefaultsTests
     }
 
     [Fact]
-    public void SelectionLabels_name_windows_taskbar_and_curated_chips()
+    public void SelectionLabels_match_Comfort_station_seed()
     {
-        Assert.Equal(
-            ["Windows taskbar", "Cursor", "Zen", "Fedora"],
-            CuratedDefaults.SelectionLabels);
+        Result<StationSeed, Failure> comfort = StationOutcomes.TrySeed(StationOutcomes.Comfort);
+        Assert.True(comfort.IsOk);
+        Assert.Equal(comfort.Value.SelectionLabels, CuratedDefaults.SelectionLabels);
     }
 }

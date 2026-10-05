@@ -601,17 +601,10 @@ public sealed partial class WizardViewModel :
         {
             return Result.Fail<WizardDraft, Failure>(packagesResult.Error);
         }
-        Result<StationOutcomeExpansion, Failure> outcome =
-            StationOutcomes.TryExpand(_software.Outcomes.Value);
-        if (!outcome.IsOk)
+        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(_software.Outcomes.Value);
+        if (!seed.IsOk)
         {
-            return Result.Fail<WizardDraft, Failure>(outcome.Error);
-        }
-        Result<DebloatExpansion, Failure> expanded =
-            DebloatPresets.TryExpand(outcome.Value.DebloatPreset);
-        if (!expanded.IsOk)
-        {
-            return Result.Fail<WizardDraft, Failure>(expanded.Error);
+            return Result.Fail<WizardDraft, Failure>(seed.Error);
         }
         if (!int.TryParse(_account.GeoId.Trim(), out int geoId))
         {
@@ -630,7 +623,7 @@ public sealed partial class WizardViewModel :
                     _account.TimeZone.Trim(),
                     _account.LocationServices)),
             DebloatMode.Online,
-            expanded.Value.RemoveProvisionedAppx,
+            seed.Value.RemoveProvisionedAppx,
             IdList.FromMultiline(
                 MergeChipAndAdvanced(packages.WingetInstallIds, _software.Advanced.Winget)),
             [],
@@ -641,8 +634,8 @@ public sealed partial class WizardViewModel :
                 packages.WslProfileTokens,
                 _software.Advanced.Wsl)),
             [],
-            expanded.Value.RemoveCapabilities,
-            expanded.Value.DisableOptionalFeatures);
+            seed.Value.RemoveCapabilities,
+            seed.Value.DisableOptionalFeatures);
         HostComposeOptions options = new(
             _source.SourceIsoPath,
             ImageQualityLane.Release,

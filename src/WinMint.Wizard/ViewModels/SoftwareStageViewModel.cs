@@ -161,8 +161,8 @@ internal sealed partial class SoftwareStageViewModel : ObservableObject, ISoftwa
 
     internal void ApplyStationOutcome(string outcome)
     {
-        Result<StationOutcomeExpansion, Failure> expanded = StationOutcomes.TryExpand(outcome);
-        if (!expanded.IsOk)
+        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(outcome);
+        if (!seed.IsOk)
         {
             return;
         }
@@ -176,15 +176,20 @@ internal sealed partial class SoftwareStageViewModel : ObservableObject, ISoftwa
         Outcomes.Value = normalized;
 
         HashSet<string> selected = new(
-            expanded.Value.ToolChipKeys.Concat(expanded.Value.WslTokens),
+            seed.Value.ToolChipKeys.Concat(seed.Value.WslTokens),
             StringComparer.OrdinalIgnoreCase);
         foreach (ChipItem chip in Chips.All)
         {
             chip.IsSelected = selected.Contains(chip.Id);
         }
 
-        Desktop.Taskbar = DesktopSelectionViewModel.WindowsTaskbar;
-        Desktop.Komorebi = expanded.Value.Komorebi;
+        Desktop.Taskbar = string.Equals(
+            seed.Value.TaskbarSurface,
+            StationOutcomes.TaskbarYasb,
+            StringComparison.Ordinal)
+            ? DesktopSelectionViewModel.YasbTaskbar
+            : DesktopSelectionViewModel.WindowsTaskbar;
+        Desktop.Komorebi = seed.Value.Komorebi;
         Advanced.Winget = "";
         Advanced.Scoop = "";
         Advanced.Wsl = "";

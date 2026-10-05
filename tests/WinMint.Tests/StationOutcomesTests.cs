@@ -8,50 +8,67 @@ namespace WinMint.Tests;
 public class StationOutcomesTests
 {
     [Fact]
-    public void Minimal_expands_to_empty_debloat_and_no_chips()
+    public void Minimal_seeds_empty_software_and_windows_taskbar()
     {
-        Result<StationOutcomeExpansion, Failure> expanded = StationOutcomes.TryExpand(StationOutcomes.Minimal);
-        Assert.True(expanded.IsOk);
-        Assert.Equal(DebloatPresets.Empty, expanded.Value.DebloatPreset);
-        Assert.Empty(expanded.Value.ToolChipKeys);
-        Assert.Empty(expanded.Value.WslTokens);
-        Assert.False(expanded.Value.Komorebi);
+        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(StationOutcomes.Minimal);
+        Assert.True(seed.IsOk);
+        Assert.Empty(seed.Value.ToolChipKeys);
+        Assert.Empty(seed.Value.WslTokens);
+        Assert.Empty(seed.Value.Packages.WingetInstallIds);
+        Assert.Empty(seed.Value.Packages.WslProfileTokens);
+        Assert.Empty(seed.Value.RemoveProvisionedAppx);
+        Assert.Equal(StationOutcomes.TaskbarWindows, seed.Value.TaskbarSurface);
+        Assert.False(seed.Value.Komorebi);
+        Assert.Contains("Windows taskbar", seed.Value.SelectionLabels);
     }
 
     [Fact]
-    public void Comfort_matches_CuratedDefaults_seed()
+    public void Comfort_seeds_recommended_debloat_and_curated_packages()
     {
-        Result<StationOutcomeExpansion, Failure> expanded = StationOutcomes.TryExpand(StationOutcomes.Comfort);
-        Assert.True(expanded.IsOk);
-        Assert.Equal(DebloatPresets.Recommended, expanded.Value.DebloatPreset);
-        Assert.Equal(CuratedDefaults.ToolChipKeys, expanded.Value.ToolChipKeys);
-        Assert.Equal(CuratedDefaults.WslTokens, expanded.Value.WslTokens);
-        Assert.False(expanded.Value.Komorebi);
+        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(StationOutcomes.Comfort);
+        Assert.True(seed.IsOk, seed.IsOk ? null : seed.Error.Message);
+
+        Result<DebloatExpansion, Failure> recommended =
+            DebloatPresets.TryExpand(DebloatPresets.Recommended);
+        Assert.True(recommended.IsOk);
+        Assert.Equal(recommended.Value.RemoveProvisionedAppx, seed.Value.RemoveProvisionedAppx);
+        Assert.Equal(recommended.Value.RemoveCapabilities, seed.Value.RemoveCapabilities);
+        Assert.Equal(recommended.Value.DisableOptionalFeatures, seed.Value.DisableOptionalFeatures);
+
+        Assert.Equal(["cursor", "zen-browser"], seed.Value.ToolChipKeys);
+        Assert.Equal(["FedoraLinux"], seed.Value.WslTokens);
+        Assert.Equal(["Anysphere.Cursor", "Zen-Team.Zen-Browser"], seed.Value.Packages.WingetInstallIds);
+        Assert.Equal(["FedoraLinux"], seed.Value.Packages.WslProfileTokens);
+        Assert.Equal(StationOutcomes.TaskbarWindows, seed.Value.TaskbarSurface);
+        Assert.False(seed.Value.Komorebi);
+        Assert.Equal(
+            ["Windows taskbar", "Cursor", "Zen", "Fedora"],
+            seed.Value.SelectionLabels);
     }
 
     [Fact]
-    public void Power_adds_komorebi_and_denser_editor_chips()
+    public void Power_seeds_komorebi_axis_and_denser_editor_chips()
     {
-        Result<StationOutcomeExpansion, Failure> expanded = StationOutcomes.TryExpand(StationOutcomes.Power);
-        Assert.True(expanded.IsOk);
-        Assert.Equal(DebloatPresets.Recommended, expanded.Value.DebloatPreset);
-        Assert.Equal(StationOutcomes.PowerToolChipKeys, expanded.Value.ToolChipKeys);
-        Assert.Contains("neovim", expanded.Value.ToolChipKeys);
-        Assert.Contains("vscode", expanded.Value.ToolChipKeys);
-        Assert.Equal(CuratedDefaults.WslTokens, expanded.Value.WslTokens);
-        Assert.True(expanded.Value.Komorebi);
-
-        Result<PackageSelection, Failure> tools =
-            PackageCatalog.Default.ResolveToolKeys(expanded.Value.ToolChipKeys);
-        Assert.True(tools.IsOk, tools.IsOk ? null : tools.Error.Message);
+        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(StationOutcomes.Power);
+        Assert.True(seed.IsOk, seed.IsOk ? null : seed.Error.Message);
+        Assert.Contains("neovim", seed.Value.ToolChipKeys);
+        Assert.Contains("vscode", seed.Value.ToolChipKeys);
+        Assert.Equal(["FedoraLinux"], seed.Value.WslTokens);
+        Assert.True(seed.Value.Komorebi);
+        Assert.Equal(StationOutcomes.TaskbarWindows, seed.Value.TaskbarSurface);
+        Assert.Contains("LGUG2Z.komorebi", seed.Value.Packages.WingetInstallIds);
+        Assert.Contains("LGUG2Z.whkd", seed.Value.Packages.WingetInstallIds);
+        Assert.Contains("Komorebi", seed.Value.SelectionLabels);
+        Assert.Contains("Neovim", seed.Value.SelectionLabels);
+        Assert.Contains("VS Code", seed.Value.SelectionLabels);
     }
 
     [Fact]
-    public void Expand_unknown_fails()
+    public void Seed_unknown_fails()
     {
-        Result<StationOutcomeExpansion, Failure> expanded = StationOutcomes.TryExpand("lane");
-        Assert.False(expanded.IsOk);
-        Assert.Equal("station.outcome.unknown", expanded.Error.Code);
+        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed("lane");
+        Assert.False(seed.IsOk);
+        Assert.Equal("station.outcome.unknown", seed.Error.Code);
     }
 
     [Fact]
@@ -59,37 +76,24 @@ public class StationOutcomesTests
     {
         foreach (string outcome in new[] { StationOutcomes.Minimal, StationOutcomes.Comfort, StationOutcomes.Power })
         {
-            Result<StationOutcomeExpansion, Failure> seed = StationOutcomes.TryExpand(outcome);
+            Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(outcome);
             Assert.True(seed.IsOk);
-            Result<DebloatExpansion, Failure> debloat = DebloatPresets.TryExpand(seed.Value.DebloatPreset);
-            Assert.True(debloat.IsOk);
-            Result<PackageSelection, Failure> tools =
-                PackageCatalog.Default.ResolveToolKeys(seed.Value.ToolChipKeys);
-            Assert.True(tools.IsOk);
-            Result<IReadOnlyList<string>, Failure> wsl =
-                PackageCatalog.Default.ResolveWslTokens(seed.Value.WslTokens);
-            Assert.True(wsl.IsOk);
-
-            IReadOnlyList<string> winget = seed.Value.Komorebi
-                ? [.. tools.Value.WingetInstallIds, "LGUG2Z.komorebi", "LGUG2Z.whkd"]
-                : tools.Value.WingetInstallIds;
 
             Profile profile = new(
                 new AccountProfile("winmint", "lab-only", false),
                 new DmaProfile(true, new DmaSettleTarget("he-IL", 117, "Israel Standard Time", true)),
                 DebloatMode.Online,
-                debloat.Value.RemoveProvisionedAppx,
-                winget,
+                seed.Value.RemoveProvisionedAppx,
+                seed.Value.Packages.WingetInstallIds,
                 [],
-                tools.Value.ScoopInstallIds,
+                seed.Value.Packages.ScoopInstallIds,
                 [],
-                wsl.Value,
+                seed.Value.Packages.WslProfileTokens,
                 [],
-                debloat.Value.RemoveCapabilities,
-                debloat.Value.DisableOptionalFeatures);
+                seed.Value.RemoveCapabilities,
+                seed.Value.DisableOptionalFeatures);
 
             string json = Encoding.UTF8.GetString(BuildPlan.SerializeProfile(profile));
-            // Outcome / preset ids must not appear as JSON string values (substring "Power" in AppX ids is fine).
             Assert.DoesNotContain("\"minimal\"", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("\"comfort\"", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("\"power\"", json, StringComparison.OrdinalIgnoreCase);
