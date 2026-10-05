@@ -23,11 +23,13 @@ function Guest-EvidencePath([string] $Work) {
 function Invoke-StaticAssert {
     param(
         [string] $Work,
-        [string[]] $PinnedRemoveAppx = @()
+        [string[]] $PinnedRemoveAppx = @(),
+        [string[]] $PinnedOnlineRemoveAppx = @()
     )
     try {
         $splat = @{ EvidenceDir = $Work; StaticEvidenceOnly = $true }
         if ($PinnedRemoveAppx.Count -gt 0) { $splat.PinnedRemoveAppx = $PinnedRemoveAppx }
+        if ($PinnedOnlineRemoveAppx.Count -gt 0) { $splat.PinnedOnlineRemoveAppx = $PinnedOnlineRemoveAppx }
         $null = & $assert @splat
         return [pscustomobject]@{ Code = 0; Err = '' }
     }
@@ -145,6 +147,22 @@ try {
     $r = Invoke-StaticAssert $nodeprov
     if ($r.Code -eq 0) { throw 'online remove without deprovision mark must fail' }
     if ($r.Err -notmatch 'deprovisioned.appx') { throw "deprovision message: $($r.Err)" }
+
+    $alreadyAbsent = Join-Path $root 'alreadyAbsent'
+    Copy-Tree $fixture $alreadyAbsent
+    Remove-Item -LiteralPath (Join-Path $alreadyAbsent 'acceptance.json') -ErrorAction SilentlyContinue
+    $guest = Get-Content -LiteralPath (Guest-EvidencePath $alreadyAbsent) -Raw | ConvertFrom-Json
+    $guest.phases = @($guest.phases) + 'deprovisioned.appx.Microsoft.BingNews_8wekyb3d8bbwe'
+    ($guest | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Guest-EvidencePath $alreadyAbsent) -Encoding utf8
+    $r = Invoke-StaticAssert $alreadyAbsent -PinnedOnlineRemoveAppx @('Microsoft.BingNews')
+    if ($r.Code -ne 0) { throw "already-absent online appx must pass: $($r.Err)" }
+
+    $noAppxPhase = Join-Path $root 'noAppxPhase'
+    Copy-Tree $fixture $noAppxPhase
+    Remove-Item -LiteralPath (Join-Path $noAppxPhase 'acceptance.json') -ErrorAction SilentlyContinue
+    $r = Invoke-StaticAssert $noAppxPhase -PinnedOnlineRemoveAppx @('Microsoft.BingNews')
+    if ($r.Code -eq 0) { throw 'pinned online appx with no phase must fail' }
+    if ($r.Err -notmatch 'removed.appx.online.Microsoft.BingNews') { throw "absent appx message: $($r.Err)" }
 
     $live = Join-Path $root 'live'
     Copy-Tree $fixture $live

@@ -116,6 +116,7 @@ function ConvertFrom-WimInfoListText {
                 edition      = $(if ($snap.Edition) { [string]$snap.Edition } else { $null })
                 version      = $(if ($snap.Version) { [string]$snap.Version } else { $null })
                 build        = $(if ($snap.Build) { [string]$snap.Build } else { $null })
+                languages    = $(if ($snap.Languages) { [string]$snap.Languages } else { $null })
             })
     }
 

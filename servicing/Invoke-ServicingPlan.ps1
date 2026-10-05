@@ -20,6 +20,62 @@ $failurePath = $null
 $stagesPath = $null
 $currentStage = 'idle'
 $currentLog = ''
+function Invoke-WinMintLoggedKernel {
+    param(
+        [Parameter(Mandatory)] [string] $Path,
+        [Parameter(Mandatory)] [hashtable] $Parameters,
+        [Parameter(Mandatory)] [string] $LogFile,
+        [Parameter(Mandatory)] [string] $Opcode,
+        [int] $QuietSeconds = 20
+    )
+    # Parent writes the stage log so a silent kernel still gets a line every QuietSeconds.
+    $bag = [hashtable]::Synchronized(@{ Exit = 0 })
+    $ps = [powershell]::Create()
+    $out = [System.Management.Automation.PSDataCollection[psobject]]::new()
+    $writer = [IO.StreamWriter]::new($LogFile, $false, [Text.UTF8Encoding]::new($false))
+    $writer.AutoFlush = $true
+    $null = $ps.AddScript({
+            param($KernelPath, $Bound, $Bag)
+            $ErrorActionPreference = 'Stop'
+            & $KernelPath @Bound *>&1
+            $Bag.Exit = $LASTEXITCODE
+        }).AddArgument($Path).AddArgument($Parameters).AddArgument($bag)
+    $phase = [Diagnostics.Stopwatch]::StartNew()
+    $quiet = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        $handle = $ps.BeginInvoke(
+            ([System.Management.Automation.PSDataCollection[psobject]]::new()),
+            $out)
+        while (-not $handle.IsCompleted) {
+            foreach ($item in @($out.ReadAll())) {
+                $text = [string]$item
+                $writer.WriteLine($text)
+                Write-Host $text
+                $quiet.Restart()
+            }
+            if ($quiet.Elapsed.TotalSeconds -ge $QuietSeconds) {
+                $text = "$Opcode running $([int]$phase.Elapsed.TotalSeconds)s"
+                $writer.WriteLine($text)
+                Write-Host $text
+                $quiet.Restart()
+            }
+            $null = $handle.AsyncWaitHandle.WaitOne(1000)
+        }
+        foreach ($item in @($out.ReadAll())) {
+            $text = [string]$item
+            $writer.WriteLine($text)
+            Write-Host $text
+        }
+        $null = $ps.EndInvoke($handle)
+    }
+    finally {
+        $writer.Dispose()
+        $ps.Dispose()
+        $out.Dispose()
+    }
+    $global:LASTEXITCODE = [int]$bag.Exit
+}
+
 function Write-ApplyStatus {
     param([string] $Stage, [string] $Log = '')
     $script:currentStage = $Stage
@@ -286,7 +342,7 @@ try {
         $phaseClock = [System.Diagnostics.Stopwatch]::StartNew()
         New-Item -ItemType File -Force -Path $logFile | Out-Null
         try {
-            & $kernel @params *>&1 | Tee-Object -FilePath $logFile
+            Invoke-WinMintLoggedKernel -Path $kernel -Parameters $params -LogFile $logFile -Opcode $opcode
         }
         catch {
             Add-Content -LiteralPath $logFile -Value ([string]$_) -Encoding utf8

@@ -12,6 +12,7 @@ public class SourceMediaProbeTests
         Name : Windows 11 Home
         Architecture : ARM64
         Edition : Core
+        Languages : en-US
         Version : 10.0.26100.1
         ServicePack Build : 26100
 
@@ -21,6 +22,7 @@ public class SourceMediaProbeTests
         Edition : Professional
         Installation : Client
         ProductType : WinNT
+        Languages : en-US
         Version : 10.0.26100.1
         ServicePack Build : 26100
         """;
@@ -112,7 +114,24 @@ public class SourceMediaProbeTests
     }
 
     [Theory]
-    [InlineData(1, false, 1, 1)]
+    [InlineData("en-US", true)]
+    [InlineData("EN-us", true)]
+    [InlineData("en-US (Default)", true)]
+    [InlineData("EN-US (default)", true)]
+    [InlineData("en-US(Default)", true)]
+    [InlineData("en-US (Default), en-GB", true)]
+    [InlineData("en-GB (Default)\nen-US", false)]
+    [InlineData("en-GB", false)]
+    [InlineData("en-GB (Default)", false)]
+    [InlineData("en-US, en-GB", false)]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    public void IsSupportedSourceLanguage_alpha_english_us_only(string? languages, bool expected)
+    {
+        Assert.Equal(expected, WimIndexInfo.IsSupportedSourceLanguage(languages));
+    }
+
+    [Theory]
     [InlineData(3, false, 1, 1)]
     [InlineData(3, true, 1, 3)]
     [InlineData(5, true, 1, 1)]

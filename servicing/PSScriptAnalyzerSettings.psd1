@@ -10,6 +10,9 @@
     Severity     = @('Error', 'Warning')
     ExcludeRules = @(
         'PSUseBOMForUnicodeEncodedFile'
+        # Live Apply progress (BITS/hash/kernel echo) must not use the success stream —
+        # Write-Output would pollute function returns captured by callers.
+        'PSAvoidUsingWriteHost'
     )
     Rules        = @{
         PSUseCompatibleSyntax = @{

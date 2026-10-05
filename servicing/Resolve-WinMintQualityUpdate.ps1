@@ -249,10 +249,51 @@ function Save-WinMintCatalogPayload {
     if (-not (Test-Path -LiteralPath $bitsadmin)) {
         throw "bitsadmin.exe missing; cannot BITS-fetch Catalog payload"
     }
+    $leaf = Split-Path -Leaf $Destination
     $job = 'WinMintQuality-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
-    & $bitsadmin /transfer $job /download /priority FOREGROUND $Uri $Destination | Out-Null
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Destination)) {
-        throw "BITS download failed ($LASTEXITCODE): $Uri"
+    Write-Host "quality BITS start $leaf"
+    try {
+        & $bitsadmin /create /download $job | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "BITS /create failed ($LASTEXITCODE)" }
+        & $bitsadmin /addfile $job $Uri $Destination | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "BITS /addfile failed ($LASTEXITCODE): $Uri" }
+        & $bitsadmin /setpriority $job FOREGROUND | Out-Null
+        & $bitsadmin /resume $job | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "BITS /resume failed ($LASTEXITCODE): $Uri" }
+        $wait = [Diagnostics.Stopwatch]::StartNew()
+        while ($true) {
+            $lines = @(
+                & $bitsadmin /rawreturn /getstate $job 2>&1 |
+                    ForEach-Object { "$_".Trim() } |
+                    Where-Object { $_ }
+            )
+            if ($LASTEXITCODE -ne 0) {
+                throw "BITS /getstate failed ($LASTEXITCODE): $($lines -join ' ')"
+            }
+            $state = if ($lines.Count) { [string]$lines[-1] } else { 'UNKNOWN' }
+            $mb = 0
+            if (Test-Path -LiteralPath $Destination) {
+                $mb = [math]::Round((Get-Item -LiteralPath $Destination).Length / 1MB)
+            }
+            Write-Host "quality BITS $state ${mb}MB ${leaf} ($([int]$wait.Elapsed.TotalSeconds)s)"
+            if ($state -eq 'TRANSFERRED') { break }
+            if ($state -in @('ERROR', 'CANCELLED', 'ACKNOWLEDGED')) {
+                throw "BITS $state : $Uri"
+            }
+            if ($state -eq 'SUSPENDED') {
+                & $bitsadmin /resume $job | Out-Null
+            }
+            Start-Sleep -Seconds 15
+        }
+        & $bitsadmin /complete $job | Out-Null
+        if (-not (Test-Path -LiteralPath $Destination)) {
+            throw "BITS download failed: $Uri"
+        }
+        Write-Host "quality BITS ok $leaf"
+    }
+    catch {
+        & $bitsadmin /cancel $job 2>$null | Out-Null
+        throw
     }
 }
 
@@ -286,12 +327,19 @@ function Expand-WinMintQualitySsu {
             $null = & $ApplyWim $MsuPath $Destination
         }
         else {
-            # DISM writes banner/progress to the success stream; Out-Null keeps the
-            # function's only output the SSU path (else Split-Path sees '' first).
-            & dism.exe /English /Apply-Image /ImageFile:$MsuPath /Index:1 /ApplyDir:$Destination | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                throw "DISM /Apply-Image failed ($LASTEXITCODE) extracting WIM-MSU: $MsuPath"
+            # DISM progress stays off the success stream so the only return is the SSU path.
+            $leaf = Split-Path -Leaf $MsuPath
+            Write-Host "quality expand DISM start $leaf"
+            $proc = Start-Process -FilePath dism.exe -PassThru -NoNewWindow -ArgumentList @(
+                '/English', '/Apply-Image', "/ImageFile:`"$MsuPath`"", '/Index:1', "/ApplyDir:`"$Destination`"")
+            $wait = [Diagnostics.Stopwatch]::StartNew()
+            while (-not $proc.WaitForExit(20000)) {
+                Write-Host ("quality expand DISM running {0} ({1:n0}s)" -f $leaf, $wait.Elapsed.TotalSeconds)
             }
+            if ($proc.ExitCode -ne 0) {
+                throw "DISM /Apply-Image failed ($($proc.ExitCode)) extracting WIM-MSU: $MsuPath"
+            }
+            Write-Host "quality expand DISM ok $leaf"
         }
     }
     else {
@@ -654,7 +702,12 @@ function Get-WinMintCatalogPayload {
         [Parameter(Mandatory)] [string] $StagingDir
     )
     $cached = Resolve-WinMintCachedQualityFile -CacheRoot $CacheRoot -Kb $Kb -Architecture $Architecture
-    if ($cached) { return $cached }
+    if ($cached) {
+        $mb = [math]::Round((Get-Item -LiteralPath $cached).Length / 1MB)
+        Write-Host "quality-cache hit $Kb ${mb}MB $(Split-Path -Leaf $cached)"
+        return $cached
+    }
+    Write-Host "quality download $Kb"
     $dialog = Invoke-WinMintCatalogDownloadDialog -UpdateId $UpdateId
     $url = Select-WinMintCatalogMsuUrl -Urls (ConvertFrom-WinMintCatalogDownloadDialog -Text $dialog) -Kb $Kb
     $leaf = [IO.Path]::GetFileName(([uri]$url).AbsolutePath)
@@ -757,3 +810,4 @@ function Save-WinMintQualityCacheFile {
     }
     return [pscustomobject]@{ Path = $dest; Sha256 = $sha }
 }
+

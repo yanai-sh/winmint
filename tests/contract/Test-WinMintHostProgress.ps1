@@ -1,4 +1,9 @@
 #requires -Version 7.6
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSAvoidUsingInvokeExpression',
+    '',
+    Justification = 'Contract extracts Invoke-WinMintLoggedKernel / Get-WinMintHeartbeatSha256 from source for behavioural checks without elevating Apply.')]
+param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -14,13 +19,34 @@ if ($helper -match 'Clear-Host') { throw 'Format-WinMintHostWatch must return a 
 $plan = Get-Content -LiteralPath (Join-Path $repo 'servicing/Invoke-ServicingPlan.ps1') -Raw -Encoding utf8
 if ($plan -notmatch 'Write-WinMintHostPhase') { throw 'elevated loop must print host phases' }
 if ($plan -notmatch 'Write-WinMintHostProgress') { throw 'elevated loop must drive Write-Progress' }
-if ($plan -notmatch 'Tee-Object') { throw 'elevated loop must keep Tee-Object' }
+if ($plan -notmatch 'function Invoke-WinMintLoggedKernel') { throw 'elevated loop must log kernels through Invoke-WinMintLoggedKernel' }
+if ($plan -notmatch 'running \$') { throw 'elevated loop must heartbeat a silent kernel' }
+Invoke-Expression ([regex]::Match($plan, '(?ms)^function Invoke-WinMintLoggedKernel \{.*?^\}').Value)
+$kernelProbe = Join-Path ([IO.Path]::GetTempPath()) 'winmint-logged-kernel.ps1'
+$kernelLog = Join-Path ([IO.Path]::GetTempPath()) 'winmint-logged-kernel.log'
+Set-Content -LiteralPath $kernelProbe -Encoding utf8 -Value "Write-Output 'kernel-line'`r`nWrite-Host 'kernel-host'`r`nStart-Sleep -Seconds 4`r`n"
+Invoke-WinMintLoggedKernel -Path $kernelProbe -Parameters @{} -LogFile $kernelLog -Opcode 'ProbeOp' -QuietSeconds 1
+$kernelText = Get-Content -LiteralPath $kernelLog -Raw -Encoding utf8
+Remove-Item -LiteralPath $kernelProbe, $kernelLog -Force
+if ($kernelText -notmatch 'kernel-line') { throw 'logged kernel dropped stdout' }
+if ($kernelText -notmatch 'kernel-host') { throw 'logged kernel dropped host line' }
+if ($kernelText -notmatch 'ProbeOp running') { throw 'silent kernel produced no heartbeat' }
 if ($plan -notmatch "updated=.*`r?`n.*stage=.*`r?`n.*log=") { throw 'apply-status schema keys changed' }
 if ($plan -match "Resolve-KernelScript.*Write-WinMintHostProgress") { throw 'helper must not be an opcode kernel' }
 
 $quality = Get-Content -LiteralPath (Join-Path $repo 'servicing/Add-QualityUpdates.ps1') -Raw -Encoding utf8
 if ($quality -notmatch 'Catalog search start') { throw 'AddQualityUpdates must announce Catalog search' }
 if ($quality -notmatch 'Catalog BITS start') { throw 'AddQualityUpdates must announce BITS' }
+if ($quality -notmatch 'quality hash start') { throw 'AddQualityUpdates must announce hash' }
+if ($quality -notmatch 'quality expand start') { throw 'AddQualityUpdates must announce expand' }
+if ($quality -notmatch 'quality packages apply') { throw 'AddQualityUpdates must announce package apply' }
+Invoke-Expression ([regex]::Match($quality, '(?ms)^function Get-WinMintHeartbeatSha256 \{.*?^\}').Value)
+$hashSample = Join-Path ([IO.Path]::GetTempPath()) 'winmint-heartbeat-sha256.txt'
+Set-Content -LiteralPath $hashSample -Value 'winmint-heartbeat' -Encoding ascii -NoNewline
+$heartbeat = Get-WinMintHeartbeatSha256 -Path $hashSample
+$expectedSha = (Get-FileHash -LiteralPath $hashSample -Algorithm SHA256).Hash.ToLowerInvariant()
+Remove-Item -LiteralPath $hashSample -Force
+if ($heartbeat -ne $expectedSha) { throw "heartbeat sha256 $heartbeat != $expectedSha" }
 $searchAt = $quality.IndexOf('Catalog search start')
 $resolvedAt = $quality.IndexOf('$resolved = Invoke-WinMintQualityCatalogResolve')
 $bitsAt = $quality.IndexOf('Catalog BITS start')
@@ -34,6 +60,9 @@ foreach ($fn in [regex]::Matches($quality, '(?ms)^function\s+\S+.*?^}')) {
 
 $smoke = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Invoke-Smoke.ps1') -Raw -Encoding utf8
 if ($smoke -notmatch 'Write-WinMintHostPhase') { throw 'Smoke host lines must use helper phase' }
+if ($smoke -notmatch 'wait \$\{elapsedMin\}m') { throw 'Smoke wait must print a beat every poll' }
+if ($smoke -notmatch 'packages\.evidence\.json') { throw 'Smoke must pull packages.evidence.json when the guest wrote it' }
+if ($smoke -match 'Start-Sleep -Seconds 30') { throw 'Smoke wait poll must stay at 20s so the beat is visible' }
 if ($smoke -notmatch 'Write-WinMintHostProgress') { throw 'Smoke host lines must use helper progress' }
 if ($smoke -notmatch 'Write-WinMintHostProgress -Activity wait -Status') { throw 'wait phase uses helper without percent' }
 if ($smoke -match 'PercentComplete') { throw 'Smoke wait must not invent a fake percent' }

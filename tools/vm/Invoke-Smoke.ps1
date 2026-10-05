@@ -388,7 +388,11 @@ function Test-GuestEvidenceReady {
     # Reboot evidence is not terminal — keep waiting for resume → Complete (ticket 17).
     # Complete evidence alone is not terminal — require live explorer shell and no Supervisor process.
     try {
-        $sessionParams = @{ VMName = $VmName; ErrorAction = 'Stop' }
+        $sessionParams = @{
+            VMName        = $VmName
+            ErrorAction   = 'Stop'
+            SessionOption = (New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 30000 -CancelTimeout 5000)
+        }
         if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
         $session = New-PSSession @sessionParams
         try {
@@ -459,6 +463,14 @@ function Test-GuestEvidenceReady {
             }
             if ($chromeRemote) {
                 Copy-Item -FromSession $session -Path $chromeRemote -Destination (Join-Path $guestDir 'shell-chrome.json') -Force
+            }
+
+            $packageEvidenceRemote = Invoke-Command -Session $session -ScriptBlock {
+                $p = Join-Path $env:ProgramData 'WinMint\evidence\packages.evidence.json'
+                if (Test-Path -LiteralPath $p) { $p } else { $null }
+            }
+            if ($packageEvidenceRemote) {
+                Copy-Item -FromSession $session -Path $packageEvidenceRemote -Destination (Join-Path $guestDir 'packages.evidence.json') -Force
             }
 
             if (-not (Test-WinMintGuestEvidenceTerminal -EvidenceDoc $pulled `
@@ -571,7 +583,11 @@ Send-VmBootNudge
 function Try-StampSmokeRunId {
     if ($script:SmokeRunIdStamped) { return }
     try {
-        $sessionParams = @{ VMName = $VmName; ErrorAction = 'Stop' }
+        $sessionParams = @{
+            VMName        = $VmName
+            ErrorAction   = 'Stop'
+            SessionOption = (New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 30000 -CancelTimeout 5000)
+        }
         if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
         $stampSession = New-PSSession @sessionParams
         try {
@@ -689,8 +705,12 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         $script:ConsecutiveHeartbeatOk = [int]$tick.ConsecutiveHeartbeatOk
         $stallLeft = [math]::Max(0, [int]($StallMinutes - $stallSw.Elapsed.TotalMinutes))
         $wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
-        $hostLine = [string]$tick.HostLine
-        if ($script:LastProbeError) { $hostLine = "PS Direct: $($script:LastProbeError)" }
+        $elapsedMin = [int]$wallSw.Elapsed.TotalMinutes
+        $hbText = if ($hb) { 'OK' } else { 'No Contact' }
+        $vhdMbNow = [int][math]::Round($vhdBytes / 1MB)
+        $beat = "wait ${elapsedMin}m $vmStateNow cpu=$cpu heartbeat=$hbText vhd=${vhdMbNow}MB stall=${stallLeft}m"
+        Write-SmokeHostLine -Name $beat -Activity wait
+        $hostLine = if ($script:LastProbeError) { "PS Direct: $($script:LastProbeError)" } else { $beat }
         Write-SmokeStatus -Path $statusPath -Phase $tick.Phase -VmName $VmName -VmState $vmStateNow `
             -Cpu $cpu -Heartbeat $(if ($hb) { 'OK' } else { 'No Contact' }) `
             -VhdFileSizeMB ([int][math]::Round($vhdBytes / 1MB)) `
@@ -704,7 +724,7 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         }
         if ($tick.SendNudge) { Send-VmBootNudge }
 
-        Start-Sleep -Seconds 30
+        Start-Sleep -Seconds 20
     }
 
     if (-not (Get-ChildItem -LiteralPath $guestDir -Filter 'evidence-*.json' -ErrorAction SilentlyContinue)) {

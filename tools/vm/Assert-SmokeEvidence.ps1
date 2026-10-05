@@ -20,7 +20,8 @@ param(
     # Empty ⇒ skip keep-flag digest asserts. Full Smoke run passes Profile remove-lists.
     [string[]] $PinnedRemoveAppx = @(),
 
-    # Online debloat: assert guest phase removed.appx.online.{id} instead of offline apply digest.
+    # Online debloat: a live remove (removed.appx.online.{id}) or a deprovision mark
+    # (package already absent on the image) both satisfy the pin.
     [string[]] $PinnedOnlineRemoveAppx = @(),
 
     [string[]] $PinnedRemoveCapabilities = @(),
@@ -187,10 +188,11 @@ if (@($PinnedOnlineRemoveAppx).Count -gt 0) {
     $phaseList = @($guest.phases)
     foreach ($id in $PinnedOnlineRemoveAppx) {
         if ([string]::IsNullOrWhiteSpace($id)) { continue }
-        $phase = "removed.appx.online.$id"
-        if ($phaseList -notcontains $phase) {
-            throw "online debloat phase missing: expected guest phases to contain '$phase'"
-        }
+        $removed = "removed.appx.online.$id"
+        $marked = @($phaseList | Where-Object { $_ -like "deprovisioned.appx.${id}_*" })
+        if ($phaseList -contains $removed -or $marked.Count -gt 0) { continue }
+        throw ("online debloat phase missing: expected '$removed' or " +
+            "'deprovisioned.appx.${id}_*' (already absent on the image)")
     }
 }
 Assert-PinnedDigests -Ids $PinnedRemoveCapabilities -KeyPrefix 'removed.capability.' -ExpectedValue 'Absent' -Label 'capability'

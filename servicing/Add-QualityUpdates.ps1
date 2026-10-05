@@ -23,6 +23,36 @@ function Write-QualityEvidence {
     }
 }
 
+function Get-WinMintHeartbeatSha256 {
+    param([Parameter(Mandatory)] [string] $Path)
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $buffer = New-Object byte[] (8MB)
+        $total = $stream.Length
+        if ($total -le 0) { throw "quality hash empty: $Path" }
+        $done = [int64]0
+        $mark = [int64]256MB
+        Write-Host ("quality hash 0% 0/{0:n0} MB" -f ($total / 1MB))
+        while (($n = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $null = $sha256.TransformBlock($buffer, 0, $n, $null, 0)
+            $done += $n
+            if ($done -ge $mark -or $done -eq $total) {
+                $pct = [math]::Floor(100.0 * $done / $total)
+                Write-Host ("quality hash {0}% {1:n0}/{2:n0} MB" -f $pct, ($done / 1MB), ($total / 1MB))
+                while ($mark -le $done) { $mark += 256MB }
+            }
+        }
+        $empty = New-Object byte[] 0
+        $null = $sha256.TransformFinalBlock($empty, 0, 0)
+        return ([BitConverter]::ToString($sha256.Hash)).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $stream.Dispose()
+        $sha256.Dispose()
+    }
+}
+
 $wimFile = Join-Path $MediaDir 'sources\install.wim'
 if (-not (Test-Path -LiteralPath $wimFile)) { throw "install.wim missing: $wimFile" }
 if (-not (Test-Path -LiteralPath $MountDir)) { throw "install mount missing: $MountDir" }
@@ -71,13 +101,18 @@ try {
     if (-not (Test-WinMintQualityKbLeaf -Name (Split-Path -Leaf $lcuPath) -Kb $resolved.Kb)) {
         throw "Combined LCU payload leaf is not $($resolved.Kb): $lcuPath"
     }
-    $sha = (Get-FileHash -LiteralPath $lcuPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $lcuLeaf = Split-Path -Leaf $lcuPath
+    $lcuMb = [math]::Round((Get-Item -LiteralPath $lcuPath).Length / 1MB)
+    Write-Output "quality hash start $lcuLeaf ${lcuMb}MB"
+    $sha = Get-WinMintHeartbeatSha256 -Path $lcuPath
+    Write-Output "quality hash ok $lcuLeaf"
     Copy-Item -LiteralPath $lcuPath -Destination (Join-Path $QualityPackageDir $lcuLeaf) -Force
 
     $extract = Join-Path $staging 'expand'
+    Write-Output "quality expand start $lcuLeaf"
     $ssuPath = Expand-WinMintQualitySsu -MsuPath $lcuPath -Destination $extract
     $ssuLeaf = Split-Path -Leaf $ssuPath
+    Write-Output "quality expand ok $ssuLeaf"
     Copy-Item -LiteralPath $ssuPath -Destination (Join-Path $QualityPackageDir $ssuLeaf) -Force
 
     $bootStlSrc = Find-WinMintQualityBootStl -ExtractDir $extract
@@ -87,6 +122,7 @@ try {
 
     $checkpointLeaves = [System.Collections.Generic.List[string]]::new()
     foreach ($ckb in @(ConvertFrom-WinMintCatalogCheckpointKb -Text $resolved.DetailsHtml -TargetKb $resolved.Kb)) {
+        Write-Output "quality checkpoint $ckb"
         $ckHtml = Invoke-WinMintCatalogSearchHtml -Query "$ckb ARM64-based Systems"
         $ckRows = ConvertFrom-WinMintCatalogSearchHtml -Html $ckHtml
         $ckHit = @($ckRows | Where-Object { $_.Kb -eq $ckb -and $_.Title -match 'ARM64-based Systems' } | Select-Object -First 1)
@@ -121,6 +157,7 @@ try {
         Copy-Item -LiteralPath $safePath -Destination (Join-Path $QualityPackageDir $safeLeaf) -Force
     }
 
+    Write-Output "quality packages apply"
     $null = Invoke-WinMintQualityPackagesApply `
         -MountDir $MountDir `
         -PackageDir $QualityPackageDir `

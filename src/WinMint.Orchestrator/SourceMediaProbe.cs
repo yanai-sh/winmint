@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace WinMint.Orchestrator;
 
@@ -55,14 +56,54 @@ public readonly record struct SourceIsoIdentity(string Sha256, long Length)
     }
 }
 
-public sealed record WimIndexInfo(
+public sealed partial record WimIndexInfo(
     int Index,
     string Name,
     string? Architecture,
     string? Edition,
     string? Version,
-    string? Build)
+    string? Build,
+    string? Languages = null)
 {
+    public static bool IsSupportedSourceLanguage(string? languages)
+    {
+        if (string.IsNullOrWhiteSpace(languages))
+        {
+            return false;
+        }
+
+        MatchCollection tags = LanguageTag().Matches(languages);
+        if (tags.Count == 0)
+        {
+            return false;
+        }
+
+        // DISM prints "en-US (Default)" and may list fallbacks. The default tag is the install language.
+        string? marked = null;
+        int markedCount = 0;
+        foreach (Match tag in tags)
+        {
+            if (!tag.Groups["mark"].Success)
+            {
+                continue;
+            }
+
+            markedCount++;
+            marked = tag.Groups["tag"].Value;
+        }
+
+        string? primary = markedCount == 1
+            ? marked
+            : tags.Count == 1 ? tags[0].Groups["tag"].Value : null;
+        return primary is not null
+            && primary.Equals(BuildPlan.SupportedSourceInstallLanguage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [GeneratedRegex(
+        @"\b(?<tag>[A-Za-z]{2,3}-[A-Za-z]{2})\b(?:\s*\(\s*(?<mark>default)\s*\))?",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex LanguageTag();
+
     public static int ResolveSelection(
         IReadOnlyList<WimIndexInfo> rows,
         int currentIndex,
@@ -184,6 +225,15 @@ public sealed class SourceMediaProbe : ISourceMediaProbe
         }
 
         WimIndexInfo? selected = listed.Value.FirstOrDefault(row => row.Index == wimIndex);
+
+        if (selected is not null && !WimIndexInfo.IsSupportedSourceLanguage(selected.Languages))
+        {
+            return Result.Fail<SourceMediaReview, Failure>(
+                new Failure(
+                    "sourceIso.language.unsupported",
+                    $"WinMint alpha supports English (US) Source ISO only (install.wim Languages must be "
+                    + $"{BuildPlan.SupportedSourceInstallLanguage}; got '{selected.Languages ?? "missing"}')."));
+        }
 
         Result<SourceIsoIdentity, Failure> hashed =
             await SourceIsoIdentity.FromFileAsync(fullPath, cancellationToken).ConfigureAwait(false);
@@ -318,7 +368,8 @@ internal static class PwshWimIndexSource
                     NullIfEmpty(row.Architecture),
                     NullIfEmpty(row.Edition),
                     NullIfEmpty(row.Version),
-                    NullIfEmpty(row.Build)));
+                    NullIfEmpty(row.Build),
+                    NullIfEmpty(row.Languages)));
             }
 
             return Result.Ok<IReadOnlyList<WimIndexInfo>, Failure>(Array.AsReadOnly(rows.ToArray()));
@@ -359,6 +410,7 @@ internal sealed class WimIndexFile
     public string? Edition { get; set; }
     public string? Version { get; set; }
     public string? Build { get; set; }
+    public string? Languages { get; set; }
 }
 
 [JsonSerializable(typeof(WimIndexListFile))]
