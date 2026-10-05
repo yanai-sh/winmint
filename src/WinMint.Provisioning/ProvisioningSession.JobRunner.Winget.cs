@@ -291,7 +291,7 @@ internal static partial class ProvisioningJobRunner
         {
             ct.ThrowIfCancellationRequested();
             if (package.Id.Equals(ShellChromeLayout.ZenWingetId, StringComparison.OrdinalIgnoreCase)
-                && await TryInstallZenUserAsync(env.Processes, wingetExe, elevated, env.ReportStatus, ct)
+                && await TryInstallZenUserAsync(env.Guest.Processes, wingetExe, elevated, env.ReportStatus, ct)
                     .ConfigureAwait(false))
             {
                 continue;
@@ -301,7 +301,7 @@ internal static partial class ProvisioningJobRunner
             env.ReportStatus(new SessionStatus(
                 $"jobs.winget.{package.Id}.running",
                 $"{package.Id} in progress…"));
-            ProcessStartResult started = await env.Processes.RunAsync(
+            ProcessStartResult started = await env.Guest.Processes.RunAsync(
                 wingetExe,
                 BuildWingetInstallArguments(package.Id, package.OverrideArguments, logPath),
                 ct).ConfigureAwait(false);

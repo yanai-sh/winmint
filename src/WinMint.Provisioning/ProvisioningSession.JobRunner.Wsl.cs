@@ -11,7 +11,7 @@ internal static partial class ProvisioningJobRunner
     {
         JobRunnerEnv env = context.Env;
         ProvisionJob job = context.Job;
-        if (env.IsHypervisorGuest())
+        if (env.Guest.IsHypervisorGuest())
         {
             env.WslMock.Mocked = true;
             env.ReportStatus(new SessionStatus(
@@ -19,7 +19,7 @@ internal static partial class ProvisioningJobRunner
                 "WSL mocked on hypervisor guest."));
             try
             {
-                env.TryStageWslTerminalMock(remainingDistros);
+                env.Guest.TryStageWslTerminalMock(remainingDistros);
             }
             catch
             {
@@ -29,7 +29,7 @@ internal static partial class ProvisioningJobRunner
             return null;
         }
 
-        bool ready = env.IsWslPlatformReady();
+        bool ready = env.Guest.IsWslPlatformReady();
         if (ready)
         {
             SessionStatus skip = new("jobs.wsl.platform.ready", "WSL / Virtual Machine Platform already active.");
@@ -39,7 +39,7 @@ internal static partial class ProvisioningJobRunner
 
         try
         {
-            ProcessStartResult started = await env.Processes.RunAsync(
+            ProcessStartResult started = await env.Guest.Processes.RunAsync(
                     "wsl.exe",
                     ["--install", "--no-distribution"],
                     ct)
@@ -65,7 +65,7 @@ internal static partial class ProvisioningJobRunner
 
     private static void SuppressWslOobe(JobRunnerEnv env)
     {
-        env.SuppressWslOobe();
+        env.Guest.SuppressWslOobe();
     }
 
     private static async Task<JobsRunResult?> RunWslFromFileInstallAsync(
@@ -79,7 +79,7 @@ internal static partial class ProvisioningJobRunner
             return FailJob(env, "jobs.failed", $"{job.Id}: fromFile WSL requires repo and asset names.");
         }
 
-        if (env.AssetDownload is null)
+        if (env.Guest.AssetDownload is null)
         {
             return FailJob(env, "jobs.failed", $"{job.Id}: fromFile WSL requires IAssetDownload.");
         }
@@ -87,7 +87,7 @@ internal static partial class ProvisioningJobRunner
         string? assetPath;
         try
         {
-            assetPath = await env.AssetDownload.TryDownloadGitHubReleaseAssetAsync(
+            assetPath = await env.Guest.AssetDownload.TryDownloadGitHubReleaseAssetAsync(
                     job.WslFromFileRepo,
                     job.WslFromFileAssetNames,
                     ct)
@@ -108,7 +108,7 @@ internal static partial class ProvisioningJobRunner
 
         try
         {
-            ProcessStartResult started = await env.Processes.RunAsync(
+            ProcessStartResult started = await env.Guest.Processes.RunAsync(
                     "wsl.exe",
                     ["--install", "--from-file", assetPath, "--no-launch"],
                     ct)

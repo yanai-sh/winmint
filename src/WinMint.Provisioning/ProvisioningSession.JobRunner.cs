@@ -7,9 +7,13 @@ internal sealed class WslMockState
     public bool Mocked;
 }
 
+/// <summary>
+/// Tenure-local job knobs + guest. Guest capabilities stay on <see cref="IGuestMachine"/> —
+/// do not re-project them into parallel fields.
+/// </summary>
 internal sealed record JobRunnerEnv(
+    IGuestMachine Guest,
     IReadOnlyList<string> RemoveProvisionedAppx,
-    IProcessHost Processes,
     TimeProvider Time,
     Action<SessionStatus> ReportStatus,
     IEvidenceSink Evidence,
@@ -17,15 +21,6 @@ internal sealed record JobRunnerEnv(
     TimeSpan WallClockTimeout,
     long TenureStartTimestamp,
     int StartIndex,
-    IAppxPackageManager? Appx,
-    Func<string?>? ResolveScoopCmd,
-    IAssetDownload? AssetDownload,
-    Func<bool> IsWslPlatformReady,
-    Action ApplyWorkstationQuiet,
-    Func<ShellChromeRequest, bool> ApplyShellChrome,
-    Action<IReadOnlyList<string>> TryStageWslTerminalMock,
-    Action SuppressWslOobe,
-    Func<bool> IsHypervisorGuest,
     WslMockState WslMock);
 
 internal enum JobsRunKind
@@ -156,7 +151,7 @@ internal static partial class ProvisioningJobRunner
                                 $"Job '{job.Id}' kind winget requires packageId.");
                         }
 
-                        if (env.Appx is null)
+                        if (env.Guest.Appx is null)
                         {
                             return FailJob(
                                 env,
@@ -166,7 +161,7 @@ internal static partial class ProvisioningJobRunner
 
                         try
                         {
-                            await env.Appx.RegisterPackageFamilyForCurrentUserAsync(
+                            await env.Guest.Appx.RegisterPackageFamilyForCurrentUserAsync(
                                     ProvisioningSession.DesktopAppInstallerFamilyName,
                                     ct)
                                 .ConfigureAwait(false);
@@ -184,7 +179,7 @@ internal static partial class ProvisioningJobRunner
                             continue;
                         }
 
-                        string? resolvedWinget = env.Appx.TryResolveWingetExecutablePath();
+                        string? resolvedWinget = env.Guest.Appx.TryResolveWingetExecutablePath();
                         if (string.IsNullOrWhiteSpace(resolvedWinget))
                         {
                             JobsRunResult? pathFail = context.RecordPackageFailure(
@@ -261,7 +256,7 @@ internal static partial class ProvisioningJobRunner
                                 $"Job '{job.Id}' kind {kindWire} requires packageId.");
                         }
 
-                        if (env.ResolveScoopCmd is null)
+                        if (env.Guest.ResolveScoopCmd is null)
                         {
                             return FailJob(
                                 env,
@@ -295,7 +290,7 @@ internal static partial class ProvisioningJobRunner
                                 ProcessStartResult bucketAdd;
                                 try
                                 {
-                                    bucketAdd = await env.Processes.RunAsync(
+                                    bucketAdd = await env.Guest.Processes.RunAsync(
                                             scoopCmd,
                                             ["bucket", "add", bucket],
                                             ct)
@@ -477,7 +472,7 @@ internal static partial class ProvisioningJobRunner
                 env.ReportStatus(new SessionStatus(
                     $"jobs.{job.Id}.running",
                     $"{job.Id} in progress…"));
-                started = await env.Processes.RunAsync(fileName, arguments, ct).ConfigureAwait(false);
+                started = await env.Guest.Processes.RunAsync(fileName, arguments, ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

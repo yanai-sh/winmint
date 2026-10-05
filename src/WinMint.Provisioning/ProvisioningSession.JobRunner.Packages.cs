@@ -26,7 +26,7 @@ internal static partial class ProvisioningJobRunner
 
         try
         {
-            ProcessStartResult started = await env.Processes.RunAsync(setup, ["/uninstall"], ct)
+            ProcessStartResult started = await env.Guest.Processes.RunAsync(setup, ["/uninstall"], ct)
                 .ConfigureAwait(false);
             // Non-zero is common when OneDrive was never fully installed; treat as best-effort ok.
             _ = started;
@@ -49,8 +49,8 @@ internal static partial class ProvisioningJobRunner
             IReadOnlyList<string> ids = CollectAllWingetIds(jobs);
             ShellDesktopRequest request = new(
                 ids,
-                env.Processes,
-                env.AssetDownload,
+                env.Guest.Processes,
+                env.Guest.AssetDownload,
                 ShellDesktopLayout.GuestDesktopRoot,
                 ShellDesktopLayout.DefaultThideInstallDir,
                 ShellDesktopLayout.DefaultYasbConfigDir,
@@ -75,7 +75,7 @@ internal static partial class ProvisioningJobRunner
         try
         {
             IReadOnlyList<string> ids = CollectSelectedWingetIds(jobs);
-            if (!env.ApplyShellChrome(new ShellChromeRequest(
+            if (!env.Guest.ApplyShellChrome(new ShellChromeRequest(
                     FailOpen: false,
                     ids,
                     RequireSelectedPins: env.PackageStrict)))
@@ -173,7 +173,7 @@ internal static partial class ProvisioningJobRunner
     {
         try
         {
-            env.ApplyWorkstationQuiet();
+            env.Guest.ApplyWorkstationQuiet();
             SessionStatus ok = new("jobs.workstation.quiet", "Dark theme and quiet user defaults applied.");
             env.ReportStatus(ok);
             return null;
@@ -227,7 +227,7 @@ internal static partial class ProvisioningJobRunner
 
         try
         {
-            ProcessStartResult started = await env.Processes.RunAsync(
+            ProcessStartResult started = await env.Guest.Processes.RunAsync(
                     "powershell.exe",
                     ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
                     ct)
@@ -250,7 +250,7 @@ internal static partial class ProvisioningJobRunner
         ProvisionJob job,
         CancellationToken ct)
     {
-        if (env.Appx is null)
+        if (env.Guest.Appx is null)
         {
             return FailJob(env, "jobs.failed", $"Job '{job.Id}' requires IAppxPackageManager.");
         }
@@ -272,9 +272,9 @@ internal static partial class ProvisioningJobRunner
                 }
 
                 bool touched = false;
-                foreach (AppxPackageInfo registered in env.Appx.FindRegisteredByCatalogId(catalogId))
+                foreach (AppxPackageInfo registered in env.Guest.Appx.FindRegisteredByCatalogId(catalogId))
                 {
-                    await env.Appx.RemovePackageAsync(registered.PackageFullName, ct).ConfigureAwait(false);
+                    await env.Guest.Appx.RemovePackageAsync(registered.PackageFullName, ct).ConfigureAwait(false);
                     touched = true;
                     if (!string.IsNullOrWhiteSpace(registered.PackageFamilyName))
                     {
@@ -282,9 +282,9 @@ internal static partial class ProvisioningJobRunner
                     }
                 }
 
-                foreach (AppxPackageInfo provisioned in env.Appx.FindProvisionedByCatalogId(catalogId))
+                foreach (AppxPackageInfo provisioned in env.Guest.Appx.FindProvisionedByCatalogId(catalogId))
                 {
-                    await env.Appx.DeprovisionPackageFamilyAsync(provisioned.PackageFamilyName, ct)
+                    await env.Guest.Appx.DeprovisionPackageFamilyAsync(provisioned.PackageFamilyName, ct)
                         .ConfigureAwait(false);
                     touched = true;
                     if (!string.IsNullOrWhiteSpace(provisioned.PackageFamilyName))
@@ -310,7 +310,7 @@ internal static partial class ProvisioningJobRunner
 
             foreach (string pfn in families.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
             {
-                env.Appx.EnsureDeprovisionedMark(pfn);
+                env.Guest.Appx.EnsureDeprovisionedMark(pfn);
                 env.ReportStatus(new SessionStatus(
                     $"deprovisioned.appx.{pfn}",
                     $"Ensured deprovisioned mark for '{pfn}'."));
@@ -323,8 +323,8 @@ internal static partial class ProvisioningJobRunner
                     continue;
                 }
 
-                if (env.Appx.FindRegisteredByCatalogId(catalogId).Count > 0
-                    || env.Appx.FindProvisionedByCatalogId(catalogId).Count > 0)
+                if (env.Guest.Appx.FindRegisteredByCatalogId(catalogId).Count > 0
+                    || env.Guest.Appx.FindProvisionedByCatalogId(catalogId).Count > 0)
                 {
                     return FailJob(
                         env,

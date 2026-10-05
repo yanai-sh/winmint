@@ -7,7 +7,7 @@ internal static partial class ProvisioningJobRunner
         CancellationToken ct)
     {
         JobRunnerEnv env = context.Env;
-        string? scoopCmd = env.ResolveScoopCmd!();
+        string? scoopCmd = env.Guest.ResolveScoopCmd!();
         if (scoopCmd is not null)
         {
             return (null, scoopCmd);
@@ -16,7 +16,7 @@ internal static partial class ProvisioningJobRunner
         ProcessStartResult bootstrap;
         try
         {
-            bootstrap = await env.Processes.RunAsync(
+            bootstrap = await env.Guest.Processes.RunAsync(
                     "powershell.exe",
                     [
                         "-NoProfile",
@@ -46,7 +46,7 @@ internal static partial class ProvisioningJobRunner
             return (fail, null);
         }
 
-        scoopCmd = env.ResolveScoopCmd!();
+        scoopCmd = env.Guest.ResolveScoopCmd!();
         if (scoopCmd is null)
         {
             JobsRunResult? fail = context.RecordPackageFailure(

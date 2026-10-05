@@ -170,8 +170,8 @@ public static partial class ProvisioningSession
         try
         {
             JobRunnerEnv runnerEnv = new(
+                Guest: env.Guest,
                 RemoveProvisionedAppx: bundle.RemoveProvisionedAppx ?? [],
-                Processes: env.Guest.Processes,
                 Time: env.Time,
                 ReportStatus: status => Note(env, phases, status),
                 Evidence: env.Evidence,
@@ -179,15 +179,6 @@ public static partial class ProvisioningSession
                 WallClockTimeout: bundle.Policy.WallClockTimeout,
                 TenureStartTimestamp: tenureStartTs,
                 StartIndex: jobStartIndex,
-                Appx: env.Guest.Appx,
-                ResolveScoopCmd: env.Guest.ResolveScoopCmd,
-                AssetDownload: env.Guest.AssetDownload,
-                IsWslPlatformReady: env.Guest.IsWslPlatformReady,
-                ApplyWorkstationQuiet: env.Guest.ApplyWorkstationQuiet,
-                ApplyShellChrome: env.Guest.ApplyShellChrome,
-                TryStageWslTerminalMock: env.Guest.TryStageWslTerminalMock,
-                SuppressWslOobe: env.Guest.SuppressWslOobe,
-                IsHypervisorGuest: env.Guest.IsHypervisorGuest,
                 WslMock: new WslMockState());
             jobs = await ProvisioningJobRunner.Run(bundle.Jobs, runnerEnv, ct)
                 .ConfigureAwait(false);
