@@ -5,9 +5,24 @@ using WinMint.Contracts;
 
 namespace WinMint.Orchestrator;
 
+/// <summary>
+/// Effective package/job slice: ProductPosture merge + catalog resolve + FirstLogon jobs.
+/// BuildPlan.Plan composes this with unattend/opcodes; Wizard seed is not a peer planner.
+/// </summary>
+internal static class SoftwarePlan
+{
+    internal static Result<PackagePlanSlice, Failure> TryPlan(
+        Profile profile,
+        PackageCatalog catalog,
+        string imageArchitecture,
+        bool auditStrict) =>
+        BuildPlan.PlanPackages(profile, catalog, imageArchitecture, auditStrict);
+}
+
 public static partial class BuildPlan
 {
-    private static Result<PackagePlanSlice, Failure> PlanPackages(
+    /// <summary>Package/posture planning seam used by <see cref="SoftwarePlan"/> and <see cref="Plan"/>.</summary>
+    internal static Result<PackagePlanSlice, Failure> PlanPackages(
         Profile profile,
         PackageCatalog catalog,
         string imageArchitecture,

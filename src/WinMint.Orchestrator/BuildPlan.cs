@@ -412,7 +412,7 @@ public static partial class BuildPlan
         string imageArchitecture = string.IsNullOrWhiteSpace(options.ImageArchitecture)
             ? PackageCatalog.DefaultImageArchitecture
             : PackageCatalog.NormalizeArch(options.ImageArchitecture);
-        Result<PackagePlanSlice, Failure> packages = PlanPackages(
+        Result<PackagePlanSlice, Failure> packages = SoftwarePlan.TryPlan(
             profile,
             catalog,
             imageArchitecture,
