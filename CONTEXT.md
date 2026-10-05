@@ -102,6 +102,9 @@ _Avoid_: calling Wizard UI chrome “Shell”
 **Shell chrome** — FirstLogon job `shell.chrome`: Start/taskbar pin layout. Nilesoft Shell is included WinMint chrome for Windows-cohesive context menus, not a user-selectable taskbar layer.  
 _Avoid_: treating Nilesoft as a taskbar surface choice; conflating with Desktop surfaces
 
+**WSL terminal prefer** — FirstLogon job `wsl.terminal`: on metal with `packages.wsl`, merge Windows Terminal `settings.json` so `defaultProfile` is the first WSL distro; profile `startingDirectory` to Linux home only when the profile username is known. Fail-open; Hyper-V WSL mock skips (Smoke uses `Win32WslTerminalMock`); merge only, never replace the whole file.  
+_Avoid_: OS default terminal; whole-file `settings.json` replace; failing FirstLogon on merge miss; running prefer on hypervisor mock
+
 **Desktop surfaces** — Two independent axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)): **taskbar surface** (Windows taskbar default, or YASB + tHide) and **window management** (optional Komorebi). Wizard Software stage; package catalog owns package ids; provisioning job `shell.desktop` owns tHide install/pin/hash and applies assets under `payload/desktop/`.  
 _Avoid_: one flat package-checkbox row for both axes; overlapping taskbar layers; Windhawk automation without a stable CLI; redistributing cursors without a license
 
