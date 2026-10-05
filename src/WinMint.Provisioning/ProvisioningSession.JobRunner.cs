@@ -22,7 +22,7 @@ internal sealed record JobRunnerEnv(
     IAssetDownload? AssetDownload,
     Func<bool> IsWslPlatformReady,
     Action ApplyWorkstationQuiet,
-    Func<ShellChromeRequest, bool> ApplyShellChrome,
+    Func<ShellSurfacesRequest, CancellationToken, Task<bool>> ApplyShellSurfaces,
     Action<IReadOnlyList<string>> TryStageWslTerminalMock,
     Action SuppressWslOobe,
     Func<bool> IsHypervisorGuest,
@@ -443,7 +443,8 @@ internal static partial class ProvisioningJobRunner
 
                 case ProvisionJobKind.ShellChrome:
                     {
-                        JobsRunResult? chrome = RunShellChromeJob(env, job, jobs);
+                        JobsRunResult? chrome = await RunShellChromeJobAsync(env, job, jobs, ct)
+                            .ConfigureAwait(false);
                         if (chrome is not null)
                         {
                             return chrome.Value;

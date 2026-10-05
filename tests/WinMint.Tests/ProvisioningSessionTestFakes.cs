@@ -136,9 +136,10 @@ internal static class ProvisioningSessionTestFakes
 
         public Action ApplyWorkstationQuietCallback { get; init; } = () => { };
 
-        public Func<ShellChromeRequest, bool> ApplyShellChromeCallback { get; init; } = static _ => true;
+        public Func<ShellSurfacesRequest, Task<bool>> ApplyShellSurfacesCallback { get; init; } =
+            static _ => Task.FromResult(true);
 
-        public List<ShellChromeRequest> ShellChromeRequests { get; } = [];
+        public List<ShellSurfacesRequest> ShellSurfacesRequests { get; } = [];
 
         public List<IReadOnlyList<string>> WslTerminalMockStages { get; } = [];
 
@@ -152,10 +153,13 @@ internal static class ProvisioningSessionTestFakes
 
         public void ApplyWorkstationQuiet() => ApplyWorkstationQuietCallback();
 
-        public bool ApplyShellChrome(ShellChromeRequest request)
+        public Task<bool> ApplyShellSurfacesAsync(
+            ShellSurfacesRequest request,
+            CancellationToken ct = default)
         {
-            ShellChromeRequests.Add(request);
-            return ApplyShellChromeCallback(request);
+            _ = ct;
+            ShellSurfacesRequests.Add(request);
+            return ApplyShellSurfacesCallback(request);
         }
 
         public void TryStageWslTerminalMock(IReadOnlyList<string> distroNames) =>

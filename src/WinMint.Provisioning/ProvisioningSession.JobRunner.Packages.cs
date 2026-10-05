@@ -47,16 +47,11 @@ internal static partial class ProvisioningJobRunner
         try
         {
             IReadOnlyList<string> ids = CollectAllWingetIds(jobs);
-            ShellDesktopRequest request = new(
-                ids,
-                env.Processes,
-                env.AssetDownload,
-                ShellDesktopLayout.GuestDesktopRoot,
-                ShellDesktopLayout.DefaultThideInstallDir,
-                ShellDesktopLayout.DefaultYasbConfigDir,
-                ShellDesktopLayout.DefaultKomorebiConfigDir,
-                ShellDesktopLayout.DefaultWhkdrcPath);
-            _ = await ShellDesktop.ApplyAsync(request, ct).ConfigureAwait(false);
+            // Desktop is fail-open: soft false still reports and continues.
+            _ = await env.ApplyShellSurfaces(
+                    new ShellSurfacesRequest(ShellSurfaceKind.Desktop, FailOpen: true, ids),
+                    ct)
+                .ConfigureAwait(false);
             env.ReportStatus(new SessionStatus("shell.desktop", "Desktop surface applied (fail-open)."));
             return null;
         }
@@ -67,18 +62,23 @@ internal static partial class ProvisioningJobRunner
         }
     }
 
-    private static JobsRunResult? RunShellChromeJob(
+    private static async Task<JobsRunResult?> RunShellChromeJobAsync(
         JobRunnerEnv env,
         ProvisionJob job,
-        IReadOnlyList<ProvisionJob> jobs)
+        IReadOnlyList<ProvisionJob> jobs,
+        CancellationToken ct)
     {
         try
         {
             IReadOnlyList<string> ids = CollectSelectedWingetIds(jobs);
-            if (!env.ApplyShellChrome(new ShellChromeRequest(
-                    FailOpen: false,
-                    ids,
-                    RequireSelectedPins: env.PackageStrict)))
+            if (!await env.ApplyShellSurfaces(
+                    new ShellSurfacesRequest(
+                        ShellSurfaceKind.Chrome,
+                        FailOpen: false,
+                        ids,
+                        RequireSelectedPins: env.PackageStrict),
+                    ct)
+                .ConfigureAwait(false))
             {
                 return FailJob(env, "jobs.failed", $"{job.Id}: shell chrome apply failed.");
             }

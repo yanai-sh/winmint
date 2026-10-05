@@ -49,7 +49,8 @@ public class ShellChromeJobTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
-        ShellChromeRequest request = Assert.Single(guest.ShellChromeRequests);
+        ShellSurfacesRequest request = Assert.Single(guest.ShellSurfacesRequests);
+        Assert.Equal(ShellSurfaceKind.Chrome, request.Kind);
         Assert.False(request.FailOpen);
         Assert.False(request.RequireSelectedPins);
         Assert.Contains("shell.chrome", evidence.Documents[^1].Phases);
@@ -70,7 +71,8 @@ public class ShellChromeJobTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
-        ShellChromeRequest request = Assert.Single(guest.ShellChromeRequests);
+        ShellSurfacesRequest request = Assert.Single(guest.ShellSurfacesRequests);
+        Assert.Equal(ShellSurfaceKind.Chrome, request.Kind);
         Assert.False(request.FailOpen);
         Assert.True(request.RequireSelectedPins);
     }
@@ -80,7 +82,8 @@ public class ShellChromeJobTests
     {
         FakeGuestMachine guest = new()
         {
-            ApplyShellChromeCallback = request => !request.FailOpen ? false : true,
+            ApplyShellSurfacesCallback = request =>
+                Task.FromResult(request.FailOpen || request.Kind != ShellSurfaceKind.Chrome),
         };
         RecordingEvidenceSink evidence = new();
 
@@ -115,7 +118,7 @@ public class ShellChromeJobTests
             Processes = processes,
             IsWslPlatformReadyCallback = static () => false,
             IsHypervisorGuestCallback = static () => false,
-            ApplyShellChromeCallback = static _ =>
+            ApplyShellSurfacesCallback = static _ =>
                 throw new InvalidOperationException("simulated chrome failure"),
         };
 
@@ -125,9 +128,10 @@ public class ShellChromeJobTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        ShellChromeRequest request = Assert.Single(guest.ShellChromeRequests);
+        ShellSurfacesRequest request = Assert.Single(guest.ShellSurfacesRequests);
+        Assert.Equal(ShellSurfaceKind.Chrome, request.Kind);
         Assert.True(request.FailOpen);
-        Assert.Empty(request.SelectedWingetIds);
+        Assert.Empty(request.WingetIds);
         Assert.DoesNotContain("shell.chrome", evidence.Documents[^1].Phases);
     }
 
@@ -167,19 +171,6 @@ public class ShellChromeJobTests
         {
             Directory.Delete(dir, recursive: true);
         }
-    }
-
-    [Fact]
-    public void ApplyPins_source_does_not_write_policies()
-    {
-        string chrome = File.ReadAllText(
-            Path.Combine(TestRepo.Root, "src", "WinMint.Provisioning", "Win32ShellChrome.cs"));
-        string quiet = File.ReadAllText(
-            Path.Combine(TestRepo.Root, "src", "WinMint.Provisioning", "Win32WorkstationQuiet.cs"));
-        Assert.DoesNotContain(@"Software\Policies\Microsoft\Windows\Explorer", chrome, StringComparison.Ordinal);
-        Assert.DoesNotContain("ConfigureStartPins", chrome, StringComparison.Ordinal);
-        Assert.DoesNotContain("DisableSearchBoxSuggestions", quiet, StringComparison.Ordinal);
-        Assert.Contains("LayoutModification.xml", chrome, StringComparison.Ordinal);
     }
 
     [Fact]

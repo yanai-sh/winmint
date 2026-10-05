@@ -184,7 +184,7 @@ public static partial class ProvisioningSession
                 AssetDownload: env.Guest.AssetDownload,
                 IsWslPlatformReady: env.Guest.IsWslPlatformReady,
                 ApplyWorkstationQuiet: env.Guest.ApplyWorkstationQuiet,
-                ApplyShellChrome: env.Guest.ApplyShellChrome,
+                ApplyShellSurfaces: env.Guest.ApplyShellSurfacesAsync,
                 TryStageWslTerminalMock: env.Guest.TryStageWslTerminalMock,
                 SuppressWslOobe: env.Guest.SuppressWslOobe,
                 IsHypervisorGuest: env.Guest.IsHypervisorGuest,
@@ -392,7 +392,10 @@ public static partial class ProvisioningSession
 
         try
         {
-            env.Guest.ApplyShellChrome(new(FailOpen: true, SelectedWingetIds: []));
+            _ = await env.Guest.ApplyShellSurfacesAsync(
+                    new ShellSurfacesRequest(ShellSurfaceKind.Chrome, FailOpen: true, []),
+                    CancellationToken.None)
+                .ConfigureAwait(false);
         }
         catch (Exception)
         {

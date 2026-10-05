@@ -55,8 +55,52 @@ public sealed class Win32GuestMachine : IGuestMachine
 
     public void ApplyWorkstationQuiet() => Win32WorkstationQuiet.Apply();
 
-    public bool ApplyShellChrome(ShellChromeRequest request) =>
-        OperatingSystem.IsWindows() && Win32ShellChrome.Apply(request);
+    public async Task<bool> ApplyShellSurfacesAsync(
+        ShellSurfacesRequest request,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return request.Kind switch
+        {
+            ShellSurfaceKind.Chrome => ApplyChrome(request),
+            ShellSurfaceKind.Desktop => await ApplyDesktopAsync(request, ct).ConfigureAwait(false),
+            _ => false,
+        };
+    }
+
+    private static bool ApplyChrome(ShellSurfacesRequest request) =>
+        OperatingSystem.IsWindows()
+        && Win32ShellChrome.Apply(new ShellChromeRequest(
+            request.FailOpen,
+            request.WingetIds,
+            request.RequireSelectedPins));
+
+    private async Task<bool> ApplyDesktopAsync(ShellSurfacesRequest request, CancellationToken ct)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return request.FailOpen;
+        }
+
+        ShellDesktopRequest desktop = new(
+            request.WingetIds,
+            Processes,
+            AssetDownload,
+            ShellDesktopLayout.GuestDesktopRoot,
+            ShellDesktopLayout.DefaultThideInstallDir,
+            ShellDesktopLayout.DefaultYasbConfigDir,
+            ShellDesktopLayout.DefaultKomorebiConfigDir,
+            ShellDesktopLayout.DefaultWhkdrcPath);
+        try
+        {
+            _ = await ShellDesktop.ApplyAsync(desktop, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException && request.FailOpen)
+        {
+            return true;
+        }
+    }
 
     public void TryStageWslTerminalMock(IReadOnlyList<string> distroNames)
     {

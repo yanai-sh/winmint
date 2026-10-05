@@ -32,6 +32,24 @@ public sealed record ProvisioningBundle(
     bool PackageStrict = false,
     bool DmaEnabled = true);
 
+public enum ShellSurfaceKind
+{
+    Chrome,
+    Desktop,
+}
+
+/// <summary>
+/// One guest apply for shell surfaces (ADR-015 axes). Chrome = Start/taskbar/wallpaper;
+/// Desktop = taskbar surface + optional Komorebi. Jobs invoke one kind at a time; fail-open
+/// baseline uses Chrome with <see cref="FailOpen"/> true.
+/// </summary>
+public sealed record ShellSurfacesRequest(
+    ShellSurfaceKind Kind,
+    bool FailOpen,
+    IReadOnlyList<string> WingetIds,
+    bool RequireSelectedPins = true);
+
+/// <summary>Chrome-only payload for <see cref="Win32ShellChrome"/> (layout + Win32).</summary>
 public sealed record ShellChromeRequest(
     bool FailOpen,
     IReadOnlyList<string> SelectedWingetIds,
@@ -109,7 +127,11 @@ public interface IGuestMachine
 
     void ApplyWorkstationQuiet();
 
-    bool ApplyShellChrome(ShellChromeRequest request);
+    /// <summary>
+    /// Apply one shell-surface step (chrome or desktop). False = fail-closed for that step;
+    /// desktop production path is fail-open and returns true after best-effort apply.
+    /// </summary>
+    Task<bool> ApplyShellSurfacesAsync(ShellSurfacesRequest request, CancellationToken ct = default);
 
     void TryStageWslTerminalMock(IReadOnlyList<string> distroNames);
 

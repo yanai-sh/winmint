@@ -153,9 +153,79 @@ public class ShellDesktopJobTests
     public async Task Shell_desktop_records_phase_on_session()
     {
         RecordingEvidenceSink evidence = new();
+        FakeGuestMachine guest = new();
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("shell.desktop", ProvisionJobKind.ShellDesktop)]),
-            Env(new FakeGuestMachine(), evidence),
+            Env(guest, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        ShellSurfacesRequest request = Assert.Single(guest.ShellSurfacesRequests);
+        Assert.Equal(ShellSurfaceKind.Desktop, request.Kind);
+        Assert.True(request.FailOpen);
+        Assert.Contains("shell.desktop", evidence.Documents[^1].Phases);
+    }
+
+    [Fact]
+    public async Task Shell_surfaces_records_chrome_and_desktop_steps()
+    {
+        FakeGuestMachine guest = new();
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs:
+            [
+                new ProvisionJob("shell.chrome", ProvisionJobKind.ShellChrome),
+                new ProvisionJob("shell.desktop", ProvisionJobKind.ShellDesktop),
+            ]),
+            Env(guest, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal(2, guest.ShellSurfacesRequests.Count);
+        Assert.Equal(ShellSurfaceKind.Chrome, guest.ShellSurfacesRequests[0].Kind);
+        Assert.False(guest.ShellSurfacesRequests[0].FailOpen);
+        Assert.Equal(ShellSurfaceKind.Desktop, guest.ShellSurfacesRequests[1].Kind);
+        Assert.True(guest.ShellSurfacesRequests[1].FailOpen);
+        Assert.Contains("shell.chrome", evidence.Documents[^1].Phases);
+        Assert.Contains("shell.desktop", evidence.Documents[^1].Phases);
+    }
+
+    [Fact]
+    public async Task Shell_desktop_fail_open_when_apply_returns_false()
+    {
+        FakeGuestMachine guest = new()
+        {
+            ApplyShellSurfacesCallback = static request =>
+                Task.FromResult(request.Kind != ShellSurfaceKind.Desktop),
+        };
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs: [new ProvisionJob("shell.desktop", ProvisionJobKind.ShellDesktop)]),
+            Env(guest, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal(ShellSurfaceKind.Desktop, Assert.Single(guest.ShellSurfacesRequests).Kind);
+        Assert.Contains("shell.desktop", evidence.Documents[^1].Phases);
+    }
+
+    [Fact]
+    public async Task Shell_desktop_fail_open_when_apply_throws()
+    {
+        FakeGuestMachine guest = new()
+        {
+            ApplyShellSurfacesCallback = static request =>
+                request.Kind == ShellSurfaceKind.Desktop
+                    ? throw new InvalidOperationException("simulated desktop failure")
+                    : Task.FromResult(true),
+        };
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs: [new ProvisionJob("shell.desktop", ProvisionJobKind.ShellDesktop)]),
+            Env(guest, evidence),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
