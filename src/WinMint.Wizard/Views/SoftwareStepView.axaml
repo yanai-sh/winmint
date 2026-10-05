@@ -130,7 +130,7 @@
                  Text="{Binding Advanced.Scoop}" />
         <TextBlock Classes="panel-label" Text="WSL tokens" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
-                 Watermark="FedoraLinux&#x0A;NixOS-WSL"
+                 Watermark="FedoraLinux&#x0A;archlinuxarm-wsl&#x0A;NixOS-WSL"
                  Text="{Binding Advanced.Wsl}" />
       </StackPanel>
     </Expander>

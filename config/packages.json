@@ -177,11 +177,15 @@
       "installId": "FedoraLinux",
       "architectures": ["amd64", "arm64"]
     },
-    "archlinux": {
-      "displayName": "Arch Linux",
-      "installKind": "store",
-      "installId": "archlinux",
-      "architectures": ["amd64", "arm64"]
+    "archlinuxarm-wsl": {
+      "displayName": "Arch",
+      "installKind": "fromFile",
+      "installId": "archlinuxarm",
+      "repo": "artiga033/archlinuxarm-wsl",
+      "assets": {
+        "arm64": ["archlinuxarm-aarch64"]
+      },
+      "architectures": ["arm64"]
     },
     "NixOS-WSL": {
       "displayName": "NixOS",
@@ -192,12 +196,6 @@
         "arm64": ["nixos.aarch64.wsl", "nixos.arm64.wsl", "nixos.wsl"],
         "amd64": ["nixos.wsl", "nixos.x86_64.wsl", "nixos.amd64.wsl"]
       },
-      "architectures": ["amd64", "arm64"]
-    },
-    "pengwin": {
-      "displayName": "Pengwin",
-      "installKind": "store",
-      "installId": "pengwin",
       "architectures": ["amd64", "arm64"]
     }
   }

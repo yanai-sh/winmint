@@ -69,6 +69,43 @@ public class WslJobsTests
     }
 
     [Fact]
+    public void Plan_archlinuxarm_wsl_emits_fromFile_metadata_on_arm64()
+    {
+        Profile profile = Parse(MinimalJson(wsl: ["archlinuxarm-wsl"]));
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { ImageArchitecture = "arm64" });
+
+        Assert.True(result.IsOk);
+        ProvisionJob arch = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
+        Assert.Equal("archlinuxarm", arch.PackageId);
+        Assert.Equal(WslInstallKind.FromFile, arch.WslInstallKind);
+        Assert.Equal("artiga033/archlinuxarm-wsl", arch.WslFromFileRepo);
+        Assert.Contains("archlinuxarm-aarch64", arch.WslFromFileAssetNames!);
+    }
+
+    [Fact]
+    public void Plan_archlinuxarm_wsl_rejects_amd64_image()
+    {
+        Profile profile = Parse(MinimalJson(wsl: ["archlinuxarm-wsl"]));
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { ImageArchitecture = "amd64" });
+
+        Assert.False(result.IsOk);
+        Assert.Equal("packages.catalog.unsupportedArch", result.Error.Code);
+    }
+
+    [Fact]
+    public void Curated_wsl_chips_are_fedora_ubuntu_arch_nixos()
+    {
+        string[] keys = [.. CuratedPackageChips.Wsl.Select(c => c.Key)];
+        Assert.Equal(["FedoraLinux", "Ubuntu", "archlinuxarm-wsl", "NixOS-WSL"], keys);
+    }
+
+    [Fact]
     public async Task Shell_wsl_platform_ready_skips_install()
     {
         RecordingProcessHost processes = new();

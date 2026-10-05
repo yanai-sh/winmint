@@ -393,11 +393,10 @@ public static class CuratedPackageChips
 
     public static IReadOnlyList<CuratedChipDefinition> Wsl { get; } =
     [
-        new("Ubuntu", "Ubuntu"),
         new("FedoraLinux", "Fedora"),
-        new("archlinux", "Arch"),
+        new("Ubuntu", "Ubuntu"),
+        new("archlinuxarm-wsl", "Arch"),
         new("NixOS-WSL", "NixOS"),
-        new("pengwin", "Pengwin"),
     ];
 
     public static bool IsPackageTool(string key) => !NonPackageToolKeys.Contains(key);
