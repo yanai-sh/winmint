@@ -82,7 +82,6 @@ public static class HostCompile
         Profile profile,
         HostComposeOptions options,
         ISourceMediaProbe? sourceMedia = null,
-        TimeProvider? time = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -91,7 +90,7 @@ public static class HostCompile
                 && Path.IsPathFullyQualified(options.ProfileName)
                     ? Path.GetDirectoryName(Path.GetFullPath(options.ProfileName))
                     : null;
-            return ComposeCoreAsync(profile, options, sourceDirectory, sourceMedia, time, cancellationToken);
+            return ComposeCoreAsync(profile, options, sourceDirectory, sourceMedia, cancellationToken);
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
@@ -104,7 +103,6 @@ public static class HostCompile
         string profilePath,
         HostComposeOptions options,
         ISourceMediaProbe? sourceMedia = null,
-        TimeProvider? time = null,
         CancellationToken cancellationToken = default)
     {
         Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(profilePath);
@@ -135,7 +133,6 @@ public static class HostCompile
                 named,
                 Path.GetDirectoryName(fullPath),
                 sourceMedia,
-                time,
                 cancellationToken)
             .ConfigureAwait(false);
     }
@@ -185,7 +182,6 @@ public static class HostCompile
         HostComposeOptions options,
         string? sourceProfileDirectory,
         ISourceMediaProbe? sourceMedia,
-        TimeProvider? time,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -210,7 +206,7 @@ public static class HostCompile
             work = Path.GetFullPath(HostDefaults.ResolveWorkDirectory(options.ImageQuality, options.WorkDirectory));
             string stem = OutputIsoNaming.ProfileStem(options.ProfileName);
             output = string.IsNullOrWhiteSpace(options.OutputIsoPath)
-                ? OutputIsoNaming.DefaultPath(work, stem + ".profile.json", options.ImageQuality, time)
+                ? OutputIsoNaming.DefaultPath(work, stem + ".profile.json", options.ImageQuality)
                 : Path.GetFullPath(options.OutputIsoPath.Trim());
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)

@@ -81,7 +81,7 @@ public static partial class ImageServicing
         Directory.CreateDirectory(workspace.Logs);
         Directory.CreateDirectory(HostServicingRoot);
 
-        // Timestamped default leaves stack; keep only this Apply's Output ISO path.
+        // At most one Output ISO per workdir; drop prior leaves before this Apply.
         _ = WorkdirOutputIsos.ClearPrior(workspace.Root, normalized.OutputIsoPath);
 
         Result<IReadOnlyList<ServicingStage>, Failure> materialized =

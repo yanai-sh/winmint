@@ -12,7 +12,7 @@ _Avoid_: pinning a KB; calling Preview CU “latest”; 26H1 from 25H2; UUP dump
 **Source ISO** — Official Microsoft install media the user provides. It remains an Apply input every run; a stored media tree must not stand in for a missing file. No silent Windows ISO or UUP-dump download. Same-train Catalog quality `.msu` is ImageServicing, not a Source ISO ([ADR-013](docs/decisions/ADR-013-catalog-lcu.md)).  
 _Avoid_: golden ISO, UUP default source; substituting Prepared media or staged media for the Source ISO
 
-**Output ISO** — Host compile result (default leaf `winmint_{profile}_{lane}_{yyyyMMdd-HHmmss}.iso`, or explicit `--out-iso`) plus digests: the delivery artifact ImageServicing emits.  
+**Output ISO** — Host compile result (default leaf `winmint_{profile}_{lane}.iso`, or explicit `--out-iso`) plus digests: the delivery artifact ImageServicing emits.  
 _Avoid_: treating bootable USB as the compile output; calling Flash “Build”; opaque `out.iso` as the product name; signed ISO; Authenticode on the ISO container; calling the ISO signed because it contains Authenticode PE
 
 **Flash** — Operator writes Output ISO to UEFI removable media with **Rufus** in **DD Image** mode (not ISO mode) and checks `digests.outputIso.sha256`. Outside WinMint’s product boundary — guidance copy only (path / Rufus DD / SHA / LaunchApply); no disk write, no Rufus launch.  

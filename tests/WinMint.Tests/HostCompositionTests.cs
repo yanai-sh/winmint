@@ -18,7 +18,6 @@ public class HostCompositionTests
             List<string> appx = ["Microsoft.GetHelp"];
             List<string> authoredSelections = ["Edge"];
             Profile profile = Profile(appx);
-            DateTimeOffset instant = new(2026, 8, 12, 19, 20, 21, TimeSpan.Zero);
             Result<HostComposition, HostComposeError> result = await HostCompile.ComposeAsync(
                 profile,
                 new HostComposeOptions(
@@ -29,7 +28,6 @@ public class HostCompositionTests
                     ProfileName: "sl7.profile.json",
                     AuthoredSelectionLabels: authoredSelections),
                 new RealHashProbe(),
-                new FixedTimeProvider(instant),
                 TestContext.Current.CancellationToken);
 
             Assert.True(result.IsOk, result.IsOk ? null : result.Error.Message);
@@ -53,11 +51,8 @@ public class HostCompositionTests
             Assert.Null(typeof(HostComposition).GetProperty("ReuseMedia"));
             Assert.Equal("sl7", composition.Review.ProfileStem);
             Assert.Equal(["Edge"], composition.Review.AuthoredSelectionLabels);
-            string timestamp = instant.ToLocalTime().ToString(
-                "yyyyMMdd-HHmmss",
-                System.Globalization.CultureInfo.InvariantCulture);
             Assert.EndsWith(
-                Path.Combine("work", $"winmint_sl7_Release_{timestamp}.iso"),
+                Path.Combine("work", "winmint_sl7_Release.iso"),
                 composition.OutputIsoPath,
                 StringComparison.OrdinalIgnoreCase);
             Assert.Equal(
@@ -285,7 +280,6 @@ public class HostCompositionTests
             Profile profile = Profile(["Microsoft.GetHelp"]);
             string profilePath = Path.Combine(root, "same.profile.json");
             File.WriteAllBytes(profilePath, BuildPlan.SerializeProfile(profile));
-            FixedTimeProvider time = new(new DateTimeOffset(2026, 8, 12, 12, 0, 0, TimeSpan.Zero));
             HostComposeOptions options = new(
                 iso,
                 ImageQualityLane.Release,
@@ -297,13 +291,11 @@ public class HostCompositionTests
                 profile,
                 options,
                 new RealHashProbe(),
-                time,
                 TestContext.Current.CancellationToken)).Value;
             HostComposition file = (await HostCompile.ComposeFileAsync(
                 profilePath,
                 options,
                 new RealHashProbe(),
-                time,
                 TestContext.Current.CancellationToken)).Value;
 
             Assert.Equal(typed.GetProfileUtf8(), file.GetProfileUtf8());
@@ -447,9 +439,4 @@ public class HostCompositionTests
         }
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset instant) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => instant;
-        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
-    }
 }

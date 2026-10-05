@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -33,29 +32,16 @@ internal static partial class OutputIsoNaming
         return string.IsNullOrEmpty(sanitized) ? "profile" : sanitized;
     }
 
-    public static string DefaultFileName(
-        string? profilePath,
-        ImageQualityLane lane,
-        DateTimeOffset timestamp) =>
-        string.Create(
-            CultureInfo.InvariantCulture,
-            $"winmint_{ProfileStem(profilePath)}_{lane}_{timestamp.ToLocalTime():yyyyMMdd-HHmmss}.iso");
+    public static string DefaultFileName(string? profilePath, ImageQualityLane lane) =>
+        $"winmint_{ProfileStem(profilePath)}_{lane}.iso";
 
     public static string DefaultPath(
         string workDirectory,
         string? profilePath,
-        ImageQualityLane lane,
-        DateTimeOffset timestamp) =>
+        ImageQualityLane lane) =>
         Path.Combine(
             workDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-            DefaultFileName(profilePath, lane, timestamp));
-
-    public static string DefaultPath(
-        string workDirectory,
-        string? profilePath,
-        ImageQualityLane lane,
-        TimeProvider? time = null) =>
-        DefaultPath(workDirectory, profilePath, lane, (time ?? TimeProvider.System).GetLocalNow());
+            DefaultFileName(profilePath, lane));
 
     private static string Sanitize(string value)
     {
@@ -86,7 +72,7 @@ internal static partial class OutputIsoNaming
 }
 
 /// <summary>
-/// Workdir Output ISO retain: at most one generation. Timestamped default leaves stack otherwise.
+/// Workdir Output ISO retain: at most one generation. Prior <c>winmint_*.iso</c> / legacy <c>out.iso</c> are trimmed at Apply.
 /// </summary>
 internal static class WorkdirOutputIsos
 {

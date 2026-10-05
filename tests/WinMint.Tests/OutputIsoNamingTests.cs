@@ -17,12 +17,10 @@ public class OutputIsoNamingTests
     [Fact]
     public void DefaultFileName_product_centric()
     {
-        DateTimeOffset ts = new(2026, 8, 12, 8, 59, 28, TimeSpan.FromHours(3));
         string name = OutputIsoNaming.DefaultFileName(
             @"samples\sl7.profile.json",
-            ImageQualityLane.Release,
-            ts);
-        Assert.Equal("winmint_sl7_Release_20260812-085928.iso", name);
+            ImageQualityLane.Release);
+        Assert.Equal("winmint_sl7_Release.iso", name);
     }
 
     [Fact]
@@ -32,8 +30,8 @@ public class OutputIsoNamingTests
         Directory.CreateDirectory(root);
         try
         {
-            string keep = Path.Combine(root, "winmint_sl7_Test_20261005-120000.iso");
-            string drop = Path.Combine(root, "winmint_sl7_Test_20260928-083807.iso");
+            string keep = Path.Combine(root, "winmint_sl7_Release.iso");
+            string drop = Path.Combine(root, "winmint_other_Test.iso");
             string legacy = Path.Combine(root, "out.iso");
             File.WriteAllText(keep, "keep");
             File.WriteAllText(drop, "drop");
@@ -57,7 +55,7 @@ public class OutputIsoNamingTests
         Directory.CreateDirectory(root);
         try
         {
-            File.WriteAllText(Path.Combine(root, "winmint_a_Test_20260101-000000.iso"), "a");
+            File.WriteAllText(Path.Combine(root, "winmint_a_Test.iso"), "a");
             File.WriteAllText(Path.Combine(root, "out.iso"), "b");
             Assert.Equal(2, WorkdirOutputIsos.ClearPrior(root));
             Assert.Empty(Directory.GetFiles(root, "*.iso"));

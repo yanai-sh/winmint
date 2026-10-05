@@ -4,8 +4,8 @@
   Shared Output ISO resolution ladder. Dot-source; do not run directly.
 
 .DESCRIPTION
-  One ladder for every gate: evidence.outputIsoPath -> newest winmint_*.iso -> legacy out.iso.
-  ImageServicing owns the default leaf (winmint_{profile}_{lane}_{timestamp}.iso); consumers here
+  One ladder for every gate: evidence.outputIsoPath -> single winmint_*.iso -> legacy out.iso.
+  ImageServicing owns the default leaf (winmint_{profile}_{lane}.iso); consumers here
   must not re-derive it. Returns $null when nothing resolves — callers decide whether that is fatal.
 #>
 
@@ -49,7 +49,7 @@ function Resolve-WinMintOutputIso {
 
 <#
 .SYNOPSIS
-  Drop prior Output ISO leaves in a workdir so timestamped Apply cannot stack multi-GB ISOs.
+  Drop prior Output ISO leaves in a workdir so Apply cannot stack multi-GB ISOs.
 .PARAMETER KeepPath
   Full path to retain (usually the ISO this run will write or -SkipApply reuse). Empty = delete all.
 #>

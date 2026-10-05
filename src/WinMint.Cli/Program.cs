@@ -39,7 +39,7 @@ internal static class Program
 
         Option<FileInfo?> outIsoOption = new("--out-iso")
         {
-            Description = "Output ISO path (defaults to <work>/winmint_{profile}_{lane}_{yyyyMMdd-HHmmss}.iso).",
+            Description = "Output ISO path (defaults to <work>/winmint_{profile}_{lane}.iso).",
         };
 
         Option<int?> wimIndexOption = new("--wim-index")

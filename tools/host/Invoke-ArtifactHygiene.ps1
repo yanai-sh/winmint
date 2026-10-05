@@ -4,7 +4,7 @@
   Prevent the failure mode that hit ~386 GB: stacked output ISOs + multiple full Apply/Smoke workdirs.
 .NOTES
   Targets:
-    - Flat output dirs (v1-style): keep N newest *.iso (default 1 — timestamped Apply must not stack)
+    - Flat output dirs (v1-style): keep N newest *.iso (default 1 — stacked Apply leaves must not accumulate)
     - .scratch (v2): keep N newest *heavy* child workdirs (media/out.iso/vhdx); drop the rest
     - Nested media.previous-* / media.incoming-* under a kept workdir
   Do not age-purge WIM/ISO bytes by LastWriteTime (Source ISO timestamps survive copy).
