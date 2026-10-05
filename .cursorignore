@@ -1,0 +1,3 @@
+# Apply-evidence contract leaf (evidence.json → out.iso). *.iso remains in .gitignore (ADR-001);
+# agents can read this path when a local stub exists (Test-ApplyEvidence materializes the bytes at run time).
+!tests/fixtures/apply-evidence/out.iso
