@@ -251,12 +251,15 @@ public static partial class ProvisioningSession
             return new SessionResult(SessionOutcome.Reboot, jobs.Status, emitted);
         }
 
-        // Finishing: unlock → Complete. (No AppearanceOnce until Profile appearance grilled.)
+        // Finishing: handoff → Complete. (No AppearanceOnce until Profile appearance grilled.)
         env.Guest.Checkpoints.ClearCheckpoint();
 
         // Unlock before Complete evidence so S4 never claims green while Shell is still Supervisor.
-        if (!ShellTenureEntry.TryUnlock(env.Guest.Winlogon)
-            || !ShellTenureEntry.IsExplorerShell(env.Guest.Winlogon.GetShell()))
+        if (!ShellTenureEntry.TryApplyLive(
+                env.Guest.Winlogon,
+                TenureExit.Complete,
+                dismissOobe: env.Guest.TryDismissOobeOverlay,
+                notePhase: status => Note(env, phases, status)))
         {
             return await FailOpenAsync(
                 bundle,
@@ -269,8 +272,6 @@ public static partial class ProvisioningSession
                 dwell: true,
                 firstPaintMs).ConfigureAwait(false);
         }
-
-        TryDismissOobeOverlay(env, phases);
 
         EvidenceSnapshot snap = env.Evidence.Write(
             new ProvisioningEvidenceFile(
@@ -311,24 +312,6 @@ public static partial class ProvisioningSession
         catch (Exception)
         {
             // ponytail: Explorer already held; residue erase is best-effort (ADR-008)
-        }
-    }
-
-    private static void TryDismissOobeOverlay(ShellEnvironment env, List<string>? phases)
-    {
-        try
-        {
-            env.Guest.TryDismissOobeOverlay();
-            if (phases is not null)
-            {
-                Note(env, phases, new SessionStatus(
-                    "oobe.dismiss",
-                    "Dismissed stuck CloudExperienceHost OOBE overlay."));
-            }
-        }
-        catch (Exception)
-        {
-            // ponytail: unlock already durable; overlay teardown is best-effort
         }
     }
 
@@ -400,10 +383,10 @@ public static partial class ProvisioningSession
         }
 
         // Unlock after evidence — custom Shell is medium-IL and may lack HKLM write.
-        if (ShellTenureEntry.TryUnlock(env.Guest.Winlogon))
-        {
-            TryDismissOobeOverlay(env, phases: null);
-        }
+        _ = ShellTenureEntry.TryApplyLive(
+            env.Guest.Winlogon,
+            TenureExit.FailOpen,
+            dismissOobe: env.Guest.TryDismissOobeOverlay);
 
         return new SessionResult(SessionOutcome.Failed, status, emitted);
     }

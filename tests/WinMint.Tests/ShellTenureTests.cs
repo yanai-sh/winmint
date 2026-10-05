@@ -167,6 +167,41 @@ public class ShellTenureTests
         Assert.Equal(expectedShell, winlogon.Shell);
     }
 
+    [Fact]
+    public void TryApplyLive_Complete_unlocks_dismisses_and_notes_phase()
+    {
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        int dismiss = 0;
+        List<string> phases = [];
+
+        bool ok = ShellTenureEntry.TryApplyLive(
+            winlogon,
+            TenureExit.Complete,
+            dismissOobe: () => dismiss++,
+            notePhase: s => phases.Add(s.Code));
+
+        Assert.True(ok);
+        Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
+        Assert.Equal(1, dismiss);
+        Assert.Equal(["oobe.dismiss"], phases);
+    }
+
+    [Fact]
+    public void TryApplyLive_Reboot_withholds_shell_and_dismiss()
+    {
+        FakeWinlogonRegistry winlogon = new() { Shell = SupervisorPath };
+        int dismiss = 0;
+
+        Assert.True(
+            ShellTenureEntry.TryApplyLive(
+                winlogon,
+                TenureExit.Reboot,
+                dismissOobe: () => dismiss++));
+
+        Assert.Equal(SupervisorPath, winlogon.Shell);
+        Assert.Equal(0, dismiss);
+    }
+
     private static ShellEnvironment Env(
         ISplashPresenter splash,
         IEvidenceSink evidence,
