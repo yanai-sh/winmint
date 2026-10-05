@@ -58,6 +58,13 @@ public static class HostCompile
             if (artifacts.WingetImportJson is { Length: > 0 })
             {
                 File.WriteAllBytes(Path.Combine(destination, "winget-import.json"), artifacts.WingetImportJson);
+                string? configurationYaml = BuildPlan.BuildWingetConfigurationYaml(artifacts.WingetImportJson);
+                if (configurationYaml is not null)
+                {
+                    File.WriteAllText(
+                        Path.Combine(destination, ServicingWorkspace.WingetConfigurationFileName),
+                        configurationYaml);
+                }
             }
 
             WriteNameList(destination, ServicingWorkspace.PackageFamilyNamesFileName, artifacts.RemoveProvisionedAppx);

@@ -27,6 +27,7 @@ public sealed class ServicingWorkspace
     public const string PackageFamilyNamesFileName = "packageFamilyNames.json";
     public const string CapabilityNamesFileName = "capabilityNames.json";
     public const string FeatureNamesFileName = "featureNames.json";
+    public const string WingetConfigurationFileName = "configuration.winget";
     public const string QualityPackagesDirectoryName = "quality-packages";
 
     public ServicingWorkspace(string root)

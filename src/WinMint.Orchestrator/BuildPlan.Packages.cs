@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 
 using WinMint.Contracts;
@@ -282,6 +283,65 @@ public static partial class BuildPlan
             ]);
 
         return JsonSerializer.SerializeToUtf8Bytes(file, WingetImportJsonContext.Default.WingetImportFile);
+    }
+
+    /// <summary>
+    /// Packages-only WinGet Configuration YAML from import JSON package ids (schema 0.2).
+    /// Null when import is absent/empty or has no package identifiers.
+    /// </summary>
+    internal static string? BuildWingetConfigurationYaml(byte[]? wingetImportJson)
+    {
+        if (wingetImportJson is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        WingetImportFile? file = JsonSerializer.Deserialize(
+            wingetImportJson,
+            WingetImportJsonContext.Default.WingetImportFile);
+        if (file?.Sources is null || file.Sources.Length == 0)
+        {
+            return null;
+        }
+
+        List<string> ids = [];
+        foreach (WingetImportSourceFile source in file.Sources)
+        {
+            if (source.Packages is null)
+            {
+                continue;
+            }
+
+            foreach (WingetImportPackageFile package in source.Packages)
+            {
+                if (!string.IsNullOrWhiteSpace(package.PackageIdentifier))
+                {
+                    ids.Add(package.PackageIdentifier);
+                }
+            }
+        }
+
+        if (ids.Count == 0)
+        {
+            return null;
+        }
+
+        StringBuilder yaml = new();
+        yaml.AppendLine("# yaml-language-server: $schema=https://aka.ms/configuration-dsc-schema/0.2");
+        yaml.AppendLine("properties:");
+        yaml.AppendLine("  resources:");
+        foreach (string id in ids)
+        {
+            yaml.AppendLine("    - resource: Microsoft.WinGet.DSC/WinGetPackage");
+            yaml.AppendLine("      directives:");
+            yaml.Append("        description: Install ").AppendLine(id);
+            yaml.AppendLine("      settings:");
+            yaml.Append("        id: ").AppendLine(id);
+            yaml.AppendLine("        source: winget");
+        }
+
+        yaml.AppendLine("  configurationVersion: 0.2.0");
+        return yaml.ToString();
     }
 }
 
