@@ -35,12 +35,14 @@ if ($plan -notmatch "updated=.*`r?`n.*stage=.*`r?`n.*log=") { throw 'apply-statu
 if ($plan -match "Resolve-KernelScript.*Write-WinMintHostProgress") { throw 'helper must not be an opcode kernel' }
 
 $quality = Get-Content -LiteralPath (Join-Path $repo 'servicing/Add-QualityUpdates.ps1') -Raw -Encoding utf8
+$qualityResolve = Get-Content -LiteralPath (Join-Path $repo 'servicing/Resolve-WinMintQualityUpdate.ps1') -Raw -Encoding utf8
 if ($quality -notmatch 'Catalog search start') { throw 'AddQualityUpdates must announce Catalog search' }
-if ($quality -notmatch 'Catalog BITS start') { throw 'AddQualityUpdates must announce BITS' }
-if ($quality -notmatch 'quality hash start') { throw 'AddQualityUpdates must announce hash' }
-if ($quality -notmatch 'quality expand start') { throw 'AddQualityUpdates must announce expand' }
+if ($quality -notmatch 'Invoke-WinMintQualityPackageStage') { throw 'AddQualityUpdates must call quality package stage' }
 if ($quality -notmatch 'quality packages apply') { throw 'AddQualityUpdates must announce package apply' }
-Invoke-Expression ([regex]::Match($quality, '(?ms)^function Get-WinMintHeartbeatSha256 \{.*?^\}').Value)
+if ($qualityResolve -notmatch 'Catalog BITS start') { throw 'quality stage must announce BITS' }
+if ($qualityResolve -notmatch 'quality hash start') { throw 'quality stage must announce hash' }
+if ($qualityResolve -notmatch 'quality expand start') { throw 'quality stage must announce expand' }
+Invoke-Expression ([regex]::Match($qualityResolve, '(?ms)^function Get-WinMintHeartbeatSha256 \{.*?^\}').Value)
 $hashSample = Join-Path ([IO.Path]::GetTempPath()) 'winmint-heartbeat-sha256.txt'
 Set-Content -LiteralPath $hashSample -Value 'winmint-heartbeat' -Encoding ascii -NoNewline
 $heartbeat = Get-WinMintHeartbeatSha256 -Path $hashSample
@@ -49,13 +51,14 @@ Remove-Item -LiteralPath $hashSample -Force
 if ($heartbeat -ne $expectedSha) { throw "heartbeat sha256 $heartbeat != $expectedSha" }
 $searchAt = $quality.IndexOf('Catalog search start')
 $resolvedAt = $quality.IndexOf('$resolved = Invoke-WinMintQualityCatalogResolve')
-$bitsAt = $quality.IndexOf('Catalog BITS start')
-$lcuAt = $quality.IndexOf('$lcuPath = Get-WinMintCatalogPayload')
+$stageAt = $quality.IndexOf('Invoke-WinMintQualityPackageStage')
+$bitsAt = $qualityResolve.IndexOf('Catalog BITS start')
+$fetchAt = $qualityResolve.IndexOf('Get-WinMintCatalogPayload')
 if (-not ($searchAt -ge 0 -and $searchAt -lt $resolvedAt)) { throw 'Catalog search start must not live inside the $resolved assignment' }
-if (-not ($bitsAt -ge 0 -and $bitsAt -lt $lcuAt)) { throw 'Catalog BITS start must not live inside the $lcuPath assignment' }
+if (-not ($stageAt -ge 0 -and $searchAt -lt $stageAt)) { throw 'Catalog search must precede quality package stage' }
+if (-not ($bitsAt -ge 0 -and $bitsAt -lt $fetchAt)) { throw 'Catalog BITS start must not live inside the Get-WinMintCatalogPayload assignment' }
 foreach ($fn in [regex]::Matches($quality, '(?ms)^function\s+\S+.*?^}')) {
     if ($fn.Value -match 'Catalog search start') { throw 'Catalog search start must not live inside a function' }
-    if ($fn.Value -match 'Catalog BITS start') { throw 'Catalog BITS start must not live inside a function' }
 }
 
 $smoke = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Invoke-Smoke.ps1') -Raw -Encoding utf8
