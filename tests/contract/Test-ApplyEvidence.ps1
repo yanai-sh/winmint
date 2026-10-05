@@ -16,6 +16,19 @@ function Copy-Tree([string] $Source, [string] $Dest) {
     }
 }
 
+# *.iso is gitignored — materialize a stub leaf and sync the digest so RequireOutputIso can run.
+function Initialize-ApplyEvidenceWork([string] $Dest) {
+    Copy-Tree $fixture $Dest
+    $iso = Join-Path $Dest 'out.iso'
+    [IO.File]::WriteAllBytes($iso, [Text.Encoding]::ASCII.GetBytes('winmint-apply-evidence-fixture'))
+    $sha = (Get-FileHash -LiteralPath $iso -Algorithm SHA256).Hash.ToLowerInvariant()
+    $evPath = Join-Path $Dest 'evidence.json'
+    $ev = Get-Content -LiteralPath $evPath -Raw -Encoding utf8 | ConvertFrom-Json
+    $ev.outputIsoPath = $iso
+    $ev.digests.'outputIso.sha256' = $sha
+    ($ev | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $evPath -Encoding utf8
+}
+
 function Invoke-ApplyAssert {
     param(
         [string] $Work,
@@ -41,7 +54,7 @@ function Invoke-ApplyAssert {
 $root = Join-Path ([IO.Path]::GetTempPath()) ('winmint-s5-' + [guid]::NewGuid().ToString('N'))
 try {
     $ok = Join-Path $root 'ok'
-    Copy-Tree $fixture $ok
+    Initialize-ApplyEvidenceWork $ok
     $r = Invoke-ApplyAssert $ok
     if ($r.Code -ne 0) { throw "fixture must pass: $($r.Err)" }
     $json = Get-Content -LiteralPath (Join-Path $ok 'apply-acceptance.json') -Raw
@@ -51,7 +64,7 @@ try {
     if ($json -notmatch '"firmwareExcluded": true') { throw 'firmware excluded' }
 
     $nodriver = Join-Path $root 'nodriver'
-    Copy-Tree $fixture $nodriver
+    Initialize-ApplyEvidenceWork $nodriver
     $ev = Get-Content -LiteralPath (Join-Path $nodriver 'evidence.json') -Raw | ConvertFrom-Json
     $ev.digests.PSObject.Properties.Remove('drivers.deviceId')
     ($ev | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $nodriver 'evidence.json') -Encoding utf8
@@ -60,7 +73,7 @@ try {
     if ($r.Err -notmatch 'Driver digest missing') { throw "driver digest message: $($r.Err)" }
 
     $fw = Join-Path $root 'fw'
-    Copy-Tree $fixture $fw
+    Initialize-ApplyEvidenceWork $fw
     $inv = Get-Content -LiteralPath (Join-Path $fw 'logs\WinMint-DriverInventory.json') -Raw | ConvertFrom-Json
     $inv.records[1].decision = 'includeOffline'
     ($inv | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $fw 'logs\WinMint-DriverInventory.json') -Encoding utf8
@@ -69,7 +82,7 @@ try {
     if ($r.Err -notmatch 'firmware') { throw "firmware message: $($r.Err)" }
 
     $stale = Join-Path $root 'stale'
-    Copy-Tree $fixture $stale
+    Initialize-ApplyEvidenceWork $stale
     $ev = Get-Content -LiteralPath (Join-Path $stale 'evidence.json') -Raw | ConvertFrom-Json
     $ev.digests.'outputIso.sha256' = 'deadbeef'
     ($ev | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $stale 'evidence.json') -Encoding utf8
@@ -78,13 +91,13 @@ try {
     if ($r.Err -notmatch 'outputIso.sha256 mismatch') { throw "outputIso message: $($r.Err)" }
 
     $lane = Join-Path $root 'lane'
-    Copy-Tree $fixture $lane
+    Initialize-ApplyEvidenceWork $lane
     $r = Invoke-ApplyAssert $lane -RequireLane Release
     if ($r.Code -eq 0) { throw 'Test fixture must fail RequireLane Release' }
     if ($r.Err -notmatch 'lane must be Release') { throw "lane message: $($r.Err)" }
 
     $nops = Join-Path $root 'nops'
-    Copy-Tree $fixture $nops
+    Initialize-ApplyEvidenceWork $nops
     $ev = Get-Content -LiteralPath (Join-Path $nops 'evidence.json') -Raw | ConvertFrom-Json
     $ev.lane = 'Release'
     $ev.PSObject.Properties.Remove('packageStrict')
@@ -94,7 +107,7 @@ try {
     if ($r.Err -notmatch 'packageStrict') { throw "packageStrict missing message: $($r.Err)" }
 
     $psfalse = Join-Path $root 'psfalse'
-    Copy-Tree $fixture $psfalse
+    Initialize-ApplyEvidenceWork $psfalse
     $ev = Get-Content -LiteralPath (Join-Path $psfalse 'evidence.json') -Raw | ConvertFrom-Json
     $ev.lane = 'Release'
     $ev | Add-Member -NotePropertyName packageStrict -NotePropertyValue $false -Force
@@ -104,13 +117,13 @@ try {
     if ($r.Err -notmatch 'packageStrict must be true') { throw "packageStrict false message: $($r.Err)" }
 
     $nofu = Join-Path $root 'nofu'
-    Copy-Tree $fixture $nofu
+    Initialize-ApplyEvidenceWork $nofu
     $r = Invoke-ApplyAssert $nofu -ExpectFuPosture
     if ($r.Code -eq 0) { throw 'ExpectFuPosture without digests must fail' }
     if ($r.Err -notmatch 'FU posture digest missing') { throw "FU digest message: $($r.Err)" }
 
     $fu = Join-Path $root 'fu'
-    Copy-Tree $fixture $fu
+    Initialize-ApplyEvidenceWork $fu
     $ev = Get-Content -LiteralPath (Join-Path $fu 'evidence.json') -Raw | ConvertFrom-Json
     $ev.lane = 'Release'
     $ev | Add-Member -NotePropertyName packageStrict -NotePropertyValue $true -Force
