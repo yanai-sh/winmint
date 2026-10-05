@@ -196,6 +196,10 @@ public class HostCompileLaneTests
             Assert.Contains("HideFirstRunExperience", policiesJson, StringComparison.Ordinal);
             Assert.True(File.Exists(Path.Combine(dest, "winget-import.json")));
             Assert.True(new FileInfo(Path.Combine(dest, "winget-import.json")).Length > 2);
+            string configurationYaml = File.ReadAllText(
+                Path.Combine(dest, ServicingWorkspace.WingetConfigurationFileName));
+            Assert.Contains("Microsoft.WinGet.DSC/WinGetPackage", configurationYaml, StringComparison.Ordinal);
+            Assert.Contains(ProductPosture.BraveWingetId, configurationYaml, StringComparison.Ordinal);
             Assert.Contains(
                 "surface-laptop-7",
                 File.ReadAllText(Path.Combine(dest, "stages.json")),
