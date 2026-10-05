@@ -33,7 +33,8 @@ public static class HostCompile
 
     /// <summary>
     /// Station pack (#141) from an approved composition. Profile bytes are the Apply intent;
-    /// ExportPlan siblings are inspection/interop only.
+    /// ExportPlan siblings are inspection/interop only. Copies relative passwordPath from
+    /// <see cref="HostComposition.SourceProfileDirectory"/> when the secret is not inline.
     /// </summary>
     public static Result<StationPackResult, Failure> ExportStationPack(
         HostComposition composition,
@@ -52,17 +53,21 @@ public static class HostCompile
         return ExportStationPack(
             new HostPlan(composition.Artifacts, composition.Review),
             parsed.Value,
-            destinationDirectory);
+            destinationDirectory,
+            composition.SourceProfileDirectory);
     }
 
     /// <summary>
     /// Station pack (#141): Profile is the sole Apply intent; ExportPlan siblings are inspection/interop only.
-    /// Password sidecar matches emit-defaults when a secret is materialised.
+    /// Writes Profile (+ password sidecar) before plan siblings so a failed pack never leaves plan-only debris.
+    /// Password: materialised secret → sidecar (emit-defaults); passwordPath-only → copy from
+    /// <paramref name="passwordSourceDirectory"/> or absolute path.
     /// </summary>
     public static Result<StationPackResult, Failure> ExportStationPack(
         HostPlan plan,
         Profile applyProfile,
-        string destinationDirectory)
+        string destinationDirectory,
+        string? passwordSourceDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(applyProfile);
@@ -84,31 +89,59 @@ public static class HostCompile
                 new Failure("stationPack.destination.invalid", ex.Message));
         }
 
+        Result<(Profile Written, string ProfilePath), Failure> profileWrite =
+            WriteStationPackProfile(applyProfile, destination, passwordSourceDirectory);
+        if (!profileWrite.IsOk)
+        {
+            return Result.Fail<StationPackResult, Failure>(profileWrite.Error);
+        }
+
         Result<Unit, Failure> siblings = ExportPlan(plan, destination);
         if (!siblings.IsOk)
         {
             return Result.Fail<StationPackResult, Failure>(siblings.Error);
         }
 
+        return Result.Ok<StationPackResult, Failure>(
+            new StationPackResult(destination, profileWrite.Value.ProfilePath));
+    }
+
+    private static Result<(Profile Written, string ProfilePath), Failure> WriteStationPackProfile(
+        Profile applyProfile,
+        string destination,
+        string? passwordSourceDirectory)
+    {
         try
         {
             Profile written = applyProfile;
             string? secret = applyProfile.Account.Password;
+            string? authoredPath = applyProfile.Account.PasswordPath;
+
             if (!string.IsNullOrEmpty(secret))
             {
-                string leaf = StationPackPasswordFileName;
-                if (!string.IsNullOrWhiteSpace(applyProfile.Account.PasswordPath))
+                string leaf = PasswordSidecarLeaf(authoredPath);
+                File.WriteAllText(Path.Combine(destination, leaf), secret, Encoding.UTF8);
+                written = applyProfile with
                 {
-                    string candidate = Path.GetFileName(applyProfile.Account.PasswordPath.Trim());
-                    if (!string.IsNullOrEmpty(candidate)
-                        && candidate is not ("." or "..")
-                        && candidate.IndexOfAny(Path.GetInvalidFileNameChars()) < 0)
+                    Account = applyProfile.Account with
                     {
-                        leaf = candidate;
-                    }
+                        Password = null,
+                        PasswordPath = leaf,
+                    },
+                };
+            }
+            else if (!string.IsNullOrWhiteSpace(authoredPath))
+            {
+                string leaf = PasswordSidecarLeaf(authoredPath);
+                Result<string, Failure> resolved = ResolvePasswordSidecarSource(
+                    authoredPath.Trim(),
+                    passwordSourceDirectory);
+                if (!resolved.IsOk)
+                {
+                    return Result.Fail<(Profile, string), Failure>(resolved.Error);
                 }
 
-                File.WriteAllText(Path.Combine(destination, leaf), secret, Encoding.UTF8);
+                File.Copy(resolved.Value, Path.Combine(destination, leaf), overwrite: true);
                 written = applyProfile with
                 {
                     Account = applyProfile.Account with
@@ -121,13 +154,53 @@ public static class HostCompile
 
             string profilePath = Path.Combine(destination, StationPackProfileFileName);
             File.WriteAllBytes(profilePath, BuildPlan.SerializeProfile(written));
-            return Result.Ok<StationPackResult, Failure>(new StationPackResult(destination, profilePath));
+            return Result.Ok<(Profile, string), Failure>((written, profilePath));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return Result.Fail<StationPackResult, Failure>(
+            return Result.Fail<(Profile, string), Failure>(
                 new Failure("stationPack.export.failed", ex.Message));
         }
+    }
+
+    private static string PasswordSidecarLeaf(string? authoredPath)
+    {
+        if (!string.IsNullOrWhiteSpace(authoredPath))
+        {
+            string candidate = Path.GetFileName(authoredPath.Trim());
+            if (!string.IsNullOrEmpty(candidate)
+                && candidate is not ("." or "..")
+                && candidate.IndexOfAny(Path.GetInvalidFileNameChars()) < 0)
+            {
+                return candidate;
+            }
+        }
+
+        return StationPackPasswordFileName;
+    }
+
+    private static Result<string, Failure> ResolvePasswordSidecarSource(
+        string authoredPath,
+        string? passwordSourceDirectory)
+    {
+        if (Path.IsPathFullyQualified(authoredPath) && File.Exists(authoredPath))
+        {
+            return Result.Ok<string, Failure>(authoredPath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(passwordSourceDirectory))
+        {
+            string combined = Path.GetFullPath(Path.Combine(passwordSourceDirectory.Trim(), authoredPath));
+            if (File.Exists(combined))
+            {
+                return Result.Ok<string, Failure>(combined);
+            }
+        }
+
+        return Result.Fail<string, Failure>(
+            new Failure(
+                "stationPack.password.missing",
+                $"Cannot copy account.passwordPath '{authoredPath}' into the Station pack."));
     }
 
     public static Result<Unit, Failure> ExportPlan(HostPlan plan, string destinationDirectory)

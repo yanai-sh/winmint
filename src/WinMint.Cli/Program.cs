@@ -232,40 +232,24 @@ internal static class Program
             return exit;
         }
 
-        if (!profilePath.Exists)
+        if (!TryLoadPlan(
+                profilePath,
+                out HostPlan? plan,
+                out Profile? profile,
+                out exit,
+                new HostComposeOptions(
+                    ImageQuality: lane,
+                    ImageArchitecture: imageArchitecture,
+                    PackageAuditStrict: packageAuditStrict,
+                    PackageStrict: packageStrict,
+                    IncludeSmokeStubs: includeSmokeStubs)))
         {
-            CliLog.ProfileNotFound(Log, profilePath.FullName);
-            return 1;
+            return exit;
         }
 
-        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(profilePath.FullName);
-        if (!parsed.IsOk)
-        {
-            foreach (DocumentError issue in parsed.Error)
-            {
-                string pathSuffix = issue.Path is null ? "" : $" ({issue.Path})";
-                CliLog.DocumentIssue(Log, issue.Code, issue.Message, pathSuffix);
-            }
-
-            return 1;
-        }
-
-        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(
-            parsed.Value,
-            new HostComposeOptions(
-                ImageQuality: lane,
-                ImageArchitecture: imageArchitecture,
-                PackageAuditStrict: packageAuditStrict,
-                PackageStrict: packageStrict,
-                IncludeSmokeStubs: includeSmokeStubs));
-        if (!planned.IsOk)
-        {
-            CliLog.Failure(Log, planned.Error.Code, planned.Error.Message);
-            return 1;
-        }
-
+        string? passwordSource = Path.GetDirectoryName(Path.GetFullPath(profilePath.FullName));
         Result<StationPackResult, Failure> packed =
-            HostCompile.ExportStationPack(planned.Value, parsed.Value, outDir.FullName);
+            HostCompile.ExportStationPack(plan!, profile!, outDir.FullName, passwordSource);
         if (!packed.IsOk)
         {
             CliLog.Failure(Log, packed.Error.Code, packed.Error.Message);
@@ -273,7 +257,7 @@ internal static class Program
         }
 
         CliLog.StationPackWritten(Log, packed.Value.Directory, packed.Value.ProfilePath);
-        WritePlanHonesty(planned.Value.Review);
+        WritePlanHonesty(plan!.Review);
         return 0;
     }
 
@@ -341,6 +325,7 @@ internal static class Program
         if (!TryLoadPlan(
                 profilePath,
                 out _,
+                out _,
                 out exit,
                 new HostComposeOptions(
                     ImageQuality: lane,
@@ -373,6 +358,7 @@ internal static class Program
         if (!TryLoadPlan(
                 profilePath,
                 out HostPlan? plan,
+                out _,
                 out exit,
                 new HostComposeOptions(
                     ImageQuality: lane,
@@ -498,10 +484,12 @@ internal static class Program
     private static bool TryLoadPlan(
         FileInfo profilePath,
         out HostPlan? plan,
+        out Profile? profile,
         out int exitCode,
         HostComposeOptions? options = null)
     {
         plan = null;
+        profile = null;
         if (!profilePath.Exists)
         {
             CliLog.ProfileNotFound(Log, profilePath.FullName);
@@ -531,6 +519,7 @@ internal static class Program
         }
 
         plan = planned.Value;
+        profile = parsed.Value;
         exitCode = 0;
         return true;
     }
