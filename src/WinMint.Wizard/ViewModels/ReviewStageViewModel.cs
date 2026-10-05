@@ -40,7 +40,6 @@ public sealed record ReviewSummaryViewModel(
     string? OutputIsoPath,
     string BuildRecipe,
     string AccountName,
-    string LaneName,
     string EditionName,
     string WifiLabel,
     string RegionLabel);
@@ -50,6 +49,7 @@ public sealed partial class ReviewBuildViewModel : ObservableObject
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private bool _canBuild;
     [ObservableProperty] private string _buildStatus = "";
+    [ObservableProperty] private string _statusTail = "";
     [ObservableProperty] private string _saveStatus = "";
     [ObservableProperty] private string _flashGuidanceText = "";
 
@@ -64,6 +64,7 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
     public ReviewStageViewModel(HostReview review)
     {
         ArgumentNullException.ThrowIfNull(review);
+        string gateLabel = review.IsGateB ? "Gate B" : "shipping";
         Summary = new(
             review.QuietSummary,
             review.PickStrip,
@@ -71,13 +72,12 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
             review.WhatsIncluded,
             review.PlanMeta,
             review.Diff,
-            $"Plan OK. Lane={review.ImageQuality}; removeProvisionedAppx={review.RemoveProvisionedAppx.Count}; jobs={review.Jobs.Count}.",
+            $"Plan OK. {gateLabel}; removeProvisionedAppx={review.RemoveProvisionedAppx.Count}; jobs={review.Jobs.Count}.",
             review.AuthoredProfileJson,
             review.SourceMedia?.SourceIsoPath ?? "",
             review.OutputIsoPath,
             review.OutputIsoPath is null ? "" : $"Output ISO: {review.OutputIsoPath}",
             review.AuthoredProfile.Account.Username,
-            review.ImageQuality.ToString(),
             review.SourceMedia?.Selected?.Name ?? "—",
             review.AuthoredProfile.Account.RequireWifiDuringOobe ? "Required at OOBE" : "Optional",
             FormatRegion(review.AuthoredProfile.Dma.Settle));

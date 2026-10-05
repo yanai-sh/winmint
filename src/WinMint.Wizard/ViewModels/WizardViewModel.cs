@@ -290,6 +290,7 @@ public sealed partial class WizardViewModel :
 
         IsBusy = true;
         buildStage.Build.FlashGuidanceText = "";
+        buildStage.Build.StatusTail = "";
         buildStage.Build.BuildStatus = "Building… (approve UAC if prompted)";
         buildStage.Status.Set(buildStage.Build.BuildStatus, false);
 
@@ -372,15 +373,20 @@ public sealed partial class WizardViewModel :
         {
             try
             {
-                string? label = FormatBusyLabel(workspace.TryReadProgress(cancellationToken));
-                if (label is not null
-                    && !string.Equals(label, last, StringComparison.Ordinal))
+                ApplyPresentation? presentation =
+                    TryFormatApplyPresentation(workspace.TryReadProgress(cancellationToken));
+                if (presentation is not null)
                 {
-                    last = label;
-                    buildStage.Build.BuildStatus = label;
-                    buildStage.Status.Set(
-                        label,
-                        label.StartsWith("Failed:", StringComparison.Ordinal));
+                    string key = presentation.Value.ToString();
+                    if (!string.Equals(key, last, StringComparison.Ordinal))
+                    {
+                        last = key;
+                        buildStage.Build.BuildStatus = presentation.Value.StageLine;
+                        buildStage.Build.StatusTail = presentation.Value.StatusTail;
+                        buildStage.Status.Set(
+                            presentation.Value.StageLine,
+                            presentation.Value.StageLine.StartsWith("Failed:", StringComparison.Ordinal));
+                    }
                 }
                 await Task.Delay(500, cancellationToken).ConfigureAwait(true);
             }
@@ -392,6 +398,32 @@ public sealed partial class WizardViewModel :
     }
 
     internal static string? FormatBusyLabel(ApplyProgress? snapshot)
+    {
+        ApplyPresentation? presentation = TryFormatApplyPresentation(snapshot, readLogTail: _ => []);
+        if (presentation is null)
+        {
+            return null;
+        }
+
+        // Thin wrapper for callers/tests that want stage + log path, not the live tail.
+        return string.IsNullOrWhiteSpace(snapshot!.Value.LogPath)
+            ? presentation.Value.StageLine
+            : $"{presentation.Value.StageLine} — {snapshot.Value.LogPath}";
+    }
+
+    internal static string? FormatApplyPresentation(
+        ApplyProgress? snapshot,
+        Func<string, IReadOnlyList<string>>? readLogTail = null,
+        int tailLines = 20)
+    {
+        ApplyPresentation? presentation = TryFormatApplyPresentation(snapshot, readLogTail, tailLines);
+        return presentation?.ToString();
+    }
+
+    private static ApplyPresentation? TryFormatApplyPresentation(
+        ApplyProgress? snapshot,
+        Func<string, IReadOnlyList<string>>? readLogTail = null,
+        int tailLines = 20)
     {
         if (snapshot is null || string.IsNullOrWhiteSpace(snapshot.Value.Stage))
         {
@@ -405,15 +437,51 @@ public sealed partial class WizardViewModel :
             return null;
         }
 
-        string prefix = stage.StartsWith("failed:", StringComparison.OrdinalIgnoreCase)
-            ? "Failed"
-            : "Building";
-        string display = stage.StartsWith("failed:", StringComparison.OrdinalIgnoreCase)
-            ? stage["failed:".Length..]
-            : stage;
-        return string.IsNullOrWhiteSpace(snapshot.Value.LogPath)
-            ? $"{prefix}: {display}"
-            : $"{prefix}: {display} — {snapshot.Value.LogPath}";
+        bool failed = stage.StartsWith("failed:", StringComparison.OrdinalIgnoreCase);
+        string display = failed ? stage["failed:".Length..] : stage;
+        string stageLine = failed ? $"Failed: {display}" : $"Building: {display}";
+        string statusTail = "";
+        if (!string.IsNullOrWhiteSpace(snapshot.Value.LogPath))
+        {
+            try
+            {
+                Func<string, IReadOnlyList<string>> reader = readLogTail ?? ReadSharedLogLines;
+                IReadOnlyList<string> lines = reader(snapshot.Value.LogPath);
+                IEnumerable<string> nonEmpty = lines.Where(static line => !string.IsNullOrWhiteSpace(line));
+                statusTail = string.Join(
+                    Environment.NewLine,
+                    nonEmpty.TakeLast(Math.Max(0, tailLines)));
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return new ApplyPresentation(stageLine, statusTail);
+    }
+
+    private static IReadOnlyList<string> ReadSharedLogLines(string path)
+    {
+        using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using StreamReader reader = new(stream);
+        List<string> lines = [];
+        while (reader.ReadLine() is { } line)
+        {
+            lines.Add(line);
+        }
+
+        return lines;
+    }
+
+    private readonly record struct ApplyPresentation(string StageLine, string StatusTail)
+    {
+        public override string ToString() =>
+            string.IsNullOrEmpty(StatusTail)
+                ? StageLine
+                : StageLine + Environment.NewLine + StatusTail;
     }
 
     [RelayCommand]
@@ -515,7 +583,7 @@ public sealed partial class WizardViewModel :
             expanded.Value.DisableOptionalFeatures);
         HostComposeOptions options = new(
             _source.SourceIsoPath,
-            _source.ImageQuality,
+            ImageQualityLane.Release,
             WimIndex: _source.WimIndex,
             ProfileName: "winmint.profile.json",
             AuthoredSelectionLabels: [.. _software.SelectedLabels()]);
@@ -606,8 +674,7 @@ public sealed partial class WizardViewModel :
         }
 
         string edition = _source.SelectedWimIndex?.Name ?? "ISO";
-        string lane = _source.Lane.IsRelease ? "Release" : "Test";
-        FooterStatus = $"Ready · {edition} · {_account.Username} · {lane}";
+        FooterStatus = $"Ready · {edition} · {_account.Username}";
         FooterWarn = false;
         FooterReady = true;
     }

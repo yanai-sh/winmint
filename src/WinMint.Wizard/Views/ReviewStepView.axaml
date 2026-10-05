@@ -22,10 +22,6 @@
           <TextBlock Classes="receipt-v" Grid.Column="1" Text="{Binding Summary.AccountName}" />
         </Grid>
         <Grid Classes="receipt-row" ColumnDefinitions="140,*" Margin="0,0,0,12">
-          <TextBlock Classes="receipt-k" Text="Lane" />
-          <TextBlock Classes="receipt-v" Grid.Column="1" Text="{Binding Summary.LaneName}" />
-        </Grid>
-        <Grid Classes="receipt-row" ColumnDefinitions="140,*" Margin="0,0,0,12">
           <TextBlock Classes="receipt-k" Text="Wi-Fi" />
           <TextBlock Classes="receipt-v" Grid.Column="1" Text="{Binding Summary.WifiLabel}" />
         </Grid>
@@ -69,6 +65,15 @@
                    FontSize="12"
                    IsVisible="{Binding Build.IsBusy}" />
         <TextBlock Text="{Binding Build.BuildStatus}" TextWrapping="Wrap" Opacity="0.85" />
+        <ScrollViewer MaxHeight="160"
+                      IsVisible="{Binding Build.StatusTail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                      Margin="0,4,0,0">
+          <TextBlock Text="{Binding Build.StatusTail}"
+                     TextWrapping="Wrap"
+                     FontFamily="Cascadia Mono, Consolas, monospace"
+                     FontSize="12"
+                     Opacity="0.8" />
+        </ScrollViewer>
 
         <Border Classes="flash"
                 IsVisible="{Binding Build.FlashGuidanceText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
