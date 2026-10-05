@@ -4,7 +4,6 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-using WinMint.Contracts;
 using WinMint.Orchestrator;
 
 namespace WinMint.Wizard.ViewModels;
@@ -593,7 +592,7 @@ public sealed partial class WizardViewModel :
         }
     }
 
-    // ponytail: internal for InternalsVisibleTo tests that pin shipping HostComposeOptions
+    // ponytail: thin adapter over WizardDraftCompile for InternalsVisibleTo smoke
     internal Result<WizardDraft, Failure> BuildDraft()
     {
         Result<PackageSelection, Failure> packagesResult = _software.ResolvePackages();
@@ -601,62 +600,25 @@ public sealed partial class WizardViewModel :
         {
             return Result.Fail<WizardDraft, Failure>(packagesResult.Error);
         }
-        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(_software.Outcomes.Value);
-        if (!seed.IsOk)
-        {
-            return Result.Fail<WizardDraft, Failure>(seed.Error);
-        }
-        if (!int.TryParse(_account.GeoId.Trim(), out int geoId))
-        {
-            return Result.Fail<WizardDraft, Failure>(
-                new Failure("dma.settle.geoId", "must be an integer."));
-        }
 
-        PackageSelection packages = packagesResult.Value;
-        Profile profile = new(
-            new AccountProfile(_account.Username.Trim(), _account.Password, _account.RequireWifi),
-            new DmaProfile(
-                _account.DmaEnabled,
-                new DmaSettleTarget(
-                    _account.Locale.Trim(),
-                    geoId,
-                    _account.TimeZone.Trim(),
-                    _account.LocationServices)),
-            DebloatMode.Online,
-            seed.Value.RemoveProvisionedAppx,
-            IdList.FromMultiline(
-                MergeChipAndAdvanced(packages.WingetInstallIds, _software.Advanced.Winget)),
-            [],
-            IdList.FromMultiline(
-                MergeChipAndAdvanced(packages.ScoopInstallIds, _software.Advanced.Scoop)),
-            [],
-            IdList.FromMultiline(MergeChipAndAdvanced(
-                packages.WslProfileTokens,
-                _software.Advanced.Wsl)),
-            [],
-            seed.Value.RemoveCapabilities,
-            seed.Value.DisableOptionalFeatures);
-        HostComposeOptions options = new(
-            _source.SourceIsoPath,
-            ImageQualityLane.Release,
-            WimIndex: _source.WimIndex,
-            ProfileName: "winmint.profile.json",
-            AuthoredSelectionLabels: [.. _software.SelectedLabels()]);
-        return Result.Ok<WizardDraft, Failure>(new WizardDraft(profile, options));
-    }
-
-    private static string MergeChipAndAdvanced(
-        IEnumerable<string> selectedChipIds,
-        string? advancedMultiline)
-    {
-        IReadOnlyList<string> advanced = IdList.FromMultiline(advancedMultiline);
-        return string.Join(
-            Environment.NewLine,
-            selectedChipIds
-                .Concat(advanced)
-                .Where(static id => !string.IsNullOrWhiteSpace(id))
-                .Select(static id => id.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase));
+        return WizardDraftCompile.TryCompile(
+            new WizardDraftRequest(
+                Username: _account.Username,
+                Password: _account.Password,
+                RequireWifi: _account.RequireWifi,
+                DmaEnabled: _account.DmaEnabled,
+                Locale: _account.Locale,
+                GeoId: _account.GeoId,
+                TimeZoneId: _account.TimeZone,
+                LocationServices: _account.LocationServices,
+                StationOutcome: _software.Outcomes.Value,
+                Packages: packagesResult.Value,
+                AdvancedWinget: _software.Advanced.Winget,
+                AdvancedScoop: _software.Advanced.Scoop,
+                AdvancedWsl: _software.Advanced.Wsl,
+                SourceIsoPath: _source.SourceIsoPath,
+                WimIndex: _source.WimIndex,
+                SelectionLabels: [.. _software.SelectedLabels()]));
     }
 
     private void InvalidatePresentation()
@@ -770,5 +732,3 @@ public sealed partial class WizardViewModel :
         _session.Dispose();
     }
 }
-
-internal sealed record WizardDraft(Profile Profile, HostComposeOptions Options);

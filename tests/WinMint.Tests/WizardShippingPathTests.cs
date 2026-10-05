@@ -6,7 +6,7 @@ namespace WinMint.Tests;
 public class WizardShippingPathTests
 {
     [Fact]
-    public void Wizard_draft_compose_options_are_shipping_gate_b()
+    public void Wizard_BuildDraft_delegates_to_shipping_compile()
     {
         using WizardViewModel vm = new(storage: null, close: null, sourceMedia: null);
         vm.Source.SourceIsoPath = @"C:\iso\source.iso";
@@ -14,17 +14,13 @@ public class WizardShippingPathTests
         Result<WizardDraft, Failure> draft = vm.BuildDraft();
 
         Assert.True(draft.IsOk);
-        HostComposeOptions options = draft.Value.Options;
-        Assert.Equal(ImageQualityLane.Release, options.ImageQuality);
-        Assert.Equal(PackageStrictOverride.FromLane, options.PackageStrict);
-        Assert.True(HostDefaults.ResolvePackageStrict(options.ImageQuality, options.PackageStrict));
+        Assert.Equal(ImageQualityLane.Release, draft.Value.Options.ImageQuality);
+        Assert.Equal(PackageStrictOverride.FromLane, draft.Value.Options.PackageStrict);
     }
 
     [Fact]
     public void Source_stage_has_no_lane_selection_surface()
     {
-        // After removal: ISourceStageViewModel must not expose SelectLaneCommand / Lane chips.
-        // Assert via reflection or compile-time: SourceStageViewModel has no public SelectLaneCommand.
         Assert.Null(typeof(ISourceStageViewModel).GetProperty("Lane"));
         Assert.Null(typeof(ISourceStageViewModel).GetProperty("SelectLaneCommand"));
     }
