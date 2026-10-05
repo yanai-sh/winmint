@@ -63,15 +63,17 @@ public static class ProfileFile
             return Result.Ok<Profile, IReadOnlyList<DocumentError>>(profile);
         }
 
-        if (!TryResolvePasswordPath(fullProfilePath, authoredPath, out string resolved, out DocumentError? pathError))
+        Result<string, DocumentError> resolved =
+            ProfileSecrets.TryResolvePasswordPath(fullProfilePath, authoredPath);
+        if (!resolved.IsOk)
         {
-            return Result.Fail<Profile, IReadOnlyList<DocumentError>>([pathError!.Value]);
+            return Result.Fail<Profile, IReadOnlyList<DocumentError>>([resolved.Error]);
         }
 
         string password;
         try
         {
-            password = File.ReadAllText(resolved).TrimEnd('\r', '\n');
+            password = File.ReadAllText(resolved.Value).TrimEnd('\r', '\n');
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
@@ -90,35 +92,5 @@ public static class ProfileFile
             Account = profile.Account with { Password = password },
         };
         return Result.Ok<Profile, IReadOnlyList<DocumentError>>(materialized);
-    }
-
-    private static bool TryResolvePasswordPath(
-        string fullProfilePath,
-        string authoredPath,
-        out string resolved,
-        out DocumentError? error)
-    {
-        resolved = "";
-        error = null;
-
-        // Fully qualified stays fully qualified. Root-relative / drive-relative ambient forms fail closed.
-        if (Path.IsPathFullyQualified(authoredPath))
-        {
-            resolved = authoredPath;
-            return true;
-        }
-
-        if (Path.IsPathRooted(authoredPath))
-        {
-            error = new DocumentError(
-                "account.passwordPath.unreadable",
-                $"Cannot read account.passwordPath '{authoredPath}'.",
-                "account.passwordPath");
-            return false;
-        }
-
-        string profileDir = Path.GetDirectoryName(fullProfilePath) ?? "";
-        resolved = Path.GetFullPath(Path.Combine(profileDir, authoredPath));
-        return true;
     }
 }

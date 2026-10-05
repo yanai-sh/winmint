@@ -119,7 +119,7 @@ public static class HostCompile
 
             if (!string.IsNullOrEmpty(secret))
             {
-                string leaf = PasswordSidecarLeaf(authoredPath);
+                string leaf = ProfileSecrets.SidecarLeaf(authoredPath, StationPackPasswordFileName);
                 File.WriteAllText(Path.Combine(destination, leaf), secret, Encoding.UTF8);
                 written = applyProfile with
                 {
@@ -132,8 +132,8 @@ public static class HostCompile
             }
             else if (!string.IsNullOrWhiteSpace(authoredPath))
             {
-                string leaf = PasswordSidecarLeaf(authoredPath);
-                Result<string, Failure> resolved = ResolvePasswordSidecarSource(
+                string leaf = ProfileSecrets.SidecarLeaf(authoredPath, StationPackPasswordFileName);
+                Result<string, Failure> resolved = ProfileSecrets.TryResolveSidecarSource(
                     authoredPath.Trim(),
                     passwordSourceDirectory);
                 if (!resolved.IsOk)
@@ -161,46 +161,6 @@ public static class HostCompile
             return Result.Fail<(Profile, string), Failure>(
                 new Failure("stationPack.export.failed", ex.Message));
         }
-    }
-
-    private static string PasswordSidecarLeaf(string? authoredPath)
-    {
-        if (!string.IsNullOrWhiteSpace(authoredPath))
-        {
-            string candidate = Path.GetFileName(authoredPath.Trim());
-            if (!string.IsNullOrEmpty(candidate)
-                && candidate is not ("." or "..")
-                && candidate.IndexOfAny(Path.GetInvalidFileNameChars()) < 0)
-            {
-                return candidate;
-            }
-        }
-
-        return StationPackPasswordFileName;
-    }
-
-    private static Result<string, Failure> ResolvePasswordSidecarSource(
-        string authoredPath,
-        string? passwordSourceDirectory)
-    {
-        if (Path.IsPathFullyQualified(authoredPath) && File.Exists(authoredPath))
-        {
-            return Result.Ok<string, Failure>(authoredPath);
-        }
-
-        if (!string.IsNullOrWhiteSpace(passwordSourceDirectory))
-        {
-            string combined = Path.GetFullPath(Path.Combine(passwordSourceDirectory.Trim(), authoredPath));
-            if (File.Exists(combined))
-            {
-                return Result.Ok<string, Failure>(combined);
-            }
-        }
-
-        return Result.Fail<string, Failure>(
-            new Failure(
-                "stationPack.password.missing",
-                $"Cannot copy account.passwordPath '{authoredPath}' into the Station pack."));
     }
 
     public static Result<Unit, Failure> ExportPlan(HostPlan plan, string destinationDirectory)
@@ -483,38 +443,16 @@ public static class HostCompile
         string? output,
         string profileStem,
         IEnumerable<string>? authoredSelectionLabels) =>
-        new(
-            SnapshotProfile(profile) with
-            {
-                Account = profile.Account with { Password = null },
-            },
-            System.Text.Encoding.UTF8.GetString(BuildPlan.SerializeProfile(
-                SnapshotProfile(profile) with
-                {
-                    Account = profile.Account with { Password = null },
-                })),
+        HostReviewFactory.Create(
+            profile,
+            artifacts,
             media,
             work,
             output,
             profileStem,
-            artifacts.Manifest.ImageQuality,
-            artifacts.PackageStrict,
-            artifacts.Manifest.RequiresNetwork,
-            ReadOnly(artifacts.RemoveProvisionedAppx),
-            ReadOnly(artifacts.EffectivePackages),
-            ReadOnly(artifacts.Jobs.Jobs.Select(SnapshotJob)),
-            ReadOnly(artifacts.Stages),
-            artifacts.BraveSelected,
-            ReadOnly(artifacts.EffectivePackages
-                .Where(static package =>
-                    package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store)
-                .Select(static package => package.ResolvedInstallId)),
-            ReadOnly(artifacts.EffectivePackages
-                .Where(static package => package.Source == EffectivePackageSource.Scoop)
-                .Select(static package => package.ResolvedInstallId)),
-            ReadOnly(authoredSelectionLabels ?? []));
+            authoredSelectionLabels);
 
-    private static Profile SnapshotProfile(Profile profile) =>
+    internal static Profile SnapshotProfile(Profile profile) =>
         profile with
         {
             Account = profile.Account with { },
@@ -606,7 +544,7 @@ public static class HostCompile
             OfflineDefaultUser = ReadOnly(artifacts.OfflineDefaultUser ?? []),
         };
 
-    private static ProvisionJob SnapshotJob(ProvisionJob job) =>
+    internal static ProvisionJob SnapshotJob(ProvisionJob job) =>
         job with
         {
             WslFromFileAssetNames = job.WslFromFileAssetNames is null ? null : ReadOnly(job.WslFromFileAssetNames),
@@ -621,7 +559,7 @@ public static class HostCompile
             SelectionMismatch = media.SelectionMismatch is null ? null : media.SelectionMismatch with { },
         };
 
-    private static ReadOnlyCollection<T> ReadOnly<T>(IEnumerable<T> values) =>
+    internal static ReadOnlyCollection<T> ReadOnly<T>(IEnumerable<T> values) =>
         Array.AsReadOnly(values.ToArray());
 
     private static Result<T, HostComposeError> ComposeFail<T>(Failure failure) =>
