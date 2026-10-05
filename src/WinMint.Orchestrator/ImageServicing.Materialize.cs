@@ -1,7 +1,5 @@
 using System.Diagnostics;
 using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization.Metadata;
 
 using WinMint.Contracts;
 
@@ -199,179 +197,29 @@ public static partial class ImageServicing
                     ServicingJsonContext.Default.StringArray));
         }
 
-        List<ServicingOpcode> opcodes = [.. plan.Stages];
-        if (!opcodes.Contains(ServicingOpcode.AddQualityUpdates))
+        Result<BoundServicingStages, Failure> bound = TryBindServicingStages(
+            new ServicingStageBindContext(
+                Plan: plan,
+                Run: run,
+                Workspace: workspace,
+                Identity: identity.Value,
+                MediaDir: mediaDir,
+                MountDir: mountDir,
+                PayloadDir: payloadDir,
+                UnattendPath: unattendPath,
+                WimOut: wimOut,
+                OutputIso: outputIso,
+                WimIndex: wimIndex));
+        if (!bound.IsOk)
         {
-            int boot = opcodes.IndexOf(ServicingOpcode.PatchBootWimApply);
-            if (boot >= 0)
-            {
-                opcodes.Insert(boot, ServicingOpcode.AddQualityUpdates);
-            }
+            return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(bound.Error);
         }
 
-        List<ServicingStage> resolved = new(opcodes.Count);
-        List<(ServicingOpcode Opcode, JsonObject Parameters)> wire = new(opcodes.Count);
-        void Add<T>(ServicingOpcode opcode, T record, JsonTypeInfo<T> typeInfo)
-        {
-            JsonObject obj = StageParamJson.From(record, typeInfo);
-            wire.Add((opcode, obj));
-            resolved.Add(new ServicingStage(opcode, StageParamJson.ToBag(obj)));
-        }
-
-        foreach (ServicingOpcode opcode in opcodes)
-        {
-            switch (opcode)
-            {
-                case ServicingOpcode.MountInstallWim:
-                    Add(
-                        opcode,
-                        new MountInstallWimParameters(
-                            SourceIso: run.SourceIsoPath,
-                            MountDir: mountDir,
-                            MediaDir: mediaDir,
-                            WimIndex: wimIndex,
-                            WorkDirectory: workspace.Root,
-                            SourceIsoSha256: identity.Value.SourceIsoSha256,
-                            SourceIsoLength: identity.Value.SourceIsoLength,
-                            CacheSchema: identity.Value.Schema,
-                            CacheRoot: PreparedMediaIdentity.Root,
-                            ImageName: run.SelectedImage?.Name,
-                            Architecture: run.SelectedImage?.Architecture,
-                            ImageEdition: run.SelectedImage?.Edition,
-                            ImageBuild: run.SelectedImage?.Build),
-                        ServicingJsonContext.Default.MountInstallWimParameters);
-                    break;
-                case ServicingOpcode.StagePayload:
-                    Add(
-                        opcode,
-                        new StagePayloadParameters(payloadDir, mountDir),
-                        ServicingJsonContext.Default.StagePayloadParameters);
-                    break;
-                case ServicingOpcode.StageOobeUnattend:
-                    Add(
-                        opcode,
-                        new StageOobeUnattendParameters(unattendPath, mountDir, mediaDir),
-                        ServicingJsonContext.Default.StageOobeUnattendParameters);
-                    break;
-                case ServicingOpcode.PatchBootWimApply:
-                    Add(
-                        opcode,
-                        new PatchBootWimApplyParameters(mediaDir, mountDir, workspace.Root, workspace.QualityPackages),
-                        ServicingJsonContext.Default.PatchBootWimApplyParameters);
-                    break;
-                case ServicingOpcode.AddQualityUpdates:
-                    Add(
-                        opcode,
-                        new AddQualityUpdatesParameters(
-                            mountDir,
-                            mediaDir,
-                            workspace.Root,
-                            HostQualityCacheRoot,
-                            workspace.QualityPackages),
-                        ServicingJsonContext.Default.AddQualityUpdatesParameters);
-                    break;
-                case ServicingOpcode.StampOfflineShell:
-                    Add(
-                        opcode,
-                        new StampOfflineShellParameters(ShellStampGuestPath, mountDir),
-                        ServicingJsonContext.Default.StampOfflineShellParameters);
-                    break;
-                case ServicingOpcode.StampOfflinePolicies:
-                    Add(
-                        opcode,
-                        new StampOfflinePoliciesParameters(
-                            mountDir,
-                            run.WorkDirectory,
-                            Path.Combine(payloadDir, ServicingWorkspace.PoliciesFileName)),
-                        ServicingJsonContext.Default.StampOfflinePoliciesParameters);
-                    break;
-                case ServicingOpcode.StampOfflineDefaultUser:
-                    Add(
-                        opcode,
-                        new StampOfflineDefaultUserParameters(
-                            mountDir,
-                            run.WorkDirectory,
-                            Path.Combine(payloadDir, ServicingWorkspace.DefaultUserFileName)),
-                        ServicingJsonContext.Default.StampOfflineDefaultUserParameters);
-                    break;
-                case ServicingOpcode.RemoveProvisionedAppx:
-                    Add(
-                        opcode,
-                        new RemoveProvisionedAppxParameters(
-                            mountDir,
-                            run.WorkDirectory,
-                            Path.Combine(payloadDir, ServicingWorkspace.PackageFamilyNamesFileName)),
-                        ServicingJsonContext.Default.RemoveProvisionedAppxParameters);
-                    break;
-                case ServicingOpcode.RemoveCapabilities:
-                    Add(
-                        opcode,
-                        new RemoveCapabilitiesParameters(
-                            mountDir,
-                            run.WorkDirectory,
-                            "capability",
-                            Path.Combine(payloadDir, ServicingWorkspace.CapabilityNamesFileName)),
-                        ServicingJsonContext.Default.RemoveCapabilitiesParameters);
-                    break;
-                case ServicingOpcode.DisableOptionalFeatures:
-                    Add(
-                        opcode,
-                        new DisableOptionalFeaturesParameters(
-                            mountDir,
-                            run.WorkDirectory,
-                            "feature",
-                            Path.Combine(payloadDir, ServicingWorkspace.FeatureNamesFileName)),
-                        ServicingJsonContext.Default.DisableOptionalFeaturesParameters);
-                    break;
-                case ServicingOpcode.InjectDrivers:
-                    if (plan.Drivers is null)
-                    {
-                        return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(
-                            new Failure("servicing.drivers.missing", "InjectDrivers opcode requires DriverInject facts."));
-                    }
-
-                    Add(
-                        opcode,
-                        new InjectDriversParameters(
-                            mountDir,
-                            run.WorkDirectory,
-                            mediaDir,
-                            plan.Drivers.DeviceId,
-                            plan.Drivers.DetailsUrl,
-                            plan.Drivers.ExpectedFileNameRegex,
-                            ExportLane.For(plan.Manifest.ImageQuality).Name),
-                        ServicingJsonContext.Default.InjectDriversParameters);
-                    break;
-                case ServicingOpcode.ExportWim:
-                    ExportLane exportLane = ExportLane.For(plan.Manifest.ImageQuality);
-                    Add(
-                        opcode,
-                        new ExportWimParameters(
-                            mountDir,
-                            mediaDir,
-                            wimOut,
-                            run.WorkDirectory,
-                            exportLane.Name,
-                            exportLane.Compression,
-                            exportLane.Cleanup),
-                        ServicingJsonContext.Default.ExportWimParameters);
-                    break;
-                case ServicingOpcode.BuildIso:
-                    Add(
-                        opcode,
-                        new BuildIsoParameters(outputIso, mediaDir),
-                        ServicingJsonContext.Default.BuildIsoParameters);
-                    break;
-                default:
-                    throw new InvalidOperationException($"Unhandled opcode {opcode}");
-            }
-        }
-
-        File.WriteAllText(workspace.Stages, SerializeServicingStagesFile(wire));
+        File.WriteAllText(workspace.Stages, SerializeServicingStagesFile(bound.Value.Wire));
         workspace.WriteManifest();
-        WriteExpectedEvidence(workspace, plan, resolved);
+        WriteExpectedEvidence(workspace, plan, bound.Value.Stages);
 
-        return Result.Ok<IReadOnlyList<ServicingStage>, Failure>([.. resolved]);
+        return Result.Ok<IReadOnlyList<ServicingStage>, Failure>(bound.Value.Stages);
     }
 
     private static Result<string, Failure> StageSetupCompleteScript(string payloadDir)
