@@ -122,8 +122,10 @@ $statusPath = Join-Path $Work 'smoke-status.json'
 $assertScript = Join-Path $PSScriptRoot 'Assert-SmokeEvidence.ps1'
 $manifestPath = Join-Path $Work 'smoke-evidence\acceptance.manifest.json'
 $runId = [guid]::NewGuid().ToString('N')
-$outIso = $null
-$runScratchHygiene = $false
+$script:outIso = $null
+$script:runScratchHygiene = $false
+# Shared with GuestProbe sleeps — same scriptblock the stage runner injects as -Clock.
+$script:SmokeClock = { param([int] $Seconds) Start-Sleep -Seconds $Seconds }
 
 if ($AssertOnly) {
     & $assertScript -EvidenceDir $EvidenceDir -StaticEvidenceOnly
@@ -177,77 +179,68 @@ New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 
 $workFull = if ([IO.Path]::IsPathRooted($Work)) { $Work } else { Join-Path $repoRoot $Work }
 
-# New run identity, stamped before the watcher spawns. Pass leftover/empty
-# -PriorRunId: — the post-stamp file is this run, not prior.
-Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
-    -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
-    -LastHostLine 'Smoke run starting' -OutputIso $null -RunId $runId
-
+$applyEvidence = Join-Path $Work 'evidence.json'
 $pwshExe = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
 $watcherMarker = Join-Path $workFull 'watch-smoke.pid'
-$watcherAlive = $false
-if (Test-Path -LiteralPath $watcherMarker -PathType Leaf) {
-    $oldWatcher = 0
-    if ([int]::TryParse((Get-Content -LiteralPath $watcherMarker -Raw).Trim(), [ref]$oldWatcher) -and $oldWatcher -gt 0) {
-        $watcherAlive = $null -ne (Get-Process -Id $oldWatcher -ErrorAction SilentlyContinue)
-    }
-}
-if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive:$watcherAlive) -eq 'spawn') {
-    $watcher = Start-Process -FilePath $pwshExe -WorkingDirectory $repoRoot -PassThru -ArgumentList @(
-        '-NoProfile',
-        '-NonInteractive',
-        '-File', (Join-Path $repoRoot 'tools/host/Watch-Host.ps1'),
-        '-Kind', 'smoke',
-        '-Work', $workFull,
-        '-PriorRunId:'
-    )
-    Set-Content -LiteralPath $watcherMarker -Value $watcher.Id -Encoding utf8
-}
+if ($SkipApply) { $script:runScratchHygiene = $true }
 
-$applyEvidence = Join-Path $Work 'evidence.json'
-# Resolve pre-Apply only for -SkipApply reuse. A full run resolves after Apply —
-# stale winmint_*.iso from failed prior runs must not fail-close a fresh Apply.
-$outIso = if ($SkipApply) { Resolve-WinMintOutputIso -WorkDirectory $Work } else { $null }
-if ($SkipApply) { $runScratchHygiene = $true }
-if (-not $SkipApply) {
-    Write-SmokeHostLine -Name 'Publishing Supervisor (Release AOT)…' -Activity publish
-    & just publish-provisioning
-    if ($LASTEXITCODE -ne 0) { throw "just publish-provisioning failed: $LASTEXITCODE" }
+# Stage runner owns status→watcher, clear projections→Apply, wait polls, fail→phase=failed.
+$null = Invoke-SmokeStageRunner -Work $Work -StatusPath $statusPath -RunId $runId -VmName $VmName `
+    -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
+    -SkipApply:$SkipApply `
+    -Clock $script:SmokeClock `
+    -SpawnWatcher {
+        $watcherAlive = $false
+        if (Test-Path -LiteralPath $watcherMarker -PathType Leaf) {
+            $oldWatcher = 0
+            if ([int]::TryParse((Get-Content -LiteralPath $watcherMarker -Raw).Trim(), [ref]$oldWatcher) -and $oldWatcher -gt 0) {
+                $watcherAlive = $null -ne (Get-Process -Id $oldWatcher -ErrorAction SilentlyContinue)
+            }
+        }
+        if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive:$watcherAlive) -eq 'spawn') {
+            $watcher = Start-Process -FilePath $pwshExe -WorkingDirectory $repoRoot -PassThru -ArgumentList @(
+                '-NoProfile',
+                '-NonInteractive',
+                '-File', (Join-Path $repoRoot 'tools/host/Watch-Host.ps1'),
+                '-Kind', 'smoke',
+                '-Work', $workFull,
+                '-PriorRunId:'
+            )
+            Set-Content -LiteralPath $watcherMarker -Value $watcher.Id -Encoding utf8
+        }
+    } `
+    -ResolveOutputIso {
+        param([string] $WorkDirectory)
+        Resolve-WinMintOutputIso -WorkDirectory $WorkDirectory
+    } `
+    -Apply {
+        Write-SmokeHostLine -Name 'Publishing Supervisor (Release AOT)…' -Activity publish
+        & just publish-provisioning
+        if ($LASTEXITCODE -ne 0) { throw "just publish-provisioning failed: $LASTEXITCODE" }
 
-    # Clear prior-run Apply projections so a crashed Apply cannot resurrect an old
-    # stage=failed, lane marker, keep-flag pins, or expected digests into this run.
-    $priorProjections = @('apply-status.txt', 'failure.json', 'evidence.json', 'stages.json', 'expected-evidence.json') |
-        ForEach-Object { Join-Path $Work $_ }
-    Remove-Item -LiteralPath $priorProjections -Force -ErrorAction SilentlyContinue
+        # Free disk before DISM: drop stacked timestamped Output ISOs (KeepPath empty — new leaf after Apply).
+        $dropped = Clear-WinMintPriorOutputIsos -WorkDirectory $Work
+        if ($dropped -gt 0) {
+            Write-SmokeHostLine -Name "Dropped $dropped prior Output ISO(s) under $Work" -Activity apply
+        }
 
-    # Free disk before DISM: drop stacked timestamped Output ISOs (KeepPath empty — new leaf after Apply).
-    $dropped = Clear-WinMintPriorOutputIsos -WorkDirectory $Work
-    if ($dropped -gt 0) {
-        Write-SmokeHostLine -Name "Dropped $dropped prior Output ISO(s) under $Work" -Activity apply
-    }
-
-    Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
-        -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
-        -LastHostLine "Applying Profile=$ProfilePath" -OutputIso $null -RunId $runId
-    Write-SmokeHostLine -Name "Applying Profile=$ProfilePath Iso=$Iso Work=$Work (Test lane, smoke stubs on)…" -Activity apply
-    $runScratchHygiene = $true
-    try {
+        Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
+            -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
+            -LastHostLine "Applying Profile=$ProfilePath" -OutputIso $null -RunId $runId
+        Write-SmokeHostLine -Name "Applying Profile=$ProfilePath Iso=$Iso Work=$Work (Test lane, smoke stubs on)…" -Activity apply
+        $script:runScratchHygiene = $true
         & just apply-maintainer $Iso $Work $ProfilePath true
         $applyFail = Get-WinMintApplyHostFailure -WorkDirectory $workFull
         if ($applyFail) { throw $applyFail }
         if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
-    }
-    catch {
-        throw
-    }
-
-    # Re-resolve after Apply (dynamic leaf).
-    $outIso = Resolve-WinMintOutputIso -WorkDirectory $Work
-}
-
-if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outIso)) {
-    throw "Output ISO missing under $Work (run Apply or omit -SkipApply)"
-}
+    } `
+    -VmHost {
+        param($OutIso)
+        $script:outIso = $OutIso
+        if ([string]::IsNullOrWhiteSpace($OutIso) -or -not (Test-Path -LiteralPath $OutIso)) {
+            throw "Output ISO missing under $Work (run Apply or omit -SkipApply)"
+        }
+        $outIso = $OutIso
 
 # Lane marker from Apply evidence (fail closed — do not invent).
 if (-not (Test-Path -LiteralPath $applyEvidence)) {
@@ -743,58 +736,68 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         }
         if ($tick.SendNudge) { Send-VmBootNudge }
 
-        Start-Sleep -Seconds 20
+        & $script:SmokeClock 20
     }
 
     if (-not (Get-ChildItem -LiteralPath $guestDir -Filter 'evidence-*.json' -ErrorAction SilentlyContinue)) {
         throw "Wall clock elapsed without guest evidence under $guestDir"
     }
 
-    Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage assert) `
-        -VmName $VmName -StallMinutesLeft 0 -WallMinutesLeft $wallLeft `
-        -LastHostLine 'Guest evidence pulled.' -OutputIso $outIso -RunId $runId
-    $shellForAssert = ([string](Get-Content -LiteralPath (Join-Path $guestDir 'winlogon-shell.txt') -Raw -Encoding utf8)).Trim()
-    & $assertScript -EvidenceDir $evidenceOut `
-        -LiveShell $shellForAssert `
-        -SupervisorRunning:$false `
-        -RequiredSmokeRunId $runId `
-        -PinnedRemoveAppx $pinnedRemoveAppx `
-        -PinnedOnlineRemoveAppx $pinnedOnlineRemoveAppx `
-        -PinnedRemoveCapabilities $pinnedRemoveCapabilities `
-        -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures `
-        -ExpectNativePackageAudit:$expectNativePackageAudit
-    if ($LASTEXITCODE -ne 0) { throw "Assert-SmokeEvidence exit $LASTEXITCODE" }
-    if (-not $SkipApply) {
-        $applyDoc = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json
-        $digestMap = @{}
-        foreach ($p in @($applyDoc.digests.PSObject.Properties)) { $digestMap[[string]$p.Name] = [string]$p.Value }
-        $sourceSha = if ($digestMap.ContainsKey('source.isoSha256')) { $digestMap['source.isoSha256'] } else { $null }
-        $sourceLength = if ($digestMap.ContainsKey('source.isoLength')) { [long]$digestMap['source.isoLength'] } else { 0 }
-        $outputSha = if ($digestMap.ContainsKey('outputIso.sha256')) { $digestMap['outputIso.sha256'] } else { $null }
-        $packageStrict = $null
-        if ($applyDoc.PSObject.Properties.Name -contains 'packageStrict') { $packageStrict = [bool]$applyDoc.packageStrict }
-        $artifactRoot = (Resolve-Path $Work).Path
-        $outputRelative = [IO.Path]::GetRelativePath($artifactRoot, (Resolve-Path $outIso).Path).Replace('\', '/')
-        Write-WinMintAcceptanceManifest -Path $manifestPath -AcceptanceKind Smoke -Outcome green `
-            -Lane ([string]$applyDoc.lane) -RepositoryRoot $repoRoot -ProfilePath $ProfilePath `
-            -SourceIsoPath $Iso -OutputIsoPath $outIso -SourceIsoSha256 $sourceSha `
-            -SourceIsoLength $sourceLength -OutputIsoSha256 $outputSha `
-            -SourceEvidenceSchemas @(
-                'winmint.image.evidence/v1',
-                'winmint.provisioning.evidence/v1',
-                'winmint.smoke.acceptance/v1'
-            ) -ArtifactPaths @($outputRelative, 'smoke-evidence/apply/evidence.json', 'smoke-evidence/guest') `
-            -PackageStrict ([Nullable[bool]]$packageStrict)
+        $script:SmokeWallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
+        $script:SmokePinnedRemoveAppx = $pinnedRemoveAppx
+        $script:SmokePinnedOnlineRemoveAppx = $pinnedOnlineRemoveAppx
+        $script:SmokePinnedRemoveCapabilities = $pinnedRemoveCapabilities
+        $script:SmokePinnedDisableOptionalFeatures = $pinnedDisableOptionalFeatures
+        $script:SmokeExpectNativePackageAudit = $expectNativePackageAudit
+        # ponytail: wait blocks in VmHost; GuestProbe ready-ack until poll-sized deepen.
+        # Sleeps use $script:SmokeClock (same scriptblock injected as -Clock).
+    } `
+    -GuestProbe { return 'ready' } `
+    -Assert {
+        param($OutIso)
+        $outIso = $OutIso
+        $shellForAssert = ([string](Get-Content -LiteralPath (Join-Path $guestDir 'winlogon-shell.txt') -Raw -Encoding utf8)).Trim()
+        & $assertScript -EvidenceDir $evidenceOut `
+            -LiveShell $shellForAssert `
+            -SupervisorRunning:$false `
+            -RequiredSmokeRunId $runId `
+            -PinnedRemoveAppx $script:SmokePinnedRemoveAppx `
+            -PinnedOnlineRemoveAppx $script:SmokePinnedOnlineRemoveAppx `
+            -PinnedRemoveCapabilities $script:SmokePinnedRemoveCapabilities `
+            -PinnedDisableOptionalFeatures $script:SmokePinnedDisableOptionalFeatures `
+            -ExpectNativePackageAudit:$script:SmokeExpectNativePackageAudit
+        if ($LASTEXITCODE -ne 0) { throw "Assert-SmokeEvidence exit $LASTEXITCODE" }
+        if (-not $SkipApply) {
+            $applyDoc = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json
+            $digestMap = @{}
+            foreach ($p in @($applyDoc.digests.PSObject.Properties)) { $digestMap[[string]$p.Name] = [string]$p.Value }
+            $sourceSha = if ($digestMap.ContainsKey('source.isoSha256')) { $digestMap['source.isoSha256'] } else { $null }
+            $sourceLength = if ($digestMap.ContainsKey('source.isoLength')) { [long]$digestMap['source.isoLength'] } else { 0 }
+            $outputSha = if ($digestMap.ContainsKey('outputIso.sha256')) { $digestMap['outputIso.sha256'] } else { $null }
+            $packageStrict = $null
+            if ($applyDoc.PSObject.Properties.Name -contains 'packageStrict') { $packageStrict = [bool]$applyDoc.packageStrict }
+            $artifactRoot = (Resolve-Path $Work).Path
+            $outputRelative = [IO.Path]::GetRelativePath($artifactRoot, (Resolve-Path $outIso).Path).Replace('\', '/')
+            Write-WinMintAcceptanceManifest -Path $manifestPath -AcceptanceKind Smoke -Outcome green `
+                -Lane ([string]$applyDoc.lane) -RepositoryRoot $repoRoot -ProfilePath $ProfilePath `
+                -SourceIsoPath $Iso -OutputIsoPath $outIso -SourceIsoSha256 $sourceSha `
+                -SourceIsoLength $sourceLength -OutputIsoSha256 $outputSha `
+                -SourceEvidenceSchemas @(
+                    'winmint.image.evidence/v1',
+                    'winmint.provisioning.evidence/v1',
+                    'winmint.smoke.acceptance/v1'
+                ) -ArtifactPaths @($outputRelative, 'smoke-evidence/apply/evidence.json', 'smoke-evidence/guest') `
+                -PackageStrict ([Nullable[bool]]$packageStrict)
+        }
+        Write-SmokeHostLine -Name "Smoke green. Evidence: $evidenceOut" -Outcome ok
+        Write-WinMintHostProgress -Activity Smoke -Completed
     }
-    Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage green) `
-        -VmName $VmName -LastHostLine 'Smoke green' -OutputIso $outIso -RunId $runId
-    Write-SmokeHostLine -Name "Smoke green. Evidence: $evidenceOut" -Outcome ok
-    Write-WinMintHostProgress -Activity Smoke -Completed
 }
 catch {
     $failMsg = [string]$_.Exception.Message
+    # Runner already wrote phase=failed for stage failures; refresh for preflight throws.
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage failed) `
-        -VmName $VmName -LastHostLine $failMsg -OutputIso $outIso -RunId $runId
+        -VmName $VmName -LastHostLine $failMsg -OutputIso $script:outIso -RunId $runId
     try {
         if (Get-Command Get-VM -ErrorAction SilentlyContinue) {
             $failVm = Get-VM -Name $VmName -ErrorAction SilentlyContinue
@@ -827,5 +830,5 @@ catch {
     throw
 }
 finally {
-    if ($runScratchHygiene) { Invoke-WinMintScratchHygiene -RepoRoot $repoRoot }
+    if ($script:runScratchHygiene) { Invoke-WinMintScratchHygiene -RepoRoot $repoRoot }
 }

@@ -8,12 +8,12 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 $smoke = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Invoke-Smoke.ps1') -Raw -Encoding utf8
 if ($smoke -notmatch 'tools[/\\]vm[/\\]SmokeStatus\.ps1') { throw 'Invoke-Smoke must dot-source SmokeStatus.ps1' }
-if ($smoke -notmatch 'Get-WinMintApplyHostFailure') { throw 'Apply wait must use Get-WinMintApplyHostFailure' }
-if ($smoke -notmatch "Resolve-SmokePhase -HostStage failed") { throw 'Apply/wait failures must write phase=failed' }
+if ($smoke -notmatch 'Invoke-SmokeStageRunner') { throw 'Invoke-Smoke must run stages via Invoke-SmokeStageRunner' }
 if ($smoke -match 'Get-Content[^\n]*smoke-status\.json') { throw 'must not read smoke-status.json as control plane' }
 if ($smoke -notmatch 'Get-SmokeWaitTick') { throw 'Invoke-Smoke wait loop must call Get-SmokeWaitTick' }
 $statusSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/SmokeStatus.ps1') -Raw -Encoding utf8
 if ($statusSrc -notmatch 'EMPTY_VHD:') { throw 'empty-VHD throw prefix missing (operator copy)' }
+if ($statusSrc -notmatch 'function Invoke-SmokeStageRunner') { throw 'SmokeStatus must define Invoke-SmokeStageRunner' }
 if ($smoke -notmatch '\[Diagnostics\.Stopwatch\]') { throw 'stall/wall/empty-vhd must use Stopwatch, not UtcNow deadlines' }
 if ($smoke -notmatch 'Select-WinMintGuestEvidencePath') { throw 'guest evidence must select by outcome, not LastWriteTime' }
 if ($smoke -notmatch 'Get-WinMintGuestHandoffReadiness') {
@@ -29,19 +29,10 @@ if ($statusSrc -notmatch 'function Get-WinMintGuestHandoffReadiness') {
 if ($smoke -match 'process-exited-early' -or $smoke -match 'Find-SmokePids') {
     throw 'Invoke-Smoke must not infer harness death from process lists'
 }
-if ($smoke -notmatch "Remove-Item[^\n]*priorProjections" -or $smoke -notmatch "'evidence\.json', 'stages\.json'") {
-    throw 'Invoke-Smoke must clear prior-run Apply projections (apply-status/failure/evidence/stages/expected) before Apply'
-}
-if ($smoke -notmatch 'if \(\$SkipApply\) \{ Resolve-WinMintOutputIso') {
-    throw 'Full runs must not resolve the Output ISO before Apply (stale winmint_*.iso would fail-close a fresh Apply)'
-}
-if ($smoke.IndexOf('Write-SmokeStatus') -gt $smoke.IndexOf('Watch-Host.ps1')) {
-    throw 'Invoke-Smoke must write this run''s status before spawning Watch-Host (stale-status guard)'
-}
 if ($smoke -notmatch 'Resolve-WinMintSmokeGuestCredential') {
     throw 'Invoke-Smoke must resolve guest credentials via Resolve-WinMintSmokeGuestCredential'
 }
-if ($smoke -notmatch 'ExpectNativePackageAudit:\$expectNativePackageAudit') {
+if ($smoke -notmatch 'ExpectNativePackageAudit:\$script:SmokeExpectNativePackageAudit') {
     throw 'assert splat must bind -ExpectNativePackageAudit as a switch, not a positional string'
 }
 if ($smoke -notmatch 'Save-SmokeVmScreenshot') {
@@ -226,6 +217,132 @@ if ((Get-SmokeSuspendVmDecision -FailureMessage "Smoke acceptance requires outco
 }
 if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive $true) -cne 'skip') { throw 'live watcher is unique' }
 if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive $false) -cne 'spawn') { throw 'dead marker respawns' }
+
+# --- Stage runner: synthetic Apply→wait→assert timeline (no Invoke-Smoke source regex) ---
+$stageTmp = Join-Path ([IO.Path]::GetTempPath()) ('smoke-stage-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $stageTmp | Out-Null
+try {
+    $stageStatus = Join-Path $stageTmp 'smoke-status.json'
+    $stageLog = [System.Collections.Generic.List[string]]::new()
+    $script:resolveBeforeApply = $false
+    $script:probeN = 0
+
+    # Stale prior-run projections must die before Apply.
+    foreach ($leaf in @('apply-status.txt', 'failure.json', 'evidence.json', 'stages.json', 'expected-evidence.json')) {
+        Set-Content -LiteralPath (Join-Path $stageTmp $leaf) -Value 'stale' -Encoding utf8
+    }
+
+    $null = Invoke-SmokeStageRunner -Work $stageTmp -StatusPath $stageStatus `
+        -RunId 'run-synth' -VmName 'winmint-smoke' -StallMinutesLeft 45 -WallMinutesLeft 90 `
+        -PollSeconds 1 -MaxPolls 10 `
+        -SpawnWatcher {
+            $doc = Get-Content -LiteralPath $stageStatus -Raw -Encoding utf8 | ConvertFrom-Json
+            if ($doc.runId -cne 'run-synth') { throw 'watcher spawned before status stamped this runId' }
+            if ($doc.phase -cne 'apply') { throw 'watcher expects phase=apply' }
+            $stageLog.Add('watcher')
+        } `
+        -ResolveOutputIso {
+            param([string] $WorkDirectory)
+            if ($stageLog -notcontains 'apply') { $script:resolveBeforeApply = $true }
+            Join-Path $WorkDirectory 'out.iso'
+        } `
+        -Apply {
+            foreach ($leaf in @('apply-status.txt', 'failure.json', 'evidence.json', 'stages.json', 'expected-evidence.json')) {
+                if (Test-Path -LiteralPath (Join-Path $stageTmp $leaf)) {
+                    throw "prior projection $leaf still present at Apply"
+                }
+            }
+            Set-Content -LiteralPath (Join-Path $stageTmp 'out.iso') -Value 'iso' -Encoding utf8
+            $stageLog.Add('apply')
+        } `
+        -VmHost {
+            param($OutIso)
+            if ([string]$OutIso -cne (Join-Path $stageTmp 'out.iso')) { throw "VmHost OutIso=$OutIso" }
+            $stageLog.Add('vm')
+        } `
+        -GuestProbe {
+            $script:probeN++
+            $stageLog.Add("probe$($script:probeN)")
+            if ($script:probeN -lt 3) { return 'wait' }
+            return 'ready'
+        } `
+        -Clock {
+            param([int] $Seconds)
+            if ($Seconds -ne 1) { throw "Clock Seconds=$Seconds want 1" }
+            $stageLog.Add('clock')
+        } `
+        -Assert {
+            param($OutIso)
+            $stageLog.Add('assert')
+        }
+
+    if ($script:resolveBeforeApply) { throw 'ResolveOutputIso must not run before Apply on a full run' }
+    $want = 'watcher|apply|vm|probe1|clock|probe2|clock|probe3|assert'
+    $got = ($stageLog -join '|')
+    if ($got -cne $want) { throw "stage timeline: $got want $want" }
+    $green = Get-Content -LiteralPath $stageStatus -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($green.phase -cne 'green') { throw "timeline end phase=$($green.phase) want green" }
+    if ($green.runId -cne 'run-synth') { throw 'green status lost runId' }
+
+    # Fail → phase=failed (Apply throw).
+    $failWork = Join-Path $stageTmp 'fail'
+    New-Item -ItemType Directory -Force -Path $failWork | Out-Null
+    $failStatus = Join-Path $failWork 'smoke-status.json'
+    $failThrown = $false
+    try {
+        Invoke-SmokeStageRunner -Work $failWork -StatusPath $failStatus `
+            -RunId 'run-fail' -VmName 'winmint-smoke' `
+            -SpawnWatcher { } `
+            -ResolveOutputIso { param($w) Join-Path $w 'out.iso' } `
+            -Apply { throw 'Apply failed: synthetic' } `
+            -VmHost { throw 'VmHost must not run after Apply fail' } `
+            -GuestProbe { throw 'GuestProbe must not run after Apply fail' } `
+            -Clock { throw 'Clock must not run after Apply fail' } `
+            -Assert { throw 'Assert must not run after Apply fail' }
+    }
+    catch {
+        $failThrown = $true
+        if ($_.Exception.Message -notmatch 'Apply failed: synthetic') {
+            throw "unexpected Apply fail message: $($_.Exception.Message)"
+        }
+    }
+    if (-not $failThrown) { throw 'Apply failure must throw' }
+    $failed = Get-Content -LiteralPath $failStatus -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($failed.phase -cne 'failed') { throw "Apply fail phase=$($failed.phase) want failed" }
+    if ($failed.lastHostLine -notmatch 'Apply failed: synthetic') {
+        throw "failed lastHostLine=$($failed.lastHostLine)"
+    }
+
+    # SkipApply resolves ISO without Apply / without clearing reuse projections.
+    $skipWork = Join-Path $stageTmp 'skip'
+    New-Item -ItemType Directory -Force -Path $skipWork | Out-Null
+    Set-Content -LiteralPath (Join-Path $skipWork 'stages.json') -Value '{"stages":[]}' -Encoding utf8
+    Set-Content -LiteralPath (Join-Path $skipWork 'out.iso') -Value 'reuse' -Encoding utf8
+    $skipStatus = Join-Path $skipWork 'smoke-status.json'
+    $skipLog = [System.Collections.Generic.List[string]]::new()
+    $null = Invoke-SmokeStageRunner -Work $skipWork -StatusPath $skipStatus `
+        -RunId 'run-skip' -VmName 'winmint-smoke' -SkipApply `
+        -SpawnWatcher { $skipLog.Add('watcher') } `
+        -ResolveOutputIso {
+            param([string] $WorkDirectory)
+            $skipLog.Add('resolve')
+            Join-Path $WorkDirectory 'out.iso'
+        } `
+        -Apply { throw 'Apply must not run on SkipApply' } `
+        -VmHost { param($o) $skipLog.Add('vm') } `
+        -GuestProbe { $skipLog.Add('probe'); return 'ready' } `
+        -Clock { throw 'Clock must not run when probe is immediately ready' } `
+        -Assert { $skipLog.Add('assert') }
+    if (-not (Test-Path -LiteralPath (Join-Path $skipWork 'stages.json'))) {
+        throw 'SkipApply must not clear stages.json'
+    }
+    $skipWant = 'watcher|resolve|vm|probe|assert'
+    $skipGot = ($skipLog -join '|')
+    if ($skipGot -cne $skipWant) { throw "SkipApply timeline: $skipGot want $skipWant" }
+}
+finally {
+    Remove-Item -LiteralPath $stageTmp -Recurse -Force -ErrorAction SilentlyContinue
+}
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('smoke-status-' + [guid]::NewGuid().ToString('N'))
 $statusPath = Join-Path $tmp 'smoke-status.json'

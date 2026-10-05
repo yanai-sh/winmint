@@ -732,3 +732,87 @@ function Test-WinMintGuestEvidenceTerminal {
         -ExplorerRunning $ExplorerRunning
     return $verdict -in @('ready', 'failed')
 }
+
+function Invoke-SmokeStageRunner {
+    <#
+    .SYNOPSIS
+      Smoke stage timeline with substitutable host I/O.
+      Owns status→watcher, clear projections→Apply, wait polls, fail→phase=failed.
+      Inject Apply / VmHost / GuestProbe / Clock (scriptblocks — no port zoo).
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $Work,
+        [Parameter(Mandatory)] [string] $StatusPath,
+        [Parameter(Mandatory)] [string] $RunId,
+        [Parameter(Mandatory)] [string] $VmName,
+        [int] $StallMinutesLeft = 0,
+        [int] $WallMinutesLeft = 0,
+        [switch] $SkipApply,
+        [Parameter(Mandatory)] [scriptblock] $Apply,
+        [Parameter(Mandatory)] [scriptblock] $VmHost,
+        [Parameter(Mandatory)] [scriptblock] $GuestProbe,
+        [Parameter(Mandatory)] [scriptblock] $Clock,
+        [scriptblock] $Assert = {},
+        [scriptblock] $SpawnWatcher = {},
+        [scriptblock] $ResolveOutputIso = {
+            param([string] $WorkDirectory)
+            throw "ResolveOutputIso not provided for $WorkDirectory"
+        },
+        [int] $PollSeconds = 20,
+        [int] $MaxPolls = [int]::MaxValue
+    )
+
+    $outIso = $null
+    try {
+        Write-SmokeStatus -Path $StatusPath -Phase (Resolve-SmokePhase -HostStage apply) `
+            -VmName $VmName -StallMinutesLeft $StallMinutesLeft -WallMinutesLeft $WallMinutesLeft `
+            -LastHostLine 'Smoke run starting' -OutputIso $null -RunId $RunId
+
+        & $SpawnWatcher
+
+        if ($SkipApply) {
+            $outIso = & $ResolveOutputIso $Work
+        }
+        else {
+            # Clear prior-run Apply projections so a crashed Apply cannot resurrect an old
+            # stage=failed, lane marker, keep-flag pins, or expected digests into this run.
+            $priorProjections = @('apply-status.txt', 'failure.json', 'evidence.json', 'stages.json', 'expected-evidence.json') |
+                ForEach-Object { Join-Path $Work $_ }
+            Remove-Item -LiteralPath $priorProjections -Force -ErrorAction SilentlyContinue
+
+            & $Apply
+            $outIso = & $ResolveOutputIso $Work
+        }
+
+        & $VmHost $outIso
+
+        $polls = 0
+        while ($true) {
+            $verdict = [string](& $GuestProbe)
+            if ($verdict -ceq 'ready') { break }
+            if ($verdict -ceq 'failed') { throw 'GuestProbe reported failed' }
+            $polls++
+            if ($polls -ge $MaxPolls) {
+                throw "MaxPolls exhausted waiting for guest (polls=$polls)"
+            }
+            & $Clock $PollSeconds
+        }
+
+        Write-SmokeStatus -Path $StatusPath -Phase (Resolve-SmokePhase -HostStage assert) `
+            -VmName $VmName -StallMinutesLeft 0 -WallMinutesLeft $WallMinutesLeft `
+            -LastHostLine 'Guest evidence pulled.' -OutputIso $outIso -RunId $RunId
+
+        & $Assert $outIso
+
+        Write-SmokeStatus -Path $StatusPath -Phase (Resolve-SmokePhase -HostStage green) `
+            -VmName $VmName -LastHostLine 'Smoke green' -OutputIso $outIso -RunId $RunId
+
+        return [pscustomobject]@{ Outcome = 'green'; OutputIso = $outIso }
+    }
+    catch {
+        Write-SmokeStatus -Path $StatusPath -Phase (Resolve-SmokePhase -HostStage failed) `
+            -VmName $VmName -LastHostLine ([string]$_.Exception.Message) `
+            -OutputIso $outIso -RunId $RunId
+        throw
+    }
+}
