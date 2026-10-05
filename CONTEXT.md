@@ -2,7 +2,7 @@
 
 Workstation state compiler — debloat, policies, packages, DMA settle, and account intent from a **Profile**. Delivery artifact: **Output ISO**. User always supplies official Microsoft **Source ISO**. Writing that ISO to removable media is **Flash** (operator step, outside the product seam).
 
-Policy / acceptance: [DESIGN](docs/DESIGN.md).
+Policy / acceptance: Primary and Gate B below; checklist: [issue #96](https://github.com/yanai-sh/winmint/issues/96).
 
 ## Language
 
@@ -86,7 +86,7 @@ _Avoid_: “metal” (retired name — it never touched hardware); treating a Te
 **Gate B** — Pre-wipe host evidence that Release + package-strict Output ISO is ready to Flash. Not a completed Primary install. The predicate is `HostReview.IsGateB` (Release ∧ package-strict).  
 _Avoid_: calling Gate B “Primary”; selling soft Host Apply Release as wipe media; re-deriving Gate B from lane alone or package-strict alone
 
-**Primary** — Release `samples/sl7.profile.json` safe to wipe primary SL7 after Gate B + real install evidence in-repo. Details: [DESIGN](docs/DESIGN.md#acceptance).  
+**Primary** — Release `samples/sl7.profile.json` safe to wipe primary SL7 after Gate B + real install evidence in-repo. Checklist: [issue #96](https://github.com/yanai-sh/winmint/issues/96).  
 _Avoid_: shipping recovery images; treating Gate B alone as wipe-proven; gating Primary on a tracking issue; treating Flash as Primary proof
 
 **Image quality** — Run override `Test` | `Release` (not Profile).
@@ -98,6 +98,12 @@ _Avoid_: Keep-flag (retired name); keep-list polarity; BCU; CDM as primary; Prof
 
 **Shell** — Winlogon replacement during Provisioning tenure only.  
 _Avoid_: calling Wizard UI chrome “Shell”
+
+**Shell chrome** — FirstLogon job `shell.chrome`: Start/taskbar pin layout. Nilesoft Shell is included WinMint chrome for Windows-cohesive context menus, not a user-selectable taskbar layer.  
+_Avoid_: treating Nilesoft as a taskbar surface choice; conflating with Desktop surfaces
+
+**Desktop surfaces** — Two independent axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)): **taskbar surface** (Windows taskbar default, or YASB + tHide) and **window management** (optional Komorebi). Wizard Software stage; package catalog owns package ids; provisioning job `shell.desktop` owns tHide install/pin/hash and applies assets under `payload/desktop/`.  
+_Avoid_: one flat package-checkbox row for both axes; overlapping taskbar layers; Windhawk automation without a stable CLI; redistributing cursors without a license
 
 **Wizard** — Avalonia front end over HostCompile: Source → Account → Software → Review; Phase B elevated Apply.  
 _Avoid_: DISM or second planner in UI

@@ -1,3 +1,4 @@
+using WinMint.Contracts;
 using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
@@ -22,12 +23,14 @@ public class PackageCatalogValidatorTests
     }
 
     [Fact]
-    public void Komorebi_and_whkd_declare_extras_bucket()
+    public void Komorebi_and_whkd_are_official_winget_entries()
     {
         Assert.True(PackageCatalog.Default.TryGetToolByKey("komorebi", out PackageToolEntry? komorebi));
-        Assert.Equal("extras", komorebi!.ScoopBucket);
+        Assert.Equal(PackageToolSource.Winget, komorebi!.Source);
+        Assert.Equal("LGUG2Z.komorebi", komorebi.InstallId);
         Assert.True(PackageCatalog.Default.TryGetToolByKey("whkd", out PackageToolEntry? whkd));
-        Assert.Equal("extras", whkd!.ScoopBucket);
+        Assert.Equal(PackageToolSource.Winget, whkd!.Source);
+        Assert.Equal("LGUG2Z.whkd", whkd.InstallId);
     }
 
     [Fact]

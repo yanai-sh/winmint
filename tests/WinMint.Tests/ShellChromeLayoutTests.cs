@@ -126,5 +126,8 @@ public class ShellChromeLayoutTests
             "zen.exe");
 
         Assert.Contains(expected, ShellChromeLayout.Candidates(ShellChromeLayout.ZenWingetId));
+        Assert.Contains(
+            Path.Combine(ShellChromeLayout.ZenUserInstallDirectory(), "zen.exe"),
+            ShellChromeLayout.Candidates(ShellChromeLayout.ZenWingetId));
     }
 }

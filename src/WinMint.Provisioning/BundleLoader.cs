@@ -177,5 +177,6 @@ public static class BundleLoader
 [JsonSerializable(typeof(ProvisioningEvidenceFile))]
 [JsonSerializable(typeof(PackagesEvidenceFile))]
 [JsonSerializable(typeof(ShellChromeEvidenceFile))]
+[JsonSerializable(typeof(ShellDesktopEvidenceFile))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class ProvisioningJsonContext : JsonSerializerContext;

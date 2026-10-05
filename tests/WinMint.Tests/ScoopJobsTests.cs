@@ -14,7 +14,7 @@ public class ScoopJobsTests
     [Fact]
     public void Plan_emits_scoop_batch_job_from_packages_scoop()
     {
-        Profile profile = Parse(MinimalJson(scoop: ["curl", "komorebi"]));
+        Profile profile = Parse(MinimalJson(scoop: ["curl"]));
 
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
@@ -23,8 +23,7 @@ public class ScoopJobsTests
         Assert.Equal("scoop.batch", batch.Id);
         Assert.False(batch.NeedsReboot);
         Assert.Contains("curl", batch.PackageId);
-        Assert.Contains("komorebi", batch.PackageId);
-        Assert.Contains("extras", batch.ScoopBuckets!);
+        Assert.Contains("main", batch.ScoopBuckets!);
     }
 
     [Fact]

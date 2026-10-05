@@ -260,6 +260,13 @@ public interface IAssetDownload
         string repo,
         IReadOnlyList<string> assetNameCandidates,
         CancellationToken ct = default);
+
+    Task<string?> TryDownloadVerifiedAsync(
+        string url,
+        string sha256Hex,
+        string destinationDirectory,
+        string fileName,
+        CancellationToken ct = default);
 }
 
 public interface ISplashPresenter

@@ -515,14 +515,13 @@ public sealed partial class WizardViewModel :
         string? advancedMultiline)
     {
         IReadOnlyList<string> advanced = IdList.FromMultiline(advancedMultiline);
-        return advanced.Count > 0
-            ? string.Join(Environment.NewLine, advanced)
-            : string.Join(
-                Environment.NewLine,
-                selectedChipIds
-                    .Where(static id => !string.IsNullOrWhiteSpace(id))
-                    .Select(static id => id.Trim())
-                    .Distinct(StringComparer.OrdinalIgnoreCase));
+        return string.Join(
+            Environment.NewLine,
+            selectedChipIds
+                .Concat(advanced)
+                .Where(static id => !string.IsNullOrWhiteSpace(id))
+                .Select(static id => id.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase));
     }
 
     private void InvalidatePresentation()

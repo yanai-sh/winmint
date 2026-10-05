@@ -19,7 +19,7 @@
   <StackPanel Spacing="16" MaxWidth="720">
     <TextBlock Classes="hero-title" Text="Software" />
     <TextBlock Classes="hero-sub"
-               Text="Editors, browsers, shell, and WSL — or continue with recommended defaults." />
+               Text="Editors, browsers, desktop, and WSL — or continue with recommended defaults." />
 
     <Button Classes="link"
             Content="Use defaults → Review"
@@ -47,15 +47,53 @@
       </ItemsControl>
     </StackPanel>
 
-    <StackPanel Spacing="6">
-      <TextBlock Classes="panel-label" Text="Shell" />
-      <ItemsControl ItemsSource="{Binding Chips.Shells}" ItemTemplate="{StaticResource ChipTile}">
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate>
-            <WrapPanel />
-          </ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-      </ItemsControl>
+    <StackPanel Spacing="10">
+      <TextBlock Classes="panel-label" Text="Desktop" />
+      <Border Classes="panel-card">
+        <StackPanel Spacing="6">
+          <TextBlock FontWeight="SemiBold" Text="Included by WinMint" />
+          <TextBlock Text="Nilesoft Shell — Windows-cohesive shell chrome"
+                     AutomationProperties.Name="Included by WinMint: Nilesoft Shell, Windows-cohesive shell chrome"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+      <TextBlock Classes="panel-label" Text="Taskbar surface" />
+      <StackPanel Orientation="Horizontal">
+        <RadioButton Classes="desktop-card"
+                     GroupName="TaskbarSurface"
+                     IsChecked="{Binding Desktop.IsWindowsTaskbar}"
+                     Command="{Binding Desktop.SelectTaskbarCommand}"
+                     CommandParameter="windows"
+                     AutomationProperties.Name="Windows taskbar, default">
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="Windows taskbar" />
+            <TextBlock Text="Default Windows surface" />
+          </StackPanel>
+        </RadioButton>
+        <RadioButton Classes="desktop-card"
+                     GroupName="TaskbarSurface"
+                     IsChecked="{Binding Desktop.IsYasbTaskbar}"
+                     Command="{Binding Desktop.SelectTaskbarCommand}"
+                     CommandParameter="yasb"
+                     AutomationProperties.Name="YASB + tHide"
+                     AutomationProperties.HelpText="YASB plus tHide provides the selected taskbar surface. tHide is installed and verified by the desktop provisioning job.">
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="YASB + tHide" />
+            <TextBlock Text="YASB with tHide taskbar surface" />
+          </StackPanel>
+        </RadioButton>
+      </StackPanel>
+      <ToggleButton Classes="desktop-card"
+                    IsChecked="{Binding Desktop.Komorebi}"
+                    AutomationProperties.Name="Komorebi window management"
+                    AutomationProperties.HelpText="Optional window management. Personal use only unless you have a workplace or commercial license.">
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Komorebi window management" />
+          <TextBlock Text="Independent optional window management" TextWrapping="Wrap" />
+          <TextBlock Text="Personal use only unless you have a workplace/commercial license."
+                     TextWrapping="Wrap" />
+        </StackPanel>
+      </ToggleButton>
     </StackPanel>
 
     <StackPanel Spacing="6">
@@ -88,7 +126,7 @@
                  Text="{Binding Advanced.Winget}" />
         <TextBlock Classes="panel-label" Text="Scoop IDs" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
-                 Watermark="curl&#x0A;komorebi"
+                 Watermark="curl&#x0A;neovim"
                  Text="{Binding Advanced.Scoop}" />
         <TextBlock Classes="panel-label" Text="WSL tokens" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"

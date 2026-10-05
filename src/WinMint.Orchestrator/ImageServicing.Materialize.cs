@@ -150,6 +150,12 @@ public static partial class ImageServicing
             return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(fonts.Error);
         }
 
+        Result<string, Failure> desktop = StageDesktopAssets(payloadDir);
+        if (!desktop.IsOk)
+        {
+            return Result.Fail<IReadOnlyList<ServicingStage>, Failure>(desktop.Error);
+        }
+
         File.WriteAllBytes(
             Path.Combine(payloadDir, ServicingWorkspace.PoliciesFileName),
             JsonSerializer.SerializeToUtf8Bytes(
@@ -464,6 +470,20 @@ public static partial class ImageServicing
         }
 
         return Result.Ok<string, Failure>(destDir);
+    }
+
+    private static Result<string, Failure> StageDesktopAssets(string payloadDir)
+    {
+        string? source = ToolkitRoot.TryFind("payload", "desktop");
+        if (source is null)
+        {
+            return Result.Fail<string, Failure>(
+                new Failure("servicing.desktop.missing", "payload/desktop not found."));
+        }
+
+        string dest = Path.Combine(payloadDir, "desktop");
+        CopyDirectory(source, dest);
+        return Result.Ok<string, Failure>(dest);
     }
 
     private static void CopyDirectory(string sourceDir, string destDir)

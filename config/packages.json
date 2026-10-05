@@ -56,9 +56,8 @@
     },
     "komorebi": {
       "displayName": "Komorebi",
-      "source": "scoop",
-      "id": "komorebi",
-      "scoopBucket": "extras",
+      "source": "winget",
+      "id": "LGUG2Z.komorebi",
       "architectures": ["amd64", "arm64"]
     },
     "fancywm": {
@@ -76,9 +75,8 @@
     },
     "whkd": {
       "displayName": "whkd",
-      "source": "scoop",
-      "id": "whkd",
-      "scoopBucket": "extras",
+      "source": "winget",
+      "id": "LGUG2Z.whkd",
       "architectures": ["amd64", "arm64"]
     },
     "jqlang.jq": {

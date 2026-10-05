@@ -166,6 +166,7 @@ internal static class PlanDiff
             ProvisionJobKind.ScoopBatch => "Scoop batch",
             ProvisionJobKind.ShellStamp => "Shell skel stamp",
             ProvisionJobKind.ShellChrome => "Start / taskbar chrome",
+            ProvisionJobKind.ShellDesktop => "Desktop surface",
             ProvisionJobKind.Wsl => $"WSL {job.PackageId}",
             _ => job.Kind.ToWire(),
         };

@@ -215,15 +215,17 @@ internal static partial class ProvisioningJobRunner
                                 continue;
                             }
 
-                            arguments =
-                            [
-                                "import",
-                                "--import-file",
-                                BundleLoader.DefaultGuestWingetImportPath,
-                                "--accept-package-agreements",
-                                "--accept-source-agreements",
-                                "--disable-interactivity",
-                            ];
+                            JobsRunResult? imported = await RunWingetImportPackagesAsync(
+                                env,
+                                context,
+                                resolvedWinget,
+                                ct).ConfigureAwait(false);
+                            if (imported is not null)
+                            {
+                                return imported.Value;
+                            }
+
+                            continue;
                         }
                         else
                         {
@@ -450,6 +452,18 @@ internal static partial class ProvisioningJobRunner
                         continue;
                     }
 
+                case ProvisionJobKind.ShellDesktop:
+                    {
+                        JobsRunResult? desktop = await RunShellDesktopJobAsync(env, job, jobs, ct)
+                            .ConfigureAwait(false);
+                        if (desktop is not null)
+                        {
+                            return desktop.Value;
+                        }
+
+                        continue;
+                    }
+
                 default:
                     return FailJob(
                         env,
@@ -548,6 +562,17 @@ internal static partial class ProvisioningJobRunner
 
             packageFailures.Add(
                 new PackageFailureEntry(Job.Id, Job.Kind.ToWire(), exitCode, message));
+            return null;
+        }
+
+        public JobsRunResult? RecordNamedPackageFailure(string packageId, int exitCode, string message)
+        {
+            if (!IsPackageKind(Job.Kind) || Env.PackageStrict)
+            {
+                return FailJob(Env, "jobs.failed", message);
+            }
+
+            packageFailures.Add(new PackageFailureEntry(packageId, Job.Kind.ToWire(), exitCode, message));
             return null;
         }
 

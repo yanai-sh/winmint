@@ -38,6 +38,35 @@ internal static partial class ProvisioningJobRunner
         }
     }
 
+    private static async Task<JobsRunResult?> RunShellDesktopJobAsync(
+        JobRunnerEnv env,
+        ProvisionJob job,
+        IReadOnlyList<ProvisionJob> jobs,
+        CancellationToken ct)
+    {
+        try
+        {
+            IReadOnlyList<string> ids = CollectAllWingetIds(jobs);
+            ShellDesktopRequest request = new(
+                ids,
+                env.Processes,
+                env.AssetDownload,
+                ShellDesktopLayout.GuestDesktopRoot,
+                ShellDesktopLayout.DefaultThideInstallDir,
+                ShellDesktopLayout.DefaultYasbConfigDir,
+                ShellDesktopLayout.DefaultKomorebiConfigDir,
+                ShellDesktopLayout.DefaultWhkdrcPath);
+            _ = await ShellDesktop.ApplyAsync(request, ct).ConfigureAwait(false);
+            env.ReportStatus(new SessionStatus("shell.desktop", "Desktop surface applied (fail-open)."));
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            env.ReportStatus(new SessionStatus("shell.desktop", $"{job.Id}: {ex.Message}"));
+            return null;
+        }
+    }
+
     private static JobsRunResult? RunShellChromeJob(
         JobRunnerEnv env,
         ProvisionJob job,
@@ -65,7 +94,18 @@ internal static partial class ProvisioningJobRunner
 
     internal static List<string> CollectSelectedWingetIds(
         IReadOnlyList<ProvisionJob> jobs,
-        string? importPath = null)
+        string? importPath = null) =>
+        CollectWingetIdsFromImport(jobs, importPath, ShellChromeLayout.IsPinApp);
+
+    internal static List<string> CollectAllWingetIds(
+        IReadOnlyList<ProvisionJob> jobs,
+        string? importPath = null) =>
+        CollectWingetIdsFromImport(jobs, importPath, static _ => true);
+
+    private static List<string> CollectWingetIdsFromImport(
+        IReadOnlyList<ProvisionJob> jobs,
+        string? importPath,
+        Func<string, bool> includeId)
     {
         List<string> ids = [];
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
@@ -109,7 +149,7 @@ internal static partial class ProvisioningJobRunner
                 }
 
                 string? id = idEl.GetString();
-                if (id is not null && ShellChromeLayout.IsPinApp(id))
+                if (id is not null && includeId(id))
                 {
                     AddSelectedId(ids, seen, id);
                 }
@@ -253,7 +293,7 @@ internal static partial class ProvisioningJobRunner
                     }
                 }
 
-                // Vacuous "already absent" must not look like an online remove (Smoke assert).
+                // Already absent on the image: deprovision mark only. Smoke accepts that mark.
                 if (touched)
                 {
                     env.ReportStatus(new SessionStatus(

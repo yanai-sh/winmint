@@ -121,6 +121,44 @@ public class WizardViewModelTests
     }
 
     [Fact]
+    public async Task Wizard_merge_keeps_curated_packages_and_deduplicates_advanced_ids()
+    {
+        string iso = Path.Combine(Path.GetTempPath(), "winmint-merge-" + Guid.NewGuid().ToString("N") + ".iso");
+        File.WriteAllText(iso, "iso-stub");
+        try
+        {
+            using WizardViewModel vm = new(storage: null, close: null, sourceMedia: new PickerProbe());
+            vm.Account.Password = "lab-only";
+            vm.Source.SourceIsoPath = iso;
+            await WaitForProbeAsync(vm);
+            vm.Source.SelectedWimIndex = Assert.Single(vm.Source.WimIndexes);
+
+            vm.Software.Chips.Browsers.Single(chip => chip.Id == "brave").IsSelected = true;
+            vm.Software.Chips.Editors.Single(chip => chip.Id == "cursor").IsSelected = true;
+            vm.Software.Desktop.SelectTaskbarCommand.Execute("yasb");
+            vm.Software.Advanced.Winget = "AmN.yasb";
+
+            await vm.ReplanAsync();
+
+            Assert.NotNull(vm.Review);
+            using System.Text.Json.JsonDocument profile =
+                System.Text.Json.JsonDocument.Parse(vm.Review!.Summary.PreviewJson);
+            string[] winget = [.. profile.RootElement
+                .GetProperty("packages")
+                .GetProperty("winget")
+                .EnumerateArray()
+                .Select(static id => id.GetString()!)];
+            Assert.Contains("Brave.Brave", winget);
+            Assert.Contains("Anysphere.Cursor", winget);
+            Assert.Equal(1, winget.Count(id => id.Equals("AmN.yasb", StringComparison.OrdinalIgnoreCase)));
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
+    }
+
+    [Fact]
     public async Task Source_stage_retries_stale_probe_after_unrelated_draft_revision()
     {
         string iso = Path.Combine(Path.GetTempPath(), "winmint-probe-retry-" + Guid.NewGuid().ToString("N") + ".iso");

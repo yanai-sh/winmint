@@ -322,6 +322,151 @@ public class WingetJobsTests
         Assert.Equal("Reboot", evidence.Documents[0].Outcome);
     }
 
+    [Fact]
+    public void Zen_audit_paths_include_the_user_programs_install()
+    {
+        string expected = Path.Combine(ShellChromeLayout.ZenUserInstallDirectory(), "zen.exe");
+        Assert.Contains(expected, ProvisioningJobRunner.GuiBinaryPaths(ShellChromeLayout.ZenWingetId));
+    }
+
+    [Fact]
+    public void Winget_install_arguments_name_the_package_and_keep_a_log()
+    {
+        string[] args = ProvisioningJobRunner.BuildWingetInstallArguments(
+            "Zen-Team.Zen-Browser",
+            "--architecture arm64",
+            @"C:\evidence\winget-Zen-Team.Zen-Browser.log");
+
+        Assert.Contains("--id", args);
+        Assert.Contains("Zen-Team.Zen-Browser", args);
+        Assert.Contains("--log", args);
+        Assert.Contains(@"C:\evidence\winget-Zen-Team.Zen-Browser.log", args);
+        Assert.Contains("--architecture", args);
+        Assert.Contains("arm64", args);
+        Assert.DoesNotContain("import", args);
+    }
+
+    [Fact]
+    public async Task Medium_il_accepts_zen_only_when_the_exe_exists()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "winmint-zen-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        string? downloadDir = null;
+        try
+        {
+            RecordingProcessHost host = new()
+            {
+                OnRun = (_, args) =>
+                {
+                    int directory = args.ToList().FindIndex(a => a == "--download-directory");
+                    if (directory >= 0 && directory + 1 < args.Count)
+                    {
+                        downloadDir = args[directory + 1];
+                        File.WriteAllBytes(Path.Combine(downloadDir, "helper.exe"), [0x4D, 0x5A]);
+                        File.WriteAllBytes(Path.Combine(downloadDir, "zen.installer-arm64.exe"), [0x4D, 0x5A]);
+                    }
+
+                    string? installArg = args.FirstOrDefault(a => a.StartsWith("/InstallDirectoryPath=", StringComparison.Ordinal));
+                    if (installArg is not null)
+                    {
+                        string installDir = installArg["/InstallDirectoryPath=".Length..].Trim('"');
+                        Directory.CreateDirectory(installDir);
+                        File.WriteAllBytes(Path.Combine(installDir, "zen.exe"), [0x4D, 0x5A]);
+                    }
+
+                    return new ProcessStartResult(0);
+                },
+            };
+
+            bool installed = await ProvisioningJobRunner.TryInstallZenUserAsync(
+                host,
+                "winget.exe",
+                elevated: false,
+                report: static _ => { },
+                TestContext.Current.CancellationToken,
+                dir);
+
+            Assert.True(installed);
+            Assert.Contains(host.Starts, start => start.FileName.EndsWith("zen.installer-arm64.exe", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(host.Starts, start => start.FileName.EndsWith("helper.exe", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            if (downloadDir is not null && Directory.Exists(downloadDir))
+            {
+                Directory.Delete(downloadDir, recursive: true);
+            }
+
+            if (Directory.Exists(dir))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Zen_exit_zero_without_the_exe_is_not_installed()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "winmint-zen-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        string? downloadDir = null;
+        try
+        {
+            RecordingProcessHost host = new()
+            {
+                OnRun = (_, args) =>
+                {
+                    int directory = args.ToList().FindIndex(a => a == "--download-directory");
+                    if (directory >= 0 && directory + 1 < args.Count)
+                    {
+                        downloadDir = args[directory + 1];
+                        File.WriteAllBytes(Path.Combine(downloadDir, "zen.installer-arm64.exe"), [0x4D, 0x5A]);
+                    }
+
+                    return new ProcessStartResult(0);
+                },
+            };
+
+            bool installed = await ProvisioningJobRunner.TryInstallZenUserAsync(
+                host,
+                "winget.exe",
+                elevated: false,
+                report: static _ => { },
+                TestContext.Current.CancellationToken,
+                dir);
+
+            Assert.False(installed);
+        }
+        finally
+        {
+            if (downloadDir is not null && Directory.Exists(downloadDir))
+            {
+                Directory.Delete(downloadDir, recursive: true);
+            }
+
+            if (Directory.Exists(dir))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Elevated_zen_stays_on_winget_install()
+    {
+        RecordingProcessHost host = new();
+        bool installed = await ProvisioningJobRunner.TryInstallZenUserAsync(
+            host,
+            "winget.exe",
+            elevated: true,
+            report: static _ => { },
+            TestContext.Current.CancellationToken,
+            Path.GetTempPath());
+
+        Assert.False(installed);
+        Assert.Empty(host.Starts);
+    }
+
     private static Profile Parse(string json)
     {
         Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));

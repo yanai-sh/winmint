@@ -86,19 +86,23 @@ public sealed class GdiSplashPresenter : ISplashPresenter, IDisposable
         FreeLibrarySafeHandle module = PInvoke.GetModuleHandle((string?)null);
         try
         {
-            HWND created = PInvoke.CreateWindowEx(
-                WINDOW_EX_STYLE.WS_EX_TOPMOST,
-                "STATIC",
-                "WinMint",
-                WINDOW_STYLE.WS_POPUP | WINDOW_STYLE.WS_VISIBLE,
-                0,
-                0,
-                width,
-                height,
-                HWND.Null,
-                null,
-                module,
-                null);
+            HWND created;
+            unsafe
+            {
+                created = PInvoke.CreateWindowEx(
+                    WINDOW_EX_STYLE.WS_EX_TOPMOST,
+                    "STATIC",
+                    "WinMint",
+                    WINDOW_STYLE.WS_POPUP | WINDOW_STYLE.WS_VISIBLE,
+                    0,
+                    0,
+                    width,
+                    height,
+                    HWND.Null,
+                    null,
+                    module,
+                    null);
+            }
 
             if (created.IsNull)
             {

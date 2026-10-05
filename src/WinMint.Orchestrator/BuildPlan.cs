@@ -15,10 +15,16 @@ public static partial class BuildPlan
     public const string IrelandSetupGeoName = DmaInterop.IrelandGeoName;
 
     /// <summary>
-    /// Display language of the English Source ISO. <see cref="IrelandSetupLocale"/> is a locale, not an
+    /// Alpha: English (US) retail/business Source ISO only (<c>install.wim</c> DISM Languages = en-US).
+    /// Matches <see cref="SourceUiLanguage"/> in unattend.
+    /// </summary>
+    public const string SupportedSourceInstallLanguage = "en-US";
+
+    /// <summary>
+    /// Display language of the English (US) Source ISO. <see cref="IrelandSetupLocale"/> is a locale, not an
     /// installed MUI pack — <c>UILanguage=en-IE</c> logs "not installed" and OOBE can reseal to Recovery.
     /// </summary>
-    public const string SourceUiLanguage = "en-US";
+    public const string SourceUiLanguage = SupportedSourceInstallLanguage;
 
     /// <summary>Parse and validate a <c>winmint.profile/v1</c> UTF-8 document into a <see cref="Profile"/>.</summary>
     public static Result<Profile, IReadOnlyList<DocumentError>> TryParseProfile(ReadOnlySpan<byte> utf8Json)
@@ -465,6 +471,10 @@ public static partial class BuildPlan
 
         jobList.AddRange(packageSlice.Jobs);
         jobList.Add(new ProvisionJob("shell.chrome", ProvisionJobKind.ShellChrome));
+        if (packageSlice.EffectivePackages.Any(IsDesktopSurfacePackage))
+        {
+            jobList.Add(new ProvisionJob("shell.desktop", ProvisionJobKind.ShellDesktop));
+        }
 
         JobsArtifact jobs = new(JobsWire.SchemaVersion, jobList);
 
@@ -638,6 +648,10 @@ public static partial class BuildPlan
     private static IReadOnlyList<DocumentError> InvalidJson(string message) =>
         [new DocumentError("document.invalidJson", message)];
 
+    private static bool IsDesktopSurfacePackage(EffectivePackageFact package) =>
+        package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store
+        && (string.Equals(package.ResolvedInstallId, ProductPosture.YasbWingetId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(package.ResolvedInstallId, ProductPosture.KomorebiWingetId, StringComparison.OrdinalIgnoreCase));
 }
 
 internal sealed record ProfileDocument(

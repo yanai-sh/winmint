@@ -10,10 +10,45 @@ namespace WinMint.Wizard.ViewModels;
 public interface ISoftwareStageViewModel
 {
     CuratedChipSelection Chips { get; }
+    DesktopSelectionViewModel Desktop { get; }
     PresetSelectionViewModel Presets { get; }
     AdvancedPackageTextViewModel Advanced { get; }
     IAsyncRelayCommand UseDefaultsCommand { get; }
     StageStatusViewModel Status { get; }
+}
+
+public sealed partial class DesktopSelectionViewModel : ObservableObject
+{
+    internal const string WindowsTaskbar = "windows";
+    internal const string YasbTaskbar = "yasb";
+
+    private readonly Action _changed;
+    [ObservableProperty] private string _taskbar = WindowsTaskbar;
+    [ObservableProperty] private bool _komorebi;
+
+    internal DesktopSelectionViewModel(Action changed) => _changed = changed;
+
+    public bool IsWindowsTaskbar => string.Equals(Taskbar, WindowsTaskbar, StringComparison.Ordinal);
+    public bool IsYasbTaskbar => string.Equals(Taskbar, YasbTaskbar, StringComparison.Ordinal);
+
+    partial void OnTaskbarChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsWindowsTaskbar));
+        OnPropertyChanged(nameof(IsYasbTaskbar));
+        _changed();
+    }
+
+    partial void OnKomorebiChanged(bool value) => _changed();
+
+    [RelayCommand]
+    private void SelectTaskbar(string? taskbar)
+    {
+        if (string.Equals(taskbar, WindowsTaskbar, StringComparison.Ordinal)
+            || string.Equals(taskbar, YasbTaskbar, StringComparison.Ordinal))
+        {
+            Taskbar = taskbar!;
+        }
+    }
 }
 
 public sealed class CuratedChipSelection
@@ -22,16 +57,14 @@ public sealed class CuratedChipSelection
     {
         Browsers = Create(CuratedPackageChips.Browsers, changed);
         Editors = Create(CuratedPackageChips.Editors, changed);
-        Shells = Create(CuratedPackageChips.Shells, changed);
         Wsl = Create(CuratedPackageChips.Wsl, changed);
     }
 
     public ObservableCollection<ChipItem> Browsers { get; }
     public ObservableCollection<ChipItem> Editors { get; }
-    public ObservableCollection<ChipItem> Shells { get; }
     public ObservableCollection<ChipItem> Wsl { get; }
 
-    internal IEnumerable<ChipItem> All => Browsers.Concat(Editors).Concat(Shells).Concat(Wsl);
+    internal IEnumerable<ChipItem> All => Browsers.Concat(Editors).Concat(Wsl);
 
     private static ObservableCollection<ChipItem> Create(
         IReadOnlyList<CuratedChipDefinition> definitions,
@@ -100,6 +133,7 @@ internal sealed partial class SoftwareStageViewModel(Action draftChanged, Func<T
     private readonly Func<Task> _useDefaults = useDefaults;
 
     public CuratedChipSelection Chips { get; } = new CuratedChipSelection(draftChanged);
+    public DesktopSelectionViewModel Desktop { get; } = new DesktopSelectionViewModel(draftChanged);
     public PresetSelectionViewModel Presets { get; } = new PresetSelectionViewModel(draftChanged);
     public AdvancedPackageTextViewModel Advanced { get; } = new AdvancedPackageTextViewModel(draftChanged);
     public StageStatusViewModel Status { get; } = new();
@@ -114,6 +148,8 @@ internal sealed partial class SoftwareStageViewModel(Action draftChanged, Func<T
         {
             chip.IsSelected = false;
         }
+        Desktop.Taskbar = DesktopSelectionViewModel.WindowsTaskbar;
+        Desktop.Komorebi = false;
         Advanced.Winget = "";
         Advanced.Scoop = "";
         Advanced.Wsl = "";
@@ -123,8 +159,16 @@ internal sealed partial class SoftwareStageViewModel(Action draftChanged, Func<T
     {
         PackageCatalog catalog = PackageCatalog.Default;
         IEnumerable<string> toolKeys = SelectedIds(Chips.Browsers)
-            .Concat(SelectedIds(Chips.Editors))
-            .Concat(SelectedIds(Chips.Shells))
+            .Concat(SelectedIds(Chips.Editors));
+        if (Desktop.IsYasbTaskbar)
+        {
+            toolKeys = toolKeys.Concat(["yasb"]);
+        }
+        if (Desktop.Komorebi)
+        {
+            toolKeys = toolKeys.Concat(["komorebi", "whkd"]);
+        }
+        toolKeys = toolKeys
             .Where(CuratedPackageChips.IsPackageTool);
         Result<PackageSelection, Failure> tools = catalog.ResolveToolKeys(toolKeys);
         if (!tools.IsOk)
@@ -139,8 +183,19 @@ internal sealed partial class SoftwareStageViewModel(Action draftChanged, Func<T
             : Result.Fail<PackageSelection, Failure>(wsl.Error);
     }
 
-    internal IEnumerable<string> SelectedLabels() =>
-        Chips.All.Where(static chip => chip.IsEnabled && chip.IsSelected).Select(static chip => chip.Label);
+    internal IEnumerable<string> SelectedLabels()
+    {
+        yield return Desktop.IsYasbTaskbar ? "YASB + tHide" : "Windows taskbar";
+        if (Desktop.Komorebi)
+        {
+            yield return "Komorebi";
+        }
+
+        foreach (ChipItem chip in Chips.All.Where(static chip => chip.IsEnabled && chip.IsSelected))
+        {
+            yield return chip.Label;
+        }
+    }
 
     private static IEnumerable<string> SelectedIds(IEnumerable<ChipItem> chips) =>
         chips.Where(static chip => chip.IsEnabled && chip.IsSelected).Select(static chip => chip.Id);

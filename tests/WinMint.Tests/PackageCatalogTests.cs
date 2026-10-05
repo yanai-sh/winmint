@@ -23,12 +23,14 @@ public class PackageCatalogTests
     }
 
     [Fact]
-    public void Default_catalog_splits_winget_and_scoop_shell_tools()
+    public void Default_catalog_resolves_desktop_tools_to_official_winget_ids()
     {
-        Result<PackageSelection, Failure> selection = PackageCatalog.Default.ResolveToolKeys(["windhawk", "komorebi"]);
+        Result<PackageSelection, Failure> selection = PackageCatalog.Default.ResolveToolKeys(["yasb", "komorebi", "whkd"]);
         Assert.True(selection.IsOk);
-        Assert.Contains("RamenSoftware.Windhawk", selection.Value.WingetInstallIds);
-        Assert.Contains("komorebi", selection.Value.ScoopInstallIds);
+        Assert.Contains("AmN.yasb", selection.Value.WingetInstallIds);
+        Assert.Contains("LGUG2Z.komorebi", selection.Value.WingetInstallIds);
+        Assert.Contains("LGUG2Z.whkd", selection.Value.WingetInstallIds);
+        Assert.Empty(selection.Value.ScoopInstallIds);
     }
 
     [Fact]

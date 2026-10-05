@@ -15,6 +15,15 @@ public static class ShellChromeLayout
     internal const string CursorWingetId = "Anysphere.Cursor";
     internal const string ZenWingetId = "Zen-Team.Zen-Browser";
 
+    /// <summary>
+    /// User-writable install root. FirstLogon is medium IL; Zen's winget manifest is machine scope only.
+    /// </summary>
+    internal static string ZenUserInstallDirectory() =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs",
+            "Zen Browser");
+
     public static string ConfigureStartPinsJson(IReadOnlyList<string> desktopLinkPaths)
     {
         ArgumentNullException.ThrowIfNull(desktopLinkPaths);
@@ -250,7 +259,7 @@ public static class ShellChromeLayout
                 Path.Combine(programFiles, "Zen Browser", "zen.exe"),
                 Path.Combine(localAppData, "Zen Browser", "zen.exe"),
                 Path.Combine(programFilesX86, "Zen Browser", "zen.exe"),
-                Path.Combine(localAppData, "Programs", "Zen Browser", "zen.exe"),
+                Path.Combine(ZenUserInstallDirectory(), "zen.exe"),
             ];
         }
 

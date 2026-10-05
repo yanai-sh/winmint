@@ -161,6 +161,39 @@ public class WizardSessionTests
         Assert.Contains("FedoraLinux", selection.Value.WslProfileTokens);
     }
 
+    [Fact]
+    public void Desktop_defaults_are_windows_taskbar_without_komorebi()
+    {
+        SoftwareStageViewModel software = new(() => { }, () => Task.CompletedTask);
+
+        Result<PackageSelection, Failure> selection = software.ResolvePackages();
+
+        Assert.True(software.Desktop.IsWindowsTaskbar);
+        Assert.False(software.Desktop.Komorebi);
+        Assert.Empty(selection.Value.WingetInstallIds);
+        Assert.Contains("Windows taskbar", software.SelectedLabels());
+        Assert.DoesNotContain("Nilesoft Shell (included)", software.SelectedLabels());
+    }
+
+    [Fact]
+    public void Yasb_and_komorebi_compose_without_duplicate_ids()
+    {
+        SoftwareStageViewModel software = new(() => { }, () => Task.CompletedTask);
+        software.Desktop.SelectTaskbarCommand.Execute("yasb");
+        software.Desktop.Komorebi = true;
+        software.Advanced.Winget = "AmN.yasb";
+
+        Result<PackageSelection, Failure> selection = software.ResolvePackages();
+
+        Assert.True(software.Desktop.IsYasbTaskbar);
+        Assert.Contains("AmN.yasb", selection.Value.WingetInstallIds);
+        Assert.Contains("LGUG2Z.komorebi", selection.Value.WingetInstallIds);
+        Assert.Contains("LGUG2Z.whkd", selection.Value.WingetInstallIds);
+        Assert.Equal(selection.Value.WingetInstallIds.Count, selection.Value.WingetInstallIds.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Contains("YASB + tHide", software.SelectedLabels());
+        Assert.Contains("Komorebi", software.SelectedLabels());
+    }
+
     private static Profile Profile() =>
         new(
             new AccountProfile("winmint", "lab-only", false),

@@ -61,6 +61,13 @@ $layoutDest = Join-Path $mountDir 'Users\Default\AppData\Local\Microsoft\Windows
 New-Item -ItemType Directory -Force -Path $layoutDest | Out-Null
 Copy-Item -LiteralPath $layoutSrc -Destination (Join-Path $layoutDest 'LayoutModification.xml') -Force
 
+$desktopSrc = Join-Path $payloadDir 'desktop'
+if (Test-Path -LiteralPath $desktopSrc) {
+    $guestDesktop = Join-Path $guestWinMint 'desktop'
+    New-Item -ItemType Directory -Force -Path $guestDesktop | Out-Null
+    Copy-Item -Path (Join-Path $desktopSrc '*') -Destination $guestDesktop -Recurse -Force
+}
+
 $fontsDest = Join-Path $mountDir 'Windows\Fonts'
 New-Item -ItemType Directory -Force -Path $fontsDest | Out-Null
 foreach ($font in @('CascadiaCodeNF.ttf', 'CascadiaMonoNF.ttf')) {

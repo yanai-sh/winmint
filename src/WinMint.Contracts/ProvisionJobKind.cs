@@ -18,6 +18,7 @@ public enum ProvisionJobKind
     WslPlatform,
     Wsl,
     ShellChrome,
+    ShellDesktop,
 }
 
 public static class ProvisionJobKindWire
@@ -37,6 +38,7 @@ public static class ProvisionJobKindWire
     public const string WslPlatform = "wsl.platform";
     public const string Wsl = "wsl";
     public const string ShellChrome = "shell.chrome";
+    public const string ShellDesktop = "shell.desktop";
 
     public static bool TryParse(string? wire, out ProvisionJobKind kind)
     {
@@ -136,6 +138,12 @@ public static class ProvisionJobKindWire
             return true;
         }
 
+        if (wire.Equals(ShellDesktop, StringComparison.OrdinalIgnoreCase))
+        {
+            kind = ProvisionJobKind.ShellDesktop;
+            return true;
+        }
+
         kind = default;
         return false;
     }
@@ -157,6 +165,7 @@ public static class ProvisionJobKindWire
         ProvisionJobKind.WslPlatform => WslPlatform,
         ProvisionJobKind.Wsl => Wsl,
         ProvisionJobKind.ShellChrome => ShellChrome,
+        ProvisionJobKind.ShellDesktop => ShellDesktop,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown ProvisionJobKind."),
     };
 }

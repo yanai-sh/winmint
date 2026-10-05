@@ -1,0 +1,76 @@
+system_colors: true
+watch_stylesheet: true
+watch_config: true
+update_check: false
+
+bars:
+  winmint-bar:
+    enabled: true
+    screens: ["**"]
+    class_name: "yasb-bar"
+    alignment:
+      position: "top"
+      center: false
+    window_flags:
+      always_on_top: false
+      windows_app_bar: true
+      auto_hide: false
+    dimensions:
+      width: "100%"
+      height: 34
+    widgets:
+      left: ["home", "komorebi_workspaces", "komorebi_active_layout"]
+      center: ["taskbar"]
+      right: ["systray", "clock", "wifi", "volume", "battery", "notifications", "power_menu"]
+
+widgets:
+  home:
+    type: "yasb.home.HomeWidget"
+    options:
+      label: "<span>\ue80f</span>"
+      system_menu: true
+      power_menu: false
+  komorebi_workspaces:
+    type: "komorebi.workspaces.WorkspaceWidget"
+    options:
+      label_offline: "Komorebi Offline"
+      label_workspace_btn: "{name}"
+      label_workspace_active_btn: "{name}"
+      label_workspace_populated_btn: "{name}"
+      hide_empty_workspaces: false
+  komorebi_active_layout:
+    type: "komorebi.active_layout.ActiveLayoutWidget"
+    options:
+      label: "{layout}"
+  taskbar:
+    type: "yasb.taskbar.TaskbarWidget"
+    options:
+      icon_size: 16
+      monitor_exclusive: true
+      grouping: true
+      strict_filtering: true
+      preview:
+        enabled: false
+  systray:
+    type: "yasb.systray.SystrayWidget"
+    options:
+      use_hook: false
+      icon_size: 16
+  clock:
+    type: "yasb.clock.ClockWidget"
+    options:
+      label: "{%H:%M}"
+  wifi:
+    type: "yasb.wifi.WifiWidget"
+  volume:
+    type: "yasb.volume.VolumeWidget"
+  battery:
+    type: "yasb.battery.BatteryWidget"
+    options:
+      hide_when_full: true
+  notifications:
+    type: "yasb.notifications.NotificationsWidget"
+  power_menu:
+    type: "yasb.power_menu.PowerMenuWidget"
+    options:
+      label: "<span>\ue7e8</span>"

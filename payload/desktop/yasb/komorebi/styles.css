@@ -1,0 +1,46 @@
+@import "yasb_colors.css";
+
+/* WinMint-owned restrained surface; widget names follow YASB's public schema. */
+* {
+  font-family: "Segoe UI";
+  color: var(--yasb-foreground);
+}
+
+.yasb-bar {
+  background: var(--yasb-background);
+  color: var(--yasb-foreground);
+}
+
+.widget {
+  margin: 4px 2px;
+  padding: 0 8px;
+  border-radius: 6px;
+}
+
+.widget:hover,
+.widget .active {
+  background: var(--yasb-accent);
+  color: var(--yasb-foreground);
+}
+
+.taskbar-widget {
+  padding: 0 4px;
+}
+
+.taskbar-widget .app-button {
+  padding: 0 6px;
+}
+
+.komorebi-workspaces-widget .workspace-button.active,
+.komorebi-active-layout-widget {
+  background: var(--yasb-accent);
+}
+
+.clock-widget,
+.wifi-widget,
+.volume-widget,
+.battery-widget,
+.notification-widget,
+.power-menu-widget {
+  font-family: "Segoe Fluent Icons", "Segoe UI";
+}

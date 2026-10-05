@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 
 namespace WinMint.Provisioning;
@@ -53,6 +54,50 @@ public sealed class GitHubAssetDownload : IAssetDownload
         }
 
         return null;
+    }
+
+    public async Task<string?> TryDownloadVerifiedAsync(
+        string url,
+        string sha256Hex,
+        string destinationDirectory,
+        string fileName,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha256Hex);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+
+        try
+        {
+            using HttpClient client = new();
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("WinMint-Provisioning/1.0");
+            using HttpResponseMessage response = await client.GetAsync(url, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            Directory.CreateDirectory(destinationDirectory);
+            string destination = Path.Combine(destinationDirectory, fileName);
+            await using FileStream stream = File.Create(destination);
+            await response.Content.CopyToAsync(stream, ct).ConfigureAwait(false);
+            await stream.FlushAsync(ct).ConfigureAwait(false);
+            stream.Position = 0;
+            byte[] hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
+            string actual = Convert.ToHexString(hash);
+            if (!actual.Equals(sha256Hex, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(destination);
+                return null;
+            }
+
+            return destination;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
     }
 }
 

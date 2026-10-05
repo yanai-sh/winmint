@@ -16,6 +16,9 @@ public static class ProductPosture
     public const string WindowsTerminalWingetId = "Microsoft.WindowsTerminal";
     public const string CoreutilsWingetId = "Microsoft.Coreutils";
     public const string NilesoftShellWingetId = "Nilesoft.Shell";
+    public const string YasbWingetId = "AmN.yasb";
+    public const string KomorebiWingetId = "LGUG2Z.komorebi";
+    public const string WhkdWingetId = "LGUG2Z.whkd";
 
     /// <summary>Install order: MinGit, pwsh, Terminal, Coreutils, Nilesoft Shell.</summary>
     public static IReadOnlyList<string> WingetIds { get; } =

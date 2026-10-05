@@ -1,0 +1,30 @@
+# WinMint conservative Alt-only bindings. Windows-key shortcuts are intentionally absent.
+
+# Focus windows
+alt + h : komorebic focus left
+alt + j : komorebic focus down
+alt + k : komorebic focus up
+alt + l : komorebic focus right
+
+# Move windows
+alt + shift + h : komorebic move left
+alt + shift + j : komorebic move down
+alt + shift + k : komorebic move up
+alt + shift + l : komorebic move right
+
+# Focus and move workspaces on the focused monitor
+alt + 1 : komorebic focus-workspace 0
+alt + 2 : komorebic focus-workspace 1
+alt + 3 : komorebic focus-workspace 2
+alt + 4 : komorebic focus-workspace 3
+alt + shift + 1 : komorebic move-to-workspace 0
+alt + shift + 2 : komorebic move-to-workspace 1
+alt + shift + 3 : komorebic move-to-workspace 2
+alt + shift + 4 : komorebic move-to-workspace 3
+
+# Window manager controls
+alt + p : komorebic toggle-pause
+alt + f : komorebic toggle-float
+alt + m : komorebic toggle-monocle
+alt + shift + o : komorebic reload-configuration
+alt + shift + q : komorebic close

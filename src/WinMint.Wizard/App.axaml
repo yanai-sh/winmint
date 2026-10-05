@@ -40,6 +40,20 @@
     <Style Selector="ToggleButton.tile:disabled">
       <Setter Property="Opacity" Value="0.45" />
     </Style>
+    <Style Selector="ToggleButton.desktop-card, RadioButton.desktop-card">
+      <Setter Property="Margin" Value="0,0,8,8" />
+      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="MinWidth" Value="210" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SystemControlForegroundBaseLowBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="ToggleButton.desktop-card:checked, RadioButton.desktop-card:checked">
+      <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}" />
+      <Setter Property="Background" Value="{DynamicResource SystemAccentColorLight3}" />
+    </Style>
     <Style Selector="TextBlock.tile-glyph">
       <Setter Property="FontSize" Value="16" />
       <Setter Property="FontWeight" Value="SemiBold" />

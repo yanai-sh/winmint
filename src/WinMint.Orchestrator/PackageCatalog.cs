@@ -235,10 +235,6 @@ public sealed class PackageCatalog
                     errors.Add($"Tool '{key}' has unsupported scoopBucket '{bucket}'.");
                 }
 
-                if ((tool.InstallId is "komorebi" or "whkd") && bucket != "extras")
-                {
-                    errors.Add($"Tool '{key}' must declare scoopBucket extras.");
-                }
             }
         }
 
@@ -393,14 +389,6 @@ public static class CuratedPackageChips
         new("vscode", "VS Code"),
         new("zed", "Zed"),
         new("neovim", "Neovim"),
-    ];
-
-    public static IReadOnlyList<CuratedChipDefinition> Shells { get; } =
-    [
-        new("windhawk", "Windhawk"),
-        new("yasb", "YASB"),
-        new("komorebi", "Komorebi"),
-        new("fancywm", "FancyWM", IsEnabled: false, ToolTip: "Coming soon"),
     ];
 
     public static IReadOnlyList<CuratedChipDefinition> Wsl { get; } =

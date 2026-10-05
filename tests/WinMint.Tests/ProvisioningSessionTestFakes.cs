@@ -174,6 +174,10 @@ internal static class ProvisioningSessionTestFakes
 
         public List<(string Repo, IReadOnlyList<string> AssetNameCandidates)> Requests { get; } = [];
 
+        public string? VerifiedDownloadPath { get; init; }
+
+        public List<(string Url, string Sha256, string Dir, string FileName)> VerifiedRequests { get; } = [];
+
         public Task<string?> TryDownloadGitHubReleaseAssetAsync(
             string repo,
             IReadOnlyList<string> assetNameCandidates,
@@ -182,6 +186,19 @@ internal static class ProvisioningSessionTestFakes
             Requests.Add((repo, assetNameCandidates));
             return Exception is null
                 ? Task.FromResult(ResultPath)
+                : Task.FromException<string?>(Exception);
+        }
+
+        public Task<string?> TryDownloadVerifiedAsync(
+            string url,
+            string sha256Hex,
+            string destinationDirectory,
+            string fileName,
+            CancellationToken ct = default)
+        {
+            VerifiedRequests.Add((url, sha256Hex, destinationDirectory, fileName));
+            return Exception is null
+                ? Task.FromResult(VerifiedDownloadPath)
                 : Task.FromException<string?>(Exception);
         }
     }

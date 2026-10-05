@@ -1,0 +1,25 @@
+// WinMint provisioning replaces {{WINMINT_MONITORS_JSON}} with one monitor
+// object per connected monitor. For ordinal m, emit four workspaces named
+// "winmint-m-1" through "winmint-m-4", each with layout "BSP".
+{
+  "$schema": "https://raw.githubusercontent.com/LGUG2Z/komorebi/master/schema.json",
+  "app_specific_configuration_path": "$Env:KOMOREBI_CONFIG_HOME/applications.json",
+  "window_hiding_behaviour": "Cloak",
+  "cross_monitor_move_behaviour": "Insert",
+  "default_workspace_padding": 8,
+  "default_container_padding": 8,
+  "focus_follows_mouse": false,
+  "mouse_follows_focus": false,
+  "transparency": false,
+  "transparency_alpha": 255,
+  "animation": {
+    "enabled": false
+  },
+  "border": false,
+  "border_width": 0,
+  "stackbar": {
+    "mode": "Never"
+  },
+  "display_index_preferences": {{WINMINT_DISPLAY_INDEX_PREFERENCES_JSON}},
+  "monitors": {{WINMINT_MONITORS_JSON}}
+}

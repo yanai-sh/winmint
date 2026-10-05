@@ -15,12 +15,12 @@ A living overlay (`DESIGN.md`, module API paste, specs) restated code. Agents tr
 
 Code and tests own behaviour. Markdown holds only:
 
-- [CONTEXT.md](../../CONTEXT.md) — words
+- [CONTEXT.md](../../CONTEXT.md) — words (coined terms, polarity, avoid-lists)
 - `docs/decisions/` — why and rejected alternatives
-- [AGENTS.md](../../AGENTS.md) — map
+- [AGENTS.md](../../AGENTS.md) — map (reach + paths; not an encyclopedia)
 - Human/legal pages (README, SECURITY, PRIVACY, signing) — operator policy
 
-An ADR is the **choice** and **what was rejected**. Not an opcode list, id catalog, changelog, or API paste. Those live in code. Git history is the archive.
+An ADR is the **choice** and **what was rejected**. Not an opcode list, id catalog, changelog, or API paste. Those live in code. Git history is the archive. Do not revive STACK / ARCHITECTURE / DESIGN overlays.
 
 ### Review trigger
 

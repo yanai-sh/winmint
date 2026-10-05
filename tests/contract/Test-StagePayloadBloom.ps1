@@ -18,3 +18,4 @@ if ($stage -match 'OneDrive\.lnk') { throw 'Stage-Payload.ps1 must not delete De
 if ($stage -match 'Set-ReservedStorageState') { throw 'Stage-Payload.ps1 must not use unsupported DISM /Image Reserved Storage' }
 if ($stage -notmatch 'Users\\Default\\Documents\\PowerShell') { throw 'Stage-Payload.ps1 must copy Default profile skel' }
 if ($stage -notmatch 'CascadiaCodeNF\.ttf') { throw 'Stage-Payload.ps1 must copy Cascadia fonts' }
+if ($stage -notmatch 'guestWinMint.*desktop') { throw 'Stage-Payload.ps1 must copy desktop payload when present' }
