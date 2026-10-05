@@ -538,7 +538,8 @@ public sealed partial class WizardViewModel :
         }
     }
 
-    private Result<WizardDraft, Failure> BuildDraft()
+    // ponytail: internal for InternalsVisibleTo tests that pin shipping HostComposeOptions
+    internal Result<WizardDraft, Failure> BuildDraft()
     {
         Result<PackageSelection, Failure> packagesResult = _software.ResolvePackages();
         if (!packagesResult.IsOk)

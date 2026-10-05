@@ -8,11 +8,13 @@ public class WizardShippingPathTests
     [Fact]
     public void Wizard_draft_compose_options_are_shipping_gate_b()
     {
-        // Build HostComposeOptions the same way WizardViewModel.BuildDraft does after this task:
-        // ImageQuality = Release, PackageStrict = FromLane (default).
-        HostComposeOptions options = new(
-            SourceIsoPath: @"C:\iso\source.iso",
-            ImageQuality: ImageQualityLane.Release);
+        using WizardViewModel vm = new(storage: null, close: null, sourceMedia: null);
+        vm.Source.SourceIsoPath = @"C:\iso\source.iso";
+
+        Result<WizardDraft, Failure> draft = vm.BuildDraft();
+
+        Assert.True(draft.IsOk);
+        HostComposeOptions options = draft.Value.Options;
         Assert.Equal(ImageQualityLane.Release, options.ImageQuality);
         Assert.Equal(PackageStrictOverride.FromLane, options.PackageStrict);
         Assert.True(HostDefaults.ResolvePackageStrict(options.ImageQuality, options.PackageStrict));
