@@ -231,7 +231,10 @@ public static partial class BuildPlan
 
         if (wslEntries.Count > 0)
         {
-            jobs.Add(new ProvisionJob("wsl.terminal", ProvisionJobKind.WslTerminal));
+            jobs.Add(new ProvisionJob(
+                "wsl.terminal",
+                ProvisionJobKind.WslTerminal,
+                PackageId: wslEntries[0].InstallId));
         }
 
         if (auditStrict && auditTargets.Count > 0 && imageArch == "arm64")

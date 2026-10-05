@@ -66,6 +66,9 @@ public sealed class Win32GuestMachine : IGuestMachine
         }
     }
 
+    public string? TryResolveWslLinuxUsername(string distroInstallId) =>
+        OperatingSystem.IsWindows() ? Win32WslLinuxUsername.TryResolve(distroInstallId) : null;
+
     public void SuppressWslOobe()
     {
         if (OperatingSystem.IsWindows())

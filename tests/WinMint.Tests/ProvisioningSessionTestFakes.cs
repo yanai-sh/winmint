@@ -142,6 +142,8 @@ internal static class ProvisioningSessionTestFakes
 
         public List<IReadOnlyList<string>> WslTerminalMockStages { get; } = [];
 
+        public Func<string, string?>? ResolveWslLinuxUsernameCallback { get; init; }
+
         public Action SuppressWslOobeCallback { get; init; } = () => { };
 
         public Action TryDismissOobeOverlayCallback { get; init; } = () => { };
@@ -160,6 +162,9 @@ internal static class ProvisioningSessionTestFakes
 
         public void TryStageWslTerminalMock(IReadOnlyList<string> distroNames) =>
             WslTerminalMockStages.Add(distroNames);
+
+        public string? TryResolveWslLinuxUsername(string distroInstallId) =>
+            ResolveWslLinuxUsernameCallback?.Invoke(distroInstallId);
 
         public void SuppressWslOobe() => SuppressWslOobeCallback();
 

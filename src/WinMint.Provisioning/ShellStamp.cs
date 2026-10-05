@@ -70,7 +70,7 @@ internal static class ShellStamp
 
     private static void StampWindowsTerminalSettings(string skel, List<string> notes)
     {
-        string? target = ResolveWindowsTerminalSettingsPath();
+        string? target = WindowsTerminalSettingsPath.Resolve();
         if (target is null)
         {
             notes.Add("wt.settings skipped (path not found)");
@@ -93,22 +93,6 @@ internal static class ShellStamp
 
         File.Copy(source, target, overwrite: false);
         notes.Add("wt.settings stamped");
-    }
-
-    private static string? ResolveWindowsTerminalSettingsPath()
-    {
-        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        string unpackaged = Path.Combine(local, "Microsoft", "Windows Terminal", "settings.json");
-        string packages = Path.Combine(local, "Packages");
-        if (Directory.Exists(packages))
-        {
-            foreach (string dir in Directory.EnumerateDirectories(packages, "Microsoft.WindowsTerminal*"))
-            {
-                return Path.Combine(dir, "LocalState", "settings.json");
-            }
-        }
-
-        return unpackaged;
     }
 
     private static void CopyIfMissing(string source, string dest, List<string> notes)

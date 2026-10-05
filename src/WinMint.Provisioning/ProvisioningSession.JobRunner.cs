@@ -24,6 +24,7 @@ internal sealed record JobRunnerEnv(
     Action ApplyWorkstationQuiet,
     Func<ShellChromeRequest, bool> ApplyShellChrome,
     Action<IReadOnlyList<string>> TryStageWslTerminalMock,
+    Func<string, string?> ResolveWslLinuxUsername,
     Action SuppressWslOobe,
     Func<bool> IsHypervisorGuest,
     WslMockState WslMock);
@@ -436,6 +437,18 @@ internal static partial class ProvisioningJobRunner
                         if (platform is not null)
                         {
                             return platform.Value;
+                        }
+
+                        continue;
+                    }
+
+                case ProvisionJobKind.WslTerminal:
+                    {
+                        JobsRunResult? terminal = await RunWslTerminalJobAsync(context, ct)
+                            .ConfigureAwait(false);
+                        if (terminal is not null)
+                        {
+                            return terminal.Value;
                         }
 
                         continue;

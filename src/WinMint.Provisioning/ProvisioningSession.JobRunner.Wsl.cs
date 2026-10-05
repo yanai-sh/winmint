@@ -128,5 +128,63 @@ internal static partial class ProvisioningJobRunner
             return FailJob(env, "jobs.failed", $"{job.Id}: {ex.Message}");
         }
     }
+
+    private static Task<JobsRunResult?> RunWslTerminalJobAsync(JobContext context, CancellationToken ct)
+    {
+        _ = ct;
+        JobRunnerEnv env = context.Env;
+        ProvisionJob job = context.Job;
+
+        if (env.WslMock.Mocked)
+        {
+            env.ReportStatus(new SessionStatus(
+                "jobs.wsl.terminal.mocked",
+                $"{job.Id} mocked on hypervisor guest."));
+            return Task.FromResult<JobsRunResult?>(null);
+        }
+
+        if (string.IsNullOrWhiteSpace(job.PackageId))
+        {
+            env.ReportStatus(new SessionStatus(
+                "jobs.wsl.terminal.skipped",
+                $"{job.Id}: no distro packageId."));
+            return Task.FromResult<JobsRunResult?>(null);
+        }
+
+        string? settingsPath = WindowsTerminalSettingsPath.Resolve();
+        if (settingsPath is null)
+        {
+            env.ReportStatus(new SessionStatus(
+                "jobs.wsl.terminal.skipped",
+                $"{job.Id}: Windows Terminal settings path not found."));
+            return Task.FromResult<JobsRunResult?>(null);
+        }
+
+        string? linuxUser = null;
+        try
+        {
+            linuxUser = env.ResolveWslLinuxUsername(job.PackageId);
+        }
+        catch
+        {
+            // Fail-open — defaultProfile merge may still apply without startingDirectory.
+        }
+
+        Win32WslTerminalMerge.MergeOutcome outcome = Win32WslTerminalMerge.TryMerge(
+            job.PackageId,
+            linuxUser,
+            settingsPath);
+
+        if (outcome.Applied)
+        {
+            env.ReportStatus(new SessionStatus("jobs.wsl.terminal.applied", $"{job.Id}: {outcome.Note}"));
+        }
+        else
+        {
+            env.ReportStatus(new SessionStatus("jobs.wsl.terminal.skipped", $"{job.Id}: {outcome.Note}"));
+        }
+
+        return Task.FromResult<JobsRunResult?>(null);
+    }
 }
 

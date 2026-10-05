@@ -186,6 +186,7 @@ public static partial class ProvisioningSession
                 ApplyWorkstationQuiet: env.Guest.ApplyWorkstationQuiet,
                 ApplyShellChrome: env.Guest.ApplyShellChrome,
                 TryStageWslTerminalMock: env.Guest.TryStageWslTerminalMock,
+                ResolveWslLinuxUsername: env.Guest.TryResolveWslLinuxUsername,
                 SuppressWslOobe: env.Guest.SuppressWslOobe,
                 IsHypervisorGuest: env.Guest.IsHypervisorGuest,
                 WslMock: new WslMockState());

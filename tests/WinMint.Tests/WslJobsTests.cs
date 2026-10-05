@@ -43,6 +43,8 @@ public class WslJobsTests
         int terminal = jobs.ToList().FindIndex(j => j is { Id: "wsl.terminal", Kind: ProvisionJobKind.WslTerminal });
         Assert.True(lastDistro >= 0);
         Assert.True(terminal > lastDistro);
+        ProvisionJob terminalJob = jobs[terminal];
+        Assert.Equal("Ubuntu", terminalJob.PackageId);
     }
 
     [Fact]
@@ -261,6 +263,90 @@ public class WslJobsTests
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("jobs.wsl.fromFileDownloadFailed", result.FinalStatus.Code);
         Assert.Empty(processes.Starts);
+    }
+
+    [Fact]
+    public void Wsl_terminal_merge_sets_defaultProfile_without_replacing_file()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "winmint-wt-merge-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        string settingsPath = Path.Combine(root, "settings.json");
+        const string psGuid = "{11111111-1111-1111-1111-111111111111}";
+        const string ubuntuGuid = "{22222222-2222-2222-2222-222222222222}";
+        File.WriteAllText(
+            settingsPath,
+            $$"""
+            {
+              "customMarker": 42,
+              "profiles": {
+                "list": [
+                  { "guid": "{{psGuid}}", "name": "PowerShell", "commandline": "pwsh.exe" },
+                  { "guid": "{{ubuntuGuid}}", "name": "Ubuntu", "source": "Windows.Terminal.Wsl" }
+                ]
+              }
+            }
+            """);
+
+        Win32WslTerminalMerge.MergeOutcome outcome = Win32WslTerminalMerge.Merge("Ubuntu", null, settingsPath);
+
+        Assert.True(outcome.Applied);
+        string merged = File.ReadAllText(settingsPath);
+        Assert.Contains("\"customMarker\": 42", merged, StringComparison.Ordinal);
+        Assert.Contains(psGuid, merged, StringComparison.Ordinal);
+        Assert.Contains($"\"defaultProfile\": \"{ubuntuGuid}\"", merged, StringComparison.Ordinal);
+        Assert.DoesNotContain("startingDirectory", merged, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Wsl_terminal_merge_sets_startingDirectory_when_linux_username_known()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "winmint-wt-merge-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        string settingsPath = Path.Combine(root, "settings.json");
+        const string ubuntuGuid = "{22222222-2222-2222-2222-222222222222}";
+        File.WriteAllText(
+            settingsPath,
+            $$"""
+            {
+              "profiles": {
+                "list": [
+                  { "guid": "{{ubuntuGuid}}", "name": "Ubuntu", "source": "Windows.Terminal.Wsl" }
+                ]
+              }
+            }
+            """);
+
+        Win32WslTerminalMerge.MergeOutcome outcome = Win32WslTerminalMerge.Merge("Ubuntu", "devuser", settingsPath);
+
+        Assert.True(outcome.Applied);
+        Assert.Contains(
+            "//wsl.localhost/Ubuntu/home/devuser",
+            File.ReadAllText(settingsPath),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Shell_wsl_terminal_mocks_on_hypervisor_guest()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+        FakeGuestMachine guest = new()
+        {
+            Processes = processes,
+            IsHypervisorGuestCallback = static () => true,
+        };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs:
+            [
+                new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform),
+                new ProvisionJob("wsl.terminal", ProvisionJobKind.WslTerminal, PackageId: "Ubuntu"),
+            ]),
+            Env(guest, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Contains("jobs.wsl.terminal.mocked", evidence.Documents[^1].Phases);
     }
 
     [Fact]

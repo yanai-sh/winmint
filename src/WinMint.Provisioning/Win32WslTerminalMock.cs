@@ -17,7 +17,7 @@ public static class Win32WslTerminalMock
 
     private static void Stage(IEnumerable<string> distroNames)
     {
-        string? path = ResolveSettingsPath();
+        string? path = WindowsTerminalSettingsPath.Resolve();
         if (path is null || !File.Exists(path))
         {
             return;
@@ -58,19 +58,4 @@ public static class Win32WslTerminalMock
         File.WriteAllText(path, json);
     }
 
-    private static string? ResolveSettingsPath()
-    {
-        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        string unpackaged = Path.Combine(local, "Microsoft", "Windows Terminal", "settings.json");
-        string packages = Path.Combine(local, "Packages");
-        if (Directory.Exists(packages))
-        {
-            foreach (string dir in Directory.EnumerateDirectories(packages, "Microsoft.WindowsTerminal*"))
-            {
-                return Path.Combine(dir, "LocalState", "settings.json");
-            }
-        }
-
-        return unpackaged;
-    }
 }

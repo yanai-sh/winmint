@@ -113,6 +113,8 @@ public interface IGuestMachine
 
     void TryStageWslTerminalMock(IReadOnlyList<string> distroNames);
 
+    string? TryResolveWslLinuxUsername(string distroInstallId);
+
     void SuppressWslOobe();
 
     /// <summary>Best-effort: tear down stuck CloudExperienceHost OOBE overlay after Shell unlock.</summary>
