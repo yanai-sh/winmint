@@ -141,12 +141,16 @@ internal sealed partial class SoftwareStageViewModel(Action draftChanged, Func<T
     [RelayCommand]
     private Task UseDefaults() => _useDefaults();
 
-    internal void ResetToDefaults()
+    /// <summary>Apply product-curated chips + recommended debloat + Windows taskbar (issue #136).</summary>
+    internal void ApplyCuratedDefaults()
     {
         Presets.Value = DebloatPresets.Recommended;
+        HashSet<string> curated = new(
+            CuratedDefaults.ToolChipKeys.Concat(CuratedDefaults.WslTokens),
+            StringComparer.OrdinalIgnoreCase);
         foreach (ChipItem chip in Chips.All)
         {
-            chip.IsSelected = false;
+            chip.IsSelected = curated.Contains(chip.Id);
         }
         Desktop.Taskbar = DesktopSelectionViewModel.WindowsTaskbar;
         Desktop.Komorebi = false;

@@ -3,6 +3,7 @@ using System.CommandLine.Parsing;
 
 using Microsoft.Extensions.Logging;
 
+using WinMint.Contracts;
 using WinMint.Orchestrator;
 
 namespace WinMint.Cli;
@@ -156,15 +157,53 @@ internal static class Program
         packagesCheckCommand.SetAction(
             async (_, ct) => await RunPackagesCheckAsync(ct).ConfigureAwait(false));
 
+        Option<DirectoryInfo> emitOutOption = new("--out", "-o")
+        {
+            Description = "Directory for curated Profile + bootstrap.password.",
+            Required = true,
+        };
+        Command emitDefaultsCommand = new(
+            "emit-defaults",
+            "Write product-curated Profile ids + generated bootstrap password (issue #136).")
+        {
+            emitOutOption,
+        };
+        emitDefaultsCommand.SetAction(parseResult =>
+        {
+            DirectoryInfo outDir = parseResult.GetValue(emitOutOption)!;
+            return RunEmitDefaults(outDir);
+        });
+
         RootCommand root = new("WinMint — Profile plan and ImageServicing build")
         {
             validateCommand,
             planCommand,
             buildCommand,
             packagesCheckCommand,
+            emitDefaultsCommand,
         };
 
         return root.Parse(args).Invoke();
+    }
+
+    private static int RunEmitDefaults(DirectoryInfo outDir)
+    {
+        HostDmaSettleSnapshot dma = HostDmaSettle.Capture();
+        Result<CuratedEmitResult, Failure> emitted = CuratedDefaults.TryEmit(
+            outDir.FullName,
+            new DmaSettleTarget(
+                dma.Locale,
+                dma.GeoId,
+                dma.TimeZoneId,
+                dma.LocationServicesEnabled));
+        if (!emitted.IsOk)
+        {
+            CliLog.Failure(Log, emitted.Error.Code, emitted.Error.Message);
+            return 1;
+        }
+
+        CliLog.CuratedDefaultsEmitted(Log, emitted.Value.ProfilePath, emitted.Value.PasswordPath);
+        return 0;
     }
 
     private static async Task<int> RunPackagesCheckAsync(CancellationToken ct)

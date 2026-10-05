@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using WinMint.Orchestrator;
+
 namespace WinMint.Wizard.ViewModels;
 
 public sealed partial class StageStatusViewModel : ObservableObject
@@ -67,7 +69,7 @@ internal sealed partial class AccountStageViewModel : ObservableObject, IAccount
 
     private void ApplyBuildMachineDmaDefaults()
     {
-        BuildMachineDmaSnapshot snapshot = BuildMachineDma.Capture();
+        HostDmaSettleSnapshot snapshot = HostDmaSettle.Capture();
         Locale = snapshot.Locale;
         GeoId = snapshot.GeoId.ToString(System.Globalization.CultureInfo.InvariantCulture);
         TimeZone = snapshot.TimeZoneId;

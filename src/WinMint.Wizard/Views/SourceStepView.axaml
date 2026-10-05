@@ -86,6 +86,12 @@
       </StackPanel>
     </Border>
 
+    <Button Classes="primary"
+            Content="Use WinMint defaults → Review"
+            HorizontalAlignment="Left"
+            Command="{Binding $parent[Window].((vm:WizardViewModel)DataContext).UseWinMintDefaultsCommand}"
+            IsVisible="{Binding SourceIsoPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
     <TextBlock Text="{Binding Status.Message}"
                TextWrapping="Wrap"
                Foreground="{DynamicResource SystemErrorTextColor}"

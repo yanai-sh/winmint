@@ -9,5 +9,7 @@
 
 Host preset **`recommended`** expands to remove-lists at plan time; JSON never embeds preset names.
 
+Product-curated host path (issue #136): `just curated-emit` / `winmint emit-defaults --out …` (see `CuratedDefaults` in Orchestrator). Distinct from Primary `sl7.profile.json`.
+
 `sl7.profile.json` password: `.scratch/sl7.password` (next to the sample; do not commit it).
 `just smoke` / `just smoke-maintainer` default to `sl7.profile.json`.

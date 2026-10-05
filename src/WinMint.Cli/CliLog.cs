@@ -47,4 +47,7 @@ internal static partial class CliLog
 
     [LoggerMessage(EventId = 14, Level = LogLevel.Information, Message = "Refreshed {Count} package proofs: {ProofPath}")]
     public static partial void PackagesProofRefreshed(ILogger logger, int count, string proofPath);
+
+    [LoggerMessage(EventId = 15, Level = LogLevel.Information, Message = "Wrote curated Profile {ProfilePath} (bootstrap password: {PasswordPath})")]
+    public static partial void CuratedDefaultsEmitted(ILogger logger, string profilePath, string passwordPath);
 }

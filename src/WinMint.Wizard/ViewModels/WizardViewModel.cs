@@ -145,16 +145,28 @@ public sealed partial class WizardViewModel :
         }
     }
 
+    private bool CanExecuteUseWinMintDefaults() => !IsBusy && _source.IsReady;
+
+    [RelayCommand(CanExecute = nameof(CanExecuteUseWinMintDefaults))]
+    private Task UseWinMintDefaults() => UseDefaultsAsync();
+
     private async Task UseDefaultsAsync()
     {
-        _software.ResetToDefaults();
-        if (!CanGoTo(ReviewIndex))
+        if (!_source.IsReady)
         {
-            StepIndex = AccountIndex;
-            ReportGateError(identityRequired: true);
+            ReportGateError(identityRequired: false);
             return;
         }
+
+        ApplyCuratedBootstrap();
         await TryEnterReviewAsync().ConfigureAwait(true);
+    }
+
+    private void ApplyCuratedBootstrap()
+    {
+        _software.ApplyCuratedDefaults();
+        _account.Username = CuratedDefaults.BootstrapUsername;
+        _account.Password = CuratedDefaults.NewBootstrapPassword();
     }
 
     private async Task<bool> TryEnterReviewAsync()
@@ -587,7 +599,7 @@ public sealed partial class WizardViewModel :
 
         if (!_account.IdentityReady)
         {
-            FooterStatus = "Source ready · set a password on Account";
+            FooterStatus = "Source ready · Use WinMint defaults or set Account password";
             FooterWarn = true;
             FooterReady = false;
             return;
@@ -625,6 +637,7 @@ public sealed partial class WizardViewModel :
         CanGoToAccount = !IsBusy && CanGoTo(AccountIndex);
         CanGoToSoftware = !IsBusy && CanGoTo(SoftwareIndex);
         CanGoToReview = !IsBusy && CanGoTo(ReviewIndex);
+        UseWinMintDefaultsCommand.NotifyCanExecuteChanged();
     }
 
     public void Dispose()

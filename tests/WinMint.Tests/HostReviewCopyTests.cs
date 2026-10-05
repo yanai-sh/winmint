@@ -75,6 +75,26 @@ public class HostReviewCopyTests
     }
 
     [Fact]
+    public void Curated_review_copy_does_not_claim_owner_user_profile_path()
+    {
+        Result<Profile, Failure> curated = CuratedDefaults.TryCreate(
+            new DmaSettleTarget("en-US", 244, "UTC", true),
+            "lab-only");
+        Assert.True(curated.IsOk);
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(
+            curated.Value,
+            new HostComposeOptions(AuthoredSelectionLabels: CuratedDefaults.SelectionLabels));
+        Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
+
+        HostReview review = planned.Value.Review;
+        Assert.DoesNotContain("C:\\Users", review.QuietSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("C:\\Users", review.PlanMeta, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("C:\\Users", review.AuthoredProfileJson, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(CuratedDefaults.BootstrapUsername, review.AuthoredProfile.Account.Username);
+        Assert.Null(review.AuthoredProfile.Account.Password);
+    }
+
+    [Fact]
     public void PickStrip_empty_returns_empty()
     {
         Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(Lab());

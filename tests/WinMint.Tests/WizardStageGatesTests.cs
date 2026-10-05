@@ -200,6 +200,61 @@ public class WizardStageGatesTests
         }
     }
 
+    [Fact]
+    public async Task Use_WinMint_defaults_reaches_Review_from_Source_without_Account_homework()
+    {
+        string iso = WriteIso();
+        try
+        {
+            using WizardViewModel shell = new(null, null, new FixedProbe());
+            shell.Source.SourceIsoPath = iso;
+            Assert.True(shell.UseWinMintDefaultsCommand.CanExecute(null));
+            Assert.False(shell.CanGoToReview);
+
+            await shell.UseWinMintDefaultsCommand.ExecuteAsync(null);
+
+            Assert.True(shell.IsReviewStep);
+            Assert.NotNull(shell.Review);
+            Assert.Equal(CuratedDefaults.BootstrapUsername, shell.Account.Username);
+            Assert.False(string.IsNullOrEmpty(shell.Account.Password));
+            Assert.DoesNotContain("C:\\Users", shell.Review.Summary.QuietSummaryText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("C:\\Users", shell.Review.Summary.PreviewJson, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Anysphere.Cursor", shell.Review.Summary.PreviewJson, StringComparison.Ordinal);
+            Assert.Contains("Zen-Team.Zen-Browser", shell.Review.Summary.PreviewJson, StringComparison.Ordinal);
+            Assert.Contains("FedoraLinux", shell.Review.Summary.PreviewJson, StringComparison.Ordinal);
+            Assert.Contains("Windows taskbar", shell.Review.Summary.PickStripText, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"password\"", shell.Review.Summary.PreviewJson, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("recommended", shell.Review.Summary.PreviewJson, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
+    }
+
+    [Fact]
+    public async Task Customize_path_still_requires_Account_password_for_Review()
+    {
+        string iso = WriteIso();
+        try
+        {
+            using WizardViewModel shell = new(null, null, new FixedProbe());
+            shell.Source.SourceIsoPath = iso;
+            Assert.False(shell.CanGoToReview);
+
+            await shell.GoToAccountCommand.ExecuteAsync(null);
+            Assert.True(shell.IsAccountStep);
+            Assert.False(shell.CanGoToReview);
+
+            shell.Account.Password = "lab-only";
+            Assert.True(shell.CanGoToReview);
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
+    }
+
     private static string WriteIso()
     {
         string path = Path.Combine(Path.GetTempPath(), "winmint-shell-" + Guid.NewGuid().ToString("N") + ".iso");

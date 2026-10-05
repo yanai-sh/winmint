@@ -22,7 +22,7 @@
                Text="Editors, browsers, desktop, and WSL — or continue with recommended defaults." />
 
     <Button Classes="link"
-            Content="Use defaults → Review"
+            Content="Use WinMint defaults → Review"
             Command="{Binding UseDefaultsCommand}" />
 
     <StackPanel Spacing="6">

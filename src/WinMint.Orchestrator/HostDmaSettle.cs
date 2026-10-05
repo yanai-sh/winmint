@@ -1,18 +1,18 @@
 using System.Globalization;
 
-namespace WinMint.Wizard;
+namespace WinMint.Orchestrator;
 
-/// <summary>Host DMA settle snapshot for Wizard compose (issue 56). Profile stores the result.</summary>
-public sealed record BuildMachineDmaSnapshot(
+/// <summary>Host DMA settle snapshot for curated / Wizard compose (issue 56 / #136).</summary>
+public sealed record HostDmaSettleSnapshot(
     string Locale,
     int GeoId,
     string TimeZoneId,
     bool LocationServicesEnabled);
 
-public static class BuildMachineDma
+public static class HostDmaSettle
 {
-    /// <summary>Best-effort read of the machine running Wizard. Falls back to stable English desktop defaults.</summary>
-    public static BuildMachineDmaSnapshot Capture()
+    /// <summary>Best-effort read of the machine running the host tool. Falls back to stable English desktop defaults.</summary>
+    public static HostDmaSettleSnapshot Capture()
     {
         string locale = CultureInfo.CurrentCulture.Name;
         if (string.IsNullOrWhiteSpace(locale))
@@ -36,6 +36,6 @@ public static class BuildMachineDma
             tz = "GMT Standard Time";
         }
 
-        return new BuildMachineDmaSnapshot(locale, geoId, tz, LocationServicesEnabled: true);
+        return new HostDmaSettleSnapshot(locale, geoId, tz, LocationServicesEnabled: true);
     }
 }

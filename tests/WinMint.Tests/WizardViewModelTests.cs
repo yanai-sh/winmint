@@ -43,7 +43,7 @@ public class WizardViewModelTests
             vm.Source.SourceIsoPath = iso;
             Assert.True(vm.FooterWarn);
             Assert.False(vm.FooterReady);
-            Assert.Contains("password", vm.FooterStatus, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("WinMint defaults", vm.FooterStatus, StringComparison.OrdinalIgnoreCase);
 
             vm.Account.Password = "secret";
             Assert.True(vm.FooterReady);

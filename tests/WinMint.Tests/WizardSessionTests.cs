@@ -162,6 +162,25 @@ public class WizardSessionTests
     }
 
     [Fact]
+    public void ApplyCuratedDefaults_selects_product_chips_and_windows_taskbar()
+    {
+        SoftwareStageViewModel software = new(() => { }, () => Task.CompletedTask);
+        software.Desktop.SelectTaskbarCommand.Execute("yasb");
+        software.Desktop.Komorebi = true;
+        software.ApplyCuratedDefaults();
+
+        Result<PackageSelection, Failure> selection = software.ResolvePackages();
+        Assert.True(selection.IsOk);
+        Assert.True(software.Desktop.IsWindowsTaskbar);
+        Assert.False(software.Desktop.Komorebi);
+        Assert.Equal(DebloatPresets.Recommended, software.Presets.Value);
+        Assert.Contains("Anysphere.Cursor", selection.Value.WingetInstallIds);
+        Assert.Contains("Zen-Team.Zen-Browser", selection.Value.WingetInstallIds);
+        Assert.Equal(["FedoraLinux"], selection.Value.WslProfileTokens);
+        Assert.DoesNotContain("AmN.yasb", selection.Value.WingetInstallIds);
+    }
+
+    [Fact]
     public void Desktop_defaults_are_windows_taskbar_without_komorebi()
     {
         SoftwareStageViewModel software = new(() => { }, () => Task.CompletedTask);
