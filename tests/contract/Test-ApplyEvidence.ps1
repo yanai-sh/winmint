@@ -16,6 +16,15 @@ if (Test-WinMintIsGateB -Lane 'Release' -PackageStrict:$false) {
 if (Test-WinMintIsGateB -Lane 'Test' -PackageStrict:$true) {
     throw 'Test lane must not be Gate B'
 }
+if (-not (Test-WinMintIsWipeReadyGateB -Lane 'Release' -PackageStrict:$true -PackageWireHonest:$true)) {
+    throw 'wipe-ready Gate B requires Release+strict+honest'
+}
+if (Test-WinMintIsWipeReadyGateB -Lane 'Release' -PackageStrict:$true -PackageWireHonest:$false) {
+    throw 'dishonest package wire must not be wipe-ready Gate B'
+}
+if (Test-WinMintIsWipeReadyGateB -Lane 'Release' -PackageStrict:$false -PackageWireHonest:$true) {
+    throw 'soft Release must not be wipe-ready Gate B'
+}
 
 function Copy-Tree([string] $Source, [string] $Dest) {
     foreach ($file in [IO.Directory]::GetFiles($Source, '*', [IO.SearchOption]::AllDirectories)) {
@@ -142,11 +151,88 @@ try {
   {"PackageIdentifier":"Nilesoft.Shell"}
 ]}]}
 '@
+    $exp = Get-Content -LiteralPath (Join-Path $fu 'expected-evidence.json') -Raw | ConvertFrom-Json
+    $exp.lane = 'Release'
+    $exp.packageStrict = $true
+    $exp.packageWireHonest = $true
+    $exp.expectFuPosture = $true
+    ($exp | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $fu 'expected-evidence.json') -Encoding utf8
     $r = Invoke-ApplyAssert $fu -RequireLane Release
     if ($r.Code -ne 0) { throw "Release FU fixture must pass: $($r.Err)" }
     $acc = Get-Content -LiteralPath (Join-Path $fu 'apply-acceptance.json') -Raw
     if ($acc -notmatch '"fuPosture": true') { throw 'fuPosture true' }
     if ($acc -notmatch '"lane": "Release"') { throw 'lane Release' }
+
+    $wireDishonest = Join-Path $root 'wire-dishonest'
+    Copy-Tree $fixture $wireDishonest
+    $ev = Get-Content -LiteralPath (Join-Path $wireDishonest 'evidence.json') -Raw | ConvertFrom-Json
+    $ev.lane = 'Release'
+    $ev | Add-Member -NotePropertyName packageStrict -NotePropertyValue $true -Force
+    $ev.digests | Add-Member -NotePropertyName 'policy.cloudContent.DisableWindowsConsumerFeatures' -NotePropertyValue '1' -Force
+    $ev.digests | Add-Member -NotePropertyName 'policy.cloudContent.DisableSoftLanding' -NotePropertyValue '1' -Force
+    $ev.digests | Add-Member -NotePropertyName 'policy.store.AutoDownload' -NotePropertyValue '2' -Force
+    ($ev | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $wireDishonest 'evidence.json') -Encoding utf8
+    $exp = Get-Content -LiteralPath (Join-Path $wireDishonest 'expected-evidence.json') -Raw | ConvertFrom-Json
+    $exp.lane = 'Release'
+    $exp.packageStrict = $true
+    $exp.packageWireHonest = $false
+    $exp.expectFuPosture = $true
+    ($exp | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $wireDishonest 'expected-evidence.json') -Encoding utf8
+    $payload = Join-Path $wireDishonest 'payload'
+    New-Item -ItemType Directory -Force -Path $payload | Out-Null
+    Set-Content -LiteralPath (Join-Path $payload 'jobs.json') -Encoding utf8 -Value @'
+{"jobs":[{"id":"winget.import","kind":"winget.import"},{"id":"scoop.batch","kind":"scoop.batch","packageId":"starship"},{"id":"shell.stamp","kind":"shell.stamp"}]}
+'@
+    Set-Content -LiteralPath (Join-Path $payload 'winget-import.json') -Encoding utf8 -Value @'
+{"Sources":[{"SourceDetails":{"Name":"winget","Identifier":"Microsoft.Winget.Source_8wekyb3d8bbwe","Argument":"https://cdn.winget.microsoft.com/cache","Type":"Microsoft.PreIndexed.Package"},"Packages":[
+  {"PackageIdentifier":"Git.MinGit"},
+  {"PackageIdentifier":"Microsoft.PowerShell"},
+  {"PackageIdentifier":"Microsoft.WindowsTerminal"},
+  {"PackageIdentifier":"Microsoft.Coreutils"},
+  {"PackageIdentifier":"Nilesoft.Shell"}
+]}]}
+'@
+    $r = Invoke-ApplyAssert $wireDishonest -RequireLane Release
+    if ($r.Code -eq 0) { throw 'packageWireHonest false must fail wipe-ready Gate B' }
+    if ($r.Err -notmatch 'wipe-ready Gate B|packageWireHonest') {
+        throw "wire honesty message: $($r.Err)"
+    }
+
+    $wslWireGateB = Join-Path $root 'wsl-wire-gateb'
+    Copy-Tree $fixture $wslWireGateB
+    $ev = Get-Content -LiteralPath (Join-Path $wslWireGateB 'evidence.json') -Raw | ConvertFrom-Json
+    $ev.lane = 'Release'
+    $ev | Add-Member -NotePropertyName packageStrict -NotePropertyValue $true -Force
+    $ev.digests | Add-Member -NotePropertyName 'policy.cloudContent.DisableWindowsConsumerFeatures' -NotePropertyValue '1' -Force
+    $ev.digests | Add-Member -NotePropertyName 'policy.cloudContent.DisableSoftLanding' -NotePropertyValue '1' -Force
+    $ev.digests | Add-Member -NotePropertyName 'policy.store.AutoDownload' -NotePropertyValue '2' -Force
+    ($ev | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $wslWireGateB 'evidence.json') -Encoding utf8
+    $exp = Get-Content -LiteralPath (Join-Path $wslWireGateB 'expected-evidence.json') -Raw | ConvertFrom-Json
+    $exp.lane = 'Release'
+    $exp.packageStrict = $true
+    $exp.packageWireHonest = $true
+    $exp.expectFuPosture = $true
+    $exp.requiredWslPackageIds = @('Ubuntu')
+    ($exp | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $wslWireGateB 'expected-evidence.json') -Encoding utf8
+    $payload = Join-Path $wslWireGateB 'payload'
+    New-Item -ItemType Directory -Force -Path $payload | Out-Null
+    Set-Content -LiteralPath (Join-Path $payload 'jobs.json') -Encoding utf8 -Value @'
+{"jobs":[{"id":"winget.import","kind":"winget.import"},{"id":"scoop.batch","kind":"scoop.batch","packageId":"starship"},{"id":"shell.stamp","kind":"shell.stamp"},{"id":"wsl.Ubuntu","kind":"wsl","packageId":"NixOS"}]}
+'@
+    Set-Content -LiteralPath (Join-Path $payload 'winget-import.json') -Encoding utf8 -Value @'
+{"Sources":[{"SourceDetails":{"Name":"winget","Identifier":"Microsoft.Winget.Source_8wekyb3d8bbwe","Argument":"https://cdn.winget.microsoft.com/cache","Type":"Microsoft.PreIndexed.Package"},"Packages":[
+  {"PackageIdentifier":"Git.MinGit"},
+  {"PackageIdentifier":"Microsoft.PowerShell"},
+  {"PackageIdentifier":"Microsoft.WindowsTerminal"},
+  {"PackageIdentifier":"Microsoft.Coreutils"},
+  {"PackageIdentifier":"Nilesoft.Shell"}
+]}]}
+'@
+    $r = Invoke-ApplyAssert $wslWireGateB -RequireLane Release
+    if ($r.Code -eq 0) { throw 'mutated WSL jobs vs requiredWslPackageIds must fail' }
+    if ($r.Err -notmatch 'requiredWslPackageIds|wsl packageId|missing wsl job') {
+        throw "wsl wire mutate message: $($r.Err)"
+    }
 
     $wslFromFile = Join-Path $root 'wsl-fromfile'
     Copy-Tree $fixture $wslFromFile

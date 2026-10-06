@@ -4,8 +4,16 @@ Set-StrictMode -Version Latest
 <#
 .SYNOPSIS
   Shared ImageEvidence schema/lane/digest/expected-evidence asserts for S4 and S5.
-  Gate B polarity for Apply evidence is lane ∧ packageStrict (Release wipe path gating).
-  HostReview.IsGateB additionally requires package wire honesty (WSL installIds) — do not equate them.
+
+.NOTES
+  Two Gate B predicates — do not equate them:
+
+  Test-WinMintIsGateB / Assert-WinMintGateB
+    Apply evidence gate: lane ∧ packageStrict (Release wipe-path gating for soft Release).
+
+  Test-WinMintIsWipeReadyGateB / Assert-WinMintWipeReadyGateB
+    Wipe-ready claim mirroring HostReview.IsGateB: Release ∧ packageStrict ∧ packageWireHonest.
+    packageWireHonest is a frozen expected-evidence fact (materialize) — PS must not re-plan it.
 #>
 
 function Test-WinMintIsGateB {
@@ -33,6 +41,50 @@ function Assert-WinMintGateB {
         throw ("$Context requires Release and packageStrict " +
             "(soft Release evidence is not wipe media; lane='$Lane' packageStrict=$PackageStrict)")
     }
+}
+
+function Test-WinMintIsWipeReadyGateB {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Lane,
+
+        [Parameter(Mandatory)]
+        [bool] $PackageStrict,
+
+        [Parameter(Mandatory)]
+        [bool] $PackageWireHonest
+    )
+    return (Test-WinMintIsGateB -Lane $Lane -PackageStrict:$PackageStrict) -and $PackageWireHonest
+}
+
+function Assert-WinMintWipeReadyGateB {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Lane,
+
+        [Parameter(Mandatory)]
+        [bool] $PackageStrict,
+
+        [Parameter(Mandatory)]
+        [bool] $PackageWireHonest,
+
+        [string] $Context = 'wipe-ready Gate B'
+    )
+    if (-not (Test-WinMintIsWipeReadyGateB -Lane $Lane -PackageStrict:$PackageStrict -PackageWireHonest:$PackageWireHonest)) {
+        throw ("$Context requires Release, packageStrict, and packageWireHonest " +
+            "(HostReview.IsGateB; lane='$Lane' packageStrict=$PackageStrict packageWireHonest=$PackageWireHonest)")
+    }
+}
+
+function Get-WinMintExpectedPackageWireHonest {
+    param(
+        [Parameter(Mandatory)]
+        $Expected
+    )
+    # Fail-closed: missing fact is not wipe-ready honesty.
+    if ($null -eq $Expected) { return $false }
+    if ($Expected.PSObject.Properties.Name -notcontains 'packageWireHonest') { return $false }
+    return [bool]$Expected.packageWireHonest
 }
 
 function Assert-WinMintImageEvidence {
@@ -77,6 +129,7 @@ function Assert-WinMintImageEvidence {
         if ($evidence.PSObject.Properties.Name -contains 'packageStrict') {
             $packageStrict = [bool]$evidence.packageStrict
         }
+        # Apply evidence gate only — wipe-ready needs expected-evidence.packageWireHonest below.
         Assert-WinMintGateB -Lane $lane -PackageStrict:$packageStrict -Context 'Release Gate B assert'
     }
 
@@ -103,6 +156,25 @@ function Assert-WinMintImageEvidence {
                 $packageStrict = [bool]$evidence.packageStrict
             }
             Assert-WinMintGateB -Lane $lane -PackageStrict:$packageStrict -Context 'expected-evidence Gate B'
+            $wireHonest = Get-WinMintExpectedPackageWireHonest -Expected $expected
+            Assert-WinMintWipeReadyGateB `
+                -Lane $lane `
+                -PackageStrict:$packageStrict `
+                -PackageWireHonest:$wireHonest `
+                -Context 'expected-evidence wipe-ready Gate B'
+        }
+        elseif ($RequireLane -eq 'Release') {
+            # Primary / RequireLane Release: wipe-ready claim consumes frozen packageWireHonest.
+            $packageStrict = $false
+            if ($evidence.PSObject.Properties.Name -contains 'packageStrict') {
+                $packageStrict = [bool]$evidence.packageStrict
+            }
+            $wireHonest = Get-WinMintExpectedPackageWireHonest -Expected $expected
+            Assert-WinMintWipeReadyGateB `
+                -Lane $lane `
+                -PackageStrict:$packageStrict `
+                -PackageWireHonest:$wireHonest `
+                -Context 'RequireLane Release wipe-ready Gate B'
         }
         foreach ($key in @($expected.requiredDigestKeys)) {
             if (-not $digestMap.ContainsKey([string]$key) -or [string]::IsNullOrWhiteSpace($digestMap[[string]$key])) {
