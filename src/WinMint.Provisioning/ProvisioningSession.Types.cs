@@ -105,6 +105,8 @@ public interface IGuestMachine
 
     bool IsWslPlatformReady();
 
+    bool IsWslDistroRegistered(string installId);
+
     bool IsHypervisorGuest();
 
     void ApplyWorkstationQuiet();

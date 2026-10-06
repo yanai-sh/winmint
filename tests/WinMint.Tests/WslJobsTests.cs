@@ -31,6 +31,20 @@ public class WslJobsTests
     }
 
     [Fact]
+    public void Plan_fedora_wsl_emits_store_install_id()
+    {
+        Profile profile = Parse(MinimalJson(wsl: ["FedoraLinux"]));
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk);
+        ProvisionJob fedora = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
+        Assert.Equal("wsl.FedoraLinux-44", fedora.Id);
+        Assert.Equal("FedoraLinux-44", fedora.PackageId);
+        Assert.Equal(WslInstallKind.Store, fedora.WslInstallKind);
+    }
+
+    [Fact]
     public void Plan_nixos_wsl_emits_fromFile_metadata()
     {
         Profile profile = Parse(MinimalJson(wsl: ["NixOS-WSL"]));
@@ -177,7 +191,7 @@ public class WslJobsTests
             Bundle(jobs:
             [
                 new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform),
-                new ProvisionJob("wsl.FedoraLinux", ProvisionJobKind.Wsl, PackageId: "FedoraLinux"),
+                new ProvisionJob("wsl.FedoraLinux-44", ProvisionJobKind.Wsl, PackageId: "FedoraLinux-44"),
             ]),
             Env(guest, evidence),
             TestContext.Current.CancellationToken);
@@ -185,8 +199,74 @@ public class WslJobsTests
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.DoesNotContain(processes.Starts, s => s.FileName.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("jobs.wsl.platform.mocked", evidence.Documents[^1].Phases);
-        Assert.Contains("jobs.wsl.FedoraLinux.mocked", evidence.Documents[^1].Phases);
-        Assert.Equal(["FedoraLinux"], Assert.Single(guest.WslTerminalMockStages));
+        Assert.Contains("jobs.wsl.FedoraLinux-44.mocked", evidence.Documents[^1].Phases);
+        Assert.Equal(["FedoraLinux-44"], Assert.Single(guest.WslTerminalMockStages));
+    }
+
+    [Fact]
+    public async Task Shell_wsl_store_install_exit_0_without_registration_fails_package_strict()
+    {
+        RecordingProcessHost processes = new() { ExitCode = 0 };
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs:
+            [
+                new ProvisionJob(
+                    "wsl.FedoraLinux-44",
+                    ProvisionJobKind.Wsl,
+                    PackageId: "FedoraLinux-44",
+                    WslInstallKind: WslInstallKind.Store),
+            ]) with
+            { PackageStrict = true },
+            Env(
+                processes,
+                evidence,
+                suppressWslOobe: static () => { },
+                isWslDistroRegistered: static _ => false),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.failed", result.FinalStatus.Code);
+        Assert.Contains("not registered", result.FinalStatus.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Shell_wsl_store_install_omitted_kind_exit_0_without_registration_fails()
+    {
+        RecordingProcessHost processes = new() { ExitCode = 0 };
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs:
+            [
+                new ProvisionJob(
+                    "wsl.FedoraLinux-44",
+                    ProvisionJobKind.Wsl,
+                    PackageId: "FedoraLinux-44"),
+            ]),
+            Env(
+                processes,
+                evidence,
+                suppressWslOobe: static () => { },
+                isWslDistroRegistered: static _ => false),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.failed", result.FinalStatus.Code);
+        Assert.Contains("not registered", result.FinalStatus.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("Ubuntu\r\n* FedoraLinux-44\r\n", "FedoraLinux-44", true)]
+    [InlineData("Ubuntu\r\n", "FedoraLinux-44", false)]
+    [InlineData("* FedoraLinux-44\r\n", "fedoralinux-44", true)]
+    public void DistroListContainsInstallId_parses_wsl_list_q_output(
+        string listOutput,
+        string installId,
+        bool expected)
+    {
+        Assert.Equal(expected, Win32WslPlatform.DistroListContainsInstallId(listOutput, installId));
     }
 
     [Fact]

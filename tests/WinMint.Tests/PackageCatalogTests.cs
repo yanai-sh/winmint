@@ -123,6 +123,8 @@ public class PackageCatalogTests
         Assert.True(wsl.IsOk);
         Assert.Equal("Anysphere.Cursor", Assert.Single(tools.Value.WingetInstallIds));
         Assert.Equal("FedoraLinux", Assert.Single(wsl.Value));
+        Assert.True(PackageCatalog.Default.TryGetWslByProfileToken("FedoraLinux", out WslDistroEntry? fedora));
+        Assert.Equal("FedoraLinux-44", fedora.InstallId);
     }
 
     [Fact]

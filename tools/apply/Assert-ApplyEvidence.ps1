@@ -92,6 +92,67 @@ if ($null -ne $expected) {
             }
         }
     }
+    $wslIds = @($expected.requiredWslPackageIds)
+    $jobsPath = Join-Path $WorkDirectory 'payload\jobs.json'
+    $wslJobs = @()
+    if (Test-Path -LiteralPath $jobsPath) {
+        $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+        $wslJobs = @($jobsDoc.jobs | Where-Object { [string]$_.kind -eq 'wsl' })
+    }
+    if ($wslJobs.Count -gt 0 -and $wslIds.Count -eq 0) {
+        throw 'expected-evidence.json requiredWslPackageIds missing or empty but payload/jobs.json has wsl jobs'
+    }
+    if ($wslIds.Count -gt 0) {
+        $catalogPath = Join-Path $PSScriptRoot '..\..\config\packages.json'
+        if (-not (Test-Path -LiteralPath $catalogPath)) {
+            throw "package catalog missing for WSL assert: $catalogPath"
+        }
+        $catalog = Get-Content -LiteralPath $catalogPath -Raw -Encoding utf8 | ConvertFrom-Json
+        $catalogWslInstallIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        if ($null -ne $catalog.wslDistros) {
+            foreach ($p in $catalog.wslDistros.PSObject.Properties) {
+                $row = $p.Value
+                $installId = [string]$row.installId
+                if ([string]::IsNullOrWhiteSpace($installId)) { $installId = [string]$p.Name }
+                if (-not [string]::IsNullOrWhiteSpace($installId)) {
+                    [void]$catalogWslInstallIds.Add($installId)
+                }
+            }
+        }
+        foreach ($needId in $wslIds) {
+            if (-not $catalogWslInstallIds.Contains([string]$needId)) {
+                throw "requiredWslPackageId '$needId' is not a catalog installId"
+            }
+        }
+        if (-not (Test-Path -LiteralPath $jobsPath)) {
+            throw "payload/jobs.json missing: $jobsPath (requiredWslPackageIds)"
+        }
+        if ($wslJobs.Count -eq 0) {
+            $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+            $wslJobs = @($jobsDoc.jobs | Where-Object { [string]$_.kind -eq 'wsl' })
+        }
+        $jobPackageIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($job in $wslJobs) {
+            $pkgId = [string]$job.packageId
+            if (-not [string]::IsNullOrWhiteSpace($pkgId)) { [void]$jobPackageIds.Add($pkgId) }
+        }
+        foreach ($needId in $wslIds) {
+            if (-not $jobPackageIds.Contains([string]$needId)) {
+                throw "payload/jobs.json missing wsl job packageId '$needId'"
+            }
+        }
+        $expectedWsl = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        foreach ($needId in $wslIds) { [void]$expectedWsl.Add([string]$needId) }
+        foreach ($job in $wslJobs) {
+            $pkgId = [string]$job.packageId
+            if ([string]::IsNullOrWhiteSpace($pkgId)) {
+                throw 'payload/jobs.json wsl job missing packageId'
+            }
+            if (-not $expectedWsl.Contains($pkgId)) {
+                throw "payload/jobs.json wsl packageId '$pkgId' not listed in expected-evidence requiredWslPackageIds"
+            }
+        }
+    }
 }
 
 if ($RequireOutputIso) {

@@ -50,6 +50,9 @@ public sealed class Win32GuestMachine : IGuestMachine
     public bool IsWslPlatformReady() =>
         OperatingSystem.IsWindows() && Win32WslPlatform.IsVirtualMachinePlatformReady();
 
+    public bool IsWslDistroRegistered(string installId) =>
+        OperatingSystem.IsWindows() && Win32WslPlatform.IsDistroRegistered(installId);
+
     public bool IsHypervisorGuest() =>
         OperatingSystem.IsWindows() && Win32HypervisorGuest.Probe();
 

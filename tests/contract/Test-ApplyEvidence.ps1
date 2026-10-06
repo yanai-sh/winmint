@@ -147,6 +147,30 @@ try {
     $acc = Get-Content -LiteralPath (Join-Path $fu 'apply-acceptance.json') -Raw
     if ($acc -notmatch '"fuPosture": true') { throw 'fuPosture true' }
     if ($acc -notmatch '"lane": "Release"') { throw 'lane Release' }
+
+    $wslFromFile = Join-Path $root 'wsl-fromfile'
+    Copy-Tree $fixture $wslFromFile
+    $exp = Get-Content -LiteralPath (Join-Path $wslFromFile 'expected-evidence.json') -Raw | ConvertFrom-Json
+    $exp.requiredWslPackageIds = @('NixOS')
+    ($exp | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $wslFromFile 'expected-evidence.json') -Encoding utf8
+    $payload = Join-Path $wslFromFile 'payload'
+    New-Item -ItemType Directory -Force -Path $payload | Out-Null
+    Set-Content -LiteralPath (Join-Path $payload 'jobs.json') -Encoding utf8 -Value @'
+{"jobs":[{"id":"wsl.NixOS","kind":"wsl","packageId":"NixOS"}]}
+'@
+    $r = Invoke-ApplyAssert $wslFromFile
+    if ($r.Code -ne 0) { throw "fromFile catalog installId must pass Gate B WSL assert: $($r.Err)" }
+
+    $wslOmitted = Join-Path $root 'wsl-omitted-evidence'
+    Copy-Tree $fixture $wslOmitted
+    $payload = Join-Path $wslOmitted 'payload'
+    New-Item -ItemType Directory -Force -Path $payload | Out-Null
+    Set-Content -LiteralPath (Join-Path $payload 'jobs.json') -Encoding utf8 -Value @'
+{"jobs":[{"id":"wsl.Ubuntu","kind":"wsl","packageId":"Ubuntu"}]}
+'@
+    $r = Invoke-ApplyAssert $wslOmitted
+    if ($r.Code -eq 0) { throw 'wsl jobs with empty requiredWslPackageIds must fail' }
+    if ($r.Err -notmatch 'requiredWslPackageIds missing or empty') { throw "wsl omitted evidence message: $($r.Err)" }
 }
 finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue

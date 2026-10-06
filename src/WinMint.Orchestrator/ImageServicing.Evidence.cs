@@ -212,12 +212,21 @@ public static partial class ImageServicing
             requiredKeys.AddRange(["drivers.deviceId", "drivers.includedCount", "drivers.excludedCount"]);
         }
 
+        List<string> wslPackageIds = [.. plan.Jobs.Jobs
+            .Where(static j => j.Kind == ProvisionJobKind.Wsl)
+            .Select(static j => j.PackageId)
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)];
+
         HashSet<string> needed =
         [
             ProvisionJobKindWire.WingetImport,
             ProvisionJobKindWire.ScoopBatch,
             ProvisionJobKindWire.ShellStamp,
             ProvisionJobKindWire.PackageAuditNative,
+            ProvisionJobKindWire.WslPlatform,
+            ProvisionJobKindWire.Wsl,
         ];
         List<string> requiredJobs = [.. plan.Jobs.Jobs
             .Select(static j => j.Kind.ToWire())
@@ -237,7 +246,8 @@ public static partial class ImageServicing
             [.. requiredKeys.Distinct(StringComparer.Ordinal)],
             requiredValues,
             [.. requiredJobs],
-            wingetIds);
+            wingetIds,
+            wslPackageIds);
         File.WriteAllBytes(
             workspace.ExpectedEvidence,
             JsonSerializer.SerializeToUtf8Bytes(expected, ServicingJsonContext.Default.ExpectedEvidenceFile));

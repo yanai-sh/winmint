@@ -172,9 +172,9 @@
       "architectures": ["amd64", "arm64"]
     },
     "FedoraLinux": {
-      "displayName": "Fedora",
+      "displayName": "Fedora 44",
       "installKind": "store",
-      "installId": "FedoraLinux",
+      "installId": "FedoraLinux-44",
       "architectures": ["amd64", "arm64"]
     },
     "archlinuxarm-wsl": {

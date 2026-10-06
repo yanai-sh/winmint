@@ -508,6 +508,22 @@ internal static partial class ProvisioningJobRunner
                 continue;
             }
 
+            if (job.Kind is ProvisionJobKind.Wsl
+                && job.WslInstallKind is not WslInstallKind.FromFile
+                && !string.IsNullOrWhiteSpace(job.PackageId)
+                && !env.Guest.IsWslDistroRegistered(job.PackageId))
+            {
+                JobsRunResult? regFail = context.RecordPackageFailure(
+                    "jobs.failed",
+                    $"Job '{job.Id}': wsl store install completed but '{job.PackageId}' is not registered.");
+                if (regFail is not null)
+                {
+                    return regFail.Value;
+                }
+
+                continue;
+            }
+
             if (job.NeedsReboot)
             {
                 return context.RequestReboot();

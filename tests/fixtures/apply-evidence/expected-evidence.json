@@ -12,5 +12,6 @@
     "policy.deviceInstaller.DisableCoInstallers": "1"
   },
   "requiredJobKinds": [],
-  "requiredWingetIds": []
+  "requiredWingetIds": [],
+  "requiredWslPackageIds": []
 }
