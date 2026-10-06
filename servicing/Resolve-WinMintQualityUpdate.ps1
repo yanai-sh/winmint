@@ -693,20 +693,14 @@ function Select-WinMintCatalogMsuUrl {
     throw 'Catalog download had no .msu/.cab payload'
 }
 
-function Get-WinMintCatalogPayload {
+# Acquire adapters: produce a staged payload path; Get-WinMintCatalogPayload saves into quality-cache.
+# Catalog = DownloadDialog + BITS; Fixture = local copy (contract miss path, no network/admin).
+function Invoke-WinMintCatalogQualityAcquire {
     param(
         [Parameter(Mandatory)] [string] $UpdateId,
-        [Parameter(Mandatory)] [string] $CacheRoot,
         [Parameter(Mandatory)] [string] $Kb,
-        [Parameter(Mandatory)] [string] $Architecture,
         [Parameter(Mandatory)] [string] $StagingDir
     )
-    $cached = Resolve-WinMintCachedQualityFile -CacheRoot $CacheRoot -Kb $Kb -Architecture $Architecture
-    if ($cached) {
-        $mb = [math]::Round((Get-Item -LiteralPath $cached).Length / 1MB)
-        Write-Host "quality-cache hit $Kb ${mb}MB $(Split-Path -Leaf $cached)"
-        return $cached
-    }
     Write-Host "quality download $Kb"
     $dialog = Invoke-WinMintCatalogDownloadDialog -UpdateId $UpdateId
     $url = Select-WinMintCatalogMsuUrl -Urls (ConvertFrom-WinMintCatalogDownloadDialog -Text $dialog) -Kb $Kb
@@ -717,6 +711,51 @@ function Get-WinMintCatalogPayload {
     }
     $tmp = Join-Path $StagingDir $leaf
     Save-WinMintCatalogPayload -Uri $url -Destination $tmp
+    return $tmp
+}
+
+function Invoke-WinMintFixtureQualityAcquire {
+    param(
+        [Parameter(Mandatory)] [string] $FixturePath,
+        [Parameter(Mandatory)] [string] $Kb,
+        [Parameter(Mandatory)] [string] $StagingDir
+    )
+    if (-not (Test-Path -LiteralPath $FixturePath -PathType Leaf)) {
+        throw "Quality fixture payload missing: $FixturePath"
+    }
+    $leaf = Split-Path -Leaf $FixturePath
+    if (-not (Test-WinMintQualityKbLeaf -Name $leaf -Kb $Kb)) {
+        throw "Fixture payload leaf is not ${Kb}: $leaf"
+    }
+    New-Item -ItemType Directory -Force -Path $StagingDir | Out-Null
+    $tmp = Join-Path $StagingDir $leaf
+    if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force }
+    Copy-Item -LiteralPath $FixturePath -Destination $tmp -Force
+    return $tmp
+}
+
+function Get-WinMintCatalogPayload {
+    param(
+        [Parameter(Mandatory)] [string] $UpdateId,
+        [Parameter(Mandatory)] [string] $CacheRoot,
+        [Parameter(Mandatory)] [string] $Kb,
+        [Parameter(Mandatory)] [string] $Architecture,
+        [Parameter(Mandatory)] [string] $StagingDir,
+        # Injectable acquire — contract tests use fixture; production leaves unset (Catalog+BITS).
+        [scriptblock] $Acquire
+    )
+    $cached = Resolve-WinMintCachedQualityFile -CacheRoot $CacheRoot -Kb $Kb -Architecture $Architecture
+    if ($cached) {
+        $mb = [math]::Round((Get-Item -LiteralPath $cached).Length / 1MB)
+        Write-Host "quality-cache hit $Kb ${mb}MB $(Split-Path -Leaf $cached)"
+        return $cached
+    }
+    if ($Acquire) {
+        $tmp = [string](& $Acquire $UpdateId $Kb $Architecture $StagingDir)
+    }
+    else {
+        $tmp = Invoke-WinMintCatalogQualityAcquire -UpdateId $UpdateId -Kb $Kb -StagingDir $StagingDir
+    }
     return (Save-WinMintQualityCacheFile -CacheRoot $CacheRoot -Kb $Kb -Architecture $Architecture -SourcePath $tmp).Path
 }
 

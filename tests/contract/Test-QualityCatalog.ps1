@@ -249,6 +249,65 @@ catch { $threw = $true }
 if (-not $threw) { throw 'Test-QualityCatalog: expected refuse writing checkpoint leaf under LCU KB' }
 Remove-Item -LiteralPath $poisonRoot -Recurse -Force
 
+# Miss path via fixture acquire — same cache layout, no DownloadDialog / BITS.
+$missRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-quality-miss-' + [guid]::NewGuid().ToString('N'))
+$missStage = Join-Path $missRoot 'staging'
+$fxSrc = Join-Path $missRoot 'fixture-src'
+New-Item -ItemType Directory -Force -Path $missStage, $fxSrc | Out-Null
+$fxMsu = Join-Path $fxSrc 'windows11.0-kb5121003-arm64_fixture.msu'
+Set-Content -LiteralPath $fxMsu -Value 'fixture-lcu' -Encoding ascii -NoNewline
+$script:acquireCalls = 0
+$acquired = Get-WinMintCatalogPayload `
+    -UpdateId '00000000-0000-0000-0000-000000000001' `
+    -CacheRoot $missRoot `
+    -Kb 'KB5121003' `
+    -Architecture 'ARM64' `
+    -StagingDir $missStage `
+    -Acquire {
+        param($UpdateId, $Kb, $Architecture, $StagingDir)
+        $script:acquireCalls++
+        Invoke-WinMintFixtureQualityAcquire -FixturePath $fxMsu -Kb $Kb -StagingDir $StagingDir
+    }
+if ($script:acquireCalls -ne 1) {
+    throw "Test-QualityCatalog: miss must call Acquire once, got $($script:acquireCalls)"
+}
+if ($acquired -notmatch '(?i)KB5121003[\\/]arm64[\\/][a-f0-9]{64}[\\/]windows11\.0-kb5121003-arm64_fixture\.msu$') {
+    throw "Test-QualityCatalog: miss must land in quality-cache layout, got $acquired"
+}
+if ((Get-Content -LiteralPath $acquired -Raw) -ne 'fixture-lcu') {
+    throw 'Test-QualityCatalog: miss cache bytes must match fixture'
+}
+$resolvedMiss = Resolve-WinMintCachedQualityFile -CacheRoot $missRoot -Kb 'KB5121003' -Architecture 'ARM64'
+if ($resolvedMiss -ne $acquired) {
+    throw "Test-QualityCatalog: post-miss Resolve must hit acquired path, got $resolvedMiss"
+}
+$hitAgain = Get-WinMintCatalogPayload `
+    -UpdateId '00000000-0000-0000-0000-000000000001' `
+    -CacheRoot $missRoot `
+    -Kb 'KB5121003' `
+    -Architecture 'ARM64' `
+    -StagingDir $missStage `
+    -Acquire {
+        param($UpdateId, $Kb, $Architecture, $StagingDir)
+        $script:acquireCalls++
+        throw 'Test-QualityCatalog: hit must not invoke Acquire'
+    }
+if ($script:acquireCalls -ne 1) {
+    throw "Test-QualityCatalog: hit must skip Acquire (calls=$script:acquireCalls)"
+}
+if ($hitAgain -ne $acquired) {
+    throw "Test-QualityCatalog: hit must return same cache path, got $hitAgain"
+}
+$wrongFx = Join-Path $fxSrc 'windows11.0-kb5043080-arm64_x.msu'
+Set-Content -LiteralPath $wrongFx -Value 'ckpt' -Encoding ascii
+$threw = $false
+try {
+    Invoke-WinMintFixtureQualityAcquire -FixturePath $wrongFx -Kb 'KB5121003' -StagingDir $missStage | Out-Null
+}
+catch { $threw = $true }
+if (-not $threw) { throw 'Test-QualityCatalog: fixture acquire must refuse wrong-KB leaf' }
+Remove-Item -LiteralPath $missRoot -Recurse -Force
+
 if (-not (Test-WinMintDownloadWindowsupdateUri -Uri $deliveryMsu)) { throw 'Test-QualityCatalog: delivery host' }
 if (Test-WinMintDownloadWindowsupdateUri -Uri 'https://catalog.update.microsoft.com/DownloadDialog.aspx') {
     throw 'Test-QualityCatalog: Catalog HTML host is not a payload CDN'
