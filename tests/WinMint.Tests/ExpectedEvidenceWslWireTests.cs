@@ -59,6 +59,9 @@ public class ExpectedEvidenceWslWireTests
                 .Select(static e => e.GetString()!)
                 .ToHashSet(StringComparer.Ordinal);
             Assert.Contains("FedoraLinux-44", wslIds);
+            Assert.True(doc.RootElement.GetProperty("packageWireHonest").GetBoolean());
+            Assert.Equal(host.Value.Artifacts.PackageWireHonest,
+                doc.RootElement.GetProperty("packageWireHonest").GetBoolean());
         }
         finally
         {

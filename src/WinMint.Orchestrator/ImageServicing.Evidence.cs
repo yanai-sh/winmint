@@ -247,7 +247,8 @@ public static partial class ImageServicing
             requiredValues,
             [.. requiredJobs],
             wingetIds,
-            wslPackageIds);
+            wslPackageIds,
+            plan.PackageWireHonest);
         File.WriteAllBytes(
             workspace.ExpectedEvidence,
             JsonSerializer.SerializeToUtf8Bytes(expected, ServicingJsonContext.Default.ExpectedEvidenceFile));

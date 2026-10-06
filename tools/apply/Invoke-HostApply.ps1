@@ -117,7 +117,7 @@ if ($AssertOnly) {
     exit 0
 }
 
-# Gate B wipe media = HostReview.IsGateB (Release ∧ packageStrict). Soft Release must not print flash guidance.
+# Soft Release rejection uses Apply evidence gate (lane ∧ packageStrict) — not full wipe-ready IsGateB.
 if ($ImageQuality -eq 'Release' -and
     -not (Test-WinMintIsGateB -Lane $ImageQuality -PackageStrict:([bool]$PackageStrict))) {
     throw 'Release Host Apply without -PackageStrict is not Gate B. Use: just primary-gate ISO=...'
@@ -233,11 +233,18 @@ if (-not $SkipApply) {
 Write-Host "Host Apply gate OK. Work=$Work lane=$assertLane"
 if ($sha) { Write-Host "outputIso.sha256=$sha" }
 if ($outIso) { Write-Host "Output ISO: $outIso" }
-if (Test-WinMintIsGateB -Lane $assertLane -PackageStrict:([bool]$PackageStrict)) {
+# Flash guidance = wipe-ready HostReview.IsGateB (incl. frozen expected-evidence.packageWireHonest).
+$wireHonest = $false
+$expectedEvidencePath = Join-Path $Work 'expected-evidence.json'
+if (Test-Path -LiteralPath $expectedEvidencePath -PathType Leaf) {
+    $expectedFlash = Get-Content -LiteralPath $expectedEvidencePath -Raw -Encoding utf8 | ConvertFrom-Json
+    $wireHonest = Get-WinMintExpectedPackageWireHonest -Expected $expectedFlash
+}
+if (Test-WinMintIsWipeReadyGateB -Lane $assertLane -PackageStrict:([bool]$PackageStrict) -PackageWireHonest:$wireHonest) {
     Write-Host "Flash only this workdir's Output ISO ($outIso). Do not flash a Test-lane workdir (.scratch/sl7-build)."
     Write-Host 'Next step (manual, destructive): write that ISO to USB and bare-metal install — not run by this harness.'
 } else {
-    Write-Host 'Test lane — not the Primary wipe ISO. Use just primary-gate for Release wipe media.'
+    Write-Host 'Not wipe-ready Gate B — do not flash. Use just primary-gate for Release+strict+honest wipe media.'
 }
 if ($runScratchHygiene) { Invoke-WinMintScratchHygiene -RepoRoot $repoRoot }
 exit 0

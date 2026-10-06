@@ -93,6 +93,11 @@ public class ServicingWorkspaceTests
             {
                 Assert.Contains(id, winget);
             }
+
+            Assert.True(doc.RootElement.GetProperty("packageWireHonest").GetBoolean());
+            Assert.Equal(
+                host.Value.Artifacts.PackageWireHonest,
+                doc.RootElement.GetProperty("packageWireHonest").GetBoolean());
         }
         finally
         {

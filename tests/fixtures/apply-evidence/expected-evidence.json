@@ -13,5 +13,6 @@
   },
   "requiredJobKinds": [],
   "requiredWingetIds": [],
-  "requiredWslPackageIds": []
+  "requiredWslPackageIds": [],
+  "packageWireHonest": true
 }

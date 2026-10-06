@@ -161,7 +161,9 @@ internal sealed record ExpectedEvidenceFile(
     [property: JsonPropertyName("requiredDigestValues")] Dictionary<string, string> RequiredDigestValues,
     [property: JsonPropertyName("requiredJobKinds")] IReadOnlyList<string> RequiredJobKinds,
     [property: JsonPropertyName("requiredWingetIds")] IReadOnlyList<string> RequiredWingetIds,
-    [property: JsonPropertyName("requiredWslPackageIds")] IReadOnlyList<string> RequiredWslPackageIds);
+    [property: JsonPropertyName("requiredWslPackageIds")] IReadOnlyList<string> RequiredWslPackageIds,
+    // Frozen HostReview package-wire honesty — wipe-ready Gate B consumes this; do not re-derive in PS.
+    [property: JsonPropertyName("packageWireHonest")] bool PackageWireHonest);
 
 internal sealed record PreparedMediaAuditFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
