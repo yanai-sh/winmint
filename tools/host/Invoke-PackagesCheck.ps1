@@ -282,7 +282,7 @@ try {
         $id = [string](Get-JsonProperty -Object $entry -Name 'id')
         $bucketValue = Get-JsonProperty -Object $entry -Name 'bucket'
         $bucket = if ($null -eq $bucketValue) { $null } else { [string]$bucketValue }
-        if ($source -notin @('winget', 'scoop')) { throw "request source is invalid: '$source'" }
+        if ($source -notin @('winget', 'scoop', 'wsl')) { throw "request source is invalid: '$source'" }
         if ([string]::IsNullOrWhiteSpace($id)) { throw 'request entry id is empty' }
         if ($source -eq 'winget' -and $null -ne $bucket) {
             throw "winget request entry '$id' must not have a bucket"
@@ -290,18 +290,22 @@ try {
         if ($source -eq 'scoop' -and [string]::IsNullOrWhiteSpace($bucket)) {
             throw "scoop request entry '$id' must have a bucket"
         }
+        if ($source -eq 'wsl' -and $null -ne $bucket) {
+            throw "wsl request entry '$id' must not have a bucket"
+        }
+
+        $method = switch ($source) {
+            'winget' { 'winget-download' }
+            'scoop' { 'scoop-manifest-download' }
+            'wsl' { 'wsl-store-allowlist' }
+        }
 
         $results.Add([pscustomobject][ordered]@{
             source    = $source
             id        = $id
             bucket    = $bucket
             succeeded = $false
-            method    = if ($source -eq 'winget') {
-                'winget-download'
-            }
-            else {
-                'scoop-manifest-download'
-            }
+            method    = $method
             error     = 'not executed'
         })
     }
@@ -333,8 +337,11 @@ try {
             if ($result.source -eq 'winget') {
                 Invoke-WingetTarget -Winget $winget -Id $result.id -Architecture $architecture
             }
-            else {
+            elseif ($result.source -eq 'scoop') {
                 Invoke-ScoopTarget -Id $result.id -Bucket $result.bucket
+            }
+            else {
+                # ponytail: catalog-authored allowlist only — no live wsl -l -o
             }
             $result.succeeded = $true
             $result.error = $null

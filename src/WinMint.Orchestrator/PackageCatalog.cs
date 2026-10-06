@@ -93,6 +93,11 @@ public sealed class PackageCatalog
         return _wslByInstallId.TryGetValue(token, out entry!);
     }
 
+    public bool TryGetWslByInstallId(string installId, out WslDistroEntry entry) =>
+        _wslByInstallId.TryGetValue(installId, out entry!);
+
+    public IReadOnlyList<string> WslProfileTokens => [.. _wslByKey.Keys];
+
     /// <summary>Resolve curated chip keys to Profile install ids grouped by package manager source.</summary>
     public Result<PackageSelection, Failure> ResolveToolKeys(IEnumerable<string> keys)
     {

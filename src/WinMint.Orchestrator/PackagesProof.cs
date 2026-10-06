@@ -76,7 +76,23 @@ public static partial class PackagesProof
                     tool.InstallId,
                     tool.ScoopBucket ?? "main"));
             }
-            // store / other: skip
+        }
+
+        foreach (string token in catalog.WslProfileTokens)
+        {
+            if (!catalog.TryGetWslByProfileToken(token, out WslDistroEntry? wsl)
+                || wsl.InstallKind is not WslInstallKind.Store)
+            {
+                continue;
+            }
+
+            if (wsl.Architectures.Count == 0
+                || !wsl.Architectures.Any(a => string.Equals(a, arch, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            list.Add(new PackagesProofEntry("wsl", wsl.InstallId, null));
         }
 
         return [.. list
@@ -240,6 +256,7 @@ public static partial class PackagesProof
     {
         "winget" => "winget-download",
         "scoop" => "scoop-manifest-download",
+        "wsl" => "wsl-store-allowlist",
         _ => throw new InvalidOperationException($"Unsupported proof source '{source}'."),
     };
 

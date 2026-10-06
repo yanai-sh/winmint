@@ -160,7 +160,8 @@ internal sealed record ExpectedEvidenceFile(
     [property: JsonPropertyName("requiredDigestKeys")] IReadOnlyList<string> RequiredDigestKeys,
     [property: JsonPropertyName("requiredDigestValues")] Dictionary<string, string> RequiredDigestValues,
     [property: JsonPropertyName("requiredJobKinds")] IReadOnlyList<string> RequiredJobKinds,
-    [property: JsonPropertyName("requiredWingetIds")] IReadOnlyList<string> RequiredWingetIds);
+    [property: JsonPropertyName("requiredWingetIds")] IReadOnlyList<string> RequiredWingetIds,
+    [property: JsonPropertyName("requiredWslPackageIds")] IReadOnlyList<string> RequiredWslPackageIds);
 
 internal sealed record PreparedMediaAuditFile(
     [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
