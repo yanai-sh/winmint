@@ -10,8 +10,6 @@ namespace WinMint.Provisioning;
 internal static class ShellDesktopLayout
 {
     public const string GuestDesktopRoot = @"C:\Windows\WinMint\desktop";
-    public const string YasbWingetId = "AmN.yasb";
-    public const string KomorebiWingetId = "LGUG2Z.komorebi";
 
     public static string DefaultThideInstallDir =>
         Path.Combine(

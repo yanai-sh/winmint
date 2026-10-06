@@ -159,8 +159,8 @@ public class ShellChromeJobTests
                 [new ProvisionJob("winget.import", ProvisionJobKind.WingetImport)],
                 importPath);
 
-            Assert.Contains(ShellChromeLayout.CursorWingetId, ids);
-            Assert.Contains(ShellChromeLayout.ZenWingetId, ids);
+            Assert.Contains(PackageIds.Cursor, ids);
+            Assert.Contains(PackageIds.ZenBrowser, ids);
             Assert.DoesNotContain("Git.Git", ids);
         }
         finally
@@ -189,8 +189,8 @@ public class ShellChromeJobTests
             [new ProvisionJob("winget.import", ProvisionJobKind.WingetImport)],
             Path.Combine(Path.GetTempPath(), "winmint-missing-import-" + Guid.NewGuid().ToString("N") + ".json"));
 
-        Assert.DoesNotContain(ShellChromeLayout.CursorWingetId, ids);
-        Assert.DoesNotContain(ShellChromeLayout.ZenWingetId, ids);
+        Assert.DoesNotContain(PackageIds.Cursor, ids);
+        Assert.DoesNotContain(PackageIds.ZenBrowser, ids);
     }
 
     [Fact]

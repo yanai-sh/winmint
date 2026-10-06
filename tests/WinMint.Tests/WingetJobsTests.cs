@@ -326,7 +326,7 @@ public class WingetJobsTests
     public void Zen_audit_paths_include_the_user_programs_install()
     {
         string expected = Path.Combine(ShellChromeLayout.ZenUserInstallDirectory(), "zen.exe");
-        Assert.Contains(expected, ProvisioningJobRunner.GuiBinaryPaths(ShellChromeLayout.ZenWingetId));
+        Assert.Contains(expected, ProvisioningJobRunner.GuiBinaryPaths(PackageIds.ZenBrowser));
     }
 
     [Fact]

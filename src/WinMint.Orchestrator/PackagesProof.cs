@@ -43,6 +43,22 @@ public static partial class PackagesProof
             }
         }
 
+        foreach (string id in new[]
+        {
+            PackageIds.Yasb,
+            PackageIds.Komorebi,
+            PackageIds.Cursor,
+            PackageIds.ZenBrowser,
+        })
+        {
+            if (!catalog.TryGetToolByInstallId(id, out PackageToolEntry? tool)
+                || tool.Source is not PackageToolSource.Winget
+                || tool.IsStub)
+            {
+                missing.Add($"packageIds:{id}");
+            }
+        }
+
         return missing;
     }
 

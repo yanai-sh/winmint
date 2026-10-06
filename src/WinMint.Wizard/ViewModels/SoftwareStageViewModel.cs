@@ -19,17 +19,14 @@ public interface ISoftwareStageViewModel
 
 public sealed partial class DesktopSelectionViewModel : ObservableObject
 {
-    internal const string WindowsTaskbar = "windows";
-    internal const string YasbTaskbar = "yasb";
-
     private readonly Action _changed;
-    [ObservableProperty] private string _taskbar = WindowsTaskbar;
+    [ObservableProperty] private string _taskbar = StationOutcomes.TaskbarWindows;
     [ObservableProperty] private bool _komorebi;
 
     internal DesktopSelectionViewModel(Action changed) => _changed = changed;
 
-    public bool IsWindowsTaskbar => string.Equals(Taskbar, WindowsTaskbar, StringComparison.Ordinal);
-    public bool IsYasbTaskbar => string.Equals(Taskbar, YasbTaskbar, StringComparison.Ordinal);
+    public bool IsWindowsTaskbar => string.Equals(Taskbar, StationOutcomes.TaskbarWindows, StringComparison.Ordinal);
+    public bool IsYasbTaskbar => string.Equals(Taskbar, StationOutcomes.TaskbarYasb, StringComparison.Ordinal);
 
     partial void OnTaskbarChanged(string value)
     {
@@ -43,8 +40,8 @@ public sealed partial class DesktopSelectionViewModel : ObservableObject
     [RelayCommand]
     private void SelectTaskbar(string? taskbar)
     {
-        if (string.Equals(taskbar, WindowsTaskbar, StringComparison.Ordinal)
-            || string.Equals(taskbar, YasbTaskbar, StringComparison.Ordinal))
+        if (string.Equals(taskbar, StationOutcomes.TaskbarWindows, StringComparison.Ordinal)
+            || string.Equals(taskbar, StationOutcomes.TaskbarYasb, StringComparison.Ordinal))
         {
             Taskbar = taskbar!;
         }
@@ -187,8 +184,8 @@ internal sealed partial class SoftwareStageViewModel : ObservableObject, ISoftwa
             seed.Value.TaskbarSurface,
             StationOutcomes.TaskbarYasb,
             StringComparison.Ordinal)
-            ? DesktopSelectionViewModel.YasbTaskbar
-            : DesktopSelectionViewModel.WindowsTaskbar;
+            ? StationOutcomes.TaskbarYasb
+            : StationOutcomes.TaskbarWindows;
         Desktop.Komorebi = seed.Value.Komorebi;
         Advanced.Winget = "";
         Advanced.Scoop = "";
