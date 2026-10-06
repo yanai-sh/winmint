@@ -71,75 +71,27 @@ public static class StationOutcomes
             return Result.Fail<StationSeed, Failure>(debloat.Error);
         }
 
-        IEnumerable<string> resolveKeys = toolChipKeys;
-        if (komorebi)
+        Result<ChipAxisResolution, Failure> resolved = ChipAxisResolve.TryResolve(
+            toolChipKeys,
+            wslTokens,
+            TaskbarWindows,
+            komorebi);
+        if (!resolved.IsOk)
         {
-            resolveKeys = resolveKeys.Concat(["komorebi", "whkd"]);
+            return Result.Fail<StationSeed, Failure>(resolved.Error);
         }
-
-        Result<PackageSelection, Failure> tools =
-            PackageCatalog.Default.ResolveToolKeys(resolveKeys);
-        if (!tools.IsOk)
-        {
-            return Result.Fail<StationSeed, Failure>(tools.Error);
-        }
-
-        Result<IReadOnlyList<string>, Failure> wsl =
-            PackageCatalog.Default.ResolveWslTokens(wslTokens);
-        if (!wsl.IsOk)
-        {
-            return Result.Fail<StationSeed, Failure>(wsl.Error);
-        }
-
-        PackageSelection packages = new(
-            tools.Value.WingetInstallIds,
-            tools.Value.ScoopInstallIds,
-            wsl.Value);
 
         return Result.Ok<StationSeed, Failure>(
             new StationSeed(
                 ToolChipKeys: toolChipKeys,
                 WslTokens: wslTokens,
-                Packages: packages,
+                Packages: resolved.Value.Packages,
                 RemoveProvisionedAppx: debloat.Value.RemoveProvisionedAppx,
                 RemoveCapabilities: debloat.Value.RemoveCapabilities,
                 DisableOptionalFeatures: debloat.Value.DisableOptionalFeatures,
                 TaskbarSurface: TaskbarWindows,
                 Komorebi: komorebi,
-                SelectionLabels: BuildLabels(TaskbarWindows, komorebi, toolChipKeys, wslTokens)));
-    }
-
-    private static List<string> BuildLabels(
-        string taskbarSurface,
-        bool komorebi,
-        IReadOnlyList<string> toolChipKeys,
-        IReadOnlyList<string> wslTokens)
-    {
-        List<string> labels =
-        [
-            string.Equals(taskbarSurface, TaskbarYasb, StringComparison.Ordinal)
-                ? "YASB + tHide"
-                : "Windows taskbar",
-        ];
-        if (komorebi)
-        {
-            labels.Add("Komorebi");
-        }
-
-        Dictionary<string, string> chipLabels = CuratedPackageChips.Browsers
-            .Concat(CuratedPackageChips.Editors)
-            .Concat(CuratedPackageChips.Wsl)
-            .ToDictionary(c => c.Key, c => c.Label, StringComparer.OrdinalIgnoreCase);
-
-        foreach (string key in toolChipKeys.Concat(wslTokens))
-        {
-            if (chipLabels.TryGetValue(key, out string? label))
-            {
-                labels.Add(label);
-            }
-        }
-
-        return labels;
+                SelectionLabels: resolved.Value.SelectionLabels));
     }
 }
 
