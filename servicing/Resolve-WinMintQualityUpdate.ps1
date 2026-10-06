@@ -336,9 +336,10 @@ function Expand-WinMintQualitySsu {
             $null = & $ApplyWim $MsuPath $Destination
         }
         else {
-            # DISM progress stays off the success stream so the only return is the SSU path.
+            # Write-Host (not Write-Output): progress must not ride the success stream —
+            # $ssuPath = Expand-WinMintQualitySsu … would capture it as the path (#120).
             $leaf = Split-Path -Leaf $MsuPath
-            Write-Output "quality expand DISM start $leaf"
+            Write-Host "quality expand DISM start $leaf"
             $proc = Start-Process -FilePath dism.exe -PassThru -NoNewWindow -ArgumentList @(
                 '/English', '/Apply-Image', "/ImageFile:`"$MsuPath`"", '/Index:1', "/ApplyDir:`"$Destination`"")
             $wait = [Diagnostics.Stopwatch]::StartNew()
@@ -346,14 +347,14 @@ function Expand-WinMintQualitySsu {
             while (-not $proc.WaitForExit(20000)) {
                 Write-WinMintHostProgress -Activity 'quality expand' -Status ("DISM $leaf $([int]$wait.Elapsed.TotalSeconds)s")
                 if ($expandTrailBeat) {
-                    Write-Output ("quality expand DISM running {0} ({1:n0}s)" -f $leaf, $wait.Elapsed.TotalSeconds)
+                    Write-Host ("quality expand DISM running {0} ({1:n0}s)" -f $leaf, $wait.Elapsed.TotalSeconds)
                 }
                 $expandTrailBeat = -not $expandTrailBeat
             }
             if ($proc.ExitCode -ne 0) {
                 throw "DISM /Apply-Image failed ($($proc.ExitCode)) extracting WIM-MSU: $MsuPath"
             }
-            Write-Output "quality expand DISM ok $leaf"
+            Write-Host "quality expand DISM ok $leaf"
         }
     }
     else {

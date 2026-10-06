@@ -367,6 +367,10 @@ try {
     if ([string]::IsNullOrWhiteSpace($ssuFromWim)) { throw 'Test-QualityCatalog: WIM-MSU SSU path empty' }
     if (-not (Test-Path -LiteralPath $ssuFromWim)) { throw 'Test-QualityCatalog: WIM-MSU SSU path missing' }
     $null = Split-Path -Leaf $ssuFromWim  # must not throw Path empty (regression)
+    # Production DISM branch (no -ApplyWim) must not Write-Output progress — assignment capture (#120).
+    if ((Get-Command Expand-WinMintQualitySsu).Definition -match 'Write-Output\s+.*quality expand DISM') {
+        throw 'Test-QualityCatalog: quality expand DISM progress must not Write-Output (pollutes $ssuPath)'
+    }
 
     $cabOut = Join-Path $msuProbe 'cab-out'
     $script:expandedCab = $false
