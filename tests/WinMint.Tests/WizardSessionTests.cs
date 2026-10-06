@@ -153,12 +153,12 @@ public class WizardSessionTests
         software.Chips.Editors.Single(chip => chip.Id == "cursor").IsSelected = true;
         software.Chips.Wsl.Single(chip => chip.Id == "FedoraLinux").IsSelected = true;
 
-        Result<PackageSelection, Failure> selection = software.ResolvePackages();
+        Result<ChipAxisResolution, Failure> resolved = ResolveSoftwareStage(software);
 
-        Assert.True(selection.IsOk);
-        Assert.Contains("Zen-Team.Zen-Browser", selection.Value.WingetInstallIds);
-        Assert.Contains("Anysphere.Cursor", selection.Value.WingetInstallIds);
-        Assert.Contains("FedoraLinux", selection.Value.WslProfileTokens);
+        Assert.True(resolved.IsOk);
+        Assert.Contains("Zen-Team.Zen-Browser", resolved.Value.Packages.WingetInstallIds);
+        Assert.Contains("Anysphere.Cursor", resolved.Value.Packages.WingetInstallIds);
+        Assert.Contains("FedoraLinux", resolved.Value.Packages.WslProfileTokens);
     }
 
     [Fact]
@@ -169,15 +169,15 @@ public class WizardSessionTests
         software.Desktop.Komorebi = true;
         software.ApplyCuratedDefaults();
 
-        Result<PackageSelection, Failure> selection = software.ResolvePackages();
-        Assert.True(selection.IsOk);
+        Result<ChipAxisResolution, Failure> resolved = ResolveSoftwareStage(software);
+        Assert.True(resolved.IsOk);
         Assert.True(software.Desktop.IsWindowsTaskbar);
         Assert.False(software.Desktop.Komorebi);
         Assert.Equal(StationOutcomes.Comfort, software.Outcomes.Value);
-        Assert.Contains("Anysphere.Cursor", selection.Value.WingetInstallIds);
-        Assert.Contains("Zen-Team.Zen-Browser", selection.Value.WingetInstallIds);
-        Assert.Equal(["FedoraLinux"], selection.Value.WslProfileTokens);
-        Assert.DoesNotContain("AmN.yasb", selection.Value.WingetInstallIds);
+        Assert.Contains("Anysphere.Cursor", resolved.Value.Packages.WingetInstallIds);
+        Assert.Contains("Zen-Team.Zen-Browser", resolved.Value.Packages.WingetInstallIds);
+        Assert.Equal(["FedoraLinux"], resolved.Value.Packages.WslProfileTokens);
+        Assert.DoesNotContain("AmN.yasb", resolved.Value.Packages.WingetInstallIds);
     }
 
     [Fact]
@@ -186,15 +186,15 @@ public class WizardSessionTests
         SoftwareStageViewModel software = new(() => { }, () => Task.CompletedTask);
         software.ApplyStationOutcome(StationOutcomes.Power);
 
-        Result<PackageSelection, Failure> selection = software.ResolvePackages();
-        Assert.True(selection.IsOk);
+        Result<ChipAxisResolution, Failure> resolved = ResolveSoftwareStage(software);
+        Assert.True(resolved.IsOk);
         Assert.Equal(StationOutcomes.Power, software.Outcomes.Value);
         Assert.True(software.Desktop.Komorebi);
-        Assert.Contains("LGUG2Z.komorebi", selection.Value.WingetInstallIds);
-        Assert.Contains("LGUG2Z.whkd", selection.Value.WingetInstallIds);
-        Assert.Contains("Neovim", software.SelectedLabels());
-        Assert.Contains("VS Code", software.SelectedLabels());
-        Assert.Contains("Komorebi", software.SelectedLabels());
+        Assert.Contains("LGUG2Z.komorebi", resolved.Value.Packages.WingetInstallIds);
+        Assert.Contains("LGUG2Z.whkd", resolved.Value.Packages.WingetInstallIds);
+        Assert.Contains("Neovim", resolved.Value.SelectionLabels);
+        Assert.Contains("VS Code", resolved.Value.SelectionLabels);
+        Assert.Contains("Komorebi", resolved.Value.SelectionLabels);
     }
 
     [Fact]
@@ -204,11 +204,11 @@ public class WizardSessionTests
         software.ApplyCuratedDefaults();
         software.ApplyStationOutcome(StationOutcomes.Minimal);
 
-        Result<PackageSelection, Failure> selection = software.ResolvePackages();
-        Assert.True(selection.IsOk);
+        Result<ChipAxisResolution, Failure> resolved = ResolveSoftwareStage(software);
+        Assert.True(resolved.IsOk);
         Assert.Equal(StationOutcomes.Minimal, software.Outcomes.Value);
-        Assert.Empty(selection.Value.WingetInstallIds);
-        Assert.Empty(selection.Value.WslProfileTokens);
+        Assert.Empty(resolved.Value.Packages.WingetInstallIds);
+        Assert.Empty(resolved.Value.Packages.WslProfileTokens);
         Assert.False(software.Desktop.Komorebi);
     }
 
@@ -217,13 +217,14 @@ public class WizardSessionTests
     {
         SoftwareStageViewModel software = new(() => { }, () => Task.CompletedTask);
 
-        Result<PackageSelection, Failure> selection = software.ResolvePackages();
+        Result<ChipAxisResolution, Failure> resolved = ResolveSoftwareStage(software);
 
+        Assert.True(resolved.IsOk);
         Assert.True(software.Desktop.IsWindowsTaskbar);
         Assert.False(software.Desktop.Komorebi);
-        Assert.Empty(selection.Value.WingetInstallIds);
-        Assert.Contains("Windows taskbar", software.SelectedLabels());
-        Assert.DoesNotContain("Nilesoft Shell (included)", software.SelectedLabels());
+        Assert.Empty(resolved.Value.Packages.WingetInstallIds);
+        Assert.Contains("Windows taskbar", resolved.Value.SelectionLabels);
+        Assert.DoesNotContain("Nilesoft Shell (included)", resolved.Value.SelectionLabels);
     }
 
     [Fact]
@@ -234,16 +235,26 @@ public class WizardSessionTests
         software.Desktop.Komorebi = true;
         software.Advanced.Winget = "AmN.yasb";
 
-        Result<PackageSelection, Failure> selection = software.ResolvePackages();
+        Result<ChipAxisResolution, Failure> resolved = ResolveSoftwareStage(software);
 
+        Assert.True(resolved.IsOk);
         Assert.True(software.Desktop.IsYasbTaskbar);
-        Assert.Contains("AmN.yasb", selection.Value.WingetInstallIds);
-        Assert.Contains("LGUG2Z.komorebi", selection.Value.WingetInstallIds);
-        Assert.Contains("LGUG2Z.whkd", selection.Value.WingetInstallIds);
-        Assert.Equal(selection.Value.WingetInstallIds.Count, selection.Value.WingetInstallIds.Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        Assert.Contains("YASB + tHide", software.SelectedLabels());
-        Assert.Contains("Komorebi", software.SelectedLabels());
+        Assert.Contains("AmN.yasb", resolved.Value.Packages.WingetInstallIds);
+        Assert.Contains("LGUG2Z.komorebi", resolved.Value.Packages.WingetInstallIds);
+        Assert.Contains("LGUG2Z.whkd", resolved.Value.Packages.WingetInstallIds);
+        Assert.Equal(
+            resolved.Value.Packages.WingetInstallIds.Count,
+            resolved.Value.Packages.WingetInstallIds.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Contains("YASB + tHide", resolved.Value.SelectionLabels);
+        Assert.Contains("Komorebi", resolved.Value.SelectionLabels);
     }
+
+    private static Result<ChipAxisResolution, Failure> ResolveSoftwareStage(SoftwareStageViewModel software) =>
+        ChipAxisResolve.TryResolve(
+            software.SelectedToolChipKeys(),
+            software.SelectedWslTokens(),
+            software.TaskbarSurfaceForCompile,
+            software.Desktop.Komorebi);
 
     private static Profile Profile() =>
         new(

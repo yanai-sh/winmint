@@ -595,10 +595,14 @@ public sealed partial class WizardViewModel :
     // ponytail: thin adapter over WizardDraftCompile for InternalsVisibleTo smoke
     internal Result<WizardDraft, Failure> BuildDraft()
     {
-        Result<PackageSelection, Failure> packagesResult = _software.ResolvePackages();
-        if (!packagesResult.IsOk)
+        Result<ChipAxisResolution, Failure> axis = ChipAxisResolve.TryResolve(
+            _software.SelectedToolChipKeys(),
+            _software.SelectedWslTokens(),
+            _software.TaskbarSurfaceForCompile,
+            _software.Desktop.Komorebi);
+        if (!axis.IsOk)
         {
-            return Result.Fail<WizardDraft, Failure>(packagesResult.Error);
+            return Result.Fail<WizardDraft, Failure>(axis.Error);
         }
 
         return WizardDraftCompile.TryCompile(
@@ -612,13 +616,13 @@ public sealed partial class WizardViewModel :
                 TimeZoneId: _account.TimeZone,
                 LocationServices: _account.LocationServices,
                 StationOutcome: _software.Outcomes.Value,
-                Packages: packagesResult.Value,
+                Packages: axis.Value.Packages,
                 AdvancedWinget: _software.Advanced.Winget,
                 AdvancedScoop: _software.Advanced.Scoop,
                 AdvancedWsl: _software.Advanced.Wsl,
                 SourceIsoPath: _source.SourceIsoPath,
                 WimIndex: _source.WimIndex,
-                SelectionLabels: [.. _software.SelectedLabels()]));
+                SelectionLabels: [.. axis.Value.SelectionLabels]));
     }
 
     private void InvalidatePresentation()

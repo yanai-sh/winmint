@@ -195,47 +195,13 @@ internal sealed partial class SoftwareStageViewModel : ObservableObject, ISoftwa
         Advanced.Wsl = "";
     }
 
-    internal Result<PackageSelection, Failure> ResolvePackages()
-    {
-        PackageCatalog catalog = PackageCatalog.Default;
-        IEnumerable<string> toolKeys = SelectedIds(Chips.Browsers)
-            .Concat(SelectedIds(Chips.Editors));
-        if (Desktop.IsYasbTaskbar)
-        {
-            toolKeys = toolKeys.Concat(["yasb"]);
-        }
-        if (Desktop.Komorebi)
-        {
-            toolKeys = toolKeys.Concat(["komorebi", "whkd"]);
-        }
-        toolKeys = toolKeys
-            .Where(CuratedPackageChips.IsPackageTool);
-        Result<PackageSelection, Failure> tools = catalog.ResolveToolKeys(toolKeys);
-        if (!tools.IsOk)
-        {
-            return tools;
-        }
+    internal IReadOnlyList<string> SelectedToolChipKeys() =>
+        [.. SelectedIds(Chips.Browsers).Concat(SelectedIds(Chips.Editors))];
 
-        Result<IReadOnlyList<string>, Failure> wsl = catalog.ResolveWslTokens(SelectedIds(Chips.Wsl));
-        return wsl.IsOk
-            ? Result.Ok<PackageSelection, Failure>(
-                new PackageSelection(tools.Value.WingetInstallIds, tools.Value.ScoopInstallIds, wsl.Value))
-            : Result.Fail<PackageSelection, Failure>(wsl.Error);
-    }
+    internal IReadOnlyList<string> SelectedWslTokens() => [.. SelectedIds(Chips.Wsl)];
 
-    internal IEnumerable<string> SelectedLabels()
-    {
-        yield return Desktop.IsYasbTaskbar ? "YASB + tHide" : "Windows taskbar";
-        if (Desktop.Komorebi)
-        {
-            yield return "Komorebi";
-        }
-
-        foreach (ChipItem chip in Chips.All.Where(static chip => chip.IsEnabled && chip.IsSelected))
-        {
-            yield return chip.Label;
-        }
-    }
+    internal string TaskbarSurfaceForCompile =>
+        Desktop.IsYasbTaskbar ? StationOutcomes.TaskbarYasb : StationOutcomes.TaskbarWindows;
 
     private static IEnumerable<string> SelectedIds(IEnumerable<ChipItem> chips) =>
         chips.Where(static chip => chip.IsEnabled && chip.IsSelected).Select(static chip => chip.Id);
