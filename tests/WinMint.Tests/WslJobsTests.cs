@@ -231,6 +231,32 @@ public class WslJobsTests
         Assert.Contains("not registered", result.FinalStatus.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Shell_wsl_store_install_omitted_kind_exit_0_without_registration_fails()
+    {
+        RecordingProcessHost processes = new() { ExitCode = 0 };
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs:
+            [
+                new ProvisionJob(
+                    "wsl.FedoraLinux-44",
+                    ProvisionJobKind.Wsl,
+                    PackageId: "FedoraLinux-44"),
+            ]),
+            Env(
+                processes,
+                evidence,
+                suppressWslOobe: static () => { },
+                isWslDistroRegistered: static _ => false),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.failed", result.FinalStatus.Code);
+        Assert.Contains("not registered", result.FinalStatus.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("Ubuntu\r\n* FedoraLinux-44\r\n", "FedoraLinux-44", true)]
     [InlineData("Ubuntu\r\n", "FedoraLinux-44", false)]

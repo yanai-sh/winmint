@@ -509,7 +509,7 @@ internal static partial class ProvisioningJobRunner
             }
 
             if (job.Kind is ProvisionJobKind.Wsl
-                && job.WslInstallKind is WslInstallKind.Store
+                && job.WslInstallKind is not WslInstallKind.FromFile
                 && !string.IsNullOrWhiteSpace(job.PackageId)
                 && !env.Guest.IsWslDistroRegistered(job.PackageId))
             {
