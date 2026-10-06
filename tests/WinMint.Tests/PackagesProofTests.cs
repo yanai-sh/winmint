@@ -255,12 +255,23 @@ public class PackagesProofTests
         Assert.Equal(
             ["scoop", "winget"],
             ok.Value.Entries!.Select(entry => entry!.Source));
+        Assert.Equal(
+            ["native", "fallback"],
+            ok.Value.Entries!.Select(entry => entry!.Resolution));
 
         (outcome.Results![0], outcome.Results[1]) = (outcome.Results[1], outcome.Results[0]);
         Assert.False(PackagesProof.Reconcile(request, outcome, 0).IsOk);
 
         outcome = SuccessfulOutcome();
         outcome.Results![0]!.Method = "winget-download";
+        Assert.False(PackagesProof.Reconcile(request, outcome, 0).IsOk);
+
+        outcome = SuccessfulOutcome();
+        outcome.Results![0]!.Resolution = null;
+        Assert.False(PackagesProof.Reconcile(request, outcome, 0).IsOk);
+
+        outcome = SuccessfulOutcome();
+        outcome.Results![0]!.Resolution = "allowlist";
         Assert.False(PackagesProof.Reconcile(request, outcome, 0).IsOk);
 
         outcome = SuccessfulOutcome();
@@ -511,6 +522,7 @@ public class PackagesProofTests
                 Bucket = "extras",
                 Succeeded = true,
                 Method = "scoop-manifest-download",
+                Resolution = "native",
             },
             new PackagesCheckResultFile
             {
@@ -518,6 +530,7 @@ public class PackagesProofTests
                 Id = "A.A",
                 Succeeded = true,
                 Method = "winget-download",
+                Resolution = "fallback",
             },
         ],
     };
@@ -543,7 +556,7 @@ public class PackagesProofTests
               "provenAtUtc": {{provenAtJson}},
               "host": {{hostJson}},
               "entries": [
-                {"source":"winget","id":"A.A","method":"winget-download"}
+                {"source":"winget","id":"A.A","method":"winget-download","resolution":"native"}
               ]
             }
             """);

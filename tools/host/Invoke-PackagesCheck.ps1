@@ -109,6 +109,7 @@ function Invoke-WingetTarget {
     $downloadDirectory = Join-Path ([System.IO.Path]::GetTempPath()) (
         'winmint-winget-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
+    $resolution = 'native'
     try {
         [string[]] $arguments = @(
             'download', '--id', $Id, '--exact',
@@ -138,6 +139,7 @@ function Invoke-WingetTarget {
                 -Label "winget fallback download for '$Id'"
             $output = $completed.Output
             $exitCode = $completed.ExitCode
+            $resolution = 'fallback'
         }
 
         if ($exitCode -ne 0) {
@@ -149,6 +151,8 @@ function Invoke-WingetTarget {
         if ($files.Count -eq 0 -or ($files | Measure-Object -Property Length -Sum).Sum -le 0) {
             throw 'winget download produced no files'
         }
+
+        return $resolution
     }
     finally {
         Remove-Item -LiteralPath $downloadDirectory -Recurse -Force -ErrorAction SilentlyContinue
@@ -178,17 +182,24 @@ function Invoke-ScoopTarget {
     }
     $architecture = Get-JsonProperty -Object $manifest -Name 'architecture'
     $url = $null
+    $resolution = $null
     if ($null -ne $architecture) {
         foreach ($name in @('arm64', 'aarch64')) {
             $node = Get-JsonProperty -Object $architecture -Name $name
             if ($null -ne $node) {
                 $url = Get-FirstUrl (Get-JsonProperty -Object $node -Name 'url')
-                if (-not [string]::IsNullOrWhiteSpace($url)) { break }
+                if (-not [string]::IsNullOrWhiteSpace($url)) {
+                    $resolution = 'native'
+                    break
+                }
             }
         }
     }
-    else {
+    if ([string]::IsNullOrWhiteSpace($url)) {
         $url = Get-FirstUrl (Get-JsonProperty -Object $manifest -Name 'url')
+        if (-not [string]::IsNullOrWhiteSpace($url)) {
+            $resolution = 'fallback'
+        }
     }
 
     if ([string]::IsNullOrWhiteSpace($url)) {
@@ -214,6 +225,8 @@ function Invoke-ScoopTarget {
             (Get-Item -LiteralPath $destination).Length -le 0) {
             throw 'scoop archive download was empty'
         }
+
+        return $resolution
     }
     finally {
         Remove-Item -LiteralPath $downloadDirectory -Recurse -Force -ErrorAction SilentlyContinue
@@ -301,12 +314,13 @@ try {
         }
 
         $results.Add([pscustomobject][ordered]@{
-            source    = $source
-            id        = $id
-            bucket    = $bucket
-            succeeded = $false
-            method    = $method
-            error     = 'not executed'
+            source     = $source
+            id         = $id
+            bucket     = $bucket
+            succeeded  = $false
+            method     = $method
+            resolution = $null
+            error      = 'not executed'
         })
     }
 
@@ -334,7 +348,7 @@ try {
     for ($i = 0; $i -lt $entries.Count; $i++) {
         $result = $results[$i]
         try {
-            if ($result.source -eq 'winget') {
+            $resolution = if ($result.source -eq 'winget') {
                 Invoke-WingetTarget -Winget $winget -Id $result.id -Architecture $architecture
             }
             elseif ($result.source -eq 'scoop') {
@@ -342,10 +356,12 @@ try {
             }
             else {
                 # ponytail: catalog-authored allowlist only — no live wsl -l -o
+                'allowlist'
             }
             $result.succeeded = $true
+            $result.resolution = $resolution
             $result.error = $null
-            Write-Output "ok $($result.source):$($result.id)"
+            Write-Output "ok $($result.source):$($result.id) ($resolution)"
         }
         catch {
             $result.error = $_.Exception.Message

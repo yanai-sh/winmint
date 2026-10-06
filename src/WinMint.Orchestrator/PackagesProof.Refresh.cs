@@ -333,12 +333,19 @@ public static partial class PackagesProof
                     $"Successful outcome result {actual.Source}:{actual.Id} must not contain an error.");
             }
 
+            if (!IsAllowedResolution(expected.Source!, actual.Resolution))
+            {
+                return ReconcileFailure(
+                    $"Outcome result {i} resolution must be {AllowedResolutions(expected.Source!)}.");
+            }
+
             proofEntries.Add(new PackagesProofEntryFile
             {
                 Source = expected.Source,
                 Id = expected.Id,
                 Bucket = expected.Bucket,
                 Method = actual.Method,
+                Resolution = actual.Resolution,
             });
         }
 
@@ -618,6 +625,9 @@ internal sealed class PackagesCheckResultFile : PackagesCheckEntryFile
 
     [JsonPropertyName("method")]
     public string? Method { get; set; }
+
+    [JsonPropertyName("resolution")]
+    public string? Resolution { get; set; }
 
     [JsonPropertyName("error")]
     public string? Error { get; set; }
