@@ -330,27 +330,6 @@ public static partial class BuildPlan
             .Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 
-    private static Failure? ValidateNeedsRebootSubset(
-        IReadOnlyList<string> packages,
-        IReadOnlyList<string> needsReboot,
-        string code,
-        string needsName,
-        string packagesName)
-    {
-        HashSet<string> set = new(packages, StringComparer.OrdinalIgnoreCase);
-        foreach (string id in needsReboot)
-        {
-            if (!set.Contains(id))
-            {
-                return new Failure(
-                    code,
-                    $"{needsName} id '{id}' is not in {packagesName}.");
-            }
-        }
-
-        return null;
-    }
-
     /// <summary>FirstLogon always needs outbound network (product-constant MinGit + Nilesoft winget). Not authored in Profile JSON.</summary>
     public static bool PlanRequiresNetwork() => true;
 
@@ -543,7 +522,11 @@ public static partial class BuildPlan
             options.PackageStrict,
             braveSelected,
             drivers,
-            ProductPosture.ComposeDefaultUserRows());
+            ProductPosture.ComposeDefaultUserRows(),
+            packageSlice.EffectiveWinget,
+            packageSlice.EffectiveScoop,
+            packageSlice.EffectiveWsl,
+            packageSlice.PackageWireHonest);
 
         return Result.Ok<BuildArtifacts, Failure>(artifacts);
     }
