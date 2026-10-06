@@ -1,5 +1,3 @@
-using WinMint.Contracts;
-
 namespace WinMint.Orchestrator;
 
 /// <summary>
@@ -18,44 +16,34 @@ public static class WizardDraftCompile
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Packages);
 
-        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(request.StationOutcome);
-        if (!seed.IsOk)
+        Result<DmaProfile, Failure> dma = ProfileDraft.TryParseDma(
+            request.DmaEnabled,
+            request.Locale,
+            request.GeoId,
+            request.TimeZoneId,
+            request.LocationServices);
+        if (!dma.IsOk)
         {
-            return Result.Fail<WizardDraft, Failure>(seed.Error);
+            return Result.Fail<WizardDraft, Failure>(dma.Error);
         }
 
-        if (!int.TryParse(request.GeoId.Trim(), out int geoId))
-        {
-            return Result.Fail<WizardDraft, Failure>(
-                new Failure("dma.settle.geoId", "must be an integer."));
-        }
+        AccountProfile account = new(
+            request.Username.Trim(),
+            request.Password,
+            request.RequireWifi);
 
-        PackageSelection packages = request.Packages;
-        Profile profile = new(
-            new AccountProfile(
-                request.Username.Trim(),
-                request.Password,
-                request.RequireWifi),
-            new DmaProfile(
-                request.DmaEnabled,
-                new DmaSettleTarget(
-                    request.Locale.Trim(),
-                    geoId,
-                    request.TimeZoneId.Trim(),
-                    request.LocationServices)),
-            DebloatMode.Online,
-            seed.Value.RemoveProvisionedAppx,
-            IdList.FromMultiline(
-                MergeChipAndAdvanced(packages.WingetInstallIds, request.AdvancedWinget)),
-            [],
-            IdList.FromMultiline(
-                MergeChipAndAdvanced(packages.ScoopInstallIds, request.AdvancedScoop)),
-            [],
-            IdList.FromMultiline(
-                MergeChipAndAdvanced(packages.WslProfileTokens, request.AdvancedWsl)),
-            [],
-            seed.Value.RemoveCapabilities,
-            seed.Value.DisableOptionalFeatures);
+        Result<Profile, Failure> profile = ProfileDraft.TryBuild(
+            request.StationOutcome,
+            account,
+            dma.Value,
+            request.Packages,
+            request.AdvancedWinget,
+            request.AdvancedScoop,
+            request.AdvancedWsl);
+        if (!profile.IsOk)
+        {
+            return Result.Fail<WizardDraft, Failure>(profile.Error);
+        }
 
         HostComposeOptions options = new(
             request.SourceIsoPath ?? "",
@@ -65,21 +53,7 @@ public static class WizardDraftCompile
             PackageStrict: PackageStrictOverride.FromLane,
             AuthoredSelectionLabels: [.. request.SelectionLabels]);
 
-        return Result.Ok<WizardDraft, Failure>(new WizardDraft(profile, options));
-    }
-
-    private static string MergeChipAndAdvanced(
-        IEnumerable<string> selectedChipIds,
-        string? advancedMultiline)
-    {
-        IReadOnlyList<string> advanced = IdList.FromMultiline(advancedMultiline);
-        return string.Join(
-            Environment.NewLine,
-            selectedChipIds
-                .Concat(advanced)
-                .Where(static id => !string.IsNullOrWhiteSpace(id))
-                .Select(static id => id.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase));
+        return Result.Ok<WizardDraft, Failure>(new WizardDraft(profile.Value, options));
     }
 }
 

@@ -46,12 +46,6 @@ public static class CuratedDefaults
                 new Failure("account.password.required", "Curated bootstrap requires a non-empty password."));
         }
 
-        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(StationOutcomes.Comfort);
-        if (!seed.IsOk)
-        {
-            return Result.Fail<Profile, Failure>(seed.Error);
-        }
-
         bool usePath = !string.IsNullOrWhiteSpace(passwordPath);
         AccountProfile account = new(
             BootstrapUsername,
@@ -59,21 +53,19 @@ public static class CuratedDefaults
             requireWifiDuringOobe,
             usePath ? passwordPath!.Trim() : null);
 
-        StationSeed software = seed.Value;
-        return Result.Ok<Profile, Failure>(
-            new Profile(
-                account,
-                new DmaProfile(Enabled: true, settle),
-                DebloatMode.Online,
-                software.RemoveProvisionedAppx,
-                software.Packages.WingetInstallIds,
-                [],
-                software.Packages.ScoopInstallIds,
-                [],
-                software.Packages.WslProfileTokens,
-                [],
-                software.RemoveCapabilities,
-                software.DisableOptionalFeatures));
+        DmaProfile dma = new(Enabled: true, settle);
+
+        Result<StationSeed, Failure> seed = StationOutcomes.TrySeed(StationOutcomes.Comfort);
+        if (!seed.IsOk)
+        {
+            return Result.Fail<Profile, Failure>(seed.Error);
+        }
+
+        return ProfileDraft.TryBuild(
+            StationOutcomes.Comfort,
+            account,
+            dma,
+            seed.Value.Packages);
     }
 
     /// <summary>Write curated Profile + bootstrap password file for CLI recipe parity.</summary>
