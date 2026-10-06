@@ -35,7 +35,7 @@ if ($plan -notmatch "updated=.*`r?`n.*stage=.*`r?`n.*log=") { throw 'apply-statu
 if ($plan -match "Resolve-KernelScript.*Write-WinMintHostProgress") { throw 'helper must not be an opcode kernel' }
 
 $quality = Get-Content -LiteralPath (Join-Path $repo 'servicing/Add-QualityUpdates.ps1') -Raw -Encoding utf8
-if ($quality -notmatch 'Catalog search start') { throw 'AddQualityUpdates must announce Catalog search' }
+if ($quality -notmatch 'quality package-set start') { throw 'AddQualityUpdates must announce package-set discovery' }
 if ($quality -notmatch 'Catalog BITS start') { throw 'AddQualityUpdates must announce BITS' }
 if ($quality -notmatch 'quality hash start') { throw 'AddQualityUpdates must announce hash' }
 if ($quality -notmatch 'quality expand start') { throw 'AddQualityUpdates must announce expand' }
@@ -47,14 +47,14 @@ $heartbeat = Get-WinMintHeartbeatSha256 -Path $hashSample
 $expectedSha = (Get-FileHash -LiteralPath $hashSample -Algorithm SHA256).Hash.ToLowerInvariant()
 Remove-Item -LiteralPath $hashSample -Force
 if ($heartbeat -ne $expectedSha) { throw "heartbeat sha256 $heartbeat != $expectedSha" }
-$searchAt = $quality.IndexOf('Catalog search start')
-$resolvedAt = $quality.IndexOf('$resolved = Invoke-WinMintQualityCatalogResolve')
+$searchAt = $quality.IndexOf('quality package-set start')
+$resolvedAt = $quality.IndexOf('$set = Get-WinMintQualityPackageSet')
 $bitsAt = $quality.IndexOf('Catalog BITS start')
 $lcuAt = $quality.IndexOf('$lcuPath = Get-WinMintCatalogPayload')
-if (-not ($searchAt -ge 0 -and $searchAt -lt $resolvedAt)) { throw 'Catalog search start must not live inside the $resolved assignment' }
+if (-not ($searchAt -ge 0 -and $searchAt -lt $resolvedAt)) { throw 'quality package-set start must not live inside the $set assignment' }
 if (-not ($bitsAt -ge 0 -and $bitsAt -lt $lcuAt)) { throw 'Catalog BITS start must not live inside the $lcuPath assignment' }
 foreach ($fn in [regex]::Matches($quality, '(?ms)^function\s+\S+.*?^}')) {
-    if ($fn.Value -match 'Catalog search start') { throw 'Catalog search start must not live inside a function' }
+    if ($fn.Value -match 'quality package-set start') { throw 'quality package-set start must not live inside a function' }
     if ($fn.Value -match 'Catalog BITS start') { throw 'Catalog BITS start must not live inside a function' }
 }
 

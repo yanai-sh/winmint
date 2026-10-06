@@ -520,5 +520,16 @@ if ($null -ne $setSkip.Setup -or $null -ne $setSkip.SafeOs) {
     throw 'Test-QualityCatalog: skipped package-set must not discover DU members'
 }
 
+$addSrc = Get-Content -LiteralPath (Join-Path $repo 'servicing\Add-QualityUpdates.ps1') -Raw
+if ($addSrc -notmatch 'Get-WinMintQualityPackageSet') {
+    throw 'Add-QualityUpdates must call Get-WinMintQualityPackageSet'
+}
+if ($addSrc -match 'Invoke-WinMintCatalogSearchHtml') {
+    throw 'Add-QualityUpdates must not call Invoke-WinMintCatalogSearchHtml (package-set owns discovery)'
+}
+if ($addSrc -match 'ConvertFrom-WinMintCatalogSearchHtml') {
+    throw 'Add-QualityUpdates must not call ConvertFrom-WinMintCatalogSearchHtml (package-set owns discovery)'
+}
+
 Write-Output 'Test-QualityCatalog ok'
 exit 0

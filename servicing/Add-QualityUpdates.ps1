@@ -69,37 +69,37 @@ if (-not [int]::TryParse([string]$snap.Build, [ref]$imageUbr)) {
     throw "WIM ServicePack Build is not an integer UBR: $($snap.Build)"
 }
 Write-Output "AddQualityUpdates start Version=$($snap.Version) UBR=$imageUbr"
-Write-Output "Catalog search start Version=$($snap.Version) UBR=$imageUbr"
+Write-Output "quality package-set start Version=$($snap.Version) UBR=$imageUbr"
 
-$resolved = Invoke-WinMintQualityCatalogResolve `
+$set = Get-WinMintQualityPackageSet `
     -Version ([string]$snap.Version) `
     -Architecture ([string]$snap.Architecture) `
     -ImageUbr $imageUbr
 
 $skipped = [pscustomobject]@{
     Skipped   = $true
-    Kb        = $resolved.Kb
+    Kb        = $set.Kb
     UbrBefore = [string]$imageUbr
     UbrAfter  = [string]$imageUbr
     Sha256    = ''
 }
 
-if ($resolved.Skipped) {
+if ($set.Skipped) {
     Write-WinMintQualityPackageLeaf -PackageDir $QualityPackageDir -Kind boot -Leaf @()
     Write-WinMintQualityPackageLeaf -PackageDir $QualityPackageDir -Kind winre -Leaf @()
     Write-QualityEvidence -State $skipped
-    Write-Output "AddQualityUpdates skipped (image UBR $imageUbr >= Catalog $($resolved.Kb) $($resolved.PackageUbr))"
+    Write-Output "AddQualityUpdates skipped (image UBR $imageUbr >= Catalog $($set.Kb) $($set.PackageUbr))"
     exit 0
 }
 
 $staging = Join-Path $WorkDirectory 'quality-staging'
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
-    Write-Output "Catalog BITS start $($resolved.Kb)"
-    $lcuPath = Get-WinMintCatalogPayload -UpdateId $resolved.UpdateId -CacheRoot $QualityCacheRoot `
-        -Kb $resolved.Kb -Architecture 'ARM64' -StagingDir $staging
-    if (-not (Test-WinMintQualityKbLeaf -Name (Split-Path -Leaf $lcuPath) -Kb $resolved.Kb)) {
-        throw "Combined LCU payload leaf is not $($resolved.Kb): $lcuPath"
+    Write-Output "Catalog BITS start $($set.Kb)"
+    $lcuPath = Get-WinMintCatalogPayload -UpdateId $set.UpdateId -CacheRoot $QualityCacheRoot `
+        -Kb $set.Kb -Architecture $set.Architecture -StagingDir $staging
+    if (-not (Test-WinMintQualityKbLeaf -Name (Split-Path -Leaf $lcuPath) -Kb $set.Kb)) {
+        throw "Combined LCU payload leaf is not $($set.Kb): $lcuPath"
     }
     $lcuLeaf = Split-Path -Leaf $lcuPath
     $lcuMb = [math]::Round((Get-Item -LiteralPath $lcuPath).Length / 1MB)
@@ -121,38 +121,26 @@ try {
     }
 
     $checkpointLeaves = [System.Collections.Generic.List[string]]::new()
-    foreach ($ckb in @(ConvertFrom-WinMintCatalogCheckpointKb -Text $resolved.DetailsHtml -TargetKb $resolved.Kb)) {
-        Write-Output "quality checkpoint $ckb"
-        $ckHtml = Invoke-WinMintCatalogSearchHtml -Query "$ckb ARM64-based Systems"
-        $ckRows = ConvertFrom-WinMintCatalogSearchHtml -Html $ckHtml
-        $ckHit = @($ckRows | Where-Object { $_.Kb -eq $ckb -and $_.Title -match 'ARM64-based Systems' } | Select-Object -First 1)
-        if ($ckHit.Count -lt 1) {
-            throw "Catalog checkpoint $ckb has no ARM64 payload"
-        }
-        $ckPath = Get-WinMintCatalogPayload -UpdateId $ckHit[0].UpdateId -CacheRoot $QualityCacheRoot `
-            -Kb $ckb -Architecture 'ARM64' -StagingDir $staging
+    foreach ($ck in @($set.Checkpoints)) {
+        Write-Output "quality checkpoint $($ck.Kb)"
+        $ckPath = Get-WinMintCatalogPayload -UpdateId $ck.UpdateId -CacheRoot $QualityCacheRoot `
+            -Kb $ck.Kb -Architecture $set.Architecture -StagingDir $staging
         $ckLeaf = Split-Path -Leaf $ckPath
         Copy-Item -LiteralPath $ckPath -Destination (Join-Path $QualityPackageDir $ckLeaf) -Force
         $checkpointLeaves.Add($ckLeaf)
     }
 
-    $month = ''
-    if ($resolved.Title -match '^(\d{4}-\d{2})') { $month = $Matches[1] }
     $setupLeaf = ''
     $safeLeaf = ''
-    $duHtml = Invoke-WinMintCatalogSearchHtml -Query "Dynamic Update for Windows 11 Version $($resolved.Label) ARM64-based Systems"
-    $duRows = ConvertFrom-WinMintCatalogSearchHtml -Html $duHtml
-    $setup = Select-WinMintDynamicUpdate -Rows $duRows -FamilyLabel $resolved.Label -Architecture 'ARM64' -Kind Setup -MonthPrefix $month
-    if ($setup -and $setup.Kb) {
-        $setupPath = Get-WinMintCatalogPayload -UpdateId $setup.UpdateId -CacheRoot $QualityCacheRoot `
-            -Kb $setup.Kb -Architecture 'ARM64' -StagingDir $staging
+    if ($set.Setup) {
+        $setupPath = Get-WinMintCatalogPayload -UpdateId $set.Setup.UpdateId -CacheRoot $QualityCacheRoot `
+            -Kb $set.Setup.Kb -Architecture $set.Architecture -StagingDir $staging
         $setupLeaf = Split-Path -Leaf $setupPath
         Copy-Item -LiteralPath $setupPath -Destination (Join-Path $QualityPackageDir $setupLeaf) -Force
     }
-    $safe = Select-WinMintDynamicUpdate -Rows $duRows -FamilyLabel $resolved.Label -Architecture 'ARM64' -Kind SafeOS -MonthPrefix $month
-    if ($safe -and $safe.Kb) {
-        $safePath = Get-WinMintCatalogPayload -UpdateId $safe.UpdateId -CacheRoot $QualityCacheRoot `
-            -Kb $safe.Kb -Architecture 'ARM64' -StagingDir $staging
+    if ($set.SafeOs) {
+        $safePath = Get-WinMintCatalogPayload -UpdateId $set.SafeOs.UpdateId -CacheRoot $QualityCacheRoot `
+            -Kb $set.SafeOs.Kb -Architecture $set.Architecture -StagingDir $staging
         $safeLeaf = Split-Path -Leaf $safePath
         Copy-Item -LiteralPath $safePath -Destination (Join-Path $QualityPackageDir $safeLeaf) -Force
     }
@@ -166,18 +154,18 @@ try {
         -LcuLeaf $lcuLeaf `
         -SetupLeaf $setupLeaf `
         -SafeOsLeaf $safeLeaf `
-        -Family $resolved.Family `
-        -PackageUbr $resolved.PackageUbr `
-        -Architecture 'ARM64'
+        -Family $set.Family `
+        -PackageUbr $set.PackageUbr `
+        -Architecture $set.Architecture
 
     Write-QualityEvidence -State ([pscustomobject]@{
             Skipped   = $false
-            Kb        = $resolved.Kb
+            Kb        = $set.Kb
             UbrBefore = [string]$imageUbr
-            UbrAfter  = [string]$resolved.PackageUbr
+            UbrAfter  = [string]$set.PackageUbr
             Sha256    = $sha
         })
-    Write-Output "AddQualityUpdates ok $($resolved.Kb) $imageUbr -> $($resolved.PackageUbr)"
+    Write-Output "AddQualityUpdates ok $($set.Kb) $imageUbr -> $($set.PackageUbr)"
 }
 finally {
     if (Test-Path -LiteralPath $staging) {
