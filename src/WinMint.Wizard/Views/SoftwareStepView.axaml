@@ -128,15 +128,15 @@
                    Text="Extra install ids merge with chips. MinGit and Nilesoft Shell are always installed." />
         <TextBlock Classes="panel-label" Text="Winget install IDs" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
-                 Watermark="Anysphere.Cursor&#x0A;Zen-Team.Zen-Browser"
+                 PlaceholderText="Anysphere.Cursor&#x0A;Zen-Team.Zen-Browser"
                  Text="{Binding Advanced.Winget}" />
         <TextBlock Classes="panel-label" Text="Scoop IDs" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
-                 Watermark="curl&#x0A;neovim"
+                 PlaceholderText="curl&#x0A;neovim"
                  Text="{Binding Advanced.Scoop}" />
         <TextBlock Classes="panel-label" Text="WSL tokens" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
-                 Watermark="FedoraLinux&#x0A;archlinuxarm-wsl&#x0A;NixOS-WSL"
+                 PlaceholderText="FedoraLinux&#x0A;archlinuxarm-wsl&#x0A;NixOS-WSL"
                  Text="{Binding Advanced.Wsl}" />
       </StackPanel>
     </Expander>

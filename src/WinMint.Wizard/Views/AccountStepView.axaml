@@ -12,11 +12,11 @@
       <StackPanel Spacing="14">
         <StackPanel Spacing="6">
           <TextBlock Classes="panel-label" Text="Username" />
-          <TextBox Text="{Binding Username}" Watermark="winmint" />
+          <TextBox Text="{Binding Username}" PlaceholderText="winmint" />
         </StackPanel>
         <StackPanel Spacing="6">
           <TextBlock Classes="panel-label" Text="Password" />
-          <TextBox Text="{Binding Password}" PasswordChar="•" Watermark="Required for autologon" />
+          <TextBox Text="{Binding Password}" PasswordChar="•" PlaceholderText="Required for autologon" />
         </StackPanel>
         <CheckBox Content="Require Wi-Fi during OOBE" IsChecked="{Binding RequireWifi}" />
       </StackPanel>
@@ -30,16 +30,16 @@
         <Grid ColumnDefinitions="*,12,*">
           <StackPanel Spacing="6">
             <TextBlock Classes="panel-label" Text="Locale" />
-            <TextBox Text="{Binding Locale}" Watermark="en-GB" />
+            <TextBox Text="{Binding Locale}" PlaceholderText="en-GB" />
           </StackPanel>
           <StackPanel Grid.Column="2" Spacing="6">
             <TextBlock Classes="panel-label" Text="Geo ID" />
-            <TextBox Text="{Binding GeoId}" Watermark="242" />
+            <TextBox Text="{Binding GeoId}" PlaceholderText="242" />
           </StackPanel>
         </Grid>
         <StackPanel Spacing="6">
           <TextBlock Classes="panel-label" Text="Time zone" />
-          <TextBox Text="{Binding TimeZone}" Watermark="GMT Standard Time" />
+          <TextBox Text="{Binding TimeZone}" PlaceholderText="GMT Standard Time" />
         </StackPanel>
         <CheckBox Content="Enable location services" IsChecked="{Binding LocationServices}" />
         <Button Classes="link"

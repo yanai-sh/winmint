@@ -119,7 +119,7 @@
                    MinHeight="160"
                    Margin="0,8,0,0"
                    FontFamily="Cascadia Mono, Consolas, monospace"
-                   Watermark="Profile JSON" />
+                   PlaceholderText="Profile JSON" />
         </Expander>
 
         <Expander Header="CLI equivalent" IsExpanded="False" Margin="0,4,0,0">
