@@ -204,6 +204,46 @@ public class WslJobsTests
     }
 
     [Fact]
+    public async Task Shell_wsl_store_install_exit_0_without_registration_fails_package_strict()
+    {
+        RecordingProcessHost processes = new() { ExitCode = 0 };
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs:
+            [
+                new ProvisionJob(
+                    "wsl.FedoraLinux-44",
+                    ProvisionJobKind.Wsl,
+                    PackageId: "FedoraLinux-44",
+                    WslInstallKind: WslInstallKind.Store),
+            ]) with
+            { PackageStrict = true },
+            Env(
+                processes,
+                evidence,
+                suppressWslOobe: static () => { },
+                isWslDistroRegistered: static _ => false),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.failed", result.FinalStatus.Code);
+        Assert.Contains("not registered", result.FinalStatus.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("Ubuntu\r\n* FedoraLinux-44\r\n", "FedoraLinux-44", true)]
+    [InlineData("Ubuntu\r\n", "FedoraLinux-44", false)]
+    [InlineData("* FedoraLinux-44\r\n", "fedoralinux-44", true)]
+    public void DistroListContainsInstallId_parses_wsl_list_q_output(
+        string listOutput,
+        string installId,
+        bool expected)
+    {
+        Assert.Equal(expected, Win32WslPlatform.DistroListContainsInstallId(listOutput, installId));
+    }
+
+    [Fact]
     public async Task Shell_wsl_runs_install_distro_argv_and_suppresses_oobe()
     {
         RecordingProcessHost processes = new();

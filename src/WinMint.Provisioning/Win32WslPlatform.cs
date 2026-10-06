@@ -46,4 +46,64 @@ public static class Win32WslPlatform
 
     public static bool IsRebootRequiredExitCode(int exitCode) =>
         exitCode is 3010 or 1641;
+
+    /// <summary>True when <paramref name="installId"/> appears in <c>wsl -l -q</c> output.</summary>
+    internal static bool DistroListContainsInstallId(string listOutput, string installId)
+    {
+        if (string.IsNullOrWhiteSpace(installId) || string.IsNullOrEmpty(listOutput))
+        {
+            return false;
+        }
+
+        foreach (string rawLine in listOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            string line = rawLine.TrimStart('*', ' ', '\0');
+            if (line.Equals(installId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Registered distro probe for store install verify (Lxss DistributionName).</summary>
+    public static bool IsDistroRegistered(string installId)
+    {
+        if (string.IsNullOrWhiteSpace(installId))
+        {
+            return false;
+        }
+
+        try
+        {
+            using RegistryKey? lxss = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Lxss");
+            if (lxss is null)
+            {
+                return false;
+            }
+
+            foreach (string subKeyName in lxss.GetSubKeyNames())
+            {
+                if (subKeyName is "PolicyVersion" or "NatIpAddress" or "NatGatewayIpAddress")
+                {
+                    continue;
+                }
+
+                using RegistryKey? distroKey = lxss.OpenSubKey(subKeyName);
+                if (distroKey?.GetValue("DistributionName") is string name
+                    && name.Equals(installId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

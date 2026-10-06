@@ -52,6 +52,7 @@ internal static class ProvisioningSessionTestFakes
         ISplashPresenter? splash = null,
         Func<string?>? resolveScoopCmd = null,
         Func<bool>? isWslPlatformReady = null,
+        Func<string, bool>? isWslDistroRegistered = null,
         Func<bool>? isHypervisorGuest = null,
         Action? applyWorkstationQuiet = null,
         Action? suppressWslOobe = null,
@@ -66,6 +67,7 @@ internal static class ProvisioningSessionTestFakes
                 Reboot = reboot,
                 ResolveScoopCmd = resolveScoopCmd,
                 IsWslPlatformReadyCallback = isWslPlatformReady ?? (() => false),
+                IsWslDistroRegisteredCallback = isWslDistroRegistered ?? (_ => true),
                 IsHypervisorGuestCallback = isHypervisorGuest ?? (() => false),
                 ApplyWorkstationQuietCallback = applyWorkstationQuiet ?? (() => { }),
                 SuppressWslOobeCallback = suppressWslOobe ?? (() => { }),
@@ -132,6 +134,8 @@ internal static class ProvisioningSessionTestFakes
 
         public Func<bool> IsWslPlatformReadyCallback { get; init; } = () => false;
 
+        public Func<string, bool> IsWslDistroRegisteredCallback { get; init; } = _ => true;
+
         public Func<bool> IsHypervisorGuestCallback { get; init; } = () => false;
 
         public Action ApplyWorkstationQuietCallback { get; init; } = () => { };
@@ -147,6 +151,8 @@ internal static class ProvisioningSessionTestFakes
         public Action TryDismissOobeOverlayCallback { get; init; } = () => { };
 
         public bool IsWslPlatformReady() => IsWslPlatformReadyCallback();
+
+        public bool IsWslDistroRegistered(string installId) => IsWslDistroRegisteredCallback(installId);
 
         public bool IsHypervisorGuest() => IsHypervisorGuestCallback();
 
