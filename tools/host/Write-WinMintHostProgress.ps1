@@ -173,44 +173,75 @@ function Format-WinMintHostWatch {
         [string] $LogLeaf = '',
         [string[]] $LogTail = @()
     )
+    # ponytail: ANSI via $PSStyle only (WT); PlainText / NO_COLOR strips for contracts & agents.
     $bold = $PSStyle.Bold
+    $dim = $PSStyle.Foreground.BrightBlack
     $reset = $PSStyle.Reset
+    # Width 10 so "heartbeat" keeps a trailing gap before the value.
+    $lbl = { param([string] $Name) "${dim}$($Name.PadRight(10))$reset" }
+    $verdictColor = switch -Regex ($Verdict) {
+        '^(done|green)$' { $PSStyle.Foreground.Green; break }
+        '^(failed|fail)$' { $PSStyle.Foreground.Red; break }
+        '^awaiting' { $PSStyle.Foreground.Yellow; break }
+        '^continue$' { $PSStyle.Foreground.Cyan; break }
+        default { $PSStyle.Foreground.White }
+    }
+    $phaseColor = switch -Regex ($Phase) {
+        '^(done|green)$' { $PSStyle.Foreground.Green; break }
+        '^(failed|fail)$' { $PSStyle.Foreground.Red; break }
+        '^(apply|wait|boot)' { $PSStyle.Foreground.Cyan; break }
+        default { $PSStyle.Foreground.White }
+    }
+    $applyColor = if ($ApplyStage -match '^failed') { $PSStyle.Foreground.Red }
+        elseif ($ApplyStage -eq 'done') { $PSStyle.Foreground.Green }
+        else { $PSStyle.Foreground.Cyan }
+    $empty = "${dim}-${reset}"
     $lines = [System.Collections.Generic.List[string]]::new()
     if (-not [string]::IsNullOrWhiteSpace($Title)) {
-        $lines.Add($Title)
+        $lines.Add("${bold}${Title}${reset}")
     }
     if (-not [string]::IsNullOrWhiteSpace($Clock)) {
-        $lines.Add($Clock)
+        $lines.Add("${dim}${Clock}${reset}")
     }
     $lines.Add('')
     if (-not [string]::IsNullOrWhiteSpace($Verdict)) {
-        $lines.Add("${bold}verdict${reset}  $Verdict")
+        $lines.Add(("$( & $lbl 'verdict' )${verdictColor}${Verdict}${reset}"))
     }
     $showVm = $PSBoundParameters.ContainsKey('VmState') -or $PSBoundParameters.ContainsKey('Heartbeat') -or
         -not [string]::IsNullOrWhiteSpace($VmState) -or -not [string]::IsNullOrWhiteSpace($Heartbeat)
     if ($showVm) {
-        $lines.Add(('phase    {0,-14}  VM {1,-12}  heartbeat {2}' -f $Phase, $VmState, $Heartbeat))
+        $phaseText = if ([string]::IsNullOrWhiteSpace($Phase)) { $empty } else { "${phaseColor}${Phase}${reset}" }
+        $vmText = if ([string]::IsNullOrWhiteSpace($VmState)) { $empty } else { $VmState }
+        $hbText = if ([string]::IsNullOrWhiteSpace($Heartbeat)) { $empty } else { $Heartbeat }
+        $lines.Add(("$( & $lbl 'phase' )${phaseText}"))
+        $lines.Add(("$( & $lbl 'vm' )${vmText}"))
+        $lines.Add(("$( & $lbl 'heartbeat' )${hbText}"))
     }
     elseif (-not [string]::IsNullOrWhiteSpace($Phase)) {
-        $lines.Add("phase    $Phase")
+        $lines.Add(("$( & $lbl 'phase' )${phaseColor}${Phase}${reset}"))
     }
     if ($PSBoundParameters.ContainsKey('StallMinutesLeft') -or $PSBoundParameters.ContainsKey('WallMinutesLeft')) {
-        $lines.Add(('stall    {0}m             wall {1}m' -f $StallMinutesLeft, $WallMinutesLeft))
+        $lines.Add(("$( & $lbl 'stall' ){0}m  ${dim}wall${reset} {1}m" -f $StallMinutesLeft, $WallMinutesLeft))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ApplyStage) -or
+        -not [string]::IsNullOrWhiteSpace($Leaf) -or
+        -not [string]::IsNullOrWhiteSpace($LastHostLine)) {
+        $lines.Add('')
     }
     if (-not [string]::IsNullOrWhiteSpace($ApplyStage)) {
-        $lines.Add("apply    $ApplyStage")
+        $lines.Add(("$( & $lbl 'apply' )${applyColor}${ApplyStage}${reset}"))
     }
     if (-not [string]::IsNullOrWhiteSpace($Leaf)) {
-        $lines.Add("leaf     $Leaf")
+        $lines.Add(("$( & $lbl 'leaf' )${Leaf}"))
     }
     if (-not [string]::IsNullOrWhiteSpace($LastHostLine)) {
-        $lines.Add("host     $LastHostLine")
+        $lines.Add(("$( & $lbl 'host' )${LastHostLine}"))
     }
     if (-not [string]::IsNullOrWhiteSpace($LogLeaf)) {
         $lines.Add('')
-        $lines.Add("${bold}log${reset}      $LogLeaf")
+        $lines.Add(("$( & $lbl 'log' )${bold}${LogLeaf}${reset}"))
         foreach ($row in @($LogTail | Select-Object -First 8)) {
-            $lines.Add("  $row")
+            $lines.Add("  ${dim}│${reset} $row")
         }
     }
     return ($lines -join [Environment]::NewLine)

@@ -27,7 +27,7 @@ switch ($Kind) {
         . (Join-Path $repoRoot 'tools/vm/SmokeStatus.ps1')
         if ([string]::IsNullOrWhiteSpace($Work)) { $Work = Join-Path $repoRoot '.scratch\smoke' }
         $host.UI.RawUI.WindowTitle = "WinMint host watch — $Work"
-        Write-Host 'Close this window to stop watching. Apply/Smoke keep running.'
+        Write-Host ($PSStyle.Foreground.BrightBlack + 'Close this window to stop watching. Apply/Smoke keep running.' + $PSStyle.Reset)
         $apply = Join-Path $Work 'apply-status.txt'
         $status = Join-Path $Work 'smoke-status.json'
         if (-not $PSBoundParameters.ContainsKey('PriorRunId')) {
@@ -46,7 +46,7 @@ switch ($Kind) {
             $Path = Join-Path $repoRoot '.scratch\check-status.json'
         }
         $host.UI.RawUI.WindowTitle = "WinMint check watch — $Path"
-        Write-Host 'Close this window to stop watching. just check keeps running.'
+        Write-Host ($PSStyle.Foreground.BrightBlack + 'Close this window to stop watching. just check keeps running.' + $PSStyle.Reset)
     }
     'apply' {
         . (Join-Path $repoRoot 'tools/host/WinMintPaths.ps1')
@@ -54,7 +54,7 @@ switch ($Kind) {
             $Work = Get-WinMintGateBWorkDirectory
         }
         $host.UI.RawUI.WindowTitle = "WinMint apply watch — $Work"
-        Write-Host 'Close this window to stop watching. Apply keeps running.'
+        Write-Host ($PSStyle.Foreground.BrightBlack + 'Close this window to stop watching. Apply keeps running.' + $PSStyle.Reset)
         $apply = Join-Path $Work 'apply-status.txt'
     }
 }

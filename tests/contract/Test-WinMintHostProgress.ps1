@@ -15,6 +15,8 @@ if ($helper -notmatch '\$PSStyle') { throw 'helper must use $PSStyle' }
 if ($helper -notmatch "Progress\.View = 'Minimal'") { throw 'helper must set Progress.View to Minimal' }
 if ($helper -match 'Spectre') { throw 'helper must not pull a TUI package' }
 if ($helper -match 'Clear-Host') { throw 'Format-WinMintHostWatch must return a string; no Clear-Host inside' }
+if ($helper -notmatch 'Foreground\.BrightBlack') { throw 'watch format must dim labels via BrightBlack' }
+if ($helper -notmatch "Foreground\.Yellow") { throw 'watch format must color awaiting verdict' }
 if ($helper -notmatch 'function Write-WinMintHostHeartbeat') { throw 'helper must define Write-WinMintHostHeartbeat' }
 if ($helper -notmatch 'function Test-WinMintTrailHeartbeatLine') { throw 'helper must define Test-WinMintTrailHeartbeatLine' }
 if ($helper -notmatch 'function Select-WinMintWatchLogTail') { throw 'helper must define Select-WinMintWatchLogTail' }
@@ -120,23 +122,25 @@ if ($just -notmatch "-Kind apply") { throw 'just watch-apply must pass -Kind app
 if ($just -match 'Get-Content -LiteralPath.*apply-status') { throw 'just watch-apply must not Get-Content -Wait the apply-status file' }
 
 $old = $PSStyle.OutputRendering
+# Host may still embed ANSI in $PSStyle strings under PlainText; strip for layout asserts.
+$plain = { param([string] $Text) ($Text -replace '\x1b\[[0-9;]*m', '') -replace "`r", '' }
 try {
     $PSStyle.OutputRendering = 'PlainText'
-    $dashNoise = Format-WinMintHostWatch -Title 'watch' -Verdict 'awaiting-run' -Phase 'apply' `
+    $dashNoise = & $plain (Format-WinMintHostWatch -Title 'watch' -Verdict 'awaiting-run' -Phase 'apply' `
         -ApplyStage 'AddQualityUpdates' -LogLeaf '10-AddQualityUpdates.log' `
         -LogTail (Select-WinMintWatchLogTail -Lines @(
             'Catalog BITS start KB1',
             'AddQualityUpdates running 78s',
             'AddQualityUpdates running 98s',
             'quality hash ok x.msu'
-        ) -Count 8)
+        ) -Count 8))
     if ($dashNoise -match 'running \d+s') { throw 'watch format must not show heartbeat tail' }
     if ($dashNoise -notmatch 'Catalog BITS start') { throw 'watch format dropped meaningful tail' }
 
-    $dash = Format-WinMintHostWatch -Title 'watch' -Clock '12:00:00' -Verdict 'done' `
+    $dash = & $plain (Format-WinMintHostWatch -Title 'watch' -Clock '12:00:00' -Verdict 'done' `
         -Phase 'green' -VmState 'Running' -Heartbeat 'OK' -StallMinutesLeft 12 `
         -WallMinutesLeft 40 -ApplyStage 'done' -LastHostLine 'Smoke green' `
-        -LogLeaf '09-AddQualityUpdates.log' -LogTail @('Catalog search start', 'AddQualityUpdates ok')
+        -LogLeaf '09-AddQualityUpdates.log' -LogTail @('Catalog search start', 'AddQualityUpdates ok'))
     if ($dash -isnot [string]) { throw 'Format-WinMintHostWatch must return a string' }
     if ($dash -notmatch 'verdict') { throw 'dashboard missing verdict' }
     if ($dash -notmatch 'green') { throw 'dashboard missing phase' }
@@ -145,8 +149,19 @@ try {
     if ($dash -notmatch 'Smoke green') { throw 'dashboard missing last host line' }
     if ($dash -notmatch '09-AddQualityUpdates.log') { throw 'dashboard missing log leaf' }
     if ((@($dash -split "`n" | Where-Object { $_ -match 'Catalog search start' }).Count -ne 1)) { throw 'log tail not shown' }
+    if ($dash -notmatch '(?m)^vm\s+Running') { throw 'smoke layout missing vm row' }
+    if ($dash -notmatch '(?m)^heartbeat\s+OK') { throw 'smoke layout missing heartbeat row' }
+    if ($dash -notmatch '(?m)^apply\s+done') { throw 'smoke layout missing apply section' }
 
-    $checkDash = Format-WinMintHostWatch -Title 'check' -Verdict 'continue' -Phase 'test' -Leaf '' -LastHostLine 'dotnet test'
+    $emptyVm = & $plain (Format-WinMintHostWatch -Title 'watch' -Verdict 'awaiting-run' -Phase 'apply' `
+        -VmState '' -Heartbeat '' -StallMinutesLeft 45 -WallMinutesLeft 180 `
+        -LastHostLine 'Applying Profile=x')
+    if ($emptyVm -notmatch '(?m)^vm\s+-') { throw 'empty vm must show placeholder dash' }
+    if ($emptyVm -notmatch '(?m)^heartbeat\s+-') { throw 'empty heartbeat must show placeholder dash' }
+    if ($emptyVm -notmatch '45m') { throw 'awaiting layout missing stall' }
+    if ($emptyVm -notmatch 'Applying Profile') { throw 'awaiting layout missing host line' }
+
+    $checkDash = & $plain (Format-WinMintHostWatch -Title 'check' -Verdict 'continue' -Phase 'test' -Leaf '' -LastHostLine 'dotnet test')
     if ($checkDash -match 'stall') { throw 'check layout must omit stall/wall' }
     if ($checkDash -match 'heartbeat') { throw 'check layout must omit VM/heartbeat' }
     if ($checkDash -notmatch 'test') { throw 'check layout missing phase' }
