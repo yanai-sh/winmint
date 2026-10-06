@@ -93,6 +93,15 @@ if ($null -ne $expected) {
         }
     }
     $wslIds = @($expected.requiredWslPackageIds)
+    $jobsPath = Join-Path $WorkDirectory 'payload\jobs.json'
+    $wslJobs = @()
+    if (Test-Path -LiteralPath $jobsPath) {
+        $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+        $wslJobs = @($jobsDoc.jobs | Where-Object { [string]$_.kind -eq 'wsl' })
+    }
+    if ($wslJobs.Count -gt 0 -and $wslIds.Count -eq 0) {
+        throw 'expected-evidence.json requiredWslPackageIds missing or empty but payload/jobs.json has wsl jobs'
+    }
     if ($wslIds.Count -gt 0) {
         $catalogPath = Join-Path $PSScriptRoot '..\..\config\packages.json'
         if (-not (Test-Path -LiteralPath $catalogPath)) {
@@ -105,22 +114,23 @@ if ($null -ne $expected) {
                 $row = $p.Value
                 $installId = [string]$row.installId
                 if ([string]::IsNullOrWhiteSpace($installId)) { $installId = [string]$p.Name }
-                if ([string]$row.installKind -eq 'store' -and -not [string]::IsNullOrWhiteSpace($installId)) {
+                if (-not [string]::IsNullOrWhiteSpace($installId)) {
                     [void]$catalogWslInstallIds.Add($installId)
                 }
             }
         }
         foreach ($needId in $wslIds) {
             if (-not $catalogWslInstallIds.Contains([string]$needId)) {
-                throw "requiredWslPackageId '$needId' is not a catalog store installId"
+                throw "requiredWslPackageId '$needId' is not a catalog installId"
             }
         }
-        $jobsPath = Join-Path $WorkDirectory 'payload\jobs.json'
         if (-not (Test-Path -LiteralPath $jobsPath)) {
             throw "payload/jobs.json missing: $jobsPath (requiredWslPackageIds)"
         }
-        $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
-        $wslJobs = @($jobsDoc.jobs | Where-Object { [string]$_.kind -eq 'wsl' })
+        if ($wslJobs.Count -eq 0) {
+            $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+            $wslJobs = @($jobsDoc.jobs | Where-Object { [string]$_.kind -eq 'wsl' })
+        }
         $jobPackageIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
         foreach ($job in $wslJobs) {
             $pkgId = [string]$job.packageId
