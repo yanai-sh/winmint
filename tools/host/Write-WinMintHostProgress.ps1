@@ -7,15 +7,60 @@ Set-StrictMode -Version Latest
 $script:WinMintHostProgressId = 7391
 $script:WinMintHostProgressReady = $false
 
+function Test-WinMintHostProgressInteractive {
+    try {
+        return -not [Console]::IsOutputRedirected -and $Host.UI.SupportsVirtualTerminal
+    }
+    catch {
+        return $false
+    }
+}
+
 function Initialize-WinMintHostProgress {
     if ($script:WinMintHostProgressReady) { return }
     $script:WinMintHostProgressReady = $true
     try {
         $PSStyle.Progress.View = 'Minimal'
+        if (Test-WinMintHostProgressInteractive) {
+            $PSStyle.Progress.UseOSCIndicator = $true
+        }
     }
     catch {
-        Write-Debug "PSStyle.Progress.View: $_"
+        Write-Debug "PSStyle.Progress: $_"
     }
+}
+
+function Test-WinMintTrailHeartbeatLine {
+    param([Parameter(Mandatory)] [string] $Line)
+    return [bool]($Line -match '^\S+ running \d+s$')
+}
+
+function Select-WinMintWatchLogTail {
+    param(
+        [string[]] $Lines = @(),
+        [int] $Count = 8
+    )
+    $kept = @(
+        $Lines |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and -not (Test-WinMintTrailHeartbeatLine -Line $_) }
+    )
+    if ($kept.Count -le $Count) { return $kept }
+    return @($kept | Select-Object -Last $Count)
+}
+
+function Write-WinMintHostHeartbeat {
+    param(
+        [Parameter(Mandatory)] [string] $Opcode,
+        [Parameter(Mandatory)] [int] $ElapsedSeconds,
+        [IO.TextWriter] $LogWriter = $null,
+        [string] $Activity = 'Apply'
+    )
+    Initialize-WinMintHostProgress
+    $text = "$Opcode running ${ElapsedSeconds}s"
+    if ($null -ne $LogWriter) {
+        $LogWriter.WriteLine($text)
+    }
+    Write-WinMintHostProgress -Activity $Activity -Status $text
 }
 
 function Write-WinMintHostPhase {
@@ -169,4 +214,64 @@ function Format-WinMintHostWatch {
         }
     }
     return ($lines -join [Environment]::NewLine)
+}
+
+function Resolve-WinMintWindowsTerminal {
+    $cmd = Get-Command wt.exe -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source) { return [string]$cmd.Source }
+    foreach ($candidate in @(
+            (Join-Path $env:LocalAppData 'Microsoft\WindowsApps\wt.exe'),
+            (Join-Path $env:ProgramFiles 'Windows Terminal\wt.exe')
+        )) {
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    return ''
+}
+
+function Start-WinMintHostWatchProcess {
+    param(
+        [Parameter(Mandatory)] [string] $RepoRoot,
+        [Parameter(Mandatory)] [string] $Work,
+        [Parameter(Mandatory)] [ValidateSet('smoke', 'check', 'apply')] [string] $Kind,
+        [string] $PriorRunId = '',
+        [Parameter(Mandatory)] [string] $MarkerPath,
+        [Parameter(Mandatory)] [string] $PwshExe
+    )
+    $watchScript = Join-Path $RepoRoot 'tools/host/Watch-Host.ps1'
+    $title = "WinMint host watch — $Work"
+    $pwshArgs = @(
+        '-NoProfile', '-NonInteractive', '-File', $watchScript,
+        '-Kind', $Kind, '-Work', $Work, '-MarkerPath', $MarkerPath
+    )
+    if ($PSBoundParameters.ContainsKey('PriorRunId')) {
+        $pwshArgs += @('-PriorRunId', $PriorRunId)
+    }
+    $wt = Resolve-WinMintWindowsTerminal
+    if ($wt) {
+        $wtArgs = @(
+            'new-tab',
+            '--title', $title,
+            '-d', $RepoRoot,
+            '--',
+            $PwshExe
+        ) + $pwshArgs
+        Start-Process -FilePath $wt -WorkingDirectory $RepoRoot -ArgumentList $wtArgs | Out-Null
+        # ponytail: poll up to 5s for Watch self-stamp; Stopwatch (not UtcNow) — host clock can jump.
+        $wait = [Diagnostics.Stopwatch]::StartNew()
+        while ($wait.Elapsed.TotalSeconds -lt 5) {
+            if (Test-Path -LiteralPath $MarkerPath -PathType Leaf) {
+                $markerPid = 0
+                $raw = (Get-Content -LiteralPath $MarkerPath -Raw -ErrorAction SilentlyContinue)
+                if ($raw -and [int]::TryParse($raw.Trim(), [ref]$markerPid) -and $markerPid -gt 0) {
+                    if ($null -ne (Get-Process -Id $markerPid -ErrorAction SilentlyContinue)) {
+                        return
+                    }
+                }
+            }
+            Start-Sleep -Milliseconds 200
+        }
+        return
+    }
+    $proc = Start-Process -FilePath $PwshExe -WorkingDirectory $RepoRoot -PassThru -ArgumentList $pwshArgs
+    Set-Content -LiteralPath $MarkerPath -Value $proc.Id -Encoding utf8
 }

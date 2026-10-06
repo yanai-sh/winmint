@@ -193,15 +193,8 @@ if (Test-Path -LiteralPath $watcherMarker -PathType Leaf) {
     }
 }
 if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive:$watcherAlive) -eq 'spawn') {
-    $watcher = Start-Process -FilePath $pwshExe -WorkingDirectory $repoRoot -PassThru -ArgumentList @(
-        '-NoProfile',
-        '-NonInteractive',
-        '-File', (Join-Path $repoRoot 'tools/host/Watch-Host.ps1'),
-        '-Kind', 'smoke',
-        '-Work', $workFull,
-        '-PriorRunId:'
-    )
-    Set-Content -LiteralPath $watcherMarker -Value $watcher.Id -Encoding utf8
+    Start-WinMintHostWatchProcess -RepoRoot $repoRoot -Work $workFull -Kind smoke `
+        -PriorRunId '' -MarkerPath $watcherMarker -PwshExe $pwshExe
 }
 
 $applyEvidence = Join-Path $Work 'evidence.json'

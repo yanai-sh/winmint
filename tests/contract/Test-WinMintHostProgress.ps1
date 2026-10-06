@@ -15,13 +15,34 @@ if ($helper -notmatch '\$PSStyle') { throw 'helper must use $PSStyle' }
 if ($helper -notmatch "Progress\.View = 'Minimal'") { throw 'helper must set Progress.View to Minimal' }
 if ($helper -match 'Spectre') { throw 'helper must not pull a TUI package' }
 if ($helper -match 'Clear-Host') { throw 'Format-WinMintHostWatch must return a string; no Clear-Host inside' }
+if ($helper -notmatch 'function Write-WinMintHostHeartbeat') { throw 'helper must define Write-WinMintHostHeartbeat' }
+if ($helper -notmatch 'function Test-WinMintTrailHeartbeatLine') { throw 'helper must define Test-WinMintTrailHeartbeatLine' }
+if ($helper -notmatch 'function Select-WinMintWatchLogTail') { throw 'helper must define Select-WinMintWatchLogTail' }
+if ($helper -notmatch 'function Start-WinMintHostWatchProcess') { throw 'helper must spawn watch via Start-WinMintHostWatchProcess' }
+if ($helper -notmatch 'wt' -and $helper -notmatch 'WindowsTerminal') { throw 'spawn helper must consider wt.exe' }
+if ($helper -notmatch 'UseOSCIndicator') { throw 'helper must set Progress.UseOSCIndicator when interactive VT' }
+if (-not (Test-WinMintTrailHeartbeatLine -Line 'AddQualityUpdates running 78s')) { throw 'heartbeat detector missed running line' }
+if (Test-WinMintTrailHeartbeatLine -Line 'Catalog BITS start KB1') { throw 'heartbeat detector false positive' }
+$filtered = @(Select-WinMintWatchLogTail -Lines @(
+        'Catalog BITS start KB1',
+        'AddQualityUpdates running 20s',
+        'AddQualityUpdates running 40s',
+        'quality hash ok leaf.msu'
+    ) -Count 8)
+if ($filtered -contains 'AddQualityUpdates running 20s') { throw 'Select-WinMintWatchLogTail must drop heartbeats' }
+if ($filtered.Count -ne 2) { throw 'Select-WinMintWatchLogTail kept wrong rows' }
 
 $plan = Get-Content -LiteralPath (Join-Path $repo 'servicing/Invoke-ServicingPlan.ps1') -Raw -Encoding utf8
 if ($plan -notmatch 'Write-WinMintHostPhase') { throw 'elevated loop must print host phases' }
 if ($plan -notmatch 'Write-WinMintHostProgress') { throw 'elevated loop must drive Write-Progress' }
 if ($plan -notmatch 'function Invoke-WinMintLoggedKernel') { throw 'elevated loop must log kernels through Invoke-WinMintLoggedKernel' }
-if ($plan -notmatch 'running \$') { throw 'elevated loop must heartbeat a silent kernel' }
-Invoke-Expression ([regex]::Match($plan, '(?ms)^function Invoke-WinMintLoggedKernel \{.*?^\}').Value)
+if ($plan -notmatch 'Write-WinMintHostHeartbeat') { throw 'logged kernel must call Write-WinMintHostHeartbeat' }
+$kernelFn = [regex]::Match($plan, '(?ms)^function Invoke-WinMintLoggedKernel \{.*?^\}').Value
+if ($kernelFn -notmatch 'Write-WinMintHostHeartbeat -Opcode') { throw 'heartbeat helper not called with -Opcode' }
+if ($kernelFn -match '\$text = "\$Opcode running[\s\S]{0,80}Write-Host \$text') {
+    throw 'heartbeat still Write-Host'
+}
+Invoke-Expression $kernelFn
 $kernelProbe = Join-Path ([IO.Path]::GetTempPath()) 'winmint-logged-kernel.ps1'
 $kernelLog = Join-Path ([IO.Path]::GetTempPath()) 'winmint-logged-kernel.log'
 Set-Content -LiteralPath $kernelProbe -Encoding utf8 -Value "Write-Output 'kernel-line'`r`nWrite-Host 'kernel-host'`r`nStart-Sleep -Seconds 4`r`n"
@@ -43,7 +64,7 @@ if ($quality -notmatch 'quality packages apply') { throw 'AddQualityUpdates must
 Invoke-Expression ([regex]::Match($quality, '(?ms)^function Get-WinMintHeartbeatSha256 \{.*?^\}').Value)
 $hashSample = Join-Path ([IO.Path]::GetTempPath()) 'winmint-heartbeat-sha256.txt'
 Set-Content -LiteralPath $hashSample -Value 'winmint-heartbeat' -Encoding ascii -NoNewline
-$heartbeat = Get-WinMintHeartbeatSha256 -Path $hashSample
+$heartbeat = @(Get-WinMintHeartbeatSha256 -Path $hashSample) | Select-Object -Last 1
 $expectedSha = (Get-FileHash -LiteralPath $hashSample -Algorithm SHA256).Hash.ToLowerInvariant()
 Remove-Item -LiteralPath $hashSample -Force
 if ($heartbeat -ne $expectedSha) { throw "heartbeat sha256 $heartbeat != $expectedSha" }
@@ -66,8 +87,9 @@ if ($smoke -match 'Start-Sleep -Seconds 30') { throw 'Smoke wait poll must stay 
 if ($smoke -notmatch 'Write-WinMintHostProgress') { throw 'Smoke host lines must use helper progress' }
 if ($smoke -notmatch 'Write-WinMintHostProgress -Activity wait -Status') { throw 'wait phase uses helper without percent' }
 if ($smoke -match 'PercentComplete') { throw 'Smoke wait must not invent a fake percent' }
-$spawnAt = $smoke.IndexOf('Watch-Host.ps1')
-if ($spawnAt -lt 0) { throw 'Invoke-Smoke must spawn Watch-Host' }
+if ($smoke -notmatch 'Start-WinMintHostWatchProcess') { throw 'Invoke-Smoke must use Start-WinMintHostWatchProcess' }
+$spawnAt = $smoke.IndexOf('Start-WinMintHostWatchProcess')
+if ($spawnAt -lt 0) { throw 'Invoke-Smoke must spawn watch via Start-WinMintHostWatchProcess' }
 $spawn = $smoke.Substring($spawnAt, [Math]::Min(400, $smoke.Length - $spawnAt))
 if ($spawn -notmatch 'PriorRunId') { throw 'spawned watcher must receive leftover or empty PriorRunId' }
 if ($spawn -match '\$runId') { throw 'spawned watcher must not receive this run''s already-written runId as PriorRunId' }
@@ -84,6 +106,9 @@ if ($watchHost -notmatch 'Read-WinMintApplyStatus') { throw 'Watch-Host smoke/ap
 if ($watchHost -match 'Get-Date') { throw 'Watch-Host must not pass Get-Date as a dashboard clock' }
 if ($watchHost -notmatch "-ne 'apply'") { throw 'Watch-Host apply kind must not exit on done' }
 if ($watchHost -notmatch 'Format-WinMintHostWatch') { throw 'Watch-Host must render via Format-WinMintHostWatch' }
+if ($watchHost -notmatch 'MarkerPath') { throw 'Watch-Host must accept -MarkerPath and self-stamp PID' }
+if ($watchHost -notmatch 'Select-WinMintWatchLogTail') { throw 'Watch-Host must filter log tail via Select-WinMintWatchLogTail' }
+if ($watchHost -notmatch '-Tail 40') { throw 'Watch-Host must read a deep raw tail before filtering' }
 
 $just = Get-Content -LiteralPath (Join-Path $repo 'Justfile') -Raw -Encoding utf8
 if ($just -notmatch 'Watch-Host.ps1') { throw 'just watch-* must call Watch-Host' }
@@ -93,6 +118,17 @@ if ($just -match 'Get-Content -LiteralPath.*apply-status') { throw 'just watch-a
 $old = $PSStyle.OutputRendering
 try {
     $PSStyle.OutputRendering = 'PlainText'
+    $dashNoise = Format-WinMintHostWatch -Title 'watch' -Verdict 'awaiting-run' -Phase 'apply' `
+        -ApplyStage 'AddQualityUpdates' -LogLeaf '10-AddQualityUpdates.log' `
+        -LogTail (Select-WinMintWatchLogTail -Lines @(
+            'Catalog BITS start KB1',
+            'AddQualityUpdates running 78s',
+            'AddQualityUpdates running 98s',
+            'quality hash ok x.msu'
+        ) -Count 8)
+    if ($dashNoise -match 'running \d+s') { throw 'watch format must not show heartbeat tail' }
+    if ($dashNoise -notmatch 'Catalog BITS start') { throw 'watch format dropped meaningful tail' }
+
     $dash = Format-WinMintHostWatch -Title 'watch' -Clock '12:00:00' -Verdict 'done' `
         -Phase 'green' -VmState 'Running' -Heartbeat 'OK' -StallMinutesLeft 12 `
         -WallMinutesLeft 40 -ApplyStage 'done' -LastHostLine 'Smoke green' `

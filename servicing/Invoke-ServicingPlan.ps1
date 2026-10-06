@@ -54,9 +54,7 @@ function Invoke-WinMintLoggedKernel {
                 $quiet.Restart()
             }
             if ($quiet.Elapsed.TotalSeconds -ge $QuietSeconds) {
-                $text = "$Opcode running $([int]$phase.Elapsed.TotalSeconds)s"
-                $writer.WriteLine($text)
-                Write-Host $text
+                Write-WinMintHostHeartbeat -Opcode $Opcode -ElapsedSeconds ([int]$phase.Elapsed.TotalSeconds) -LogWriter $writer
                 $quiet.Restart()
             }
             $null = $handle.AsyncWaitHandle.WaitOne(1000)

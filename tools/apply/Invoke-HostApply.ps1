@@ -61,6 +61,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
+. (Join-Path $repoRoot 'tools/host/Write-WinMintHostProgress.ps1')
 . (Join-Path $repoRoot 'tools\AcceptanceManifest.ps1')
 . (Join-Path $repoRoot 'tools\host\Assert-ImageEvidenceCore.ps1')
 . (Join-Path $repoRoot 'tools\host\Invoke-ArtifactHygiene.ps1') -NoRun
@@ -171,22 +172,22 @@ function Resolve-WinMintCliExe {
 if (-not $SkipApply) {
     $supervisor = Join-Path $repoRoot 'artifacts\provisioning\WinMint.Provisioning.exe'
     if (-not (Test-Path -LiteralPath $supervisor -PathType Leaf)) {
-        Write-Host 'Publishing Supervisor (Release AOT)…'
+        Write-WinMintHostPhase -Lane Apply -Name 'Publishing Supervisor (Release AOT)…'
         & just publish-provisioning
         if ($LASTEXITCODE -ne 0) { throw "just publish-provisioning failed: $LASTEXITCODE" }
     }
     else {
-        Write-Host "Using packaged Supervisor: $supervisor"
+        Write-WinMintHostPhase -Lane Apply -Name "Using packaged Supervisor: $supervisor"
     }
 
     $strictArgs = @()
     if ($PackageStrict) { $strictArgs = @('--package-strict') }
 
-    Write-Host "Host Apply Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality…"
-    Write-Host 'Pre-wipe only: mutates offline WIM from Source ISO — does not install to this device.'
+    Write-WinMintHostPhase -Lane Apply -Name "Profile=$Profile Iso=$Iso Work=$Work Lane=$ImageQuality"
+    Write-WinMintHostPhase -Lane Apply -Name 'Pre-wipe only: mutates offline WIM from Source ISO — does not install to this device.'
     $dropped = Clear-WinMintPriorOutputIsos -WorkDirectory $Work
     if ($dropped -gt 0) {
-        Write-Host "Dropped $dropped prior Output ISO(s) under $Work"
+        Write-WinMintHostPhase -Lane Apply -Name "Dropped $dropped prior Output ISO(s) under $Work"
     }
     $runScratchHygiene = $true
     $cliExe = Resolve-WinMintCliExe

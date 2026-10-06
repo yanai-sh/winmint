@@ -1,5 +1,6 @@
 #requires -Version 7.6
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot '..\tools\host\Write-WinMintHostProgress.ps1')
 # Catalog LCU resolve / BITS / SSU expand / DISM Add-Package. Dot-source helper (ADR-013).
 # Live Catalog is Apply + `just quality-check` only — never `just check`.
 
@@ -251,7 +252,7 @@ function Save-WinMintCatalogPayload {
     }
     $leaf = Split-Path -Leaf $Destination
     $job = 'WinMintQuality-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
-    Write-Host "quality BITS start $leaf"
+    Write-Output "quality BITS start $leaf"
     try {
         & $bitsadmin /create /download $job | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "BITS /create failed ($LASTEXITCODE)" }
@@ -261,6 +262,8 @@ function Save-WinMintCatalogPayload {
         & $bitsadmin /resume $job | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "BITS /resume failed ($LASTEXITCODE): $Uri" }
         $wait = [Diagnostics.Stopwatch]::StartNew()
+        $lastTrailState = $null
+        $trailBeat = [Diagnostics.Stopwatch]::StartNew()
         while ($true) {
             $lines = @(
                 & $bitsadmin /rawreturn /getstate $job 2>&1 |
@@ -275,7 +278,13 @@ function Save-WinMintCatalogPayload {
             if (Test-Path -LiteralPath $Destination) {
                 $mb = [math]::Round((Get-Item -LiteralPath $Destination).Length / 1MB)
             }
-            Write-Host "quality BITS $state ${mb}MB ${leaf} ($([int]$wait.Elapsed.TotalSeconds)s)"
+            $status = "quality BITS $state ${mb}MB $leaf ($([int]$wait.Elapsed.TotalSeconds)s)"
+            Write-WinMintHostProgress -Activity 'Catalog BITS' -Status $status
+            if ($state -ne $lastTrailState -or $trailBeat.Elapsed.TotalSeconds -ge 60) {
+                Write-Output $status
+                $lastTrailState = $state
+                $trailBeat.Restart()
+            }
             if ($state -eq 'TRANSFERRED') { break }
             if ($state -in @('ERROR', 'CANCELLED', 'ACKNOWLEDGED')) {
                 throw "BITS $state : $Uri"
@@ -289,7 +298,7 @@ function Save-WinMintCatalogPayload {
         if (-not (Test-Path -LiteralPath $Destination)) {
             throw "BITS download failed: $Uri"
         }
-        Write-Host "quality BITS ok $leaf"
+        Write-Output "quality BITS ok $leaf"
     }
     catch {
         & $bitsadmin /cancel $job 2>$null | Out-Null
@@ -329,17 +338,22 @@ function Expand-WinMintQualitySsu {
         else {
             # DISM progress stays off the success stream so the only return is the SSU path.
             $leaf = Split-Path -Leaf $MsuPath
-            Write-Host "quality expand DISM start $leaf"
+            Write-Output "quality expand DISM start $leaf"
             $proc = Start-Process -FilePath dism.exe -PassThru -NoNewWindow -ArgumentList @(
                 '/English', '/Apply-Image', "/ImageFile:`"$MsuPath`"", '/Index:1', "/ApplyDir:`"$Destination`"")
             $wait = [Diagnostics.Stopwatch]::StartNew()
+            $expandTrailBeat = $false
             while (-not $proc.WaitForExit(20000)) {
-                Write-Host ("quality expand DISM running {0} ({1:n0}s)" -f $leaf, $wait.Elapsed.TotalSeconds)
+                Write-WinMintHostProgress -Activity 'quality expand' -Status ("DISM $leaf $([int]$wait.Elapsed.TotalSeconds)s")
+                if ($expandTrailBeat) {
+                    Write-Output ("quality expand DISM running {0} ({1:n0}s)" -f $leaf, $wait.Elapsed.TotalSeconds)
+                }
+                $expandTrailBeat = -not $expandTrailBeat
             }
             if ($proc.ExitCode -ne 0) {
                 throw "DISM /Apply-Image failed ($($proc.ExitCode)) extracting WIM-MSU: $MsuPath"
             }
-            Write-Host "quality expand DISM ok $leaf"
+            Write-Output "quality expand DISM ok $leaf"
         }
     }
     else {

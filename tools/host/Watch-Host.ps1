@@ -12,7 +12,8 @@ param(
     [string] $Path = '',
     # Invoke-Smoke binds leftover or empty after it already stamped this run.
     # Unbound = standalone watch: leftover file id is prior.
-    [string] $PriorRunId
+    [string] $PriorRunId,
+    [string] $MarkerPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -58,6 +59,10 @@ switch ($Kind) {
     }
 }
 
+if (-not [string]::IsNullOrWhiteSpace($MarkerPath)) {
+    Set-Content -LiteralPath $MarkerPath -Value $PID -Encoding utf8
+}
+
 $doneTicks = 0
 $ageSw = $null
 $lastFp = ''
@@ -81,7 +86,8 @@ while ($true) {
             $applyStage = [string]$snap.Stage
             if ($snap.Log -and (Test-Path -LiteralPath $snap.Log)) {
                 $logLeaf = Split-Path -Leaf $snap.Log
-                $logTail = @(Get-Content -LiteralPath $snap.Log -Tail 8)
+                $rawTail = @(Get-Content -LiteralPath $snap.Log -Tail 40)
+                $logTail = @(Select-WinMintWatchLogTail -Lines $rawTail -Count 8)
             }
         }
         $format.ApplyStage = $applyStage

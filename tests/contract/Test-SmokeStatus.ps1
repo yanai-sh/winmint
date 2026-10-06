@@ -38,7 +38,7 @@ if ($smoke -notmatch "Remove-Item[^\n]*priorProjections" -or $smoke -notmatch "'
 if ($smoke -notmatch 'if \(\$SkipApply\) \{ Resolve-WinMintOutputIso') {
     throw 'Full runs must not resolve the Output ISO before Apply (stale winmint_*.iso would fail-close a fresh Apply)'
 }
-if ($smoke.IndexOf('Write-SmokeStatus') -gt $smoke.IndexOf('Watch-Host.ps1')) {
+if ($smoke.IndexOf('Write-SmokeStatus') -gt $smoke.IndexOf('Start-WinMintHostWatchProcess')) {
     throw 'Invoke-Smoke must write this run''s status before spawning Watch-Host (stale-status guard)'
 }
 if ($smoke -notmatch 'Resolve-WinMintSmokeGuestCredential') {
@@ -71,7 +71,8 @@ if ($smoke -notmatch 'LastProbeError') {
 if ($smoke -notmatch 'ProfilePath') {
     throw 'Invoke-Smoke must take -ProfilePath (not the automatic \$PROFILE)'
 }
-if ($smoke -notmatch '-NonInteractive') {
+$hostProgress = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Write-WinMintHostProgress.ps1') -Raw -Encoding utf8
+if ($hostProgress -notmatch '-NonInteractive') {
     throw 'Watcher spawn must pass -NonInteractive so prompts fail closed'
 }
 if ($smoke -notmatch 'Get-SmokeWatcherSpawnDecision') {
@@ -110,8 +111,8 @@ if ($watch -notmatch '\[Diagnostics\.Stopwatch\]') { throw 'Watch-Host smoke age
 if ($watch -notmatch 'PSBoundParameters' -or $watch -notmatch 'ContainsKey') {
     throw 'Watch-Host must not treat the post-stamp file as PriorRunId when the parent bound leftover/empty'
 }
-$spawnAt = $smoke.IndexOf('Watch-Host.ps1')
-if ($spawnAt -lt 0) { throw 'Invoke-Smoke must spawn Watch-Host' }
+$spawnAt = $smoke.IndexOf('Start-WinMintHostWatchProcess')
+if ($spawnAt -lt 0) { throw 'Invoke-Smoke must spawn watch via Start-WinMintHostWatchProcess' }
 $spawn = $smoke.Substring($spawnAt, [Math]::Min(400, $smoke.Length - $spawnAt))
 if ($spawn -notmatch 'PriorRunId') {
     throw 'spawned watcher must receive leftover or empty -PriorRunId (parent already stamped)'
