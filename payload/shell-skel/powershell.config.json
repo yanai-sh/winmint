@@ -1,7 +1,3 @@
 {
-  "Microsoft.PowerShell:ExecutionPolicy": "RemoteSigned",
-  "ExperimentalFeatures": [
-    "PSFeedbackProvider",
-    "PSNativeWindowsTildeExpansion"
-  ]
+  "Microsoft.PowerShell:ExecutionPolicy": "RemoteSigned"
 }
