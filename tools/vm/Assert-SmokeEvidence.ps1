@@ -47,6 +47,8 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'SmokeStatus.ps1')
 . (Join-Path $PSScriptRoot '..\host\Assert-ImageEvidenceCore.ps1')
+. (Join-Path $PSScriptRoot 'SmokeS4AcceptanceFacts.ps1')
+$s4Facts = Get-WinMintSmokeS4AcceptanceFacts
 
 if (-not $StaticEvidenceOnly -and [string]::IsNullOrWhiteSpace($LiveShell)) {
     throw 'Assert-SmokeEvidence requires -LiveShell (full Smoke) or -StaticEvidenceOnly (AssertOnly/fixtures)'

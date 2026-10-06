@@ -44,6 +44,34 @@ try {
     Copy-Tree $fixture $ok
     $r = Invoke-StaticAssert $ok
     if ($r.Code -ne 0) { throw "fixture must pass: $($r.Err)" }
+
+    $factsPath = Join-Path $repo 'tools\vm\SmokeS4AcceptanceFacts.ps1'
+    if (-not (Test-Path -LiteralPath $factsPath)) { throw 'SmokeS4AcceptanceFacts.ps1 missing' }
+    . $factsPath
+    $facts = Get-WinMintSmokeS4AcceptanceFacts
+    if ($facts.RequiredPhases -notcontains 'shell.firstPaint') { throw 'facts must list shell.firstPaint' }
+
+    $nofactsphase = Join-Path $root 'nofactsphase'
+    Copy-Tree $fixture $nofactsphase
+    Remove-Item -LiteralPath (Join-Path $nofactsphase 'acceptance.json') -ErrorAction SilentlyContinue
+    $guest = Get-Content -LiteralPath (Guest-EvidencePath $nofactsphase) -Raw | ConvertFrom-Json
+    # Drop a facts-owned required phase (keep handoff phases jobs.ok + oobe.dismiss so failure is facts, not handoff)
+    $guest.phases = @($guest.phases | Where-Object { $_ -cne 'jobs.workstation.quiet' })
+    ($guest | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Guest-EvidencePath $nofactsphase) -Encoding utf8
+    $r = Invoke-StaticAssert $nofactsphase
+    if ($r.Code -eq 0) { throw 'missing facts-required phase must fail' }
+    if ($r.Err -notmatch 'jobs\.workstation\.quiet|quiet chrome') {
+        throw "facts-phase message: $($r.Err)"
+    }
+
+    $assertSrc = Get-Content -LiteralPath $assert -Raw -Encoding utf8
+    if ($assertSrc -notmatch 'SmokeS4AcceptanceFacts\.ps1') {
+        throw 'Assert-SmokeEvidence must dot SmokeS4AcceptanceFacts.ps1'
+    }
+    if ($assertSrc -notmatch 'Get-WinMintSmokeS4AcceptanceFacts') {
+        throw 'Assert-SmokeEvidence must call Get-WinMintSmokeS4AcceptanceFacts'
+    }
+
     $json = Get-Content -LiteralPath (Join-Path $ok 'acceptance.json') -Raw
     if ($json -notmatch 'winmint.smoke.acceptance/v1') { throw 'acceptance schema' }
     if ($json -notmatch '"splashBeforeExplorer": true') { throw 'splash-before-Explorer' }
