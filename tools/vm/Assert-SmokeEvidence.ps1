@@ -76,14 +76,16 @@ if ($guest.schemaVersion -ne 'winmint.provisioning.evidence/v1') {
 }
 
 $phases = @($guest.phases)
-if ($phases -notcontains 'shell.firstPaint') {
-    throw 'splash-before-Explorer marker missing: phases must contain shell.firstPaint'
+$firstPaintPhase = [string]$s4Facts.SplashBeforeSettle.FirstPaintPhase
+$settleBeginPhase = [string]$s4Facts.SplashBeforeSettle.SettleBeginPhase
+if ($phases -notcontains $firstPaintPhase) {
+    throw "splash-before-Explorer marker missing: phases must contain $firstPaintPhase"
 }
 
-$paintIdx = [array]::IndexOf($phases, 'shell.firstPaint')
-$settleIdx = [array]::IndexOf($phases, 'settle.begin')
+$paintIdx = [array]::IndexOf($phases, $firstPaintPhase)
+$settleIdx = [array]::IndexOf($phases, $settleBeginPhase)
 if ($settleIdx -ge 0 -and $paintIdx -gt $settleIdx) {
-    throw 'splash-before-Explorer failed: shell.firstPaint after settle.begin'
+    throw "splash-before-Explorer failed: $firstPaintPhase after $settleBeginPhase"
 }
 
 $outcome = [string]$guest.outcome
@@ -92,19 +94,25 @@ if ($outcome -ne 'Complete') {
 }
 
 # jobs.ok / oobe.dismiss / explorer Shell live in Get-WinMintGuestHandoffReadiness (shared with wait).
-if ($phases -notcontains 'jobs.workstation.quiet') {
-    throw 'FirstLogon quiet chrome missing: phases must contain jobs.workstation.quiet'
+$requiredPhaseThrows = [ordered]@{
+    'jobs.workstation.quiet'   = 'FirstLogon quiet chrome missing: phases must contain jobs.workstation.quiet'
+    'jobs.wsl.platform.mocked' = 'hypervisor WSL mock missing: phases must contain jobs.wsl.platform.mocked'
+    'shell.chrome'             = 'shell chrome missing: phases must contain shell.chrome'
 }
-if ($phases -notcontains 'jobs.wsl.platform.mocked') {
-    throw 'hypervisor WSL mock missing: phases must contain jobs.wsl.platform.mocked'
-}
-if ($phases -notcontains 'shell.chrome') {
-    throw 'shell chrome missing: phases must contain shell.chrome'
+foreach ($phase in @($s4Facts.RequiredPhases)) {
+    if ($phase -ceq $firstPaintPhase) { continue }
+    if ($phases -ccontains $phase) { continue }
+    if ($requiredPhaseThrows.Contains($phase)) {
+        throw $requiredPhaseThrows[$phase]
+    }
+    throw "phases must contain $phase"
 }
 
-$onlineRemoves = @($phases | Where-Object { $_ -like 'removed.appx.online.*' })
+$onRemovePat = [string]$s4Facts.OnlineRemoveSafetyNet.OnlineRemovePhasePattern
+$deprovPat = [string]$s4Facts.OnlineRemoveSafetyNet.DeprovisionPhasePattern
+$onlineRemoves = @($phases | Where-Object { $_ -like $onRemovePat })
 if ($onlineRemoves.Count -gt 0) {
-    $deprovisionMarks = @($phases | Where-Object { $_ -like 'deprovisioned.appx.*' })
+    $deprovisionMarks = @($phases | Where-Object { $_ -like $deprovPat })
     if ($deprovisionMarks.Count -eq 0) {
         throw 'AppX safety-net incomplete: removed.appx.online phases present but no deprovisioned.appx.* phase'
     }
@@ -112,13 +120,24 @@ if ($onlineRemoves.Count -gt 0) {
 
 # DMA hard fields must succeed
 # resumeOk + checkpoint.resume proves hard-field re-verify on resume (ticket 17), including setup-region latch.
-$dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.locationWarn') -or
-    (($phases -contains 'settle.resumeOk') -and ($phases -contains 'checkpoint.resume'))
+$dmaOk = $false
+foreach ($combo in @($s4Facts.DmaOkAnyOf)) {
+    $need = @($combo)
+    if ($need.Count -eq 0) { continue }
+    $hit = $true
+    foreach ($p in $need) {
+        if ($phases -cnotcontains $p) { $hit = $false; break }
+    }
+    if ($hit) { $dmaOk = $true; break }
+}
 if (-not $dmaOk) {
     throw 'DMA hard fields missing: need settle.ok, settle.locationWarn, or settle.resumeOk+checkpoint.resume'
 }
 
-$setupRegionOk = ($phases -contains 'settle.deviceRegionOk') -or ($phases -contains 'settle.deviceRegionRepaired')
+$setupRegionOk = $false
+foreach ($p in @($s4Facts.SetupRegionOkAnyOf)) {
+    if ($phases -ccontains $p) { $setupRegionOk = $true; break }
+}
 if (-not $setupRegionOk) {
     throw 'DMA setup region missing: need settle.deviceRegionOk or settle.deviceRegionRepaired (DeviceRegion Ireland)'
 }
@@ -227,19 +246,21 @@ $chrome = Get-Content -LiteralPath $chromePath -Raw -Encoding utf8 | ConvertFrom
 if ([string]$chrome.schemaVersion -ne 'winmint.shell.chrome/v1') {
     throw "unexpected shell chrome schema '$($chrome.schemaVersion)'"
 }
-$expectedWallpaper = 'C:\Windows\Web\Wallpaper\Windows\WinMint-Bloom.jpg'
+$expectedWallpaper = [string]$s4Facts.ExpectedWallpaperPath
 if ([string]$chrome.wallpaperPath -ne $expectedWallpaper) {
     throw "shell chrome wallpaperPath must be $expectedWallpaper, got '$($chrome.wallpaperPath)'"
 }
 $startPins = @($chrome.startPinIds)
 $taskbarPins = @($chrome.taskbarPinIds)
-foreach ($id in @('explorer', 'settings', 'terminal')) {
+foreach ($id in @($s4Facts.RequiredStartPinIds)) {
     if ($startPins -cnotcontains $id) {
         throw "shell chrome startPinIds must contain $id"
     }
 }
-if ($taskbarPins -cnotcontains 'explorer' -or $taskbarPins -cnotcontains 'terminal') {
-    throw 'shell chrome taskbarPinIds must contain explorer and terminal'
+foreach ($id in @($s4Facts.RequiredTaskbarPinIds)) {
+    if ($taskbarPins -cnotcontains $id) {
+        throw "shell chrome taskbarPinIds must contain $id"
+    }
 }
 
 $packageStrict = $false
@@ -251,12 +272,9 @@ if (Test-Path -LiteralPath $applyEvidencePath -PathType Leaf) {
     }
 }
 
-$extraPinIds = [ordered]@{
-    'Anysphere.Cursor'     = 'cursor'
-    'Zen-Team.Zen-Browser' = 'zen-browser'
-}
+$extraPinIds = $s4Facts.PackageStrictExtraPins
 if ($packageStrict) {
-    foreach ($pinId in $extraPinIds.Values) {
+    foreach ($pinId in @($extraPinIds.Values)) {
         if ($startPins -cnotcontains $pinId) {
             throw "package-strict shell chrome startPinIds must contain $pinId"
         }
@@ -282,14 +300,8 @@ if ($null -eq $chrome.quietDwords) {
 }
 # Task 6 writes the full ExplorerAdvancedDwords table plus SearchboxTaskbarMode.
 # Assert the v1 quiet keys as a subset (must be 0); do not require exact dictionary equality.
-$requiredQuiet = [ordered]@{
-    SearchboxTaskbarMode = 0
-    TaskbarDa            = 0
-    TaskbarMn            = 0
-    ShowTaskViewButton   = 0
-    ShowCopilotButton    = 0
-}
-foreach ($name in $requiredQuiet.Keys) {
+$requiredQuiet = $s4Facts.RequiredQuietDwords
+foreach ($name in @($requiredQuiet.Keys)) {
     $prop = $chrome.quietDwords.PSObject.Properties[$name]
     if ($null -eq $prop) {
         throw "shell chrome quietDwords missing $name"
