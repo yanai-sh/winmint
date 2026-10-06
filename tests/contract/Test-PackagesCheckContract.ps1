@@ -69,6 +69,19 @@ if ($bounded -notmatch 'timed out after \$DownloadTimeoutSeconds seconds' `
     -or ([regex]::Matches($scoop, '600-second timeout')).Count -ne 2) {
     $failures += 'timeout errors must state the active bound'
 }
+if ($winget -notmatch "'native'" -or $winget -notmatch "'fallback'") {
+    $failures += 'winget prove must record native vs fallback resolution'
+}
+if ($scoop -notmatch "'native'" -or $scoop -notmatch "'fallback'") {
+    $failures += 'scoop prove must record native vs fallback resolution'
+}
+if ($body -notmatch "'allowlist'" `
+    -or $body -notmatch '\$result\.resolution\s*=') {
+    $failures += 'outcome results must include resolution (wsl allowlist + target assignment)'
+}
+if ($body -notmatch 'ok \$\(\$result\.source\):\$\(\$result\.id\) \(\$resolution\)') {
+    $failures += 'ok lines must surface resolution in parentheses'
+}
 
 . ([scriptblock]::Create($bounded))
 $script:DownloadTimeoutSeconds = 5

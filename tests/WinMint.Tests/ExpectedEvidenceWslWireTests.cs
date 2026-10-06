@@ -103,7 +103,7 @@ public class ExpectedEvidenceWslWireTests
                     string bucket = e.ScoopBucket is null
                         ? "null"
                         : $"\"{e.ScoopBucket}\"";
-                    return $$"""{"source":"{{e.Source}}","id":"{{e.Id}}","method":"{{PackagesProof.ExpectedMethod(e.Source)}}","bucket":{{bucket}}}""";
+                    return $$"""{"source":"{{e.Source}}","id":"{{e.Id}}","method":"{{PackagesProof.ExpectedMethod(e.Source)}}","resolution":"{{(e.Source is "wsl" ? "allowlist" : "native")}}","bucket":{{bucket}}}""";
                 });
             File.WriteAllText(
                 proofPath,

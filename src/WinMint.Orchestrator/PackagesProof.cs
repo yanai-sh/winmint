@@ -247,6 +247,12 @@ public static partial class PackagesProof
                 errors.Add(
                     $"proof entry {key} method must be {expectedMethod} — run: just packages-check");
             }
+
+            if (!IsAllowedResolution(required.Source, actual.Resolution))
+            {
+                errors.Add(
+                    $"proof entry {key} resolution must be {AllowedResolutions(required.Source)} — run: just packages-check");
+            }
         }
 
         return errors;
@@ -259,6 +265,22 @@ public static partial class PackagesProof
         "wsl" => "wsl-store-allowlist",
         _ => throw new InvalidOperationException($"Unsupported proof source '{source}'."),
     };
+
+    internal static string AllowedResolutions(string source) => source switch
+    {
+        "winget" or "scoop" => "native|fallback",
+        "wsl" => "allowlist",
+        _ => throw new InvalidOperationException($"Unsupported proof source '{source}'."),
+    };
+
+    internal static bool IsAllowedResolution(string source, string? resolution) =>
+        !string.IsNullOrWhiteSpace(resolution)
+        && source switch
+        {
+            "winget" or "scoop" => resolution is "native" or "fallback",
+            "wsl" => resolution is "allowlist",
+            _ => false,
+        };
 
     internal static IReadOnlyList<string> DuplicateIdentities(
         IEnumerable<PackagesProofEntry> entries) =>
@@ -303,6 +325,9 @@ internal sealed class PackagesProofEntryFile
 
     [JsonPropertyName("method")]
     public string? Method { get; set; }
+
+    [JsonPropertyName("resolution")]
+    public string? Resolution { get; set; }
 
     [JsonPropertyName("bucket")]
     public string? Bucket { get; set; }
