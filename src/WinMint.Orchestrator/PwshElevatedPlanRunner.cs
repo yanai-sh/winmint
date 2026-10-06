@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace WinMint.Orchestrator;
 
 /// <summary>One elevated <c>pwsh -File servicing/Invoke-ServicingPlan.ps1</c> invocation per Apply (single UAC).</summary>
-public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
+public sealed class PwshElevatedPlanRunner(Action<string>? onProgress = null) : IElevatedPlanRunner
 {
     public async Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
         ServicingWorkspace workspace,
@@ -63,14 +63,18 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
             if (elevated)
             {
                 // Already elevated: Process.RunAsync honors CancellationToken (kills child on cancel).
-                // Process.Run / RunAsync reject UseShellExecute — elevated path only.
+                // Process.Run / RunAsync reject UseShellExecute — elevated path only. No parent poll
+                // (child shares console / Write-WinMintHostPhase).
                 ProcessExitStatus status = await Process.RunAsync(psi, ct).ConfigureAwait(false);
                 exitCode = status.ExitCode;
             }
             else
             {
-                // UAC Verb=runas requires UseShellExecute — Process.Run rejects that, so Start + WaitForExit.
-                // ct.Register kills the child on cancel (WaitForExit itself is not cancelable).
+                // UAC Verb=runas requires UseShellExecute — Process.Run rejects that, so Start + wait loop.
+                // ct.Register kills the child on cancel (WaitForExit(timeout) is cancelable via Kill).
+                onProgress?.Invoke(
+                    $"Applying… work={workspace.Root} (just watch-apply for log tail)");
+                ApplyOperatorProgressTracker tracker = new();
                 using Process process = Process.Start(psi)
                     ?? throw new InvalidOperationException("Failed to start elevated pwsh.");
                 using (ct.Register(() =>
@@ -88,7 +92,14 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
                     }
                 }))
                 {
-                    process.WaitForExit();
+                    while (!process.WaitForExit(1000))
+                    {
+                        EmitProgress(workspace, tracker, onProgress, ct.IsCancellationRequested);
+                        if (ct.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                    }
                 }
 
                 exitCode = process.ExitCode;
@@ -102,14 +113,7 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
 
             if (exitCode != 0)
             {
-                // No failure.json means the plan runner died before it could say why — a distinct
-                // condition from a stage failing, and the elevated path has no stdout to fall back on.
-                string? message = ReadFailureMessage(workspace);
-                return Result.Fail<ElevatedRunOk, Failure>(message is null
-                    ? new Failure(
-                        "servicing.plan.crashed",
-                        $"Invoke-ServicingPlan exited {exitCode} without writing failure.json.")
-                    : new Failure("servicing.plan.failed", message));
+                return Result.Fail<ElevatedRunOk, Failure>(BuildPlanFailure(workspace, exitCode));
             }
         }
         catch (OperationCanceledException)
@@ -126,12 +130,55 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
         return Result.Ok<ElevatedRunOk, Failure>(default);
     }
 
-    private static string? ReadFailureMessage(ServicingWorkspace workspace)
+    private static void EmitProgress(
+        ServicingWorkspace workspace,
+        ApplyOperatorProgressTracker tracker,
+        Action<string>? onProgress,
+        bool cancelled)
     {
+        if (onProgress is null || cancelled)
+        {
+            return;
+        }
+
+        ApplyProgress? snap = workspace.TryReadProgress();
+        long? logLength = ApplyOperatorProgressTracker.TryGetLogLength(snap?.LogPath);
+        string? line = tracker.Consider(snap, logLength, cancelled);
+        if (line is not null)
+        {
+            onProgress(line);
+        }
+    }
+
+    private static Failure BuildPlanFailure(ServicingWorkspace workspace, int exitCode)
+    {
+        ApplyProgress? progress = workspace.TryReadProgress();
+        string? stage = progress?.Stage;
+        string? logPath = progress?.LogPath;
+
+        if (!TryReadFailureFile(workspace, out string? opcode, out string? message))
+        {
+            return new Failure(
+                "servicing.plan.crashed",
+                ApplyOperatorMessages.FormatCrashed(workspace.Root, exitCode));
+        }
+
+        return new Failure(
+            "servicing.plan.failed",
+            ApplyOperatorMessages.FormatFailed(workspace.Root, opcode, message, stage, logPath));
+    }
+
+    private static bool TryReadFailureFile(
+        ServicingWorkspace workspace,
+        out string? opcode,
+        out string? message)
+    {
+        opcode = null;
+        message = null;
         string path = workspace.Failure;
         if (!File.Exists(path))
         {
-            return null;
+            return false;
         }
 
         try
@@ -139,11 +186,18 @@ public sealed class PwshElevatedPlanRunner : IElevatedPlanRunner
             FailureFile? failure = JsonSerializer.Deserialize(
                 File.ReadAllBytes(path),
                 ServicingJsonContext.Default.FailureFile);
-            return failure?.Message;
+            if (failure is null)
+            {
+                return false;
+            }
+
+            opcode = failure.Opcode;
+            message = failure.Message;
+            return !string.IsNullOrWhiteSpace(message) || !string.IsNullOrWhiteSpace(opcode);
         }
         catch (JsonException)
         {
-            return null;
+            return false;
         }
     }
 

@@ -125,4 +125,10 @@ finally {
     Remove-Item -LiteralPath $fakeRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# --- wrapper token honesty (exit 2 must not print quality-check ok) ---
+$wrapper = Get-Content -LiteralPath (Join-Path $repo 'tools\host\Invoke-MaintainerCheck.ps1') -Raw -Encoding utf8
+Assert-True ($wrapper -match '\[int\]\$result\.ExitCode -eq 0') 'ok token gated on exit 0'
+Assert-True ($wrapper -match "maintainer-check advisory") 'advisory token present'
+Assert-True ($wrapper -match "Write-Output 'quality-check ok'") 'ok token still present when exit 0'
+
 Write-Output 'Test-MaintainerCheck ok'

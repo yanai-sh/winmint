@@ -438,7 +438,10 @@ internal static class Program
         WritePlanHonesty(composition.Review);
 
         Result<ImageEvidence, Failure> applied =
-            await HostCompile.ApplyAsync(composition).ConfigureAwait(false);
+            await HostCompile.ApplyAsync(
+                    composition,
+                    new PwshElevatedPlanRunner(OnApplyProgress))
+                .ConfigureAwait(false);
         if (!applied.IsOk)
         {
             CliLog.Failure(Log, applied.Error.Code, applied.Error.Message);
@@ -522,6 +525,17 @@ internal static class Program
         profile = parsed.Value;
         exitCode = 0;
         return true;
+    }
+
+    private static void OnApplyProgress(string line)
+    {
+        if (line.StartsWith("quiet ", StringComparison.Ordinal))
+        {
+            CliLog.ApplyProgressWarn(Log, line);
+            return;
+        }
+
+        CliLog.ApplyProgress(Log, line);
     }
 
     private static void WritePlanHonesty(HostReview review)

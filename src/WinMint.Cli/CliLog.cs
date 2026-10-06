@@ -53,4 +53,10 @@ internal static partial class CliLog
 
     [LoggerMessage(EventId = 16, Level = LogLevel.Information, Message = "Wrote Station pack to {PackDir} (Apply Profile: {ProfilePath})")]
     public static partial void StationPackWritten(ILogger logger, string packDir, string profilePath);
+
+    [LoggerMessage(EventId = 17, Level = LogLevel.Information, Message = "{Line}")]
+    public static partial void ApplyProgress(ILogger logger, string line);
+
+    [LoggerMessage(EventId = 18, Level = LogLevel.Warning, Message = "{Line}")]
+    public static partial void ApplyProgressWarn(ILogger logger, string line);
 }

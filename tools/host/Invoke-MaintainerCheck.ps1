@@ -21,6 +21,11 @@ else {
     if ($null -ne $result.IsoResult) {
         foreach ($m in $result.IsoResult.Messages) { Write-Output $m }
     }
-    Write-Output 'quality-check ok'
+    if ([int]$result.ExitCode -eq 0) {
+        Write-Output 'quality-check ok'
+    }
+    elseif ([int]$result.ExitCode -eq 2) {
+        Write-Output 'maintainer-check advisory'
+    }
 }
 exit [int]$result.ExitCode
