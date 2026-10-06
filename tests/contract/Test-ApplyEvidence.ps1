@@ -171,6 +171,23 @@ try {
     $r = Invoke-ApplyAssert $wslOmitted
     if ($r.Code -eq 0) { throw 'wsl jobs with empty requiredWslPackageIds must fail' }
     if ($r.Err -notmatch 'requiredWslPackageIds missing or empty') { throw "wsl omitted evidence message: $($r.Err)" }
+
+    $dmaIncomplete = Join-Path $root 'dma-incomplete'
+    Copy-Tree $fixture $dmaIncomplete
+    $ev = Get-Content -LiteralPath (Join-Path $dmaIncomplete 'evidence.json') -Raw | ConvertFrom-Json
+    $ev.lane = 'Release'
+    $ev | Add-Member -NotePropertyName packageStrict -NotePropertyValue $true -Force
+    ($ev | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $dmaIncomplete 'evidence.json') -Encoding utf8
+    $payload = Join-Path $dmaIncomplete 'payload'
+    New-Item -ItemType Directory -Force -Path $payload | Out-Null
+    Set-Content -LiteralPath (Join-Path $payload 'bundle.json') -Encoding utf8 -Value @'
+{"schemaVersion":"winmint.provisioning.bundle/v1","supervisorPath":"C:\\Windows\\WinMint\\Supervisor.exe","username":"winmint","password":"","dmaEnabled":true,"settle":null,"packageStrict":true}
+'@
+    $r = Invoke-ApplyAssert $dmaIncomplete -RequireLane Release
+    if ($r.Code -eq 0) { throw 'Gate B with dmaEnabled and incomplete settle must fail' }
+    if ($r.Err -notmatch 'dma\.settle requires locale, geoId, timeZoneId, and locationServicesEnabled') {
+        throw "dma settle message: $($r.Err)"
+    }
 }
 finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue

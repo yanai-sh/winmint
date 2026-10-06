@@ -60,6 +60,16 @@ public class HostCompileLaneTests
             using JsonDocument bundle = JsonDocument.Parse(
                 File.ReadAllBytes(Path.Combine(work, "payload", "bundle.json")));
             Assert.Equal(expected, bundle.RootElement.GetProperty("packageStrict").GetBoolean());
+            if (bundle.RootElement.GetProperty("dmaEnabled").GetBoolean())
+            {
+                JsonElement settle = bundle.RootElement.GetProperty("settle");
+                Assert.False(string.IsNullOrWhiteSpace(settle.GetProperty("locale").GetString()));
+                Assert.False(string.IsNullOrWhiteSpace(settle.GetProperty("timeZoneId").GetString()));
+                Assert.True(settle.GetProperty("geoId").TryGetInt32(out _));
+                Assert.True(settle.TryGetProperty("locationServicesEnabled", out JsonElement loc));
+                Assert.True(loc.ValueKind is JsonValueKind.True or JsonValueKind.False);
+            }
+
             string payload = Path.Combine(work, ServicingWorkspace.PayloadDirectoryName);
             string defaultUserJson = File.ReadAllText(
                 Path.Combine(payload, ServicingWorkspace.DefaultUserFileName));

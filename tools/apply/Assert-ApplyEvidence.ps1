@@ -59,6 +59,14 @@ $lane = $core.Lane
 $digestMap = $core.DigestMap
 $expected = $core.Expected
 
+$packageStrict = $false
+if ($evidence.PSObject.Properties.Name -contains 'packageStrict') {
+    $packageStrict = [bool]$evidence.packageStrict
+}
+if (Test-WinMintIsGateB -Lane $lane -PackageStrict:$packageStrict) {
+    Assert-WinMintDmaSettleBundle -BundlePath (Join-Path $WorkDirectory 'payload\bundle.json')
+}
+
 if ($null -ne $expected) {
     if ([bool]$expected.expectDrivers) { $ExpectDrivers = $true }
     if ([bool]$expected.expectFuPosture) { $ExpectFuPosture = $true }

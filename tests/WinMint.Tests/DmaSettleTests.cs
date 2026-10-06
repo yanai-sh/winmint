@@ -32,11 +32,46 @@ public class DmaSettleTests
         Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
         Assert.DoesNotContain(splash.Events, e => e.StartsWith("Status:jobs.", StringComparison.Ordinal));
         Assert.Empty(processes.Starts);
-        Assert.Single(region.Applied);
-        Assert.Equal(242, region.Applied[0].GeoId);
+        Assert.NotEmpty(region.Applied);
+        Assert.All(region.Applied, a => Assert.Equal(242, a.GeoId));
         Assert.Contains("settle.hardMismatch", evidence.Documents[0].Phases);
         Assert.DoesNotContain("jobs.begin", evidence.Documents[0].Phases);
         Assert.DoesNotContain("jobs.ok", evidence.Documents[0].Phases);
+    }
+
+    [Fact]
+    public async Task Shell_restamps_when_hard_fields_drift_during_poll()
+    {
+        ManualTimeProvider time = new();
+        DmaSettleTarget target = new("en-GB", 242, "GMT Standard Time", true);
+        ScriptedRegionSnapshot region = new(
+            new RegionRead.ValueRead(new RegionState("en-GB", 68, "GMT Standard Time", true)),
+            new RegionRead.ValueRead(new RegionState("en-GB", 242, "GMT Standard Time", true)));
+        RecordingSplashPresenter splash = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(dma: target, policy: TightSettlePolicy()),
+            Env(time, region, splash, new RecordingEvidenceSink()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal(2, region.Applied.Count);
+        Assert.All(region.Applied, a => Assert.Equal(242, a.GeoId));
+        Assert.Contains("Status:settle.ok", splash.Events);
+    }
+
+    [Fact]
+    public void Poll_probe_reapplies_after_hard_field_drift()
+    {
+        DmaSettleTarget target = new("en-GB", 242, "GMT Standard Time", true);
+        ScriptedRegionSnapshot region = new(
+            new RegionRead.ValueRead(new RegionState("en-GB", 68, "GMT Standard Time", true)));
+
+        bool matched = DmaSettleConfidence.TryPollProbe(region, target, out _);
+
+        Assert.False(matched);
+        Assert.Single(region.Applied);
+        Assert.Equal(242, region.Applied[0].GeoId);
     }
 
     [Fact]

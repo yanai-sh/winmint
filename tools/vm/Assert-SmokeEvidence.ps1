@@ -109,11 +109,11 @@ if ($onlineRemoves.Count -gt 0) {
 }
 
 # DMA hard fields must succeed
-# resumeSkip + checkpoint.resume also proves prior settle (ticket 17), including setup-region gate on resume.
+# resumeOk + checkpoint.resume proves hard-field re-verify on resume (ticket 17), including setup-region latch.
 $dmaOk = ($phases -contains 'settle.ok') -or ($phases -contains 'settle.locationWarn') -or
-    (($phases -contains 'settle.resumeSkip') -and ($phases -contains 'checkpoint.resume'))
+    (($phases -contains 'settle.resumeOk') -and ($phases -contains 'checkpoint.resume'))
 if (-not $dmaOk) {
-    throw 'DMA hard fields missing: need settle.ok, settle.locationWarn, or settle.resumeSkip+checkpoint.resume'
+    throw 'DMA hard fields missing: need settle.ok, settle.locationWarn, or settle.resumeOk+checkpoint.resume'
 }
 
 $setupRegionOk = ($phases -contains 'settle.deviceRegionOk') -or ($phases -contains 'settle.deviceRegionRepaired')
