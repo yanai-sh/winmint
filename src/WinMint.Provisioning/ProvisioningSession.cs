@@ -1,7 +1,4 @@
-using System.Security;
 using System.Text.Json.Serialization;
-
-using WinMint.Contracts;
 
 namespace WinMint.Provisioning;
 
@@ -443,16 +440,8 @@ public static partial class ProvisioningSession
             return new SettlePhaseResult(HardFailed: false, TimedOut: false, skipped);
         }
 
-        // Same four fields Win32RegionSnapshot.Apply requires — a narrower gate here would
-        // surface a missing target as settle.applyFailed instead of settle.targetIncomplete.
-        if (string.IsNullOrWhiteSpace(bundle.Dma.Locale)
-            || bundle.Dma.GeoId is null
-            || string.IsNullOrWhiteSpace(bundle.Dma.TimeZoneId)
-            || bundle.Dma.LocationServicesEnabled is null)
+        if (DmaSettleConfidence.TargetIncompleteStatus(bundle.Dma) is SessionStatus incomplete)
         {
-            SessionStatus incomplete = new(
-                "settle.targetIncomplete",
-                "DMA settle requires locale, geoId, timeZoneId, and locationServicesEnabled.");
             Note(env, phases, incomplete);
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, incomplete);
         }
@@ -485,19 +474,10 @@ public static partial class ProvisioningSession
                 return new SettlePhaseResult(HardFailed: true, TimedOut: true, TimeoutStatus());
             }
 
-            try
+            if (DmaSettleConfidence.TryPollProbe(env.Guest.Region, bundle.Dma, out _))
             {
-                RegionState snap = env.Guest.Region.Read();
-                if (HardFieldsMatch(snap, bundle.Dma))
-                {
-                    // Still take an authoritative final snapshot after the loop.
-                    break;
-                }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                // ponytail: intermediate DMA probe fail-open — final snapshot after loop is authoritative
-                _ = ex;
+                // Still take an authoritative final snapshot after the loop.
+                break;
             }
 
             TimeSpan settleElapsed = env.Time.GetElapsedTime(settleStartTs);
@@ -556,11 +536,9 @@ public static partial class ProvisioningSession
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, readFailed);
         }
 
-        if (!HardFieldsMatch(final, bundle.Dma))
+        if (!DmaSettleConfidence.HardFieldsMatch(final, bundle.Dma))
         {
-            SessionStatus mismatch = new(
-                "settle.hardMismatch",
-                $"Final snapshot hard fields mismatch (locale={final.Locale}, geoId={final.GeoId}, tz={final.TimeZoneId}).");
+            SessionStatus mismatch = DmaSettleConfidence.HardMismatchStatus(final);
             Note(env, phases, mismatch);
             return new SettlePhaseResult(HardFailed: true, TimedOut: false, mismatch);
         }
@@ -571,12 +549,8 @@ public static partial class ProvisioningSession
             return setup.Value;
         }
 
-        if (bundle.Dma.LocationServicesEnabled is bool expectedLocation
-            && final.LocationServicesEnabled != expectedLocation)
+        if (DmaSettleConfidence.LocationWarnStatus(final, bundle.Dma) is SessionStatus warn)
         {
-            SessionStatus warn = new(
-                "settle.locationWarn",
-                $"Location-services posture is {final.LocationServicesEnabled}; expected {expectedLocation}.");
             Note(env, phases, warn);
             return new SettlePhaseResult(HardFailed: false, TimedOut: false, warn);
         }
@@ -614,62 +588,21 @@ public static partial class ProvisioningSession
             return null;
         }
 
-        DmaSetupRegionLatch latch = EnsureDmaSetupRegion(
+        DmaSetupRegionLatch latch = DmaSettleConfidence.EnsureDmaSetupRegion(
             env.Guest.DmaSetup,
             DmaSetupRegionPolicy.Settle);
-        SessionStatus status = latch.Kind switch
-        {
-            DmaSetupRegionLatchKind.Ok when latch.EnsureResult == DmaSetupRegionEnsureResult.Repaired =>
-                new("settle.deviceRegionRepaired", "DeviceRegion repaired to Ireland (68)."),
-            DmaSetupRegionLatchKind.Ok =>
-                new("settle.deviceRegionOk", "DeviceRegion already Ireland (68)."),
-            DmaSetupRegionLatchKind.MissingPort =>
-                new("settle.deviceRegionFailed", "DmaSetup port required when DMA enabled."),
-            _ => new("settle.deviceRegionFailed", latch.Message ?? "DeviceRegion latch failed."),
-        };
+        SessionStatus status = DmaSettleConfidence.DeviceRegionStatus(latch);
         Note(env, phases, status);
         return new SettlePhaseResult(
-            HardFailed: latch.Kind is not DmaSetupRegionLatchKind.Ok,
+            HardFailed: DmaSettleConfidence.DeviceRegionHardFailed(latch),
             TimedOut: false,
             status);
     }
 
-    /// <summary>
-    /// Sticky Ireland DeviceRegion latch (ADR-003). Machine setup fail-opens on access denied;
-    /// FirstLogon settle fail-closes after repair/verify.
-    /// </summary>
     internal static DmaSetupRegionLatch EnsureDmaSetupRegion(
         IDmaSetupRegion? port,
-        DmaSetupRegionPolicy policy)
-    {
-        if (port is null)
-        {
-            return new DmaSetupRegionLatch(DmaSetupRegionLatchKind.MissingPort, null, null);
-        }
-
-        try
-        {
-            DmaSetupRegionEnsureResult result = port.EnsureIreland();
-            return new DmaSetupRegionLatch(DmaSetupRegionLatchKind.Ok, result, null);
-        }
-        catch (Exception ex) when (
-            policy == DmaSetupRegionPolicy.MachineSetup
-            && ex is UnauthorizedAccessException or SecurityException)
-        {
-            // ponytail: OOBE still holds DeviceRegion during SetupComplete. Exit 1 reseals to Recovery.
-            // FirstLogon settle retries the latch; fail-closed stays for verify/null-port failures.
-            return new DmaSetupRegionLatch(DmaSetupRegionLatchKind.AccessDeniedSoft, null, null);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return new DmaSetupRegionLatch(DmaSetupRegionLatchKind.Failed, null, ex.Message);
-        }
-    }
-
-    private static bool HardFieldsMatch(RegionState actual, DmaSettleTarget target) =>
-        string.Equals(actual.Locale, target.Locale, StringComparison.OrdinalIgnoreCase)
-        && actual.GeoId == target.GeoId
-        && string.Equals(actual.TimeZoneId, target.TimeZoneId, StringComparison.OrdinalIgnoreCase);
+        DmaSetupRegionPolicy policy) =>
+        DmaSettleConfidence.EnsureDmaSetupRegion(port, policy);
 
     /// <summary>Run the SetupComplete/SYSTEM pass: stamp autologon, verify Shell, wipe secrets.</summary>
     public static Task<SessionResult> RunMachineSetupAsync(
