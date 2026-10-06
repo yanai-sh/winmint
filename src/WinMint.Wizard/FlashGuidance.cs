@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
 
+using WinMint.Orchestrator;
+
 namespace WinMint.Wizard;
 
 /// <summary>Post-Build flash strip copy (Avalonia-free). Gate B = wipe media prep, not Primary install proven.</summary>
@@ -9,6 +11,25 @@ internal static class FlashGuidance
     public static string Format(
         string outputIsoPath,
         bool gateB,
+        string? outputIsoSha256 = null) =>
+        Format(outputIsoPath, gateB, ImageQualityLane.Test, packageStrict: false, outputIsoSha256);
+
+    public static string Format(
+        string outputIsoPath,
+        HostReview review,
+        string? outputIsoSha256 = null) =>
+        Format(
+            outputIsoPath,
+            review.IsGateB,
+            review.ImageQuality,
+            review.PackageStrict,
+            outputIsoSha256);
+
+    public static string Format(
+        string outputIsoPath,
+        bool gateB,
+        ImageQualityLane lane,
+        bool packageStrict,
         string? outputIsoSha256 = null)
     {
         string iso = outputIsoPath.Trim();
@@ -18,6 +39,14 @@ internal static class FlashGuidance
         if (gateB)
         {
             sb.AppendLine("Gate B wipe media ready (pre-wipe ISO evidence — not a completed Primary install).");
+        }
+        else if (lane == ImageQualityLane.Release && packageStrict)
+        {
+            sb.AppendLine("Release+strict ISO ready — package wire not wipe-ready (not Gate B).");
+        }
+        else if (lane == ImageQualityLane.Release)
+        {
+            sb.AppendLine("Release ISO ready (not package-strict wipe gate).");
         }
         else
         {

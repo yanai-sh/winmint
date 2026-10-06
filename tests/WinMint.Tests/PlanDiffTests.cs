@@ -6,6 +6,28 @@ namespace WinMint.Tests;
 public class PlanDiffTests
 {
     [Fact]
+    public void Sl7_host_review_shows_fedora_wsl_wire_and_gate_b_on_release_strict()
+    {
+        string samplePath = Path.Combine(TestRepo.Root, "samples", "sl7.profile.json");
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(samplePath);
+        Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
+
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(
+            parsed.Value,
+            new HostComposeOptions(
+                ImageQuality: ImageQualityLane.Release,
+                PackageStrict: PackageStrictOverride.Force));
+        Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
+
+        HostReview review = planned.Value.Review;
+        Assert.Contains("FedoraLinux-44", review.EffectiveWsl);
+        Assert.Contains("FedoraLinux", review.AuthoredProfile.WslDistros);
+        Assert.True(review.PackageWireHonest);
+        Assert.True(review.IsGateB);
+        Assert.Contains("WSL FedoraLinux-44", review.Diff, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Host_review_projects_curated_package_facts_for_single_argument_diff()
     {
         Profile profile = Lab() with
@@ -24,6 +46,7 @@ public class PlanDiffTests
         Assert.True(review.BraveSelected);
         Assert.Contains("Anysphere.Cursor", review.EffectiveWinget);
         Assert.Contains("curl", review.EffectiveScoop);
+        Assert.Empty(review.EffectiveWsl);
 
         string text = review.Diff;
         Assert.Contains("Brave policies — you chose", text, StringComparison.Ordinal);
@@ -125,6 +148,8 @@ public class PlanDiffTests
             EffectivePackages = [],
             EffectiveWinget = [],
             EffectiveScoop = [],
+            EffectiveWsl = [],
+            PackageWireHonest = false,
         };
 
         string text = review.Diff;

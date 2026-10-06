@@ -4,7 +4,8 @@ Set-StrictMode -Version Latest
 <#
 .SYNOPSIS
   Shared ImageEvidence schema/lane/digest/expected-evidence asserts for S4 and S5.
-  Gate B polarity matches HostReview.IsGateB (Release ∧ packageStrict).
+  Gate B polarity for Apply evidence is lane ∧ packageStrict (Release wipe path gating).
+  HostReview.IsGateB additionally requires package wire honesty (WSL installIds) — do not equate them.
 #>
 
 function Test-WinMintIsGateB {

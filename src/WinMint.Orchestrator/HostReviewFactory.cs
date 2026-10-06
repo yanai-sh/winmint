@@ -1,3 +1,5 @@
+using WinMint.Contracts;
+
 namespace WinMint.Orchestrator;
 
 /// <summary>
@@ -19,6 +21,14 @@ internal static class HostReviewFactory
         {
             Account = profile.Account with { Password = null },
         };
+        IReadOnlyList<ProvisionJob> jobs =
+            HostCompile.ReadOnly(artifacts.Jobs.Jobs.Select(HostCompile.SnapshotJob));
+        IReadOnlyList<EffectivePackageFact> packages =
+            HostCompile.ReadOnly(artifacts.EffectivePackages);
+        IReadOnlyList<string> effectiveWsl = HostCompile.ReadOnly(
+            HostPackageWire.EffectiveWslInstallIds(packages));
+        PackageCatalog catalog = PackageCatalog.Default;
+        bool wireHonest = HostPackageWire.IsHonest(jobs, packages, catalog);
         return new HostReview(
             redacted,
             System.Text.Encoding.UTF8.GetString(BuildPlan.SerializeProfile(redacted)),
@@ -30,8 +40,8 @@ internal static class HostReviewFactory
             artifacts.PackageStrict,
             artifacts.Manifest.RequiresNetwork,
             HostCompile.ReadOnly(artifacts.RemoveProvisionedAppx),
-            HostCompile.ReadOnly(artifacts.EffectivePackages),
-            HostCompile.ReadOnly(artifacts.Jobs.Jobs.Select(HostCompile.SnapshotJob)),
+            packages,
+            jobs,
             HostCompile.ReadOnly(artifacts.Stages),
             artifacts.BraveSelected,
             HostCompile.ReadOnly(artifacts.EffectivePackages
@@ -41,6 +51,8 @@ internal static class HostReviewFactory
             HostCompile.ReadOnly(artifacts.EffectivePackages
                 .Where(static package => package.Source == EffectivePackageSource.Scoop)
                 .Select(static package => package.ResolvedInstallId)),
-            HostCompile.ReadOnly(authoredSelectionLabels ?? []));
+            effectiveWsl,
+            HostCompile.ReadOnly(authoredSelectionLabels ?? []),
+            wireHonest);
     }
 }

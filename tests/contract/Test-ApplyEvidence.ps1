@@ -8,7 +8,7 @@ $assert = Join-Path $repo 'tools\apply\Assert-ApplyEvidence.ps1'
 $fixture = Join-Path $repo 'tests\fixtures\apply-evidence'
 . (Join-Path $repo 'tools\host\Assert-ImageEvidenceCore.ps1')
 if (-not (Test-WinMintIsGateB -Lane 'Release' -PackageStrict:$true)) {
-    throw 'Test-WinMintIsGateB must match HostReview.IsGateB for Release+strict'
+    throw 'Test-WinMintIsGateB Release+strict must be true (Apply lane predicate; not full HostReview.IsGateB)'
 }
 if (Test-WinMintIsGateB -Lane 'Release' -PackageStrict:$false) {
     throw 'soft Release must not be Gate B'

@@ -39,9 +39,11 @@ if ($interactive) {
         try {
             Set-PSReadLineOption -PredictionSource History
         } catch {
+            Write-Verbose -Message $_.Exception.Message
         }
     } catch {
         # Hosts without PSReadLine (or option mismatches) must not brick startup.
+        Write-Verbose -Message $_.Exception.Message
     }
 }
 
@@ -65,6 +67,7 @@ if ($interactive -and (Test-CommandExists zoxide)) {
         Invoke-Expression (& { (zoxide init powershell | Out-String) })
     } catch {
         # Broken Scoop shim must not brick pwsh.
+        Write-Verbose -Message $_.Exception.Message
     }
 }
 
@@ -74,5 +77,6 @@ if ($interactive -and (Test-CommandExists starship)) {
         Invoke-Expression (& { (starship init powershell | Out-String) })
     } catch {
         # Broken Scoop shim must not brick pwsh.
+        Write-Verbose -Message $_.Exception.Message
     }
 }

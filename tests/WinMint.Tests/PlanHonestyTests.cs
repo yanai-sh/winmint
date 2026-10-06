@@ -74,6 +74,29 @@ public class PlanHonestyTests
         Assert.DoesNotContain("Warning:", text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Release_strict_with_wsl_job_but_empty_facts_is_not_gate_b()
+    {
+        Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(
+            Lab() with { WslDistros = ["FedoraLinux"] },
+            new HostComposeOptions(
+                ImageQuality: ImageQualityLane.Release,
+                PackageStrict: PackageStrictOverride.Force));
+        Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
+        Assert.True(planned.Value.Review.IsGateB);
+        Assert.Contains("FedoraLinux-44", planned.Value.Review.EffectiveWsl);
+
+        HostReview dishonest = planned.Value.Review with
+        {
+            EffectivePackages = [],
+            EffectiveWsl = [],
+            PackageWireHonest = false,
+        };
+        Assert.False(dishonest.IsGateB);
+        Assert.Contains("Warning:", dishonest.Honesty, StringComparison.Ordinal);
+        Assert.Contains("package wire", dishonest.Honesty, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static Profile Lab() =>
         new(
             new AccountProfile("winmint", "lab-only", RequireWifiDuringOobe: true),

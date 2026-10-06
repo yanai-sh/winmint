@@ -66,7 +66,11 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
     public ReviewStageViewModel(HostReview review)
     {
         ArgumentNullException.ThrowIfNull(review);
-        string gateLabel = review.IsGateB ? "Gate B" : "shipping";
+        string gateLabel = review.IsGateB
+            ? "Gate B"
+            : review.ImageQuality == ImageQualityLane.Release && review.PackageStrict
+                ? "not Gate B (package wire)"
+                : "shipping";
         Summary = new(
             review.QuietSummary,
             review.PickStrip,

@@ -603,9 +603,15 @@ public sealed record HostReview(
     bool BraveSelected,
     IReadOnlyList<string> EffectiveWinget,
     IReadOnlyList<string> EffectiveScoop,
-    IReadOnlyList<string> AuthoredSelectionLabels)
+    IReadOnlyList<string> EffectiveWsl,
+    IReadOnlyList<string> AuthoredSelectionLabels,
+    bool PackageWireHonest)
 {
-    public bool IsGateB => ImageQuality == ImageQualityLane.Release && PackageStrict;
+    /// <summary>
+    /// Wipe-ready claim: Release ∧ package-strict ∧ package wire honest (WSL installIds attested).
+    /// </summary>
+    public bool IsGateB =>
+        ImageQuality == ImageQualityLane.Release && PackageStrict && PackageWireHonest;
 
     public string Honesty
     {
@@ -615,10 +621,20 @@ public sealed record HostReview(
                 ? "requireWifiDuringOobe=true (OOBE may show Network page)"
                 : "requireWifiDuringOobe=false (OOBE Network page hidden)";
             string head = $"requiresNetwork={(RequiresNetwork ? "true" : "false")}; {wifi}";
-            return RequiresNetwork
-                ? head + Environment.NewLine
-                    + "Warning: FirstLogon needs outbound network (packages and/or online AppX removes)."
-                : head;
+            List<string> lines = [head];
+            if (RequiresNetwork)
+            {
+                lines.Add(
+                    "Warning: FirstLogon needs outbound network (packages and/or online AppX removes).");
+            }
+
+            if (ImageQuality == ImageQualityLane.Release && PackageStrict && !PackageWireHonest)
+            {
+                lines.Add(
+                    "Warning: package wire not Gate B (WSL installIds unattested or missing from review facts).");
+            }
+
+            return string.Join(Environment.NewLine, lines);
         }
     }
 

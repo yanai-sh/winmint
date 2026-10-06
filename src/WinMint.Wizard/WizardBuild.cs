@@ -29,9 +29,14 @@ internal static class WizardBuild
         }
 
         ImageEvidence evidence = applied.Value;
-        string gateHint = composition.Review.IsGateB
+        HostReview review = composition.Review;
+        string gateHint = review.IsGateB
             ? " Gate B wipe media (pre-wipe ISO evidence — not Primary install proven)."
-            : " Test lane (not the wipe gate).";
+            : review.ImageQuality == ImageQualityLane.Release && review.PackageStrict
+                ? " Release+strict but package wire not Gate B."
+                : review.ImageQuality == ImageQualityLane.Release
+                    ? " Soft Release (not the wipe gate)."
+                    : " Test lane (not the wipe gate).";
         string ok =
             $"Image OK: {evidence.OutputIsoPath}; Lane={evidence.Lane}; Shell={evidence.ShellStampTargetPath}; Work={work}.{gateHint}";
         return WizardBuildResult.Ok(ok, evidence.OutputIsoPath, work, evidence.Digests);

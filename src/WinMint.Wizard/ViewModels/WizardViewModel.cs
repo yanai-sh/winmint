@@ -406,7 +406,7 @@ public sealed partial class WizardViewModel :
                     : null;
             buildStage.Build.FlashGuidanceText = FlashGuidance.Format(
                 result.OutputIsoPath!,
-                composition.Review.IsGateB,
+                composition.Review,
                 sha);
         }
         else

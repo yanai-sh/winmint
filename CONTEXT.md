@@ -83,8 +83,8 @@ _Avoid_: treating Smoke alone as Primary wipe confidence; treating Hyper-V Conne
 **Host Apply (S5)** — Elevated Apply run on the build host, then assert the workdir evidence (`just host-apply`, `tools/apply/`). No Hyper-V and no hardware install — the destructive install is Primary, and it is manual.  
 _Avoid_: “metal” (retired name — it never touched hardware); treating a Test-lane Host Apply as wipe media
 
-**Gate B** — Pre-wipe host evidence that Release + package-strict Output ISO is ready to Flash. Not a completed Primary install. The predicate is `HostReview.IsGateB` (Release ∧ package-strict).  
-_Avoid_: calling Gate B “Primary”; selling soft Host Apply Release as wipe media; re-deriving Gate B from lane alone or package-strict alone
+**Gate B** — Pre-wipe host evidence that Release + package-strict Output ISO is ready to Flash. Not a completed Primary install. The predicate is `HostReview.IsGateB` (Release ∧ package-strict ∧ package wire honest — planned WSL installIds attested on review facts / store proof). Apply harness `Test-WinMintIsGateB` remains the lane∧strict evidence gate only.  
+_Avoid_: calling Gate B “Primary”; selling soft Host Apply Release as wipe media; re-deriving Gate B from lane alone or package-strict alone; equating PS lane∧strict with wipe-ready when WSL wire is dishonest
 
 **Primary** — Release `samples/sl7.profile.json` safe to wipe primary SL7 after Gate B + real install evidence in-repo. Checklist: [issue #96](https://github.com/yanai-sh/winmint/issues/96).  
 _Avoid_: shipping recovery images; treating Gate B alone as wipe-proven; gating Primary on a tracking issue; treating Flash as Primary proof
