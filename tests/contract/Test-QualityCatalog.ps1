@@ -457,5 +457,68 @@ finally {
     Remove-Item -LiteralPath $pkgApply -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# Package-set discovery (LCU + checkpoint + DU identities) via fixture Discover adapter.
+$detailsWithCkpt = $details.Replace(
+    'This package does not list a checkpoint.',
+    'Checkpoint cumulative updates include KB5043080.')
+$searchCkpt5043080 = @'
+<a href="javascript:void(0);" onclick="goToDetails(&quot;cccccccc-dddd-eeee-ffff-000000000001&quot;);">2026-07 Cumulative Update for Windows 11 Version 25H2 for ARM64-based Systems (KB5043080)</a>
+'@
+$searchDu258 = @'
+<a href="javascript:void(0);" onclick="goToDetails(&quot;dddddddd-eeee-ffff-0000-111111111111&quot;);">2026-08 Dynamic Update for Windows 11 Version 25H2 for ARM64-based Systems (KB5127216)</a>
+<a href="javascript:void(0);" onclick="goToDetails(&quot;eeeeeeee-ffff-0000-1111-222222222222&quot;);">2026-08 Safe OS Dynamic Update for Windows 11 Version 25H2 for ARM64-based Systems (KB5121002)</a>
+'@
+$set = Get-WinMintQualityPackageSet `
+    -Version '10.0.26200.8037' `
+    -Architecture 'ARM64' `
+    -ImageUbr 8037 `
+    -Discover {
+        param($Context)
+        return @{
+            LcuSearchHtml          = $search25
+            DetailsHtml            = $detailsWithCkpt
+            CheckpointSearchHtml   = @{ KB5043080 = $searchCkpt5043080 }
+            DuSearchHtml           = $searchDu258
+        }
+    }
+if ($set.Skipped) { throw 'Test-QualityCatalog: expected non-skipped package-set for fixture train' }
+if ([string]::IsNullOrWhiteSpace($set.Kb) -or [string]::IsNullOrWhiteSpace($set.UpdateId)) {
+    throw 'Test-QualityCatalog: package-set missing LCU identity'
+}
+if ($set.Kb -ne 'KB5121003') { throw "Test-QualityCatalog: package-set LCU $($set.Kb)" }
+foreach ($ck in @($set.Checkpoints)) {
+    if ([string]::IsNullOrWhiteSpace($ck.Kb) -or [string]::IsNullOrWhiteSpace($ck.UpdateId)) {
+        throw "Test-QualityCatalog: checkpoint identity incomplete: $($ck | ConvertTo-Json -Compress)"
+    }
+}
+if (@($set.Checkpoints).Count -ne 1 -or $set.Checkpoints[0].Kb -ne 'KB5043080') {
+    throw "Test-QualityCatalog: expected one checkpoint KB5043080, got $(@($set.Checkpoints | ForEach-Object { $_.Kb }) -join ',')"
+}
+if ($null -eq $set.Setup -or $set.Setup.Kb -ne 'KB5127216') {
+    throw "Test-QualityCatalog: package-set Setup identity $($set.Setup.Kb)"
+}
+if ($null -eq $set.SafeOs -or $set.SafeOs.Kb -ne 'KB5121002') {
+    throw "Test-QualityCatalog: package-set SafeOs identity $($set.SafeOs.Kb)"
+}
+
+$setSkip = Get-WinMintQualityPackageSet `
+    -Version '10.0.26200.8037' `
+    -Architecture 'ARM64' `
+    -ImageUbr 9168 `
+    -Discover {
+        param($Context)
+        return @{
+            LcuSearchHtml        = $search25
+            DetailsHtml          = $details
+            CheckpointSearchHtml = @{}
+            DuSearchHtml         = $searchDu258
+        }
+    }
+if (-not $setSkip.Skipped) { throw 'Test-QualityCatalog: package-set must skip when image UBR >= Catalog' }
+if (@($setSkip.Checkpoints).Count -ne 0) { throw 'Test-QualityCatalog: skipped package-set must not discover checkpoints' }
+if ($null -ne $setSkip.Setup -or $null -ne $setSkip.SafeOs) {
+    throw 'Test-QualityCatalog: skipped package-set must not discover DU members'
+}
+
 Write-Output 'Test-QualityCatalog ok'
 exit 0

@@ -826,6 +826,134 @@ function Move-WinMintInvalidQualityCacheEntry {
     }
 }
 
+function Get-WinMintQualityPackageSet {
+    <#
+      LCU resolve plus checkpoint / Dynamic Update membership (identities only — no acquire).
+      Optional -Discover for contract tests: param($Context) returns a hashtable with:
+        LcuSearchHtml        — Catalog search HTML for the LCU train query
+        DetailsHtml          — ScopedView HTML for the picked LCU
+        CheckpointSearchHtml — [hashtable] checkpoint KB (e.g. KB5043080) -> search HTML
+        DuSearchHtml         — Catalog search HTML for Dynamic Update train query
+      Context: @{ Version; Architecture; ImageUbr; Train = Get-WinMintQualityTrain output }
+      Live path (Discover omitted): Invoke-WinMintCatalogSearchHtml / DetailsHtml as Add does today.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $Version,
+        [Parameter(Mandatory)] [string] $Architecture,
+        [Parameter(Mandatory)] [int] $ImageUbr,
+        [scriptblock] $Discover
+    )
+    $train = Get-WinMintQualityTrain -Version $Version -Architecture $Architecture
+    $ctx = @{
+        Version      = $Version
+        Architecture = $Architecture
+        ImageUbr     = $ImageUbr
+        Train        = $train
+    }
+    if ($Discover) {
+        $fixture = & $Discover $ctx
+        $lcuSearch = [string]$fixture.LcuSearchHtml
+        $detailsHtml = [string]$fixture.DetailsHtml
+        $ckSearchMap = $fixture.CheckpointSearchHtml
+        $duSearch = [string]$fixture.DuSearchHtml
+    }
+    else {
+        $lcuSearch = Invoke-WinMintCatalogSearchHtml -Query "$($train.Query) ARM64-based Systems"
+        $pickedLive = Select-WinMintQualityUpdate `
+            -Rows (ConvertFrom-WinMintCatalogSearchHtml -Html $lcuSearch) `
+            -FamilyLabel $train.Label `
+            -Architecture $train.Architecture
+        $detailsHtml = Invoke-WinMintCatalogDetailsHtml -UpdateId $pickedLive.UpdateId
+        $ckSearchMap = $null
+        $duSearch = $null
+    }
+    $resolved = Resolve-WinMintQualityUpdate `
+        -Version $Version `
+        -Architecture $Architecture `
+        -ImageUbr $ImageUbr `
+        -SearchHtml $lcuSearch `
+        -DetailsHtml $detailsHtml
+
+    if ($resolved.Skipped) {
+        return [pscustomobject]@{
+            Skipped      = $true
+            Kb           = $resolved.Kb
+            Title        = $resolved.Title
+            UpdateId     = $resolved.UpdateId
+            Family       = $resolved.Family
+            Label        = $resolved.Label
+            Architecture = $resolved.Architecture
+            Query        = $resolved.Query
+            ImageUbr     = $resolved.ImageUbr
+            PackageUbr   = $resolved.PackageUbr
+            DetailsHtml  = $resolved.DetailsHtml
+            Checkpoints  = @()
+            Setup        = $null
+            SafeOs       = $null
+        }
+    }
+
+    $checkpoints = [System.Collections.Generic.List[object]]::new()
+    foreach ($ckb in @(ConvertFrom-WinMintCatalogCheckpointKb -Text $resolved.DetailsHtml -TargetKb $resolved.Kb)) {
+        if ($Discover) {
+            if ($null -eq $ckSearchMap -or -not $ckSearchMap.ContainsKey($ckb)) {
+                throw "Discover fixture missing CheckpointSearchHtml for $ckb"
+            }
+            $ckHtml = [string]$ckSearchMap[$ckb]
+        }
+        else {
+            $ckHtml = Invoke-WinMintCatalogSearchHtml -Query "$ckb ARM64-based Systems"
+        }
+        $ckRows = ConvertFrom-WinMintCatalogSearchHtml -Html $ckHtml
+        $ckHit = @($ckRows | Where-Object { $_.Kb -eq $ckb -and $_.Title -match 'ARM64-based Systems' } | Select-Object -First 1)
+        if ($ckHit.Count -lt 1) {
+            throw "Catalog checkpoint $ckb has no ARM64 payload"
+        }
+        $checkpoints.Add([pscustomobject]@{
+                Kb       = $ckHit[0].Kb
+                UpdateId = $ckHit[0].UpdateId
+                Title    = $ckHit[0].Title
+            })
+    }
+
+    $month = ''
+    if ($resolved.Title -match '^(\d{4}-\d{2})') { $month = $Matches[1] }
+    if ($Discover) {
+        $duHtml = $duSearch
+    }
+    else {
+        $duHtml = Invoke-WinMintCatalogSearchHtml -Query "Dynamic Update for Windows 11 Version $($resolved.Label) ARM64-based Systems"
+    }
+    $duRows = ConvertFrom-WinMintCatalogSearchHtml -Html $duHtml
+    $setupPick = Select-WinMintDynamicUpdate -Rows $duRows -FamilyLabel $resolved.Label -Architecture 'ARM64' -Kind Setup -MonthPrefix $month
+    $safePick = Select-WinMintDynamicUpdate -Rows $duRows -FamilyLabel $resolved.Label -Architecture 'ARM64' -Kind SafeOS -MonthPrefix $month
+    $setup = $null
+    if ($setupPick -and $setupPick.Kb) {
+        $setup = [pscustomobject]@{ Kb = $setupPick.Kb; UpdateId = $setupPick.UpdateId; Title = $setupPick.Title }
+    }
+    $safeOs = $null
+    if ($safePick -and $safePick.Kb) {
+        $safeOs = [pscustomobject]@{ Kb = $safePick.Kb; UpdateId = $safePick.UpdateId; Title = $safePick.Title }
+    }
+
+    return [pscustomobject]@{
+        Skipped      = $false
+        Kb           = $resolved.Kb
+        Title        = $resolved.Title
+        UpdateId     = $resolved.UpdateId
+        Family       = $resolved.Family
+        Label        = $resolved.Label
+        Architecture = $resolved.Architecture
+        Query        = $resolved.Query
+        ImageUbr     = $resolved.ImageUbr
+        PackageUbr   = $resolved.PackageUbr
+        DetailsHtml  = $resolved.DetailsHtml
+        Checkpoints  = @($checkpoints)
+        Setup        = $setup
+        SafeOs       = $safeOs
+    }
+}
+
 function Save-WinMintQualityCacheFile {
     [CmdletBinding(SupportsShouldProcess)]
     param(
