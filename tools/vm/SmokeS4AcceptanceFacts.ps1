@@ -14,9 +14,9 @@ function Get-WinMintSmokeS4AcceptanceFacts {
             SettleBeginPhase  = 'settle.begin'
         }
         DmaOkAnyOf = @(
-            @('settle.ok')
-            @('settle.locationWarn')
-            @('settle.resumeOk', 'checkpoint.resume')
+            ,@('settle.ok')
+            ,@('settle.locationWarn')
+            ,@('settle.resumeOk', 'checkpoint.resume')
         )
         SetupRegionOkAnyOf = @(
             'settle.deviceRegionOk'

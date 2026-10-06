@@ -50,6 +50,20 @@ try {
     . $factsPath
     $facts = Get-WinMintSmokeS4AcceptanceFacts
     if ($facts.RequiredPhases -notcontains 'shell.firstPaint') { throw 'facts must list shell.firstPaint' }
+    if (@($facts.DmaOkAnyOf).Count -ne 3) { throw 'DmaOkAnyOf must have 3 alternatives' }
+    if (@($facts.DmaOkAnyOf[2]).Count -ne 2) { throw 'DmaOkAnyOf third combo must be AND pair' }
+
+    $dmaResumeOnly = Join-Path $root 'dmaResumeOnly'
+    Copy-Tree $fixture $dmaResumeOnly
+    Remove-Item -LiteralPath (Join-Path $dmaResumeOnly 'acceptance.json') -ErrorAction SilentlyContinue
+    $guest = Get-Content -LiteralPath (Guest-EvidencePath $dmaResumeOnly) -Raw | ConvertFrom-Json
+    $guest.phases = @(
+        'shell.firstPaint', 'settle.begin', 'settle.deviceRegionOk', 'settle.resumeOk', 'jobs.begin',
+        'jobs.workstation.quiet', 'jobs.wsl.platform.mocked', 'shell.chrome', 'jobs.ok', 'oobe.dismiss')
+    ($guest | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Guest-EvidencePath $dmaResumeOnly) -Encoding utf8
+    $r = Invoke-StaticAssert $dmaResumeOnly
+    if ($r.Code -eq 0) { throw 'settle.resumeOk without checkpoint.resume must fail DMA gate' }
+    if ($r.Err -notmatch 'DMA hard fields') { throw "DMA resume-only message: $($r.Err)" }
 
     $nofactsphase = Join-Path $root 'nofactsphase'
     Copy-Tree $fixture $nofactsphase
