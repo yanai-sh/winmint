@@ -125,3 +125,55 @@ function Assert-WinMintImageEvidence {
         Expected  = $expected
     }
 }
+
+function Assert-WinMintDmaSettleBundle {
+    param(
+        [Parameter(Mandatory)]
+        [string] $BundlePath
+    )
+
+    if (-not (Test-Path -LiteralPath $BundlePath -PathType Leaf)) {
+        return
+    }
+
+    $bundle = Get-Content -LiteralPath $BundlePath -Raw -Encoding utf8 | ConvertFrom-Json
+    $dmaEnabled = $false
+    if ($bundle.PSObject.Properties.Name -contains 'dmaEnabled') {
+        $dmaEnabled = [bool]$bundle.dmaEnabled
+    }
+    if (-not $dmaEnabled) {
+        return
+    }
+
+    $settle = $null
+    if ($bundle.PSObject.Properties.Name -contains 'settle') {
+        $settle = $bundle.settle
+    }
+    $locale = ''
+    $timeZoneId = ''
+    $geoId = $null
+    $locationServicesEnabled = $null
+    if ($null -ne $settle) {
+        if ($settle.PSObject.Properties.Name -contains 'locale') {
+            $locale = [string]$settle.locale
+        }
+        if ($settle.PSObject.Properties.Name -contains 'timeZoneId') {
+            $timeZoneId = [string]$settle.timeZoneId
+        }
+        if ($settle.PSObject.Properties.Name -contains 'geoId') {
+            $geoId = $settle.geoId
+        }
+        if ($settle.PSObject.Properties.Name -contains 'locationServicesEnabled') {
+            $locationServicesEnabled = $settle.locationServicesEnabled
+        }
+    }
+
+    $incomplete = [string]::IsNullOrWhiteSpace($locale) `
+        -or [string]::IsNullOrWhiteSpace($timeZoneId) `
+        -or $null -eq $geoId `
+        -or $null -eq $locationServicesEnabled
+    if ($incomplete) {
+        throw ('payload/bundle.json dma.settle requires locale, geoId, timeZoneId, and locationServicesEnabled ' +
+            'when dmaEnabled.')
+    }
+}
