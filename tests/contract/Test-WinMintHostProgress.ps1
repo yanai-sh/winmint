@@ -20,6 +20,10 @@ if ($helper -notmatch 'function Test-WinMintTrailHeartbeatLine') { throw 'helper
 if ($helper -notmatch 'function Select-WinMintWatchLogTail') { throw 'helper must define Select-WinMintWatchLogTail' }
 if ($helper -notmatch 'function Start-WinMintHostWatchProcess') { throw 'helper must spawn watch via Start-WinMintHostWatchProcess' }
 if ($helper -notmatch 'wt' -and $helper -notmatch 'WindowsTerminal') { throw 'spawn helper must consider wt.exe' }
+if ($helper -notmatch 'ArgumentList\.Add') { throw 'wt spawn must use ProcessStartInfo.ArgumentList so spaced --title stays one argv' }
+if ($helper -notmatch "'-w',\s*'0'") { throw 'wt spawn must open a new window (-w 0) so elevated smoke does not attach to an existing session' }
+if ($helper -match "-NonInteractive', '-File', `$watchScript") { throw 'watch spawn must not use -NonInteractive (needs console UI)' }
+if ($helper -notmatch '-PriorRunId:') { throw 'empty PriorRunId must be one argv (-PriorRunId:) so wt does not drop it' }
 if ($helper -notmatch 'UseOSCIndicator') { throw 'helper must set Progress.UseOSCIndicator when interactive VT' }
 if (-not (Test-WinMintTrailHeartbeatLine -Line 'AddQualityUpdates running 78s')) { throw 'heartbeat detector missed running line' }
 if (Test-WinMintTrailHeartbeatLine -Line 'Catalog BITS start KB1') { throw 'heartbeat detector false positive' }

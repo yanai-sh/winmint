@@ -239,23 +239,34 @@ function Start-WinMintHostWatchProcess {
     )
     $watchScript = Join-Path $RepoRoot 'tools/host/Watch-Host.ps1'
     $title = "WinMint host watch — $Work"
+    # Watch redraws an interactive console — not -NonInteractive.
     $pwshArgs = @(
-        '-NoProfile', '-NonInteractive', '-File', $watchScript,
+        '-NoProfile', '-File', $watchScript,
         '-Kind', $Kind, '-Work', $Work, '-MarkerPath', $MarkerPath
     )
     if ($PSBoundParameters.ContainsKey('PriorRunId')) {
-        $pwshArgs += @('-PriorRunId', $PriorRunId)
+        # One argv token so an empty prior id survives wt/-- forwarding (bare "" is dropped).
+        $pwshArgs += "-PriorRunId:$PriorRunId"
     }
     $wt = Resolve-WinMintWindowsTerminal
     if ($wt) {
+        # -w 0: new window (elevated smoke must not rely on attaching to an existing tab).
+        # ProcessStartInfo.ArgumentList: Start-Process joins with spaces and does not quote;
+        # wt then treats the second word of --title ("host") as the executable → 0x80070002.
         $wtArgs = @(
+            '-w', '0',
             'new-tab',
             '--title', $title,
             '-d', $RepoRoot,
             '--',
             $PwshExe
         ) + $pwshArgs
-        Start-Process -FilePath $wt -WorkingDirectory $RepoRoot -ArgumentList $wtArgs | Out-Null
+        $psi = [System.Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = $wt
+        $psi.WorkingDirectory = $RepoRoot
+        $psi.UseShellExecute = $false
+        foreach ($a in $wtArgs) { [void]$psi.ArgumentList.Add([string]$a) }
+        [void][System.Diagnostics.Process]::Start($psi)
         # ponytail: poll up to 5s for Watch self-stamp; Stopwatch (not UtcNow) — host clock can jump.
         $wait = [Diagnostics.Stopwatch]::StartNew()
         while ($wait.Elapsed.TotalSeconds -lt 5) {
@@ -272,6 +283,11 @@ function Start-WinMintHostWatchProcess {
         }
         return
     }
-    $proc = Start-Process -FilePath $PwshExe -WorkingDirectory $RepoRoot -PassThru -ArgumentList $pwshArgs
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $PwshExe
+    $psi.WorkingDirectory = $RepoRoot
+    $psi.UseShellExecute = $false
+    foreach ($a in $pwshArgs) { [void]$psi.ArgumentList.Add([string]$a) }
+    $proc = [System.Diagnostics.Process]::Start($psi)
     Set-Content -LiteralPath $MarkerPath -Value $proc.Id -Encoding utf8
 }
