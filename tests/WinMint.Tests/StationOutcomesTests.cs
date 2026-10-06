@@ -42,7 +42,7 @@ public class StationOutcomesTests
         Assert.Equal(StationOutcomes.TaskbarWindows, seed.Value.TaskbarSurface);
         Assert.False(seed.Value.Komorebi);
         Assert.Equal(
-            ["Windows taskbar", "Cursor", "Zen", "Fedora"],
+            ["Windows taskbar", "Cursor", "Zen", "Fedora 44"],
             seed.Value.SelectionLabels);
     }
 

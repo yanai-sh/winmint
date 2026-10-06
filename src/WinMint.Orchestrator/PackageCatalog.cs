@@ -393,7 +393,7 @@ public static class CuratedPackageChips
 
     public static IReadOnlyList<CuratedChipDefinition> Wsl { get; } =
     [
-        new("FedoraLinux", "Fedora"),
+        new("FedoraLinux", "Fedora 44"),
         new("Ubuntu", "Ubuntu"),
         new("archlinuxarm-wsl", "Arch"),
         new("NixOS-WSL", "NixOS"),

@@ -31,6 +31,20 @@ public class WslJobsTests
     }
 
     [Fact]
+    public void Plan_fedora_wsl_emits_store_install_id()
+    {
+        Profile profile = Parse(MinimalJson(wsl: ["FedoraLinux"]));
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk);
+        ProvisionJob fedora = Assert.Single(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
+        Assert.Equal("wsl.FedoraLinux-44", fedora.Id);
+        Assert.Equal("FedoraLinux-44", fedora.PackageId);
+        Assert.Equal(WslInstallKind.Store, fedora.WslInstallKind);
+    }
+
+    [Fact]
     public void Plan_nixos_wsl_emits_fromFile_metadata()
     {
         Profile profile = Parse(MinimalJson(wsl: ["NixOS-WSL"]));
@@ -177,7 +191,7 @@ public class WslJobsTests
             Bundle(jobs:
             [
                 new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform),
-                new ProvisionJob("wsl.FedoraLinux", ProvisionJobKind.Wsl, PackageId: "FedoraLinux"),
+                new ProvisionJob("wsl.FedoraLinux-44", ProvisionJobKind.Wsl, PackageId: "FedoraLinux-44"),
             ]),
             Env(guest, evidence),
             TestContext.Current.CancellationToken);
@@ -185,8 +199,8 @@ public class WslJobsTests
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.DoesNotContain(processes.Starts, s => s.FileName.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("jobs.wsl.platform.mocked", evidence.Documents[^1].Phases);
-        Assert.Contains("jobs.wsl.FedoraLinux.mocked", evidence.Documents[^1].Phases);
-        Assert.Equal(["FedoraLinux"], Assert.Single(guest.WslTerminalMockStages));
+        Assert.Contains("jobs.wsl.FedoraLinux-44.mocked", evidence.Documents[^1].Phases);
+        Assert.Equal(["FedoraLinux-44"], Assert.Single(guest.WslTerminalMockStages));
     }
 
     [Fact]

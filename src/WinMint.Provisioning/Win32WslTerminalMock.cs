@@ -31,9 +31,7 @@ public static class Win32WslTerminalMock
                 continue;
             }
 
-            string name = distro.Equals("FedoraLinux", StringComparison.OrdinalIgnoreCase)
-                ? "Fedora"
-                : distro;
+            string name = distro;
             if (json.Contains($"\"name\": \"{name}\"", StringComparison.OrdinalIgnoreCase)
                 || json.Contains($"\"name\":\"{name}\"", StringComparison.OrdinalIgnoreCase))
             {
