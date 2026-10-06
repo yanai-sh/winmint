@@ -14,12 +14,12 @@ public static class ChipAxisResolve
         IEnumerable<string> resolveKeys = toolChipKeys;
         if (string.Equals(taskbarSurface, StationOutcomes.TaskbarYasb, StringComparison.Ordinal))
         {
-            resolveKeys = resolveKeys.Concat(["yasb"]);
+            resolveKeys = resolveKeys.Concat([PackageChips.Yasb]);
         }
 
         if (komorebi)
         {
-            resolveKeys = resolveKeys.Concat(["komorebi", "whkd"]);
+            resolveKeys = resolveKeys.Concat([PackageChips.Komorebi, PackageChips.Whkd]);
         }
 
         resolveKeys = resolveKeys.Where(CuratedPackageChips.IsPackageTool);
