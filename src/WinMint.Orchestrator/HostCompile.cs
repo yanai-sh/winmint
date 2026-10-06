@@ -542,6 +542,10 @@ public static class HostCompile
             WingetImportJson = artifacts.WingetImportJson?.ToArray(),
             Drivers = artifacts.Drivers,
             OfflineDefaultUser = ReadOnly(artifacts.OfflineDefaultUser ?? []),
+            EffectiveWinget = ReadOnly(artifacts.EffectiveWinget),
+            EffectiveScoop = ReadOnly(artifacts.EffectiveScoop),
+            EffectiveWsl = ReadOnly(artifacts.EffectiveWsl),
+            PackageWireHonest = artifacts.PackageWireHonest,
         };
 
     internal static ProvisionJob SnapshotJob(ProvisionJob job) =>

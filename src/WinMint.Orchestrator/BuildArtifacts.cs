@@ -83,7 +83,11 @@ public sealed record BuildArtifacts(
     bool PackageStrict,
     bool BraveSelected,
     DriverInject? Drivers,
-    IReadOnlyList<OfflinePolicyRow> OfflineDefaultUser);
+    IReadOnlyList<OfflinePolicyRow> OfflineDefaultUser,
+    IReadOnlyList<string> EffectiveWinget,
+    IReadOnlyList<string> EffectiveScoop,
+    IReadOnlyList<string> EffectiveWsl,
+    bool PackageWireHonest);
 
 public sealed record DriverInject(string DeviceId, string DetailsUrl, string ExpectedFileNameRegex);
 

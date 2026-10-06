@@ -168,6 +168,10 @@ public class HostCompileLaneTests
         Assert.Equal(snap.EffectivePackages, review.EffectivePackages);
         Assert.Equal(snap.PackageStrict, review.PackageStrict);
         Assert.Equal(snap.BraveSelected, review.BraveSelected);
+        Assert.Equal(snap.EffectiveWinget, review.EffectiveWinget);
+        Assert.Equal(snap.EffectiveScoop, review.EffectiveScoop);
+        Assert.Equal(snap.EffectiveWsl, review.EffectiveWsl);
+        Assert.Equal(snap.PackageWireHonest, review.PackageWireHonest);
         Assert.Equal(snap.Manifest.ImageQuality, review.ImageQuality);
         Assert.Equal(snap.Manifest.RequiresNetwork, review.RequiresNetwork);
         Assert.Equal(snap.Jobs.Jobs.Count, review.Jobs.Count);

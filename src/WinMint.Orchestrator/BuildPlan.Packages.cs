@@ -6,23 +6,12 @@ using WinMint.Contracts;
 namespace WinMint.Orchestrator;
 
 /// <summary>
-/// Effective package/job slice: ProductPosture merge + catalog resolve + FirstLogon jobs.
-/// BuildPlan.Plan composes this with unattend/opcodes; Wizard seed is not a peer planner.
+/// Effective package/job slice + HostReview package facts.
+/// BuildPlan.Plan / HostReviewFactory only compose; this owns PlanPackages + wire honesty.
 /// </summary>
 internal static class SoftwarePlan
 {
     internal static Result<PackagePlanSlice, Failure> TryPlan(
-        Profile profile,
-        PackageCatalog catalog,
-        string imageArchitecture,
-        bool auditStrict) =>
-        BuildPlan.PlanPackages(profile, catalog, imageArchitecture, auditStrict);
-}
-
-public static partial class BuildPlan
-{
-    /// <summary>Package/posture planning seam used by <see cref="SoftwarePlan"/> and <see cref="Plan"/>.</summary>
-    internal static Result<PackagePlanSlice, Failure> PlanPackages(
         Profile profile,
         PackageCatalog catalog,
         string imageArchitecture,
@@ -254,8 +243,54 @@ public static partial class BuildPlan
                 AuditStrict: true));
         }
 
+        IReadOnlyList<EffectivePackageFact> effectivePackages = [.. facts];
+        IReadOnlyList<ProvisionJob> packageJobs = [.. jobs];
+        IReadOnlyList<string> effectiveWinget =
+        [
+            .. effectivePackages
+                .Where(static package =>
+                    package.Source is EffectivePackageSource.Winget or EffectivePackageSource.Store)
+                .Select(static package => package.ResolvedInstallId),
+        ];
+        IReadOnlyList<string> effectiveScoop =
+        [
+            .. effectivePackages
+                .Where(static package => package.Source == EffectivePackageSource.Scoop)
+                .Select(static package => package.ResolvedInstallId),
+        ];
+        IReadOnlyList<string> effectiveWsl = HostPackageWire.EffectiveWslInstallIds(effectivePackages);
+        bool packageWireHonest = HostPackageWire.IsHonest(packageJobs, effectivePackages, catalog);
+
         return Result.Ok<PackagePlanSlice, Failure>(
-            new PackagePlanSlice([.. facts], [.. jobs], wingetImportJson));
+            new PackagePlanSlice(
+                effectivePackages,
+                packageJobs,
+                wingetImportJson,
+                effectiveWinget,
+                effectiveScoop,
+                effectiveWsl,
+                packageWireHonest));
+    }
+
+    private static Failure? ValidateNeedsRebootSubset(
+        IReadOnlyList<string> packages,
+        IReadOnlyList<string> needsReboot,
+        string code,
+        string needsName,
+        string packagesName)
+    {
+        HashSet<string> set = new(packages, StringComparer.OrdinalIgnoreCase);
+        foreach (string id in needsReboot)
+        {
+            if (!set.Contains(id))
+            {
+                return new Failure(
+                    code,
+                    $"{needsName} id '{id}' is not in {packagesName}.");
+            }
+        }
+
+        return null;
     }
 
     private static bool SupportsArchitecture(IReadOnlyList<string> architectures, string imageArchitecture) =>
@@ -299,7 +334,10 @@ public static partial class BuildPlan
 
         return JsonSerializer.SerializeToUtf8Bytes(file, WingetImportJsonContext.Default.WingetImportFile);
     }
+}
 
+public static partial class BuildPlan
+{
     /// <summary>
     /// Packages-only WinGet Configuration YAML from import JSON package ids (schema 0.2).
     /// Null when import is absent/empty or has no package identifiers.
@@ -363,4 +401,8 @@ public static partial class BuildPlan
 internal sealed record PackagePlanSlice(
     IReadOnlyList<EffectivePackageFact> EffectivePackages,
     IReadOnlyList<ProvisionJob> Jobs,
-    byte[]? WingetImportJson);
+    byte[]? WingetImportJson,
+    IReadOnlyList<string> EffectiveWinget,
+    IReadOnlyList<string> EffectiveScoop,
+    IReadOnlyList<string> EffectiveWsl,
+    bool PackageWireHonest);
