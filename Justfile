@@ -119,21 +119,22 @@ apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STU
 
 # S4 Hyper-V Smoke — not in `just check`. Assert-only: just smoke-assert tests/fixtures/smoke-evidence
 # Default Profile = samples/sl7.profile.json (same install target as Primary / this machine).
-# Needs .scratch/sl7.password (SECRETS). Longer wall — winget/WSL on Default Switch NAT.
+# Needs .scratch/sl7.password (SECRETS). Longer wall — winget/WSL after Supervisor (offline OOBE default).
+# Offline OOBE (default): NIC deferred until Supervisor; ONLINE=1 for legacy always-on Default Switch.
 # PowerShell: pass ISO as a positional arg only — not ISO=path. NAME=value overrides are not reliable on Windows;
-# use positional WORK WALL MONITOR STALL or `smoke-maintainer-monitor` for VMConnect.
+# use positional WORK WALL MONITOR STALL ONLINE or `smoke-maintainer-monitor` for VMConnect.
 # Usage: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'
-#        just smoke-maintainer .scratch/smoke 180 1 45
-smoke ISO WORK=".scratch/smoke" PROFILE="samples/sl7.profile.json" WALL="180" MONITOR="0" STALL="45":
-    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -ProfilePath '{{PROFILE}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}'
+#        just smoke-maintainer .scratch/smoke 180 1 45 0
+smoke ISO WORK=".scratch/smoke" PROFILE="samples/sl7.profile.json" WALL="180" MONITOR="0" STALL="45" ONLINE="0":
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -ProfilePath '{{PROFILE}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}' -OnlineOobe '{{ONLINE}}'
 
 # Maintainer SL7 vanilla Source ISO — tests/fixtures/maintainer-host.json
-smoke-maintainer WORK=".scratch/smoke" WALL="180" MONITOR="0" STALL="45":
-    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Maintainer -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}'
+smoke-maintainer WORK=".scratch/smoke" WALL="180" MONITOR="0" STALL="45" ONLINE="0":
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Maintainer -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}' -OnlineOobe '{{ONLINE}}'
 
-# VMConnect during maintainer smoke (elevated pwsh required).
-smoke-maintainer-monitor WORK=".scratch/smoke" WALL="180" STALL="45":
-    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Maintainer -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor 1
+# VMConnect during maintainer smoke (elevated pwsh required). ONLINE=1 for online-OOBE escape.
+smoke-maintainer-monitor WORK=".scratch/smoke" WALL="180" STALL="45" ONLINE="0":
+    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Maintainer -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor 1 -OnlineOobe '{{ONLINE}}'
 
 # Own-console host watch (Apply/Smoke keep running if you close it).
 # smoke-maintainer already spawns one Watch-Host; use this to attach a second view.

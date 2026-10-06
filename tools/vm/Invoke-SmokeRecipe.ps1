@@ -22,7 +22,10 @@ param(
     [int] $StallMinutes = 45,
 
     # 0/false/empty = headless; 1/true/yes = -Monitor (VMConnect).
-    [string] $Monitor = '0'
+    [string] $Monitor = '0',
+
+    # 0/false/empty = offline OOBE (default); 1/true/yes = -OnlineOobe (NAT before Start-VM).
+    [string] $OnlineOobe = '0'
 )
 
 Set-StrictMode -Version Latest
@@ -45,6 +48,7 @@ if ([string]::IsNullOrWhiteSpace($Iso)) {
 }
 
 $useMonitor = $Monitor -in @('1', 'true', 'yes')
+$useOnlineOobe = $OnlineOobe -in @('1', 'true', 'yes')
 $smokeScript = Join-Path $repoRoot 'tools\vm\Invoke-Smoke.ps1'
 $invokeArgs = @(
     '-NoProfile', '-NonInteractive', '-File', $smokeScript,
@@ -55,6 +59,7 @@ $invokeArgs = @(
     '-StallMinutes', $StallMinutes
 )
 if ($useMonitor) { $invokeArgs += '-Monitor' }
+if ($useOnlineOobe) { $invokeArgs += '-OnlineOobe' }
 
 & pwsh @invokeArgs
 exit $LASTEXITCODE

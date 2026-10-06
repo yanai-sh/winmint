@@ -19,6 +19,8 @@
   Empty-VHD fail-fast: dynamic VHD stays under 1GB for -EmptyVhdMinutes after Running (WinPE never applied).
   Elapsed time uses Stopwatch (QPC), not Get-Date — SL7's clock can jump.
   Script default wall is 90 minutes; `just smoke` passes 180 (winget/WSL on Default Switch NAT).
+  Offline OOBE is the default: guest NIC stays off Default Switch until Supervisor (skip ZDP).
+  Escape: -OnlineOobe attaches NAT before Start-VM (legacy always-online path).
 #>
 param(
     [Parameter(ParameterSetName = 'Run')]
@@ -57,6 +59,10 @@ param(
     # Attach to an in-progress winmint-smoke VM (setup reboot); do not recreate VHD.
     [Parameter(ParameterSetName = 'Run')]
     [switch] $ReuseVm,
+
+    # Escape: attach Default Switch before Start-VM (online OOBE / ZDP path). Default is offline OOBE.
+    [Parameter(ParameterSetName = 'Run')]
+    [switch] $OnlineOobe,
 
     [Parameter(Mandatory, ParameterSetName = 'AssertOnly')]
     [switch] $AssertOnly,
@@ -164,6 +170,7 @@ if ($freeGB -lt 40) {
 # Resolve now — passwordPath included — so a missing secret fails here, not as a
 # blocking New-PSSession credential prompt mid-wait (sl7.profile.json uses passwordPath).
 $guestCred = Resolve-WinMintSmokeGuestCredential -ProfilePath $ProfilePath
+# Authored Profile for pin/evidence facts; Apply may use an offline-OOBE overlay.
 $profileDoc = Get-Content -LiteralPath $ProfilePath -Raw -Encoding utf8 | ConvertFrom-Json
 
 $evidenceOut = Join-Path $Work 'smoke-evidence'
@@ -176,6 +183,21 @@ if (Test-Path -LiteralPath $guestDir) {
 New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 
 $workFull = if ([IO.Path]::IsPathRooted($Work)) { $Work } else { Join-Path $repoRoot $Work }
+
+$applyProfilePath = $ProfilePath
+$script:SmokeNicConnected = [bool]$OnlineOobe
+if (-not $OnlineOobe) {
+    $applyProfilePath = New-SmokeOfflineOobeProfile `
+        -SourceProfilePath $ProfilePath `
+        -DestPath (Join-Path $workFull 'offline-oobe.profile.json')
+    Write-SmokeHostLine -Name "Offline OOBE: Apply Profile overlay HideWireless ($applyProfilePath); NIC until Supervisor." -Activity apply
+    if ($SkipApply) {
+        Write-Warning 'SkipApply + offline OOBE: Output ISO unattend must already HideWireless — NIC is still deferred.'
+    }
+}
+else {
+    Write-SmokeHostLine -Name 'Online OOBE: Default Switch attached before Start-VM (ZDP path).' -Activity vm
+}
 
 # New run identity, stamped before the watcher spawns. Pass leftover/empty
 # -PriorRunId: — the post-stamp file is this run, not prior.
@@ -221,11 +243,11 @@ if (-not $SkipApply) {
 
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
         -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
-        -LastHostLine "Applying Profile=$ProfilePath" -OutputIso $null -RunId $runId
-    Write-SmokeHostLine -Name "Applying Profile=$ProfilePath Iso=$Iso Work=$Work (Test lane, smoke stubs on)…" -Activity apply
+        -LastHostLine "Applying Profile=$applyProfilePath" -OutputIso $null -RunId $runId
+    Write-SmokeHostLine -Name "Applying Profile=$applyProfilePath Iso=$Iso Work=$Work (Test lane, smoke stubs on)…" -Activity apply
     $runScratchHygiene = $true
     try {
-        & just apply-maintainer $Iso $Work $ProfilePath true
+        & just apply-maintainer $Iso $Work $applyProfilePath true
         $applyFail = Get-WinMintApplyHostFailure -WorkDirectory $workFull
         if ($applyFail) { throw $applyFail }
         if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
@@ -260,7 +282,17 @@ $existing = Get-VM -Name $VmName -ErrorAction SilentlyContinue
 if ($ReuseVm) {
     if (-not $existing) { throw "ReuseVm: VM '$VmName' not found" }
     Write-SmokeHostLine -Name "Reusing existing VM $VmName (state=$($existing.State))…" -Activity vm
+    # ponytail: IC time sync off — same ceiling/upgrade as fresh VM path below.
     Disable-VMIntegrationService -VMName $VmName -Name 'Time Synchronization' -ErrorAction SilentlyContinue
+    try {
+        $reuseNic = Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop | Select-Object -First 1
+        $script:SmokeNicConnected = -not [string]::IsNullOrWhiteSpace([string]$reuseNic.SwitchName)
+    }
+    catch { $null = $_ }
+    if ($OnlineOobe -and -not $script:SmokeNicConnected) {
+        Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
+        $script:SmokeNicConnected = $true
+    }
     if ($existing.State -eq 'Off') {
         Start-VM -Name $VmName
     }
@@ -280,7 +312,8 @@ else {
         Remove-Item -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $vhdx) { Remove-Item -LiteralPath $vhdx -Force }
 
-    # Gen2, Secure Boot off + no vTPM (Start-VM times out with vTPM on this host — SPLASH).
+    # ponytail: Secure Boot off + no vTPM — ceiling: Start-VM hangs with vTPM on this host.
+    # Upgrade: re-enable Gen2 Secure Boot + vTPM when this host starts those VMs reliably.
     # WinPE apply stamps LabConfig on the applied-image SYSTEM hive.
     New-VHD -Path $vhdx -SizeBytes 64GB -Dynamic | Out-Null
     New-VM -Name $VmName -Generation 2 -VHDPath $vhdx | Out-Null
@@ -289,12 +322,19 @@ else {
     Set-VM -Name $VmName -AutomaticCheckpointsEnabled $false
     Set-VMFirmware -VMName $VmName -EnableSecureBoot Off
     Set-VMProcessor -VMName $VmName -Count 4
-    # Guest NAT for winget/source (prior Smoke was offline-friendly stubs; Default Switch = Hyper-V NAT).
+    # Guest NAT for winget/source after FirstLogon. Offline OOBE (default) defers Connect until Supervisor.
     $switch = Get-VMSwitch -Name 'Default Switch' -ErrorAction SilentlyContinue
     if (-not $switch) {
         throw "Hyper-V 'Default Switch' not found — needed for guest network (winget prove-out)."
     }
-    Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
+    if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:([bool]$OnlineOobe)) -eq 'connect') {
+        Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
+        $script:SmokeNicConnected = $true
+    }
+    else {
+        Write-SmokeHostLine -Name 'Offline OOBE: Network Adapter left disconnected until Supervisor.' -Activity vm
+        $script:SmokeNicConnected = $false
+    }
     # DVD boot from applied ISO
     $dvd = Get-VMDvdDrive -VMName $VmName -ErrorAction SilentlyContinue
     if (-not $dvd) {
@@ -308,8 +348,8 @@ else {
     $dvdDev = Get-VMDvdDrive -VMName $VmName
     Set-VMFirmware -VMName $VmName -BootOrder $dvdDev, $hddDev
 
-    # Disable guest IC time sync — host/guest NTP jumps otherwise blow wall-facing clocks
-    # during settle (product deadlines are monotonic; harness still removes the class of jump).
+    # Heartbeat stays on (guest-up / stall). Guest Services (Copy-VMFile) and COM/serial are not OOBE channels.
+    # ponytail: IC time sync off — ceiling: host clock jumps blow wall-facing settle; upgrade: re-enable when maintainer clock is trusted.
     Disable-VMIntegrationService -VMName $VmName -Name 'Time Synchronization'
 
     # Hyper-V media ACL (SPLASH spike)
@@ -387,10 +427,11 @@ function Test-GuestEvidenceReady {
     # Reboot evidence is not terminal — keep waiting for resume → Complete (ticket 17).
     # Complete evidence alone is not terminal — require live explorer shell and no Supervisor process.
     try {
+        # VMName parameter set has no SessionOption (ComputerName/Uri only) — including it
+        # fails every PSD open with "Parameter set cannot be resolved".
         $sessionParams = @{
-            VMName        = $VmName
-            ErrorAction   = 'Stop'
-            SessionOption = (New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 30000 -CancelTimeout 5000)
+            VMName      = $VmName
+            ErrorAction = 'Stop'
         }
         if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
         $session = New-PSSession @sessionParams
@@ -595,18 +636,19 @@ Send-VmBootNudge
 function Try-StampSmokeRunId {
     if ($script:SmokeRunIdStamped) { return }
     try {
+        # VMName set: Credential + VMName only — no SessionOption (see evidence-pull PSD above).
         $sessionParams = @{
-            VMName        = $VmName
-            ErrorAction   = 'Stop'
-            SessionOption = (New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 30000 -CancelTimeout 5000)
+            VMName      = $VmName
+            ErrorAction = 'Stop'
         }
         if ($null -ne $guestCred) { $sessionParams['Credential'] = $guestCred }
         $stampSession = New-PSSession @sessionParams
         try {
+            # Ship the host helper into the guest session (5.1-safe WriteAllText).
+            $stampFn = ${function:Write-SmokeRunIdFile}.ToString()
             Invoke-Command -Session $stampSession -ScriptBlock {
-                $root = Join-Path $env:ProgramData 'WinMint'
-                New-Item -ItemType Directory -Force -Path $root | Out-Null
-                Set-Content -LiteralPath (Join-Path $root 'smoke-run.id') -Value ($using:runId).Trim() -Encoding utf8 -NoNewline
+                ${function:Write-SmokeRunIdFile} = $Using:stampFn
+                Write-SmokeRunIdFile -Path (Join-Path (Join-Path $env:ProgramData 'WinMint') 'smoke-run.id') -RunId $Using:runId
             }
             $script:SmokeRunIdStamped = $true
             Write-SmokeHostLine -Name "Stamped guest smoke-run.id=$runId" -Activity wait
@@ -713,8 +755,24 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         $script:LastVmState = $vmStateNow
         $script:SetupRebootCount = [int]$tick.SetupRebootCount
         $script:LastGuestEvidenceFingerprint = [string]$tick.LastFingerprint
+        $wasGuestUpSticky = [bool]$script:GuestUpSticky
         $script:GuestUpSticky = [bool]$tick.GuestUpSticky
+        if (-not $wasGuestUpSticky -and $script:GuestUpSticky) {
+            Write-SmokeHostLine -Name 'guest-up: stall only on Supervisor/evidence; CXH spinner ignored' -Activity wait
+        }
         $script:ConsecutiveHeartbeatOk = [int]$tick.ConsecutiveHeartbeatOk
+        if ((Get-SmokeNicReconnectDecision -OnlineOobe:([bool]$OnlineOobe) `
+                -AlreadyConnected:([bool]$script:SmokeNicConnected) `
+                -SupervisorRunning:([bool]$script:LastSupervisorRunning)) -eq 'connect') {
+            try {
+                Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
+                $script:SmokeNicConnected = $true
+                Write-SmokeHostLine -Name 'Offline OOBE: attached Default Switch (Supervisor sighted).' -Activity wait
+            }
+            catch {
+                Write-Warning "Could not attach Default Switch yet: $($_.Exception.Message)"
+            }
+        }
         $stallLeft = [math]::Max(0, [int]($StallMinutes - $stallSw.Elapsed.TotalMinutes))
         $wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
         $elapsedMin = [int]$wallSw.Elapsed.TotalMinutes

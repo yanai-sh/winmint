@@ -178,6 +178,75 @@ if ([bool]$t.TryStamp) { throw 'no heartbeat yet' }
 $t = Invoke-Tick @{ SmokeRunIdStamped = $false; HeartbeatOk = $true }
 if (-not [bool]$t.TryStamp) { throw 'first contact' }
 
+# Guest PSD is Windows PowerShell 5.1 — stamp must not use Set-Content -Encoding + -NoNewline.
+if ($statusSrc -notmatch 'function Write-SmokeRunIdFile') { throw 'SmokeStatus must define Write-SmokeRunIdFile' }
+if ($statusSrc -notmatch 'WriteAllText') { throw 'Write-SmokeRunIdFile must use WriteAllText' }
+if ($smoke -match 'Set-Content[^\n]*smoke-run\.id') {
+    throw 'Invoke-Smoke must not Set-Content smoke-run.id (5.1 -Encoding/-NoNewline clash)'
+}
+$stampDir = Join-Path ([IO.Path]::GetTempPath()) ("winmint-smoke-run-id-" + [guid]::NewGuid().ToString('N'))
+$stampPath = Join-Path $stampDir 'smoke-run.id'
+try {
+    Write-SmokeRunIdFile -Path $stampPath -RunId "  abc123`n"
+    $raw = [System.IO.File]::ReadAllBytes($stampPath)
+    if ([Text.Encoding]::UTF8.GetString($raw) -cne 'abc123') { throw 'Write-SmokeRunIdFile must trim and write exact id bytes' }
+    if ($raw.Length -ge 3 -and $raw[0] -eq 0xEF -and $raw[1] -eq 0xBB -and $raw[2] -eq 0xBF) {
+        throw 'Write-SmokeRunIdFile must write UTF-8 without BOM'
+    }
+}
+finally {
+    Remove-Item -LiteralPath $stampDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+if ($smoke -notmatch 'Write-SmokeRunIdFile') { throw 'Invoke-Smoke must call Write-SmokeRunIdFile for PSD stamp' }
+if ($smoke -notmatch 'guest-up: stall only on Supervisor/evidence') {
+    throw 'Invoke-Smoke must announce sticky guest-up stall policy once'
+}
+# New-PSSession -VMName cannot take -SessionOption (own parameter set) — #120 stall root cause.
+if ($smoke -match 'New-PSSessionOption') {
+    throw 'Invoke-Smoke must not build New-PSSessionOption for VMName PSD (parameter-set clash)'
+}
+
+# Offline OOBE (default): defer NAT until Supervisor; -OnlineOobe escape (#155).
+if ($statusSrc -notmatch 'function Get-SmokeNicAttachAtCreateDecision') {
+    throw 'SmokeStatus must define Get-SmokeNicAttachAtCreateDecision'
+}
+if ($statusSrc -notmatch 'function Get-SmokeNicReconnectDecision') {
+    throw 'SmokeStatus must define Get-SmokeNicReconnectDecision'
+}
+if ($statusSrc -notmatch 'function New-SmokeOfflineOobeProfile') {
+    throw 'SmokeStatus must define New-SmokeOfflineOobeProfile'
+}
+if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:$false) -cne 'defer') { throw 'offline OOBE defers NIC at create' }
+if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:$true) -cne 'connect') { throw 'OnlineOobe connects at create' }
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false) -cne 'hold') {
+    throw 'offline hold before Supervisor'
+}
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$true) -cne 'connect') {
+    throw 'offline reconnect on Supervisor'
+}
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$true -SupervisorRunning:$true) -cne 'skip') {
+    throw 'already connected skips reconnect'
+}
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$true -AlreadyConnected:$false -SupervisorRunning:$true) -cne 'skip') {
+    throw 'OnlineOobe skips reconnect path'
+}
+if ($smoke -notmatch '\[switch\] \$OnlineOobe') { throw 'Invoke-Smoke must expose -OnlineOobe' }
+if ($smoke -notmatch 'New-SmokeOfflineOobeProfile') { throw 'Invoke-Smoke must build offline-OOBE Apply overlay' }
+if ($smoke -notmatch 'Get-SmokeNicAttachAtCreateDecision') { throw 'Invoke-Smoke must gate Connect at create' }
+if ($smoke -notmatch 'Get-SmokeNicReconnectDecision') { throw 'Invoke-Smoke must reconnect on Supervisor' }
+
+$oobeSrc = Join-Path $repo 'samples/smoke.profile.json'
+$oobeDir = Join-Path ([IO.Path]::GetTempPath()) ("winmint-offline-oobe-" + [guid]::NewGuid().ToString('N'))
+$oobeDest = Join-Path $oobeDir 'offline-oobe.profile.json'
+try {
+    New-SmokeOfflineOobeProfile -SourceProfilePath $oobeSrc -DestPath $oobeDest | Out-Null
+    $oobeDoc = Get-Content -LiteralPath $oobeDest -Raw -Encoding utf8 | ConvertFrom-Json
+    if ([bool]$oobeDoc.account.requireWifiDuringOobe) { throw 'offline overlay must set requireWifiDuringOobe false' }
+}
+finally {
+    Remove-Item -LiteralPath $oobeDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 $t = Invoke-Tick @{ VmState = 'Starting'; Cpu = 0 }
 if (-not [bool]$t.ExtendStall) { throw 'reboot churn extends' }
 $t = Invoke-Tick @{ Cpu = 40; GuestUpSticky = $false }

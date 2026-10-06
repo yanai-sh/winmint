@@ -12,6 +12,8 @@ param(
     [int] $WallClockMinutes = 180,
     [int] $StallMinutes = 45,
     [string] $Monitor = '1',
+    # 0 = offline OOBE (default); 1 = online OOBE escape.
+    [string] $OnlineOobe = '0',
     [string] $TranscriptPath = ''
 )
 
@@ -44,7 +46,7 @@ try {
     Write-Host "Invoke-SmokeElevated Admin=True HEAD=$(git rev-parse --short HEAD)"
     $recipe = Join-Path $repoRoot 'tools\vm\Invoke-SmokeRecipe.ps1'
     & pwsh -NoProfile -File $recipe -Maintainer -Work $Work -WallClockMinutes $WallClockMinutes `
-        -StallMinutes $StallMinutes -Monitor $Monitor
+        -StallMinutes $StallMinutes -Monitor $Monitor -OnlineOobe $OnlineOobe
     exit $LASTEXITCODE
 }
 finally {

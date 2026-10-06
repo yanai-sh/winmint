@@ -8,7 +8,8 @@
     "Optional sourceIso.sha256: (Get-FileHash -Algorithm SHA256 <path>).Hash.ToLowerInvariant() after you verify the retail ISO.",
     "Task Scheduler example (run from repo root): pwsh -NoProfile -File tools/host/Invoke-MaintainerCheck.ps1",
     "just smoke-maintainer uses samples/sl7.profile.json (same Primary install target). Requires .scratch/sl7.password.",
-    "PowerShell: do not use just NAME=value overrides (WALL=180 binds to WORK). Use defaults, positional args (.scratch/smoke 180 1 45), or just smoke-maintainer-monitor.",
+    "Smoke default is offline OOBE (NIC until Supervisor). Online escape: positional ONLINE=1 or Invoke-SmokeElevated -OnlineOobe 1.",
+    "PowerShell: do not use just NAME=value overrides (WALL=180 binds to WORK). Use defaults, positional args (.scratch/smoke 180 1 45 0), or just smoke-maintainer-monitor.",
     "Elevated: sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1"
   ],
   "sourceIso": {

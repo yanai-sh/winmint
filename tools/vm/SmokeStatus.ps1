@@ -129,6 +129,91 @@ function Get-SmokeRunIdStampDecision {
     return 'try-stamp'
 }
 
+function Write-SmokeRunIdFile {
+    <#
+    .SYNOPSIS
+      Write smoke-run.id bytes (UTF-8 no BOM, no trailing newline).
+    .NOTES
+      Guest PSD runs Windows PowerShell 5.1 — Set-Content -Encoding + -NoNewline is a
+      parameter-set clash there. Keep this path as WriteAllText only.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string] $Path,
+        [Parameter(Mandatory)]
+        [string] $RunId
+    )
+    $dir = Split-Path -Parent $Path
+    if (-not [string]::IsNullOrWhiteSpace($dir) -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
+    [System.IO.File]::WriteAllText($Path, $RunId.Trim(), [System.Text.UTF8Encoding]::new($false))
+}
+
+function Get-SmokeNicAttachAtCreateDecision {
+    <#
+    .SYNOPSIS
+      Whether Smoke connects Default Switch before Start-VM.
+      Offline OOBE (default) defers NAT until Supervisor to skip ZDP during OOBE.
+    #>
+    param([bool] $OnlineOobe = $false)
+    if ($OnlineOobe) { return 'connect' }
+    return 'defer'
+}
+
+function Get-SmokeNicReconnectDecision {
+    <#
+    .SYNOPSIS
+      Whether the wait loop should attach Default Switch this poll (Supervisor sighted).
+    #>
+    param(
+        [bool] $OnlineOobe = $false,
+        [bool] $AlreadyConnected = $false,
+        [bool] $SupervisorRunning = $false
+    )
+    if ($OnlineOobe -or $AlreadyConnected) { return 'skip' }
+    if ($SupervisorRunning) { return 'connect' }
+    return 'hold'
+}
+
+function New-SmokeOfflineOobeProfile {
+    <#
+    .SYNOPSIS
+      Copy a Profile with requireWifiDuringOobe=false for offline-OOBE Apply.
+      Rewrites passwordPath to a fully-qualified path so the overlay can live under Work.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string] $SourceProfilePath,
+        [Parameter(Mandatory)]
+        [string] $DestPath
+    )
+    if (-not (Test-Path -LiteralPath $SourceProfilePath -PathType Leaf)) {
+        throw "Source Profile not found: $SourceProfilePath"
+    }
+    $srcFull = (Resolve-Path -LiteralPath $SourceProfilePath).Path
+    $doc = Get-Content -LiteralPath $srcFull -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($null -eq $doc.account) {
+        throw "Profile has no account block: $srcFull"
+    }
+    $doc.account | Add-Member -NotePropertyName requireWifiDuringOobe -NotePropertyValue $false -Force
+    $names = @($doc.account.PSObject.Properties.Name)
+    if ($names -contains 'passwordPath' -and -not [string]::IsNullOrWhiteSpace([string]$doc.account.passwordPath)) {
+        $authored = [string]$doc.account.passwordPath
+        if (-not [IO.Path]::IsPathFullyQualified($authored)) {
+            $resolved = [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $srcFull) $authored))
+            $doc.account.passwordPath = $resolved
+        }
+    }
+    $destDir = Split-Path -Parent $DestPath
+    if (-not [string]::IsNullOrWhiteSpace($destDir)) {
+        New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+    }
+    $json = $doc | ConvertTo-Json -Depth 40
+    [System.IO.File]::WriteAllText($DestPath, $json + "`n", [System.Text.UTF8Encoding]::new($false))
+    return $DestPath
+}
+
 function Resolve-WinMintSmokeGuestCredential {
     <#
     .SYNOPSIS
