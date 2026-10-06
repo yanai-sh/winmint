@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using System.Text.Json;
 
+using WinMint.Contracts;
+
 namespace WinMint.Provisioning;
 
 internal sealed record ShellDesktopRequest(
@@ -31,8 +33,8 @@ internal static class ShellDesktop
     {
         ArgumentNullException.ThrowIfNull(request);
         List<string> notes = [];
-        bool yasb = ContainsId(request.WingetIds, ShellDesktopLayout.YasbWingetId);
-        bool komorebi = ContainsId(request.WingetIds, ShellDesktopLayout.KomorebiWingetId);
+        bool yasb = ContainsId(request.WingetIds, PackageIds.Yasb);
+        bool komorebi = ContainsId(request.WingetIds, PackageIds.Komorebi);
         if (!yasb && !komorebi)
         {
             return new ShellDesktopApplyResult(null, false, true, true, true, false, notes);

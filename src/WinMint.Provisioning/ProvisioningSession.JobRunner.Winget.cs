@@ -73,8 +73,8 @@ internal static partial class ProvisioningJobRunner
 
     internal static IEnumerable<string> GuiBinaryPaths(string wingetId)
     {
-        if (wingetId.Equals(ShellChromeLayout.CursorWingetId, StringComparison.OrdinalIgnoreCase)
-            || wingetId.Equals(ShellChromeLayout.ZenWingetId, StringComparison.OrdinalIgnoreCase))
+        if (wingetId.Equals(PackageIds.Cursor, StringComparison.OrdinalIgnoreCase)
+            || wingetId.Equals(PackageIds.ZenBrowser, StringComparison.OrdinalIgnoreCase))
         {
             return ShellChromeLayout.Candidates(wingetId);
         }
@@ -225,7 +225,7 @@ internal static partial class ProvisioningJobRunner
                 [
                     "download",
                     "--id",
-                    ShellChromeLayout.ZenWingetId,
+                    PackageIds.ZenBrowser,
                     "--exact",
                     "--architecture",
                     "arm64",
@@ -290,7 +290,7 @@ internal static partial class ProvisioningJobRunner
         foreach (WingetListedPackage package in packages)
         {
             ct.ThrowIfCancellationRequested();
-            if (package.Id.Equals(ShellChromeLayout.ZenWingetId, StringComparison.OrdinalIgnoreCase)
+            if (package.Id.Equals(PackageIds.ZenBrowser, StringComparison.OrdinalIgnoreCase)
                 && await TryInstallZenUserAsync(env.Guest.Processes, wingetExe, elevated, env.ReportStatus, ct)
                     .ConfigureAwait(false))
             {

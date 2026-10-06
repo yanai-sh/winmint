@@ -12,8 +12,6 @@ internal readonly record struct ShellChromePins(
 public static class ShellChromeLayout
 {
     public const string WallpaperPath = GuestChrome.BloomWallpaperPath;
-    internal const string CursorWingetId = "Anysphere.Cursor";
-    internal const string ZenWingetId = "Zen-Team.Zen-Browser";
 
     /// <summary>
     /// User-writable install root. FirstLogon is medium IL; Zen's winget manifest is machine scope only.
@@ -204,12 +202,12 @@ public static class ShellChromeLayout
 
     private static string? StartMenuNameContains(string wingetId)
     {
-        if (wingetId.Equals(CursorWingetId, StringComparison.OrdinalIgnoreCase))
+        if (wingetId.Equals(PackageIds.Cursor, StringComparison.OrdinalIgnoreCase))
         {
             return "Cursor";
         }
 
-        if (wingetId.Equals(ZenWingetId, StringComparison.OrdinalIgnoreCase))
+        if (wingetId.Equals(PackageIds.ZenBrowser, StringComparison.OrdinalIgnoreCase))
         {
             return "Zen";
         }
@@ -224,12 +222,12 @@ public static class ShellChromeLayout
 
     internal static string? TryPinId(string wingetId)
     {
-        if (wingetId.Equals(CursorWingetId, StringComparison.OrdinalIgnoreCase))
+        if (wingetId.Equals(PackageIds.Cursor, StringComparison.OrdinalIgnoreCase))
         {
             return "cursor";
         }
 
-        if (wingetId.Equals(ZenWingetId, StringComparison.OrdinalIgnoreCase))
+        if (wingetId.Equals(PackageIds.ZenBrowser, StringComparison.OrdinalIgnoreCase))
         {
             return "zen-browser";
         }
@@ -242,7 +240,7 @@ public static class ShellChromeLayout
         string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-        if (wingetId.Equals(CursorWingetId, StringComparison.OrdinalIgnoreCase))
+        if (wingetId.Equals(PackageIds.Cursor, StringComparison.OrdinalIgnoreCase))
         {
             return
             [
@@ -252,7 +250,7 @@ public static class ShellChromeLayout
             ];
         }
 
-        if (wingetId.Equals(ZenWingetId, StringComparison.OrdinalIgnoreCase))
+        if (wingetId.Equals(PackageIds.ZenBrowser, StringComparison.OrdinalIgnoreCase))
         {
             return
             [

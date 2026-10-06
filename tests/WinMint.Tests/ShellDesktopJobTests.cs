@@ -13,7 +13,7 @@ public class ShellDesktopJobTests
     [Fact]
     public void Plan_emits_shell_desktop_after_chrome_when_yasb_selected()
     {
-        Profile profile = LabProfile(winget: ["AmN.yasb"]);
+        Profile profile = LabProfile(winget: [PackageIds.Yasb]);
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
             profile,
             new RunOptions { ImageArchitecture = "arm64" });
@@ -46,7 +46,7 @@ public class ShellDesktopJobTests
         try
         {
             ShellDesktopRequest request = new(
-                [ShellDesktopLayout.YasbWingetId],
+                [PackageIds.Yasb],
                 processes,
                 download,
                 guestRoot,
@@ -88,7 +88,7 @@ public class ShellDesktopJobTests
         try
         {
             ShellDesktopRequest request = new(
-                [ShellDesktopLayout.YasbWingetId],
+                [PackageIds.Yasb],
                 processes,
                 download,
                 guestRoot,
@@ -128,7 +128,7 @@ public class ShellDesktopJobTests
         try
         {
             ShellDesktopRequest request = new(
-                [ShellDesktopLayout.KomorebiWingetId],
+                [PackageIds.Komorebi],
                 new NoopProcesses(),
                 null,
                 guestRoot,

@@ -94,7 +94,7 @@ public class ShellChromeLayoutTests
     public void TryBuildPins_omits_cursor_and_zen_when_no_lnk()
     {
         bool ok = ShellChromeLayout.TryBuildPins(
-            [ShellChromeLayout.CursorWingetId, ShellChromeLayout.ZenWingetId],
+            [PackageIds.Cursor, PackageIds.ZenBrowser],
             failOpen: true,
             resolveShortcut: static _ => null,
             out ShellChromePins pins);
@@ -111,7 +111,7 @@ public class ShellChromeLayoutTests
     public void TryBuildPins_fail_closed_when_selected_pin_has_no_lnk()
     {
         Assert.False(ShellChromeLayout.TryBuildPins(
-            [ShellChromeLayout.CursorWingetId],
+            [PackageIds.Cursor],
             failOpen: false,
             resolveShortcut: static _ => null,
             out _));
@@ -125,9 +125,9 @@ public class ShellChromeLayoutTests
             "Zen Browser",
             "zen.exe");
 
-        Assert.Contains(expected, ShellChromeLayout.Candidates(ShellChromeLayout.ZenWingetId));
+        Assert.Contains(expected, ShellChromeLayout.Candidates(PackageIds.ZenBrowser));
         Assert.Contains(
             Path.Combine(ShellChromeLayout.ZenUserInstallDirectory(), "zen.exe"),
-            ShellChromeLayout.Candidates(ShellChromeLayout.ZenWingetId));
+            ShellChromeLayout.Candidates(PackageIds.ZenBrowser));
     }
 }
