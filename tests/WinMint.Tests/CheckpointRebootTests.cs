@@ -95,14 +95,67 @@ public class CheckpointRebootTests
         Assert.Null(checkpoints.LastWritten);
         Assert.Equal(2, processes.Starts.Count);
         Assert.Contains("Status:checkpoint.resume", splash.Events);
-        Assert.Contains("Status:settle.resumeSkip", splash.Events);
+        Assert.Contains("Status:settle.resumeOk", splash.Events);
         int resumeAt = splash.Events.IndexOf("Status:checkpoint.resume");
-        int settleAt = splash.Events.FindLastIndex(e => e == "Status:settle.begin");
-        Assert.True(settleAt >= 0 && settleAt < resumeAt, "settle runs before reboot only; resume skips settle");
+        int resumeOkAt = splash.Events.IndexOf("Status:settle.resumeOk");
+        int settleBeginAt = splash.Events.FindLastIndex(e => e == "Status:settle.begin");
+        Assert.True(settleBeginAt >= 0 && settleBeginAt < resumeAt, "full settle runs before reboot only");
+        Assert.True(resumeOkAt > resumeAt, "hard-field re-verify runs after checkpoint.resume before jobs");
+        Assert.DoesNotContain("Status:settle.resumeSkip", splash.Events);
         Assert.Contains("checkpoint.resume", evidence.Documents[^1].Phases);
-        Assert.Contains("settle.resumeSkip", evidence.Documents[^1].Phases);
+        Assert.Contains("settle.resumeOk", evidence.Documents[^1].Phases);
         Assert.Equal("Complete", evidence.Documents[^1].Outcome);
         Assert.Equal(1, winlogon.ReArmCalls);
+    }
+
+    [Fact]
+    public async Task Shell_resume_hard_mismatch_fails_before_remaining_jobs()
+    {
+        RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
+        RecordingCheckpoints checkpoints = new();
+        RecordingProcessHost processes = new();
+        RecordingSplashPresenter splash = new();
+        RecordingEvidenceSink evidence = new();
+        ResumeDriftRegion region = new(
+            new RegionState("en-GB", 242, "GMT Standard Time", true),
+            new RegionState("en-GB", 68, "GMT Standard Time", true));
+
+        ShellEnvironment env = Env(
+            new FakeGuestMachine
+            {
+                Winlogon = winlogon,
+                Checkpoints = checkpoints,
+                Processes = processes,
+                Region = region,
+            },
+            evidence,
+            splash: splash);
+
+        ProvisionJob[] jobs =
+        [
+            new ProvisionJob("smoke.stub.reboot", ProvisionJobKind.Stub, NeedsReboot: true),
+            new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub),
+        ];
+
+        SessionResult first = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle(jobs),
+            env,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Reboot, first.Outcome);
+
+        SessionResult second = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle(jobs),
+            env,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, second.Outcome);
+        Assert.Equal("settle.hardMismatch", second.FinalStatus.Code);
+        Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
+        Assert.Single(processes.Starts);
+        Assert.Contains("settle.resumeReverify", evidence.Documents[^1].Phases);
+        Assert.Contains("settle.hardMismatch", evidence.Documents[^1].Phases);
+        Assert.DoesNotContain("jobs.begin", evidence.Documents[^1].Phases);
     }
 
     [Fact]
@@ -132,5 +185,18 @@ public class CheckpointRebootTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    /// <summary>Two good reads for initial settle final snapshot; third read models post-reboot drift.</summary>
+    private sealed class ResumeDriftRegion(RegionState initialSettle, RegionState resumeSnapshot) : IRegionSnapshot
+    {
+        private int _reads;
+
+        public void Apply(DmaSettleTarget target)
+        {
+        }
+
+        public RegionState Read() =>
+            ++_reads <= 2 ? initialSettle : resumeSnapshot;
     }
 }

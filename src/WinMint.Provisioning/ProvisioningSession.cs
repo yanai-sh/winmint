@@ -94,23 +94,17 @@ public static partial class ProvisioningSession
             SessionStatus resumed = new("checkpoint.resume", $"Resuming from {resume.Phase}.");
             Note(env, phases, resumed);
 
-            // Settle already ran before NeedsReboot. Skip re-settle on resume (idempotent restore;
-            // also avoids re-entering TZ/location churn right after OS reboot).
-            SessionStatus settleSkip = new(
-                "settle.resumeSkip",
-                "DMA settle skipped on checkpoint resume.");
-            Note(env, phases, settleSkip);
-
-            // Sticky setup region is cheap and must survive reboot even when visible settle is skipped.
-            SettlePhaseResult? setupOnResume = EnsureDmaSetupRegionForSettle(bundle, env, phases);
-            if (setupOnResume is { HardFailed: true })
+            // Settle already ran before NeedsReboot, but reboot can still drift locale/Geo/TZ.
+            // Re-read hard fields once (no poll/apply churn) before jobs; DeviceRegion latch stays.
+            SettlePhaseResult resumeSettle = ReverifySettleHardFieldsOnResume(bundle, env, phases);
+            if (resumeSettle.HardFailed)
             {
                 return await FailOpenAsync(
                         bundle,
                         env,
                         phases,
                         emitted,
-                        setupOnResume.Value.Status,
+                        resumeSettle.Status,
                         dwell: true,
                         firstPaintMs)
                     .ConfigureAwait(false);
@@ -420,6 +414,60 @@ public static partial class ProvisioningSession
     private readonly record struct SettlePhaseResult(bool HardFailed, bool TimedOut, SessionStatus Status);
 
     /// <summary>
+    /// Checkpoint resume: one authoritative read gates hard locale / GeoID / TZ before jobs.
+    /// </summary>
+    private static SettlePhaseResult ReverifySettleHardFieldsOnResume(
+        ProvisioningBundle bundle,
+        ShellEnvironment env,
+        List<string> phases)
+    {
+        SessionStatus begin = new("settle.resumeReverify", "DMA hard-field re-verify on checkpoint resume.");
+        Note(env, phases, begin);
+
+        if (!bundle.DmaEnabled)
+        {
+            SessionStatus skipped = new("settle.skipped", "DMA disabled; settle skipped.");
+            Note(env, phases, skipped);
+            return new SettlePhaseResult(HardFailed: false, TimedOut: false, skipped);
+        }
+
+        if (DmaSettleConfidence.TargetIncompleteStatus(bundle.Dma) is SessionStatus incomplete)
+        {
+            Note(env, phases, incomplete);
+            return new SettlePhaseResult(HardFailed: true, TimedOut: false, incomplete);
+        }
+
+        RegionState final;
+        try
+        {
+            final = env.Guest.Region.Read();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SessionStatus readFailed = new("settle.readFailed", ex.Message);
+            Note(env, phases, readFailed);
+            return new SettlePhaseResult(HardFailed: true, TimedOut: false, readFailed);
+        }
+
+        if (!DmaSettleConfidence.HardFieldsMatch(final, bundle.Dma))
+        {
+            SessionStatus mismatch = DmaSettleConfidence.HardMismatchStatus(final);
+            Note(env, phases, mismatch);
+            return new SettlePhaseResult(HardFailed: true, TimedOut: false, mismatch);
+        }
+
+        SettlePhaseResult? setup = EnsureDmaSetupRegionForSettle(bundle, env, phases);
+        if (setup is { HardFailed: true })
+        {
+            return setup.Value;
+        }
+
+        SessionStatus ok = new("settle.resumeOk", "DMA hard fields re-verified after checkpoint resume.");
+        Note(env, phases, ok);
+        return new SettlePhaseResult(HardFailed: false, TimedOut: false, ok);
+    }
+
+    /// <summary>
     /// Bounded restore + poll; only the final snapshot gates hard locale / GeoID / TZ.
     /// Soft location-services mismatch warns and continues.
     /// </summary>
@@ -576,7 +624,7 @@ public static partial class ProvisioningSession
     }
 
     /// <summary>
-    /// Repair-then-verify sticky DeviceRegion Ireland after visible settle (or on resume skip).
+    /// Repair-then-verify sticky DeviceRegion Ireland after visible settle (or on resume re-verify).
     /// </summary>
     private static SettlePhaseResult? EnsureDmaSetupRegionForSettle(
         ProvisioningBundle bundle,
