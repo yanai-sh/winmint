@@ -40,10 +40,8 @@ The Wizard is **Source** → **Account** → **Software** → **Review**.
 
 1. Choose your **English (US)** Microsoft ISO.
 2. Set a local account. A password is required.
-3. Pick apps and cleanup, or continue with defaults.
-4. On **Review**, choose **Build**. Servicing is elevated and takes several hours.
-
-On Source, pick **Test** while you experiment. Pick **Release** when you intend to install from the ISO.
+3. On **Software**, pick a **Station outcome** (Comfort / Minimal / Power) to seed apps and cleanup, then refine chips and desktop surfaces as needed.
+4. On **Review**, choose **Build**. Servicing is elevated and takes several hours. The Wizard always builds shipping image quality (no Test vs Release chooser).
 
 If you check **Require Wi-Fi during OOBE**, stay at the machine for network setup.
 

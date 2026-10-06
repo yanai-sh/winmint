@@ -42,6 +42,13 @@ BenchmarkDotNet.Artifacts/
 .scratch/
 .superpowers/
 
-# Cursor agent skill installs (vendor copies + lockfile; not product)
-.agents/
+# Cursor agent skill installs — track only WinMint-tuned skills under .agents/skills/
+.agents/**
+!.agents/skills/
+!.agents/skills/dotnet-best-practices/
+!.agents/skills/dotnet-best-practices/**
+!.agents/skills/microsoft-docs/
+!.agents/skills/microsoft-docs/**
+!.agents/skills/project-structure/
+!.agents/skills/project-structure/**
 skills-lock.json

@@ -9,7 +9,7 @@
 
 Host preset **`recommended`** expands to remove-lists at plan time; JSON never embeds preset names.
 
-Product-curated host path (issue #136): `just curated-emit` / `winmint emit-defaults --out …` (see `CuratedDefaults` in Orchestrator). Distinct from Primary `sl7.profile.json`.
+Product-curated host path: `just curated-emit` / `winmint emit-defaults --out …` (`CuratedDefaults` / `ProfileDraft` in Orchestrator). Distinct from Primary `sl7.profile.json`. Wizard Station outcomes seed the same draft path ([ADR-016](../docs/decisions/ADR-016-wizard-no-lane.md)).
 
 `sl7.profile.json` password: `.scratch/sl7.password` (next to the sample; do not commit it).
 `just smoke` / `just smoke-maintainer` default to `sl7.profile.json`.

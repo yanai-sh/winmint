@@ -2,7 +2,7 @@
 
 Workstation state compiler — debloat, policies, packages, DMA settle, and account intent from a **Profile**. Delivery artifact: **Output ISO**. User always supplies official Microsoft **Source ISO**. Writing that ISO to removable media is **Flash** (operator step, outside the product seam).
 
-Policy / acceptance: Primary and Gate B below; checklist: [issue #96](https://github.com/yanai-sh/winmint/issues/96).
+Policy / acceptance terms: **Primary** and **Gate B** (below). Wipe checklist: [issue #96](https://github.com/yanai-sh/winmint/issues/96).
 
 ## Language
 

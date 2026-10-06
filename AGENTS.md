@@ -10,7 +10,7 @@ Elevate **only** Servicing `pwsh -File`. No v1 `WinMint.ps1`. No guest **pwsh pr
 
 ## Reach
 
-Code and tests are the product ([ADR-014](docs/decisions/ADR-014-docs-are-not-living-law.md)). Do not add living design docs. Do not restate types, opcodes, or defaults that already live in `src/`. An ADR is the choice and what was rejected — not an id catalog or changelog.
+Code and tests are the product ([ADR-014](docs/decisions/ADR-014-docs-are-not-living-law.md)). Do not add living design docs or session-plan overlays. Do not restate types, opcodes, or defaults that already live in `src/`. An ADR is the choice and what was rejected — not an id catalog or changelog.
 
 Open by branch:
 
@@ -19,9 +19,11 @@ Open by branch:
 | Coined word, polarity, avoid-list | [CONTEXT.md](CONTEXT.md) |
 | Why a bar exists / what was rejected | [docs/decisions/](docs/decisions/) |
 | Behaviour, types, opcodes, defaults | `src/`, `servicing/`, `tests/` |
+| GitHub Issues / wayfinder | [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md) |
+| Domain-doc habit for engineering skills | [docs/agents/domain.md](docs/agents/domain.md) |
 | Operator / legal policy | [README.md](README.md), [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) |
 
-Identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)).
+Identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)) · Wizard never exposes Lane ([ADR-016](docs/decisions/ADR-016-wizard-no-lane.md)).
 
 ## Map
 
@@ -39,11 +41,12 @@ Identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · re
 | Sample profiles | `samples/` |
 | Host recipes | `Justfile`, `tools/host/` |
 | Smoke / Hyper-V | `tools/vm/` |
+| Host Apply (S5) | `tools/apply/` |
 | Contract harness | `tests/contract/` |
 | Unit / session tests | `tests/WinMint.Tests/` |
 | Maintainer ISO / smoke recipes | `tests/fixtures/maintainer-host.json` |
 
-Pins: `global.json`, `Directory.Build.props`. Gate: `just check`.
+Pins: `global.json`, `Directory.Build.props` (no CPM / `Directory.Packages.props` — [ADR-004](docs/decisions/ADR-004-stack-and-guest-control-plane.md)). Gate: `just check`.
 
 ## Maintainer host
 
@@ -71,16 +74,6 @@ Prefer one issue per session. Tiny same-risk fixes in touched code are fine — 
 just check
 ```
 
-**Solo — no PRs** unless asked. Issues are the work surface.
-
-- Create: `gh issue create --title "..." --body "..."` (heredoc for multi-line)
-- Read: `gh issue view <number> --comments`
-- List: `gh issue list --state open --json number,title,body,labels,comments`
-- Comment: `gh issue comment <number> --body "..."`
-- Labels: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- Close: `gh issue close <number> --comment "..."`
+**Solo — no PRs** unless asked. Issues are the work surface. `gh` CRUD, labels, and wayfinder: [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md).
 
 Labels: `needs-triage` · `needs-info` · `ready-for-agent` · `ready-for-human` · `wontfix`. Apply `ready-for-agent` only when starting an implement session on that issue.
-
-When a skill says “publish to the issue tracker” → create a GitHub issue.  
-When a skill says “fetch the relevant ticket” → `gh issue view <number> --comments`.

@@ -11,3 +11,7 @@ GitHub Issues via `gh`. See `docs/agents/issue-tracker.md`.
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/decisions/`. See `docs/agents/domain.md`.
+
+### Local skills
+
+Repo-tuned under `.agents/skills/`: `dotnet-best-practices`, `project-structure`, `microsoft-docs`.
