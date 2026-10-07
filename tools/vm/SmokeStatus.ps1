@@ -165,17 +165,23 @@ function Get-SmokeNicReconnectDecision {
     <#
     .SYNOPSIS
       Whether the wait loop should attach Default Switch this poll.
-      Offline OOBE: connect at guest-up or Supervisor sighted — not only PSD Supervisor,
-      which can miss while the guest already runs the network gate.
+      Offline OOBE: prefer Supervisor sighted. Bare guest-up heartbeat often lands on
+      CloudExperienceHost "Just a moment" — connecting NAT there re-enables ZDP.
+      Fallback: connect only after guest-up has been sticky long enough for HideWireless
+      OOBE to finish offline (GuestUpNicDeferSeconds).
     #>
     param(
         [bool] $OnlineOobe = $false,
         [bool] $AlreadyConnected = $false,
         [bool] $SupervisorRunning = $false,
-        [bool] $GuestUpSticky = $false
+        [bool] $GuestUpSticky = $false,
+        [int] $GuestUpStickySeconds = 0,
+        # ponytail: 6m covers typical HideWireless OOBE after heartbeat; ceiling = ZDP if too low.
+        [int] $GuestUpNicDeferSeconds = 360
     )
     if ($OnlineOobe -or $AlreadyConnected) { return 'skip' }
-    if ($SupervisorRunning -or $GuestUpSticky) { return 'connect' }
+    if ($SupervisorRunning) { return 'connect' }
+    if ($GuestUpSticky -and $GuestUpStickySeconds -ge $GuestUpNicDeferSeconds) { return 'connect' }
     return 'hold'
 }
 

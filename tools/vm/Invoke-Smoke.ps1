@@ -557,6 +557,7 @@ $script:DiskBootPreferred = $false
 $script:DvdEjected = $false
 $script:SmokeRunIdStamped = $false
 $script:GuestUpSticky = $false
+$script:GuestUpStickySw = $null
 $script:ConsecutiveHeartbeatOk = 0
 $script:LastProbeError = ''
 $script:LastSupervisorRunning = $false
@@ -758,17 +759,20 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         $wasGuestUpSticky = [bool]$script:GuestUpSticky
         $script:GuestUpSticky = [bool]$tick.GuestUpSticky
         if (-not $wasGuestUpSticky -and $script:GuestUpSticky) {
-            Write-SmokeHostLine -Name 'guest-up: stall only on Supervisor/evidence; CXH spinner ignored' -Activity wait
+            $script:GuestUpStickySw = [Diagnostics.Stopwatch]::StartNew()
+            Write-SmokeHostLine -Name 'guest-up: stall only on Supervisor/evidence; CXH spinner ignored; NIC deferred past CXH' -Activity wait
         }
+        $guestUpSecs = if ($null -ne $script:GuestUpStickySw) { [int]$script:GuestUpStickySw.Elapsed.TotalSeconds } else { 0 }
         $script:ConsecutiveHeartbeatOk = [int]$tick.ConsecutiveHeartbeatOk
         if ((Get-SmokeNicReconnectDecision -OnlineOobe:([bool]$OnlineOobe) `
                 -AlreadyConnected:([bool]$script:SmokeNicConnected) `
                 -SupervisorRunning:([bool]$script:LastSupervisorRunning) `
-                -GuestUpSticky:([bool]$script:GuestUpSticky)) -eq 'connect') {
+                -GuestUpSticky:([bool]$script:GuestUpSticky) `
+                -GuestUpStickySeconds $guestUpSecs) -eq 'connect') {
             try {
                 Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
                 $script:SmokeNicConnected = $true
-                $why = if ($script:LastSupervisorRunning) { 'Supervisor sighted' } else { 'guest-up' }
+                $why = if ($script:LastSupervisorRunning) { 'Supervisor sighted' } else { "guest-up+${guestUpSecs}s" }
                 Write-SmokeHostLine -Name "Offline OOBE: attached Default Switch ($why)." -Activity wait
             }
             catch {
