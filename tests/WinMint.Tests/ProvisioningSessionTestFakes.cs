@@ -29,6 +29,8 @@ internal static class ProvisioningSessionTestFakes
             {
                 SettleDeadline = TimeSpan.Zero,
                 FailedDwell = TimeSpan.Zero,
+                // Single-shot offline probes in unit tests (no Smoke NIC race).
+                NetworkDeadline = TimeSpan.Zero,
             },
         };
 

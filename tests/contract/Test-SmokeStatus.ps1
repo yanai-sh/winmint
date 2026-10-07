@@ -241,6 +241,8 @@ if ($smoke -notmatch 'New-SmokeOfflineOobeProfile') { throw 'Invoke-Smoke must b
 if ($smoke -notmatch 'Get-SmokeNicAttachAtCreateDecision') { throw 'Invoke-Smoke must gate Connect at create' }
 if ($smoke -notmatch 'Get-SmokeNicReconnectDecision') { throw 'Invoke-Smoke must reconnect offline NIC' }
 if ($smoke -notmatch 'GuestUpStickySeconds') { throw 'Invoke-Smoke must pass guest-up age into NIC reconnect' }
+if ($smoke -notmatch 'Test-SmokeSupervisorProcess') { throw 'Invoke-Smoke must sight Supervisor before terminal evidence' }
+if ($smoke -notmatch 'Connect-SmokeOfflineNicIfNeeded') { throw 'Invoke-Smoke must attach offline NIC before Failed evidence break' }
 
 $oobeSrc = Join-Path $repo 'samples/smoke.profile.json'
 $oobeDir = Join-Path ([IO.Path]::GetTempPath()) ("winmint-offline-oobe-" + [guid]::NewGuid().ToString('N'))

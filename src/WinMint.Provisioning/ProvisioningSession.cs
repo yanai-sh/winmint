@@ -154,7 +154,12 @@ public static partial class ProvisioningSession
 
         if (bundle.RequiresNetwork)
         {
-            SessionStatus? network = await EnsureNetworkAvailableAsync(env, phases, ct)
+            SessionStatus? network = await EnsureNetworkAvailableAsync(
+                    bundle,
+                    env,
+                    phases,
+                    tenureStartTs,
+                    ct)
                 .ConfigureAwait(false);
             if (network is not null)
             {
@@ -391,23 +396,93 @@ public static partial class ProvisioningSession
     }
 
     private static async Task<SessionStatus?> EnsureNetworkAvailableAsync(
+        ProvisioningBundle bundle,
         ShellEnvironment env,
         List<string> phases,
+        long tenureStartTs,
         CancellationToken ct)
     {
-        if (env.Guest.Connectivity is not null
-            && await env.Guest.Connectivity.HasOutboundNetworkAsync(ct).ConfigureAwait(false))
+        if (env.Guest.Connectivity is null)
         {
-            SessionStatus ok = new("network.ok", "Outbound connectivity available.");
-            Note(env, phases, ok);
-            return null;
+            SessionStatus offline = new(
+                "network.required.offline",
+                "Plan requires network but outbound connectivity probe failed.");
+            Note(env, phases, offline);
+            return offline;
         }
 
-        SessionStatus offline = new(
+        SessionStatus begin = new("network.begin", "Waiting for outbound connectivity.");
+        Note(env, phases, begin);
+
+        long networkStartTs = env.Time.GetTimestamp();
+        TimeSpan deadline = bundle.Policy.NetworkDeadline;
+        TimeSpan poll = bundle.Policy.NetworkPollInterval <= TimeSpan.Zero
+            ? TimeSpan.FromSeconds(2)
+            : bundle.Policy.NetworkPollInterval;
+
+        while (true)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                SessionStatus cancelled = new("network.cancelled", "Network wait cancelled.");
+                Note(env, phases, cancelled);
+                return cancelled;
+            }
+
+            if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
+            {
+                return TimeoutStatus();
+            }
+
+            if (await env.Guest.Connectivity.HasOutboundNetworkAsync(ct).ConfigureAwait(false))
+            {
+                SessionStatus ok = new("network.ok", "Outbound connectivity available.");
+                Note(env, phases, ok);
+                return null;
+            }
+
+            if (deadline <= TimeSpan.Zero
+                || env.Time.GetElapsedTime(networkStartTs) >= deadline)
+            {
+                break;
+            }
+
+            TimeSpan elapsed = env.Time.GetElapsedTime(networkStartTs);
+            TimeSpan wait = poll;
+            TimeSpan remainingNetwork = deadline - elapsed;
+            TimeSpan remainingTenure = bundle.Policy.WallClockTimeout - env.Time.GetElapsedTime(tenureStartTs);
+            if (remainingNetwork < wait)
+            {
+                wait = remainingNetwork;
+            }
+
+            if (remainingTenure < wait)
+            {
+                wait = remainingTenure;
+            }
+
+            if (wait <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            try
+            {
+                await Task.Delay(wait, env.Time, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                SessionStatus cancelled = new("network.cancelled", "Network wait cancelled.");
+                Note(env, phases, cancelled);
+                return cancelled;
+            }
+        }
+
+        SessionStatus failed = new(
             "network.required.offline",
             "Plan requires network but outbound connectivity probe failed.");
-        Note(env, phases, offline);
-        return offline;
+        Note(env, phases, failed);
+        return failed;
     }
 
     private static bool TryParseJobsPhase(string phase, out int jobIndex)

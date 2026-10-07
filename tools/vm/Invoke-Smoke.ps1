@@ -685,10 +685,57 @@ function Try-StampSmokeRunId {
     }
 }
 
+function Test-SmokeSupervisorProcess {
+    # Lightweight sighting so offline NIC can attach while Supervisor still waits for network.
+    try {
+        $session = New-PSSession -VMName $VmName -Credential $guestCred -ErrorAction Stop
+        try {
+            return [bool](Invoke-Command -Session $session -ScriptBlock {
+                @(Get-Process -Name 'Supervisor' -ErrorAction SilentlyContinue).Count -gt 0
+            })
+        }
+        finally {
+            Remove-PSSession $session -ErrorAction SilentlyContinue
+        }
+    }
+    catch {
+        return $false
+    }
+}
+
+function Connect-SmokeOfflineNicIfNeeded {
+    param([string] $Why)
+    if ((Get-SmokeNicReconnectDecision -OnlineOobe:([bool]$OnlineOobe) `
+            -AlreadyConnected:([bool]$script:SmokeNicConnected) `
+            -SupervisorRunning:([bool]$script:LastSupervisorRunning) `
+            -GuestUpSticky:([bool]$script:GuestUpSticky) `
+            -GuestUpStickySeconds $(if ($null -ne $script:GuestUpStickySw) {
+                [int]$script:GuestUpStickySw.Elapsed.TotalSeconds
+            } else { 0 })) -ne 'connect') {
+        return
+    }
+    try {
+        Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
+        $script:SmokeNicConnected = $true
+        Write-SmokeHostLine -Name "Offline OOBE: attached Default Switch ($Why)." -Activity wait
+    }
+    catch {
+        Write-Warning "Could not attach Default Switch yet: $($_.Exception.Message)"
+    }
+}
+
 $wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
 # Outer try (line ~82) owns the catch: Apply failures and wait/assert failures share
 # one smoke-status + acceptance-manifest failure path.
 while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
+        # Attach NAT before terminal Failed evidence: Supervisor waits up to NetworkDeadline for outbound.
+        if (-not $script:SmokeNicConnected -and -not $OnlineOobe) {
+            if (Test-SmokeSupervisorProcess) {
+                $script:LastSupervisorRunning = $true
+                Connect-SmokeOfflineNicIfNeeded -Why 'Supervisor sighted'
+            }
+        }
+
         if (Test-GuestEvidenceReady) {
             Write-SmokeHostLine -Name 'Guest evidence pulled.' -Activity wait
             break
@@ -786,21 +833,8 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         }
         $guestUpSecs = if ($null -ne $script:GuestUpStickySw) { [int]$script:GuestUpStickySw.Elapsed.TotalSeconds } else { 0 }
         $script:ConsecutiveHeartbeatOk = [int]$tick.ConsecutiveHeartbeatOk
-        if ((Get-SmokeNicReconnectDecision -OnlineOobe:([bool]$OnlineOobe) `
-                -AlreadyConnected:([bool]$script:SmokeNicConnected) `
-                -SupervisorRunning:([bool]$script:LastSupervisorRunning) `
-                -GuestUpSticky:([bool]$script:GuestUpSticky) `
-                -GuestUpStickySeconds $guestUpSecs) -eq 'connect') {
-            try {
-                Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
-                $script:SmokeNicConnected = $true
-                $why = if ($script:LastSupervisorRunning) { 'Supervisor sighted' } else { "guest-up+${guestUpSecs}s" }
-                Write-SmokeHostLine -Name "Offline OOBE: attached Default Switch ($why)." -Activity wait
-            }
-            catch {
-                Write-Warning "Could not attach Default Switch yet: $($_.Exception.Message)"
-            }
-        }
+        $why = if ($script:LastSupervisorRunning) { 'Supervisor sighted' } else { "guest-up+${guestUpSecs}s" }
+        Connect-SmokeOfflineNicIfNeeded -Why $why
         $stallLeft = [math]::Max(0, [int]($StallMinutes - $stallSw.Elapsed.TotalMinutes))
         $wallLeft = [math]::Max(0, [int]($WallClockMinutes - $wallSw.Elapsed.TotalMinutes))
         $elapsedMin = [int]$wallSw.Elapsed.TotalMinutes

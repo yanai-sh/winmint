@@ -47,14 +47,20 @@ public sealed record SessionPolicy(
     TimeSpan SettleDeadline,
     TimeSpan SettlePollInterval,
     TimeSpan FailedDwell,
-    TimeSpan StaleTenureThreshold)
+    TimeSpan StaleTenureThreshold,
+    // Outbound probe budget after settle when RequiresNetwork (Smoke offline NIC attach).
+    TimeSpan NetworkDeadline = default,
+    TimeSpan NetworkPollInterval = default)
 {
     public static SessionPolicy SmokeDefaults { get; } = new(
         WallClockTimeout: TimeSpan.FromMinutes(90),
         SettleDeadline: TimeSpan.FromSeconds(120),
         SettlePollInterval: TimeSpan.FromSeconds(2),
         FailedDwell: TimeSpan.FromSeconds(5),
-        StaleTenureThreshold: TimeSpan.FromMinutes(15));
+        StaleTenureThreshold: TimeSpan.FromMinutes(15),
+        // Covers Smoke wait-poll (~20s) + Default Switch attach + DHCP after Supervisor starts.
+        NetworkDeadline: TimeSpan.FromMinutes(3),
+        NetworkPollInterval: TimeSpan.FromSeconds(2));
 }
 
 public interface IConnectivityProbe

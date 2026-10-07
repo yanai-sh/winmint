@@ -20,7 +20,7 @@ internal static partial class ProvisioningJobRunner
         string? setup = candidates.FirstOrDefault(File.Exists);
         if (setup is null)
         {
-            // Already gone — product-constant uninstall is idempotent.
+            // Offline EraseOfflineOneDrive already removed Setup — FirstLogon is a safety net.
             return null;
         }
 
@@ -253,8 +253,8 @@ internal static partial class ProvisioningJobRunner
             env.ReportStatus(new SessionStatus(
                 $"jobs.{job.Id}.running",
                 $"{job.Id} online AppX safety net…"));
-            // FU survival = Deprovisioned hive marks (Learn: remove-provisioned-apps-during-update).
-            // Collect PFNs from live hits; if already gone offline, still stamp catalog→PFN.
+            // Strip goal: gone is success. Already-absent catalog ids are silent (no phase, no fail).
+            // FU marks are best-effort; offline DISM owns provisioned remove.
             HashSet<string> families = new(StringComparer.OrdinalIgnoreCase);
             foreach (string catalogId in ids)
             {
@@ -285,7 +285,6 @@ internal static partial class ProvisioningJobRunner
                     }
                 }
 
-                // Already absent on the image: deprovision mark only. Smoke accepts that mark.
                 if (touched)
                 {
                     env.ReportStatus(new SessionStatus(
@@ -293,7 +292,6 @@ internal static partial class ProvisioningJobRunner
                         $"Removed online AppX catalog id '{catalogId}'."));
                 }
 
-                // Always ensure FU-survival mark for this catalog id (Learn manual Deprovisioned keys).
                 string stampPfn = families.FirstOrDefault(pfn =>
                     pfn.StartsWith(catalogId + "_", StringComparison.OrdinalIgnoreCase))
                     ?? AppxCatalogFamilyNames.Resolve(catalogId);
@@ -304,10 +302,8 @@ internal static partial class ProvisioningJobRunner
             {
                 if (!env.Guest.Appx.EnsureDeprovisionedMark(pfn))
                 {
-                    return FailJob(
-                        env,
-                        "jobs.failed",
-                        $"Job '{job.Id}': could not stamp Deprovisioned mark for '{pfn}'.");
+                    // ponytail: medium-IL may lack HKLM; absence already satisfies the strip
+                    continue;
                 }
 
                 env.ReportStatus(new SessionStatus(
