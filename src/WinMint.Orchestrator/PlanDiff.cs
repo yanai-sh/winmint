@@ -76,6 +76,11 @@ internal static class PlanDiff
             }
         }
 
+        if (review.Stages.Contains(ServicingOpcode.EraseOfflineOneDrive))
+        {
+            Line(sb, "OneDrive erased from image", "always");
+        }
+
         if (review.Stages.Contains(ServicingOpcode.InjectDrivers))
         {
             Line(sb, "Surface drivers", "you chose");

@@ -34,7 +34,7 @@ public sealed record Profile(
 
 /// <summary>
 /// Optional Profile <c>policies</c> object (winmint.profile/v1). Omit ⇒ product defaults.
-/// AppX Copilot/gaming strip, OneDrive / EdgeDebloat / DeviceMetadata / WPBT / ReservedStorage /
+/// AppX Copilot/gaming strip, offline OneDrive erase + Known Folders / EdgeDebloat / DeviceMetadata / WPBT / ReservedStorage /
 /// MinGit / Nilesoft are product posture (<see cref="ProductPosture"/>), not fields here.
 /// <c>DohProvider</c> is an optional DoH id (<c>cloudflare</c>, <c>google</c>, <c>quad9</c>); null/omit ⇒ no DoH job.
 /// </summary>

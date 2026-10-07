@@ -473,6 +473,7 @@ public static partial class BuildPlan
         [
             ServicingOpcode.MountInstallWim,
             ServicingOpcode.StampOfflinePolicies,
+            ServicingOpcode.EraseOfflineOneDrive,
         ];
 
         // Offline DISM remove whenever the effective remove-list is non-empty.

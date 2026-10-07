@@ -64,6 +64,7 @@ public class ImageServicingApplyTests
                 [
                     ServicingOpcode.MountInstallWim,
                     ServicingOpcode.StampOfflinePolicies,
+                    ServicingOpcode.EraseOfflineOneDrive,
                     ServicingOpcode.RemoveProvisionedAppx,
                     ServicingOpcode.StagePayload,
                     ServicingOpcode.StampOfflineDefaultUser,
