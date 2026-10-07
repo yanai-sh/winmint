@@ -139,19 +139,26 @@ public class DebloatAppxSafetyNetTests
     }
 
     [Fact]
-    public async Task Shell_appx_safetyNet_fails_when_deprovisioned_mark_cannot_be_stamped()
+    public async Task Shell_appx_safetyNet_ignores_mark_stamp_failure_when_already_absent()
     {
+        // Strip goal is absence. FU mark is best-effort (medium-IL may lack HKLM).
         RecordingAppx appx = new() { EnsureDeprovisionedMarkResult = false };
+        RecordingEvidenceSink evidence = new();
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
                 removeProvisionedAppx: ["Microsoft.BingNews"]),
-            Env(new FakeGuestMachine { Appx = appx }, new RecordingEvidenceSink()),
+            Env(new FakeGuestMachine { Appx = appx }, evidence),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Contains("Deprovisioned mark", result.FinalStatus.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.DoesNotContain(
+            evidence.Documents[^1].Phases,
+            p => p.StartsWith("removed.appx.online.", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            evidence.Documents[^1].Phases,
+            p => p.StartsWith("deprovisioned.appx.", StringComparison.Ordinal));
     }
 
     [Fact]

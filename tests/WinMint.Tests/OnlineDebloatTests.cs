@@ -139,7 +139,38 @@ public class OnlineDebloatSessionTests
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("network.required.offline", result.FinalStatus.Code);
+        Assert.Contains(evidence.Documents[0].Phases, p => p == "network.begin");
         Assert.Contains(evidence.Documents[0].Phases, p => p == "network.required.offline");
+    }
+
+    [Fact]
+    public async Task Shell_network_required_waits_until_outbound_ok()
+    {
+        ManualTimeProvider time = new();
+        RecordingEvidenceSink evidence = new();
+        FlippingConnectivityProbe probe = new(onlineAfterAttempts: 3);
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle([new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub)]) with
+            {
+                RequiresNetwork = true,
+                Policy = SessionPolicy.SmokeDefaults with
+                {
+                    SettleDeadline = TimeSpan.Zero,
+                    FailedDwell = TimeSpan.Zero,
+                    NetworkDeadline = TimeSpan.FromSeconds(30),
+                    NetworkPollInterval = TimeSpan.FromSeconds(2),
+                },
+            },
+            Env(
+                new FakeGuestMachine { Connectivity = probe },
+                evidence,
+                time: time),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.True(probe.Attempts >= 3);
+        Assert.Contains(evidence.Documents[0].Phases, p => p == "network.begin");
+        Assert.Contains(evidence.Documents[0].Phases, p => p == "network.ok");
     }
 
     [Fact]
@@ -168,5 +199,16 @@ public class OnlineDebloatSessionTests
     {
         public Task<bool> HasOutboundNetworkAsync(CancellationToken ct = default) =>
             Task.FromResult(false);
+    }
+
+    private sealed class FlippingConnectivityProbe(int onlineAfterAttempts) : IConnectivityProbe
+    {
+        public int Attempts { get; private set; }
+
+        public Task<bool> HasOutboundNetworkAsync(CancellationToken ct = default)
+        {
+            Attempts++;
+            return Task.FromResult(Attempts >= onlineAfterAttempts);
+        }
     }
 }

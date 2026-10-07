@@ -71,9 +71,10 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
         }
         catch (Exception ex) when (IsAccessDenied(ex))
         {
-            throw new InvalidOperationException(
-                $"FindProvisionedPackages access denied for catalog '{catalogId}'.",
-                ex);
+            // FindProvisionedPackages needs admin. FirstLogon Shell is medium-IL — offline DISM
+            // already owns provisioned remove; safety net still stamps Deprovisioned + clears
+            // per-user hits via FindPackagesForUser (which must keep failing closed on denial).
+            return [];
         }
 
         return [.. hits];
