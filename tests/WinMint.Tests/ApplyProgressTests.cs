@@ -188,9 +188,70 @@ public class ApplyProgressTests
         Assert.Null(presentation.Value.ProgressPercent);
     }
 
+    [Fact]
+    public void ApplyBuildPresentation_alive_line_from_latest_heartbeat()
+    {
+        string[] lines =
+        [
+            "MountInstallWim start",
+            "MountInstallWim running 1103s",
+        ];
+        ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
+            new ApplyProgress("MountInstallWim", "ignored.log"),
+            _ => lines);
+        Assert.NotNull(presentation);
+        Assert.Equal("MountInstallWim · 18m 23s", presentation.Value.AliveLine);
+    }
+
+    [Fact]
+    public void ApplyBuildPresentation_alive_line_without_heartbeat_is_working()
+    {
+        ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
+            new ApplyProgress("MountInstallWim", "ignored.log"),
+            _ => ["MountInstallWim start"]);
+        Assert.NotNull(presentation);
+        Assert.Equal("working…", presentation.Value.AliveLine);
+    }
+
+    [Fact]
+    public void ApplyBuildPresentation_failed_reads_failure_and_transcript_hint()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "winmint-fail-ui-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(root, ServicingWorkspace.FailureFileName),
+                """{"schemaVersion":"1","opcode":"StampOfflinePolicies","message":"Cannot bind argument to parameter 'Line'"}""");
+            File.WriteAllText(Path.Combine(root, "dism-transcript.log"), "=== stage ===\n");
+            ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
+                new ApplyProgress("failed:StampOfflinePolicies", null),
+                workDirectory: root);
+            Assert.NotNull(presentation);
+            Assert.Equal("Failed: StampOfflinePolicies", presentation.Value.StageLine);
+            Assert.Equal("Cannot bind argument to parameter 'Line'", presentation.Value.FailureDetail);
+            Assert.Contains("dism-transcript.log", presentation.Value.TranscriptHint, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(0, "0s")]
+    [InlineData(59, "59s")]
+    [InlineData(60, "1m")]
+    [InlineData(1103, "18m 23s")]
+    [InlineData(3600, "1h")]
+    [InlineData(3661, "1h 1m")]
+    public void FormatElapsed_human_grain(int seconds, string expected) =>
+        Assert.Equal(expected, ApplyBuildPresentationFormat.FormatElapsed(seconds));
+
     [Theory]
     [InlineData("AddQualityUpdates running 78s", true)]
     [InlineData("Catalog BITS start KB1", false)]
+    [InlineData("", false)]
     public void IsTrailHeartbeatLine_matches_host_grain(string line, bool expected) =>
         Assert.Equal(expected, ApplyBuildPresentationFormat.IsTrailHeartbeatLine(line));
 
@@ -200,5 +261,6 @@ public class ApplyProgressTests
         Assert.False(ApplyBuildPresentationFormat.IsDismProgressBarLine("quality hash 50% leaf.msu"));
         Assert.True(ApplyBuildPresentationFormat.IsDismProgressBarLine(
             "[=====     50.0%                          ]"));
+        Assert.False(ApplyBuildPresentationFormat.IsDismProgressBarLine(""));
     }
 }

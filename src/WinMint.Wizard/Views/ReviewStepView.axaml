@@ -62,24 +62,32 @@
                    TextWrapping="Wrap"
                    Margin="0,6,0,0" />
 
+        <TextBlock Text="{Binding Build.BuildStatus}"
+                   TextWrapping="Wrap"
+                   Opacity="0.85"
+                   Margin="0,8,0,0" />
+        <TextBlock Text="{Binding Build.AliveLine}"
+                   TextWrapping="Wrap"
+                   Opacity="0.75"
+                   FontSize="12"
+                   IsVisible="{Binding Build.IsBusy}" />
+        <TextBlock Text="{Binding Build.StepCue}"
+                   TextWrapping="Wrap"
+                   Opacity="0.75"
+                   FontSize="12"
+                   IsVisible="{Binding Build.StepCue, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         <ProgressBar IsIndeterminate="{Binding Build.IsProgressIndeterminate}"
                      Value="{Binding Build.ProgressValue}"
                      Minimum="0"
                      Maximum="100"
                      Height="4"
                      IsVisible="{Binding Build.IsBusy}"
-                     Margin="0,8,0,0" />
-        <TextBlock Text="{Binding Build.StepCue}"
-                   TextWrapping="Wrap"
-                   Opacity="0.75"
-                   FontSize="12"
-                   IsVisible="{Binding Build.StepCue, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                     Margin="0,4,0,0" />
         <TextBlock Text="{Binding Build.BuildWaitHint}"
                    TextWrapping="Wrap"
                    Opacity="0.65"
                    FontSize="12"
                    IsVisible="{Binding Build.IsBusy}" />
-        <TextBlock Text="{Binding Build.BuildStatus}" TextWrapping="Wrap" Opacity="0.85" />
         <ScrollViewer MaxHeight="160"
                       IsVisible="{Binding Build.StatusTail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                       Margin="0,4,0,0">
@@ -89,6 +97,18 @@
                      FontSize="12"
                      Opacity="0.8" />
         </ScrollViewer>
+        <TextBlock Text="{Binding Build.FailureDetail}"
+                   TextWrapping="Wrap"
+                   Opacity="0.9"
+                   FontSize="12"
+                   Margin="0,6,0,0"
+                   IsVisible="{Binding Build.FailureDetail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Text="{Binding Build.TranscriptHint}"
+                   TextWrapping="Wrap"
+                   Opacity="0.7"
+                   FontSize="11"
+                   FontFamily="Cascadia Mono, Consolas, monospace"
+                   IsVisible="{Binding Build.TranscriptHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
         <Border Classes="flash"
                 IsVisible="{Binding Build.FlashGuidanceText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">

@@ -51,10 +51,13 @@ public sealed partial class ReviewBuildViewModel : ObservableObject
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private bool _canBuild;
     [ObservableProperty] private string _buildStatus = "";
+    [ObservableProperty] private string _aliveLine = "";
     [ObservableProperty] private string _statusTail = "";
     [ObservableProperty] private bool _isProgressIndeterminate = true;
     [ObservableProperty] private double _progressValue;
     [ObservableProperty] private string _stepCue = "";
+    [ObservableProperty] private string _failureDetail = "";
+    [ObservableProperty] private string _transcriptHint = "";
     [ObservableProperty] private string _saveStatus = "";
     [ObservableProperty] private string _flashGuidanceText = "";
 

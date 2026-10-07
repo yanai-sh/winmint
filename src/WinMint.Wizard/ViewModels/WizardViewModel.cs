@@ -345,6 +345,9 @@ public sealed partial class WizardViewModel :
         IsBusy = true;
         buildStage.Build.FlashGuidanceText = "";
         buildStage.Build.StatusTail = "";
+        buildStage.Build.AliveLine = "";
+        buildStage.Build.FailureDetail = "";
+        buildStage.Build.TranscriptHint = "";
         buildStage.Build.StepCue = "";
         buildStage.Build.ProgressValue = 0;
         buildStage.Build.IsProgressIndeterminate = true;
@@ -432,7 +435,8 @@ public sealed partial class WizardViewModel :
             {
                 ApplyBuildPresentation? presentation =
                     ApplyBuildPresentationFormat.FromApplyProgress(
-                        workspace.TryReadProgress(cancellationToken));
+                        workspace.TryReadProgress(cancellationToken),
+                        workDirectory: workDirectory);
                 if (presentation is not null)
                 {
                     ApplyBuildPresentation p = presentation.Value;
@@ -447,9 +451,13 @@ public sealed partial class WizardViewModel :
                             p.StageLine.StartsWith("Failed:", StringComparison.Ordinal));
                     }
 
+                    // Alive / progress / step advance every tick (heartbeat not in StatusTail key).
+                    buildStage.Build.AliveLine = p.AliveLine;
                     buildStage.Build.IsProgressIndeterminate = p.IsProgressIndeterminate;
                     buildStage.Build.ProgressValue = p.ProgressPercent ?? 0;
                     buildStage.Build.StepCue = p.StepCue ?? "";
+                    buildStage.Build.FailureDetail = p.FailureDetail ?? "";
+                    buildStage.Build.TranscriptHint = p.TranscriptHint ?? "";
                 }
                 await Task.Delay(500, cancellationToken).ConfigureAwait(true);
             }
