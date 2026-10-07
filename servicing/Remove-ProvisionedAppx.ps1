@@ -9,6 +9,8 @@ param(
 # (re-Apply after a prior remove). Uses dism.exe (not DISM AppX cmdlets) — Store pwsh
 # hits "Class not registered" on those COM APIs.
 
+. (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
+
 function ConvertFrom-ProvisionedAppxText {
     param([Parameter(Mandatory)] [string] $Text)
     $pkgs = [System.Collections.Generic.List[object]]::new()
@@ -36,10 +38,7 @@ function ConvertFrom-ProvisionedAppxText {
 
 function Get-ProvisionedInventory {
     param([string] $Path)
-    $text = & dism.exe /English /Image:$Path /Get-ProvisionedAppxPackages 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) {
-        throw "dism Get-ProvisionedAppxPackages failed: $LASTEXITCODE`n$text"
-    }
+    $text = Invoke-WinMintDism -ArgumentList @('/English', "/Image:$Path", '/Get-ProvisionedAppxPackages') -Stage 'Get-ProvisionedAppxPackages' -PassThruText
     return ConvertFrom-ProvisionedAppxText -Text $text
 }
 
@@ -91,16 +90,13 @@ $removed = [System.Collections.Generic.List[object]]::new()
 foreach ($id in $ids) {
     $matchedPkgs = @($before | Where-Object { Test-PackageMatchesCatalogId -Package $_ -CatalogId $id })
     if ($matchedPkgs.Count -eq 0) {
-        Write-Output "Remove-ProvisionedAppx already absent catalogId=$id"
+        # Already gone — strip goal met; digest still records absent below.
         continue
     }
     foreach ($pkg in $matchedPkgs) {
         $packageName = [string]$pkg.PackageName
         Write-Output "Remove-ProvisionedAppxPackage PackageName=$packageName catalogId=$id"
-        & dism.exe /English /Image:$mountDir /Remove-ProvisionedAppxPackage /PackageName:$packageName /LogPath:$dismLog
-        if ($LASTEXITCODE -ne 0) {
-            throw "dism Remove-ProvisionedAppxPackage failed for $packageName : $LASTEXITCODE"
-        }
+        Invoke-WinMintDism -ArgumentList @('/English', "/Image:$mountDir", '/Remove-ProvisionedAppxPackage', "/PackageName:$packageName", "/LogPath:$dismLog") -Stage 'Remove-ProvisionedAppxPackage'
         $removed.Add([pscustomobject]@{
                 CatalogId         = $id
                 PackageName       = $packageName

@@ -10,6 +10,8 @@ param(
     [string] $ListFromIso
 )
 
+. (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
+
 function Test-WimMetadataUndefined([string] $Value) {
     if ([string]::IsNullOrWhiteSpace($Value)) { return $true }
     $t = $Value.Trim()
@@ -134,10 +136,7 @@ function Get-WimIndexList {
     }
 
     # IndexCount from summary list (no /Index). Per-index detail needs /Index — 25H2 summary omits Architecture.
-    $summary = & dism.exe /English /Get-WimInfo /WimFile:$WimFile 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) {
-        throw "wim.probe.unreadable: Get-WimInfo failed: $LASTEXITCODE`n$summary"
-    }
+    $summary = Invoke-WinMintDism -ArgumentList @('/English', '/Get-WimInfo', "/WimFile:$WimFile") -Stage 'Get-WimInfo' -PassThruText
 
     $indexCount = ([regex]::Matches($summary, '(?m)^Index : \d+\s*$')).Count
     if ($indexCount -lt 1) {
@@ -146,11 +145,7 @@ function Get-WimIndexList {
 
     $parts = [System.Collections.Generic.List[string]]::new()
     for ($i = 1; $i -le $indexCount; $i++) {
-        $detail = & dism.exe /English /Get-WimInfo /WimFile:$WimFile /Index:$i 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) {
-            throw "wim.probe.unreadable: Get-WimInfo /Index:$i failed: $LASTEXITCODE`n$detail"
-        }
-
+        $detail = Invoke-WinMintDism -ArgumentList @('/English', '/Get-WimInfo', "/WimFile:$WimFile", "/Index:$i") -Stage 'Get-WimInfo' -PassThruText
         $parts.Add($detail)
     }
 
@@ -215,10 +210,7 @@ function Get-WimMetadataSnapshot {
     }
 
     # IndexCount from summary list (no /Index). Per-index detail needs /Index — 25H2 summary omits Architecture.
-    $summary = & dism.exe /English /Get-WimInfo /WimFile:$WimFile 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) {
-        throw "Get-WimInfo failed: $LASTEXITCODE`n$summary"
-    }
+    $summary = Invoke-WinMintDism -ArgumentList @('/English', '/Get-WimInfo', "/WimFile:$WimFile") -Stage 'Get-WimInfo' -PassThruText
 
     $indexCount = ([regex]::Matches($summary, '(?m)^Index : \d+\s*$')).Count
     if ($indexCount -lt 1) {
@@ -231,10 +223,7 @@ function Get-WimMetadataSnapshot {
         else { throw "Get-WimInfo: Index parameter required when indexCount=$indexCount" }
     }
 
-    $detail = & dism.exe /English /Get-WimInfo /WimFile:$WimFile /Index:$detailIndex 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) {
-        throw "Get-WimInfo /Index:$detailIndex failed: $LASTEXITCODE`n$detail"
-    }
+    $detail = Invoke-WinMintDism -ArgumentList @('/English', '/Get-WimInfo', "/WimFile:$WimFile", "/Index:$detailIndex") -Stage 'Get-WimInfo' -PassThruText
 
     $snap = ConvertFrom-WimInfoText -Text $detail -Index 0
     $snap['IndexCount'] = $indexCount

@@ -19,6 +19,7 @@ if ($helper -notmatch 'Foreground\.BrightBlack') { throw 'watch format must dim 
 if ($helper -notmatch "Foreground\.Yellow") { throw 'watch format must color awaiting verdict' }
 if ($helper -notmatch 'function Write-WinMintHostHeartbeat') { throw 'helper must define Write-WinMintHostHeartbeat' }
 if ($helper -notmatch 'function Test-WinMintTrailHeartbeatLine') { throw 'helper must define Test-WinMintTrailHeartbeatLine' }
+if ($helper -notmatch 'function Test-WinMintDismProgressBarLine') { throw 'helper must define Test-WinMintDismProgressBarLine' }
 if ($helper -notmatch 'function Select-WinMintWatchLogTail') { throw 'helper must define Select-WinMintWatchLogTail' }
 if ($helper -notmatch 'function Start-WinMintHostWatchProcess') { throw 'helper must spawn watch via Start-WinMintHostWatchProcess' }
 if ($helper -notmatch 'wt' -and $helper -notmatch 'WindowsTerminal') { throw 'spawn helper must consider wt.exe' }
@@ -29,6 +30,9 @@ if ($helper -notmatch '-PriorRunId:') { throw 'empty PriorRunId must be one argv
 if ($helper -notmatch 'UseOSCIndicator') { throw 'helper must set Progress.UseOSCIndicator when interactive VT' }
 if (-not (Test-WinMintTrailHeartbeatLine -Line 'AddQualityUpdates running 78s')) { throw 'heartbeat detector missed running line' }
 if (Test-WinMintTrailHeartbeatLine -Line 'Catalog BITS start KB1') { throw 'heartbeat detector false positive' }
+$sampleBar = '[=====     50.0%                          ]'
+if (-not (Test-WinMintDismProgressBarLine -Line $sampleBar)) { throw 'DISM bar detector missed bracket percent line' }
+if (Test-WinMintDismProgressBarLine -Line 'quality hash 50% leaf.msu') { throw 'DISM bar detector false positive on milestone' }
 $filtered = @(Select-WinMintWatchLogTail -Lines @(
         'Catalog BITS start KB1',
         'AddQualityUpdates running 20s',
@@ -37,6 +41,13 @@ $filtered = @(Select-WinMintWatchLogTail -Lines @(
     ) -Count 8)
 if ($filtered -contains 'AddQualityUpdates running 20s') { throw 'Select-WinMintWatchLogTail must drop heartbeats' }
 if ($filtered.Count -ne 2) { throw 'Select-WinMintWatchLogTail kept wrong rows' }
+$filteredBars = @(Select-WinMintWatchLogTail -Lines @(
+        'Catalog BITS start KB1',
+        $sampleBar,
+        'quality hash ok leaf.msu'
+    ) -Count 8)
+if ($filteredBars -contains $sampleBar) { throw 'Select-WinMintWatchLogTail must drop DISM progress bars' }
+if ($filteredBars.Count -ne 2) { throw 'Select-WinMintWatchLogTail bar filter kept wrong rows' }
 
 $plan = Get-Content -LiteralPath (Join-Path $repo 'servicing/Invoke-ServicingPlan.ps1') -Raw -Encoding utf8
 if ($plan -notmatch 'Write-WinMintHostPhase') { throw 'elevated loop must print host phases' }
@@ -45,18 +56,25 @@ if ($plan -notmatch 'function Invoke-WinMintLoggedKernel') { throw 'elevated loo
 if ($plan -notmatch 'Write-WinMintHostHeartbeat') { throw 'logged kernel must call Write-WinMintHostHeartbeat' }
 $kernelFn = [regex]::Match($plan, '(?ms)^function Invoke-WinMintLoggedKernel \{.*?^\}').Value
 if ($kernelFn -notmatch 'Write-WinMintHostHeartbeat -Opcode') { throw 'heartbeat helper not called with -Opcode' }
+if ($kernelFn -notmatch 'Test-WinMintDismProgressBarLine') { throw 'logged kernel must skip DISM progress bar lines' }
 if ($kernelFn -match '\$text = "\$Opcode running[\s\S]{0,80}Write-Host \$text') {
     throw 'heartbeat still Write-Host'
 }
 Invoke-Expression $kernelFn
 $kernelProbe = Join-Path ([IO.Path]::GetTempPath()) 'winmint-logged-kernel.ps1'
 $kernelLog = Join-Path ([IO.Path]::GetTempPath()) 'winmint-logged-kernel.log'
-Set-Content -LiteralPath $kernelProbe -Encoding utf8 -Value "Write-Output 'kernel-line'`r`nWrite-Host 'kernel-host'`r`nStart-Sleep -Seconds 4`r`n"
+Set-Content -LiteralPath $kernelProbe -Encoding utf8 -Value @(
+    "Write-Output 'kernel-line'"
+    "Write-Output '$sampleBar'"
+    "Write-Host 'kernel-host'"
+    'Start-Sleep -Seconds 4'
+)
 Invoke-WinMintLoggedKernel -Path $kernelProbe -Parameters @{} -LogFile $kernelLog -Opcode 'ProbeOp' -QuietSeconds 1
 $kernelText = Get-Content -LiteralPath $kernelLog -Raw -Encoding utf8
 Remove-Item -LiteralPath $kernelProbe, $kernelLog -Force
 if ($kernelText -notmatch 'kernel-line') { throw 'logged kernel dropped stdout' }
 if ($kernelText -notmatch 'kernel-host') { throw 'logged kernel dropped host line' }
+if ($kernelText -match [regex]::Escape($sampleBar)) { throw 'logged kernel must not tee DISM progress bars' }
 if ($kernelText -notmatch 'ProbeOp running') { throw 'silent kernel produced no heartbeat' }
 if ($plan -notmatch "updated=.*`r?`n.*stage=.*`r?`n.*log=") { throw 'apply-status schema keys changed' }
 if ($plan -match "Resolve-KernelScript.*Write-WinMintHostProgress") { throw 'helper must not be an opcode kernel' }

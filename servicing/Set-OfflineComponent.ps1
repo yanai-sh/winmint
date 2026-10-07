@@ -8,6 +8,8 @@ param(
 # Offline capability remove OR optional-feature disable — param-only.
 # kind=capability|feature. Already-absent/disabled / not listed ⇒ ok + digest.
 
+. (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
+
 function ConvertFrom-DismStateText {
     param(
         [Parameter(Mandatory)] [string] $Text,
@@ -39,12 +41,10 @@ function ConvertFrom-DismStateText {
 function Get-StateMap {
     param([string] $Path, [string] $Kind)
     if ($Kind -eq 'capability') {
-        $text = & dism.exe /English /Image:$Path /Get-Capabilities 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) { throw "dism Get-Capabilities failed: $LASTEXITCODE`n$text" }
+        $text = Invoke-WinMintDism -ArgumentList @('/English', "/Image:$Path", '/Get-Capabilities') -Stage 'Get-Capabilities' -PassThruText
     }
     else {
-        $text = & dism.exe /English /Image:$Path /Get-Features 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) { throw "dism Get-Features failed: $LASTEXITCODE`n$text" }
+        $text = Invoke-WinMintDism -ArgumentList @('/English', "/Image:$Path", '/Get-Features') -Stage 'Get-Features' -PassThruText
     }
     return ConvertFrom-DismStateText -Text $text -Kind $Kind
 }
@@ -75,8 +75,7 @@ foreach ($id in ($ids | Select-Object -Unique)) {
         if ($state -ieq 'NotPresent' -or $state -ieq 'Absent' -or $state -ieq 'Not Present') {
             Write-Output "CapabilityAlreadyAbsent=$id"; continue
         }
-        $out = & dism.exe /English /Image:$mountDir /Remove-Capability /CapabilityName:$id /LogPath:$dismLog 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) { throw "dism Remove-Capability failed for '$id': $LASTEXITCODE`n$out" }
+        Invoke-WinMintDism -ArgumentList @('/English', "/Image:$mountDir", '/Remove-Capability', "/CapabilityName:$id", "/LogPath:$dismLog") -Stage 'Remove-Capability'
         Write-Output "CapabilityRemoved=$id"
     }
     else {
@@ -84,8 +83,7 @@ foreach ($id in ($ids | Select-Object -Unique)) {
         if ($state -ieq 'Disabled' -or $state -ieq 'DisabledWithPayloadRemoved') {
             Write-Output "FeatureAlreadyDisabled=$id"; continue
         }
-        $out = & dism.exe /English /Image:$mountDir /Disable-Feature /FeatureName:$id /LogPath:$dismLog 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) { throw "dism Disable-Feature failed for '$id': $LASTEXITCODE`n$out" }
+        Invoke-WinMintDism -ArgumentList @('/English', "/Image:$mountDir", '/Disable-Feature', "/FeatureName:$id", "/LogPath:$dismLog") -Stage 'Disable-Feature'
         Write-Output "FeatureDisabled=$id"
     }
 }

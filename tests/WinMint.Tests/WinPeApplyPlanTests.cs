@@ -26,6 +26,7 @@ public class WinPeApplyPlanTests
             [
                 ServicingOpcode.MountInstallWim,
                 ServicingOpcode.StampOfflinePolicies,
+                ServicingOpcode.EraseOfflineOneDrive,
                 ServicingOpcode.RemoveProvisionedAppx,
                 ServicingOpcode.StagePayload,
                 ServicingOpcode.StampOfflineDefaultUser,
@@ -125,7 +126,8 @@ public class WinPeApplyPlanTests
             Assert.Contains("/Get-WimInfo", reader, StringComparison.Ordinal);
             Assert.Contains("Index : (\\d+)", reader, StringComparison.Ordinal);
             Assert.Contains("foreach ($index in $indexes)", reader, StringComparison.Ordinal);
-            Assert.Contains("/Index:$index /MountDir:$bootMount", reader, StringComparison.Ordinal);
+            Assert.Contains("/Index:$index", reader, StringComparison.Ordinal);
+            Assert.Contains("/MountDir:$bootMount", reader, StringComparison.Ordinal);
             Assert.DoesNotContain("/Index:1 /MountDir:$bootMount", reader, StringComparison.Ordinal);
         }
 

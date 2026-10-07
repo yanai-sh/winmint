@@ -9,6 +9,7 @@ param(
 . (Join-Path $PSScriptRoot 'WinPeApplyContract.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintQualityUpdate.ps1')
+. (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
 $launchApplyPayload = Get-WinPeApplyPayloadPath
 $expectedMarker = Get-WinPeApplyMarkerText
 $bootLeafRaw = @(Get-WinMintQualityPackageLeaf -PackageDir $QualityPackageDir -Kind boot)
@@ -31,10 +32,17 @@ if (-not (Test-Path -LiteralPath $bootWim)) {
 function Test-LaunchApplyPatched {
     param([string] $Wim, [string] $Mount, [int] $Index)
     Write-WinMintMountOwner -Kind boot -WorkDirectory $workDirectory -MountDirectory $Mount -ImageFile $Wim -SourceIndex $Index | Out-Null
-    & dism.exe /English /Mount-Image /ImageFile:$Wim /Index:$Index /MountDir:$Mount /ReadOnly
-    if ($LASTEXITCODE -ne 0) {
-        & dism.exe /English /Unmount-Image /MountDir:$Mount /Discard 2>$null | Out-Null
-        if ($LASTEXITCODE -eq 0) { Remove-WinMintMountOwner -Kind boot }
+    try {
+        Invoke-WinMintDism -ArgumentList @('/English', '/Mount-Image', "/ImageFile:$Wim", "/Index:$Index", "/MountDir:$Mount", '/ReadOnly') -Stage 'Mount-Image-ReadOnly'
+    }
+    catch {
+        try {
+            Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$Mount", '/Discard') -Stage 'Unmount-Discard'
+            Remove-WinMintMountOwner -Kind boot
+        }
+        catch {
+            Write-Debug "Mount-Image-ReadOnly cleanup after failure: $_"
+        }
         return $false
     }
     $clean = $false
@@ -47,13 +55,12 @@ function Test-LaunchApplyPatched {
         throw
     }
     finally {
-        & dism.exe /English /Unmount-Image /MountDir:$Mount /Discard | Out-Null
-        $unmountExit = $LASTEXITCODE
-        if ($unmountExit -eq 0) {
+        try {
+            Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$Mount", '/Discard') -Stage 'Unmount-Discard'
             Remove-WinMintMountOwner -Kind boot
         }
-        else {
-            $message = "Unmount boot.wim:$Index after apply check failed: $unmountExit"
+        catch {
+            $message = "Unmount boot.wim:$Index after apply check failed: $($_.Exception.Message)"
             if ($null -eq $primaryError) { throw $message }
             Write-Warning "$message (preserving earlier error: $($primaryError.Exception.Message))"
         }
@@ -63,13 +70,18 @@ function Test-LaunchApplyPatched {
 
 $bootMount = Join-Path (Split-Path -Parent $mountDir) 'boot-mount'
 if (Test-Path -LiteralPath $bootMount) {
-    & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) { Remove-WinMintMountOwner -Kind boot }
+    try {
+        Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Discard') -Stage 'Unmount-Discard'
+        Remove-WinMintMountOwner -Kind boot
+    }
+    catch {
+        Write-Debug "Stale boot-mount discard before patch: $_"
+    }
     Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
 }
 New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
 
-$info = & dism.exe /English /Get-WimInfo /WimFile:$bootWim 2>&1 | Out-String
+$info = Invoke-WinMintDism -ArgumentList @('/English', '/Get-WimInfo', "/WimFile:$bootWim") -Stage 'Get-WimInfo' -PassThruText
 $indexes = @([regex]::Matches($info, '(?m)^Index : (\d+)\s*$') | ForEach-Object { [int]$_.Groups[1].Value })
 if ($indexes.Count -eq 0) { throw 'boot.wim has no indexes' }
 
@@ -111,8 +123,7 @@ $winpeshl = Get-WinPeApplyWinpeshlText
 foreach ($index in $indexes) {
     Write-Output "Patch boot.wim index $index (WinPE apply launcher)"
     Write-WinMintMountOwner -Kind boot -WorkDirectory $workDirectory -MountDirectory $bootMount -ImageFile $bootWim -SourceIndex $index | Out-Null
-    & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:$index /MountDir:$bootMount
-    if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:$index failed: $LASTEXITCODE" }
+    Invoke-WinMintDism -ArgumentList @('/English', '/Mount-Image', "/ImageFile:$bootWim", "/Index:$index", "/MountDir:$bootMount") -Stage 'Mount-Image'
     try {
         if ($applyQuality) {
             foreach ($leaf in $bootPackages) {
@@ -126,8 +137,7 @@ foreach ($index in $indexes) {
         Set-Content -LiteralPath (Join-Path $bootMount 'Windows\System32\winpeshl.ini') -Value $winpeshl -Encoding ascii
     }
     finally {
-        & dism.exe /English /Unmount-Image /MountDir:$bootMount /Commit
-        if ($LASTEXITCODE -ne 0) { throw "Unmount boot.wim:$index failed: $LASTEXITCODE" }
+        Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Commit') -Stage 'Unmount-Commit'
         Remove-WinMintMountOwner -Kind boot
     }
 }
@@ -145,16 +155,14 @@ if ((Test-Path -LiteralPath $winreSrc) -and $winrePackages.Count -gt 0) {
     $winreItem = Get-Item -LiteralPath $winreTmp
     if ($winreItem.IsReadOnly) { $winreItem.IsReadOnly = $false }
     Write-WinMintMountOwner -Kind boot -WorkDirectory $workDirectory -MountDirectory $bootMount -ImageFile $winreTmp -SourceIndex 1 | Out-Null
-    & dism.exe /English /Mount-Image /ImageFile:$winreTmp /MountDir:$bootMount /Index:1
-    if ($LASTEXITCODE -ne 0) { throw "Mount WinRE failed: $LASTEXITCODE" }
+    Invoke-WinMintDism -ArgumentList @('/English', '/Mount-Image', "/ImageFile:$winreTmp", "/MountDir:$bootMount", '/Index:1') -Stage 'Mount-Image'
     try {
         foreach ($leaf in $winrePackages) {
             Invoke-WinMintDismAddPackage -MountDir $bootMount -PackagePath (Join-Path $QualityPackageDir $leaf)
         }
     }
     finally {
-        & dism.exe /English /Unmount-Image /MountDir:$bootMount /Commit
-        if ($LASTEXITCODE -ne 0) { throw "Unmount WinRE failed: $LASTEXITCODE" }
+        Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Commit') -Stage 'Unmount-Commit'
         Remove-WinMintMountOwner -Kind boot
     }
     Copy-Item -LiteralPath $winreTmp -Destination $winreSrc -Force

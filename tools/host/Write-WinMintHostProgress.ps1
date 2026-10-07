@@ -35,6 +35,11 @@ function Test-WinMintTrailHeartbeatLine {
     return [bool]($Line -match '^\S+ running \d+s$')
 }
 
+function Test-WinMintDismProgressBarLine {
+    param([Parameter(Mandatory)] [string] $Line)
+    return [bool]($Line -match '^\s*\[.*\d+\.\d+%\s*\]')
+}
+
 function Select-WinMintWatchLogTail {
     param(
         [string[]] $Lines = @(),
@@ -42,7 +47,11 @@ function Select-WinMintWatchLogTail {
     )
     $kept = @(
         $Lines |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and -not (Test-WinMintTrailHeartbeatLine -Line $_) }
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                -not (Test-WinMintTrailHeartbeatLine -Line $_) -and
+                -not (Test-WinMintDismProgressBarLine -Line $_)
+            }
     )
     if ($kept.Count -le $Count) { return $kept }
     return @($kept | Select-Object -Last $Count)

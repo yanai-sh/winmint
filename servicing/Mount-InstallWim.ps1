@@ -23,6 +23,7 @@ if (-not (Test-Path -LiteralPath $sourceIso)) { throw "sourceIso not found: $sou
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
 . (Join-Path $PSScriptRoot 'Initialize-SourceMediaCache.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
+. (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
 
 New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
 
@@ -69,9 +70,8 @@ Write-WimMetadataEvidence -WorkDirectory $WorkDirectory -Document @{
 Write-Output "DISM Mount-Image index=1 → $mountDir"
 Write-WinMintMountOwner -Kind install -WorkDirectory $WorkDirectory -MountDirectory $mountDir -ImageFile $wimFile -SourceIsoSha256 $sourceIsoSha256 -SourceIndex 1 | Out-Null
 $mountClock = [System.Diagnostics.Stopwatch]::StartNew()
-& dism.exe /English /Mount-Image /ImageFile:$wimFile /Index:1 /MountDir:$mountDir
+Invoke-WinMintDism -ArgumentList @('/English', '/Mount-Image', "/ImageFile:$wimFile", '/Index:1', "/MountDir:$mountDir") -Stage 'Mount-Image'
 $mountClock.Stop()
-if ($LASTEXITCODE -ne 0) { throw "DISM Mount-Image failed: $LASTEXITCODE" }
 
 $manifest = Get-Content -LiteralPath (Join-Path $prepared.EntryPath 'manifest.json') -Raw | ConvertFrom-Json
 $recoveryAction = [string]$env:WINMINT_RECOVERY_ACTION

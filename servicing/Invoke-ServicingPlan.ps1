@@ -49,8 +49,10 @@ function Invoke-WinMintLoggedKernel {
         while (-not $handle.IsCompleted) {
             foreach ($item in @($out.ReadAll())) {
                 $text = [string]$item
-                $writer.WriteLine($text)
-                Write-Host $text
+                if (-not (Test-WinMintDismProgressBarLine -Line $text)) {
+                    $writer.WriteLine($text)
+                    Write-Host $text
+                }
                 $quiet.Restart()
             }
             if ($quiet.Elapsed.TotalSeconds -ge $QuietSeconds) {
@@ -61,8 +63,10 @@ function Invoke-WinMintLoggedKernel {
         }
         foreach ($item in @($out.ReadAll())) {
             $text = [string]$item
-            $writer.WriteLine($text)
-            Write-Host $text
+            if (-not (Test-WinMintDismProgressBarLine -Line $text)) {
+                $writer.WriteLine($text)
+                Write-Host $text
+            }
         }
         $null = $ps.EndInvoke($handle)
     }
@@ -199,6 +203,7 @@ function Resolve-KernelScript {
         'StampOfflineShell' { return Join-Path $scriptRoot 'Stamp-OfflineShell.ps1' }
         'StampOfflinePolicies' { return Join-Path $scriptRoot 'Stamp-OfflinePolicies.ps1' }
         'StampOfflineDefaultUser' { return Join-Path $scriptRoot 'Stamp-OfflineDefaultUser.ps1' }
+        'EraseOfflineOneDrive' { return Join-Path $scriptRoot 'Erase-OfflineOneDrive.ps1' }
         'RemoveProvisionedAppx' { return Join-Path $scriptRoot 'Remove-ProvisionedAppx.ps1' }
         'RemoveCapabilities' { return Join-Path $scriptRoot 'Set-OfflineComponent.ps1' }
         'DisableOptionalFeatures' { return Join-Path $scriptRoot 'Set-OfflineComponent.ps1' }

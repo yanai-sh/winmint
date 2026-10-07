@@ -121,4 +121,84 @@ public class ApplyProgressTests
         Assert.NotNull(text);
         Assert.StartsWith("Failed", text, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void FormatApplyPresentation_filters_heartbeat_and_dism_bar_lines()
+    {
+        string sampleBar = "[=====     50.0%                          ]";
+        string[] lines =
+        [
+            "Catalog BITS start KB5129195",
+            "AddQualityUpdates running 78s",
+            sampleBar,
+            "AddQualityUpdates ok 12.3s",
+        ];
+        string? text = WizardViewModel.FormatApplyPresentation(
+            new ApplyProgress("AddQualityUpdates", "ignored.log"),
+            _ => lines);
+        Assert.NotNull(text);
+        Assert.Contains("Catalog BITS start", text, StringComparison.Ordinal);
+        Assert.Contains("AddQualityUpdates ok", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("running 78s", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(sampleBar, text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyBuildPresentation_parses_latest_quality_hash_percent()
+    {
+        string[] lines =
+        [
+            "quality hash 25% 1024/4096 MB",
+            "AddQualityUpdates running 40s",
+            "quality hash 50% leaf.msu",
+        ];
+        ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
+            new ApplyProgress("AddQualityUpdates", "ignored.log"),
+            _ => lines);
+        Assert.NotNull(presentation);
+        Assert.Equal(50, presentation.Value.ProgressPercent);
+        Assert.False(presentation.Value.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public void ApplyBuildPresentation_busy_without_hash_stays_indeterminate()
+    {
+        ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
+            new ApplyProgress("MountInstallWim", "ignored.log"),
+            _ => ["MountInstallWim start"]);
+        Assert.NotNull(presentation);
+        Assert.Null(presentation.Value.ProgressPercent);
+        Assert.True(presentation.Value.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public void ApplyBuildPresentation_parses_apply_step_cue_without_progress_value()
+    {
+        string[] lines =
+        [
+            "Apply  10/14  MountInstallWim",
+            "Apply  11/14  AddQualityUpdates",
+        ];
+        ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
+            new ApplyProgress("AddQualityUpdates", "ignored.log"),
+            _ => lines);
+        Assert.NotNull(presentation);
+        Assert.Equal("Step 11 of 14", presentation.Value.StepCue);
+        Assert.True(presentation.Value.IsProgressIndeterminate);
+        Assert.Null(presentation.Value.ProgressPercent);
+    }
+
+    [Theory]
+    [InlineData("AddQualityUpdates running 78s", true)]
+    [InlineData("Catalog BITS start KB1", false)]
+    public void IsTrailHeartbeatLine_matches_host_grain(string line, bool expected) =>
+        Assert.Equal(expected, ApplyBuildPresentationFormat.IsTrailHeartbeatLine(line));
+
+    [Fact]
+    public void IsDismProgressBarLine_rejects_quality_hash_milestone()
+    {
+        Assert.False(ApplyBuildPresentationFormat.IsDismProgressBarLine("quality hash 50% leaf.msu"));
+        Assert.True(ApplyBuildPresentationFormat.IsDismProgressBarLine(
+            "[=====     50.0%                          ]"));
+    }
 }
