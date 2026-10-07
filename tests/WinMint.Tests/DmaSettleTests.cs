@@ -55,7 +55,8 @@ public class DmaSettleTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
-        Assert.Equal(2, region.Applied.Count);
+        // Initial Apply + poll re-apply + post-DeviceRegion latch restore.
+        Assert.Equal(3, region.Applied.Count);
         Assert.All(region.Applied, a => Assert.Equal(242, a.GeoId));
         Assert.Contains("Status:settle.ok", splash.Events);
     }
@@ -120,8 +121,10 @@ public class DmaSettleTests
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Contains("Status:settle.deviceRegionOk", splash.Events);
+        Assert.Contains("Status:settle.ok", splash.Events);
         Assert.Contains("Status:settle.locationWarn", splash.Events);
         Assert.Contains("Status:jobs.ok", splash.Events);
+        Assert.Contains("settle.ok", evidence.Documents[0].Phases);
         Assert.Contains("settle.locationWarn", evidence.Documents[0].Phases);
         Assert.Contains("settle.deviceRegionOk", evidence.Documents[0].Phases);
         Assert.Equal("Complete", evidence.Documents[0].Outcome);
@@ -169,6 +172,32 @@ public class DmaSettleTests
         Assert.Contains("Status:settle.deviceRegionRepaired", splash.Events);
         Assert.Contains("Status:settle.ok", splash.Events);
         Assert.Contains("settle.deviceRegionRepaired", evidence.Documents[0].Phases);
+    }
+
+    [Fact]
+    public async Task Shell_post_latch_hard_drift_fails_closed()
+    {
+        ManualTimeProvider time = new();
+        ScriptedRegionSnapshot region = new(
+            new RegionRead.ValueRead(new RegionState("en-GB", 242, "GMT Standard Time", true)))
+        {
+            CorruptHardFieldsOnApplyAfterCount = 2,
+        };
+        RecordingSplashPresenter splash = new();
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(
+                dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
+                policy: TightSettlePolicy()),
+            Env(time, region, splash, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("settle.hardMismatch", result.FinalStatus.Code);
+        Assert.Contains("settle.hardMismatch", evidence.Documents[0].Phases);
+        Assert.DoesNotContain("jobs.begin", evidence.Documents[0].Phases);
+        Assert.Contains("Status:settle.deviceRegionOk", splash.Events);
     }
 
     [Fact]
@@ -266,7 +295,21 @@ public class DmaSettleTests
 
         public List<DmaSettleTarget> Applied { get; } = [];
 
-        public void Apply(DmaSettleTarget target) => Applied.Add(target);
+        /// <summary>After this many Apply calls, hard Geo snaps to 68 (post-latch drift).</summary>
+        public int CorruptHardFieldsOnApplyAfterCount { get; init; }
+
+        public void Apply(DmaSettleTarget target)
+        {
+            Applied.Add(target);
+            // Default: Apply does not mutate scripted Read sticky (models OS ignore / slow settle).
+            // Optional: corrupt hard Geo after N applies (post-DeviceRegion latch snap-back).
+            if (CorruptHardFieldsOnApplyAfterCount > 0
+                && Applied.Count >= CorruptHardFieldsOnApplyAfterCount)
+            {
+                bool? location = _lastGood?.LocationServicesEnabled ?? target.LocationServicesEnabled;
+                _lastGood = new RegionState(target.Locale!, 68, target.TimeZoneId!, location);
+            }
+        }
 
         public RegionState Read()
         {

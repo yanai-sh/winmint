@@ -32,12 +32,20 @@ public static class Win32ShellChrome
 
         try
         {
+            // Spotlight + OOBE taskbar chrome win if applied before bloom/pins.
+            Win32WorkstationQuiet.DisableDesktopSpotlight();
             if (wallpaperPresent)
             {
                 ApplyWallpaper();
             }
 
             ApplyPins(pins.LinkPaths);
+            Win32WorkstationQuiet.ApplyTaskbarChrome();
+            if (!VerifyFinalChrome(wallpaperPresent) && !request.FailOpen)
+            {
+                return false;
+            }
+
             WriteEvidence(pins.StartPinIds, pins.TaskbarPinIds);
             return true;
         }
@@ -81,6 +89,47 @@ public static class Win32ShellChrome
         File.WriteAllText(
             Path.Combine(shellDir, "LayoutModification.xml"),
             ShellChromeLayout.TaskbarLayoutXml(desktopLinkPaths));
+
+        // ponytail: LayoutModification is ignored once Taskband exists (OOBE explorer). Clear so Unlock re-reads Replace list.
+        try
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(
+                @"Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband",
+                throwOnMissingSubKey: false);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or SystemException)
+        {
+            // Best-effort — OEM LayoutXMLPath still covers new profiles.
+        }
+    }
+
+    /// <summary>Fail-closed gate before unlock — bloom/search/Spotlight must stick.</summary>
+    private static bool VerifyFinalChrome(bool wallpaperPresent)
+    {
+        if (wallpaperPresent)
+        {
+            using RegistryKey? desktop = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop");
+            string? wallpaper = desktop?.GetValue("Wallpaper") as string;
+            if (!string.Equals(wallpaper, ShellChromeLayout.WallpaperPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        using (RegistryKey? spotlight = Registry.CurrentUser.OpenSubKey(
+                   @"SOFTWARE\Microsoft\Windows\CurrentVersion\DesktopSpotlight\Settings"))
+        {
+            object? enabled = spotlight?.GetValue("EnabledState");
+            if (enabled is int state && state != 0)
+            {
+                return false;
+            }
+        }
+
+        using RegistryKey? search = Registry.CurrentUser.OpenSubKey(
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Search");
+        object? mode = search?.GetValue("SearchboxTaskbarMode");
+        return mode is int searchMode && searchMode == Win32WorkstationQuiet.SearchboxTaskbarMode;
     }
 
     private static void WriteEvidence(IReadOnlyList<string> startPinIds, IReadOnlyList<string> taskbarPinIds)

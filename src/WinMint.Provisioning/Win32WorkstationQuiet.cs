@@ -3,61 +3,27 @@ using System.Runtime.Versioning;
 
 using Microsoft.Win32;
 
+using WinMint.Contracts;
+
 namespace WinMint.Provisioning;
 
 /// <summary>
 /// FirstLogon quiet defaults aligned with Microsoft Windows Developer Config (HKCU + dark.theme).
-/// Best-effort: never throws to the job runner.
+/// Theme/CDM/file UX only — taskbar search/Spotlight/bloom owned by <see cref="Win32ShellChrome"/>.
+/// Registry facts: <see cref="QuietChromeFacts"/>. Best-effort: never throws to the job runner.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public static class Win32WorkstationQuiet
 {
     public const string DarkThemePath = @"C:\Windows\Resources\Themes\dark.theme";
 
-    public const int SearchboxTaskbarMode = 0;
-    public const int HideRecycleBin = 1;
+    public static int SearchboxTaskbarMode => QuietChromeFacts.SearchboxTaskbarMode;
 
-    private const string RecycleBinClsid = "{645FF040-5081-101B-9F08-00AA002F954E}";
+    public static int HideRecycleBin => QuietChromeFacts.HideRecycleBin;
 
-    private static readonly string[] HideDesktopIconViews = ["NewStartPanel", "ClassicStartMenu"];
+    public static IReadOnlyDictionary<string, int> ExplorerAdvancedDwords => QuietChromeFacts.ExplorerAdvancedDwords;
 
-    public static readonly IReadOnlyDictionary<string, int> ExplorerAdvancedDwords =
-        new Dictionary<string, int>(StringComparer.Ordinal)
-        {
-            ["HideFileExt"] = 0,
-            ["Hidden"] = 1,
-            ["FullPathAddress"] = 1,
-            ["LaunchTo"] = 1,
-            ["ShowFrequent"] = 0,
-            ["NavPaneShowVersionControl"] = 1,
-            ["ShowSyncProviderNotifications"] = 0,
-            ["TaskbarDa"] = 0,
-            ["TaskbarEndTask"] = 1,
-            ["Start_IrisRecommendations"] = 0,
-            ["ShowTaskViewButton"] = 0,
-            ["TaskbarMn"] = 0,
-            ["ShowCopilotButton"] = 0,
-            ["Start_AccountNotifications"] = 0,
-        };
-
-    // v1 Set-WinMintFirstLogonQuietUxDefaults ContentDeliveryManager names, all 0.
-    public static readonly IReadOnlyList<string> ContentDeliveryManagerDwords =
-    [
-        "SubscribedContent-310093Enabled",
-        "SubscribedContent-338388Enabled",
-        "SubscribedContent-338389Enabled",
-        "SubscribedContent-338393Enabled",
-        "SubscribedContent-353694Enabled",
-        "SubscribedContent-353696Enabled",
-        "SubscribedContent-353698Enabled",
-        "SoftLandingEnabled",
-        "SystemPaneSuggestionsEnabled",
-        "SilentInstalledAppsEnabled",
-        "PreInstalledAppsEnabled",
-        "OemPreInstalledAppsEnabled",
-        "RotatingLockScreenEnabled",
-        "RotatingLockScreenOverlayEnabled",
-    ];
+    public static IReadOnlyList<string> ContentDeliveryManagerDwords => QuietChromeFacts.ContentDeliveryManagerDwords;
 
     public static void Apply()
     {
@@ -136,8 +102,13 @@ public static class Win32WorkstationQuiet
         {
             if (advanced is not null)
             {
-                foreach ((string name, int value) in ExplorerAdvancedDwords)
+                foreach ((string name, int value) in QuietChromeFacts.ExplorerAdvancedDwords)
                 {
+                    if (QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced.Contains(name))
+                    {
+                        continue;
+                    }
+
                     advanced.SetValue(name, value, RegistryValueKind.DWord);
                 }
             }
@@ -150,17 +121,11 @@ public static class Win32WorkstationQuiet
             explorer?.SetValue("ShowCloudFilesInQuickAccess", 0, RegistryValueKind.DWord);
         }
 
-        using (RegistryKey? search = Registry.CurrentUser.CreateSubKey(
-                   @"SOFTWARE\Microsoft\Windows\CurrentVersion\Search"))
-        {
-            search?.SetValue("SearchboxTaskbarMode", SearchboxTaskbarMode, RegistryValueKind.DWord);
-        }
-
-        foreach (string view in HideDesktopIconViews)
+        foreach (string view in QuietChromeFacts.HideDesktopIconViews)
         {
             using RegistryKey? hide = Registry.CurrentUser.CreateSubKey(
                 $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\{view}");
-            hide?.SetValue(RecycleBinClsid, HideRecycleBin, RegistryValueKind.DWord);
+            hide?.SetValue(QuietChromeFacts.RecycleBinClsid, QuietChromeFacts.HideRecycleBin, RegistryValueKind.DWord);
         }
 
         using (RegistryKey? cdm = Registry.CurrentUser.CreateSubKey(
@@ -168,17 +133,58 @@ public static class Win32WorkstationQuiet
         {
             if (cdm is not null)
             {
-                foreach (string name in ContentDeliveryManagerDwords)
+                foreach (string name in QuietChromeFacts.ContentDeliveryManagerDwords)
                 {
                     cdm.SetValue(name, 0, RegistryValueKind.DWord);
                 }
             }
         }
 
-        using (RegistryKey? searchSettings = Registry.CurrentUser.CreateSubKey(
-                   @"SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings"))
+        using RegistryKey? searchSettings = Registry.CurrentUser.CreateSubKey(
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings");
+        searchSettings?.SetValue("IsDynamicSearchBoxEnabled", 0, RegistryValueKind.DWord);
+    }
+
+    /// <summary>
+    /// Taskbar search/widgets + Desktop Spotlight off. Owned by shell.chrome after packages.
+    /// </summary>
+    public static void ApplyTaskbarChrome()
+    {
+        using (RegistryKey? advanced = Registry.CurrentUser.CreateSubKey(
+                   @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"))
         {
-            searchSettings?.SetValue("IsDynamicSearchBoxEnabled", 0, RegistryValueKind.DWord);
+            if (advanced is not null)
+            {
+                foreach (string name in QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced)
+                {
+                    if (QuietChromeFacts.ExplorerAdvancedDwords.TryGetValue(name, out int value))
+                    {
+                        advanced.SetValue(name, value, RegistryValueKind.DWord);
+                    }
+                }
+            }
         }
+
+        using (RegistryKey? search = Registry.CurrentUser.CreateSubKey(
+                   @"SOFTWARE\Microsoft\Windows\CurrentVersion\Search"))
+        {
+            search?.SetValue("SearchboxTaskbarMode", QuietChromeFacts.SearchboxTaskbarMode, RegistryValueKind.DWord);
+        }
+
+        DisableDesktopSpotlight();
+    }
+
+    public static void DisableDesktopSpotlight()
+    {
+        using (RegistryKey? spotlight = Registry.CurrentUser.CreateSubKey(
+                   @"SOFTWARE\Microsoft\Windows\CurrentVersion\DesktopSpotlight\Settings"))
+        {
+            spotlight?.SetValue("EnabledState", QuietChromeFacts.SpotlightEnabledState, RegistryValueKind.DWord);
+        }
+
+        // Picture wallpaper (not Spotlight slideshow).
+        using RegistryKey? wallpapers = Registry.CurrentUser.CreateSubKey(
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers");
+        wallpapers?.SetValue("BackgroundType", 0, RegistryValueKind.DWord);
     }
 }

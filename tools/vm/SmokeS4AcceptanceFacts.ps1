@@ -1,6 +1,7 @@
 #requires -Version 7.6
 Set-StrictMode -Version Latest
 
+# Mirror of WinMint.Contracts.QuietChromeFacts + GuestChrome (asserted by QuietChromeFactsTests).
 function Get-WinMintSmokeS4AcceptanceFacts {
     [ordered]@{
         RequiredPhases = @(
@@ -15,7 +16,6 @@ function Get-WinMintSmokeS4AcceptanceFacts {
         }
         DmaOkAnyOf = @(
             ,@('settle.ok')
-            ,@('settle.locationWarn')
             ,@('settle.resumeOk', 'checkpoint.resume')
         )
         SetupRegionOkAnyOf = @(
@@ -27,6 +27,10 @@ function Get-WinMintSmokeS4AcceptanceFacts {
             DeprovisionPhasePattern  = 'deprovisioned.appx.*'
         }
         ExpectedWallpaperPath   = 'C:\Windows\Web\Wallpaper\Windows\WinMint-Bloom.jpg'
+        ExpectedDevMode         = 1
+        ExpectedSudo            = 3
+        ExpectedLongPaths       = 1
+        ExpectedSpotlightEnabledState = 0
         RequiredStartPinIds     = @('explorer', 'settings', 'terminal')
         RequiredTaskbarPinIds   = @('explorer', 'terminal')
         RequiredQuietDwords     = [ordered]@{

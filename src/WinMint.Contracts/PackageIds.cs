@@ -7,4 +7,5 @@ public static class PackageIds
     public const string Komorebi = "LGUG2Z.komorebi";
     public const string Cursor = "Anysphere.Cursor";
     public const string ZenBrowser = "Zen-Team.Zen-Browser";
+    public const string Brave = "Brave.Brave";
 }

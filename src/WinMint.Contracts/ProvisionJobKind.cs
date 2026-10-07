@@ -168,4 +168,13 @@ public static class ProvisionJobKindWire
         ProvisionJobKind.ShellDesktop => ShellDesktop,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown ProvisionJobKind."),
     };
+
+    /// <summary>Product-constant FirstLogon jobs (ADR-009) — PlanDiff "always" vs authored packages.</summary>
+    public static bool IsAlwaysOn(ProvisionJobKind kind) =>
+        kind is ProvisionJobKind.OneDriveUninstall
+            or ProvisionJobKind.ReservedStorageDisable
+            or ProvisionJobKind.WorkstationQuiet
+            or ProvisionJobKind.AppxSafetyNet
+            or ProvisionJobKind.ShellStamp
+            or ProvisionJobKind.ShellChrome;
 }

@@ -46,6 +46,7 @@ public class BrowserPolicyPlanTests
             [
                 ServicingOpcode.MountInstallWim,
                 ServicingOpcode.StampOfflinePolicies,
+                ServicingOpcode.RemoveProvisionedAppx,
                 ServicingOpcode.StagePayload,
                 ServicingOpcode.StampOfflineDefaultUser,
                 ServicingOpcode.StageOobeUnattend,

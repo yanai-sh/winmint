@@ -161,9 +161,9 @@ public class ProductPostureTests
             rows,
             static row => Assert.DoesNotContain("Policies", row.SubKey, StringComparison.OrdinalIgnoreCase));
 
-        foreach ((string name, int value) in Win32WorkstationQuiet.ExplorerAdvancedDwords)
+        foreach ((string name, int value) in QuietChromeFacts.ExplorerAdvancedDwords)
         {
-            if (name is "TaskbarDa" or "TaskbarMn" or "ShowTaskViewButton" or "ShowCopilotButton")
+            if (QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced.Contains(name))
             {
                 Assert.DoesNotContain(rows, row => row.Name == name);
                 continue;
@@ -176,7 +176,7 @@ public class ProductPostureTests
                     && row.RegType == "REG_DWORD");
         }
 
-        foreach (string name in Win32WorkstationQuiet.ContentDeliveryManagerDwords)
+        foreach (string name in QuietChromeFacts.ContentDeliveryManagerDwords)
         {
             Assert.Contains(rows, row => row.Name == name && row.Data == "0");
         }
@@ -185,6 +185,17 @@ public class ProductPostureTests
             rows,
             row => row.Name == "Wallpaper" && row.Data == GuestChrome.BloomWallpaperPath);
         Assert.Contains(rows, row => row.Name == "TileWallpaper" && row.Data == "0");
+        Assert.Contains(
+            rows,
+            row => row.SubKey.Contains("DesktopSpotlight", StringComparison.OrdinalIgnoreCase)
+                && row.Name == "EnabledState"
+                && row.Data == QuietChromeFacts.SpotlightEnabledState.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Contains(
+            rows,
+            row => row.SubKey.Contains("Explorer\\Wallpapers", StringComparison.Ordinal)
+                && row.Name == "BackgroundType"
+                && row.Data == "0");
         Assert.Equal(GuestChrome.BloomWallpaperPath, ShellChromeLayout.WallpaperPath);
     }
 

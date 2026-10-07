@@ -64,6 +64,7 @@ public class ImageServicingApplyTests
                 [
                     ServicingOpcode.MountInstallWim,
                     ServicingOpcode.StampOfflinePolicies,
+                    ServicingOpcode.RemoveProvisionedAppx,
                     ServicingOpcode.StagePayload,
                     ServicingOpcode.StampOfflineDefaultUser,
                     ServicingOpcode.StageOobeUnattend,

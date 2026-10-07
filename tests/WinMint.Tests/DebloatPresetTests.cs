@@ -154,7 +154,7 @@ public class DebloatPresetTests
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.AppxSafetyNet);
-        Assert.DoesNotContain(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
+        Assert.Contains(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
         Assert.Contains(ServicingOpcode.RemoveCapabilities, planned.Value.Stages);
         Assert.Contains(ServicingOpcode.DisableOptionalFeatures, planned.Value.Stages);
     }
@@ -216,7 +216,7 @@ public class DebloatPresetTests
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk);
-        Assert.DoesNotContain(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
+        Assert.Contains(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
     }
 
     [Fact]
@@ -290,7 +290,7 @@ public class DebloatPresetTests
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.AppxSafetyNet);
-        Assert.DoesNotContain(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
+        Assert.Contains(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
         Assert.Contains(planned.Value.RemoveProvisionedAppx, id => id == "Microsoft.Copilot");
         Assert.Contains(planned.Value.RemoveProvisionedAppx, id => id == "Microsoft.GamingApp");
         Assert.Contains(ServicingOpcode.RemoveCapabilities, planned.Value.Stages);

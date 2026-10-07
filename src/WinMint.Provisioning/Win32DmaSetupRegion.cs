@@ -52,15 +52,19 @@ public sealed class Win32DmaSetupRegion : IDmaSetupRegion
             }
         }
 
-        // Seed .DEFAULT so first GetUserGeoID fallback cannot race before DeviceRegion is read.
-        try
+        // Seed .DEFAULT only when we just wrote DeviceRegion — re-seeding on AlreadyOk snaps
+        // visible GetUserGeoID back to Ireland after FirstLogon settle restored the user Geo.
+        if (!alreadyOk)
         {
-            SeedDefaultUserGeo(DmaInterop.IrelandGeoId, DmaInterop.IrelandGeoName);
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or SecurityException or IOException)
-        {
-            // ponytail: DeviceRegion is authoritative; .DEFAULT seed is belt-and-suspenders.
-            // A medium-IL Shell hitting HKU\.DEFAULT raises IOException, not just access denied.
+            try
+            {
+                SeedDefaultUserGeo(DmaInterop.IrelandGeoId, DmaInterop.IrelandGeoName);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or SecurityException or IOException)
+            {
+                // ponytail: DeviceRegion is authoritative; .DEFAULT seed is belt-and-suspenders.
+                // A medium-IL Shell hitting HKU\.DEFAULT raises IOException, not just access denied.
+            }
         }
 
         int? verified = ReadDeviceRegion();

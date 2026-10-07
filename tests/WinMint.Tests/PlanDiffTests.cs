@@ -79,9 +79,11 @@ public class PlanDiffTests
         int safetyNet = text.IndexOf("AppX safety net — always", StringComparison.OrdinalIgnoreCase);
         int bingNews = text.IndexOf("Microsoft.BingNews", StringComparison.OrdinalIgnoreCase);
 
-        Assert.True(duringBuild < afterSignIn);
+        // Offline RemoveProvisionedAppx lists AppX during build; Online also keeps safety-net after sign-in.
+        Assert.True(duringBuild >= 0 && duringBuild < bingNews);
+        Assert.True(bingNews < afterSignIn);
         Assert.True(afterSignIn < safetyNet);
-        Assert.True(safetyNet < bingNews);
+        Assert.Contains("AppX safety net — always", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

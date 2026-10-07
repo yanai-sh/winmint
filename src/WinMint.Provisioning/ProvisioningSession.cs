@@ -96,7 +96,14 @@ public static partial class ProvisioningSession
 
             // Settle already ran before NeedsReboot, but reboot can still drift locale/Geo/TZ.
             // Re-read hard fields once (no poll/apply churn) before jobs; DeviceRegion latch stays.
-            SettlePhaseResult resumeSettle = ReverifySettleHardFieldsOnResume(bundle, env, phases);
+            DmaSettle.Outcome resumeSettle = await RunDmaSettleAsync(
+                    DmaSettle.Mode.Resume,
+                    bundle,
+                    env,
+                    phases,
+                    tenureStartTs,
+                    ct)
+                .ConfigureAwait(false);
             if (resumeSettle.HardFailed)
             {
                 return await FailOpenAsync(
@@ -118,7 +125,13 @@ public static partial class ProvisioningSession
                     .ConfigureAwait(false);
             }
 
-            SettlePhaseResult settle = await RunSettleAsync(bundle, env, phases, tenureStartTs, ct)
+            DmaSettle.Outcome settle = await RunDmaSettleAsync(
+                    DmaSettle.Mode.Full,
+                    bundle,
+                    env,
+                    phases,
+                    tenureStartTs,
+                    ct)
                 .ConfigureAwait(false);
             if (settle.TimedOut)
             {
@@ -357,11 +370,11 @@ public static partial class ProvisioningSession
 
         try
         {
-            _ = ShellSurfaces.TryApplyChrome(
-                env.Guest,
-                selectedWingetIds: [],
-                packageStrict: false,
-                failOpen: true);
+            _ = env.Guest.ApplyShellChrome(
+                new ShellChromeRequest(
+                    FailOpen: true,
+                    SelectedWingetIds: [],
+                    RequireSelectedPins: false));
         }
         catch (Exception)
         {
@@ -411,202 +424,26 @@ public static partial class ProvisioningSession
         return true;
     }
 
-    private readonly record struct SettlePhaseResult(bool HardFailed, bool TimedOut, SessionStatus Status);
-
-    /// <summary>
-    /// Checkpoint resume: one authoritative read gates hard locale / GeoID / TZ before jobs.
-    /// </summary>
-    private static SettlePhaseResult ReverifySettleHardFieldsOnResume(
-        ProvisioningBundle bundle,
-        ShellEnvironment env,
-        List<string> phases)
-    {
-        SessionStatus begin = new("settle.resumeReverify", "DMA hard-field re-verify on checkpoint resume.");
-        Note(env, phases, begin);
-
-        if (!bundle.DmaEnabled)
-        {
-            SessionStatus skipped = new("settle.skipped", "DMA disabled; settle skipped.");
-            Note(env, phases, skipped);
-            return new SettlePhaseResult(HardFailed: false, TimedOut: false, skipped);
-        }
-
-        if (DmaSettleConfidence.TargetIncompleteStatus(bundle.Dma) is SessionStatus incomplete)
-        {
-            Note(env, phases, incomplete);
-            return new SettlePhaseResult(HardFailed: true, TimedOut: false, incomplete);
-        }
-
-        RegionState final;
-        try
-        {
-            final = env.Guest.Region.Read();
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            SessionStatus readFailed = new("settle.readFailed", ex.Message);
-            Note(env, phases, readFailed);
-            return new SettlePhaseResult(HardFailed: true, TimedOut: false, readFailed);
-        }
-
-        if (!DmaSettleConfidence.HardFieldsMatch(final, bundle.Dma))
-        {
-            SessionStatus mismatch = DmaSettleConfidence.HardMismatchStatus(final);
-            Note(env, phases, mismatch);
-            return new SettlePhaseResult(HardFailed: true, TimedOut: false, mismatch);
-        }
-
-        SettlePhaseResult? setup = EnsureDmaSetupRegionForSettle(bundle, env, phases);
-        if (setup is { HardFailed: true })
-        {
-            return setup.Value;
-        }
-
-        SessionStatus ok = new("settle.resumeOk", "DMA hard fields re-verified after checkpoint resume.");
-        Note(env, phases, ok);
-        return new SettlePhaseResult(HardFailed: false, TimedOut: false, ok);
-    }
-
-    /// <summary>
-    /// Bounded restore + poll; only the final snapshot gates hard locale / GeoID / TZ.
-    /// Soft location-services mismatch warns and continues.
-    /// </summary>
-    private static async Task<SettlePhaseResult> RunSettleAsync(
+    private static Task<DmaSettle.Outcome> RunDmaSettleAsync(
+        DmaSettle.Mode mode,
         ProvisioningBundle bundle,
         ShellEnvironment env,
         List<string> phases,
         long tenureStartTs,
-        CancellationToken ct)
-    {
-        SessionStatus begin = new("settle.begin", "DMA settle start.");
-        Note(env, phases, begin);
-
-        if (!bundle.DmaEnabled)
-        {
-            SessionStatus skipped = new("settle.skipped", "DMA disabled; settle skipped.");
-            Note(env, phases, skipped);
-            return new SettlePhaseResult(HardFailed: false, TimedOut: false, skipped);
-        }
-
-        if (DmaSettleConfidence.TargetIncompleteStatus(bundle.Dma) is SessionStatus incomplete)
-        {
-            Note(env, phases, incomplete);
-            return new SettlePhaseResult(HardFailed: true, TimedOut: false, incomplete);
-        }
-
-        try
-        {
-            env.Guest.Region.Apply(bundle.Dma);
-        }
-        catch (Exception ex)
-        {
-            SessionStatus applyFailed = new("settle.applyFailed", ex.Message);
-            Note(env, phases, applyFailed);
-            return new SettlePhaseResult(HardFailed: true, TimedOut: false, applyFailed);
-        }
-
-        long settleStartTs = env.Time.GetTimestamp();
-        TimeSpan settleBudget = bundle.Policy.SettleDeadline;
-
-        while (true)
-        {
-            if (ct.IsCancellationRequested)
-            {
-                SessionStatus cancelled = new("settle.cancelled", "DMA settle cancelled.");
-                Note(env, phases, cancelled);
-                return new SettlePhaseResult(HardFailed: true, TimedOut: false, cancelled);
-            }
-
-            if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
-            {
-                return new SettlePhaseResult(HardFailed: true, TimedOut: true, TimeoutStatus());
-            }
-
-            if (DmaSettleConfidence.TryPollProbe(env.Guest.Region, bundle.Dma, out _))
-            {
-                // Still take an authoritative final snapshot after the loop.
-                break;
-            }
-
-            TimeSpan settleElapsed = env.Time.GetElapsedTime(settleStartTs);
-            TimeSpan tenureElapsed = env.Time.GetElapsedTime(tenureStartTs);
-            if (settleElapsed >= settleBudget
-                || tenureElapsed >= bundle.Policy.WallClockTimeout)
-            {
-                break;
-            }
-
-            TimeSpan wait = bundle.Policy.SettlePollInterval;
-            TimeSpan remainingSettle = settleBudget - settleElapsed;
-            TimeSpan remainingTenure = bundle.Policy.WallClockTimeout - tenureElapsed;
-            if (remainingSettle < wait)
-            {
-                wait = remainingSettle;
-            }
-
-            if (remainingTenure < wait)
-            {
-                wait = remainingTenure;
-            }
-
-            if (wait <= TimeSpan.Zero)
-            {
-                break;
-            }
-
-            try
-            {
-                await Task.Delay(wait, env.Time, ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                SessionStatus cancelled = new("settle.cancelled", "DMA settle cancelled.");
-                Note(env, phases, cancelled);
-                return new SettlePhaseResult(HardFailed: true, TimedOut: false, cancelled);
-            }
-        }
-
-        if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
-        {
-            return new SettlePhaseResult(HardFailed: true, TimedOut: true, TimeoutStatus());
-        }
-
-        // Final snapshot gates hard fields — always read once after the bounded poll.
-        RegionState final;
-        try
-        {
-            final = env.Guest.Region.Read();
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            SessionStatus readFailed = new("settle.readFailed", ex.Message);
-            Note(env, phases, readFailed);
-            return new SettlePhaseResult(HardFailed: true, TimedOut: false, readFailed);
-        }
-
-        if (!DmaSettleConfidence.HardFieldsMatch(final, bundle.Dma))
-        {
-            SessionStatus mismatch = DmaSettleConfidence.HardMismatchStatus(final);
-            Note(env, phases, mismatch);
-            return new SettlePhaseResult(HardFailed: true, TimedOut: false, mismatch);
-        }
-
-        SettlePhaseResult? setup = EnsureDmaSetupRegionForSettle(bundle, env, phases);
-        if (setup is { HardFailed: true })
-        {
-            return setup.Value;
-        }
-
-        if (DmaSettleConfidence.LocationWarnStatus(final, bundle.Dma) is SessionStatus warn)
-        {
-            Note(env, phases, warn);
-            return new SettlePhaseResult(HardFailed: false, TimedOut: false, warn);
-        }
-
-        SessionStatus ok = new("settle.ok", "DMA hard fields settled.");
-        Note(env, phases, ok);
-        return new SettlePhaseResult(HardFailed: false, TimedOut: false, ok);
-    }
+        CancellationToken ct) =>
+        DmaSettle.RunAsync(
+            mode,
+            bundle.DmaEnabled,
+            bundle.Dma,
+            env.Guest.Region,
+            env.Guest.DmaSetup,
+            env.Time,
+            bundle.Policy.SettleDeadline,
+            bundle.Policy.SettlePollInterval,
+            bundle.Policy.WallClockTimeout,
+            tenureStartTs,
+            status => Note(env, phases, status),
+            ct);
 
     private static SessionResult? EnsureDmaSetupRegionForMachineSetup(MachineSetupEnvironment env)
     {
@@ -621,30 +458,6 @@ public static partial class ProvisioningSession
                 "DmaSetup port required when DMA enabled."),
             _ => Fail("machineSetup.dmaSetupRegionFailed", latch.Message ?? "DeviceRegion latch failed."),
         };
-    }
-
-    /// <summary>
-    /// Repair-then-verify sticky DeviceRegion Ireland after visible settle (or on resume re-verify).
-    /// </summary>
-    private static SettlePhaseResult? EnsureDmaSetupRegionForSettle(
-        ProvisioningBundle bundle,
-        ShellEnvironment env,
-        List<string> phases)
-    {
-        if (!bundle.DmaEnabled)
-        {
-            return null;
-        }
-
-        DmaSetupRegionLatch latch = DmaSettleConfidence.EnsureDmaSetupRegion(
-            env.Guest.DmaSetup,
-            DmaSetupRegionPolicy.Settle);
-        SessionStatus status = DmaSettleConfidence.DeviceRegionStatus(latch);
-        Note(env, phases, status);
-        return new SettlePhaseResult(
-            HardFailed: DmaSettleConfidence.DeviceRegionHardFailed(latch),
-            TimedOut: false,
-            status);
     }
 
     internal static DmaSetupRegionLatch EnsureDmaSetupRegion(
@@ -753,6 +566,13 @@ public static partial class ProvisioningSession
             if (dmaSetupFail is not null)
             {
                 return Task.FromResult(dmaSetupFail);
+            }
+
+            // SYSTEM can write HKLM ConsentStore; FirstLogon medium-IL cannot.
+            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)
+                && bundle.Dma.LocationServicesEnabled is bool locationEnabled)
+            {
+                _ = Win32RegionSnapshot.TrySetLocationServices(locationEnabled);
             }
         }
 

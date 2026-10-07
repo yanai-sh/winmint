@@ -45,8 +45,10 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
         }
         catch (Exception ex) when (IsAccessDenied(ex))
         {
-            // ponytail: medium-IL FirstLogon — access-denied ⇒ empty hits (offline DISM owns provisioned)
-            return [];
+            // Honesty: empty hits on access-denied made Online safety net green while packages remained.
+            throw new InvalidOperationException(
+                $"FindPackagesForUser access denied for catalog '{catalogId}'.",
+                ex);
         }
 
         return [.. hits];
@@ -69,8 +71,9 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
         }
         catch (Exception ex) when (IsAccessDenied(ex))
         {
-            // ponytail: FindProvisionedPackages needs elevation; offline remove already handled provisioned
-            return [];
+            throw new InvalidOperationException(
+                $"FindProvisionedPackages access denied for catalog '{catalogId}'.",
+                ex);
         }
 
         return [.. hits];
@@ -115,15 +118,15 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
         }
     }
 
-    public void EnsureDeprovisionedMark(string packageFamilyName)
+    public bool EnsureDeprovisionedMark(string packageFamilyName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
         if (AppxDeprovisionedMarks.Exists(packageFamilyName))
         {
-            return;
+            return true;
         }
 
-        _ = AppxDeprovisionedMarks.Ensure(packageFamilyName);
+        return AppxDeprovisionedMarks.Ensure(packageFamilyName);
     }
 
     public async Task RegisterPackageFamilyForCurrentUserAsync(

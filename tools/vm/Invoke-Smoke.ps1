@@ -513,6 +513,28 @@ function Test-GuestEvidenceReady {
                 Copy-Item -FromSession $session -Path $chromeRemote -Destination (Join-Path $guestDir 'shell-chrome.json') -Force
             }
 
+            $livePosture = Invoke-Command -Session $session -ScriptBlock {
+                $adv = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -ErrorAction SilentlyContinue
+                $search = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search' -ErrorAction SilentlyContinue
+                $spot = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\DesktopSpotlight\Settings' -ErrorAction SilentlyContinue
+                $geo = $null
+                try { $geo = (Get-WinHomeLocation).GeoId } catch { $null = $_ }
+                [pscustomobject]@{
+                    Wallpaper              = [string](Get-ItemProperty 'HKCU:\Control Panel\Desktop' -ErrorAction SilentlyContinue).Wallpaper
+                    SearchboxTaskbarMode   = [int]$(if ($null -ne $search.SearchboxTaskbarMode) { $search.SearchboxTaskbarMode } else { -1 })
+                    SpotlightEnabledState  = [int]$(if ($null -ne $spot.EnabledState) { $spot.EnabledState } else { -1 })
+                    TaskbarDa              = [int]$(if ($null -ne $adv.TaskbarDa) { $adv.TaskbarDa } else { -1 })
+                    TaskbarMn              = [int]$(if ($null -ne $adv.TaskbarMn) { $adv.TaskbarMn } else { -1 })
+                    ShowTaskViewButton     = [int]$(if ($null -ne $adv.ShowTaskViewButton) { $adv.ShowTaskViewButton } else { -1 })
+                    ShowCopilotButton      = [int]$(if ($null -ne $adv.ShowCopilotButton) { $adv.ShowCopilotButton } else { -1 })
+                    GeoId                  = [int]$(if ($null -ne $geo) { $geo } else { -1 })
+                    DevMode                = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -ErrorAction SilentlyContinue).AllowDevelopmentWithoutDevLicense
+                    Sudo                   = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo' -ErrorAction SilentlyContinue).Enabled
+                    LongPaths              = [int](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -ErrorAction SilentlyContinue).LongPathsEnabled
+                }
+            }
+            ($livePosture | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath (Join-Path $guestDir 'live-posture.json') -Encoding utf8
+
             $packageEvidenceRemote = Invoke-Command -Session $session -ScriptBlock {
                 $p = Join-Path $env:ProgramData 'WinMint\evidence\packages.evidence.json'
                 if (Test-Path -LiteralPath $p) { $p } else { $null }
@@ -811,6 +833,12 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         -VmName $VmName -StallMinutesLeft 0 -WallMinutesLeft $wallLeft `
         -LastHostLine 'Guest evidence pulled.' -OutputIso $outIso -RunId $runId
     $shellForAssert = ([string](Get-Content -LiteralPath (Join-Path $guestDir 'winlogon-shell.txt') -Raw -Encoding utf8)).Trim()
+    $expectedGeoId = 0
+    if ($null -ne $profileDoc -and $profileDoc.PSObject.Properties.Name -contains 'dma' `
+            -and $null -ne $profileDoc.dma.settle `
+            -and $profileDoc.dma.settle.PSObject.Properties.Name -contains 'geoId') {
+        $expectedGeoId = [int]$profileDoc.dma.settle.geoId
+    }
     & $assertScript -EvidenceDir $evidenceOut `
         -LiveShell $shellForAssert `
         -SupervisorRunning:$false `
@@ -819,7 +847,8 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         -PinnedOnlineRemoveAppx $pinnedOnlineRemoveAppx `
         -PinnedRemoveCapabilities $pinnedRemoveCapabilities `
         -PinnedDisableOptionalFeatures $pinnedDisableOptionalFeatures `
-        -ExpectNativePackageAudit:$expectNativePackageAudit
+        -ExpectNativePackageAudit:$expectNativePackageAudit `
+        -ExpectedGeoId $expectedGeoId
     if ($LASTEXITCODE -ne 0) { throw "Assert-SmokeEvidence exit $LASTEXITCODE" }
     if (-not $SkipApply) {
         $applyDoc = Get-Content -LiteralPath $applyEvidence -Raw -Encoding utf8 | ConvertFrom-Json

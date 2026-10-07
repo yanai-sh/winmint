@@ -12,8 +12,8 @@ namespace WinMint.Tests;
 public class OnlineDebloatPlanTests
 {
     [Theory]
-    [InlineData(null, true, false, true)]
-    [InlineData("online", true, false, true)]
+    [InlineData(null, true, true, true)]
+    [InlineData("online", true, true, true)]
     [InlineData("offline", false, true, true)]
     public void Plan_debloat_mode_controls_appx_venue(
         string? mode,

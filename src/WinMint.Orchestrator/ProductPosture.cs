@@ -10,7 +10,7 @@ namespace WinMint.Orchestrator;
 /// </summary>
 public static class ProductPosture
 {
-    public const string BraveWingetId = "Brave.Brave";
+    public const string BraveWingetId = PackageIds.Brave;
     public const string MinGitWingetId = "Git.MinGit";
     public const string PowerShellWingetId = "Microsoft.PowerShell";
     public const string WindowsTerminalWingetId = "Microsoft.WindowsTerminal";
@@ -262,9 +262,9 @@ public static class ProductPosture
             User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize", "SystemUsesLightTheme", "0"),
             User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings", "NOC_GLOBAL_SETTING_TOASTS_ENABLED", "0"),
         ];
-        foreach ((string name, int value) in DefaultUserExplorerAdvanced)
+        foreach ((string name, int value) in QuietChromeFacts.ExplorerAdvancedDwords)
         {
-            if (DefaultUserOfflineSkipExplorerAdvanced.Contains(name))
+            if (QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced.Contains(name))
             {
                 continue;
             }
@@ -274,21 +274,30 @@ public static class ProductPosture
 
         rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "ShowRecent", "0"));
         rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "ShowCloudFilesInQuickAccess", "0"));
-        rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Search", "SearchboxTaskbarMode", "0"));
-        foreach (string view in DefaultUserHideDesktopIconViews)
+        rows.Add(User(
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Search",
+            "SearchboxTaskbarMode",
+            QuietChromeFacts.SearchboxTaskbarMode.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        foreach (string view in QuietChromeFacts.HideDesktopIconViews)
         {
             rows.Add(User(
                 $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\{view}",
-                RecycleBinClsid,
-                "1"));
+                QuietChromeFacts.RecycleBinClsid,
+                QuietChromeFacts.HideRecycleBin.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
 
-        foreach (string name in DefaultUserContentDeliveryManager)
+        foreach (string name in QuietChromeFacts.ContentDeliveryManagerDwords)
         {
             rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", name, "0"));
         }
 
         rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings", "IsDynamicSearchBoxEnabled", "0"));
+        // Desktop Spotlight steals bloom after FirstLogon if EnabledState stays 1.
+        rows.Add(User(
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\DesktopSpotlight\Settings",
+            "EnabledState",
+            QuietChromeFacts.SpotlightEnabledState.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers", "BackgroundType", "0"));
         rows.Add(UserString(@"Control Panel\Desktop", "Wallpaper", GuestChrome.BloomWallpaperPath));
         rows.Add(UserString(@"Control Panel\Desktop", "WallpaperStyle", "10"));
         rows.Add(UserString(@"Control Panel\Desktop", "TileWallpaper", "0"));
@@ -399,57 +408,6 @@ public static class ProductPosture
         Soft("Policies\\Microsoft\\Edge", "DefaultBrowserSettingsCampaignEnabled", "0", "edge"),
     ];
 
-    private const string RecycleBinClsid = "{645FF040-5081-101B-9F08-00AA002F954E}";
-
-    private static readonly string[] DefaultUserHideDesktopIconViews = ["NewStartPanel", "ClassicStartMenu"];
-
-    // Values also in Win32WorkstationQuiet.ExplorerAdvancedDwords; taskbar subset is live-only (NTUSER stamp fails on Win11).
-    private static readonly HashSet<string> DefaultUserOfflineSkipExplorerAdvanced =
-        new(StringComparer.Ordinal)
-        {
-            "TaskbarDa",
-            "TaskbarMn",
-            "ShowTaskViewButton",
-            "ShowCopilotButton",
-        };
-
-    private static readonly Dictionary<string, int> DefaultUserExplorerAdvanced =
-        new(StringComparer.Ordinal)
-        {
-            ["HideFileExt"] = 0,
-            ["Hidden"] = 1,
-            ["FullPathAddress"] = 1,
-            ["LaunchTo"] = 1,
-            ["ShowFrequent"] = 0,
-            ["NavPaneShowVersionControl"] = 1,
-            ["ShowSyncProviderNotifications"] = 0,
-            ["TaskbarDa"] = 0,
-            ["TaskbarEndTask"] = 1,
-            ["Start_IrisRecommendations"] = 0,
-            ["ShowTaskViewButton"] = 0,
-            ["TaskbarMn"] = 0,
-            ["ShowCopilotButton"] = 0,
-            ["Start_AccountNotifications"] = 0,
-        };
-
-    private static readonly string[] DefaultUserContentDeliveryManager =
-    [
-        "SubscribedContent-310093Enabled",
-        "SubscribedContent-338388Enabled",
-        "SubscribedContent-338389Enabled",
-        "SubscribedContent-338393Enabled",
-        "SubscribedContent-353694Enabled",
-        "SubscribedContent-353696Enabled",
-        "SubscribedContent-353698Enabled",
-        "SoftLandingEnabled",
-        "SystemPaneSuggestionsEnabled",
-        "SilentInstalledAppsEnabled",
-        "PreInstalledAppsEnabled",
-        "OemPreInstalledAppsEnabled",
-        "RotatingLockScreenEnabled",
-        "RotatingLockScreenOverlayEnabled",
-    ];
-
     /// <summary>
     /// Machine posture aligned with Microsoft Windows Developer Config (HKLM only).
     /// Skip RDP enable — widens attack surface on wipe-ready workstations.
@@ -459,9 +417,21 @@ public static class ProductPosture
         Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableWindowsConsumerFeatures", "1", "cloudContent"),
         Soft("Policies\\Microsoft\\Windows\\CloudContent", "DisableSoftLanding", "1", "cloudContent"),
         Soft("Policies\\Microsoft\\WindowsStore", "AutoDownload", "2", "store"),
-        Soft(@"Microsoft\Windows\CurrentVersion\AppModelUnlock", "AllowDevelopmentWithoutDevLicense", "1", "developer"),
-        Soft(@"Microsoft\Windows\CurrentVersion\Sudo", "Enabled", "3", "sudo"),
-        Sys("ControlSet001\\Control\\FileSystem", "LongPathsEnabled", "1", "filesystem"),
+        Soft(
+            @"Microsoft\Windows\CurrentVersion\AppModelUnlock",
+            "AllowDevelopmentWithoutDevLicense",
+            QuietChromeFacts.ExpectedDevMode.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "developer"),
+        Soft(
+            @"Microsoft\Windows\CurrentVersion\Sudo",
+            "Enabled",
+            QuietChromeFacts.ExpectedSudo.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "sudo"),
+        Sys(
+            "ControlSet001\\Control\\FileSystem",
+            "LongPathsEnabled",
+            QuietChromeFacts.ExpectedLongPaths.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "filesystem"),
     ];
 
     private static readonly OfflinePolicyRow[] OneDriveDisable =

@@ -144,13 +144,7 @@ internal static class PlanDiff
         }
     }
 
-    private static bool JobAlways(ProvisionJob job) =>
-        job.Kind is ProvisionJobKind.OneDriveUninstall
-            or ProvisionJobKind.ReservedStorageDisable
-            or ProvisionJobKind.WorkstationQuiet
-            or ProvisionJobKind.AppxSafetyNet
-            or ProvisionJobKind.ShellStamp
-            or ProvisionJobKind.ShellChrome;
+    private static bool JobAlways(ProvisionJob job) => ProvisionJobKindWire.IsAlwaysOn(job.Kind);
 
     private static string JobLabel(ProvisionJob job) =>
         job.Kind switch
