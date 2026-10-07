@@ -71,6 +71,18 @@ if ($kernel -notmatch '\$Lane -eq ''Test''' -or $kernel -notmatch 'surface_test_
 if ($kernel -notmatch "ValidateSet\('Test', 'Release'\)") {
     throw 'Inject-SurfaceDrivers must take a Test/Release Lane'
 }
+if ($kernel -notmatch 'function Invoke-WinMintSurfaceMsiBitsDownload') {
+    throw 'Surface MSI must BITS-download (IWR ResponseEnded on long pulls)'
+}
+if ($kernel -match 'Invoke-WebRequest -Uri \$asset\.DownloadUrl -OutFile') {
+    throw 'Surface MSI must not use Invoke-WebRequest -OutFile for the package body'
+}
+if ($kernel -notmatch 'surface-cache hit') {
+    throw 'Surface MSI download must reuse a Microsoft-signed cache hit'
+}
+if (-not (Get-Command Invoke-WinMintSurfaceMsiBitsDownload -ErrorAction SilentlyContinue)) {
+    throw 'Invoke-WinMintSurfaceMsiBitsDownload must be dot-sourceable'
+}
 
 Write-Output 'Test-SurfaceDrivers ok'
 exit 0

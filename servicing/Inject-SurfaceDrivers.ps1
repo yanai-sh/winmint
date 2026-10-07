@@ -19,6 +19,104 @@ function Test-MicrosoftDownloadUri {
     $parsed.Host -in @('download.microsoft.com', 'www.microsoft.com')
 }
 
+function Test-WinMintMicrosoftSignedMsi {
+    param([Parameter(Mandatory)] [string] $Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    $sig = Get-AuthenticodeSignature -LiteralPath $Path
+    return ([string]$sig.Status -eq 'Valid' -and [string]$sig.SignerCertificate.Subject -match 'Microsoft Corporation')
+}
+
+function Invoke-WinMintSurfaceMsiBitsDownload {
+    <#
+    .SYNOPSIS
+      BITS-fetch a Surface MSI from download.microsoft.com (IWR ResponseEnded on long pulls).
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $Uri,
+        [Parameter(Mandatory)] [string] $Destination,
+        [int] $Attempts = 3
+    )
+    if (-not (Test-MicrosoftDownloadUri -Uri $Uri)) {
+        throw "Surface MSI download host is not Microsoft-owned: $Uri"
+    }
+    if ($Uri -notmatch '\.msi(\?|$)') {
+        throw "Surface MSI download URL must end in .msi: $Uri"
+    }
+    $bitsadmin = Join-Path $env:SystemRoot 'System32\bitsadmin.exe'
+    if (-not (Test-Path -LiteralPath $bitsadmin)) {
+        throw 'bitsadmin.exe missing; cannot BITS-fetch Surface MSI'
+    }
+    $dir = Split-Path -Parent $Destination
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $leaf = Split-Path -Leaf $Destination
+    $lastErr = $null
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        if (Test-Path -LiteralPath $Destination) {
+            Remove-Item -LiteralPath $Destination -Force -ErrorAction SilentlyContinue
+        }
+        $job = 'WinMintSurface-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+        Write-Output "surface BITS start $leaf (attempt $attempt/$Attempts)"
+        try {
+            & $bitsadmin /create /download $job | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "BITS /create failed ($LASTEXITCODE)" }
+            & $bitsadmin /addfile $job $Uri $Destination | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "BITS /addfile failed ($LASTEXITCODE): $Uri" }
+            & $bitsadmin /setpriority $job FOREGROUND | Out-Null
+            & $bitsadmin /resume $job | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "BITS /resume failed ($LASTEXITCODE): $Uri" }
+            $wait = [Diagnostics.Stopwatch]::StartNew()
+            $lastTrail = $null
+            $trailBeat = [Diagnostics.Stopwatch]::StartNew()
+            while ($true) {
+                $lines = @(
+                    & $bitsadmin /rawreturn /getstate $job 2>&1 |
+                        ForEach-Object { "$_".Trim() } |
+                        Where-Object { $_ }
+                )
+                if ($LASTEXITCODE -ne 0) {
+                    throw "BITS /getstate failed ($LASTEXITCODE): $($lines -join ' ')"
+                }
+                $state = if ($lines.Count) { [string]$lines[-1] } else { 'UNKNOWN' }
+                $mb = 0
+                if (Test-Path -LiteralPath $Destination) {
+                    $mb = [math]::Round((Get-Item -LiteralPath $Destination).Length / 1MB)
+                }
+                $status = "surface BITS $state ${mb}MB $leaf ($([int]$wait.Elapsed.TotalSeconds)s)"
+                if ($state -ne $lastTrail -or $trailBeat.Elapsed.TotalSeconds -ge 60) {
+                    Write-Output $status
+                    $lastTrail = $state
+                    $trailBeat.Restart()
+                }
+                if ($state -eq 'TRANSFERRED') { break }
+                if ($state -in @('ERROR', 'CANCELLED', 'ACKNOWLEDGED')) {
+                    throw "BITS $state : $Uri"
+                }
+                if ($state -eq 'SUSPENDED') {
+                    & $bitsadmin /resume $job | Out-Null
+                }
+                # ponytail: 45m wall per attempt — Surface MSI is large; upgrade = catalog cache.
+                if ($wait.Elapsed.TotalMinutes -ge 45) {
+                    throw "BITS timed out after 45 minutes: $Uri"
+                }
+                Start-Sleep -Seconds 15
+            }
+            & $bitsadmin /complete $job | Out-Null
+            if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) {
+                throw "BITS completed but file missing: $Destination"
+            }
+            Write-Output "surface BITS ok $leaf"
+            return
+        }
+        catch {
+            $lastErr = $_
+            & $bitsadmin /cancel $job 2>$null | Out-Null
+            Write-Output "surface BITS fail attempt $attempt/$Attempts : $($_.Exception.Message)"
+            if ($attempt -lt $Attempts) { Start-Sleep -Seconds 10 }
+        }
+    }
+    throw "Surface MSI BITS download failed after $Attempts attempts: $lastErr"
+}
+
 function Get-WinMintBootSetupCriticalClass {
     # WinPE on Hyper-V: Surface Class=system/extension (ACPI platform/filter) bugchecks 0xA5 _ADR.
     # Storage/USB/HID/net only. Release install.wim still gets the full SurfaceMsiSafe set.
@@ -196,10 +294,14 @@ $asset = Resolve-SurfaceMsiDownload -Url $detailsUrl -Pattern $expectedFileNameR
 $downloadDir = Join-Path $workDirectory 'surface_catalog_download'
 $null = New-Item -ItemType Directory -Path $downloadDir -Force
 $msiPath = Join-Path $downloadDir $asset.FileName
-Write-Output "Downloading Surface driver MSI for $deviceId…"
-Invoke-WebRequest -Uri $asset.DownloadUrl -OutFile $msiPath -UseBasicParsing
-$sig = Get-AuthenticodeSignature -LiteralPath $msiPath
-if ([string]$sig.Status -ne 'Valid' -or [string]$sig.SignerCertificate.Subject -notmatch 'Microsoft Corporation') {
+if (Test-WinMintMicrosoftSignedMsi -Path $msiPath) {
+    Write-Output "surface-cache hit $deviceId $(Split-Path -Leaf $msiPath)"
+}
+else {
+    Write-Output "Downloading Surface driver MSI for $deviceId…"
+    Invoke-WinMintSurfaceMsiBitsDownload -Uri $asset.DownloadUrl -Destination $msiPath
+}
+if (-not (Test-WinMintMicrosoftSignedMsi -Path $msiPath)) {
     throw "Downloaded Surface driver package is not signed by Microsoft: $msiPath"
 }
 
