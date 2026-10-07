@@ -4,6 +4,7 @@ Set-StrictMode -Version Latest
 if (-not (Get-Command -Name Get-WimMetadataSnapshot -ErrorAction SilentlyContinue)) {
     . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
 }
+. (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
 
 function Test-WinMintSelectedImage {
     param(
@@ -135,8 +136,7 @@ function Invoke-WinMintExportImage {
     }
     Clear-WimReadOnly -WimFile $SourceWim
     if (Test-Path -LiteralPath $DestWim) { Remove-Item -LiteralPath $DestWim -Force }
-    & dism.exe /English /Export-Image /SourceImageFile:$SourceWim /SourceIndex:$SourceIndex /DestinationImageFile:$DestWim /Compress:fast
-    if ($LASTEXITCODE -ne 0) { throw "Export-Image (single-index) failed: $LASTEXITCODE" }
+    Invoke-WinMintDism -ArgumentList @('/English', '/Export-Image', "/SourceImageFile:$SourceWim", "/SourceIndex:$SourceIndex", "/DestinationImageFile:$DestWim", '/Compress:fast') -Stage 'Export-Image'
 }
 
 function Get-WinMintMediaCacheEntry {

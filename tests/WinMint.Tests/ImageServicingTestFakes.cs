@@ -94,6 +94,9 @@ internal static class ImageServicingTestFakes
             Path.Combine(TestRepo.Root, "servicing", "Resolve-WinMintMount.ps1"),
             Path.Combine(servicing, "Resolve-WinMintMount.ps1"));
         File.Copy(
+            Path.Combine(TestRepo.Root, "servicing", "Invoke-WinMintDism.ps1"),
+            Path.Combine(servicing, "Invoke-WinMintDism.ps1"));
+        File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Get-WinMintServicingWorkspace.ps1"),
             Path.Combine(servicing, "Get-WinMintServicingWorkspace.ps1"));
         string host = Path.Combine(workDirectory, "tools", "host");

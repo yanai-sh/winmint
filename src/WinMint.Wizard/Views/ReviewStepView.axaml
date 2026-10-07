@@ -62,10 +62,18 @@
                    TextWrapping="Wrap"
                    Margin="0,6,0,0" />
 
-        <ProgressBar IsIndeterminate="True"
+        <ProgressBar IsIndeterminate="{Binding Build.IsProgressIndeterminate}"
+                     Value="{Binding Build.ProgressValue}"
+                     Minimum="0"
+                     Maximum="100"
                      Height="4"
                      IsVisible="{Binding Build.IsBusy}"
                      Margin="0,8,0,0" />
+        <TextBlock Text="{Binding Build.StepCue}"
+                   TextWrapping="Wrap"
+                   Opacity="0.75"
+                   FontSize="12"
+                   IsVisible="{Binding Build.StepCue, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         <TextBlock Text="{Binding Build.BuildWaitHint}"
                    TextWrapping="Wrap"
                    Opacity="0.65"

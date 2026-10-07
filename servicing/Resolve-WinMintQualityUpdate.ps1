@@ -1,6 +1,7 @@
 #requires -Version 7.6
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot '..\tools\host\Write-WinMintHostProgress.ps1')
+. (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
 # Catalog LCU resolve / BITS / SSU expand / DISM Add-Package. Dot-source helper (ADR-013).
 # Live Catalog is Apply + `just quality-check` only — never `just check`.
 
@@ -340,20 +341,9 @@ function Expand-WinMintQualitySsu {
             # $ssuPath = Expand-WinMintQualitySsu … would capture it as the path (#120).
             $leaf = Split-Path -Leaf $MsuPath
             Write-Host "quality expand DISM start $leaf"
-            $proc = Start-Process -FilePath dism.exe -PassThru -NoNewWindow -ArgumentList @(
-                '/English', '/Apply-Image', "/ImageFile:`"$MsuPath`"", '/Index:1', "/ApplyDir:`"$Destination`"")
-            $wait = [Diagnostics.Stopwatch]::StartNew()
-            $expandTrailBeat = $false
-            while (-not $proc.WaitForExit(20000)) {
-                Write-WinMintHostProgress -Activity 'quality expand' -Status ("DISM $leaf $([int]$wait.Elapsed.TotalSeconds)s")
-                if ($expandTrailBeat) {
-                    Write-Host ("quality expand DISM running {0} ({1:n0}s)" -f $leaf, $wait.Elapsed.TotalSeconds)
-                }
-                $expandTrailBeat = -not $expandTrailBeat
-            }
-            if ($proc.ExitCode -ne 0) {
-                throw "DISM /Apply-Image failed ($($proc.ExitCode)) extracting WIM-MSU: $MsuPath"
-            }
+            Invoke-WinMintDism -ArgumentList @(
+                '/English', '/Apply-Image', "/ImageFile:$MsuPath", '/Index:1', "/ApplyDir:$Destination") `
+                -Stage 'Apply-Image-WIM-MSU'
             Write-Host "quality expand DISM ok $leaf"
         }
     }
@@ -409,10 +399,7 @@ function Invoke-WinMintDismAddPackage {
         throw "Quality package missing: $PackagePath"
     }
     Write-Output "DISM /Add-Package $PackagePath"
-    & dism.exe /English /Image:$MountDir /Add-Package /PackagePath:$PackagePath
-    if ($LASTEXITCODE -ne 0) {
-        throw "DISM /Add-Package failed ($LASTEXITCODE): $PackagePath"
-    }
+    Invoke-WinMintDism -ArgumentList @('/English', "/Image:$MountDir", '/Add-Package', "/PackagePath:$PackagePath") -Stage 'Add-Package'
 }
 
 function Get-WinMintQualityPackageLeafPath {
@@ -543,8 +530,7 @@ function Invoke-WinMintQualityPackagesApply {
         $packages = [string](& $GetPackages $MountDir)
     }
     else {
-        $packages = & dism.exe /English /Image:$MountDir /Get-Packages 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) { throw "DISM /Get-Packages failed: $LASTEXITCODE" }
+        $packages = Invoke-WinMintDism -ArgumentList @('/English', "/Image:$MountDir", '/Get-Packages') -Stage 'Get-Packages' -PassThruText
     }
     Test-WinMintRollupFixPresent -GetPackagesText $packages -Family $Family -Ubr $PackageUbr -Architecture $Architecture
 

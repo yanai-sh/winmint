@@ -345,6 +345,9 @@ public sealed partial class WizardViewModel :
         IsBusy = true;
         buildStage.Build.FlashGuidanceText = "";
         buildStage.Build.StatusTail = "";
+        buildStage.Build.StepCue = "";
+        buildStage.Build.ProgressValue = 0;
+        buildStage.Build.IsProgressIndeterminate = true;
         buildStage.Build.BuildStatus = "Building… (approve UAC if prompted)";
         buildStage.Status.Set(buildStage.Build.BuildStatus, false);
 
@@ -427,20 +430,26 @@ public sealed partial class WizardViewModel :
         {
             try
             {
-                ApplyPresentation? presentation =
-                    TryFormatApplyPresentation(workspace.TryReadProgress(cancellationToken));
+                ApplyBuildPresentation? presentation =
+                    ApplyBuildPresentationFormat.FromApplyProgress(
+                        workspace.TryReadProgress(cancellationToken));
                 if (presentation is not null)
                 {
-                    string key = presentation.Value.ToString();
+                    ApplyBuildPresentation p = presentation.Value;
+                    string key = p.ToString();
                     if (!string.Equals(key, last, StringComparison.Ordinal))
                     {
                         last = key;
-                        buildStage.Build.BuildStatus = presentation.Value.StageLine;
-                        buildStage.Build.StatusTail = presentation.Value.StatusTail;
+                        buildStage.Build.BuildStatus = p.StageLine;
+                        buildStage.Build.StatusTail = p.StatusTail;
                         buildStage.Status.Set(
-                            presentation.Value.StageLine,
-                            presentation.Value.StageLine.StartsWith("Failed:", StringComparison.Ordinal));
+                            p.StageLine,
+                            p.StageLine.StartsWith("Failed:", StringComparison.Ordinal));
                     }
+
+                    buildStage.Build.IsProgressIndeterminate = p.IsProgressIndeterminate;
+                    buildStage.Build.ProgressValue = p.ProgressPercent ?? 0;
+                    buildStage.Build.StepCue = p.StepCue ?? "";
                 }
                 await Task.Delay(500, cancellationToken).ConfigureAwait(true);
             }
@@ -453,7 +462,8 @@ public sealed partial class WizardViewModel :
 
     internal static string? FormatBusyLabel(ApplyProgress? snapshot)
     {
-        ApplyPresentation? presentation = TryFormatApplyPresentation(snapshot, readLogTail: _ => []);
+        ApplyBuildPresentation? presentation =
+            ApplyBuildPresentationFormat.FromApplyProgress(snapshot, readLogTail: _ => []);
         if (presentation is null)
         {
             return null;
@@ -470,72 +480,9 @@ public sealed partial class WizardViewModel :
         Func<string, IReadOnlyList<string>>? readLogTail = null,
         int tailLines = 20)
     {
-        ApplyPresentation? presentation = TryFormatApplyPresentation(snapshot, readLogTail, tailLines);
+        ApplyBuildPresentation? presentation =
+            ApplyBuildPresentationFormat.FromApplyProgress(snapshot, readLogTail, tailLines);
         return presentation?.ToString();
-    }
-
-    private static ApplyPresentation? TryFormatApplyPresentation(
-        ApplyProgress? snapshot,
-        Func<string, IReadOnlyList<string>>? readLogTail = null,
-        int tailLines = 20)
-    {
-        if (snapshot is null || string.IsNullOrWhiteSpace(snapshot.Value.Stage))
-        {
-            return null;
-        }
-
-        string stage = snapshot.Value.Stage;
-        if (stage.Equals("idle", StringComparison.OrdinalIgnoreCase)
-            || stage.Equals("done", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        bool failed = stage.StartsWith("failed:", StringComparison.OrdinalIgnoreCase);
-        string display = failed ? stage["failed:".Length..] : stage;
-        string stageLine = failed ? $"Failed: {display}" : $"Building: {display}";
-        string statusTail = "";
-        if (!string.IsNullOrWhiteSpace(snapshot.Value.LogPath))
-        {
-            try
-            {
-                Func<string, IReadOnlyList<string>> reader = readLogTail ?? ReadSharedLogLines;
-                IReadOnlyList<string> lines = reader(snapshot.Value.LogPath);
-                IEnumerable<string> nonEmpty = lines.Where(static line => !string.IsNullOrWhiteSpace(line));
-                statusTail = string.Join(
-                    Environment.NewLine,
-                    nonEmpty.TakeLast(Math.Max(0, tailLines)));
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
-        }
-
-        return new ApplyPresentation(stageLine, statusTail);
-    }
-
-    private static IReadOnlyList<string> ReadSharedLogLines(string path)
-    {
-        using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using StreamReader reader = new(stream);
-        List<string> lines = [];
-        while (reader.ReadLine() is { } line)
-        {
-            lines.Add(line);
-        }
-
-        return lines;
-    }
-
-    private readonly record struct ApplyPresentation(string StageLine, string StatusTail)
-    {
-        public override string ToString() =>
-            string.IsNullOrEmpty(StatusTail)
-                ? StageLine
-                : StageLine + Environment.NewLine + StatusTail;
     }
 
     [RelayCommand]

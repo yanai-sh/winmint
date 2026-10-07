@@ -11,6 +11,8 @@ param(
 # Surface Catalog offline driver injection — param-only (issue 63).
 # Download → MSI extract → SurfaceMsiSafe classify → DISM Add-Driver (install.wim + boot.wim subset).
 
+. (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
+
 function Test-MicrosoftDownloadUri {
     param([string] $Uri)
     $parsed = $null
@@ -283,10 +285,7 @@ function Copy-ClassifiedDriverPayload {
 
 function Invoke-DismAddDriver {
     param([string] $ImageMount, [string] $DriverSource)
-    $out = & dism.exe /English /Image:$ImageMount /Add-Driver /Driver:$DriverSource /Recurse 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) {
-        throw "DISM Add-Driver failed ($LASTEXITCODE):`n$out"
-    }
+    Invoke-WinMintDism -ArgumentList @('/English', "/Image:$ImageMount", '/Add-Driver', "/Driver:$DriverSource", '/Recurse') -Stage 'Add-Driver'
 }
 
 # --- main ---
@@ -335,23 +334,26 @@ if (Test-Path -LiteralPath $bootWim) {
         if ($bootInfCount -ge 1) {
             $bootMount = Join-Path (Split-Path -Parent $mountDir) 'boot-mount'
             if (Test-Path -LiteralPath $bootMount) {
-                & dism.exe /English /Unmount-Image /MountDir:$bootMount /Discard 2>$null | Out-Null
+                try {
+                    Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Discard') -Stage 'Unmount-Discard'
+                }
+                catch {
+                    Write-Debug "Stale boot-mount discard before driver inject: $_"
+                }
                 Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
             }
             New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
             $null = Set-ItemProperty -Path $bootWim -Name IsReadOnly -Value $false -ErrorAction SilentlyContinue
-            $info = & dism.exe /English /Get-WimInfo /WimFile:$bootWim 2>&1 | Out-String
+            $info = Invoke-WinMintDism -ArgumentList @('/English', '/Get-WimInfo', "/WimFile:$bootWim") -Stage 'Get-WimInfo' -PassThruText
             $indexes = @([regex]::Matches($info, '(?m)^Index : (\d+)\s*$') | ForEach-Object { [int]$_.Groups[1].Value })
             foreach ($index in $indexes) {
                 Write-Output "Injecting setup-critical drivers into boot.wim index $index…"
-                & dism.exe /English /Mount-Image /ImageFile:$bootWim /Index:$index /MountDir:$bootMount
-                if ($LASTEXITCODE -ne 0) { throw "Mount boot.wim:$index failed: $LASTEXITCODE" }
+                Invoke-WinMintDism -ArgumentList @('/English', '/Mount-Image', "/ImageFile:$bootWim", "/Index:$index", "/MountDir:$bootMount") -Stage 'Mount-Image'
                 try {
                     Invoke-DismAddDriver -ImageMount $bootMount -DriverSource $bootDriverSource
                 }
                 finally {
-                    & dism.exe /English /Unmount-Image /MountDir:$bootMount /Commit
-                    if ($LASTEXITCODE -ne 0) { throw "Unmount boot.wim:$index failed: $LASTEXITCODE" }
+                    Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Commit') -Stage 'Unmount-Commit'
                 }
             }
             Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue

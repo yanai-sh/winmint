@@ -12,6 +12,7 @@ param(
 # Metadata assert + R/O clear + ei.cfg/PID.txt after final WIM shape.
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
+. (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
 
 $wimFile = Join-Path $mediaDir 'sources\install.wim'
 if (-not (Test-Path -LiteralPath $wimFile)) { throw "install.wim missing: $wimFile" }
@@ -25,16 +26,14 @@ Clear-WimReadOnly -WimFile $wimFile
 
 if ($cleanup -eq 'full') {
     Write-Output "DISM Cleanup-Image /StartComponentCleanup /ResetBase ($mountDir)"
-    & dism.exe /English /Image:$mountDir /Cleanup-Image /StartComponentCleanup /ResetBase
-    if ($LASTEXITCODE -ne 0) { throw "DISM Cleanup-Image failed: $LASTEXITCODE" }
+    Invoke-WinMintDism -ArgumentList @('/English', "/Image:$mountDir", '/Cleanup-Image', '/StartComponentCleanup', '/ResetBase') -Stage 'Cleanup-Image'
 }
 elseif ($cleanup -ne 'skip') {
     throw "unsupported cleanup='$cleanup' (expected skip|full)"
 }
 
 Write-Output "DISM Unmount-Image /Commit ($mountDir) lane=$lane compression=$compression cleanup=$cleanup name=$($before.Name)"
-& dism.exe /English /Unmount-Image /MountDir:$mountDir /Commit
-if ($LASTEXITCODE -ne 0) { throw "DISM Unmount-Image failed: $LASTEXITCODE" }
+Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$mountDir", '/Commit') -Stage 'Unmount-Commit'
 Remove-WinMintMountOwner -Kind install
 
 $afterCommit = Get-WimMetadataSnapshot -WimFile $wimFile -Index 1
@@ -49,8 +48,7 @@ if ($compression -eq 'max') {
     $exportTmp = Join-Path $mediaDir 'sources\install.export.wim'
     if (Test-Path -LiteralPath $exportTmp) { Remove-Item -LiteralPath $exportTmp -Force }
     Write-Output "DISM Export-Image /Compress:max → $exportTmp"
-    & dism.exe /English /Export-Image /SourceImageFile:$wimFile /SourceIndex:1 /DestinationImageFile:$exportTmp /Compress:max
-    if ($LASTEXITCODE -ne 0) { throw "DISM Export-Image failed: $LASTEXITCODE" }
+    Invoke-WinMintDism -ArgumentList @('/English', '/Export-Image', "/SourceImageFile:$wimFile", '/SourceIndex:1', "/DestinationImageFile:$exportTmp", '/Compress:max') -Stage 'Export-Image'
     Remove-Item -LiteralPath $wimFile -Force
     Move-Item -LiteralPath $exportTmp -Destination $wimFile -Force
     Clear-WimReadOnly -WimFile $wimFile

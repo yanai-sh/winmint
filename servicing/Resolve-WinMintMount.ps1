@@ -1,6 +1,8 @@
 #requires -Version 7.6
 Set-StrictMode -Version Latest
 
+. (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
+
 $script:WinMintImageServicingMutexName = 'Global\WinMint.ImageServicing.v1'
 
 function Get-WinMintServicingRoot {
@@ -68,7 +70,7 @@ function Get-WinMintMountedImage {
         return @(& $injected)
     }
 
-    $raw = & dism.exe /English /Get-MountedWimInfo 2>&1 | Out-String
+    $raw = Invoke-WinMintDism -ArgumentList @('/English', '/Get-MountedWimInfo') -Stage 'Get-MountedWimInfo' -PassThruText
     $images = [System.Collections.Generic.List[object]]::new()
     foreach ($match in [regex]::Matches($raw, '(?m)^Mount Dir : (.+)\r?\nImage File : (.+)\r?\nImage Index : (\d+)\r?\nMounted Read/Write : (.+)\r?\nStatus : (.+)\s*$')) {
         $images.Add([pscustomobject]@{
@@ -177,10 +179,7 @@ function Invoke-WinMintRemount {
     }
     # Invalid / Needs Remount: Cleanup-Mountpoints will not drop a remountable image
     # (learn.microsoft.com DISM image management — /Cleanup-Mountpoints).
-    & dism.exe /English /Remount-Image /MountDir:$MountDir
-    if ($LASTEXITCODE -ne 0) {
-        throw "DISM Remount-Image failed: $LASTEXITCODE"
-    }
+    Invoke-WinMintDism -ArgumentList @('/English', '/Remount-Image', "/MountDir:$MountDir") -Stage 'Remount-Image'
 }
 
 function Invoke-WinMintUnmountDiscard {
@@ -193,10 +192,7 @@ function Invoke-WinMintUnmountDiscard {
         & $injected $MountDir
         return
     }
-    & dism.exe /English /Unmount-Image /MountDir:$MountDir /Discard
-    if ($LASTEXITCODE -ne 0) {
-        throw "DISM Unmount-Image /Discard failed: $LASTEXITCODE"
-    }
+    Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$MountDir", '/Discard') -Stage 'Unmount-Discard'
 }
 
 function Invoke-WinMintRecoverOwnedMount {
@@ -221,10 +217,7 @@ function Invoke-WinMintCleanupWim {
     # /Cleanup-Wim is the deprecated spelling; DISM 10.0.26100 (ARM64) rejects it
     # with Error 50 "The request is not supported". /Cleanup-Mountpoints is the
     # supported command for the same intent (delete stale/corrupt mount state).
-    & dism.exe /English /Cleanup-Mountpoints
-    if ($LASTEXITCODE -ne 0) {
-        throw "DISM Cleanup-Mountpoints failed: $LASTEXITCODE"
-    }
+    Invoke-WinMintDism -ArgumentList @('/English', '/Cleanup-Mountpoints') -Stage 'Cleanup-Mountpoints'
 }
 
 function Stop-WinMintOrphanDismHost {
