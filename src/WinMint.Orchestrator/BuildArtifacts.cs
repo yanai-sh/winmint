@@ -162,6 +162,7 @@ public enum ServicingOpcode
     StampOfflineShell,
     StampOfflinePolicies,
     StampOfflineDefaultUser,
+    EraseOfflineOneDrive,
     RemoveProvisionedAppx,
     RemoveCapabilities,
     DisableOptionalFeatures,

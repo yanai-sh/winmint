@@ -37,6 +37,14 @@ public static partial class ImageServicing
                     "StampOfflineDefaultUser stage missing or incomplete."));
         }
 
+        if (!stages.Any(static s => s.Opcode == ServicingOpcode.EraseOfflineOneDrive))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.onedrive.missing",
+                    "EraseOfflineOneDrive stage missing or incomplete."));
+        }
+
         if (!stages.Any(static s => s.Opcode == ServicingOpcode.ExportWim))
         {
             return Result.Fail<ImageEvidence, Failure>(
@@ -274,6 +282,7 @@ internal sealed record FailureFile(
 [JsonSerializable(typeof(StampOfflineShellParameters))]
 [JsonSerializable(typeof(StampOfflinePoliciesParameters))]
 [JsonSerializable(typeof(StampOfflineDefaultUserParameters))]
+[JsonSerializable(typeof(EraseOfflineOneDriveParameters))]
 [JsonSerializable(typeof(RemoveProvisionedAppxParameters))]
 [JsonSerializable(typeof(RemoveCapabilitiesParameters))]
 [JsonSerializable(typeof(DisableOptionalFeaturesParameters))]

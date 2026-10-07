@@ -30,22 +30,31 @@ function Invoke-OfflineHiveValueWrite {
             $kind = switch ($Type.ToUpperInvariant()) {
                 'REG_DWORD' { [Microsoft.Win32.RegistryValueKind]::DWord }
                 'REG_SZ' { [Microsoft.Win32.RegistryValueKind]::String }
+                'REG_EXPAND_SZ' { [Microsoft.Win32.RegistryValueKind]::ExpandString }
                 'REG_QWORD' { [Microsoft.Win32.RegistryValueKind]::QWord }
                 default { throw "unsupported reg type '$Type'" }
             }
-            $value = if ($kind -eq [Microsoft.Win32.RegistryValueKind]::String) {
+            $value = if ($kind -eq [Microsoft.Win32.RegistryValueKind]::String `
+                -or $kind -eq [Microsoft.Win32.RegistryValueKind]::ExpandString) {
                 [string]$Data
             }
             else {
                 [int]$Data
             }
             $key.SetValue($Name, $value, $kind)
-            $got = $key.GetValue($Name)
-            if ($kind -eq [Microsoft.Win32.RegistryValueKind]::String) {
+            if ($kind -eq [Microsoft.Win32.RegistryValueKind]::String `
+                -or $kind -eq [Microsoft.Win32.RegistryValueKind]::ExpandString) {
+                $got = $key.GetValue(
+                    $Name,
+                    $null,
+                    [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
                 if ([string]$got -ne [string]$Data) { throw "readback mismatch got=$got want=$Data" }
             }
-            elseif ([int]$got -ne [int]$Data) {
-                throw "readback mismatch got=$got want=$Data"
+            else {
+                $got = $key.GetValue($Name)
+                if ([int]$got -ne [int]$Data) {
+                    throw "readback mismatch got=$got want=$Data"
+                }
             }
         }
         finally {
@@ -68,6 +77,7 @@ function Invoke-OfflineRegExeAdd {
     $regType = switch ($Type.ToUpperInvariant()) {
         'REG_DWORD' { 'REG_DWORD' }
         'REG_SZ' { 'REG_SZ' }
+        'REG_EXPAND_SZ' { 'REG_EXPAND_SZ' }
         'REG_QWORD' { 'REG_QWORD' }
         default { throw "unsupported reg type '$Type'" }
     }
