@@ -140,5 +140,61 @@ if ($iot -ne 'IoTEnterpriseS') { throw "Test-WimMetadata: IoT Enterprise LTSC Ed
 $ws = Resolve-WimEditionId -Snapshot ([ordered]@{ Name = 'Windows 11 Pro for Workstations'; Edition = $null })
 if ($ws -ne 'ProfessionalWorkstation') { throw "Test-WimMetadata: Pro for Workstations EditionId got '$ws'" }
 
+# Probe child runs before ServicingPlan sets WINMINT_SERVICING_WORK (dd6abfa).
+$savedDismWork = $env:WINMINT_SERVICING_WORK
+try {
+    $env:WINMINT_SERVICING_WORK = ''
+    $threw = $false
+    try { Get-WimIndexList -WimFile 'C:\winmint-no-such.wim' | Out-Null } catch { $threw = $true }
+    if (-not $threw) { throw 'Test-WimMetadata: expected wimMissing when WIM absent' }
+    if ($env:WINMINT_SERVICING_WORK -notmatch '[\\/]wim-probe$') {
+        throw "Test-WimMetadata: expected probe work default, got '$($env:WINMINT_SERVICING_WORK)'"
+    }
+
+    # Reach DISM with probe default — must not fail-closed on missing env (smoke Apply regression).
+    $dismThrew = $false
+    $dismMsg = ''
+    try {
+        Invoke-WinMintDism -ArgumentList @('/English', '/Get-WimInfo', '/WimFile:C:\winmint-no-such.wim') `
+            -Stage 'wim-probe-gate' -PassThruText | Out-Null
+    }
+    catch {
+        $dismThrew = $true
+        $dismMsg = $_.Exception.Message
+    }
+    if (-not $dismThrew) { throw 'Test-WimMetadata: expected DISM fail on missing WIM' }
+    if ($dismMsg -match 'WINMINT_SERVICING_WORK is unset') {
+        throw "Test-WimMetadata: probe work not applied before DISM: $dismMsg"
+    }
+
+    # Child -File -ListFromIso (Orchestrator spawn). No real ISO — just check never mounts (maintainer-host.json).
+    $env:WINMINT_SERVICING_WORK = ''
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = 'pwsh'
+    [void]$psi.ArgumentList.Add('-NoProfile')
+    [void]$psi.ArgumentList.Add('-File')
+    [void]$psi.ArgumentList.Add((Join-Path $repo 'servicing\Get-WimMetadata.ps1'))
+    [void]$psi.ArgumentList.Add('-ListFromIso')
+    [void]$psi.ArgumentList.Add('C:\winmint-no-such.iso')
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardError = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.CreateNoWindow = $true
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $stderr = $proc.StandardError.ReadToEnd()
+    $null = $proc.StandardOutput.ReadToEnd()
+    if (-not $proc.WaitForExit(60000)) { throw 'Test-WimMetadata: ListFromIso child timed out' }
+    if ($proc.ExitCode -eq 0) { throw 'Test-WimMetadata: ListFromIso child should fail on missing ISO' }
+    if ($stderr -notmatch 'wim\.probe\.isoMissing') {
+        throw "Test-WimMetadata: expected isoMissing from child, got: $stderr"
+    }
+    if ($stderr -match 'WINMINT_SERVICING_WORK is unset') {
+        throw "Test-WimMetadata: child hit unset-env: $stderr"
+    }
+}
+finally {
+    $env:WINMINT_SERVICING_WORK = $savedDismWork
+}
+
 Write-Output 'Test-WimMetadata ok'
 exit 0

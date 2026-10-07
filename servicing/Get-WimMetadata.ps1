@@ -131,6 +131,11 @@ function Get-WimIndexList {
         [string] $WimFile
     )
 
+    # Orchestrator probes ISO in a child pwsh before Invoke-ServicingPlan sets work (dd6abfa transcript).
+    if ([string]::IsNullOrWhiteSpace($env:WINMINT_SERVICING_WORK)) {
+        $env:WINMINT_SERVICING_WORK = Join-Path $env:ProgramData 'WinMint\Servicing\wim-probe'
+    }
+
     if (-not (Test-Path -LiteralPath $WimFile)) {
         throw "wim.probe.wimMissing: WIM missing: $WimFile"
     }
@@ -433,6 +438,11 @@ if ($ListFromTextPath) {
 
 if ($ListFromIso) {
     try {
+        # Child pwsh from SourceMediaProbe — before Invoke-ServicingPlan sets work.
+        if ([string]::IsNullOrWhiteSpace($env:WINMINT_SERVICING_WORK)) {
+            $env:WINMINT_SERVICING_WORK = Join-Path $env:ProgramData 'WinMint\Servicing\wim-probe'
+        }
+
         $rows = Get-SourceIsoWimIndexList -IsoPath $ListFromIso
         Write-Output (Write-WimIndexListJson -Rows $rows)
         exit 0
