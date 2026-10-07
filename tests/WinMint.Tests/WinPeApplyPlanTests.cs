@@ -26,7 +26,6 @@ public class WinPeApplyPlanTests
             [
                 ServicingOpcode.MountInstallWim,
                 ServicingOpcode.StampOfflinePolicies,
-                ServicingOpcode.EraseOfflineOneDrive,
                 ServicingOpcode.RemoveProvisionedAppx,
                 ServicingOpcode.StagePayload,
                 ServicingOpcode.StampOfflineDefaultUser,

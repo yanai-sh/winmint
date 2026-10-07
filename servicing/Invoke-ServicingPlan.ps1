@@ -203,7 +203,6 @@ function Resolve-KernelScript {
         'StampOfflineShell' { return Join-Path $scriptRoot 'Stamp-OfflineShell.ps1' }
         'StampOfflinePolicies' { return Join-Path $scriptRoot 'Stamp-OfflinePolicies.ps1' }
         'StampOfflineDefaultUser' { return Join-Path $scriptRoot 'Stamp-OfflineDefaultUser.ps1' }
-        'EraseOfflineOneDrive' { return Join-Path $scriptRoot 'Erase-OfflineOneDrive.ps1' }
         'RemoveProvisionedAppx' { return Join-Path $scriptRoot 'Remove-ProvisionedAppx.ps1' }
         'RemoveCapabilities' { return Join-Path $scriptRoot 'Set-OfflineComponent.ps1' }
         'DisableOptionalFeatures' { return Join-Path $scriptRoot 'Set-OfflineComponent.ps1' }
