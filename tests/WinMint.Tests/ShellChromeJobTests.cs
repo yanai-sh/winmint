@@ -180,6 +180,10 @@ public class ShellChromeJobTests
         Assert.DoesNotContain("ConfigureStartPins", chrome, StringComparison.Ordinal);
         Assert.DoesNotContain("DisableSearchBoxSuggestions", quiet, StringComparison.Ordinal);
         Assert.Contains("LayoutModification.xml", chrome, StringComparison.Ordinal);
+        Assert.Contains("DisableDesktopSpotlight", chrome, StringComparison.Ordinal);
+        Assert.Contains("ApplyTaskbarChrome", chrome, StringComparison.Ordinal);
+        Assert.Contains("Taskband", chrome, StringComparison.Ordinal);
+        Assert.Contains("VerifyFinalChrome", chrome, StringComparison.Ordinal);
     }
 
     [Fact]

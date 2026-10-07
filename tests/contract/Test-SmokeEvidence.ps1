@@ -50,8 +50,8 @@ try {
     . $factsPath
     $facts = Get-WinMintSmokeS4AcceptanceFacts
     if ($facts.RequiredPhases -notcontains 'shell.firstPaint') { throw 'facts must list shell.firstPaint' }
-    if (@($facts.DmaOkAnyOf).Count -ne 3) { throw 'DmaOkAnyOf must have 3 alternatives' }
-    if (@($facts.DmaOkAnyOf[2]).Count -ne 2) { throw 'DmaOkAnyOf third combo must be AND pair' }
+    if (@($facts.DmaOkAnyOf).Count -ne 2) { throw 'DmaOkAnyOf must have 2 alternatives (settle.ok | resume pair)' }
+    if (@($facts.DmaOkAnyOf[1]).Count -ne 2) { throw 'DmaOkAnyOf second combo must be resume AND pair' }
 
     $dmaResumeOnly = Join-Path $root 'dmaResumeOnly'
     Copy-Tree $fixture $dmaResumeOnly

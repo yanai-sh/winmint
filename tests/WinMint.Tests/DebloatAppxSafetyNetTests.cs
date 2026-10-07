@@ -139,6 +139,22 @@ public class DebloatAppxSafetyNetTests
     }
 
     [Fact]
+    public async Task Shell_appx_safetyNet_fails_when_deprovisioned_mark_cannot_be_stamped()
+    {
+        RecordingAppx appx = new() { EnsureDeprovisionedMarkResult = false };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(
+                jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
+                removeProvisionedAppx: ["Microsoft.BingNews"]),
+            Env(new FakeGuestMachine { Appx = appx }, new RecordingEvidenceSink()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Contains("Deprovisioned mark", result.FinalStatus.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void MatchesCatalogId_prefix_matches_publisher_variant()
     {
         AppxPackageInfo linkedIn = new(
@@ -201,7 +217,7 @@ public class DebloatAppxSafetyNetTests
             j => j.Kind == ProvisionJobKind.AppxSafetyNet);
         Assert.Equal("debloat.appx.safetyNet", safety.Id);
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.AppxSafetyNet);
-        Assert.DoesNotContain(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
+        Assert.Contains(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
     }
 
     [Fact]

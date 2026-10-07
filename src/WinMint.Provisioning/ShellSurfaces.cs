@@ -1,23 +1,11 @@
 namespace WinMint.Provisioning;
 
 /// <summary>
-/// FirstLogon shell surfaces (ADR-015): taskbar chrome and window-management desktop axes.
-/// JobRunner calls this seam; layout/pin/Win32 details stay implementation-local.
+/// FirstLogon desktop-surface apply (ADR-015 window-management axis).
+/// Taskbar chrome goes through <see cref="IGuestMachine.ApplyShellChrome"/> directly.
 /// </summary>
 public static class ShellSurfaces
 {
-    /// <summary>Apply Start/taskbar/bloom chrome via the guest adapter.</summary>
-    public static bool TryApplyChrome(
-        IGuestMachine guest,
-        IReadOnlyList<string> selectedWingetIds,
-        bool packageStrict,
-        bool failOpen = false) =>
-        guest.ApplyShellChrome(
-            new ShellChromeRequest(
-                FailOpen: failOpen,
-                SelectedWingetIds: selectedWingetIds,
-                RequireSelectedPins: packageStrict));
-
     /// <summary>Apply YASB/tHide/Komorebi desktop assets (fail-open job).</summary>
     public static async Task ApplyDesktopAsync(
         IGuestMachine guest,

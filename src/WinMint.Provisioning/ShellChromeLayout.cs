@@ -153,8 +153,14 @@ public static class ShellChromeLayout
                 continue;
             }
 
-            links.Add(resolved);
             startPinIds.Add(pinId);
+            // Taskbar: Explorer + Terminal + default browser only (Cursor stays Start-only).
+            if (!IsTaskbarBrowserPin(wingetId))
+            {
+                continue;
+            }
+
+            links.Add(resolved);
             taskbarPinIds.Add(pinId);
         }
 
@@ -212,6 +218,11 @@ public static class ShellChromeLayout
             return "Zen";
         }
 
+        if (wingetId.Equals(PackageIds.Brave, StringComparison.OrdinalIgnoreCase))
+        {
+            return "Brave";
+        }
+
         return null;
     }
 
@@ -219,6 +230,10 @@ public static class ShellChromeLayout
         $"\"{value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
 
     internal static bool IsPinApp(string wingetId) => TryPinId(wingetId) is not null;
+
+    internal static bool IsTaskbarBrowserPin(string wingetId) =>
+        wingetId.Equals(PackageIds.ZenBrowser, StringComparison.OrdinalIgnoreCase)
+        || wingetId.Equals(PackageIds.Brave, StringComparison.OrdinalIgnoreCase);
 
     internal static string? TryPinId(string wingetId)
     {
@@ -230,6 +245,11 @@ public static class ShellChromeLayout
         if (wingetId.Equals(PackageIds.ZenBrowser, StringComparison.OrdinalIgnoreCase))
         {
             return "zen-browser";
+        }
+
+        if (wingetId.Equals(PackageIds.Brave, StringComparison.OrdinalIgnoreCase))
+        {
+            return "brave";
         }
 
         return null;
@@ -258,6 +278,15 @@ public static class ShellChromeLayout
                 Path.Combine(localAppData, "Zen Browser", "zen.exe"),
                 Path.Combine(programFilesX86, "Zen Browser", "zen.exe"),
                 Path.Combine(ZenUserInstallDirectory(), "zen.exe"),
+            ];
+        }
+
+        if (wingetId.Equals(PackageIds.Brave, StringComparison.OrdinalIgnoreCase))
+        {
+            return
+            [
+                Path.Combine(programFiles, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+                Path.Combine(localAppData, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
             ];
         }
 

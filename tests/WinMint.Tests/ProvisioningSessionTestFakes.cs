@@ -351,8 +351,13 @@ internal static class ProvisioningSessionTestFakes
             return Task.CompletedTask;
         }
 
-        public void EnsureDeprovisionedMark(string packageFamilyName) =>
+        public bool EnsureDeprovisionedMark(string packageFamilyName)
+        {
             EnsuredDeprovisionedMarks.Add(packageFamilyName);
+            return EnsureDeprovisionedMarkResult;
+        }
+
+        public bool EnsureDeprovisionedMarkResult { get; set; } = true;
 
         public Task RegisterPackageFamilyForCurrentUserAsync(
             string packageFamilyName,

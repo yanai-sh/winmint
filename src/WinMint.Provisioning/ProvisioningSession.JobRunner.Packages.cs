@@ -66,7 +66,11 @@ internal static partial class ProvisioningJobRunner
         try
         {
             IReadOnlyList<string> ids = CollectSelectedWingetIds(jobs);
-            if (!ShellSurfaces.TryApplyChrome(env.Guest, ids, env.PackageStrict))
+            if (!env.Guest.ApplyShellChrome(
+                    new ShellChromeRequest(
+                        FailOpen: false,
+                        SelectedWingetIds: ids,
+                        RequireSelectedPins: env.PackageStrict)))
             {
                 return FailJob(env, "jobs.failed", $"{job.Id}: shell chrome apply failed.");
             }
@@ -298,7 +302,14 @@ internal static partial class ProvisioningJobRunner
 
             foreach (string pfn in families.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
             {
-                env.Guest.Appx.EnsureDeprovisionedMark(pfn);
+                if (!env.Guest.Appx.EnsureDeprovisionedMark(pfn))
+                {
+                    return FailJob(
+                        env,
+                        "jobs.failed",
+                        $"Job '{job.Id}': could not stamp Deprovisioned mark for '{pfn}'.");
+                }
+
                 env.ReportStatus(new SessionStatus(
                     $"deprovisioned.appx.{pfn}",
                     $"Ensured deprovisioned mark for '{pfn}'."));

@@ -1,5 +1,6 @@
 using System.Text;
 
+using WinMint.Contracts;
 using WinMint.Orchestrator;
 
 namespace WinMint.Tests;
@@ -15,19 +16,21 @@ public class DebloatPlanTests
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.DoesNotContain(ServicingOpcode.RemoveProvisionedAppx, result.Value.Stages);
+        // ProductPosture.AppxIds always union into the remove-list — offline DISM always runs.
+        Assert.Contains(ServicingOpcode.RemoveProvisionedAppx, result.Value.Stages);
         Assert.Empty(profile.RemoveProvisionedAppx);
+        Assert.NotEmpty(result.Value.RemoveProvisionedAppx);
     }
 
     [Fact]
-    public void Plan_absent_debloat_emits_no_remove_stages()
+    public void Plan_absent_debloat_still_emits_product_constant_remove_stage()
     {
         Profile profile = Parse(MinimalProfileJson(includeDebloat: false));
 
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
         Assert.True(result.IsOk);
-        Assert.DoesNotContain(ServicingOpcode.RemoveProvisionedAppx, result.Value.Stages);
+        Assert.Contains(ServicingOpcode.RemoveProvisionedAppx, result.Value.Stages);
     }
 
     [Fact]
@@ -64,6 +67,20 @@ public class DebloatPlanTests
         int removeAt = opcodes.ToList().IndexOf(ServicingOpcode.RemoveProvisionedAppx);
         int payloadAt = opcodes.ToList().IndexOf(ServicingOpcode.StagePayload);
         Assert.True(mountAt >= 0 && removeAt > mountAt && removeAt < payloadAt);
+    }
+
+    [Fact]
+    public void Plan_online_mode_still_emits_offline_RemoveProvisionedAppx()
+    {
+        Profile profile = Parse(MinimalProfileJson(removeIds: ["Microsoft.BingNews"], debloatMode: "online"));
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
+        Assert.Contains(ServicingOpcode.RemoveProvisionedAppx, result.Value.Stages);
+        Assert.Contains(
+            result.Value.Jobs.Jobs,
+            j => j.Kind == ProvisionJobKind.AppxSafetyNet);
     }
 
     private static string MinimalProfileJson(

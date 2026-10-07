@@ -39,7 +39,10 @@ param(
     [string] $RequiredSmokeRunId = '',
 
     # AssertOnly / fixtures: file marker only — not live FirstLogon truth.
-    [switch] $StaticEvidenceOnly
+    [switch] $StaticEvidenceOnly,
+
+    # Full Smoke: Profile dma.settle.geoId — live PSD posture must match (0 = skip).
+    [int] $ExpectedGeoId = 0
 )
 
 Set-StrictMode -Version Latest
@@ -131,7 +134,7 @@ foreach ($combo in @($s4Facts.DmaOkAnyOf)) {
     if ($hit) { $dmaOk = $true; break }
 }
 if (-not $dmaOk) {
-    throw 'DMA hard fields missing: need settle.ok, settle.locationWarn, or settle.resumeOk+checkpoint.resume'
+    throw 'DMA hard fields missing: need settle.ok or settle.resumeOk+checkpoint.resume'
 }
 
 $setupRegionOk = $false
@@ -308,6 +311,47 @@ foreach ($name in @($requiredQuiet.Keys)) {
     }
     if ([int]$prop.Value -ne $requiredQuiet[$name]) {
         throw "shell chrome quietDwords.$name must be $($requiredQuiet[$name]), got '$($prop.Value)'"
+    }
+}
+
+# Live PSD posture (full Smoke): evidence JSON alone cannot prove bloom/search/Geo stuck.
+if (-not $StaticEvidenceOnly) {
+    $livePath = Join-Path $EvidenceDir 'guest\live-posture.json'
+    if (-not (Test-Path -LiteralPath $livePath -PathType Leaf)) {
+        throw 'live posture missing: expected guest/live-posture.json (PSD snap at handoff)'
+    }
+    $live = Get-Content -LiteralPath $livePath -Raw -Encoding utf8 | ConvertFrom-Json
+    $expectedWallpaper = [string]$s4Facts.ExpectedWallpaperPath
+    if ([string]$live.Wallpaper -cne $expectedWallpaper) {
+        throw "live Wallpaper must be $expectedWallpaper, got '$($live.Wallpaper)'"
+    }
+    if ([int]$live.SearchboxTaskbarMode -ne [int]$requiredQuiet.SearchboxTaskbarMode) {
+        throw "live SearchboxTaskbarMode must be $($requiredQuiet.SearchboxTaskbarMode), got '$($live.SearchboxTaskbarMode)'"
+    }
+    if ([int]$live.SpotlightEnabledState -ne [int]$s4Facts.ExpectedSpotlightEnabledState) {
+        throw "live Spotlight EnabledState must be $($s4Facts.ExpectedSpotlightEnabledState), got '$($live.SpotlightEnabledState)'"
+    }
+    foreach ($name in @($requiredQuiet.Keys)) {
+        if ($name -eq 'SearchboxTaskbarMode') { continue }
+        $prop = $live.PSObject.Properties[$name]
+        if ($null -eq $prop) {
+            throw "live posture missing $name"
+        }
+        if ([int]$prop.Value -ne $requiredQuiet[$name]) {
+            throw "live $name must be $($requiredQuiet[$name]), got '$($prop.Value)'"
+        }
+    }
+    if ($ExpectedGeoId -gt 0 -and [int]$live.GeoId -ne $ExpectedGeoId) {
+        throw "live GeoId must be $ExpectedGeoId, got '$($live.GeoId)'"
+    }
+    if ([int]$live.DevMode -ne [int]$s4Facts.ExpectedDevMode) {
+        throw "live DevMode must be $($s4Facts.ExpectedDevMode), got '$($live.DevMode)'"
+    }
+    if ([int]$live.Sudo -ne [int]$s4Facts.ExpectedSudo) {
+        throw "live Sudo must be $($s4Facts.ExpectedSudo), got '$($live.Sudo)'"
+    }
+    if ([int]$live.LongPaths -ne [int]$s4Facts.ExpectedLongPaths) {
+        throw "live LongPaths must be $($s4Facts.ExpectedLongPaths), got '$($live.LongPaths)'"
     }
 }
 

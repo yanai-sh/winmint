@@ -48,18 +48,21 @@ public sealed class Win32RegionSnapshot : IRegionSnapshot
             throw new InvalidOperationException($"Set time zone '{target.TimeZoneId}' failed.");
         }
 
-        // Soft field: Shell is medium-IL; HKLM ConsentStore may deny. Settle poll emits location_warn.
+        // Soft field: Shell is medium-IL; HKLM ConsentStore may deny. MachineSetup stamps as SYSTEM.
+        TrySetLocationServices(target.LocationServicesEnabled.Value);
+    }
+
+    /// <summary>SYSTEM MachineSetup / elevated stamp for location consent. Soft — never throws to callers.</summary>
+    public static bool TrySetLocationServices(bool enabled)
+    {
         try
         {
-            SetLocationServices(target.LocationServicesEnabled.Value);
+            SetLocationServices(enabled);
+            return true;
         }
-        catch (UnauthorizedAccessException)
+        catch (Exception ex) when (ex is UnauthorizedAccessException or SecurityException or IOException)
         {
-            // ponytail: location is soft; MachineSetup may pre-stamp or Users ACL grants later
-        }
-        catch (SecurityException)
-        {
-            // RegistrySecurity path
+            return false;
         }
     }
 

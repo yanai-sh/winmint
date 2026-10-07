@@ -187,7 +187,10 @@ public class CheckpointRebootTests
         }
     }
 
-    /// <summary>Two good reads for initial settle final snapshot; third read models post-reboot drift.</summary>
+    /// <summary>
+    /// Three good reads for initial settle (poll + final + post-DeviceRegion latch);
+    /// further reads model post-reboot drift.
+    /// </summary>
     private sealed class ResumeDriftRegion(RegionState initialSettle, RegionState resumeSnapshot) : IRegionSnapshot
     {
         private int _reads;
@@ -197,6 +200,6 @@ public class CheckpointRebootTests
         }
 
         public RegionState Read() =>
-            ++_reads <= 2 ? initialSettle : resumeSnapshot;
+            ++_reads <= 3 ? initialSettle : resumeSnapshot;
     }
 }

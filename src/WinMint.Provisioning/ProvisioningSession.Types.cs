@@ -163,9 +163,9 @@ public interface IAppxPackageManager
 
     /// <summary>
     /// Ensure <c>HKLM\...\AppxAllUserStore\Deprovisioned\&lt;PFN&gt;</c> exists (FU rehydrate survival).
-    /// Idempotent; best-effort when not elevated.
+    /// Idempotent. Returns false when the mark could not be created (e.g. medium-IL).
     /// </summary>
-    void EnsureDeprovisionedMark(string packageFamilyName);
+    bool EnsureDeprovisionedMark(string packageFamilyName);
 
     /// <summary>
     /// Register a provisioned package family for the current user (winget / App Installer FirstLogon).

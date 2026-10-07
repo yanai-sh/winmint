@@ -108,6 +108,23 @@ public class ShellChromeLayoutTests
     }
 
     [Fact]
+    public void TryBuildPins_taskbar_is_explorer_terminal_and_browser_only()
+    {
+        bool ok = ShellChromeLayout.TryBuildPins(
+            [PackageIds.Cursor, PackageIds.ZenBrowser],
+            failOpen: true,
+            resolveShortcut: static id => id.Equals(PackageIds.Cursor, StringComparison.OrdinalIgnoreCase)
+                ? @"C:\pins\Cursor.lnk"
+                : @"C:\pins\Zen.lnk",
+            out ShellChromePins pins);
+
+        Assert.True(ok);
+        Assert.Equal(["explorer", "settings", "terminal", "cursor", "zen-browser"], pins.StartPinIds);
+        Assert.Equal(["explorer", "terminal", "zen-browser"], pins.TaskbarPinIds);
+        Assert.Equal([@"C:\pins\Zen.lnk"], pins.LinkPaths);
+    }
+
+    [Fact]
     public void TryBuildPins_fail_closed_when_selected_pin_has_no_lnk()
     {
         Assert.False(ShellChromeLayout.TryBuildPins(

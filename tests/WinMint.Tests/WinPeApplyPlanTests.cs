@@ -26,6 +26,7 @@ public class WinPeApplyPlanTests
             [
                 ServicingOpcode.MountInstallWim,
                 ServicingOpcode.StampOfflinePolicies,
+                ServicingOpcode.RemoveProvisionedAppx,
                 ServicingOpcode.StagePayload,
                 ServicingOpcode.StampOfflineDefaultUser,
                 ServicingOpcode.StageOobeUnattend,

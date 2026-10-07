@@ -475,7 +475,9 @@ public static partial class BuildPlan
             ServicingOpcode.StampOfflinePolicies,
         ];
 
-        if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Offline)
+        // Offline DISM remove whenever the effective remove-list is non-empty.
+        // DebloatMode.Online still runs FirstLogon safety net; Offline is the image-time pass.
+        if (appx.Count > 0)
         {
             stages.Add(ServicingOpcode.RemoveProvisionedAppx);
         }
