@@ -129,12 +129,13 @@ smoke ISO WORK=".scratch/smoke" PROFILE="samples/sl7.profile.json" WALL="180" MO
     pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -ProfilePath '{{PROFILE}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}' -OnlineOobe '{{ONLINE}}'
 
 # Maintainer SL7 vanilla Source ISO — tests/fixtures/maintainer-host.json
+# Starts elevated via Start-SmokeElevated (Windows Terminal when wt.exe resolves).
 smoke-maintainer WORK=".scratch/smoke" WALL="180" MONITOR="0" STALL="45" ONLINE="0":
-    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Maintainer -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}' -OnlineOobe '{{ONLINE}}'
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Start-SmokeElevated.ps1' -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}' -OnlineOobe '{{ONLINE}}'
 
-# VMConnect during maintainer smoke (elevated pwsh required). ONLINE=1 for online-OOBE escape.
+# VMConnect during maintainer smoke. ONLINE=1 for online-OOBE escape.
 smoke-maintainer-monitor WORK=".scratch/smoke" WALL="180" STALL="45" ONLINE="0":
-    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Maintainer -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor 1 -OnlineOobe '{{ONLINE}}'
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Start-SmokeElevated.ps1' -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor 1 -OnlineOobe '{{ONLINE}}'
 
 # Own-console host watch (Apply/Smoke keep running if you close it).
 # smoke-maintainer already spawns one Watch-Host; use this to attach a second view.

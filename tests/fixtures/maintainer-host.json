@@ -10,7 +10,7 @@
     "just smoke-maintainer uses samples/sl7.profile.json (same Primary install target). Requires .scratch/sl7.password.",
     "Smoke default is offline OOBE (NIC until Supervisor). Online escape: positional ONLINE=1 or Invoke-SmokeElevated -OnlineOobe 1.",
     "PowerShell: do not use just NAME=value overrides (WALL=180 binds to WORK). Use defaults, positional args (.scratch/smoke 180 1 45 0), or just smoke-maintainer-monitor.",
-    "Elevated: sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1"
+    "Elevated (prefers Windows Terminal): pwsh -NoProfile -File tools/vm/Start-SmokeElevated.ps1"
   ],
   "sourceIso": {
     "role": "vanilla-test",
@@ -22,7 +22,7 @@
     "sha256": "638aa2c88e94385b00f4f178d071e3df0b7d9e335577a83bd533b7f2eb65adf0"
   },
   "smokeRecipe": "just smoke-maintainer-monitor",
-  "smokeRecipeElevated": "sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1",
+  "smokeRecipeElevated": "pwsh -NoProfile -File tools/vm/Start-SmokeElevated.ps1",
   "smokeRecipePositional": "just smoke-maintainer .scratch/smoke 180 1 45",
   "smokeRecipeNote": "ISO path is only for `just smoke` (positional). Maintainer ISO is fixed in this fixture; recipes call Invoke-SmokeRecipe.ps1."
 }

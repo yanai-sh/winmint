@@ -4,8 +4,9 @@
   Elevated maintainer Smoke (Apply + Hyper-V). Use when the shell is not admin.
 
 .EXAMPLE
-  sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1
-  sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1 -Monitor 0
+  pwsh -NoProfile -File tools/vm/Start-SmokeElevated.ps1
+  # Already elevated inside Windows Terminal:
+  pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1
 #>
 param(
     [string] $Work = '.scratch/smoke',
@@ -29,9 +30,9 @@ if (-not $admin) {
     throw @"
 Smoke needs an elevated pwsh (Apply + Hyper-V). From repo root:
 
-  sudo -E pwsh -NoProfile -File tools/vm/Invoke-SmokeElevated.ps1
+  pwsh -NoProfile -File tools/vm/Start-SmokeElevated.ps1
 
-Or open an elevated terminal and run: just smoke-maintainer-monitor
+Or: just smoke-maintainer-monitor
 "@
 }
 
@@ -45,7 +46,8 @@ Start-Transcript -LiteralPath $log -Force | Out-Null
 try {
     Write-Host "Invoke-SmokeElevated Admin=True HEAD=$(git rev-parse --short HEAD)"
     $recipe = Join-Path $repoRoot 'tools\vm\Invoke-SmokeRecipe.ps1'
-    & pwsh -NoProfile -File $recipe -Maintainer -Work $Work -WallClockMinutes $WallClockMinutes `
+    # Same console — do not nest another pwsh.exe (that prefers conhost).
+    & $recipe -Maintainer -Work $Work -WallClockMinutes $WallClockMinutes `
         -StallMinutes $StallMinutes -Monitor $Monitor -OnlineOobe $OnlineOobe
     exit $LASTEXITCODE
 }
