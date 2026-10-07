@@ -257,13 +257,24 @@ function Format-WinMintHostWatch {
 }
 
 function Resolve-WinMintWindowsTerminal {
-    $cmd = Get-Command wt.exe -ErrorAction SilentlyContinue
-    if ($cmd -and $cmd.Source) { return [string]$cmd.Source }
-    foreach ($candidate in @(
-            (Join-Path $env:LocalAppData 'Microsoft\WindowsApps\wt.exe'),
-            (Join-Path $env:ProgramFiles 'Windows Terminal\wt.exe')
+    # Prefer real install over WindowsApps app-execution alias (often 0-byte stub → "cannot be accessed").
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    foreach ($p in @(
+            (Join-Path $env:ProgramFiles 'Windows Terminal\wt.exe'),
+            (Join-Path ${env:ProgramFiles(x86)} 'Windows Terminal\wt.exe')
         )) {
-        if (Test-Path -LiteralPath $candidate) { return $candidate }
+        if (-not [string]::IsNullOrWhiteSpace($p)) { [void]$candidates.Add($p) }
+    }
+    $cmd = Get-Command wt.exe -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source) { [void]$candidates.Add([string]$cmd.Source) }
+    [void]$candidates.Add((Join-Path $env:LocalAppData 'Microsoft\WindowsApps\wt.exe'))
+    foreach ($candidate in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
+        if (-not (Test-Path -LiteralPath $candidate)) { continue }
+        $item = Get-Item -LiteralPath $candidate -ErrorAction SilentlyContinue
+        # App execution aliases are 0-byte reparse points until the Store app is present.
+        if ($null -eq $item -or $item.Length -lt 1024) { continue }
+        return $candidate
     }
     return ''
 }
@@ -301,27 +312,32 @@ function Start-WinMintHostWatchProcess {
             '--',
             $PwshExe
         ) + $pwshArgs
-        $psi = [System.Diagnostics.ProcessStartInfo]::new()
-        $psi.FileName = $wt
-        $psi.WorkingDirectory = $RepoRoot
-        $psi.UseShellExecute = $false
-        foreach ($a in $wtArgs) { [void]$psi.ArgumentList.Add([string]$a) }
-        [void][System.Diagnostics.Process]::Start($psi)
-        # ponytail: poll up to 5s for Watch self-stamp; Stopwatch (not UtcNow) — host clock can jump.
-        $wait = [Diagnostics.Stopwatch]::StartNew()
-        while ($wait.Elapsed.TotalSeconds -lt 5) {
-            if (Test-Path -LiteralPath $MarkerPath -PathType Leaf) {
-                $markerPid = 0
-                $raw = (Get-Content -LiteralPath $MarkerPath -Raw -ErrorAction SilentlyContinue)
-                if ($raw -and [int]::TryParse($raw.Trim(), [ref]$markerPid) -and $markerPid -gt 0) {
-                    if ($null -ne (Get-Process -Id $markerPid -ErrorAction SilentlyContinue)) {
-                        return
+        try {
+            $psi = [System.Diagnostics.ProcessStartInfo]::new()
+            $psi.FileName = $wt
+            $psi.WorkingDirectory = $RepoRoot
+            $psi.UseShellExecute = $false
+            foreach ($a in $wtArgs) { [void]$psi.ArgumentList.Add([string]$a) }
+            [void][System.Diagnostics.Process]::Start($psi)
+            # ponytail: poll up to 5s for Watch self-stamp; Stopwatch (not UtcNow) — host clock can jump.
+            $wait = [Diagnostics.Stopwatch]::StartNew()
+            while ($wait.Elapsed.TotalSeconds -lt 5) {
+                if (Test-Path -LiteralPath $MarkerPath -PathType Leaf) {
+                    $markerPid = 0
+                    $raw = (Get-Content -LiteralPath $MarkerPath -Raw -ErrorAction SilentlyContinue)
+                    if ($raw -and [int]::TryParse($raw.Trim(), [ref]$markerPid) -and $markerPid -gt 0) {
+                        if ($null -ne (Get-Process -Id $markerPid -ErrorAction SilentlyContinue)) {
+                            return
+                        }
                     }
                 }
+                Start-Sleep -Milliseconds 200
             }
-            Start-Sleep -Milliseconds 200
+            return
         }
-        return
+        catch {
+            # Broken wt alias / ACL — fall through to pwsh console watch.
+        }
     }
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = $PwshExe
