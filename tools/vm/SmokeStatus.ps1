@@ -164,15 +164,18 @@ function Get-SmokeNicAttachAtCreateDecision {
 function Get-SmokeNicReconnectDecision {
     <#
     .SYNOPSIS
-      Whether the wait loop should attach Default Switch this poll (Supervisor sighted).
+      Whether the wait loop should attach Default Switch this poll.
+      Offline OOBE: connect at guest-up or Supervisor sighted — not only PSD Supervisor,
+      which can miss while the guest already runs the network gate.
     #>
     param(
         [bool] $OnlineOobe = $false,
         [bool] $AlreadyConnected = $false,
-        [bool] $SupervisorRunning = $false
+        [bool] $SupervisorRunning = $false,
+        [bool] $GuestUpSticky = $false
     )
     if ($OnlineOobe -or $AlreadyConnected) { return 'skip' }
-    if ($SupervisorRunning) { return 'connect' }
+    if ($SupervisorRunning -or $GuestUpSticky) { return 'connect' }
     return 'hold'
 }
 

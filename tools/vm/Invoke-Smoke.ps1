@@ -763,11 +763,13 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         $script:ConsecutiveHeartbeatOk = [int]$tick.ConsecutiveHeartbeatOk
         if ((Get-SmokeNicReconnectDecision -OnlineOobe:([bool]$OnlineOobe) `
                 -AlreadyConnected:([bool]$script:SmokeNicConnected) `
-                -SupervisorRunning:([bool]$script:LastSupervisorRunning)) -eq 'connect') {
+                -SupervisorRunning:([bool]$script:LastSupervisorRunning) `
+                -GuestUpSticky:([bool]$script:GuestUpSticky)) -eq 'connect') {
             try {
                 Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
                 $script:SmokeNicConnected = $true
-                Write-SmokeHostLine -Name 'Offline OOBE: attached Default Switch (Supervisor sighted).' -Activity wait
+                $why = if ($script:LastSupervisorRunning) { 'Supervisor sighted' } else { 'guest-up' }
+                Write-SmokeHostLine -Name "Offline OOBE: attached Default Switch ($why)." -Activity wait
             }
             catch {
                 Write-Warning "Could not attach Default Switch yet: $($_.Exception.Message)"

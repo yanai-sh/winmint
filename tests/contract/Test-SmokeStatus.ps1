@@ -218,22 +218,26 @@ if ($statusSrc -notmatch 'function New-SmokeOfflineOobeProfile') {
 }
 if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:$false) -cne 'defer') { throw 'offline OOBE defers NIC at create' }
 if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:$true) -cne 'connect') { throw 'OnlineOobe connects at create' }
-if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false) -cne 'hold') {
-    throw 'offline hold before Supervisor'
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$false) -cne 'hold') {
+    throw 'offline hold before guest-up / Supervisor'
 }
-if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$true) -cne 'connect') {
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$true -GuestUpSticky:$false) -cne 'connect') {
     throw 'offline reconnect on Supervisor'
 }
-if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$true -SupervisorRunning:$true) -cne 'skip') {
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$true) -cne 'connect') {
+    throw 'offline reconnect on guest-up (PSD may miss Supervisor)'
+}
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$true -SupervisorRunning:$true -GuestUpSticky:$true) -cne 'skip') {
     throw 'already connected skips reconnect'
 }
-if ((Get-SmokeNicReconnectDecision -OnlineOobe:$true -AlreadyConnected:$false -SupervisorRunning:$true) -cne 'skip') {
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$true -AlreadyConnected:$false -SupervisorRunning:$true -GuestUpSticky:$true) -cne 'skip') {
     throw 'OnlineOobe skips reconnect path'
 }
 if ($smoke -notmatch '\[switch\] \$OnlineOobe') { throw 'Invoke-Smoke must expose -OnlineOobe' }
 if ($smoke -notmatch 'New-SmokeOfflineOobeProfile') { throw 'Invoke-Smoke must build offline-OOBE Apply overlay' }
 if ($smoke -notmatch 'Get-SmokeNicAttachAtCreateDecision') { throw 'Invoke-Smoke must gate Connect at create' }
-if ($smoke -notmatch 'Get-SmokeNicReconnectDecision') { throw 'Invoke-Smoke must reconnect on Supervisor' }
+if ($smoke -notmatch 'Get-SmokeNicReconnectDecision') { throw 'Invoke-Smoke must reconnect offline NIC' }
+if ($smoke -notmatch 'GuestUpSticky:') { throw 'Invoke-Smoke must pass GuestUpSticky into NIC reconnect' }
 
 $oobeSrc = Join-Path $repo 'samples/smoke.profile.json'
 $oobeDir = Join-Path ([IO.Path]::GetTempPath()) ("winmint-offline-oobe-" + [guid]::NewGuid().ToString('N'))
