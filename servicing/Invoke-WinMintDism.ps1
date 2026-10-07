@@ -34,8 +34,11 @@ function Invoke-WinMintDism {
     $stdoutFile = [IO.Path]::GetTempFileName()
     $stderrFile = [IO.Path]::GetTempFileName()
     try {
-        $proc = Start-Process -FilePath $DismPath -ArgumentList $ArgumentList -Wait -PassThru -NoNewWindow `
+        # Do not use Start-Process -Wait: after Mount-Image, dism.exe can exit while -Wait
+        # never returns (smoke hung ~1h with MountStatus Ok / no Mount-Image transcript).
+        $proc = Start-Process -FilePath $DismPath -ArgumentList $ArgumentList -PassThru -NoNewWindow `
             -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+        $null = $proc.WaitForExit()
         $exitCode = $proc.ExitCode
     }
     finally {

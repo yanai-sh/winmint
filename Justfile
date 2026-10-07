@@ -98,7 +98,7 @@ exclude-scratch ISO="":
 # Does not start Apply. If this still fails: close Explorer on that path, then reboot.
 # Recipe body is already pwsh -Command (windows-shell) — do not nest another -Command or $vars vanish.
 discard-stale-mount:
-    . '{{justfile_directory()}}/servicing/Resolve-WinMintMount.ps1'; $held = Enter-WinMintImageServicingLock; try { Resolve-WinMintStaleMount | ConvertTo-Json -Compress } finally { Exit-WinMintImageServicingLock $held }
+    $env:WINMINT_SERVICING_WORK = Join-Path $env:ProgramData 'WinMint\Servicing'; . '{{justfile_directory()}}/servicing/Resolve-WinMintMount.ps1'; $held = Enter-WinMintImageServicingLock; try { Resolve-WinMintStaleMount | ConvertTo-Json -Compress } finally { Exit-WinMintImageServicingLock $held }
 
 # Artifact hygiene under .scratch (or root=…). Also runs after smoke / host-apply / Cli build with -SkipIfBusy.
 # Nuclear: just wipe-scratch
