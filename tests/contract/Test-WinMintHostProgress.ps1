@@ -30,9 +30,17 @@ if ($helper -notmatch '-PriorRunId:') { throw 'empty PriorRunId must be one argv
 if ($helper -notmatch 'UseOSCIndicator') { throw 'helper must set Progress.UseOSCIndicator when interactive VT' }
 if (-not (Test-WinMintTrailHeartbeatLine -Line 'AddQualityUpdates running 78s')) { throw 'heartbeat detector missed running line' }
 if (Test-WinMintTrailHeartbeatLine -Line 'Catalog BITS start KB1') { throw 'heartbeat detector false positive' }
+if (Test-WinMintTrailHeartbeatLine -Line '') { throw 'empty heartbeat line must be non-match (not throw)' }
 $sampleBar = '[=====     50.0%                          ]'
 if (-not (Test-WinMintDismProgressBarLine -Line $sampleBar)) { throw 'DISM bar detector missed bracket percent line' }
 if (Test-WinMintDismProgressBarLine -Line 'quality hash 50% leaf.msu') { throw 'DISM bar detector false positive on milestone' }
+if (Test-WinMintDismProgressBarLine -Line '') { throw 'empty DISM bar line must be non-match (not throw)' }
+if ($helper -match 'function Test-WinMintDismProgressBarLine \{[\s\S]{0,120}\[Parameter\(Mandatory\)\]') {
+    throw 'Test-WinMintDismProgressBarLine must allow empty Line (not Mandatory)'
+}
+if ($helper -match 'function Test-WinMintTrailHeartbeatLine \{[\s\S]{0,120}\[Parameter\(Mandatory\)\]') {
+    throw 'Test-WinMintTrailHeartbeatLine must allow empty Line (not Mandatory)'
+}
 $filtered = @(Select-WinMintWatchLogTail -Lines @(
         'Catalog BITS start KB1',
         'AddQualityUpdates running 20s',

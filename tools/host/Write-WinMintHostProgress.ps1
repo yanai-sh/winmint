@@ -31,12 +31,16 @@ function Initialize-WinMintHostProgress {
 }
 
 function Test-WinMintTrailHeartbeatLine {
-    param([Parameter(Mandatory)] [string] $Line)
+    # Allow empty: kernel tee can emit blank lines; Mandatory+ValidateNotNullOrEmpty would throw.
+    param([string] $Line = '')
+    if ([string]::IsNullOrEmpty($Line)) { return $false }
     return [bool]($Line -match '^\S+ running \d+s$')
 }
 
 function Test-WinMintDismProgressBarLine {
-    param([Parameter(Mandatory)] [string] $Line)
+    # Allow empty: kernel tee can emit blank lines; Mandatory+ValidateNotNullOrEmpty would throw.
+    param([string] $Line = '')
+    if ([string]::IsNullOrEmpty($Line)) { return $false }
     return [bool]($Line -match '^\s*\[.*\d+\.\d+%\s*\]')
 }
 
@@ -337,6 +341,7 @@ function Start-WinMintHostWatchProcess {
         }
         catch {
             # Broken wt alias / ACL — fall through to pwsh console watch.
+            Write-Debug "wt spawn failed: $($_.Exception.Message)"
         }
     }
     $psi = [System.Diagnostics.ProcessStartInfo]::new()

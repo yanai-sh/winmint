@@ -3,7 +3,9 @@
 Set-StrictMode -Version Latest
 
 function Test-WinMintDismProgressBarLine {
-    param([Parameter(Mandatory)] [string] $Line)
+    # Allow empty: kernel tee / stubs can emit blank lines.
+    param([string] $Line = '')
+    if ([string]::IsNullOrEmpty($Line)) { return $false }
     return [bool]($Line -match '^\s*\[.*\d+\.\d+%\s*\]')
 }
 

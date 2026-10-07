@@ -18,6 +18,7 @@ exit 0
 
 $barLine = '[=====     50.0%                          ]'
 $okLine = 'The operation completed successfully.'
+if (Test-WinMintDismProgressBarLine -Line '') { throw 'empty Line must be non-match (not throw)' }
 
 $pipeline = @(
     Invoke-WinMintDism -DismPath (Get-Process -Id $PID).Path `

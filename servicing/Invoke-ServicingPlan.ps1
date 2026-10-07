@@ -48,7 +48,7 @@ function Invoke-WinMintLoggedKernel {
             $out)
         while (-not $handle.IsCompleted) {
             foreach ($item in @($out.ReadAll())) {
-                $text = [string]$item
+                $text = if ($null -eq $item) { '' } else { [string]$item }
                 if (-not (Test-WinMintDismProgressBarLine -Line $text)) {
                     $writer.WriteLine($text)
                     Write-Host $text
@@ -62,7 +62,7 @@ function Invoke-WinMintLoggedKernel {
             $null = $handle.AsyncWaitHandle.WaitOne(1000)
         }
         foreach ($item in @($out.ReadAll())) {
-            $text = [string]$item
+            $text = if ($null -eq $item) { '' } else { [string]$item }
             if (-not (Test-WinMintDismProgressBarLine -Line $text)) {
                 $writer.WriteLine($text)
                 Write-Host $text
