@@ -114,7 +114,7 @@ if ($probeFn -match 'Prefer-DiskBoot|Dismount-InstallDvdWhenWindowsBoots') {
     throw 'Test-GuestEvidenceReady must not act prefer/eject — wait-loop tick actions own I/O'
 }
 
-$preferSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/SmokeStatus.ps1') -Raw -Encoding utf8
+$preferSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/SmokeConverge.ps1') -Raw -Encoding utf8
 if ($preferSrc -notmatch 'STATUS_NO_MEDIA') {
     throw 'harness must document 0xc0000178 STATUS_NO_MEDIA'
 }

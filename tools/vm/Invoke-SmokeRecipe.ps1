@@ -25,7 +25,10 @@ param(
     [string] $Monitor = '0',
 
     # 0/false/empty = offline OOBE (default); 1/true/yes = -OnlineOobe (NAT before Start-VM).
-    [string] $OnlineOobe = '0'
+    [string] $OnlineOobe = '0',
+
+    # Reuse Work Output ISO — guest-only iteration (no DISM Apply).
+    [switch] $SkipApply
 )
 
 Set-StrictMode -Version Latest
@@ -60,6 +63,7 @@ $invokeArgs = @(
 )
 if ($useMonitor) { $invokeArgs += '-Monitor' }
 if ($useOnlineOobe) { $invokeArgs += '-OnlineOobe' }
+if ($SkipApply) { $invokeArgs += '-SkipApply' }
 
 & pwsh @invokeArgs
 exit $LASTEXITCODE
