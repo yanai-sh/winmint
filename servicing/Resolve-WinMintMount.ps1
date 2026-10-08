@@ -386,6 +386,29 @@ function Resolve-WinMintStaleMount {
     return [pscustomobject]@{ recoveryAction = $recoveryAction }
 }
 
+# Stuck offline hive loads (killed Apply) make the next `reg load` Access Denied.
+function Clear-WinMintOfflineRegistryHive {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+    $names = @(
+        'WinMintSoft',
+        'WinMintDU',
+        'WinMintOdSoft',
+        'WinMintOdDU',
+        'WinMintAppx',
+        'WinMintPol_SOFTWARE_Off',
+        'WinMintPol_SYSTEM_Off'
+    )
+    if (-not $PSCmdlet.ShouldProcess('HKLM\WinMint*', 'Unload stale offline registry hives')) {
+        return
+    }
+    [gc]::Collect()
+    [gc]::WaitForPendingFinalizers()
+    foreach ($name in $names) {
+        & reg.exe unload "HKLM\$name" 2>$null | Out-Null
+    }
+}
+
 function Clear-WinMintOwnedMount {
     [CmdletBinding(SupportsShouldProcess)]
     param(

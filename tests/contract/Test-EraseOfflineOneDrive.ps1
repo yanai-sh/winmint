@@ -22,6 +22,12 @@ if ($kernel -notmatch '\$MountDir') {
 if ($kernel -match '\$WorkDirectory|\$PoliciesPath|\$DefaultUserPath') {
     throw 'Erase-OfflineOneDrive must take MountDir only'
 }
+if ($kernel -match 'Registry::LocalMachine\.OpenSubKey|\[Microsoft\.Win32\.Registry\]::LocalMachine\.OpenSubKey') {
+    throw 'Erase-OfflineOneDrive must clear Run via reg.exe (not .NET OpenSubKey on offline hive)'
+}
+if ($kernel -notmatch 'reg\.exe query' -or $kernel -notmatch 'reg\.exe delete') {
+    throw 'Erase-OfflineOneDrive must use reg.exe query/delete for Run clears'
+}
 
 $plan = Get-Content -LiteralPath (Join-Path $repo 'servicing\Invoke-ServicingPlan.ps1') -Raw
 if ($plan -notmatch "'EraseOfflineOneDrive'") {

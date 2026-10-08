@@ -30,32 +30,24 @@ function Clear-WinMintOfflineOneDriveRun {
         [Parameter(Mandatory)] [string] $HiveKey,
         [Parameter(Mandatory)] [string] $SubKey
     )
-    $mountName = $HiveKey -replace '^HKLM\\', ''
-    $root = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($mountName, $true)
-    if ($null -eq $root) { throw "cannot open HKLM\$mountName writable" }
-    try {
-        $key = $root.OpenSubKey($SubKey, $true)
-        if ($null -eq $key) {
-            Write-Output "onedrive erase Run skip missing: $HiveKey\$SubKey"
-            return
-        }
-        try {
-            foreach ($name in @($key.GetValueNames())) {
-                if ($name -notmatch '(?i)OneDrive') { continue }
-                $target = "$HiveKey\$SubKey\$name"
-                if (-not $PSCmdlet.ShouldProcess($target, 'Clear OneDrive Run value')) {
-                    continue
-                }
-                $key.DeleteValue($name, $false)
-                Write-Output "onedrive erase Run cleared: $target"
-            }
-        }
-        finally {
-            $key.Dispose()
-        }
+    # ponytail: reg.exe only — .NET OpenSubKey on loaded offline hives sticks handles and poisons later loads.
+    $keyPath = "$HiveKey\$SubKey"
+    $query = & reg.exe query $keyPath 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Output "onedrive erase Run skip missing: $keyPath"
+        return
     }
-    finally {
-        $root.Dispose()
+    foreach ($line in @($query)) {
+        if ($line -notmatch '^\s+(\S+)\s+REG_\w+\s+') { continue }
+        $name = $Matches[1]
+        if ($name -notmatch '(?i)OneDrive') { continue }
+        $target = "$keyPath\$name"
+        if (-not $PSCmdlet.ShouldProcess($target, 'Clear OneDrive Run value')) {
+            continue
+        }
+        & reg.exe delete $keyPath /v $name /f | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "reg delete failed: $target exit $LASTEXITCODE" }
+        Write-Output "onedrive erase Run cleared: $target"
     }
 }
 

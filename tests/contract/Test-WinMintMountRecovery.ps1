@@ -358,11 +358,13 @@ try {
     $plan = Get-Content -LiteralPath (Join-Path $repo 'servicing/Invoke-ServicingPlan.ps1') -Raw
     $lockAt = $plan.IndexOf('Enter-WinMintImageServicingLock')
     $resolveAt = $plan.IndexOf('Resolve-WinMintStaleMount')
+    $hiveClearAt = $plan.IndexOf('Clear-WinMintOfflineRegistryHive')
     $stageAt = $plan.IndexOf('Resolve-KernelScript -Opcode')
-    Assert-True ($lockAt -ge 0 -and $resolveAt -ge 0 -and $stageAt -ge 0) 'elevated loop missing lock/recovery'
-    Assert-True ($lockAt -lt $resolveAt -and $resolveAt -lt $stageAt) 'recovery is not before Source ISO / stage mutation'
+    Assert-True ($lockAt -ge 0 -and $resolveAt -ge 0 -and $hiveClearAt -ge 0 -and $stageAt -ge 0) 'elevated loop missing lock/recovery/hive-clear'
+    Assert-True ($lockAt -lt $resolveAt -and $resolveAt -lt $hiveClearAt -and $hiveClearAt -lt $stageAt) 'recovery/hive-clear not before Source ISO / stage mutation'
 
     $mountHelper = Get-Content -LiteralPath (Join-Path $repo 'servicing/Resolve-WinMintMount.ps1') -Raw
+    Assert-True ($mountHelper -match 'function Clear-WinMintOfflineRegistryHive') 'Clear-WinMintOfflineRegistryHive missing'
     $stopAt = $mountHelper.IndexOf('function Stop-WinMintOrphanDismHost')
     $stopEnd = $mountHelper.IndexOf('function ', $stopAt + 1)
     Assert-True ($stopAt -ge 0 -and $stopEnd -gt $stopAt) 'Stop-WinMintOrphanDismHost missing'

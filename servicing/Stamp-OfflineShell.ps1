@@ -10,6 +10,8 @@ if (-not (Test-Path -LiteralPath $hiveSoftware)) { throw "SOFTWARE hive missing:
 $hiveKey = 'HKLM\WinMintSoft'
 $winlogon = 'HKLM\WinMintSoft\Microsoft\Windows NT\CurrentVersion\Winlogon'
 
+# ponytail: killed prior Apply can leave this key loaded; load then Access Denied.
+& reg.exe unload $hiveKey 2>$null | Out-Null
 Write-Output "REG LOAD $hiveKey"
 & reg.exe load $hiveKey $hiveSoftware
 if ($LASTEXITCODE -ne 0) { throw "reg load failed: $LASTEXITCODE" }
