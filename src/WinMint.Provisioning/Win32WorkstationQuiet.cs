@@ -157,9 +157,19 @@ public static class Win32WorkstationQuiet
             {
                 foreach (string name in QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced)
                 {
-                    if (QuietChromeFacts.ExplorerAdvancedDwords.TryGetValue(name, out int value))
+                    if (!QuietChromeFacts.ExplorerAdvancedDwords.TryGetValue(name, out int value))
+                    {
+                        continue;
+                    }
+
+                    // ponytail: medium-IL FirstLogon can deny individual LiveOnly keys; Search/Spotlight stay required.
+                    try
                     {
                         advanced.SetValue(name, value, RegistryValueKind.DWord);
+                    }
+                    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or SystemException)
+                    {
+                        // Best-effort — VerifyFinalChrome still requires search/Spotlight.
                     }
                 }
             }

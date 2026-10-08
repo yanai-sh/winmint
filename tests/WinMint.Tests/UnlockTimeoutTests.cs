@@ -60,8 +60,9 @@ public class UnlockTimeoutTests
                 dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
                 {
-                    WallClockTimeout = TimeSpan.FromSeconds(10),
-                    SettleDeadline = TimeSpan.FromSeconds(10),
+                    // Room for DMA settle + live-chrome sticky streak (~20s at SmokeDefaults).
+                    WallClockTimeout = TimeSpan.FromSeconds(60),
+                    SettleDeadline = TimeSpan.FromSeconds(30),
                     SettlePollInterval = TimeSpan.FromSeconds(1),
                     FailedDwell = TimeSpan.Zero,
                 }),

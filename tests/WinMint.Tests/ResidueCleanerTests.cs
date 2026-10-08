@@ -1,3 +1,5 @@
+using Microsoft.Win32;
+
 using WinMint.Provisioning;
 
 using static WinMint.Tests.ProvisioningSessionTestFakes;
@@ -71,6 +73,33 @@ public class ResidueCleanerTests
             {
                 Directory.Delete(windir, recursive: true);
             }
+        }
+    }
+
+    [Fact]
+    public void ScheduleDeferredAutoLogonClear_writes_hkcu_runonce()
+    {
+        const string name = "WinMintClearAutoLogon";
+        using RegistryKey key = Registry.CurrentUser.CreateSubKey(
+            @"Software\Microsoft\Windows\CurrentVersion\RunOnce")
+            ?? throw new InvalidOperationException("HKCU RunOnce unavailable");
+        key.DeleteValue(name, throwOnMissingValue: false);
+
+        try
+        {
+            Win32WinlogonRegistry.ScheduleDeferredAutoLogonClear();
+            object? value = key.GetValue(name);
+            Assert.IsType<string>(value);
+            string cmd = (string)value;
+            Assert.Contains("AutoAdminLogon", cmd, StringComparison.Ordinal);
+            Assert.Contains("reg.exe", cmd, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Wallpaper", cmd, StringComparison.Ordinal);
+            Assert.Contains("SearchboxTaskbarMode", cmd, StringComparison.Ordinal);
+            Assert.Contains("UpdatePerUserSystemParameters", cmd, StringComparison.Ordinal);
+        }
+        finally
+        {
+            key.DeleteValue(name, throwOnMissingValue: false);
         }
     }
 

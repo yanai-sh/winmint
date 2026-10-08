@@ -42,17 +42,22 @@ public class ShellChromeJobTests
     {
         FakeGuestMachine guest = new();
         RecordingEvidenceSink evidence = new();
+        ManualTimeProvider time = new();
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("shell.chrome", ProvisionJobKind.ShellChrome)]),
-            Env(guest, evidence),
+            Env(guest, evidence, time: time),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
-        ShellChromeRequest request = Assert.Single(guest.ShellChromeRequests);
-        Assert.False(request.FailOpen);
-        Assert.False(request.RequireSelectedPins);
+        Assert.Equal(2, guest.ShellChromeRequests.Count);
+        Assert.All(guest.ShellChromeRequests, r =>
+        {
+            Assert.False(r.FailOpen);
+            Assert.False(r.RequireSelectedPins);
+        });
         Assert.Contains("shell.chrome", evidence.Documents[^1].Phases);
+        Assert.Contains("shell.chrome.live", evidence.Documents[^1].Phases);
     }
 
     [Fact]
@@ -60,19 +65,23 @@ public class ShellChromeJobTests
     {
         FakeGuestMachine guest = new();
         RecordingEvidenceSink evidence = new();
+        ManualTimeProvider time = new();
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(jobs: [new ProvisionJob("shell.chrome", ProvisionJobKind.ShellChrome)]) with
             {
                 PackageStrict = true,
             },
-            Env(guest, evidence),
+            Env(guest, evidence, time: time),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
-        ShellChromeRequest request = Assert.Single(guest.ShellChromeRequests);
-        Assert.False(request.FailOpen);
-        Assert.True(request.RequireSelectedPins);
+        Assert.Equal(2, guest.ShellChromeRequests.Count);
+        Assert.All(guest.ShellChromeRequests, r =>
+        {
+            Assert.False(r.FailOpen);
+            Assert.True(r.RequireSelectedPins);
+        });
     }
 
     [Fact]
@@ -184,6 +193,30 @@ public class ShellChromeJobTests
         Assert.Contains("ApplyTaskbarChrome", chrome, StringComparison.Ordinal);
         Assert.Contains("Taskband", chrome, StringComparison.Ordinal);
         Assert.Contains("VerifyFinalChrome", chrome, StringComparison.Ordinal);
+        Assert.Contains("taskbar.LiveOnly", chrome, StringComparison.Ordinal);
+        Assert.Contains("InvalidOperationException", chrome, StringComparison.Ordinal);
+        Assert.Contains("UnauthorizedAccessException", quiet, StringComparison.Ordinal);
+        Assert.Contains("LiveOnlyTaskbarExplorerAdvanced", quiet, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Shell_chrome_surfaces_step_prefixed_unauthorized()
+    {
+        FakeGuestMachine guest = new()
+        {
+            ApplyShellChromeCallback = static _ =>
+                throw new InvalidOperationException(
+                    "taskbar.LiveOnly: Attempted to perform an unauthorized operation."),
+        };
+        RecordingEvidenceSink evidence = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle(jobs: [new ProvisionJob("shell.chrome", ProvisionJobKind.ShellChrome)]),
+            Env(guest, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Contains("taskbar.LiveOnly", result.FinalStatus.Message, StringComparison.Ordinal);
     }
 
     [Fact]

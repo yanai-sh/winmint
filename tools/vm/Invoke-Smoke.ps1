@@ -392,12 +392,19 @@ $stallSw = [Diagnostics.Stopwatch]::StartNew()
 $nudgeSw = [Diagnostics.Stopwatch]::StartNew()
 $script:emptyVhdSw = $null
 
+# Guest plan truth: package.auditNative in payload/jobs.json (smoke-plumbing omits winget + audit).
 $expectNativePackageAudit = $false
-if ($null -ne $profileDoc -and $profileDoc.PSObject.Properties.Name -contains 'packages') {
-    $packages = $profileDoc.packages
-    if ($null -ne $packages -and $packages.PSObject.Properties.Name -contains 'winget') {
-        $wingetIds = @($packages.winget | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
-        $expectNativePackageAudit = $wingetIds.Count -gt 0
+$jobsPath = Join-Path $Work 'payload\jobs.json'
+if (Test-Path -LiteralPath $jobsPath -PathType Leaf) {
+    try {
+        $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+        $expectNativePackageAudit = @(
+            $jobsDoc.jobs |
+                Where-Object { [string]$_.kind -ceq 'package.auditNative' }
+        ).Count -gt 0
+    }
+    catch {
+        throw "payload/jobs.json unreadable under $Work : $($_.Exception.Message)"
     }
 }
 

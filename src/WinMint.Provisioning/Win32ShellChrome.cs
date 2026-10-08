@@ -30,28 +30,39 @@ public static class Win32ShellChrome
             return false;
         }
 
+        string step = "begin";
         try
         {
             // Spotlight + OOBE taskbar chrome win if applied before bloom/pins.
+            step = "spotlight";
             Win32WorkstationQuiet.DisableDesktopSpotlight();
             if (wallpaperPresent)
             {
+                step = "wallpaper";
                 ApplyWallpaper();
             }
 
+            step = "pins";
             ApplyPins(pins.LinkPaths);
+            step = "taskbar.LiveOnly";
             Win32WorkstationQuiet.ApplyTaskbarChrome();
+            step = "verify";
             if (!VerifyFinalChrome(wallpaperPresent) && !request.FailOpen)
             {
                 return false;
             }
 
+            step = "evidence";
             WriteEvidence(pins.StartPinIds, pins.TaskbarPinIds);
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException && request.FailOpen)
         {
             return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException && !request.FailOpen)
+        {
+            throw new InvalidOperationException($"{step}: {ex.Message}", ex);
         }
     }
 
@@ -62,6 +73,25 @@ public static class Win32ShellChrome
             desktop?.SetValue("Wallpaper", ShellChromeLayout.WallpaperPath, RegistryValueKind.String);
             desktop?.SetValue("WallpaperStyle", "10", RegistryValueKind.String);
             desktop?.SetValue("TileWallpaper", "0", RegistryValueKind.String);
+        }
+
+        // ponytail: explorer first-run may keep a stale transcode of img19; drop so SPI sticks.
+        try
+        {
+            string transcoded = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Microsoft",
+                "Windows",
+                "Themes",
+                "TranscodedWallpaper");
+            if (File.Exists(transcoded))
+            {
+                File.Delete(transcoded);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort — registry + SPI still apply.
         }
 
         unsafe
@@ -103,6 +133,11 @@ public static class Win32ShellChrome
         }
     }
 
+    /// <summary>
+    /// Live desktop still shows bloom + search hide (explorer first-run can overwrite after Apply).
+    /// </summary>
+    public static bool IsLiveSticky() => VerifyFinalChrome(wallpaperPresent: true);
+
     /// <summary>Fail-closed gate before unlock — bloom/search/Spotlight must stick.</summary>
     private static bool VerifyFinalChrome(bool wallpaperPresent)
     {
@@ -142,15 +177,31 @@ public static class Win32ShellChrome
         string dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "WinMint");
-        Directory.CreateDirectory(dir);
-        ShellChromeEvidenceFile document = new(
-            ShellChromeEvidenceFile.SchemaVersionValue,
-            ShellChromeLayout.WallpaperPath,
-            [.. startPinIds],
-            [.. taskbarPinIds],
-            quiet);
-        File.WriteAllBytes(
-            Path.Combine(dir, "shell-chrome.json"),
-            JsonSerializer.SerializeToUtf8Bytes(document, ProvisioningJsonContext.Default.ShellChromeEvidenceFile));
+        byte[] utf8 = JsonSerializer.SerializeToUtf8Bytes(
+            new ShellChromeEvidenceFile(
+                ShellChromeEvidenceFile.SchemaVersionValue,
+                ShellChromeLayout.WallpaperPath,
+                [.. startPinIds],
+                [.. taskbarPinIds],
+                quiet),
+            ProvisioningJsonContext.Default.ShellChromeEvidenceFile);
+        string path = Path.Combine(dir, "shell-chrome.json");
+
+        // ponytail: medium-IL can briefly deny ProgramData; verify already passed — retry once.
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                Directory.CreateDirectory(dir);
+                File.WriteAllBytes(path, utf8);
+                return;
+            }
+            catch (Exception ex) when (
+                attempt == 0
+                && ex is UnauthorizedAccessException or IOException)
+            {
+                Thread.Sleep(250);
+            }
+        }
     }
 }

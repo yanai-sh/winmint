@@ -59,7 +59,8 @@ try {
     $guest = Get-Content -LiteralPath (Guest-EvidencePath $dmaResumeOnly) -Raw | ConvertFrom-Json
     $guest.phases = @(
         'shell.firstPaint', 'settle.begin', 'settle.deviceRegionOk', 'settle.resumeOk', 'jobs.begin',
-        'jobs.workstation.quiet', 'jobs.wsl.platform.mocked', 'shell.chrome', 'jobs.ok', 'oobe.dismiss')
+        'jobs.workstation.quiet', 'jobs.wsl.platform.mocked', 'shell.chrome', 'jobs.ok', 'oobe.dismiss',
+        'shell.chrome.live', 'shell.chrome.settled')
     ($guest | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Guest-EvidencePath $dmaResumeOnly) -Encoding utf8
     $r = Invoke-StaticAssert $dmaResumeOnly
     if ($r.Code -eq 0) { throw 'settle.resumeOk without checkpoint.resume must fail DMA gate' }
@@ -117,7 +118,8 @@ try {
     $guest = Get-Content -LiteralPath (Guest-EvidencePath $nooobe) -Raw | ConvertFrom-Json
     $guest.phases = @(
         'shell.firstPaint', 'settle.begin', 'settle.deviceRegionOk', 'settle.ok', 'jobs.begin',
-        'jobs.workstation.quiet', 'jobs.wsl.platform.mocked', 'shell.chrome', 'jobs.ok')
+        'jobs.workstation.quiet', 'jobs.wsl.platform.mocked', 'shell.chrome', 'jobs.ok',
+        'shell.chrome.live', 'shell.chrome.settled')
     ($guest | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Guest-EvidencePath $nooobe) -Encoding utf8
     $r = Invoke-StaticAssert $nooobe
     if ($r.Code -eq 0) { throw 'missing oobe.dismiss must fail' }
@@ -186,7 +188,7 @@ try {
     $guest.phases = @(
         'shell.firstPaint', 'settle.begin', 'settle.deviceRegionOk', 'settle.ok', 'jobs.begin',
         'jobs.workstation.quiet', 'jobs.wsl.platform.mocked', 'removed.appx.online.Microsoft.BingNews',
-        'shell.chrome', 'jobs.ok', 'oobe.dismiss')
+        'shell.chrome', 'jobs.ok', 'oobe.dismiss', 'shell.chrome.live', 'shell.chrome.settled')
     ($guest | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Guest-EvidencePath $nodeprov) -Encoding utf8
     $r = Invoke-StaticAssert $nodeprov
     if ($r.Code -eq 0) { throw 'online remove without deprovision mark must fail' }

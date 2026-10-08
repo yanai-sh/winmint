@@ -38,7 +38,8 @@ internal static class ProvisioningSessionTestFakes
         TimeProvider? time = null,
         ISplashPresenter? splash = null) =>
         new(
-            Time: time ?? TimeProvider.System,
+            // Manual clock so live-chrome sticky streak Delays do not wall-clock the suite.
+            Time: time ?? new ManualTimeProvider(),
             Guest: guest,
             Splash: splash ?? new RecordingSplashPresenter(),
             Evidence: evidence);
@@ -142,6 +143,12 @@ internal static class ProvisioningSessionTestFakes
 
         public Func<ShellChromeRequest, bool> ApplyShellChromeCallback { get; init; } = static _ => true;
 
+        public Func<bool> IsExplorerProcessRunningCallback { get; init; } = static () => true;
+
+        public Action TryStartExplorerIfMissingCallback { get; init; } = static () => { };
+
+        public Func<bool> IsLiveShellChromeStickyCallback { get; init; } = static () => true;
+
         public List<ShellChromeRequest> ShellChromeRequests { get; } = [];
 
         public List<IReadOnlyList<string>> WslTerminalMockStages { get; } = [];
@@ -163,6 +170,12 @@ internal static class ProvisioningSessionTestFakes
             ShellChromeRequests.Add(request);
             return ApplyShellChromeCallback(request);
         }
+
+        public bool IsExplorerProcessRunning() => IsExplorerProcessRunningCallback();
+
+        public void TryStartExplorerIfMissing() => TryStartExplorerIfMissingCallback();
+
+        public bool IsLiveShellChromeSticky() => IsLiveShellChromeStickyCallback();
 
         public void TryStageWslTerminalMock(IReadOnlyList<string> distroNames) =>
             WslTerminalMockStages.Add(distroNames);

@@ -268,6 +268,48 @@ public static partial class ProvisioningSession
                 firstPaintMs).ConfigureAwait(false);
         }
 
+        // Keep Autologon across Supervisor exit: residue schedules HKCU RunOnce clear so
+        // Winlogon shell-exit logoff can re-autologon into explorer (not LogonUI forever).
+        SessionStatus? explorerWait = await WaitForExplorerReadyAsync(
+                bundle,
+                env,
+                phases,
+                tenureStartTs,
+                ct)
+            .ConfigureAwait(false);
+        if (explorerWait is { } explorerMissing)
+        {
+            return await FailOpenAsync(
+                    bundle,
+                    env,
+                    phases,
+                    emitted,
+                    explorerMissing,
+                    dwell: true,
+                    firstPaintMs)
+                .ConfigureAwait(false);
+        }
+
+        SessionStatus? liveChrome = await SettleLiveShellChromeAsync(
+                bundle,
+                env,
+                phases,
+                tenureStartTs,
+                ct)
+            .ConfigureAwait(false);
+        if (liveChrome is { } chromeFailed)
+        {
+            return await FailOpenAsync(
+                    bundle,
+                    env,
+                    phases,
+                    emitted,
+                    chromeFailed,
+                    dwell: true,
+                    firstPaintMs)
+                .ConfigureAwait(false);
+        }
+
         EvidenceSnapshot snap = env.Evidence.Write(
             new ProvisioningEvidenceFile(
                 SchemaVersion: EvidenceSchemaVersion,
@@ -281,6 +323,183 @@ public static partial class ProvisioningSession
         TryEraseResidue(env);
 
         return new SessionResult(SessionOutcome.Complete, jobs.Status, emitted);
+    }
+
+    /// <summary>
+    /// Poll until an explorer process is running (SettleDeadline), nudging start once at entry.
+    /// </summary>
+    private static async Task<SessionStatus?> WaitForExplorerReadyAsync(
+        ProvisioningBundle bundle,
+        ShellEnvironment env,
+        List<string> phases,
+        long tenureStartTs,
+        CancellationToken ct)
+    {
+        env.Guest.TryStartExplorerIfMissing();
+        long waitStartTs = env.Time.GetTimestamp();
+
+        while (!env.Guest.IsExplorerProcessRunning())
+        {
+            if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout)
+                || env.Time.GetElapsedTime(waitStartTs) >= bundle.Policy.SettleDeadline)
+            {
+                return new SessionStatus(
+                    "shell.explorerMissing",
+                    "explorer.exe did not start after Shell unlock.");
+            }
+
+            try
+            {
+                await Task.Delay(bundle.Policy.SettlePollInterval, env.Time, ct)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return new SessionStatus("shell.cancelled", "Shell tenure cancelled.");
+            }
+        }
+
+        Note(env, phases, new SessionStatus("shell.explorerReady", "Explorer process is running."));
+        return null;
+    }
+
+    /// <summary>
+    /// Reapply chrome after explorer-up until bloom/search survive a poll streak
+    /// (explorer first-run overwrites Wallpaper/Searchbox after a single sticky read).
+    /// </summary>
+    private static async Task<SessionStatus?> SettleLiveShellChromeAsync(
+        ProvisioningBundle bundle,
+        ShellEnvironment env,
+        List<string> phases,
+        long tenureStartTs,
+        CancellationToken ct)
+    {
+        SessionStatus? applied = ApplyLiveShellChrome(bundle, env);
+        if (applied is not null)
+        {
+            return applied;
+        }
+
+        Note(
+            env,
+            phases,
+            new SessionStatus(
+                "shell.chrome.live",
+                "Shell chrome reapplied after Explorer was ready."));
+
+        // ponytail: one sticky sample is a false settle — explorer resets img19/Searchbox=2
+        // after first-run. Hold ~20s of consecutive sticky polls (re-stamp when soft).
+        // SettleDeadline=0 (unit BundleFastSettle): single sticky sample is enough.
+        TimeSpan poll = bundle.Policy.SettlePollInterval;
+        TimeSpan deadline = bundle.Policy.SettleDeadline;
+        if (deadline <= TimeSpan.Zero)
+        {
+            if (env.Guest.IsLiveShellChromeSticky())
+            {
+                Note(
+                    env,
+                    phases,
+                    new SessionStatus(
+                        "shell.chrome.settled",
+                        "Live shell chrome stuck after Explorer."));
+                return null;
+            }
+
+            return new SessionStatus(
+                "shell.chrome.liveUnstable",
+                "Live shell chrome did not stick after Explorer was ready.");
+        }
+
+        // Cap streak to SettleDeadline so TightSettlePolicy (4s) unit tests still Complete.
+        int requiredStickyStreak = 1;
+        if (poll > TimeSpan.Zero)
+        {
+            int want = Math.Max(2, (int)Math.Ceiling(TimeSpan.FromSeconds(20) / poll));
+            int maxPolls = Math.Max(1, (int)(deadline / poll));
+            requiredStickyStreak = Math.Min(want, maxPolls);
+        }
+
+        int stickyStreak = 0;
+        long settleStartTs = env.Time.GetTimestamp();
+        while (env.Time.GetElapsedTime(settleStartTs) < deadline)
+        {
+            if (IsTimedOut(env, tenureStartTs, bundle.Policy.WallClockTimeout))
+            {
+                return TimeoutStatus();
+            }
+
+            if (!env.Guest.IsExplorerProcessRunning())
+            {
+                return new SessionStatus(
+                    "shell.explorerMissing",
+                    "explorer.exe exited while settling live shell chrome.");
+            }
+
+            if (env.Guest.IsLiveShellChromeSticky())
+            {
+                stickyStreak++;
+                if (stickyStreak >= requiredStickyStreak)
+                {
+                    Note(
+                        env,
+                        phases,
+                        new SessionStatus(
+                            "shell.chrome.settled",
+                            "Live shell chrome stuck after Explorer."));
+                    return null;
+                }
+            }
+            else
+            {
+                stickyStreak = 0;
+                SessionStatus? retry = ApplyLiveShellChrome(bundle, env);
+                if (retry is not null)
+                {
+                    return retry;
+                }
+            }
+
+            try
+            {
+                await Task.Delay(poll, env.Time, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return new SessionStatus("shell.cancelled", "Shell tenure cancelled.");
+            }
+        }
+
+        return new SessionStatus(
+            "shell.chrome.liveUnstable",
+            "Live shell chrome did not stick after Explorer was ready.");
+    }
+
+    private static SessionStatus? ApplyLiveShellChrome(
+        ProvisioningBundle bundle,
+        ShellEnvironment env)
+    {
+        try
+        {
+            IReadOnlyList<string> ids = ProvisioningJobRunner.CollectSelectedWingetIds(bundle.Jobs);
+            if (!env.Guest.ApplyShellChrome(
+                    new ShellChromeRequest(
+                        FailOpen: false,
+                        SelectedWingetIds: ids,
+                        RequireSelectedPins: bundle.PackageStrict)))
+            {
+                return new SessionStatus(
+                    "shell.chrome.liveFailed",
+                    "Live shell chrome apply failed after Explorer was ready.");
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new SessionStatus(
+                "shell.chrome.liveFailed",
+                $"Live shell chrome apply failed: {ex.Message}");
+        }
     }
 
     /// <summary>

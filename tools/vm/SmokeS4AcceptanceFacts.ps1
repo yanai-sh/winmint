@@ -9,6 +9,8 @@ function Get-WinMintSmokeS4AcceptanceFacts {
             'jobs.workstation.quiet'
             'jobs.wsl.platform.mocked'
             'shell.chrome'
+            'shell.chrome.live'
+            'shell.chrome.settled'
         )
         SplashBeforeSettle = [pscustomobject]@{
             FirstPaintPhase = 'shell.firstPaint'

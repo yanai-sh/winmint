@@ -20,7 +20,7 @@ internal static partial class ProvisioningJobRunner
         string? setup = candidates.FirstOrDefault(File.Exists);
         if (setup is null)
         {
-            // Already gone — product-constant uninstall is idempotent.
+            // Offline EraseOfflineOneDrive removed Setup — FirstLogon is a no-op (no UAC).
             return null;
         }
 

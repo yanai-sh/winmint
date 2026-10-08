@@ -78,5 +78,60 @@ public class QuietChromeFactsTests
             Assert.True(quiet.TryGetValue(name, out int got), name);
             Assert.Equal(value, got);
         }
+
+        // Live-only taskbar Advanced keys Smoke asserts are a subset of QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced.
+        foreach (string liveOnly in QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced)
+        {
+            Assert.True(quiet.ContainsKey(liveOnly), liveOnly);
+        }
+    }
+
+    [Fact]
+    public void SmokeS4AcceptanceFacts_keeps_harness_only_fields_out_of_Contracts()
+    {
+        // RequiredPhases / DmaOkAnyOf / PackageStrictExtraPins are Smoke harness gates — not QuietChromeFacts.
+        string script = Path.Combine(TestRepo.Root, "tools", "vm", "SmokeS4AcceptanceFacts.ps1");
+        string escaped = script.Replace("'", "''", StringComparison.Ordinal);
+        string ps =
+            ". '" + escaped + "'\n"
+            + "$f = Get-WinMintSmokeS4AcceptanceFacts\n"
+            + "[pscustomobject]@{\n"
+            + "  RequiredPhases = @($f.RequiredPhases)\n"
+            + "  HasDmaOkAnyOf = [bool]($null -ne $f.DmaOkAnyOf)\n"
+            + "  PackageStrictExtraPinCount = @($f.PackageStrictExtraPins.Keys).Count\n"
+            + "} | ConvertTo-Json -Compress\n";
+
+        using Process process = new()
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "pwsh",
+                ArgumentList = { "-NoProfile", "-Command", ps },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            },
+        };
+        _ = process.Start();
+        string stdout = process.StandardOutput.ReadToEnd();
+        string stderr = process.StandardError.ReadToEnd();
+        Assert.True(process.WaitForExit(30_000), "pwsh timed out");
+        Assert.True(process.ExitCode == 0, stderr + stdout);
+
+        using JsonDocument doc = JsonDocument.Parse(stdout.Trim());
+        JsonElement root = doc.RootElement;
+        string[] phases =
+        [
+            .. root.GetProperty("RequiredPhases").EnumerateArray().Select(static e => e.GetString()!),
+        ];
+        Assert.Contains("shell.firstPaint", phases);
+        Assert.Contains("shell.chrome", phases);
+        Assert.True(root.GetProperty("HasDmaOkAnyOf").GetBoolean());
+        Assert.True(root.GetProperty("PackageStrictExtraPinCount").GetInt32() > 0);
+
+        // Contracts must not grow harness-only phase catalogs.
+        Assert.Null(typeof(QuietChromeFacts).GetProperty("RequiredPhases"));
+        Assert.Null(typeof(QuietChromeFacts).GetProperty("DmaOkAnyOf"));
+        Assert.Null(typeof(QuietChromeFacts).GetProperty("PackageStrictExtraPins"));
     }
 }

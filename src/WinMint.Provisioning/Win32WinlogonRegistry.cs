@@ -10,6 +10,9 @@ namespace WinMint.Provisioning;
 public sealed class Win32WinlogonRegistry : IWinlogonRegistry
 {
     private const string WinlogonSubKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon";
+    private const string ClearAutoLogonRunOnceName = "WinMintClearAutoLogon";
+    private const string WinlogonRegPath = @"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon";
+
 
     public void SetAutoLogon(string username, string password)
     {
@@ -30,6 +33,38 @@ public sealed class Win32WinlogonRegistry : IWinlogonRegistry
         try { key.DeleteValue("DefaultPassword", throwOnMissingValue: false); } catch { /* best-effort */ }
         try { key.DeleteValue("DefaultUserName", throwOnMissingValue: false); } catch { /* best-effort */ }
         try { key.DeleteValue("DefaultDomainName", throwOnMissingValue: false); } catch { /* best-effort */ }
+    }
+
+    /// <summary>
+    /// Schedule Autologon clear + live chrome re-stamp on next interactive logon (HKCU RunOnce).
+    /// Supervisor is Winlogon's Shell: exiting logs the session off. Clearing Autologon
+    /// before that exit leaves LogonUI with Shell=explorer.exe and no explorer process.
+    /// HKCU RunOnce survives in NTUSER across that logoff; Autologon re-enters, explorer
+    /// starts as Shell, then RunOnce re-stamps bloom/search (explorer first-run race) and
+    /// clears Autologon stamps (Users ACE on Winlogon from GrantShellUnlockAccess).
+    /// </summary>
+    internal static void ScheduleDeferredAutoLogonClear()
+    {
+        // ponytail: HKCU RunOnce; ceiling = stamps linger until next logon if Winlogon
+        // never logs off (rare). Upgrade: breakaway delayed clear if that path shows up.
+        string wallpaper = ShellChromeLayout.WallpaperPath;
+        int searchMode = Win32WorkstationQuiet.SearchboxTaskbarMode;
+        string stampChrome =
+            "reg.exe add \"HKCU\\Control Panel\\Desktop\" /v Wallpaper /t REG_SZ /d \"" + wallpaper + "\" /f" +
+            " & reg.exe add \"HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Search\" /v SearchboxTaskbarMode /t REG_DWORD /d " + searchMode + " /f" +
+            " & reg.exe add \"HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DesktopSpotlight\\Settings\" /v EnabledState /t REG_DWORD /d 0 /f" +
+            " & rundll32.exe user32.dll,UpdatePerUserSystemParameters";
+        string clearCmd =
+            stampChrome +
+            " & reg.exe add \"" + WinlogonRegPath + "\" /v AutoAdminLogon /t REG_SZ /d 0 /f" +
+            " & reg.exe delete \"" + WinlogonRegPath + "\" /v DefaultPassword /f" +
+            " & reg.exe delete \"" + WinlogonRegPath + "\" /v DefaultUserName /f" +
+            " & reg.exe delete \"" + WinlogonRegPath + "\" /v DefaultDomainName /f" +
+            " & " + stampChrome;
+        using RegistryKey key = Registry.CurrentUser.CreateSubKey(
+            @"Software\Microsoft\Windows\CurrentVersion\RunOnce")
+            ?? throw new InvalidOperationException("Cannot open HKCU RunOnce for Autologon clear.");
+        key.SetValue(ClearAutoLogonRunOnceName, "cmd.exe /c " + clearCmd, RegistryValueKind.String);
     }
 
     public string? GetDefaultUserName()

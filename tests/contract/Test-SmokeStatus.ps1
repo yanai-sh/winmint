@@ -65,6 +65,13 @@ if ($smoke -notmatch 'Resolve-WinMintSmokeGuestCredential') {
 if ($smoke -notmatch 'ExpectNativePackageAudit:\$expectNativePackageAudit') {
     throw 'assert splat must bind -ExpectNativePackageAudit as a switch, not a positional string'
 }
+if ($smoke -notmatch "kind -ceq 'package\.auditNative'") {
+    throw 'ExpectNativePackageAudit must key off payload/jobs.json package.auditNative (not Profile.packages.winget)'
+}
+$assertSmoke = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Assert-SmokeEvidence.ps1') -Raw -Encoding utf8
+if ($assertSmoke -match 'Profile had winget packages') {
+    throw 'Assert-SmokeEvidence must not treat authored Profile.packages.winget as guest plan truth'
+}
 if ($smoke -notmatch 'Save-SmokeVmScreenshot') {
     throw 'Invoke-Smoke must capture a VM console screenshot on failure/half-stall'
 }

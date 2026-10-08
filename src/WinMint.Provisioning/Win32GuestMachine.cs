@@ -61,6 +61,20 @@ public sealed class Win32GuestMachine : IGuestMachine
     public bool ApplyShellChrome(ShellChromeRequest request) =>
         OperatingSystem.IsWindows() && Win32ShellChrome.Apply(request);
 
+    public bool IsExplorerProcessRunning() =>
+        OperatingSystem.IsWindows() && Win32ExplorerProcess.IsRunning();
+
+    public void TryStartExplorerIfMissing()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Win32ExplorerProcess.TryStartIfMissing();
+        }
+    }
+
+    public bool IsLiveShellChromeSticky() =>
+        OperatingSystem.IsWindows() && Win32ShellChrome.IsLiveSticky();
+
     public void TryStageWslTerminalMock(IReadOnlyList<string> distroNames)
     {
         if (OperatingSystem.IsWindows())

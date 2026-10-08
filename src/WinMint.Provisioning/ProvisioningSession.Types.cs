@@ -113,6 +113,15 @@ public interface IGuestMachine
 
     bool ApplyShellChrome(ShellChromeRequest request);
 
+    /// <summary>True when an <c>explorer</c> process is running (handoff / live chrome gate).</summary>
+    bool IsExplorerProcessRunning();
+
+    /// <summary>Best-effort: start explorer.exe when none is running.</summary>
+    void TryStartExplorerIfMissing();
+
+    /// <summary>True when bloom wallpaper + search hide still match live chrome.</summary>
+    bool IsLiveShellChromeSticky();
+
     void TryStageWslTerminalMock(IReadOnlyList<string> distroNames);
 
     void SuppressWslOobe();

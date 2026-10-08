@@ -18,7 +18,7 @@ public static class Win32OobeOverlay
     {
         TryStampSetupComplete();
         TryTerminateOverlayHosts();
-        TryStartExplorerIfMissing();
+        Win32ExplorerProcess.TryStartIfMissing();
     }
 
     /// <summary>
@@ -78,23 +78,4 @@ public static class Win32OobeOverlay
         }
     }
 
-    private static void TryStartExplorerIfMissing()
-    {
-        if (Process.GetProcessesByName("explorer").Length > 0)
-        {
-            return;
-        }
-
-        try
-        {
-            string explorer = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-                "explorer.exe");
-            Process.Start(new ProcessStartInfo(explorer) { UseShellExecute = true });
-        }
-        catch
-        {
-            // Winlogon may launch explorer on Supervisor exit
-        }
-    }
 }

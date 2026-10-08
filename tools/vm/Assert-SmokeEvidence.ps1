@@ -101,6 +101,8 @@ $requiredPhaseThrows = [ordered]@{
     'jobs.workstation.quiet'   = 'FirstLogon quiet chrome missing: phases must contain jobs.workstation.quiet'
     'jobs.wsl.platform.mocked' = 'hypervisor WSL mock missing: phases must contain jobs.wsl.platform.mocked'
     'shell.chrome'             = 'shell chrome missing: phases must contain shell.chrome'
+    'shell.chrome.live'        = 'live shell chrome missing: phases must contain shell.chrome.live'
+    'shell.chrome.settled'     = 'settled shell chrome missing: phases must contain shell.chrome.settled'
 }
 foreach ($phase in @($s4Facts.RequiredPhases)) {
     if ($phase -ceq $firstPaintPhase) { continue }
@@ -230,7 +232,7 @@ if ($firstPaintMs -gt $budgetMs) {
 if ($ExpectNativePackageAudit) {
     $nativePath = Join-Path $EvidenceDir 'guest\native-packages.json'
     if (-not (Test-Path -LiteralPath $nativePath)) {
-        throw "native package audit missing: expected guest/native-packages.json (Profile had winget packages)"
+        throw "native package audit missing: expected guest/native-packages.json (plan had package.auditNative)"
     }
     $native = Get-Content -LiteralPath $nativePath -Raw -Encoding utf8 | ConvertFrom-Json
     if ([string]$native.schemaVersion -ne 'winmint.native-packages/v1') {

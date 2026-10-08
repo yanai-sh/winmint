@@ -13,7 +13,9 @@ public sealed class Win32ResidueCleaner : IResidueCleaner
     public Win32ResidueCleaner(
         ILogger? logger = null,
         string? windowsDirectory = null)
-        : this(Win32WinlogonRegistry.ClearAutoLogon, logger, windowsDirectory)
+        // Unlock restores Shell=explorer, but Supervisor exit still logoffs the session.
+        // Schedule HKCU RunOnce: re-stamp wallpaper/search after Autologon re-entry, then clear Autologon.
+        : this(Win32WinlogonRegistry.ScheduleDeferredAutoLogonClear, logger, windowsDirectory)
     {
     }
 

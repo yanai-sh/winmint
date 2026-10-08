@@ -165,6 +165,10 @@ internal static class Program
                 $"stall {stallLeft}m  wall {wallLeft}m"));
         }
 
+        applyStage ??= string.Empty;
+        rows ??= [];
+        events ??= [];
+
         string stageLine = string.IsNullOrWhiteSpace(applyStage) ? "-" : applyStage;
         string proof = proofPct is null ? string.Empty : $"  proof {proofPct.Value:0.#}%";
         header.Add(new Markup($"stage [cyan]{Markup.Escape(stageLine)}[/]  {Markup.Escape(alive)}{proof}"));
@@ -177,6 +181,11 @@ internal static class Program
         table.Border(TableBorder.Rounded);
         foreach (string row in rows)
         {
+            if (string.IsNullOrEmpty(row))
+            {
+                continue;
+            }
+
             string[] parts = SplitRow(row);
             table.AddRow(
                 new Markup(Markup.Escape(parts[0])),
@@ -187,7 +196,8 @@ internal static class Program
 
         string footer = "[dim]Ctrl+C to quit[/]";
         ApplyEvent? lastFail = events.LastOrDefault(e =>
-            string.Equals(e.Kind, "opcode.end", StringComparison.Ordinal)
+            e is not null
+            && string.Equals(e.Kind, "opcode.end", StringComparison.Ordinal)
             && string.Equals(e.Outcome, "fail", StringComparison.Ordinal));
         if (lastFail is not null)
         {
@@ -339,11 +349,11 @@ internal static class Program
         }
         catch (IOException)
         {
-            return default;
+            return new ApplyStatusSnap(string.Empty, string.Empty, null);
         }
         catch (UnauthorizedAccessException)
         {
-            return default;
+            return new ApplyStatusSnap(string.Empty, string.Empty, null);
         }
     }
 

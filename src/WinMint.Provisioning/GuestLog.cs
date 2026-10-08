@@ -22,7 +22,7 @@ internal static partial class GuestLog
     [LoggerMessage(EventId = 6, Level = LogLevel.Error, Message = "shell.crash")]
     public static partial void ShellCrash(ILogger logger, Exception exception);
 
-    [LoggerMessage(EventId = 8, Level = LogLevel.Information, Message = "residue: cleared AutoAdminLogon stamps")]
+    [LoggerMessage(EventId = 8, Level = LogLevel.Information, Message = "residue: scheduled AutoAdminLogon clear (HKCU RunOnce)")]
     public static partial void ResidueCleared(ILogger logger);
 
     [LoggerMessage(EventId = 9, Level = LogLevel.Warning, Message = "residue: ClearAutoLogon failed: {Message}")]
