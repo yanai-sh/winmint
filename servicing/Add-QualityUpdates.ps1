@@ -11,6 +11,7 @@ param(
 . (Join-Path $PSScriptRoot 'Get-WimMetadata.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintQualityUpdate.ps1')
 . (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
+. (Join-Path $PSScriptRoot 'Write-WinMintApplyEvent.ps1')
 . (Join-Path $PSScriptRoot '..\tools\host\Write-WinMintHostProgress.ps1')
 
 function Write-QualityEvidence {
@@ -34,14 +35,24 @@ function Get-WinMintHeartbeatSha256 {
         if ($total -le 0) { throw "quality hash empty: $Path" }
         $done = [int64]0
         $mark = [int64]256MB
-        Write-Output ("quality hash 0% 0/{0:n0} MB" -f ($total / 1MB))
+        $sum0 = ("quality hash 0% 0/{0:n0} MB" -f ($total / 1MB))
+        Write-Output $sum0
+        if ((Get-Command Write-WinMintApplyEvent -ErrorAction SilentlyContinue) -and $WorkDirectory) {
+            Write-WinMintApplyEvent -Path (Join-Path $WorkDirectory 'apply-events.jsonl') -Kind 'proof' `
+                -Opcode 'AddQualityUpdates' -Label 'quality-hash' -Percent 0 -Summary $sum0
+        }
         Write-WinMintHostProgress -Activity 'quality hash' -Status ("0/{0:n0} MB" -f ($total / 1MB)) -PercentComplete 0
         while (($n = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
             $null = $sha256.TransformBlock($buffer, 0, $n, $null, 0)
             $done += $n
             if ($done -ge $mark -or $done -eq $total) {
                 $pct = [math]::Floor(100.0 * $done / $total)
-                Write-Output ("quality hash {0}% {1:n0}/{2:n0} MB" -f $pct, ($done / 1MB), ($total / 1MB))
+                $sum = ("quality hash {0}% {1:n0}/{2:n0} MB" -f $pct, ($done / 1MB), ($total / 1MB))
+                Write-Output $sum
+                if ((Get-Command Write-WinMintApplyEvent -ErrorAction SilentlyContinue) -and $WorkDirectory) {
+                    Write-WinMintApplyEvent -Path (Join-Path $WorkDirectory 'apply-events.jsonl') -Kind 'proof' `
+                        -Opcode 'AddQualityUpdates' -Label 'quality-hash' -Percent $pct -Summary $sum
+                }
                 Write-WinMintHostProgress -Activity 'quality hash' -Status ("{0:n0}/{1:n0} MB" -f ($done / 1MB), ($total / 1MB)) -PercentComplete ([int]$pct)
                 while ($mark -le $done) { $mark += 256MB }
             }

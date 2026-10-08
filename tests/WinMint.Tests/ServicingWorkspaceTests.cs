@@ -18,6 +18,7 @@ public class ServicingWorkspaceTests
         Assert.Equal(Path.Combine(root, "expected-evidence.json"), ws.ExpectedEvidence);
         Assert.Equal(Path.Combine(root, "failure.json"), ws.Failure);
         Assert.Equal(Path.Combine(root, "apply-status.txt"), ws.ApplyStatus);
+        Assert.Equal(Path.Combine(root, ApplyEvents.FileName), ws.ApplyEventsPath);
         Assert.Equal(Path.Combine(root, "stages.json"), ws.Stages);
         Assert.Equal(Path.Combine(root, "install.wim"), ws.InstallWim);
         Assert.Equal(Path.Combine(root, "unattend.xml"), ws.Unattend);

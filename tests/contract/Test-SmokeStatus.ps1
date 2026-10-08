@@ -9,11 +9,17 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $smoke = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Invoke-Smoke.ps1') -Raw -Encoding utf8
 if ($smoke -notmatch 'tools[/\\]vm[/\\]SmokeStatus\.ps1') { throw 'Invoke-Smoke must dot-source SmokeStatus.ps1' }
 if ($smoke -notmatch 'Get-WinMintApplyHostFailure') { throw 'Apply wait must use Get-WinMintApplyHostFailure' }
+if ($smoke -notmatch 'Format-WinMintServicingLockFailure') { throw 'Apply catch must rewrite servicing already active' }
 if ($smoke -notmatch "Resolve-SmokePhase -HostStage failed") { throw 'Apply/wait failures must write phase=failed' }
 if ($smoke -match 'Get-Content[^\n]*smoke-status\.json') { throw 'must not read smoke-status.json as control plane' }
 if ($smoke -notmatch 'Get-SmokeWaitTick') { throw 'Invoke-Smoke wait loop must call Get-SmokeWaitTick' }
-$statusSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/SmokeStatus.ps1') -Raw -Encoding utf8
-if ($statusSrc -notmatch 'EMPTY_VHD:') { throw 'empty-VHD throw prefix missing (operator copy)' }
+$statusFacade = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/SmokeStatus.ps1') -Raw -Encoding utf8
+if ($statusFacade -notmatch 'SmokeConverge\.ps1') { throw 'SmokeStatus facade must load SmokeConverge.ps1' }
+if ($statusFacade -notmatch 'SmokeWatchStatus\.ps1') { throw 'SmokeStatus facade must load SmokeWatchStatus.ps1' }
+$convergeSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/SmokeConverge.ps1') -Raw -Encoding utf8
+$watchSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/SmokeWatchStatus.ps1') -Raw -Encoding utf8
+$statusSrc = $convergeSrc + "`n" + $watchSrc
+if ($convergeSrc -notmatch 'EMPTY_VHD:') { throw 'empty-VHD throw prefix missing (operator copy)' }
 if ($smoke -notmatch '\[Diagnostics\.Stopwatch\]') { throw 'stall/wall/empty-vhd must use Stopwatch, not UtcNow deadlines' }
 if ($smoke -notmatch 'Select-WinMintGuestEvidencePath') { throw 'guest evidence must select by outcome, not LastWriteTime' }
 if ($smoke -notmatch 'Get-WinMintGuestHandoffReadiness') {
@@ -26,14 +32,26 @@ if ($assertSrc -notmatch 'Get-WinMintGuestHandoffReadiness') {
 if ($assertSrc -match "statusCode -ne 'jobs\.ok'") {
     throw 'Assert-SmokeEvidence must not restate jobs.ok statusCode; handoff readiness owns that fact'
 }
-if ($statusSrc -notmatch 'function Get-WinMintGuestHandoffReadiness') {
-    throw 'SmokeStatus must define Get-WinMintGuestHandoffReadiness'
+if ($convergeSrc -notmatch 'function Get-WinMintGuestHandoffReadiness') {
+    throw 'SmokeConverge must define Get-WinMintGuestHandoffReadiness'
+}
+if ($assertSrc -notmatch 'SmokeConverge\.ps1') {
+    throw 'Assert-SmokeEvidence must dot-source SmokeConverge (handoff locality)'
+}
+if ($watchSrc -notmatch 'function Get-SmokeWatchVerdict') {
+    throw 'SmokeWatchStatus must define Get-SmokeWatchVerdict'
 }
 if ($smoke -match 'process-exited-early' -or $smoke -match 'Find-SmokePids') {
     throw 'Invoke-Smoke must not infer harness death from process lists'
 }
-if ($smoke -notmatch "Remove-Item[^\n]*priorProjections" -or $smoke -notmatch "'evidence\.json', 'stages\.json'") {
+if ($smoke -notmatch 'priorProjections' -or $smoke -notmatch "'evidence\.json'" -or $smoke -notmatch "'stages\.json'" -or $smoke -notmatch "'expected-evidence\.json'") {
     throw 'Invoke-Smoke must clear prior-run Apply projections (apply-status/failure/evidence/stages/expected) before Apply'
+}
+if ($smoke -notmatch "'apply-events\.jsonl'") {
+    throw 'Invoke-Smoke must clear apply-events.jsonl with prior-run Apply projections'
+}
+if ($smoke -notmatch 'publish-watch') {
+    throw 'Invoke-Smoke must just publish-watch before spawning Spectre Watch'
 }
 if ($smoke -notmatch 'if \(\$SkipApply\) \{ Resolve-WinMintOutputIso') {
     throw 'Full runs must not resolve the Output ISO before Apply (stale winmint_*.iso would fail-close a fresh Apply)'
@@ -71,6 +89,12 @@ if ($smoke -notmatch 'LastProbeError') {
 if ($smoke -notmatch 'ProfilePath') {
     throw 'Invoke-Smoke must take -ProfilePath (not the automatic \$PROFILE)'
 }
+if ($smoke -notmatch 'apply-smoke-maintainer') {
+    throw 'Invoke-Smoke must Apply via just apply-smoke-maintainer (stubs + smoke plumbing)'
+}
+if ($smoke -match 'apply-maintainer \$Iso \$Work \$applyProfilePath true') {
+    throw 'Invoke-Smoke must not use opaque apply-maintainer … true for Smoke Apply'
+}
 $hostProgress = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Write-WinMintHostProgress.ps1') -Raw -Encoding utf8
 if ($hostProgress -notmatch '-NonInteractive') {
     throw 'Watcher spawn must pass -NonInteractive so prompts fail closed'
@@ -86,6 +110,15 @@ $justfile = Get-Content -LiteralPath (Join-Path $repo 'Justfile') -Raw -Encoding
 if ($justfile -notmatch 'NonInteractive') {
     throw 'just smoke / smoke-assert must pass -NonInteractive'
 }
+if ($justfile -notmatch '(?m)^publish-watch:') {
+    throw 'Justfile must define publish-watch for Spectre host Watch'
+}
+if ($justfile -match '(?ms)^watch-smoke[^\n]*:\s*\r?\n\s+pwsh[^\n]*-NonInteractive') {
+    throw 'just watch-smoke must not use -NonInteractive (Spectre Live needs a console)'
+}
+if ($justfile -match '(?ms)^watch-apply[^\n]*:\s*\r?\n\s+pwsh[^\n]*-NonInteractive') {
+    throw 'just watch-apply must not use -NonInteractive (Spectre Live needs a console)'
+}
 if ($justfile -notmatch 'STALL=') {
     throw 'just smoke must expose STALL'
 }
@@ -98,19 +131,25 @@ if ($justfile -match '(?ms)^smoke-maintainer[^\n]*:\s*\r?\n\s+just smoke ') {
 if ($justfile -notmatch 'Invoke-SmokeRecipe\.ps1') {
     throw 'just smoke recipes must call tools/vm/Invoke-SmokeRecipe.ps1'
 }
+if ($justfile -notmatch '(?m)^apply-smoke-maintainer ') {
+    throw 'Justfile must define apply-smoke-maintainer (Smoke Apply intent)'
+}
+if ($justfile -notmatch '--smoke-plumbing') {
+    throw 'apply-smoke-maintainer must pass --smoke-plumbing'
+}
 $recipe = Get-Content -LiteralPath (Join-Path $repo 'tools\vm\Invoke-SmokeRecipe.ps1') -Raw -Encoding utf8
 if ($recipe -notmatch 'Invoke-Smoke\.ps1') { throw 'Invoke-SmokeRecipe must delegate to Invoke-Smoke.ps1' }
 if ($recipe -notmatch 'Maintainer') { throw 'Invoke-SmokeRecipe must support -Maintainer' }
 
 $watch = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Watch-Host.ps1') -Raw -Encoding utf8
-if ($watch -notmatch 'Get-SmokeWatchVerdict') { throw 'Watch-Host smoke must call Get-SmokeWatchVerdict' }
-if ($watch -notmatch 'PriorRunId') { throw 'Watch-Host smoke must pass -PriorRunId' }
-if ($watch -notmatch 'Format-WinMintHostWatch') { throw 'Watch-Host must render via Format-WinMintHostWatch' }
-if ($watch -match 'Get-Date') { throw 'Watch-Host must not use Get-Date as a dashboard clock' }
-if ($watch -notmatch '\[Diagnostics\.Stopwatch\]') { throw 'Watch-Host smoke age must use Stopwatch' }
+if ($watch -notmatch 'WinMint\.Watch') { throw 'Watch-Host smoke must launch WinMint.Watch' }
+if ($watch -notmatch 'PriorRunId') { throw 'Watch-Host smoke must pass prior run id to WinMint.Watch' }
 if ($watch -notmatch 'PSBoundParameters' -or $watch -notmatch 'ContainsKey') {
     throw 'Watch-Host must not treat the post-stamp file as PriorRunId when the parent bound leftover/empty'
 }
+$watchCs = Get-Content -LiteralPath (Join-Path $repo 'src/WinMint.Watch/Program.cs') -Raw -Encoding utf8
+if ($watchCs -notmatch 'GetSmokeWatchVerdict') { throw 'WinMint.Watch must implement smoke verdict logic' }
+if ($watchCs -notmatch 'Diagnostics\.Stopwatch') { throw 'WinMint.Watch smoke age must use Stopwatch' }
 $spawnAt = $smoke.IndexOf('Start-WinMintHostWatchProcess')
 if ($spawnAt -lt 0) { throw 'Invoke-Smoke must spawn watch via Start-WinMintHostWatchProcess' }
 $spawn = $smoke.Substring($spawnAt, [Math]::Min(400, $smoke.Length - $spawnAt))
@@ -344,6 +383,15 @@ try {
     Set-Content -LiteralPath (Join-Path $applyWork 'apply-status.txt') -Value "stage=failed:AddQualityUpdates`nlog=x" -Encoding utf8
     '{"message":"combined LCU missing SSU"}' | Set-Content -LiteralPath (Join-Path $applyWork 'failure.json') -Encoding utf8
     if ((Get-WinMintApplyHostFailure -WorkDirectory $applyWork) -cne 'combined LCU missing SSU') { throw 'apply-status projects failure.json' }
+    Set-Content -LiteralPath (Join-Path $applyWork 'apply-status.txt') -Value "stage=failed:MountInstallWim`nlog=x" -Encoding utf8
+    '{"message":"servicing already active"}' | Set-Content -LiteralPath (Join-Path $applyWork 'failure.json') -Encoding utf8
+    $lockFail = Get-WinMintApplyHostFailure -WorkDirectory $applyWork
+    if ($lockFail -notmatch 'servicing already active — another Apply holds') {
+        throw "expected servicing-lock fail line, got: $lockFail"
+    }
+    if ((Format-WinMintServicingLockFailure -Message 'boom servicing already active here') -notmatch 'ImageServicing lock') {
+        throw 'Format-WinMintServicingLockFailure must rewrite servicing already active'
+    }
     Set-Content -LiteralPath (Join-Path $applyWork 'apply-status.txt') -Value "stage=MountInstallWim`n" -Encoding utf8
     if ($null -ne (Get-WinMintApplyHostFailure -WorkDirectory $applyWork)) {
         throw 'Get-WinMintApplyHostFailure must ignore a live Apply'

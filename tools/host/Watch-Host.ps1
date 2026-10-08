@@ -22,22 +22,46 @@ $ErrorActionPreference = 'Continue'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 . (Join-Path $repoRoot 'tools/host/Write-WinMintHostProgress.ps1')
 
+function Resolve-WinMintWatchDll {
+    param([Parameter(Mandatory)] [string] $RepoRoot)
+    # Prefer Smoke/host published leaf (just publish-watch → artifacts/watch).
+    $published = Join-Path $RepoRoot 'artifacts/watch/WinMint.Watch.dll'
+    if (Test-Path -LiteralPath $published -PathType Leaf) {
+        return (Resolve-Path -LiteralPath $published).Path
+    }
+    foreach ($cfg in @('Release', 'Debug')) {
+        $candidate = Join-Path $RepoRoot "src/WinMint.Watch/bin/$cfg/net11.0/WinMint.Watch.dll"
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+    $proj = Join-Path $RepoRoot 'src/WinMint.Watch/WinMint.Watch.csproj'
+    if (-not (Test-Path -LiteralPath $proj -PathType Leaf)) { return '' }
+    & dotnet publish $proj -c Release -o (Join-Path $RepoRoot 'artifacts/watch') -v q | Out-Null
+    if ($LASTEXITCODE -ne 0) { return '' }
+    if (Test-Path -LiteralPath $published -PathType Leaf) {
+        return (Resolve-Path -LiteralPath $published).Path
+    }
+    return ''
+}
+
+$watchPriorRunId = ''
 switch ($Kind) {
     'smoke' {
         . (Join-Path $repoRoot 'tools/vm/SmokeStatus.ps1')
         if ([string]::IsNullOrWhiteSpace($Work)) { $Work = Join-Path $repoRoot '.scratch\smoke' }
-        $host.UI.RawUI.WindowTitle = "WinMint host watch — $Work"
-        Write-Host ($PSStyle.Foreground.BrightBlack + 'Close this window to stop watching. Apply/Smoke keep running.' + $PSStyle.Reset)
-        $apply = Join-Path $Work 'apply-status.txt'
         $status = Join-Path $Work 'smoke-status.json'
         if (-not $PSBoundParameters.ContainsKey('PriorRunId')) {
-            $PriorRunId = ''
+            $watchPriorRunId = ''
             if (Test-Path -LiteralPath $status -PathType Leaf) {
                 try {
-                    $PriorRunId = [string]((Get-Content -LiteralPath $status -Raw -Encoding utf8 | ConvertFrom-Json).runId)
+                    $watchPriorRunId = [string]((Get-Content -LiteralPath $status -Raw -Encoding utf8 | ConvertFrom-Json).runId)
                 }
-                catch { $PriorRunId = '' }
+                catch { $watchPriorRunId = '' }
             }
+        }
+        else {
+            $watchPriorRunId = $PriorRunId
         }
     }
     'check' {
@@ -53,82 +77,40 @@ switch ($Kind) {
         if ([string]::IsNullOrWhiteSpace($Work)) {
             $Work = Get-WinMintGateBWorkDirectory
         }
-        $host.UI.RawUI.WindowTitle = "WinMint apply watch — $Work"
-        Write-Host ($PSStyle.Foreground.BrightBlack + 'Close this window to stop watching. Apply keeps running.' + $PSStyle.Reset)
-        $apply = Join-Path $Work 'apply-status.txt'
     }
 }
 
-if (-not [string]::IsNullOrWhiteSpace($MarkerPath)) {
-    Set-Content -LiteralPath $MarkerPath -Value $PID -Encoding utf8
+if ($Kind -in @('smoke', 'apply')) {
+    $dll = Resolve-WinMintWatchDll -RepoRoot $repoRoot
+    if (-not $dll) {
+        Write-Error 'WinMint.Watch.dll not found; dotnet build src/WinMint.Watch/WinMint.Watch.csproj'
+        exit 1
+    }
+    $execArgs = @(
+        'exec', $dll,
+        '--work', $Work,
+        '--kind', $Kind
+    )
+    if ($Kind -eq 'smoke') {
+        $execArgs += @('--prior-run-id', $watchPriorRunId)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($MarkerPath)) {
+        $execArgs += @('--marker-path', $MarkerPath)
+    }
+    $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
+    & $dotnet @execArgs
+    exit $LASTEXITCODE
 }
 
 $doneTicks = 0
-$ageSw = $null
-$lastFp = ''
 while ($true) {
     $verdict = ''
     $phase = ''
-    $vmState = ''
-    $heartbeat = ''
-    $stallLeft = 0
-    $wallLeft = 0
-    $lastHost = ''
     $leaf = ''
-    $applyStage = ''
-    $logLeaf = ''
-    $logTail = @()
+    $lastHost = ''
     $format = @{ Title = $host.UI.RawUI.WindowTitle }
 
-    if ($Kind -in @('smoke', 'apply')) {
-        $snap = Read-WinMintApplyStatus -Path $apply
-        if ($null -ne $snap) {
-            $applyStage = [string]$snap.Stage
-            if ($snap.Log -and (Test-Path -LiteralPath $snap.Log)) {
-                $logLeaf = Split-Path -Leaf $snap.Log
-                $rawTail = @(Get-Content -LiteralPath $snap.Log -Tail 40)
-                $logTail = @(Select-WinMintWatchLogTail -Lines $rawTail -Count 8)
-            }
-        }
-        $format.ApplyStage = $applyStage
-        $format.LogLeaf = $logLeaf
-        $format.LogTail = $logTail
-    }
-
-    if ($Kind -eq 'smoke') {
-        $doc = $null
-        if (Test-Path -LiteralPath $status) {
-            try { $doc = Get-Content -LiteralPath $status -Raw -Encoding utf8 | ConvertFrom-Json } catch { $doc = $null }
-        }
-        $verdict = 'awaiting-run'
-        if ($null -ne $doc) {
-            $fp = [string]$doc.runId + '|' + [string]$doc.phase + '|' + [string]$doc.updatedAt + '|' +
-                [string]$doc.vmState + '|' + [string]$doc.vhdFileSizeMB
-            if ($fp -ne $lastFp) {
-                $lastFp = $fp
-                $ageSw = [Diagnostics.Stopwatch]::StartNew()
-            }
-            $age = if ($null -eq $ageSw) { 0 } else { [int]$ageSw.Elapsed.TotalSeconds }
-            $vmState = if ($doc.PSObject.Properties.Name -contains 'vmState') { [string]$doc.vmState } else { '' }
-            $vhdMb = if ($doc.PSObject.Properties.Name -contains 'vhdFileSizeMB') { [int]$doc.vhdFileSizeMB } else { 0 }
-            $statusRunId = if ($doc.PSObject.Properties.Name -contains 'runId') { [string]$doc.runId } else { '' }
-            $phase = [string]$doc.phase
-            $verdict = Get-SmokeWatchVerdict -Phase $phase -VmState $vmState `
-                -VhdFileSizeMB $vhdMb -StatusAgeSeconds $age -StatusRunId $statusRunId -PriorRunId $PriorRunId
-            $heartbeat = if ($doc.PSObject.Properties.Name -contains 'heartbeat') { [string]$doc.heartbeat } else { '' }
-            $stallLeft = if ($doc.PSObject.Properties.Name -contains 'stallMinutesLeft') { [int]$doc.stallMinutesLeft } else { 0 }
-            $wallLeft = if ($doc.PSObject.Properties.Name -contains 'wallMinutesLeft') { [int]$doc.wallMinutesLeft } else { 0 }
-            $lastHost = if ($doc.PSObject.Properties.Name -contains 'lastHostLine') { [string]$doc.lastHostLine } else { '' }
-        }
-        $format.Verdict = $verdict
-        $format.Phase = $phase
-        $format.VmState = $vmState
-        $format.Heartbeat = $heartbeat
-        $format.StallMinutesLeft = $stallLeft
-        $format.WallMinutesLeft = $wallLeft
-        $format.LastHostLine = $lastHost
-    }
-    elseif ($Kind -eq 'check') {
+    if ($Kind -eq 'check') {
         $verdict = 'continue'
         if (Test-Path -LiteralPath $Path -PathType Leaf) {
             try {
@@ -151,7 +133,7 @@ while ($true) {
     Clear-Host
     Write-Host (Format-WinMintHostWatch @format)
 
-    if ($Kind -ne 'apply' -and $verdict -eq 'done') {
+    if ($verdict -eq 'done') {
         $doneTicks++
         if ($doneTicks -ge 3) { break }
     }

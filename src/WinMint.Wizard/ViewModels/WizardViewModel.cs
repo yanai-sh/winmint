@@ -471,7 +471,7 @@ public sealed partial class WizardViewModel :
     internal static string? FormatBusyLabel(ApplyProgress? snapshot)
     {
         ApplyBuildPresentation? presentation =
-            ApplyBuildPresentationFormat.FromApplyProgress(snapshot, readLogTail: _ => []);
+            ApplyBuildPresentationFormat.FromApplyProgress(snapshot, readEventsTail: (_, _) => []);
         if (presentation is null)
         {
             return null;
@@ -485,11 +485,11 @@ public sealed partial class WizardViewModel :
 
     internal static string? FormatApplyPresentation(
         ApplyProgress? snapshot,
-        Func<string, IReadOnlyList<string>>? readLogTail = null,
-        int tailLines = 20)
+        Func<string, int, IReadOnlyList<ApplyEvent>>? readEventsTail = null,
+        int maxEvents = 40)
     {
         ApplyBuildPresentation? presentation =
-            ApplyBuildPresentationFormat.FromApplyProgress(snapshot, readLogTail, tailLines);
+            ApplyBuildPresentationFormat.FromApplyProgress(snapshot, readEventsTail, maxEvents);
         return presentation?.ToString();
     }
 

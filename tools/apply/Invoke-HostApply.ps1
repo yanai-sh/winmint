@@ -95,7 +95,7 @@ trap {
         try {
             $failureLane = if (-not [string]::IsNullOrWhiteSpace($RequireLane)) { $RequireLane } else { $ImageQuality }
             $failureArtifacts = @(
-                @('apply-status.txt', 'failure.json', 'evidence.json') |
+                @('apply-status.txt', 'apply-events.jsonl', 'failure.json', 'evidence.json') |
                     Where-Object { Test-Path -LiteralPath (Join-Path $Work $_) -PathType Leaf }
             )
             if ($failureArtifacts.Count -eq 0) { $failureArtifacts = @('acceptance.manifest.json') }

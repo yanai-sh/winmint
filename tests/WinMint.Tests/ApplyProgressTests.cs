@@ -33,15 +33,15 @@ public class ApplyProgressTests
                 """
                 updated=2026-08-06T12:00:00.0000000Z
                 stage=MountInstallWim
-                log=C:\ProgramData\WinMint\work\logs\01-MountInstallWim.log
+                log=C:\ProgramData\WinMint\work\apply-events.jsonl
                 """);
 
             ApplyProgress? snap = workspace.TryReadProgress(TestContext.Current.CancellationToken);
             Assert.NotNull(snap);
             Assert.Equal("MountInstallWim", snap.Value.Stage);
-            Assert.Equal(@"C:\ProgramData\WinMint\work\logs\01-MountInstallWim.log", snap.Value.LogPath);
+            Assert.Equal(@"C:\ProgramData\WinMint\work\apply-events.jsonl", snap.Value.LogPath);
             Assert.Equal(
-                "Building: MountInstallWim — C:\\ProgramData\\WinMint\\work\\logs\\01-MountInstallWim.log",
+                "Building: MountInstallWim — C:\\ProgramData\\WinMint\\work\\apply-events.jsonl",
                 WizardViewModel.FormatBusyLabel(snap));
         }
         finally
@@ -61,10 +61,10 @@ public class ApplyProgressTests
             File.WriteAllText(workspace.ApplyStatus, "updated=t1\nstage=idle\nlog=\n");
             Assert.Equal("idle", workspace.TryReadProgress(TestContext.Current.CancellationToken)!.Value.Stage);
 
-            File.WriteAllText(workspace.ApplyStatus, "updated=t2\nstage=ExportWim\nlog=D:\\logs\\09-ExportWim.log\n");
+            File.WriteAllText(workspace.ApplyStatus, "updated=t2\nstage=ExportWim\nlog=D:\\work\\apply-events.jsonl\n");
             ApplyProgress snap = workspace.TryReadProgress(TestContext.Current.CancellationToken)!.Value;
             Assert.Equal("ExportWim", snap.Stage);
-            Assert.Equal(@"D:\logs\09-ExportWim.log", snap.LogPath);
+            Assert.Equal(@"D:\work\apply-events.jsonl", snap.LogPath);
         }
         finally
         {
@@ -92,24 +92,26 @@ public class ApplyProgressTests
     }
 
     [Fact]
-    public void FormatApplyPresentation_includes_stage_and_log_tail()
+    public void FormatApplyPresentation_includes_stage_and_event_rows()
     {
-        string log = Path.Combine(Path.GetTempPath(), "winmint-tail-" + Guid.NewGuid().ToString("N") + ".log");
+        string jsonl = Path.Combine(Path.GetTempPath(), "winmint-events-" + Guid.NewGuid().ToString("N") + ".jsonl");
         try
         {
-            File.WriteAllText(log, string.Join('\n', Enumerable.Range(1, 25).Select(i => $"line-{i}")));
+            IEnumerable<string> lines = Enumerable.Range(1, 25).Select(i =>
+                $$"""{"ts":"2026-08-06T12:00:00Z","kind":"opcode.end","opcode":"Stage{{i}}","outcome":"ok","summary":"done {{i}}"}""");
+            File.WriteAllText(jsonl, string.Join('\n', lines));
             string? text = WizardViewModel.FormatApplyPresentation(
-                new ApplyProgress("MountInstallWim", log),
-                path => File.ReadAllLines(path),
-                tailLines: 20);
+                new ApplyProgress("MountInstallWim", jsonl),
+                readEventsTail: null,
+                maxEvents: 20);
             Assert.NotNull(text);
             Assert.Contains("MountInstallWim", text, StringComparison.Ordinal);
-            Assert.Contains("line-25", text, StringComparison.Ordinal);
-            Assert.DoesNotContain("line-5", text, StringComparison.Ordinal); // outside last 20
+            Assert.Contains("done 25", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("done 5", text, StringComparison.Ordinal);
         }
         finally
         {
-            if (File.Exists(log)) File.Delete(log);
+            if (File.Exists(jsonl)) File.Delete(jsonl);
         }
     }
 
@@ -123,65 +125,60 @@ public class ApplyProgressTests
     }
 
     [Fact]
-    public void FormatApplyPresentation_filters_heartbeat_and_dism_bar_lines()
+    public void FormatApplyPresentation_renders_formatted_event_rows()
     {
-        string sampleBar = "[=====     50.0%                          ]";
-        string[] lines =
+        ApplyEvent[] events =
         [
-            "Catalog BITS start KB5129195",
-            "AddQualityUpdates running 78s",
-            sampleBar,
-            "AddQualityUpdates ok 12.3s",
+            new(Ts: "2026-08-06T12:00:00Z", Kind: "opcode.end", Opcode: "CatalogBits", Outcome: "ok", Summary: "Catalog BITS start KB5129195"),
+            new(Ts: "2026-08-06T12:01:00Z", Kind: "opcode.end", Opcode: "AddQualityUpdates", Outcome: "ok", Summary: "AddQualityUpdates ok 12.3s"),
         ];
         string? text = WizardViewModel.FormatApplyPresentation(
-            new ApplyProgress("AddQualityUpdates", "ignored.log"),
-            _ => lines);
+            new ApplyProgress("AddQualityUpdates", "ignored.jsonl"),
+            (_, _) => events);
         Assert.NotNull(text);
+        Assert.Contains("CatalogBits", text, StringComparison.Ordinal);
+        Assert.Contains("AddQualityUpdates", text, StringComparison.Ordinal);
         Assert.Contains("Catalog BITS start", text, StringComparison.Ordinal);
-        Assert.Contains("AddQualityUpdates ok", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("running 78s", text, StringComparison.Ordinal);
-        Assert.DoesNotContain(sampleBar, text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ApplyBuildPresentation_parses_latest_quality_hash_percent()
+    public void ApplyBuildPresentation_parses_latest_proof_percent()
     {
-        string[] lines =
+        ApplyEvent[] events =
         [
-            "quality hash 25% 1024/4096 MB",
-            "AddQualityUpdates running 40s",
-            "quality hash 50% leaf.msu",
+            new(Kind: "proof", Opcode: "AddQualityUpdates", Percent: 25, Summary: "quality hash 25%"),
+            new(Kind: "proof", Opcode: "AddQualityUpdates", Percent: 50, Summary: "quality hash 50%"),
         ];
         ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
-            new ApplyProgress("AddQualityUpdates", "ignored.log"),
-            _ => lines);
+            new ApplyProgress("AddQualityUpdates", "ignored.jsonl"),
+            (_, _) => events);
         Assert.NotNull(presentation);
         Assert.Equal(50, presentation.Value.ProgressPercent);
         Assert.False(presentation.Value.IsProgressIndeterminate);
     }
 
     [Fact]
-    public void ApplyBuildPresentation_busy_without_hash_stays_indeterminate()
+    public void ApplyBuildPresentation_busy_without_proof_stays_indeterminate()
     {
         ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
-            new ApplyProgress("MountInstallWim", "ignored.log"),
-            _ => ["MountInstallWim start"]);
+            new ApplyProgress("MountInstallWim", "ignored.jsonl"),
+            (_, _) => [new(Kind: "run.start", Summary: "Apply start")]);
         Assert.NotNull(presentation);
         Assert.Null(presentation.Value.ProgressPercent);
         Assert.True(presentation.Value.IsProgressIndeterminate);
     }
 
     [Fact]
-    public void ApplyBuildPresentation_parses_apply_step_cue_without_progress_value()
+    public void ApplyBuildPresentation_parses_step_cue_from_opcode_end()
     {
-        string[] lines =
+        ApplyEvent[] events =
         [
-            "Apply  10/14  MountInstallWim",
-            "Apply  11/14  AddQualityUpdates",
+            new(Kind: "opcode.end", Opcode: "MountInstallWim", Index: 10, Count: 14, Outcome: "ok", Summary: "mounted"),
+            new(Kind: "opcode.end", Opcode: "AddQualityUpdates", Index: 11, Count: 14, Outcome: "ok", Summary: "updates"),
         ];
         ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
-            new ApplyProgress("AddQualityUpdates", "ignored.log"),
-            _ => lines);
+            new ApplyProgress("AddQualityUpdates", "ignored.jsonl"),
+            (_, _) => events);
         Assert.NotNull(presentation);
         Assert.Equal("Step 11 of 14", presentation.Value.StepCue);
         Assert.True(presentation.Value.IsProgressIndeterminate);
@@ -189,26 +186,11 @@ public class ApplyProgressTests
     }
 
     [Fact]
-    public void ApplyBuildPresentation_alive_line_from_latest_heartbeat()
-    {
-        string[] lines =
-        [
-            "MountInstallWim start",
-            "MountInstallWim running 1103s",
-        ];
-        ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
-            new ApplyProgress("MountInstallWim", "ignored.log"),
-            _ => lines);
-        Assert.NotNull(presentation);
-        Assert.Equal("MountInstallWim · 18m 23s", presentation.Value.AliveLine);
-    }
-
-    [Fact]
-    public void ApplyBuildPresentation_alive_line_without_heartbeat_is_working()
+    public void ApplyBuildPresentation_alive_line_is_working()
     {
         ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
-            new ApplyProgress("MountInstallWim", "ignored.log"),
-            _ => ["MountInstallWim start"]);
+            new ApplyProgress("MountInstallWim", "ignored.jsonl"),
+            (_, _) => [new(Kind: "run.start", Summary: "Apply start")]);
         Assert.NotNull(presentation);
         Assert.Equal("working…", presentation.Value.AliveLine);
     }
@@ -238,29 +220,25 @@ public class ApplyProgressTests
         }
     }
 
-    [Theory]
-    [InlineData(0, "0s")]
-    [InlineData(59, "59s")]
-    [InlineData(60, "1m")]
-    [InlineData(1103, "18m 23s")]
-    [InlineData(3600, "1h")]
-    [InlineData(3661, "1h 1m")]
-    public void FormatElapsed_human_grain(int seconds, string expected) =>
-        Assert.Equal(expected, ApplyBuildPresentationFormat.FormatElapsed(seconds));
-
-    [Theory]
-    [InlineData("AddQualityUpdates running 78s", true)]
-    [InlineData("Catalog BITS start KB1", false)]
-    [InlineData("", false)]
-    public void IsTrailHeartbeatLine_matches_host_grain(string line, bool expected) =>
-        Assert.Equal(expected, ApplyBuildPresentationFormat.IsTrailHeartbeatLine(line));
-
     [Fact]
-    public void IsDismProgressBarLine_rejects_quality_hash_milestone()
+    public void ApplyBuildPresentation_reads_events_from_work_directory_when_log_empty()
     {
-        Assert.False(ApplyBuildPresentationFormat.IsDismProgressBarLine("quality hash 50% leaf.msu"));
-        Assert.True(ApplyBuildPresentationFormat.IsDismProgressBarLine(
-            "[=====     50.0%                          ]"));
-        Assert.False(ApplyBuildPresentationFormat.IsDismProgressBarLine(""));
+        string root = Path.Combine(Path.GetTempPath(), "winmint-events-wd-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(
+                ApplyEvents.PathFor(root),
+                """{"ts":"2026-08-06T12:00:00Z","kind":"opcode.end","opcode":"ExportWim","outcome":"ok","summary":"exported"}""");
+            ApplyBuildPresentation? presentation = ApplyBuildPresentationFormat.FromApplyProgress(
+                new ApplyProgress("ExportWim", null),
+                workDirectory: root);
+            Assert.NotNull(presentation);
+            Assert.Contains("ExportWim", presentation.Value.StatusTail, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 }

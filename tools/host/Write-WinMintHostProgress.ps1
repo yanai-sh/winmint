@@ -145,6 +145,38 @@ function Read-WinMintApplyStatus {
     [pscustomobject]@{ Stage = $stage; Log = $log }
 }
 
+function Format-WinMintServicingLockFailure {
+    param([string] $Message)
+    if ([string]::IsNullOrWhiteSpace($Message)) { return $null }
+    if ($Message -notmatch '(?i)servicing already active') { return $null }
+    return 'servicing already active — another Apply holds the ImageServicing lock; wait or just discard-stale-mount'
+}
+
+function Get-WinMintWatchConsoleWidth {
+    try {
+        $w = [Console]::WindowWidth
+        if ($w -ge 40) { return [int]$w }
+    }
+    catch {
+        Write-Debug "console width: $_"
+    }
+    return 100
+}
+
+function Format-WinMintWatchClip {
+    param(
+        [AllowEmptyString()]
+        [string] $Text = '',
+        [int] $MaxWidth = 0
+    )
+    # Clip (don’t mid-word wrap): long PackageName lines destroyed Watch readability.
+    if ($MaxWidth -le 0) { $MaxWidth = Get-WinMintWatchConsoleWidth }
+    if ($MaxWidth -lt 8) { return $Text }
+    $plain = $Text -replace '\x1b\[[0-9;]*m', ''
+    if ($plain.Length -le $MaxWidth) { return $Text }
+    return ($plain.Substring(0, $MaxWidth - 1) + '…')
+}
+
 function Get-WinMintApplyHostFailure {
     param([Parameter(Mandatory)] [string] $WorkDirectory)
     $applyStatusPath = Join-Path $WorkDirectory 'apply-status.txt'
@@ -160,7 +192,9 @@ function Get-WinMintApplyHostFailure {
         try {
             $failDoc = Get-Content -LiteralPath $failureJson -Raw -Encoding utf8 | ConvertFrom-Json
             if (-not [string]::IsNullOrWhiteSpace([string]$failDoc.message)) {
-                return [string]$failDoc.message
+                $msg = [string]$failDoc.message
+                $lock = Format-WinMintServicingLockFailure -Message $msg
+                return $(if ($lock) { $lock } else { $msg })
             }
         }
         catch {
@@ -247,14 +281,20 @@ function Format-WinMintHostWatch {
     if (-not [string]::IsNullOrWhiteSpace($Leaf)) {
         $lines.Add(("$( & $lbl 'leaf' )${Leaf}"))
     }
+    $width = Get-WinMintWatchConsoleWidth
+    # Label block is 10 chars + gap; log rows use "  │ " (4 visible).
+    $valueWidth = [Math]::Max(24, $width - 12)
+    $logWidth = [Math]::Max(24, $width - 4)
     if (-not [string]::IsNullOrWhiteSpace($LastHostLine)) {
-        $lines.Add(("$( & $lbl 'host' )${LastHostLine}"))
+        $hostClip = Format-WinMintWatchClip -Text $LastHostLine -MaxWidth $valueWidth
+        $lines.Add(("$( & $lbl 'host' )${hostClip}"))
     }
     if (-not [string]::IsNullOrWhiteSpace($LogLeaf)) {
         $lines.Add('')
         $lines.Add(("$( & $lbl 'log' )${bold}${LogLeaf}${reset}"))
         foreach ($row in @($LogTail | Select-Object -First 8)) {
-            $lines.Add("  ${dim}│${reset} $row")
+            $clip = Format-WinMintWatchClip -Text $row -MaxWidth $logWidth
+            $lines.Add("  ${dim}│${reset} $clip")
         }
     }
     return ($lines -join [Environment]::NewLine)
@@ -268,6 +308,11 @@ function Resolve-WinMintWindowsTerminal {
             (Join-Path ${env:ProgramFiles(x86)} 'Windows Terminal\wt.exe')
         )) {
         if (-not [string]::IsNullOrWhiteSpace($p)) { [void]$candidates.Add($p) }
+    }
+    # Store package: alias is 0 bytes; real binary lives under InstallLocation.
+    foreach ($pkg in @(Get-AppxPackage -Name 'Microsoft.WindowsTerminal*' -ErrorAction SilentlyContinue)) {
+        if ([string]::IsNullOrWhiteSpace([string]$pkg.InstallLocation)) { continue }
+        [void]$candidates.Add((Join-Path $pkg.InstallLocation 'wt.exe'))
     }
     $cmd = Get-Command wt.exe -ErrorAction SilentlyContinue
     if ($cmd -and $cmd.Source) { [void]$candidates.Add([string]$cmd.Source) }

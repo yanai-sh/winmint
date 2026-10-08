@@ -95,7 +95,8 @@ foreach ($id in $ids) {
     }
     foreach ($pkg in $matchedPkgs) {
         $packageName = [string]$pkg.PackageName
-        Write-Output "Remove-ProvisionedAppxPackage PackageName=$packageName catalogId=$id"
+        # Trail milestone: catalog id only (full PackageName stays in DISM transcript / digests).
+        Write-Output "Remove-ProvisionedAppx catalogId=$id"
         Invoke-WinMintDism -ArgumentList @('/English', "/Image:$mountDir", '/Remove-ProvisionedAppxPackage', "/PackageName:$packageName", "/LogPath:$dismLog") -Stage 'Remove-ProvisionedAppxPackage'
         $removed.Add([pscustomobject]@{
                 CatalogId         = $id

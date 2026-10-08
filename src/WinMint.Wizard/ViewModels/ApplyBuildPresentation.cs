@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 using WinMint.Orchestrator;
 
@@ -21,32 +20,17 @@ internal readonly record struct ApplyBuildPresentation(
             : StageLine + Environment.NewLine + StatusTail;
 }
 
-internal static partial class ApplyBuildPresentationFormat
+internal static class ApplyBuildPresentationFormat
 {
-    private static readonly Regex QualityHashPercent = QualityHashPercentRegex();
-    private static readonly Regex ApplyStepIndex = ApplyStepIndexRegex();
-    private static readonly Regex AliveHeartbeatMatch = AliveHeartbeatRegex();
-
     private static readonly JsonSerializerOptions FailureJsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };
 
-    internal static bool IsTrailHeartbeatLine(string line) =>
-        !string.IsNullOrWhiteSpace(line) && TrailHeartbeat().IsMatch(line);
-
-    internal static bool IsDismProgressBarLine(string line) =>
-        !string.IsNullOrWhiteSpace(line) && DismProgressBar().IsMatch(line);
-
-    internal static bool ShouldShowInStatusTail(string line) =>
-        !string.IsNullOrWhiteSpace(line)
-        && !IsTrailHeartbeatLine(line)
-        && !IsDismProgressBarLine(line);
-
     internal static ApplyBuildPresentation? FromApplyProgress(
         ApplyProgress? snapshot,
-        Func<string, IReadOnlyList<string>>? readLogTail = null,
-        int tailLines = 20,
+        Func<string, int, IReadOnlyList<ApplyEvent>>? readEventsTail = null,
+        int maxEvents = 40,
         string? workDirectory = null)
     {
         if (snapshot is null || string.IsNullOrWhiteSpace(snapshot.Value.Stage))
@@ -65,13 +49,17 @@ internal static partial class ApplyBuildPresentationFormat
         string display = failed ? stage["failed:".Length..] : stage;
         string stageLine = failed ? $"Failed: {display}" : $"Building: {display}";
 
-        IReadOnlyList<string> rawLines = [];
-        if (!string.IsNullOrWhiteSpace(snapshot.Value.LogPath))
+        string? eventsPath = !string.IsNullOrWhiteSpace(snapshot.Value.LogPath)
+            ? snapshot.Value.LogPath
+            : string.IsNullOrWhiteSpace(workDirectory) ? null : ApplyEvents.PathFor(workDirectory);
+
+        IReadOnlyList<ApplyEvent> events = [];
+        if (!string.IsNullOrWhiteSpace(eventsPath))
         {
             try
             {
-                Func<string, IReadOnlyList<string>> reader = readLogTail ?? ReadSharedLogLines;
-                rawLines = reader(snapshot.Value.LogPath);
+                Func<string, int, IReadOnlyList<ApplyEvent>> reader = readEventsTail ?? ApplyEvents.ReadTail;
+                events = reader(eventsPath, maxEvents);
             }
             catch (IOException)
             {
@@ -81,13 +69,9 @@ internal static partial class ApplyBuildPresentationFormat
             }
         }
 
-        double? progressPercent = TryParseLatestQualityHashPercent(rawLines);
-        string? stepCue = TryParseLatestApplyStepCue(rawLines);
-        string aliveLine = FormatAliveLine(rawLines);
-        IEnumerable<string> filtered = rawLines.Where(ShouldShowInStatusTail);
-        string statusTail = string.Join(
-            Environment.NewLine,
-            filtered.TakeLast(Math.Max(0, tailLines)));
+        double? progressPercent = ApplyEvents.TryLatestProofPercent(events);
+        string? stepCue = ApplyEvents.TryLatestStepCue(events);
+        string statusTail = string.Join(Environment.NewLine, ApplyEvents.FormatRows(events));
 
         string? failureDetail = null;
         string? transcriptHint = null;
@@ -105,111 +89,15 @@ internal static partial class ApplyBuildPresentationFormat
             }
         }
 
-        bool indeterminate = progressPercent is null;
         return new ApplyBuildPresentation(
             stageLine,
-            aliveLine,
+            "working…",
             statusTail,
             progressPercent,
-            indeterminate,
+            progressPercent is null,
             stepCue,
             failureDetail,
             transcriptHint);
-    }
-
-    internal static string FormatAliveLine(IEnumerable<string> lines)
-    {
-        foreach (string line in lines.Reverse())
-        {
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            Match match = AliveHeartbeatMatch.Match(line);
-            if (!match.Success)
-            {
-                continue;
-            }
-
-            if (!int.TryParse(match.Groups[2].Value, out int seconds))
-            {
-                continue;
-            }
-
-            return $"{match.Groups[1].Value} · {FormatElapsed(seconds)}";
-        }
-
-        return "working…";
-    }
-
-    internal static string FormatElapsed(int totalSeconds)
-    {
-        if (totalSeconds < 0)
-        {
-            totalSeconds = 0;
-        }
-
-        if (totalSeconds < 60)
-        {
-            return $"{totalSeconds}s";
-        }
-
-        int minutes = totalSeconds / 60;
-        int seconds = totalSeconds % 60;
-        if (minutes < 60)
-        {
-            return seconds == 0 ? $"{minutes}m" : $"{minutes}m {seconds}s";
-        }
-
-        int hours = minutes / 60;
-        minutes %= 60;
-        return minutes == 0 ? $"{hours}h" : $"{hours}h {minutes}m";
-    }
-
-    internal static double? TryParseLatestQualityHashPercent(IEnumerable<string> lines)
-    {
-        foreach (string line in lines.Reverse())
-        {
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            Match match = QualityHashPercent.Match(line);
-            if (!match.Success)
-            {
-                continue;
-            }
-
-            if (int.TryParse(match.Groups[1].Value, out int percent))
-            {
-                return Math.Clamp(percent, 0, 100);
-            }
-        }
-
-        return null;
-    }
-
-    internal static string? TryParseLatestApplyStepCue(IEnumerable<string> lines)
-    {
-        foreach (string line in lines.Reverse())
-        {
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            Match match = ApplyStepIndex.Match(line);
-            if (!match.Success)
-            {
-                continue;
-            }
-
-            return $"Step {match.Groups[1].Value} of {match.Groups[2].Value}";
-        }
-
-        return null;
     }
 
     private static string? TryReadFailureMessage(string workDirectory)
@@ -240,33 +128,5 @@ internal static partial class ApplyBuildPresentationFormat
         }
     }
 
-    private static IReadOnlyList<string> ReadSharedLogLines(string path)
-    {
-        using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using StreamReader reader = new(stream);
-        List<string> lines = [];
-        while (reader.ReadLine() is { } line)
-        {
-            lines.Add(line);
-        }
-
-        return lines;
-    }
-
     private sealed record FailureMessageDto(string? Message);
-
-    [GeneratedRegex(@"^\S+ running \d+s$", RegexOptions.CultureInvariant)]
-    private static partial Regex TrailHeartbeat();
-
-    [GeneratedRegex(@"^(\S+) running (\d+)s$", RegexOptions.CultureInvariant)]
-    private static partial Regex AliveHeartbeatRegex();
-
-    [GeneratedRegex(@"^\s*\[.*\d+\.\d+%\s*\]", RegexOptions.CultureInvariant)]
-    private static partial Regex DismProgressBar();
-
-    [GeneratedRegex(@"quality hash (\d+)%", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex QualityHashPercentRegex();
-
-    [GeneratedRegex(@"Apply\s+(\d+)/(\d+)", RegexOptions.CultureInvariant)]
-    private static partial Regex ApplyStepIndexRegex();
 }

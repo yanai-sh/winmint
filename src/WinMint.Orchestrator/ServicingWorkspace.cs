@@ -13,6 +13,7 @@ public sealed class ServicingWorkspace
     public const string ExpectedEvidenceFileName = "expected-evidence.json";
     public const string FailureFileName = "failure.json";
     public const string ApplyStatusFileName = "apply-status.txt";
+    public const string ApplyEventsFileName = ApplyEvents.FileName;
     public const string StagesFileName = "stages.json";
     public const string WorkspaceFileName = "workspace.json";
     public const string InstallWimFileName = "install.wim";
@@ -41,6 +42,7 @@ public sealed class ServicingWorkspace
         ExpectedEvidence = Path.Combine(Root, ExpectedEvidenceFileName);
         Failure = Path.Combine(Root, FailureFileName);
         ApplyStatus = Path.Combine(Root, ApplyStatusFileName);
+        ApplyEventsPath = Path.Combine(Root, ApplyEventsFileName);
         Stages = Path.Combine(Root, StagesFileName);
         WorkspaceManifest = Path.Combine(Root, WorkspaceFileName);
         InstallWim = Path.Combine(Root, InstallWimFileName);
@@ -58,6 +60,7 @@ public sealed class ServicingWorkspace
     public string ExpectedEvidence { get; }
     public string Failure { get; }
     public string ApplyStatus { get; }
+    public string ApplyEventsPath { get; }
     public string Stages { get; }
     public string WorkspaceManifest { get; }
     public string InstallWim { get; }
@@ -79,6 +82,7 @@ public sealed class ServicingWorkspace
             ["expectedEvidence"] = ExpectedEvidence,
             ["failure"] = Failure,
             ["applyStatus"] = ApplyStatus,
+            ["applyEvents"] = ApplyEventsPath,
             ["stages"] = Stages,
             ["installWim"] = InstallWim,
             ["unattend"] = Unattend,

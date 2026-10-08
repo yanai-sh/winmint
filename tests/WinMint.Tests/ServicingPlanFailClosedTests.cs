@@ -81,7 +81,14 @@ public class ServicingPlanFailClosedTests
                 "stage=failed:StampOfflineShell",
                 File.ReadAllText(Path.Combine(work, "apply-status.txt")),
                 StringComparison.Ordinal);
-            Assert.Contains("01-StampOfflineShell.log", File.ReadAllText(Path.Combine(work, "apply-status.txt")), StringComparison.Ordinal);
+            Assert.Contains(
+                ApplyEvents.FileName,
+                File.ReadAllText(Path.Combine(work, "apply-status.txt")),
+                StringComparison.Ordinal);
+            string eventsPath = Path.Combine(work, ApplyEvents.FileName);
+            Assert.True(File.Exists(eventsPath), $"expected {ApplyEvents.FileName}\n{output}");
+            Assert.Contains("opcode.end", File.ReadAllText(eventsPath), StringComparison.Ordinal);
+            Assert.Contains("\"outcome\":\"fail\"", File.ReadAllText(eventsPath), StringComparison.Ordinal);
         }
         finally
         {
@@ -289,6 +296,9 @@ public class ServicingPlanFailClosedTests
         File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Get-WinMintServicingWorkspace.ps1"),
             Path.Combine(servicing, "Get-WinMintServicingWorkspace.ps1"));
+        File.Copy(
+            Path.Combine(TestRepo.Root, "servicing", "Write-WinMintApplyEvent.ps1"),
+            Path.Combine(servicing, "Write-WinMintApplyEvent.ps1"));
         string host = Path.Combine(work, "tools", "host");
         Directory.CreateDirectory(host);
         File.Copy(

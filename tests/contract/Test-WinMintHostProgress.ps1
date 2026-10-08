@@ -21,6 +21,10 @@ if ($helper -notmatch 'function Write-WinMintHostHeartbeat') { throw 'helper mus
 if ($helper -notmatch 'function Test-WinMintTrailHeartbeatLine') { throw 'helper must define Test-WinMintTrailHeartbeatLine' }
 if ($helper -notmatch 'function Test-WinMintDismProgressBarLine') { throw 'helper must define Test-WinMintDismProgressBarLine' }
 if ($helper -notmatch 'function Select-WinMintWatchLogTail') { throw 'helper must define Select-WinMintWatchLogTail' }
+if ($helper -notmatch 'function Format-WinMintWatchClip') { throw 'helper must define Format-WinMintWatchClip' }
+$clipped = Format-WinMintWatchClip -Text ('Remove-ProvisionedAppxPackage PackageName=' + ('x' * 200) + ' catalogId=Microsoft.GetHelp') -MaxWidth 60
+if ($clipped.Length -gt 60) { throw 'Format-WinMintWatchClip must not exceed MaxWidth' }
+if ($clipped[-1] -cne [char]0x2026) { throw 'Format-WinMintWatchClip must end with … when clipped' }
 if ($helper -notmatch 'function Start-WinMintHostWatchProcess') { throw 'helper must spawn watch via Start-WinMintHostWatchProcess' }
 if ($helper -notmatch 'wt' -and $helper -notmatch 'WindowsTerminal') { throw 'spawn helper must consider wt.exe' }
 if ($helper -notmatch 'ArgumentList\.Add') { throw 'wt spawn must use ProcessStartInfo.ArgumentList so spaced --title stays one argv' }
@@ -134,13 +138,13 @@ foreach ($m in [regex]::Matches($smoke, 'Write-WinMintHostProgress -Activity Smo
 if (-not $completedAfterFailTry) { throw 'Smoke fail must Completed after suspend try (including skip)' }
 
 $watchHost = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Watch-Host.ps1') -Raw -Encoding utf8
-if ($watchHost -notmatch 'Read-WinMintApplyStatus') { throw 'Watch-Host smoke/apply must read apply-status via Read-WinMintApplyStatus' }
+if ($watchHost -notmatch 'WinMint\.Watch') { throw 'Watch-Host smoke/apply must launch WinMint.Watch' }
+if ($watchHost -notmatch 'dotnet.*exec') { throw 'Watch-Host smoke/apply must dotnet exec WinMint.Watch.dll' }
+if ($watchHost -notmatch 'Resolve-WinMintWatchDll') { throw 'Watch-Host must resolve WinMint.Watch.dll under src/' }
+if ($watchHost -notmatch 'artifacts/watch') { throw 'Watch-Host must prefer artifacts/watch publish leaf' }
+if ($watchHost -notmatch 'Format-WinMintHostWatch') { throw 'Watch-Host check must render via Format-WinMintHostWatch' }
+if ($watchHost -notmatch 'MarkerPath') { throw 'Watch-Host must accept -MarkerPath for spawn marker' }
 if ($watchHost -match 'Get-Date') { throw 'Watch-Host must not pass Get-Date as a dashboard clock' }
-if ($watchHost -notmatch "-ne 'apply'") { throw 'Watch-Host apply kind must not exit on done' }
-if ($watchHost -notmatch 'Format-WinMintHostWatch') { throw 'Watch-Host must render via Format-WinMintHostWatch' }
-if ($watchHost -notmatch 'MarkerPath') { throw 'Watch-Host must accept -MarkerPath and self-stamp PID' }
-if ($watchHost -notmatch 'Select-WinMintWatchLogTail') { throw 'Watch-Host must filter log tail via Select-WinMintWatchLogTail' }
-if ($watchHost -notmatch '-Tail 40') { throw 'Watch-Host must read a deep raw tail before filtering' }
 
 $just = Get-Content -LiteralPath (Join-Path $repo 'Justfile') -Raw -Encoding utf8
 if ($just -notmatch 'Watch-Host.ps1') { throw 'just watch-* must call Watch-Host' }
@@ -186,6 +190,15 @@ try {
     if ($emptyVm -notmatch '(?m)^heartbeat\s+-') { throw 'empty heartbeat must show placeholder dash' }
     if ($emptyVm -notmatch '45m') { throw 'awaiting layout missing stall' }
     if ($emptyVm -notmatch 'Applying Profile') { throw 'awaiting layout missing host line' }
+
+    $longPkg = 'Remove-ProvisionedAppxPackage PackageName=' + ('x' * 240) + ' catalogId=Microsoft.GetHelp'
+    $clipDash = & $plain (Format-WinMintHostWatch -Title 'watch' -Verdict 'awaiting-run' -Phase 'apply' `
+        -ApplyStage 'RemoveProvisionedAppx' -LogLeaf '04-RemoveProvisionedAppx.log' `
+        -LogTail @($longPkg) -LastHostLine ('Applying Profile=' + ('p' * 200)))
+    foreach ($clipLine in @($clipDash -split "`n")) {
+        if ($clipLine.Length -gt 120) { throw "watch row exceeds clip budget: $($clipLine.Length) chars" }
+    }
+    if ($clipDash -notmatch [char]0x2026) { throw 'watch must ellipsis-clip long log/host rows' }
 
     $checkDash = & $plain (Format-WinMintHostWatch -Title 'check' -Verdict 'continue' -Phase 'test' -Leaf '' -LastHostLine 'dotnet test')
     if ($checkDash -match 'stall') { throw 'check layout must omit stall/wall' }

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinMint.Orchestrator\WinMint.Orchestrator.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- why-not-BCL: Live TUI redraw -->
+    <PackageReference Include="Spectre.Console" Version="0.54.0" />
+  </ItemGroup>
+</Project>

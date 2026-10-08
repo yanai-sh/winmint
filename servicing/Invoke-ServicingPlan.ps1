@@ -56,6 +56,7 @@ function Invoke-WinMintLoggedKernel {
                 $quiet.Restart()
             }
             if ($quiet.Elapsed.TotalSeconds -ge $QuietSeconds) {
+                # Heartbeat → stage .log + Write-Progress only (not apply-events.jsonl).
                 Write-WinMintHostHeartbeat -Opcode $Opcode -ElapsedSeconds ([int]$phase.Elapsed.TotalSeconds) -LogWriter $writer
                 $quiet.Restart()
             }
@@ -166,6 +167,20 @@ function Write-PlanFailure {
         $reportingErrors.Add("apply status write failed: $_")
     }
     try {
+        if ($script:eventsPath) {
+            $hint = Join-Path $WorkDirectory 'dism-transcript.log'
+            Write-WinMintApplyEvent -Path $script:eventsPath -Kind 'opcode.end' `
+                -Opcode ($Opcode ? $Opcode : 'plan') -Outcome fail `
+                -Summary (Format-WinMintApplyEventSummary -Text $Message) `
+                -ErrorMessage $Message `
+                -TranscriptHint $(if (Test-Path -LiteralPath $hint) { $hint } else { '' })
+            Write-WinMintApplyEvent -Path $script:eventsPath -Kind 'run.end' -Outcome fail -Summary 'Apply failed'
+        }
+    }
+    catch {
+        $reportingErrors.Add("apply events write failed: $_")
+    }
+    try {
         Write-WinMintHostPhase -Lane Apply -Name ($Opcode ? $Opcode : 'plan') -Outcome failed
         Write-WinMintHostProgress -Activity Apply -Completed
     }
@@ -181,7 +196,9 @@ function Write-PlanFailure {
 $scriptRoot = $PSScriptRoot
 . (Join-Path $scriptRoot 'Resolve-WinMintMount.ps1')
 . (Join-Path $scriptRoot 'Get-WinMintServicingWorkspace.ps1')
+. (Join-Path $scriptRoot 'Write-WinMintApplyEvent.ps1')
 . (Join-Path $scriptRoot '..\tools\host\Write-WinMintHostProgress.ps1')
+$script:eventsPath = ''
 
 function ConvertTo-ParamHashtable {
     param($ParametersObject)
@@ -203,6 +220,7 @@ function Resolve-KernelScript {
         'StampOfflineShell' { return Join-Path $scriptRoot 'Stamp-OfflineShell.ps1' }
         'StampOfflinePolicies' { return Join-Path $scriptRoot 'Stamp-OfflinePolicies.ps1' }
         'StampOfflineDefaultUser' { return Join-Path $scriptRoot 'Stamp-OfflineDefaultUser.ps1' }
+        'EraseOfflineOneDrive' { return Join-Path $scriptRoot 'Erase-OfflineOneDrive.ps1' }
         'RemoveProvisionedAppx' { return Join-Path $scriptRoot 'Remove-ProvisionedAppx.ps1' }
         'RemoveCapabilities' { return Join-Path $scriptRoot 'Set-OfflineComponent.ps1' }
         'DisableOptionalFeatures' { return Join-Path $scriptRoot 'Set-OfflineComponent.ps1' }
@@ -296,17 +314,23 @@ try {
 
     $servicingLock = Enter-WinMintImageServicingLock
     $recovery = Resolve-WinMintStaleMount
+    Clear-WinMintOfflineRegistryHive
     $script:recoveryAction = [string]$recovery.recoveryAction
     if ([string]::IsNullOrWhiteSpace($script:recoveryAction)) { $script:recoveryAction = 'none' }
     $env:WINMINT_RECOVERY_ACTION = $script:recoveryAction
     $script:phaseTimings = @{}
 
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    $script:eventsPath = Join-Path $WorkDirectory 'apply-events.jsonl'
+    if (Test-Path -LiteralPath $script:eventsPath -PathType Leaf) {
+        Remove-Item -LiteralPath $script:eventsPath -Force
+    }
 
     # Remove stale green state, but keep the prior failure visible until this run either atomically
     # overwrites it with a current failure or commits evidence and removes it on success.
     Invoke-FinalizerFileRemoval -Path $evidencePath
-    Write-ApplyStatus -Stage 'idle'
+    Write-ApplyStatus -Stage 'idle' -Log $script:eventsPath
+    Write-WinMintApplyEvent -Path $script:eventsPath -Kind 'run.start' -Summary 'Apply start'
 
     if (-not (Test-Path -LiteralPath $stagesPath -PathType Leaf)) {
         $opcode = 'stages'
@@ -337,7 +361,8 @@ try {
         $params = ConvertTo-ParamHashtable $stage.parameters
         $kernel = Resolve-KernelScript -Opcode $opcode
         $logFile = Join-Path $logDir ("{0:D2}-{1}.log" -f $index, $opcode)
-        Write-ApplyStatus -Stage $opcode -Log $logFile
+        # Operator trail is JSONL; per-opcode .log remains kernel tee forensics only.
+        Write-ApplyStatus -Stage $opcode -Log $script:eventsPath
         $percent = if ($stageCount -gt 0) { [int][Math]::Floor(100 * $index / $stageCount) } else { 0 }
         Write-WinMintHostPhase -Lane Apply -Name $opcode -Index $index -Count $stageCount
         Write-WinMintHostProgress -Activity Apply -Status $opcode -PercentComplete $percent
@@ -351,14 +376,18 @@ try {
             throw
         }
         $phaseClock.Stop()
+        $elapsedMs = [int]$phaseClock.ElapsedMilliseconds
         Write-WinMintHostPhase -Lane Apply -Name $opcode -Index $index -Count $stageCount `
-            -Outcome ok -DurationMs ([int]$phaseClock.ElapsedMilliseconds)
+            -Outcome ok -DurationMs $elapsedMs
         Write-WinMintHostProgress -Activity Apply -Completed
+        Write-WinMintApplyEvent -Path $script:eventsPath -Kind 'opcode.end' -Opcode $opcode `
+            -Index $index -Count $stageCount -Outcome ok -DurationMs $elapsedMs `
+            -Summary ("{0} ok ({1:n1}s)" -f $opcode, ($elapsedMs / 1000.0))
         if ($opcode -eq 'ExportWim') {
-            $script:phaseTimings['exportMs'] = [int]$phaseClock.ElapsedMilliseconds
+            $script:phaseTimings['exportMs'] = $elapsedMs
         }
         elseif ($opcode -eq 'BuildIso') {
-            $script:phaseTimings['buildIsoMs'] = [int]$phaseClock.ElapsedMilliseconds
+            $script:phaseTimings['buildIsoMs'] = $elapsedMs
         }
         if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
             throw "Kernel exited $LASTEXITCODE"
@@ -367,7 +396,8 @@ try {
 
     $opcode = 'digests'
     Write-PlanDigestSidecar
-    Write-ApplyStatus -Stage 'done'
+    Write-WinMintApplyEvent -Path $script:eventsPath -Kind 'run.end' -Outcome ok -Summary 'Apply done'
+    Write-ApplyStatus -Stage 'done' -Log $script:eventsPath
     $failed = $false
 }
 catch {

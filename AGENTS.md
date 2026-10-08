@@ -35,6 +35,7 @@ Identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · re
 | **ProvisioningSession** / Supervisor | `src/WinMint.Provisioning` |
 | Contracts / job wire | `src/WinMint.Contracts` |
 | Cli / Wizard front ends | `src/WinMint.Cli`, `src/WinMint.Wizard` |
+| Host Watch (Spectre; smoke/apply) | `src/WinMint.Watch` (launcher `tools/host/Watch-Host.ps1`) |
 | WinPE apply helper | `src/WinMint.WinPeApply` |
 | Package catalog / chips | `config/packages.json` (+ `config/packages.proof.json`) |
 | Guest payload / skel / desktop assets | `payload/` |
@@ -58,13 +59,14 @@ Pins: `global.json`, `Directory.Build.props` (no CPM / `Directory.Packages.props
 
 ```powershell
 just publish-provisioning
-# Elevated pwsh — Apply + Hyper-V
+# Elevated pwsh — Apply + Hyper-V (Smoke also runs just publish-watch, then Spectre Watch-Host)
 just smoke-maintainer-monitor
 # or: pwsh -NoProfile -File tools/vm/Start-SmokeElevated.ps1
 # Profile: samples/sl7.profile.json (needs .scratch/sl7.password)
 # Custom wall/monitor/online (positional — not WALL=180 on PowerShell): just smoke-maintainer .scratch/smoke 180 1 45 0
 # Online OOBE escape (ZDP path): last positional 1, or Start-SmokeElevated -OnlineOobe 1
 # Custom ISO only: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'
+# Extra Watch attach: just watch-smoke .scratch/smoke
 ```
 
 ## Session

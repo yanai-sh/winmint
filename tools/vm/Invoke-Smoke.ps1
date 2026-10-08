@@ -205,6 +205,17 @@ Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply)
     -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
     -LastHostLine 'Smoke run starting' -OutputIso $null -RunId $runId
 
+# Spectre Watch binary before WT spawn (avoid on-demand build races under elevated smoke).
+Write-SmokeHostLine -Name 'Publishing host Watch (Spectre)…' -Activity publish
+& just publish-watch
+if ($LASTEXITCODE -ne 0) { throw "just publish-watch failed: $LASTEXITCODE" }
+
+# Full Apply: drop stale operator events so Watch opens on this run's story.
+# SkipApply keeps prior apply-events.jsonl for wait/assert viewing.
+if (-not $SkipApply) {
+    Remove-Item -LiteralPath (Join-Path $Work 'apply-events.jsonl') -Force -ErrorAction SilentlyContinue
+}
+
 $pwshExe = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
 $watcherMarker = Join-Path $workFull 'watch-smoke.pid'
 $watcherAlive = $false
@@ -231,8 +242,14 @@ if (-not $SkipApply) {
 
     # Clear prior-run Apply projections so a crashed Apply cannot resurrect an old
     # stage=failed, lane marker, keep-flag pins, or expected digests into this run.
-    $priorProjections = @('apply-status.txt', 'failure.json', 'evidence.json', 'stages.json', 'expected-evidence.json') |
-        ForEach-Object { Join-Path $Work $_ }
+    $priorProjections = @(
+        'apply-status.txt',
+        'apply-events.jsonl',
+        'failure.json',
+        'evidence.json',
+        'stages.json',
+        'expected-evidence.json'
+    ) | ForEach-Object { Join-Path $Work $_ }
     Remove-Item -LiteralPath $priorProjections -Force -ErrorAction SilentlyContinue
 
     # Free disk before DISM: drop prior Output ISOs (KeepPath empty — new leaf after Apply).
@@ -247,12 +264,14 @@ if (-not $SkipApply) {
     Write-SmokeHostLine -Name "Applying Profile=$applyProfilePath Iso=$Iso Work=$Work (Test lane, smoke stubs on)…" -Activity apply
     $runScratchHygiene = $true
     try {
-        & just apply-maintainer $Iso $Work $applyProfilePath true
+        & just apply-smoke-maintainer $Iso $Work $applyProfilePath
         $applyFail = Get-WinMintApplyHostFailure -WorkDirectory $workFull
         if ($applyFail) { throw $applyFail }
         if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
     }
     catch {
+        $lock = Format-WinMintServicingLockFailure -Message "$_"
+        if ($lock) { throw $lock }
         throw
     }
 

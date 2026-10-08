@@ -48,7 +48,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-. (Join-Path $PSScriptRoot 'SmokeStatus.ps1')
+. (Join-Path $PSScriptRoot 'SmokeConverge.ps1')
 . (Join-Path $PSScriptRoot '..\host\Assert-ImageEvidenceCore.ps1')
 . (Join-Path $PSScriptRoot 'SmokeS4AcceptanceFacts.ps1')
 $s4Facts = Get-WinMintSmokeS4AcceptanceFacts

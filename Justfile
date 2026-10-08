@@ -90,6 +90,10 @@ publish-provisioning:
     dotnet publish src/WinMint.WinPeApply/WinMint.WinPeApply.csproj -c Release -o artifacts/winpe-apply
     dotnet publish src/WinMint.Provisioning/WinMint.Provisioning.csproj -c Release -o artifacts/provisioning
 
+# Spectre host Watch for smoke/apply (Smoke publishes this before spawning Watch-Host).
+publish-watch:
+    dotnet publish src/WinMint.Watch/WinMint.Watch.csproj -c Release -o artifacts/watch
+
 # Admin: Defender exclusions for DISM workdirs.
 exclude-scratch ISO="":
     $scratch = Join-Path '{{justfile_directory()}}' '.scratch'; $servicing = Join-Path $env:ProgramData 'WinMint\Servicing'; New-Item -ItemType Directory -Force -Path $scratch, $servicing | Out-Null; $paths = @($scratch, $servicing); if ('{{ISO}}' -ne '') { $paths += '{{ISO}}' }; foreach ($p in $paths) { Add-MpPreference -ExclusionPath $p; Write-Host "Excluded: $p" }
@@ -108,14 +112,20 @@ clean-artifacts root=".scratch" keep="1" workdirs="1" days="14":
 wipe-scratch:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-ArtifactHygiene.ps1' -Root (Join-Path '{{justfile_directory()}}' '.scratch') -Wipe
 
-# Own-console apply-status watch. Default WORK = Gate B (%LOCALAPPDATA%\WinMint\work\gate-b).
+# Own-console apply-events watch (Spectre). Default WORK = Gate B (%LOCALAPPDATA%\WinMint\work\gate-b).
+# Interactive — Spectre Live needs a real console (not -NonInteractive).
 watch-apply WORK="":
-    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/host/Watch-Host.ps1' -Kind apply -Work '{{WORK}}'
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Watch-Host.ps1' -Kind apply -Work '{{WORK}}'
 
 # Maintainer Apply (DISM hours). Cli verb is build.
 # Prereq: just publish-provisioning. INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs.
 apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STUBS="false":
     Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $stubs = @(); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $stubs = @('--include-smoke-stubs') }; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}', '--package-audit-strict') + $stubs; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
+
+# Smoke Apply intent: Test lane + stubs + smoke plumbing (no outbound FirstLogon packages).
+# Owns Offline-capable plan; Offline OOBE NIC defer stays in Invoke-Smoke.
+apply-smoke-maintainer ISO WORK PROFILE:
+    Write-Host 'Smoke Apply (stubs + plumbing). Prefer just check day-to-day.'; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}', '--package-audit-strict', '--include-smoke-stubs', '--smoke-plumbing'); & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
 
 # S4 Hyper-V Smoke — not in `just check`. Assert-only: just smoke-assert tests/fixtures/smoke-evidence
 # Default Profile = samples/sl7.profile.json (same install target as Primary / this machine).
@@ -137,10 +147,15 @@ smoke-maintainer WORK=".scratch/smoke" WALL="180" MONITOR="0" STALL="45" ONLINE=
 smoke-maintainer-monitor WORK=".scratch/smoke" WALL="180" STALL="45" ONLINE="0":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Start-SmokeElevated.ps1' -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor 1 -OnlineOobe '{{ONLINE}}'
 
-# Own-console host watch (Apply/Smoke keep running if you close it).
+# Guest-only: reuse Work Output ISO (no DISM Apply). Needs a prior Apply with EraseOfflineOneDrive.
+smoke-maintainer-skip-apply WORK=".scratch/smoke" WALL="180" MONITOR="1" STALL="45" ONLINE="0":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/vm/Start-SmokeElevated.ps1' -Work '{{WORK}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}' -OnlineOobe '{{ONLINE}}' -SkipApply
+
+# Own-console host watch (Spectre; Apply/Smoke keep running if you close it).
 # smoke-maintainer already spawns one Watch-Host; use this to attach a second view.
+# Interactive — Spectre Live needs a real console (not -NonInteractive).
 watch-smoke WORK=".scratch/smoke":
-    pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/host/Watch-Host.ps1' -Kind smoke -Work '{{WORK}}'
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Watch-Host.ps1' -Kind smoke -Work '{{WORK}}'
 
 # Attach to just check. Default PATH = .scratch/check-status.json. just check does not spawn this.
 watch-check PATH="":
