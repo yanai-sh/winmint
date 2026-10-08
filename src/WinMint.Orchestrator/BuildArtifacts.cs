@@ -39,6 +39,12 @@ public sealed record RunOptions
     /// <summary>When true, Plan emits smoke.stub.* jobs (Smoke/acceptance harness). Default false.</summary>
     public bool IncludeSmokeStubs { get; init; }
 
+    /// <summary>
+    /// Smoke plumbing: omit outbound FirstLogon package jobs and derive <c>requiresNetwork=false</c>.
+    /// Harness-only; requires <see cref="IncludeSmokeStubs"/> and Test lane. Default false.
+    /// </summary>
+    public bool SmokePlumbing { get; init; }
+
     /// <summary>Override embedded package catalog (tests); null uses <see cref="PackageCatalog.Default"/>.</summary>
     public PackageCatalog? PackageCatalog { get; init; }
 }
@@ -162,6 +168,7 @@ public enum ServicingOpcode
     StampOfflineShell,
     StampOfflinePolicies,
     StampOfflineDefaultUser,
+    EraseOfflineOneDrive,
     RemoveProvisionedAppx,
     RemoveCapabilities,
     DisableOptionalFeatures,

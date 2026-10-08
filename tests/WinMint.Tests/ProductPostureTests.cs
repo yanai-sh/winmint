@@ -142,6 +142,8 @@ public class ProductPostureTests
         Assert.Contains("policy.deviceInstaller.DisableCoInstallers", digestKeys);
         Assert.Contains("policy.taskbar.LayoutXMLPath", digestKeys);
         Assert.Contains("policy.onedrive.DisableFileSyncNGSC", digestKeys);
+        Assert.Contains("policy.onedrive.DisableFileSync", digestKeys);
+        Assert.Contains("policy.onedrive.DisableMeteredNetworkFileSync", digestKeys);
         Assert.Contains("policy.onedrive.PreventNetworkTrafficPreUserSignIn", digestKeys);
         Assert.Equal("AllowNewsAndInterests", rows[0].Name);
         Assert.Equal("ConfigureStartPins", rows[1].Name);
@@ -196,7 +198,33 @@ public class ProductPostureTests
             row => row.SubKey.Contains("Explorer\\Wallpapers", StringComparison.Ordinal)
                 && row.Name == "BackgroundType"
                 && row.Data == "0");
+        Assert.Contains(
+            rows,
+            row => row.Name == "Personal"
+                && row.RegType == "REG_EXPAND_SZ"
+                && row.Data == @"%USERPROFILE%\Documents"
+                && !row.Data.Contains("OneDrive", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            rows,
+            row => row.Name == "My Pictures"
+                && row.RegType == "REG_EXPAND_SZ"
+                && row.Data == @"%USERPROFILE%\Pictures");
+        Assert.All(
+            rows.Where(static row => row.SubKey.Contains("User Shell Folders", StringComparison.Ordinal)),
+            static row => Assert.DoesNotContain("OneDrive", row.Data, StringComparison.OrdinalIgnoreCase));
         Assert.Equal(GuestChrome.BloomWallpaperPath, ShellChromeLayout.WallpaperPath);
+    }
+
+    [Fact]
+    public void Plan_always_erases_onedrive_offline()
+    {
+        Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(Lab());
+
+        Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
+        Assert.Contains(ServicingOpcode.EraseOfflineOneDrive, planned.Value.Stages);
+        int policiesAt = planned.Value.Stages.ToList().IndexOf(ServicingOpcode.StampOfflinePolicies);
+        int eraseAt = planned.Value.Stages.ToList().IndexOf(ServicingOpcode.EraseOfflineOneDrive);
+        Assert.True(policiesAt >= 0 && eraseAt == policiesAt + 1);
     }
 
     [Fact]

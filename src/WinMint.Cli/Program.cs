@@ -73,6 +73,12 @@ internal static class Program
             Description = "Include smoke.stub.* FirstLogon jobs (Smoke/acceptance harness). Default off.",
         };
 
+        Option<bool> smokePlumbingOption = new("--smoke-plumbing")
+        {
+            Description =
+                "Smoke plumbing: omit outbound package jobs and requiresNetwork=false. Requires --include-smoke-stubs; Test lane only.",
+        };
+
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")
         {
             profileArgument,
@@ -81,6 +87,7 @@ internal static class Program
             packageAuditStrictOption,
             packageStrictOption,
             includeSmokeStubsOption,
+            smokePlumbingOption,
         };
         validateCommand.SetAction(parseResult =>
         {
@@ -91,7 +98,8 @@ internal static class Program
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
-                parseResult.GetValue(includeSmokeStubsOption));
+                parseResult.GetValue(includeSmokeStubsOption),
+                parseResult.GetValue(smokePlumbingOption));
         });
 
         Command planCommand = new("plan", "Parse and plan a Profile; emit plan artifacts.")
@@ -103,6 +111,7 @@ internal static class Program
             packageAuditStrictOption,
             packageStrictOption,
             includeSmokeStubsOption,
+            smokePlumbingOption,
         };
         planCommand.SetAction(parseResult =>
         {
@@ -115,7 +124,8 @@ internal static class Program
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
-                parseResult.GetValue(includeSmokeStubsOption));
+                parseResult.GetValue(includeSmokeStubsOption),
+                parseResult.GetValue(smokePlumbingOption));
         });
 
         Command buildCommand = new("build", "Plan a Profile and apply ImageServicing (one elevated Invoke-ServicingPlan).")
@@ -130,6 +140,7 @@ internal static class Program
             packageAuditStrictOption,
             packageStrictOption,
             includeSmokeStubsOption,
+            smokePlumbingOption,
         };
         buildCommand.SetAction(async parseResult =>
         {
@@ -148,7 +159,8 @@ internal static class Program
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
-                parseResult.GetValue(includeSmokeStubsOption));
+                parseResult.GetValue(includeSmokeStubsOption),
+                parseResult.GetValue(smokePlumbingOption));
         });
 
         Command packagesCheckCommand = new(
@@ -190,6 +202,7 @@ internal static class Program
             packageAuditStrictOption,
             packageStrictOption,
             includeSmokeStubsOption,
+            smokePlumbingOption,
         };
         packCommand.SetAction(parseResult =>
         {
@@ -202,7 +215,8 @@ internal static class Program
                 parseResult.GetValue(imageArchitectureOption),
                 parseResult.GetValue(packageAuditStrictOption),
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
-                parseResult.GetValue(includeSmokeStubsOption));
+                parseResult.GetValue(includeSmokeStubsOption),
+                parseResult.GetValue(smokePlumbingOption));
         });
 
         RootCommand root = new("WinMint — Profile plan and ImageServicing build")
@@ -225,7 +239,8 @@ internal static class Program
         string? imageArchitecture,
         bool packageAuditStrict,
         PackageStrictOverride packageStrict,
-        bool includeSmokeStubs)
+        bool includeSmokeStubs,
+        bool smokePlumbing)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -242,7 +257,8 @@ internal static class Program
                     ImageArchitecture: imageArchitecture,
                     PackageAuditStrict: packageAuditStrict,
                     PackageStrict: packageStrict,
-                    IncludeSmokeStubs: includeSmokeStubs)))
+                    IncludeSmokeStubs: includeSmokeStubs,
+                    SmokePlumbing: smokePlumbing)))
         {
             return exit;
         }
@@ -315,7 +331,8 @@ internal static class Program
         string? imageArchitecture,
         bool packageAuditStrict,
         PackageStrictOverride packageStrict,
-        bool includeSmokeStubs)
+        bool includeSmokeStubs,
+        bool smokePlumbing)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -332,7 +349,8 @@ internal static class Program
                     ImageArchitecture: imageArchitecture,
                     PackageAuditStrict: packageAuditStrict,
                     PackageStrict: packageStrict,
-                    IncludeSmokeStubs: includeSmokeStubs)))
+                    IncludeSmokeStubs: includeSmokeStubs,
+                    SmokePlumbing: smokePlumbing)))
         {
             return exit;
         }
@@ -348,7 +366,8 @@ internal static class Program
         string? imageArchitecture,
         bool packageAuditStrict,
         PackageStrictOverride packageStrict,
-        bool includeSmokeStubs)
+        bool includeSmokeStubs,
+        bool smokePlumbing)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -365,7 +384,8 @@ internal static class Program
                     ImageArchitecture: imageArchitecture,
                     PackageAuditStrict: packageAuditStrict,
                     PackageStrict: packageStrict,
-                    IncludeSmokeStubs: includeSmokeStubs)))
+                    IncludeSmokeStubs: includeSmokeStubs,
+                    SmokePlumbing: smokePlumbing)))
         {
             return exit;
         }
@@ -391,7 +411,8 @@ internal static class Program
         string? imageArchitecture,
         bool packageAuditStrict,
         PackageStrictOverride packageStrict,
-        bool includeSmokeStubs)
+        bool includeSmokeStubs,
+        bool smokePlumbing)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -401,15 +422,16 @@ internal static class Program
         Result<HostComposition, HostComposeError> composed = await HostCompile.ComposeFileAsync(
                 profilePath.FullName,
                 new HostComposeOptions(
-                    iso.FullName,
-                    lane,
-                    work.FullName,
-                    outIso?.FullName,
-                    wimIndex,
-                    packageStrict,
-                    packageAuditStrict,
-                    includeSmokeStubs,
-                    imageArchitecture))
+                    SourceIsoPath: iso.FullName,
+                    ImageQuality: lane,
+                    WorkDirectory: work.FullName,
+                    OutputIsoPath: outIso?.FullName,
+                    WimIndex: wimIndex,
+                    PackageStrict: packageStrict,
+                    PackageAuditStrict: packageAuditStrict,
+                    IncludeSmokeStubs: includeSmokeStubs,
+                    SmokePlumbing: smokePlumbing,
+                    ImageArchitecture: imageArchitecture))
             .ConfigureAwait(false);
         if (!composed.IsOk)
         {

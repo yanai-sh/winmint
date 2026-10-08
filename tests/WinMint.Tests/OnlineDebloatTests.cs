@@ -100,9 +100,19 @@ public class OnlineDebloatPlanTests
     }
 
     [Fact]
-    public void PlanRequiresNetwork_always_true()
+    public void PlanRequiresNetwork_true_when_winget_jobs_present()
     {
-        Assert.True(BuildPlan.PlanRequiresNetwork());
+        Assert.True(BuildPlan.PlanRequiresNetwork(
+        [
+            new ProvisionJob("winget.import", ProvisionJobKind.WingetImport),
+        ]));
+        Assert.False(BuildPlan.PlanRequiresNetwork(
+        [
+            new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub),
+            new ProvisionJob("workstation.quiet", ProvisionJobKind.WorkstationQuiet),
+            new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform),
+            new ProvisionJob("shell.chrome", ProvisionJobKind.ShellChrome),
+        ]));
     }
 
     private static Profile Parse(string json)
@@ -140,6 +150,34 @@ public class OnlineDebloatSessionTests
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("network.required.offline", result.FinalStatus.Code);
         Assert.Contains(evidence.Documents[0].Phases, p => p == "network.required.offline");
+    }
+
+    [Fact]
+    public async Task Shell_requiresNetwork_false_completes_when_offline()
+    {
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle(
+            [
+                new ProvisionJob("smoke.stub.ready", ProvisionJobKind.Stub),
+                new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub),
+            ]) with
+            {
+                RequiresNetwork = false,
+            },
+            Env(
+                new FakeGuestMachine
+                {
+                    Processes = processes,
+                    Connectivity = new OfflineConnectivityProbe(),
+                },
+                evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.DoesNotContain(evidence.Documents[0].Phases, p => p == "network.required.offline");
+        Assert.Equal("jobs.ok", result.FinalStatus.Code);
     }
 
     [Fact]

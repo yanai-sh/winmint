@@ -129,6 +129,12 @@ public static partial class ImageServicing
                             Path.Combine(payloadDir, ServicingWorkspace.DefaultUserFileName)),
                         ServicingJsonContext.Default.StampOfflineDefaultUserParameters);
                     break;
+                case ServicingOpcode.EraseOfflineOneDrive:
+                    Add(
+                        opcode,
+                        new EraseOfflineOneDriveParameters(mountDir),
+                        ServicingJsonContext.Default.EraseOfflineOneDriveParameters);
+                    break;
                 case ServicingOpcode.RemoveProvisionedAppx:
                     Add(
                         opcode,

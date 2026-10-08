@@ -239,6 +239,7 @@ internal sealed class WizardSession(ISourceMediaProbe? sourceMedia = null) : IDi
         && left.PackageStrict == right.PackageStrict
         && left.PackageAuditStrict == right.PackageAuditStrict
         && left.IncludeSmokeStubs == right.IncludeSmokeStubs
+        && left.SmokePlumbing == right.SmokePlumbing
         && string.Equals(left.ImageArchitecture, right.ImageArchitecture, StringComparison.Ordinal)
         && left.WindowsBuild == right.WindowsBuild
         && string.Equals(left.ProfileName, right.ProfileName, StringComparison.Ordinal)

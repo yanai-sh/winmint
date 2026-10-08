@@ -15,11 +15,20 @@ internal static class SoftwarePlan
         Profile profile,
         PackageCatalog catalog,
         string imageArchitecture,
-        bool auditStrict)
+        bool auditStrict,
+        bool smokePlumbing = false)
     {
+        // Smoke plumbing: ignore authored package lists (outbound jobs omitted). Still validate shape when not plumbing.
+        IReadOnlyList<string> wingetPackages = smokePlumbing ? [] : profile.WingetPackages;
+        IReadOnlyList<string> wingetNeedsRebootList = smokePlumbing ? [] : profile.WingetNeedsReboot;
+        IReadOnlyList<string> scoopPackages = smokePlumbing ? [] : profile.ScoopPackages;
+        IReadOnlyList<string> scoopNeedsRebootList = smokePlumbing ? [] : profile.ScoopNeedsReboot;
+        IReadOnlyList<string> wslDistros = smokePlumbing ? [] : profile.WslDistros;
+        IReadOnlyList<string> wslNeedsRebootList = smokePlumbing ? [] : profile.WslNeedsReboot;
+
         Failure? failure = ValidateNeedsRebootSubset(
-            profile.WingetPackages,
-            profile.WingetNeedsReboot,
+            wingetPackages,
+            wingetNeedsRebootList,
             "packages.wingetNeedsReboot.unknown",
             "wingetNeedsReboot",
             "packages.winget");
@@ -29,8 +38,8 @@ internal static class SoftwarePlan
         }
 
         failure = ValidateNeedsRebootSubset(
-            profile.ScoopPackages,
-            profile.ScoopNeedsReboot,
+            scoopPackages,
+            scoopNeedsRebootList,
             "packages.scoopNeedsReboot.unknown",
             "scoopNeedsReboot",
             "packages.scoop");
@@ -40,8 +49,8 @@ internal static class SoftwarePlan
         }
 
         failure = ValidateNeedsRebootSubset(
-            profile.WslDistros,
-            profile.WslNeedsReboot,
+            wslDistros,
+            wslNeedsRebootList,
             "packages.wslNeedsReboot.unknown",
             "wslNeedsReboot",
             "packages.wsl");
@@ -51,13 +60,16 @@ internal static class SoftwarePlan
         }
 
         string imageArch = PackageCatalog.NormalizeArch(imageArchitecture);
-        HashSet<string> wingetNeedsReboot = new(profile.WingetNeedsReboot, StringComparer.OrdinalIgnoreCase);
-        HashSet<string> scoopNeedsReboot = new(profile.ScoopNeedsReboot, StringComparer.OrdinalIgnoreCase);
-        HashSet<string> wslNeedsReboot = new(profile.WslNeedsReboot, StringComparer.OrdinalIgnoreCase);
+        HashSet<string> wingetNeedsReboot = new(wingetNeedsRebootList, StringComparer.OrdinalIgnoreCase);
+        HashSet<string> scoopNeedsReboot = new(scoopNeedsRebootList, StringComparer.OrdinalIgnoreCase);
+        HashSet<string> wslNeedsReboot = new(wslNeedsRebootList, StringComparer.OrdinalIgnoreCase);
         List<EffectivePackageFact> facts = [];
         List<string> auditTargets = [];
 
-        IReadOnlyList<string> effectiveWingetIds = ProductPosture.MergeWinget(profile.WingetPackages);
+        // Smoke plumbing: no ProductPosture winget/scoop merge (MinGit/Nilesoft/…) — offline FirstLogon.
+        IReadOnlyList<string> effectiveWingetIds = smokePlumbing
+            ? []
+            : ProductPosture.MergeWinget(wingetPackages);
         List<PackageToolEntry> wingetTools = [];
         List<bool> wingetReboot = [];
         foreach (string authoredInstallId in effectiveWingetIds)
@@ -92,7 +104,9 @@ internal static class SoftwarePlan
             auditTargets.Add(tool.InstallId);
         }
 
-        IReadOnlyList<string> effectiveScoopIds = ProductPosture.MergeScoop(profile.ScoopPackages);
+        IReadOnlyList<string> effectiveScoopIds = smokePlumbing
+            ? []
+            : ProductPosture.MergeScoop(scoopPackages);
         List<PackageToolEntry> scoopTools = [];
         List<bool> scoopReboot = [];
         foreach (string authoredInstallId in effectiveScoopIds)
@@ -130,7 +144,7 @@ internal static class SoftwarePlan
         List<bool> wslReboot = [];
         Dictionary<string, int> wslIndexByInstallId = new(StringComparer.OrdinalIgnoreCase);
         int wslFactStart = facts.Count;
-        foreach (string token in profile.WslDistros)
+        foreach (string token in wslDistros)
         {
             if (!catalog.TryGetWslByProfileToken(token, out WslDistroEntry? entry))
             {
@@ -215,23 +229,27 @@ internal static class SoftwarePlan
 
         jobs.Add(new ProvisionJob("shell.stamp", ProvisionJobKind.ShellStamp));
 
-        if (wslEntries.Count > 0)
+        // Smoke plumbing: platform mock only (Hyper-V) — no distro download jobs.
+        if (smokePlumbing || wslEntries.Count > 0)
         {
             jobs.Add(new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform));
         }
 
-        for (int i = 0; i < wslEntries.Count; i++)
+        if (!smokePlumbing)
         {
-            WslDistroEntry entry = wslEntries[i];
-            IReadOnlyList<string>? assetNames = entry.FromFileAssetNamesFor(imageArch);
-            jobs.Add(new ProvisionJob(
-                $"wsl.{entry.InstallId}",
-                ProvisionJobKind.Wsl,
-                PackageId: entry.InstallId,
-                NeedsReboot: wslReboot[i],
-                WslInstallKind: entry.InstallKind,
-                WslFromFileRepo: entry.FromFileRepo,
-                WslFromFileAssetNames: assetNames is { Count: > 0 } ? assetNames : null));
+            for (int i = 0; i < wslEntries.Count; i++)
+            {
+                WslDistroEntry entry = wslEntries[i];
+                IReadOnlyList<string>? assetNames = entry.FromFileAssetNamesFor(imageArch);
+                jobs.Add(new ProvisionJob(
+                    $"wsl.{entry.InstallId}",
+                    ProvisionJobKind.Wsl,
+                    PackageId: entry.InstallId,
+                    NeedsReboot: wslReboot[i],
+                    WslInstallKind: entry.InstallKind,
+                    WslFromFileRepo: entry.FromFileRepo,
+                    WslFromFileAssetNames: assetNames is { Count: > 0 } ? assetNames : null));
+            }
         }
 
         if (auditStrict && auditTargets.Count > 0 && imageArch == "arm64")

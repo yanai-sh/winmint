@@ -330,8 +330,21 @@ public static partial class BuildPlan
             .Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 
-    /// <summary>FirstLogon always needs outbound network (product-constant MinGit + Nilesoft winget). Not authored in Profile JSON.</summary>
-    public static bool PlanRequiresNetwork() => true;
+    /// <summary>
+    /// Whether FirstLogon needs outbound network before jobs.
+    /// Derived from planned job kinds (winget/scoop/WSL install/online AppX) — not a Profile field.
+    /// </summary>
+    public static bool PlanRequiresNetwork(IEnumerable<ProvisionJob> jobs) =>
+        jobs.Any(static j => JobRequiresOutboundNetwork(j.Kind));
+
+    /// <summary>Job kinds that need outbound connectivity before they can run.</summary>
+    public static bool JobRequiresOutboundNetwork(ProvisionJobKind kind) =>
+        kind is ProvisionJobKind.Winget
+            or ProvisionJobKind.WingetImport
+            or ProvisionJobKind.Scoop
+            or ProvisionJobKind.ScoopBatch
+            or ProvisionJobKind.Wsl
+            or ProvisionJobKind.AppxSafetyNet;
 
     /// <summary>Compose plan artifacts (jobs, stages, unattend, manifest) from a validated <see cref="Profile"/>.</summary>
     public static Result<BuildArtifacts, Failure> Plan(Profile profile, RunOptions? run = null)
@@ -387,6 +400,25 @@ public static partial class BuildPlan
             }
         }
 
+        if (options.SmokePlumbing)
+        {
+            if (!options.IncludeSmokeStubs)
+            {
+                return Result.Fail<BuildArtifacts, Failure>(
+                    new Failure(
+                        "run.smokePlumbing.stubsRequired",
+                        "SmokePlumbing requires IncludeSmokeStubs (Smoke harness only)."));
+            }
+
+            if (options.ImageQuality != ImageQualityLane.Test)
+            {
+                return Result.Fail<BuildArtifacts, Failure>(
+                    new Failure(
+                        "run.smokePlumbing.testLaneRequired",
+                        "SmokePlumbing is Test-lane only (not Release/Primary)."));
+            }
+        }
+
         PackageCatalog catalog = options.PackageCatalog ?? PackageCatalog.Default;
         string imageArchitecture = string.IsNullOrWhiteSpace(options.ImageArchitecture)
             ? PackageCatalog.DefaultImageArchitecture
@@ -395,7 +427,8 @@ public static partial class BuildPlan
             profile,
             catalog,
             imageArchitecture,
-            options.PackageAuditStrict);
+            options.PackageAuditStrict,
+            smokePlumbing: options.SmokePlumbing);
         if (!packages.IsOk)
         {
             return Result.Fail<BuildArtifacts, Failure>(packages.Error);
@@ -443,7 +476,7 @@ public static partial class BuildPlan
                 DohTemplate: doh.DohTemplate));
         }
 
-        if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Online)
+        if (appx.Count > 0 && profile.DebloatMode == DebloatMode.Online && !options.SmokePlumbing)
         {
             jobList.Add(new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet));
         }
@@ -473,6 +506,7 @@ public static partial class BuildPlan
         [
             ServicingOpcode.MountInstallWim,
             ServicingOpcode.StampOfflinePolicies,
+            ServicingOpcode.EraseOfflineOneDrive,
         ];
 
         // Offline DISM remove whenever the effective remove-list is non-empty.
@@ -513,7 +547,7 @@ public static partial class BuildPlan
             jobs,
             stages,
             new DmaContract(profile.Dma.Enabled, profile.Dma.Enabled ? profile.Dma.Settle : null),
-            new BuildManifest(options.ImageQuality, PlanRequiresNetwork()),
+            new BuildManifest(options.ImageQuality, PlanRequiresNetwork(jobList)),
             profile.Account,
             appx,
             packageSlice.EffectivePackages,

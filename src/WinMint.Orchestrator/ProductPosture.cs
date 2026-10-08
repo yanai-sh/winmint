@@ -274,6 +274,20 @@ public static class ProductPosture
 
         rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "ShowRecent", "0"));
         rows.Add(User(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "ShowCloudFilesInQuickAccess", "0"));
+        // Keep Known Folders under the profile — never OneDrive\Documents / Pictures / …
+        const string usf = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders";
+        rows.Add(UserExpand(usf, "Desktop", @"%USERPROFILE%\Desktop"));
+        rows.Add(UserExpand(usf, "Personal", @"%USERPROFILE%\Documents"));
+        rows.Add(UserExpand(usf, "My Pictures", @"%USERPROFILE%\Pictures"));
+        rows.Add(UserExpand(usf, "My Music", @"%USERPROFILE%\Music"));
+        rows.Add(UserExpand(usf, "My Video", @"%USERPROFILE%\Videos"));
+        rows.Add(UserExpand(usf, "Favorites", @"%USERPROFILE%\Favorites"));
+        rows.Add(UserExpand(usf, "{374DE290-123F-4565-9164-39C4925E467B}", @"%USERPROFILE%\Downloads"));
+        rows.Add(UserExpand(usf, "{F42EE2D3-909F-4907-8871-4C22FC0BF756}", @"%USERPROFILE%\Documents"));
+        rows.Add(UserExpand(usf, "{0DDD015D-B06C-45D5-8C4C-F59713854639}", @"%USERPROFILE%\Pictures"));
+        rows.Add(UserExpand(usf, "{A0C69A99-21C8-4671-8703-7934162FCF1D}", @"%USERPROFILE%\Music"));
+        rows.Add(UserExpand(usf, "{35286A68-3C57-41A1-BBB1-0EAE73D76C95}", @"%USERPROFILE%\Videos"));
+        rows.Add(UserExpand(usf, "{754AC886-DF64-4CBA-86B5-F7FBF4FBCEF5}", @"%USERPROFILE%\Desktop"));
         rows.Add(User(
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Search",
             "SearchboxTaskbarMode",
@@ -437,6 +451,9 @@ public static class ProductPosture
     private static readonly OfflinePolicyRow[] OneDriveDisable =
     [
         Soft("Policies\\Microsoft\\Windows\\OneDrive", "DisableFileSyncNGSC", "1", "onedrive"),
+        Soft("Policies\\Microsoft\\Windows\\OneDrive", "DisableFileSync", "1", "onedrive"),
+        Soft("Policies\\Microsoft\\Windows\\OneDrive", "DisableMeteredNetworkFileSync", "1", "onedrive"),
+        Soft("Policies\\Microsoft\\Windows\\OneDrive", "PreventNetworkTrafficPreUserSignIn", "1", "onedrive"),
         Soft(@"Microsoft\OneDrive", "PreventNetworkTrafficPreUserSignIn", "1", "onedrive"),
     ];
 
@@ -485,6 +502,9 @@ public static class ProductPosture
 
     private static OfflinePolicyRow UserString(string subKey, string name, string data) =>
         new("NTUSER", subKey, name, "REG_SZ", data, "quiet");
+
+    private static OfflinePolicyRow UserExpand(string subKey, string name, string data) =>
+        new("NTUSER", subKey, name, "REG_EXPAND_SZ", data, "quiet");
 }
 
 /// <summary>One offline <c>reg add</c> row under SOFTWARE, SYSTEM, or NTUSER. <see cref="Family"/> is declared, never inferred.</summary>

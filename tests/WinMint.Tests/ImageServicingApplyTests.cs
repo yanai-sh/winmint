@@ -64,6 +64,7 @@ public class ImageServicingApplyTests
                 [
                     ServicingOpcode.MountInstallWim,
                     ServicingOpcode.StampOfflinePolicies,
+                    ServicingOpcode.EraseOfflineOneDrive,
                     ServicingOpcode.RemoveProvisionedAppx,
                     ServicingOpcode.StagePayload,
                     ServicingOpcode.StampOfflineDefaultUser,
@@ -84,6 +85,11 @@ public class ImageServicingApplyTests
                     && polMount == ImageServicing.HostMountDir
                     && s.Parameters.TryGetValue(StageParams.WorkDirectory, out string? polWork)
                     && polWork == work);
+            Assert.Contains(
+                runner.Stages,
+                s => s.Opcode == ServicingOpcode.EraseOfflineOneDrive
+                    && s.Parameters.TryGetValue(StageParams.MountDir, out string? odMount)
+                    && odMount == ImageServicing.HostMountDir);
             Assert.Contains(
                 runner.Stages,
                 s => s.Opcode == ServicingOpcode.StampOfflineDefaultUser

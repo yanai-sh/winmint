@@ -159,6 +159,7 @@ public class BuildPlanPlanTests
             [
                 ServicingOpcode.MountInstallWim,
                 ServicingOpcode.StampOfflinePolicies,
+                ServicingOpcode.EraseOfflineOneDrive,
                 ServicingOpcode.RemoveProvisionedAppx,
                 ServicingOpcode.StagePayload,
                 ServicingOpcode.StampOfflineDefaultUser,
@@ -208,6 +209,120 @@ public class BuildPlanPlanTests
         Assert.True(result.IsOk);
         Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.ready" });
         Assert.Contains(result.Value.Jobs.Jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.complete" });
+        Assert.True(result.Value.Manifest.RequiresNetwork);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
+    }
+
+    [Fact]
+    public void Plan_smokePlumbing_omits_outbound_packages_and_requiresNetwork_false()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              },
+              "packages": {
+                "winget": ["Anysphere.Cursor"],
+                "wsl": ["Ubuntu"]
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { IncludeSmokeStubs = true, SmokePlumbing = true });
+
+        Assert.True(result.IsOk);
+        BuildArtifacts artifacts = result.Value;
+        Assert.False(artifacts.Manifest.RequiresNetwork);
+        Assert.Contains(artifacts.Jobs.Jobs, j => j is { Kind: ProvisionJobKind.Stub, Id: "smoke.stub.ready" });
+        Assert.Contains(artifacts.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WslPlatform);
+        Assert.DoesNotContain(artifacts.Jobs.Jobs, j => j.Kind is ProvisionJobKind.Winget or ProvisionJobKind.WingetImport);
+        Assert.DoesNotContain(artifacts.Jobs.Jobs, j => j.Kind is ProvisionJobKind.Scoop or ProvisionJobKind.ScoopBatch);
+        Assert.DoesNotContain(artifacts.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
+        Assert.DoesNotContain(
+            artifacts.EffectivePackages,
+            p => string.Equals(p.ResolvedInstallId, ProductPosture.MinGitWingetId, StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(artifacts.EffectiveWinget);
+    }
+
+    [Fact]
+    public void Plan_smokePlumbing_without_stubs_fails()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { SmokePlumbing = true });
+
+        Assert.False(result.IsOk);
+        Assert.Equal("run.smokePlumbing.stubsRequired", result.Error.Code);
+    }
+
+    [Fact]
+    public void Plan_smokePlumbing_release_fails()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions
+            {
+                IncludeSmokeStubs = true,
+                SmokePlumbing = true,
+                ImageQuality = ImageQualityLane.Release,
+            });
+
+        Assert.False(result.IsOk);
+        Assert.Equal("run.smokePlumbing.testLaneRequired", result.Error.Code);
     }
 
     [Fact]

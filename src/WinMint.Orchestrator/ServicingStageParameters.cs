@@ -64,6 +64,8 @@ public sealed record StampOfflinePoliciesParameters(string MountDir, string Work
 
 public sealed record StampOfflineDefaultUserParameters(string MountDir, string WorkDirectory, string DefaultUserPath);
 
+public sealed record EraseOfflineOneDriveParameters(string MountDir);
+
 public sealed record RemoveProvisionedAppxParameters(
     string MountDir,
     string WorkDirectory,
