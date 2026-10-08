@@ -157,6 +157,7 @@ if ($watch -notmatch 'PSBoundParameters' -or $watch -notmatch 'ContainsKey') {
 $watchCs = Get-Content -LiteralPath (Join-Path $repo 'src/WinMint.Watch/Program.cs') -Raw -Encoding utf8
 if ($watchCs -notmatch 'GetSmokeWatchVerdict') { throw 'WinMint.Watch must implement smoke verdict logic' }
 if ($watchCs -notmatch 'Diagnostics\.Stopwatch') { throw 'WinMint.Watch smoke age must use Stopwatch' }
+if ($watchCs -notmatch 'applyStage \?\?=') { throw 'WinMint.Watch BuildFrame must null-coalesce applyStage (failed/empty apply)' }
 $spawnAt = $smoke.IndexOf('Start-WinMintHostWatchProcess')
 if ($spawnAt -lt 0) { throw 'Invoke-Smoke must spawn watch via Start-WinMintHostWatchProcess' }
 $spawn = $smoke.Substring($spawnAt, [Math]::Min(400, $smoke.Length - $spawnAt))

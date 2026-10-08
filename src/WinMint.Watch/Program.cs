@@ -320,7 +320,7 @@ internal static class Program
     {
         if (!File.Exists(path))
         {
-            return default;
+            return new ApplyStatusSnap(string.Empty, string.Empty, null);
         }
 
         try
