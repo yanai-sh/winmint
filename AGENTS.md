@@ -23,7 +23,7 @@ Open by branch:
 | Domain-doc habit for engineering skills | [docs/agents/domain.md](docs/agents/domain.md) |
 | Operator / legal policy | [README.md](README.md), [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) |
 
-Identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)) · Wizard never exposes Lane ([ADR-016](docs/decisions/ADR-016-wizard-no-lane.md)).
+Identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)) · Wizard never exposes Lane ([ADR-016](docs/decisions/ADR-016-wizard-no-lane.md)) · account modes `oobeLocal` / `localAutoLogon` ([ADR-017](docs/decisions/ADR-017-account-modes.md)).
 
 ## Map
 

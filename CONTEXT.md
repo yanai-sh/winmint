@@ -77,6 +77,15 @@ _Avoid_: reading `Dma*` types as device-memory or Kernel DMA Protection; sticky 
 **OOBE answers** — Profile-derived replies that complete Windows setup screens so those screens never appear. Distinct from the DMA sticky setup region and from FirstLogon.  
 _Avoid_: SkipMachineOOBE; SkipUserOOBE; gating answers on DMA enabled; conflating with Machine setup or FirstLogon
 
+**Account mode** — Profile `account.mode` discriminator for how the owner local account is created ([ADR-017](docs/decisions/ADR-017-account-modes.md)).  
+_Avoid_: treating Station pack alone as the portable delivery unit; C2 custom identity UI as the portable path; conflating with OOBE answers
+
+**`oobeLocal`** — Intended shareable-ISO path: no baked owner password; native OOBE creates the local account; single FirstLogon as that user. May defer Supervisor Shell until after first interactive logon. Curated default only after Primary-proof gate.  
+_Avoid_: offline Shell stamp that blocks OOBE; assuming MSA-free OOBE forever without contracts
+
+**`localAutoLogon`** — Bake-in path: username + password in the Output ISO; AutoLogon into Supervisor; single tenure from first frame. Smoke / automation; operational default until `oobeLocal` is proven.  
+_Avoid_: shipping this as the only long-term shareable-media story
+
 **Smoke** — Hyper-V plumbing acceptance (`Test` lane, Local+autoLogon, Pro). Headless by default. Maintainer vanilla Source ISO path: [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-host.json) (also [AGENTS](AGENTS.md#maintainer-host)). Default **offline OOBE**: guest NIC stays off Default Switch until Supervisor (skip ZDP); Apply uses a HideWireless overlay without editing Primary `sl7.profile.json`. Escape: `-OnlineOobe` / `ONLINE=1`. **Smoke plumbing** (`--smoke-plumbing` with stubs): omit outbound FirstLogon package jobs and stamp `requiresNetwork=false` so no-internet Smoke can Complete; not a Profile field and not Offline OOBE. Apply via `just apply-smoke-maintainer`.  
 _Avoid_: treating Smoke alone as Primary wipe confidence; treating Hyper-V Connect as the product UI; second Connect / Enhanced Session as unattended readiness; treating CloudExperienceHost “Just a moment” as a hang when Default Switch is up (ZDP/OOBE updates); assuming always-online OOBE is the only Hyper-V path; Guest Services / `Copy-VMFile` / Gen2 serial as OOBE progress; calling a host status file Evidence; inventing a second ISO path in chat when the fixture already names it; flipping committed `sl7` `requireWifiDuringOobe` for lab speed; conflating Offline OOBE (NIC defer) with Smoke plumbing (no download jobs); `ONLINE=1` as the fix for `network.required.offline`
 
