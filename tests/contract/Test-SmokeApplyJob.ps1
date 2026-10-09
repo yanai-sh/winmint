@@ -36,6 +36,9 @@ if ($jobScript -notmatch 'CREATE_SUSPENDED') {
 if ($jobScript -notmatch 'ResumeThread|ResumePrimaryThread') {
     throw 'WinMintSmokeApplyJob must resume Apply only after job assignment'
 }
+if ($jobScript -notmatch '\$exitCode\s*=\s*\[int\]\$proc\.ExitCode') {
+    throw 'WinMintSmokeApplyJob must capture ExitCode into $exitCode before finally (return inside try can yield $null)'
+}
 
 . (Join-Path $repo 'tools/vm/WinMintSmokeApplyJob.ps1')
 

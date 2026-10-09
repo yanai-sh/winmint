@@ -286,6 +286,8 @@ function Invoke-WinMintSmokeApplyMaintainer {
     # Nested Add-Type struct: ::default is not a static property under StrictMode.
     $pi = [Activator]::CreateInstance([WinMintSmokeApplyJobNative+PROCESS_INFORMATION])
     $assigned = $false
+    # Capture before finally — `return $proc.ExitCode` inside try can yield $null to the caller.
+    $exitCode = $null
     try {
         $hJob = [WinMintSmokeApplyJobNative]::CreateKillOnCloseJob()
     }
@@ -328,7 +330,7 @@ function Invoke-WinMintSmokeApplyMaintainer {
 
         $proc = [System.Diagnostics.Process]::GetProcessById($pi.dwProcessId)
         $proc.WaitForExit()
-        return $proc.ExitCode
+        $exitCode = [int]$proc.ExitCode
     }
     finally {
         if (-not $assigned -and $pi.hProcess -ne [IntPtr]::Zero) {
@@ -341,4 +343,9 @@ function Invoke-WinMintSmokeApplyMaintainer {
             [WinMintSmokeApplyJobNative]::CloseJob($hJob)
         }
     }
+
+    if ($null -eq $exitCode) {
+        throw 'smokeApplyJobFailed: Apply process exited but no exit code was captured'
+    }
+    return $exitCode
 }
