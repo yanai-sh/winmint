@@ -29,7 +29,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $repoRoot
-. (Join-Path $repoRoot 'tools/host/Write-WinMintHostProgress.ps1')
+. (Join-Path $repoRoot 'tools/host/WinMintHostConsole.ps1')
 
 function Invoke-WinMintSmokeElevatedWorker {
     param(

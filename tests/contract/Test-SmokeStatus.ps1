@@ -102,9 +102,12 @@ if ($smoke -notmatch 'apply-smoke-maintainer') {
 if ($smoke -match 'apply-maintainer \$Iso \$Work \$applyProfilePath true') {
     throw 'Invoke-Smoke must not use opaque apply-maintainer … true for Smoke Apply'
 }
-$hostProgress = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Write-WinMintHostProgress.ps1') -Raw -Encoding utf8
-if ($hostProgress -notmatch '-NonInteractive') {
-    throw 'Watcher spawn must pass -NonInteractive so prompts fail closed'
+$hostConsole = Get-Content -LiteralPath (Join-Path $repo 'tools/host/WinMintHostConsole.ps1') -Raw -Encoding utf8
+if ($hostConsole -match "-NonInteractive', '-File', `$watchScript") {
+    throw 'Watcher spawn must not use -NonInteractive (needs console UI)'
+}
+if ($hostConsole -notmatch '-NonInteractive') {
+    throw 'Watcher spawn policy must document -NonInteractive (watch stays interactive)'
 }
 if ($smoke -notmatch 'Get-SmokeWatcherSpawnDecision') {
     throw 'Invoke-Smoke must skip a live watcher via Get-SmokeWatcherSpawnDecision'

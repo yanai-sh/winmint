@@ -11,6 +11,8 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $repo 'tools/host/Write-WinMintHostProgress.ps1')
 
 $helper = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Write-WinMintHostProgress.ps1') -Raw -Encoding utf8
+$console = Get-Content -LiteralPath (Join-Path $repo 'tools/host/WinMintHostConsole.ps1') -Raw -Encoding utf8
+if ($console -notmatch 'function Start-WinMintHostConsole') { throw 'WinMintHostConsole must export Start-WinMintHostConsole' }
 if ($helper -notmatch '\$PSStyle') { throw 'helper must use $PSStyle' }
 if ($helper -notmatch "Progress\.View = 'Minimal'") { throw 'helper must set Progress.View to Minimal' }
 if ($helper -match 'Spectre') { throw 'helper must not pull a TUI package' }
@@ -25,12 +27,14 @@ if ($helper -notmatch 'function Format-WinMintWatchClip') { throw 'helper must d
 $clipped = Format-WinMintWatchClip -Text ('Remove-ProvisionedAppxPackage PackageName=' + ('x' * 200) + ' catalogId=Microsoft.GetHelp') -MaxWidth 60
 if ($clipped.Length -gt 60) { throw 'Format-WinMintWatchClip must not exceed MaxWidth' }
 if ($clipped[-1] -cne [char]0x2026) { throw 'Format-WinMintWatchClip must end with … when clipped' }
-if ($helper -notmatch 'function Start-WinMintHostWatchProcess') { throw 'helper must spawn watch via Start-WinMintHostWatchProcess' }
-if ($helper -notmatch 'wt' -and $helper -notmatch 'WindowsTerminal') { throw 'spawn helper must consider wt.exe' }
-if ($helper -notmatch 'ArgumentList\.Add') { throw 'wt spawn must use ProcessStartInfo.ArgumentList so spaced --title stays one argv' }
-if ($helper -notmatch "'-w',\s*'0'") { throw 'wt spawn must open a new window (-w 0) so elevated smoke does not attach to an existing session' }
-if ($helper -match "-NonInteractive', '-File', `$watchScript") { throw 'watch spawn must not use -NonInteractive (needs console UI)' }
-if ($helper -notmatch '-PriorRunId:') { throw 'empty PriorRunId must be one argv (-PriorRunId:) so wt does not drop it' }
+if ($console -notmatch 'function Start-WinMintHostWatchProcess') { throw 'console module must spawn watch via Start-WinMintHostWatchProcess' }
+if ($console -notmatch 'wt' -and $console -notmatch 'WindowsTerminal') { throw 'spawn helper must consider wt.exe' }
+if ($console -notmatch 'ArgumentList\.Add') { throw 'wt spawn must use ProcessStartInfo.ArgumentList so spaced --title stays one argv' }
+if ($console -notmatch "'-w',\s*'0'") { throw 'wt spawn must open a new window (-w 0) so elevated smoke does not attach to an existing session' }
+if ($console -match "-NonInteractive', '-File', `$watchScript") { throw 'watch spawn must not use -NonInteractive (needs console UI)' }
+if ($console -notmatch '-PriorRunId:') { throw 'empty PriorRunId must be one argv (-PriorRunId:) so wt does not drop it' }
+if ($helper -match 'function Resolve-WinMintWindowsTerminal') { throw 'progress helper must not own wt resolve' }
+if ($helper -match 'function Start-WinMintHostConsole') { throw 'progress helper must not own Start-WinMintHostConsole' }
 if ($helper -notmatch 'UseOSCIndicator') { throw 'helper must set Progress.UseOSCIndicator when interactive VT' }
 if (-not (Test-WinMintTrailHeartbeatLine -Line 'AddQualityUpdates running 78s')) { throw 'heartbeat detector missed running line' }
 if (Test-WinMintTrailHeartbeatLine -Line 'Catalog BITS start KB1') { throw 'heartbeat detector false positive' }
