@@ -29,6 +29,14 @@ foreach ($path in @(
     }
 }
 
+$jobScript = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/WinMintSmokeApplyJob.ps1') -Raw -Encoding utf8
+if ($jobScript -notmatch 'CREATE_SUSPENDED') {
+    throw 'WinMintSmokeApplyJob must create Apply suspended before AssignProcessToJobObject'
+}
+if ($jobScript -notmatch 'ResumeThread|ResumePrimaryThread') {
+    throw 'WinMintSmokeApplyJob must resume Apply only after job assignment'
+}
+
 . (Join-Path $repo 'tools/vm/WinMintSmokeApplyJob.ps1')
 
 $hJob = [WinMintSmokeApplyJobNative]::CreateKillOnCloseJob()
