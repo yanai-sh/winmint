@@ -28,6 +28,9 @@ $clipped = Format-WinMintWatchClip -Text ('Remove-ProvisionedAppxPackage Package
 if ($clipped.Length -gt 60) { throw 'Format-WinMintWatchClip must not exceed MaxWidth' }
 if ($clipped[-1] -cne [char]0x2026) { throw 'Format-WinMintWatchClip must end with … when clipped' }
 if ($console -notmatch 'function Start-WinMintHostWatchProcess') { throw 'console module must spawn watch via Start-WinMintHostWatchProcess' }
+if ($console -notmatch 'ParameterSetName = ''Elevate''') { throw 'console module must expose -Elevate parameter set' }
+if ($console -notmatch 'transcriptLocked') { throw 'console module must enforce single-flight transcript lock' }
+if ($console -notmatch 'overlapAlive') { throw 'console module must enforce overlapAlive single-flight' }
 if ($console -notmatch 'wt' -and $console -notmatch 'WindowsTerminal') { throw 'spawn helper must consider wt.exe' }
 if ($console -notmatch 'ArgumentList\.Add') { throw 'wt spawn must use ProcessStartInfo.ArgumentList so spaced --title stays one argv' }
 if ($console -notmatch "'-w',\s*'0'") { throw 'wt spawn must open a new window (-w 0) so elevated smoke does not attach to an existing session' }

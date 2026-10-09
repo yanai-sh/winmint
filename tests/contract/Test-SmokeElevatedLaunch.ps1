@@ -5,17 +5,23 @@ $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $start = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Start-SmokeElevated.ps1') -Raw -Encoding utf8
+$console = Get-Content -LiteralPath (Join-Path $repo 'tools/host/WinMintHostConsole.ps1') -Raw -Encoding utf8
 $elev = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Invoke-SmokeElevated.ps1') -Raw -Encoding utf8
 $recipe = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Invoke-SmokeRecipe.ps1') -Raw -Encoding utf8
 $just = Get-Content -LiteralPath (Join-Path $repo 'Justfile') -Raw -Encoding utf8
 
-if ($start -notmatch 'Resolve-WinMintWindowsTerminal') { throw 'Start-SmokeElevated must resolve wt' }
-if ($start -notmatch 'ArgumentList\.Add') { throw 'Start-SmokeElevated must use ProcessStartInfo.ArgumentList' }
-if ($start -notmatch "'-w',\s*'0'") { throw 'Start-SmokeElevated must open a new wt window (-w 0)' }
-if ($start -notmatch 'sudo') { throw 'Start-SmokeElevated must elevate via sudo when not admin' }
+if ($start -notmatch 'Start-WinMintHostConsole') { throw 'Start-SmokeElevated must call Start-WinMintHostConsole' }
+if ($start -notmatch '\-Elevate') { throw 'Start-SmokeElevated must pass -Elevate to the host console module' }
+if ($start -match 'function Start-WinMintArgvProcess') { throw 'Start-SmokeElevated must not define Start-WinMintArgvProcess' }
+if ($console -notmatch 'Resolve-WinMintWindowsTerminal') { throw 'WinMintHostConsole must resolve wt' }
+if ($console -notmatch 'ArgumentList\.Add') { throw 'WinMintHostConsole must use ProcessStartInfo.ArgumentList' }
+if ($console -notmatch "'-w',\s*'0'") { throw 'WinMintHostConsole must open a new wt window (-w 0)' }
+if ($console -notmatch 'sudo') { throw 'WinMintHostConsole must elevate via sudo when not admin' }
+if ($console -notmatch 'host-console-spawn\.json') { throw 'WinMintHostConsole must stamp host-console-spawn.json' }
+if ($console -notmatch 'watchMarkerTimeout') { throw 'WinMintHostConsole watch path must fail loud on marker timeout' }
 if ($start -notmatch 'ElevatedWorker') { throw 'Start-SmokeElevated must own -ElevatedWorker process body' }
 if ($start -notmatch 'Invoke-SmokeRecipe\.ps1') { throw 'Start-SmokeElevated worker must invoke Recipe in-process' }
-if ($start -notmatch 'WT_SESSION') { throw 'Start-SmokeElevated must detect an existing Windows Terminal session' }
+if ($console -notmatch 'WT_SESSION') { throw 'WinMintHostConsole must detect an existing Windows Terminal session' }
 if ($start -match '& pwsh -NoProfile -File \$recipe') {
     throw 'Start-SmokeElevated must not nest pwsh.exe for the recipe (conhost)'
 }
