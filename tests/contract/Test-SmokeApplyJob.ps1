@@ -39,6 +39,12 @@ if ($jobScript -notmatch 'ResumeThread|ResumePrimaryThread') {
 if ($jobScript -notmatch '\$exitCode\s*=\s*\[int\]\$proc\.ExitCode') {
     throw 'WinMintSmokeApplyJob must capture ExitCode into $exitCode before finally (return inside try can yield $null)'
 }
+if ($jobScript -match 'PROCESS_INFORMATION\]::default') {
+    throw 'WinMintSmokeApplyJob must not use PROCESS_INFORMATION::default (StrictMode — use Activator.CreateInstance)'
+}
+if ($jobScript -notmatch 'Activator\]::CreateInstance\(\[WinMintSmokeApplyJobNative\+PROCESS_INFORMATION\]\)') {
+    throw 'WinMintSmokeApplyJob must zero-init PROCESS_INFORMATION via Activator.CreateInstance under StrictMode'
+}
 
 . (Join-Path $repo 'tools/vm/WinMintSmokeApplyJob.ps1')
 

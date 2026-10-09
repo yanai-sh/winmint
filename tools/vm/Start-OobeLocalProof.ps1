@@ -77,7 +77,9 @@ function Invoke-OobeLocalProofWorker {
         try {
             $proofUser = [string](Get-Content -LiteralPath $profilePath -Raw -Encoding utf8 | ConvertFrom-Json).account.username
             if ([string]::IsNullOrWhiteSpace($proofUser)) { $proofUser = 'proof' }
-        } catch { }
+        } catch {
+            Write-Verbose "proof username fallback to 'proof': $($_.Exception.Message)"
+        }
         Write-Host "OobeLocal proof HEAD=$(git rev-parse --short HEAD) Work=$Work"
         Write-Host "At OOBE create local user '$proofUser' with password from: $guestPasswordPath"
         Write-Host 'Expect possible second sign-in after deferred Shell (FirstLogonCommands logoff).'
@@ -124,7 +126,9 @@ $proofUser = 'proof'
 try {
     $proofUser = [string](Get-Content -LiteralPath $profilePath -Raw -Encoding utf8 | ConvertFrom-Json).account.username
     if ([string]::IsNullOrWhiteSpace($proofUser)) { $proofUser = 'proof' }
-} catch { }
+} catch {
+    Write-Verbose "proof username fallback to 'proof': $($_.Exception.Message)"
+}
 Write-Host "Spawned elevated oobeLocal proof ($($result.disposition)). Log: $log"
 Write-Host "OOBE: create local user '$proofUser' / password in $guestPasswordPath"
 exit 0
