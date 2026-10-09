@@ -82,6 +82,7 @@ Set-Location $repoRoot
 
 . (Join-Path $repoRoot 'tools/vm/SmokeStatus.ps1')
 . (Join-Path $repoRoot 'tools/host/Write-WinMintHostProgress.ps1')
+. (Join-Path $PSScriptRoot 'WinMintSmokeApplyJob.ps1')
 . (Join-Path $repoRoot 'tools/AcceptanceManifest.ps1')
 
 function Write-SmokeHostLine {
@@ -263,11 +264,12 @@ if (-not $SkipApply) {
         -LastHostLine "Applying Profile=$applyProfilePath" -OutputIso $null -RunId $runId
     Write-SmokeHostLine -Name "Applying Profile=$applyProfilePath Iso=$Iso Work=$Work (Test lane, smoke stubs on)…" -Activity apply
     $runScratchHygiene = $true
+    # Job Object KILL_ON_JOB_CLOSE: killing this waiter stops Apply. `just discard-stale-mount` only after hard-kill mid-DISM Invalid mounts.
     try {
-        & just apply-smoke-maintainer $Iso $Work $applyProfilePath
+        $applyExit = Invoke-WinMintSmokeApplyMaintainer -Iso $Iso -Work $Work -ProfilePath $applyProfilePath
         $applyFail = Get-WinMintApplyHostFailure -WorkDirectory $workFull
         if ($applyFail) { throw $applyFail }
-        if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
+        if ($applyExit -ne 0) { throw "Apply failed: $applyExit" }
     }
     catch {
         $lock = Format-WinMintServicingLockFailure -Message "$_"
@@ -488,6 +490,7 @@ function Test-GuestEvidenceReady {
             # Reboot needs no live shell probe — readiness alone is wait-reboot.
             if ($outcome -eq 'Reboot') {
                 $script:LastProbeError = ''
+                $script:LastHandoffIncomplete = $false
                 $script:LastSupervisorRunning = $false
                 if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $pulled `
                         -LiveShell '' -SupervisorRunning:$false -RequiredSmokeRunId $runId) -ceq 'wait-reboot') {
@@ -574,12 +577,14 @@ function Test-GuestEvidenceReady {
                 -LiveShell ([string]$live.Shell) -SupervisorRunning:$live.SupervisorRunning `
                 -RequiredSmokeRunId $runId -ExplorerRunning $live.ExplorerRunning
             if ($readiness -eq 'wait-handoff') {
+                $script:LastHandoffIncomplete = ($outcome -eq 'Complete')
                 if ($outcome -eq 'Complete') {
                     Write-SmokeHostLine -Name ("Guest evidence Complete but handoff not verified " +
                         "(shell='$($live.Shell)' supervisor=$($live.SupervisorRunning) explorer=$($live.ExplorerRunning)) — waiting…") -Activity wait
                 }
                 return $false
             }
+            $script:LastHandoffIncomplete = $false
             if ($readiness -notin @('ready', 'failed')) {
                 return $false
             }
@@ -608,6 +613,7 @@ $script:GuestUpSticky = $false
 $script:GuestUpStickySw = $null
 $script:ConsecutiveHeartbeatOk = 0
 $script:LastProbeError = ''
+$script:LastHandoffIncomplete = $false
 $script:LastSupervisorRunning = $false
 $script:GuestEvidenceFingerprint = ''
 $script:LastGuestEvidenceFingerprint = ''
@@ -768,6 +774,8 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
                 LastFingerprint          = $script:LastGuestEvidenceFingerprint
                 Fingerprint              = $script:GuestEvidenceFingerprint
                 SupervisorRunning        = $script:LastSupervisorRunning
+                ProbeTransportError      = ([bool]$script:GuestUpSticky -and -not [string]::IsNullOrWhiteSpace($script:LastProbeError))
+                HandoffIncomplete        = ([bool]$script:GuestUpSticky -and [bool]$script:LastHandoffIncomplete)
                 SetupRebootCount         = $script:SetupRebootCount
                 MaxSetupReboots          = $MaxSetupReboots
                 StallElapsedMinutes      = $stallSw.Elapsed.TotalMinutes

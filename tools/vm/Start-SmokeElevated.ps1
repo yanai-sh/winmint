@@ -29,7 +29,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $repoRoot
-. (Join-Path $repoRoot 'tools/host/Write-WinMintHostProgress.ps1')
+. (Join-Path $repoRoot 'tools/host/WinMintHostConsole.ps1')
 
 function Invoke-WinMintSmokeElevatedWorker {
     param(
@@ -113,58 +113,30 @@ if (-not [string]::IsNullOrWhiteSpace($TranscriptPath)) {
 
 $self = Join-Path $repoRoot 'tools\vm\Start-SmokeElevated.ps1'
 $pwshExe = (Get-Command pwsh.exe -ErrorAction Stop).Source
-$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
-    [Security.Principal.WindowsBuiltInRole]::Administrator)
-$inWt = -not [string]::IsNullOrWhiteSpace([string]$env:WT_SESSION)
 
-# Already elevated inside Windows Terminal — stay in this tab.
-if ($admin -and $inWt) {
+$elevSplat = @{
+    Elevate        = $true
+    RepoRoot       = $repoRoot
+    Work           = $Work
+    File           = $self
+    ArgumentList   = $innerArgs
+    PwshExe        = $pwshExe
+    TranscriptPath = $TranscriptPath
+}
+$result = Start-WinMintHostConsole @elevSplat
+
+if ($result.disposition -eq 'RunHere') {
     Invoke-WinMintSmokeElevatedWorker @workerSplat
     exit $LASTEXITCODE
 }
 
-$wt = Resolve-WinMintWindowsTerminal
-$title = "WinMint smoke elevated — $Work"
-
-function Start-WinMintArgvProcess {
-    param(
-        [Parameter(Mandatory)] [string] $FileName,
-        [Parameter(Mandatory)] [string[]] $ArgumentList,
-        [Parameter(Mandatory)] [string] $WorkingDirectory
-    )
-    $psi = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName = $FileName
-    $psi.WorkingDirectory = $WorkingDirectory
-    $psi.UseShellExecute = $false
-    foreach ($a in $ArgumentList) { [void]$psi.ArgumentList.Add([string]$a) }
-    [void][System.Diagnostics.Process]::Start($psi)
+# Spawned — confirm outer starter stayed alive briefly (Stopwatch; host clock can jump).
+$alive = [Diagnostics.Stopwatch]::StartNew()
+while ($alive.Elapsed.TotalSeconds -lt 4) {
+    if ($null -ne (Get-Process -Id $result.childPid -ErrorAction SilentlyContinue)) {
+        exit 0
+    }
+    Start-Sleep -Milliseconds 150
 }
 
-if ($admin -and $wt -and -not $inWt) {
-    $wtArgs = @(
-        '-w', '0', 'new-tab', '--title', $title, '-d', $repoRoot, '--',
-        $pwshExe, '-NoProfile', '-File', $self
-    ) + $innerArgs
-    Start-WinMintArgvProcess -FileName $wt -ArgumentList $wtArgs -WorkingDirectory $repoRoot
-    exit 0
-}
-
-if (-not $admin -and $wt) {
-    $sudoArgs = @(
-        '-E', $wt,
-        '-w', '0', 'new-tab', '--title', $title, '-d', $repoRoot, '--',
-        $pwshExe, '-NoProfile', '-File', $self
-    ) + $innerArgs
-    Start-WinMintArgvProcess -FileName 'sudo' -ArgumentList $sudoArgs -WorkingDirectory $repoRoot
-    exit 0
-}
-
-if (-not $admin) {
-    $sudoArgs = @('-E', $pwshExe, '-NoProfile', '-File', $self) + $innerArgs
-    Start-WinMintArgvProcess -FileName 'sudo' -ArgumentList $sudoArgs -WorkingDirectory $repoRoot
-    exit 0
-}
-
-# Elevated, no wt — run here (conhost).
-Invoke-WinMintSmokeElevatedWorker @workerSplat
-exit $LASTEXITCODE
+throw "childExitedEarly: pid=$($result.childPid)"

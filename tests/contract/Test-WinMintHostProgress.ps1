@@ -11,6 +11,8 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $repo 'tools/host/Write-WinMintHostProgress.ps1')
 
 $helper = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Write-WinMintHostProgress.ps1') -Raw -Encoding utf8
+$console = Get-Content -LiteralPath (Join-Path $repo 'tools/host/WinMintHostConsole.ps1') -Raw -Encoding utf8
+if ($console -notmatch 'function Start-WinMintHostConsole') { throw 'WinMintHostConsole must export Start-WinMintHostConsole' }
 if ($helper -notmatch '\$PSStyle') { throw 'helper must use $PSStyle' }
 if ($helper -notmatch "Progress\.View = 'Minimal'") { throw 'helper must set Progress.View to Minimal' }
 if ($helper -match 'Spectre') { throw 'helper must not pull a TUI package' }
@@ -25,12 +27,13 @@ if ($helper -notmatch 'function Format-WinMintWatchClip') { throw 'helper must d
 $clipped = Format-WinMintWatchClip -Text ('Remove-ProvisionedAppxPackage PackageName=' + ('x' * 200) + ' catalogId=Microsoft.GetHelp') -MaxWidth 60
 if ($clipped.Length -gt 60) { throw 'Format-WinMintWatchClip must not exceed MaxWidth' }
 if ($clipped[-1] -cne [char]0x2026) { throw 'Format-WinMintWatchClip must end with … when clipped' }
-if ($helper -notmatch 'function Start-WinMintHostWatchProcess') { throw 'helper must spawn watch via Start-WinMintHostWatchProcess' }
-if ($helper -notmatch 'wt' -and $helper -notmatch 'WindowsTerminal') { throw 'spawn helper must consider wt.exe' }
-if ($helper -notmatch 'ArgumentList\.Add') { throw 'wt spawn must use ProcessStartInfo.ArgumentList so spaced --title stays one argv' }
-if ($helper -notmatch "'-w',\s*'0'") { throw 'wt spawn must open a new window (-w 0) so elevated smoke does not attach to an existing session' }
-if ($helper -match "-NonInteractive', '-File', `$watchScript") { throw 'watch spawn must not use -NonInteractive (needs console UI)' }
-if ($helper -notmatch '-PriorRunId:') { throw 'empty PriorRunId must be one argv (-PriorRunId:) so wt does not drop it' }
+if ($console -notmatch 'function Start-WinMintHostWatchProcess') { throw 'console module must spawn watch via Start-WinMintHostWatchProcess' }
+if ($console -notmatch 'ParameterSetName = ''Elevate''') { throw 'console module must expose -Elevate parameter set' }
+if ($console -notmatch 'transcriptLocked') { throw 'console module must enforce single-flight transcript lock' }
+if ($console -notmatch 'overlapAlive') { throw 'console module must enforce overlapAlive single-flight' }
+if ($console -notmatch '\$ProcessStarter') { throw 'console module must expose ProcessStarter for behavioural spawn contracts' }
+if ($helper -match 'function Resolve-WinMintWindowsTerminal') { throw 'progress helper must not own wt resolve' }
+if ($helper -match 'function Start-WinMintHostConsole') { throw 'progress helper must not own Start-WinMintHostConsole' }
 if ($helper -notmatch 'UseOSCIndicator') { throw 'helper must set Progress.UseOSCIndicator when interactive VT' }
 if (-not (Test-WinMintTrailHeartbeatLine -Line 'AddQualityUpdates running 78s')) { throw 'heartbeat detector missed running line' }
 if (Test-WinMintTrailHeartbeatLine -Line 'Catalog BITS start KB1') { throw 'heartbeat detector false positive' }
@@ -147,9 +150,29 @@ if ($watchHost -notmatch 'MarkerPath') { throw 'Watch-Host must accept -MarkerPa
 if ($watchHost -match 'Get-Date') { throw 'Watch-Host must not pass Get-Date as a dashboard clock' }
 
 $just = Get-Content -LiteralPath (Join-Path $repo 'Justfile') -Raw -Encoding utf8
-if ($just -notmatch 'Watch-Host.ps1') { throw 'just watch-* must call Watch-Host' }
-if ($just -notmatch "-Kind apply") { throw 'just watch-apply must pass -Kind apply' }
+$watchAttach = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Invoke-WinMintHostWatchAttach.ps1') -Raw -Encoding utf8
+if ($watchAttach -notmatch 'WinMintHostConsole\.ps1') {
+    throw 'watch attach helper must dot-source WinMintHostConsole.ps1'
+}
+if ($watchAttach -notmatch 'Start-WinMintHostConsole\s+-Here') {
+    throw 'watch attach helper must call Start-WinMintHostConsole -Here'
+}
+if ($just -notmatch 'Invoke-WinMintHostWatchAttach\.ps1') {
+    throw 'just watch-smoke/apply must route through Invoke-WinMintHostWatchAttach'
+}
+if ($just -notmatch 'Invoke-WinMintHostWatchAttach\.ps1.*-Kind apply') {
+    throw 'just watch-apply must pass -Kind apply via attach helper'
+}
+if ($just -match '(?ms)^watch-(?:smoke|apply)[^\n]*:\s*\r?\n[^\n]*Watch-Host\.ps1') {
+    throw 'just watch-smoke/apply must not call Watch-Host.ps1 directly'
+}
 if ($just -match 'Get-Content -LiteralPath.*apply-status') { throw 'just watch-apply must not Get-Content -Wait the apply-status file' }
+
+$hostConsole = Get-Content -LiteralPath (Join-Path $repo 'tools/host/WinMintHostConsole.ps1') -Raw -Encoding utf8
+if ($hostConsole -notmatch '\[switch\]\s*\$Here') { throw 'WinMintHostConsole must expose -Here for in-console attach' }
+if ($hostConsole -notmatch "disposition\s*=\s*'RunHere'") {
+    throw 'WinMintHostConsole -Here must return RunHere disposition'
+}
 
 $old = $PSStyle.OutputRendering
 # Host may still embed ANSI in $PSStyle strings under PlainText; strip for layout asserts.

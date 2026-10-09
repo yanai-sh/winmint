@@ -17,6 +17,7 @@
     <ProjectReference Include="..\..\src\WinMint.Provisioning\WinMint.Provisioning.csproj" />
     <ProjectReference Include="..\..\src\WinMint.WinPeApply\WinMint.WinPeApply.csproj" />
     <ProjectReference Include="..\..\src\WinMint.Wizard\WinMint.Wizard.csproj" />
+    <ProjectReference Include="..\..\src\WinMint.Watch\WinMint.Watch.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

@@ -35,6 +35,15 @@ if ($assertSrc -match "statusCode -ne 'jobs\.ok'") {
 if ($convergeSrc -notmatch 'function Get-WinMintGuestHandoffReadiness') {
     throw 'SmokeConverge must define Get-WinMintGuestHandoffReadiness'
 }
+if ($convergeSrc -notmatch 'function Get-SmokeStallFailVerdict') {
+    throw 'SmokeConverge must define Get-SmokeStallFailVerdict'
+}
+if ($smoke -notmatch 'HandoffIncomplete') {
+    throw 'Invoke-Smoke must pass HandoffIncomplete into Get-SmokeWaitTick'
+}
+if ($smoke -notmatch 'ProbeTransportError') {
+    throw 'Invoke-Smoke must pass ProbeTransportError into Get-SmokeWaitTick'
+}
 if ($assertSrc -notmatch 'SmokeConverge\.ps1') {
     throw 'Assert-SmokeEvidence must dot-source SmokeConverge (handoff locality)'
 }
@@ -96,15 +105,43 @@ if ($smoke -notmatch 'LastProbeError') {
 if ($smoke -notmatch 'ProfilePath') {
     throw 'Invoke-Smoke must take -ProfilePath (not the automatic \$PROFILE)'
 }
-if ($smoke -notmatch 'apply-smoke-maintainer') {
-    throw 'Invoke-Smoke must Apply via just apply-smoke-maintainer (stubs + smoke plumbing)'
+if ($smoke -notmatch 'Invoke-WinMintSmokeApplyMaintainer') {
+    throw 'Invoke-Smoke must Apply via Invoke-WinMintSmokeApplyMaintainer (job-wrapped just apply-smoke-maintainer)'
+}
+if ($smoke -notmatch 'WinMintSmokeApplyJob') {
+    throw 'Invoke-Smoke must dot-source WinMintSmokeApplyJob for Apply lifetime'
 }
 if ($smoke -match 'apply-maintainer \$Iso \$Work \$applyProfilePath true') {
     throw 'Invoke-Smoke must not use opaque apply-maintainer … true for Smoke Apply'
 }
-$hostProgress = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Write-WinMintHostProgress.ps1') -Raw -Encoding utf8
-if ($hostProgress -notmatch '-NonInteractive') {
-    throw 'Watcher spawn must pass -NonInteractive so prompts fail closed'
+. (Join-Path $repo 'tools/host/WinMintHostConsole.ps1')
+$fakeWt = Join-Path ([IO.Path]::GetTempPath()) ('winmint-fake-wt-status-' + [guid]::NewGuid().ToString('N') + '.exe')
+Set-Content -LiteralPath $fakeWt -Value 'stub' -Encoding ascii -Force
+$script:WinMintFakeWtPath = $fakeWt
+function Resolve-WinMintWindowsTerminal { return $script:WinMintFakeWtPath }
+$spawnWork = Join-Path ([IO.Path]::GetTempPath()) ('winmint-watch-spawn-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $spawnWork | Out-Null
+$spawnMarker = Join-Path $spawnWork 'watch-smoke.pid'
+Set-Content -LiteralPath $spawnMarker -Value $PID -Encoding utf8 -NoNewline
+$script:WinMintWatchSpawnArgv = [string[]]@()
+function Invoke-WinMintWatchSpawnRecorder {
+    param([System.Diagnostics.ProcessStartInfo] $StartInfo)
+    $script:WinMintWatchSpawnArgv = @(
+        foreach ($a in $StartInfo.ArgumentList) { [string]$a })
+    return [pscustomobject]@{ Id = $PID }
+}
+try {
+    $pwshExe = (Get-Command pwsh.exe -ErrorAction Stop).Source
+    $null = Start-WinMintHostConsole -RepoRoot $repo -Work $spawnWork -Kind smoke `
+        -PriorRunId '' -MarkerPath $spawnMarker -PwshExe $pwshExe `
+        -ProcessStarter ${function:Invoke-WinMintWatchSpawnRecorder}
+    if ($script:WinMintWatchSpawnArgv -contains '-NonInteractive') {
+        throw 'Watch spawn argv must not include -NonInteractive (needs console UI)'
+    }
+}
+finally {
+    Remove-Item -LiteralPath $spawnWork -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $fakeWt -Force -ErrorAction SilentlyContinue
 }
 if ($smoke -notmatch 'Get-SmokeWatcherSpawnDecision') {
     throw 'Invoke-Smoke must skip a live watcher via Get-SmokeWatcherSpawnDecision'
@@ -155,9 +192,18 @@ if ($watch -notmatch 'PSBoundParameters' -or $watch -notmatch 'ContainsKey') {
     throw 'Watch-Host must not treat the post-stamp file as PriorRunId when the parent bound leftover/empty'
 }
 $watchCs = Get-Content -LiteralPath (Join-Path $repo 'src/WinMint.Watch/Program.cs') -Raw -Encoding utf8
+$watchDisplay = Get-Content -LiteralPath (Join-Path $repo 'src/WinMint.Watch/SmokeWatchDisplay.cs') -Raw -Encoding utf8
 if ($watchCs -notmatch 'GetSmokeWatchVerdict') { throw 'WinMint.Watch must implement smoke verdict logic' }
 if ($watchCs -notmatch 'Diagnostics\.Stopwatch') { throw 'WinMint.Watch smoke age must use Stopwatch' }
 if ($watchCs -notmatch 'applyStage \?\?=') { throw 'WinMint.Watch BuildFrame must null-coalesce applyStage (failed/empty apply)' }
+if ($watchCs -notmatch 'lastHostLine') { throw 'WinMint.Watch SmokeStatusSnap must deserialize lastHostLine' }
+if ($watchDisplay -notmatch 'IsAlarmVerdict') { throw 'WinMint.Watch must classify harness-stale / empty-vhd alarm verdicts' }
+if ($watchDisplay -notmatch 'harness-stale' -or $watchDisplay -notmatch 'VerdictSpectreColor[\s\S]{0,400}red') {
+    throw 'WinMint.Watch must render alarm verdicts in red via VerdictSpectreColor'
+}
+if ($watchCs -match 'harness-stale[\s\S]{0,80}break|empty-vhd[\s\S]{0,80}break') {
+    throw 'WinMint.Watch must not exit on harness-stale or empty-vhd (watch-only)'
+}
 $spawnAt = $smoke.IndexOf('Start-WinMintHostWatchProcess')
 if ($spawnAt -lt 0) { throw 'Invoke-Smoke must spawn watch via Start-WinMintHostWatchProcess' }
 $spawn = $smoke.Substring($spawnAt, [Math]::Min(400, $smoke.Length - $spawnAt))
@@ -329,10 +375,35 @@ $t = Invoke-Tick @{ LastVmState = 'Off'; VmState = 'Running'; DiskBootPreferred 
 if ([bool]$t.RearmNudge) { throw 'HDD-first does not re-arm' }
 
 $t = Invoke-Tick @{ GuestUpSticky = $true; StallElapsedMinutes = 45; StallMinutes = 45; Cpu = 90 }
-if ($t.FailReason -cne 'STALL') { throw 'Complete-without-handoff CEH spinner must stall' }
+if ($t.FailReason -cne 'STALL') { throw 'idle guest-up with no handoff/probe signals must STALL_SUSPECT' }
 if ($t.FailMessage -notmatch '^STALL_SUSPECT:') { throw 'stall FailMessage prefix' }
+$t = Invoke-Tick @{ GuestUpSticky = $true; StallElapsedMinutes = 45; StallMinutes = 45; HandoffIncomplete = $true }
+if ($t.FailReason -cne 'HANDOFF') { throw 'Complete wait-handoff must HANDOFF_STUCK' }
+if ($t.FailMessage -notmatch '^HANDOFF_STUCK:') { throw 'handoff FailMessage prefix' }
+$t = Invoke-Tick @{ GuestUpSticky = $true; StallElapsedMinutes = 45; StallMinutes = 45; ProbeTransportError = $true }
+if ($t.FailReason) { throw 'probe transport error extends stall (grace), no fail this tick' }
+if (-not [bool]$t.ExtendStall) { throw 'PSD flake must extend stall after guest-up' }
+$t = Invoke-Tick @{ GuestUpSticky = $true; StallElapsedMinutes = 45; StallMinutes = 45; ProbeTransportError = $true; SupervisorRunning = $false; Fingerprint = '1:Complete'; LastFingerprint = '1:Complete' }
+if ($t.FailReason) { throw 'probe grace still applies when fingerprint unchanged' }
+if ((Get-SmokeStallFailVerdict -GuestUpSticky:$true -ProbeTransportError:$true) -cne 'psd-flake') {
+    throw 'Get-SmokeStallFailVerdict psd-flake when stall fail tick has probe error'
+}
 $t = Invoke-Tick @{ GuestUpSticky = $true; StallElapsedMinutes = 45; StallMinutes = 45; SupervisorRunning = $true }
 if ($t.FailReason) { throw 'Supervisor alive must extend stall, not fail' }
+if ((Get-SmokeStallFailVerdict -GuestUpSticky:$true -HandoffIncomplete:$true -ProbeTransportError:$true) -cne 'handoff-stuck') {
+    throw 'Get-SmokeStallFailVerdict handoff precedence'
+}
+if ((Get-SmokeStallFailVerdict -GuestUpSticky:$true -HandoffIncomplete:$false -ProbeTransportError:$true) -cne 'psd-flake') {
+    throw 'Get-SmokeStallFailVerdict psd-flake'
+}
+if ((Get-SmokeStallExtendDecision -GuestUpSticky:$true -GuestProgress:$false -Cpu 99) -cne 'hold') {
+    throw 'Get-SmokeStallExtendDecision ignores CXH CPU after guest-up'
+}
+if ((Get-SmokeStallExtendDecision -GuestUpSticky:$true -ProbeTransportError:$true -GuestProgress:$false -Cpu 99) -cne 'extend') {
+    throw 'Get-SmokeStallExtendDecision PSD grace'
+}
+if ((Get-SmokeSuspendVmDecision -FailureMessage 'PSD_FLAKE: transport') -cne 'suspend') { throw 'psd-flake suspends' }
+if ((Get-SmokeSuspendVmDecision -FailureMessage 'HANDOFF_STUCK: shell') -cne 'suspend') { throw 'handoff stuck suspends' }
 
 $t = Invoke-Tick @{ VhdFileSizeBytes = 36MB; VhdHasImage = $false; EmptyVhdRunningSeconds = 60 }
 if ($t.FailReason) { throw 'empty VHD under budget' }

@@ -304,6 +304,9 @@ public class ServicingPlanFailClosedTests
         File.Copy(
             Path.Combine(TestRepo.Root, "tools", "host", "Write-WinMintHostProgress.ps1"),
             Path.Combine(host, "Write-WinMintHostProgress.ps1"));
+        File.Copy(
+            Path.Combine(TestRepo.Root, "tools", "host", "WinMintHostConsole.ps1"),
+            Path.Combine(host, "WinMintHostConsole.ps1"));
         const string noOp = """
             param(
                 [string] $ShellTarget,
