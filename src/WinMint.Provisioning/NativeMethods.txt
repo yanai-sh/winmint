@@ -17,6 +17,11 @@ SelectObject
 GetStockObject
 TextOutW
 GetModuleHandleW
+GetMessageW
+TranslateMessage
+DispatchMessageW
+PostMessageW
+PostQuitMessage
 
 // Win32SystemReboot
 ExitWindowsEx

@@ -268,8 +268,13 @@ public static partial class ProvisioningSession
                 firstPaintMs).ConfigureAwait(false);
         }
 
-        // Keep Autologon across Supervisor exit: residue schedules HKCU RunOnce clear so
-        // Winlogon shell-exit logoff can re-autologon into explorer (not LogonUI forever).
+        // Arm RunOnce before explorer wait/settle: if tenure dies after chrome, next
+        // Autologon still re-stamps bloom/search then clears Autologon. Residue erase
+        // re-arms the same value (idempotent).
+        TryScheduleDeferredAutoLogonClear(env);
+
+        // Keep Autologon across Supervisor exit: HKCU RunOnce clear so Winlogon
+        // shell-exit logoff can re-autologon into explorer (not LogonUI forever).
         SessionStatus? explorerWait = await WaitForExplorerReadyAsync(
                 bundle,
                 env,
@@ -510,6 +515,23 @@ public static partial class ProvisioningSession
     {
         env.Splash.SetStatus(status);
         phases.Add(status.Code);
+    }
+
+    private static void TryScheduleDeferredAutoLogonClear(ShellEnvironment env)
+    {
+        if (env.Guest.ResidueCleaner is null)
+        {
+            return;
+        }
+
+        try
+        {
+            env.Guest.ResidueCleaner.TryScheduleDeferredAutoLogonClear();
+        }
+        catch (Exception)
+        {
+            // ponytail: unlock already durable; RunOnce arm is best-effort
+        }
     }
 
     private static void TryEraseResidue(ShellEnvironment env)

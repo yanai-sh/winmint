@@ -20,46 +20,134 @@ public sealed class GdiSplashPresenter : ISplashPresenter, IDisposable
     // ponytail: solid fill + status TextOutW for first opaque frame; full D2D only if that path still fails
     private static readonly COLORREF FillColor = new(0x00281810); // BGR: 16,24,40
 
+    // ponytail: Supervisor is Winlogon Shell — HWND without a pump → Winsrv hung-kill (10002).
+    private const uint WmSplashPaint = 0x0400; // WM_USER
+    private const uint WmSplashClose = 0x0401;
+
+    private readonly ManualResetEventSlim _uiReady = new(false);
+    private readonly object _statusGate = new();
+
+    private Thread? _uiThread;
     private SafeHwnd? _hwnd;
     private SessionStatus _status = new("shell.idle", "");
+    private Exception? _uiStartError;
     private bool _shown;
+    private bool _disposed;
 
     /// <summary>Last status pushed by the session (in-memory; not a file mailbox).</summary>
-    public SessionStatus CurrentStatus => _status;
+    public SessionStatus CurrentStatus
+    {
+        get
+        {
+            lock (_statusGate)
+            {
+                return _status;
+            }
+        }
+    }
 
     public void Show()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_shown)
         {
             return;
         }
 
-        EnsureWindow();
-        HWND hwnd = _hwnd!.Hwnd;
-        _ = PInvoke.ShowWindow(hwnd, SHOW_WINDOW_CMD.SW_SHOW);
-
-        if (!PInvoke.UpdateWindow(hwnd))
+        _uiThread = new Thread(UiMain)
         {
-            throw new InvalidOperationException($"UpdateWindow failed: {Marshal.GetLastPInvokeError()}");
+            IsBackground = true,
+            Name = "WinMint.Splash",
+        };
+        _uiThread.SetApartmentState(ApartmentState.STA);
+        _uiThread.Start();
+        _uiReady.Wait();
+        if (_uiStartError is not null)
+        {
+            throw new InvalidOperationException("Splash UI thread failed to start.", _uiStartError);
         }
 
-        PaintOpaque(hwnd);
         _shown = true;
     }
 
     public void SetStatus(SessionStatus status)
     {
-        _status = status;
-        if (_hwnd is { IsInvalid: false })
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_statusGate)
         {
-            PaintOpaque(_hwnd.Hwnd);
+            _status = status;
+        }
+
+        if (_hwnd is { IsInvalid: false } hwnd)
+        {
+            _ = PInvoke.PostMessage(hwnd.Hwnd, WmSplashPaint, default, default);
         }
     }
 
     public void Dispose()
     {
-        _hwnd?.Dispose();
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        if (_hwnd is { IsInvalid: false } hwnd)
+        {
+            _ = PInvoke.PostMessage(hwnd.Hwnd, WmSplashClose, default, default);
+        }
+
+        if (_uiThread is { IsAlive: true } ui)
+        {
+            // ponytail: 2s join ceiling — DestroyWindow already posted; abandon if UI wedged
+            _ = ui.Join(TimeSpan.FromSeconds(2));
+        }
+
         _hwnd = null;
+        _uiReady.Dispose();
+    }
+
+    private void UiMain()
+    {
+        try
+        {
+            EnsureWindow();
+            HWND hwnd = _hwnd!.Hwnd;
+            _ = PInvoke.ShowWindow(hwnd, SHOW_WINDOW_CMD.SW_SHOW);
+
+            if (!PInvoke.UpdateWindow(hwnd))
+            {
+                throw new InvalidOperationException($"UpdateWindow failed: {Marshal.GetLastPInvokeError()}");
+            }
+
+            PaintOpaque(hwnd);
+            _uiReady.Set();
+
+            while (PInvoke.GetMessage(out MSG msg, HWND.Null, 0, 0))
+            {
+                if (msg.message == WmSplashPaint)
+                {
+                    PaintOpaque(hwnd);
+                    continue;
+                }
+
+                if (msg.message == WmSplashClose)
+                {
+                    _hwnd?.Dispose();
+                    _hwnd = null;
+                    PInvoke.PostQuitMessage(0);
+                    continue;
+                }
+
+                _ = PInvoke.TranslateMessage(msg);
+                _ = PInvoke.DispatchMessage(msg);
+            }
+        }
+        catch (Exception ex)
+        {
+            _uiStartError = ex;
+            _uiReady.Set();
+        }
     }
 
     private void EnsureWindow()
@@ -155,7 +243,13 @@ public sealed class GdiSplashPresenter : ISplashPresenter, IDisposable
 
     private void DrawStatusText(HDC hdc)
     {
-        string label = string.IsNullOrWhiteSpace(_status.Message) ? _status.Code : _status.Message;
+        SessionStatus status;
+        lock (_statusGate)
+        {
+            status = _status;
+        }
+
+        string label = string.IsNullOrWhiteSpace(status.Message) ? status.Code : status.Message;
         if (string.IsNullOrWhiteSpace(label))
         {
             return;

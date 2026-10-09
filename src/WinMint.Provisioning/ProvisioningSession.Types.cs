@@ -221,6 +221,13 @@ public interface IWinlogonRegistry
 /// </summary>
 public interface IResidueCleaner
 {
+    /// <summary>
+    /// Arm HKCU RunOnce Autologon clear + chrome re-stamp (idempotent SetValue).
+    /// Call at Complete unlock — before explorer wait/settle — so a mid-settle death
+    /// still re-stamps on next Autologon.
+    /// </summary>
+    void TryScheduleDeferredAutoLogonClear();
+
     void TryEraseAfterComplete();
 }
 

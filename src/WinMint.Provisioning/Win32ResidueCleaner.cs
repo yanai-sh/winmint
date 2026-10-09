@@ -38,8 +38,24 @@ public sealed class Win32ResidueCleaner : IResidueCleaner
         _setupCompletePath = Path.Combine(windir, "Setup", "Scripts", "SetupComplete.cmd");
     }
 
+    public void TryScheduleDeferredAutoLogonClear()
+    {
+        try
+        {
+            _clearAutoLogon();
+        }
+        catch (Exception ex)
+        {
+            if (_logger is not null)
+            {
+                GuestLog.ResidueClearFailed(_logger, ex.Message);
+            }
+        }
+    }
+
     public void TryEraseAfterComplete()
     {
+        // Idempotent with unlock-time schedule (same HKCU RunOnce SetValue).
         try
         {
             _clearAutoLogon();

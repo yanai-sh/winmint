@@ -12,7 +12,13 @@ namespace WinMint.Provisioning;
 [SupportedOSPlatform("windows")]
 public static class Win32OobeOverlay
 {
-    private static readonly string[] OverlayProcessNames = ["CloudExperienceHost", "UserOOBEBroker", "setuphost"];
+    private static readonly string[] OverlayProcessNames =
+    [
+        "CloudExperienceHost",
+        "CloudExperienceHostBroker",
+        "UserOOBEBroker",
+        "setuphost",
+    ];
 
     public static void TryDismiss()
     {

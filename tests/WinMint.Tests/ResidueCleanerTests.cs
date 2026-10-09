@@ -21,6 +21,7 @@ public class ResidueCleanerTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal(1, cleaner.ScheduleCount);
         Assert.Equal(1, cleaner.EraseCount);
         Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
     }
@@ -37,6 +38,39 @@ public class ResidueCleanerTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal(0, cleaner.ScheduleCount);
+        Assert.Equal(0, cleaner.EraseCount);
+    }
+
+    [Fact]
+    public async Task Shell_unlock_schedules_deferred_autologon_before_explorer_wait()
+    {
+        RecordingResidueCleaner cleaner = new();
+        RecordingEvidenceSink evidence = new();
+        ManualTimeProvider time = new();
+        FakeGuestMachine guest = new()
+        {
+            Winlogon = new RecordingWinlogon(),
+            ResidueCleaner = cleaner,
+            IsExplorerProcessRunningCallback = static () => false,
+        };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle([]) with
+            {
+                Policy = SessionPolicy.SmokeDefaults with
+                {
+                    SettleDeadline = TimeSpan.FromSeconds(4),
+                    SettlePollInterval = TimeSpan.FromSeconds(1),
+                    FailedDwell = TimeSpan.Zero,
+                },
+            },
+            Env(guest, evidence, time: time),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("shell.explorerMissing", result.FinalStatus.Code);
+        Assert.Equal(1, cleaner.ScheduleCount);
         Assert.Equal(0, cleaner.EraseCount);
     }
 
@@ -134,13 +168,20 @@ public class ResidueCleanerTests
 
     private sealed class RecordingResidueCleaner : IResidueCleaner
     {
+        public int ScheduleCount { get; private set; }
+
         public int EraseCount { get; private set; }
+
+        public void TryScheduleDeferredAutoLogonClear() => ScheduleCount++;
 
         public void TryEraseAfterComplete() => EraseCount++;
     }
 
     private sealed class ThrowingResidueCleaner : IResidueCleaner
     {
+        public void TryScheduleDeferredAutoLogonClear() =>
+            throw new InvalidOperationException("simulated schedule failure");
+
         public void TryEraseAfterComplete() =>
             throw new InvalidOperationException("simulated residue failure");
     }

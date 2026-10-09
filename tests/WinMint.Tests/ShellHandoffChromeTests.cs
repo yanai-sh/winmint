@@ -28,6 +28,7 @@ public class ShellHandoffChromeTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal(1, cleaner.ScheduleCount);
         Assert.Equal(1, cleaner.EraseCount);
         Assert.Single(guest.ShellChromeRequests);
         Assert.False(guest.ShellChromeRequests[0].FailOpen);
@@ -65,6 +66,7 @@ public class ShellHandoffChromeTests
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("shell.explorerMissing", result.FinalStatus.Code);
+        Assert.Equal(1, cleaner.ScheduleCount);
         Assert.Equal(0, cleaner.EraseCount);
         Assert.DoesNotContain(guest.ShellChromeRequests, r => !r.FailOpen);
         Assert.Equal("Failed", evidence.Documents[^1].Outcome);
@@ -90,6 +92,7 @@ public class ShellHandoffChromeTests
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("shell.chrome.liveFailed", result.FinalStatus.Code);
+        Assert.Equal(1, cleaner.ScheduleCount);
         Assert.Equal(0, cleaner.EraseCount);
         Assert.Contains(guest.ShellChromeRequests, r => !r.FailOpen);
         Assert.Equal("Failed", evidence.Documents[^1].Outcome);
@@ -115,6 +118,7 @@ public class ShellHandoffChromeTests
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Equal(2, guest.ShellChromeRequests.Count);
         Assert.All(guest.ShellChromeRequests, r => Assert.False(r.FailOpen));
+        Assert.Equal(1, cleaner.ScheduleCount);
         Assert.Equal(1, cleaner.EraseCount);
         Assert.Contains("shell.chrome", evidence.Documents[^1].Phases);
         Assert.Contains("shell.chrome.live", evidence.Documents[^1].Phases);
@@ -149,13 +153,18 @@ public class ShellHandoffChromeTests
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("shell.chrome.liveUnstable", result.FinalStatus.Code);
+        Assert.Equal(1, cleaner.ScheduleCount);
         Assert.Equal(0, cleaner.EraseCount);
         Assert.Contains(guest.ShellChromeRequests, r => !r.FailOpen);
     }
 
     private sealed class RecordingResidueCleaner : IResidueCleaner
     {
+        public int ScheduleCount { get; private set; }
+
         public int EraseCount { get; private set; }
+
+        public void TryScheduleDeferredAutoLogonClear() => ScheduleCount++;
 
         public void TryEraseAfterComplete() => EraseCount++;
     }
