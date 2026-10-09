@@ -77,6 +77,8 @@ internal static class Program
                         string phase = string.Empty;
                         int stallLeft = 0;
                         int wallLeft = 0;
+                        int smokeStatusAgeSeconds = 0;
+                        string lastHostLine = string.Empty;
                         if (isSmoke && smoke is not null)
                         {
                             string fp = $"{smoke.RunId}|{smoke.Phase}|{smoke.UpdatedAt}|{smoke.VmState}|{smoke.VhdFileSizeMB}";
@@ -86,19 +88,20 @@ internal static class Program
                                 statusAge = System.Diagnostics.Stopwatch.StartNew();
                             }
 
-                            int ageSeconds = statusAge is null ? 0 : (int)statusAge.Elapsed.TotalSeconds;
-                            int emptyVhdSeconds = smoke.VmState == "Running" && smoke.VhdFileSizeMB < 1024 ? ageSeconds : 0;
+                            smokeStatusAgeSeconds = statusAge is null ? 0 : (int)statusAge.Elapsed.TotalSeconds;
+                            int emptyVhdSeconds = smoke.VmState == "Running" && smoke.VhdFileSizeMB < 1024 ? smokeStatusAgeSeconds : 0;
                             verdict = GetSmokeWatchVerdict(
                                 smoke.Phase,
                                 smoke.VmState,
                                 smoke.VhdFileSizeMB,
-                                ageSeconds,
+                                smokeStatusAgeSeconds,
                                 emptyVhdSeconds,
                                 smoke.RunId,
                                 priorRunId);
                             phase = smoke.Phase;
                             stallLeft = smoke.StallMinutesLeft;
                             wallLeft = smoke.WallMinutesLeft;
+                            lastHostLine = smoke.LastHostLine ?? string.Empty;
                         }
 
                         string alive = FormatAlive(apply.Updated);
@@ -113,6 +116,8 @@ internal static class Program
                             phase,
                             stallLeft,
                             wallLeft,
+                            smokeStatusAgeSeconds,
+                            lastHostLine,
                             rows,
                             work,
                             events));
@@ -152,6 +157,8 @@ internal static class Program
         string phase,
         int stallLeft,
         int wallLeft,
+        int smokeStatusAgeSeconds,
+        string lastHostLine,
         IReadOnlyList<string> rows,
         string work,
         IReadOnlyList<ApplyEvent> events)
@@ -159,10 +166,14 @@ internal static class Program
         List<IRenderable> header = [new Markup($"[bold]{Markup.Escape(title)}[/]")];
         if (isSmoke)
         {
-            header.Add(new Markup(
-                $"verdict [cyan]{Markup.Escape(string.IsNullOrWhiteSpace(verdict) ? "awaiting-run" : verdict)}[/]  " +
-                $"phase [cyan]{Markup.Escape(string.IsNullOrWhiteSpace(phase) ? "-" : phase)}[/]  " +
-                $"stall {stallLeft}m  wall {wallLeft}m"));
+            header.Add(new Markup(SmokeWatchDisplay.BuildSmokeHeaderMarkup(
+                verdict, phase, stallLeft, wallLeft, smokeStatusAgeSeconds)));
+            if (SmokeWatchDisplay.IsAlarmVerdict(verdict) && !string.IsNullOrWhiteSpace(lastHostLine))
+            {
+                int clipWidth = Math.Max(24, Math.Min(80, Console.WindowWidth - 44));
+                string clipped = SmokeWatchDisplay.ClipHostLine(lastHostLine.Trim(), clipWidth);
+                header.Add(new Markup($"last  {Markup.Escape(clipped)}"));
+            }
         }
 
         applyStage ??= string.Empty;
@@ -436,7 +447,8 @@ internal sealed record SmokeStatusSnap(
     [property: JsonPropertyName("vmState")] string VmState = "",
     [property: JsonPropertyName("vhdFileSizeMB")] int VhdFileSizeMB = 0,
     [property: JsonPropertyName("stallMinutesLeft")] int StallMinutesLeft = 0,
-    [property: JsonPropertyName("wallMinutesLeft")] int WallMinutesLeft = 0);
+    [property: JsonPropertyName("wallMinutesLeft")] int WallMinutesLeft = 0,
+    [property: JsonPropertyName("lastHostLine")] string? LastHostLine = null);
 
 [JsonSerializable(typeof(SmokeStatusSnap))]
 internal sealed partial class SmokeStatusJsonContext : JsonSerializerContext;

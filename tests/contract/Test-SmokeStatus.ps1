@@ -192,9 +192,18 @@ if ($watch -notmatch 'PSBoundParameters' -or $watch -notmatch 'ContainsKey') {
     throw 'Watch-Host must not treat the post-stamp file as PriorRunId when the parent bound leftover/empty'
 }
 $watchCs = Get-Content -LiteralPath (Join-Path $repo 'src/WinMint.Watch/Program.cs') -Raw -Encoding utf8
+$watchDisplay = Get-Content -LiteralPath (Join-Path $repo 'src/WinMint.Watch/SmokeWatchDisplay.cs') -Raw -Encoding utf8
 if ($watchCs -notmatch 'GetSmokeWatchVerdict') { throw 'WinMint.Watch must implement smoke verdict logic' }
 if ($watchCs -notmatch 'Diagnostics\.Stopwatch') { throw 'WinMint.Watch smoke age must use Stopwatch' }
 if ($watchCs -notmatch 'applyStage \?\?=') { throw 'WinMint.Watch BuildFrame must null-coalesce applyStage (failed/empty apply)' }
+if ($watchCs -notmatch 'lastHostLine') { throw 'WinMint.Watch SmokeStatusSnap must deserialize lastHostLine' }
+if ($watchDisplay -notmatch 'IsAlarmVerdict') { throw 'WinMint.Watch must classify harness-stale / empty-vhd alarm verdicts' }
+if ($watchDisplay -notmatch 'harness-stale' -or $watchDisplay -notmatch 'VerdictSpectreColor[\s\S]{0,400}red') {
+    throw 'WinMint.Watch must render alarm verdicts in red via VerdictSpectreColor'
+}
+if ($watchCs -match 'harness-stale[\s\S]{0,80}break|empty-vhd[\s\S]{0,80}break') {
+    throw 'WinMint.Watch must not exit on harness-stale or empty-vhd (watch-only)'
+}
 $spawnAt = $smoke.IndexOf('Start-WinMintHostWatchProcess')
 if ($spawnAt -lt 0) { throw 'Invoke-Smoke must spawn watch via Start-WinMintHostWatchProcess' }
 $spawn = $smoke.Substring($spawnAt, [Math]::Min(400, $smoke.Length - $spawnAt))
