@@ -96,8 +96,11 @@ if ($smoke -notmatch 'LastProbeError') {
 if ($smoke -notmatch 'ProfilePath') {
     throw 'Invoke-Smoke must take -ProfilePath (not the automatic \$PROFILE)'
 }
-if ($smoke -notmatch 'apply-smoke-maintainer') {
-    throw 'Invoke-Smoke must Apply via just apply-smoke-maintainer (stubs + smoke plumbing)'
+if ($smoke -notmatch 'Invoke-WinMintSmokeApplyMaintainer') {
+    throw 'Invoke-Smoke must Apply via Invoke-WinMintSmokeApplyMaintainer (job-wrapped just apply-smoke-maintainer)'
+}
+if ($smoke -notmatch 'WinMintSmokeApplyJob') {
+    throw 'Invoke-Smoke must dot-source WinMintSmokeApplyJob for Apply lifetime'
 }
 if ($smoke -match 'apply-maintainer \$Iso \$Work \$applyProfilePath true') {
     throw 'Invoke-Smoke must not use opaque apply-maintainer … true for Smoke Apply'

@@ -82,6 +82,7 @@ Set-Location $repoRoot
 
 . (Join-Path $repoRoot 'tools/vm/SmokeStatus.ps1')
 . (Join-Path $repoRoot 'tools/host/Write-WinMintHostProgress.ps1')
+. (Join-Path $PSScriptRoot 'WinMintSmokeApplyJob.ps1')
 . (Join-Path $repoRoot 'tools/AcceptanceManifest.ps1')
 
 function Write-SmokeHostLine {
@@ -263,11 +264,12 @@ if (-not $SkipApply) {
         -LastHostLine "Applying Profile=$applyProfilePath" -OutputIso $null -RunId $runId
     Write-SmokeHostLine -Name "Applying Profile=$applyProfilePath Iso=$Iso Work=$Work (Test lane, smoke stubs on)…" -Activity apply
     $runScratchHygiene = $true
+    # Job Object KILL_ON_JOB_CLOSE: killing this waiter stops Apply. `just discard-stale-mount` only after hard-kill mid-DISM Invalid mounts.
     try {
-        & just apply-smoke-maintainer $Iso $Work $applyProfilePath
+        $applyExit = Invoke-WinMintSmokeApplyMaintainer -Iso $Iso -Work $Work -ProfilePath $applyProfilePath
         $applyFail = Get-WinMintApplyHostFailure -WorkDirectory $workFull
         if ($applyFail) { throw $applyFail }
-        if ($LASTEXITCODE -ne 0) { throw "Apply failed: $LASTEXITCODE" }
+        if ($applyExit -ne 0) { throw "Apply failed: $applyExit" }
     }
     catch {
         $lock = Format-WinMintServicingLockFailure -Message "$_"
