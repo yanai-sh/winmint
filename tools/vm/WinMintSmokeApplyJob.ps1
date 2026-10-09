@@ -283,7 +283,8 @@ function Invoke-WinMintSmokeApplyMaintainer {
 
     $just = (Get-Command just -ErrorAction Stop).Source
     $hJob = [IntPtr]::Zero
-    $pi = [WinMintSmokeApplyJobNative+PROCESS_INFORMATION]::default
+    # Nested Add-Type struct: ::default is not a static property under StrictMode.
+    $pi = [Activator]::CreateInstance([WinMintSmokeApplyJobNative+PROCESS_INFORMATION])
     $assigned = $false
     try {
         $hJob = [WinMintSmokeApplyJobNative]::CreateKillOnCloseJob()
