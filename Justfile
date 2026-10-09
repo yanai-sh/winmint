@@ -169,6 +169,7 @@ host-apply ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUAL
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-HostApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality '{{QUALITY}}'
 
 # Gate B wipe ISO: Release + package-strict. Workdir survives TEMP toolkit cleanup.
+# WIM index: omit here — Invoke-PrimaryGate resolves host EditionID (Home=1 / Pro=3). Override via -WimIndex on the PS script.
 primary-gate ISO WORK="" PROFILE="samples/sl7.profile.json":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-PrimaryGate.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}'
 

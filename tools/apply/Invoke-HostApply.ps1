@@ -47,6 +47,11 @@ param(
     [ValidateSet('HostApply', 'GateB')]
     [string] $AcceptanceKind = 'HostApply',
 
+    # 0 = omit --wim-index (Cli defaults to Pro / index 3). >0 appends --wim-index.
+    [Parameter(ParameterSetName = 'Run')]
+    [ValidateRange(0, 32)]
+    [int] $WimIndex = 0,
+
     [switch] $ExpectDrivers,
 
     [switch] $ExpectNativePackageAuditJobs,
@@ -192,6 +197,10 @@ if (-not $SkipApply) {
     $runScratchHygiene = $true
     $cliExe = Resolve-WinMintCliExe
     $buildArgs = @('build', $Profile, '--iso', $Iso, '--work', $Work, '--image-quality', $ImageQuality, '--package-audit-strict') + $strictArgs
+    if ($WimIndex -gt 0) {
+        $buildArgs += @('--wim-index', "$WimIndex")
+        Write-WinMintHostPhase -Lane Apply -Name "WimIndex=$WimIndex"
+    }
     if ($cliExe) {
         & $cliExe @buildArgs
     }
