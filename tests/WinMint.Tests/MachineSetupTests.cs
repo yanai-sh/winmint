@@ -52,13 +52,14 @@ public class MachineSetupTests
     [Fact]
     public async Task MachineSetup_oobeLocal_skips_autologon_and_leaves_explorer_Shell()
     {
+        int stampCount = 0;
         FakeWinlogonRegistry winlogon = new() { Shell = "explorer.exe" };
         RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("", "");
 
         SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             bundle,
-            Env(winlogon, secrets),
+            Env(winlogon, secrets, stampOobeComplete: () => stampCount++),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
@@ -68,6 +69,7 @@ public class MachineSetupTests
         Assert.Null(winlogon.DefaultUserName);
         Assert.Equal("explorer.exe", winlogon.Shell);
         Assert.Equal(1, secrets.WipeCount);
+        Assert.Equal(0, stampCount);
     }
 
     [Fact]

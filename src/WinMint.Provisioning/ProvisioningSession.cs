@@ -865,7 +865,8 @@ public static partial class ProvisioningSession
             }
         }
 
-        if (env.StampOobeComplete is not null)
+        // ImageState IMAGE_STATE_COMPLETE fights native OOBE owner creation — bake-in only.
+        if (bakeInAutologon && env.StampOobeComplete is not null)
         {
             try
             {
