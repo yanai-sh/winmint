@@ -653,6 +653,26 @@ try {
     } catch {
         if ($_.Exception.Message -notmatch 'root-relative') { throw "rooted passwordPath message: $($_.Exception.Message)" }
     }
+    '{"schemaVersion":"winmint.profile/v1","account":{"mode":"oobeLocal","username":"proof"}}' |
+        Set-Content -LiteralPath (Join-Path $credDir 'oobe.json') -Encoding utf8
+    try {
+        $null = Resolve-WinMintSmokeGuestCredential -ProfilePath (Join-Path $credDir 'oobe.json')
+        throw 'oobeLocal without GuestSecretPath must throw'
+    } catch {
+        if ($_.Exception.Message -notmatch 'GuestSecretPath') { throw "oobeLocal message: $($_.Exception.Message)" }
+    }
+    $guestPw = Join-Path $credDir 'guest.password'
+    Set-Content -LiteralPath $guestPw -Value 'oobe-guest-pass' -NoNewline -Encoding utf8
+    $oobeCred = Resolve-WinMintSmokeGuestCredential -ProfilePath (Join-Path $credDir 'oobe.json') -GuestSecretPath $guestPw
+    if ($oobeCred.UserName -cne 'proof') { throw 'oobeLocal GuestSecretPath username' }
+    $oobeBstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($oobeCred.Password)
+    try {
+        if (([Runtime.InteropServices.Marshal]::PtrToStringBSTR($oobeBstr)) -cne 'oobe-guest-pass') {
+            throw 'oobeLocal GuestSecretPath contents'
+        }
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($oobeBstr)
+    }
 
     $pixels = [byte[]]::new(8)
     $bmp = ConvertTo-WinMintBmp565 -PixelData $pixels -Width 2 -Height 2

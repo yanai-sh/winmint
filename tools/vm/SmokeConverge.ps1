@@ -165,10 +165,15 @@ function Resolve-WinMintSmokeGuestCredential {
     .NOTES
       Throws when a localAutoLogon Profile yields no credential — New-PSSession -VMName
       has a mandatory -Credential and would block the wait loop on an interactive prompt.
+      For account.mode=oobeLocal the ISO has no password; pass -GuestSecretPath (host-only
+      file path) matching the local account created at interactive OOBE (#164).
     #>
     param(
         [Parameter(Mandatory)]
-        [string] $ProfilePath
+        [string] $ProfilePath,
+
+        # Host-only secret file for PS Direct when Profile is oobeLocal (never baked into the ISO).
+        [string] $GuestSecretPath = ''
     )
     if (-not (Test-Path -LiteralPath $ProfilePath -PathType Leaf)) {
         throw "Profile not found: $ProfilePath"
@@ -179,14 +184,38 @@ function Resolve-WinMintSmokeGuestCredential {
         throw "Profile has no account block: $ProfilePath"
     }
     $names = @($account.PSObject.Properties.Name)
+    $mode = if ($names -contains 'mode') { [string]$account.mode } else { '' }
     $username = if ($names -contains 'username') { [string]$account.username } else { '' }
     if ([string]::IsNullOrWhiteSpace($username)) {
         throw "Profile account.username missing: $ProfilePath"
     }
+
+    if (-not [string]::IsNullOrWhiteSpace($GuestSecretPath)) {
+        $guestPath = $GuestSecretPath.Trim()
+        if (-not [IO.Path]::IsPathFullyQualified($guestPath)) {
+            if ([IO.Path]::IsPathRooted($guestPath)) {
+                throw "GuestSecretPath '$guestPath' is root-relative — use fully qualified or repo-relative."
+            }
+            $guestPath = [IO.Path]::GetFullPath((Join-Path (Get-Location) $guestPath))
+        }
+        if (-not (Test-Path -LiteralPath $guestPath -PathType Leaf)) {
+            throw "GuestSecretPath missing file: $guestPath"
+        }
+        $guestPassword = ([IO.File]::ReadAllText($guestPath)).TrimEnd("`r", "`n")
+        if ([string]::IsNullOrEmpty($guestPassword)) {
+            throw "GuestSecretPath file is empty: $guestPath"
+        }
+        return [pscredential]::new($username, (ConvertTo-SecureString $guestPassword -AsPlainText -Force))
+    }
+
     $password = if ($names -contains 'password') { [string]$account.password } else { '' }
     if ([string]::IsNullOrWhiteSpace($password)) {
         $authored = if ($names -contains 'passwordPath') { [string]$account.passwordPath } else { '' }
         if ([string]::IsNullOrWhiteSpace($authored)) {
+            if ([string]::Equals($mode, 'oobeLocal', [StringComparison]::Ordinal)) {
+                throw ("Profile '$ProfilePath' is oobeLocal — pass -GuestSecretPath for PS Direct " +
+                    '(host-only; create that local account at interactive OOBE).')
+            }
             throw ("Profile '$ProfilePath' has neither account.password nor account.passwordPath — " +
                 'PS Direct needs guest credentials for the Smoke wait loop.')
         }

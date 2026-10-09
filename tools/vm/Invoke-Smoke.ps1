@@ -64,6 +64,10 @@ param(
     [Parameter(ParameterSetName = 'Run')]
     [switch] $OnlineOobe,
 
+    # Host-only PS Direct secret file for oobeLocal Profiles (not baked into the ISO). #164
+    [Parameter(ParameterSetName = 'Run')]
+    [string] $GuestSecretPath = '',
+
     [Parameter(Mandatory, ParameterSetName = 'AssertOnly')]
     [switch] $AssertOnly,
 
@@ -170,7 +174,8 @@ if ($freeGB -lt 40) {
 # Local+autoLogon Profiles need explicit PS Direct credentials (workgroup guest).
 # Resolve now — passwordPath included — so a missing secret fails here, not as a
 # blocking New-PSSession credential prompt mid-wait (sl7.profile.json uses passwordPath).
-$guestCred = Resolve-WinMintSmokeGuestCredential -ProfilePath $ProfilePath
+# oobeLocal: pass -GuestSecretPath (host-only) matching the OOBE-created local account (#164).
+$guestCred = Resolve-WinMintSmokeGuestCredential -ProfilePath $ProfilePath -GuestSecretPath $GuestSecretPath
 # Authored Profile for pin/evidence facts; Apply may use an offline-OOBE overlay.
 $profileDoc = Get-Content -LiteralPath $ProfilePath -Raw -Encoding utf8 | ConvertFrom-Json
 
