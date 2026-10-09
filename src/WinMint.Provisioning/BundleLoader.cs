@@ -65,10 +65,11 @@ public static class BundleLoader
                 new BundleLoadError("bundle.required", "bundle.supervisorPath is required."));
         }
 
-        if (string.IsNullOrWhiteSpace(file.Username))
+        // oobeLocal bundles omit credentials; username required only when a bake-in password is present.
+        if (string.IsNullOrWhiteSpace(file.Username) && !string.IsNullOrEmpty(file.Password))
         {
             return BundleLoadResult.Fail(
-                new BundleLoadError("bundle.required", "bundle.username is required."));
+                new BundleLoadError("bundle.required", "bundle.username is required when password is set."));
         }
 
         string? dir = Path.GetDirectoryName(path);

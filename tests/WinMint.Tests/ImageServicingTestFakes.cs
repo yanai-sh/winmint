@@ -17,10 +17,11 @@ internal static class ImageServicingTestFakes
         {
             Stages.AddRange(ReadStagesJson(workspace));
             IReadOnlyList<ServicingStage> stages = Stages;
+            // Absent StampOfflineShell is ok (oobeLocal defer); incomplete stamp is not.
             ServicingStage? stamp = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.StampOfflineShell);
-            if (stamp is null
-                || !stamp.Parameters.TryGetValue(StageParams.ShellTarget, out string? shellTarget)
-                || string.IsNullOrWhiteSpace(shellTarget))
+            if (stamp is not null
+                && (!stamp.Parameters.TryGetValue(StageParams.ShellTarget, out string? shellTarget)
+                    || string.IsNullOrWhiteSpace(shellTarget)))
             {
                 return Task.FromResult(Result.Fail<ElevatedRunOk, Failure>(
                     new Failure(

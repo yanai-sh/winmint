@@ -564,7 +564,12 @@ public static partial class BuildPlan
         stages.Add(ServicingOpcode.StagePayload);
         stages.Add(ServicingOpcode.StampOfflineDefaultUser);
         stages.Add(ServicingOpcode.StageOobeUnattend);
-        stages.Add(ServicingOpcode.StampOfflineShell);
+        // oobeLocal: leave explorer through native OOBE; FirstLogonCommands defers Supervisor Shell (ADR-017).
+        if (!string.Equals(profile.Account.Mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal))
+        {
+            stages.Add(ServicingOpcode.StampOfflineShell);
+        }
+
         stages.Add(ServicingOpcode.PatchBootWimApply);
         stages.Add(ServicingOpcode.ExportWim);
         stages.Add(ServicingOpcode.BuildIso);
@@ -606,6 +611,7 @@ public static partial class BuildPlan
         string timeZone = XmlEscape(profile.Dma.Settle.TimeZoneId ?? "");
         string timeZoneXml = string.IsNullOrEmpty(timeZone) ? "" : $"<TimeZone>{timeZone}</TimeZone>";
         string accountBlocks = BuildOobeAccountBlocksXml(profile);
+        string deferredShell = BuildDeferredShellFirstLogonXml(profile);
 
         return $$"""
             <?xml version="1.0" encoding="utf-8"?>
@@ -623,9 +629,36 @@ public static partial class BuildPlan
                     <ProtectYourPC>3</ProtectYourPC>
                   </OOBE>
                   {{accountBlocks}}
+                  {{deferredShell}}
                 </component>
               </settings>
             </unattend>
+            """;
+    }
+
+    /// <summary>
+    /// <see cref="AccountProfile.OobeLocalMode"/> only: after OOBE + first owner logon, stamp Winlogon
+    /// Shell to Supervisor and log off so the next interactive logon runs FirstLogon tenure (ADR-017).
+    /// One place — oobeSystem FirstLogonCommands (not specialize; not MachineSetup).
+    /// </summary>
+    private static string BuildDeferredShellFirstLogonXml(Profile profile)
+    {
+        if (!string.Equals(profile.Account.Mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal))
+        {
+            return "";
+        }
+
+        string shell = XmlEscape(ImageServicing.ShellStampGuestPath);
+        // ponytail: FirstLogonCommands + logoff; ceiling = owner signs in twice (create + post-defer).
+        // Upgrade if a password-less re-entry (or single-session Shell swap) proves stable on Home ARM64.
+        return $$"""
+                  <FirstLogonCommands>
+                    <SynchronousCommand wcm:action="add">
+                      <Order>1</Order>
+                      <Description>WinMint defer Shell to Supervisor (oobeLocal)</Description>
+                      <CommandLine>cmd.exe /c reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Shell /t REG_SZ /d "{{shell}}" /f &amp; shutdown.exe /l</CommandLine>
+                    </SynchronousCommand>
+                  </FirstLogonCommands>
             """;
     }
 

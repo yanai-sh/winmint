@@ -146,6 +146,39 @@ public class AccountModeTests
     }
 
     [Fact]
+    public void Plan_oobeLocal_omits_StampOfflineShell_and_emits_deferred_FirstLogonCommands()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountProfile.OobeLocalMode}}",
+                "requireWifiDuringOobe": false
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk, result.IsOk ? "" : result.Error.Code + ": " + result.Error.Message);
+        Assert.DoesNotContain(ServicingOpcode.StampOfflineShell, result.Value.Stages);
+        string xml = result.Value.Unattend.Xml;
+        Assert.Contains("FirstLogonCommands", xml, StringComparison.Ordinal);
+        Assert.Contains("defer Shell to Supervisor", xml, StringComparison.Ordinal);
+        Assert.Contains(ImageServicing.ShellStampGuestPath, xml, StringComparison.Ordinal);
+        Assert.Contains("shutdown.exe /l", xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Plan_localAutoLogon_still_emits_AutoLogon()
     {
         Profile profile = Parse($$"""
@@ -176,6 +209,37 @@ public class AccountModeTests
         Assert.Contains("AutoLogon", xml, StringComparison.Ordinal);
         Assert.Contains("LocalAccounts", xml, StringComparison.Ordinal);
         Assert.Contains("<Username>winmint</Username>", xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_localAutoLogon_still_includes_StampOfflineShell()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
+                "username": "winmint",
+                "password": "lab-only",
+                "requireWifiDuringOobe": false
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              }
+            }
+            """);
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
+
+        Assert.True(result.IsOk);
+        Assert.Contains(ServicingOpcode.StampOfflineShell, result.Value.Stages);
+        Assert.DoesNotContain("FirstLogonCommands", result.Value.Unattend.Xml, StringComparison.Ordinal);
     }
 
     [Fact]
