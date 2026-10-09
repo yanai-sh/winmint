@@ -83,17 +83,40 @@ public static partial class BuildPlan
             {
                 issues.Add(new DocumentError("account.mode.missing", "account.mode is required.", "account.mode"));
             }
-            else if (!string.Equals(doc.Account.Mode, AccountProfile.LocalAutoLogonMode, StringComparison.Ordinal))
+            else if (string.Equals(doc.Account.Mode, AccountProfile.LocalAutoLogonMode, StringComparison.Ordinal))
+            {
+                if (string.IsNullOrWhiteSpace(doc.Account.Username))
+                {
+                    issues.Add(new DocumentError(
+                        "account.username.missing",
+                        "account.username is required.",
+                        "account.username"));
+                }
+            }
+            else if (string.Equals(doc.Account.Mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal))
+            {
+                if (doc.Account.Password is not null || !string.IsNullOrWhiteSpace(doc.Account.PasswordPath))
+                {
+                    issues.Add(new DocumentError(
+                        "account.password.forbidden",
+                        $"account.mode {AccountProfile.OobeLocalMode} forbids account.password and account.passwordPath.",
+                        "account"));
+                }
+
+                if (doc.Account.Username is not null && string.IsNullOrWhiteSpace(doc.Account.Username))
+                {
+                    issues.Add(new DocumentError(
+                        "account.username.blank",
+                        "account.username, when set, must be non-whitespace.",
+                        "account.username"));
+                }
+            }
+            else
             {
                 issues.Add(new DocumentError(
                     "account.mode.unsupported",
-                    $"Unsupported account.mode '{doc.Account.Mode}'. Smoke supports {AccountProfile.LocalAutoLogonMode} only.",
+                    $"Unsupported account.mode '{doc.Account.Mode}'. Expected {AccountProfile.LocalAutoLogonMode} or {AccountProfile.OobeLocalMode}.",
                     "account.mode"));
-            }
-
-            if (string.IsNullOrWhiteSpace(doc.Account.Username))
-            {
-                issues.Add(new DocumentError("account.username.missing", "account.username is required.", "account.username"));
             }
         }
 
@@ -193,8 +216,11 @@ public static partial class BuildPlan
             }
         }
 
+        string username = string.IsNullOrWhiteSpace(doc.Account.Username)
+            ? ""
+            : doc.Account.Username.Trim();
         Profile profile = new(
-            new AccountProfile(doc.Account.Username!, password, requireWifi, passwordPath),
+            new AccountProfile(username, password, requireWifi, passwordPath, doc.Account.Mode!),
             new DmaProfile(
                 doc.Dma.Enabled ?? true,
                 new DmaSettleTarget(
@@ -260,8 +286,8 @@ public static partial class BuildPlan
         ProfileDocument doc = new(
             ProfileSchemaVersion,
             new AccountDocument(
-                AccountProfile.LocalAutoLogonMode,
-                profile.Account.Username,
+                profile.Account.Mode,
+                string.IsNullOrEmpty(profile.Account.Username) ? null : profile.Account.Username,
                 profile.Account.PasswordPath is null ? profile.Account.Password : null,
                 profile.Account.RequireWifiDuringOobe,
                 profile.Account.PasswordPath),
@@ -351,7 +377,8 @@ public static partial class BuildPlan
     {
         RunOptions options = run ?? new RunOptions();
 
-        if (string.IsNullOrEmpty(profile.Account.Password))
+        if (string.Equals(profile.Account.Mode, AccountProfile.LocalAutoLogonMode, StringComparison.Ordinal)
+            && string.IsNullOrEmpty(profile.Account.Password))
         {
             return Result.Fail<BuildArtifacts, Failure>(
                 new Failure("account.password.required", "Local autoLogon requires a non-empty password."));
@@ -570,8 +597,6 @@ public static partial class BuildPlan
     /// <summary>OOBE-phase unattend (specialize + oobeSystem) for WinPE apply — no windowsPE disk/ImageInstall.</summary>
     internal static string BuildOobeUnattendXml(Profile profile)
     {
-        string user = XmlEscape(profile.Account.Username);
-        string pass = XmlEscape(profile.Account.Password ?? "");
         // Official Unattend: show Network when false/omit; hide when true (Smoke headless). See BUILDPLAN.
         string hideWireless = profile.Account.RequireWifiDuringOobe ? "false" : "true";
         string specialize = BuildSpecializeXml(profile);
@@ -580,6 +605,7 @@ public static partial class BuildPlan
         string oobeIntl = BuildInternationalCoreXml(oobeLocale);
         string timeZone = XmlEscape(profile.Dma.Settle.TimeZoneId ?? "");
         string timeZoneXml = string.IsNullOrEmpty(timeZone) ? "" : $"<TimeZone>{timeZone}</TimeZone>";
+        string accountBlocks = BuildOobeAccountBlocksXml(profile);
 
         return $$"""
             <?xml version="1.0" encoding="utf-8"?>
@@ -596,6 +622,27 @@ public static partial class BuildPlan
                     <HideWirelessSetupInOOBE>{{hideWireless}}</HideWirelessSetupInOOBE>
                     <ProtectYourPC>3</ProtectYourPC>
                   </OOBE>
+                  {{accountBlocks}}
+                </component>
+              </settings>
+            </unattend>
+            """;
+    }
+
+    /// <summary>
+    /// <see cref="AccountProfile.OobeLocalMode"/> omits LocalAccounts/AutoLogon (native OOBE creates the owner).
+    /// <see cref="AccountProfile.LocalAutoLogonMode"/> keeps today's bake-in.
+    /// </summary>
+    private static string BuildOobeAccountBlocksXml(Profile profile)
+    {
+        if (string.Equals(profile.Account.Mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal))
+        {
+            return "";
+        }
+
+        string user = XmlEscape(profile.Account.Username);
+        string pass = XmlEscape(profile.Account.Password ?? "");
+        return $$"""
                   <UserAccounts>
                     <LocalAccounts>
                       <LocalAccount wcm:action="add">
@@ -617,9 +664,6 @@ public static partial class BuildPlan
                     </Password>
                     <LogonCount>5</LogonCount>
                   </AutoLogon>
-                </component>
-              </settings>
-            </unattend>
             """;
     }
 

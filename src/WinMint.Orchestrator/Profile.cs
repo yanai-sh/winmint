@@ -48,9 +48,10 @@ public sealed record PoliciesProfile(
 public sealed record DriversProfile(string Source, string DeviceId);
 
 /// <summary>
-/// Local auto-logon account from Profile JSON.
+/// Account block from Profile JSON. <see cref="Mode"/> is <see cref="LocalAutoLogonMode"/> (username + password)
+/// or <see cref="OobeLocalMode"/> (no baked credentials; native OOBE creates the owner — ADR-017).
 /// <c>RequireWifiDuringOobe</c>: when true, OobeUnattend leaves the OOBE Network page visible (<c>HideWirelessSetupInOOBE=false</c>).
-/// Local account + <c>HideOnlineAccountScreens</c> still come from the ISO. Default true (real hardware);
+/// <c>HideOnlineAccountScreens</c> still comes from the ISO. Default true (real hardware);
 /// Smoke Profiles set false for headless Hyper‑V.
 /// <c>PasswordPath</c> is the authored host path to the password file (issue 56); never an environment variable.
 /// </summary>
@@ -58,10 +59,14 @@ public sealed record AccountProfile(
     string Username,
     string? Password,
     bool RequireWifiDuringOobe,
-    string? PasswordPath = null)
+    string? PasswordPath = null,
+    string Mode = "localAutoLogon")
 {
-    /// <summary>Only supported wire form of account.mode in Profile JSON.</summary>
+    /// <summary>Bake-in local account + AutoLogon (Smoke / automation).</summary>
     public const string LocalAutoLogonMode = "localAutoLogon";
+
+    /// <summary>Portable ISO: no LocalAccounts/AutoLogon; OOBE creates the owner.</summary>
+    public const string OobeLocalMode = "oobeLocal";
 }
 
 public sealed record DmaProfile(
