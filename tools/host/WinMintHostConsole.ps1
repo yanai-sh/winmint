@@ -165,8 +165,11 @@ function Start-WinMintHostConsole {
         [Parameter(ParameterSetName = 'Watch')]
         [string] $PriorRunId = '',
 
-        [Parameter(Mandatory, ParameterSetName = 'Watch')]
-        [string] $MarkerPath,
+        [Parameter(ParameterSetName = 'Watch')]
+        [string] $MarkerPath = '',
+
+        [Parameter(ParameterSetName = 'Watch')]
+        [switch] $Here,
 
         [Parameter(Mandatory, ParameterSetName = 'Watch')]
         [Parameter(Mandatory, ParameterSetName = 'Elevate')]
@@ -326,8 +329,39 @@ function Start-WinMintHostConsole {
         }
     }
 
+    if (-not $Here -and [string]::IsNullOrWhiteSpace($MarkerPath)) {
+        throw 'MarkerPath is required when spawning Watch; use -Here to attach in the current console.'
+    }
+
     $watchScript = Join-Path $RepoRoot 'tools/host/Watch-Host.ps1'
     $title = "WinMint host watch — $Work"
+
+    if ($Here) {
+        Push-Location -LiteralPath $RepoRoot
+        try {
+            $host.UI.RawUI.WindowTitle = $title
+            $invokeParams = @{ Kind = $Kind; Work = $Work }
+            if ($PSBoundParameters.ContainsKey('PriorRunId')) {
+                $invokeParams.PriorRunId = $PriorRunId
+            }
+            if (-not [string]::IsNullOrWhiteSpace($MarkerPath)) {
+                $invokeParams.MarkerPath = $MarkerPath
+            }
+            & $watchScript @invokeParams
+        }
+        finally {
+            Pop-Location
+        }
+        return [pscustomobject]@{
+            spawnMode      = 'here'
+            wtResolvedPath = ''
+            childPid       = $null
+            outcome        = 'ok'
+            disposition    = 'RunHere'
+            detail         = ''
+        }
+    }
+
     # Watch redraws an interactive console — not -NonInteractive.
     $pwshArgs = @(
         '-NoProfile', '-File', $watchScript,

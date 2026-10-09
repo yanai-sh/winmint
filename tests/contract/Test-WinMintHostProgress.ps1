@@ -150,9 +150,29 @@ if ($watchHost -notmatch 'MarkerPath') { throw 'Watch-Host must accept -MarkerPa
 if ($watchHost -match 'Get-Date') { throw 'Watch-Host must not pass Get-Date as a dashboard clock' }
 
 $just = Get-Content -LiteralPath (Join-Path $repo 'Justfile') -Raw -Encoding utf8
-if ($just -notmatch 'Watch-Host.ps1') { throw 'just watch-* must call Watch-Host' }
-if ($just -notmatch "-Kind apply") { throw 'just watch-apply must pass -Kind apply' }
+$watchAttach = Get-Content -LiteralPath (Join-Path $repo 'tools/host/Invoke-WinMintHostWatchAttach.ps1') -Raw -Encoding utf8
+if ($watchAttach -notmatch 'WinMintHostConsole\.ps1') {
+    throw 'watch attach helper must dot-source WinMintHostConsole.ps1'
+}
+if ($watchAttach -notmatch 'Start-WinMintHostConsole\s+-Here') {
+    throw 'watch attach helper must call Start-WinMintHostConsole -Here'
+}
+if ($just -notmatch 'Invoke-WinMintHostWatchAttach\.ps1') {
+    throw 'just watch-smoke/apply must route through Invoke-WinMintHostWatchAttach'
+}
+if ($just -notmatch 'Invoke-WinMintHostWatchAttach\.ps1.*-Kind apply') {
+    throw 'just watch-apply must pass -Kind apply via attach helper'
+}
+if ($just -match '(?ms)^watch-(?:smoke|apply)[^\n]*:\s*\r?\n[^\n]*Watch-Host\.ps1') {
+    throw 'just watch-smoke/apply must not call Watch-Host.ps1 directly'
+}
 if ($just -match 'Get-Content -LiteralPath.*apply-status') { throw 'just watch-apply must not Get-Content -Wait the apply-status file' }
+
+$hostConsole = Get-Content -LiteralPath (Join-Path $repo 'tools/host/WinMintHostConsole.ps1') -Raw -Encoding utf8
+if ($hostConsole -notmatch '\[switch\]\s*\$Here') { throw 'WinMintHostConsole must expose -Here for in-console attach' }
+if ($hostConsole -notmatch "disposition\s*=\s*'RunHere'") {
+    throw 'WinMintHostConsole -Here must return RunHere disposition'
+}
 
 $old = $PSStyle.OutputRendering
 # Host may still embed ANSI in $PSStyle strings under PlainText; strip for layout asserts.

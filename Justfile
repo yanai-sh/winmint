@@ -115,7 +115,7 @@ wipe-scratch:
 # Own-console apply-events watch (Spectre). Default WORK = Gate B (%LOCALAPPDATA%\WinMint\work\gate-b).
 # Interactive — Spectre Live needs a real console (not -NonInteractive).
 watch-apply WORK="":
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Watch-Host.ps1' -Kind apply -Work '{{WORK}}'
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintHostWatchAttach.ps1' -Kind apply -Work '{{WORK}}'
 
 # Maintainer Apply (DISM hours). Cli verb is build.
 # Prereq: just publish-provisioning. INCLUDE_SMOKE_STUBS=true → --include-smoke-stubs.
@@ -155,7 +155,7 @@ smoke-maintainer-skip-apply WORK=".scratch/smoke" WALL="180" MONITOR="1" STALL="
 # smoke-maintainer already spawns one Watch-Host; use this to attach a second view.
 # Interactive — Spectre Live needs a real console (not -NonInteractive).
 watch-smoke WORK=".scratch/smoke":
-    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Watch-Host.ps1' -Kind smoke -Work '{{WORK}}'
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintHostWatchAttach.ps1' -Kind smoke -Work '{{WORK}}'
 
 # Attach to just check. Default PATH = .scratch/check-status.json. just check does not spawn this.
 watch-check PATH="":
