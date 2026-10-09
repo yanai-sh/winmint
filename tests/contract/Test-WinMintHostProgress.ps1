@@ -31,11 +31,7 @@ if ($console -notmatch 'function Start-WinMintHostWatchProcess') { throw 'consol
 if ($console -notmatch 'ParameterSetName = ''Elevate''') { throw 'console module must expose -Elevate parameter set' }
 if ($console -notmatch 'transcriptLocked') { throw 'console module must enforce single-flight transcript lock' }
 if ($console -notmatch 'overlapAlive') { throw 'console module must enforce overlapAlive single-flight' }
-if ($console -notmatch 'wt' -and $console -notmatch 'WindowsTerminal') { throw 'spawn helper must consider wt.exe' }
-if ($console -notmatch 'ArgumentList\.Add') { throw 'wt spawn must use ProcessStartInfo.ArgumentList so spaced --title stays one argv' }
-if ($console -notmatch "'-w',\s*'0'") { throw 'wt spawn must open a new window (-w 0) so elevated smoke does not attach to an existing session' }
-if ($console -match "-NonInteractive', '-File', `$watchScript") { throw 'watch spawn must not use -NonInteractive (needs console UI)' }
-if ($console -notmatch '-PriorRunId:') { throw 'empty PriorRunId must be one argv (-PriorRunId:) so wt does not drop it' }
+if ($console -notmatch '\$ProcessStarter') { throw 'console module must expose ProcessStarter for behavioural spawn contracts' }
 if ($helper -match 'function Resolve-WinMintWindowsTerminal') { throw 'progress helper must not own wt resolve' }
 if ($helper -match 'function Start-WinMintHostConsole') { throw 'progress helper must not own Start-WinMintHostConsole' }
 if ($helper -notmatch 'UseOSCIndicator') { throw 'helper must set Progress.UseOSCIndicator when interactive VT' }

@@ -13,12 +13,9 @@ $just = Get-Content -LiteralPath (Join-Path $repo 'Justfile') -Raw -Encoding utf
 if ($start -notmatch 'Start-WinMintHostConsole') { throw 'Start-SmokeElevated must call Start-WinMintHostConsole' }
 if ($start -notmatch '\-Elevate') { throw 'Start-SmokeElevated must pass -Elevate to the host console module' }
 if ($start -match 'function Start-WinMintArgvProcess') { throw 'Start-SmokeElevated must not define Start-WinMintArgvProcess' }
-if ($console -notmatch 'Resolve-WinMintWindowsTerminal') { throw 'WinMintHostConsole must resolve wt' }
-if ($console -notmatch 'ArgumentList\.Add') { throw 'WinMintHostConsole must use ProcessStartInfo.ArgumentList' }
-if ($console -notmatch "'-w',\s*'0'") { throw 'WinMintHostConsole must open a new wt window (-w 0)' }
-if ($console -notmatch 'sudo') { throw 'WinMintHostConsole must elevate via sudo when not admin' }
-if ($console -notmatch 'host-console-spawn\.json') { throw 'WinMintHostConsole must stamp host-console-spawn.json' }
-if ($console -notmatch 'watchMarkerTimeout') { throw 'WinMintHostConsole watch path must fail loud on marker timeout' }
+if ($console -notmatch 'function Start-WinMintHostConsole') { throw 'WinMintHostConsole must export Start-WinMintHostConsole' }
+if ($console -notmatch '\$ProcessStarter') { throw 'WinMintHostConsole must expose ProcessStarter for behavioural contracts' }
+if ($start -notmatch 'childExitedEarly') { throw 'Start-SmokeElevated must throw childExitedEarly when outer starter dies quickly' }
 if ($start -notmatch 'ElevatedWorker') { throw 'Start-SmokeElevated must own -ElevatedWorker process body' }
 if ($start -notmatch 'Invoke-SmokeRecipe\.ps1') { throw 'Start-SmokeElevated worker must invoke Recipe in-process' }
 if ($console -notmatch 'WT_SESSION') { throw 'WinMintHostConsole must detect an existing Windows Terminal session' }

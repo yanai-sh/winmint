@@ -102,12 +102,34 @@ if ($smoke -notmatch 'apply-smoke-maintainer') {
 if ($smoke -match 'apply-maintainer \$Iso \$Work \$applyProfilePath true') {
     throw 'Invoke-Smoke must not use opaque apply-maintainer … true for Smoke Apply'
 }
-$hostConsole = Get-Content -LiteralPath (Join-Path $repo 'tools/host/WinMintHostConsole.ps1') -Raw -Encoding utf8
-if ($hostConsole -match "-NonInteractive', '-File', `$watchScript") {
-    throw 'Watcher spawn must not use -NonInteractive (needs console UI)'
+. (Join-Path $repo 'tools/host/WinMintHostConsole.ps1')
+$fakeWt = Join-Path ([IO.Path]::GetTempPath()) ('winmint-fake-wt-status-' + [guid]::NewGuid().ToString('N') + '.exe')
+Set-Content -LiteralPath $fakeWt -Value 'stub' -Encoding ascii -Force
+$script:WinMintFakeWtPath = $fakeWt
+function Resolve-WinMintWindowsTerminal { return $script:WinMintFakeWtPath }
+$spawnWork = Join-Path ([IO.Path]::GetTempPath()) ('winmint-watch-spawn-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $spawnWork | Out-Null
+$spawnMarker = Join-Path $spawnWork 'watch-smoke.pid'
+Set-Content -LiteralPath $spawnMarker -Value $PID -Encoding utf8 -NoNewline
+$script:WinMintWatchSpawnArgv = [string[]]@()
+function Invoke-WinMintWatchSpawnRecorder {
+    param([System.Diagnostics.ProcessStartInfo] $StartInfo)
+    $script:WinMintWatchSpawnArgv = @(
+        foreach ($a in $StartInfo.ArgumentList) { [string]$a })
+    return [pscustomobject]@{ Id = $PID }
 }
-if ($hostConsole -notmatch '-NonInteractive') {
-    throw 'Watcher spawn policy must document -NonInteractive (watch stays interactive)'
+try {
+    $pwshExe = (Get-Command pwsh.exe -ErrorAction Stop).Source
+    $null = Start-WinMintHostConsole -RepoRoot $repo -Work $spawnWork -Kind smoke `
+        -PriorRunId '' -MarkerPath $spawnMarker -PwshExe $pwshExe `
+        -ProcessStarter ${function:Invoke-WinMintWatchSpawnRecorder}
+    if ($script:WinMintWatchSpawnArgv -contains '-NonInteractive') {
+        throw 'Watch spawn argv must not include -NonInteractive (needs console UI)'
+    }
+}
+finally {
+    Remove-Item -LiteralPath $spawnWork -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $fakeWt -Force -ErrorAction SilentlyContinue
 }
 if ($smoke -notmatch 'Get-SmokeWatcherSpawnDecision') {
     throw 'Invoke-Smoke must skip a live watcher via Get-SmokeWatcherSpawnDecision'

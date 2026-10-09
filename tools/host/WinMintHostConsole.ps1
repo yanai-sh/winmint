@@ -98,9 +98,9 @@ function Test-WinMintHostConsoleOverlapAlive {
         $raw = Get-Content -LiteralPath $SidecarPath -Raw -Encoding utf8
         if ([string]::IsNullOrWhiteSpace($raw)) { return $false }
         $doc = $raw | ConvertFrom-Json
-        $pid = [int]$doc.childPid
-        if ($pid -le 0) { return $false }
-        return $null -ne (Get-Process -Id $pid -ErrorAction SilentlyContinue)
+        $workerPid = [int]$doc.childPid
+        if ($workerPid -le 0) { return $false }
+        return $null -ne (Get-Process -Id $workerPid -ErrorAction SilentlyContinue)
     }
     catch {
         return $false
