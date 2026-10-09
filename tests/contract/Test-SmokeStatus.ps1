@@ -35,6 +35,15 @@ if ($assertSrc -match "statusCode -ne 'jobs\.ok'") {
 if ($convergeSrc -notmatch 'function Get-WinMintGuestHandoffReadiness') {
     throw 'SmokeConverge must define Get-WinMintGuestHandoffReadiness'
 }
+if ($convergeSrc -notmatch 'function Get-SmokeStallFailVerdict') {
+    throw 'SmokeConverge must define Get-SmokeStallFailVerdict'
+}
+if ($smoke -notmatch 'HandoffIncomplete') {
+    throw 'Invoke-Smoke must pass HandoffIncomplete into Get-SmokeWaitTick'
+}
+if ($smoke -notmatch 'ProbeTransportError') {
+    throw 'Invoke-Smoke must pass ProbeTransportError into Get-SmokeWaitTick'
+}
 if ($assertSrc -notmatch 'SmokeConverge\.ps1') {
     throw 'Assert-SmokeEvidence must dot-source SmokeConverge (handoff locality)'
 }
@@ -357,10 +366,35 @@ $t = Invoke-Tick @{ LastVmState = 'Off'; VmState = 'Running'; DiskBootPreferred 
 if ([bool]$t.RearmNudge) { throw 'HDD-first does not re-arm' }
 
 $t = Invoke-Tick @{ GuestUpSticky = $true; StallElapsedMinutes = 45; StallMinutes = 45; Cpu = 90 }
-if ($t.FailReason -cne 'STALL') { throw 'Complete-without-handoff CEH spinner must stall' }
+if ($t.FailReason -cne 'STALL') { throw 'idle guest-up with no handoff/probe signals must STALL_SUSPECT' }
 if ($t.FailMessage -notmatch '^STALL_SUSPECT:') { throw 'stall FailMessage prefix' }
+$t = Invoke-Tick @{ GuestUpSticky = $true; StallElapsedMinutes = 45; StallMinutes = 45; HandoffIncomplete = $true }
+if ($t.FailReason -cne 'HANDOFF') { throw 'Complete wait-handoff must HANDOFF_STUCK' }
+if ($t.FailMessage -notmatch '^HANDOFF_STUCK:') { throw 'handoff FailMessage prefix' }
+$t = Invoke-Tick @{ GuestUpSticky = $true; StallElapsedMinutes = 45; StallMinutes = 45; ProbeTransportError = $true }
+if ($t.FailReason) { throw 'probe transport error extends stall (grace), no fail this tick' }
+if (-not [bool]$t.ExtendStall) { throw 'PSD flake must extend stall after guest-up' }
+$t = Invoke-Tick @{ GuestUpSticky = $true; StallElapsedMinutes = 45; StallMinutes = 45; ProbeTransportError = $true; SupervisorRunning = $false; Fingerprint = '1:Complete'; LastFingerprint = '1:Complete' }
+if ($t.FailReason) { throw 'probe grace still applies when fingerprint unchanged' }
+if ((Get-SmokeStallFailVerdict -GuestUpSticky:$true -ProbeTransportError:$true) -cne 'psd-flake') {
+    throw 'Get-SmokeStallFailVerdict psd-flake when stall fail tick has probe error'
+}
 $t = Invoke-Tick @{ GuestUpSticky = $true; StallElapsedMinutes = 45; StallMinutes = 45; SupervisorRunning = $true }
 if ($t.FailReason) { throw 'Supervisor alive must extend stall, not fail' }
+if ((Get-SmokeStallFailVerdict -GuestUpSticky:$true -HandoffIncomplete:$true -ProbeTransportError:$true) -cne 'handoff-stuck') {
+    throw 'Get-SmokeStallFailVerdict handoff precedence'
+}
+if ((Get-SmokeStallFailVerdict -GuestUpSticky:$true -HandoffIncomplete:$false -ProbeTransportError:$true) -cne 'psd-flake') {
+    throw 'Get-SmokeStallFailVerdict psd-flake'
+}
+if ((Get-SmokeStallExtendDecision -GuestUpSticky:$true -GuestProgress:$false -Cpu 99) -cne 'hold') {
+    throw 'Get-SmokeStallExtendDecision ignores CXH CPU after guest-up'
+}
+if ((Get-SmokeStallExtendDecision -GuestUpSticky:$true -ProbeTransportError:$true -GuestProgress:$false -Cpu 99) -cne 'extend') {
+    throw 'Get-SmokeStallExtendDecision PSD grace'
+}
+if ((Get-SmokeSuspendVmDecision -FailureMessage 'PSD_FLAKE: transport') -cne 'suspend') { throw 'psd-flake suspends' }
+if ((Get-SmokeSuspendVmDecision -FailureMessage 'HANDOFF_STUCK: shell') -cne 'suspend') { throw 'handoff stuck suspends' }
 
 $t = Invoke-Tick @{ VhdFileSizeBytes = 36MB; VhdHasImage = $false; EmptyVhdRunningSeconds = 60 }
 if ($t.FailReason) { throw 'empty VHD under budget' }

@@ -216,21 +216,41 @@ function Get-SmokeStallExtendDecision {
       Pre-guest-up: CPU activity or setup reboot churn counts (WinPE/OOBE leave no durable
       guest signal). After sticky guest-up: only real guest progress extends — Supervisor
       process alive (its own wall clock bounds tenure) or new evidence bytes. A CPU-burning
-      CloudExperienceHost "Just a moment" spinner no longer resets stall.
+      CloudExperienceHost "Just a moment" spinner no longer resets stall. Transient PS
+      Direct transport errors after guest-up extend (grace) so flake does not immediately
+      fail-close as STALL_SUSPECT; chronic flake still hits wall clock.
     #>
     param(
         [string] $VmState,
         [int] $Cpu = 0,
         [bool] $GuestUpSticky = $false,
-        [bool] $GuestProgress = $false
+        [bool] $GuestProgress = $false,
+        [bool] $ProbeTransportError = $false
     )
     if ($VmState -in @('Starting', 'Stopping')) { return 'extend' }
     if ($GuestUpSticky) {
         if ($GuestProgress) { return 'extend' }
+        if ($ProbeTransportError) { return 'extend' }
         return 'hold'
     }
     if ($Cpu -gt 0) { return 'extend' }
     return 'hold'
+}
+
+function Get-SmokeStallFailVerdict {
+    <#
+    .SYNOPSIS
+      Named stall fail reason after the stall budget is exhausted (guest-up phase only).
+    #>
+    param(
+        [bool] $GuestUpSticky = $false,
+        [bool] $HandoffIncomplete = $false,
+        [bool] $ProbeTransportError = $false
+    )
+    if (-not $GuestUpSticky) { return 'stall-suspect' }
+    if ($HandoffIncomplete) { return 'handoff-stuck' }
+    if ($ProbeTransportError) { return 'psd-flake' }
+    return 'stall-suspect'
 }
 
 function Get-SmokeSetupRebootTransition {
@@ -309,7 +329,7 @@ function Get-SmokeSuspendVmDecision {
     #>
     param([string] $FailureMessage)
     if ($FailureMessage -match 'Apply failed') { return 'skip' }
-    if ($FailureMessage -match '^(STALL_SUSPECT|EMPTY_VHD|REBOOT_LOOP|Wall clock)') {
+    if ($FailureMessage -match '^(STALL_SUSPECT|PSD_FLAKE|HANDOFF_STUCK|EMPTY_VHD|REBOOT_LOOP|Wall clock)') {
         return 'suspend'
     }
     return 'shutdown'
@@ -382,6 +402,8 @@ function Get-SmokeWaitTick {
         LastFingerprint           = ''
         Fingerprint               = ''
         SupervisorRunning         = $false
+        ProbeTransportError       = $false
+        HandoffIncomplete         = $false
         SetupRebootCount          = 0
         MaxSetupReboots           = 8
         StallElapsedMinutes       = 0.0
@@ -454,9 +476,13 @@ function Get-SmokeWaitTick {
     $lastFp = [string]$d.LastFingerprint
     if ($guestProgress) { $lastFp = [string]$d.Fingerprint }
 
+    $probeTransportError = [bool]$d.ProbeTransportError
+    $handoffIncomplete = [bool]$d.HandoffIncomplete
     $extendStall = (Get-SmokeStallExtendDecision -VmState $vmState -Cpu ([int]$d.Cpu) `
-            -GuestUpSticky ([bool]$d.GuestUpSticky) -GuestProgress $guestProgress) -eq 'extend'
-    $stallElapsed = [double]$d.StallElapsedMinutes
+            -GuestUpSticky ([bool]$d.GuestUpSticky) -GuestProgress $guestProgress `
+            -ProbeTransportError $probeTransportError) -eq 'extend'
+    $stallElapsedInput = [double]$d.StallElapsedMinutes
+    $stallElapsed = $stallElapsedInput
     if ($extendStall) { $stallElapsed = 0 }
 
     $tryStamp = (Get-SmokeRunIdStampDecision -AlreadyStamped ([bool]$d.SmokeRunIdStamped) `
@@ -484,9 +510,22 @@ function Get-SmokeWaitTick {
     }
     else {
         $stallMin = [int]$d.StallMinutes
-        if ($stallElapsed -ge $stallMin) {
-            $failReason = 'STALL'
-            $failMessage = "STALL_SUSPECT: no guest progress for ${stallMin} minutes (fail-fast before WallClockTimeout)."
+        if ($stallElapsedInput -ge $stallMin -and -not $extendStall) {
+            switch ((Get-SmokeStallFailVerdict -GuestUpSticky ([bool]$d.GuestUpSticky) `
+                    -HandoffIncomplete $handoffIncomplete -ProbeTransportError $probeTransportError)) {
+                'handoff-stuck' {
+                    $failReason = 'HANDOFF'
+                    $failMessage = "HANDOFF_STUCK: Complete evidence but shell/explorer handoff not verified for ${stallMin} minutes."
+                }
+                'psd-flake' {
+                    $failReason = 'PSD_FLAKE'
+                    $failMessage = "PSD_FLAKE: PS Direct transport errors with no guest progress for ${stallMin} minutes (fail-fast before WallClockTimeout)."
+                }
+                default {
+                    $failReason = 'STALL'
+                    $failMessage = "STALL_SUSPECT: no guest progress for ${stallMin} minutes (fail-fast before WallClockTimeout)."
+                }
+            }
         }
     }
 

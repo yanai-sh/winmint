@@ -490,6 +490,7 @@ function Test-GuestEvidenceReady {
             # Reboot needs no live shell probe — readiness alone is wait-reboot.
             if ($outcome -eq 'Reboot') {
                 $script:LastProbeError = ''
+                $script:LastHandoffIncomplete = $false
                 $script:LastSupervisorRunning = $false
                 if ((Get-WinMintGuestHandoffReadiness -EvidenceDoc $pulled `
                         -LiveShell '' -SupervisorRunning:$false -RequiredSmokeRunId $runId) -ceq 'wait-reboot') {
@@ -576,12 +577,14 @@ function Test-GuestEvidenceReady {
                 -LiveShell ([string]$live.Shell) -SupervisorRunning:$live.SupervisorRunning `
                 -RequiredSmokeRunId $runId -ExplorerRunning $live.ExplorerRunning
             if ($readiness -eq 'wait-handoff') {
+                $script:LastHandoffIncomplete = ($outcome -eq 'Complete')
                 if ($outcome -eq 'Complete') {
                     Write-SmokeHostLine -Name ("Guest evidence Complete but handoff not verified " +
                         "(shell='$($live.Shell)' supervisor=$($live.SupervisorRunning) explorer=$($live.ExplorerRunning)) — waiting…") -Activity wait
                 }
                 return $false
             }
+            $script:LastHandoffIncomplete = $false
             if ($readiness -notin @('ready', 'failed')) {
                 return $false
             }
@@ -610,6 +613,7 @@ $script:GuestUpSticky = $false
 $script:GuestUpStickySw = $null
 $script:ConsecutiveHeartbeatOk = 0
 $script:LastProbeError = ''
+$script:LastHandoffIncomplete = $false
 $script:LastSupervisorRunning = $false
 $script:GuestEvidenceFingerprint = ''
 $script:LastGuestEvidenceFingerprint = ''
@@ -770,6 +774,8 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
                 LastFingerprint          = $script:LastGuestEvidenceFingerprint
                 Fingerprint              = $script:GuestEvidenceFingerprint
                 SupervisorRunning        = $script:LastSupervisorRunning
+                ProbeTransportError      = ([bool]$script:GuestUpSticky -and -not [string]::IsNullOrWhiteSpace($script:LastProbeError))
+                HandoffIncomplete        = ([bool]$script:GuestUpSticky -and [bool]$script:LastHandoffIncomplete)
                 SetupRebootCount         = $script:SetupRebootCount
                 MaxSetupReboots          = $MaxSetupReboots
                 StallElapsedMinutes      = $stallSw.Elapsed.TotalMinutes
