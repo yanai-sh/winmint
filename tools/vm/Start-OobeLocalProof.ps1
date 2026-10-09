@@ -73,8 +73,13 @@ function Invoke-OobeLocalProofWorker {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null
     Start-Transcript -LiteralPath $log -Force | Out-Null
     try {
+        $proofUser = 'proof'
+        try {
+            $proofUser = [string](Get-Content -LiteralPath $profilePath -Raw -Encoding utf8 | ConvertFrom-Json).account.username
+            if ([string]::IsNullOrWhiteSpace($proofUser)) { $proofUser = 'proof' }
+        } catch { }
         Write-Host "OobeLocal proof HEAD=$(git rev-parse --short HEAD) Work=$Work"
-        Write-Host "At OOBE create local user 'proof' with password from: $guestPasswordPath"
+        Write-Host "At OOBE create local user '$proofUser' with password from: $guestPasswordPath"
         Write-Host 'Expect possible second sign-in after deferred Shell (FirstLogonCommands logoff).'
         $smoke = Join-Path $repoRoot 'tools\vm\Invoke-Smoke.ps1'
         $args = @{
@@ -115,6 +120,11 @@ if ($result.disposition -eq 'RunHere') {
     exit $LASTEXITCODE
 }
 
+$proofUser = 'proof'
+try {
+    $proofUser = [string](Get-Content -LiteralPath $profilePath -Raw -Encoding utf8 | ConvertFrom-Json).account.username
+    if ([string]::IsNullOrWhiteSpace($proofUser)) { $proofUser = 'proof' }
+} catch { }
 Write-Host "Spawned elevated oobeLocal proof ($($result.disposition)). Log: $log"
-Write-Host "OOBE: create local user 'proof' / password in $guestPasswordPath"
+Write-Host "OOBE: create local user '$proofUser' / password in $guestPasswordPath"
 exit 0
