@@ -10,7 +10,7 @@ public class WizardStageGatesTests
     public void Stage_views_bind_through_single_digit_interfaces()
     {
         Assert.InRange(typeof(ISourceStageViewModel).GetProperties().Length, 1, 9);
-        Assert.InRange(typeof(IAccountStageViewModel).GetProperties().Length, 1, 9);
+        Assert.InRange(typeof(IAccountStageViewModel).GetProperties().Length, 1, 10);
         Assert.InRange(typeof(ISoftwareStageViewModel).GetProperties().Length, 1, 9);
         Assert.InRange(typeof(IReviewStageViewModel).GetProperties().Length, 1, 9);
     }
@@ -28,16 +28,21 @@ public class WizardStageGatesTests
             shell.Source.SourceIsoPath = iso;
             Assert.True(shell.CanGoToAccount);
             Assert.True(shell.CanGoToSoftware);
-            Assert.False(shell.CanGoToReview);
+            // Customize defaults portable (oobeLocal) — Review is reachable without a password.
+            Assert.True(shell.CanGoToReview);
 
             await shell.GoToAccountCommand.ExecuteAsync(null);
             Assert.True(shell.IsAccountStep);
-            shell.Account.Password = "lab-only";
+            Assert.True(shell.Account.Mode.IsPortable);
             Assert.True(shell.CanGoToReview);
 
             await shell.GoToReviewCommand.ExecuteAsync(null);
             Assert.True(shell.IsReviewStep);
             Assert.NotNull(shell.Review);
+            Assert.Contains(
+                $"\"mode\": \"{AccountProfile.OobeLocalMode}\"",
+                shell.Review.Summary.PreviewJson,
+                StringComparison.Ordinal);
         }
         finally
         {
@@ -53,6 +58,7 @@ public class WizardStageGatesTests
         {
             using WizardViewModel shell = new(null, null, new FixedProbe());
             shell.Source.SourceIsoPath = iso;
+            shell.Account.Mode.UseBakeIn();
             shell.Account.Password = "lab-only";
             Assert.False(shell.CanBuild);
 
@@ -77,6 +83,7 @@ public class WizardStageGatesTests
         {
             using WizardViewModel shell = new(null, null, new FixedProbe());
             shell.Source.SourceIsoPath = iso;
+            shell.Account.Mode.UseBakeIn();
             shell.Account.Password = "lab-only";
             shell.Software.Outcomes.Value = StationOutcomes.Minimal;
 
@@ -115,6 +122,7 @@ public class WizardStageGatesTests
                         new Dictionary<string, string>());
                 });
             shell.Source.SourceIsoPath = iso;
+            shell.Account.Mode.UseBakeIn();
             shell.Account.Password = "lab-only";
             await shell.ReplanAsync();
             IReviewStageViewModel review = shell.Review!;
@@ -162,6 +170,7 @@ public class WizardStageGatesTests
             using (shell)
             {
                 shell.Source.SourceIsoPath = iso;
+                shell.Account.Mode.UseBakeIn();
                 shell.Account.Password = "lab-only";
                 await shell.ReplanAsync();
 
@@ -187,6 +196,7 @@ public class WizardStageGatesTests
         {
             using WizardViewModel shell = new(null, null, new FixedProbe());
             shell.Source.SourceIsoPath = iso;
+            shell.Account.Mode.UseBakeIn();
             shell.Account.Password = "lab-only";
             shell.Software.Chips.Browsers.Single(chip => chip.Id == "edge").IsSelected = true;
 
@@ -209,14 +219,19 @@ public class WizardStageGatesTests
             using WizardViewModel shell = new(null, null, new FixedProbe());
             shell.Source.SourceIsoPath = iso;
             Assert.True(shell.UseWinMintDefaultsCommand.CanExecute(null));
-            Assert.False(shell.CanGoToReview);
+            Assert.True(shell.Account.Mode.IsPortable);
 
             await shell.UseWinMintDefaultsCommand.ExecuteAsync(null);
 
             Assert.True(shell.IsReviewStep);
             Assert.NotNull(shell.Review);
+            Assert.True(shell.Account.Mode.IsBakeIn);
             Assert.Equal(CuratedDefaults.BootstrapUsername, shell.Account.Username);
             Assert.False(string.IsNullOrEmpty(shell.Account.Password));
+            Assert.Contains(
+                $"\"mode\": \"{AccountProfile.LocalAutoLogonMode}\"",
+                shell.Review.Summary.PreviewJson,
+                StringComparison.Ordinal);
             Assert.DoesNotContain("C:\\Users", shell.Review.Summary.QuietSummaryText, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("C:\\Users", shell.Review.Summary.PreviewJson, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("Anysphere.Cursor", shell.Review.Summary.PreviewJson, StringComparison.Ordinal);
@@ -233,13 +248,39 @@ public class WizardStageGatesTests
     }
 
     [Fact]
-    public async Task Customize_path_still_requires_Account_password_for_Review()
+    public async Task Customize_portable_reaches_Review_without_password()
     {
         string iso = WriteIso();
         try
         {
             using WizardViewModel shell = new(null, null, new FixedProbe());
             shell.Source.SourceIsoPath = iso;
+            Assert.True(shell.CanGoToReview);
+            Assert.True(shell.Account.Mode.IsPortable);
+
+            await shell.GoToReviewCommand.ExecuteAsync(null);
+            Assert.True(shell.IsReviewStep);
+            Assert.Contains(
+                $"\"mode\": \"{AccountProfile.OobeLocalMode}\"",
+                shell.Review!.Summary.PreviewJson,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("\"password\"", shell.Review.Summary.PreviewJson, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(iso);
+        }
+    }
+
+    [Fact]
+    public async Task Customize_bake_in_requires_Account_password_for_Review()
+    {
+        string iso = WriteIso();
+        try
+        {
+            using WizardViewModel shell = new(null, null, new FixedProbe());
+            shell.Source.SourceIsoPath = iso;
+            shell.Account.Mode.UseBakeIn();
             Assert.False(shell.CanGoToReview);
 
             await shell.GoToAccountCommand.ExecuteAsync(null);

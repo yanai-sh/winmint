@@ -18,6 +18,7 @@ public class CuratedDefaultsTests
         Assert.True(created.IsOk, created.IsOk ? null : $"{created.Error.Code}: {created.Error.Message}");
 
         Profile profile = created.Value;
+        Assert.Equal(AccountProfile.LocalAutoLogonMode, profile.Account.Mode);
         Assert.Equal(CuratedDefaults.BootstrapUsername, profile.Account.Username);
         Assert.Equal("bootstrap-secret", profile.Account.Password);
         Assert.Null(profile.Account.PasswordPath);

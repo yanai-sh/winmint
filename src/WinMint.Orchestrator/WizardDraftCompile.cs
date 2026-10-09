@@ -27,10 +27,16 @@ public static class WizardDraftCompile
             return Result.Fail<WizardDraft, Failure>(dma.Error);
         }
 
+        bool bakeIn = string.Equals(
+            request.AccountMode,
+            AccountProfile.LocalAutoLogonMode,
+            StringComparison.Ordinal);
         AccountProfile account = new(
-            request.Username.Trim(),
-            request.Password,
-            request.RequireWifi);
+            bakeIn ? request.Username.Trim() : "",
+            bakeIn ? request.Password : null,
+            request.RequireWifi,
+            PasswordPath: null,
+            Mode: bakeIn ? AccountProfile.LocalAutoLogonMode : AccountProfile.OobeLocalMode);
 
         Result<Profile, Failure> profile = ProfileDraft.TryBuild(
             request.StationOutcome,
@@ -74,7 +80,9 @@ public sealed record WizardDraftRequest(
     string? AdvancedWsl,
     string? SourceIsoPath,
     int WimIndex,
-    IReadOnlyList<string> SelectionLabels);
+    IReadOnlyList<string> SelectionLabels,
+    // ponytail: default bake-in keeps existing LabRequest / curated call sites on ADR-017 proof path
+    string AccountMode = AccountProfile.LocalAutoLogonMode);
 
 /// <summary>Compiled Wizard draft ready for HostCompile.</summary>
 public sealed record WizardDraft(Profile Profile, HostComposeOptions Options);

@@ -47,11 +47,13 @@ public static class CuratedDefaults
         }
 
         bool usePath = !string.IsNullOrWhiteSpace(passwordPath);
+        // ADR-017 proof gate: curated emit stays localAutoLogon until Primary proves oobeLocal
         AccountProfile account = new(
             BootstrapUsername,
             usePath ? null : bootstrapPassword,
             requireWifiDuringOobe,
-            usePath ? passwordPath!.Trim() : null);
+            usePath ? passwordPath!.Trim() : null,
+            AccountProfile.LocalAutoLogonMode);
 
         DmaProfile dma = new(Enabled: true, settle);
 

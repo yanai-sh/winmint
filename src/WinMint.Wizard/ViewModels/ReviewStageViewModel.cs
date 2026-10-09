@@ -89,7 +89,7 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
             review.SourceMedia?.SourceIsoPath ?? "",
             review.OutputIsoPath,
             review.OutputIsoPath is null ? "" : $"Output ISO: {review.OutputIsoPath}",
-            review.AuthoredProfile.Account.Username,
+            FormatAccountName(review.AuthoredProfile.Account),
             review.SourceMedia?.Selected?.Name ?? "—",
             review.AuthoredProfile.Account.RequireWifiDuringOobe ? "Required at OOBE" : "Optional",
             FormatRegion(review.AuthoredProfile.Dma.Settle));
@@ -129,6 +129,11 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
 
     [RelayCommand]
     private void CancelBuild() => _host?.CancelBuild();
+
+    private static string FormatAccountName(AccountProfile account) =>
+        string.Equals(account.Mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal)
+            ? "OOBE local account"
+            : account.Username;
 
     private static string FormatRegion(DmaSettleTarget settle)
     {

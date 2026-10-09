@@ -29,7 +29,7 @@ public class WizardViewModelTests
     }
 
     [Fact]
-    public void Footer_prompts_for_iso_then_password_then_ready()
+    public void Footer_prompts_for_iso_then_ready_or_bake_in_password()
     {
         using WizardViewModel vm = Vm();
         Assert.Equal("Select a Windows ISO to begin.", vm.FooterStatus);
@@ -41,9 +41,14 @@ public class WizardViewModelTests
         try
         {
             vm.Source.SourceIsoPath = iso;
+            Assert.True(vm.FooterReady);
+            Assert.False(vm.FooterWarn);
+            Assert.Equal("Ready · ISO · OOBE local", vm.FooterStatus);
+
+            vm.Account.Mode.UseBakeIn();
             Assert.True(vm.FooterWarn);
             Assert.False(vm.FooterReady);
-            Assert.Contains("WinMint defaults", vm.FooterStatus, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("bake-in", vm.FooterStatus, StringComparison.OrdinalIgnoreCase);
 
             vm.Account.Password = "secret";
             Assert.True(vm.FooterReady);
@@ -93,6 +98,7 @@ public class WizardViewModelTests
         {
             PickerProbe probe = new();
             using WizardViewModel vm = new(storage: null, close: null, sourceMedia: probe);
+            vm.Account.Mode.UseBakeIn();
             vm.Account.Password = "do-not-show-me";
             vm.Source.SourceIsoPath = iso;
             await WaitForProbeAsync(vm);
@@ -129,6 +135,7 @@ public class WizardViewModelTests
         try
         {
             using WizardViewModel vm = new(storage: null, close: null, sourceMedia: new PickerProbe());
+            vm.Account.Mode.UseBakeIn();
             vm.Account.Password = "lab-only";
             vm.Source.SourceIsoPath = iso;
             await WaitForProbeAsync(vm);
@@ -171,7 +178,8 @@ public class WizardViewModelTests
             vm.Source.SourceIsoPath = iso;
             await probe.WaitForCallsAsync(1);
 
-            vm.Account.Username = "unrelated-revision";
+            // Portable compile ignores username; flip Wi-Fi so the draft revision actually moves.
+            vm.Account.RequireWifi = true;
             probe.Complete(0);
             await probe.WaitForCallsAsync(2);
 
