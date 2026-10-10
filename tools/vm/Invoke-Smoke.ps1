@@ -232,7 +232,9 @@ $workFull = [IO.Path]::GetFullPath($workFull).TrimEnd('\')
 $scratchRoot = Join-Path $repoRoot '.scratch'
 if (Test-Path -LiteralPath $scratchRoot -PathType Container) {
     foreach ($sib in @(Get-ChildItem -LiteralPath $scratchRoot -Directory -ErrorAction SilentlyContinue)) {
-        if (Test-WinMintSamePath -Left $sib.FullName -Right $workFull) { continue }
+        # ponytail: same path as Work — OrdinalIgnoreCase after GetFullPath (no shared helper)
+        $sibFull = [IO.Path]::GetFullPath($sib.FullName).TrimEnd('\')
+        if ([string]::Equals($sibFull, $workFull, [StringComparison]::OrdinalIgnoreCase)) { continue }
         if (-not (Test-HeavyWorkDir -Dir $sib.FullName)) { continue }
         if (Test-ScratchWorkDirLiveHeavy -Dir $sib.FullName) {
             throw "Concurrent heavy Apply under .scratch\$($sib.Name) — finish or stop it before Smoke (one live heavy workdir)."
