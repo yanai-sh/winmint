@@ -281,6 +281,22 @@ Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply)
     -LastHostLine 'Smoke run starting' -OutputIso $null -RunId $runId
 
 # Spectre Watch binary before WT spawn (avoid on-demand build races under elevated smoke).
+# Stop a prior Watch first — a live artifacts/watch DLL locks just publish-watch.
+$pwshExe = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
+$watcherMarker = Join-Path $workFull 'watch-smoke.pid'
+if (Test-Path -LiteralPath $watcherMarker -PathType Leaf) {
+    $oldWatcher = 0
+    if ([int]::TryParse((Get-Content -LiteralPath $watcherMarker -Raw).Trim(), [ref]$oldWatcher) -and $oldWatcher -gt 0) {
+        $oldProc = Get-Process -Id $oldWatcher -ErrorAction SilentlyContinue
+        if ($null -ne $oldProc) {
+            Write-SmokeHostLine -Name "Stopping prior host Watch (pid=$oldWatcher) before publish…" -Activity publish
+            Stop-Process -Id $oldWatcher -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    Remove-Item -LiteralPath $watcherMarker -Force -ErrorAction SilentlyContinue
+}
+
 Write-SmokeHostLine -Name 'Publishing host Watch (Spectre)…' -Activity publish
 & just publish-watch
 if ($LASTEXITCODE -ne 0) { throw "just publish-watch failed: $LASTEXITCODE" }
@@ -291,19 +307,8 @@ if (-not $SkipApply) {
     Remove-Item -LiteralPath (Join-Path $Work 'apply-events.jsonl') -Force -ErrorAction SilentlyContinue
 }
 
-$pwshExe = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'
-$watcherMarker = Join-Path $workFull 'watch-smoke.pid'
-$watcherAlive = $false
-if (Test-Path -LiteralPath $watcherMarker -PathType Leaf) {
-    $oldWatcher = 0
-    if ([int]::TryParse((Get-Content -LiteralPath $watcherMarker -Raw).Trim(), [ref]$oldWatcher) -and $oldWatcher -gt 0) {
-        $watcherAlive = $null -ne (Get-Process -Id $oldWatcher -ErrorAction SilentlyContinue)
-    }
-}
-if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive:$watcherAlive) -eq 'spawn') {
-    Start-WinMintHostWatchProcess -RepoRoot $repoRoot -Work $workFull -Kind smoke `
-        -PriorRunId '' -MarkerPath $watcherMarker -PwshExe $pwshExe
-}
+Start-WinMintHostWatchProcess -RepoRoot $repoRoot -Work $workFull -Kind smoke `
+    -PriorRunId '' -MarkerPath $watcherMarker -PwshExe $pwshExe
 
 $applyEvidence = Join-Path $Work 'evidence.json'
 # Resolve pre-Apply only for -SkipApply reuse. A full run resolves after Apply —
