@@ -1,11 +1,15 @@
 #requires -Version 7.6
 <#
 .SYNOPSIS
-  #164 proof gate: oobeLocal Output ISO → Hyper-V Online OOBE → Supervisor FirstLogon.
+  #164 proof gate: oobeLocal Output ISO → Hyper-V Offline OOBE → Supervisor FirstLogon.
 
 .DESCRIPTION
-  Builds/applies with a portable Profile (no baked password), boots with OnlineOobe + Monitor,
+  Builds/applies with a portable Profile (no baked password), boots Offline OOBE + Monitor
+  (NIC deferred until Supervisor — same as Smoke default; avoids CXH/ZDP "Just a moment"),
   and waits for Smoke Complete using host-only -GuestSecretPath credentials.
+
+  Hyper-V proof Profile uses requireWifiDuringOobe=false so Apply bakes HideWireless.
+  Real hardware / Primary can still use requireWifi=true; this scratch Profile is lab-only.
 
   At interactive OOBE, create a local account matching:
     username = account.username in the Profile (default: proof)
@@ -44,15 +48,22 @@ function Ensure-OobeLocalProofArtifacts {
         Set-Content -LiteralPath $guestPasswordPath -Value $pw -NoNewline -Encoding utf8
         Write-Host "Wrote host-only guest password: $guestPasswordPath"
     }
+    # Hyper-V: HideWireless + Offline OOBE (NIC defer). Stale OnlineOobe proofs stuck on CXH/ZDP.
+    $account = [pscustomobject]@{
+        mode                  = 'oobeLocal'
+        username              = 'proof'
+        requireWifiDuringOobe = $false
+    }
     if (-not (Test-Path -LiteralPath $profilePath -PathType Leaf)) {
         $sl7 = Get-Content -LiteralPath (Join-Path $repoRoot 'samples\sl7.profile.json') -Raw -Encoding utf8 | ConvertFrom-Json
-        $sl7.account = [pscustomobject]@{
-            mode                   = 'oobeLocal'
-            username               = 'proof'
-            requireWifiDuringOobe  = $true
-        }
+        $sl7.account = $account
         $sl7 | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $profilePath -Encoding utf8NoBOM
         Write-Host "Wrote proof Profile: $profilePath"
+    }
+    else {
+        $doc = Get-Content -LiteralPath $profilePath -Raw -Encoding utf8 | ConvertFrom-Json
+        $doc.account = $account
+        $doc | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $profilePath -Encoding utf8NoBOM
     }
 }
 
@@ -84,15 +95,15 @@ function Invoke-OobeLocalProofWorker {
         Write-Host "At OOBE create local user '$proofUser' with password from: $guestPasswordPath"
         Write-Host 'Expect possible second sign-in after deferred Shell (FirstLogonCommands logoff).'
         $smoke = Join-Path $repoRoot 'tools\vm\Invoke-Smoke.ps1'
+        # Offline OOBE (default): do not pass -OnlineOobe — NAT during OOBE is the CXH/ZDP trap (#164).
         $args = @{
-            Iso               = $iso
-            Work              = $Work
-            ProfilePath       = $profilePath
-            WallClockMinutes  = $WallClockMinutes
-            StallMinutes      = $StallMinutes
+            Iso              = $iso
+            Work             = $Work
+            ProfilePath      = $profilePath
+            WallClockMinutes = $WallClockMinutes
+            StallMinutes     = $StallMinutes
             GuestSecretPath  = $guestPasswordPath
             Monitor          = $true
-            OnlineOobe       = $true
         }
         if ($SkipApply) { $args.SkipApply = $true }
         & $smoke @args
@@ -130,5 +141,6 @@ try {
     Write-Verbose "proof username fallback to 'proof': $($_.Exception.Message)"
 }
 Write-Host "Spawned elevated oobeLocal proof ($($result.disposition)). Log: $log"
+Write-Host 'Mode: Offline OOBE (NIC deferred; no -OnlineOobe). Apply bakes HideWireless.'
 Write-Host "OOBE: create local user '$proofUser' / password in $guestPasswordPath"
 exit 0

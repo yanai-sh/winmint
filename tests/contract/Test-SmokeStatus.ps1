@@ -334,7 +334,9 @@ if ($smoke -notmatch 'New-SmokeOfflineOobeProfile') { throw 'Invoke-Smoke must b
 if ($smoke -notmatch 'Get-SmokeNicAttachAtCreateDecision') { throw 'Invoke-Smoke must gate Connect at create' }
 if ($smoke -notmatch 'Get-SmokeNicReconnectDecision') { throw 'Invoke-Smoke must reconnect offline NIC' }
 if ($smoke -notmatch 'GuestUpStickySeconds') { throw 'Invoke-Smoke must pass guest-up age into NIC reconnect' }
-
+$oobeProof = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Start-OobeLocalProof.ps1') -Raw -Encoding utf8
+if ($oobeProof -match 'OnlineOobe\s*=\s*\$true') { throw 'Start-OobeLocalProof must not force OnlineOobe (CXH/ZDP trap #164)' }
+if ($oobeProof -notmatch 'requireWifiDuringOobe\s*=\s*\$false') { throw 'Start-OobeLocalProof must pin requireWifiDuringOobe false for Hyper-V HideWireless' }
 $oobeSrc = Join-Path $repo 'samples/smoke.profile.json'
 $oobeDir = Join-Path ([IO.Path]::GetTempPath()) ("winmint-offline-oobe-" + [guid]::NewGuid().ToString('N'))
 $oobeDest = Join-Path $oobeDir 'offline-oobe.profile.json'
