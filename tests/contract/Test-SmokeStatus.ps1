@@ -323,6 +323,9 @@ if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -
 if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$true -GuestUpStickySeconds:360) -cne 'connect') {
     throw 'offline fallback reconnect after guest-up defer window'
 }
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$true -GuestUpStickySeconds:3600 -GuestUpNicDeferSeconds:([int]::MaxValue)) -cne 'hold') {
+    throw 'oobeLocal GuestSecretPath must not NAT-fallback on guest-up (#164)'
+}
 if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$true -SupervisorRunning:$true -GuestUpSticky:$true) -cne 'skip') {
     throw 'already connected skips reconnect'
 }
@@ -334,6 +337,7 @@ if ($smoke -notmatch 'New-SmokeOfflineOobeProfile') { throw 'Invoke-Smoke must b
 if ($smoke -notmatch 'Get-SmokeNicAttachAtCreateDecision') { throw 'Invoke-Smoke must gate Connect at create' }
 if ($smoke -notmatch 'Get-SmokeNicReconnectDecision') { throw 'Invoke-Smoke must reconnect offline NIC' }
 if ($smoke -notmatch 'GuestUpStickySeconds') { throw 'Invoke-Smoke must pass guest-up age into NIC reconnect' }
+if ($smoke -notmatch 'nicDeferSecs') { throw 'Invoke-Smoke must raise NIC defer for oobeLocal GuestSecretPath' }
 $oobeProof = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Start-OobeLocalProof.ps1') -Raw -Encoding utf8
 if ($oobeProof -match 'OnlineOobe\s*=\s*\$true') { throw 'Start-OobeLocalProof must not force OnlineOobe (CXH/ZDP trap #164)' }
 if ($oobeProof -notmatch 'requireWifiDuringOobe\s*=\s*\$false') { throw 'Start-OobeLocalProof must pin requireWifiDuringOobe false for Hyper-V HideWireless' }

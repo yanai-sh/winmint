@@ -25,6 +25,7 @@ param(
     [int] $WallClockMinutes = 180,
     [int] $StallMinutes = 45,
     [switch] $SkipApply,
+    [switch] $ReuseVm,
     [switch] $ElevatedWorker
 )
 
@@ -106,6 +107,7 @@ function Invoke-OobeLocalProofWorker {
             Monitor          = $true
         }
         if ($SkipApply) { $args.SkipApply = $true }
+        if ($ReuseVm) { $args.ReuseVm = $true }
         & $smoke @args
         exit $LASTEXITCODE
     }
@@ -124,6 +126,7 @@ $self = Join-Path $repoRoot 'tools\vm\Start-OobeLocalProof.ps1'
 $pwshExe = (Get-Command pwsh.exe -ErrorAction Stop).Source
 $inner = @('-ElevatedWorker', '-Work', $Work, '-WallClockMinutes', "$WallClockMinutes", '-StallMinutes', "$StallMinutes")
 if ($SkipApply) { $inner += '-SkipApply' }
+ if ($ReuseVm) { $inner += '-ReuseVm' }
 
 $result = Start-WinMintHostConsole -Elevate -RepoRoot $repoRoot -Work $Work -File $self `
     -ArgumentList $inner -PwshExe $pwshExe -TranscriptPath $log

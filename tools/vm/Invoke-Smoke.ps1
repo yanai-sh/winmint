@@ -825,11 +825,17 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         }
         $guestUpSecs = if ($null -ne $script:GuestUpStickySw) { [int]$script:GuestUpStickySw.Elapsed.TotalSeconds } else { 0 }
         $script:ConsecutiveHeartbeatOk = [int]$tick.ConsecutiveHeartbeatOk
+        # Trust Hyper-V over script sticky — operator/proof may Disconnect mid-wait (#164).
+        $liveNic = Get-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -ErrorAction SilentlyContinue
+        $script:SmokeNicConnected = [bool]($liveNic -and -not [string]::IsNullOrWhiteSpace([string]$liveNic.SwitchName))
+        # oobeLocal (GuestSecretPath): human may still be on local-account UI - do not NAT-fallback on guest-up (#164).
+        $nicDeferSecs = if (-not [string]::IsNullOrWhiteSpace($GuestSecretPath)) { [int]::MaxValue } else { 360 }
         if ((Get-SmokeNicReconnectDecision -OnlineOobe:([bool]$OnlineOobe) `
                 -AlreadyConnected:([bool]$script:SmokeNicConnected) `
                 -SupervisorRunning:([bool]$script:LastSupervisorRunning) `
                 -GuestUpSticky:([bool]$script:GuestUpSticky) `
-                -GuestUpStickySeconds $guestUpSecs) -eq 'connect') {
+                -GuestUpStickySeconds $guestUpSecs `
+                -GuestUpNicDeferSeconds $nicDeferSecs) -eq 'connect') {
             try {
                 Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
                 $script:SmokeNicConnected = $true
