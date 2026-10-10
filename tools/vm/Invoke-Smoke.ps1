@@ -307,8 +307,11 @@ if (-not $SkipApply) {
     Remove-Item -LiteralPath (Join-Path $Work 'apply-events.jsonl') -Force -ErrorAction SilentlyContinue
 }
 
-Start-WinMintHostWatchProcess -RepoRoot $repoRoot -Work $workFull -Kind smoke `
-    -PriorRunId '' -MarkerPath $watcherMarker -PwshExe $pwshExe
+# Marker cleared above — always spawn for this run (decision helper keeps contract pin).
+if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive:$false) -eq 'spawn') {
+    Start-WinMintHostWatchProcess -RepoRoot $repoRoot -Work $workFull -Kind smoke `
+        -PriorRunId '' -MarkerPath $watcherMarker -PwshExe $pwshExe
+}
 
 $applyEvidence = Join-Path $Work 'evidence.json'
 # Resolve pre-Apply only for -SkipApply reuse. A full run resolves after Apply —

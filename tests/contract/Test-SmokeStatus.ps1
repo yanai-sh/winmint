@@ -144,7 +144,10 @@ finally {
     Remove-Item -LiteralPath $fakeWt -Force -ErrorAction SilentlyContinue
 }
 if ($smoke -notmatch 'Get-SmokeWatcherSpawnDecision') {
-    throw 'Invoke-Smoke must skip a live watcher via Get-SmokeWatcherSpawnDecision'
+    throw 'Invoke-Smoke must call Get-SmokeWatcherSpawnDecision for Watch spawn'
+}
+if ($smoke -notmatch 'Stopping prior host Watch') {
+    throw 'Invoke-Smoke must stop a prior Watch before publish-watch (DLL lock)'
 }
 if ($smoke -notmatch '(?s)LastProbeError = \[string\]\$_\.Exception\.Message\s+\$script:LastSupervisorRunning = \$false') {
     throw 'probe-fail must not keep Supervisor-alive'
