@@ -93,3 +93,47 @@ function Clear-WinMintPriorOutputIsos {
 
     return $removed
 }
+
+<#
+.SYNOPSIS
+  Reclaim Apply staging under a workdir after evidence is copied (media/payload before VHD grows).
+.NOTES
+  Keeps Output ISO + evidence leaves. -Phase is call-site documentation only (Smoke Assert).
+#>
+function Clear-WinMintApplyStaging {
+    param(
+        [Parameter(Mandatory)][string] $WorkDirectory,
+        [string] $Phase = 'Assert'
+    )
+
+    $null = $Phase
+    if (-not (Test-Path -LiteralPath $WorkDirectory -PathType Container)) {
+        return 0
+    }
+
+    $removed = 0
+    foreach ($name in @('media', 'payload', 'quality-packages', 'install.wim')) {
+        $path = Join-Path $WorkDirectory $name
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        try {
+            Remove-Item -LiteralPath $path -Recurse -Force
+            $removed++
+        }
+        catch {
+            Write-Warning "Apply staging still locked: $path ($($_.Exception.Message))"
+        }
+    }
+
+    foreach ($d in @(Get-ChildItem -LiteralPath $WorkDirectory -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like 'media.previous-*' -or $_.Name -like 'media.incoming-*' })) {
+        try {
+            Remove-Item -LiteralPath $d.FullName -Recurse -Force
+            $removed++
+        }
+        catch {
+            Write-Warning "Apply staging still locked: $($d.FullName) ($($_.Exception.Message))"
+        }
+    }
+
+    return $removed
+}

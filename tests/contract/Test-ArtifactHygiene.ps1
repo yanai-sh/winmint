@@ -25,9 +25,11 @@ if ($hygiene -notmatch '-KeepIso 1') { throw 'Invoke-WinMintScratchHygiene must 
 
 $resolve = Get-Content -LiteralPath (Join-Path $repo 'tools\Resolve-OutputIso.ps1') -Raw -Encoding utf8
 if ($resolve -notmatch 'function Clear-WinMintPriorOutputIsos') { throw 'Resolve-OutputIso must define Clear-WinMintPriorOutputIsos' }
+if ($resolve -notmatch 'function Clear-WinMintApplyStaging') { throw 'Resolve-OutputIso must define Clear-WinMintApplyStaging' }
 
 $smoke = Get-Content -LiteralPath (Join-Path $repo 'tools\vm\Invoke-Smoke.ps1') -Raw -Encoding utf8
 if ($smoke -notmatch 'Clear-WinMintPriorOutputIsos') { throw 'Invoke-Smoke must clear prior Output ISOs before Apply' }
+if ($smoke -notmatch 'Clear-WinMintApplyStaging') { throw 'Invoke-Smoke must clear Apply staging after evidence copy' }
 $hostApply = Get-Content -LiteralPath (Join-Path $repo 'tools\apply\Invoke-HostApply.ps1') -Raw -Encoding utf8
 if ($hostApply -notmatch 'Clear-WinMintPriorOutputIsos') { throw 'Invoke-HostApply must clear prior Output ISOs before Apply' }
 
