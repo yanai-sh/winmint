@@ -43,6 +43,10 @@ Identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · re
 | Host recipes | `Justfile`, `tools/host/` |
 | Smoke / Hyper-V | `tools/vm/` |
 | Host Apply (S5) | `tools/apply/` |
+| CI / health / release / warm-media bench | `tools/ci/`, `tools/release/`, `tools/bench/` |
+| Bootstrap Worker (`winmint.yanai.sh`) | `cloudflare/winmint/` |
+| README brand assets | `assets/` |
+| No-clone bootstrap (not product runtime) | `winmint.ps1` |
 | Contract harness | `tests/contract/` |
 | Unit / session tests | `tests/WinMint.Tests/` |
 | Maintainer ISO / smoke recipes | `tests/fixtures/maintainer-host.json` |

@@ -13,18 +13,22 @@ Authority: [AGENTS.md](../../../AGENTS.md) map + [ADR-004](../../../docs/decisio
 WinMint.slnx
 global.json                          # SDK pin (net11 preview)
 Directory.Build.props                # shared TFM / analyzers / warnings
+winmint.ps1                          # no-clone bootstrap (not product runtime)
 src/
   WinMint.Contracts/                 # job wire / shared types (Brain — no PackageReferences)
   WinMint.Orchestrator/              # HostCompile, BuildPlan, ImageServicing ports
   WinMint.Cli/                       # thin host adapter
   WinMint.Wizard/                    # Avalonia host adapter
   WinMint.Provisioning/              # AOT Supervisor (ISO / guest)
+  WinMint.Watch/                     # Spectre host Watch (smoke/apply)
   WinMint.WinPeApply/                # WinPE apply helper
 servicing/                           # elevated pwsh kernels (one opcode each)
 config/                              # packages.json (+ packages.proof.json)
 payload/                             # guest payload / skel / desktop assets
 samples/                             # profiles
-tools/{host,vm,apply}/               # host recipes, Smoke, Host Apply
+assets/                              # README brand (not guest payload)
+cloudflare/winmint/                  # bootstrap Worker (winmint.yanai.sh)
+tools/{host,vm,apply,ci,release,bench}/  # host recipes, Smoke, Apply, CI, release, bench
 tests/
   WinMint.Tests/                     # xUnit v3 + MTP
   contract/                          # Test-*.ps1 (no live ISO / no Hyper-V)

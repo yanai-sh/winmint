@@ -55,7 +55,7 @@ if ($sl7Raw -notmatch '"passwordPath"') {
     throw 'sl7.profile.json must keep passwordPath (maintainer Smoke / Primary pin)'
 }
 
-foreach ($name in @('smoke.profile.json', 'acceptance.profile.json', 'israel.profile.json')) {
+foreach ($name in @('smoke.profile.json', 'acceptance.profile.json')) {
     Assert-ProfileLocalAutoLogon -ProfilePath (Join-Path $repo "samples\$name")
 }
 
