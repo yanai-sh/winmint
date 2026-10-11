@@ -35,13 +35,14 @@ function Get-WinMintSmokeS4AcceptanceFacts {
         ExpectedSpotlightEnabledState = 0
         RequiredStartPinIds     = @('explorer', 'settings', 'terminal')
         RequiredTaskbarPinIds   = @('explorer', 'terminal')
+        # TaskbarDa (Widgets) is policy-owned — assert AllowNewsAndInterests via apply digests, not live HKCU.
         RequiredQuietDwords     = [ordered]@{
             SearchboxTaskbarMode = 0
-            TaskbarDa            = 0
             TaskbarMn            = 0
             ShowTaskViewButton   = 0
             ShowCopilotButton    = 0
         }
+        ExpectedAllowNewsAndInterests = 0
         PackageStrictExtraPins  = [ordered]@{
             'Anysphere.Cursor'     = 'cursor'
             'Zen-Team.Zen-Browser' = 'zen-browser'

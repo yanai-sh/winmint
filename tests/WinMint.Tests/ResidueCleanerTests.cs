@@ -128,8 +128,15 @@ public class ResidueCleanerTests
             Assert.Contains("AutoAdminLogon", cmd, StringComparison.Ordinal);
             Assert.Contains("reg.exe", cmd, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("Wallpaper", cmd, StringComparison.Ordinal);
+            Assert.Contains("WallpaperStyle", cmd, StringComparison.Ordinal);
+            Assert.Contains("TranscodedWallpaper", cmd, StringComparison.Ordinal);
             Assert.Contains("SearchboxTaskbarMode", cmd, StringComparison.Ordinal);
+            Assert.DoesNotContain("TaskbarDa", cmd, StringComparison.Ordinal);
+            Assert.Contains("TaskbarMn", cmd, StringComparison.Ordinal);
+            Assert.Contains("ShowTaskViewButton", cmd, StringComparison.Ordinal);
+            Assert.Contains("ShowCopilotButton", cmd, StringComparison.Ordinal);
             Assert.Contains("UpdatePerUserSystemParameters", cmd, StringComparison.Ordinal);
+            Assert.Contains("timeout /t 10", cmd, StringComparison.Ordinal);
         }
         finally
         {
@@ -138,14 +145,33 @@ public class ResidueCleanerTests
     }
 
     [Fact]
-    public async Task Shell_Complete_swallows_ResidueCleaner_throw()
+    public async Task Shell_schedule_throw_fails_open_clearArmFailed()
+    {
+        RecordingEvidenceSink evidence = new();
+        RecordingWinlogon winlogon = new();
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle([]) with
+            {
+                Policy = SessionPolicy.SmokeDefaults with { FailedDwell = TimeSpan.Zero },
+            },
+            ShellEnv(winlogon, evidence, new ThrowingScheduleResidueCleaner()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("shell.autologon.clearArmFailed", result.FinalStatus.Code);
+        Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
+    }
+
+    [Fact]
+    public async Task Shell_Complete_swallows_erase_throw()
     {
         RecordingEvidenceSink evidence = new();
         RecordingWinlogon winlogon = new();
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle([]),
-            ShellEnv(winlogon, evidence, new ThrowingResidueCleaner()),
+            ShellEnv(winlogon, evidence, new ThrowingEraseResidueCleaner()),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Complete, result.Outcome);
@@ -172,15 +198,28 @@ public class ResidueCleanerTests
 
         public int EraseCount { get; private set; }
 
-        public void TryScheduleDeferredAutoLogonClear() => ScheduleCount++;
+        public bool TryScheduleDeferredAutoLogonClear()
+        {
+            ScheduleCount++;
+            return true;
+        }
 
         public void TryEraseAfterComplete() => EraseCount++;
     }
 
-    private sealed class ThrowingResidueCleaner : IResidueCleaner
+    private sealed class ThrowingScheduleResidueCleaner : IResidueCleaner
     {
-        public void TryScheduleDeferredAutoLogonClear() =>
+        public bool TryScheduleDeferredAutoLogonClear() =>
             throw new InvalidOperationException("simulated schedule failure");
+
+        public void TryEraseAfterComplete()
+        {
+        }
+    }
+
+    private sealed class ThrowingEraseResidueCleaner : IResidueCleaner
+    {
+        public bool TryScheduleDeferredAutoLogonClear() => true;
 
         public void TryEraseAfterComplete() =>
             throw new InvalidOperationException("simulated residue failure");

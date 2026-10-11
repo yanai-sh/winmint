@@ -8,7 +8,7 @@ namespace WinMint.Tests;
 public class BuildPlanPlanTests
 {
     [Fact]
-    public void Plan_local_autologon_without_password_fails()
+    public void Plan_local_autologon_without_password_uses_default()
     {
         Profile profile = Parse($$"""
             {
@@ -31,8 +31,11 @@ public class BuildPlanPlanTests
 
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
-        Assert.False(result.IsOk);
-        Assert.Equal("account.password.required", result.Error.Code);
+        Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
+        Assert.Contains(
+            AccountProfile.DefaultLocalPassword,
+            result.Value.Unattend.Xml,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -255,7 +258,7 @@ public class BuildPlanPlanTests
         Assert.DoesNotContain(
             artifacts.EffectivePackages,
             p => string.Equals(p.ResolvedInstallId, ProductPosture.MinGitWingetId, StringComparison.OrdinalIgnoreCase));
-        Assert.Empty(artifacts.EffectiveWinget);
+        Assert.Empty(HostPackageWire.EffectiveWingetInstallIds(artifacts.EffectivePackages));
     }
 
     [Fact]

@@ -121,7 +121,7 @@ public class ProfileFileTests
     }
 
     [Fact]
-    public void TryLoad_empty_password_file_materializes_empty_and_plan_fails()
+    public void TryLoad_empty_password_file_uses_default_local_password()
     {
         using TempProfileDir dir = new();
         string pwFile = Path.Combine(dir.Root, "empty.txt");
@@ -130,11 +130,10 @@ public class ProfileFileTests
 
         Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(path);
         Assert.True(loaded.IsOk, Format(loaded));
-        Assert.Equal("", loaded.Value.Account.Password);
+        Assert.Equal(AccountProfile.DefaultLocalPassword, loaded.Value.Account.Password);
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(loaded.Value);
-        Assert.False(planned.IsOk);
-        Assert.Equal("account.password.required", planned.Error.Code);
+        Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
     }
 
     [Fact]

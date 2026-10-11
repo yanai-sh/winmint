@@ -70,13 +70,10 @@ public class CuratedDefaultsTests
     }
 
     [Fact]
-    public void NewBootstrapPassword_is_non_empty_and_varies()
+    public void NewBootstrapPassword_is_default_local_password()
     {
-        string a = CuratedDefaults.NewBootstrapPassword();
-        string b = CuratedDefaults.NewBootstrapPassword();
-        Assert.False(string.IsNullOrWhiteSpace(a));
-        Assert.True(a.Length >= 20);
-        Assert.NotEqual(a, b);
+        Assert.Equal(AccountProfile.DefaultLocalPassword, CuratedDefaults.NewBootstrapPassword());
+        Assert.Equal("winmint", CuratedDefaults.NewBootstrapPassword());
     }
 
     [Fact]
@@ -100,8 +97,9 @@ public class CuratedDefaultsTests
             Assert.Contains("Anysphere.Cursor", json, StringComparison.Ordinal);
 
             string secret = File.ReadAllText(emitted.Value.PasswordPath).Trim();
-            Assert.False(string.IsNullOrEmpty(secret));
-            Assert.DoesNotContain(secret, json, StringComparison.Ordinal);
+            Assert.Equal(AccountProfile.DefaultLocalPassword, secret);
+            // Username is also "winmint" — assert no inline account.password property.
+            Assert.DoesNotContain("\"password\"", json, StringComparison.OrdinalIgnoreCase);
 
             Result<Profile, IReadOnlyList<DocumentError>> loaded = ProfileFile.TryLoad(emitted.Value.ProfilePath);
             Assert.True(loaded.IsOk, loaded.IsOk ? null : string.Join("; ", loaded.Error.Select(i => i.Code)));

@@ -15,6 +15,11 @@ public class WorkstationQuietLayoutTests
         Assert.Equal(0, advanced["ShowCopilotButton"]);
         Assert.Equal(0, QuietChromeFacts.SearchboxTaskbarMode);
         Assert.Equal(1, QuietChromeFacts.HideRecycleBin);
+        Assert.Equal(0, QuietChromeFacts.ExpectedAllowNewsAndInterests);
+        Assert.Contains("TaskbarDa", QuietChromeFacts.PolicyOwnedTaskbarExplorerAdvanced);
+        Assert.DoesNotContain(
+            QuietChromeFacts.RequiredQuietDwords.Keys,
+            static name => QuietChromeFacts.PolicyOwnedTaskbarExplorerAdvanced.Contains(name));
         Assert.Equal(QuietChromeFacts.ExplorerAdvancedDwords, Win32WorkstationQuiet.ExplorerAdvancedDwords);
     }
 

@@ -59,15 +59,19 @@ public class BuildPlanPasswordPathTests
     }
 
     [Fact]
-    public void Plan_unresolved_path_only_fails_password_required()
+    public void Plan_unresolved_path_only_uses_default_password()
     {
+        // BuildPlan is pure — passwordPath is not read here; empty Password gets the default.
         Profile profile = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(
             MinimalProfile(passwordPath: @"C:\never\reads\this.txt"))).Value;
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(profile);
 
-        Assert.False(planned.IsOk);
-        Assert.Equal("account.password.required", planned.Error.Code);
+        Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
+        Assert.Contains(
+            AccountProfile.DefaultLocalPassword,
+            planned.Value.Unattend.Xml,
+            StringComparison.Ordinal);
     }
 
     [Fact]

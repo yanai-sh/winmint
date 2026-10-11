@@ -87,6 +87,11 @@ public static class ProfileFile
             ]);
         }
 
+        if (string.IsNullOrEmpty(password))
+        {
+            password = AccountProfile.DefaultLocalPassword;
+        }
+
         Profile materialized = profile with
         {
             Account = profile.Account with { Password = password },

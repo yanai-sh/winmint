@@ -13,6 +13,9 @@ public static class QuietChromeFacts
     public const int ExpectedSudo = 3;
     public const int ExpectedLongPaths = 1;
 
+    /// <summary>HKLM AllowNewsAndInterests (NewsAndInterests CSP) — supported Widgets off.</summary>
+    public const int ExpectedAllowNewsAndInterests = 0;
+
     public const string RecycleBinClsid = "{645FF040-5081-101B-9F08-00AA002F954E}";
 
     public static readonly IReadOnlyList<string> HideDesktopIconViews = ["NewStartPanel", "ClassicStartMenu"];
@@ -39,7 +42,7 @@ public static class QuietChromeFacts
 
     /// <summary>
     /// Taskbar Advanced keys owned by shell.chrome after packages (OOBE rewrites if set during workstation.quiet;
-    /// NTUSER stamp fails on Win11 for these).
+    /// NTUSER stamp fails on Win11 for these). Best-effort stamp + RunOnce re-stamp.
     /// </summary>
     public static readonly IReadOnlySet<string> LiveOnlyTaskbarExplorerAdvanced =
         new HashSet<string>(StringComparer.Ordinal)
@@ -48,6 +51,16 @@ public static class QuietChromeFacts
             "TaskbarMn",
             "ShowTaskViewButton",
             "ShowCopilotButton",
+        };
+
+    /// <summary>
+    /// Live-only keys the 25H2 shell may delete after Autologon; product posture is the matching HKLM policy
+    /// (Widgets → AllowNewsAndInterests). Not required for VerifyFinalChrome / Smoke live quiet asserts.
+    /// </summary>
+    public static readonly IReadOnlySet<string> PolicyOwnedTaskbarExplorerAdvanced =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "TaskbarDa",
         };
 
     public static readonly IReadOnlyList<string> ContentDeliveryManagerDwords =
@@ -74,12 +87,14 @@ public static class QuietChromeFacts
     /// <summary>Baseline taskbar pin ids Smoke asserts (matches GuestChrome TaskbarLayoutBaselineXml).</summary>
     public static readonly IReadOnlyList<string> RequiredTaskbarPinIds = ["explorer", "terminal"];
 
-    /// <summary>Live quiet DWords Smoke asserts after shell.chrome (subset of ExplorerAdvanced + Search).</summary>
+    /// <summary>
+    /// Live quiet DWords Smoke asserts after shell.chrome (subset of ExplorerAdvanced + Search).
+    /// Policy-owned Advanced keys (Widgets TaskbarDa) are omitted — assert HKLM policy instead.
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, int> RequiredQuietDwords =
         new Dictionary<string, int>(StringComparer.Ordinal)
         {
             ["SearchboxTaskbarMode"] = SearchboxTaskbarMode,
-            ["TaskbarDa"] = 0,
             ["TaskbarMn"] = 0,
             ["ShowTaskViewButton"] = 0,
             ["ShowCopilotButton"] = 0,

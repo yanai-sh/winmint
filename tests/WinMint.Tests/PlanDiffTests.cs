@@ -6,11 +6,16 @@ namespace WinMint.Tests;
 public class PlanDiffTests
 {
     [Fact]
-    public void Sl7_host_review_shows_fedora_wsl_wire_and_gate_b_on_release_strict()
+    public void Sl7_host_review_empty_optional_packages_and_gate_b_on_release_strict()
     {
         string samplePath = Path.Combine(TestRepo.Root, "samples", "sl7.profile.json");
         Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(samplePath);
         Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
+
+        Assert.Equal("Yanai", parsed.Value.Account.Username);
+        Assert.Empty(parsed.Value.WingetPackages);
+        Assert.Empty(parsed.Value.WslDistros);
+        Assert.Equal(AccountProfile.DefaultLocalPassword, parsed.Value.Account.Password);
 
         Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(
             parsed.Value,
@@ -20,11 +25,16 @@ public class PlanDiffTests
         Assert.True(planned.IsOk, planned.IsOk ? null : planned.Error.Message);
 
         HostReview review = planned.Value.Review;
-        Assert.Contains("FedoraLinux-44", review.EffectiveWsl);
-        Assert.Contains("FedoraLinux", review.AuthoredProfile.WslDistros);
+        Assert.Empty(review.AuthoredProfile.WslDistros);
+        Assert.Empty(review.AuthoredProfile.WingetPackages);
+        Assert.DoesNotContain(
+            review.EffectiveWsl,
+            static id => id.Contains("FedoraLinux", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(
+            review.EffectiveWinget,
+            static id => id.Equals("Anysphere.Cursor", StringComparison.OrdinalIgnoreCase));
         Assert.True(review.PackageWireHonest);
         Assert.True(review.IsGateB);
-        Assert.Contains("WSL FedoraLinux-44", review.Diff, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -148,9 +158,6 @@ public class PlanDiffTests
         {
             Jobs = [new ProvisionJob("missing.package", kind, PackageId: "Missing.Package")],
             EffectivePackages = [],
-            EffectiveWinget = [],
-            EffectiveScoop = [],
-            EffectiveWsl = [],
             PackageWireHonest = false,
         };
 

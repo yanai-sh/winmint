@@ -249,7 +249,7 @@ public class DebloatPresetTests
         string scratch = Path.Combine(root, ".scratch");
         Directory.CreateDirectory(scratch);
         string pwFile = Path.Combine(scratch, "sl7.password");
-        File.WriteAllText(pwFile, "lab-only-sl7");
+        File.WriteAllText(pwFile, AccountProfile.DefaultLocalPassword);
 
         string samplePath = Path.Combine(root, "samples", "sl7.profile.json");
         byte[] utf8 = File.ReadAllBytes(samplePath);
@@ -260,8 +260,8 @@ public class DebloatPresetTests
 
         Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(samplePath);
         Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
-        Assert.Equal("yanai", parsed.Value.Account.Username);
-        Assert.Equal("lab-only-sl7", parsed.Value.Account.Password);
+        Assert.Equal("Yanai", parsed.Value.Account.Username);
+        Assert.Equal(AccountProfile.DefaultLocalPassword, parsed.Value.Account.Password);
         Assert.DoesNotContain("Microsoft.WindowsAlarms", parsed.Value.RemoveProvisionedAppx);
         Assert.DoesNotContain("Microsoft.YourPhone", parsed.Value.RemoveProvisionedAppx);
         Assert.Equal(
@@ -277,18 +277,16 @@ public class DebloatPresetTests
             parsed.Value.RemoveProvisionedAppx);
         Assert.Equal(expanded.Value.RemoveCapabilities, parsed.Value.RemoveCapabilities);
         Assert.Equal(expanded.Value.DisableOptionalFeatures, parsed.Value.DisableOptionalFeatures);
+        Assert.Empty(parsed.Value.WingetPackages);
         Assert.Equal(
-            ["Anysphere.Cursor", "Zen-Team.Zen-Browser"],
-            parsed.Value.WingetPackages);
-        Assert.Equal(
-            ["Git.MinGit", "Microsoft.PowerShell", "Microsoft.WindowsTerminal", "Microsoft.Coreutils", "Nilesoft.Shell", "Anysphere.Cursor", "Zen-Team.Zen-Browser"],
+            ["Git.MinGit", "Microsoft.PowerShell", "Microsoft.WindowsTerminal", "Microsoft.Coreutils", "Nilesoft.Shell"],
             ProductPosture.MergeWinget(parsed.Value.WingetPackages));
-        Assert.Equal(["FedoraLinux"], parsed.Value.WslDistros);
+        Assert.Empty(parsed.Value.WslDistros);
 
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(parsed.Value);
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
-        Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
+        Assert.DoesNotContain(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
         Assert.Contains(planned.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.AppxSafetyNet);
         Assert.Contains(ServicingOpcode.RemoveProvisionedAppx, planned.Value.Stages);
         Assert.Contains(planned.Value.RemoveProvisionedAppx, id => id == "Microsoft.Copilot");

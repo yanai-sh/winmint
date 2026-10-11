@@ -380,8 +380,10 @@ public static partial class BuildPlan
         if (string.Equals(profile.Account.Mode, AccountProfile.LocalAutoLogonMode, StringComparison.Ordinal)
             && string.IsNullOrEmpty(profile.Account.Password))
         {
-            return Result.Fail<BuildArtifacts, Failure>(
-                new Failure("account.password.required", "Local autoLogon requires a non-empty password."));
+            profile = profile with
+            {
+                Account = profile.Account with { Password = AccountProfile.DefaultLocalPassword },
+            };
         }
 
         IReadOnlyList<string> appx = ProductPosture.UnionAppx(profile.RemoveProvisionedAppx);
@@ -591,9 +593,6 @@ public static partial class BuildPlan
             braveSelected,
             drivers,
             ProductPosture.ComposeDefaultUserRows(),
-            packageSlice.EffectiveWinget,
-            packageSlice.EffectiveScoop,
-            packageSlice.EffectiveWsl,
             packageSlice.PackageWireHonest);
 
         return Result.Ok<BuildArtifacts, Failure>(artifacts);

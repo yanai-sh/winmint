@@ -2,7 +2,7 @@
   "schemaVersion": "winmint.profile/v1",
   "account": {
     "mode": "localAutoLogon",
-    "username": "yanai",
+    "username": "Yanai",
     "passwordPath": "../.scratch/sl7.password",
     "requireWifiDuringOobe": true
   },
@@ -55,13 +55,8 @@
     ]
   },
   "packages": {
-    "winget": [
-      "Anysphere.Cursor",
-      "Zen-Team.Zen-Browser"
-    ],
-    "wsl": [
-      "FedoraLinux"
-    ]
+    "winget": [],
+    "wsl": []
   },
   "drivers": {
     "source": "surfaceCatalog",

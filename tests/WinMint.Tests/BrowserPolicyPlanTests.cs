@@ -22,6 +22,9 @@ public class BrowserPolicyPlanTests
         Assert.Contains("LongPathsEnabled", names, StringComparison.Ordinal);
         Assert.Contains("AllowNewsAndInterests", names, StringComparison.Ordinal);
         Assert.Contains("ConfigureStartPins", names, StringComparison.Ordinal);
+        Assert.Contains("HideTaskViewButton", names, StringComparison.Ordinal);
+        Assert.Contains("SearchOnTaskbarMode", names, StringComparison.Ordinal);
+        Assert.Contains("ChatIcon", names, StringComparison.Ordinal);
         Assert.Contains("DisableSearchBoxSuggestions", names, StringComparison.Ordinal);
         Assert.Contains("DisableWindowsConsumerFeatures", names, StringComparison.Ordinal);
         Assert.Contains("DisableSoftLanding", names, StringComparison.Ordinal);

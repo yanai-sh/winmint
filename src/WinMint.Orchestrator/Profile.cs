@@ -67,6 +67,12 @@ public sealed record AccountProfile(
 
     /// <summary>Portable ISO: no LocalAccounts/AutoLogon; OOBE creates the owner.</summary>
     public const string OobeLocalMode = "oobeLocal";
+
+    /// <summary>
+    /// Intentional weak Autologon fallback when <see cref="LocalAutoLogonMode"/> has no usable password
+    /// after materialization (empty inline / empty passwordPath file). Credential-bound ISO.
+    /// </summary>
+    public const string DefaultLocalPassword = "winmint";
 }
 
 public sealed record DmaProfile(

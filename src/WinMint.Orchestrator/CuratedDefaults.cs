@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 
 using WinMint.Contracts;
@@ -18,20 +17,13 @@ public static class CuratedDefaults
     public static IReadOnlyList<string> SelectionLabels =>
         StationOutcomes.TrySeed(StationOutcomes.Comfort).Value.SelectionLabels;
 
-    public static string NewBootstrapPassword()
-    {
-        // ponytail: 24 bytes → base64url (~32 chars); enough for AutoLogon bridge until C2
-        Span<byte> bytes = stackalloc byte[24];
-        RandomNumberGenerator.Fill(bytes);
-        return Convert.ToBase64String(bytes)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
-    }
+    /// <summary>Same literal as <see cref="AccountProfile.DefaultLocalPassword"/> (weak Autologon default).</summary>
+    public static string NewBootstrapPassword() => AccountProfile.DefaultLocalPassword;
 
     /// <summary>
     /// Expand Comfort seed + bootstrap account into a Profile. Pass <paramref name="passwordPath"/> to author
     /// <c>account.passwordPath</c> (caller writes the secret); otherwise inline <c>account.password</c>.
+    /// Empty <paramref name="bootstrapPassword"/> uses <see cref="AccountProfile.DefaultLocalPassword"/>.
     /// </summary>
     public static Result<Profile, Failure> TryCreate(
         DmaSettleTarget settle,
@@ -42,8 +34,7 @@ public static class CuratedDefaults
         ArgumentNullException.ThrowIfNull(settle);
         if (string.IsNullOrEmpty(bootstrapPassword))
         {
-            return Result.Fail<Profile, Failure>(
-                new Failure("account.password.required", "Curated bootstrap requires a non-empty password."));
+            bootstrapPassword = AccountProfile.DefaultLocalPassword;
         }
 
         bool usePath = !string.IsNullOrWhiteSpace(passwordPath);

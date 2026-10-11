@@ -326,13 +326,17 @@ public static class ProductPosture
         [
             // Widgets first in the JSON only for readability. Unauthorized Dsh writes were the
             // load-key name WinMintPol_SOFTWARE, not row order.
+            // Supported taskbar posture (Learn CSP/GPO) — HKCU Explorer\Advanced toggles are best-effort only.
             Soft("Policies\\Microsoft\\Dsh", "AllowNewsAndInterests", "0", "widgets"),
             SoftString(
                 "Policies\\Microsoft\\Windows\\Explorer",
                 "ConfigureStartPins",
                 GuestChrome.StartPinsBaselineJson,
                 "start"),
+            Soft("Policies\\Microsoft\\Windows\\Explorer", "HideTaskViewButton", "1", "taskview"),
             Soft("Policies\\Microsoft\\Windows\\Explorer", "DisableSearchBoxSuggestions", "1", "search"),
+            Soft("Policies\\Microsoft\\Windows\\Windows Search", "SearchOnTaskbarMode", "0", "search"),
+            Soft("Policies\\Microsoft\\Windows\\Windows Chat", "ChatIcon", "3", "chat"),
             SoftString(
                 @"Microsoft\Windows\CurrentVersion\Explorer",
                 "LayoutXMLPath",

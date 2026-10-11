@@ -31,6 +31,7 @@ public class QuietChromeFactsTests
             + "  RequiredStartPinIds = @($f.RequiredStartPinIds)\n"
             + "  RequiredTaskbarPinIds = @($f.RequiredTaskbarPinIds)\n"
             + "  RequiredQuietDwords = $quiet\n"
+            + "  ExpectedAllowNewsAndInterests = [int]$f.ExpectedAllowNewsAndInterests\n"
             + "} | ConvertTo-Json -Compress -Depth 5\n";
 
         using Process process = new()
@@ -79,11 +80,26 @@ public class QuietChromeFactsTests
             Assert.Equal(value, got);
         }
 
-        // Live-only taskbar Advanced keys Smoke asserts are a subset of QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced.
-        foreach (string liveOnly in QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced)
+        // Smoke-required live Advanced keys ⊆ LiveOnly; policy-owned (Widgets) must not be required.
+        foreach ((string name, _) in QuietChromeFacts.RequiredQuietDwords)
         {
-            Assert.True(quiet.ContainsKey(liveOnly), liveOnly);
+            if (string.Equals(name, "SearchboxTaskbarMode", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            Assert.Contains(name, QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced);
+            Assert.DoesNotContain(name, QuietChromeFacts.PolicyOwnedTaskbarExplorerAdvanced);
         }
+
+        foreach (string owned in QuietChromeFacts.PolicyOwnedTaskbarExplorerAdvanced)
+        {
+            Assert.Contains(owned, QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced);
+            Assert.False(quiet.ContainsKey(owned), owned);
+        }
+
+        Assert.Equal(0, QuietChromeFacts.ExpectedAllowNewsAndInterests);
+        Assert.Equal(0, root.GetProperty("ExpectedAllowNewsAndInterests").GetInt32());
     }
 
     [Fact]

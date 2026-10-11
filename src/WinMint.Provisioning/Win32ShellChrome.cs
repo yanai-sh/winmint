@@ -6,6 +6,8 @@ using Microsoft.Win32;
 using Windows.Win32;
 using Windows.Win32.UI.WindowsAndMessaging;
 
+using WinMint.Contracts;
+
 namespace WinMint.Provisioning;
 
 [SupportedOSPlatform("windows10.0.19041.0")]
@@ -46,6 +48,8 @@ public static class Win32ShellChrome
             ApplyPins(pins.LinkPaths);
             step = "taskbar.LiveOnly";
             Win32WorkstationQuiet.ApplyTaskbarChrome();
+            step = "accountPicture";
+            Win32AccountPicture.TryApplyForCurrentUser();
             step = "verify";
             if (!VerifyFinalChrome(wallpaperPresent) && !request.FailOpen)
             {
@@ -134,11 +138,12 @@ public static class Win32ShellChrome
     }
 
     /// <summary>
-    /// Live desktop still shows bloom + search hide (explorer first-run can overwrite after Apply).
+    /// Live desktop still shows bloom + search hide + live-only taskbar quiet
+    /// (explorer first-run can overwrite after Apply).
     /// </summary>
     public static bool IsLiveSticky() => VerifyFinalChrome(wallpaperPresent: true);
 
-    /// <summary>Fail-closed gate before unlock — bloom/search/Spotlight must stick.</summary>
+    /// <summary>Fail-closed gate — bloom/search/Spotlight/Widgets-class taskbar keys must stick.</summary>
     private static bool VerifyFinalChrome(bool wallpaperPresent)
     {
         if (wallpaperPresent)
@@ -164,15 +169,46 @@ public static class Win32ShellChrome
         using RegistryKey? search = Registry.CurrentUser.OpenSubKey(
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Search");
         object? mode = search?.GetValue("SearchboxTaskbarMode");
-        return mode is int searchMode && searchMode == Win32WorkstationQuiet.SearchboxTaskbarMode;
+        if (mode is not int searchMode || searchMode != Win32WorkstationQuiet.SearchboxTaskbarMode)
+        {
+            return false;
+        }
+
+        // Live-only Advanced keys Smoke still asserts — skip policy-owned (Widgets TaskbarDa may vanish).
+        using RegistryKey? advanced = Registry.CurrentUser.OpenSubKey(
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced");
+        foreach (string name in QuietChromeFacts.LiveOnlyTaskbarExplorerAdvanced)
+        {
+            if (QuietChromeFacts.PolicyOwnedTaskbarExplorerAdvanced.Contains(name))
+            {
+                continue;
+            }
+
+            if (!QuietChromeFacts.ExplorerAdvancedDwords.TryGetValue(name, out int want))
+            {
+                continue;
+            }
+
+            if (advanced?.GetValue(name) is not int actual || actual != want)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void WriteEvidence(IReadOnlyList<string> startPinIds, IReadOnlyList<string> taskbarPinIds)
     {
-        Dictionary<string, int> quiet = new(Win32WorkstationQuiet.ExplorerAdvancedDwords, StringComparer.Ordinal)
+        // Live reads only — never invent expected dwords when unset (policy-owned keys may be absent).
+        Dictionary<string, int> quiet = new(StringComparer.Ordinal);
+        foreach ((string name, _) in QuietChromeFacts.RequiredQuietDwords)
         {
-            ["SearchboxTaskbarMode"] = Win32WorkstationQuiet.SearchboxTaskbarMode,
-        };
+            if (TryReadRequiredQuietDword(name) is int got)
+            {
+                quiet[name] = got;
+            }
+        }
 
         string dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
@@ -203,5 +239,19 @@ public static class Win32ShellChrome
                 Thread.Sleep(250);
             }
         }
+    }
+
+    private static int? TryReadRequiredQuietDword(string name)
+    {
+        if (string.Equals(name, "SearchboxTaskbarMode", StringComparison.Ordinal))
+        {
+            using RegistryKey? search = Registry.CurrentUser.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Search");
+            return search?.GetValue(name) as int?;
+        }
+
+        using RegistryKey? advanced = Registry.CurrentUser.OpenSubKey(
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced");
+        return advanced?.GetValue(name) as int?;
     }
 }

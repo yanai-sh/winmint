@@ -106,6 +106,62 @@ function Write-SmokeHostLine {
     }
 }
 
+function Clear-SmokeWorkVhd {
+    # Drop dynamic VHD when the guest run is done and the VM is not held for post-mortem.
+    param(
+        [Parameter(Mandatory)][string] $WorkDirectory,
+        [Parameter(Mandatory)][string] $VmName
+    )
+    $vm = Get-VM -Name $VmName -ErrorAction SilentlyContinue
+    if ($vm -and $vm.State -ne 'Off') {
+        Write-Warning "Smoke VHD retained (VM $VmName state=$($vm.State))"
+        return
+    }
+    foreach ($disk in @(Get-ChildItem -LiteralPath $WorkDirectory -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -match '^\.(vhdx|avhdx)$' })) {
+        try {
+            Remove-Item -LiteralPath $disk.FullName -Force
+            Write-SmokeHostLine -Name "Dropped $($disk.Name)" -Outcome ok
+        }
+        catch {
+            Write-Warning "Smoke VHD still locked: $($disk.FullName) ($($_.Exception.Message))"
+        }
+    }
+}
+
+function Test-ScratchWorkDirLiveHeavy {
+    # Live Apply/Smoke in another .scratch workdir — KeepWorkDirs hygiene race / dual DISM.
+    param([Parameter(Mandatory)][string] $Dir)
+    $statusPath = Join-Path $Dir 'smoke-status.json'
+    if (Test-Path -LiteralPath $statusPath -PathType Leaf) {
+        try {
+            $j = Get-Content -LiteralPath $statusPath -Raw -Encoding utf8 | ConvertFrom-Json
+            $phase = [string]$j.phase
+            if ($phase -notin @('green', 'failed', 'assert')) {
+                $waiter = 0
+                if ([int]::TryParse([string]$j.waiterPid, [ref]$waiter) -and $waiter -gt 0) {
+                    if ($null -ne (Get-Process -Id $waiter -ErrorAction SilentlyContinue)) { return $true }
+                }
+            }
+        }
+        catch { $null = $_ }
+    }
+    $dirFull = [IO.Path]::GetFullPath($Dir).TrimEnd('\')
+    $leaf = Split-Path -Leaf $dirFull
+    $scratchRel = @(".scratch\$leaf", ".scratch/$leaf")
+    foreach ($p in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^(WinMint\.Cli|dism|pwsh)\.exe$' })) {
+        $cmd = [string]$p.CommandLine
+        if ([string]::IsNullOrWhiteSpace($cmd)) { continue }
+        if ($cmd -notmatch 'WinMint\.Cli|Invoke-ServicingPlan|dism(\.exe)?') { continue }
+        if ($cmd.IndexOf($dirFull, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+        foreach ($rel in $scratchRel) {
+            if ($cmd.IndexOf($rel, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+        }
+    }
+    return $false
+}
+
 function Stop-SmokeVmGuest {
     # ACPI first; TurnOff only if the guest ignores the power button (WinPE).
     param(
@@ -171,6 +227,19 @@ if ($freeGB -lt 40) {
     throw "Only ${freeGB}GB free on $workDrive — Smoke needs headroom for the 64GB dynamic VHD + Output ISO (40GB floor)."
 }
 
+$workFull = if ([IO.Path]::IsPathRooted($Work)) { $Work } else { Join-Path $repoRoot $Work }
+$workFull = [IO.Path]::GetFullPath($workFull).TrimEnd('\')
+$scratchRoot = Join-Path $repoRoot '.scratch'
+if (Test-Path -LiteralPath $scratchRoot -PathType Container) {
+    foreach ($sib in @(Get-ChildItem -LiteralPath $scratchRoot -Directory -ErrorAction SilentlyContinue)) {
+        if (Test-WinMintSamePath -Left $sib.FullName -Right $workFull) { continue }
+        if (-not (Test-HeavyWorkDir -Dir $sib.FullName)) { continue }
+        if (Test-ScratchWorkDirLiveHeavy -Dir $sib.FullName) {
+            throw "Concurrent heavy Apply under .scratch\$($sib.Name) — finish or stop it before Smoke (one live heavy workdir)."
+        }
+    }
+}
+
 # Local+autoLogon Profiles need explicit PS Direct credentials (workgroup guest).
 # Resolve now — passwordPath included — so a missing secret fails here, not as a
 # blocking New-PSSession credential prompt mid-wait (sl7.profile.json uses passwordPath).
@@ -187,8 +256,6 @@ if (Test-Path -LiteralPath $guestDir) {
     Remove-Item -LiteralPath $guestDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
-
-$workFull = if ([IO.Path]::IsPathRooted($Work)) { $Work } else { Join-Path $repoRoot $Work }
 
 $applyProfilePath = $ProfilePath
 $script:SmokeNicConnected = [bool]$OnlineOobe
@@ -294,11 +361,15 @@ if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outI
 if (-not (Test-Path -LiteralPath $applyEvidence)) {
     throw "Apply evidence.json missing under $Work (lane marker required for S4)"
 }
+# ponytail: hygiene must not delete ProtectWorkDir; recreate applyDir if a sibling race still partial-wiped
+New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 Copy-Item -LiteralPath $applyEvidence -Destination (Join-Path $applyDir 'evidence.json') -Force
 $applyExpected = Join-Path $Work 'expected-evidence.json'
 if (Test-Path -LiteralPath $applyExpected -PathType Leaf) {
     Copy-Item -LiteralPath $applyExpected -Destination (Join-Path $applyDir 'expected-evidence.json') -Force
 }
+# Assert inputs copied into smoke-evidence; reclaim media/payload before VHD grows.
+$null = Clear-WinMintApplyStaging -WorkDirectory $workFull -Phase Assert
 
 # --- Hyper-V ---
 Enable-VMEventing -Force -ErrorAction SilentlyContinue
@@ -547,25 +618,49 @@ function Test-GuestEvidenceReady {
                 Copy-Item -FromSession $session -Path $chromeRemote -Destination (Join-Path $guestDir 'shell-chrome.json') -Force
             }
 
-            $livePosture = Invoke-Command -Session $session -ScriptBlock {
-                $adv = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -ErrorAction SilentlyContinue
-                $search = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search' -ErrorAction SilentlyContinue
-                $spot = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\DesktopSpotlight\Settings' -ErrorAction SilentlyContinue
-                $geo = $null
-                try { $geo = (Get-WinHomeLocation).GeoId } catch { $null = $_ }
-                [pscustomobject]@{
-                    Wallpaper              = [string](Get-ItemProperty 'HKCU:\Control Panel\Desktop' -ErrorAction SilentlyContinue).Wallpaper
-                    SearchboxTaskbarMode   = [int]$(if ($null -ne $search.SearchboxTaskbarMode) { $search.SearchboxTaskbarMode } else { -1 })
-                    SpotlightEnabledState  = [int]$(if ($null -ne $spot.EnabledState) { $spot.EnabledState } else { -1 })
-                    TaskbarDa              = [int]$(if ($null -ne $adv.TaskbarDa) { $adv.TaskbarDa } else { -1 })
-                    TaskbarMn              = [int]$(if ($null -ne $adv.TaskbarMn) { $adv.TaskbarMn } else { -1 })
-                    ShowTaskViewButton     = [int]$(if ($null -ne $adv.ShowTaskViewButton) { $adv.ShowTaskViewButton } else { -1 })
-                    ShowCopilotButton      = [int]$(if ($null -ne $adv.ShowCopilotButton) { $adv.ShowCopilotButton } else { -1 })
-                    GeoId                  = [int]$(if ($null -ne $geo) { $geo } else { -1 })
-                    DevMode                = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -ErrorAction SilentlyContinue).AllowDevelopmentWithoutDevLicense
-                    Sudo                   = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo' -ErrorAction SilentlyContinue).Enabled
-                    LongPaths              = [int](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -ErrorAction SilentlyContinue).LongPathsEnabled
+            # Live quiet keys can lag RunOnce chrome re-stamp after Autologon re-entry.
+            $snapLivePosture = {
+                Invoke-Command -Session $session -ScriptBlock {
+                    $adv = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -ErrorAction SilentlyContinue
+                    $search = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search' -ErrorAction SilentlyContinue
+                    $spot = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\DesktopSpotlight\Settings' -ErrorAction SilentlyContinue
+                    $geo = $null
+                    try { $geo = (Get-WinHomeLocation).GeoId } catch { $null = $_ }
+                    [pscustomobject]@{
+                        Wallpaper              = [string](Get-ItemProperty 'HKCU:\Control Panel\Desktop' -ErrorAction SilentlyContinue).Wallpaper
+                        SearchboxTaskbarMode   = [int]$(if ($null -ne $search.SearchboxTaskbarMode) { $search.SearchboxTaskbarMode } else { -1 })
+                        SpotlightEnabledState  = [int]$(if ($null -ne $spot.EnabledState) { $spot.EnabledState } else { -1 })
+                        TaskbarDa              = [int]$(if ($null -ne $adv.TaskbarDa) { $adv.TaskbarDa } else { -1 })
+                        TaskbarMn              = [int]$(if ($null -ne $adv.TaskbarMn) { $adv.TaskbarMn } else { -1 })
+                        ShowTaskViewButton     = [int]$(if ($null -ne $adv.ShowTaskViewButton) { $adv.ShowTaskViewButton } else { -1 })
+                        ShowCopilotButton      = [int]$(if ($null -ne $adv.ShowCopilotButton) { $adv.ShowCopilotButton } else { -1 })
+                        GeoId                  = [int]$(if ($null -ne $geo) { $geo } else { -1 })
+                        DevMode                = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -ErrorAction SilentlyContinue).AllowDevelopmentWithoutDevLicense
+                        Sudo                   = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo' -ErrorAction SilentlyContinue).Enabled
+                        LongPaths              = [int](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -ErrorAction SilentlyContinue).LongPathsEnabled
+                    }
                 }
+            }
+            $livePosture = & $snapLivePosture
+            # Autologon RunOnce can lag explorer first-run (img19 / SearchboxTaskbarMode=2).
+            $bloomLeaf = 'WinMint-Bloom.jpg'
+            $liveChromeLagging = {
+                param($p)
+                $wall = [string]$p.Wallpaper
+                $search = [int]$p.SearchboxTaskbarMode
+                $quietMissing = @(
+                    @('TaskbarMn', 'ShowTaskViewButton', 'ShowCopilotButton') |
+                        Where-Object { [int]$p.$_ -lt 0 }
+                )
+                return ($wall -notlike "*$bloomLeaf") -or ($search -ne 0) -or ($quietMissing.Count -gt 0)
+            }
+            if (& $liveChromeLagging $livePosture) {
+                Start-Sleep -Seconds 8
+                $livePosture = & $snapLivePosture
+            }
+            if (& $liveChromeLagging $livePosture) {
+                Start-Sleep -Seconds 12
+                $livePosture = & $snapLivePosture
             }
             ($livePosture | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath (Join-Path $guestDir 'live-posture.json') -Encoding utf8
 
@@ -921,6 +1016,8 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         -VmName $VmName -LastHostLine 'Smoke green' -OutputIso $outIso -RunId $runId
     Write-SmokeHostLine -Name "Smoke green. Evidence: $evidenceOut" -Outcome ok
     Write-WinMintHostProgress -Activity Smoke -Completed
+    Stop-SmokeVmGuest -Name $VmName
+    Clear-SmokeWorkVhd -WorkDirectory $workFull -VmName $VmName
 }
 catch {
     $failMsg = [string]$_.Exception.Message
@@ -955,8 +1052,11 @@ catch {
     catch {
         Write-Warning "Could not write failure acceptance manifest: $($_.Exception.Message)"
     }
+    Clear-SmokeWorkVhd -WorkDirectory $workFull -VmName $VmName
     throw
 }
 finally {
-    if ($runScratchHygiene) { Invoke-WinMintScratchHygiene -RepoRoot $repoRoot }
+    if ($runScratchHygiene) {
+        Invoke-WinMintScratchHygiene -RepoRoot $repoRoot -ProtectWorkDir $workFull
+    }
 }

@@ -113,6 +113,7 @@ public class ProductPostureTests
         Assert.Equal(
             [
                 "brave",
+                "chat",
                 "cloudContent",
                 "developer",
                 "device",
@@ -126,6 +127,7 @@ public class ProductPostureTests
                 "store",
                 "sudo",
                 "taskbar",
+                "taskview",
                 "widgets",
                 "wpbt",
             ],
@@ -148,6 +150,9 @@ public class ProductPostureTests
         Assert.Equal("AllowNewsAndInterests", rows[0].Name);
         Assert.Equal("ConfigureStartPins", rows[1].Name);
         Assert.Equal(GuestChrome.StartPinsBaselineJson, rows[1].Data);
+        Assert.Contains(rows, static row => row.Name == "HideTaskViewButton" && row.Data == "1");
+        Assert.Contains(rows, static row => row.Name == "SearchOnTaskbarMode" && row.Data == "0");
+        Assert.Contains(rows, static row => row.Name == "ChatIcon" && row.Data == "3");
         Assert.Contains(
             rows,
             static row => row.Name == "LayoutXMLPath" && row.Data == GuestChrome.TaskbarLayoutOemGuestPath);
