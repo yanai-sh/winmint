@@ -145,21 +145,18 @@ public class ResidueCleanerTests
     }
 
     [Fact]
-    public async Task Shell_schedule_throw_fails_open_clearArmFailed()
+    public async Task Shell_schedule_throw_is_best_effort()
     {
         RecordingEvidenceSink evidence = new();
         RecordingWinlogon winlogon = new();
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
-            Bundle([]) with
-            {
-                Policy = SessionPolicy.SmokeDefaults with { FailedDwell = TimeSpan.Zero },
-            },
+            Bundle([]),
             ShellEnv(winlogon, evidence, new ThrowingScheduleResidueCleaner()),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Equal("shell.autologon.clearArmFailed", result.FinalStatus.Code);
+        // ponytail: RunOnce arm is best-effort after unlock; throw must not fail the session
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
         Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
     }
 
@@ -198,18 +195,14 @@ public class ResidueCleanerTests
 
         public int EraseCount { get; private set; }
 
-        public bool TryScheduleDeferredAutoLogonClear()
-        {
-            ScheduleCount++;
-            return true;
-        }
+        public void TryScheduleDeferredAutoLogonClear() => ScheduleCount++;
 
         public void TryEraseAfterComplete() => EraseCount++;
     }
 
     private sealed class ThrowingScheduleResidueCleaner : IResidueCleaner
     {
-        public bool TryScheduleDeferredAutoLogonClear() =>
+        public void TryScheduleDeferredAutoLogonClear() =>
             throw new InvalidOperationException("simulated schedule failure");
 
         public void TryEraseAfterComplete()
@@ -219,7 +212,9 @@ public class ResidueCleanerTests
 
     private sealed class ThrowingEraseResidueCleaner : IResidueCleaner
     {
-        public bool TryScheduleDeferredAutoLogonClear() => true;
+        public void TryScheduleDeferredAutoLogonClear()
+        {
+        }
 
         public void TryEraseAfterComplete() =>
             throw new InvalidOperationException("simulated residue failure");

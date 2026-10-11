@@ -258,7 +258,7 @@ public class BuildPlanPlanTests
         Assert.DoesNotContain(
             artifacts.EffectivePackages,
             p => string.Equals(p.ResolvedInstallId, ProductPosture.MinGitWingetId, StringComparison.OrdinalIgnoreCase));
-        Assert.Empty(HostPackageWire.EffectiveWingetInstallIds(artifacts.EffectivePackages));
+        Assert.Empty(artifacts.EffectiveWinget);
     }
 
     [Fact]

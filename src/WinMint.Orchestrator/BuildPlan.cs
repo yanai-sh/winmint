@@ -593,6 +593,9 @@ public static partial class BuildPlan
             braveSelected,
             drivers,
             ProductPosture.ComposeDefaultUserRows(),
+            packageSlice.EffectiveWinget,
+            packageSlice.EffectiveScoop,
+            packageSlice.EffectiveWsl,
             packageSlice.PackageWireHonest);
 
         return Result.Ok<BuildArtifacts, Failure>(artifacts);

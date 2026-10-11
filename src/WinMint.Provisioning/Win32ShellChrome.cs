@@ -48,8 +48,6 @@ public static class Win32ShellChrome
             ApplyPins(pins.LinkPaths);
             step = "taskbar.LiveOnly";
             Win32WorkstationQuiet.ApplyTaskbarChrome();
-            step = "accountPicture";
-            Win32AccountPicture.TryApplyForCurrentUser();
             step = "verify";
             if (!VerifyFinalChrome(wallpaperPresent) && !request.FailOpen)
             {
