@@ -320,11 +320,26 @@ if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:$false -PlanRequiresNetwork:
 if ($smoke -notmatch 'attachNicAtCreate' -or $smoke -notmatch 'PlanRequiresNetwork') {
     throw 'Invoke-Smoke must decide NIC attach at create from OnlineOobe|requiresNetwork before Start-VM'
 }
-# requiresNetwork must be read from manifest before Hyper-V create (not only in the wait loop).
+# requiresNetwork: capture payload/bundle BEFORE staging clear; Work/manifest after clear; both before Hyper-V.
+$bundleReadIdx = $smoke.IndexOf('SmokePlanRequiresNetworkFromBundle')
+# Call site (not the earlier comment that names the function).
+$clearIdx = $smoke.IndexOf('Clear-WinMintApplyStaging -WorkDirectory')
 $manifestReadIdx = $smoke.IndexOf('planManifestPath')
 $hyperVIdx = $smoke.IndexOf('# --- Hyper-V ---')
+if ($bundleReadIdx -lt 0 -or $clearIdx -lt 0 -or $bundleReadIdx -gt $clearIdx) {
+    throw 'Invoke-Smoke must read payload/bundle.json requiresNetwork before Clear-WinMintApplyStaging'
+}
 if ($manifestReadIdx -lt 0 -or $hyperVIdx -lt 0 -or $manifestReadIdx -gt $hyperVIdx) {
     throw 'Invoke-Smoke must read manifest.json requiresNetwork before Hyper-V Start-VM'
+}
+if ($smoke -notmatch 'requiresNetwork unknown after Apply') {
+    throw 'Invoke-Smoke must fail closed when requiresNetwork is unreadable after Apply'
+}
+if ($smoke -notmatch 'Plan requiresNetwork=') {
+    throw 'Invoke-Smoke must log Plan requiresNetwork before Hyper-V'
+}
+if ($smoke -notmatch 'bundle\.json') {
+    throw 'Invoke-Smoke must reference payload bundle.json for requiresNetwork'
 }
 if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$false) -cne 'hold') {
     throw 'offline hold before guest-up / Supervisor'

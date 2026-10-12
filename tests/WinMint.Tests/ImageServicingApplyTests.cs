@@ -60,6 +60,14 @@ public class ImageServicingApplyTests
                 TestContext.Current.CancellationToken);
 
             Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
+            string planManifestPath = Path.Combine(work, ServicingWorkspace.PlanManifestFileName);
+            Assert.True(File.Exists(planManifestPath), "Materialize must write Work/manifest.json (requiresNetwork honesty)");
+            using (JsonDocument planManifest = JsonDocument.Parse(File.ReadAllText(planManifestPath)))
+            {
+                Assert.True(planManifest.RootElement.TryGetProperty("requiresNetwork", out JsonElement reqNet));
+                Assert.Equal(plan.Manifest.RequiresNetwork, reqNet.GetBoolean());
+            }
+
             Assert.Equal(
                 [
                     ServicingOpcode.MountInstallWim,

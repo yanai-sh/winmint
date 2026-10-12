@@ -15,6 +15,8 @@ public sealed class ServicingWorkspace
     public const string ApplyStatusFileName = "apply-status.txt";
     public const string ApplyEventsFileName = ApplyEvents.FileName;
     public const string StagesFileName = "stages.json";
+    /// <summary>Plan honesty leaf (<c>requiresNetwork</c>) — survives Apply staging clear; not <see cref="WorkspaceFileName"/>.</summary>
+    public const string PlanManifestFileName = "manifest.json";
     public const string WorkspaceFileName = "workspace.json";
     public const string InstallWimFileName = "install.wim";
     public const string UnattendFileName = "unattend.xml";
@@ -44,6 +46,7 @@ public sealed class ServicingWorkspace
         ApplyStatus = Path.Combine(Root, ApplyStatusFileName);
         ApplyEventsPath = Path.Combine(Root, ApplyEventsFileName);
         Stages = Path.Combine(Root, StagesFileName);
+        PlanManifest = Path.Combine(Root, PlanManifestFileName);
         WorkspaceManifest = Path.Combine(Root, WorkspaceFileName);
         InstallWim = Path.Combine(Root, InstallWimFileName);
         Unattend = Path.Combine(Root, UnattendFileName);
@@ -62,6 +65,7 @@ public sealed class ServicingWorkspace
     public string ApplyStatus { get; }
     public string ApplyEventsPath { get; }
     public string Stages { get; }
+    public string PlanManifest { get; }
     public string WorkspaceManifest { get; }
     public string InstallWim { get; }
     public string Unattend { get; }
@@ -84,6 +88,7 @@ public sealed class ServicingWorkspace
             ["applyStatus"] = ApplyStatus,
             ["applyEvents"] = ApplyEventsPath,
             ["stages"] = Stages,
+            ["planManifest"] = PlanManifest,
             ["installWim"] = InstallWim,
             ["unattend"] = Unattend,
             ["digests"] = Digests,

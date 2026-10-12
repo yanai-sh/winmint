@@ -216,6 +216,8 @@ public static partial class ImageServicing
         }
 
         File.WriteAllText(workspace.Stages, SerializeServicingStagesFile(bound.Value.Wire));
+        // Plan honesty leaf (requiresNetwork) — Smoke reads after staging clear; not workspace.json.
+        File.WriteAllText(workspace.PlanManifest, BuildPlan.SerializeManifestFile(plan.Manifest));
         workspace.WriteManifest();
         WriteExpectedEvidence(workspace, plan, bound.Value.Stages);
 

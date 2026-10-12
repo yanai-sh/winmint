@@ -376,6 +376,22 @@ if (-not (Test-Path -LiteralPath $applyEvidence)) {
 # Guest plan truth + S5 assert BEFORE Clear-WinMintApplyStaging (payload/ holds jobs + name lists).
 $expectNativePackageAudit = $false
 $jobsPath = Join-Path $Work 'payload\jobs.json'
+$bundlePath = Join-Path $Work 'payload/bundle.json'
+# Capture requiresNetwork from guest wire before staging clear deletes payload/ (NAT-at-create honesty).
+$script:SmokePlanRequiresNetwork = $false
+$script:SmokePlanRequiresNetworkFromBundle = $false
+if (Test-Path -LiteralPath $bundlePath -PathType Leaf) {
+    try {
+        $bundleDoc = Get-Content -LiteralPath $bundlePath -Raw -Encoding utf8 | ConvertFrom-Json
+        if ($null -ne $bundleDoc.PSObject.Properties['requiresNetwork']) {
+            $script:SmokePlanRequiresNetwork = [bool]$bundleDoc.requiresNetwork
+            $script:SmokePlanRequiresNetworkFromBundle = $true
+        }
+    }
+    catch {
+        throw "payload/bundle.json unreadable under $Work : $($_.Exception.Message)"
+    }
+}
 if (Test-Path -LiteralPath $jobsPath -PathType Leaf) {
     try {
         $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
@@ -419,7 +435,7 @@ if ($pinnedRemoveAppx.Count -eq 0 -and $null -ne $profileDoc -and $profileDoc.PS
     }
 }
 
-# ponytail: hygiene must not delete ProtectWorkDir; recreate applyDir if a sibling race still partial-wiped
+# ponytail: KeepWorkDirs=1 retains newest heavy workdir; recreate applyDir if a sibling race partial-wiped
 New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 Copy-Item -LiteralPath $applyEvidence -Destination (Join-Path $applyDir 'evidence.json') -Force
 $applyExpected = Join-Path $Work 'expected-evidence.json'
@@ -429,18 +445,30 @@ if (Test-Path -LiteralPath $applyExpected -PathType Leaf) {
 # Assert inputs copied into smoke-evidence; reclaim media/payload before VHD grows.
 $null = Clear-WinMintApplyStaging -WorkDirectory $workFull -Phase Assert
 
-# Plan honesty BEFORE Start-VM (manifest survives staging clear). requiresNetwork ⇒ NAT at create.
-$script:SmokePlanRequiresNetwork = $false
+# Plan honesty BEFORE Start-VM. Materialize writes Work/manifest.json (survives staging clear);
+# bundle capture above is authoritative when payload was present. requiresNetwork ⇒ NAT at create.
 $planManifestPath = Join-Path $Work 'manifest.json'
+$manifestRequiresNetwork = $null
 if (Test-Path -LiteralPath $planManifestPath -PathType Leaf) {
     try {
         $planManifest = Get-Content -LiteralPath $planManifestPath -Raw -Encoding utf8 | ConvertFrom-Json
-        $script:SmokePlanRequiresNetwork = [bool]$planManifest.requiresNetwork
+        $manifestRequiresNetwork = [bool]$planManifest.requiresNetwork
+        if (-not $script:SmokePlanRequiresNetworkFromBundle) {
+            $script:SmokePlanRequiresNetwork = $manifestRequiresNetwork
+        }
+        elseif ([bool]$manifestRequiresNetwork -ne [bool]$script:SmokePlanRequiresNetwork) {
+            throw "requiresNetwork mismatch: payload/bundle=$($script:SmokePlanRequiresNetwork) Work/manifest=$manifestRequiresNetwork"
+        }
     }
     catch {
+        if ($_.Exception.Message -match 'requiresNetwork mismatch') { throw }
         throw "manifest.json unreadable under $Work : $($_.Exception.Message)"
     }
 }
+elseif (-not $script:SmokePlanRequiresNetworkFromBundle -and -not $SkipApply) {
+    throw "requiresNetwork unknown after Apply: missing payload/bundle.json (pre-clear) and Work/manifest.json"
+}
+Write-SmokeHostLine -Name "Plan requiresNetwork=$($script:SmokePlanRequiresNetwork) (NAT-at-create when true)." -Activity vm
 
 # --- Hyper-V ---
 Enable-VMEventing -Force -ErrorAction SilentlyContinue
@@ -1079,6 +1107,6 @@ catch {
 }
 finally {
     if ($runScratchHygiene) {
-        Invoke-WinMintScratchHygiene -RepoRoot $repoRoot -ProtectWorkDir $workFull
+        Invoke-WinMintScratchHygiene -RepoRoot $repoRoot
     }
 }
