@@ -21,6 +21,12 @@ public sealed class Win32ProcessHost : IProcessHost
                 cancellationToken: ct)
             .ConfigureAwait(false);
 
+        if (status.Canceled)
+        {
+            ct.ThrowIfCancellationRequested();
+            throw new OperationCanceledException("Process.RunAsync canceled.", ct);
+        }
+
         return new ProcessStartResult(status.ExitCode);
     }
 }

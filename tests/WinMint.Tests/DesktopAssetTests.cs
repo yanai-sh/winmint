@@ -61,6 +61,8 @@ public class DesktopAssetTests
         Assert.Contains("{{WINMINT_DISPLAY_INDEX_PREFERENCES_JSON}}", template, StringComparison.Ordinal);
         Assert.Contains("\"winmint-m-1\" through \"winmint-m-4\"", template, StringComparison.Ordinal);
         Assert.Contains("layout \"BSP\"", template, StringComparison.Ordinal);
+        Assert.Contains("$Env:USERPROFILE/applications.json", template, StringComparison.Ordinal);
+        Assert.DoesNotContain("KOMOREBI_CONFIG_HOME", template, StringComparison.Ordinal);
         Assert.DoesNotContain("serial", template, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("\"monitors\": [", template, StringComparison.Ordinal);
     }

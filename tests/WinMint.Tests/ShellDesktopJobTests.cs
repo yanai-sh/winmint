@@ -125,27 +125,132 @@ public class ShellDesktopJobTests
     public async Task Komorebi_soft_fail_does_not_fail_session()
     {
         (string guestRoot, string yasbDir, string thideDir) = StageGuestDesktopFixture(includeKomorebi: true);
+        string sandbox = Path.Combine(Path.GetTempPath(), "winmint-komorebi-soft-" + Guid.NewGuid().ToString("N"));
+        string komorebiDir = Path.Combine(sandbox, "xdg-config", "komorebi");
+        string whkdPath = Path.Combine(sandbox, "xdg-config", "whkdrc");
+        string docLink = Path.Combine(sandbox, "komorebi.json");
+        using PathScope pathScope = PrepPathWithExecutable("komorebic.exe");
+        RecordingProcessHost processes = new() { ExitCode = 1 };
         try
         {
             ShellDesktopRequest request = new(
                 [PackageIds.Komorebi],
-                new NoopProcesses(),
+                processes,
                 null,
                 guestRoot,
                 thideDir,
                 yasbDir,
-                Path.Combine(Path.GetTempPath(), "komorebi-" + Guid.NewGuid().ToString("N")),
-                Path.Combine(Path.GetTempPath(), "whkd-" + Guid.NewGuid().ToString("N")));
+                komorebiDir,
+                whkdPath,
+                KomorebiDocLinkPath: docLink);
 
             ShellDesktopApplyResult applied = await ShellDesktop.ApplyAsync(
                 request,
                 TestContext.Current.CancellationToken);
             Assert.False(applied.KomorebiOk);
             Assert.Contains("komorebi configure failed", applied.Notes);
+            Assert.Single(processes.Starts);
         }
         finally
         {
-            Directory.Delete(guestRoot, recursive: true);
+            TryDeleteTree(guestRoot);
+            TryDeleteTree(sandbox);
+        }
+    }
+
+    [Fact]
+    public async Task Komorebi_writes_xdg_config_and_passes_explicit_config_flag()
+    {
+        (string guestRoot, string yasbDir, string thideDir) = StageGuestDesktopFixture(includeKomorebi: true);
+        string sandbox = Path.Combine(Path.GetTempPath(), "winmint-komorebi-ok-" + Guid.NewGuid().ToString("N"));
+        string komorebiDir = Path.Combine(sandbox, "xdg-config", "komorebi");
+        string whkdPath = Path.Combine(sandbox, "xdg-config", "whkdrc");
+        string docLink = Path.Combine(sandbox, "komorebi.json");
+        using PathScope pathScope = PrepPathWithExecutable("komorebic.exe");
+        RecordingProcessHost processes = new() { ExitCode = 0 };
+        try
+        {
+            ShellDesktopRequest request = new(
+                [PackageIds.Komorebi],
+                processes,
+                null,
+                guestRoot,
+                thideDir,
+                yasbDir,
+                komorebiDir,
+                whkdPath,
+                KomorebiDocLinkPath: docLink);
+
+            ShellDesktopApplyResult applied = await ShellDesktop.ApplyAsync(
+                request,
+                TestContext.Current.CancellationToken);
+
+            string configPath = Path.GetFullPath(Path.Combine(komorebiDir, "komorebi.json"));
+            Assert.True(applied.KomorebiOk);
+            Assert.True(File.Exists(configPath));
+            Assert.True(File.Exists(whkdPath));
+            Assert.Single(processes.Starts);
+            Assert.Equal(
+                ["enable-autostart", "--config", configPath, "--whkd"],
+                processes.Starts[0].Arguments);
+
+            // Doc-path discoverability: symlink or fail-open note (no KOMOREBI_CONFIG_HOME).
+            if (File.Exists(docLink))
+            {
+                Assert.Equal(
+                    configPath,
+                    Path.GetFullPath(File.ResolveLinkTarget(docLink, returnFinalTarget: true)!.FullName));
+            }
+            else
+            {
+                Assert.Contains(applied.Notes, static n => n.Contains("doc-link skipped", StringComparison.Ordinal));
+            }
+        }
+        finally
+        {
+            TryDeleteTree(guestRoot);
+            TryDeleteTree(sandbox);
+        }
+    }
+
+    [Fact]
+    public void TryLinkDiscoverability_links_or_fail_opens_with_note()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "winmint-doc-link-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string target = Path.Combine(dir, "canonical", "komorebi.json");
+        string link = Path.Combine(dir, "komorebi.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        File.WriteAllText(target, "{}");
+        try
+        {
+            List<string> notes = [];
+            ShellDesktop.TryLinkDiscoverability(link, target, notes);
+            if (notes.Count == 0)
+            {
+                Assert.True(File.Exists(link));
+                Assert.Equal(
+                    Path.GetFullPath(target),
+                    Path.GetFullPath(File.ResolveLinkTarget(link, returnFinalTarget: true)!.FullName));
+            }
+            else
+            {
+                Assert.Contains(notes, static n => n.Contains("doc-link skipped", StringComparison.Ordinal));
+            }
+
+            // Existing real file: never overwrite.
+            string blocked = Path.Combine(dir, "blocked.json");
+            File.WriteAllText(blocked, "keep");
+            List<string> blockedNotes = [];
+            ShellDesktop.TryLinkDiscoverability(blocked, target, blockedNotes);
+            Assert.Contains(
+                blockedNotes,
+                static n => n.Contains("already exists", StringComparison.Ordinal));
+            Assert.Equal("keep", File.ReadAllText(blocked));
+        }
+        finally
+        {
+            TryDeleteTree(dir);
         }
     }
 
@@ -212,6 +317,40 @@ public class ShellDesktopJobTests
             [],
             []);
 
+    // Symlinks / AV can lock a sibling .tmp briefly; never let cleanup fail the test.
+    private static void TryDeleteTree(string path)
+    {
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: true);
+                }
+                else if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == 4)
+                {
+                    return;
+                }
+
+                Thread.Sleep(50);
+            }
+            catch
+            {
+                return;
+            }
+        }
+    }
+
     private static (string GuestRoot, string YasbDir, string ThideDir) StageGuestDesktopFixture(
         bool includeKomorebi = false)
     {
@@ -270,10 +409,7 @@ public class ShellDesktopJobTests
 
             _disposed = true;
             Environment.SetEnvironmentVariable("PATH", oldPath);
-            if (Directory.Exists(pathDir))
-            {
-                Directory.Delete(pathDir, recursive: true);
-            }
+            TryDeleteTree(pathDir);
         }
     }
 }

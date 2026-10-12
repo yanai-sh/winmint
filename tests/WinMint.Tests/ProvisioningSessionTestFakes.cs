@@ -286,13 +286,36 @@ internal static class ProvisioningSessionTestFakes
 
         public Func<string, IReadOnlyList<string>, ProcessStartResult>? OnRun { get; init; }
 
+        /// <summary>When set, waits until cancelled or this delay elapses (for package-timeout tests).</summary>
+        public TimeSpan? BlockUntilCancel { get; init; }
+
         public Task<ProcessStartResult> RunAsync(
             string fileName,
             IReadOnlyList<string> arguments,
             CancellationToken ct = default)
         {
             Starts.Add((fileName, arguments));
+            if (BlockUntilCancel is { } wait)
+            {
+                return BlockAsync(wait, ct);
+            }
+
             return Task.FromResult(OnRun?.Invoke(fileName, arguments) ?? new ProcessStartResult(ExitCode));
+        }
+
+        private async Task<ProcessStartResult> BlockAsync(TimeSpan wait, CancellationToken ct)
+        {
+            try
+            {
+                await Task.Delay(wait, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex)
+            {
+                // Mirror AOT Process.RunAsync cancel wrapping — must not become shell.crash.
+                throw new AggregateException(ex);
+            }
+
+            return new ProcessStartResult(ExitCode);
         }
     }
 
@@ -341,8 +364,16 @@ internal static class ProvisioningSessionTestFakes
         public IReadOnlyList<AppxPackageInfo> FindRegisteredByCatalogId(string catalogId) =>
             [.. Registered.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId))];
 
+        /// <summary>
+        /// When true, mimics WinRT medium-IL FindProvisionedPackages access-denied → empty
+        /// (see <see cref="WinRTAppxPackageManager.FindProvisionedByCatalogId"/>).
+        /// </summary>
+        public bool FindProvisionedAccessDenied { get; init; }
+
         public IReadOnlyList<AppxPackageInfo> FindProvisionedByCatalogId(string catalogId) =>
-            [.. Provisioned.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId))];
+            FindProvisionedAccessDenied
+                ? []
+                : [.. Provisioned.Where(p => WinRTAppxPackageManager.MatchesCatalogId(p, catalogId))];
 
         public Task RemovePackageAsync(string packageFullName, CancellationToken ct = default)
         {
@@ -396,10 +427,14 @@ internal static class ProvisioningSessionTestFakes
     {
         public CheckpointState? LastWritten { get; private set; }
 
+        public string? LastTenurePhase { get; private set; }
+
         public TenureState ReadTenure() =>
             new(CheckpointInProgress: LastWritten is not null, HeartbeatUtc: DateTimeOffset.UtcNow);
 
         public void WriteHeartbeat(DateTimeOffset utcNow) { }
+
+        public void WriteTenurePhase(string code) => LastTenurePhase = code;
 
         public void WriteCheckpoint(CheckpointState state) => LastWritten = state;
 
@@ -491,6 +526,8 @@ internal static class ProvisioningSessionTestFakes
         public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
 
         public void WriteHeartbeat(DateTimeOffset utcNow) { }
+
+        public void WriteTenurePhase(string code) { }
 
         public void WriteCheckpoint(CheckpointState state) { }
 

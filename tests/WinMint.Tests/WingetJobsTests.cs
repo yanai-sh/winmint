@@ -280,6 +280,240 @@ public class WingetJobsTests
     }
 
     [Fact]
+    public async Task Shell_nilesoft_winget_nudges_explorer_before_install()
+    {
+        // Official winget install → WiX MSI OnInstall: shell.exe -restart needs an explorer process.
+        RecordingProcessHost processes = new();
+        RecordingEvidenceSink evidence = new();
+        RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
+        int explorerStarts = 0;
+        bool explorerRunning = false;
+        FakeGuestMachine guest = new()
+        {
+            Processes = processes,
+            Appx = appx,
+            IsExplorerProcessRunningCallback = () => explorerRunning,
+            TryStartExplorerIfMissingCallback = () =>
+            {
+                explorerStarts++;
+                explorerRunning = true;
+            },
+        };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(jobs: [new ProvisionJob(
+                "winget.Nilesoft.Shell",
+                ProvisionJobKind.Winget,
+                PackageId: PackageIds.NilesoftShell)]),
+            Env(guest, evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        // Handoff also calls TryStartExplorerIfMissing after jobs.
+        Assert.True(explorerStarts >= 1);
+        Assert.Single(processes.Starts);
+        Assert.Contains("--silent", processes.Starts[0].Arguments);
+        Assert.Equal(PackageIds.NilesoftShell, processes.Starts[0].Arguments[2]);
+        Assert.Contains("jobs.winget.Nilesoft.Shell.explorerNudge", evidence.Documents[0].Phases);
+    }
+
+    [Fact]
+    public async Task Shell_nilesoft_winget_import_nudges_explorer_before_install()
+    {
+        // Same MSI OnInstall hang via WingetImport package list (not a discrete Winget job).
+        string importPath = BundleLoader.DefaultGuestWingetImportPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(importPath)!);
+        string? previous = File.Exists(importPath) ? File.ReadAllText(importPath) : null;
+        try
+        {
+            File.WriteAllText(
+                importPath,
+                $$"""
+                {
+                  "Sources": [
+                    {
+                      "Packages": [
+                        { "PackageIdentifier": "{{PackageIds.NilesoftShell}}" }
+                      ]
+                    }
+                  ]
+                }
+                """);
+
+            RecordingProcessHost processes = new();
+            RecordingEvidenceSink evidence = new();
+            RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
+            int explorerStarts = 0;
+            bool explorerRunning = false;
+            FakeGuestMachine guest = new()
+            {
+                Processes = processes,
+                Appx = appx,
+                IsExplorerProcessRunningCallback = () => explorerRunning,
+                TryStartExplorerIfMissingCallback = () =>
+                {
+                    explorerStarts++;
+                    explorerRunning = true;
+                },
+            };
+
+            SessionResult result = await ProvisioningSession.RunShellAsync(
+                Bundle(jobs: [new ProvisionJob("winget.import", ProvisionJobKind.WingetImport)]),
+                Env(guest, evidence),
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(SessionOutcome.Complete, result.Outcome);
+            Assert.True(explorerStarts >= 1);
+            Assert.Single(processes.Starts);
+            Assert.Equal(PackageIds.NilesoftShell, processes.Starts[0].Arguments[2]);
+            Assert.Contains($"jobs.winget.{PackageIds.NilesoftShell}.explorerNudge", evidence.Documents[0].Phases);
+        }
+        finally
+        {
+            if (previous is null)
+            {
+                if (File.Exists(importPath))
+                {
+                    File.Delete(importPath);
+                }
+            }
+            else
+            {
+                File.WriteAllText(importPath, previous);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task EnsureExplorer_for_nilesoft_is_noop_when_explorer_already_runs()
+    {
+        int starts = 0;
+        FakeGuestMachine guest = new()
+        {
+            IsExplorerProcessRunningCallback = static () => true,
+            TryStartExplorerIfMissingCallback = () => starts++,
+        };
+
+        await ProvisioningJobRunner.EnsureExplorerForNilesoftMsiAsync(
+            guest,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, starts);
+    }
+
+    [Fact]
+    public void SmokeDefaults_package_job_timeout_caps_winget_hangs()
+    {
+        // Official winget path for Nilesoft.Shell; timeout keeps one hung MSI from burning tenure.
+        Assert.Equal(TimeSpan.FromMinutes(20), SessionPolicy.SmokeDefaults.PackageJobTimeout);
+        Assert.Equal(TimeSpan.FromMinutes(150), SessionPolicy.SmokeDefaults.WallClockTimeout);
+    }
+
+    [Fact]
+    public void Winget_install_arguments_are_silent_and_noninteractive()
+    {
+        string[] args = ProvisioningJobRunner.BuildWingetInstallArguments(
+            "Nilesoft.Shell",
+            "--architecture arm64",
+            @"C:\evidence\winget-Nilesoft.Shell.log");
+
+        Assert.Equal("install", args[0]);
+        Assert.Contains("--id", args);
+        Assert.Contains("Nilesoft.Shell", args);
+        Assert.Contains("--silent", args);
+        Assert.Contains("--disable-interactivity", args);
+        Assert.Contains("--accept-package-agreements", args);
+        Assert.Contains("--accept-source-agreements", args);
+        Assert.Contains("--architecture", args);
+        Assert.Contains("arm64", args);
+    }
+
+    [Fact]
+    public async Task Shell_winget_job_timeout_fail_opens_and_continues()
+    {
+        // Official winget install → WiX MSI OnInstall CA hang (Nilesoft): CancelAfter; !PackageStrict continues.
+        RecordingProcessHost processes = new() { BlockUntilCancel = TimeSpan.FromSeconds(30) };
+        RecordingEvidenceSink evidence = new();
+        RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
+        ProvisioningBundle bundle = Bundle(
+            jobs: [new ProvisionJob("winget.Nilesoft.Shell", ProvisionJobKind.Winget, PackageId: "Nilesoft.Shell")]) with
+        {
+            Policy = SessionPolicy.SmokeDefaults with { PackageJobTimeout = TimeSpan.FromMilliseconds(80) },
+        };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            bundle,
+            Env(processes, evidence, appx: appx),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal("jobs.ok", result.FinalStatus.Code);
+        Assert.Single(processes.Starts);
+        Assert.Contains(
+            evidence.PackageDocuments,
+            d => d.Failures.Any(f => f.JobId == "winget.Nilesoft.Shell"
+                && (f.Message?.Contains("timed out", StringComparison.OrdinalIgnoreCase) ?? false)));
+    }
+
+    [Fact]
+    public async Task Shell_winget_job_aggregate_cancel_fail_opens_not_shell_crash()
+    {
+        // AOT Process.RunAsync cancel can surface AggregateException(TaskCanceledException).
+        RecordingProcessHost processes = new()
+        {
+            OnRun = static (_, _) => throw new AggregateException(
+                new TaskCanceledException("Process.RunAsync canceled.")),
+        };
+        RecordingEvidenceSink evidence = new();
+        RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
+        ProvisioningBundle bundle = Bundle(
+            jobs:
+            [
+                new ProvisionJob("winget.Nilesoft.Shell", ProvisionJobKind.Winget, PackageId: "Nilesoft.Shell"),
+                new ProvisionJob("winget.jqlang.jq", ProvisionJobKind.Winget, PackageId: "jqlang.jq"),
+            ]) with
+        {
+            Policy = SessionPolicy.SmokeDefaults with { PackageJobTimeout = TimeSpan.FromMinutes(20) },
+        };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            bundle,
+            Env(processes, evidence, appx: appx),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal("jobs.ok", result.FinalStatus.Code);
+        Assert.Equal(2, processes.Starts.Count);
+        Assert.Contains(
+            evidence.PackageDocuments,
+            d => d.Failures.Any(f => f.JobId == "winget.Nilesoft.Shell"
+                && (f.Message?.Contains("timed out", StringComparison.OrdinalIgnoreCase) ?? false)));
+    }
+
+    [Fact]
+    public async Task Shell_winget_job_timeout_fails_closed_when_strict()
+    {
+        RecordingProcessHost processes = new() { BlockUntilCancel = TimeSpan.FromSeconds(30) };
+        RecordingEvidenceSink evidence = new();
+        RecordingAppx appx = new() { WingetPath = @"C:\Tools\winget.exe" };
+        ProvisioningBundle bundle = Bundle(
+            jobs: [new ProvisionJob("winget.Nilesoft.Shell", ProvisionJobKind.Winget, PackageId: "Nilesoft.Shell")]) with
+        {
+            PackageStrict = true,
+            Policy = SessionPolicy.SmokeDefaults with { PackageJobTimeout = TimeSpan.FromMilliseconds(80) },
+        };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            bundle,
+            Env(processes, evidence, appx: appx),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("jobs.package.timeout", result.FinalStatus.Code);
+        Assert.Single(processes.Starts);
+    }
+
+    [Fact]
     public async Task Shell_winget_job_registers_app_installer_before_spawn()
     {
         RecordingProcessHost processes = new();

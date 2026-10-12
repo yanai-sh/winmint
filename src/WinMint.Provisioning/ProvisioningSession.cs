@@ -154,7 +154,12 @@ public static partial class ProvisioningSession
 
         if (bundle.RequiresNetwork)
         {
-            SessionStatus? network = await EnsureNetworkAvailableAsync(env, phases, ct)
+            SessionStatus? network = await EnsureNetworkAvailableAsync(
+                    env,
+                    phases,
+                    bundle.Policy,
+                    tenureStartTs,
+                    ct)
                 .ConfigureAwait(false);
             if (network is not null)
             {
@@ -183,12 +188,19 @@ public static partial class ProvisioningSession
                 WallClockTimeout: bundle.Policy.WallClockTimeout,
                 TenureStartTimestamp: tenureStartTs,
                 StartIndex: jobStartIndex,
-                WslMock: new WslMockState());
+                WslMock: new WslMockState(),
+                RecordPhaseQuiet: code => phases.Add(code),
+                PackageJobTimeout: bundle.Policy.PackageJobTimeout);
             jobs = await ProvisioningJobRunner.Run(bundle.Jobs, runnerEnv, ct)
                 .ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (Exception ex) when (ex is OperationCanceledException
+            || (ex is AggregateException agg
+                && agg.Flatten().InnerExceptions.All(static e => e is OperationCanceledException)))
         {
+            // AggregateException(TaskCanceledException) from AOT Process.RunAsync cancel must not
+            // escape to Program as shell.crash — package CancelAfter already maps to TimeoutException;
+            // this is the tenure-cancel / residual path.
             return await FailOpenAsync(
                 bundle,
                 env,
@@ -515,6 +527,7 @@ public static partial class ProvisioningSession
     {
         env.Splash.SetStatus(status);
         phases.Add(status.Code);
+        env.Guest.Checkpoints.WriteTenurePhase(status.Code);
     }
 
     private static void TryScheduleDeferredAutoLogonClear(ShellEnvironment env)
@@ -634,14 +647,42 @@ public static partial class ProvisioningSession
     private static async Task<SessionStatus?> EnsureNetworkAvailableAsync(
         ShellEnvironment env,
         List<string> phases,
+        SessionPolicy policy,
+        long tenureStartTs,
         CancellationToken ct)
     {
-        if (env.Guest.Connectivity is not null
-            && await env.Guest.Connectivity.HasOutboundNetworkAsync(ct).ConfigureAwait(false))
+        // Offline OOBE / Hyper-V: host may attach NAT only after guest-up or Supervisor sighting.
+        // Wait NetworkWaitDeadline so a deferred NIC can come up before failing closed.
+        TimeSpan networkWait = policy.NetworkWaitDeadline <= TimeSpan.Zero
+            ? TimeSpan.Zero
+            : policy.NetworkWaitDeadline;
+        long waitStartTs = env.Time.GetTimestamp();
+        bool waitingNoted = false;
+        while (true)
         {
-            SessionStatus ok = new("network.ok", "Outbound connectivity available.");
-            Note(env, phases, ok);
-            return null;
+            if (env.Guest.Connectivity is not null
+                && await env.Guest.Connectivity.HasOutboundNetworkAsync(ct).ConfigureAwait(false))
+            {
+                SessionStatus ok = new("network.ok", "Outbound connectivity available.");
+                Note(env, phases, ok);
+                return null;
+            }
+
+            if (IsTimedOut(env, tenureStartTs, policy.WallClockTimeout)
+                || env.Time.GetElapsedTime(waitStartTs) >= networkWait)
+            {
+                break;
+            }
+
+            if (!waitingNoted)
+            {
+                Note(env, phases, new SessionStatus(
+                    "network.wait",
+                    "Waiting for outbound connectivity (plan requires network)."));
+                waitingNoted = true;
+            }
+
+            await Task.Delay(policy.SettlePollInterval, env.Time, ct).ConfigureAwait(false);
         }
 
         SessionStatus offline = new(

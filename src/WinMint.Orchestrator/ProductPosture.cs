@@ -15,7 +15,7 @@ public static class ProductPosture
     public const string PowerShellWingetId = "Microsoft.PowerShell";
     public const string WindowsTerminalWingetId = "Microsoft.WindowsTerminal";
     public const string CoreutilsWingetId = "Microsoft.Coreutils";
-    public const string NilesoftShellWingetId = "Nilesoft.Shell";
+    public const string NilesoftShellWingetId = PackageIds.NilesoftShell;
     public const string YasbWingetId = PackageIds.Yasb;
     public const string KomorebiWingetId = PackageIds.Komorebi;
     public const string WhkdWingetId = "LGUG2Z.whkd";
@@ -221,6 +221,7 @@ public static class ProductPosture
         "Nilesoft Shell",
         "Starship + scoop CLI",
         "shell skel stamp",
+        "XDG basedir only",
     ];
 
     public static IReadOnlyList<string> AlwaysOnDigestKeys =>
@@ -288,6 +289,13 @@ public static class ProductPosture
         rows.Add(UserExpand(usf, "{A0C69A99-21C8-4671-8703-7934162FCF1D}", @"%USERPROFILE%\Music"));
         rows.Add(UserExpand(usf, "{35286A68-3C57-41A1-BBB1-0EAE73D76C95}", @"%USERPROFILE%\Videos"));
         rows.Add(UserExpand(usf, "{754AC886-DF64-4CBA-86B5-F7FBF4FBCEF5}", @"%USERPROFILE%\Desktop"));
+        // XDG basedir only (no KOMOREBI_CONFIG_HOME) — expand from USERPROFILE only.
+        const string env = "Environment";
+        rows.Add(UserExpand(env, "XDG_CONFIG_HOME", @"%USERPROFILE%\.config"));
+        rows.Add(UserExpand(env, "XDG_DATA_HOME", @"%USERPROFILE%\.local\share"));
+        rows.Add(UserExpand(env, "XDG_STATE_HOME", @"%USERPROFILE%\.local\state"));
+        rows.Add(UserExpand(env, "XDG_CACHE_HOME", @"%USERPROFILE%\.cache"));
+
         rows.Add(User(
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Search",
             "SearchboxTaskbarMode",
@@ -450,6 +458,19 @@ public static class ProductPosture
             "LongPathsEnabled",
             QuietChromeFacts.ExpectedLongPaths.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "filesystem"),
+        // FirstLogon Shell is medium-IL; winget→MSI (Nilesoft) needs elevation. Default
+        // ConsentPromptBehaviorAdmin=5 prompts for non-Windows binaries — blocks bare-metal
+        // and Smoke tenure alike. Keep EnableLUA; auto-elevate Administrators (no Consent UI).
+        Soft(
+            @"Microsoft\Windows\CurrentVersion\Policies\System",
+            "ConsentPromptBehaviorAdmin",
+            "0",
+            "uac"),
+        Soft(
+            @"Microsoft\Windows\CurrentVersion\Policies\System",
+            "PromptOnSecureDesktop",
+            "0",
+            "uac"),
     ];
 
     private static readonly OfflinePolicyRow[] OneDriveDisable =

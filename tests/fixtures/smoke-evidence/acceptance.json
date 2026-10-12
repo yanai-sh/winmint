@@ -2,5 +2,6 @@
   "schemaVersion": "winmint.smoke.acceptance/v1",
   "splashBeforeExplorer": true,
   "outcome": "Complete",
-  "lane": "Test"
+  "lane": "Test",
+  "liveHandoffVerified": false
 }

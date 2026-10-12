@@ -223,6 +223,8 @@ public class UnlockTimeoutTests
 
         public void WriteHeartbeat(DateTimeOffset utcNow) => HeartbeatsWritten.Add(utcNow);
 
+        public void WriteTenurePhase(string code) { }
+
         public void WriteCheckpoint(CheckpointState state) { }
 
         public CheckpointState? TryReadCheckpoint() => null;

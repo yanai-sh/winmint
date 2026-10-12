@@ -345,7 +345,7 @@ if (-not $SkipApply) {
     Write-SmokeStatus -Path $statusPath -Phase (Resolve-SmokePhase -HostStage apply) `
         -VmName $VmName -StallMinutesLeft $StallMinutes -WallMinutesLeft $WallClockMinutes `
         -LastHostLine "Applying Profile=$applyProfilePath" -OutputIso $null -RunId $runId
-    Write-SmokeHostLine -Name "Applying Profile=$applyProfilePath Iso=$Iso Work=$Work (Test lane, smoke stubs on)…" -Activity apply
+    Write-SmokeHostLine -Name "Applying Profile=$applyProfilePath Iso=$Iso Work=$Work (Test lane, packages on)…" -Activity apply
     $runScratchHygiene = $true
     # Job Object KILL_ON_JOB_CLOSE: killing this waiter stops Apply. `just discard-stale-mount` only after hard-kill mid-DISM Invalid mounts.
     try {

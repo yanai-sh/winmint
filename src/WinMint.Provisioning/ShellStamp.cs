@@ -161,11 +161,7 @@ internal static class ShellStamp
             return;
         }
 
-        string sourceDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".local",
-            "share",
-            "chezmoi");
+        string sourceDir = Path.Combine(XdgPaths.DataHome, "chezmoi");
         string seedMarker = Path.Combine(sourceDir, ".winmint-seeded");
         if (File.Exists(seedMarker))
         {

@@ -47,14 +47,24 @@ public sealed record SessionPolicy(
     TimeSpan SettleDeadline,
     TimeSpan SettlePollInterval,
     TimeSpan FailedDwell,
-    TimeSpan StaleTenureThreshold)
+    TimeSpan StaleTenureThreshold,
+    // Outbound wait when RequiresNetwork (Hyper-V Offline OOBE may attach NAT after first paint).
+    TimeSpan NetworkWaitDeadline = default,
+    // Per winget/scoop package spawn — kills hung installer trees via Process.RunAsync cancel.
+    TimeSpan PackageJobTimeout = default)
 {
     public static SessionPolicy SmokeDefaults { get; } = new(
-        WallClockTimeout: TimeSpan.FromMinutes(90),
+        // Host smoke wall is 180m (Apply + guest). Tenure starts at FirstLogon — needs room
+        // for ProductPosture AppX safety-net + winget/scoop after network.ok (SL7 OnlineOobe).
+        WallClockTimeout: TimeSpan.FromMinutes(150),
         SettleDeadline: TimeSpan.FromSeconds(120),
         SettlePollInterval: TimeSpan.FromSeconds(2),
         FailedDwell: TimeSpan.FromSeconds(5),
-        StaleTenureThreshold: TimeSpan.FromMinutes(15));
+        StaleTenureThreshold: TimeSpan.FromMinutes(15),
+        NetworkWaitDeadline: TimeSpan.FromSeconds(120),
+        // Safety net: Nilesoft.Shell winget→WiX MSI OnInstall waits on `shell.exe -restart`.
+        // Job runner nudges explorer.exe first; this caps any remaining hang so tenure continues.
+        PackageJobTimeout: TimeSpan.FromMinutes(20));
 }
 
 public interface IConnectivityProbe
@@ -328,6 +338,9 @@ public interface ICheckpointStore
     TenureState ReadTenure();
 
     void WriteHeartbeat(DateTimeOffset utcNow);
+
+    /// <summary>Last splash/session phase code under ProgramData (survives mid-settle death).</summary>
+    void WriteTenurePhase(string code);
 
     void WriteCheckpoint(CheckpointState state);
 

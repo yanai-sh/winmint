@@ -122,10 +122,10 @@ watch-apply WORK="":
 apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STUBS="false":
     Write-Host 'Maintainer Apply can take multiple hours (DISM I/O). Prefer just check day-to-day.'; $stubs = @(); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $stubs = @('--include-smoke-stubs') }; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}', '--package-audit-strict') + $stubs; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
 
-# Smoke Apply intent: Test lane + stubs + smoke plumbing (no outbound FirstLogon packages).
-# Owns Offline-capable plan; Offline OOBE NIC defer stays in Invoke-Smoke.
-apply-smoke-maintainer ISO WORK PROFILE:
-    Write-Host 'Smoke Apply (stubs + plumbing). Prefer just check day-to-day.'; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}', '--package-audit-strict', '--include-smoke-stubs', '--smoke-plumbing'); & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
+# Smoke Apply intent: Test lane + real FirstLogon packages (Nilesoft / winget tenure).
+# Always --include-wsl-platform (Hyper-V mocks; no nested virt). Stubs+plumbing: INCLUDE_SMOKE_STUBS=true.
+apply-smoke-maintainer ISO WORK PROFILE INCLUDE_SMOKE_STUBS="false":
+    Write-Host 'Smoke Apply (packages on; WSL platform mocked). Prefer just check day-to-day.'; $extra = @('--include-wsl-platform'); if ('{{INCLUDE_SMOKE_STUBS}}' -eq 'true') { $extra += @('--include-smoke-stubs', '--smoke-plumbing') }; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}', '--package-audit-strict') + $extra; & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
 
 # S4 Hyper-V Smoke — not in `just check`. Inner loop: servicing→host-apply; guest-only→smoke-maintainer-skip-apply;
 # assert bar→smoke-assert; boot/handoff integrate→full smoke-maintainer (Assert-ApplyEvidence runs before Hyper-V).

@@ -149,7 +149,34 @@ public class OnlineDebloatSessionTests
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("network.required.offline", result.FinalStatus.Code);
+        Assert.Contains(evidence.Documents[0].Phases, p => p == "network.wait");
         Assert.Contains(evidence.Documents[0].Phases, p => p == "network.required.offline");
+    }
+
+    [Fact]
+    public async Task Shell_requiresNetwork_waits_then_ok_when_connectivity_appears()
+    {
+        RecordingEvidenceSink evidence = new();
+        DelayedConnectivityProbe probe = new(failCount: 3);
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle([new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)]) with
+            {
+                RemoveProvisionedAppx = ["Microsoft.BingNews"],
+                RequiresNetwork = true,
+            },
+            Env(
+                new FakeGuestMachine
+                {
+                    Appx = new RecordingAppx(),
+                    Connectivity = probe,
+                },
+                evidence),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Contains(evidence.Documents[0].Phases, p => p == "network.wait");
+        Assert.Contains(evidence.Documents[0].Phases, p => p == "network.ok");
+        Assert.DoesNotContain(evidence.Documents[0].Phases, p => p == "network.required.offline");
     }
 
     [Fact]
@@ -206,5 +233,21 @@ public class OnlineDebloatSessionTests
     {
         public Task<bool> HasOutboundNetworkAsync(CancellationToken ct = default) =>
             Task.FromResult(false);
+    }
+
+    private sealed class DelayedConnectivityProbe(int failCount) : IConnectivityProbe
+    {
+        private int _remaining = failCount;
+
+        public Task<bool> HasOutboundNetworkAsync(CancellationToken ct = default)
+        {
+            if (_remaining > 0)
+            {
+                _remaining--;
+                return Task.FromResult(false);
+            }
+
+            return Task.FromResult(true);
+        }
     }
 }

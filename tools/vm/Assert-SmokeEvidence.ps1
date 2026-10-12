@@ -105,8 +105,24 @@ $requiredPhaseThrows = [ordered]@{
     'shell.chrome.live'        = 'live shell chrome missing: phases must contain shell.chrome.live'
     'shell.chrome.settled'     = 'settled shell chrome missing: phases must contain shell.chrome.settled'
 }
+# WSL mock only when the plan scheduled wsl.platform (or guest already emitted a wsl phase).
+$requireWslMock = @($phases | Where-Object { $_ -like 'jobs.wsl.*' }).Count -gt 0
+$applyExpectedPath = Join-Path $EvidenceDir 'apply\expected-evidence.json'
+if (Test-Path -LiteralPath $applyExpectedPath -PathType Leaf) {
+    try {
+        $applyExpected = Get-Content -LiteralPath $applyExpectedPath -Raw -Encoding utf8 | ConvertFrom-Json
+        if (@($applyExpected.requiredJobKinds) -contains 'wsl.platform') {
+            $requireWslMock = $true
+        }
+    }
+    catch {
+        # ponytail: expected-evidence optional for fixtures that only ship guest/
+        $null = $_
+    }
+}
 foreach ($phase in @($s4Facts.RequiredPhases)) {
     if ($phase -ceq $firstPaintPhase) { continue }
+    if ($phase -ceq 'jobs.wsl.platform.mocked' -and -not $requireWslMock) { continue }
     if ($phases -ccontains $phase) { continue }
     if ($requiredPhaseThrows.Contains($phase)) {
         throw $requiredPhaseThrows[$phase]

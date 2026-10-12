@@ -1,10 +1,19 @@
 namespace WinMint.Provisioning;
 
 /// <summary>Heartbeat + checkpoint under ProgramData (plain phase string, same shape as heartbeat).</summary>
-public sealed class FileCheckpointStore(string programDataRoot) : ICheckpointStore
+public sealed class FileCheckpointStore : ICheckpointStore
 {
-    private readonly string _checkpointPath = Path.Combine(RequireRoot(programDataRoot), "checkpoint.json");
-    private readonly string _heartbeatPath = Path.Combine(RequireRoot(programDataRoot), "heartbeat");
+    private readonly string _checkpointPath;
+    private readonly string _heartbeatPath;
+    private readonly string _tenurePhasePath;
+
+    public FileCheckpointStore(string programDataRoot)
+    {
+        string root = RequireRoot(programDataRoot);
+        _checkpointPath = Path.Combine(root, "checkpoint.json");
+        _heartbeatPath = Path.Combine(root, "heartbeat");
+        _tenurePhasePath = Path.Combine(root, "tenure-phase");
+    }
 
     private static string RequireRoot(string programDataRoot)
     {
@@ -36,6 +45,20 @@ public sealed class FileCheckpointStore(string programDataRoot) : ICheckpointSto
     {
         EnsureDir(_heartbeatPath);
         File.WriteAllText(_heartbeatPath, utcNow.ToString("o"));
+    }
+
+    public void WriteTenurePhase(string code)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+        try
+        {
+            EnsureDir(_tenurePhasePath);
+            File.WriteAllText(_tenurePhasePath, code);
+        }
+        catch
+        {
+            // ponytail: breadcrumb only — mid-settle death diagnosis; never fail tenure
+        }
     }
 
     public void WriteCheckpoint(CheckpointState state)

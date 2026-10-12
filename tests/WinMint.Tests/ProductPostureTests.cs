@@ -128,6 +128,7 @@ public class ProductPostureTests
                 "sudo",
                 "taskbar",
                 "taskview",
+                "uac",
                 "widgets",
                 "wpbt",
             ],
@@ -141,6 +142,14 @@ public class ProductPostureTests
         Assert.Contains("policy.store.AutoDownload", digestKeys);
         Assert.Contains("policy.wpbt.DisableWpbtExecution", digestKeys);
         Assert.Contains("policy.filesystem.LongPathsEnabled", digestKeys);
+        Assert.Contains("policy.uac.ConsentPromptBehaviorAdmin", digestKeys);
+        Assert.Contains("policy.uac.PromptOnSecureDesktop", digestKeys);
+        Assert.Contains(
+            rows,
+            static row => row.Name == "ConsentPromptBehaviorAdmin" && row.Data == "0" && row.Family == "uac");
+        Assert.Contains(
+            rows,
+            static row => row.Name == "PromptOnSecureDesktop" && row.Data == "0" && row.Family == "uac");
         Assert.Contains("policy.deviceInstaller.DisableCoInstallers", digestKeys);
         Assert.Contains("policy.taskbar.LayoutXMLPath", digestKeys);
         Assert.Contains("policy.onedrive.DisableFileSyncNGSC", digestKeys);
@@ -217,6 +226,37 @@ public class ProductPostureTests
         Assert.All(
             rows.Where(static row => row.SubKey.Contains("User Shell Folders", StringComparison.Ordinal)),
             static row => Assert.DoesNotContain("OneDrive", row.Data, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            rows,
+            row => row.SubKey == "Environment"
+                && row.Name == "XDG_CONFIG_HOME"
+                && row.RegType == "REG_EXPAND_SZ"
+                && row.Data == @"%USERPROFILE%\.config");
+        Assert.Contains(
+            rows,
+            row => row.SubKey == "Environment"
+                && row.Name == "XDG_DATA_HOME"
+                && row.RegType == "REG_EXPAND_SZ"
+                && row.Data == @"%USERPROFILE%\.local\share");
+        Assert.Contains(
+            rows,
+            row => row.SubKey == "Environment"
+                && row.Name == "XDG_STATE_HOME"
+                && row.RegType == "REG_EXPAND_SZ"
+                && row.Data == @"%USERPROFILE%\.local\state");
+        Assert.Contains(
+            rows,
+            row => row.SubKey == "Environment"
+                && row.Name == "XDG_CACHE_HOME"
+                && row.RegType == "REG_EXPAND_SZ"
+                && row.Data == @"%USERPROFILE%\.cache");
+        Assert.DoesNotContain(
+            rows,
+            row => row.SubKey == "Environment" && row.Name == "KOMOREBI_CONFIG_HOME");
+        Assert.Contains(ProductPosture.QuietLabels, static label => label == "XDG basedir only");
+        Assert.DoesNotContain(
+            ProductPosture.QuietLabels,
+            static label => label.Contains("Komorebi", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(GuestChrome.BloomWallpaperPath, ShellChromeLayout.WallpaperPath);
     }
 
@@ -306,6 +346,20 @@ public class ProductPostureTests
         {
             Assert.Contains(id, batch.PackageId!, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    [Fact]
+    public void Plan_never_stamps_komorebi_config_home_even_when_selected()
+    {
+        Result<BuildArtifacts, Failure> with = BuildPlan.Plan(
+            Lab(winget: [ProductPosture.KomorebiWingetId]));
+        Assert.True(with.IsOk, with.IsOk ? null : with.Error.Message);
+        Assert.DoesNotContain(
+            with.Value.OfflineDefaultUser,
+            row => row.SubKey == "Environment" && row.Name == "KOMOREBI_CONFIG_HOME");
+        Assert.Contains(
+            with.Value.OfflineDefaultUser,
+            row => row.SubKey == "Environment" && row.Name == "XDG_CONFIG_HOME");
     }
 
     private static Profile Lab(IReadOnlyList<string>? winget = null) =>

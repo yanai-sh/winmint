@@ -266,6 +266,29 @@ internal static partial class ProvisioningJobRunner
         }
     }
 
+    /// <summary>
+    /// Nilesoft MSI OnInstall runs <c>shell.exe -r -s -t -restart</c> and waits forever when no
+    /// explorer.exe process exists (Supervisor is Winlogon Shell during FirstLogon jobs).
+    /// </summary>
+    // ponytail: starts explorer while Supervisor is still Shell — ceiling = splash/Shell exclusivity race; upgrade = defer MSI until after handoff or JobObject-scoped install.
+    internal static async Task EnsureExplorerForNilesoftMsiAsync(IGuestMachine guest, CancellationToken ct)
+    {
+        if (guest.IsExplorerProcessRunning())
+        {
+            return;
+        }
+
+        guest.TryStartExplorerIfMissing();
+        for (int i = 0; i < 50 && !guest.IsExplorerProcessRunning(); i++)
+        {
+            await Task.Delay(100, ct).ConfigureAwait(false);
+        }
+    }
+
+    private static bool IsNilesoftShell(string? packageId) =>
+        !string.IsNullOrWhiteSpace(packageId)
+        && packageId.Equals(PackageIds.NilesoftShell, StringComparison.OrdinalIgnoreCase);
+
     private static async Task<JobsRunResult?> RunWingetImportPackagesAsync(
         JobRunnerEnv env,
         JobContext context,
@@ -297,14 +320,44 @@ internal static partial class ProvisioningJobRunner
                 continue;
             }
 
+            if (IsNilesoftShell(package.Id))
+            {
+                env.ReportStatus(new SessionStatus(
+                    $"jobs.winget.{package.Id}.explorerNudge",
+                    "Starting explorer so Nilesoft MSI -restart can finish."));
+                await EnsureExplorerForNilesoftMsiAsync(env.Guest, ct).ConfigureAwait(false);
+            }
+
             string logPath = WingetLogPath(package.Id);
             env.ReportStatus(new SessionStatus(
                 $"jobs.winget.{package.Id}.running",
                 $"{package.Id} in progress…"));
-            ProcessStartResult started = await env.Guest.Processes.RunAsync(
-                wingetExe,
-                BuildWingetInstallArguments(package.Id, package.OverrideArguments, logPath),
-                ct).ConfigureAwait(false);
+            ProcessStartResult started;
+            try
+            {
+                started = await RunPackageProcessAsync(
+                        env,
+                        ProvisionJobKind.WingetImport,
+                        wingetExe,
+                        BuildWingetInstallArguments(package.Id, package.OverrideArguments, logPath),
+                        ct)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException ex)
+            {
+                anyFailed = true;
+                JobsRunResult? timedOut = context.RecordNamedPackageFailure(
+                    package.Id,
+                    exitCode: -1,
+                    $"{package.Id}: {ex.Message}");
+                if (timedOut is not null)
+                {
+                    return timedOut.Value;
+                }
+
+                continue;
+            }
+
             if (started.ExitCode == 0)
             {
                 continue;

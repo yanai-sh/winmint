@@ -17,23 +17,11 @@ internal static class ShellDesktopLayout
             "WinMint",
             "thide");
 
-    public static string DefaultYasbConfigDir =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".config",
-            "yasb");
+    public static string DefaultYasbConfigDir => Path.Combine(XdgPaths.ConfigHome, "yasb");
 
-    public static string DefaultKomorebiConfigDir =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".config",
-            "komorebi");
+    public static string DefaultKomorebiConfigDir => XdgPaths.KomorebiConfigHome;
 
-    public static string DefaultWhkdrcPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".config",
-            "whkdrc");
+    public static string DefaultWhkdrcPath => Path.Combine(XdgPaths.ConfigHome, "whkdrc");
 
     public static string SelectYasbVariant(bool komorebi) => komorebi ? "komorebi" : "native";
 

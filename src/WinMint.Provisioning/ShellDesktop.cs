@@ -14,7 +14,9 @@ internal sealed record ShellDesktopRequest(
     string YasbConfigDir,
     string KomorebiConfigDir,
     string WhkdrcPath,
-    string? ArchitectureOverride = null);
+    string? ArchitectureOverride = null,
+    // Test override; production null → %USERPROFILE%\komorebi.json.
+    string? KomorebiDocLinkPath = null);
 
 internal sealed record ShellDesktopApplyResult(
     string? TaskbarSurface,
@@ -89,7 +91,7 @@ internal static class ShellDesktop
         {
             try
             {
-                komorebiOk = await TryConfigureKomorebiAsync(request, ct).ConfigureAwait(false);
+                komorebiOk = await TryConfigureKomorebiAsync(request, notes, ct).ConfigureAwait(false);
                 if (!komorebiOk)
                 {
                     notes.Add("komorebi configure failed");
@@ -220,7 +222,10 @@ internal static class ShellDesktop
         return disable.ExitCode == 0;
     }
 
-    private static async Task<bool> TryConfigureKomorebiAsync(ShellDesktopRequest request, CancellationToken ct)
+    private static async Task<bool> TryConfigureKomorebiAsync(
+        ShellDesktopRequest request,
+        List<string> notes,
+        CancellationToken ct)
     {
         string templatePath = Path.Combine(request.GuestDesktopRoot, "komorebi", "komorebi.json.template");
         string whkdSource = Path.Combine(request.GuestDesktopRoot, "komorebi", "whkdrc");
@@ -229,7 +234,9 @@ internal static class ShellDesktop
             return false;
         }
 
-        Directory.CreateDirectory(request.KomorebiConfigDir);
+        // Canonical under XDG_CONFIG_HOME\komorebi; USERPROFILE\komorebi.json is a doc-path link.
+        string komorebiDir = request.KomorebiConfigDir;
+        Directory.CreateDirectory(komorebiDir);
         string? whkdParent = Path.GetDirectoryName(request.WhkdrcPath);
         if (!string.IsNullOrWhiteSpace(whkdParent))
         {
@@ -245,10 +252,14 @@ internal static class ShellDesktop
             await File.ReadAllTextAsync(templatePath, ct).ConfigureAwait(false),
             monitorsJson,
             displayPrefsJson);
-        await File.WriteAllTextAsync(
-            Path.Combine(request.KomorebiConfigDir, "komorebi.json"),
-            rendered,
-            ct).ConfigureAwait(false);
+        string configPath = Path.GetFullPath(Path.Combine(komorebiDir, "komorebi.json"));
+        await File.WriteAllTextAsync(configPath, rendered, ct).ConfigureAwait(false);
+
+        string docLink = request.KomorebiDocLinkPath
+            ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "komorebi.json");
+        TryLinkDiscoverability(docLink, configPath, notes);
 
         string? komorebic = TryResolveOnPath("komorebic.exe") ?? TryResolveOnPath("komorebic");
         if (komorebic is null)
@@ -256,11 +267,59 @@ internal static class ShellDesktop
             return false;
         }
 
+        // Explicit --config at XDG canonical (no KOMOREBI_CONFIG_HOME stamp).
         ProcessStartResult enable = await request.Processes.RunAsync(
             komorebic,
-            ["enable-autostart", "--whkd"],
+            ["enable-autostart", "--config", configPath, "--whkd"],
             ct).ConfigureAwait(false);
         return enable.ExitCode == 0;
+    }
+
+    /// <summary>
+    /// Symlink Komorebi's documented USERPROFILE path to the XDG canonical file.
+    /// Fail-open: existing files and privilege failures become notes, not hard errors.
+    /// </summary>
+    internal static void TryLinkDiscoverability(string linkPath, string targetPath, List<string> notes)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(linkPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+        ArgumentNullException.ThrowIfNull(notes);
+
+        try
+        {
+            string fullTarget = Path.GetFullPath(targetPath);
+            string fullLink = Path.GetFullPath(linkPath);
+            if (string.Equals(fullLink, fullTarget, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var info = new FileInfo(fullLink);
+            if (info.Exists)
+            {
+                string? existing = info.LinkTarget;
+                if (existing is not null
+                    && string.Equals(Path.GetFullPath(existing), fullTarget, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                notes.Add($"komorebi doc-link skipped: {Path.GetFileName(fullLink)} already exists");
+                return;
+            }
+
+            if (Directory.Exists(fullLink))
+            {
+                notes.Add($"komorebi doc-link skipped: {Path.GetFileName(fullLink)} already exists");
+                return;
+            }
+
+            File.CreateSymbolicLink(fullLink, fullTarget);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            notes.Add($"komorebi doc-link skipped: {ex.Message}");
+        }
     }
 
     private static string? ExtractThideExe(string zipPath, string installDir)

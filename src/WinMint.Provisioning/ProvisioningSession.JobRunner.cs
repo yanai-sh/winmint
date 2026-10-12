@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using WinMint.Contracts;
 
 namespace WinMint.Provisioning;
@@ -10,6 +12,8 @@ internal sealed class WslMockState
 /// <summary>
 /// Tenure-local job knobs + guest. Guest capabilities stay on <see cref="IGuestMachine"/> —
 /// do not re-project them into parallel fields.
+/// <paramref name="RecordPhaseQuiet"/> appends evidence phases without splash/checkpoint I/O
+/// (bulk safety-net marks).
 /// </summary>
 internal sealed record JobRunnerEnv(
     IGuestMachine Guest,
@@ -21,7 +25,9 @@ internal sealed record JobRunnerEnv(
     TimeSpan WallClockTimeout,
     long TenureStartTimestamp,
     int StartIndex,
-    WslMockState WslMock);
+    WslMockState WslMock,
+    Action<string>? RecordPhaseQuiet = null,
+    TimeSpan PackageJobTimeout = default);
 
 internal enum JobsRunKind
 {
@@ -469,10 +475,32 @@ internal static partial class ProvisioningJobRunner
             ProcessStartResult started;
             try
             {
+                if (job.Kind is ProvisionJobKind.Winget && IsNilesoftShell(job.PackageId))
+                {
+                    env.ReportStatus(new SessionStatus(
+                        $"jobs.{job.Id}.explorerNudge",
+                        "Starting explorer so Nilesoft MSI -restart can finish."));
+                    await EnsureExplorerForNilesoftMsiAsync(env.Guest, ct).ConfigureAwait(false);
+                }
+
                 env.ReportStatus(new SessionStatus(
                     $"jobs.{job.Id}.running",
                     $"{job.Id} in progress…"));
-                started = await env.Guest.Processes.RunAsync(fileName, arguments, ct).ConfigureAwait(false);
+                started = await RunPackageProcessAsync(env, job.Kind, fileName, arguments, ct)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException ex)
+            {
+                // Per-package CancelAfter — winget→msiexec hang (Nilesoft.Shell OnInstall CA).
+                JobsRunResult? timeoutFail = context.RecordPackageFailure(
+                    "jobs.package.timeout",
+                    $"{job.Id}: {ex.Message}");
+                if (timeoutFail is not null)
+                {
+                    return timeoutFail.Value;
+                }
+
+                continue;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -603,6 +631,84 @@ internal static partial class ProvisioningJobRunner
         or ProvisionJobKind.Scoop
         or ProvisionJobKind.ScoopBatch
         or ProvisionJobKind.ShellStamp;
+
+    private static bool UsesPackageJobTimeout(ProvisionJobKind kind) => kind is
+        ProvisionJobKind.Winget
+        or ProvisionJobKind.WingetImport
+        or ProvisionJobKind.Scoop
+        or ProvisionJobKind.ScoopBatch;
+
+    /// <summary>
+    /// Run a package installer with <see cref="JobRunnerEnv.PackageJobTimeout"/>.
+    /// Cancel kills the Process.RunAsync child tree (winget→msiexec).
+    /// </summary>
+    private static async Task<ProcessStartResult> RunPackageProcessAsync(
+        JobRunnerEnv env,
+        ProvisionJobKind kind,
+        string fileName,
+        IReadOnlyList<string> arguments,
+        CancellationToken ct)
+    {
+        TimeSpan limit = env.PackageJobTimeout;
+        if (!UsesPackageJobTimeout(kind) || limit <= TimeSpan.Zero)
+        {
+            return await env.Guest.Processes.RunAsync(fileName, arguments, ct).ConfigureAwait(false);
+        }
+
+        using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linked.CancelAfter(limit);
+        try
+        {
+            return await env.Guest.Processes.RunAsync(fileName, arguments, linked.Token)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested && IsPackageJobCancel(ex))
+        {
+            // AggregateException / TaskCanceledException on AOT cancel — must not shell.crash.
+            TryKillOrphanMsiexec();
+            throw new TimeoutException(
+                $"package install timed out after {limit.TotalMinutes:0.#}m (installer tree cancelled).",
+                ex);
+        }
+    }
+
+    private static bool IsPackageJobCancel(Exception ex) =>
+        ex is OperationCanceledException or TimeoutException
+        || (ex is AggregateException agg && agg.Flatten().InnerExceptions.Any(IsPackageJobCancel));
+
+    private static void TryKillOrphanMsiexec()
+    {
+        // ponytail: Process.RunAsync cancel kills the winget tree; orphan msiexec (WiX CA) is rare.
+        // Cap: same interactive session only (not session-0) — JobObject if orphans return.
+        try
+        {
+            int session = Process.GetCurrentProcess().SessionId;
+            foreach (Process msiexec in Process.GetProcessesByName("msiexec"))
+            {
+                try
+                {
+                    if (msiexec.SessionId != session)
+                    {
+                        continue;
+                    }
+
+                    msiexec.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // best-effort
+                }
+                finally
+                {
+                    msiexec.Dispose();
+                }
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
 
     private static void WritePackagesEvidence(
         IEvidenceSink evidence,
