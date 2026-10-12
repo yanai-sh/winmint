@@ -487,6 +487,7 @@ public static class HostCompile
             PackageStrict = HostDefaults.ResolvePackageStrict(options.ImageQuality, options.PackageStrict),
             IncludeSmokeStubs = options.IncludeSmokeStubs,
             SmokePlumbing = options.SmokePlumbing,
+            IncludeWslPlatform = options.IncludeWslPlatform,
             PackageCatalog = options.PackageCatalog,
         };
 
@@ -581,6 +582,7 @@ public sealed record HostComposeOptions(
     bool PackageAuditStrict = false,
     bool IncludeSmokeStubs = false,
     bool SmokePlumbing = false,
+    bool IncludeWslPlatform = false,
     string? ImageArchitecture = null,
     int? WindowsBuild = null,
     string? ProfileName = null,

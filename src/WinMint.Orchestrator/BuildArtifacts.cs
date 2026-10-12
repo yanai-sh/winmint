@@ -45,6 +45,12 @@ public sealed record RunOptions
     /// </summary>
     public bool SmokePlumbing { get; init; }
 
+    /// <summary>
+    /// Plan <c>wsl.platform</c> so Hyper-V Smoke can emit <c>jobs.wsl.platform.mocked</c>
+    /// without authored WSL distros or Smoke plumbing. Default false.
+    /// </summary>
+    public bool IncludeWslPlatform { get; init; }
+
     /// <summary>Override embedded package catalog (tests); null uses <see cref="PackageCatalog.Default"/>.</summary>
     public PackageCatalog? PackageCatalog { get; init; }
 }

@@ -79,6 +79,12 @@ internal static class Program
                 "Smoke plumbing: omit outbound package jobs and requiresNetwork=false. Requires --include-smoke-stubs; Test lane only.",
         };
 
+        Option<bool> includeWslPlatformOption = new("--include-wsl-platform")
+        {
+            Description =
+                "Plan wsl.platform (Hyper-V Smoke mocks it). No stubs; no real WSL distro install required.",
+        };
+
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")
         {
             profileArgument,
@@ -88,6 +94,7 @@ internal static class Program
             packageStrictOption,
             includeSmokeStubsOption,
             smokePlumbingOption,
+            includeWslPlatformOption,
         };
         validateCommand.SetAction(parseResult =>
         {
@@ -99,7 +106,8 @@ internal static class Program
                 parseResult.GetValue(packageAuditStrictOption),
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption),
-                parseResult.GetValue(smokePlumbingOption));
+                parseResult.GetValue(smokePlumbingOption),
+                parseResult.GetValue(includeWslPlatformOption));
         });
 
         Command planCommand = new("plan", "Parse and plan a Profile; emit plan artifacts.")
@@ -112,6 +120,7 @@ internal static class Program
             packageStrictOption,
             includeSmokeStubsOption,
             smokePlumbingOption,
+            includeWslPlatformOption,
         };
         planCommand.SetAction(parseResult =>
         {
@@ -125,7 +134,8 @@ internal static class Program
                 parseResult.GetValue(packageAuditStrictOption),
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption),
-                parseResult.GetValue(smokePlumbingOption));
+                parseResult.GetValue(smokePlumbingOption),
+                parseResult.GetValue(includeWslPlatformOption));
         });
 
         Command buildCommand = new("build", "Plan a Profile and apply ImageServicing (one elevated Invoke-ServicingPlan).")
@@ -141,6 +151,7 @@ internal static class Program
             packageStrictOption,
             includeSmokeStubsOption,
             smokePlumbingOption,
+            includeWslPlatformOption,
         };
         buildCommand.SetAction(async parseResult =>
         {
@@ -160,9 +171,9 @@ internal static class Program
                 parseResult.GetValue(packageAuditStrictOption),
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption),
-                parseResult.GetValue(smokePlumbingOption));
+                parseResult.GetValue(smokePlumbingOption),
+                parseResult.GetValue(includeWslPlatformOption));
         });
-
         Command packagesCheckCommand = new(
             "packages-check",
             "Refresh the live ARM64 package catalog proof.");
@@ -203,6 +214,7 @@ internal static class Program
             packageStrictOption,
             includeSmokeStubsOption,
             smokePlumbingOption,
+            includeWslPlatformOption,
         };
         packCommand.SetAction(parseResult =>
         {
@@ -216,9 +228,9 @@ internal static class Program
                 parseResult.GetValue(packageAuditStrictOption),
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption),
-                parseResult.GetValue(smokePlumbingOption));
+                parseResult.GetValue(smokePlumbingOption),
+                parseResult.GetValue(includeWslPlatformOption));
         });
-
         RootCommand root = new("WinMint — Profile plan and ImageServicing build")
         {
             validateCommand,
@@ -240,7 +252,8 @@ internal static class Program
         bool packageAuditStrict,
         PackageStrictOverride packageStrict,
         bool includeSmokeStubs,
-        bool smokePlumbing)
+        bool smokePlumbing,
+        bool includeWslPlatform)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -258,7 +271,8 @@ internal static class Program
                     PackageAuditStrict: packageAuditStrict,
                     PackageStrict: packageStrict,
                     IncludeSmokeStubs: includeSmokeStubs,
-                    SmokePlumbing: smokePlumbing)))
+                    SmokePlumbing: smokePlumbing,
+                    IncludeWslPlatform: includeWslPlatform)))
         {
             return exit;
         }
@@ -332,7 +346,8 @@ internal static class Program
         bool packageAuditStrict,
         PackageStrictOverride packageStrict,
         bool includeSmokeStubs,
-        bool smokePlumbing)
+        bool smokePlumbing,
+        bool includeWslPlatform)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -350,7 +365,8 @@ internal static class Program
                     PackageAuditStrict: packageAuditStrict,
                     PackageStrict: packageStrict,
                     IncludeSmokeStubs: includeSmokeStubs,
-                    SmokePlumbing: smokePlumbing)))
+                    SmokePlumbing: smokePlumbing,
+                    IncludeWslPlatform: includeWslPlatform)))
         {
             return exit;
         }
@@ -367,7 +383,8 @@ internal static class Program
         bool packageAuditStrict,
         PackageStrictOverride packageStrict,
         bool includeSmokeStubs,
-        bool smokePlumbing)
+        bool smokePlumbing,
+        bool includeWslPlatform)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -385,7 +402,8 @@ internal static class Program
                     PackageAuditStrict: packageAuditStrict,
                     PackageStrict: packageStrict,
                     IncludeSmokeStubs: includeSmokeStubs,
-                    SmokePlumbing: smokePlumbing)))
+                    SmokePlumbing: smokePlumbing,
+                    IncludeWslPlatform: includeWslPlatform)))
         {
             return exit;
         }
@@ -412,7 +430,8 @@ internal static class Program
         bool packageAuditStrict,
         PackageStrictOverride packageStrict,
         bool includeSmokeStubs,
-        bool smokePlumbing)
+        bool smokePlumbing,
+        bool includeWslPlatform)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -431,6 +450,7 @@ internal static class Program
                     PackageAuditStrict: packageAuditStrict,
                     IncludeSmokeStubs: includeSmokeStubs,
                     SmokePlumbing: smokePlumbing,
+                    IncludeWslPlatform: includeWslPlatform,
                     ImageArchitecture: imageArchitecture))
             .ConfigureAwait(false);
         if (!composed.IsOk)

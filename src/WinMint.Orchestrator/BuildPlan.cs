@@ -457,7 +457,8 @@ public static partial class BuildPlan
             catalog,
             imageArchitecture,
             options.PackageAuditStrict,
-            smokePlumbing: options.SmokePlumbing);
+            smokePlumbing: options.SmokePlumbing,
+            includeWslPlatform: options.IncludeWslPlatform);
         if (!packages.IsOk)
         {
             return Result.Fail<BuildArtifacts, Failure>(packages.Error);

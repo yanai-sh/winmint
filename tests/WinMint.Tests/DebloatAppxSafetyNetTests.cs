@@ -40,13 +40,16 @@ public class DebloatAppxSafetyNetTests
         Assert.Equal(
             ["Microsoft.BingNews_8wekyb3d8bbwe"],
             appx.EnsuredDeprovisionedMarks);
-        string[] effectPhases =
-        [
-            "removed.appx.online.Microsoft.BingNews",
+        Assert.Contains("Status:removed.appx.online.Microsoft.BingNews", splash.Events);
+        Assert.Contains("Status:deprovisioned.appx.ok", splash.Events);
+        Assert.Contains("removed.appx.online.Microsoft.BingNews", evidence.Documents[^1].Phases);
+        Assert.Contains("deprovisioned.appx.ok", evidence.Documents[^1].Phases);
+        Assert.Contains(
             "deprovisioned.appx.Microsoft.BingNews_8wekyb3d8bbwe",
-        ];
-        Assert.All(effectPhases, phase => Assert.Contains($"Status:{phase}", splash.Events));
-        Assert.All(effectPhases, phase => Assert.Contains(phase, evidence.Documents[^1].Phases));
+            evidence.Documents[^1].Phases);
+        Assert.DoesNotContain(
+            splash.Events,
+            e => e.StartsWith("Status:deprovisioned.appx.Microsoft.", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -87,6 +90,29 @@ public class DebloatAppxSafetyNetTests
     }
 
     [Fact]
+    public async Task Shell_appx_safetyNet_completes_when_provisioned_enum_access_denied()
+    {
+        // Medium-IL FirstLogon: FindProvisionedPackages is access-denied; WinRT returns empty.
+        // Offline DISM already removed; safety net still stamps Deprovisioned marks.
+        RecordingAppx appx = new() { FindProvisionedAccessDenied = true };
+        appx.Provisioned.Add(new AppxPackageInfo(
+            "Microsoft.BingNews_1.0.0.0_neutral__8wekyb3d8bbwe",
+            "Microsoft.BingNews_8wekyb3d8bbwe",
+            "Microsoft.BingNews"));
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(
+                jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
+                removeProvisionedAppx: ["Microsoft.BingNews"]),
+            Env(new FakeGuestMachine { Appx = appx }, new RecordingEvidenceSink()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Empty(appx.DeprovisionedFamilyNames);
+        Assert.Equal(["Microsoft.BingNews_8wekyb3d8bbwe"], appx.EnsuredDeprovisionedMarks);
+    }
+
+    [Fact]
     public async Task Shell_appx_safetyNet_stamps_deprovisioned_when_already_absent()
     {
         // Offline DISM already removed packages: live finds empty. Must still stamp
@@ -111,12 +137,16 @@ public class DebloatAppxSafetyNetTests
         Assert.DoesNotContain(
             splash.Events,
             e => e.StartsWith("Status:removed.appx.online.", StringComparison.Ordinal));
-        Assert.Contains("Status:deprovisioned.appx.Microsoft.BingNews_8wekyb3d8bbwe", splash.Events);
-        Assert.Contains("Status:deprovisioned.appx.Microsoft.BingWeather_8wekyb3d8bbwe", splash.Events);
+        Assert.Contains("Status:deprovisioned.appx.ok", splash.Events);
+        Assert.Contains("deprovisioned.appx.ok", evidence.Documents[^1].Phases);
         Assert.Contains("deprovisioned.appx.Microsoft.BingNews_8wekyb3d8bbwe", evidence.Documents[^1].Phases);
+        Assert.Contains("deprovisioned.appx.Microsoft.BingWeather_8wekyb3d8bbwe", evidence.Documents[^1].Phases);
         Assert.DoesNotContain(
             evidence.Documents[^1].Phases,
             p => p.StartsWith("removed.appx.online.", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            splash.Events,
+            e => e.StartsWith("Status:deprovisioned.appx.Microsoft.", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -139,19 +169,29 @@ public class DebloatAppxSafetyNetTests
     }
 
     [Fact]
-    public async Task Shell_appx_safetyNet_fails_when_deprovisioned_mark_cannot_be_stamped()
+    public async Task Shell_appx_safetyNet_completes_when_deprovisioned_mark_not_writable()
     {
+        // Medium-IL cannot create HKLM Deprovisioned keys; offline DISM owns FU stamps.
+        // Job still emits deprovisioned.appx.* (smoke already-absent path) and Completes.
         RecordingAppx appx = new() { EnsureDeprovisionedMarkResult = false };
+        RecordingEvidenceSink evidence = new();
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 jobs: [new ProvisionJob("debloat.appx.safetyNet", ProvisionJobKind.AppxSafetyNet)],
-                removeProvisionedAppx: ["Microsoft.BingNews"]),
-            Env(new FakeGuestMachine { Appx = appx }, new RecordingEvidenceSink()),
+                removeProvisionedAppx: ["4DF9E0F8.Netflix", "Microsoft.BingNews"]),
+            Env(new FakeGuestMachine { Appx = appx }, evidence),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(SessionOutcome.Failed, result.Outcome);
-        Assert.Contains("Deprovisioned mark", result.FinalStatus.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(SessionOutcome.Complete, result.Outcome);
+        Assert.Equal("jobs.ok", result.FinalStatus.Code);
+        Assert.Contains("deprovisioned.appx.ok", evidence.Documents[^1].Phases);
+        Assert.Contains(
+            "deprovisioned.appx.4DF9E0F8.Netflix_8wekyb3d8bbwe",
+            evidence.Documents[^1].Phases);
+        Assert.Contains(
+            "deprovisioned.appx.Microsoft.BingNews_8wekyb3d8bbwe",
+            evidence.Documents[^1].Phases);
     }
 
     [Fact]

@@ -13,7 +13,10 @@ internal static class AppxDeprovisionedMarks
     public const string DeprovisionedRoot =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned";
 
-    /// <summary>Create <c>Deprovisioned\&lt;PFN&gt;</c> if missing. Returns false on access failure.</summary>
+    /// <summary>
+    /// Create <c>Deprovisioned\&lt;PFN&gt;</c> if missing. Returns false on access failure
+    /// (medium-IL cannot write HKLM); callers fail-open — offline DISM owns FU stamps.
+    /// </summary>
     public static bool Ensure(string packageFamilyName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);

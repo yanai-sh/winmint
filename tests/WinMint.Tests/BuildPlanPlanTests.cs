@@ -217,6 +217,41 @@ public class BuildPlanPlanTests
     }
 
     [Fact]
+    public void Plan_includeWslPlatform_without_stubs_or_authored_wsl()
+    {
+        Profile profile = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
+                "username": "winmint",
+                "password": "lab-only"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              },
+              "packages": { "winget": [], "wsl": [] }
+            }
+            """);
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { IncludeWslPlatform = true });
+
+        Assert.True(result.IsOk);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WslPlatform);
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Stub);
+        Assert.DoesNotContain(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
+        Assert.Contains(result.Value.Jobs.Jobs, j => j.Kind == ProvisionJobKind.WingetImport);
+    }
+
+    [Fact]
     public void Plan_smokePlumbing_omits_outbound_packages_and_requiresNetwork_false()
     {
         Profile profile = Parse($$"""

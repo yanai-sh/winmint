@@ -16,7 +16,8 @@ internal static class SoftwarePlan
         PackageCatalog catalog,
         string imageArchitecture,
         bool auditStrict,
-        bool smokePlumbing = false)
+        bool smokePlumbing = false,
+        bool includeWslPlatform = false)
     {
         // Smoke plumbing: ignore authored package lists (outbound jobs omitted). Still validate shape when not plumbing.
         IReadOnlyList<string> wingetPackages = smokePlumbing ? [] : profile.WingetPackages;
@@ -229,8 +230,8 @@ internal static class SoftwarePlan
 
         jobs.Add(new ProvisionJob("shell.stamp", ProvisionJobKind.ShellStamp));
 
-        // Smoke plumbing: platform mock only (Hyper-V) — no distro download jobs.
-        if (smokePlumbing || wslEntries.Count > 0)
+        // wsl.platform: authored distros, smoke plumbing, or Hyper-V smoke harness (--include-wsl-platform).
+        if (includeWslPlatform || smokePlumbing || wslEntries.Count > 0)
         {
             jobs.Add(new ProvisionJob("wsl.platform", ProvisionJobKind.WslPlatform));
         }

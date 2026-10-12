@@ -71,9 +71,12 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
         }
         catch (Exception ex) when (IsAccessDenied(ex))
         {
-            throw new InvalidOperationException(
-                $"FindProvisionedPackages access denied for catalog '{catalogId}'.",
-                ex);
+            // ponytail: FindProvisionedPackages needs admin. Medium-IL FirstLogon cannot enumerate
+            // provisioned packages; offline DISM + Deprovisioned marks own FU survival.
+            // DeprovisionPackageForAllUsers already fail-opens at this IL — empty hits match that.
+            // FindPackagesForUser stays fail-closed (registered packages are visible / honesty).
+            _ = ex;
+            return [];
         }
 
         return [.. hits];
@@ -126,7 +129,15 @@ public sealed class WinRTAppxPackageManager(ILogger? logger = null) : IAppxPacka
             return true;
         }
 
-        return AppxDeprovisionedMarks.Ensure(packageFamilyName);
+        if (AppxDeprovisionedMarks.Ensure(packageFamilyName))
+        {
+            return true;
+        }
+
+        // ponytail: HKLM AppxAllUserStore\Deprovisioned needs admin. Medium-IL FirstLogon cannot
+        // create missing keys; offline Remove-ProvisionedAppx already stamped what it removed.
+        // Fail-open matches FindProvisioned / DeprovisionPackageForAllUsers at this IL.
+        return true;
     }
 
     public async Task RegisterPackageFamilyForCurrentUserAsync(
