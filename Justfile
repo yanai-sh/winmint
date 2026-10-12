@@ -127,7 +127,9 @@ apply-maintainer ISO WORK PROFILE="samples/smoke.profile.json" INCLUDE_SMOKE_STU
 apply-smoke-maintainer ISO WORK PROFILE:
     Write-Host 'Smoke Apply (stubs + plumbing). Prefer just check day-to-day.'; Set-Location '{{justfile_directory()}}'; $args = @('build', '{{PROFILE}}', '--iso', '{{ISO}}', '--work', '{{WORK}}', '--package-audit-strict', '--include-smoke-stubs', '--smoke-plumbing'); & pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-WinMintCli.ps1' -- @args; exit $LASTEXITCODE
 
-# S4 Hyper-V Smoke — not in `just check`. Assert-only: just smoke-assert tests/fixtures/smoke-evidence
+# S4 Hyper-V Smoke — not in `just check`. Inner loop: servicing→host-apply; guest-only→smoke-maintainer-skip-apply;
+# assert bar→smoke-assert; boot/handoff integrate→full smoke-maintainer (Assert-ApplyEvidence runs before Hyper-V).
+# Assert-only: just smoke-assert tests/fixtures/smoke-evidence
 # Default Profile = samples/sl7.profile.json (same install target as Primary / this machine).
 # Needs .scratch/sl7.password (SECRETS). Longer wall — winget/WSL after Supervisor (offline OOBE default).
 # Offline OOBE (default): NIC deferred until Supervisor; ONLINE=1 for legacy always-on Default Switch.
@@ -161,10 +163,12 @@ watch-smoke WORK=".scratch/smoke":
 watch-check PATH="":
     pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/host/Watch-Host.ps1' -Kind check -Path '{{PATH}}'
 
+# Acceptance-fact bar only (fixtures / pulled evidence). No Apply, no Hyper-V.
 smoke-assert EVIDENCE:
     pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'
 
-# S5 Host Apply (pre-wipe). Test lane ≠ Primary. Wipe ISO: just primary-gate <iso> <work>
+# S5 Host Apply (pre-wipe). Prefer for servicing/debloat/stamp work — no Hyper-V.
+# Asserts offline remove-list digests when stages.json present. Test lane ≠ Primary. Wipe ISO: just primary-gate <iso> <work>
 host-apply ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="Test":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-HostApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality '{{QUALITY}}'
 

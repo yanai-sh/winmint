@@ -83,6 +83,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 . (Join-Path $repoRoot 'tools\host\Invoke-ArtifactHygiene.ps1') -NoRun
+. (Join-Path $repoRoot 'tools\host\Assert-DebloatDigestPins.ps1')
 
 . (Join-Path $repoRoot 'tools/vm/SmokeStatus.ps1')
 . (Join-Path $repoRoot 'tools/host/Write-WinMintHostProgress.ps1')
@@ -371,6 +372,53 @@ if ([string]::IsNullOrWhiteSpace($outIso) -or -not (Test-Path -LiteralPath $outI
 if (-not (Test-Path -LiteralPath $applyEvidence)) {
     throw "Apply evidence.json missing under $Work (lane marker required for S4)"
 }
+
+# Guest plan truth + S5 assert BEFORE Clear-WinMintApplyStaging (payload/ holds jobs + name lists).
+$expectNativePackageAudit = $false
+$jobsPath = Join-Path $Work 'payload\jobs.json'
+if (Test-Path -LiteralPath $jobsPath -PathType Leaf) {
+    try {
+        $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
+        $expectNativePackageAudit = @(
+            $jobsDoc.jobs |
+                Where-Object { [string]$_.kind -ceq 'package.auditNative' }
+        ).Count -gt 0
+    }
+    catch {
+        throw "payload/jobs.json unreadable under $Work : $($_.Exception.Message)"
+    }
+}
+
+# Full Apply (or SkipApply with payload still present): S5 bar before Hyper-V.
+# SkipApply after a prior staging clear has no payload/jobs.json — offline digests already gated.
+if (Test-Path -LiteralPath $jobsPath -PathType Leaf) {
+    Write-SmokeHostLine -Name 'Assert-ApplyEvidence (offline digests / pins) before Hyper-V…' -Activity assert
+    & (Join-Path $repoRoot 'tools\apply\Assert-ApplyEvidence.ps1') -WorkDirectory $Work -RequireOutputIso
+    if ($LASTEXITCODE -ne 0) { throw "Assert-ApplyEvidence exit $LASTEXITCODE (fail-fast before Hyper-V)" }
+}
+elseif ($SkipApply) {
+    Write-SmokeHostLine -Name 'SkipApply: payload absent — skip Assert-ApplyEvidence (pins may be empty).' -Activity assert
+}
+else {
+    throw "payload/jobs.json missing under $Work after Apply (required for Assert-ApplyEvidence fail-fast)"
+}
+
+# S4 defense pins: one resolve after S5 (Assert-ApplyEvidence already read stages). Keep arrays past staging clear.
+$pins = Get-WinMintDebloatPinsFromStages -StagesPath (Join-Path $Work 'stages.json')
+$pinnedRemoveAppx = @($pins.PinnedRemoveAppx)
+$pinnedRemoveCapabilities = @($pins.PinnedRemoveCapabilities)
+$pinnedDisableOptionalFeatures = @($pins.PinnedDisableOptionalFeatures)
+$pinnedOnlineRemoveAppx = @()
+if ($pinnedRemoveAppx.Count -eq 0 -and $null -ne $profileDoc -and $profileDoc.PSObject.Properties.Name -contains 'debloat') {
+    $debloat = $profileDoc.debloat
+    if ($null -ne $debloat -and $debloat.PSObject.Properties.Name -contains 'removeProvisionedAppx') {
+        $mode = if ($debloat.PSObject.Properties.Name -contains 'mode') { [string]$debloat.mode } else { '' }
+        if ([string]::IsNullOrWhiteSpace($mode) -or $mode -eq 'online') {
+            $pinnedOnlineRemoveAppx = @($debloat.removeProvisionedAppx | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+        }
+    }
+}
+
 # ponytail: hygiene must not delete ProtectWorkDir; recreate applyDir if a sibling race still partial-wiped
 New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
 Copy-Item -LiteralPath $applyEvidence -Destination (Join-Path $applyDir 'evidence.json') -Force
@@ -480,62 +528,6 @@ $stallSw = [Diagnostics.Stopwatch]::StartNew()
 $nudgeSw = [Diagnostics.Stopwatch]::StartNew()
 $script:emptyVhdSw = $null
 
-# Guest plan truth: package.auditNative in payload/jobs.json (smoke-plumbing omits winget + audit).
-$expectNativePackageAudit = $false
-$jobsPath = Join-Path $Work 'payload\jobs.json'
-if (Test-Path -LiteralPath $jobsPath -PathType Leaf) {
-    try {
-        $jobsDoc = Get-Content -LiteralPath $jobsPath -Raw -Encoding utf8 | ConvertFrom-Json
-        $expectNativePackageAudit = @(
-            $jobsDoc.jobs |
-                Where-Object { [string]$_.kind -ceq 'package.auditNative' }
-        ).Count -gt 0
-    }
-    catch {
-        throw "payload/jobs.json unreadable under $Work : $($_.Exception.Message)"
-    }
-}
-
-# Keep-flag pins from Apply Materialize (stages.json) — not Profile debloat.* (CONTRACTS ownership).
-$stagesPath = Join-Path $Work 'stages.json'
-if (-not (Test-Path -LiteralPath $stagesPath)) {
-    throw "stages.json missing under $Work (Apply materialize required for keep-flag pins)"
-}
-try {
-    $stagesDoc = Get-Content -LiteralPath $stagesPath -Raw -Encoding utf8 | ConvertFrom-Json
-}
-catch {
-    throw "stages.json unreadable under $Work : $($_.Exception.Message)"
-}
-
-function Get-PayloadJsonIds {
-    param(
-        [Parameter(Mandatory)] $StagesDoc,
-        [Parameter(Mandatory)] [string] $Opcode,
-        [Parameter(Mandatory)] [string] $PathParam
-    )
-    $stage = @($StagesDoc.stages) |
-        Where-Object { [string]$_.opcode -eq $Opcode } |
-        Select-Object -First 1
-    if ($null -eq $stage) { return @() }
-    $path = [string]$stage.parameters.$PathParam
-    if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) { return @() }
-    return @(Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json)
-}
-
-$pinnedRemoveAppx = @(Get-PayloadJsonIds -StagesDoc $stagesDoc -Opcode 'RemoveProvisionedAppx' -PathParam 'packageFamilyNamesPath')
-$pinnedOnlineRemoveAppx = @()
-if ($pinnedRemoveAppx.Count -eq 0 -and $null -ne $profileDoc -and $profileDoc.PSObject.Properties.Name -contains 'debloat') {
-    $debloat = $profileDoc.debloat
-    if ($null -ne $debloat -and $debloat.PSObject.Properties.Name -contains 'removeProvisionedAppx') {
-        $mode = if ($debloat.PSObject.Properties.Name -contains 'mode') { [string]$debloat.mode } else { '' }
-        if ([string]::IsNullOrWhiteSpace($mode) -or $mode -eq 'online') {
-            $pinnedOnlineRemoveAppx = @($debloat.removeProvisionedAppx | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
-        }
-    }
-}
-$pinnedRemoveCapabilities = @(Get-PayloadJsonIds -StagesDoc $stagesDoc -Opcode 'RemoveCapabilities' -PathParam 'namesPath')
-$pinnedDisableOptionalFeatures = @(Get-PayloadJsonIds -StagesDoc $stagesDoc -Opcode 'DisableOptionalFeatures' -PathParam 'namesPath')
 
 function Test-GuestEvidenceReady {
     # Reboot evidence is not terminal — keep waiting for resume → Complete (ticket 17).

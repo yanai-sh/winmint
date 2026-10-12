@@ -50,6 +50,7 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'SmokeConverge.ps1')
 . (Join-Path $PSScriptRoot '..\host\Assert-ImageEvidenceCore.ps1')
+. (Join-Path $PSScriptRoot '..\host\Assert-DebloatDigestPins.ps1')
 . (Join-Path $PSScriptRoot 'SmokeS4AcceptanceFacts.ps1')
 $s4Facts = Get-WinMintSmokeS4AcceptanceFacts
 
@@ -185,37 +186,23 @@ $core = Assert-WinMintImageEvidence `
 $lane = $core.Lane
 $digestMap = $core.DigestMap
 
-function Assert-PinnedDigests {
-    param(
-        [string[]] $Ids,
-        [string] $KeyPrefix,
-        [string] $ExpectedValue,
-        [string] $Label
-    )
-    if ($null -eq $Ids -or @($Ids).Count -eq 0) { return }
-    foreach ($id in $Ids) {
-        if ([string]::IsNullOrWhiteSpace($id)) { continue }
-        $key = "$KeyPrefix$id"
-        if (-not $digestMap.ContainsKey($key) -or $digestMap[$key] -ne $ExpectedValue) {
-            throw "keep-flag digest missing: expected $key=$ExpectedValue in apply/evidence.json digests ($Label)"
-        }
-    }
-}
-
-Assert-PinnedDigests -Ids $PinnedRemoveAppx -KeyPrefix 'removed.appx.' -ExpectedValue 'absent' -Label 'appx'
+Assert-WinMintPinnedRemoveDigests `
+    -DigestMap $digestMap `
+    -PinnedRemoveAppx $PinnedRemoveAppx `
+    -PinnedRemoveCapabilities $PinnedRemoveCapabilities `
+    -PinnedDisableOptionalFeatures $PinnedDisableOptionalFeatures
 if (@($PinnedOnlineRemoveAppx).Count -gt 0) {
     $phaseList = @($guest.phases)
+    $batchMark = $phaseList -contains 'deprovisioned.appx.ok'
     foreach ($id in $PinnedOnlineRemoveAppx) {
         if ([string]::IsNullOrWhiteSpace($id)) { continue }
         $removed = "removed.appx.online.$id"
         $marked = @($phaseList | Where-Object { $_ -like "deprovisioned.appx.${id}_*" })
-        if ($phaseList -contains $removed -or $marked.Count -gt 0) { continue }
-        throw ("online debloat phase missing: expected '$removed' or " +
-            "'deprovisioned.appx.${id}_*' (already absent on the image)")
+        if ($phaseList -contains $removed -or $marked.Count -gt 0 -or $batchMark) { continue }
+        throw ("online debloat phase missing: expected '$removed', " +
+            "'deprovisioned.appx.${id}_*', or 'deprovisioned.appx.ok' (already absent on the image)")
     }
 }
-Assert-PinnedDigests -Ids $PinnedRemoveCapabilities -KeyPrefix 'removed.capability.' -ExpectedValue 'Absent' -Label 'capability'
-Assert-PinnedDigests -Ids $PinnedDisableOptionalFeatures -KeyPrefix 'disabled.feature.' -ExpectedValue 'Disabled' -Label 'feature'
 
 $firstPaintMs = $null
 if ($guest.PSObject.Properties.Name -contains 'firstPaintMs' -and $null -ne $guest.firstPaintMs) {

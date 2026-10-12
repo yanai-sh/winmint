@@ -42,6 +42,7 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot '..\Resolve-OutputIso.ps1')
 . (Join-Path $PSScriptRoot '..\host\Assert-ImageEvidenceCore.ps1')
+. (Join-Path $PSScriptRoot '..\host\Assert-DebloatDigestPins.ps1')
 # Same definition of "patched" the patcher uses — the gate must not certify media it would re-patch.
 . (Join-Path $PSScriptRoot '..\..\servicing\WinPeApplyContract.ps1')
 
@@ -58,6 +59,18 @@ $evidence = $core.Evidence
 $lane = $core.Lane
 $digestMap = $core.DigestMap
 $expected = $core.Expected
+
+# Offline remove-list digests when stages.json is present (Host Apply / smoke fail-fast).
+# Missing stages ⇒ fixture/assert-only trees skip pins. Online AppX phases stay S4-only.
+$stagesPath = Join-Path $WorkDirectory 'stages.json'
+if (Test-Path -LiteralPath $stagesPath -PathType Leaf) {
+    $pins = Get-WinMintDebloatPinsFromStages -StagesPath $stagesPath
+    Assert-WinMintPinnedRemoveDigests `
+        -DigestMap $digestMap `
+        -PinnedRemoveAppx $pins.PinnedRemoveAppx `
+        -PinnedRemoveCapabilities $pins.PinnedRemoveCapabilities `
+        -PinnedDisableOptionalFeatures $pins.PinnedDisableOptionalFeatures
+}
 
 $packageStrict = $false
 if ($evidence.PSObject.Properties.Name -contains 'packageStrict') {

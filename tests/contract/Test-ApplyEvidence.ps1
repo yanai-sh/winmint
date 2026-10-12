@@ -274,6 +274,43 @@ try {
     if ($r.Err -notmatch 'dma\.settle requires locale, geoId, timeZoneId, and locationServicesEnabled') {
         throw "dma settle message: $($r.Err)"
     }
+
+    # Offline debloat digest pins from stages.json (S5 fail-fast; appx-only proves the gate).
+    function Add-DebloatPinTree {
+        param([string] $Work, [switch] $OmitAppxDigest)
+        $payload = Join-Path $Work 'payload'
+        New-Item -ItemType Directory -Force -Path $payload | Out-Null
+        $appxList = Join-Path $payload 'packageFamilyNames.json'
+        Set-Content -LiteralPath $appxList -Encoding utf8 -Value '["Microsoft.BingNews_8wekyb3d8bbwe"]'
+        $stages = [ordered]@{
+            schemaVersion = 'winmint.servicing.stages/v1'
+            stages        = @(
+                [ordered]@{
+                    opcode     = 'RemoveProvisionedAppx'
+                    parameters = [ordered]@{ packageFamilyNamesPath = $appxList }
+                }
+            )
+        }
+        ($stages | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $Work 'stages.json') -Encoding utf8
+        $ev = Get-Content -LiteralPath (Join-Path $Work 'evidence.json') -Raw | ConvertFrom-Json
+        if (-not $OmitAppxDigest) {
+            $ev.digests | Add-Member -NotePropertyName 'removed.appx.Microsoft.BingNews_8wekyb3d8bbwe' -NotePropertyValue 'absent' -Force
+        }
+        ($ev | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $Work 'evidence.json') -Encoding utf8
+    }
+
+    $pinsOk = Join-Path $root 'debloat-pins-ok'
+    Copy-Tree $fixture $pinsOk
+    Add-DebloatPinTree $pinsOk
+    $r = Invoke-ApplyAssert $pinsOk
+    if ($r.Code -ne 0) { throw "debloat pin digests must pass: $($r.Err)" }
+
+    $pinsMissing = Join-Path $root 'debloat-pins-missing'
+    Copy-Tree $fixture $pinsMissing
+    Add-DebloatPinTree $pinsMissing -OmitAppxDigest
+    $r = Invoke-ApplyAssert $pinsMissing
+    if ($r.Code -eq 0) { throw 'missing pinned appx digest must fail' }
+    if ($r.Err -notmatch 'keep-flag digest missing') { throw "pin digest message: $($r.Err)" }
 }
 finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
