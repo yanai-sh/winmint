@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Text;
 
 using Microsoft.Win32;
 
@@ -14,6 +15,8 @@ public sealed class Win32WinlogonRegistry : IWinlogonRegistry
     private const string WinlogonSubKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon";
     private const string ClearAutoLogonRunOnceName = "WinMintClearAutoLogon";
     private const string WinlogonRegPath = @"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon";
+    // ProgramData (not Windows\WinMint) — residue erase must not delete the RunOnce target.
+    internal const string ClearAutoLogonCmdFileName = "clear-autologon.cmd";
 
 
     public void SetAutoLogon(string username, string password)
@@ -96,10 +99,12 @@ public sealed class Win32WinlogonRegistry : IWinlogonRegistry
             " & " + stampChrome +
             " & timeout /t 10 /nobreak >nul" +
             " & " + stampChrome;
+        // Shell Execute quote-splits long inline /c bodies; park the chain and arm a short pointer.
+        string scriptPath = WriteClearAutoLogonCmd(clearCmd);
         using RegistryKey key = Registry.CurrentUser.CreateSubKey(
             @"Software\Microsoft\Windows\CurrentVersion\RunOnce")
             ?? throw new InvalidOperationException("Cannot open HKCU RunOnce for Autologon clear.");
-        string value = "cmd.exe /c " + clearCmd;
+        string value = "cmd.exe /c " + scriptPath;
         key.SetValue(ClearAutoLogonRunOnceName, value, RegistryValueKind.String);
         // Verify — silent arm failure left Autologon password stranded after mid-settle death.
         if (key.GetValue(ClearAutoLogonRunOnceName) is not string armed
@@ -108,6 +113,40 @@ public sealed class Win32WinlogonRegistry : IWinlogonRegistry
             throw new InvalidOperationException(
                 "HKCU RunOnce WinMintClearAutoLogon was not armed after SetValue.");
         }
+    }
+
+    internal static string ClearAutoLogonCmdPath()
+    {
+        string programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        if (string.IsNullOrWhiteSpace(programData))
+        {
+            throw new InvalidOperationException("CommonApplicationData unavailable for Autologon clear script.");
+        }
+
+        return Path.GetFullPath(Path.Combine(programData, "WinMint", ClearAutoLogonCmdFileName));
+    }
+
+    private static string WriteClearAutoLogonCmd(string clearCmd)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(clearCmd);
+        string scriptPath = ClearAutoLogonCmdPath();
+        // Unquoted RunOnce pointer — whitespace would reintroduce Shell Execute quote-split.
+        if (scriptPath.Any(char.IsWhiteSpace))
+        {
+            throw new InvalidOperationException(
+                "Autologon clear script path has whitespace; cannot arm unquoted RunOnce pointer.");
+        }
+
+        string? dir = Path.GetDirectoryName(scriptPath);
+        if (string.IsNullOrWhiteSpace(dir))
+        {
+            throw new InvalidOperationException("Autologon clear script directory unavailable.");
+        }
+
+        Directory.CreateDirectory(dir);
+        // No BOM — cmd.exe misreads a UTF-8 BOM as part of the first token.
+        File.WriteAllText(scriptPath, clearCmd, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        return scriptPath;
     }
 
     public string? GetDefaultUserName()

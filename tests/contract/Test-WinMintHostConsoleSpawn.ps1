@@ -102,6 +102,37 @@ try {
     }
 
     $sidecar = Join-Path $elevWork 'host-console-spawn.json'
+    $workerPidPath = Get-WinMintHostConsoleWorkerPidPath -WorkRoot $elevWork
+
+    # First red (#166): live worker pid file + dead sidecar childPid → overlap before ProcessStarter.
+    Set-Content -LiteralPath $workerPidPath -Value $PID -Encoding utf8 -NoNewline
+    @{
+        utc            = [DateTimeOffset]::UtcNow.ToString('o')
+        spawnMode      = 'wtNewWindow'
+        wtResolvedPath = $fakeWt
+        childPid       = 2147483647
+        outcome        = 'ok'
+        disposition    = 'Spawned'
+        detail         = ''
+    } | ConvertTo-Json -Compress | Set-Content -LiteralPath $sidecar -Encoding utf8
+    if ($null -ne (Get-Process -Id 2147483647 -ErrorAction SilentlyContinue)) {
+        throw 'test fixture childPid 2147483647 unexpectedly alive'
+    }
+    try {
+        Start-WinMintHostConsole -Elevate -RepoRoot $repo -Work $elevWork `
+            -File $elevFile -ArgumentList @('-ElevatedWorker') -PwshExe $pwshExe `
+            -TranscriptPath $elevTranscript `
+            -ProcessStarter { throw 'overlap must short-circuit before ProcessStarter' }
+        throw 'expected overlapAlive throw (worker pid file)'
+    }
+    catch {
+        if ($_.Exception.Message -notmatch '^overlapAlive:') {
+            throw "expected overlapAlive from worker pid file, got: $($_.Exception.Message)"
+        }
+    }
+
+    # Sidecar launcher pid still counts when worker pid file is absent.
+    Remove-Item -LiteralPath $workerPidPath -Force -ErrorAction SilentlyContinue
     @{
         utc            = [DateTimeOffset]::UtcNow.ToString('o')
         spawnMode      = 'wtNewWindow'
@@ -116,17 +147,23 @@ try {
             -File $elevFile -ArgumentList @('-ElevatedWorker') -PwshExe $pwshExe `
             -TranscriptPath $elevTranscript `
             -ProcessStarter { throw 'overlap must short-circuit before ProcessStarter' }
-        throw 'expected overlapAlive throw'
+        throw 'expected overlapAlive throw (sidecar childPid)'
     }
     catch {
         if ($_.Exception.Message -notmatch '^overlapAlive:') {
-            throw "expected overlapAlive, got: $($_.Exception.Message)"
+            throw "expected overlapAlive from sidecar childPid, got: $($_.Exception.Message)"
         }
     }
 
     $startSrc = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Start-SmokeElevated.ps1') -Raw -Encoding utf8
     if ($startSrc -notmatch 'childExitedEarly') {
-        throw 'Start-SmokeElevated must throw childExitedEarly when outer starter dies quickly'
+        throw 'Start-SmokeElevated must throw childExitedEarly when elevated worker pid file never appears'
+    }
+    if ($startSrc -notmatch 'Test-WinMintHostConsoleWorkerPidAlive') {
+        throw 'Start-SmokeElevated spawn wait must poll worker pid file (not launcher childPid)'
+    }
+    if ($startSrc -notmatch 'TotalSeconds -lt 8') {
+        throw 'Start-SmokeElevated spawn wait must poll ~8s for worker pid file'
     }
 }
 finally {

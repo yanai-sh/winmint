@@ -149,7 +149,9 @@ public class ShellDesktopJobTests
                 TestContext.Current.CancellationToken);
             Assert.False(applied.KomorebiOk);
             Assert.Contains("komorebi configure failed", applied.Notes);
-            Assert.Single(processes.Starts);
+            Assert.Contains(applied.Notes, static n => n.Contains("fetch-asc skipped", StringComparison.Ordinal));
+            Assert.Equal(2, processes.Starts.Count);
+            Assert.Equal(["fetch-asc"], processes.Starts[0].Arguments);
         }
         finally
         {
@@ -166,10 +168,26 @@ public class ShellDesktopJobTests
         string komorebiDir = Path.Combine(sandbox, "xdg-config", "komorebi");
         string whkdPath = Path.Combine(sandbox, "xdg-config", "whkdrc");
         string docLink = Path.Combine(sandbox, "komorebi.json");
+        string ascPath = Path.Combine(sandbox, "applications.json");
+        string? previousUserProfile = Environment.GetEnvironmentVariable("USERPROFILE");
         using PathScope pathScope = PrepPathWithExecutable("komorebic.exe");
-        RecordingProcessHost processes = new() { ExitCode = 0 };
+        RecordingProcessHost processes = new()
+        {
+            OnRun = (_, args) =>
+            {
+                if (args is ["fetch-asc"] or ["fetch-app-specific-configuration"])
+                {
+                    // Simulate komorebic fetch-asc → %USERPROFILE%\applications.json.
+                    File.WriteAllText(ascPath, "[]");
+                    return new ProcessStartResult(0);
+                }
+
+                return new ProcessStartResult(0);
+            },
+        };
         try
         {
+            Environment.SetEnvironmentVariable("USERPROFILE", sandbox);
             ShellDesktopRequest request = new(
                 [PackageIds.Komorebi],
                 processes,
@@ -189,10 +207,13 @@ public class ShellDesktopJobTests
             Assert.True(applied.KomorebiOk);
             Assert.True(File.Exists(configPath));
             Assert.True(File.Exists(whkdPath));
-            Assert.Single(processes.Starts);
+            Assert.True(File.Exists(ascPath));
+            Assert.Equal(2, processes.Starts.Count);
+            Assert.Equal(["fetch-asc"], processes.Starts[0].Arguments);
             Assert.Equal(
                 ["enable-autostart", "--config", configPath, "--whkd"],
-                processes.Starts[0].Arguments);
+                processes.Starts[1].Arguments);
+            Assert.DoesNotContain(applied.Notes, static n => n.Contains("fetch-asc skipped", StringComparison.Ordinal));
 
             // Doc-path discoverability: symlink or fail-open note (no KOMOREBI_CONFIG_HOME).
             if (File.Exists(docLink))
@@ -205,6 +226,51 @@ public class ShellDesktopJobTests
             {
                 Assert.Contains(applied.Notes, static n => n.Contains("doc-link skipped", StringComparison.Ordinal));
             }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", previousUserProfile);
+            TryDeleteTree(guestRoot);
+            TryDeleteTree(sandbox);
+        }
+    }
+
+    [Fact]
+    public async Task Komorebi_fetch_asc_fail_open_still_enables_autostart()
+    {
+        (string guestRoot, string yasbDir, string thideDir) = StageGuestDesktopFixture(includeKomorebi: true);
+        string sandbox = Path.Combine(Path.GetTempPath(), "winmint-komorebi-asc-" + Guid.NewGuid().ToString("N"));
+        string komorebiDir = Path.Combine(sandbox, "xdg-config", "komorebi");
+        string whkdPath = Path.Combine(sandbox, "xdg-config", "whkdrc");
+        string docLink = Path.Combine(sandbox, "komorebi.json");
+        using PathScope pathScope = PrepPathWithExecutable("komorebic.exe");
+        RecordingProcessHost processes = new()
+        {
+            OnRun = static (_, args) => args is ["fetch-asc"] or ["fetch-app-specific-configuration"]
+                ? new ProcessStartResult(1)
+                : new ProcessStartResult(0),
+        };
+        try
+        {
+            ShellDesktopRequest request = new(
+                [PackageIds.Komorebi],
+                processes,
+                null,
+                guestRoot,
+                thideDir,
+                yasbDir,
+                komorebiDir,
+                whkdPath,
+                KomorebiDocLinkPath: docLink);
+
+            ShellDesktopApplyResult applied = await ShellDesktop.ApplyAsync(
+                request,
+                TestContext.Current.CancellationToken);
+
+            Assert.True(applied.KomorebiOk);
+            Assert.Contains(applied.Notes, static n => n.Contains("fetch-asc skipped", StringComparison.Ordinal));
+            Assert.Equal(["fetch-asc"], processes.Starts[0].Arguments);
+            Assert.Equal("enable-autostart", processes.Starts[1].Arguments[0]);
         }
         finally
         {

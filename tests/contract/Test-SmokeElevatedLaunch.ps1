@@ -15,7 +15,10 @@ if ($start -notmatch '\-Elevate') { throw 'Start-SmokeElevated must pass -Elevat
 if ($start -match 'function Start-WinMintArgvProcess') { throw 'Start-SmokeElevated must not define Start-WinMintArgvProcess' }
 if ($console -notmatch 'function Start-WinMintHostConsole') { throw 'WinMintHostConsole must export Start-WinMintHostConsole' }
 if ($console -notmatch '\$ProcessStarter') { throw 'WinMintHostConsole must expose ProcessStarter for behavioural contracts' }
-if ($start -notmatch 'childExitedEarly') { throw 'Start-SmokeElevated must throw childExitedEarly when outer starter dies quickly' }
+if ($start -notmatch 'childExitedEarly') { throw 'Start-SmokeElevated must throw childExitedEarly when elevated worker pid file never appears' }
+if ($start -notmatch 'Test-WinMintHostConsoleWorkerPidAlive') { throw 'Start-SmokeElevated spawn wait must poll worker pid file' }
+if ($console -notmatch 'host-console-worker\.pid') { throw 'WinMintHostConsole must define host-console-worker.pid path' }
+if ($console -notmatch 'Test-WinMintHostConsoleWorkerPidAlive') { throw 'WinMintHostConsole overlap must prefer worker pid file' }
 if ($start -notmatch 'ElevatedWorker') { throw 'Start-SmokeElevated must own -ElevatedWorker process body' }
 if ($start -notmatch 'Invoke-SmokeRecipe\.ps1') { throw 'Start-SmokeElevated worker must invoke Recipe in-process' }
 if ($console -notmatch 'WT_SESSION') { throw 'WinMintHostConsole must detect an existing Windows Terminal session' }

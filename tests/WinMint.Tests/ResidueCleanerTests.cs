@@ -118,29 +118,43 @@ public class ResidueCleanerTests
             @"Software\Microsoft\Windows\CurrentVersion\RunOnce")
             ?? throw new InvalidOperationException("HKCU RunOnce unavailable");
         key.DeleteValue(name, throwOnMissingValue: false);
+        string scriptPath = Win32WinlogonRegistry.ClearAutoLogonCmdPath();
 
         try
         {
             Win32WinlogonRegistry.ScheduleDeferredAutoLogonClear();
             object? value = key.GetValue(name);
             Assert.IsType<string>(value);
-            string cmd = (string)value;
-            Assert.Contains("AutoAdminLogon", cmd, StringComparison.Ordinal);
-            Assert.Contains("reg.exe", cmd, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("Wallpaper", cmd, StringComparison.Ordinal);
-            Assert.Contains("WallpaperStyle", cmd, StringComparison.Ordinal);
-            Assert.Contains("TranscodedWallpaper", cmd, StringComparison.Ordinal);
-            Assert.Contains("SearchboxTaskbarMode", cmd, StringComparison.Ordinal);
-            Assert.DoesNotContain("TaskbarDa", cmd, StringComparison.Ordinal);
-            Assert.Contains("TaskbarMn", cmd, StringComparison.Ordinal);
-            Assert.Contains("ShowTaskViewButton", cmd, StringComparison.Ordinal);
-            Assert.Contains("ShowCopilotButton", cmd, StringComparison.Ordinal);
-            Assert.Contains("UpdatePerUserSystemParameters", cmd, StringComparison.Ordinal);
-            Assert.Contains("timeout /t 10", cmd, StringComparison.Ordinal);
+            string runOnce = (string)value;
+            Assert.Equal("cmd.exe /c " + scriptPath, runOnce);
+            Assert.DoesNotContain("reg.exe", runOnce, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Wallpaper", runOnce, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                Path.Combine("Windows", "WinMint"),
+                scriptPath,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.True(File.Exists(scriptPath));
+            string body = File.ReadAllText(scriptPath);
+            Assert.Contains("AutoAdminLogon", body, StringComparison.Ordinal);
+            Assert.Contains("reg.exe", body, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Wallpaper", body, StringComparison.Ordinal);
+            Assert.Contains("WallpaperStyle", body, StringComparison.Ordinal);
+            Assert.Contains("TranscodedWallpaper", body, StringComparison.Ordinal);
+            Assert.Contains("SearchboxTaskbarMode", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("TaskbarDa", body, StringComparison.Ordinal);
+            Assert.Contains("TaskbarMn", body, StringComparison.Ordinal);
+            Assert.Contains("ShowTaskViewButton", body, StringComparison.Ordinal);
+            Assert.Contains("ShowCopilotButton", body, StringComparison.Ordinal);
+            Assert.Contains("UpdatePerUserSystemParameters", body, StringComparison.Ordinal);
+            Assert.Contains("timeout /t 10", body, StringComparison.Ordinal);
         }
         finally
         {
             key.DeleteValue(name, throwOnMissingValue: false);
+            if (File.Exists(scriptPath))
+            {
+                File.Delete(scriptPath);
+            }
         }
     }
 

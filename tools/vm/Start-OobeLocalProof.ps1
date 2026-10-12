@@ -82,9 +82,12 @@ function Invoke-OobeLocalProofWorker {
         throw "Maintainer Source ISO missing: $iso"
     }
 
+    $workRoot = Get-WinMintHostConsoleWorkRoot -RepoRoot $repoRoot -Work $Work -TranscriptPath $log
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null
     Start-Transcript -LiteralPath $log -Force | Out-Null
     try {
+        # Stamp for elevate overlap only (spawner exits 0 after spawn by design — no childExitedEarly gate).
+        Write-WinMintHostConsoleWorkerPid -WorkRoot $workRoot
         $proofUser = 'proof'
         try {
             $proofUser = [string](Get-Content -LiteralPath $profilePath -Raw -Encoding utf8 | ConvertFrom-Json).account.username
@@ -112,6 +115,7 @@ function Invoke-OobeLocalProofWorker {
         exit $LASTEXITCODE
     }
     finally {
+        Clear-WinMintHostConsoleWorkerPid -WorkRoot $workRoot
         Stop-Transcript | Out-Null
     }
 }

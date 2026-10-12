@@ -70,6 +70,34 @@ function Test-WinMintHostConsoleTranscriptLocked {
     }
 }
 
+function Get-WinMintHostConsoleWorkerPidPath {
+    param([Parameter(Mandatory)] [string] $WorkRoot)
+    return (Join-Path $WorkRoot 'host-console-worker.pid')
+}
+
+function Write-WinMintHostConsoleWorkerPid {
+    param([Parameter(Mandatory)] [string] $WorkRoot)
+    if (-not (Test-Path -LiteralPath $WorkRoot)) {
+        New-Item -ItemType Directory -Force -Path $WorkRoot | Out-Null
+    }
+    Set-Content -LiteralPath (Get-WinMintHostConsoleWorkerPidPath -WorkRoot $WorkRoot) -Value $PID -Encoding utf8 -NoNewline
+}
+
+function Clear-WinMintHostConsoleWorkerPid {
+    param([Parameter(Mandatory)] [string] $WorkRoot)
+    Remove-Item -LiteralPath (Get-WinMintHostConsoleWorkerPidPath -WorkRoot $WorkRoot) -Force -ErrorAction SilentlyContinue
+}
+
+function Test-WinMintHostConsoleWorkerPidAlive {
+    param([Parameter(Mandatory)] [string] $WorkRoot)
+    $path = Get-WinMintHostConsoleWorkerPidPath -WorkRoot $WorkRoot
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
+    $workerPid = 0
+    $raw = (Get-Content -LiteralPath $path -Raw -ErrorAction SilentlyContinue)
+    if (-not $raw -or -not [int]::TryParse($raw.Trim(), [ref]$workerPid) -or $workerPid -le 0) { return $false }
+    return $null -ne (Get-Process -Id $workerPid -ErrorAction SilentlyContinue)
+}
+
 function Write-WinMintHostConsoleSpawnSidecar {
     param(
         [Parameter(Mandatory)] [string] $SidecarPath,
@@ -93,14 +121,17 @@ function Write-WinMintHostConsoleSpawnSidecar {
 
 function Test-WinMintHostConsoleOverlapAlive {
     param([Parameter(Mandatory)] [string] $SidecarPath)
+    $workRoot = Split-Path -Parent $SidecarPath
+    # ponytail: prefer worker pid file; sidecar childPid is wt/sudo launcher (exits in ms).
+    if (Test-WinMintHostConsoleWorkerPidAlive -WorkRoot $workRoot) { return $true }
     if (-not (Test-Path -LiteralPath $SidecarPath -PathType Leaf)) { return $false }
     try {
         $raw = Get-Content -LiteralPath $SidecarPath -Raw -Encoding utf8
         if ([string]::IsNullOrWhiteSpace($raw)) { return $false }
         $doc = $raw | ConvertFrom-Json
-        $workerPid = [int]$doc.childPid
-        if ($workerPid -le 0) { return $false }
-        return $null -ne (Get-Process -Id $workerPid -ErrorAction SilentlyContinue)
+        $launcherPid = [int]$doc.childPid
+        if ($launcherPid -le 0) { return $false }
+        return $null -ne (Get-Process -Id $launcherPid -ErrorAction SilentlyContinue)
     }
     catch {
         return $false

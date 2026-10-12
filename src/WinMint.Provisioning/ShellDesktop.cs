@@ -267,6 +267,16 @@ internal static class ShellDesktop
             return false;
         }
 
+        // Community ASC → %USERPROFILE%\applications.json (template path). Offline = fail-open.
+        ProcessStartResult fetchAsc = await request.Processes.RunAsync(
+            komorebic,
+            ["fetch-asc"],
+            ct).ConfigureAwait(false);
+        if (fetchAsc.ExitCode != 0)
+        {
+            notes.Add($"komorebi fetch-asc skipped: exit {fetchAsc.ExitCode}");
+        }
+
         // Explicit --config at XDG canonical (no KOMOREBI_CONFIG_HOME stamp).
         ProcessStartResult enable = await request.Processes.RunAsync(
             komorebic,

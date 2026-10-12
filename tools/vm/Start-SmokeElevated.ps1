@@ -59,9 +59,11 @@ Or: just smoke-maintainer-monitor
     }
     else { $TranscriptPath }
 
+    $workRoot = Get-WinMintHostConsoleWorkRoot -RepoRoot $repoRoot -Work $Work -TranscriptPath $TranscriptPath
     New-Item -ItemType Directory -Force -Path (Split-Path $log -Parent) | Out-Null
     Start-Transcript -LiteralPath $log -Force | Out-Null
     try {
+        Write-WinMintHostConsoleWorkerPid -WorkRoot $workRoot
         Write-Host "Start-SmokeElevated Admin=True HEAD=$(git rev-parse --short HEAD)"
         $recipe = Join-Path $repoRoot 'tools\vm\Invoke-SmokeRecipe.ps1'
         # Same console — do not nest another pwsh.exe (that prefers conhost).
@@ -78,6 +80,7 @@ Or: just smoke-maintainer-monitor
         exit $LASTEXITCODE
     }
     finally {
+        Clear-WinMintHostConsoleWorkerPid -WorkRoot $workRoot
         Stop-Transcript | Out-Null
     }
 }
@@ -130,13 +133,15 @@ if ($result.disposition -eq 'RunHere') {
     exit $LASTEXITCODE
 }
 
-# Spawned — confirm outer starter stayed alive briefly (Stopwatch; host clock can jump).
+# Spawned — wait for elevated worker pid file (sidecar childPid is wt/sudo; exits in ms).
+# ponytail: Stopwatch poll; no named-WT kill helper (ceiling: would kill other tabs in that window).
+$workRoot = Get-WinMintHostConsoleWorkRoot -RepoRoot $repoRoot -Work $Work -TranscriptPath $TranscriptPath
 $alive = [Diagnostics.Stopwatch]::StartNew()
-while ($alive.Elapsed.TotalSeconds -lt 4) {
-    if ($null -ne (Get-Process -Id $result.childPid -ErrorAction SilentlyContinue)) {
+while ($alive.Elapsed.TotalSeconds -lt 8) {
+    if (Test-WinMintHostConsoleWorkerPidAlive -WorkRoot $workRoot) {
         exit 0
     }
     Start-Sleep -Milliseconds 150
 }
 
-throw "childExitedEarly: pid=$($result.childPid)"
+throw "childExitedEarly: workerPidFile=$(Get-WinMintHostConsoleWorkerPidPath -WorkRoot $workRoot) launcherPid=$($result.childPid)"
