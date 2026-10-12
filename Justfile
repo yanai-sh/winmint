@@ -86,7 +86,10 @@ analyze-powershell:
 
 analyze-servicing: analyze-powershell
 
+# Wipe outs first: AOT can leave a stale Supervisor.exe that omits new string/code paths (e.g. network.wait).
+# (dotnet publish on this SDK rejects --no-incremental.)
 publish-provisioning:
+    Remove-Item -Recurse -Force artifacts/winpe-apply, artifacts/provisioning -ErrorAction SilentlyContinue
     dotnet publish src/WinMint.WinPeApply/WinMint.WinPeApply.csproj -c Release -o artifacts/winpe-apply
     dotnet publish src/WinMint.Provisioning/WinMint.Provisioning.csproj -c Release -o artifacts/provisioning
 
@@ -132,7 +135,8 @@ apply-smoke-maintainer ISO WORK PROFILE INCLUDE_SMOKE_STUBS="false":
 # Assert-only: just smoke-assert tests/fixtures/smoke-evidence
 # Default Profile = samples/sl7.profile.json (same install target as Primary / this machine).
 # Needs .scratch/sl7.password (SECRETS). Longer wall — winget/WSL after Supervisor (offline OOBE default).
-# Offline OOBE (default): NIC deferred until Supervisor; ONLINE=1 for legacy always-on Default Switch.
+# Offline OOBE (default): HideWireless + NIC deferred unless plan requiresNetwork (then NAT at Start-VM).
+# ONLINE=1: legacy always-on Default Switch (ZDP path).
 # PowerShell: pass ISO as a positional arg only — not ISO=path. NAME=value overrides are not reliable on Windows;
 # use positional WORK WALL MONITOR STALL ONLINE or `smoke-maintainer-monitor` for VMConnect.
 # Usage: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'

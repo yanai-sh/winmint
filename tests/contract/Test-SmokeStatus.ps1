@@ -314,6 +314,18 @@ if ($statusSrc -notmatch 'function New-SmokeOfflineOobeProfile') {
 }
 if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:$false) -cne 'defer') { throw 'offline OOBE defers NIC at create' }
 if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:$true) -cne 'connect') { throw 'OnlineOobe connects at create' }
+if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:$false -PlanRequiresNetwork:$true) -cne 'connect') {
+    throw 'plan requiresNetwork must attach NAT before Start-VM (FirstLogon outbound gate)'
+}
+if ($smoke -notmatch 'attachNicAtCreate' -or $smoke -notmatch 'PlanRequiresNetwork') {
+    throw 'Invoke-Smoke must decide NIC attach at create from OnlineOobe|requiresNetwork before Start-VM'
+}
+# requiresNetwork must be read from manifest before Hyper-V create (not only in the wait loop).
+$manifestReadIdx = $smoke.IndexOf('planManifestPath')
+$hyperVIdx = $smoke.IndexOf('# --- Hyper-V ---')
+if ($manifestReadIdx -lt 0 -or $hyperVIdx -lt 0 -or $manifestReadIdx -gt $hyperVIdx) {
+    throw 'Invoke-Smoke must read manifest.json requiresNetwork before Hyper-V Start-VM'
+}
 if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$false) -cne 'hold') {
     throw 'offline hold before guest-up / Supervisor'
 }
@@ -325,6 +337,18 @@ if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -
 }
 if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$true -GuestUpStickySeconds:360) -cne 'connect') {
     throw 'offline fallback reconnect after guest-up defer window'
+}
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$true -GuestUpStickySeconds:30 -PlanRequiresNetwork:$true) -cne 'hold') {
+    throw 'requiresNetwork guest-up defer must still clear early CXH window'
+}
+if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$true -GuestUpStickySeconds:45 -PlanRequiresNetwork:$true) -cne 'connect') {
+    throw 'requiresNetwork plans attach NAT after short guest-up defer (PS Direct may miss Supervisor)'
+}
+if ($smoke -notmatch 'SmokePlanRequiresNetwork' -or $smoke -notmatch 'PlanRequiresNetwork') {
+    throw 'Invoke-Smoke must pass plan requiresNetwork into NIC reconnect'
+}
+if ($smoke -notmatch 'manifest\.json') {
+    throw 'Invoke-Smoke must read Apply manifest.json for requiresNetwork'
 }
 if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$true -GuestUpStickySeconds:3600 -GuestUpNicDeferSeconds:([int]::MaxValue)) -cne 'hold') {
     throw 'oobeLocal GuestSecretPath must not NAT-fallback on guest-up (#164)'

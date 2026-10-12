@@ -266,9 +266,9 @@ if (-not $OnlineOobe) {
     $applyProfilePath = New-SmokeOfflineOobeProfile `
         -SourceProfilePath $ProfilePath `
         -DestPath (Join-Path $workFull 'offline-oobe.profile.json')
-    Write-SmokeHostLine -Name "Offline OOBE: Apply Profile overlay HideWireless ($applyProfilePath); NIC until Supervisor." -Activity apply
+    Write-SmokeHostLine -Name "Offline OOBE: Apply Profile overlay HideWireless ($applyProfilePath); NIC after Supervisor / guest-up (sooner if plan requiresNetwork)." -Activity apply
     if ($SkipApply) {
-        Write-Warning 'SkipApply + offline OOBE: Output ISO unattend must already HideWireless — NIC is still deferred.'
+        Write-Warning 'SkipApply + offline OOBE: Output ISO unattend must already HideWireless — NIC still follows OnlineOobe|requiresNetwork.'
     }
 }
 else {
@@ -429,11 +429,27 @@ if (Test-Path -LiteralPath $applyExpected -PathType Leaf) {
 # Assert inputs copied into smoke-evidence; reclaim media/payload before VHD grows.
 $null = Clear-WinMintApplyStaging -WorkDirectory $workFull -Phase Assert
 
+# Plan honesty BEFORE Start-VM (manifest survives staging clear). requiresNetwork ⇒ NAT at create.
+$script:SmokePlanRequiresNetwork = $false
+$planManifestPath = Join-Path $Work 'manifest.json'
+if (Test-Path -LiteralPath $planManifestPath -PathType Leaf) {
+    try {
+        $planManifest = Get-Content -LiteralPath $planManifestPath -Raw -Encoding utf8 | ConvertFrom-Json
+        $script:SmokePlanRequiresNetwork = [bool]$planManifest.requiresNetwork
+    }
+    catch {
+        throw "manifest.json unreadable under $Work : $($_.Exception.Message)"
+    }
+}
+
 # --- Hyper-V ---
 Enable-VMEventing -Force -ErrorAction SilentlyContinue
 
 $vhdx = Join-Path $Work 'smoke.vhdx'
 $existing = Get-VM -Name $VmName -ErrorAction SilentlyContinue
+$attachNicAtCreate = (Get-SmokeNicAttachAtCreateDecision `
+        -OnlineOobe:([bool]$OnlineOobe) `
+        -PlanRequiresNetwork:([bool]$script:SmokePlanRequiresNetwork)) -eq 'connect'
 if ($ReuseVm) {
     if (-not $existing) { throw "ReuseVm: VM '$VmName' not found" }
     Write-SmokeHostLine -Name "Reusing existing VM $VmName (state=$($existing.State))…" -Activity vm
@@ -444,9 +460,10 @@ if ($ReuseVm) {
         $script:SmokeNicConnected = -not [string]::IsNullOrWhiteSpace([string]$reuseNic.SwitchName)
     }
     catch { $null = $_ }
-    if ($OnlineOobe -and -not $script:SmokeNicConnected) {
+    if ($attachNicAtCreate -and -not $script:SmokeNicConnected) {
         Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
         $script:SmokeNicConnected = $true
+        Write-SmokeHostLine -Name 'Attached Default Switch before Start-VM (OnlineOobe or plan requiresNetwork).' -Activity vm
     }
     if ($existing.State -eq 'Off') {
         Start-VM -Name $VmName
@@ -477,14 +494,16 @@ else {
     Set-VM -Name $VmName -AutomaticCheckpointsEnabled $false
     Set-VMFirmware -VMName $VmName -EnableSecureBoot Off
     Set-VMProcessor -VMName $VmName -Count 4
-    # Guest NAT for winget/source after FirstLogon. Offline OOBE (default) defers Connect until Supervisor.
+    # Guest NAT: Offline OOBE defers Connect unless plan requiresNetwork (FirstLogon outbound).
     $switch = Get-VMSwitch -Name 'Default Switch' -ErrorAction SilentlyContinue
     if (-not $switch) {
         throw "Hyper-V 'Default Switch' not found — needed for guest network (winget prove-out)."
     }
-    if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:([bool]$OnlineOobe)) -eq 'connect') {
+    if ($attachNicAtCreate) {
         Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
         $script:SmokeNicConnected = $true
+        $why = if ($OnlineOobe) { 'OnlineOobe' } elseif ($script:SmokePlanRequiresNetwork) { 'plan requiresNetwork' } else { 'policy' }
+        Write-SmokeHostLine -Name "Default Switch attached before Start-VM ($why). HideWireless still skips wifi OOBE." -Activity vm
     }
     else {
         Write-SmokeHostLine -Name 'Offline OOBE: Network Adapter left disconnected until Supervisor.' -Activity vm
@@ -932,7 +951,8 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
                 -SupervisorRunning:([bool]$script:LastSupervisorRunning) `
                 -GuestUpSticky:([bool]$script:GuestUpSticky) `
                 -GuestUpStickySeconds $guestUpSecs `
-                -GuestUpNicDeferSeconds $nicDeferSecs) -eq 'connect') {
+                -GuestUpNicDeferSeconds $nicDeferSecs `
+                -PlanRequiresNetwork:([bool]$script:SmokePlanRequiresNetwork)) -eq 'connect') {
             try {
                 Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
                 $script:SmokeNicConnected = $true

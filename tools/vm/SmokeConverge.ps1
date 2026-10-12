@@ -89,9 +89,15 @@ function Get-SmokeNicAttachAtCreateDecision {
     .SYNOPSIS
       Whether Smoke connects Default Switch before Start-VM.
       Offline OOBE (default) defers NAT until Supervisor to skip ZDP during OOBE.
+      When Apply plan requiresNetwork (AppX safety net / winget / …), connect at create
+      anyway — HideWireless still skips the wifi OOBE page; FirstLogon must have NAT
+      before Supervisor's outbound gate (guest-up reconnect is too late).
     #>
-    param([bool] $OnlineOobe = $false)
-    if ($OnlineOobe) { return 'connect' }
+    param(
+        [bool] $OnlineOobe = $false,
+        [bool] $PlanRequiresNetwork = $false
+    )
+    if ($OnlineOobe -or $PlanRequiresNetwork) { return 'connect' }
     return 'defer'
 }
 
@@ -103,6 +109,9 @@ function Get-SmokeNicReconnectDecision {
       CloudExperienceHost "Just a moment" — connecting NAT there re-enables ZDP.
       Fallback: connect only after guest-up has been sticky long enough for HideWireless
       OOBE to finish offline (GuestUpNicDeferSeconds).
+      When the Apply plan requiresNetwork (AppX safety net / winget / …), use a shorter
+      guest-up defer so Hyper-V NAT is up before Supervisor's network gate times out —
+      PS Direct credential flaps must not leave the NIC disconnected forever.
     #>
     param(
         [bool] $OnlineOobe = $false,
@@ -111,11 +120,15 @@ function Get-SmokeNicReconnectDecision {
         [bool] $GuestUpSticky = $false,
         [int] $GuestUpStickySeconds = 0,
         # ponytail: 6m covers typical HideWireless OOBE after heartbeat; ceiling = ZDP if too low.
-        [int] $GuestUpNicDeferSeconds = 360
+        [int] $GuestUpNicDeferSeconds = 360,
+        [bool] $PlanRequiresNetwork = $false,
+        # ponytail: past HideWireless first-logon; short enough for Supervisor SettleDeadline wait.
+        [int] $RequiresNetworkGuestUpNicDeferSeconds = 45
     )
     if ($OnlineOobe -or $AlreadyConnected) { return 'skip' }
     if ($SupervisorRunning) { return 'connect' }
-    if ($GuestUpSticky -and $GuestUpStickySeconds -ge $GuestUpNicDeferSeconds) { return 'connect' }
+    $deferSecs = if ($PlanRequiresNetwork) { $RequiresNetworkGuestUpNicDeferSeconds } else { $GuestUpNicDeferSeconds }
+    if ($GuestUpSticky -and $GuestUpStickySeconds -ge $deferSecs) { return 'connect' }
     return 'hold'
 }
 
