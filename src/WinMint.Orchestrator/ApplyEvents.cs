@@ -9,6 +9,9 @@ public static class ApplyEvents
 {
     public const string FileName = "apply-events.jsonl";
 
+    /// <summary>Monospace opcode field for <see cref="FormatRow"/> (covers every ServicingOpcode).</summary>
+    public const int OpcodeFieldWidth = 24;
+
     public static string PathFor(string workDirectory) =>
         System.IO.Path.Combine(workDirectory, FileName);
 
@@ -67,17 +70,77 @@ public static class ApplyEvents
         }
     }
 
+    /// <summary>
+    /// Operator table rows: keep non-proof events; keep only the latest proof per (opcode, label);
+    /// then take the last <paramref name="maxRows"/> so proof ticks cannot evict stage history.
+    /// </summary>
+    public static IReadOnlyList<ApplyEvent> ForDisplay(IEnumerable<ApplyEvent> events, int maxRows = 40)
+    {
+        List<ApplyEvent> rows = [];
+        Dictionary<string, int> proofSlot = new(StringComparer.Ordinal);
+        foreach (ApplyEvent ev in events)
+        {
+            if (string.Equals(ev.Kind, "proof", StringComparison.Ordinal))
+            {
+                string key = (ev.Opcode ?? string.Empty) + "\0" + (ev.Label ?? string.Empty);
+                if (proofSlot.TryGetValue(key, out int index))
+                {
+                    rows[index] = ev;
+                }
+                else
+                {
+                    proofSlot[key] = rows.Count;
+                    rows.Add(ev);
+                }
+
+                continue;
+            }
+
+            rows.Add(ev);
+        }
+
+        if (rows.Count <= maxRows)
+        {
+            return rows;
+        }
+
+        return [.. rows.TakeLast(maxRows)];
+    }
+
+    public static string DisplayTime(ApplyEvent ev) => TryFormatTime(ev.Ts);
+
+    public static string DisplayOpcode(ApplyEvent ev) =>
+        string.IsNullOrWhiteSpace(ev.Opcode) ? ev.Kind : ev.Opcode;
+
+    public static string DisplayOutcome(ApplyEvent ev) =>
+        string.IsNullOrWhiteSpace(ev.Outcome) ? "-" : ev.Outcome;
+
+    public static string DisplaySummary(ApplyEvent ev, int summaryWidth = 60)
+    {
+        string summary = ev.Summary ?? string.Empty;
+        string opcode = DisplayOpcode(ev);
+        if (opcode.Length > 0
+            && summary.StartsWith(opcode, StringComparison.Ordinal)
+            && summary.Length > opcode.Length
+            && summary[opcode.Length] == ' ')
+        {
+            summary = summary[(opcode.Length + 1)..];
+        }
+
+        return Clip(summary, Math.Max(8, summaryWidth));
+    }
+
     public static string FormatRow(ApplyEvent ev, int summaryWidth = 60)
     {
-        string time = TryFormatTime(ev.Ts);
-        string opcode = string.IsNullOrWhiteSpace(ev.Opcode) ? ev.Kind : ev.Opcode;
-        string outcome = string.IsNullOrWhiteSpace(ev.Outcome) ? "-" : ev.Outcome;
-        string summary = Clip(ev.Summary ?? "", Math.Max(8, summaryWidth));
-        return $"{time}  {opcode,-22}  {outcome,-4}  {summary}";
+        string time = DisplayTime(ev);
+        string opcode = Clip(DisplayOpcode(ev), OpcodeFieldWidth);
+        string outcome = DisplayOutcome(ev);
+        string summary = DisplaySummary(ev, summaryWidth);
+        return $"{time}  {opcode,-24}  {outcome,-4}  {summary}";
     }
 
     public static IReadOnlyList<string> FormatRows(IEnumerable<ApplyEvent> events, int summaryWidth = 60) =>
-        [.. events.Select(e => FormatRow(e, summaryWidth))];
+        [.. ForDisplay(events).Select(e => FormatRow(e, summaryWidth))];
 
     public static double? TryLatestProofPercent(IEnumerable<ApplyEvent> events)
     {

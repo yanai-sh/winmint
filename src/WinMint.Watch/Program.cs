@@ -69,9 +69,10 @@ internal static class Program
                         ApplyStatusSnap apply = ReadApplyStatus(applyStatusPath);
                         SmokeStatusSnap? smoke = isSmoke ? ReadSmokeStatus(smokeStatusPath) : null;
                         string eventsPath = !string.IsNullOrWhiteSpace(apply.Log) ? apply.Log : ApplyEvents.PathFor(work);
-                        IReadOnlyList<ApplyEvent> events = ApplyEvents.ReadTail(eventsPath);
+                        // Raw window larger than display: ForDisplay coalesces proofs then TakeLast(40).
+                        IReadOnlyList<ApplyEvent> events = ApplyEvents.ReadTail(eventsPath, maxEvents: 256);
                         int summaryWidth = Math.Max(24, Math.Min(80, Console.WindowWidth - 44));
-                        IReadOnlyList<string> rows = ApplyEvents.FormatRows(events, summaryWidth);
+                        IReadOnlyList<ApplyEvent> displayEvents = ApplyEvents.ForDisplay(events);
 
                         string verdict = string.Empty;
                         string phase = string.Empty;
@@ -118,7 +119,8 @@ internal static class Program
                             wallLeft,
                             smokeStatusAgeSeconds,
                             lastHostLine,
-                            rows,
+                            displayEvents,
+                            summaryWidth,
                             work,
                             events));
 
@@ -159,7 +161,8 @@ internal static class Program
         int wallLeft,
         int smokeStatusAgeSeconds,
         string lastHostLine,
-        IReadOnlyList<string> rows,
+        IReadOnlyList<ApplyEvent> displayEvents,
+        int summaryWidth,
         string work,
         IReadOnlyList<ApplyEvent> events)
     {
@@ -177,7 +180,7 @@ internal static class Program
         }
 
         applyStage ??= string.Empty;
-        rows ??= [];
+        displayEvents ??= [];
         events ??= [];
 
         string stageLine = string.IsNullOrWhiteSpace(applyStage) ? "-" : applyStage;
@@ -185,24 +188,19 @@ internal static class Program
         header.Add(new Markup($"stage [cyan]{Markup.Escape(stageLine)}[/]  {Markup.Escape(alive)}{proof}"));
 
         Table table = new();
-        table.AddColumn("Time");
-        table.AddColumn("Opcode");
-        table.AddColumn("Outcome");
+        table.AddColumn("Time", c => c.NoWrap());
+        table.AddColumn("Opcode", c => c.NoWrap());
+        table.AddColumn("Outcome", c => c.NoWrap().Width(6));
         table.AddColumn("Summary");
         table.Border(TableBorder.Rounded);
-        foreach (string row in rows)
+        foreach (ApplyEvent ev in displayEvents)
         {
-            if (string.IsNullOrEmpty(row))
-            {
-                continue;
-            }
-
-            string[] parts = SplitRow(row);
+            (string time, string opcode, string outcome, string summary) = ApplyWatchDisplay.Cells(ev, summaryWidth);
             table.AddRow(
-                new Markup(Markup.Escape(parts[0])),
-                new Markup(Markup.Escape(parts[1])),
-                ColorOutcome(parts[2]),
-                new Markup(Markup.Escape(parts[3])));
+                new Markup(Markup.Escape(time)),
+                new Markup(Markup.Escape(opcode)),
+                ApplyWatchDisplay.ColorOutcome(outcome),
+                new Markup(Markup.Escape(summary)));
         }
 
         string footer = "[dim]Ctrl+C to quit[/]";
@@ -224,57 +222,6 @@ internal static class Program
         }
 
         return new Rows([.. header, new Rule(), table, new Markup(footer)]);
-    }
-
-    private static Markup ColorOutcome(string outcome)
-    {
-        if (string.Equals(outcome, "ok", StringComparison.OrdinalIgnoreCase))
-        {
-            return new Markup($"[green]{Markup.Escape(outcome)}[/]");
-        }
-
-        if (string.Equals(outcome, "fail", StringComparison.OrdinalIgnoreCase))
-        {
-            return new Markup($"[red]{Markup.Escape(outcome)}[/]");
-        }
-
-        return new Markup(Markup.Escape(outcome));
-    }
-
-    private static string[] SplitRow(string row)
-    {
-        // FormatRow: "{time}  {opcode,-22}  {outcome,-4}  {summary}"
-        ReadOnlySpan<char> span = row.AsSpan().TrimEnd();
-        int i = 0;
-        while (i < span.Length && span[i] != ' ')
-        {
-            i++;
-        }
-
-        string time = span[..i].ToString();
-        span = span[i..].TrimStart();
-        string opcode = TakeToken(ref span, 22);
-        string outcome = TakeToken(ref span, 4);
-        string summary = span.TrimStart().ToString();
-        return [time, opcode.Trim(), outcome.Trim(), summary];
-    }
-
-    private static string TakeToken(ref ReadOnlySpan<char> span, int fieldWidth)
-    {
-        if (span.IsEmpty)
-        {
-            return string.Empty;
-        }
-
-        int end = Math.Min(span.Length, fieldWidth);
-        while (end > 0 && span[end - 1] == ' ')
-        {
-            end--;
-        }
-
-        string token = span[..end].ToString();
-        span = span.Length > fieldWidth ? span[fieldWidth..].TrimStart() : [];
-        return token;
     }
 
     private static string FormatAlive(DateTimeOffset? updated)

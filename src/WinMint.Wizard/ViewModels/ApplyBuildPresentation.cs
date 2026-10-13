@@ -30,7 +30,7 @@ internal static class ApplyBuildPresentationFormat
     internal static ApplyBuildPresentation? FromApplyProgress(
         ApplyProgress? snapshot,
         Func<string, int, IReadOnlyList<ApplyEvent>>? readEventsTail = null,
-        int maxEvents = 40,
+        int maxEvents = 256,
         string? workDirectory = null)
     {
         if (snapshot is null || string.IsNullOrWhiteSpace(snapshot.Value.Stage))
