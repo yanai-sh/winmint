@@ -763,16 +763,15 @@ public static partial class ProvisioningSession
 
         string username = bundle.Account.Username.Trim();
         string password = bundle.Account.Password;
-        // Empty password = oobeLocal (no bake-in): FirstLogonCommands defers Shell after owner logon.
-        bool bakeInAutologon = !string.IsNullOrEmpty(password);
 
-        if (bakeInAutologon && string.IsNullOrWhiteSpace(username))
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrEmpty(password))
         {
-            return Task.FromResult(Fail("machineSetup.account.empty", "Account username is required."));
+            return Task.FromResult(Fail(
+                "machineSetup.account.empty",
+                "Account username and password are required."));
         }
 
-        if (bakeInAutologon
-            && string.Equals(username, ForbiddenAutologonUser, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(username, ForbiddenAutologonUser, StringComparison.OrdinalIgnoreCase))
         {
             return Task.FromResult(Fail(
                 "machineSetup.account.forbidden",
@@ -780,61 +779,46 @@ public static partial class ProvisioningSession
         }
 
         SessionResult? shellFailure = null;
-        if (bakeInAutologon)
+        try
         {
-            try
+            env.Winlogon.SetAutoLogon(username, password);
+            env.Winlogon.GrantShellUnlockAccess(username);
+            if (env.Winlogon.GetAutoAdminLogon()
+                && string.Equals(
+                    env.Winlogon.GetDefaultUserName()?.Trim(),
+                    ForbiddenAutologonUser,
+                    StringComparison.OrdinalIgnoreCase))
             {
-                env.Winlogon.SetAutoLogon(username, password);
-                env.Winlogon.GrantShellUnlockAccess(username);
-                if (env.Winlogon.GetAutoAdminLogon()
-                    && string.Equals(
-                        env.Winlogon.GetDefaultUserName()?.Trim(),
-                        ForbiddenAutologonUser,
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    return Task.FromResult(Fail(
-                        "machineSetup.account.forbidden",
-                        $"Refusing to leave '{ForbiddenAutologonUser}' with AutoAdminLogon enabled."));
-                }
-            }
-            catch (Exception ex)
-            {
-                return Task.FromResult(Fail("machineSetup.autologon.stampFailed", ex.Message));
-            }
-
-            string expectedShell = bundle.SupervisorShellPath;
-            try
-            {
-                string? shell = env.Winlogon.GetShell();
-                if (!ShellEquals(shell, expectedShell))
-                {
-                    env.Winlogon.SetShell(expectedShell);
-                    shell = env.Winlogon.GetShell();
-                }
-
-                if (!ShellEquals(shell, expectedShell))
-                {
-                    shellFailure = Fail(
-                        "machineSetup.shell.verifyFailed",
-                        $"Winlogon Shell is '{shell ?? "<null>"}' after restamp; expected '{expectedShell}'.");
-                }
-            }
-            catch (Exception ex)
-            {
-                shellFailure = Fail("machineSetup.shell.verifyFailed", ex.Message);
+                return Task.FromResult(Fail(
+                    "machineSetup.account.forbidden",
+                    $"Refusing to leave '{ForbiddenAutologonUser}' with AutoAdminLogon enabled."));
             }
         }
-        else
+        catch (Exception ex)
         {
-            // oobeLocal: leave explorer; Users ACE so deferred Supervisor tenure can Unlock.
-            try
+            return Task.FromResult(Fail("machineSetup.autologon.stampFailed", ex.Message));
+        }
+
+        string expectedShell = bundle.SupervisorShellPath;
+        try
+        {
+            string? shell = env.Winlogon.GetShell();
+            if (!ShellEquals(shell, expectedShell))
             {
-                env.Winlogon.GrantShellUnlockAccess(username);
+                env.Winlogon.SetShell(expectedShell);
+                shell = env.Winlogon.GetShell();
             }
-            catch (Exception ex)
+
+            if (!ShellEquals(shell, expectedShell))
             {
-                return Task.FromResult(Fail("machineSetup.autologon.stampFailed", ex.Message));
+                shellFailure = Fail(
+                    "machineSetup.shell.verifyFailed",
+                    $"Winlogon Shell is '{shell ?? "<null>"}' after restamp; expected '{expectedShell}'.");
             }
+        }
+        catch (Exception ex)
+        {
+            shellFailure = Fail("machineSetup.shell.verifyFailed", ex.Message);
         }
 
         // No further use of stamp password in this phase (disk wipe next; string GC lifetime remains).
@@ -906,8 +890,7 @@ public static partial class ProvisioningSession
             }
         }
 
-        // ImageState IMAGE_STATE_COMPLETE fights native OOBE owner creation — bake-in only.
-        if (bakeInAutologon && env.StampOobeComplete is not null)
+        if (env.StampOobeComplete is not null)
         {
             try
             {
@@ -920,12 +903,9 @@ public static partial class ProvisioningSession
             }
         }
 
-        string okMessage = bakeInAutologon
-            ? "Autologon stamped; Shell verified; secrets wiped."
-            : "oobeLocal: Shell deferred; secrets wiped.";
         return Task.FromResult(new SessionResult(
             SessionOutcome.Complete,
-            new SessionStatus("machineSetup.ok", okMessage),
+            new SessionStatus("machineSetup.ok", "Autologon stamped; Shell verified; secrets wiped."),
             []));
     }
 

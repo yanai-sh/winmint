@@ -1,59 +1,28 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:WinMint.Wizard.ViewModels"
-             xmlns:orch="using:WinMint.Orchestrator"
              x:Class="WinMint.Wizard.Views.AccountStepView"
              x:DataType="vm:IAccountStageViewModel">
   <StackPanel Spacing="16" MaxWidth="520">
     <TextBlock Classes="hero-title" Text="Account" />
     <TextBlock Classes="hero-sub"
-               Text="Create the owner when Windows starts, or bake auto-logon for automation." />
+               Text="Username and password are baked into the Output ISO for auto-logon." />
 
     <Border Classes="panel-card" HorizontalAlignment="Stretch">
       <StackPanel Spacing="14">
-        <TextBlock Classes="panel-label" Text="First sign-in" />
-        <StackPanel Spacing="8">
-          <RadioButton Classes="desktop-card"
-                       GroupName="AccountMode"
-                       IsChecked="{Binding Mode.IsPortable}"
-                       Command="{Binding Mode.SelectCommand}"
-                       CommandParameter="{x:Static orch:AccountProfile.OobeLocalMode}"
-                       AutomationProperties.Name="Create account when Windows starts, portable">
-            <StackPanel>
-              <TextBlock FontWeight="SemiBold" Text="Create account when Windows starts" />
-              <TextBlock Text="Portable ISO — native OOBE creates the owner; no password in the image."
-                         TextWrapping="Wrap" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton Classes="desktop-card"
-                       GroupName="AccountMode"
-                       IsChecked="{Binding Mode.IsBakeIn}"
-                       Command="{Binding Mode.SelectCommand}"
-                       CommandParameter="{x:Static orch:AccountProfile.LocalAutoLogonMode}"
-                       AutomationProperties.Name="Bake auto-logon, automation">
-            <StackPanel>
-              <TextBlock FontWeight="SemiBold" Text="Bake auto-logon" />
-              <TextBlock Text="Automation — username and password go into the Output ISO."
-                         TextWrapping="Wrap" />
-            </StackPanel>
-          </RadioButton>
+        <TextBlock Classes="panel-label" Text="Owner account" />
+        <TextBlock Classes="hero-sub"
+                   Text="Warning: the Output ISO will contain this password. Anyone with the ISO can sign in as this user."
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemErrorTextColor}" />
+        <StackPanel Spacing="6">
+          <TextBlock Classes="panel-label" Text="Username" />
+          <TextBox Text="{Binding Username}" PlaceholderText="winmint" />
         </StackPanel>
-
-        <StackPanel Spacing="14" IsVisible="{Binding Mode.IsBakeIn}">
-          <TextBlock Classes="hero-sub"
-                     Text="Warning: the Output ISO will contain this password. Anyone with the ISO can sign in as this user."
-                     TextWrapping="Wrap"
-                     Foreground="{DynamicResource SystemErrorTextColor}" />
-          <StackPanel Spacing="6">
-            <TextBlock Classes="panel-label" Text="Username" />
-            <TextBox Text="{Binding Username}" PlaceholderText="winmint" />
-          </StackPanel>
-          <StackPanel Spacing="6">
-            <TextBlock Classes="panel-label" Text="Password" />
-            <TextBox Text="{Binding Password}" PasswordChar="•" PlaceholderText="Required for autologon" />
-          </StackPanel>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="panel-label" Text="Password" />
+          <TextBox Text="{Binding Password}" PasswordChar="•" PlaceholderText="Required" />
         </StackPanel>
-
         <CheckBox Content="Require Wi-Fi during OOBE" IsChecked="{Binding RequireWifi}" />
       </StackPanel>
     </Border>

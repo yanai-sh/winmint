@@ -50,26 +50,20 @@ public class MachineSetupTests
     }
 
     [Fact]
-    public async Task MachineSetup_oobeLocal_skips_autologon_and_leaves_explorer_Shell()
+    public async Task MachineSetup_empty_credentials_fails()
     {
-        int stampCount = 0;
         FakeWinlogonRegistry winlogon = new() { Shell = "explorer.exe" };
         RecordingWipeSecrets secrets = new();
         ProvisioningBundle bundle = MinimalBundle("", "");
 
         SessionResult result = await ProvisioningSession.RunMachineSetupAsync(
             bundle,
-            Env(winlogon, secrets, stampOobeComplete: () => stampCount++),
+            Env(winlogon, secrets),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(SessionOutcome.Complete, result.Outcome);
-        Assert.Equal("machineSetup.ok", result.FinalStatus.Code);
-        Assert.Contains("deferred", result.FinalStatus.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.False(winlogon.AutoAdminLogon);
-        Assert.Null(winlogon.DefaultUserName);
-        Assert.Equal("explorer.exe", winlogon.Shell);
-        Assert.Equal(1, secrets.WipeCount);
-        Assert.Equal(0, stampCount);
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("machineSetup.account.empty", result.FinalStatus.Code);
+        Assert.Equal(0, secrets.WipeCount);
     }
 
     [Fact]

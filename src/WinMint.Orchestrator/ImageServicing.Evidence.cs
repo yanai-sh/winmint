@@ -21,12 +21,7 @@ public static partial class ImageServicing
                 new Failure("servicing.evidence.outputIso.missing", "BuildIso output missing."));
         }
 
-        // oobeLocal omits offline Shell stamp (explorer through OOBE; FirstLogonCommands defers — ADR-017).
-        bool deferShell = string.Equals(
-            plan.Account.Mode,
-            AccountProfile.OobeLocalMode,
-            StringComparison.Ordinal);
-        if (!deferShell && !stages.Any(static s => s.Opcode == ServicingOpcode.StampOfflineShell))
+        if (!stages.Any(static s => s.Opcode == ServicingOpcode.StampOfflineShell))
         {
             return Result.Fail<ImageEvidence, Failure>(
                 new Failure(

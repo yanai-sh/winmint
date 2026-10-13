@@ -21,7 +21,6 @@ public sealed partial class StageStatusViewModel : ObservableObject
 
 public interface IAccountStageViewModel
 {
-    AccountModeSelectionViewModel Mode { get; }
     string Username { get; set; }
     string Password { get; set; }
     bool RequireWifi { get; set; }
@@ -33,42 +32,6 @@ public interface IAccountStageViewModel
     StageStatusViewModel Status { get; }
 }
 
-/// <summary>Portable OOBE vs bake-in AutoLogon (ADR-017). Customize defaults portable; curated emit forces bake-in.</summary>
-public sealed partial class AccountModeSelectionViewModel : ObservableObject
-{
-    private readonly Action _changed;
-
-    // ponytail: customize defaults portable; Use WinMint defaults / CuratedDefaults still force bake-in
-    [ObservableProperty] private string _value = AccountProfile.OobeLocalMode;
-
-    internal AccountModeSelectionViewModel(Action changed) => _changed = changed;
-
-    public bool IsPortable =>
-        string.Equals(Value, AccountProfile.OobeLocalMode, StringComparison.Ordinal);
-
-    public bool IsBakeIn =>
-        string.Equals(Value, AccountProfile.LocalAutoLogonMode, StringComparison.Ordinal);
-
-    partial void OnValueChanged(string value)
-    {
-        OnPropertyChanged(nameof(IsPortable));
-        OnPropertyChanged(nameof(IsBakeIn));
-        _changed();
-    }
-
-    [RelayCommand]
-    private void Select(string? mode)
-    {
-        if (string.Equals(mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal)
-            || string.Equals(mode, AccountProfile.LocalAutoLogonMode, StringComparison.Ordinal))
-        {
-            Value = mode!;
-        }
-    }
-
-    internal void UseBakeIn() => Value = AccountProfile.LocalAutoLogonMode;
-}
-
 internal sealed partial class AccountStageViewModel : ObservableObject, IAccountStageViewModel
 {
     private readonly Action _draftChanged;
@@ -76,11 +39,8 @@ internal sealed partial class AccountStageViewModel : ObservableObject, IAccount
     public AccountStageViewModel(Action draftChanged)
     {
         _draftChanged = draftChanged;
-        Mode = new AccountModeSelectionViewModel(DraftChanged);
         ApplyBuildMachineDmaDefaults();
     }
-
-    public AccountModeSelectionViewModel Mode { get; }
 
     [ObservableProperty] private string _username = "winmint";
     [ObservableProperty] private string _password = "";
@@ -94,8 +54,7 @@ internal sealed partial class AccountStageViewModel : ObservableObject, IAccount
     public StageStatusViewModel Status { get; } = new();
 
     internal bool IdentityReady =>
-        Mode.IsPortable
-        || (!string.IsNullOrWhiteSpace(Username) && !string.IsNullOrEmpty(Password));
+        !string.IsNullOrWhiteSpace(Username) && !string.IsNullOrEmpty(Password);
 
     partial void OnUsernameChanged(string value) => DraftChanged();
     partial void OnPasswordChanged(string value) => DraftChanged();

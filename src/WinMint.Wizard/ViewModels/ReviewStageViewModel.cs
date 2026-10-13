@@ -130,10 +130,7 @@ internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewSt
     [RelayCommand]
     private void CancelBuild() => _host?.CancelBuild();
 
-    private static string FormatAccountName(AccountProfile account) =>
-        string.Equals(account.Mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal)
-            ? "OOBE local account"
-            : account.Username;
+    private static string FormatAccountName(AccountProfile account) => account.Username;
 
     private static string FormatRegion(DmaSettleTarget settle)
     {

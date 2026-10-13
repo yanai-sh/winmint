@@ -10,6 +10,7 @@ public class WizardShippingPathTests
     {
         using WizardViewModel vm = new(storage: null, close: null, sourceMedia: null);
         vm.Source.SourceIsoPath = @"C:\iso\source.iso";
+        vm.Account.Password = "lab-only";
 
         Result<WizardDraft, Failure> draft = vm.BuildDraft();
 

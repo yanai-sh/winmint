@@ -83,7 +83,14 @@ public static partial class BuildPlan
             {
                 issues.Add(new DocumentError("account.mode.missing", "account.mode is required.", "account.mode"));
             }
-            else if (string.Equals(doc.Account.Mode, AccountProfile.LocalAutoLogonMode, StringComparison.Ordinal))
+            else if (!string.Equals(doc.Account.Mode, AccountProfile.LocalAutoLogonMode, StringComparison.Ordinal))
+            {
+                issues.Add(new DocumentError(
+                    "account.mode.unsupported",
+                    $"Unsupported account.mode '{doc.Account.Mode}'. Expected {AccountProfile.LocalAutoLogonMode} (username + password required at build).",
+                    "account.mode"));
+            }
+            else
             {
                 if (string.IsNullOrWhiteSpace(doc.Account.Username))
                 {
@@ -92,31 +99,16 @@ public static partial class BuildPlan
                         "account.username is required.",
                         "account.username"));
                 }
-            }
-            else if (string.Equals(doc.Account.Mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal))
-            {
-                if (doc.Account.Password is not null || !string.IsNullOrWhiteSpace(doc.Account.PasswordPath))
+
+                bool hasPassword = !string.IsNullOrWhiteSpace(doc.Account.Password);
+                bool hasPasswordPath = !string.IsNullOrWhiteSpace(doc.Account.PasswordPath);
+                if (!hasPassword && !hasPasswordPath)
                 {
                     issues.Add(new DocumentError(
-                        "account.password.forbidden",
-                        $"account.mode {AccountProfile.OobeLocalMode} forbids account.password and account.passwordPath.",
+                        "account.password.missing",
+                        "account.password or account.passwordPath is required before building the ISO.",
                         "account"));
                 }
-
-                if (doc.Account.Username is not null && string.IsNullOrWhiteSpace(doc.Account.Username))
-                {
-                    issues.Add(new DocumentError(
-                        "account.username.blank",
-                        "account.username, when set, must be non-whitespace.",
-                        "account.username"));
-                }
-            }
-            else
-            {
-                issues.Add(new DocumentError(
-                    "account.mode.unsupported",
-                    $"Unsupported account.mode '{doc.Account.Mode}'. Expected {AccountProfile.LocalAutoLogonMode} or {AccountProfile.OobeLocalMode}.",
-                    "account.mode"));
             }
         }
 
@@ -567,11 +559,7 @@ public static partial class BuildPlan
         stages.Add(ServicingOpcode.StagePayload);
         stages.Add(ServicingOpcode.StampOfflineDefaultUser);
         stages.Add(ServicingOpcode.StageOobeUnattend);
-        // oobeLocal: leave explorer through native OOBE; FirstLogonCommands defers Supervisor Shell (ADR-017).
-        if (!string.Equals(profile.Account.Mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal))
-        {
-            stages.Add(ServicingOpcode.StampOfflineShell);
-        }
+        stages.Add(ServicingOpcode.StampOfflineShell);
 
         stages.Add(ServicingOpcode.PatchBootWimApply);
         stages.Add(ServicingOpcode.ExportWim);
@@ -614,7 +602,6 @@ public static partial class BuildPlan
         string timeZone = XmlEscape(profile.Dma.Settle.TimeZoneId ?? "");
         string timeZoneXml = string.IsNullOrEmpty(timeZone) ? "" : $"<TimeZone>{timeZone}</TimeZone>";
         string accountBlocks = BuildOobeAccountBlocksXml(profile);
-        string deferredShell = BuildDeferredShellFirstLogonXml(profile);
 
         return $$"""
             <?xml version="1.0" encoding="utf-8"?>
@@ -632,50 +619,15 @@ public static partial class BuildPlan
                     <ProtectYourPC>3</ProtectYourPC>
                   </OOBE>
                   {{accountBlocks}}
-                  {{deferredShell}}
                 </component>
               </settings>
             </unattend>
             """;
     }
 
-    /// <summary>
-    /// <see cref="AccountProfile.OobeLocalMode"/> only: after OOBE + first owner logon, stamp Winlogon
-    /// Shell to Supervisor and log off so the next interactive logon runs FirstLogon tenure (ADR-017).
-    /// One place — oobeSystem FirstLogonCommands (not specialize; not MachineSetup).
-    /// </summary>
-    private static string BuildDeferredShellFirstLogonXml(Profile profile)
-    {
-        if (!string.Equals(profile.Account.Mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal))
-        {
-            return "";
-        }
-
-        string shell = XmlEscape(ImageServicing.ShellStampGuestPath);
-        // ponytail: FirstLogonCommands + logoff; ceiling = owner signs in twice (create + post-defer).
-        // Upgrade if a password-less re-entry (or single-session Shell swap) proves stable on Home ARM64.
-        return $$"""
-                  <FirstLogonCommands>
-                    <SynchronousCommand wcm:action="add">
-                      <Order>1</Order>
-                      <Description>WinMint defer Shell to Supervisor (oobeLocal)</Description>
-                      <CommandLine>cmd.exe /c reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Shell /t REG_SZ /d "{{shell}}" /f &amp; shutdown.exe /l</CommandLine>
-                    </SynchronousCommand>
-                  </FirstLogonCommands>
-            """;
-    }
-
-    /// <summary>
-    /// <see cref="AccountProfile.OobeLocalMode"/> omits LocalAccounts/AutoLogon (native OOBE creates the owner).
-    /// <see cref="AccountProfile.LocalAutoLogonMode"/> keeps today's bake-in.
-    /// </summary>
+    /// <summary>Bake-in LocalAccounts + AutoLogon (ADR-017 — credentials required at build).</summary>
     private static string BuildOobeAccountBlocksXml(Profile profile)
     {
-        if (string.Equals(profile.Account.Mode, AccountProfile.OobeLocalMode, StringComparison.Ordinal))
-        {
-            return "";
-        }
-
         string user = XmlEscape(profile.Account.Username);
         string pass = XmlEscape(profile.Account.Password ?? "");
         return $$"""

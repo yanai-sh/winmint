@@ -57,22 +57,7 @@ public class WizardDraftCompileTests
     }
 
     [Fact]
-    public void TryCompile_oobeLocal_omits_credentials()
-    {
-        Result<WizardDraft, Failure> draft = WizardDraftCompile.TryCompile(
-            LabRequest() with
-            {
-                AccountMode = AccountProfile.OobeLocalMode,
-                Password = "must-not-bake",
-            });
-        Assert.True(draft.IsOk, draft.IsOk ? null : draft.Error.Message);
-        Assert.Equal(AccountProfile.OobeLocalMode, draft.Value.Profile.Account.Mode);
-        Assert.Equal("", draft.Value.Profile.Account.Username);
-        Assert.Null(draft.Value.Profile.Account.Password);
-    }
-
-    [Fact]
-    public void TryCompile_default_mode_stays_localAutoLogon()
+    public void TryCompile_bakes_localAutoLogon_credentials()
     {
         Result<WizardDraft, Failure> draft = WizardDraftCompile.TryCompile(LabRequest());
         Assert.True(draft.IsOk);

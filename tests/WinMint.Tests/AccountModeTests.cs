@@ -7,68 +7,13 @@ namespace WinMint.Tests;
 public class AccountModeTests
 {
     [Fact]
-    public void Parse_oobeLocal_without_password_succeeds()
+    public void Parse_oobeLocal_rejected()
     {
-        Result<Profile, IReadOnlyList<DocumentError>> result = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
+        Result<Profile, IReadOnlyList<DocumentError>> result = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes("""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
-                "mode": "{{AccountProfile.OobeLocalMode}}"
-              },
-              "dma": {
-                "enabled": true,
-                "settle": {
-                  "locale": "en-GB",
-                  "geoId": 242,
-                  "timeZoneId": "GMT Standard Time",
-                  "locationServicesEnabled": true
-                }
-              }
-            }
-            """));
-
-        Assert.True(result.IsOk, Format(result));
-        Assert.Equal(AccountProfile.OobeLocalMode, result.Value.Account.Mode);
-        Assert.Equal("", result.Value.Account.Username);
-        Assert.Null(result.Value.Account.Password);
-        Assert.Null(result.Value.Account.PasswordPath);
-    }
-
-    [Fact]
-    public void Parse_oobeLocal_optional_username_accepted()
-    {
-        Profile profile = Parse($$"""
-            {
-              "schemaVersion": "winmint.profile/v1",
-              "account": {
-                "mode": "{{AccountProfile.OobeLocalMode}}",
-                "username": "hint"
-              },
-              "dma": {
-                "enabled": true,
-                "settle": {
-                  "locale": "en-GB",
-                  "geoId": 242,
-                  "timeZoneId": "GMT Standard Time",
-                  "locationServicesEnabled": true
-                }
-              }
-            }
-            """);
-
-        Assert.Equal(AccountProfile.OobeLocalMode, profile.Account.Mode);
-        Assert.Equal("hint", profile.Account.Username);
-    }
-
-    [Fact]
-    public void Parse_oobeLocal_with_password_fails()
-    {
-        Result<Profile, IReadOnlyList<DocumentError>> result = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
-            {
-              "schemaVersion": "winmint.profile/v1",
-              "account": {
-                "mode": "{{AccountProfile.OobeLocalMode}}",
-                "password": "secret"
+                "mode": "oobeLocal"
               },
               "dma": {
                 "enabled": true,
@@ -83,7 +28,33 @@ public class AccountModeTests
             """));
 
         Assert.False(result.IsOk);
-        Assert.Contains(result.Error, i => i.Code == "account.password.forbidden");
+        Assert.Contains(result.Error, i => i.Code == "account.mode.unsupported");
+    }
+
+    [Fact]
+    public void Parse_localAutoLogon_requires_username_and_password()
+    {
+        Result<Profile, IReadOnlyList<DocumentError>> result = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
+                "username": "winmint"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              }
+            }
+            """));
+
+        Assert.False(result.IsOk);
+        Assert.Contains(result.Error, i => i.Code == "account.password.missing");
     }
 
     [Fact]
@@ -113,73 +84,7 @@ public class AccountModeTests
     }
 
     [Fact]
-    public void Plan_oobeLocal_unattend_omits_AutoLogon()
-    {
-        Profile profile = Parse($$"""
-            {
-              "schemaVersion": "winmint.profile/v1",
-              "account": {
-                "mode": "{{AccountProfile.OobeLocalMode}}",
-                "requireWifiDuringOobe": false
-              },
-              "dma": {
-                "enabled": true,
-                "settle": {
-                  "locale": "en-GB",
-                  "geoId": 242,
-                  "timeZoneId": "GMT Standard Time",
-                  "locationServicesEnabled": true
-                }
-              }
-            }
-            """);
-
-        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
-
-        Assert.True(result.IsOk, result.IsOk ? "" : result.Error.Code + ": " + result.Error.Message);
-        string xml = result.Value.Unattend.Xml;
-        Assert.DoesNotContain("AutoLogon", xml, StringComparison.Ordinal);
-        Assert.DoesNotContain("UserAccounts", xml, StringComparison.Ordinal);
-        Assert.DoesNotContain("LocalAccounts", xml, StringComparison.Ordinal);
-        Assert.Contains("<HideOnlineAccountScreens>true</HideOnlineAccountScreens>", xml, StringComparison.Ordinal);
-        Assert.Contains("<HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>", xml, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Plan_oobeLocal_omits_StampOfflineShell_and_emits_deferred_FirstLogonCommands()
-    {
-        Profile profile = Parse($$"""
-            {
-              "schemaVersion": "winmint.profile/v1",
-              "account": {
-                "mode": "{{AccountProfile.OobeLocalMode}}",
-                "requireWifiDuringOobe": false
-              },
-              "dma": {
-                "enabled": true,
-                "settle": {
-                  "locale": "en-GB",
-                  "geoId": 242,
-                  "timeZoneId": "GMT Standard Time",
-                  "locationServicesEnabled": true
-                }
-              }
-            }
-            """);
-
-        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
-
-        Assert.True(result.IsOk, result.IsOk ? "" : result.Error.Code + ": " + result.Error.Message);
-        Assert.DoesNotContain(ServicingOpcode.StampOfflineShell, result.Value.Stages);
-        string xml = result.Value.Unattend.Xml;
-        Assert.Contains("FirstLogonCommands", xml, StringComparison.Ordinal);
-        Assert.Contains("defer Shell to Supervisor", xml, StringComparison.Ordinal);
-        Assert.Contains(ImageServicing.ShellStampGuestPath, xml, StringComparison.Ordinal);
-        Assert.Contains("shutdown.exe /l", xml, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Plan_localAutoLogon_still_emits_AutoLogon()
+    public void Plan_localAutoLogon_emits_AutoLogon_and_StampOfflineShell()
     {
         Profile profile = Parse($$"""
             {
@@ -204,15 +109,17 @@ public class AccountModeTests
 
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
-        Assert.True(result.IsOk);
+        Assert.True(result.IsOk, result.IsOk ? "" : result.Error.Code + ": " + result.Error.Message);
         string xml = result.Value.Unattend.Xml;
         Assert.Contains("AutoLogon", xml, StringComparison.Ordinal);
         Assert.Contains("LocalAccounts", xml, StringComparison.Ordinal);
         Assert.Contains("<Username>winmint</Username>", xml, StringComparison.Ordinal);
+        Assert.Contains(ServicingOpcode.StampOfflineShell, result.Value.Stages);
+        Assert.DoesNotContain("FirstLogonCommands", xml, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Plan_localAutoLogon_still_includes_StampOfflineShell()
+    public void SerializeProfile_roundtrips_localAutoLogon()
     {
         Profile profile = Parse($$"""
             {
@@ -220,36 +127,7 @@ public class AccountModeTests
               "account": {
                 "mode": "{{AccountProfile.LocalAutoLogonMode}}",
                 "username": "winmint",
-                "password": "lab-only",
-                "requireWifiDuringOobe": false
-              },
-              "dma": {
-                "enabled": true,
-                "settle": {
-                  "locale": "en-GB",
-                  "geoId": 242,
-                  "timeZoneId": "GMT Standard Time",
-                  "locationServicesEnabled": true
-                }
-              }
-            }
-            """);
-
-        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
-
-        Assert.True(result.IsOk);
-        Assert.Contains(ServicingOpcode.StampOfflineShell, result.Value.Stages);
-        Assert.DoesNotContain("FirstLogonCommands", result.Value.Unattend.Xml, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void SerializeProfile_roundtrips_oobeLocal()
-    {
-        Profile profile = Parse($$"""
-            {
-              "schemaVersion": "winmint.profile/v1",
-              "account": {
-                "mode": "{{AccountProfile.OobeLocalMode}}"
+                "password": "lab-only"
               },
               "dma": {
                 "enabled": true,
@@ -264,12 +142,12 @@ public class AccountModeTests
             """);
 
         string json = Encoding.UTF8.GetString(BuildPlan.SerializeProfile(profile));
-        Assert.Contains($"\"mode\": \"{AccountProfile.OobeLocalMode}\"", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("password", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"\"mode\": \"{AccountProfile.LocalAutoLogonMode}\"", json, StringComparison.Ordinal);
 
         Result<Profile, IReadOnlyList<DocumentError>> again = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes(json));
         Assert.True(again.IsOk, Format(again));
-        Assert.Equal(AccountProfile.OobeLocalMode, again.Value.Account.Mode);
+        Assert.Equal(AccountProfile.LocalAutoLogonMode, again.Value.Account.Mode);
+        Assert.Equal("winmint", again.Value.Account.Username);
     }
 
     private static Profile Parse(string json)

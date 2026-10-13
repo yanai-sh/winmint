@@ -164,8 +164,6 @@ public sealed partial class WizardViewModel :
     private void ApplyCuratedBootstrap()
     {
         _software.ApplyCuratedDefaults();
-        // ADR-017 proof gate: curated / Use WinMint defaults stay localAutoLogon (+ bootstrap password)
-        _account.Mode.UseBakeIn();
         _account.Username = CuratedDefaults.BootstrapUsername;
         _account.Password = CuratedDefaults.NewBootstrapPassword();
     }
@@ -579,8 +577,7 @@ public sealed partial class WizardViewModel :
                 AdvancedWsl: _software.Advanced.Wsl,
                 SourceIsoPath: _source.SourceIsoPath,
                 WimIndex: _source.WimIndex,
-                SelectionLabels: [.. axis.Value.SelectionLabels],
-                AccountMode: _account.Mode.Value));
+                SelectionLabels: [.. axis.Value.SelectionLabels]));
     }
 
     private void InvalidatePresentation()
@@ -593,7 +590,7 @@ public sealed partial class WizardViewModel :
     {
         CurrentStatus().Set(
             identityRequired
-                ? "Choose portable OOBE or add a bake-in password on Account to continue."
+                ? "Add username and password on Account to continue."
                 : "Choose an existing Source ISO to continue.",
             true);
     }
@@ -646,15 +643,14 @@ public sealed partial class WizardViewModel :
 
         if (!_account.IdentityReady)
         {
-            FooterStatus = "Source ready · Use WinMint defaults or bake-in Account password";
+            FooterStatus = "Source ready · Set Account username and password";
             FooterWarn = true;
             FooterReady = false;
             return;
         }
 
         string edition = _source.SelectedWimIndex?.Name ?? "ISO";
-        string accountLabel = _account.Mode.IsPortable ? "OOBE local" : _account.Username;
-        FooterStatus = $"Ready · {edition} · {accountLabel}";
+        FooterStatus = $"Ready · {edition} · {_account.Username}";
         FooterWarn = false;
         FooterReady = true;
     }

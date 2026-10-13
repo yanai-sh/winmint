@@ -64,10 +64,6 @@ param(
     [Parameter(ParameterSetName = 'Run')]
     [switch] $OnlineOobe,
 
-    # Host-only PS Direct secret file for oobeLocal Profiles (not baked into the ISO). #164
-    [Parameter(ParameterSetName = 'Run')]
-    [string] $GuestSecretPath = '',
-
     [Parameter(Mandatory, ParameterSetName = 'AssertOnly')]
     [switch] $AssertOnly,
 
@@ -243,11 +239,10 @@ if (Test-Path -LiteralPath $scratchRoot -PathType Container) {
     }
 }
 
-# Local+autoLogon Profiles need explicit PS Direct credentials (workgroup guest).
+# Bake-in Profiles need explicit PS Direct credentials (workgroup guest).
 # Resolve now — passwordPath included — so a missing secret fails here, not as a
 # blocking New-PSSession credential prompt mid-wait (sl7.profile.json uses passwordPath).
-# oobeLocal: pass -GuestSecretPath (host-only) matching the OOBE-created local account (#164).
-$guestCred = Resolve-WinMintSmokeGuestCredential -ProfilePath $ProfilePath -GuestSecretPath $GuestSecretPath
+$guestCred = Resolve-WinMintSmokeGuestCredential -ProfilePath $ProfilePath
 # Authored Profile for pin/evidence facts; Apply may use an offline-OOBE overlay.
 $profileDoc = Get-Content -LiteralPath $ProfilePath -Raw -Encoding utf8 | ConvertFrom-Json
 
@@ -492,6 +487,11 @@ if ($ReuseVm) {
         Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
         $script:SmokeNicConnected = $true
         Write-SmokeHostLine -Name 'Attached Default Switch before Start-VM (OnlineOobe or plan requiresNetwork).' -Activity vm
+    }
+    elseif (-not $attachNicAtCreate -and $script:SmokeNicConnected) {
+        Disconnect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -ErrorAction SilentlyContinue
+        $script:SmokeNicConnected = $false
+        Write-SmokeHostLine -Name 'Offline OOBE: disconnected Default Switch before Start-VM (defer).' -Activity vm
     }
     if ($existing.State -eq 'Off') {
         Start-VM -Name $VmName
@@ -969,17 +969,15 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         }
         $guestUpSecs = if ($null -ne $script:GuestUpStickySw) { [int]$script:GuestUpStickySw.Elapsed.TotalSeconds } else { 0 }
         $script:ConsecutiveHeartbeatOk = [int]$tick.ConsecutiveHeartbeatOk
-        # Trust Hyper-V over script sticky — operator/proof may Disconnect mid-wait (#164).
+        # Trust Hyper-V over script sticky — operator may Disconnect mid-wait.
         $liveNic = Get-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -ErrorAction SilentlyContinue
         $script:SmokeNicConnected = [bool]($liveNic -and -not [string]::IsNullOrWhiteSpace([string]$liveNic.SwitchName))
-        # oobeLocal (GuestSecretPath): human may still be on local-account UI - do not NAT-fallback on guest-up (#164).
-        $nicDeferSecs = if (-not [string]::IsNullOrWhiteSpace($GuestSecretPath)) { [int]::MaxValue } else { 360 }
         if ((Get-SmokeNicReconnectDecision -OnlineOobe:([bool]$OnlineOobe) `
                 -AlreadyConnected:([bool]$script:SmokeNicConnected) `
                 -SupervisorRunning:([bool]$script:LastSupervisorRunning) `
                 -GuestUpSticky:([bool]$script:GuestUpSticky) `
                 -GuestUpStickySeconds $guestUpSecs `
-                -GuestUpNicDeferSeconds $nicDeferSecs `
+                -GuestUpNicDeferSeconds 360 `
                 -PlanRequiresNetwork:([bool]$script:SmokePlanRequiresNetwork)) -eq 'connect') {
             try {
                 Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'

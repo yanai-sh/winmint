@@ -320,6 +320,9 @@ if ((Get-SmokeNicAttachAtCreateDecision -OnlineOobe:$false -PlanRequiresNetwork:
 if ($smoke -notmatch 'attachNicAtCreate' -or $smoke -notmatch 'PlanRequiresNetwork') {
     throw 'Invoke-Smoke must decide NIC attach at create from OnlineOobe|requiresNetwork before Start-VM'
 }
+if ($smoke -notmatch 'Disconnect-VMNetworkAdapter') {
+    throw 'Invoke-Smoke must Disconnect Default Switch on ReuseVm when Offline OOBE defers NAT'
+}
 # requiresNetwork: capture payload/bundle BEFORE staging clear; Work/manifest after clear; both before Hyper-V.
 $bundleReadIdx = $smoke.IndexOf('SmokePlanRequiresNetworkFromBundle')
 # Call site (not the earlier comment that names the function).
@@ -365,9 +368,6 @@ if ($smoke -notmatch 'SmokePlanRequiresNetwork' -or $smoke -notmatch 'PlanRequir
 if ($smoke -notmatch 'manifest\.json') {
     throw 'Invoke-Smoke must read Apply manifest.json for requiresNetwork'
 }
-if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$false -SupervisorRunning:$false -GuestUpSticky:$true -GuestUpStickySeconds:3600 -GuestUpNicDeferSeconds:([int]::MaxValue)) -cne 'hold') {
-    throw 'oobeLocal GuestSecretPath must not NAT-fallback on guest-up (#164)'
-}
 if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$true -SupervisorRunning:$true -GuestUpSticky:$true) -cne 'skip') {
     throw 'already connected skips reconnect'
 }
@@ -379,10 +379,9 @@ if ($smoke -notmatch 'New-SmokeOfflineOobeProfile') { throw 'Invoke-Smoke must b
 if ($smoke -notmatch 'Get-SmokeNicAttachAtCreateDecision') { throw 'Invoke-Smoke must gate Connect at create' }
 if ($smoke -notmatch 'Get-SmokeNicReconnectDecision') { throw 'Invoke-Smoke must reconnect offline NIC' }
 if ($smoke -notmatch 'GuestUpStickySeconds') { throw 'Invoke-Smoke must pass guest-up age into NIC reconnect' }
-if ($smoke -notmatch 'nicDeferSecs') { throw 'Invoke-Smoke must raise NIC defer for oobeLocal GuestSecretPath' }
-$oobeProof = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/Start-OobeLocalProof.ps1') -Raw -Encoding utf8
-if ($oobeProof -match 'OnlineOobe\s*=\s*\$true') { throw 'Start-OobeLocalProof must not force OnlineOobe (CXH/ZDP trap #164)' }
-if ($oobeProof -notmatch 'requireWifiDuringOobe\s*=\s*\$false') { throw 'Start-OobeLocalProof must pin requireWifiDuringOobe false for Hyper-V HideWireless' }
+if ($smoke -match 'GuestSecretPath|InteractiveOobeLocal|Start-OobeLocalProof') {
+    throw 'Invoke-Smoke must not retain oobeLocal GuestSecretPath / proof harness'
+}
 $oobeSrc = Join-Path $repo 'samples/smoke.profile.json'
 $oobeDir = Join-Path ([IO.Path]::GetTempPath()) ("winmint-offline-oobe-" + [guid]::NewGuid().ToString('N'))
 $oobeDest = Join-Path $oobeDir 'offline-oobe.profile.json'
@@ -701,25 +700,13 @@ try {
     } catch {
         if ($_.Exception.Message -notmatch 'root-relative') { throw "rooted passwordPath message: $($_.Exception.Message)" }
     }
-    '{"schemaVersion":"winmint.profile/v1","account":{"mode":"oobeLocal","username":"proof"}}' |
-        Set-Content -LiteralPath (Join-Path $credDir 'oobe.json') -Encoding utf8
+    '{"schemaVersion":"winmint.profile/v1","account":{"mode":"localAutoLogon","username":"winmint"}}' |
+        Set-Content -LiteralPath (Join-Path $credDir 'nopw.json') -Encoding utf8
     try {
-        $null = Resolve-WinMintSmokeGuestCredential -ProfilePath (Join-Path $credDir 'oobe.json')
-        throw 'oobeLocal without GuestSecretPath must throw'
+        $null = Resolve-WinMintSmokeGuestCredential -ProfilePath (Join-Path $credDir 'nopw.json')
+        throw 'missing password must throw'
     } catch {
-        if ($_.Exception.Message -notmatch 'GuestSecretPath') { throw "oobeLocal message: $($_.Exception.Message)" }
-    }
-    $guestPw = Join-Path $credDir 'guest.password'
-    Set-Content -LiteralPath $guestPw -Value 'oobe-guest-pass' -NoNewline -Encoding utf8
-    $oobeCred = Resolve-WinMintSmokeGuestCredential -ProfilePath (Join-Path $credDir 'oobe.json') -GuestSecretPath $guestPw
-    if ($oobeCred.UserName -cne 'proof') { throw 'oobeLocal GuestSecretPath username' }
-    $oobeBstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($oobeCred.Password)
-    try {
-        if (([Runtime.InteropServices.Marshal]::PtrToStringBSTR($oobeBstr)) -cne 'oobe-guest-pass') {
-            throw 'oobeLocal GuestSecretPath contents'
-        }
-    } finally {
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($oobeBstr)
+        if ($_.Exception.Message -notmatch 'password') { throw "missing password message: $($_.Exception.Message)" }
     }
 
     $pixels = [byte[]]::new(8)

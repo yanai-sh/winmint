@@ -17,7 +17,7 @@ internal static class ImageServicingTestFakes
         {
             Stages.AddRange(ReadStagesJson(workspace));
             IReadOnlyList<ServicingStage> stages = Stages;
-            // Absent StampOfflineShell is ok (oobeLocal defer); incomplete stamp is not.
+            // Incomplete StampOfflineShell fails closed.
             ServicingStage? stamp = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.StampOfflineShell);
             if (stamp is not null
                 && (!stamp.Parameters.TryGetValue(StageParams.ShellTarget, out string? shellTarget)

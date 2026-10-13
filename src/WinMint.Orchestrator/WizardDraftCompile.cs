@@ -10,6 +10,7 @@ public static class WizardDraftCompile
 
     /// <summary>
     /// Build a shipping draft: remove-lists from Station seed(outcome); packages from refined UI selection.
+    /// Username + password required (ADR-017).
     /// </summary>
     public static Result<WizardDraft, Failure> TryCompile(WizardDraftRequest request)
     {
@@ -27,16 +28,13 @@ public static class WizardDraftCompile
             return Result.Fail<WizardDraft, Failure>(dma.Error);
         }
 
-        bool bakeIn = string.Equals(
-            request.AccountMode,
-            AccountProfile.LocalAutoLogonMode,
-            StringComparison.Ordinal);
+        // Empty password OK for incomplete Wizard drafts (WIM probe); IdentityReady / Profile parse gate build.
         AccountProfile account = new(
-            bakeIn ? request.Username.Trim() : "",
-            bakeIn ? request.Password : null,
+            string.IsNullOrWhiteSpace(request.Username) ? "winmint" : request.Username.Trim(),
+            request.Password,
             request.RequireWifi,
             PasswordPath: null,
-            Mode: bakeIn ? AccountProfile.LocalAutoLogonMode : AccountProfile.OobeLocalMode);
+            Mode: AccountProfile.LocalAutoLogonMode);
 
         Result<Profile, Failure> profile = ProfileDraft.TryBuild(
             request.StationOutcome,
@@ -80,9 +78,7 @@ public sealed record WizardDraftRequest(
     string? AdvancedWsl,
     string? SourceIsoPath,
     int WimIndex,
-    IReadOnlyList<string> SelectionLabels,
-    // ponytail: default bake-in keeps existing LabRequest / curated call sites on ADR-017 proof path
-    string AccountMode = AccountProfile.LocalAutoLogonMode);
+    IReadOnlyList<string> SelectionLabels);
 
 /// <summary>Compiled Wizard draft ready for HostCompile.</summary>
 public sealed record WizardDraft(Profile Profile, HostComposeOptions Options);

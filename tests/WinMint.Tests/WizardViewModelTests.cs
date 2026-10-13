@@ -41,14 +41,9 @@ public class WizardViewModelTests
         try
         {
             vm.Source.SourceIsoPath = iso;
-            Assert.True(vm.FooterReady);
-            Assert.False(vm.FooterWarn);
-            Assert.Equal("Ready · ISO · OOBE local", vm.FooterStatus);
-
-            vm.Account.Mode.UseBakeIn();
             Assert.True(vm.FooterWarn);
             Assert.False(vm.FooterReady);
-            Assert.Contains("bake-in", vm.FooterStatus, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("password", vm.FooterStatus, StringComparison.OrdinalIgnoreCase);
 
             vm.Account.Password = "secret";
             Assert.True(vm.FooterReady);
@@ -98,7 +93,6 @@ public class WizardViewModelTests
         {
             PickerProbe probe = new();
             using WizardViewModel vm = new(storage: null, close: null, sourceMedia: probe);
-            vm.Account.Mode.UseBakeIn();
             vm.Account.Password = "do-not-show-me";
             vm.Source.SourceIsoPath = iso;
             await WaitForProbeAsync(vm);
@@ -135,7 +129,6 @@ public class WizardViewModelTests
         try
         {
             using WizardViewModel vm = new(storage: null, close: null, sourceMedia: new PickerProbe());
-            vm.Account.Mode.UseBakeIn();
             vm.Account.Password = "lab-only";
             vm.Source.SourceIsoPath = iso;
             await WaitForProbeAsync(vm);
@@ -178,7 +171,7 @@ public class WizardViewModelTests
             vm.Source.SourceIsoPath = iso;
             await probe.WaitForCallsAsync(1);
 
-            // Portable compile ignores username; flip Wi-Fi so the draft revision actually moves.
+            // Flip Wi-Fi so the draft revision actually moves.
             vm.Account.RequireWifi = true;
             probe.Complete(0);
             await probe.WaitForCallsAsync(2);

@@ -8,9 +8,9 @@ namespace WinMint.Tests;
 public class BuildPlanPlanTests
 {
     [Fact]
-    public void Plan_local_autologon_without_password_uses_default()
+    public void Parse_local_autologon_without_password_fails()
     {
-        Profile profile = Parse($$"""
+        Result<Profile, IReadOnlyList<DocumentError>> result = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
             {
               "schemaVersion": "winmint.profile/v1",
               "account": {
@@ -27,7 +27,36 @@ public class BuildPlanPlanTests
                 }
               }
             }
+            """));
+
+        Assert.False(result.IsOk);
+        Assert.Contains(result.Error, i => i.Code == "account.password.missing");
+    }
+
+    [Fact]
+    public void Plan_empty_password_fills_default_local_password()
+    {
+        // Plan still fills Autologon default when Password is empty after host materialization.
+        Profile parsed = Parse($$"""
+            {
+              "schemaVersion": "winmint.profile/v1",
+              "account": {
+                "mode": "{{AccountProfile.LocalAutoLogonMode}}",
+                "username": "winmint",
+                "password": "placeholder"
+              },
+              "dma": {
+                "enabled": true,
+                "settle": {
+                  "locale": "en-GB",
+                  "geoId": 242,
+                  "timeZoneId": "GMT Standard Time",
+                  "locationServicesEnabled": true
+                }
+              }
+            }
             """);
+        Profile profile = parsed with { Account = parsed.Account with { Password = "" } };
 
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(profile);
 
