@@ -351,7 +351,7 @@ public sealed partial class WizardViewModel :
         buildStage.Build.StepCue = "";
         buildStage.Build.ProgressValue = 0;
         buildStage.Build.IsProgressIndeterminate = true;
-        buildStage.Build.BuildStatus = "Building… (approve UAC if prompted)";
+        buildStage.Build.BuildStatus = "Building…";
         buildStage.Status.Set(buildStage.Build.BuildStatus, false);
 
         using CancellationTokenSource pollCts =

@@ -253,7 +253,10 @@ function Save-WinMintCatalogPayload {
     }
     $leaf = Split-Path -Leaf $Destination
     $job = 'WinMintQuality-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
-    Write-Output "quality BITS start $leaf"
+    # Write-Host (not Write-Output): progress must not ride the success stream —
+    # $tmp = Invoke-WinMintCatalogQualityAcquire … → Save-WinMintQualityCacheFile -SourcePath
+    # would receive Object[] and fail [string] bind (EndInvoke / smoke AddQualityUpdates).
+    Write-Host "quality BITS start $leaf"
     try {
         & $bitsadmin /create /download $job | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "BITS /create failed ($LASTEXITCODE)" }
@@ -282,7 +285,7 @@ function Save-WinMintCatalogPayload {
             $status = "quality BITS $state ${mb}MB $leaf ($([int]$wait.Elapsed.TotalSeconds)s)"
             Write-WinMintHostProgress -Activity 'Catalog BITS' -Status $status
             if ($state -ne $lastTrailState -or $trailBeat.Elapsed.TotalSeconds -ge 60) {
-                Write-Output $status
+                Write-Host $status
                 $lastTrailState = $state
                 $trailBeat.Restart()
             }
@@ -299,7 +302,7 @@ function Save-WinMintCatalogPayload {
         if (-not (Test-Path -LiteralPath $Destination)) {
             throw "BITS download failed: $Uri"
         }
-        Write-Output "quality BITS ok $leaf"
+        Write-Host "quality BITS ok $leaf"
     }
     catch {
         & $bitsadmin /cancel $job 2>$null | Out-Null
@@ -752,12 +755,17 @@ function Get-WinMintCatalogPayload {
         return $cached
     }
     if ($Acquire) {
-        $tmp = [string](& $Acquire $UpdateId $Kb $Architecture $StagingDir)
+        $tmp = & $Acquire $UpdateId $Kb $Architecture $StagingDir
     }
     else {
         $tmp = Invoke-WinMintCatalogQualityAcquire -UpdateId $UpdateId -Kb $Kb -StagingDir $StagingDir
     }
-    return (Save-WinMintQualityCacheFile -CacheRoot $CacheRoot -Kb $Kb -Architecture $Architecture -SourcePath $tmp).Path
+    # Last object only — stray success-stream lines must not become -SourcePath.
+    $path = [string](@($tmp)[-1])
+    if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Catalog acquire did not yield a payload file path (got: $tmp)"
+    }
+    return (Save-WinMintQualityCacheFile -CacheRoot $CacheRoot -Kb $Kb -Architecture $Architecture -SourcePath $path).Path
 }
 
 function Resolve-WinMintCachedQualityFile {

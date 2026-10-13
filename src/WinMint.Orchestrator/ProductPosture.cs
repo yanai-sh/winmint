@@ -458,9 +458,11 @@ public static class ProductPosture
             "LongPathsEnabled",
             QuietChromeFacts.ExpectedLongPaths.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "filesystem"),
-        // FirstLogon Shell is medium-IL; winget→MSI (Nilesoft) needs elevation. Default
-        // ConsentPromptBehaviorAdmin=5 prompts for non-Windows binaries — blocks bare-metal
-        // and Smoke tenure alike. Keep EnableLUA; auto-elevate Administrators (no Consent UI).
+        // Earliest seam: StampOfflinePolicies (ISO Apply), before any guest FirstLogon.
+        // Medium-IL Shell → winget/MSI needs elevation; default ConsentPromptBehaviorAdmin=5
+        // shows Consent UI and blocks Smoke/Primary. Keep EnableLUA; Administrators
+        // auto-elevate with no prompt (ConsentPromptBehaviorAdmin=0, PromptOnSecureDesktop=0).
+        // Bar: no UAC consent click anywhere in product tenure — never instruct operators to approve.
         Soft(
             @"Microsoft\Windows\CurrentVersion\Policies\System",
             "ConsentPromptBehaviorAdmin",

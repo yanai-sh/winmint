@@ -12,7 +12,10 @@ dist/
 .vs/
 .idea/
 .vscode/
-.cursor/
+# Cursor local state — track project subagents only (see .cursor/agents/)
+.cursor/*
+!.cursor/agents/
+!.cursor/agents/**
 
 # User-supplied Windows media — never commit (ADR-001)
 *.iso

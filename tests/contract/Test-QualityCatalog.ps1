@@ -371,6 +371,11 @@ try {
     if ((Get-Command Expand-WinMintQualitySsu).Definition -match 'Write-Output\s+.*quality expand DISM') {
         throw 'Test-QualityCatalog: quality expand DISM progress must not Write-Output (pollutes $ssuPath)'
     }
+    # BITS progress on the success stream turns $tmp into Object[] → -SourcePath [string] EndInvoke fail.
+    $bitsBody = (Get-Command Save-WinMintCatalogPayload).Definition
+    if ($bitsBody -match '(?m)^\s*Write-Output\b') {
+        throw 'Test-QualityCatalog: Save-WinMintCatalogPayload must not Write-Output (pollutes acquire path)'
+    }
 
     $cabOut = Join-Path $msuProbe 'cab-out'
     $script:expandedCab = $false
