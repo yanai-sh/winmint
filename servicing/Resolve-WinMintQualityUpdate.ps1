@@ -390,14 +390,6 @@ function Expand-WinMintQualitySsu {
     return , [string]$ssu[0].FullName
 }
 
-function Find-WinMintQualityBootStl {
-    param([Parameter(Mandatory)] [string] $ExtractDir)
-    $hit = Get-ChildItem -LiteralPath $ExtractDir -Recurse -Filter 'boot.stl' -File -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if ($null -eq $hit) { return $null }
-    return [string]$hit.FullName
-}
-
 function Invoke-WinMintDismAddPackage {
     param(
         [Parameter(Mandatory)] [string] $MountDir,
