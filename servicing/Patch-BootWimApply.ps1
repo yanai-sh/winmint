@@ -135,6 +135,12 @@ foreach ($index in $indexes) {
         Copy-Item -LiteralPath $helperSrc `
             -Destination (Join-Path $bootMount 'Windows\System32\WinMintApply.exe') -Force
         Set-Content -LiteralPath (Join-Path $bootMount 'Windows\System32\winpeshl.ini') -Value $winpeshl -Encoding ascii
+        $desktopSrc = Join-Path (Split-Path -Parent $launchApplyPayload) 'winpe.jpg'
+        if (-not (Test-Path -LiteralPath $desktopSrc -PathType Leaf)) { throw "winpe.jpg missing: $desktopSrc" }
+        $desktopDest = Join-Path $bootMount 'Windows\System32\winpe.jpg'
+        $desktopItem = Get-Item -LiteralPath $desktopDest -ErrorAction SilentlyContinue
+        if ($null -ne $desktopItem -and $desktopItem.IsReadOnly) { $desktopItem.IsReadOnly = $false }
+        Copy-Item -LiteralPath $desktopSrc -Destination $desktopDest -Force
     }
     finally {
         Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Commit') -Stage 'Unmount-Commit'

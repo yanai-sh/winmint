@@ -104,5 +104,20 @@ function Get-WinPeApplyDefect {
         $defects += 'WinMintApply.exe bytes differ from work payload'
     }
 
+    # Learn: WinPE paints windows\system32\winpe.jpg as the desktop. A black frame is the boot
+    # surface; the apply splash draws on that, not on the stock blue wallpaper.
+    $desktop = Join-Path $MountDir 'Windows\System32\winpe.jpg'
+    $desktopSrc = Join-Path (Split-Path -Parent (Get-WinPeApplyPayloadPath)) 'winpe.jpg'
+    if (-not (Test-Path -LiteralPath $desktop -PathType Leaf)) {
+        $defects += 'winpe.jpg missing inside boot.wim (WinPE desktop must be black)'
+    }
+    elseif (-not (Test-Path -LiteralPath $desktopSrc -PathType Leaf)) {
+        $defects += "winpe.jpg payload missing: $desktopSrc"
+    }
+    elseif ((Get-FileHash -LiteralPath $desktop -Algorithm SHA256).Hash -cne
+        (Get-FileHash -LiteralPath $desktopSrc -Algorithm SHA256).Hash) {
+        $defects += 'winpe.jpg bytes differ from payload/winpe/winpe.jpg'
+    }
+
     return , ([string[]] $defects)
 }
