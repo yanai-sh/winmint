@@ -14,12 +14,11 @@
   ],
   "sourceIso": {
     "role": "vanilla-test",
-    "description": "Official Microsoft Windows 11 25H2 English (US) ARM64 retail/business Source ISO (DISM Languages en-US) for Smoke and Host Apply on SL7",
-    "path": "C:\\Users\\yanai\\Documents\\Win11_25H2_English_Arm64_v2.iso",
-    "leaf": "Win11_25H2_English_Arm64_v2.iso",
+    "description": "Official Microsoft Windows 11 26H2 English (US) ARM64 retail Source ISO (DISM Languages en-US, family 26300) for Smoke and Host Apply on SL7",
+    "path": "C:\\Users\\yanai\\Documents\\Windows11_Client_arm64_en-us_26300_9457.iso",
+    "leaf": "Windows11_Client_arm64_en-us_26300_9457.iso",
     "architecture": "ARM64",
-    "train": "25H2",
-    "sha256": "638aa2c88e94385b00f4f178d071e3df0b7d9e335577a83bd533b7f2eb65adf0"
+    "train": "26H2"
   },
   "smokeRecipe": "just smoke-maintainer-monitor",
   "smokeRecipeElevated": "pwsh -NoProfile -File tools/vm/Start-SmokeElevated.ps1",

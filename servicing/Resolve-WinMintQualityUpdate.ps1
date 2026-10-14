@@ -18,12 +18,15 @@ function Get-WinMintQualityTrain {
         throw "Unrecognized WIM Version '$Version' (need 10.0.<family>)"
     }
     $family = [int]$Matches[1]
+    # 26H2 (26300) is the primary retail train. 25H2 (26200) stays a same-train mapping.
+    # 26H1 (28000) and every unmapped family fail closed.
     $label = switch ($family) {
+        26300 { '26H2' }
         26200 { '25H2' }
         default { $null }
     }
     if ($null -eq $label) {
-        throw "No Catalog LCU mapping for Version family $family (WinMint is 25H2+; do not guess newer trains)"
+        throw "No Catalog LCU mapping for Version family $family (primary train is 26H2 family 26300; 25H2 family 26200 remains; do not guess other trains)"
     }
     return [pscustomobject]@{
         Family       = $family
@@ -214,11 +217,13 @@ function Test-WinMintRollupFixPresent {
         [Parameter(Mandatory)] [string] $Architecture
     )
     $arch = $Architecture.ToLowerInvariant()
-    # 25H2 WIMs report 10.0.26200.*, but Catalog LCUs still install as
-    # Package_for_RollupFix~...~~26100.<ubr> (enablement on the 24H2 binary train).
+    # 25H2 (26200) and 26H2 (26300) are enablement builds on the 24H2 binary train.
+    # Catalog LCUs still install as Package_for_RollupFix~...~~26100.<ubr>.
+    # 26H2 may also report 26200.<ubr>. Accept the WIM family plus those identities.
     $families = [System.Collections.Generic.List[int]]::new()
     [void]$families.Add($Family)
-    if ($Family -eq 26200) { [void]$families.Add(26100) }
+    if ($Family -eq 26200 -or $Family -eq 26300) { [void]$families.Add(26100) }
+    if ($Family -eq 26300) { [void]$families.Add(26200) }
     $alt = (@($families | ForEach-Object { [regex]::Escape(("$_.$Ubr")) }) -join '|')
     $pattern = "(?im)^Package Identity\s*:\s*Package_for_RollupFix~\w+~$arch~~(?:$alt)\."
     if ($GetPackagesText -notmatch $pattern) {

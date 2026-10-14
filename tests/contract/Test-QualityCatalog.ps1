@@ -58,7 +58,7 @@ try {
 catch { $threw = $true }
 if (-not $threw) { throw 'Test-QualityCatalog: expected refuse 26H1/x64-only fixture' }
 
-# 24H2 (26100) is out of product scope — WinMint supports 25H2+ only.
+# 24H2 (26100) is out of product scope. Primary train is 26H2 (26300); 25H2 (26200) remains.
 $threw = $false
 try {
     Resolve-WinMintQualityUpdate -Version '10.0.26100.1' -Architecture 'ARM64' -ImageUbr 1 `
@@ -70,7 +70,42 @@ catch {
         throw "Test-QualityCatalog: family 26100 must fail closed on mapping, got: $($_.Exception.Message)"
     }
 }
-if (-not $threw) { throw 'Test-QualityCatalog: expected family 26100 to fail closed (25H2+ only)' }
+if (-not $threw) { throw 'Test-QualityCatalog: expected family 26100 to fail closed (mapped trains only)' }
+
+# 26H2 retail ISO (family 26300) is the primary train.
+$search26 = @'
+<a href="javascript:void(0);" onclick="goToDetails(&quot;bbbbbbbb-cccc-dddd-eeee-222222222222&quot;);">2026-09 Cumulative Update for Windows 11 Version 26H2 for ARM64-based Systems (KB5130001) (26300.9457)</a>
+'@
+$apply26 = Resolve-WinMintQualityUpdate -Version '10.0.26300.9457' -Architecture 'ARM64' -ImageUbr 1 `
+    -SearchHtml $search26 -DetailsHtml '<p>no extra builds</p>'
+if ($apply26.Skipped -or $apply26.Label -ne '26H2' -or $apply26.Family -ne 26300 -or $apply26.Kb -ne 'KB5130001' -or $apply26.PackageUbr -ne 9457) {
+    throw "Test-QualityCatalog: 26H2 apply label=$($apply26.Label) family=$($apply26.Family) kb=$($apply26.Kb) ubr=$($apply26.PackageUbr)"
+}
+$skip26 = Resolve-WinMintQualityUpdate -Version '10.0.26300.9457' -Architecture 'ARM64' -ImageUbr 9457 `
+    -SearchHtml $search26 -DetailsHtml '<p>no extra builds</p>'
+if (-not $skip26.Skipped -or $skip26.Label -ne '26H2') {
+    throw 'Test-QualityCatalog: 26H2 image already at Catalog UBR must skip'
+}
+$rollup26 = @"
+Package Identity : Package_for_RollupFix~31bf3856ad364e35~arm64~~26100.9457.1.19
+State : Installed
+"@
+try {
+    Test-WinMintRollupFixPresent -GetPackagesText $rollup26 -Family 26300 -Ubr 9457 -Architecture 'ARM64'
+}
+catch {
+    throw "Test-QualityCatalog: 26H2 must accept RollupFix 26100.<ubr>: $($_.Exception.Message)"
+}
+$rollup26Own = @"
+Package Identity : Package_for_RollupFix~31bf3856ad364e35~arm64~~26300.9457.1.19
+State : Installed
+"@
+try {
+    Test-WinMintRollupFixPresent -GetPackagesText $rollup26Own -Family 26300 -Ubr 9457 -Architecture 'ARM64'
+}
+catch {
+    throw "Test-QualityCatalog: 26H2 must accept RollupFix 26300.<ubr>: $($_.Exception.Message)"
+}
 
 # 25H2 enablement: RollupFix package identity stays on 26100.<ubr> even when WIM family is 26200.
 $rollup25 = @"

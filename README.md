@@ -8,7 +8,7 @@
 
 WinMint builds a custom Windows 11 ISO for a clean ARM64 developer PC.
 
-You bring an official **English (US)** Windows 11 ARM64 ISO from [Microsoft software download](https://www.microsoft.com/software-download/windows11) (choose **English 64-bit**, not English International). WinMint does not download or redistribute Windows. It services that ISO offline, then finishes setup on first sign-in.
+You bring an official **English (US)** Windows 11 **26H2** ARM64 ISO (build family 26300) from [Microsoft’s ARM64 download](https://www.microsoft.com/en-us/software-download/windows11arm64) (English, not English International). A 25H2 ISO (family 26200) still services. WinMint does not download or redistribute Windows. It services that ISO offline, then finishes setup on first sign-in.
 
 ## Alpha
 

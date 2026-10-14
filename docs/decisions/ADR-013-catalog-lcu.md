@@ -14,7 +14,9 @@ Treating Catalog `.msu` as a Source ISO ([ADR-001](ADR-001-source-iso-legal.md))
 
 When staged `install.wim` UBR is behind the newest same-family Catalog **Security Update** (B-release), ImageServicing fetches the ARM64 combined LCU (plus listed checkpoint packages) into a host quality-cache keyed by KB + arch + SHA, then `/Add-Package` on **staged** media only.
 
-Same DISM Version family only. Fail closed if behind and Catalog/BITS/DISM cannot finish. Payload hosts and leaf-KB identity live in code; other hosts and wrong leaves are a miss.
+Same DISM Version family only. Primary retail family is **26H2 (26300)**. **25H2 (26200)** stays mapped. Fail closed for 26H1 (28000) and every unmapped family. Fail closed if behind and Catalog/BITS/DISM cannot finish. Payload hosts and leaf-KB identity live in code; other hosts and wrong leaves are a miss.
+
+Rejected for this train move: feature-upgrading a 25H2 image into 26H2, and treating 26H1 as the 2026 ARM64 download.
 
 Quality-cache is not Prepared media and not a golden WIM. Skip when already current.
 
