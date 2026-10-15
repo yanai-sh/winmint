@@ -8,8 +8,7 @@
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
   Files that were stored inside an OneDrive folder are moved into the normal
   profile folders first. The OneDrive directory is then deleted.
-  Set-OneDrivePolicy.ps1 blocks sync. This script rewrites
-  PreventNetworkTrafficPreUserSignIn after it clears the client key.
+  Sync is blocked, and known folders are pointed at the normal profile paths.
   -DryRun lists what would be removed and changes nothing.
 #>
 param([switch] $DryRun)
@@ -179,7 +178,59 @@ function Remove-TrustedInstallerFile {
     }
 }
 
+function Set-OneDriveBlock {
+    $pol = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive'
+    foreach ($name in @(
+            'DisableFileSyncNGSC'
+            'DisableFileSync'
+            'DisableMeteredNetworkFileSync'
+            'PreventNetworkTrafficPreUserSignIn'
+        )) {
+        if ($DryRun) {
+            Write-Output "dry-run: $pol $name = 1"
+            continue
+        }
+
+        if (-not (Test-Path -LiteralPath $pol)) {
+            New-Item -Path $pol -Force | Out-Null
+        }
+
+        New-ItemProperty -LiteralPath $pol -Name $name -Value 1 -PropertyType DWord -Force | Out-Null
+    }
+}
+
+function Set-ProfileFolder {
+    param([Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
+    $folders = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
+    if ($DryRun) {
+        Write-Output "dry-run: $folders $Name = $Value"
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $folders)) {
+        New-Item -Path $folders -Force | Out-Null
+    }
+
+    New-ItemProperty -LiteralPath $folders -Name $Name -Value $Value -PropertyType ExpandString -Force | Out-Null
+}
+
+function Set-ProfileFolders {
+    Set-ProfileFolder 'Desktop' '%USERPROFILE%\Desktop'
+    Set-ProfileFolder 'Personal' '%USERPROFILE%\Documents'
+    Set-ProfileFolder 'My Pictures' '%USERPROFILE%\Pictures'
+    Set-ProfileFolder 'My Music' '%USERPROFILE%\Music'
+    Set-ProfileFolder 'My Video' '%USERPROFILE%\Videos'
+    Set-ProfileFolder 'Favorites' '%USERPROFILE%\Favorites'
+    Set-ProfileFolder '{374DE290-123F-4565-9164-39C4925E467B}' '%USERPROFILE%\Downloads'
+    Set-ProfileFolder '{F42EE2D3-909F-4907-8871-4C22FC0BF756}' '%USERPROFILE%\Documents'
+    Set-ProfileFolder '{0DDD015D-B06C-45D5-8C4C-F59713854639}' '%USERPROFILE%\Pictures'
+    Set-ProfileFolder '{A0C69A99-21C8-4671-8703-7934162FCF1D}' '%USERPROFILE%\Music'
+    Set-ProfileFolder '{35286A68-3C57-41A1-BBB1-0EAE73D76C95}' '%USERPROFILE%\Videos'
+    Set-ProfileFolder '{754AC886-DF64-4CBA-86B5-F7FBF4FBCEF5}' '%USERPROFILE%\Desktop'
+}
+
 function Invoke-OneDrivePurge {
+    Set-OneDriveBlock
     if ($DryRun) {
         Write-Output 'dry-run: OneDrive purge. No files or registry will be changed.'
         foreach ($setup in @(
@@ -223,6 +274,7 @@ function Invoke-OneDrivePurge {
         Write-Output 'dry-run: clear OneDrive Run and RunOnce values, shortcuts, sync roots, and navigation-pane entries'
         Write-Output 'dry-run: disable OneSyncSvc'
         Write-Output 'dry-run: set HKLM\SOFTWARE\Microsoft\OneDrive PreventNetworkTrafficPreUserSignIn = 1'
+        Set-ProfileFolders
         return
     }
 
@@ -459,7 +511,7 @@ function Invoke-OneDrivePurge {
         Write-Output "disabled service $($service.Name)"
     }
 
-    # Set-OneDrivePolicy.ps1 writes this value. Clearing the client key above would drop it.
+    # Keep the sync block after the client key is cleared.
     $block = 'HKLM:\SOFTWARE\Microsoft\OneDrive'
     if (-not (Test-Path -LiteralPath $block)) {
         New-Item -Path $block -Force | Out-Null
@@ -481,6 +533,8 @@ function Invoke-OneDrivePurge {
             Write-Output "removed $($sub.PSPath)"
         }
     }
+
+    Set-ProfileFolders
 }
 
 
