@@ -2,10 +2,11 @@
 #requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  Turn on Developer Mode.
+  Turn activity history off. Leaves clipboard history alone.
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
+  The feed, publish, and upload policies are all 0.
   -DryRun prints each value and writes nothing.
 #>
 param([switch] $DryRun)
@@ -15,13 +16,16 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-. (Join-Path $PSScriptRoot 'Registry.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Registry.ps1')
 
-Set-RegDword 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowDevelopmentWithoutDevLicense' 1
+$pol = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System'
+Set-RegDword $pol 'EnableActivityFeed' 0
+Set-RegDword $pol 'PublishUserActivities' 0
+Set-RegDword $pol 'UploadUserActivities' 0
 
 if ($DryRun) {
-    Write-Output 'dry-run: Developer Mode not written.'
+    Write-Output 'dry-run: activity history not written.'
 }
 else {
-    Write-Output 'Developer Mode on.'
+    Write-Output 'Activity history off.'
 }

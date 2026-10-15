@@ -2,7 +2,7 @@
 #requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  Turn on inline sudo.
+  Stop firmware from running a program out of the Windows Platform Binary Table.
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
@@ -15,13 +15,13 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-. (Join-Path $PSScriptRoot 'Registry.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Registry.ps1')
 
-Set-RegDword 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo' 'Enabled' 3
+Set-RegDword 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' 'DisableWpbtExecution' 1
 
 if ($DryRun) {
-    Write-Output 'dry-run: sudo not written.'
+    Write-Output 'dry-run: WPBT not written.'
 }
 else {
-    Write-Output 'Inline sudo on.'
+    Write-Output 'WPBT execution off.'
 }

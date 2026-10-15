@@ -15,7 +15,7 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-. (Join-Path $PSScriptRoot 'Registry.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Registry.ps1')
 
 $folders = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
 Set-RegExpand $folders 'Desktop' '%USERPROFILE%\Desktop'

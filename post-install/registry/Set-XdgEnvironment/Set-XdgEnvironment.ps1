@@ -15,7 +15,7 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-. (Join-Path $PSScriptRoot 'Registry.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Registry.ps1')
 
 Set-RegExpand 'HKCU:\Environment' 'XDG_CONFIG_HOME' '%USERPROFILE%\.config'
 Set-RegExpand 'HKCU:\Environment' 'XDG_DATA_HOME' '%USERPROFILE%\.local\share'
