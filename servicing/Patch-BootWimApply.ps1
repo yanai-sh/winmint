@@ -42,7 +42,7 @@ function Publish-WinMintMediaBootFile {
     if (-not $haveMgfw -and -not $haveMgr) { return }
     $efiFiles = @(Get-ChildItem -LiteralPath $MediaDir -Force -Recurse -File -Filter 'b*.efi' -ErrorAction SilentlyContinue)
     foreach ($file in $efiFiles) {
-        if ($haveMgfw -and $file.Name -match '^(?i)bootmgfw\.efi|bootx64\.efi|bootia32\.efi|bootaa64\.efi$') {
+        if ($haveMgfw -and $file.Name -match '^(?i)(bootmgfw|bootx64|bootia32|bootaa64)\.efi$') {
             Copy-WinMintMediaBootFile -Source $BootMgfw -Destination $file.FullName
         }
         elseif ($haveMgr -and $file.Name -match '^(?i)bootmgr\.efi$') {
