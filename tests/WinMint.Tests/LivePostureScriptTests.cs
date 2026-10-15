@@ -3,10 +3,9 @@ namespace WinMint.Tests;
 public class LivePostureScriptTests
 {
     [Fact]
-    public void Live_scripts_keep_the_curated_registry_names()
+    public void Registry_script_keeps_the_curated_names()
     {
-        string machine = File.ReadAllText(FindRepoFile("tools", "live", "Apply-Machine.ps1"));
-        string user = File.ReadAllText(FindRepoFile("tools", "live", "Apply-User.ps1"));
+        string script = File.ReadAllText(FindRepoFile("tools", "live", "Apply-Registry.ps1"));
 
         foreach (string name in new[]
         {
@@ -17,15 +16,6 @@ public class LivePostureScriptTests
             "LongPathsEnabled",
             "DisableWpbtExecution",
             "AllowDevelopmentWithoutDevLicense",
-        })
-        {
-            Assert.Contains(name, machine, StringComparison.Ordinal);
-        }
-
-        Assert.DoesNotContain("ConsentPromptBehaviorAdmin", machine, StringComparison.Ordinal);
-
-        foreach (string name in new[]
-        {
             "AppsUseLightTheme",
             "HideFileExt",
             "TaskbarDa",
@@ -36,8 +26,12 @@ public class LivePostureScriptTests
             "XDG_CONFIG_HOME",
         })
         {
-            Assert.Contains(name, user, StringComparison.Ordinal);
+            Assert.Contains(name, script, StringComparison.Ordinal);
         }
+
+        Assert.DoesNotContain("ConsentPromptBehaviorAdmin", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-AppxPackage", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Set-WinHomeLocation", script, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(params string[] parts)
