@@ -17,7 +17,46 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-. (Join-Path $PSScriptRoot 'Registry.ps1')
+
+function Set-RegDword {
+    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][int] $Value)
+    if ($DryRun) {
+        Write-Output "dry-run: $Path $Name = $Value"
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        New-Item -Path $Path -Force | Out-Null
+    }
+    New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType DWord -Force | Out-Null
+}
+
+function Set-RegString {
+    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
+    if ($DryRun) {
+        Write-Output "dry-run: $Path $Name = $Value"
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        New-Item -Path $Path -Force | Out-Null
+    }
+    New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType String -Force | Out-Null
+}
+
+function Set-RegExpand {
+    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
+    if ($DryRun) {
+        Write-Output "dry-run: $Path $Name = $Value"
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        New-Item -Path $Path -Force | Out-Null
+    }
+    New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType ExpandString -Force | Out-Null
+}
+
 
 $system = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System'
 Set-RegDword $system 'EnableActivityFeed' 0
