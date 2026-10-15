@@ -2,7 +2,7 @@
 #requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  Notify before the Store downloads apps.
+  Turn on inline sudo.
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
@@ -15,13 +15,13 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-. (Join-Path $PSScriptRoot 'Registry.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Registry.ps1')
 
-Set-RegDword 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore' 'AutoDownload' 2
+Set-RegDword 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo' 'Enabled' 3
 
 if ($DryRun) {
-    Write-Output 'dry-run: Store auto-download not written.'
+    Write-Output 'dry-run: sudo not written.'
 }
 else {
-    Write-Output 'Store auto-download set to notify.'
+    Write-Output 'Inline sudo on.'
 }

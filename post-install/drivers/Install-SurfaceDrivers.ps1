@@ -10,8 +10,8 @@
   runs Microsoft's Surface driver MSI on the live PC.
   -DryRun resolves the MSI name and does not download or install.
 
-  pwsh -NoProfile -File .\Install-SurfaceDrivers.ps1 -DryRun
-  pwsh -NoProfile -File .\Install-SurfaceDrivers.ps1 -DeviceId surface-laptop-7
+  pwsh -NoProfile -File .\drivers\Install-SurfaceDrivers.ps1 -DryRun
+  pwsh -NoProfile -File .\drivers\Install-SurfaceDrivers.ps1 -DeviceId surface-laptop-7
 #>
 param(
     [switch] $DryRun,

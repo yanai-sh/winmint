@@ -2,11 +2,10 @@
 #requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  Download updates from Microsoft only. This PC does not peer them.
+  Stop Windows from downloading device companion apps.
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
-  DODownloadMode 0 keeps HTTP downloads and turns peering off.
   -DryRun prints each value and writes nothing.
 #>
 param([switch] $DryRun)
@@ -16,13 +15,13 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-. (Join-Path $PSScriptRoot 'Registry.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Registry.ps1')
 
-Set-RegDword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' 'DODownloadMode' 0
+Set-RegDword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata' 'PreventDeviceMetadataFromNetwork' 1
 
 if ($DryRun) {
-    Write-Output 'dry-run: Delivery Optimization not written.'
+    Write-Output 'dry-run: device companion apps not written.'
 }
 else {
-    Write-Output 'Delivery Optimization peering off.'
+    Write-Output 'Device companion apps blocked.'
 }

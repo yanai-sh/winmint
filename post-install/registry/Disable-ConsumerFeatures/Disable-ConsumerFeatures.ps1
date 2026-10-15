@@ -15,7 +15,7 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-. (Join-Path $PSScriptRoot 'Registry.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Registry.ps1')
 
 $pol = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'
 Set-RegDword $pol 'DisableWindowsConsumerFeatures' 1

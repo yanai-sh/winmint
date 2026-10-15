@@ -6,7 +6,7 @@
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated from this directory, after Windows Update.
-  Each script also runs on its own. Registry tasks are the files in registry\.
+  Each task script lives in its own folder and also runs on its own.
   -DryRun prints the changes and writes nothing.
   -Drivers also installs the Surface catalog MSI. It is off unless you pass it.
 
@@ -29,8 +29,8 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
 
 foreach ($name in @(
         'Apply-Registry.ps1'
-        'Uninstall-OneDrive.ps1'
-        'Remove-InboxApps.ps1'
+        'onedrive\Uninstall-OneDrive.ps1'
+        'inbox\Remove-InboxApps.ps1'
     )) {
     $path = Join-Path $PSScriptRoot $name
     Write-Output "live: $name"
@@ -43,8 +43,8 @@ foreach ($name in @(
 }
 
 if ($Drivers) {
-    $driverScript = Join-Path $PSScriptRoot 'Install-SurfaceDrivers.ps1'
-    Write-Output 'live: Install-SurfaceDrivers.ps1'
+    $driverScript = Join-Path $PSScriptRoot 'drivers\Install-SurfaceDrivers.ps1'
+    Write-Output 'live: drivers\Install-SurfaceDrivers.ps1'
     if ($DryRun) {
         & $driverScript -DryRun -DeviceId $DeviceId
     }
