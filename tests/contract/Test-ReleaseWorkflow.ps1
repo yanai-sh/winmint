@@ -55,8 +55,8 @@ Assert-Contains $gate 'pwsh -NoProfile -File tools/host/Invoke-CheckGate.ps1' 's
 Assert-Contains $pack 'needs: gate' 'pack depends on gate'
 Assert-Contains $upload 'needs: pack' 'upload depends on pack'
 
-$uploadArtifact = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'
-$downloadArtifact = 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093'
+$uploadArtifact = 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
+$downloadArtifact = 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
 Assert-Contains $pack $uploadArtifact 'pinned official upload-artifact action'
 Assert-Contains $upload $downloadArtifact 'pinned official download-artifact action'
 Assert-Contains $pack 'name: winmint-release-assets' 'exact artifact name'

@@ -43,7 +43,7 @@ foreach ($job in @('quality', 'packages')) {
     Assert-Contains $body 'runs-on: windows-11-arm' "$job native ARM64 runner"
     Assert-Matches $body 'permissions:\r?\n      contents: read' "$job read permission"
     Assert-Contains $body 'if: always()' "$job always-upload step"
-    Assert-Contains $body 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$job full-SHA upload pin"
+    Assert-Contains $body 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' "$job full-SHA upload pin"
     Assert-Contains $body 'retention-days: 1' "$job short artifact retention"
 }
 Assert-Contains $harness "'packages-check'" 'existing package command reuse'
