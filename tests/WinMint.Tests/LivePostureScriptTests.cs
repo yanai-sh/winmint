@@ -30,8 +30,12 @@ public class LivePostureScriptTests
         }
 
         Assert.DoesNotContain("ConsentPromptBehaviorAdmin", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("Remove-AppxPackage", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Set-WinHomeLocation", script, StringComparison.Ordinal);
+        Assert.Contains("OneDriveSetup.exe", script, StringComparison.Ordinal);
+        Assert.Contains("/uninstall", script, StringComparison.Ordinal);
+        Assert.Contains("Deprovisioned", script, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.Copilot", script, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.XboxGamingOverlay", script, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(params string[] parts)

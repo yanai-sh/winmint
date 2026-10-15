@@ -2,10 +2,10 @@
 #requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  Curated WinMint registry for the machine and the account that runs it.
+  Curated WinMint registry, OneDrive uninstall, and the SL7 inbox-app strip.
 .DESCRIPTION
   Elevated Windows PowerShell, after Windows Update. Sign out afterward.
-  Leaves UAC, language, time zone, and installed apps alone.
+  Leaves UAC, language, and time zone alone.
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -149,4 +149,102 @@ Set-RegExpand 'HKCU:\Environment' 'XDG_DATA_HOME' '%USERPROFILE%\.local\share'
 Set-RegExpand 'HKCU:\Environment' 'XDG_STATE_HOME' '%USERPROFILE%\.local\state'
 Set-RegExpand 'HKCU:\Environment' 'XDG_CACHE_HOME' '%USERPROFILE%\.cache'
 
-Write-Output 'Registry applied. Sign out and back in.'
+function Invoke-OneDriveUninstall {
+    $ran = $false
+    foreach ($setup in @(
+            (Join-Path $env:SystemRoot 'System32\OneDriveSetup.exe')
+            (Join-Path $env:SystemRoot 'SysWOW64\OneDriveSetup.exe')
+        )) {
+        if (-not (Test-Path -LiteralPath $setup)) {
+            continue
+        }
+
+        $ran = $true
+        $proc = Start-Process -FilePath $setup -ArgumentList '/uninstall' -Wait -PassThru -WindowStyle Hidden
+        Write-Output "OneDriveSetup exit $($proc.ExitCode): $setup"
+    }
+
+    if (-not $ran) {
+        Write-Output 'OneDriveSetup.exe is not on this PC.'
+    }
+
+    foreach ($run in @(
+            'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run'
+        )) {
+        if (-not (Test-Path -LiteralPath $run)) {
+            continue
+        }
+
+        $key = Get-Item -LiteralPath $run
+        foreach ($name in @($key.GetValueNames())) {
+            $value = [string] $key.GetValue($name)
+            if ($value -like '*OneDrive*') {
+                Remove-ItemProperty -LiteralPath $run -Name $name -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+
+function Remove-Sl7App {
+    param([Parameter(Mandatory)][string] $Id)
+    $pfns = New-Object System.Collections.Generic.List[string]
+    $installed = @(Get-AppxPackage -AllUsers -Name $Id -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $Id })
+    foreach ($pkg in $installed) {
+        try {
+            Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop
+        }
+        catch {
+            Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction SilentlyContinue
+        }
+
+        if ($pkg.PackageFamilyName) {
+            $pfns.Add($pkg.PackageFamilyName)
+        }
+    }
+
+    $provisioned = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq $Id })
+    foreach ($pkg in $provisioned) {
+        Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName -ErrorAction SilentlyContinue | Out-Null
+    }
+
+    if ($pfns.Count -eq 0) {
+        $pfns.Add("${Id}_8wekyb3d8bbwe")
+    }
+
+    $root = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned'
+    foreach ($pfn in @($pfns | Select-Object -Unique)) {
+        New-Item -Path (Join-Path $root $pfn) -Force | Out-Null
+    }
+
+    Write-Output "removed $Id"
+}
+
+Invoke-OneDriveUninstall
+foreach ($id in @(
+        'Microsoft.BingNews'
+        'Microsoft.BingWeather'
+        'Microsoft.GetHelp'
+        'Microsoft.Getstarted'
+        'Microsoft.MicrosoftOfficeHub'
+        'Microsoft.MicrosoftSolitaireCollection'
+        'Microsoft.People'
+        'Microsoft.PowerAutomateDesktop'
+        'Microsoft.Todos'
+        'Microsoft.WindowsFeedbackHub'
+        'Microsoft.WindowsMaps'
+        'Microsoft.ZuneMusic'
+        'Microsoft.ZuneVideo'
+        'MicrosoftCorporationII.QuickAssist'
+        'Microsoft.Copilot'
+        'Microsoft.GamingApp'
+        'Microsoft.Xbox.TCUI'
+        'Microsoft.XboxGamingOverlay'
+        'Microsoft.XboxSpeechToTextOverlay'
+    )) {
+    Remove-Sl7App -Id $id
+}
+
+Write-Output 'Registry, OneDrive, and inbox apps applied. Sign out and back in.'
+
