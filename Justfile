@@ -171,12 +171,13 @@ watch-check PATH="":
 smoke-assert EVIDENCE:
     pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-Smoke.ps1' -AssertOnly -EvidenceDir '{{EVIDENCE}}'
 
-# S5 Host Apply (pre-wipe). Prefer for servicing/debloat/stamp work — no Hyper-V.
-# Asserts offline remove-list digests when stages.json present. Test lane ≠ Primary. Wipe ISO: just primary-gate <iso> <work>
+# S5 Host Apply. Prefer for servicing/debloat/stamp work — no Hyper-V.
+# Asserts offline remove-list digests when stages.json present. Test lane ≠ Primary.
+# The Output ISO is unstable. Do not install from it.
 host-apply ISO WORK=".scratch/sl7-build" PROFILE="samples/sl7.profile.json" QUALITY="Test":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-HostApply.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}' -ImageQuality '{{QUALITY}}'
 
-# Gate B wipe ISO: Release + package-strict. Workdir survives TEMP toolkit cleanup.
+# Gate B compile: Release + package-strict. The Output ISO is unstable. Do not install from it.
 # WIM index: omit here — Invoke-PrimaryGate resolves host EditionID (Home=1 / Pro=3). Override via -WimIndex on the PS script.
 primary-gate ISO WORK="" PROFILE="samples/sl7.profile.json":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-PrimaryGate.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -Profile '{{PROFILE}}'
@@ -204,6 +205,6 @@ bench-warm-media SOURCE_ISO BASELINE="":
 primary-gate-assert WORK="":
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-PrimaryGate.ps1' -AssertOnly -Work '{{WORK}}'
 
-# Operator walkthrough for the Primary wipe path. Elevate to let it drive the gate.
+# Gate B walkthrough. Stops before any USB write: the Output ISO is unstable.
 primary-gate-wizard:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/apply/Invoke-PrimaryGateWizard.ps1'

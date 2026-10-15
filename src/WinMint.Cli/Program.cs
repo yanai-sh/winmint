@@ -492,6 +492,7 @@ internal static class Program
         }
 
         CliLog.ImageOk(Log, applied.Value.OutputIsoPath);
+        CliLog.OutputIsoUnstable(Log);
         CliLog.ShellStamp(Log, applied.Value.ShellStampTargetPath);
         CliLog.Lane(Log, applied.Value.Lane);
         return 0;

@@ -251,10 +251,11 @@ if (Test-Path -LiteralPath $expectedEvidencePath -PathType Leaf) {
     $wireHonest = Get-WinMintExpectedPackageWireHonest -Expected $expectedFlash
 }
 if (Test-WinMintIsWipeReadyGateB -Lane $assertLane -PackageStrict:([bool]$PackageStrict) -PackageWireHonest:$wireHonest) {
-    Write-Host "Flash only this workdir's Output ISO ($outIso). Do not flash a Test-lane workdir (.scratch/sl7-build)."
-    Write-Host 'Next step (manual, destructive): write that ISO to USB and bare-metal install — not run by this harness.'
+    Write-Host "Gate B evidence is green for $outIso."
 } else {
-    Write-Host 'Not wipe-ready Gate B — do not flash. Use just primary-gate for Release+strict+honest wipe media.'
+    Write-Host 'Gate B evidence is not green.'
 }
+Write-Host 'The Output ISO is unstable. Do not write it to USB. Do not boot it. Do not install from it.'
+Write-Host 'Live posture on an already-installed PC: post-install/Apply-LivePosture.ps1'
 if ($runScratchHygiene) { Invoke-WinMintScratchHygiene -RepoRoot $repoRoot }
 exit 0

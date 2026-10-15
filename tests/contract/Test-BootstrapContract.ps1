@@ -48,7 +48,7 @@ Assert-BootstrapText -Pattern '\[switch\]\$Gui' -Description 'primary GUI launch
 Assert-BootstrapText -Pattern '\[switch\]\$Headless' -Description 'headless launcher switch'
 Assert-BootstrapText -Pattern '\[switch\]\$CacheRelease' -Description 'durable release caching is explicit opt-in'
 Assert-BootstrapText -Pattern '\[switch\]\$PrimaryGate' -Description 'one-shot Gate B wipe ISO switch'
-Assert-BootstrapText -Pattern 'Wipe ISO while Wizard is open' -Description 'ephemeral live-session wipe hint'
+Assert-BootstrapText -Pattern 'The Output ISO is unstable' -Description 'bootstrap warns that the Output ISO is unstable'
 Assert-BootstrapText -Pattern 'Ephemeral toolkit left at' -Description 'NoLaunch leaves TEMP toolkit for disposable job'
 Assert-BootstrapText -Pattern 'bin\\wizard\\WinMint\.Wizard\.exe' -Description 'Wizard toolkit path'
 Assert-BootstrapText -Pattern 'bin\\cli\\WinMint\.Cli\.exe' -Description 'Cli toolkit path'

@@ -31,12 +31,13 @@ internal static class WizardBuild
         ImageEvidence evidence = applied.Value;
         HostReview review = composition.Review;
         string gateHint = review.IsGateB
-            ? " Gate B wipe media (pre-wipe ISO evidence — not Primary install proven)."
+            ? " Gate B evidence recorded."
             : review.ImageQuality == ImageQualityLane.Release && review.PackageStrict
-                ? " Release+strict but package wire not Gate B."
+                ? " Release+strict evidence recorded."
                 : review.ImageQuality == ImageQualityLane.Release
-                    ? " Soft Release (not the wipe gate)."
-                    : " Test lane (not the wipe gate).";
+                    ? " Release evidence recorded."
+                    : " Test lane evidence recorded.";
+        gateHint += " Output ISO is unstable. Do not install from it.";
         string ok =
             $"Image OK: {evidence.OutputIsoPath}; Lane={evidence.Lane}; Shell={evidence.ShellStampTargetPath}; Work={work}.{gateHint}";
         return WizardBuildResult.Ok(ok, evidence.OutputIsoPath, work, evidence.Digests);

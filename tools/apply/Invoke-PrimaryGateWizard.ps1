@@ -133,10 +133,11 @@ Import-Answer
 # ── Banner ──────────────────────────────────────────────────────────────────
 if (-not [Console]::IsOutputRedirected) { Clear-Host }
 Write-Host ''
-Write-Host '  WinMint Primary wipe path' -ForegroundColor Blue
+Write-Host '  WinMint Gate B compile' -ForegroundColor Blue
 Write-Host "  $TotalStages stages" -ForegroundColor DarkGray
 Write-Host ''
-Write-Note 'This wizard tells you what to do and captures what you copy back.'
+Write-Warn 'The Output ISO is unstable. This walkthrough stops before any USB write.'
+Write-Note 'Live posture on an already-installed PC is post-install/Apply-LivePosture.ps1.'
 Write-Note "Stop any time with Ctrl-C - answers so far are kept in $EnvFile."
 if (Test-Elevated) {
     Write-Good 'Elevated - the wizard will run the gate and read its exit code.'
@@ -146,18 +147,12 @@ else {
 }
 Wait-Human 'Ready to start?'
 
-# ── Stage 1: Restore path ───────────────────────────────────────────────────
-Show-Stage 'Restore path'
-Write-Say 'Before the destructive install, have a restore path for THIS PC ready.'
-Write-Say 'This is operator hygiene, not a WinMint feature - WinMint never downloads'
-Write-Say 'or ships recovery images (see README).'
-Start-Process 'https://support.microsoft.com/surfacerecoveryimage'
-Write-Step 'Surface: grab a serial-matched recovery image (BMR) from the page just opened.'
-Write-Note "Not a Surface? Use your PC maker's OEM recovery site, or a Windows recovery drive."
-Write-Note 'Maintainer note: a local serial-matched BMR (e.g. under Downloads) is fine for'
-Write-Note 'this device - just never commit or link that file in the repo.'
-if (-not (Confirm-Yes 'Restore path ready for this PC?')) {
-    Write-Warn 'Get a restore path sorted first - re-run this wizard when ready.'
+# ── Stage 1: Unstable ISO ───────────────────────────────────────────────────
+Show-Stage 'Unstable ISO'
+Write-Warn 'The Output ISO is unstable. Do not write it to USB. Do not boot it. Do not install from it.'
+Write-Say 'This walkthrough can still compile Gate B evidence. It stops before any USB write.'
+if (-not (Confirm-Yes 'Continue the Gate B compile anyway?')) {
+    Write-Warn 'Stopped.'
     exit 1
 }
 
@@ -234,11 +229,20 @@ if (-not $wipeIso -or -not (Test-Path -LiteralPath $wipeIso -PathType Leaf)) {
     Write-Warn "No output ISO under $gateWork - do not flash a USB yet."
     exit 1
 }
-Write-Good "wipe ISO: $wipeIso"
+Write-Good "Output ISO: $wipeIso"
 Save-Answer 'WIPE_ISO' $wipeIso
 if ($wipeSha) { Save-Answer 'WIPE_SHA' $wipeSha }
 
-# ── Stage 5: USB write ──────────────────────────────────────────────────────
+# ── Stage 5: stop ───────────────────────────────────────────────────────────
+# ADR-018: the current Output ISO is unstable install media. The checklist
+# below stays in this file for the acceptance contract and does not run.
+Show-Stage 'Output ISO'
+Write-Warn 'The Output ISO is unstable. Do not write it to USB. Do not boot it. Do not install from it.'
+Write-Say 'Live posture on this PC is post-install/Apply-LivePosture.ps1.'
+Write-Step $wipeIso
+exit 1
+
+# ── Stage 5 (unreachable): USB write ────────────────────────────────────────
 Show-Stage 'USB write'
 if ($wipeSha) {
     Write-Say 'Checking the ISO against the digest the gate recorded...'
@@ -253,9 +257,9 @@ if ($wipeSha) {
         exit 1
     }
 }
-Write-Say 'Flash this ISO - and only this one - with Rufus DD (or another honest writer):'
+Write-Warn 'Unreachable while the Output ISO is unstable. Do not flash this ISO.'
 Write-Step $wipeIso
-Wait-Human 'Press Enter once the USB is flashed and ready'
+exit 1
 
 # ── Stage 6: Destructive install ────────────────────────────────────────────
 Show-Stage 'Destructive install'

@@ -15,7 +15,7 @@ param(
     [string]$SourceIso = '',
     [string]$Work = '',
     [switch]$ValidateOnly,
-    # Gate B wipe ISO: Release + --package-strict (same bar as just primary-gate).
+    # Gate B compile switch. The Output ISO is unstable. Do not install from it.
     [switch]$PrimaryGate,
     [switch]$NoLaunch,
     [switch]$Force
@@ -65,6 +65,8 @@ function Write-WinMintBootstrapFailure {
 }
 
 try {
+    Write-WinMintBootstrapLog 'WinMint is the maintainer working tree. It is not ready for anyone else to run.' 'WARN'
+    Write-WinMintBootstrapLog 'The Output ISO is unstable. Do not write it to USB. Do not boot it. Do not install from it.' 'WARN'
     $sessionRoot = $null
     try {
         $tls12 = [Net.SecurityProtocolType]::Tls12
@@ -327,7 +329,7 @@ try {
         Write-WinMintBootstrapLog "Launching Wizard: $wizard"
         if ($null -ne $sessionRoot) {
             Write-WinMintBootstrapLog "Ephemeral session toolkit: $toolkitRoot"
-            Write-WinMintBootstrapLog 'Wipe ISO while Wizard is open: second terminal → cd to toolkit root → just primary-gate. Or one-shot: irm …/primary-gate?SourceIso=… | iex (see README).' 'WARN'
+            Write-WinMintBootstrapLog 'The Output ISO is unstable. Do not write it to USB. Do not boot it. Do not install from it. Live posture: post-install/Apply-LivePosture.ps1.' 'WARN'
         }
         $p = Start-Process -FilePath $wizard -WorkingDirectory $toolkitRoot -PassThru -Wait
         $code = $p.ExitCode

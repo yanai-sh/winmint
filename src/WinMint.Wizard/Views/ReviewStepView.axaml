@@ -113,7 +113,7 @@
         <Border Classes="flash"
                 IsVisible="{Binding Build.FlashGuidanceText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
           <StackPanel Spacing="6">
-            <TextBlock Classes="panel-label" Text="FLASH" Margin="0" />
+            <TextBlock Classes="panel-label" Text="UNSTABLE" Margin="0" />
             <TextBlock Text="{Binding Build.FlashGuidanceText}"
                        TextWrapping="Wrap"
                        FontSize="13"

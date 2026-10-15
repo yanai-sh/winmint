@@ -12,10 +12,11 @@ public class FlashGuidanceTests
             gateB: true,
             outputIsoSha256: "abc123");
 
-        Assert.Contains("Gate B wipe media ready", text, StringComparison.Ordinal);
-        Assert.Contains("not a completed Primary install", text, StringComparison.Ordinal);
-        Assert.Contains("Rufus", text, StringComparison.Ordinal);
-        Assert.Contains("DD Image", text, StringComparison.Ordinal);
+        Assert.Contains("Unstable. Do not write this ISO to USB.", text, StringComparison.Ordinal);
+        Assert.Contains("Do not install from it.", text, StringComparison.Ordinal);
+        Assert.Contains("post-install/Apply-LivePosture.ps1", text, StringComparison.Ordinal);
+        Assert.Contains("gateB=True", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Rufus", text, StringComparison.Ordinal);
         Assert.Contains("abc123", text, StringComparison.Ordinal);
         Assert.Contains(@"C:\work\out.iso", text, StringComparison.Ordinal);
     }
@@ -24,7 +25,8 @@ public class FlashGuidanceTests
     public void Format_test_lane_is_not_wipe_gate()
     {
         string text = FlashGuidance.Format(@"D:\out.iso", gateB: false);
-        Assert.Contains("not the wipe gate", text, StringComparison.Ordinal);
+        Assert.Contains("Do not install from it.", text, StringComparison.Ordinal);
+        Assert.Contains("gateB=False", text, StringComparison.Ordinal);
         Assert.Contains("evidence.json", text, StringComparison.Ordinal);
     }
 

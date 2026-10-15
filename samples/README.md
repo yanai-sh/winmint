@@ -1,5 +1,7 @@
 # Samples
 
+The Output ISO these profiles compile is unstable. Do not write it to USB or install from it. Live posture on an already-installed PC is `post-install/`.
+
 | Sample | Purpose | Lane | Wipe risk |
 |--------|---------|------|-----------|
 | `sl7.profile.json` | **Maintainer Smoke** + Gate B / Primary wipe — this machine’s install target | Release via `primary-gate`; Smoke uses Test lane | Yes — needs `passwordPath` |

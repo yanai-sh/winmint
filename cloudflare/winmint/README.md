@@ -1,6 +1,8 @@
 # WinMint Bootstrap Worker
 
-Short launcher for users (no git clone, no source zip):
+Maintainer working tree. Not ready for anyone else to run. The Output ISO is unstable. Do not write it to USB or install from it. Live posture is `post-install/` in the repo.
+
+Launcher (no git clone, no source zip):
 
 ```powershell
 irm https://winmint.yanai.sh | iex

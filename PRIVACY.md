@@ -1,5 +1,7 @@
 # Privacy
 
+This repository is the maintainer's working tree. It is not ready for anyone else to run.
+
 WinMint does not send data off the PC unless you started that step.
 WinMint does not transfer information to networked systems unless the operator requested that operation.
 

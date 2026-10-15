@@ -6,52 +6,31 @@
   </picture>
 </div>
 
-WinMint builds a custom Windows 11 ISO for a clean ARM64 developer PC.
+WinMint is the maintainer's working tree. It is not ready for anyone else to run.
 
-You bring an official **English (US)** Windows 11 **26H2** ARM64 ISO (build family 26300) from [Microsoft’s ARM64 download](https://www.microsoft.com/en-us/software-download/windows11arm64) (English, not English International). A 25H2 ISO (family 26200) still services. WinMint does not download or redistribute Windows. It services that ISO offline, then finishes setup on first sign-in.
+## Post-install
 
-## Alpha
+On an already-installed Windows 11 PC, the current path is [`post-install/`](post-install/Apply-LivePosture.ps1). Run it elevated, after Windows Update. The same files run under Windows PowerShell 5.1 and under PowerShell 7.
 
-You can plan and build ISOs today. Flashing that ISO and wiping a PC is something you run yourself. Treat every wipe as your own risk.
+```powershell
+cd post-install
+powershell -NoProfile -File .\Apply-LivePosture.ps1 -DryRun
+powershell -NoProfile -File .\Apply-LivePosture.ps1
+```
+
+`-DryRun` prints the planned changes and writes nothing. Pass `-Drivers` to include the Surface Laptop 7 ARM64 catalog MSI. Sign out after a real run. Language, time zone, UAC, Reserved Storage, and location stay as they are.
+
+Each script also runs on its own: `Apply-Registry.ps1`, `Uninstall-OneDrive.ps1`, `Remove-InboxApps.ps1`, `Install-SurfaceDrivers.ps1`.
+
+## Output ISO
+
+The Output ISO is unstable. Do not write it to USB. Do not boot it. Do not install from it.
+
+The goal is a portable ISO that installs cleanly, with the curated settings still to come. The compiler stays in the tree for that goal. Its current output is unstable install media.
+
+A build still takes an official **English (US)** Windows 11 **26H2** ARM64 ISO (family 26300) from [Microsoft’s ARM64 download](https://www.microsoft.com/en-us/software-download/windows11arm64) (English, not English International). A 25H2 ISO (family 26200) still services. WinMint does not download or redistribute Windows.
 
 GitHub Releases are unsigned. See the [Code signing policy](docs/CODE_SIGNING.md).
-
-## Open the Wizard
-
-On Windows (ARM64 recommended), in PowerShell:
-
-```powershell
-irm https://winmint.yanai.sh | iex
-```
-
-This downloads a SHA-256-checked toolkit into a temporary folder and opens the Wizard. The toolkit is deleted when you quit. The work folder and output ISO stay on disk.
-
-To check a sample profile without a Microsoft ISO:
-
-```powershell
-irm https://winmint.yanai.sh/validate | iex
-```
-
-The first run needs network. Missing PowerShell 7.6+ is installed from GitHub's MSI, not winget's MSIX (that package cannot service an image). Missing [Just](https://github.com/casey/just#installation) is installed via winget.
-
-## Build the ISO
-
-The Wizard is **Source** → **Account** → **Software** → **Review**.
-
-1. Choose your **English (US)** Microsoft ISO.
-2. Set a local account. A password is required.
-3. On **Software**, pick a **Station outcome** (Comfort / Minimal / Power) to seed apps and cleanup, then refine chips and desktop surfaces as needed.
-4. On **Review**, choose **Build**. Servicing is elevated and takes several hours. The Wizard always builds shipping image quality (no Test vs Release chooser).
-
-If you check **Require Wi-Fi during OOBE**, stay at the machine for network setup.
-
-## Flash the USB
-
-When **Build** finishes, Review shows the output ISO path and SHA-256. Check the hash before you wipe anything.
-
-Write the ISO to a UEFI USB with [Rufus](https://rufus.ie/) in **DD Image** mode, not ISO mode. Boot expects WinPE LaunchApply, not Windows Setup.
-
-Before you wipe a PC, prepare a restore path: OEM recovery when available, or a Windows recovery drive. WinMint does not download recovery images.
 
 [Issues](https://github.com/yanai-sh/winmint/issues) · [Privacy](PRIVACY.md) · [GPL-3.0-or-later](LICENSE)
 
