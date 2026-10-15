@@ -117,7 +117,8 @@ function Assert-Contract {
         [string] $Expect,
         [switch] $NoHelper,
         [switch] $HelperMismatch,
-        [switch] $NoWorkHelper
+        [switch] $NoWorkHelper,
+        [switch] $NoDesktop
     )
 
     Remove-Item -LiteralPath $mount, $contractWork -Recurse -Force -ErrorAction SilentlyContinue
@@ -134,6 +135,12 @@ function Assert-Contract {
     }
     if (-not $NoHelper) {
         [IO.File]::WriteAllText((Join-Path $system32 'WinMintApply.exe'), 'MZ', [Text.Encoding]::ASCII)
+    }
+    if (-not $NoDesktop) {
+        $jpgSrc = Join-Path (Split-Path -Parent (Get-WinPeApplyPayloadPath)) 'winpe.jpg'
+        if (Test-Path -LiteralPath $jpgSrc -PathType Leaf) {
+            Copy-Item -LiteralPath $jpgSrc -Destination (Join-Path $system32 'winpe.jpg') -Force
+        }
     }
     if (-not $NoWorkHelper) {
         $payloadDir = Join-Path $contractWork 'payload'
@@ -168,6 +175,7 @@ try {
     Assert-Contract 'LaunchApps cmd host rejected' $shipped "[LaunchApps]`r`n%SYSTEMDRIVE%\Windows\System32\LaunchApply.cmd" 'must [LaunchApp] AppPath WinMintApply.exe'
     Assert-Contract 'helper bytes mismatch rejected' $shipped $winpeshl 'bytes differ from work payload' -HelperMismatch
     Assert-Contract 'helper source missing rejected' $shipped $winpeshl 'helper source missing' -NoWorkHelper
+    Assert-Contract 'stock blue desktop rejected' $shipped $winpeshl 'winpe.jpg missing' -NoDesktop
 }
 finally {
     Remove-Item -LiteralPath $mount, $contractWork -Recurse -Force -ErrorAction SilentlyContinue
