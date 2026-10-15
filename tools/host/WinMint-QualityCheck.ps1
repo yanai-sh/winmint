@@ -3,8 +3,9 @@ Set-StrictMode -Version Latest
 # Shared live Catalog B-release reconcile (ADR-013). Dot-source from host scripts.
 
 function Get-WinMintQualityTrainPairs {
-    # WinMint supports 25H2+ only; do not probe older trains.
+    # Primary retail train is 26H2. 25H2 stays a same-train mapping. Do not probe 24H2 or 26H1.
     return , @(
+        [pscustomobject]@{ Label = '26H2'; Version = '10.0.26300.1' }
         [pscustomobject]@{ Label = '25H2'; Version = '10.0.26200.1' }
     )
 }

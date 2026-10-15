@@ -102,7 +102,14 @@ public class WinPeApplyPlanTests
 
         Assert.Contains("Apply-Image", payload, StringComparison.Ordinal);
         Assert.Contains("bcdboot", payload, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/offline /bootex", payload, StringComparison.Ordinal);
         Assert.Contains("wpeutil reboot", payload, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("wpeutil shutdown", payload, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("winmint-applied.txt", payload, StringComparison.Ordinal);
+        Assert.True(
+            payload.IndexOf("winmint-applied.txt", StringComparison.Ordinal)
+                < payload.IndexOf("echo clean", StringComparison.Ordinal),
+            "A finished apply must be noticed before diskpart clean.");
         Assert.Contains("LabConfig", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("setup.exe", payload, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("/legacy", payload, StringComparison.Ordinal);

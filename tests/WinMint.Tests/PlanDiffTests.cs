@@ -8,8 +8,7 @@ public class PlanDiffTests
     [Fact]
     public void Sl7_host_review_empty_optional_packages_and_gate_b_on_release_strict()
     {
-        string samplePath = Path.Combine(TestRepo.Root, "samples", "sl7.profile.json");
-        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(samplePath);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = Sl7SamplePassword.TryLoad();
         Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
 
         Assert.Equal("Yanai", parsed.Value.Account.Username);

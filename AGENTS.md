@@ -60,7 +60,7 @@ Pins: `global.json`, `Directory.Build.props` (no CPM / `Directory.Packages.props
 
 **Clock** — Maintainer zone is Asia/Jerusalem (Tel Aviv). SL7’s system time can jump backward at random even after a sync (faulty DMA workaround on this machine, not product DMA settle). Do not trust `Get-Date`, `[datetime]::UtcNow`, file `LastWriteTime`, chat timestamps, or harness remaining-time as elapsed truth. Smoke stall/wall and the DVD boot-nudge window are wall-clock: a backward jump inflates them. If remaining time grows or files look newer than “now,” the clock jumped — stop treating those timers as elapsed and ask the human. A sync is temporary.
 
-**Vanilla Source ISO (Smoke / Host Apply)** — Official Microsoft **English (US)** 25H2 ARM64 ISO on this host (DISM `Languages : en-US`; not English International). Path and recipes: [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-host.json). User-supplied only ([ADR-001](docs/decisions/ADR-001-source-iso-legal.md)); never commit the ISO bytes; CI must not fetch Windows media.
+**Vanilla Source ISO (Smoke / Host Apply)** — Official Microsoft **English (US)** 26H2 ARM64 ISO on this host (family 26300; DISM `Languages : en-US`; not English International). 25H2 (26200) remains a same-train mapping. Path and recipes: [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-host.json). User-supplied only ([ADR-001](docs/decisions/ADR-001-source-iso-legal.md)); never commit the ISO bytes; CI must not fetch Windows media.
 
 **Maintainer signals** — Weekly Catalog B-release: GitHub Actions workflow **health** (subscribe to failures). SL7 ISO + Catalog: `just maintainer-check` (optional Task Scheduler; see fixture notes). Catalog-only: `just quality-check`.
 
@@ -72,7 +72,7 @@ just smoke-maintainer-monitor
 # Profile: samples/sl7.profile.json (needs .scratch/sl7.password)
 # Custom wall/monitor/online (positional — not WALL=180 on PowerShell): just smoke-maintainer .scratch/smoke 180 1 45 0
 # Online OOBE escape (ZDP path): last positional 1, or Start-SmokeElevated -OnlineOobe 1
-# Custom ISO only: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'
+# Custom ISO only: just smoke 'C:\Users\yanai\Documents\Windows11_Client_arm64_en-us_26300_9457.iso'
 # Extra Watch attach: just watch-smoke .scratch/smoke
 ```
 

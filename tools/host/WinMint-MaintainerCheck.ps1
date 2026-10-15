@@ -71,11 +71,16 @@ function Test-WinMintSourceIsoWimRow {
         throw "Source ISO Pro Version unrecognized: '$version'"
     }
     $family = [int]$Matches[1]
-    if ($ExpectedTrain -eq '25H2' -and $family -ne 26200) {
-        throw "Source ISO train mismatch: expected family 26200 (25H2), got $family"
+    $expectedFamily = switch ($ExpectedTrain) {
+        '26H2' { 26300 }
+        '25H2' { 26200 }
+        default { 0 }
     }
-    if ($ExpectedTrain -ne '25H2') {
+    if ($expectedFamily -eq 0) {
         throw "Unsupported maintainer train '$ExpectedTrain'"
+    }
+    if ($family -ne $expectedFamily) {
+        throw "Source ISO train mismatch: expected family $expectedFamily ($ExpectedTrain), got $family"
     }
 }
 
@@ -115,7 +120,7 @@ function Test-WinMintMaintainerIsoAdvisory {
             $messages.Add(
                 "ISO advisory: install.wim UBR $WimUbr is $gap behind Catalog B-release UBR $CatalogUbr " +
                 'and the ISO file hash is unchanged since the last maintainer-check. Consider downloading a ' +
-                'newer retail 25H2 English (US) ARM64 ISO (English 64-bit) from https://www.microsoft.com/software-download/windows11 ' +
+                'newer retail 26H2 English (US) ARM64 ISO (English 64-bit) from https://www.microsoft.com/software-download/windows11arm64 ' +
                 'and updating tests/fixtures/maintainer-host.json (path, leaf, optional sha256).'
             )
         }
@@ -144,7 +149,7 @@ function Invoke-WinMintMaintainerIsoCheck {
     }
 
     $train = [string]$Fixture.sourceIso.train
-    if ([string]::IsNullOrWhiteSpace($train)) { $train = '25H2' }
+    if ([string]::IsNullOrWhiteSpace($train)) { $train = '26H2' }
 
     $isoSha = Get-WinMintIsoSha256Hex -Path $isoPath
     $messages = [System.Collections.Generic.List[string]]::new()

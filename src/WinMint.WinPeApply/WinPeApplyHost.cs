@@ -6,8 +6,9 @@ namespace WinMint.WinPeApply;
 /// Windows-subsystem WinPE host. winpeshl [LaunchApp] cannot pass arguments, so this exe
 /// CREATE_NO_WINDOW-launches LaunchApply.cmd beside it. Failures reopen a console with the log —
 /// disk-guard refusals must stay visible (#119).
-/// ponytail: Native AOT WinExe in WinPE — kernel32 CreateProcess only. If a Source ISO WinPE
-/// lacks an API the runtime needs, replace this host with a C Win32 stub; keep LaunchApply.cmd.
+/// ponytail: Native AOT WinExe in WinPE. The boot surface is a fullscreen black GDI window;
+/// LaunchApply stays CreateProcess. If a Source ISO WinPE lacks an API the runtime needs,
+/// replace this host with a C Win32 stub; keep LaunchApply.cmd.
 /// </summary>
 internal static class WinPeApplyHost
 {
@@ -29,17 +30,31 @@ internal static class WinPeApplyHost
             return ShowFailure(system32, log, holdFailureConsole, 1);
         }
 
-        using Process? apply = Process.Start(HiddenLaunch(system32, log));
-        if (apply is null)
+        int code = 1;
+        bool started = false;
+        using (ApplyBootSplash.TryShow())
         {
-            File.WriteAllText(log, "WinMint: CreateProcess LaunchApply failed");
+            using Process? apply = Process.Start(HiddenLaunch(system32, log));
+            if (apply is null)
+            {
+                File.WriteAllText(log, "WinMint: CreateProcess LaunchApply failed");
+            }
+            else
+            {
+                started = true;
+                apply.WaitForExit();
+                code = apply.ExitCode;
+            }
+        }
+
+        if (!started)
+        {
             return ShowFailure(system32, log, holdFailureConsole, 1);
         }
 
-        apply.WaitForExit();
-        return apply.ExitCode == 0
+        return code == 0
             ? 0
-            : ShowFailure(system32, log, holdFailureConsole, apply.ExitCode);
+            : ShowFailure(system32, log, holdFailureConsole, code);
     }
 
     private static ProcessStartInfo HiddenLaunch(string system32, string logPath)
