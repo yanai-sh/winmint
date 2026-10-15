@@ -30,11 +30,12 @@ public class LivePostureScriptTests
             last = at;
             string path = Path.Combine(live, "registry", task);
             string body = File.ReadAllText(path);
-            Assert.Contains("Registry.ps1", body, StringComparison.Ordinal);
+            Assert.Contains("function Set-RegDword", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("Registry.ps1", body, StringComparison.Ordinal);
             script.AppendLine(body);
         }
 
-        Assert.DoesNotContain("'Registry.ps1'", orchestrator, StringComparison.Ordinal);
+        Assert.DoesNotContain("Registry.ps1", orchestrator, StringComparison.Ordinal);
         string combined = script.ToString();
         foreach (string name in new[]
         {
@@ -133,13 +134,6 @@ public class LivePostureScriptTests
             Assert.DoesNotContain("#requires -Version 7", script, StringComparison.Ordinal);
             Assert.DoesNotContain("&&", script, StringComparison.Ordinal);
             Assert.DoesNotContain("??", script, StringComparison.Ordinal);
-            if (Path.GetFileName(path).Equals("Registry.ps1", StringComparison.Ordinal))
-            {
-                Assert.Contains("function Set-RegDword", script, StringComparison.Ordinal);
-                Assert.DoesNotContain("[switch] $DryRun", script, StringComparison.Ordinal);
-                continue;
-            }
-
             Assert.Contains("[switch] $DryRun", script, StringComparison.Ordinal);
         }
 
