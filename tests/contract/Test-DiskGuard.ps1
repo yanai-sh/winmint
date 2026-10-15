@@ -31,6 +31,7 @@ $harness = @('@echo off', 'setlocal EnableExtensions', 'set INSTALL=Z') +
         if ($_ -eq 'set WORK=%TEMP%\winmint') { "set WORK=$work" }
         elseif ($_ -match 'list disk') { 'rem pre-seeded' }
         elseif ($_ -match 'diskpart /s') { 'rem pre-seeded' }
+        elseif ($_ -match 'winmint_see_applied|winmint_finished') { 'rem install probe is not the disk-pick harness' }
         else { $_ } }) +
     @('echo RESULT TARGET=%TARGET% EXTRA=%EXTRA%', 'exit /b 0', '') +
     ($lines[$sub..($lines.Length - 1)] | ForEach-Object {
@@ -181,6 +182,15 @@ finally {
     Remove-Item -LiteralPath $mount, $contractWork -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+function Get-CanonicalPath([string] $Path) {
+    $full = [IO.Path]::GetFullPath($Path)
+    $parent = Split-Path -Parent $full
+    $leaf = Split-Path -Leaf $full
+    if (-not (Test-Path -LiteralPath $parent -PathType Container)) { return $full }
+    $fso = New-Object -ComObject Scripting.FileSystemObject
+    return Join-Path $fso.GetFolder($parent).Path $leaf
+}
+
 $packagedRoot = Join-Path $env:TEMP "winmint-packaged-root-$([guid]::NewGuid().ToString('N'))"
 try {
     New-Item -ItemType Directory -Force -Path `
@@ -190,13 +200,13 @@ try {
     Copy-Item -LiteralPath $payloadPath `
         -Destination (Join-Path $packagedRoot 'payload\winpe\LaunchApply.cmd')
     . (Join-Path $packagedRoot 'servicing/WinPeApplyContract.ps1')
-    $expectedPackagedPayload = (Resolve-Path (Join-Path $packagedRoot 'payload\winpe\LaunchApply.cmd')).Path
-    $resolvedPackagedPayload = (Resolve-Path (Get-WinPeApplyPayloadPath)).Path
+    $expectedPackagedPayload = Get-CanonicalPath (Join-Path $packagedRoot 'payload\winpe\LaunchApply.cmd')
+    $resolvedPackagedPayload = Get-CanonicalPath (Get-WinPeApplyPayloadPath)
     if ($resolvedPackagedPayload -cne $expectedPackagedPayload) {
         $failures += "packaged payload resolution`n    expected: $expectedPackagedPayload`n    actual:   $resolvedPackagedPayload"
     }
-    $expectedPackagedHelper = Join-Path $packagedRoot 'payload\WinMintApply.exe'
-    $resolvedPackagedHelper = Get-WinPeApplyHelperPath -WorkDirectory $packagedRoot
+    $expectedPackagedHelper = Get-CanonicalPath (Join-Path $packagedRoot 'payload\WinMintApply.exe')
+    $resolvedPackagedHelper = Get-CanonicalPath (Get-WinPeApplyHelperPath -WorkDirectory $packagedRoot)
     if ($resolvedPackagedHelper -cne $expectedPackagedHelper) {
         $failures += "packaged helper resolution`n    expected: $expectedPackagedHelper`n    actual:   $resolvedPackagedHelper"
     }
