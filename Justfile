@@ -139,7 +139,7 @@ apply-smoke-maintainer ISO WORK PROFILE INCLUDE_SMOKE_STUBS="false":
 # ONLINE=1: legacy always-on Default Switch (ZDP path).
 # PowerShell: pass ISO as a positional arg only — not ISO=path. NAME=value overrides are not reliable on Windows;
 # use positional WORK WALL MONITOR STALL ONLINE or `smoke-maintainer-monitor` for VMConnect.
-# Usage: just smoke 'C:\Users\yanai\Documents\Win11_25H2_English_Arm64_v2.iso'
+# Usage: just smoke 'C:\Users\yanai\Documents\Windows11_Client_arm64_en-us_26300_9457.iso'
 #        just smoke-maintainer .scratch/smoke 180 1 45 0
 smoke ISO WORK=".scratch/smoke" PROFILE="samples/sl7.profile.json" WALL="180" MONITOR="0" STALL="45" ONLINE="0":
     pwsh -NoProfile -NonInteractive -File '{{justfile_directory()}}/tools/vm/Invoke-SmokeRecipe.ps1' -Iso '{{ISO}}' -Work '{{WORK}}' -ProfilePath '{{PROFILE}}' -WallClockMinutes {{WALL}} -StallMinutes {{STALL}} -Monitor '{{MONITOR}}' -OnlineOobe '{{ONLINE}}'

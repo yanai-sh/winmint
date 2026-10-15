@@ -6,6 +6,52 @@ param(
     [Parameter(Mandatory)] [string] $QualityPackageDir
 )
 # Source-ISO edition index is unrelated: after single-image export, apply target is always index 1.
+
+function Copy-WinMintMediaBootFile {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)] [string] $Source,
+        [Parameter(Mandatory)] [string] $Destination
+    )
+    if (-not $PSCmdlet.ShouldProcess($Destination, 'Replace media boot file')) { return }
+    $destItem = Get-Item -LiteralPath $Destination -ErrorAction SilentlyContinue
+    if ($null -ne $destItem -and $destItem.IsReadOnly) { $destItem.IsReadOnly = $false }
+    Copy-Item -LiteralPath $Source -Destination $Destination -Force
+}
+
+function Publish-WinMintMediaBootFile {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)] [string] $MediaDir,
+        [string] $BootMgfw = '',
+        [string] $BootMgr = '',
+        [string] $BootStl = ''
+    )
+    # Learn "Update Windows installation media": after the LCU is on boot.wim, copy
+    # Windows\Boot\EFI\boot.stl to efi\microsoft\boot\boot.stl and replace the media
+    # bootmgfw/bootaa64/bootmgr copies with that same serviced WinPE. KB5127648:
+    # a missing or mismatched boot.stl fails Secure Boot media start (0xc0430001).
+    if (-not $PSCmdlet.ShouldProcess($MediaDir, 'Publish serviced boot file')) { return }
+    $haveMgfw = -not [string]::IsNullOrWhiteSpace($BootMgfw)
+    $haveMgr = -not [string]::IsNullOrWhiteSpace($BootMgr)
+    if (-not [string]::IsNullOrWhiteSpace($BootStl)) {
+        $stlDir = Join-Path $MediaDir 'efi\microsoft\boot'
+        New-Item -ItemType Directory -Force -Path $stlDir | Out-Null
+        Copy-WinMintMediaBootFile -Source $BootStl -Destination (Join-Path $stlDir 'boot.stl')
+    }
+    if (-not $haveMgfw -and -not $haveMgr) { return }
+    $efiFiles = @(Get-ChildItem -LiteralPath $MediaDir -Force -Recurse -File -Filter 'b*.efi' -ErrorAction SilentlyContinue)
+    foreach ($file in $efiFiles) {
+        if ($haveMgfw -and $file.Name -match '^(?i)(bootmgfw|bootx64|bootia32|bootaa64)\.efi$') {
+            Copy-WinMintMediaBootFile -Source $BootMgfw -Destination $file.FullName
+        }
+        elseif ($haveMgr -and $file.Name -match '^(?i)bootmgr\.efi$') {
+            Copy-WinMintMediaBootFile -Source $BootMgr -Destination $file.FullName
+        }
+    }
+}
+
+if ($MyInvocation.InvocationName -ne '.') {
 . (Join-Path $PSScriptRoot 'WinPeApplyContract.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
 . (Join-Path $PSScriptRoot 'Resolve-WinMintQualityUpdate.ps1')
@@ -68,6 +114,7 @@ function Test-LaunchApplyPatched {
     return $clean
 }
 
+$bootEfiStage = Join-Path $WorkDirectory 'boot-efi'
 $bootMount = Join-Path (Split-Path -Parent $mountDir) 'boot-mount'
 if (Test-Path -LiteralPath $bootMount) {
     try {
@@ -141,6 +188,14 @@ foreach ($index in $indexes) {
         $desktopItem = Get-Item -LiteralPath $desktopDest -ErrorAction SilentlyContinue
         if ($null -ne $desktopItem -and $desktopItem.IsReadOnly) { $desktopItem.IsReadOnly = $false }
         Copy-Item -LiteralPath $desktopSrc -Destination $desktopDest -Force
+        $efiDir = Join-Path $bootMount 'Windows\Boot\EFI'
+        foreach ($leaf in @('boot.stl', 'bootmgfw.efi', 'bootmgr.efi')) {
+            $src = Join-Path $efiDir $leaf
+            if (Test-Path -LiteralPath $src -PathType Leaf) {
+                New-Item -ItemType Directory -Force -Path $bootEfiStage | Out-Null
+                Copy-Item -LiteralPath $src -Destination (Join-Path $bootEfiStage $leaf) -Force
+            }
+        }
     }
     finally {
         Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Commit') -Stage 'Unmount-Commit'
@@ -175,12 +230,22 @@ if ((Test-Path -LiteralPath $winreSrc) -and $winrePackages.Count -gt 0) {
     Remove-Item -LiteralPath $winreTmp -Force -ErrorAction SilentlyContinue
 }
 
-$stl = Join-Path $QualityPackageDir 'boot.stl'
-if (Test-Path -LiteralPath $stl -PathType Leaf) {
-    Copy-Item -LiteralPath $stl -Destination (Join-Path $mediaDir 'sources\boot.stl') -Force
-    Write-Output 'PatchBootWimApply copied boot.stl'
+if ($applyQuality) {
+    $stlStaged = Join-Path $bootEfiStage 'boot.stl'
+    if (-not (Test-Path -LiteralPath $stlStaged -PathType Leaf)) {
+        throw 'Serviced boot.wim is missing Windows\Boot\EFI\boot.stl; Secure Boot media needs efi\microsoft\boot\boot.stl'
+    }
+    $mgfwStaged = Join-Path $bootEfiStage 'bootmgfw.efi'
+    $mgrStaged = Join-Path $bootEfiStage 'bootmgr.efi'
+    $mgfwArg = ''
+    $mgrArg = ''
+    if (Test-Path -LiteralPath $mgfwStaged -PathType Leaf) { $mgfwArg = $mgfwStaged }
+    if (Test-Path -LiteralPath $mgrStaged -PathType Leaf) { $mgrArg = $mgrStaged }
+    Publish-WinMintMediaBootFile -MediaDir $mediaDir -BootStl $stlStaged -BootMgfw $mgfwArg -BootMgr $mgrArg
+    Write-Output 'PatchBootWimApply copied boot.stl to efi\microsoft\boot\boot.stl'
 }
 
 Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
 Write-Output 'PatchBootWimApply ok'
 exit 0
+}

@@ -130,11 +130,6 @@ try {
     Write-Output "quality expand ok $ssuLeaf"
     Copy-Item -LiteralPath $ssuPath -Destination (Join-Path $QualityPackageDir $ssuLeaf) -Force
 
-    $bootStlSrc = Find-WinMintQualityBootStl -ExtractDir $extract
-    if ($bootStlSrc) {
-        Copy-Item -LiteralPath $bootStlSrc -Destination (Join-Path $QualityPackageDir 'boot.stl') -Force
-    }
-
     $checkpointLeaves = [System.Collections.Generic.List[string]]::new()
     foreach ($ck in @($set.Checkpoints)) {
         Write-Output "quality checkpoint $($ck.Kb)"

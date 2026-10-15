@@ -125,6 +125,23 @@ finally {
     Remove-Item -LiteralPath $fakeRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# --- 26H2 primary train ---
+Test-WinMintSourceIsoWimRow -ExpectedTrain '26H2' -Row ([ordered]@{
+        architecture = 'ARM64'
+        languages    = 'en-US'
+        version      = '10.0.26300.9457'
+    })
+$threwTrain = $false
+try {
+    Test-WinMintSourceIsoWimRow -ExpectedTrain '26H2' -Row ([ordered]@{
+            architecture = 'ARM64'
+            languages    = 'en-US'
+            version      = '10.0.26200.9457'
+        })
+}
+catch { $threwTrain = $true }
+Assert-True $threwTrain '26H2 fixture must reject a 25H2 WIM family'
+
 # --- wrapper token honesty (exit 2 must not print quality-check ok) ---
 $wrapper = Get-Content -LiteralPath (Join-Path $repo 'tools\host\Invoke-MaintainerCheck.ps1') -Raw -Encoding utf8
 Assert-True ($wrapper -match '\[int\]\$result\.ExitCode -eq 0') 'ok token gated on exit 0'
