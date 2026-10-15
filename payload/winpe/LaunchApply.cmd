@@ -77,6 +77,10 @@ if defined EXTRA (
 )
 if not defined REINSTALL call :winmint_see_applied
 if defined HANDED goto :winmint_finished
+if defined PROBEFAIL (
+  echo WinMint: could not check the internal disk for an existing install. Refusing to erase.
+  exit /b 1
+)
 echo WinMint: erasing disk %TARGET%
 set DP=%WORK%\diskpart.txt
 > "%DP%" (
@@ -114,12 +118,8 @@ set BCDBOOT=W:\Windows\System32\bcdboot.exe
 if not exist "%BCDBOOT%" set BCDBOOT=bcdboot
 "%BCDBOOT%" W:\Windows /s S: /f UEFI /offline /bootex
 if errorlevel 1 (
-  echo WinMint: bcdboot /offline /bootex failed. Retrying with the default boot files.
-  "%BCDBOOT%" W:\Windows /s S: /f UEFI
-  if errorlevel 1 (
-    echo WinMint: bcdboot failed
-    exit /b 1
-  )
+  echo WinMint: bcdboot /offline /bootex failed. The 2011 UEFI CA boot manager is not a fallback.
+  exit /b 1
 )
 if exist "%INSTALL%:\OobeUnattend.xml" (
   if not exist W:\Windows\Panther mkdir W:\Windows\Panther
@@ -149,6 +149,7 @@ exit /b 0
 
 :winmint_see_applied
 set HANDED=
+set PROBEFAIL=
 > "%WORK%\parts.txt" (
   echo select disk %TARGET%
   echo list partition
@@ -160,7 +161,11 @@ goto :eof
 
 :winmint_probe
 set N=%1
-if exist B:\ goto :eof
+if defined HANDED goto :eof
+if exist B:\ (
+  set PROBEFAIL=1
+  goto :eof
+)
 > "%WORK%\as%N%.txt" (
   echo select disk %TARGET%
   echo select partition %N%
