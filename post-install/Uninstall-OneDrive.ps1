@@ -8,8 +8,8 @@
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
   Files that were stored inside an OneDrive folder are moved into the normal
   profile folders first. The OneDrive directory is then deleted.
-  The disable policies from Apply-Registry.ps1 are written again so OneDrive
-  stays blocked.
+  Set-OneDrivePolicy.ps1 blocks sync. This script rewrites
+  PreventNetworkTrafficPreUserSignIn after it clears the client key.
   -DryRun lists what would be removed and changes nothing.
 #>
 param([switch] $DryRun)
@@ -459,7 +459,7 @@ function Invoke-OneDrivePurge {
         Write-Output "disabled service $($service.Name)"
     }
 
-    # Apply-Registry.ps1 writes this block. Removing the client key above would drop it.
+    # Set-OneDrivePolicy.ps1 writes this value. Clearing the client key above would drop it.
     $block = 'HKLM:\SOFTWARE\Microsoft\OneDrive'
     if (-not (Test-Path -LiteralPath $block)) {
         New-Item -Path $block -Force | Out-Null
