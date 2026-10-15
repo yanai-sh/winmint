@@ -15,6 +15,10 @@ public class LivePostureScriptTests
         {
             "AllowNewsAndInterests",
             "DisableWindowsConsumerFeatures",
+            "EnableActivityFeed",
+            "PublishUserActivities",
+            "UploadUserActivities",
+            "DODownloadMode",
             "DisableFileSyncNGSC",
             "HideFirstRunExperience",
             "LongPathsEnabled",
@@ -33,6 +37,11 @@ public class LivePostureScriptTests
             Assert.Contains(name, script, StringComparison.Ordinal);
         }
 
+        Assert.Contains("'EnableActivityFeed' 0", script, StringComparison.Ordinal);
+        Assert.Contains("'DODownloadMode' 0", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("GlobalUserDisabled", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("SvcHostSplitThresholdInKB", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Set-Service", script, StringComparison.Ordinal);
         Assert.DoesNotContain("ConsentPromptBehaviorAdmin", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Set-WinHomeLocation", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Set-ReservedStorageState", script, StringComparison.Ordinal);

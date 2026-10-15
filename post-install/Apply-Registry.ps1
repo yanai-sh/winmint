@@ -70,6 +70,10 @@ Set-RegDword "$pol\Windows\OneDrive" 'DisableFileSync' 1
 Set-RegDword "$pol\Windows\OneDrive" 'DisableMeteredNetworkFileSync' 1
 Set-RegDword "$pol\Windows\OneDrive" 'PreventNetworkTrafficPreUserSignIn' 1
 Set-RegDword "$pol\Windows\Device Metadata" 'PreventDeviceMetadataFromNetwork' 1
+Set-RegDword "$pol\Windows\System" 'EnableActivityFeed' 0
+Set-RegDword "$pol\Windows\System" 'PublishUserActivities' 0
+Set-RegDword "$pol\Windows\System" 'UploadUserActivities' 0
+Set-RegDword "$pol\Windows\DeliveryOptimization" 'DODownloadMode' 0
 
 $edge = "$pol\Edge"
 Set-RegDword "$pol\EdgeUpdate" 'CreateDesktopShortcutDefault' 0
